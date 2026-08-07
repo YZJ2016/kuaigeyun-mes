@@ -1,12 +1,20 @@
+/**
+ * 平台许可证管理
+ */
+
 import { rowActionKind } from '../../../components/uni-action';
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Modal, Space, Tag } from 'antd';
-import { CopyOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { CopyOutlined, ReloadOutlined } from '@ant-design/icons';
 import { ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { FormModalTemplate } from '../../../components/layout-templates';
+import { FormModalTemplate, ListPageTemplate } from '../../../components/layout-templates';
 import { UniTable } from '../../../components/uni-table';
+import {
+  PRO_APP_CODES,
+  PRO_PLACEHOLDER_META,
+} from '../../system/applications/proAppCatalog';
 import {
   createPlatformLicense,
   generatePlatformLicenseKey,
@@ -18,7 +26,7 @@ import {
 
 const GLOBAL_SCOPE = '*';
 
-export default function LicenseCenterTab() {
+export default function LicenseManagementPage() {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -27,27 +35,44 @@ export default function LicenseCenterTab() {
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
 
+  const appCodeLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    map.set(
+      GLOBAL_SCOPE,
+      t('pages.infra.licenseCenter.globalScope', { defaultValue: '全部 PRO 应用' }),
+    );
+    for (const code of PRO_APP_CODES) {
+      const meta = PRO_PLACEHOLDER_META[code];
+      map.set(code, t(meta.nameKey, { defaultValue: meta.nameDefault }));
+    }
+    return map;
+  }, [t]);
+
   const appCodeOptions = useMemo(
-    () => [
-      { label: t('pages.infra.licenseCenter.globalScope', { defaultValue: '全局通用（全部 PRO 应用）' }), value: GLOBAL_SCOPE },
-      { label: 'kuaiai', value: 'kuaiai' },
-      { label: 'kuaicaiwu', value: 'kuaicaiwu' },
-      { label: 'kuaireport', value: 'kuaireport' },
-      { label: 'kuaizhizao', value: 'kuaizhizao' },
-      { label: 'master-data', value: 'master-data' },
-    ],
-    [t]
+    () =>
+      Array.from(appCodeLabelMap.entries()).map(([value, label]) => ({
+        label,
+        value,
+      })),
+    [appCodeLabelMap],
   );
+
+  const scopeValueEnum = useMemo(() => {
+    const valueEnum: Record<string, { text: string }> = {};
+    for (const [value, label] of appCodeLabelMap.entries()) {
+      valueEnum[value] = { text: label };
+    }
+    return valueEnum;
+  }, [appCodeLabelMap]);
 
   const columns: ProColumns<PlatformLicenseItem>[] = [
     {
       title: t('pages.infra.licenseCenter.scope', { defaultValue: '适用范围' }),
       dataIndex: 'app_code',
-      width: 160,
-      render: (_, record) =>
-        record.app_code === GLOBAL_SCOPE
-          ? t('pages.infra.licenseCenter.globalShort', { defaultValue: '全局' })
-          : record.app_code,
+      width: 180,
+      valueType: 'select',
+      valueEnum: scopeValueEnum,
+      render: (_, record) => appCodeLabelMap.get(record.app_code) || record.app_code,
     },
     {
       title: t('pages.infra.licenseCenter.alias', { defaultValue: '别名' }),
@@ -105,7 +130,9 @@ export default function LicenseCenterTab() {
       width: 140,
       render: (_, record) => (
         <Space>
-          <Button key="copy" {...rowActionKind('read')}
+          <Button
+            key="copy"
+            {...rowActionKind('read')}
             size="small"
             icon={<CopyOutlined />}
             onClick={async () => {
@@ -120,7 +147,9 @@ export default function LicenseCenterTab() {
           >
             {t('pages.infra.licenseCenter.copyKey', { defaultValue: '复制KEY' })}
           </Button>
-          <Button key="revoke" {...rowActionKind('revoke')}
+          <Button
+            key="revoke"
+            {...rowActionKind('revoke')}
             size="small"
             danger
             disabled={!record.is_active}
@@ -144,10 +173,10 @@ export default function LicenseCenterTab() {
   ];
 
   return (
-    <>
+    <ListPageTemplate>
       <UniTable<PlatformLicenseItem>
-        columnPersistenceId="pages.infra.admin.license-center"
-        headerTitle={t('pages.infra.licenseCenter.headerTitle', { defaultValue: '许可证中心' })}
+        columnPersistenceId="pages.infra.license-management"
+        headerTitle={t('menu.infra.license-management')}
         actionRef={actionRef}
         columns={columns}
         rowKey="uuid"
@@ -230,6 +259,7 @@ export default function LicenseCenterTab() {
           label={t('pages.infra.licenseCenter.scope', { defaultValue: '适用范围' })}
           options={appCodeOptions}
           initialValue={GLOBAL_SCOPE}
+          rules={[{ required: true, message: t('common.required', { defaultValue: '必填' }) }]}
         />
         <ProFormDigit
           name="max_activations"
@@ -250,7 +280,6 @@ export default function LicenseCenterTab() {
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
-    </>
+    </ListPageTemplate>
   );
 }
-
