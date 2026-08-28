@@ -1,23 +1,30 @@
+/**
+ * 公司印章管理（站点 company_seal）：上传 / 模糊预览 / 清除。
+ * 入口在条款管理弹窗；打印模板页不再托管。
+ * 印章文件存于保密 category，但单据内使用不需文件管理二次密码。
+ */
+
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Button, Upload } from 'antd';
+import { Alert, App, Button, Space, Typography, Upload } from 'antd';
 import { DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd';
-import ImageCropper from '../../../components/image-cropper';
-import { getSiteSetting, updateSiteSetting } from '../../../services/siteSetting';
+import ImageCropper from '../../../../../components/image-cropper';
+import { getSiteSetting, updateSiteSetting } from '../../../../../services/siteSetting';
 import {
   uploadFile,
   getCompanySealPreview,
   invalidateCompanySealPreviewCache,
   type FileUploadResponse,
-} from '../../../services/file';
-import { toRelativeIfLocalhost } from '../../../utils/avatar';
+} from '../../../../../services/file';
+import { toRelativeIfLocalhost } from '../../../../../utils/avatar';
 
 function isUUID(str: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
 
-export function useCompanySealSettings() {
+export function useCompanySealSettings(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
 
@@ -47,7 +54,7 @@ export function useCompanySealSettings() {
       setSealUrl(previewUrl);
       setSealFileList([{
         uid: sealValue.trim(),
-        name: t('pages.system.printTemplates.companySeal'),
+        name: t('app.kuaizhizao.salesContract.terms.companySeal'),
         status: 'done',
         url: previewUrl,
       }]);
@@ -57,7 +64,7 @@ export function useCompanySealSettings() {
     setSealUrl(sealValue.trim());
     setSealFileList([{
       uid: sealValue.trim(),
-      name: t('pages.system.printTemplates.companySeal'),
+      name: t('app.kuaizhizao.salesContract.terms.companySeal'),
       status: 'done',
       url: sealValue.trim(),
     }]);
@@ -71,19 +78,20 @@ export function useCompanySealSettings() {
       setSealUuid(value);
       await loadCompanySealPreview(value || undefined);
     } catch (error: any) {
-      messageApi.error(error?.message || t('pages.system.printTemplates.companySealLoadFailed'));
+      messageApi.error(error?.message || t('app.kuaizhizao.salesContract.terms.companySealLoadFailed'));
     } finally {
       setLoading(false);
     }
   }, [loadCompanySealPreview, messageApi, t]);
 
   useEffect(() => {
+    if (!enabled) return;
     void loadSealSetting();
-  }, [loadSealSetting]);
+  }, [enabled, loadSealSetting]);
 
   const handleSealFileSelect: UploadProps['beforeUpload'] = (file) => {
     if (!file.type.startsWith('image/')) {
-      messageApi.error(t('pages.system.printTemplates.companySealSelectImage'));
+      messageApi.error(t('app.kuaizhizao.salesContract.terms.companySealSelectImage'));
       return false;
     }
     setSelectedImageFile(file);
@@ -106,13 +114,13 @@ export function useCompanySealSettings() {
 
       const response: FileUploadResponse = await uploadFile(croppedFile, {
         category: 'company-seal',
-        description: t('pages.system.printTemplates.companySeal'),
+        description: t('app.kuaizhizao.salesContract.terms.companySeal'),
       });
 
       if (!response.uuid) {
         URL.revokeObjectURL(localPreviewUrl);
         setSealUrl(undefined);
-        throw new Error(t('pages.system.printTemplates.companySealUploadFailed'));
+        throw new Error(t('app.kuaizhizao.salesContract.terms.companySealUploadFailed'));
       }
 
       invalidateCompanySealPreviewCache(response.uuid);
@@ -137,9 +145,9 @@ export function useCompanySealSettings() {
         status: 'done',
         url: previewUrl || localPreviewUrl,
       }]);
-      messageApi.success(t('pages.system.printTemplates.companySealUploadSuccess'));
+      messageApi.success(t('app.kuaizhizao.salesContract.terms.companySealUploadSuccess'));
     } catch (error: any) {
-      messageApi.error(error?.message || t('pages.system.printTemplates.companySealUploadFailed'));
+      messageApi.error(error?.message || t('app.kuaizhizao.salesContract.terms.companySealUploadFailed'));
     } finally {
       setSaving(false);
     }
@@ -156,9 +164,9 @@ export function useCompanySealSettings() {
       if (previousSeal.trim()) {
         invalidateCompanySealPreviewCache(previousSeal.trim());
       }
-      messageApi.success(t('pages.system.printTemplates.companySealClearSuccess'));
+      messageApi.success(t('app.kuaizhizao.salesContract.terms.companySealClearSuccess'));
     } catch (error: any) {
-      messageApi.error(error?.message || t('pages.system.printTemplates.companySealClearFailed'));
+      messageApi.error(error?.message || t('app.kuaizhizao.salesContract.terms.companySealClearFailed'));
     } finally {
       setSaving(false);
     }
@@ -167,7 +175,7 @@ export function useCompanySealSettings() {
   const cropModal = (
     <ImageCropper
       open={cropModalVisible}
-      title={t('pages.system.printTemplates.companySealCropTitle')}
+      title={t('app.kuaizhizao.salesContract.terms.companySealCropTitle')}
       image={selectedImageFile}
       defaultShape="round"
       onCancel={() => {
@@ -178,29 +186,61 @@ export function useCompanySealSettings() {
     />
   );
 
-  const toolbarActions = (
-    <>
-      <Upload
-        beforeUpload={handleSealFileSelect}
-        fileList={sealFileList}
-        maxCount={1}
-        accept="image/*"
-        showUploadList={false}
-      >
-        <Button icon={<UploadOutlined />} loading={saving || loading}>
-          {t('pages.system.printTemplates.uploadCompanySeal')}
-        </Button>
-      </Upload>
-      {sealUrl && (
-        <Button icon={<DeleteOutlined />} danger loading={saving} onClick={() => void handleClearSeal()}>
-          {t('pages.system.printTemplates.clearCompanySeal')}
-        </Button>
+  const panel = (
+    <Space orientation="vertical" size="middle" style={{ width: '100%', paddingTop: 8 }}>
+      <Alert
+        type="info"
+        showIcon
+        title={t('app.kuaizhizao.salesContract.terms.companySealTooltip')}
+      />
+      <Space wrap>
+        <Upload
+          beforeUpload={handleSealFileSelect}
+          fileList={sealFileList}
+          maxCount={1}
+          accept="image/*"
+          showUploadList={false}
+        >
+          <Button icon={<UploadOutlined />} loading={saving || loading}>
+            {t('app.kuaizhizao.salesContract.terms.uploadCompanySeal')}
+          </Button>
+        </Upload>
+        {sealUrl ? (
+          <Button icon={<DeleteOutlined />} danger loading={saving} onClick={() => void handleClearSeal()}>
+            {t('app.kuaizhizao.salesContract.terms.clearCompanySeal')}
+          </Button>
+        ) : null}
+      </Space>
+      {sealUrl ? (
+        <div>
+          <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+            {t('app.kuaizhizao.salesContract.terms.companySealBlurHint')}
+          </Typography.Text>
+          <img
+            src={sealUrl}
+            alt={t('app.kuaizhizao.salesContract.terms.companySeal')}
+            style={{
+              maxWidth: 220,
+              maxHeight: 220,
+              objectFit: 'contain',
+              filter: 'blur(6px)',
+              borderRadius: 8,
+              background: '#fafafa',
+              border: '1px solid #f0f0f0',
+              padding: 8,
+            }}
+          />
+        </div>
+      ) : (
+        <Typography.Text type="secondary">
+          {t('app.kuaizhizao.salesContract.terms.companySealEmpty')}
+        </Typography.Text>
       )}
-    </>
+    </Space>
   );
 
   return {
     cropModal,
-    toolbarActions,
+    panel,
   };
 }
