@@ -307,11 +307,13 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         customer_name: str,
         quantity: Decimal,
         pushed: Decimal,
+        quantity_offset: Decimal = Decimal("0"),
     ) -> Dict[str, Any]:
         qty = money_to_json_float(quantity)
         pushed_f = money_to_json_float(pushed)
-        max_push = money_to_json_float(max(Decimal("0"), quantity - pushed))
-        return {
+        offset = max(Decimal("0"), quantity_offset)
+        max_push = money_to_json_float(max(Decimal("0"), quantity - pushed - offset))
+        payload: Dict[str, Any] = {
             "item_id": int(source_id),
             "source_code": source_code,
             "customer_name": customer_name,
@@ -319,6 +321,9 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "pushed_quantity": pushed_f,
             "max_push_quantity": max_push,
         }
+        if offset > Decimal("0"):
+            payload["goods_offset"] = money_to_json_float(offset)
+        return payload
 
     async def _build_preview_items_for_sales_order(
         self,
@@ -380,6 +385,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         receivable: Any,
         *,
         pushed: Optional[Decimal] = None,
+        goods_offset: Optional[Decimal] = None,
     ) -> List[Dict[str, Any]]:
         rid = int(receivable["id"] if isinstance(receivable, dict) else receivable.id)
         code = str(
@@ -399,6 +405,12 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 tenant_id, [rid], {rid: code}
             )
             pushed = pushed_map.get(rid, Decimal("0"))
+        if goods_offset is None:
+            from apps.kuaicaiwu.services.return_open_balance_offset_service import (
+                sum_goods_offset_for_receivable,
+            )
+
+            goods_offset = await sum_goods_offset_for_receivable(tenant_id, rid)
         customer_name = str(
             (receivable.get("customer_name") if isinstance(receivable, dict) else getattr(receivable, "customer_name", ""))
             or ""
@@ -410,6 +422,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 customer_name=customer_name,
                 quantity=total,
                 pushed=pushed,
+                quantity_offset=goods_offset,
             )
         ]
 

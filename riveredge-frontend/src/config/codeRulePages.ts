@@ -436,7 +436,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   {
     pageCode: 'kuaizhizao-production-outsource-order',
     pageName: '委外单',
-    pagePath: '/apps/kuaizhizao/production-execution/outsource-orders',
+    pagePath: '/apps/kuaizhizao/outsource-management/outsource-orders',
     codeField: 'code',
     codeFieldLabel: '委外单编号',
     module: '快格轻制造',
@@ -923,7 +923,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   {
     pageCode: 'kuaizhizao-production-outsource-work-order',
     pageName: '委外工单',
-    pagePath: '/apps/kuaizhizao/production-execution/outsource-work-orders',
+    pagePath: '/apps/kuaizhizao/outsource-management/outsource-work-orders',
     codeField: 'code',
     codeFieldLabel: '委外工单编号',
     module: '快格轻制造',
@@ -935,7 +935,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   {
     pageCode: 'kuaizhizao-production-outsource-material-receipt',
     pageName: '委外收货',
-    pagePath: '/apps/kuaizhizao/warehouse-management/batching-center',
+    pagePath: '/apps/kuaizhizao/outsource-management/outsource-receipt',
     codeField: 'code',
     codeFieldLabel: '委外收货单编号',
     module: '快格轻制造',
@@ -947,7 +947,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   {
     pageCode: 'kuaizhizao-production-outsource-material-return',
     pageName: '委外退料',
-    pagePath: '/apps/kuaizhizao/warehouse-management/batching-center',
+    pagePath: '/apps/kuaizhizao/outsource-management/outsource-material-return',
     codeField: 'code',
     codeFieldLabel: '委外退料单编号',
     module: '快格轻制造',
@@ -959,7 +959,7 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
   {
     pageCode: 'kuaizhizao-production-outsource-product-return',
     pageName: '委外退货',
-    pagePath: '/apps/kuaizhizao/warehouse-management/batching-center',
+    pagePath: '/apps/kuaizhizao/outsource-management/outsource-product-return',
     codeField: 'code',
     codeFieldLabel: '委外退货单编号',
     module: '快格轻制造',

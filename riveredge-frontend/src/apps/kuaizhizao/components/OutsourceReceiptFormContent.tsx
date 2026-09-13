@@ -6,6 +6,7 @@ import { Divider, InputNumber, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
 import { formatQuantity } from '../../../utils/format';
+import { applyOutsourceReceiptQuantityChange } from '../utils/outsourceReceiptLineQuantities';
 
 export type OutsourceReceiptLine = {
   key: number;
@@ -72,17 +73,12 @@ const OutsourceReceiptFormContent: React.FC<OutsourceReceiptFormContentProps> = 
 }) => {
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
 
-  const updateLine = (patch: Partial<OutsourceReceiptLine>) => {
+  const updateLine = (
+    field: 'receiptQuantity' | 'qualifiedQuantity' | 'unqualifiedQuantity' | 'processWasteQty' | 'materialWasteQty',
+    value: number,
+  ) => {
     if (!line) return;
-    const next = { ...line, ...patch };
-    if (patch.receiptQuantity != null && patch.qualifiedQuantity == null && patch.unqualifiedQuantity == null) {
-      const unqualified = Number(next.unqualifiedQuantity || 0);
-      next.qualifiedQuantity = Math.max(0, Number(patch.receiptQuantity) - unqualified);
-    }
-    if (patch.qualifiedQuantity != null || patch.unqualifiedQuantity != null) {
-      next.receiptQuantity = Number(next.qualifiedQuantity || 0) + Number(next.unqualifiedQuantity || 0);
-    }
-    onLineChange(next);
+    onLineChange(applyOutsourceReceiptQuantityChange(line, field, value, quantityDecimals));
   };
 
   const columns: ColumnsType<OutsourceReceiptLine> = useMemo(
@@ -143,7 +139,7 @@ const OutsourceReceiptFormContent: React.FC<OutsourceReceiptFormContentProps> = 
             value={r.receiptQuantity}
             disabled={r.pendingQuantity <= 0}
             style={{ width: '100%' }}
-            onChange={(v) => updateLine({ receiptQuantity: Number(v ?? 0) })}
+            onChange={(v) => updateLine('receiptQuantity', Number(v ?? 0))}
           />
         ),
       },
@@ -160,7 +156,7 @@ const OutsourceReceiptFormContent: React.FC<OutsourceReceiptFormContentProps> = 
             value={r.qualifiedQuantity}
             disabled={r.pendingQuantity <= 0}
             style={{ width: '100%' }}
-            onChange={(v) => updateLine({ qualifiedQuantity: Number(v ?? 0) })}
+            onChange={(v) => updateLine('qualifiedQuantity', Number(v ?? 0))}
           />
         ),
       },
@@ -177,7 +173,7 @@ const OutsourceReceiptFormContent: React.FC<OutsourceReceiptFormContentProps> = 
             value={r.unqualifiedQuantity}
             disabled={r.pendingQuantity <= 0}
             style={{ width: '100%' }}
-            onChange={(v) => updateLine({ unqualifiedQuantity: Number(v ?? 0) })}
+            onChange={(v) => updateLine('unqualifiedQuantity', Number(v ?? 0))}
           />
         ),
       },
@@ -194,7 +190,7 @@ const OutsourceReceiptFormContent: React.FC<OutsourceReceiptFormContentProps> = 
             value={r.processWasteQty ?? 0}
             disabled={r.pendingQuantity <= 0 || !(r.unqualifiedQuantity > 0)}
             style={{ width: '100%' }}
-            onChange={(v) => updateLine({ processWasteQty: Number(v ?? 0) })}
+            onChange={(v) => updateLine('processWasteQty', Number(v ?? 0))}
           />
         ),
       },
@@ -212,7 +208,7 @@ const OutsourceReceiptFormContent: React.FC<OutsourceReceiptFormContentProps> = 
             value={r.materialWasteQty ?? 0}
             disabled={r.pendingQuantity <= 0 || !(r.unqualifiedQuantity > 0)}
             style={{ width: '100%' }}
-            onChange={(v) => updateLine({ materialWasteQty: Number(v ?? 0) })}
+            onChange={(v) => updateLine('materialWasteQty', Number(v ?? 0))}
           />
         ),
       },

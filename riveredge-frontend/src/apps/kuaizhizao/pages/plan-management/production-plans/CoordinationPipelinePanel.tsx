@@ -97,7 +97,7 @@ const RelatedDocumentsPanel: React.FC<RelatedDocumentsPanelProps> = ({ documents
       label: t('app.kuaizhizao.coordinationPipeline.outsourceWorkOrder'),
       count: documents.outsource_work_orders.length,
       items: documents.outsource_work_orders,
-      path: '/apps/kuaizhizao/warehouse-management/batching-center?tab=outsource_issue',
+      path: '/apps/kuaizhizao/outsource-management/outsource-issue',
     },
     {
       key: 'wo',

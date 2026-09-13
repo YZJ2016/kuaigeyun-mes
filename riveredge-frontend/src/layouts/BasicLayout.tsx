@@ -111,6 +111,7 @@ import TechStackModal from '../components/tech-stack-modal';
 import { HeaderClientDownloadButton, HeaderMiniprogramQrButton } from '../components/header-client-download';
 import ThemeEditor from '../components/theme-editor';
 import IterationFloatButton from '../components/iteration-float-button';
+import MenuSyncPrompt from '../components/menu-sync-prompt';
 import { RouteTransition } from '../components/route-transition';
 const TenantBootstrapModal = React.lazy(() => import('../components/tenant-bootstrap-modal'));
 /** AI 助手按需加载，避免动画/AntX 栈进入启动主图 */
@@ -134,7 +135,7 @@ import {
   TENANT_BACKEND_HOME_QUERY_KEY,
 } from '../services/menu';
 import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
-import { ManufacturingIcons } from '../utils/manufacturingIcons';
+import { ManufacturingIcons, resolveMenuIconComponent } from '../utils/manufacturingIcons';
 import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl, toRelativeIfLocalhost, isTextAvatarDisplay, getTextAvatarCircleStyle, getImageAvatarCircleStyle } from '../utils/avatar';
 import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
 import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
@@ -259,7 +260,8 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/production-execution/work-orders': 'work_order',
   '/apps/kuaizhizao/production-execution/reporting': 'reporting_record',
   '/apps/kuaizhizao/production-execution/rework-orders': 'rework_order',
-  '/apps/kuaizhizao/production-execution/outsource-management': 'outsource_work_order',
+  '/apps/kuaizhizao/outsource-management/outsource-work-orders': 'outsource_work_order',
+  '/apps/kuaizhizao/outsource-management/outsource-orders': 'outsource_order',
   '/apps/kuaizhizao/production-execution/packing-binding': 'packing_binding',
   '/apps/kuaizhizao/production-execution/material-shortage-exceptions': 'material_shortage_exception',
   '/apps/kuaizhizao/production-execution/delivery-delay-exceptions': 'delivery_delay_exception',
@@ -1130,10 +1132,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    */
   const convertMenuTreeToMenuDataItem = React.useCallback((menu: MenuTree, isAppMenu: boolean = false, depth: number = 0): MenuDataItem => {
     // 图标唯一真源：manifest / 库表 icon 键 → ManufacturingIcons 预置表。禁止 path/名称猜测、禁止 DynamicIcon。
+    // Lucide PascalCase（好力 GO 等）经 resolveMenuIconComponent 归一为 camelCase / kebab。
     let iconElement: React.ReactNode = undefined;
     const rawIcon = typeof menu.icon === 'string' ? menu.icon.trim() : '';
     if (rawIcon) {
-      const IconComponent = ManufacturingIcons[rawIcon as keyof typeof ManufacturingIcons];
+      const IconComponent = resolveMenuIconComponent(rawIcon);
       if (IconComponent) {
         iconElement = React.createElement(IconComponent, { size: 16 });
       } else if (process.env.NODE_ENV === 'development') {
@@ -3640,6 +3643,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       <React.Suspense fallback={null}>
         <TenantBootstrapModal />
       </React.Suspense>
+
+      {/* 组织管理员：菜单结构变更时征求同意后再同步 */}
+      <MenuSyncPrompt />
 
       {/* 右下角悬浮按钮：迭代提示与意见反馈 */}
       <IterationFloatButton />

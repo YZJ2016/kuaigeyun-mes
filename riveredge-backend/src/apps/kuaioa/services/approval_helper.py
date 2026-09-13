@@ -33,7 +33,7 @@ async def start_approval(
     content: str,
     submitter_id: int,
     business_type: Optional[str] = None,
-) -> None:
+) -> Any:
     from core.services.approval.approval_instance_service import ApprovalInstanceService
     from infra.exceptions.exceptions import ValidationError
 
@@ -52,6 +52,39 @@ async def start_approval(
         raise ValidationError(
             f"审核已开启但未找到可用的审批流程，请在配置中心检查 {node_key} 审批流程是否已激活"
         )
+    return instance
+
+
+async def assert_kuaioa_manual_approval_action(
+    tenant_id: int,
+    *,
+    audit_node_key: str,
+    entity_type: str,
+    entity_id: int,
+    doc_label: str,
+    verb: str = "审核",
+    is_auto_approve: bool = False,
+) -> None:
+    if is_auto_approve:
+        return
+    if not await is_audit_required(tenant_id, audit_node_key):
+        return
+    from core.services.approval.audit_flow_guard import (
+        assert_manual_approval_action_allowed,
+        get_approval_gate_status,
+    )
+
+    gate = await get_approval_gate_status(
+        tenant_id=tenant_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
+    assert_manual_approval_action_allowed(
+        gate,
+        doc_label=doc_label,
+        verb=verb,
+        is_auto_approve=is_auto_approve,
+    )
 
 
 async def cancel_approval(

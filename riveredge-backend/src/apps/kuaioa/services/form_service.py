@@ -282,8 +282,9 @@ class FormRequestService:
         row.submitted_at = resolve_business_datetime()
         await touch_updated(row, user or user_id)
         await row.save()
+        approval_instance = None
         if await is_audit_required(tenant_id, AUDIT_NODE_FORM_REQUEST):
-            await start_approval(
+            approval_instance = await start_approval(
                 tenant_id,
                 node_key=AUDIT_NODE_FORM_REQUEST,
                 entity_type="kuaioa_form_request",
@@ -298,6 +299,12 @@ class FormRequestService:
             row.status = "approved"
             await touch_updated(row, user or user_id)
             await row.save()
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance and approval_instance_finished_on_submit(approval_instance):
+            await apply_form_request_decision(
+                tenant_id, request_id, True, user_id, is_auto_approve=True
+            )
         return await self.get_request(tenant_id, request_id)
 
     async def revoke_request(self, tenant_id: int, request_id: int, user_id: int) -> dict[str, Any]:
@@ -322,13 +329,29 @@ class FormRequestService:
 
 
 async def apply_form_request_decision(
-    tenant_id: int, request_id: int, approved: bool, user_id: int
+    tenant_id: int,
+    request_id: int,
+    approved: bool,
+    user_id: int,
+    *,
+    is_auto_approve: bool = False,
 ) -> None:
+    from apps.kuaioa.services.approval_helper import assert_kuaioa_manual_approval_action
+
     row = await KuaioaFormRequest.get_or_none(
         id=request_id, tenant_id=tenant_id, deleted_at__isnull=True
     )
     if not row:
         return
+    await assert_kuaioa_manual_approval_action(
+        tenant_id,
+        audit_node_key=AUDIT_NODE_FORM_REQUEST,
+        entity_type="kuaioa_form_request",
+        entity_id=request_id,
+        doc_label="自定义申请",
+        verb="审核" if approved else "驳回",
+        is_auto_approve=is_auto_approve,
+    )
     row.status = "approved" if approved else "rejected"
     await touch_updated(row, user_id)
     await row.save()

@@ -27,7 +27,7 @@ from core.services.code_rule.code_rule_component_service import (
 )
 from core.config.code_rule_pages import get_seq_sync_entity_for_rule
 from infra.exceptions.exceptions import ValidationError
-from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+from core.utils.timezone_utils import now_utc, resolve_business_datetime, to_site_date
 
 # snake_case <-> camelCase 映射（用于 scope_fields 与 context 的兼容）
 _SCOPE_FIELD_ALIASES = {
@@ -268,6 +268,44 @@ class CodeGenerationService:
         if name:
             context["name"] = name
         return context
+
+    @staticmethod
+    async def _resolve_active_code_sequence(
+        *,
+        code_rule_id: int,
+        tenant_id: int,
+        scope_key: str,
+    ) -> Optional[CodeSequence]:
+        """
+        同一规则+租户+作用域仅保留最早一条序号行。
+
+        历史并发创建可能插入重复 core_code_sequences，get_or_none 会抛出 MultipleObjectsReturned。
+        """
+        rows = await CodeSequence.filter(
+            code_rule_id=code_rule_id,
+            tenant_id=tenant_id,
+            scope_key=scope_key,
+            deleted_at__isnull=True,
+        ).order_by("id").all()
+        if not rows:
+            return None
+        if len(rows) == 1:
+            return rows[0]
+
+        canonical = rows[0]
+        now = now_utc()
+        for duplicate in rows[1:]:
+            duplicate.deleted_at = now
+            await duplicate.save(update_fields=["deleted_at", "updated_at"])
+        logger.warning(
+            "编码序号 code_rule_id={} tenant_id={} scope_key={!r} 存在 {} 条重复记录，已保留 id={} 并软删其余",
+            code_rule_id,
+            tenant_id,
+            scope_key,
+            len(rows),
+            canonical.id,
+        )
+        return canonical
     
     @staticmethod
     async def generate_code(
@@ -654,11 +692,10 @@ class CodeGenerationService:
         )
         
         # 获取当前序号（不更新）
-        sequence = await CodeSequence.get_or_none(
+        sequence = await CodeGenerationService._resolve_active_code_sequence(
             code_rule_id=rule.id,
             tenant_id=tenant_id,
             scope_key=scope_key,
-            deleted_at__isnull=True
         )
         
         # 计算预览序号，必须与正式生成逻辑完全一致（含库中最大号校准）

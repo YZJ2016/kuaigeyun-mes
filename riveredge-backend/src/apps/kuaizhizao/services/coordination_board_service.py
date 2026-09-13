@@ -1280,11 +1280,11 @@ class CoordinationBoardService:
             os_actions = [
                 self._nav(
                     "委外发料",
-                    "/apps/kuaizhizao/warehouse-management/batching-center?tab=outsource_issue",
+                    "/apps/kuaizhizao/outsource-management/outsource-issue",
                 ),
                 self._nav(
                     "委外收货",
-                    "/apps/kuaizhizao/warehouse-management/batching-center?tab=outsource_receipt",
+                    "/apps/kuaizhizao/outsource-management/outsource-receipt",
                 ),
             ]
 

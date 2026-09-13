@@ -1,14 +1,28 @@
 /** Hub 聚合列表统一行类型 */
 
 import type { TFunction } from 'i18next';
+import type {
+  KuaizhizaoDocumentActionKey,
+  KuaizhizaoPullCreateMenuItemSpec,
+} from '../../../constants/documentActionRegistry';
 import { outboundHubCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
+import type { OutboundQuickPullKey } from './outboundPullEntryTypes';
 
 export type OutboundIssueType =
   | 'production_picking'
   | 'sales_delivery'
   | 'outsource_issue'
   | 'other_outbound'
-  | 'material_borrow';
+  | 'material_borrow'
+  | 'purchase_return';
+
+/** 模块级 scoped 出库 Hub 包装页 props */
+export type OutboundHubPageProps = {
+  fixedOutboundType?: OutboundIssueType;
+  scopedOutboundTypes?: readonly OutboundIssueType[];
+  headerTitle?: string;
+  columnPersistenceId?: string;
+};
 
 export interface OutboundHubOrder {
   id?: number;
@@ -18,6 +32,11 @@ export interface OutboundHubOrder {
   outbound_code?: string;
   borrow_code?: string;
   issue_code?: string;
+  return_code?: string;
+  purchase_order_code?: string;
+  supplier_name?: string;
+  return_time?: string;
+  returner_name?: string;
   status?: string;
   delivery_date?: string;
   customer_id?: number;
@@ -68,6 +87,7 @@ export const OUTBOUND_PENDING_STATUSES = new Set([
   '待出库',
   '待领料',
   '待借出',
+  '待退货',
   '草稿',
   'draft',
   'pending',
@@ -77,6 +97,7 @@ export const OUTBOUND_POSTED_STATUSES = new Set([
   '已出库',
   '已领料',
   '已借出',
+  '已退货',
   '已完成',
   'completed',
   '已确认',
@@ -89,6 +110,7 @@ export const OUTBOUND_ISSUE_TYPE_I18N_KEYS: Record<OutboundIssueType, string> = 
   outsource_issue: 'app.kuaizhizao.warehouseOutbound.type.outsourceIssue',
   other_outbound: 'app.kuaizhizao.warehouseOutbound.type.otherOutbound',
   material_borrow: 'app.kuaizhizao.warehouseOutbound.type.materialBorrow',
+  purchase_return: 'app.kuaizhizao.warehouseOutbound.type.purchaseReturn',
 };
 
 export const OUTBOUND_ISSUE_TYPES: OutboundIssueType[] = [
@@ -97,19 +119,25 @@ export const OUTBOUND_ISSUE_TYPES: OutboundIssueType[] = [
   'outsource_issue',
   'other_outbound',
   'material_borrow',
+  'purchase_return',
 ];
 
 export function getOutboundIssueTypeLabel(t: TFunction, type: OutboundIssueType): string {
   return t(OUTBOUND_ISSUE_TYPE_I18N_KEYS[type]);
 }
 
-/** 列表工具栏快速筛选：全部 + 各出库类型 */
+/** 列表工具栏快速筛选：全部 + 各出库类型（可选 scoped 子集） */
 export function outboundIssueTypeSegmentOptions(
   t: TFunction,
+  scopedTypes?: readonly OutboundIssueType[],
 ): Array<{ label: string; value: string }> {
+  const types = scopedTypes?.length
+    ? OUTBOUND_ISSUE_TYPES.filter((type) => scopedTypes.includes(type))
+    : OUTBOUND_ISSUE_TYPES;
+  const showAll = !scopedTypes?.length || scopedTypes.length > 1;
   return [
-    { label: t('app.kuaizhizao.warehouseCommon.allTypes'), value: 'all' },
-    ...OUTBOUND_ISSUE_TYPES.map((type) => ({
+    ...(showAll ? [{ label: t('app.kuaizhizao.warehouseCommon.allTypes'), value: 'all' }] : []),
+    ...types.map((type) => ({
       label: getOutboundIssueTypeLabel(t, type),
       value: type,
     })),
@@ -122,6 +150,7 @@ export const OUTBOUND_ISSUE_TYPE_LABELS: Record<OutboundIssueType, string> = {
   outsource_issue: '委外发料',
   other_outbound: '其他出库',
   material_borrow: '借料单',
+  purchase_return: '采购退货',
 };
 
 export function isOutboundConfirmable(record: OutboundHubOrder): boolean {
@@ -184,6 +213,7 @@ export function outboundDocumentCode(record: OutboundHubOrder): string {
     record.outbound_code ||
     record.borrow_code ||
     record.issue_code ||
+    record.return_code ||
     String(record.id ?? '')
   );
 }
@@ -195,6 +225,7 @@ function pushUniqueRef(parts: string[], value: unknown) {
 
 export function outboundSourceDocNo(record: OutboundHubOrder): string {
   const parts: string[] = [];
+  pushUniqueRef(parts, record.purchase_order_code);
   pushUniqueRef(parts, record.sales_order_code);
   pushUniqueRef(parts, record.work_order_code);
   pushUniqueRef(parts, record.outsource_work_order_code);
@@ -218,6 +249,7 @@ export function resolveOutboundHubDateRaw(record: OutboundHubOrder): unknown {
     record.picking_time ||
     record.delivery_time ||
     record.borrow_time ||
+    record.return_time ||
     record.issued_at ||
     null
   );
@@ -230,6 +262,7 @@ export function resolveOutboundHubOperator(record: OutboundHubOrder): string {
     record.picker_name ||
     record.deliverer_name ||
     record.borrower_name ||
+    record.returner_name ||
     record.issued_by_name ||
     '';
   return String(value).trim();
@@ -274,4 +307,69 @@ export function mapOutsourceIssueToOutbound(item: Record<string, unknown>): Outb
     notes: String(item.remarks ?? item.notes ?? ''),
     lifecycle: item.lifecycle as OutboundHubOrder['lifecycle'],
   };
+}
+
+const OUTBOUND_PULL_ACTION_ISSUE_TYPES: Partial<
+  Record<KuaizhizaoDocumentActionKey, readonly OutboundIssueType[]>
+> = {
+  'outbound.pull_from_work_order': ['production_picking'],
+  'sales_delivery.pull_from_shipment_notice': ['sales_delivery'],
+  'sales_delivery.pull_from_sales_order': ['sales_delivery'],
+  'outbound.pull_from_outsource_work_order': ['outsource_issue'],
+  'delivery_note.pull_from_sales_delivery': ['sales_delivery'],
+};
+
+const OUTBOUND_QUICK_PULL_KEY_ISSUE_TYPES: Record<
+  OutboundQuickPullKey,
+  readonly OutboundIssueType[]
+> = {
+  work_order: ['production_picking'],
+  shipment_notice: ['sales_delivery'],
+  sales_order: ['sales_delivery'],
+  outsource: ['outsource_issue'],
+  delivery_note: ['sales_delivery'],
+};
+
+function outboundPullTargetsOverlapScope(
+  targets: readonly OutboundIssueType[],
+  scopedTypes?: readonly OutboundIssueType[],
+): boolean {
+  if (!scopedTypes?.length) return true;
+  return targets.some((type) => scopedTypes.includes(type));
+}
+
+export function isOutboundPullActionInHubScope(
+  actionKey: KuaizhizaoDocumentActionKey,
+  scopedTypes?: readonly OutboundIssueType[],
+): boolean {
+  const targets = OUTBOUND_PULL_ACTION_ISSUE_TYPES[actionKey];
+  if (!targets?.length) return !scopedTypes?.length;
+  return outboundPullTargetsOverlapScope(targets, scopedTypes);
+}
+
+export function filterOutboundPullCreateMenuSpecs(
+  specs: KuaizhizaoPullCreateMenuItemSpec[],
+  scopedTypes?: readonly OutboundIssueType[],
+): KuaizhizaoPullCreateMenuItemSpec[] {
+  if (!scopedTypes?.length) return specs;
+  return specs.filter((spec) => isOutboundPullActionInHubScope(spec.actionKey, scopedTypes));
+}
+
+export function resolveDefaultOutboundQuickPullKey(
+  scopedTypes?: readonly OutboundIssueType[],
+): OutboundQuickPullKey {
+  if (!scopedTypes?.length) return 'work_order';
+  const order: OutboundQuickPullKey[] = [
+    'work_order',
+    'shipment_notice',
+    'sales_order',
+    'outsource',
+    'delivery_note',
+  ];
+  for (const key of order) {
+    if (outboundPullTargetsOverlapScope(OUTBOUND_QUICK_PULL_KEY_ISSUE_TYPES[key], scopedTypes)) {
+      return key;
+    }
+  }
+  return 'work_order';
 }

@@ -420,6 +420,40 @@ const NonconformingLedgerPage: React.FC = () => {
         ellipsis: true,
         render: (_, row) => {
           const links: React.ReactNode[] = [];
+          if (row.finished_goods_receipt_id) {
+            links.push(
+              <Button
+                key="fgr"
+                type="link"
+                size="small"
+                style={{ paddingInline: 0 }}
+                onClick={() =>
+                  navigate(
+                    `${ROUTES.WM_INBOUND}?receipt_type=finished_goods&receipt_id=${row.finished_goods_receipt_id}`,
+                  )
+                }
+              >
+                {t('app.kuaizhizao.quality.nc.columns.finishedGoodsReceipt')}
+              </Button>,
+            );
+          }
+          if (row.accept_purchase_receipt_id) {
+            links.push(
+              <Button
+                key="apr"
+                type="link"
+                size="small"
+                style={{ paddingInline: 0 }}
+                onClick={() =>
+                  navigate(
+                    `${ROUTES.WM_INBOUND}?receipt_type=purchase&receipt_id=${row.accept_purchase_receipt_id}`,
+                  )
+                }
+              >
+                {t('app.kuaizhizao.quality.nc.columns.purchaseReceipt')}
+              </Button>,
+            );
+          }
           if (row.other_inbound_id) {
             links.push(
               <Button

@@ -1,8 +1,9 @@
 import { rowActionKind } from '../../../../../components/uni-action';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
   ProFormDatePicker,
+  ProFormDependency,
   ProFormDigit,
   ProFormSelect,
   ProFormSwitch,
@@ -11,6 +12,9 @@ import {
 } from '@ant-design/pro-components';
 import { App, Button, Popconfirm } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
+import { factoryListItems, workCenterApi } from '../../../../master-data/services/factory';
+import { materialApi } from '../../../../master-data/services/material';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -35,14 +39,81 @@ import { buildListPageHelpViewConfig } from '../../../../../components/page-help
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
+type TargetOption = { label: string; value: number; code?: string; name?: string };
+
 const StandardCostsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<StandardCost | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [createInitialValues, setCreateInitialValues] = useState<Record<string, unknown>>({
+    currency: 'CNY',
+    version: '1.0',
+    is_active: true,
+  });
+  const [workCenterOptions, setWorkCenterOptions] = useState<TargetOption[]>([]);
+  const [materialOptions, setMaterialOptions] = useState<TargetOption[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [wcRes, matRes] = await Promise.all([
+          workCenterApi.list({ limit: 500, is_active: true }),
+          materialApi.list({ limit: 500, isActive: true }),
+        ]);
+        if (cancelled) return;
+        const wcItems = factoryListItems(wcRes);
+        setWorkCenterOptions(
+          wcItems.map((row) => ({
+            value: Number(row.id),
+            code: row.code,
+            name: row.name,
+            label: `${row.name || row.code || row.id}${row.code ? ` (${row.code})` : ''}`,
+          })),
+        );
+        const matItems = Array.isArray(matRes?.items) ? matRes.items : [];
+        setMaterialOptions(
+          matItems.map((row: { id: number; name?: string; main_code?: string; code?: string }) => ({
+            value: Number(row.id),
+            code: row.main_code || row.code,
+            name: row.name,
+            label: `${row.name || row.main_code || row.id}${
+              row.main_code || row.code ? ` (${row.main_code || row.code})` : ''
+            }`,
+          })),
+        );
+      } catch (error) {
+        console.error('加载标准成本对象选项失败:', error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (searchParams.get('prefill') !== '1') return;
+    const targetType = searchParams.get('target_type');
+    const targetId = Number(searchParams.get('target_id'));
+    const costItemType = searchParams.get('cost_item_type');
+    if (!targetType || !targetId) return;
+    setEditing(null);
+    setCreateInitialValues({
+      currency: 'CNY',
+      version: '1.0',
+      is_active: true,
+      target_type: targetType,
+      target_id: targetId,
+      ...(costItemType ? { cost_item_type: costItemType } : {}),
+    });
+    setModalVisible(true);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     for (const key of keys) {
@@ -290,7 +361,11 @@ const StandardCostsPage: React.FC = () => {
         }}
         showCreateButton
         createButtonText={t('app.kuaicaiwu.standardCost.create')}
-        onCreate={() => { setEditing(null); setModalVisible(true); }}
+        onCreate={() => {
+          setEditing(null);
+          setCreateInitialValues({ currency: 'CNY', version: '1.0', is_active: true });
+          setModalVisible(true);
+        }}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
@@ -335,7 +410,7 @@ const StandardCostsPage: React.FC = () => {
           setModalVisible(false);
     actionRef.current?.reload();
         }}
-        initialValues={editing ?? { currency: 'CNY', version: '1.0', is_active: true }}
+        initialValues={editing ?? createInitialValues}
       >
         <ProFormSelect
           name="target_type"
@@ -344,14 +419,46 @@ const StandardCostsPage: React.FC = () => {
           options={targetTypeOptions}
           disabled={!!editing}
         />
-        <ProFormDigit
-          name="target_id"
-          label={t('app.kuaicaiwu.standardCost.field.targetId')}
-          rules={[{ required: true }]}
-          min={1}
-          disabled={!!editing}
-          tooltip={t('app.kuaicaiwu.standardCost.field.targetIdTooltip')}
-        />
+        <ProFormDependency name={['target_type']}>
+          {({ target_type }) => {
+            if (target_type === 'work_center') {
+              return (
+                <ProFormSelect
+                  name="target_id"
+                  label={t('app.kuaicaiwu.financeUi.targetType.workCenter')}
+                  rules={[{ required: true }]}
+                  options={workCenterOptions}
+                  showSearch
+                  disabled={!!editing}
+                  fieldProps={{ optionFilterProp: 'label' }}
+                />
+              );
+            }
+            if (target_type === 'material') {
+              return (
+                <ProFormSelect
+                  name="target_id"
+                  label={t('app.kuaicaiwu.financeUi.targetType.material')}
+                  rules={[{ required: true }]}
+                  options={materialOptions}
+                  showSearch
+                  disabled={!!editing}
+                  fieldProps={{ optionFilterProp: 'label' }}
+                />
+              );
+            }
+            return (
+              <ProFormDigit
+                name="target_id"
+                label={t('app.kuaicaiwu.standardCost.field.targetId')}
+                rules={[{ required: true }]}
+                min={1}
+                disabled={!!editing}
+                tooltip={t('app.kuaicaiwu.standardCost.field.targetIdTooltip')}
+              />
+            );
+          }}
+        </ProFormDependency>
         <ProFormText name="target_code" label={t('app.kuaicaiwu.standardCost.col.targetCode')} />
         <ProFormText name="target_name" label={t('app.kuaicaiwu.standardCost.col.targetName')} />
         <ProFormSelect

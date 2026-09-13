@@ -27,7 +27,7 @@ class InventoryAnalysisService:
         self._cost_svc = InventoryCostService()
 
     async def _material_unit_cost(self, tenant_id: int, material_id: int) -> Decimal:
-        return await self._cost_svc.get_material_unit_cost(tenant_id, material_id)
+        return await self._cost_svc.get_material_base_unit_cost(tenant_id, material_id)
 
     async def get_inventory_analysis(
         self,

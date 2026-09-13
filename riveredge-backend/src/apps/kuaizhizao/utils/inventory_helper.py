@@ -178,27 +178,16 @@ async def compute_tenant_inventory_dashboard_metrics(tenant_id: int) -> Dict[str
             tenant_id=tenant_id,
             id__in=list(qty_by_material.keys()),
             deleted_at__isnull=True,
-        ).only("id", "defaults", "source_config")
+        ).only("id", "defaults", "source_config", "base_unit", "units")
         mid_material = {m.id: m for m in materials}
         cost_svc = InventoryCostService()
         for mid, qty in qty_by_material.items():
             material = mid_material.get(mid)
-            unit_cost = Decimal("0")
-            if material is not None:
-                from_defaults = cost_svc._read_defaults_cost(
-                    material.defaults,
-                    "moving_average_cost",
-                    "standard_cost",
-                    "purchase_price",
-                )
-                if from_defaults is not None:
-                    unit_cost = from_defaults
-                else:
-                    from_source = cost_svc._read_source_config_purchase_price(
-                        getattr(material, "source_config", None)
-                    )
-                    if from_source is not None:
-                        unit_cost = from_source
+            unit_cost = (
+                cost_svc.resolve_material_base_unit_cost(material)
+                if material is not None
+                else Decimal("0")
+            )
             total_value += qty * unit_cost
 
     return {

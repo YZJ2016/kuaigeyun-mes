@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { App, Button, List, Typography, theme } from 'antd';
+import { App, Button, Table, Typography, theme } from 'antd';
 import {
   ThunderboltOutlined,
   CheckCircleOutlined,
@@ -39,7 +39,8 @@ import {
   masonryWeightFromRows,
   resolveMasonryEmptyFallback,
 } from '../../../components/module-center';
-import { MarkerTag } from '../../../../../constants/statusBadges';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
+import { normalizeQualityInspectionListResponse } from '../../../utils/qualityInspectionListCore';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
 dayjs.extend(relativeTime);
@@ -112,6 +113,19 @@ const InspectionCenter: React.FC = () => {
     const { data } = normalizeQualityImprovementListResponse(res);
     return data;
   }, 'kz:quality-dashboard:nc-ledger');
+
+  const { data: incomingPendingRaw, loading: incomingPendingLoading } = useDashboardRequest(async () => {
+    const res = await qualityApi.incomingInspection.list({ limit: 6, status: '待检验' });
+    return normalizeQualityInspectionListResponse(res).data;
+  }, 'kz:quality-dashboard:incoming-pending');
+
+  const { data: processPendingRaw, loading: processPendingLoading } = useDashboardRequest(async () => {
+    const res = await qualityApi.processInspection.list({ limit: 6, status: '待检验' });
+    return normalizeQualityInspectionListResponse(res).data;
+  }, 'kz:quality-dashboard:process-pending');
+
+  const incomingPending = (incomingPendingRaw ?? []) as Record<string, unknown>[];
+  const processPending = (processPendingRaw ?? []) as Record<string, unknown>[];
 
   const anomalies = anomaliesResp?.anomalies ?? [];
   const qualityTodos = todosData?.items ?? [];
@@ -302,6 +316,32 @@ const InspectionCenter: React.FC = () => {
     hasTrendData,
   ]);
 
+  const inspectionQueueColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.quality.common.label.inspectionCode'),
+        dataIndex: 'inspection_code',
+        ellipsis: true,
+        render: (text: string) => text || '-',
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.label.materialName'),
+        dataIndex: 'material_name',
+        ellipsis: true,
+        render: (text: string) => text || '-',
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        width: 80,
+        render: (status: string) => (
+          <StatusTag color="processing">{status || t('app.kuaizhizao.quality.common.docStatus.pendingInspection')}</StatusTag>
+        ),
+      },
+    ],
+    [t],
+  );
+
   const anomalyFeedItems = useMemo(
     () =>
       anomalies.slice(0, 12).map((item) => ({
@@ -326,6 +366,23 @@ const InspectionCenter: React.FC = () => {
     [anomalies, navigate, t],
   );
 
+  const ncFeedItems = useMemo(
+    () =>
+      ncPending.map((item: Record<string, unknown>) => ({
+        id: String(item.id ?? item.code ?? item.uuid),
+        title: String(item.code ?? ''),
+        subtitle: String(item.product_name || item.defect_reason || item.defect_type || ''),
+        tag: item.status ? { label: String(item.status), color: 'warning' } : undefined,
+        onClick: () => navigate('/apps/kuaizhizao/quality-management/nonconforming-ledger'),
+      })),
+    [ncPending, navigate],
+  );
+
+  const pendingByTypeItems = useMemo(
+    () => pendingByType.filter((item) => item.count > 0),
+    [pendingByType],
+  );
+
   return (
     <ModuleCenterLayout
       loading={summaryLoading && !summary}
@@ -338,23 +395,49 @@ const InspectionCenter: React.FC = () => {
               <ModuleTodoList items={qualityTodos} emptyText={t('app.kuaizhizao.quality.common.empty.noTodos')} />
             </ModuleActionPanel>
           ) : null}
-          {showMasonryCard(summaryLoading, hasPendingByType, masonryEmptyFallback) ? (
-            <ModuleActionPanel layout="masonry" title={t('app.kuaizhizao.quality.inspectionCenter.pendingByTypeTitle')} masonryWeight={masonryWeightFromRows(pendingByType.filter((i) => i.count > 0).length)}>
-              <List
+          {showMasonryCard(incomingPendingLoading, incomingPending.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.quality.inspectionCenter.incomingPendingTitle')}
+              loading={incomingPendingLoading}
+              masonryWeight={masonryWeightFromRows(incomingPending.length)}
+              extra={
+                <a onClick={() => navigate(INSPECTION_LIST_PATH.incoming)}>
+                  {t('app.kuaizhizao.quality.common.actions.viewAll')}
+                </a>
+              }
+            >
+              <Table
                 size="small"
-                dataSource={pendingByType.filter((item) => item.count > 0)}
-                renderItem={(item) => (
-                  <List.Item
-                    style={{ cursor: 'pointer', padding: '8px 4px' }}
-                    onClick={() => navigate(INSPECTION_LIST_PATH[item.key] || '/')}
-                    actions={[
-                      <MarkerTag color="processing" key="count">{item.count}</MarkerTag>,
-                      <RightOutlined key="go" style={{ color: token.colorTextTertiary, fontSize: 11 }} />,
-                    ]}
-                  >
-                    <Text>{INSPECTION_TYPE_KEY[item.key] ? t(INSPECTION_TYPE_KEY[item.key]) : item.key}</Text>
-                  </List.Item>
-                )}
+                tableLayout="fixed"
+                pagination={false}
+                rowKey={(r) => String(r.id ?? r.inspection_code)}
+                dataSource={incomingPending}
+                columns={inspectionQueueColumns}
+                locale={{ emptyText: t('common.noData') }}
+              />
+            </ModuleActionPanel>
+          ) : null}
+          {showMasonryCard(processPendingLoading, processPending.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.quality.inspectionCenter.processPendingTitle')}
+              loading={processPendingLoading}
+              masonryWeight={masonryWeightFromRows(processPending.length)}
+              extra={
+                <a onClick={() => navigate(INSPECTION_LIST_PATH.process)}>
+                  {t('app.kuaizhizao.quality.common.actions.viewAll')}
+                </a>
+              }
+            >
+              <Table
+                size="small"
+                tableLayout="fixed"
+                pagination={false}
+                rowKey={(r) => String(r.id ?? r.inspection_code)}
+                dataSource={processPending}
+                columns={inspectionQueueColumns}
+                locale={{ emptyText: t('common.noData') }}
               />
             </ModuleActionPanel>
           ) : null}
@@ -385,23 +468,46 @@ const InspectionCenter: React.FC = () => {
                 </a>
               }
             >
-              <List
-                size="small"
-                dataSource={ncPending}
-                renderItem={(item) => (
-                  <List.Item style={{ cursor: 'pointer', padding: '8px 4px' }} onClick={() => navigate('/apps/kuaizhizao/quality-management/nonconforming-ledger')}>
-                    <List.Item.Meta
-                      title={item.code}
-                      description={
-                        <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
-                          {item.product_name || item.defect_reason || item.defect_type}
-                        </Text>
+              <ModuleFeedList items={ncFeedItems} emptyText={t('common.noData')} />
+            </ModuleActionPanel>
+          ) : null}
+          {showMasonryCard(summaryLoading, hasPendingByType, masonryEmptyFallback) ? (
+            <ModuleActionPanel layout="masonry" title={t('app.kuaizhizao.quality.inspectionCenter.pendingByTypeTitle')} masonryWeight={masonryWeightFromRows(pendingByType.filter((i) => i.count > 0).length)}>
+              <div className="dashboard-feed-list">
+                {pendingByTypeItems.map((item) => (
+                  <div
+                    key={item.key}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(INSPECTION_LIST_PATH[item.key] || '/')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate(INSPECTION_LIST_PATH[item.key] || '/');
                       }
-                    />
-                    <MarkerTag color="warning">{item.status}</MarkerTag>
-                  </List.Item>
-                )}
-              />
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      marginBottom: 6,
+                      border: `1px solid ${token.colorBorderSecondary}`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Text style={{ flex: 1, minWidth: 0 }}>
+                      {INSPECTION_TYPE_KEY[item.key] ? t(INSPECTION_TYPE_KEY[item.key]) : item.key}
+                    </Text>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                      <MarkerTag color="processing">{item.count}</MarkerTag>
+                      <RightOutlined style={{ color: token.colorTextTertiary, fontSize: 11 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </ModuleActionPanel>
           ) : null}
           {showMasonryCard(summaryLoading, hasTrendData, masonryEmptyFallback) ? (

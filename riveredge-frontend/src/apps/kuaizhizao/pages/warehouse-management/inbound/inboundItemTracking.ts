@@ -153,6 +153,10 @@ export async function loadConfirmPreviewMaterialMeta(
         if (materialId != null && materialById?.has(String(materialId))) {
           m = materialById.get(String(materialId)) ?? null;
         }
+        if (!m && materialId != null && Number(materialId) > 0) {
+          const res = await materialApi.list({ ids: [Number(materialId)], limit: 1 });
+          m = firstMaterialFromListResponse(res);
+        }
         if (!m) {
           const code = String(it.material_code || '').trim();
           if (!code) return;

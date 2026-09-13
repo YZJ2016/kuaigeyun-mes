@@ -1171,6 +1171,45 @@ async def get_fqc_inbound_remaining_quantity(
     return max(Decimal("0"), cap - received)
 
 
+async def sum_defect_accept_quantity_for_finished_goods_receipt(
+    tenant_id: int,
+    receipt_id: int,
+) -> Decimal:
+    """汇总关联到该成品入库单的让步接收数量（不计入 FQC 合格 cap，单独放行）。"""
+    from apps.kuaizhizao.models.defect_record import DefectRecord
+
+    rows = await DefectRecord.filter(
+        tenant_id=tenant_id,
+        finished_goods_receipt_id=int(receipt_id),
+        disposition="accept",
+        deleted_at__isnull=True,
+    ).all()
+    total = Decimal("0")
+    for row in rows:
+        try:
+            total += Decimal(str(row.defect_quantity or 0))
+        except Exception:
+            continue
+    return total
+
+
+async def defect_accept_material_ids_for_purchase_receipt(
+    tenant_id: int,
+    receipt_id: int,
+) -> frozenset[int]:
+    """采购入库单关联的让步接收物料（来料检验已执行，确认时放行）。"""
+    from apps.kuaizhizao.models.defect_record import DefectRecord
+
+    rows = await DefectRecord.filter(
+        tenant_id=tenant_id,
+        accept_purchase_receipt_id=int(receipt_id),
+        disposition="accept",
+        incoming_inspection_id__not_isnull=True,
+        deleted_at__isnull=True,
+    ).all()
+    return frozenset(int(row.product_id) for row in rows if row.product_id)
+
+
 async def assert_fqc_for_finished_goods_receipt(
     tenant_id: int,
     receipt_id: int,
@@ -1185,6 +1224,10 @@ async def assert_fqc_for_finished_goods_receipt(
 
     if not work_order_id:
         return
+
+    concession_allowance = await sum_defect_accept_quantity_for_finished_goods_receipt(
+        tenant_id, receipt_id
+    )
 
     for item in lines:
         mid = getattr(item, "material_id", None)
@@ -1204,7 +1247,7 @@ async def assert_fqc_for_finished_goods_receipt(
         qualified_cap = await sum_fqc_inbound_qualified_quantity(
             tenant_id, int(work_order_id), int(mid)
         )
-        if gate_enabled and qualified_cap <= 0:
+        if gate_enabled and qualified_cap <= 0 and concession_allowance <= 0:
             raise BusinessLogicError(
                 "已启用「需已审 FQC 且入库数量不超过合格数」，请先完成成品检验"
                 "（需审核时须审核通过）且存在合格数量后再确认成品入库"
@@ -1216,9 +1259,11 @@ async def assert_fqc_for_finished_goods_receipt(
             int(mid),
             exclude_receipt_id=receipt_id,
         )
-        if qty_dec > remaining + Decimal("1e-9"):
+        allowed = remaining + concession_allowance
+        if qty_dec > allowed + Decimal("1e-9"):
             raise BusinessLogicError(
-                f"入库数量 {qty_dec} 超过成品检验合格可入余量 {remaining}（合格合计 {qualified_cap}）"
+                f"入库数量 {qty_dec} 超过可确认余量 {allowed}"
+                f"（FQC 合格可入 {remaining}，让步接收 {concession_allowance}）"
             )
 
 
@@ -1274,12 +1319,18 @@ async def assert_iqc_for_purchase_receipt_lines(
     if not needs_qc_mids:
         return
 
+    concession_mids = await defect_accept_material_ids_for_purchase_receipt(
+        tenant_id, receipt_id
+    )
+
     inspections = await IncomingInspection.filter(
         tenant_id=tenant_id,
         purchase_receipt_id=receipt_id,
         deleted_at__isnull=True,
     ).all()
     if not inspections:
+        if concession_mids and all(mid in concession_mids for mid in needs_qc_mids):
+            return
         raise BusinessLogicError(
             "已启用「收货前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
         )
@@ -1291,6 +1342,8 @@ async def assert_iqc_for_purchase_receipt_lines(
 
     for mid in needs_qc_mids:
         if passed_by_material.get(mid):
+            continue
+        if mid in concession_mids:
             continue
         raise BusinessLogicError(
             "已启用「收货前必须来料检验」，相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"

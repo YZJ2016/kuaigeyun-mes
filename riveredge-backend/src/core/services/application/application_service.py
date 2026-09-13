@@ -5,10 +5,11 @@
 使用直接的 asyncpg 连接，避免 Tortoise ORM 配置问题。
 """
 
+import hashlib
 import json
 import os
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 from uuid import UUID, uuid4
 from datetime import datetime
 import asyncpg
@@ -93,7 +94,12 @@ class ApplicationService:
         app_code: str,
         application: ApplicationDict,
     ) -> ApplicationDict:
-        """基础应用（manifest market_category=base）安装后默认启用。"""
+        """
+        基础应用（manifest market_category=base）在本轮新安装后默认启用。
+
+        仅应由扫描安装路径在「本轮新安装」后调用；禁止在每次 scan / 菜单同步时
+        对已安装但已停用的应用再次调用（否则会把用户关闭的应用重新打开）。
+        """
         if not ApplicationService.is_base_app_code(app_code):
             return application
         if not application.get("is_installed") or application.get("is_active"):
@@ -1238,6 +1244,169 @@ class ApplicationService:
         return None
 
     @staticmethod
+    def collect_manifest_menu_paths(menu_config: Any) -> Set[str]:
+        """从 manifest menu_config 收集全部叶子路由 path（侧栏可见性比对用）。"""
+        paths: Set[str] = set()
+
+        def walk(node: Dict[str, Any]) -> None:
+            path = node.get("path")
+            if path and str(path).strip():
+                paths.add(str(path).strip())
+            for child in node.get("children") or []:
+                if isinstance(child, dict):
+                    walk(child)
+
+        if isinstance(menu_config, dict):
+            walk(menu_config)
+        elif isinstance(menu_config, list):
+            for item in menu_config:
+                if isinstance(item, dict):
+                    walk(item)
+        return paths
+
+    @staticmethod
+    def _is_orphaned_manifest_menu_row(
+        *,
+        name: Optional[str],
+        path: Optional[str],
+        parent_id: Optional[int],
+        application_uuid: Optional[str],
+        app_code: str,
+    ) -> bool:
+        """
+        应用 manifest 菜单被误挂到根级（parent_id 为空）时视为待同步。
+
+        路径可能已在 core_menus，但侧栏层级错乱（如「绩效管理」跳出快制造）。
+        """
+        from core.services.system.menu_service import MenuService
+
+        if not application_uuid:
+            return False
+        if parent_id is not None:
+            return False
+        app_root_path = f"/apps/{str(app_code).strip()}"
+        normalized_path = str(path or "").strip()
+        if normalized_path == app_root_path:
+            return False
+        if MenuService._is_app_root_menu_path(path):
+            return False
+        return MenuService._is_synced_i18n_menu_name(name)
+
+    @staticmethod
+    async def _application_menu_hierarchy_stale(
+        tenant_id: int,
+        application_uuid: str,
+        app_code: str,
+    ) -> bool:
+        """manifest 同步菜单是否存在 parent_id 为空的孤儿分组/页面。"""
+        from core.models.menu import Menu
+
+        rows = await Menu.filter(
+            tenant_id=tenant_id,
+            application_uuid=str(application_uuid),
+            deleted_at__isnull=True,
+        )
+        for menu in rows:
+            if ApplicationService._is_orphaned_manifest_menu_row(
+                name=menu.name,
+                path=menu.path,
+                parent_id=menu.parent_id,
+                application_uuid=menu.application_uuid,
+                app_code=app_code,
+            ):
+                return True
+        return False
+
+    @staticmethod
+    async def _application_menu_paths_missing(
+        tenant_id: int,
+        application_uuid: str,
+        manifest_menu_config: Any,
+    ) -> bool:
+        """manifest 声明的路由是否尚未写入 core_menus（清单已新、侧栏仍旧时也为 true）。"""
+        from core.models.menu import Menu
+
+        expected = ApplicationService.collect_manifest_menu_paths(manifest_menu_config)
+        if not expected:
+            return False
+        rows = await Menu.filter(
+            tenant_id=tenant_id,
+            application_uuid=str(application_uuid),
+            deleted_at__isnull=True,
+        ).values_list("path", flat=True)
+        actual = {str(path).strip() for path in rows if path and str(path).strip()}
+        return bool(expected - actual)
+
+    @staticmethod
+    def stable_menu_config_digest(menu_config: Any) -> str:
+        """菜单结构稳定摘要，用于比对 manifest 与库内 menu_config 是否一致。"""
+        normalized = ApplicationService._normalize_menu_config_field(menu_config)
+        if not normalized:
+            return "empty"
+        raw = json.dumps(normalized, sort_keys=True, ensure_ascii=False, default=str)
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+    @staticmethod
+    async def get_menu_sync_status(tenant_id: int) -> Dict[str, Any]:
+        """
+        检测已启用应用的库内 menu_config 是否与当前部署 manifest 一致。
+
+        供租户管理员登录后提示「需要同步菜单」；仅读比对，不写库。
+        """
+        from core.services.system.menu_service import MenuService
+
+        manifest_by_code = {
+            str(plugin.get("code") or "").strip(): plugin
+            for plugin in ApplicationService._scan_plugin_manifests()
+            if plugin.get("code")
+        }
+        apps = await ApplicationService.list_applications(
+            tenant_id=tenant_id,
+            skip=0,
+            limit=500,
+            is_installed=True,
+            is_active=True,
+        )
+        stale_app_codes: List[str] = []
+        for app in apps:
+            code = str(app.get("code") or "").strip()
+            if not code:
+                continue
+            if is_industry_pack_shell_code(code):
+                continue
+            manifest = manifest_by_code.get(code)
+            if not manifest:
+                continue
+            manifest_menu_config = manifest.get("menu_config")
+            manifest_digest = ApplicationService.stable_menu_config_digest(manifest_menu_config)
+            db_digest = ApplicationService.stable_menu_config_digest(app.get("menu_config"))
+            config_stale = manifest_digest != db_digest
+            rows_stale = False
+            hierarchy_stale = False
+            app_uuid = app.get("uuid")
+            if app_uuid and manifest_menu_config:
+                rows_stale = await ApplicationService._application_menu_paths_missing(
+                    tenant_id,
+                    str(app_uuid),
+                    manifest_menu_config,
+                )
+            if app_uuid:
+                hierarchy_stale = await ApplicationService._application_menu_hierarchy_stale(
+                    tenant_id,
+                    str(app_uuid),
+                    code,
+                )
+            if config_stale or rows_stale or hierarchy_stale:
+                stale_app_codes.append(code)
+
+        return {
+            "needs_sync": len(stale_app_codes) > 0,
+            "stale_app_count": len(stale_app_codes),
+            "stale_app_codes": stale_app_codes,
+            "manifest_fingerprint": MenuService._get_manifest_fingerprint(),
+        }
+
+    @staticmethod
     def _build_manifest_sync_update(app: ApplicationDict, manifest: Dict[str, Any]) -> ApplicationUpdate:
         menu_config = manifest.get("menu_config")
         version = manifest.get("version", app.get("version", "1.0.0"))
@@ -1472,12 +1641,16 @@ class ApplicationService:
                     ),
                 )
                 
+                from core.config.app_scan_enable_policy import (
+                    should_auto_enable_base_app_after_scan,
+                )
+
+                newly_installed = False
                 if existing_app:
                     # 更新现有应用（保留 is_active 和 is_installed 状态）
-                    # 但是，如果是系统内置应用且未安装，自动安装
-                    if should_auto_install and not is_installed:
-                        is_installed = True
-                    
+                    # 系统内置应用且未安装时，本轮自动安装（勿先改本地 is_installed 标记，否则会跳过安装）
+                    needs_auto_install = bool(should_auto_install and not is_installed)
+
                     # 决定是否更新名称：如果用户自定义了名称，扫描不应覆盖它
                     app_name = existing_app.get('name')
                     if not existing_app.get('is_custom_name'):
@@ -1505,25 +1678,22 @@ class ApplicationService:
                         data=update_data,
                         sync_derived_resources=False,
                     )
-                    
-                    # 如果是系统内置应用且未安装，更新安装状态
-                    if should_auto_install and not is_installed:
+
+                    if needs_auto_install:
                         await ApplicationService.install_application(
                             tenant_id=tenant_id,
                             uuid=existing_app.get('uuid'),
                             sync_menus_after_install=False,
                         )
                         application['is_installed'] = True
-                        application = await ApplicationService._auto_enable_base_app_if_needed(
-                            tenant_id, code, application
-                        )
+                        newly_installed = True
                 else:
                     # 创建新应用
                     application = await ApplicationService.create_application(
                         tenant_id=tenant_id,
                         data=app_data
                     )
-                    
+
                     # 如果是系统内置应用，自动安装
                     if should_auto_install:
                         await ApplicationService.install_application(
@@ -1532,18 +1702,18 @@ class ApplicationService:
                             sync_menus_after_install=False,
                         )
                         application['is_installed'] = True
-                        application = await ApplicationService._auto_enable_base_app_if_needed(
-                            tenant_id, code, application
-                        )
-                
+                        newly_installed = True
+
                 ded = ApplicationService._manifest_is_dedicated(manifest)
                 await ApplicationService._persist_is_dedicated(tenant_id, code, ded)
                 if isinstance(application, dict):
                     application["is_dedicated"] = ded
 
-                application = await ApplicationService._auto_enable_base_app_if_needed(
-                    tenant_id, code, application
-                )
+                # 仅本轮新安装的基础应用默认打开；已安装但用户关闭的不得重开
+                if should_auto_enable_base_app_after_scan(newly_installed=newly_installed):
+                    application = await ApplicationService._auto_enable_base_app_if_needed(
+                        tenant_id, code, application
+                    )
 
                 registered_apps.append(application)
                 

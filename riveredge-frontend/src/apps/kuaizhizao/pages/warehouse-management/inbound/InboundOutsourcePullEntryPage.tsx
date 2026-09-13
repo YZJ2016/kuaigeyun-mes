@@ -47,6 +47,10 @@ import {
 } from '../shared/pullEntryFormDraft';
 import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import {
+  applyOutsourceReceiptQuantityChange,
+  isOutsourceReceiptQuantityBalanced,
+} from '../../../utils/outsourceReceiptLineQuantities';
 
 const PULL_TYPE_TO_RECEIPT_TYPE: Record<InboundOutsourcePullType, InboundReceiptType> = {
   outsource_receipt: 'outsource_receipt',
@@ -336,16 +340,11 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             disabled={record.pendingQuantity <= 0}
             style={{ width: '100%' }}
             onChange={(v) => {
-              const qty = Number(v ?? 0);
-              setReceiptLine((prev) => {
-                if (!prev) return prev;
-                const unqualified = Number(prev.unqualifiedQuantity || 0);
-                return {
-                  ...prev,
-                  receiptQuantity: qty,
-                  qualifiedQuantity: Math.max(0, qty - unqualified),
-                };
-              });
+              setReceiptLine((prev) =>
+                prev
+                  ? applyOutsourceReceiptQuantityChange(prev, 'receiptQuantity', Number(v ?? 0), quantityDecimals)
+                  : prev,
+              );
             }}
           />
         ),
@@ -362,16 +361,11 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             value={record.qualifiedQuantity}
             style={{ width: '100%' }}
             onChange={(v) => {
-              const qualified = Number(v ?? 0);
-              setReceiptLine((prev) => {
-                if (!prev) return prev;
-                const unqualified = Number(prev.unqualifiedQuantity || 0);
-                return {
-                  ...prev,
-                  qualifiedQuantity: qualified,
-                  receiptQuantity: qualified + unqualified,
-                };
-              });
+              setReceiptLine((prev) =>
+                prev
+                  ? applyOutsourceReceiptQuantityChange(prev, 'qualifiedQuantity', Number(v ?? 0), quantityDecimals)
+                  : prev,
+              );
             }}
           />
         ),
@@ -388,18 +382,11 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             value={record.unqualifiedQuantity}
             style={{ width: '100%' }}
             onChange={(v) => {
-              const unqualified = Number(v ?? 0);
-              setReceiptLine((prev) => {
-                if (!prev) return prev;
-                const qualified = Number(prev.qualifiedQuantity || 0);
-                return {
-                  ...prev,
-                  unqualifiedQuantity: unqualified,
-                  receiptQuantity: qualified + unqualified,
-                  processWasteQty: Math.min(Number(prev.processWasteQty || 0), unqualified),
-                  materialWasteQty: Math.min(Number(prev.materialWasteQty || 0), unqualified),
-                };
-              });
+              setReceiptLine((prev) =>
+                prev
+                  ? applyOutsourceReceiptQuantityChange(prev, 'unqualifiedQuantity', Number(v ?? 0), quantityDecimals)
+                  : prev,
+              );
             }}
           />
         ),
@@ -417,7 +404,11 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             disabled={!(record.unqualifiedQuantity > 0)}
             style={{ width: '100%' }}
             onChange={(v) => {
-              setReceiptLine((prev) => (prev ? { ...prev, processWasteQty: Number(v ?? 0) } : prev));
+              setReceiptLine((prev) =>
+                prev
+                  ? applyOutsourceReceiptQuantityChange(prev, 'processWasteQty', Number(v ?? 0), quantityDecimals)
+                  : prev,
+              );
             }}
           />
         ),
@@ -435,7 +426,11 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             disabled={!(record.unqualifiedQuantity > 0)}
             style={{ width: '100%' }}
             onChange={(v) => {
-              setReceiptLine((prev) => (prev ? { ...prev, materialWasteQty: Number(v ?? 0) } : prev));
+              setReceiptLine((prev) =>
+                prev
+                  ? applyOutsourceReceiptQuantityChange(prev, 'materialWasteQty', Number(v ?? 0), quantityDecimals)
+                  : prev,
+              );
             }}
           />
         ),
@@ -540,6 +535,10 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
       const createdIds: number[] = [];
 
       if (pullType === 'outsource_receipt') {
+        if (!isOutsourceReceiptQuantityBalanced(receiptLine)) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.receiptQtyMismatch'));
+          return;
+        }
         const processWaste = Number(receiptLine.processWasteQty || 0);
         const materialWaste = Number(receiptLine.materialWasteQty || 0);
         const unqualified = Number(receiptLine.unqualifiedQuantity || 0);

@@ -41,6 +41,7 @@ import { TabRouteCache } from './TabRouteCache';
 import { isCreateTabKey } from './isCreateTabKey';
 import { readUniTabsBorderRadius } from '../../utils/themeBorderRadius';
 import { isAppGroupTitleItem } from '../../utils/permission';
+import { dispatchRouteSoftRefresh } from '../../hooks/useRouteSoftRefresh';
 
 function isTenantDefaultHomePath(p: string): boolean {
   return (LEGACY_TENANT_DEFAULT_HOME_PATHS as readonly string[]).includes(p);
@@ -848,14 +849,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    */
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
-    if (searchParams.has('_refresh')) {
-      // 移除 refresh 参数，保持 URL 干净
-      searchParams.delete('_refresh');
-      const newSearch = searchParams.toString();
-      const newPath = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
-      navigate(newPath, { replace: true });
-      // 更新 refreshKey 触发组件重新渲染
-      setRefreshKey(prev => prev + 1);
+    if (!searchParams.has('_refresh')) return;
+    searchParams.delete('_refresh');
+    const newSearch = searchParams.toString();
+    const tabKey = location.pathname + (newSearch ? `?${newSearch}` : '');
+    navigate(tabKey, { replace: true });
+    dispatchRouteSoftRefresh(tabKey);
+    if (isCreateTabKey(tabKey)) {
+      setRefreshKey((prev) => prev + 1);
     }
   }, [location.search, location.pathname, navigate]);
 
@@ -1014,19 +1015,19 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 处理标签刷新 - 局部刷新当前标签页
    */
   const handleTabRefresh = useCallback((tabKey: string) => {
-    // 计算当前逻辑 tabKey（排除 _refresh），用于判断是否已在目标标签
     const searchParams = new URLSearchParams(location.search || '');
     searchParams.delete('_refresh');
     const cleanSearch = searchParams.toString();
     const currentTabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
-    // 如果当前路径就是目标路径，通过添加 refresh 参数来触发局部刷新
-    if (currentTabKey === tabKey) {
-      // 添加 refresh 参数，触发路由变化，从而触发组件重新渲染
-      const separator = location.search ? '&' : '?';
-      navigate(`${tabKey}${separator}_refresh=${Date.now()}`, { replace: true });
-    } else {
-      // 如果当前路径不是目标路径，先导航到目标路径
+
+    if (currentTabKey !== tabKey) {
       navigate(tabKey, { replace: true });
+      return;
+    }
+
+    dispatchRouteSoftRefresh(tabKey);
+    if (isCreateTabKey(tabKey)) {
+      setRefreshKey((prev) => prev + 1);
     }
   }, [navigate, location.pathname, location.search]);
 
@@ -1352,8 +1353,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         {content}
       </TabRouteCache>
     ) : (
-      // 无建单标签时：刷新仅 remount 当前列表路由，不波及 keep-alive
-      <RouteTransition key={`route-refresh-${refreshKey}`}>{content}</RouteTransition>
+      <RouteTransition>{content}</RouteTransition>
     );
 
   // 无标签时仍保留 UniTabs 内容壳（page-outer 16px），避免切换租户清空标签后内容贴边

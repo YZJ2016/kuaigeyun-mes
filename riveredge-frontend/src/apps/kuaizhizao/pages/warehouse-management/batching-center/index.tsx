@@ -2,14 +2,14 @@ import { toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils
 /**
  * 物料中心页面
  *
- * 集中处理工单线边备料、产线补料、委外收发等物料流转作业。
+ * 集中处理工单线边备料与产线补料。
  *
  * Author: Luigi Lu
  * Date: 2026-02-28
  */
 
-import React, { useRef, useState, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Table, Form as AntForm, InputNumber, Row, Col, Tooltip } from 'antd';
@@ -20,10 +20,6 @@ import {
   PhoneOutlined,
   CarryOutOutlined,
   BulbOutlined,
-  WarningOutlined,
-  ExportOutlined,
-  ImportOutlined,
-  RollbackOutlined,
 } from '@ant-design/icons';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniPullQueryModal, isPullableScope, renderPullCapabilityTag, useUniPullQuery } from '../../../../../components/uni-pull-query';
@@ -41,7 +37,6 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import BatchingTaskQueue from './BatchingTaskQueue';
 import LineSidePrepSplitView from './LineSidePrepSplitView';
-import OutsourceMaterialPanel from './OutsourceMaterialPanel';
 import {
   MaterialCenterDetailDrawer,
   loadMaterialCenterDetail,
@@ -50,8 +45,8 @@ import {
 import {
   getMaterialCenterTabs,
   DEFAULT_MATERIAL_CENTER_TAB,
-  isBatchingTaskTab,
   resolveMaterialCenterTabKey,
+  resolveLegacyOutsourceMaterialCenterPath,
   type MaterialCenterTabKey,
   type BatchingTaskTabKey,
 } from './materialCenterTabs';
@@ -79,6 +74,7 @@ interface PullWorkOrderCandidate {
 }
 
 const BatchingCenterPage: React.FC = () => {
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'batching_order.pull_from_work_order');
   const { message: messageApi } = App.useApp();
@@ -118,6 +114,14 @@ const BatchingCenterPage: React.FC = () => {
     }
     return DEFAULT_MATERIAL_CENTER_TAB;
   }, [searchParams, materialCenterTabs]);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const legacyOutsourcePath = resolveLegacyOutsourceMaterialCenterPath(tab);
+    if (legacyOutsourcePath) {
+      navigate(legacyOutsourcePath, { replace: true });
+    }
+  }, [navigate, searchParams]);
   const [activeTabKey, setActiveTabKey] = useState<MaterialCenterTabKey>(initialTab);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
@@ -279,12 +283,7 @@ const BatchingCenterPage: React.FC = () => {
     line_side_prep: <CarryOutOutlined />,
     batching_draft: <CarryOutOutlined />,
     material_call: <PhoneOutlined />,
-    outsource_issue: <ExportOutlined />,
-    outsource_receipt: <ImportOutlined />,
-    outsource_material_return: <RollbackOutlined />,
-    outsource_product_return: <RollbackOutlined />,
     proactive_prep: <BulbOutlined />,
-    backflush_alert: <WarningOutlined />,
   };
 
   const taskTabs = useMemo(
@@ -307,15 +306,13 @@ const BatchingCenterPage: React.FC = () => {
               canRead={perms.canRead}
               onRefreshBatchingList={invalidateMenuBadgeCounts}
             />
-          ) : isBatchingTaskTab(tab.key) ? (
+          ) : (
             <BatchingTaskQueue
               taskType={tab.key as BatchingTaskTabKey}
               onOpenDetail={openMaterialCenterDetail}
               canRead={perms.canRead}
               onRefreshBatchingList={invalidateMenuBadgeCounts}
             />
-          ) : (
-            <OutsourceMaterialPanel mode={tab.key} onOpenDetail={openMaterialCenterDetail} canRead={perms.canRead} />
           ),
       })),
     [materialCenterTabs, invalidateMenuBadgeCounts, openMaterialCenterDetail, perms.canRead, t],

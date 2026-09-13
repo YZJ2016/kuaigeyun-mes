@@ -503,8 +503,9 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         source_type="semi_finished_goods_receipt_revoke",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
-                        movement_type="semi_fg_receipt",
+                        movement_type="semi_fg_receipt_withdraw",
                         from_warehouse_id=wh_id,
+                        idempotency_key=f"semi_finished_goods_receipt:{receipt_id}:revoke:{item.id}",
                         operator_id=updated_by,
                     )
                 await SemiFinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
@@ -673,18 +674,27 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             raise BusinessLogicError(f"工单状态为 {work_order.status}，无法预览入库明细")
 
         fg_svc = FinishedGoodsReceiptService()
-        planned = float(work_order.quantity or 0)
         quota = await fg_svc._get_work_order_inbound_quota(tenant_id, work_order_id)
-        received = quota["received"]
-        pending = quota["pending"]
+        pending = float(quota["pending"])
         suggested = await fg_svc._resolve_work_order_suggested_receipt_quantity(
             tenant_id, work_order_id, strict=False
         )
-        receipt_qty = min(suggested, pending) if pending > 0 else 0.0
+        reference_qty, received, effective_pending, receipt_qty = (
+            await fg_svc._resolve_work_order_inbound_preview_quantities(
+                tenant_id,
+                work_order_id,
+                work_order,
+                quota,
+                suggested,
+            )
+        )
         hint = None
+        fqc_rem = quota.get("fqc_qualified_remaining")
         if pending <= 0:
             hint = "工单可入库数量已用尽，无法再取单入库"
-        elif suggested <= 0:
+        elif effective_pending <= 0 and fqc_rem is not None:
+            hint = "须先完成成品检验且存在合格数量后才能下推入库"
+        elif effective_pending <= 0 and suggested <= 0:
             hint = "暂无质检合格或末道已审报工数量，请手工填写入库数量"
 
         material = await Material.get_or_none(
@@ -699,9 +709,9 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             material_name=(getattr(material, "name", None) or work_order.product_name or ""),
             material_spec=getattr(material, "specification", None) or getattr(work_order, "product_spec", None),
             material_unit=material_unit,
-            source_doc_quantity=planned,
+            source_doc_quantity=reference_qty,
             source_received_quantity=received,
-            source_pending_quantity=pending,
+            source_pending_quantity=effective_pending,
             receipt_quantity=receipt_qty,
         )
         return WorkOrderInboundPreviewResponse(

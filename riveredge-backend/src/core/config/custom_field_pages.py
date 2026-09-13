@@ -378,7 +378,7 @@ CUSTOM_FIELD_PAGES: List[CustomFieldPageConfig] = [
     {
         "page_code": "kuaizhizao-production-outsource-order",
         "page_name": "委外单",
-        "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
+        "page_path": "/apps/kuaizhizao/outsource-management/outsource-orders",
         "table_name": "apps_kuaizhizao_outsource_orders",
         "table_name_label": "委外单表",
         "module": "快格轻制造",
@@ -387,7 +387,7 @@ CUSTOM_FIELD_PAGES: List[CustomFieldPageConfig] = [
     {
         "page_code": "kuaizhizao-production-outsource-work-order",
         "page_name": "委外工单",
-        "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
+        "page_path": "/apps/kuaizhizao/outsource-management/outsource-work-orders",
         "table_name": "apps_kuaizhizao_outsource_work_orders",
         "table_name_label": "委外工单表",
         "module": "快格轻制造",

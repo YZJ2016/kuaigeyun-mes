@@ -45,10 +45,6 @@ function resolveIssueMethod(issueMethod: unknown, sourceType: unknown): string {
   const defaults: Record<string, string> = {
     Phantom: 'none',
     Service: 'none',
-    Buy: 'backflush',
-    Make: 'pick',
-    Outsource: 'pick',
-    Configure: 'pick',
   }
   return defaults[st] ?? 'pick'
 }

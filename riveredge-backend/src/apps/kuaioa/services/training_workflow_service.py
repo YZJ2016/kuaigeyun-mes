@@ -115,7 +115,14 @@ async def apply_dept_training_application_decision(
     tenant_id: int, request_id: int, approved: bool, user_id: int
 ) -> None:
     await apply_approval_decision(
-        KuaioaDeptTrainingApplication, tenant_id, request_id, approved, user_id
+        KuaioaDeptTrainingApplication,
+        tenant_id,
+        request_id,
+        approved,
+        user_id,
+        audit_node_key=_DEPT_APP.audit_node_key,
+        entity_type=_DEPT_APP.entity_type,
+        doc_label=_DEPT_APP.title_prefix,
     )
 
 
@@ -176,7 +183,14 @@ async def apply_special_work_qualification_decision(
     tenant_id: int, request_id: int, approved: bool, user_id: int
 ) -> None:
     await apply_approval_decision(
-        KuaioaSpecialWorkQualification, tenant_id, request_id, approved, user_id
+        KuaioaSpecialWorkQualification,
+        tenant_id,
+        request_id,
+        approved,
+        user_id,
+        audit_node_key=_SPECIAL_WORK.audit_node_key,
+        entity_type=_SPECIAL_WORK.entity_type,
+        doc_label=_SPECIAL_WORK.title_prefix,
     )
     if approved:
         from apps.kuaioa.services.training_reminder_service import (
@@ -256,7 +270,16 @@ class AnnualTrainingPlanService:
 async def apply_training_plan_decision(
     tenant_id: int, plan_id: int, approved: bool, user_id: int
 ) -> None:
-    await apply_approval_decision(KuaioaTrainingPlan, tenant_id, plan_id, approved, user_id)
+    await apply_approval_decision(
+        KuaioaTrainingPlan,
+        tenant_id,
+        plan_id,
+        approved,
+        user_id,
+        audit_node_key=_ANNUAL_PLAN.audit_node_key,
+        entity_type=_ANNUAL_PLAN.entity_type,
+        doc_label=_ANNUAL_PLAN.title_prefix,
+    )
     if not approved:
         return
     row = await KuaioaTrainingPlan.get_or_none(

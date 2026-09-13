@@ -19,6 +19,12 @@ from apps.kuaicaiwu.services.fa_core import (
     quantize_money,
     touch_updated,
 )
+from apps.kuaicaiwu.services.fa_depreciation_methods import (
+    depreciation_method_label,
+    is_valid_depreciation_method,
+    normalize_depreciation_method,
+)
+from apps.kuaicaiwu.services.finance_integration_hooks import record_finance_accounting_event
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
@@ -48,16 +54,72 @@ class FaAssetService:
         payload["category_name"] = cat.category_name
         return payload
 
+    def _validate_depreciation_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        method = normalize_depreciation_method(payload.get("depreciation_method"))
+        if not is_valid_depreciation_method(method):
+            raise ValidationError(f"不支持的折旧方法: {payload.get('depreciation_method')}")
+        payload["depreciation_method"] = method
+        if method == "units_of_production":
+            workload = payload.get("total_workload")
+            if workload is None or quantize_money(workload) <= 0:
+                raise ValidationError("工作量法须填写预计总工作量")
+        return payload
+
     def _recalc_depreciation_fields(self, payload: dict[str, Any]) -> dict[str, Any]:
         original = quantize_money(payload.get("original_value") or 0)
         residual_rate = quantize_money(payload.get("residual_rate") or "0.05")
         useful_life = int(payload.get("useful_life_months") or 60)
         accumulated = quantize_money(payload.get("accumulated_depreciation") or 0)
         impairment = quantize_money(payload.get("impairment_value") or 0)
-        monthly = compute_monthly_depreciation(original, residual_rate, useful_life)
+        method = normalize_depreciation_method(payload.get("depreciation_method"))
+        monthly = compute_monthly_depreciation(
+            original,
+            residual_rate,
+            useful_life,
+            depreciation_method=method,
+            depreciated_periods=int(payload.get("depreciated_periods") or 0),
+            accumulated_depreciation=accumulated,
+            impairment_value=impairment,
+            total_workload=payload.get("total_workload"),
+        )
         payload["monthly_depreciation"] = monthly
         payload["net_value"] = float(compute_net_value(original, accumulated, impairment))
         return payload
+
+    async def _record_impairment_increase(
+        self,
+        tenant_id: int,
+        asset: FaAsset,
+        *,
+        previous_impairment: Decimal,
+        new_impairment: Decimal,
+        user: User,
+    ) -> None:
+        delta = quantize_money(new_impairment) - quantize_money(previous_impairment)
+        if delta <= 0:
+            return
+        await record_finance_accounting_event(
+            tenant_id=tenant_id,
+            event_type="FA_IMPAIRMENT",
+            business_type="fixed_asset_impairment",
+            source_doc_type="fa_asset",
+            source_doc_id=asset.id,
+            source_doc_code=asset.asset_code,
+            target_doc_type="fa_asset",
+            target_doc_id=asset.id,
+            target_doc_code=asset.asset_code,
+            amount=delta,
+            operator_id=user.id,
+            notes="减值",
+            payload={
+                "asset_code": asset.asset_code,
+                "asset_name": asset.asset_name,
+                "department_id": asset.department_id,
+                "department_name": asset.department_name,
+                "impairment_loss_account_code": "6701",
+                "impairment_provision_account_code": "1603",
+            },
+        )
 
     async def list_assets(
         self,
@@ -173,7 +235,10 @@ class FaAssetService:
             "specification": data.get("specification"),
             "notes": data.get("notes"),
             "attachment_uuids": list(data.get("attachment_uuids") or []),
-            "depreciation_method": data.get("depreciation_method") or "straight_line",
+            "depreciation_method": normalize_depreciation_method(data.get("depreciation_method")),
+            "total_workload": quantize_money(data["total_workload"])
+            if data.get("total_workload") not in (None, "")
+            else None,
             "original_value": quantize_money(data.get("original_value") or 0),
             "impairment_value": quantize_money(data.get("impairment_value") or 0),
             "useful_life_months": int(data.get("useful_life_months") or 60),
@@ -190,13 +255,17 @@ class FaAssetService:
             "source_purchase_id": data.get("source_purchase_id"),
         }
         payload = await self._resolve_category_name(tenant_id, payload)
-        payload["monthly_depreciation"] = compute_monthly_depreciation(
-            payload["original_value"],
-            payload["residual_rate"],
-            payload["useful_life_months"],
-        )
+        payload = self._validate_depreciation_payload(payload)
+        payload = self._recalc_depreciation_fields(payload)
         apply_create_audit(payload, resolved_user)
         row = await FaAsset.create(**payload)
+        await self._record_impairment_increase(
+            tenant_id,
+            row,
+            previous_impairment=Decimal("0"),
+            new_impairment=quantize_money(row.impairment_value),
+            user=resolved_user,
+        )
         return await self.get_asset(tenant_id, row.id)
 
     async def update_asset(
@@ -207,6 +276,8 @@ class FaAssetService:
             raise NotFoundError("资产不存在")
         if row.status == "disposed":
             raise BusinessLogicError("已清理资产不可编辑")
+
+        previous_impairment = quantize_money(row.impairment_value)
 
         scalar_fields = (
             "asset_name",
@@ -224,6 +295,7 @@ class FaAssetService:
             "specification",
             "notes",
             "depreciation_method",
+            "total_workload",
             "useful_life_months",
             "depreciated_periods",
             "asset_account_code",
@@ -236,6 +308,13 @@ class FaAssetService:
                     setattr(row, key, quantize_money(data[key]))
                 elif key in {"useful_life_months", "depreciated_periods", "category_id", "department_id", "user_id"}:
                     setattr(row, key, int(data[key]))
+                elif key == "total_workload":
+                    value = data[key]
+                    setattr(
+                        row,
+                        key,
+                        quantize_money(value) if value not in (None, "") else None,
+                    )
                 else:
                     setattr(row, key, data[key])
         for key in ("start_use_date", "entry_date"):
@@ -254,13 +333,20 @@ class FaAssetService:
             if "category_name" in resolved:
                 row.category_name = resolved["category_name"]
 
-        row.monthly_depreciation = compute_monthly_depreciation(
-            quantize_money(row.original_value),
-            quantize_money(row.residual_rate),
-            int(row.useful_life_months or 0),
-        )
+        draft = model_to_dict(row)
+        draft = self._validate_depreciation_payload(draft)
+        row.depreciation_method = draft["depreciation_method"]
+        recalc = self._recalc_depreciation_fields(draft)
+        row.monthly_depreciation = recalc["monthly_depreciation"]
         await touch_updated(row, user)
         await row.save()
+        await self._record_impairment_increase(
+            tenant_id,
+            row,
+            previous_impairment=previous_impairment,
+            new_impairment=quantize_money(row.impairment_value),
+            user=user,
+        )
         return await self.get_asset(tenant_id, asset_id)
 
     async def delete_asset(self, tenant_id: int, asset_id: int, user: User) -> None:
@@ -406,7 +492,13 @@ class FaAssetService:
             "disposed": "已清理",
             "scrapped": "已报废",
         }
-        depr_labels = {"straight_line": "年限平均法"}
+        depr_labels = {code: depreciation_method_label(code) for code in (
+            "straight_line",
+            "double_declining",
+            "sum_of_years",
+            "units_of_production",
+            "none",
+        )}
         for item in result["items"]:
             ws.append(
                 [

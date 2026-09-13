@@ -36,6 +36,7 @@ const OUTBOUND_ISSUE_TYPE_COLORS: Record<OutboundIssueType, string> = {
   outsource_issue: 'warning',
   other_outbound: 'gold',
   material_borrow: 'geekblue',
+  purchase_return: 'orange',
 };
 
 type StocktakingType = 'full' | 'partial' | 'cycle';

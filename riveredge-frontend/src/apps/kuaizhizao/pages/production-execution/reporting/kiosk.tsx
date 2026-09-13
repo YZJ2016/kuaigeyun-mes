@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { App, Card, Button, Space, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Divider, Modal } from 'antd';
 import { QrcodeOutlined, ScanOutlined, CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -21,8 +22,45 @@ import { qrcodeApi } from '../../../../../services/qrcode';
 import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
 import dayjs from 'dayjs';
 import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, resolveDefaultReportingQuantityFields } from '../../../utils/workOrderReporting';
+import {
+  convertBaseQtyToProductionDisplay,
+  convertProductionInputToBaseQty,
+} from '../../../../../utils/materialScenarioUnit';
 
 const { TextArea } = Input;
+
+type OperationDefectOption = {
+  label: string;
+  value: string;
+  code?: string;
+  name?: string;
+};
+
+function operationHasSimpleInspection(operation: Operation | null) {
+  if (!operation) return false;
+  const mode = operation.inspection_mode ?? operation.inspectionMode;
+  if (mode === 'simple') return true;
+  const dt = operation.defect_types ?? operation.defectTypes;
+  return Array.isArray(dt) && dt.length > 0;
+}
+
+function getOperationDefectTypeOptions(operation: Operation | null): OperationDefectOption[] {
+  const raw = operation?.defect_types ?? operation?.defectTypes ?? [];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((d: any) => {
+      const uuid = String(d.uuid || '').trim();
+      const code = String(d.code || '').trim();
+      const name = String(d.name || '').trim();
+      return {
+        label: `${name || code}${code ? ` (${code})` : ''}`.trim(),
+        value: uuid || code || String(d.id ?? ''),
+        code: code || undefined,
+        name: name || undefined,
+      };
+    })
+    .filter((o) => Boolean(o.value));
+}
 
 interface WorkOrder {
   id?: number;
@@ -34,6 +72,9 @@ interface WorkOrder {
   completed_quantity?: number;
   status?: string;
   allow_operation_jump?: boolean;
+  product_unit?: string;
+  base_unit?: string;
+  unit_to_base_factor?: number;
 }
 
 interface Operation {
@@ -54,6 +95,10 @@ interface Operation {
   allow_jump?: boolean;
   is_node_operation?: boolean;
   isNodeOperation?: boolean;
+  defect_types?: Array<{ code?: string; name?: string; uuid?: string; id?: number }>;
+  defectTypes?: Array<{ code?: string; name?: string; uuid?: string; id?: number }>;
+  inspection_mode?: string;
+  inspectionMode?: string;
 }
 
 const effectiveAllowJump = (workOrder: WorkOrder | null, _operation?: Operation | null) =>
@@ -63,6 +108,7 @@ const effectiveAllowJump = (workOrder: WorkOrder | null, _operation?: Operation 
  * 报工管理 - 工位机触屏模式页面
  */
 const ReportingKioskPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const touchScreen = useTouchScreen();
   const [form] = Form.useForm();
@@ -272,12 +318,24 @@ const ReportingKioskPage: React.FC = () => {
           setLoading(false);
           return;
         }
-        const rem = getRemainingReportableQuantity(
+        const remBase = getRemainingReportableQuantity(
           currentOperation,
           Number(currentWorkOrder.quantity) || 0,
         );
+        const rem = convertBaseQtyToProductionDisplay(remBase, currentWorkOrder);
         if (rq > rem + 1e-9) {
           messageApi.warning(`本次报工数量不能超过本次可报上限（${rem}）`);
+          setLoading(false);
+          return;
+        }
+        const defectOpts = getOperationDefectTypeOptions(currentOperation);
+        if (
+          unqualifiedQty > 0 &&
+          operationHasSimpleInspection(currentOperation) &&
+          defectOpts.length > 0 &&
+          !values.defect_type
+        ) {
+          messageApi.warning(t('app.kuaizhizao.workOrder.kioskSelectDefectType'));
           setLoading(false);
           return;
         }
@@ -286,6 +344,9 @@ const ReportingKioskPage: React.FC = () => {
           qualifiedQty = rq;
           unqualifiedQty = 0;
         }
+        reportedQty = convertProductionInputToBaseQty(reportedQty, currentWorkOrder);
+        qualifiedQty = convertProductionInputToBaseQty(qualifiedQty, currentWorkOrder);
+        unqualifiedQty = convertProductionInputToBaseQty(unqualifiedQty, currentWorkOrder);
       } else if (currentOperation.reporting_type === 'status') {
         const isCompleted = (values.completed_status || 'completed') === 'completed';
         const completeQty = isCompleted
@@ -310,7 +371,39 @@ const ReportingKioskPage: React.FC = () => {
         remarks: values.remarks || '',
       };
 
-      await reportingApi.quickCreate(reportingData);
+      const created = await reportingApi.quickCreate(reportingData);
+      const createdId = Number((created as { id?: number } | null)?.id);
+
+      if (
+        currentOperation.reporting_type === 'quantity' &&
+        Number(values.unqualified_quantity) > 0 &&
+        operationHasSimpleInspection(currentOperation) &&
+        createdId
+      ) {
+        const defectOpts = getOperationDefectTypeOptions(currentOperation);
+        const uqDisplay = Number(values.unqualified_quantity) || 0;
+        const defectQtyBase = convertProductionInputToBaseQty(uqDisplay, currentWorkOrder);
+        const selected = defectOpts.find((o) => o.value === values.defect_type);
+        if (defectOpts.length > 0 && values.defect_type) {
+          try {
+            await reportingApi.recordDefect(String(createdId), {
+              defect_quantity: defectQtyBase,
+              defect_type: selected?.code || String(values.defect_type),
+              defect_reason: selected?.name || selected?.label || String(values.defect_type),
+              disposition: 'quarantine',
+            });
+          } catch (defectErr: unknown) {
+            console.error(defectErr);
+            const detail = defectErr instanceof Error ? defectErr.message : String(defectErr);
+            messageApi.warning(
+              detail
+                ? `${t('app.kuaizhizao.workReporting.defectCreateAfterReportFailed')}：${detail}`
+                : t('app.kuaizhizao.workReporting.defectCreateAfterReportFailed'),
+            );
+          }
+        }
+      }
+
       messageApi.success('报工成功！');
       
       // 重置表单和状态
@@ -562,6 +655,35 @@ const ReportingKioskPage: React.FC = () => {
                         style={{ width: '100%', height: 60, fontSize: 24 }}
                         placeholder="请输入不合格数量"
                       />
+                    </Form.Item>
+
+                    <Form.Item noStyle shouldUpdate={(prev, curr) => prev.unqualified_quantity !== curr.unqualified_quantity}>
+                      {({ getFieldValue }) => {
+                        const uq = Number(getFieldValue('unqualified_quantity')) || 0;
+                        const defectOpts = getOperationDefectTypeOptions(currentOperation);
+                        if (
+                          uq <= 0 ||
+                          !operationHasSimpleInspection(currentOperation) ||
+                          defectOpts.length === 0
+                        ) {
+                          return null;
+                        }
+                        return (
+                          <Form.Item
+                            name="defect_type"
+                            label={t('app.kuaizhizao.workReporting.defectType')}
+                            rules={[{ required: true, message: t('app.kuaizhizao.workOrder.kioskSelectDefectType') }]}
+                          >
+                            <Radio.Group size="large" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {defectOpts.map((opt) => (
+                                <Radio key={opt.value} value={opt.value} style={{ fontSize: 20, lineHeight: '32px' }}>
+                                  {opt.label}
+                                </Radio>
+                              ))}
+                            </Radio.Group>
+                          </Form.Item>
+                        );
+                      }}
                     </Form.Item>
                   </>
                 )}

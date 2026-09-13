@@ -1204,9 +1204,10 @@ class AuthService:
 
             await self._ensure_user_has_guest_role(guest_user.id, default_tenant.id)
 
+            # 演示组织可自动授予 guest 组织管理员；但不得覆盖管理员在用户管理中显式开启的权限
             guest_should_be_tenant_admin = self._guest_may_be_tenant_admin(default_tenant)
-            if guest_user.is_tenant_admin != guest_should_be_tenant_admin:
-                guest_user.is_tenant_admin = guest_should_be_tenant_admin
+            if guest_should_be_tenant_admin and not guest_user.is_tenant_admin:
+                guest_user.is_tenant_admin = True
                 await guest_user.save(update_fields=["is_tenant_admin"])
                 await PermissionVersionService.bump(
                     tenant_id=default_tenant.id,

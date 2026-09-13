@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Segmented, Space, Typography, theme, Result, Switch } from 'antd';
+import { Segmented, Space, Table, Typography, theme, Result, Switch } from 'antd';
 import { AlertOutlined, CheckCircleOutlined, DashboardOutlined } from '@ant-design/icons';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
@@ -19,6 +19,7 @@ import {
 } from '../../../kuaizhizao/components/module-center';
 import type { ModuleKpiDef } from '../../../kuaizhizao/components/module-center';
 import type { ModuleFeedItem } from '../../../kuaizhizao/components/module-center';
+import { MarkerTag } from '../../../../constants/statusBadges';
 
 const { Text } = Typography;
 
@@ -136,7 +137,19 @@ export default function KuaiElectronicsEsdDashboardPage() {
   }, [alerts]);
 
   const hasAlerts = alertFeedItems.length > 0;
-  const masonryEmptyFallback = resolveMasonryEmptyFallback(loading && !board, [hasAlerts]);
+  const statusStructureRows = useMemo(
+    () =>
+      (board?.status_breakdown ?? []).map((row, idx) => ({
+        key: `${row.status}-${idx}`,
+        label: row.status,
+        count: row.count,
+      })),
+    [board?.status_breakdown],
+  );
+  const masonryEmptyFallback = resolveMasonryEmptyFallback(loading && !board, [
+    hasAlerts,
+    statusStructureRows.length > 0,
+  ]);
 
   return (
     <ListPageTemplate>
@@ -218,6 +231,35 @@ export default function KuaiElectronicsEsdDashboardPage() {
                 <ModuleFeedList
                   items={alertFeedItems}
                   emptyText={t('app.kuaielectronics.esd.noAlerts')}
+                />
+              </ModuleActionPanel>
+            ) : null}
+            {showMasonryCard(loading && !board, statusStructureRows.length > 0, masonryEmptyFallback) ? (
+              <ModuleActionPanel
+                layout="masonry"
+                title={t('app.kuaielectronics.esd.statusStructureTitle')}
+                loading={loading && !board}
+                masonryWeight={masonryWeightFromRows(statusStructureRows.length)}
+              >
+                <Table
+                  size="small"
+                  tableLayout="fixed"
+                  pagination={false}
+                  rowKey="key"
+                  dataSource={statusStructureRows}
+                  locale={{ emptyText: t('common.noData') }}
+                  columns={[
+                    {
+                      title: t('app.kuaielectronics.esd.colStatus'),
+                      dataIndex: 'label',
+                      render: (label: string) => <MarkerTag color="processing">{label}</MarkerTag>,
+                    },
+                    {
+                      title: t('app.kuaielectronics.esd.colCount'),
+                      dataIndex: 'count',
+                      width: 72,
+                    },
+                  ]}
                 />
               </ModuleActionPanel>
             ) : null}

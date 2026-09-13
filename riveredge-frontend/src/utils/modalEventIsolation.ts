@@ -15,3 +15,9 @@ export const MODAL_ISOLATE_POINTER_PROPS = {
   onClick: stopPortalBubble,
   onDoubleClick: stopPortalBubble,
 } as const;
+
+/** Modal 内 Select 下拉挂到内容区，避免明细表 overflow 裁切与 body 滚动锁竞争 */
+export function getPopupContainerInModal(trigger: HTMLElement): HTMLElement {
+  const el = trigger.closest('.ant-modal-content') ?? trigger.closest('.ant-modal-wrap');
+  return (el as HTMLElement) ?? document.body;
+}

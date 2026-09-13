@@ -304,7 +304,6 @@ async def _assert_quality_inspection_pending_approval(
     doc_label: str,
     verb: str,
     is_auto_approve: bool = False,
-    allow_approved_instance_sync: bool = False,
 ) -> None:
     """审核已开时须有进行中流程；auto_pass 完成写回或补齐已通过实例时放行。"""
     if is_auto_approve:
@@ -312,29 +311,21 @@ async def _assert_quality_inspection_pending_approval(
     audit_required = await _is_quality_audit_required(tenant_id, stage_code)
     if not audit_required:
         return
-    from core.services.approval.approval_instance_service import ApprovalInstanceService
+    from core.services.approval.audit_flow_guard import (
+        assert_manual_approval_action_allowed,
+        get_approval_gate_status,
+    )
 
-    approval_status = await ApprovalInstanceService.get_approval_status(
+    gate = await get_approval_gate_status(
         tenant_id=tenant_id,
         entity_type=stage_code,
         entity_id=inspection_id,
     )
-    has_pending_flow = bool(
-        approval_status.get("has_instance")
-        and approval_status.get("status") == "pending"
-    )
-    if has_pending_flow:
-        return
-    # 流程已通过、单据仍待审：补齐业务写回（空审批人 auto_pass / 完成回调曾缺失）
-    if allow_approved_instance_sync and bool(
-        approval_status.get("has_instance")
-        and approval_status.get("status") == "approved"
-    ):
-        return
-    from infra.exceptions.exceptions import BusinessLogicError
-
-    raise BusinessLogicError(
-        f"{doc_label}审核已开启但无进行中的审批流程，请先提交审批后再{verb}"
+    assert_manual_approval_action_allowed(
+        gate,
+        doc_label=doc_label,
+        verb=verb,
+        is_auto_approve=is_auto_approve,
     )
 
 
@@ -1286,7 +1277,9 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     logger.warning(f"来料检验合格 -> 关联入库单处理失败: {e}")
 
         # 空审批人 auto_pass：流程已通过，须在事务外同步落业务审核，避免嵌套事务挂起
-        if getattr(approval_instance, "status", None) == "approved":
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance and approval_instance_finished_on_submit(approval_instance):
             return await self.approve_inspection(
                 tenant_id=tenant_id,
                 inspection_id=inspection_id,
@@ -1612,10 +1605,6 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 inspection,
                 "reject" if rejection_reason else "approve",
             )
-            review_pending = str(getattr(inspection, "review_status", None) or "").strip() in {
-                "PENDING",
-                "待审核",
-            }
             await _assert_quality_inspection_pending_approval(
                 tenant_id=tenant_id,
                 stage_code="incoming_inspection",
@@ -1623,9 +1612,6 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 doc_label="来料检验",
                 verb="驳回" if rejection_reason else "审核",
                 is_auto_approve=is_auto_approve,
-                allow_approved_instance_sync=bool(
-                    review_pending and not rejection_reason
-                ),
             )
 
             approver_name = await self.get_user_name(approved_by)
@@ -3324,7 +3310,9 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 work_order_id=int(work_order_id),
             )
 
-        if getattr(approval_instance, "status", None) == "approved":
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance and approval_instance_finished_on_submit(approval_instance):
             return await self.approve_inspection(
                 tenant_id=tenant_id,
                 inspection_id=inspection_id,
@@ -3392,10 +3380,6 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 inspection,
                 "reject" if rejection_reason else "approve",
             )
-            review_pending = str(getattr(inspection, "review_status", None) or "").strip() in {
-                "PENDING",
-                "待审核",
-            }
             await _assert_quality_inspection_pending_approval(
                 tenant_id=tenant_id,
                 stage_code="process_inspection",
@@ -3403,9 +3387,6 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 doc_label="过程检验",
                 verb="驳回" if rejection_reason else "审核",
                 is_auto_approve=is_auto_approve,
-                allow_approved_instance_sync=bool(
-                    review_pending and not rejection_reason
-                ),
             )
 
             approver_name = await self.get_user_name(approved_by)
@@ -4946,7 +4927,9 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 source_type="finished_goods_inspection",
             )
 
-        if getattr(approval_instance, "status", None) == "approved":
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance and approval_instance_finished_on_submit(approval_instance):
             return await self.approve_inspection(
                 tenant_id=tenant_id,
                 inspection_id=inspection_id,
@@ -4980,10 +4963,6 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 inspection,
                 "reject" if rejection_reason else "approve",
             )
-            review_pending = str(getattr(inspection, "review_status", None) or "").strip() in {
-                "PENDING",
-                "待审核",
-            }
             await _assert_quality_inspection_pending_approval(
                 tenant_id=tenant_id,
                 stage_code="finished_goods_inspection",
@@ -4991,9 +4970,6 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 doc_label="成品检验",
                 verb="驳回" if rejection_reason else "审核",
                 is_auto_approve=is_auto_approve,
-                allow_approved_instance_sync=bool(
-                    review_pending and not rejection_reason
-                ),
             )
 
             approver_name = await self.get_user_name(approved_by)

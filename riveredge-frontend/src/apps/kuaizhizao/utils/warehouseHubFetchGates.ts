@@ -24,6 +24,7 @@ export const OUTBOUND_SOURCE_READ_PERMISSION = {
   outsource_issue: 'kuaizhizao:outsource-order:read',
   other_outbound: 'kuaizhizao:other-outbound:read',
   material_borrow: 'kuaizhizao:material-borrow:read',
+  purchase_return: 'kuaizhizao:purchase-return:read',
 } as const;
 
 export type OutboundHubSource = keyof typeof OUTBOUND_SOURCE_READ_PERMISSION;
@@ -46,8 +47,10 @@ export function shouldFetchInboundHubType(
   user: CurrentUser | undefined,
   typeFilter: string | undefined,
   source: InboundReceiptType,
+  scopedTypes?: readonly InboundReceiptType[],
 ): boolean {
-  if (typeFilter && typeFilter !== source) return false;
+  if (scopedTypes?.length && !scopedTypes.includes(source)) return false;
+  if (typeFilter && typeFilter !== 'all' && typeFilter !== source) return false;
   return canFetchInboundHubSource(user, source);
 }
 
@@ -55,7 +58,9 @@ export function shouldFetchOutboundHubType(
   user: CurrentUser | undefined,
   typeFilter: string | undefined,
   source: OutboundHubSource,
+  scopedTypes?: readonly OutboundHubSource[],
 ): boolean {
-  if (typeFilter && typeFilter !== source) return false;
+  if (scopedTypes?.length && !scopedTypes.includes(source)) return false;
+  if (typeFilter && typeFilter !== 'all' && typeFilter !== source) return false;
   return canFetchOutboundHubSource(user, source);
 }

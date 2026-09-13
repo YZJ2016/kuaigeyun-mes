@@ -2,28 +2,28 @@
 export const MASONRY_CHART_WEIGHT = 6;
 
 /**
- * 瀑布流卡可见性：加载中挂载；有数据挂载；全无数据且 emptyFallback 时挂空白壳。
+ * 瀑布流卡可见性：模块中心事项卡一律挂载（含空数据，由卡内 Empty / 空表展示）。
+ * 保留参数签名，避免各页调用处机械改签名；参数不再参与可见性判断。
  */
 export function showMasonryCard(
-  loading?: boolean,
-  hasData?: boolean,
-  emptyFallback?: boolean,
+  _loading?: boolean,
+  _hasData?: boolean,
+  _emptyFallback?: boolean,
 ): boolean {
-  if (loading) return true;
-  if (hasData) return true;
-  return Boolean(emptyFallback);
+  return true;
 }
 
-/** balanced 装箱权重：表/列表/动态按行数，封顶 8 */
+/** balanced 装箱权重：表/列表/动态按行数，封顶 8；空卡按 1 */
 export function masonryWeightFromRows(rowCount: number, cap = 8): number {
   return Math.min(cap, Math.max(1, rowCount));
 }
 
-/** 全部卡加载结束且皆无数据时，仍挂空白壳避免事项区整块留白 */
+/**
+ * @deprecated 卡已一律挂载，不再需要「全空才挂壳」；保留供旧调用兼容，恒为 true。
+ */
 export function resolveMasonryEmptyFallback(
-  masonryLoading: boolean,
-  hasDataFlags: boolean[],
+  _masonryLoading: boolean,
+  _hasDataFlags: boolean[],
 ): boolean {
-  if (masonryLoading) return false;
-  return !hasDataFlags.some(Boolean);
+  return true;
 }

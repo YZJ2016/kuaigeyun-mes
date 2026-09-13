@@ -668,6 +668,14 @@ class QuotationService:
                 submitted_by,
                 auto_approved=False,
             )
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance_finished_on_submit(instance):
+            await self.approve_quotation(
+                tenant_id,
+                quotation_id,
+                submitted_by,
+            )
 
     async def create_quotation(
         self,
@@ -873,22 +881,26 @@ class QuotationService:
         await self._assert_quotation_capability(tenant_id, quotation, "approve")
 
         audit_required = await self._quotation_audit_required(tenant_id)
+        approval_gate: dict = {}
+        sync_after_flow = False
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            approval_gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="quotation",
                 entity_id=quotation_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                approval_gate,
+                doc_label="报价单",
+                verb="审核",
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "报价单审核已开启但无进行中的审批流程，请先提交审批后再审核"
-                )
+            sync_after_flow = should_sync_doc_after_flow_completed(approval_gate, approve=True)
 
         from core.services.approval.uni_audit_service import UniAuditService
 
@@ -914,6 +926,9 @@ class QuotationService:
                     "审核通过",
                 )
             return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
+
+        if sync_after_flow:
+            return await _do_approve()
 
         result = await UniAuditService.approve_with_flow_fallback(
             tenant_id=tenant_id,
@@ -950,22 +965,25 @@ class QuotationService:
             raise BusinessLogicError(f"仅待审核的报价单可驳回，当前审核状态: {quotation.review_status}")
 
         audit_required = await self._quotation_audit_required(tenant_id)
+        sync_after_flow = False
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            approval_gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="quotation",
                 entity_id=quotation_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                approval_gate,
+                doc_label="报价单",
+                verb="驳回",
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "报价单审核已开启但无进行中的审批流程，请先提交审批后再驳回"
-                )
+            sync_after_flow = should_sync_doc_after_flow_completed(approval_gate, approve=False)
 
         from core.services.approval.uni_audit_service import UniAuditService
 
@@ -993,6 +1011,9 @@ class QuotationService:
                     "审核驳回",
                 )
             return await self.get_quotation_by_id(tenant_id, quotation_id, include_items=True)
+
+        if sync_after_flow:
+            return await _do_reject(review_remarks)
 
         result = await UniAuditService.reject_with_flow_fallback(
             tenant_id=tenant_id,

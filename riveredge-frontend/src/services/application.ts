@@ -323,6 +323,29 @@ function formatSyncManifestApiError(
 
 const SYNC_ALL_MANIFESTS_AND_MENUS_TIMEOUT_MS = 180_000;
 
+export const MENU_SYNC_STATUS_QUERY_KEY = ['menuSyncStatus'] as const;
+
+export type MenuSyncStatus = {
+  needs_sync: boolean;
+  stale_app_count: number;
+  stale_app_codes: string[];
+  manifest_fingerprint: string;
+};
+
+/** 检测已启用应用菜单是否与当前 manifest 一致（租户管理员登录提示用） */
+export async function getMenuSyncStatus(): Promise<MenuSyncStatus | null> {
+  try {
+    return await apiRequest<MenuSyncStatus>('/core/applications/menu-sync-status');
+  } catch (error: unknown) {
+    const status = (error as { response?: { status?: number } })?.response?.status;
+    // 非组织管理员：静默跳过，避免弹全局 403
+    if (status === 403) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export type SyncAllManifestsAndMenusResult = {
   success: boolean;
   message: string;

@@ -13,10 +13,15 @@
  * 使用场景：BasicLayout（侧边栏、UniTabs、面包屑、页面标题）、Dashboard 快捷入口等
  */
 
-import { createElement, useMemo, useCallback, useEffect } from 'react';
+import { createElement, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MenuDataItem } from '@ant-design/pro-components';
-import { getMenuCustomLayout, type MenuTree, type CustomMenuLayoutNode } from '../services/menu';
+import {
+  buildMenuCustomLayoutQueryKey,
+  getMenuCustomLayout,
+  type MenuTree,
+  type CustomMenuLayoutNode,
+} from '../services/menu';
 import { extractAppCodeFromPath, resolveAppMenuGroupDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
 import { useConfigStore } from '../stores/configStore';
@@ -29,7 +34,6 @@ import { useCurrentUser } from './useCurrentUser';
 
 // 向后兼容：历史代码从本模块导入该常量
 export { NAVIGATION_MENU_TREE_QUERY_KEY };
-const MENU_CUSTOM_LAYOUT_QUERY_KEY = 'menuCustomLayout';
 
 function treeHasAppPath(nodes: MenuTree[]): boolean {
   for (const n of nodes) {
@@ -303,12 +307,18 @@ export function useUnifiedMenuData(
   }, [currentUser?.id, currentUser?.is_tenant_admin, currentUser?.is_infra_admin, menuPermissionUser?.permissions?.length]);
 
   const { data: fullMenuTree, isLoading, refetch } = useNavigationMenuTreeQuery();
+  const menuCustomLayoutQueryKey = useMemo(
+    () => buildMenuCustomLayoutQueryKey(currentUser?.tenant_id),
+    [currentUser?.tenant_id],
+  );
   const { data: menuCustomLayout, isLoading: customLayoutLoading } = useQuery({
-    queryKey: [MENU_CUSTOM_LAYOUT_QUERY_KEY, currentUser?.tenant_id ?? null],
+    queryKey: menuCustomLayoutQueryKey,
     queryFn: () => getMenuCustomLayout(),
     enabled: !!currentUser,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
+    // 菜单重命名等仅刷新导航树时，避免布局 query 短暂空窗回退 manifest 默认序
+    placeholderData: (previousData) => previousData,
   });
 
   const applicationMenus = useMemo(() => {
@@ -317,8 +327,9 @@ export function useUnifiedMenuData(
   }, [fullMenuTree]);
 
   const mappedApplicationMenus = useMemo(() => {
-    const layoutNodes = menuCustomLayout?.nodes || [];
-    if (!menuCustomLayout?.enabled || !layoutNodes.length) {
+    const layoutEnabled = menuCustomLayout?.enabled === true;
+    const layoutNodes = menuCustomLayout?.nodes;
+    if (!layoutEnabled || !Array.isArray(layoutNodes) || layoutNodes.length === 0) {
       return applicationMenus;
     }
     const sourceByUuid = flattenMenuTreeByUuid(applicationMenus);
@@ -332,15 +343,20 @@ export function useUnifiedMenuData(
     if (applicationMenuVersion > 0) {
       queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
-      queryClient.invalidateQueries({ queryKey: [MENU_CUSTOM_LAYOUT_QUERY_KEY] });
     }
   }, [applicationMenuVersion, queryClient]);
 
+  const prevPermissionVersionRef = useRef<number | null>(null);
   useEffect(() => {
-    if (currentUser?.permission_version != null) {
-      queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
-      queryClient.invalidateQueries({ queryKey: [MENU_CUSTOM_LAYOUT_QUERY_KEY] });
+    const version = currentUser?.permission_version;
+    if (version == null) return;
+    if (prevPermissionVersionRef.current === null) {
+      prevPermissionVersionRef.current = version;
+      return;
     }
+    if (prevPermissionVersionRef.current === version) return;
+    prevPermissionVersionRef.current = version;
+    queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
   }, [currentUser?.permission_version, queryClient]);
 
   const invalidateAndRefetch = useCallback(() => {

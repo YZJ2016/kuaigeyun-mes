@@ -568,7 +568,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     {
         "page_code": "kuaizhizao-production-outsource-order",
         "page_name": "委外单",
-        "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
+        "page_path": "/apps/kuaizhizao/outsource-management/outsource-orders",
         "code_field": "code",
         "code_field_label": "委外单编码",
         "module": "快格轻制造",
@@ -1368,7 +1368,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     {
         "page_code": "kuaizhizao-production-outsource-work-order",
         "page_name": "委外工单",
-        "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
+        "page_path": "/apps/kuaizhizao/outsource-management/outsource-work-orders",
         "code_field": "code",
         "code_field_label": "委外工单编码",
         "module": "快格轻制造",
@@ -1380,7 +1380,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     {
         "page_code": "kuaizhizao-production-outsource-material-receipt",
         "page_name": "委外收货",
-        "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+        "page_path": "/apps/kuaizhizao/outsource-management/outsource-receipt",
         "code_field": "code",
         "code_field_label": "委外收货单编号",
         "module": "快格轻制造",
@@ -1392,7 +1392,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     {
         "page_code": "kuaizhizao-production-outsource-material-return",
         "page_name": "委外退料",
-        "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+        "page_path": "/apps/kuaizhizao/outsource-management/outsource-material-return",
         "code_field": "code",
         "code_field_label": "委外退料单编号",
         "module": "快格轻制造",
@@ -1404,7 +1404,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
     {
         "page_code": "kuaizhizao-production-outsource-product-return",
         "page_name": "委外退货",
-        "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+        "page_path": "/apps/kuaizhizao/outsource-management/outsource-product-return",
         "code_field": "code",
         "code_field_label": "委外退货单编号",
         "module": "快格轻制造",

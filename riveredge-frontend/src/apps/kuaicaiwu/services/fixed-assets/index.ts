@@ -37,6 +37,7 @@ export interface FaAsset {
   notes?: string;
   attachment_uuids?: string[];
   depreciation_method?: string;
+  total_workload?: number;
   original_value: number;
   impairment_value?: number;
   useful_life_months: number;
@@ -142,6 +143,31 @@ export const fixedAssetService = {
       method: 'POST',
       body: { period_year, period_month, notes },
     }),
+
+  generatePeriodCloseVouchers: (closeId: number) =>
+    apiRequest<{
+      created_count: number;
+      skipped: number;
+      fa_event_count: number;
+      voucher_pending_count: number;
+      voucher_draft_count: number;
+      voucher_reviewed_count: number;
+      voucher_posted_count: number;
+      errors?: string[];
+    }>(`${API}/period-closes/${closeId}/generate-vouchers`, { method: 'POST' }),
+
+  postPeriodCloseVouchers: (closeId: number) =>
+    apiRequest<{
+      posted_count: number;
+      reviewed_count: number;
+      skipped: number;
+      fa_event_count: number;
+      voucher_pending_count: number;
+      voucher_draft_count: number;
+      voucher_reviewed_count: number;
+      voucher_posted_count: number;
+      errors?: string[];
+    }>(`${API}/period-closes/${closeId}/post-vouchers`, { method: 'POST' }),
 
   depreciationDetailReport: (params?: Record<string, unknown>) =>
     apiRequest<Record<string, unknown>[]>(`${API}/reports/depreciation-detail`, { params }),

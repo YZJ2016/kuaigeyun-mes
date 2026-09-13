@@ -4,7 +4,9 @@ from types import SimpleNamespace
 from apps.kuaizhizao.utils.material_unit_utils import (
     build_work_order_unit_fields,
     convert_from_base_quantity,
+    convert_purchase_unit_price_to_base,
     convert_to_base_quantity,
+    convert_unit_price_to_base,
     resolve_material_scenario_unit,
 )
 
@@ -49,6 +51,20 @@ def test_build_work_order_unit_fields():
     assert fields["product_unit"] == "瓶"
     assert fields["display_quantity"] == Decimal("80")
     assert fields["display_completed_quantity"] == Decimal("16")
+
+
+def test_purchase_unit_price_to_base_piece():
+    mat = SimpleNamespace(
+        base_unit="个",
+        units={
+            "units": [
+                {"unit": "箱", "numerator": 1000, "denominator": 1},
+            ],
+            "scenarios": {"purchase": "箱", "inventory": "个"},
+        },
+    )
+    assert convert_purchase_unit_price_to_base(mat, Decimal("50")) == Decimal("0.05")
+    assert convert_unit_price_to_base(mat, Decimal("50"), from_unit="箱") == Decimal("0.05")
 
 
 def test_purchase_box_to_base_piece():

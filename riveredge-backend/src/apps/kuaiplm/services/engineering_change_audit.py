@@ -103,7 +103,7 @@ async def start_change_approval_flow(
     change: Any,
     *,
     submitter_id: int,
-) -> None:
+) -> Any:
     """创建变更进入待审批时自动启动审批实例（发起人为申请人）。"""
     from core.services.approval.approval_instance_service import ApprovalInstanceService
 
@@ -129,6 +129,7 @@ async def start_change_approval_flow(
         raise ValidationError(
             f"{label}审核已开启但未找到可用的审批流程，请在配置中心检查 {entity_type} 审批流程是否已激活"
         )
+    return instance
 
 
 async def cancel_change_approval_flow(

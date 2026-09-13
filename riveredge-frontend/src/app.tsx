@@ -214,7 +214,6 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     if (permissionVersionChanged) {
       queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
-      queryClient.invalidateQueries({ queryKey: ['menuCustomLayout'] });
     }
   }, [userData, setCurrentUser]);
 

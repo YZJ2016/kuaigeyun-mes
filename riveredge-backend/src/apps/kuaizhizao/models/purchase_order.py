@@ -13,6 +13,18 @@ from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 from decimal import Decimal
 
 
+def compute_po_item_received_outstanding(
+    ordered: Decimal,
+    confirmed_receipt_qty: Decimal,
+    confirmed_return_qty: Decimal,
+) -> tuple[Decimal, Decimal]:
+    """按已确认入库减已确认退货，计算采购订单行已到货/未到货。"""
+    net_received = max(Decimal("0"), confirmed_receipt_qty - confirmed_return_qty)
+    received = min(net_received, ordered) if ordered > 0 else net_received
+    outstanding = max(ordered - received, Decimal("0"))
+    return received, outstanding
+
+
 def effective_po_item_outstanding(item: "PurchaseOrderItem") -> Decimal:
     """未到货数量：ordered - received 为真源；stored 仅作上限，避免与 received 不一致时重复下推。"""
     ordered = Decimal(str(item.ordered_quantity or 0))

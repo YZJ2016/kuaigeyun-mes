@@ -46,8 +46,10 @@ class VoucherTemplateService:
         "WAREHOUSE_OUTBOUND": "inventory_issue",
         "FA_DEPRECIATION": "fa_depreciation",
         "FA_DISPOSAL": "fa_disposal",
+        "FA_IMPAIRMENT": "fa_impairment",
         "FIXED_ASSET_DEPRECIATION": "fa_depreciation",
         "FIXED_ASSET_DISPOSAL": "fa_disposal",
+        "FIXED_ASSET_IMPAIRMENT": "fa_impairment",
     }
 
     DEFAULT_TEMPLATES: Dict[str, List[Dict[str, str]]] = {
@@ -119,6 +121,10 @@ class VoucherTemplateService:
             {"side": "debit", "account_code": "1602", "summary": "转出累计折旧"},
             {"side": "credit", "account_code": "1601", "summary": "转出固定资产原值"},
         ],
+        "fa_impairment": [
+            {"side": "debit", "account_code": "6701", "summary": "减值"},
+            {"side": "credit", "account_code": "1603", "summary": "减值"},
+        ],
     }
 
     async def _resolve_account(
@@ -164,6 +170,14 @@ class VoucherTemplateService:
             rows = [
                 {"side": "debit", "account_code": accum_code, "summary": "转出累计折旧"},
                 {"side": "credit", "account_code": asset_code, "summary": "转出固定资产原值"},
+            ]
+        elif template_key == "fa_impairment":
+            loss_code = payload.get("impairment_loss_account_code") or "6701"
+            provision_code = payload.get("impairment_provision_account_code") or "1603"
+            summary = event.notes or "减值"
+            rows = [
+                {"side": "debit", "account_code": loss_code, "summary": summary},
+                {"side": "credit", "account_code": provision_code, "summary": summary},
             ]
         else:
             rows = self.DEFAULT_TEMPLATES.get(template_key, [])

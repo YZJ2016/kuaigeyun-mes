@@ -42,12 +42,12 @@ import {
   clearTenantBackendHome,
   TENANT_BACKEND_HOME_QUERY_KEY,
   EFFECTIVE_HOME_QUERY_KEY,
+  buildMenuCustomLayoutQueryKey,
   getMenuCustomLayout,
   updateMenuCustomLayout,
   getNavigationMenuTree,
-  syncAllMenus,
 } from '../../../services/menu';
-import { getApplicationList } from '../../../services/application';
+import { getApplicationList, syncAllManifestsAndMenus, MENU_SYNC_STATUS_QUERY_KEY } from '../../../services/application';
 import { useGlobalStore } from '../../../stores';
 import { useConfigStore } from '../../../stores/configStore';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -129,7 +129,7 @@ function stripEmptyMenuChildren(nodes: MenuTree[]): MenuTree[] {
 
 const trimField = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
-const CUSTOM_LAYOUT_QUERY_KEY = ['menuCustomLayout'] as const;
+const CUSTOM_LAYOUT_QUERY_KEY = ['menuCustomLayout'] as const; // 前缀匹配 buildMenuCustomLayoutQueryKey
 
   /**
    * 递归获取所有菜单 UUID（用于一键展开）
@@ -271,15 +271,26 @@ const MenuListPage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const detailRetryUuidRef = useRef<string | null>(null);
 
-  /** 菜单变更后刷新侧边栏/UniTabs/面包屑（统一数据源） */
-  const refreshLayoutMenus = useCallback(() => {
+  /** 菜单元数据变更后刷新导航树（不重刷自组布局，避免侧栏短暂回退 manifest 默认序） */
+  const refreshNavigationMenus = useCallback(() => {
     useGlobalStore.getState().incrementApplicationMenuVersion();
     queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
     queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
-    queryClient.invalidateQueries({ queryKey: [...CUSTOM_LAYOUT_QUERY_KEY] });
     queryClient.invalidateQueries({ queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY] });
     queryClient.invalidateQueries({ queryKey: [...EFFECTIVE_HOME_QUERY_KEY] });
   }, [queryClient]);
+
+  const refreshCustomMenuLayoutCache = useCallback(
+    (layout?: Awaited<ReturnType<typeof getMenuCustomLayout>>) => {
+      const queryKey = buildMenuCustomLayoutQueryKey(currentUser?.tenant_id);
+      if (layout) {
+        queryClient.setQueryData(queryKey, layout);
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: [...CUSTOM_LAYOUT_QUERY_KEY] });
+    },
+    [currentUser?.tenant_id, queryClient],
+  );
 
   useEffect(() => {
     setShowAppMenuNames(configShowAppMenuNames);
@@ -370,7 +381,8 @@ const MenuListPage: React.FC = () => {
       }
       messageApi.success(t('pages.system.menus.customLayoutSaveSuccess'));
       setCustomLayoutModalOpen(false);
-      refreshLayoutMenus();
+      refreshCustomMenuLayoutCache(saved);
+      refreshNavigationMenus();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.menus.customLayoutSaveFailed'));
@@ -380,7 +392,8 @@ const MenuListPage: React.FC = () => {
   }, [
     messageApi,
     patchShowAppMenuNamesConfig,
-    refreshLayoutMenus,
+    refreshCustomMenuLayoutCache,
+    refreshNavigationMenus,
     t,
   ]);
 
@@ -399,13 +412,14 @@ const MenuListPage: React.FC = () => {
           layout.nodes || [],
           validMenuUuids,
         );
-        await updateMenuCustomLayout({
+        const saved = await updateMenuCustomLayout({
           enabled: !!layout.enabled,
           show_app_names: checked,
           nodes,
         });
         patchShowAppMenuNamesConfig(checked);
-        refreshLayoutMenus();
+        refreshCustomMenuLayoutCache(saved);
+        refreshNavigationMenus();
         if (removedCount > 0) {
           messageApi.warning(
             t('pages.system.menus.customLayoutStaleRefsRemoved', { count: removedCount }),
@@ -423,7 +437,7 @@ const MenuListPage: React.FC = () => {
         setShowAppMenuNamesSaving(false);
       }
     },
-    [messageApi, patchShowAppMenuNamesConfig, refreshLayoutMenus, showAppMenuNames, t],
+    [messageApi, patchShowAppMenuNamesConfig, refreshCustomMenuLayoutCache, refreshNavigationMenus, showAppMenuNames, t],
   );
 
   const handleSetBackendHome = useCallback(
@@ -570,12 +584,12 @@ const MenuListPage: React.FC = () => {
     try {
       await deleteMenu(record.uuid);
       messageApi.success(t('common.deleteSuccess'));
-      refreshLayoutMenus();
+      refreshNavigationMenus();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || t('common.deleteFailed'));
     }
-  }, [messageApi, refreshLayoutMenus, t]);
+  }, [messageApi, refreshNavigationMenus, t]);
 
   const handleBatchDelete = useCallback(async (keys: React.Key[]) => {
     if (keys.length === 0) return;
@@ -596,13 +610,13 @@ const MenuListPage: React.FC = () => {
       await Promise.all(deletable.map((uuid) => deleteMenu(uuid)));
       messageApi.success(t('pages.system.menus.batchDeleteSuccess'));
       setSelectedRowKeys([]);
-      refreshLayoutMenus();
+      refreshNavigationMenus();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.menus.batchDeleteFailed'));
       actionRef.current?.reload();
     }
-  }, [menuTreeData, messageApi, refreshLayoutMenus, t]);
+  }, [menuTreeData, messageApi, refreshNavigationMenus, t]);
 
   const handleRestoreDefault = useCallback(async () => {
     setRestoreDefaultLoading(true);
@@ -611,12 +625,14 @@ const MenuListPage: React.FC = () => {
       key: 'restore-default',
     });
     try {
-      const result = await syncAllMenus();
-      refreshLayoutMenus();
+      const result = await syncAllManifestsAndMenus();
+      refreshNavigationMenus();
+      refreshCustomMenuLayoutCache();
+      queryClient.invalidateQueries({ queryKey: [...MENU_SYNC_STATUS_QUERY_KEY] });
       actionRef.current?.reload();
       messageApi.success({
         content: t('pages.system.menus.restoreDefaultSuccess', {
-          count: result.count ?? 0,
+          count: result.menu_count ?? 0,
         }),
         key: 'restore-default',
       });
@@ -628,7 +644,7 @@ const MenuListPage: React.FC = () => {
     } finally {
       setRestoreDefaultLoading(false);
     }
-  }, [messageApi, refreshLayoutMenus, t]);
+  }, [messageApi, queryClient, refreshCustomMenuLayoutCache, refreshNavigationMenus, t]);
 
   const handleCreate = useCallback((parentUuid?: string) => {
     const parent = findMenuInTree(parentUuid, menuTreeData);
@@ -648,6 +664,7 @@ const MenuListPage: React.FC = () => {
     try {
         setIsEdit(true);
         setCurrentMenuUuid(record.uuid);
+        const treeNode = findMenuInTree(record.uuid, menuTreeData);
         const detail = await getMenuDetail(record.uuid);
         const { meta, ...detailWithoutMeta } = detail;
         const structuralName = detail.name;
@@ -657,6 +674,7 @@ const MenuListPage: React.FC = () => {
           : translateAppMenuItemName(structuralName, detail.path, t);
         setFormInitialValues({
           ...detailWithoutMeta,
+          parent_uuid: detail.parent_uuid ?? treeNode?.parent_uuid ?? null,
           _structuralName: structuralName,
           name: override || defaultLabel,
         });
@@ -664,7 +682,7 @@ const MenuListPage: React.FC = () => {
     } catch (error: any) {
         messageApi.error(error.message || t('pages.system.menus.getDetailFailed'));
     }
-  }, [messageApi, t]);
+  }, [menuTreeData, messageApi, t]);
   
   const loadDetail = useCallback(
     async (uuid: string) => {
@@ -732,6 +750,14 @@ const MenuListPage: React.FC = () => {
           const v = payload[k];
           if (v === undefined) delete payload[k];
         });
+        const isManifestMenuEdit =
+          isEdit &&
+          !!formInitialValues?.application_uuid &&
+          isManifestSyncedAppMenuName(structuralName) &&
+          !isAppRootMenuPath(formInitialValues?.path);
+        if (isManifestMenuEdit) {
+          delete payload.parent_uuid;
+        }
         if (!isEdit) {
           const parent = findMenuInTree(values.parent_uuid, menuTreeData);
           if (parent?.application_uuid) {
@@ -749,14 +775,14 @@ const MenuListPage: React.FC = () => {
             messageApi.success(t('common.createSuccess'));
         }
         setModalVisible(false);
-        refreshLayoutMenus();
+        refreshNavigationMenus();
     actionRef.current?.reload();
     } catch (error: any) {
         messageApi.error(error.message || t('common.operationFailed'));
     } finally {
         setFormLoading(false);
     }
-  }, [currentMenuUuid, formInitialValues, isEdit, menuTreeData, messageApi, refreshLayoutMenus, t]);
+  }, [currentMenuUuid, formInitialValues, isEdit, menuTreeData, messageApi, refreshNavigationMenus, t]);
 
   const columns: ProColumns<Menu>[] = useMemo(() => alignProColumns([
     {
@@ -1122,11 +1148,17 @@ const MenuListPage: React.FC = () => {
                 name="parent_uuid"
                 label={t('pages.system.menus.parentMenu')}
                 placeholder={t('pages.system.menus.parentMenuPlaceholder')}
+                disabled={isEdit && editingMenuMeta.isManifestMenu}
+                tooltip={
+                  isEdit && editingMenuMeta.isManifestMenu
+                    ? t('pages.system.menus.parentMenuManifestLockedHint')
+                    : undefined
+                }
                 fieldProps={{
                     treeData: parentMenuTreeData,
                     fieldNames: { label: 'name', value: 'uuid', children: 'children' },
                     showSearch: true,
-                    allowClear: true,
+                    allowClear: !editingMenuMeta.isManifestMenu,
                     treeDefaultExpandAll: true,
                     variant: 'outlined',
                 }}

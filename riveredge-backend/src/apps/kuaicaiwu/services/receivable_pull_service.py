@@ -712,6 +712,11 @@ class ReceivablePullService(AppBaseService[Receivable]):
         pushed_map = await sales_invoice_pull._sum_pushed_totals_by_receivable(
             tenant_id, receivable_ids, code_by_id
         )
+        from apps.kuaicaiwu.services.return_open_balance_offset_service import (
+            sum_goods_offset_for_receivable_ids,
+        )
+
+        goods_offset_map = await sum_goods_offset_for_receivable_ids(tenant_id, receivable_ids)
 
         enriched: List[Dict[str, Any]] = []
         for rec in receivables:
@@ -720,6 +725,7 @@ class ReceivablePullService(AppBaseService[Receivable]):
                 tenant_id,
                 rec,
                 pushed=pushed_map.get(rid, Decimal("0")),
+                goods_offset=goods_offset_map.get(rid, Decimal("0")),
             )
             allowed, reason = sales_invoice_pull._derive_pull_capability(
                 source_allowed=sales_invoice_pull._receivable_source_allowed(rec),
@@ -753,9 +759,15 @@ class ReceivablePullService(AppBaseService[Receivable]):
                 payload["remaining_invoice_amount"] = Decimal("0")
                 payload["invoice_status"] = "未开票"
             else:
+                total_amount = Decimal(str(payload.get("total_amount") or 0))
+                goods_offset = goods_offset_map.get(rid, Decimal("0"))
+                effective_invoice_total = max(
+                    Decimal("0"),
+                    total_amount - max(Decimal("0"), goods_offset),
+                )
                 invoiced, remaining_inv, inv_status = derive_invoice_amount_status(
                     pushed_map.get(rid, Decimal("0")),
-                    Decimal(str(payload.get("total_amount") or 0)),
+                    effective_invoice_total,
                     status_none="未开票",
                     status_partial="部分开票",
                     status_full="已开票",

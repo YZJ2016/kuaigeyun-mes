@@ -6,7 +6,7 @@
 
 import React from 'react';
 import type { MenuTree } from '../../services/menu';
-import { ManufacturingIcons } from '../../utils/manufacturingIcons';
+import { resolveMenuIconComponent } from '../../utils/manufacturingIcons';
 
 function iconKeyFromMenu(menu: MenuTree | null | undefined): string {
   return typeof menu?.icon === 'string' ? menu.icon.trim() : '';
@@ -71,7 +71,7 @@ export function renderQuickEntryIconByKey(
     }
     return null;
   }
-  const IconComponent = ManufacturingIcons[key as keyof typeof ManufacturingIcons];
+  const IconComponent = resolveMenuIconComponent(key);
   if (!IconComponent) {
     if (process.env.NODE_ENV === 'development') {
       console.error(
@@ -103,11 +103,7 @@ export function resolveQuickEntryIconFromTree(
     hit = findMenuAncestryByPath(menuTree, opts.menu_path);
   }
   if (!hit) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error(
-        `[quick-entry] 菜单树中找不到节点（uuid=${opts.menu_uuid ?? ''} path=${opts.menu_path ?? ''}），无法解析 icon。`,
-      );
-    }
+    // 节点不在当前导航树（偏好残留 / 菜单已下线）：静默无图标，由展示层丢弃该项
     return null;
   }
   return renderQuickEntryMenuIcon(hit.menu, hit.ancestors);

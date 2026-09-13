@@ -799,6 +799,9 @@ const PurchaseOrdersPage: React.FC = () => {
   const [pushToReturnWarehouseId, setPushToReturnWarehouseId] = useState<number | undefined>(undefined);
   const [pushToReturnWarehouseName, setPushToReturnWarehouseName] = useState('');
   const [pushToReturnLoading, setPushToReturnLoading] = useState(false);
+  const [pushToReturnLineMeta, setPushToReturnLineMeta] = useState<
+    Record<number, { received: number; pushed: number; remaining: number }>
+  >({});
   const [landingCostOrder, setLandingCostOrder] = useState<PurchaseOrder | null>(null);
 
   /** 列表列顺序：金额/数量/时间在前；生命周期固定倒数第二；操作列最后（与 UI_Standard 一致） */
@@ -1313,7 +1316,7 @@ const PurchaseOrdersPage: React.FC = () => {
     }
     if (pushPreviewKind === 'purchase_return') {
       return {
-        quantity: t('common.quantity'),
+        quantity: t('app.kuaizhizao.purchaseOrder.col.receivedQty'),
         pushed: t('app.kuaizhizao.salesOrder.colPushedQty'),
         pushable: t('app.kuaizhizao.salesOrder.colPushableQty'),
       };
@@ -1369,16 +1372,43 @@ const PurchaseOrdersPage: React.FC = () => {
 
   const openPushReturnWarehouseModal = useCallback(
     async (record: PurchaseOrder, quantities: Record<number, number>) => {
-      const detail = await getPurchaseOrder(record.id!);
-      const items = (detail.items || []).filter(
-        (it: PurchaseOrderItem) => it.id != null && (quantities[it.id] ?? 0) > 0,
+      const [detail, preview] = await Promise.all([
+        getPurchaseOrder(record.id!),
+        previewPushToPurchaseReturn(record.id!),
+      ]);
+      const previewByItemId = new Map(
+        (preview.items || []).map((row) => [Number(row.item_id), row]),
       );
+      const lineMeta: Record<number, { received: number; pushed: number; remaining: number }> = {};
+      for (const row of preview.items || []) {
+        const itemId = Number(row.item_id);
+        if (!Number.isFinite(itemId) || itemId <= 0) continue;
+        lineMeta[itemId] = {
+          received: Number(row.quantity ?? 0),
+          pushed: Number(row.pushed_quantity ?? 0),
+          remaining: Number(row.max_push_quantity ?? 0),
+        };
+      }
+      const items = (detail.items || []).filter((it: PurchaseOrderItem) => {
+        if (it.id == null || (quantities[it.id] ?? 0) <= 0) return false;
+        const meta = lineMeta[it.id];
+        return meta ? meta.remaining > 0 : true;
+      });
       if (items.length === 0) {
         messageApi.warning(t('app.kuaizhizao.purchaseOrder.noReturnableQty'));
         return;
       }
+      const clampedQuantities: Record<number, number> = {};
+      for (const it of items) {
+        if (it.id == null) continue;
+        const meta = previewByItemId.get(it.id);
+        const max = Number(meta?.max_push_quantity ?? it.received_quantity ?? 0);
+        const requested = Number(quantities[it.id] ?? 0);
+        clampedQuantities[it.id] = Math.min(requested, max > 0 ? max : requested);
+      }
       setPushToReturnOrder(detail as PurchaseOrderDetail);
-      setPushToReturnQuantities(quantities);
+      setPushToReturnQuantities(clampedQuantities);
+      setPushToReturnLineMeta(lineMeta);
       setPushToReturnWarehouseId(undefined);
       setPushToReturnWarehouseName('');
       setPushToReturnVisible(true);
@@ -1648,11 +1678,16 @@ const PurchaseOrdersPage: React.FC = () => {
       messageApi.warning(t('app.kuaizhizao.purchaseOrder.returnWarehouseRequired'));
       return;
     }
-    const items = (pushToReturnOrder.items || []).filter((it: PurchaseOrderItem) => Number(it.received_quantity ?? 0) > 0);
+    const items = (pushToReturnOrder.items || []).filter((it: PurchaseOrderItem) => {
+      if (it.id == null) return false;
+      const meta = pushToReturnLineMeta[it.id];
+      return meta ? meta.remaining > 0 : Number(it.received_quantity ?? 0) > 0;
+    });
     for (const it of items) {
       if (it.id == null) continue;
       const qty = pushToReturnQuantities[it.id] ?? 0;
-      const max = Number(it.received_quantity ?? 0);
+      const meta = pushToReturnLineMeta[it.id];
+      const max = meta?.remaining ?? Number(it.received_quantity ?? 0);
       if (qty <= 0) continue;
       if (qty > max) {
         messageApi.error(t('app.kuaizhizao.purchaseOrder.qtyExceedsReturnable', { material: it.material_code || it.material_name, max }));
@@ -1671,6 +1706,7 @@ const PurchaseOrdersPage: React.FC = () => {
       setPushToReturnVisible(false);
       setPushToReturnOrder(null);
       setPushToReturnQuantities({});
+      setPushToReturnLineMeta({});
       setPushToReturnWarehouseId(undefined);
       setPushToReturnWarehouseName('');
       invalidateStatistics();
@@ -4178,6 +4214,7 @@ const PurchaseOrdersPage: React.FC = () => {
           setPushToReturnVisible(false);
           setPushToReturnOrder(null);
           setPushToReturnQuantities({});
+          setPushToReturnLineMeta({});
           setPushToReturnWarehouseId(undefined);
           setPushToReturnWarehouseName('');
         }}
@@ -4217,15 +4254,46 @@ const PurchaseOrdersPage: React.FC = () => {
             </ProForm>
             <Table
               size="small"
-              dataSource={(pushToReturnOrder.items || []).filter((it: PurchaseOrderItem) => (it.received_quantity ?? 0) > 0)}
+              dataSource={(pushToReturnOrder.items || []).filter((it: PurchaseOrderItem) => {
+                if (it.id == null) return false;
+                const meta = pushToReturnLineMeta[it.id];
+                return meta ? meta.remaining > 0 : (it.received_quantity ?? 0) > 0;
+              })}
               rowKey="id"
               pagination={false}
-              scroll={{ x: 700 }}
+              scroll={{ x: 860 }}
               columns={[
                 { title: t('app.kuaizhizao.purchaseOrder.col.materialCode'), dataIndex: 'material_code', width: 120 },
                 { title: t('app.kuaizhizao.purchaseOrder.col.materialName'), dataIndex: 'material_name', width: 150 },
-                { title: t('app.kuaizhizao.purchaseOrder.col.orderedQty'), dataIndex: 'ordered_quantity', width: 100, align: 'right' , render: formatQuantity },
-                { title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'), dataIndex: 'received_quantity', width: 90, align: 'right', render: formatQuantity },
+                {
+                  title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'),
+                  width: 90,
+                  align: 'right',
+                  render: (_: unknown, record: PurchaseOrderItem) =>
+                    formatQuantity(
+                      record.id != null
+                        ? pushToReturnLineMeta[record.id]?.received ?? record.received_quantity
+                        : record.received_quantity,
+                    ),
+                },
+                {
+                  title: t('app.kuaizhizao.salesOrder.colPushedQty'),
+                  width: 90,
+                  align: 'right',
+                  render: (_: unknown, record: PurchaseOrderItem) =>
+                    formatQuantity(record.id != null ? pushToReturnLineMeta[record.id]?.pushed ?? 0 : 0),
+                },
+                {
+                  title: t('app.kuaizhizao.salesOrder.colPushableQty'),
+                  width: 90,
+                  align: 'right',
+                  render: (_: unknown, record: PurchaseOrderItem) =>
+                    formatQuantity(
+                      record.id != null
+                        ? pushToReturnLineMeta[record.id]?.remaining ?? record.received_quantity
+                        : record.received_quantity,
+                    ),
+                },
                 {
                   title: t('app.kuaizhizao.purchaseOrder.col.returnQty'),
                   width: 140,
@@ -4233,7 +4301,10 @@ const PurchaseOrdersPage: React.FC = () => {
                   render: (_: any, record: PurchaseOrderItem) => (record.id != null ? (
                     <InputNumber
                       min={0}
-                      max={Number(record.received_quantity ?? 0)}
+                      max={
+                        pushToReturnLineMeta[record.id]?.remaining ??
+                        Number(record.received_quantity ?? 0)
+                      }
                       value={pushToReturnQuantities[record.id] ?? 0}
                       onChange={(v) =>
                         setPushToReturnQuantities((prev) => ({

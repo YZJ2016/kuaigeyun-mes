@@ -18,7 +18,7 @@ from apps.kuaicaiwu.services.fa_depreciation_service import (
 )
 from core.api.deps.deps import get_current_user
 from core.schemas.base import BaseSchema
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
 router = APIRouter(
@@ -79,6 +79,7 @@ class FaAssetBody(BaseSchema):
     notes: Optional[str] = None
     attachment_uuids: Optional[List[str]] = None
     depreciation_method: str = "straight_line"
+    total_workload: Optional[Decimal] = None
     original_value: Decimal = Field(Decimal("0"))
     impairment_value: Decimal = Field(Decimal("0"))
     useful_life_months: int = Field(60, ge=1)
@@ -452,6 +453,36 @@ async def close_period(body: FaPeriodCloseBody, current_user: User = Depends(get
         current_user,
         body.notes,
     )
+
+
+@router.post(
+    "/period-closes/{close_id}/generate-vouchers",
+    dependencies=[Depends(require_kuaicaiwu_module_access("fixed-asset"))],
+)
+async def generate_period_close_vouchers(
+    close_id: int, current_user: User = Depends(get_current_user)
+):
+    try:
+        return await period_close_service.generate_period_vouchers(
+            current_user.tenant_id, close_id, current_user
+        )
+    except (ValidationError, NotFoundError, BusinessLogicError) as exc:
+        raise _err(exc)
+
+
+@router.post(
+    "/period-closes/{close_id}/post-vouchers",
+    dependencies=[Depends(require_kuaicaiwu_module_access("fixed-asset"))],
+)
+async def post_period_close_vouchers(
+    close_id: int, current_user: User = Depends(get_current_user)
+):
+    try:
+        return await period_close_service.post_period_vouchers(
+            current_user.tenant_id, close_id, current_user
+        )
+    except (ValidationError, NotFoundError, BusinessLogicError) as exc:
+        raise _err(exc)
 
 
 # --- 报表 ---

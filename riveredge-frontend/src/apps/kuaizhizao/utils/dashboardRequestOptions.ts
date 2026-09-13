@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useRequest } from 'ahooks';
 import { getCache, setCache } from 'ahooks/es/useRequest/src/utils/cache';
+import { useRouteSoftRefresh } from '../../../hooks/useRouteSoftRefresh';
 
 export const DASHBOARD_REQUEST_STALE_TIME = 60_000;
 export const DASHBOARD_REQUEST_CACHE_TIME = 30 * 60_000;
@@ -66,6 +67,8 @@ export function useDashboardRequest<TData, TParams extends unknown[]>(
     return {
       ...restExtra,
       manual: true,
+      loadingDelay: 400,
+      pollingWhenHidden: false,
       onSuccess: (data: TData, params: TParams) => {
         writeDashboardCache(cacheKey, data, params);
         if (typeof onSuccess === 'function') {
@@ -112,6 +115,10 @@ export function useDashboardRequest<TData, TParams extends unknown[]>(
   }, [cacheKey, result.cancel, result.mutate, result.run]);
 
   const data = result.data !== undefined ? result.data : cachedInitial;
+
+  useRouteSoftRefresh(() => {
+    void result.refresh();
+  });
 
   return {
     ...result,

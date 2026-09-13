@@ -1,17 +1,103 @@
 /** 固定资产表单：折旧与净值计算（与后端 fa_core 一致） */
 
+export type FaDepreciationMethod =
+  | 'straight_line'
+  | 'double_declining'
+  | 'sum_of_years'
+  | 'units_of_production'
+  | 'none';
+
+export function computePeriodDepreciation(params: {
+  depreciationMethod?: string;
+  originalValue: number;
+  residualRate: number;
+  usefulLifeMonths: number;
+  depreciatedPeriods?: number;
+  accumulatedDepreciation?: number;
+  impairmentValue?: number;
+  totalWorkload?: number;
+}): number {
+  const method = params.depreciationMethod || 'straight_line';
+  if (method === 'none') return 0;
+
+  const original = Number(params.originalValue) || 0;
+  const rate = Number(params.residualRate) || 0;
+  const life = Number(params.usefulLifeMonths) || 0;
+  const used = Math.max(0, Number(params.depreciatedPeriods) || 0);
+  const accumulated = Number(params.accumulatedDepreciation) || 0;
+  const impairment = Number(params.impairmentValue) || 0;
+  if (life <= 0 || used >= life) return 0;
+
+  const residual = roundMoney(original * rate);
+  const depreciable = roundMoney(original - residual);
+  if (depreciable <= 0) return 0;
+
+  const bookValue = roundMoney(original - accumulated - impairment);
+  if (bookValue <= residual) return 0;
+
+  const remainingPeriods = life - used;
+  const remainingDepreciable = roundMoney(bookValue - residual);
+  let dep = 0;
+
+  if (method === 'straight_line') {
+    dep =
+      impairment > 0
+        ? roundMoney(remainingDepreciable / remainingPeriods)
+        : roundMoney(depreciable / life);
+  } else if (method === 'double_declining') {
+    const ddb = roundMoney(bookValue * (2 / life));
+    const sl = roundMoney(remainingDepreciable / remainingPeriods);
+    dep = remainingPeriods <= 24 ? sl : ddb;
+    if (dep < sl) dep = sl;
+  } else if (method === 'sum_of_years') {
+    if (impairment > 0) {
+      const sumRemaining = (remainingPeriods * (remainingPeriods + 1)) / 2;
+      dep = roundMoney((remainingDepreciable * remainingPeriods) / sumRemaining);
+    } else {
+      const sumDigits = (life * (life + 1)) / 2;
+      const weight = life - used;
+      dep = roundMoney((depreciable * weight) / sumDigits);
+    }
+  } else if (method === 'units_of_production') {
+    const workload = Number(params.totalWorkload) || 0;
+    if (workload <= 0) return 0;
+    const periodWorkload = roundMoney(workload / life);
+    const base = impairment > 0 ? remainingDepreciable : depreciable;
+    dep = roundMoney((base * periodWorkload) / workload);
+  } else {
+    dep =
+      impairment > 0
+        ? roundMoney(remainingDepreciable / remainingPeriods)
+        : roundMoney(depreciable / life);
+  }
+
+  const maxDep = roundMoney(bookValue - residual);
+  if (dep > maxDep) dep = maxDep;
+  return dep > 0 ? dep : 0;
+}
+
 export function computeMonthlyDepreciation(
   originalValue: number,
   residualRate: number,
   usefulLifeMonths: number,
+  options?: {
+    depreciationMethod?: string;
+    depreciatedPeriods?: number;
+    accumulatedDepreciation?: number;
+    impairmentValue?: number;
+    totalWorkload?: number;
+  },
 ): number {
-  if (!usefulLifeMonths || usefulLifeMonths <= 0) return 0;
-  const original = Number(originalValue) || 0;
-  const rate = Number(residualRate) || 0;
-  const residual = roundMoney(original * rate);
-  const depreciable = roundMoney(original - residual);
-  if (depreciable <= 0) return 0;
-  return roundMoney(depreciable / usefulLifeMonths);
+  return computePeriodDepreciation({
+    depreciationMethod: options?.depreciationMethod,
+    originalValue,
+    residualRate,
+    usefulLifeMonths,
+    depreciatedPeriods: options?.depreciatedPeriods,
+    accumulatedDepreciation: options?.accumulatedDepreciation,
+    impairmentValue: options?.impairmentValue,
+    totalWorkload: options?.totalWorkload,
+  });
 }
 
 export function computeNetValue(

@@ -1,4 +1,3 @@
-import type { StatCard } from '../../../components/layout-templates';
 import type { UniReportExecuteResult } from '../../../components/uni-report';
 import { extractReportProTableSort } from '../../../utils/tableQueryKey';
 import {
@@ -287,6 +286,13 @@ export async function fetchKuaizhizaoReport(
     typeof searchFormValues?.supplier_name === 'string' && searchFormValues.supplier_name.trim()
       ? searchFormValues.supplier_name.trim()
       : undefined;
+  const supplierIdRaw = searchFormValues?.supplier_id;
+  const supplier_id =
+    typeof supplierIdRaw === 'number'
+      ? supplierIdRaw
+      : typeof supplierIdRaw === 'string' && supplierIdRaw.trim()
+        ? Number(supplierIdRaw)
+        : undefined;
   const warehouseIdRaw = searchFormValues?.warehouse_id;
   const materialIdRaw = searchFormValues?.material_id;
   const warehouse_id =
@@ -321,6 +327,7 @@ export async function fetchKuaizhizaoReport(
     ...(order_code ? { order_code } : {}),
     ...(product_name ? { product_name } : {}),
     ...(supplier_name || formSupplier ? { supplier_name: supplier_name ?? formSupplier } : {}),
+    ...(supplier_id != null && Number.isFinite(supplier_id) ? { supplier_id } : {}),
     ...(work_order_code ? { work_order_code } : {}),
     ...(period_basis ? { period_basis } : {}),
     ...(typeof params?.supplier_id === 'number'
@@ -357,4 +364,3 @@ export async function fetchKuaizhizaoReport(
   }
 }
 
-export type KuaizhizaoReportStatCards = StatCard[] | ((summary: Record<string, number>) => StatCard[]);

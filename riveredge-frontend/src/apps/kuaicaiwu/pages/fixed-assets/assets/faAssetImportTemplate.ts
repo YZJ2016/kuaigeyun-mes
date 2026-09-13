@@ -15,6 +15,24 @@ export const FA_ASSET_STATUS_LABELS: Record<string, string> = {
 
 export const FA_DEPRECIATION_METHOD_LABELS: Record<string, string> = {
   straight_line: '年限平均法',
+  double_declining: '双倍余额递减法',
+  sum_of_years: '年数总和法',
+  units_of_production: '工作量法',
+  none: '不折旧',
+};
+
+const FA_DEPRECIATION_LABEL_TO_CODE: Record<string, string> = {
+  年限平均法: 'straight_line',
+  直线法: 'straight_line',
+  straight_line: 'straight_line',
+  双倍余额递减法: 'double_declining',
+  double_declining: 'double_declining',
+  年数总和法: 'sum_of_years',
+  sum_of_years: 'sum_of_years',
+  工作量法: 'units_of_production',
+  units_of_production: 'units_of_production',
+  不折旧: 'none',
+  none: 'none',
 };
 
 export function buildFaAssetImportTemplate(
@@ -167,8 +185,8 @@ export function parseFaAssetStatusLabel(label: string): string | undefined {
 
 export function parseFaDepreciationMethodLabel(label: string): string {
   const trimmed = label.trim();
-  if (!trimmed || trimmed === '年限平均法' || trimmed === '直线法') return 'straight_line';
-  return trimmed;
+  if (!trimmed) return 'straight_line';
+  return FA_DEPRECIATION_LABEL_TO_CODE[trimmed] ?? trimmed;
 }
 
 export function parseFaResidualRate(raw: string): number | undefined {

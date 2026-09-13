@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal
-from typing import Any, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
@@ -70,15 +70,31 @@ def _add_positive_ids(target: Set[int], *raw_ids: Any) -> None:
 
 
 async def sum_goods_offset_for_receivable(tenant_id: int, receivable_id: int) -> Decimal:
+    offset_map = await sum_goods_offset_for_receivable_ids(tenant_id, [int(receivable_id)])
+    return offset_map.get(int(receivable_id), Decimal("0"))
+
+
+async def sum_goods_offset_for_receivable_ids(
+    tenant_id: int,
+    receivable_ids: List[int],
+) -> Dict[int, Decimal]:
+    result: Dict[int, Decimal] = {int(i): Decimal("0") for i in receivable_ids if int(i) > 0}
+    if not result:
+        return result
     rows = await SettlementRecord.filter(
         tenant_id=tenant_id,
         debit_doc_type="Receivable",
-        debit_doc_id=int(receivable_id),
+        debit_doc_id__in=list(result.keys()),
         credit_doc_type=SETTLEMENT_CREDIT_SALES_RETURN_OFFSET,
         is_active=True,
         deleted_at__isnull=True,
     ).all()
-    return quantize_money(sum((quantize_money(r.amount) for r in rows), Decimal("0")))
+    for row in rows:
+        rid = int(row.debit_doc_id or 0)
+        if rid not in result:
+            continue
+        result[rid] = quantize_money(result[rid] + quantize_money(row.amount))
+    return result
 
 
 async def sum_goods_offset_for_payable(tenant_id: int, payable_id: int) -> Decimal:

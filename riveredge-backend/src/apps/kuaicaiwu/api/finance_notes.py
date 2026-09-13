@@ -9,9 +9,10 @@ from decimal import Decimal
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
+from apps.kuaicaiwu.utils.calendar_date_coerce import coerce_api_calendar_date
 from apps.kuaicaiwu.services.finance_note_service import FinanceNoteService
 from core.api.deps.deps import get_current_user
 from core.schemas.base import BaseSchema
@@ -44,6 +45,11 @@ class FinanceNoteCreate(BaseSchema):
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
 
+    @field_validator("issue_date", "due_date", mode="before")
+    @classmethod
+    def coerce_calendar_dates(cls, value: Any) -> Any:
+        return coerce_api_calendar_date(value)
+
 
 class FinanceNoteUpdate(BaseSchema):
     bill_type: Optional[str] = None
@@ -66,6 +72,11 @@ class FinanceNoteUpdate(BaseSchema):
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
 
+    @field_validator("issue_date", "due_date", mode="before")
+    @classmethod
+    def coerce_calendar_dates(cls, value: Any) -> Any:
+        return coerce_api_calendar_date(value)
+
 
 class FinanceNoteActionRequest(BaseSchema):
     action: str = Field(..., description="endorse/discount/collect/dishonor/honor")
@@ -74,6 +85,11 @@ class FinanceNoteActionRequest(BaseSchema):
     discount_date: Optional[date] = None
     discount_interest: Optional[Decimal] = None
     settle_date: Optional[date] = None
+
+    @field_validator("discount_date", "settle_date", mode="before")
+    @classmethod
+    def coerce_calendar_dates(cls, value: Any) -> Any:
+        return coerce_api_calendar_date(value)
 
 
 class FinanceNoteResponse(BaseSchema):

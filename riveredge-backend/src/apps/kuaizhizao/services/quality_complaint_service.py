@@ -256,8 +256,9 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
         audit_node_key = self._resolve_audit_node_key(
             row.business_type or QUALITY_COMPLAINT_TYPE_DEFAULT
         )
+        approval_instance = None
         if await AuditBindingService.is_audit_enabled(tenant_id, audit_node_key):
-            instance = await ApprovalInstanceService.start_approval_for_node(
+            approval_instance = await ApprovalInstanceService.start_approval_for_node(
                 tenant_id=tenant_id,
                 user_id=user.id,
                 node_key=audit_node_key,
@@ -269,7 +270,7 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
                 business_type=row.business_type,
                 send_notification=True,
             )
-            if instance is None:
+            if approval_instance is None:
                 raise ValidationError(
                     f"审核已开启但未找到可用审批流程，请检查 {audit_node_key} 绑定"
                 )
@@ -278,6 +279,10 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
         )
 
         await QualityComplaintReminderService.sync_after_submit(tenant_id, row)
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance and approval_instance_finished_on_submit(approval_instance):
+            return await self.approve(tenant_id, complaint_id, user)
         return self._to_response(row)
 
     async def approve(
@@ -286,6 +291,25 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
         row = await self._get_row(tenant_id, complaint_id)
         if row.status != "pending":
             raise BusinessLogicError("仅待审投诉可通过")
+        audit_node_key = self._resolve_audit_node_key(
+            row.business_type or QUALITY_COMPLAINT_TYPE_DEFAULT
+        )
+        if await AuditBindingService.is_audit_enabled(tenant_id, audit_node_key):
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type=AUDIT_NODE,
+                entity_id=complaint_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="质量投诉",
+                verb="审核",
+            )
         row.status = "processing"
         row.approved_at = resolve_business_datetime()
         apply_update_audit(row, user)
@@ -303,6 +327,25 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
         row = await self._get_row(tenant_id, complaint_id)
         if row.status != "pending":
             raise BusinessLogicError("仅待审投诉可驳回")
+        audit_node_key = self._resolve_audit_node_key(
+            row.business_type or QUALITY_COMPLAINT_TYPE_DEFAULT
+        )
+        if await AuditBindingService.is_audit_enabled(tenant_id, audit_node_key):
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type=AUDIT_NODE,
+                entity_id=complaint_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="质量投诉",
+                verb="驳回",
+            )
         row.status = "rejected"
         apply_update_audit(row, user)
         await row.save()

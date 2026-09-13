@@ -302,8 +302,9 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
         apply_update_audit(row, user)
         await row.save()
 
+        approval_instance = None
         if await AuditBindingService.is_audit_enabled(tenant_id, AUDIT_NODE):
-            instance = await ApprovalInstanceService.start_approval_for_node(
+            approval_instance = await ApprovalInstanceService.start_approval_for_node(
                 tenant_id=tenant_id,
                 user_id=user.id,
                 node_key=AUDIT_NODE,
@@ -315,10 +316,14 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
                 business_type=row.change_kind,
                 send_notification=True,
             )
-            if instance is None:
+            if approval_instance is None:
                 raise ValidationError(
                     f"审核已开启但未找到可用审批流程，请检查 {AUDIT_NODE} 绑定"
                 )
+        from apps.kuaiplm.services.plm_audit_flow_sync import submit_instance_auto_passed
+
+        if submit_instance_auto_passed(approval_instance):
+            return await self.approve(tenant_id, ecn_id, user)
         mats, signoffs = await self._load_children(tenant_id, ecn_id)
         return self._to_response(row, mats, signoffs)
 
@@ -328,6 +333,16 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
         row = await self._get_row(tenant_id, ecn_id)
         if row.status != "pending":
             raise BusinessLogicError("仅待审工程变更可通过")
+        from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
+
+        await assert_plm_manual_approval_action(
+            tenant_id,
+            audit_node=AUDIT_NODE,
+            entity_type="engineering_change",
+            entity_id=ecn_id,
+            doc_label="工程变更",
+            verb="审核",
+        )
         row.status = "erp_pending"
         row.approved_at = resolve_business_datetime()
         row.erp_audit_status = "pending"
@@ -342,6 +357,16 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
         row = await self._get_row(tenant_id, ecn_id)
         if row.status != "pending":
             raise BusinessLogicError("仅待审工程变更可驳回")
+        from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
+
+        await assert_plm_manual_approval_action(
+            tenant_id,
+            audit_node=AUDIT_NODE,
+            entity_type="engineering_change",
+            entity_id=ecn_id,
+            doc_label="工程变更",
+            verb="驳回",
+        )
         row.status = "draft"
         row.submitted_at = None
         apply_update_audit(row, user)

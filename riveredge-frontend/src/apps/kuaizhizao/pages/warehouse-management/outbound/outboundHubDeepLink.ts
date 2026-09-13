@@ -12,6 +12,7 @@ const DOCUMENT_TYPE_TO_OUTBOUND_TYPE: Record<string, OutboundIssueType> = {
   other_outbound: 'other_outbound',
   material_borrow: 'material_borrow',
   outsource_issue: 'outsource_issue',
+  purchase_return: 'purchase_return',
 };
 
 function parsePositiveInt(raw: string | null | undefined): number | undefined {
@@ -102,6 +103,9 @@ export async function resolveOutboundDeepLinkId(
       break;
     case 'outsource_issue':
       res = await outsourceMaterialIssueApi.list(listLimit);
+      break;
+    case 'purchase_return':
+      res = await warehouseApi.purchaseReturn.list(listLimit);
       break;
     default:
       return undefined;

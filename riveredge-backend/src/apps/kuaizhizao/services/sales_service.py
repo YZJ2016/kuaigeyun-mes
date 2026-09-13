@@ -810,7 +810,15 @@ class SalesForecastService(AppBaseService[SalesForecast]):
 
         return demand
 
-    async def approve_forecast(self, tenant_id: int, forecast_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> SalesForecastResponse:
+    async def approve_forecast(
+        self,
+        tenant_id: int,
+        forecast_id: int,
+        approved_by: int,
+        rejection_reason: Optional[str] = None,
+        *,
+        is_auto_approve: bool = False,
+    ) -> SalesForecastResponse:
         """审核销售预测"""
         from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 
@@ -830,14 +838,15 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "sales_forecast"
         )
-        await assert_pending_approval_instance(
-            tenant_id=tenant_id,
-            entity_type="sales_forecast",
-            entity_id=forecast_id,
-            audit_required=audit_required,
-            doc_label="销售预测",
-            verb="驳回" if rejection_reason else "审核",
-        )
+        if not is_auto_approve:
+            await assert_pending_approval_instance(
+                tenant_id=tenant_id,
+                entity_type="sales_forecast",
+                entity_id=forecast_id,
+                audit_required=audit_required,
+                doc_label="销售预测",
+                verb="驳回" if rejection_reason else "审核",
+            )
 
         async with in_transaction():
             approver_name = await self.get_user_name(approved_by)
@@ -984,6 +993,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
         assert_sales_forecast_capability(forecast_row, "submit")
 
+        approval_instance = None
         async with in_transaction():
             # 检查业务配置：若无需审核，则提交后直接设为已审核（考虑中小企业实情）
             from infra.services.business_config_service import BusinessConfigService
@@ -1005,7 +1015,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             else:
                 from core.services.approval.audit_flow_guard import start_document_approval_or_raise
 
-                await start_document_approval_or_raise(
+                approval_instance = await start_document_approval_or_raise(
                     tenant_id=tenant_id,
                     user_id=submitted_by,
                     node_key="sales_forecast",
@@ -1021,9 +1031,18 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     review_status=ReviewStatus.PENDING.value,
                     **(await self._audit_update_fields(submitted_by)),
                 )
-            
-            updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
-            return updated_forecast
+
+        if approval_instance:
+            from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+            if approval_instance_finished_on_submit(approval_instance):
+                return await self.approve_forecast(
+                    tenant_id,
+                    forecast_id,
+                    submitted_by,
+                    is_auto_approve=True,
+                )
+        return await self.get_sales_forecast_by_id(tenant_id, forecast_id)
 
     async def withdraw_forecast(
         self,

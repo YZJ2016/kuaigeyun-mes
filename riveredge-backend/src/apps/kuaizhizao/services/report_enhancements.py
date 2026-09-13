@@ -22,6 +22,87 @@ from core.utils.timezone_utils import (
 # 与前端 UNI_REPORT_PAGE_SIZE_ALL 一致：报表分页「全部」上限
 REPORT_LIST_MAX_LIMIT = 10_000
 
+# 入库撤回：冲减本期入库，不得计入出库（与 sales_delivery_withdraw 对称）
+INBOUND_WITHDRAW_MOVEMENT_TYPES = frozenset({
+    "fg_receipt_withdraw",
+    "semi_fg_receipt_withdraw",
+    "purchase_receipt_withdraw",
+    "other_inbound_withdraw",
+})
+INBOUND_WITHDRAW_DOC_TYPE_LABELS: Dict[str, str] = {
+    "fg_receipt_withdraw": "成品入库撤回",
+    "semi_fg_receipt_withdraw": "半成品入库撤回",
+    "purchase_receipt_withdraw": "采购入库撤回",
+    "other_inbound_withdraw": "其他入库撤回",
+}
+# 历史误记为 other_outbound 的入库撤回（按 source_doc_type 识别）
+LEGACY_INBOUND_REVOKE_DOC_TYPE_LABELS: Dict[str, str] = {
+    "finished_goods_receipt_revoke": "成品入库撤回",
+    "semi_finished_goods_receipt_revoke": "半成品入库撤回",
+    "purchase_receipt_revoke": "采购入库撤回",
+    "other_inbound_revoke": "其他入库撤回",
+}
+LEGACY_INBOUND_REVOKE_SOURCE_TYPES = frozenset(LEGACY_INBOUND_REVOKE_DOC_TYPE_LABELS.keys())
+
+
+def _is_legacy_inbound_revoke_mislabeled(
+    movement_type: str,
+    source_doc_type: str,
+    quantity: float,
+) -> bool:
+    return (
+        source_doc_type in LEGACY_INBOUND_REVOKE_SOURCE_TYPES
+        and quantity < 0
+        and movement_type == "other_outbound"
+    )
+
+
+def resolve_inventory_movement_report_quantities(
+    *,
+    movement_type: Optional[str],
+    quantity: float,
+    source_doc_type: Optional[str] = None,
+) -> tuple[float, float]:
+    """
+    收发存汇总/明细/台账：有符号流水 → 本期入/出。
+    入库撤回记为负向入库，避免取消入库被统计成出库。
+    """
+    mt = (movement_type or "").strip()
+    src = (source_doc_type or "").strip()
+    qty = float(quantity or 0)
+    if mt in INBOUND_WITHDRAW_MOVEMENT_TYPES:
+        return qty, 0.0
+    if _is_legacy_inbound_revoke_mislabeled(mt, src, qty):
+        return qty, 0.0
+    if src in LEGACY_INBOUND_REVOKE_SOURCE_TYPES and qty < 0 and mt in ("semi_fg_receipt", "fg_receipt"):
+        return qty, 0.0
+    if qty > 0:
+        return qty, 0.0
+    if qty < 0:
+        return 0.0, abs(qty)
+    return 0.0, 0.0
+
+
+def resolve_inventory_movement_report_doc_type(
+    *,
+    movement_type: Optional[str],
+    source_doc_type: Optional[str],
+    quantity: float,
+    default_labels: Optional[Dict[str, str]] = None,
+) -> str:
+    """收发存/入出库明细/台账：展示用业务类型（撤回不得显示为其他出库）。"""
+    mt = (movement_type or "").strip()
+    src = (source_doc_type or "").strip()
+    qty = float(quantity or 0)
+    if mt in INBOUND_WITHDRAW_DOC_TYPE_LABELS:
+        return INBOUND_WITHDRAW_DOC_TYPE_LABELS[mt]
+    if _is_legacy_inbound_revoke_mislabeled(mt, src, qty):
+        return LEGACY_INBOUND_REVOKE_DOC_TYPE_LABELS[src]
+    if src in LEGACY_INBOUND_REVOKE_SOURCE_TYPES and qty < 0 and mt in ("semi_fg_receipt", "fg_receipt"):
+        return LEGACY_INBOUND_REVOKE_DOC_TYPE_LABELS[src]
+    labels = default_labels or {}
+    return labels.get(mt, mt or "库存移动")
+
 
 async def customer_received_by_customer_id(
     tenant_id: int,
@@ -458,6 +539,10 @@ async def collect_inventory_movement_events(
             "backflush_consume": "报工倒冲",
             "semi_fg_receipt": "半成品入库",
             "fg_receipt": "成品入库",
+            "fg_receipt_withdraw": "成品入库撤回",
+            "semi_fg_receipt_withdraw": "半成品入库撤回",
+            "purchase_receipt_withdraw": "采购入库撤回",
+            "other_inbound_withdraw": "其他入库撤回",
             "scrap": "报废",
             "transfer": "调拨",
             "outsource_issue": "委外发料",
@@ -465,6 +550,8 @@ async def collect_inventory_movement_events(
             "adjust": "库存调整",
             "other_inbound": "其他入库",
             "other_outbound": "其他出库",
+            "purchase_return": "采购退货",
+            "purchase_return_withdraw": "采购退货撤回",
             "assembly_consume": "组装领料",
             "assembly_receipt": "组装入库",
             "disassembly_consume": "拆卸领料",
@@ -489,6 +576,7 @@ async def collect_inventory_movement_events(
         rows = await mq.order_by("created_at", "id").values(
             "created_at",
             "movement_type",
+            "source_doc_type",
             "source_doc_code",
             "material_id",
             "material_code",
@@ -504,6 +592,11 @@ async def collect_inventory_movement_events(
         )
         for r in rows:
             qty = float(r.get("quantity") or 0)
+            qty_in, qty_out = resolve_inventory_movement_report_quantities(
+                movement_type=r.get("movement_type"),
+                quantity=qty,
+                source_doc_type=r.get("source_doc_type"),
+            )
             bal_wh = r.get("balance_warehouse_id")
             from_wh = r.get("from_warehouse_id")
             to_wh = r.get("to_warehouse_id")
@@ -517,7 +610,12 @@ async def collect_inventory_movement_events(
             )
             events.append({
                 "event_time": r.get("created_at"),
-                "doc_type": type_labels.get(r.get("movement_type"), r.get("movement_type") or "库存移动"),
+                "doc_type": resolve_inventory_movement_report_doc_type(
+                    movement_type=r.get("movement_type"),
+                    source_doc_type=r.get("source_doc_type"),
+                    quantity=qty,
+                    default_labels=type_labels,
+                ),
                 "doc_code": r.get("source_doc_code") or "",
                 "material_id": r.get("material_id"),
                 "material_code": r.get("material_code") or "",
@@ -527,8 +625,8 @@ async def collect_inventory_movement_events(
                 "batch_number": r.get("batch_no") or "",
                 "warehouse_id": wh_id,
                 "warehouse_name": wh_name,
-                "qty_in": qty if qty > 0 else 0.0,
-                "qty_out": abs(qty) if qty < 0 else 0.0,
+                "qty_in": qty_in,
+                "qty_out": qty_out,
                 "operator": r.get("operator_name") or "",
             })
 
@@ -645,10 +743,10 @@ async def build_inventory_summary(
         "closing_qty": round(sum(it["closing_qty"] for it in items), 4),
     }
     total = len(items)
-    sk = max(0, int(skip or 0))
-    lim = max(1, min(int(limit or 100), REPORT_LIST_MAX_LIMIT))
+    # 分页由 report_service.apply_report_list_query → finalize_report_items 统一处理；
+    # 此处若再 slice，API 层二次分页会把 total 压成当前页行数，前端永远只有一页。
     return {
-        "data": items[sk : sk + lim],
+        "data": items,
         "total": total,
         "success": True,
         "summary": summary,
@@ -719,12 +817,9 @@ async def build_inventory_ledger(
     total_in = sum(float(e.get("qty_in") or 0) for e in events)
     total_out = sum(float(e.get("qty_out") or 0) for e in events)
     total = len(events)
-    sk = max(0, int(skip or 0))
-    lim = max(1, min(int(limit or 100), REPORT_LIST_MAX_LIMIT))
-    page = events[sk : sk + lim]
 
     return {
-        "data": page,
+        "data": events,
         "total": total,
         "success": True,
         "summary": {
@@ -762,7 +857,10 @@ async def build_warehouse_movement_detail(
     )
 
     qty_key = "qty_in" if direction == "inbound" else "qty_out"
-    filtered = [ev for ev in events if float(ev.get(qty_key) or 0) > 0]
+    if direction == "inbound":
+        filtered = [ev for ev in events if float(ev.get("qty_in") or 0) != 0]
+    else:
+        filtered = [ev for ev in events if float(ev.get("qty_out") or 0) > 0]
 
     kw = (keyword or "").strip().lower()
     if kw:
@@ -782,6 +880,8 @@ async def build_warehouse_movement_detail(
         sort_key = et.isoformat() if et else ""
         display_at = et.strftime("%Y-%m-%d %H:%M") if et else None
         qty = float(ev.get(qty_key) or 0)
+        if direction == "outbound":
+            qty = abs(qty)
         rows.append({
             "id": (
                 f"{ev.get('doc_code') or 'doc'}:"
@@ -805,10 +905,8 @@ async def build_warehouse_movement_detail(
     rows.sort(key=lambda row: row.get("event_time") or "", reverse=True)
     total_qty = round(sum(float(row.get("quantity") or 0) for row in rows), 4)
     total = len(rows)
-    sk = max(0, int(skip or 0))
-    lim = max(1, min(int(limit or 100), REPORT_LIST_MAX_LIMIT))
     return {
-        "data": rows[sk : sk + lim],
+        "data": rows,
         "total": total,
         "success": True,
         "summary": {

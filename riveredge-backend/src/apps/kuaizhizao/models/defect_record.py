@@ -114,8 +114,10 @@ class DefectRecord(BaseModel):
     downgrade_material_unit = fields.CharField(max_length=20, null=True, description="降级回用目标原料单位")
     downgrade_warehouse_id = fields.IntField(null=True, description="降级回用入库仓库ID")
     downgrade_warehouse_name = fields.CharField(max_length=100, null=True, description="降级回用入库仓库名称")
-    other_inbound_id = fields.IntField(null=True, description="降级回用生成的其他入库单ID")
+    other_inbound_id = fields.IntField(null=True, description="降级回用或让步接收（过程/报工）生成的其他入库单ID")
     purchase_return_id = fields.IntField(null=True, description="退货处置生成的采购退货单ID")
+    finished_goods_receipt_id = fields.IntField(null=True, description="让步接收生成的成品/半成品入库单ID")
+    accept_purchase_receipt_id = fields.IntField(null=True, description="让步接收生成的采购入库单ID")
 
     # 状态信息
     status = fields.CharField(max_length=20, default="draft", description="状态（draft/processed/cancelled）")

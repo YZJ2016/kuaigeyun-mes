@@ -151,12 +151,18 @@ class ProcessRouteChangeService:
             change.status = "pending"
             await change.save()
             submitter_id = change.applicant_id or operator_id
-            await start_change_approval_flow(
+            instance = await start_change_approval_flow(
                 tenant_id,
                 "process_route",
                 change,
                 submitter_id=submitter_id,
             )
+            from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+            if approval_instance_finished_on_submit(instance):
+                return await ProcessRouteChangeService.approve_change(
+                    tenant_id, str(change.uuid), operator_id, True
+                )
         else:
             change.status = "approved"
             change.approver_id = operator_id
@@ -441,6 +447,28 @@ class ProcessRouteChangeService:
         if change.status not in ("pending",):
             raise ValidationError(f"变更记录状态为 {change.status}，无法审批")
 
+        from apps.kuaiplm.services.engineering_change_audit import is_audit_required
+
+        sync_after_flow = False
+        if await is_audit_required(tenant_id, "process_route"):
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="process_route_change",
+                entity_id=change.id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="工艺路线变更",
+                verb="审核" if approved else "驳回",
+            )
+            sync_after_flow = should_sync_doc_after_flow_completed(gate, approve=approved)
+
         async def _do_approve() -> ProcessRouteChangeResponse:
             return await ProcessRouteChangeService._apply_approval_decision(
                 tenant_id, change_uuid, approver_id, True, approval_comment
@@ -455,7 +483,9 @@ class ProcessRouteChangeService:
                 reason or approval_comment or "审批驳回",
             )
 
-        if approved:
+        if sync_after_flow:
+            result = await (_do_approve() if approved else _do_reject(approval_comment))
+        elif approved:
             result = await UniAuditService.approve_with_flow_fallback(
                 tenant_id=tenant_id,
                 entity_type="process_route_change",

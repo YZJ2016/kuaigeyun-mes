@@ -125,9 +125,29 @@
             "permission": "kuaizhizao:shipment-notice:read"
           },
           {
+            "title": "app.kuaizhizao.menu.sales-management.outbound",
+            "path": "/apps/kuaizhizao/sales-management/outbound",
+            "sort_order": 10,
+            "meta": {
+              "module": "sales",
+              "node": "sales_delivery"
+            },
+            "permission": "kuaizhizao:outbound:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.sales-management.sales-returns",
             "path": "/apps/kuaizhizao/sales-management/sales-returns",
-            "sort_order": 10,
+            "sort_order": 11,
+            "meta": {
+              "module": "sales",
+              "node": "sales_return"
+            },
+            "permission": "kuaizhizao:sales-return:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.sales-management.inbound",
+            "path": "/apps/kuaizhizao/sales-management/inbound",
+            "sort_order": 12,
             "meta": {
               "module": "sales",
               "node": "sales_return"
@@ -137,7 +157,7 @@
           {
             "title": "app.kuaizhizao.menu.sales-management.reports",
             "icon": "fileText",
-            "sort_order": 11,
+            "sort_order": 13,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.sales-order-query",
@@ -375,9 +395,19 @@
             "permission": "kuaizhizao:receipt-notice:read"
           },
           {
+            "title": "app.kuaizhizao.menu.purchase-management.inbound",
+            "path": "/apps/kuaizhizao/purchase-management/inbound",
+            "sort_order": 7,
+            "meta": {
+              "module": "purchase",
+              "node": "purchase_receipt"
+            },
+            "permission": "kuaizhizao:inbound:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.purchase-management.purchase-returns",
             "path": "/apps/kuaizhizao/purchase-management/purchase-returns",
-            "sort_order": 7,
+            "sort_order": 8,
             "meta": {
               "module": "purchase",
               "node": "purchase_return"
@@ -387,7 +417,7 @@
           {
             "title": "app.kuaizhizao.menu.purchase-management.reports",
             "icon": "fileText",
-            "sort_order": 8,
+            "sort_order": 9,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-requisition-tracking",
@@ -452,6 +482,16 @@
             "permission": "kuaizhizao:work-order:read"
           },
           {
+            "title": "app.kuaizhizao.menu.production-execution.outbound",
+            "path": "/apps/kuaizhizao/production-execution/outbound",
+            "sort_order": 2,
+            "meta": {
+              "module": "production",
+              "node": "production_picking"
+            },
+            "permission": "kuaizhizao:inbound:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.production-execution.reporting",
             "path": "/apps/kuaizhizao/production-execution/reporting",
             "sort_order": 3,
@@ -461,9 +501,19 @@
             "permission": "kuaizhizao:production-execution-reporting:read"
           },
           {
+            "title": "app.kuaizhizao.menu.production-execution.inbound",
+            "path": "/apps/kuaizhizao/production-execution/inbound",
+            "sort_order": 4,
+            "meta": {
+              "module": "production",
+              "node": "finished_goods_receipt"
+            },
+            "permission": "kuaizhizao:inbound:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.production-execution.rework-orders",
             "path": "/apps/kuaizhizao/production-execution/rework-orders",
-            "sort_order": 4,
+            "sort_order": 5,
             "meta": {
               "module": "production",
               "node": "rework_order"
@@ -473,22 +523,12 @@
           {
             "title": "app.kuaizhizao.menu.production-execution.rework-position-plan-templates",
             "path": "/apps/kuaizhizao/production-execution/rework-position-plan-templates",
-            "sort_order": 4.5,
+            "sort_order": 5.5,
             "meta": {
               "module": "production",
               "node": "rework_position_plan_template"
             },
             "permission": "kuaizhizao:rework-position-plan-template:read"
-          },
-          {
-            "title": "app.kuaizhizao.menu.production-execution.outsource-management",
-            "path": "/apps/kuaizhizao/production-execution/outsource-management",
-            "sort_order": 5,
-            "meta": {
-              "module": "production",
-              "node": "outsource_order"
-            },
-            "permission": "kuaizhizao:outsource-order:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.packing-binding",
@@ -610,18 +650,6 @@
                 "permission": "kuaizhizao:production-execution-reports-work-order-labor-detail:read"
               },
               {
-                "title": "app.kuaizhizao.menu.reports.outsource-order-query",
-                "path": "/apps/kuaizhizao/production-execution/reports/outsource-order-query",
-                "sort_order": 6,
-                "permission": "kuaizhizao:production-execution-reports-outsource-order-query:read"
-              },
-              {
-                "title": "app.kuaizhizao.menu.reports.outsource-material-reconciliation",
-                "path": "/apps/kuaizhizao/production-execution/reports/outsource-material-reconciliation",
-                "sort_order": 7,
-                "permission": "kuaizhizao:production-execution-reports-outsource-material-reconciliation:read"
-              },
-              {
                 "title": "app.kuaizhizao.menu.reports.scrap-defect-analysis",
                 "path": "/apps/kuaizhizao/production-execution/reports/scrap-defect-analysis",
                 "sort_order": 8,
@@ -663,6 +691,113 @@
                   "node": "work_order"
                 },
                 "permission": "kuaizhizao:production-execution-exception-statistics:read"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "app.kuaizhizao.menu.outsource-management",
+        "icon": "handshake",
+        "sort_order": 6,
+        "meta": {
+          "module": "outsource"
+        },
+        "children": [
+          {
+            "title": "app.kuaizhizao.menu.outsource-management.dashboard",
+            "path": "/apps/kuaizhizao/outsource-management/dashboard",
+            "sort_order": 0,
+            "meta": {
+              "module": "outsource"
+            },
+            "permission": "kuaizhizao:outsource-management-dashboard:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.outsource-management.outsource-work-orders",
+            "path": "/apps/kuaizhizao/outsource-management/outsource-work-orders",
+            "sort_order": 1,
+            "meta": {
+              "module": "outsource",
+              "node": "outsource_work_order"
+            },
+            "permission": "kuaizhizao:outsource-order:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.outsource-management.outsource-orders",
+            "path": "/apps/kuaizhizao/outsource-management/outsource-orders",
+            "sort_order": 2,
+            "meta": {
+              "module": "outsource",
+              "node": "outsource_order"
+            },
+            "permission": "kuaizhizao:outsource-order:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.outsource-management.outsource-issue",
+            "path": "/apps/kuaizhizao/outsource-management/outsource-issue",
+            "sort_order": 3,
+            "meta": {
+              "module": "outsource",
+              "node": "outsource_order"
+            },
+            "permission": "kuaizhizao:outsource-order:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.outsource-management.outsource-receipt",
+            "path": "/apps/kuaizhizao/outsource-management/outsource-receipt",
+            "sort_order": 4,
+            "meta": {
+              "module": "outsource",
+              "node": "outsource_order"
+            },
+            "permission": "kuaizhizao:outsource-order:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.outsource-management.outsource-material-return",
+            "path": "/apps/kuaizhizao/outsource-management/outsource-material-return",
+            "sort_order": 5,
+            "meta": {
+              "module": "outsource",
+              "node": "outsource_order"
+            },
+            "permission": "kuaizhizao:outsource-order:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.outsource-management.outsource-product-return",
+            "path": "/apps/kuaizhizao/outsource-management/outsource-product-return",
+            "sort_order": 6,
+            "meta": {
+              "module": "outsource",
+              "node": "outsource_order"
+            },
+            "permission": "kuaizhizao:outsource-order:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.outsource-management.settlements",
+            "path": "/apps/kuaizhizao/outsource-management/settlements",
+            "sort_order": 7,
+            "meta": {
+              "module": "outsource"
+            },
+            "permission": "kuaizhizao:outsource-order:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.outsource-management.reports",
+            "icon": "fileText",
+            "sort_order": 8,
+            "children": [
+              {
+                "title": "app.kuaizhizao.menu.reports.outsource-order-query",
+                "path": "/apps/kuaizhizao/outsource-management/reports/outsource-order-query",
+                "sort_order": 1,
+                "permission": "kuaizhizao:production-execution-reports-outsource-order-query:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.outsource-material-reconciliation",
+                "path": "/apps/kuaizhizao/outsource-management/reports/outsource-material-reconciliation",
+                "sort_order": 2,
+                "permission": "kuaizhizao:production-execution-reports-outsource-material-reconciliation:read"
               }
             ]
           }
@@ -2357,6 +2492,8 @@
     "kuaizhizao:outsource-order:revoke",
     "kuaizhizao:outsource-order:submit",
     "kuaizhizao:outsource-order:update",
+    "kuaizhizao:outsource-management-dashboard:print",
+    "kuaizhizao:outsource-management-dashboard:read",
     "kuaizhizao:performance-employee-configs:approve",
     "kuaizhizao:performance-employee-configs:audit",
     "kuaizhizao:performance-employee-configs:create",
@@ -3751,7 +3888,7 @@
     {
       "page_code": "kuaizhizao-production-outsource-order",
       "page_name": "委外单",
-      "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
+      "page_path": "/apps/kuaizhizao/outsource-management/outsource-orders",
       "code_field": "code",
       "code_field_label": "委外单编码",
       "module": "快制造",
@@ -4479,7 +4616,7 @@
     {
       "page_code": "kuaizhizao-production-outsource-work-order",
       "page_name": "委外工单",
-      "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
+      "page_path": "/apps/kuaizhizao/outsource-management/outsource-work-orders",
       "code_field": "code",
       "code_field_label": "委外工单编码",
       "module": "快制造",
@@ -4491,7 +4628,7 @@
     {
       "page_code": "kuaizhizao-production-outsource-material-receipt",
       "page_name": "委外收货",
-      "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+      "page_path": "/apps/kuaizhizao/outsource-management/outsource-receipt",
       "code_field": "code",
       "code_field_label": "委外收货单编号",
       "module": "快制造",
@@ -4503,7 +4640,7 @@
     {
       "page_code": "kuaizhizao-production-outsource-material-return",
       "page_name": "委外退料",
-      "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+      "page_path": "/apps/kuaizhizao/outsource-management/outsource-material-return",
       "code_field": "code",
       "code_field_label": "委外退料单编号",
       "module": "快制造",
@@ -4515,7 +4652,7 @@
     {
       "page_code": "kuaizhizao-production-outsource-product-return",
       "page_name": "委外退货",
-      "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+      "page_path": "/apps/kuaizhizao/outsource-management/outsource-product-return",
       "code_field": "code",
       "code_field_label": "委外退货单编号",
       "module": "快制造",
@@ -4709,7 +4846,7 @@
     {
       "page_code": "kuaizhizao-production-outsource-order",
       "page_name": "委外单",
-      "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
+      "page_path": "/apps/kuaizhizao/outsource-management/outsource-orders",
       "table_name": "apps_kuaizhizao_outsource_orders",
       "table_name_label": "委外单表",
       "module": "快制造",
@@ -4718,7 +4855,7 @@
     {
       "page_code": "kuaizhizao-production-outsource-work-order",
       "page_name": "委外工单",
-      "page_path": "/apps/kuaizhizao/production-execution/outsource-management",
+      "page_path": "/apps/kuaizhizao/outsource-management/outsource-work-orders",
       "table_name": "apps_kuaizhizao_outsource_work_orders",
       "table_name_label": "委外工单表",
       "module": "快制造",

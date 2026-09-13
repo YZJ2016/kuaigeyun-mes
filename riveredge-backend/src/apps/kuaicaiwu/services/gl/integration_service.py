@@ -22,6 +22,7 @@ _BUSINESS_TYPE_LABELS: Dict[str, str] = {
     "fixed_asset": "固定资产折旧",
     "fixed_asset_adjustment": "固定资产调整",
     "fixed_asset_disposal": "固定资产处置",
+    "fixed_asset_impairment": "固定资产减值",
     "fx_revaluation": "汇兑损益",
 }
 

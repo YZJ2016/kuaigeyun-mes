@@ -51,6 +51,8 @@ const TimeconfigPage = lazy(() => import('./pages/timeconfig'));
 // 生产执行页面
 const ManufacturingDashboardPage = lazy(() => import('./pages/production-execution/dashboard'));
 const WorkOrdersPage = lazy(() => import('./pages/production-execution/work-orders'));
+const ProductionOutboundPage = lazy(() => import('./pages/production-execution/outbound'));
+const ProductionInboundPage = lazy(() => import('./pages/production-execution/inbound'));
 // 生产终端路由已下线，页面保留：./pages/production-execution/work-orders/kiosk.tsx
 // const WorkOrdersTerminalPage = lazy(() => import('./pages/production-execution/work-orders/kiosk'));
 const WorkOrderDetailKioskPage = lazy(() => import('./pages/production-execution/work-orders/detail-kiosk'));
@@ -64,7 +66,14 @@ const ReworkOrdersPage = lazy(() => import('./pages/production-execution/rework-
 const ReworkPositionPlanTemplatesPage = lazy(
   () => import('./pages/production-execution/rework-position-plan-templates'),
 );
-const OutsourceManagementPage = lazy(() => import('./pages/production-execution/outsource-management'));
+const OutsourceWorkOrdersPage = lazy(() => import('./pages/outsource-management/outsource-work-orders'));
+const OutsourceOrdersPage = lazy(() => import('./pages/outsource-management/outsource-orders'));
+const OutsourceDashboardPage = lazy(() => import('./pages/outsource-management/dashboard'));
+const OutsourceIssuePage = lazy(() => import('./pages/outsource-management/outsource-issue'));
+const OutsourceReceiptPage = lazy(() => import('./pages/outsource-management/outsource-receipt'));
+const OutsourceMaterialReturnPage = lazy(() => import('./pages/outsource-management/outsource-material-return'));
+const OutsourceProductReturnPage = lazy(() => import('./pages/outsource-management/outsource-product-return'));
+const OutsourceSettlementsPage = lazy(() => import('./pages/outsource-management/settlements'));
 
 // 采购管理页面
 const PurchaseDashboardPage = lazy(() => import('./pages/purchase-management/dashboard'));
@@ -75,6 +84,7 @@ const PurchaseRequisitionsPage = lazy(() => import('./pages/purchase-management/
 const PurchaseInquiriesPage = lazy(() => import('./pages/purchase-management/purchase-inquiries'));
 const ReceiptNoticesPage = lazy(() => import('./pages/purchase-management/receipt-notices'));
 const PurchaseReturnsPage = lazy(() => import('./pages/purchase-management/purchase-returns'));
+const PurchaseInboundPage = lazy(() => import('./pages/purchase-management/inbound'));
 
 // 销售管理页面
 const SalesDashboardPage = lazy(() => import('./pages/sales-management/dashboard'));
@@ -96,6 +106,8 @@ const CustomerFollowUpsPage = lazy(() => import('./pages/sales-management/custom
 const SalesReviewsPage = lazy(() => import('./pages/sales-management/sales-reviews'));
 const AfterSalesTicketsPage = lazy(() => import('./pages/after-sales-service/tickets'));
 const SalesReturnsPage = lazy(() => import('./pages/sales-management/sales-returns'));
+const SalesOutboundPage = lazy(() => import('./pages/sales-management/outbound'));
+const SalesInboundPage = lazy(() => import('./pages/sales-management/inbound'));
 
 // 交付项目（订单交机）
 const DeliveryProjectDashboardPage = lazy(() => import('./pages/delivery-project/dashboard'));
@@ -266,15 +278,21 @@ const HourlyRatesPage = lazy(() => import('./pages/performance/hourly-rates'));
 const KpiDefinitionsPage = lazy(() => import('./pages/performance/kpi-definitions'));
 const SummariesPage = lazy(() => import('./pages/performance/summaries'));
 
-/** 委外工单列表已并入委外管理 Tab；保留旧书签路径并重定向 query */
-const RedirectOutsourceWorkOrdersToManagement: React.FC = () => {
+const OUTSOURCE_BASE = '/apps/kuaizhizao/outsource-management';
+
+/** 旧生产执行委外合页 → 工单委外 */
+const RedirectLegacyOutsourceManagement: React.FC = () => {
   const loc = useLocation();
-  return (
-    <Navigate
-      to={`/apps/kuaizhizao/production-execution/outsource-management${loc.search}`}
-      replace
-    />
-  );
+  const tab = new URLSearchParams(loc.search).get('tab');
+  if (tab === 'process') {
+    return <Navigate to={`${OUTSOURCE_BASE}/outsource-orders${loc.search}`} replace />;
+  }
+  return <Navigate to={`${OUTSOURCE_BASE}/outsource-work-orders${loc.search}`} replace />;
+};
+
+const RedirectLegacyOutsourceWorkOrders: React.FC = () => {
+  const loc = useLocation();
+  return <Navigate to={`${OUTSOURCE_BASE}/outsource-work-orders${loc.search}`} replace />;
 };
 
 /** 分析中心已迁至快报表：旧书签 /apps/kuaizhizao/analysis-center/... 跳转至对应快报表路径 */
@@ -317,8 +335,10 @@ const WorkOrderQueryPage = lazy(() => import('./pages/production-execution/repor
 const WorkOrderTrackingPage = lazy(() => import('./pages/production-execution/reports/WorkOrderTracking'));
 const WorkOrderMaterialUsagePage = lazy(() => import('./pages/production-execution/reports/WorkOrderMaterialUsage'));
 const WorkOrderLaborDetailPage = lazy(() => import('./pages/production-execution/reports/WorkOrderLaborDetail'));
-const OutsourceOrderQueryPage = lazy(() => import('./pages/production-execution/reports/OutsourceOrderQuery'));
-const OutsourceMaterialReconciliationPage = lazy(() => import('./pages/production-execution/reports/OutsourceMaterialReconciliation'));
+const OutsourceOrderQueryPage = lazy(() => import('./pages/outsource-management/reports/OutsourceOrderQuery'));
+const OutsourceMaterialReconciliationPage = lazy(
+  () => import('./pages/outsource-management/reports/OutsourceMaterialReconciliation'),
+);
 const ScrapDefectAnalysisPage = lazy(() => import('./pages/production-execution/reports/ScrapDefectAnalysis'));
 const FirstPassYieldAnalysisPage = lazy(() => import('./pages/production-execution/reports/FirstPassYieldAnalysis'));
 const ProductionDelayWarningPage = lazy(() => import('./pages/production-execution/reports/ProductionDelayWarning'));
@@ -410,10 +430,13 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="purchase-management/purchase-inquiries" element={withPageSuspense(PurchaseInquiriesPage)} />
       <Route path="purchase-management/receipt-notices" element={withPageSuspense(ReceiptNoticesPage)} />
       <Route path="purchase-management/purchase-returns" element={withPageSuspense(PurchaseReturnsPage)} />
+      <Route path="purchase-management/inbound" element={withPageSuspense(PurchaseInboundPage)} />
 
       {/* 生产执行路由 */}
       <Route path="production-execution/dashboard" element={withPageSuspense(ManufacturingDashboardPage)} />
       <Route path="production-execution/work-orders" element={withPageSuspense(WorkOrdersPage)} />
+      <Route path="production-execution/outbound" element={withPageSuspense(ProductionOutboundPage)} />
+      <Route path="production-execution/inbound" element={withPageSuspense(ProductionInboundPage)} />
       {/* 生产终端路由已下线：/apps/kuaizhizao/production-execution/terminal */}
       <Route path="production-execution/reporting" element={withPageSuspense(ReportingPage)} />
       <Route path="production-execution/reporting/kiosk" element={withPageSuspense(ReportingKioskPage)} />
@@ -426,10 +449,43 @@ const KuaizhizaoApp: React.FC = () => {
         path="production-execution/rework-position-plan-templates"
         element={withPageSuspense(ReworkPositionPlanTemplatesPage)}
       />
-      <Route path="production-execution/outsource-management" element={withPageSuspense(OutsourceManagementPage)} />
+      <Route path="production-execution/outsource-management" element={<RedirectLegacyOutsourceManagement />} />
+      <Route path="production-execution/outsource-work-orders" element={<RedirectLegacyOutsourceWorkOrders />} />
       <Route
-        path="production-execution/outsource-work-orders"
-        element={<RedirectOutsourceWorkOrdersToManagement />}
+        path="production-execution/outsource-orders"
+        element={<Navigate to={`${OUTSOURCE_BASE}/outsource-orders`} replace />}
+      />
+      <Route
+        path="production-execution/reports/outsource-order-query"
+        element={<Navigate to={`${OUTSOURCE_BASE}/reports/outsource-order-query`} replace />}
+      />
+      <Route
+        path="production-execution/reports/outsource-material-reconciliation"
+        element={<Navigate to={`${OUTSOURCE_BASE}/reports/outsource-material-reconciliation`} replace />}
+      />
+
+      {/* 委外管理 */}
+      <Route path="outsource-management/dashboard" element={withPageSuspense(OutsourceDashboardPage)} />
+      <Route path="outsource-management/outsource-work-orders" element={withPageSuspense(OutsourceWorkOrdersPage)} />
+      <Route path="outsource-management/outsource-orders" element={withPageSuspense(OutsourceOrdersPage)} />
+      <Route path="outsource-management/outsource-issue" element={withPageSuspense(OutsourceIssuePage)} />
+      <Route path="outsource-management/outsource-receipt" element={withPageSuspense(OutsourceReceiptPage)} />
+      <Route
+        path="outsource-management/outsource-material-return"
+        element={withPageSuspense(OutsourceMaterialReturnPage)}
+      />
+      <Route
+        path="outsource-management/outsource-product-return"
+        element={withPageSuspense(OutsourceProductReturnPage)}
+      />
+      <Route path="outsource-management/settlements" element={withPageSuspense(OutsourceSettlementsPage)} />
+      <Route
+        path="outsource-management/reports/outsource-order-query"
+        element={withPageSuspense(OutsourceOrderQueryPage)}
+      />
+      <Route
+        path="outsource-management/reports/outsource-material-reconciliation"
+        element={withPageSuspense(OutsourceMaterialReconciliationPage)}
       />
       <Route path="production-execution/packing-binding" element={withPageSuspense(PackingBindingPage)} />
       <Route path="production-execution/label-station" element={withPageSuspense(LabelStationPage)} />
@@ -459,6 +515,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="sales-management/customer-follow-ups" element={withPageSuspense(CustomerFollowUpsPage)} />
       <Route path="sales-management/sales-reviews" element={withPageSuspense(SalesReviewsPage)} />
       <Route path="sales-management/sales-returns" element={withPageSuspense(SalesReturnsPage)} />
+      <Route path="sales-management/outbound" element={withPageSuspense(SalesOutboundPage)} />
+      <Route path="sales-management/inbound" element={withPageSuspense(SalesInboundPage)} />
 
       <Route path="production-execution/work-orders/:id/kiosk" element={withPageSuspense(WorkOrderDetailKioskPage)} />
 
@@ -700,8 +758,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/reports/work-order-tracking" element={withPageSuspense(WorkOrderTrackingPage)} />
       <Route path="production-execution/reports/work-order-material-usage" element={withPageSuspense(WorkOrderMaterialUsagePage)} />
       <Route path="production-execution/reports/work-order-labor-detail" element={withPageSuspense(WorkOrderLaborDetailPage)} />
-      <Route path="production-execution/reports/outsource-order-query" element={withPageSuspense(OutsourceOrderQueryPage)} />
-      <Route path="production-execution/reports/outsource-material-reconciliation" element={withPageSuspense(OutsourceMaterialReconciliationPage)} />
       <Route path="production-execution/reports/scrap-defect-analysis" element={withPageSuspense(ScrapDefectAnalysisPage)} />
       <Route path="production-execution/reports/first-pass-yield" element={withPageSuspense(FirstPassYieldAnalysisPage)} />
       <Route path="production-execution/reports/production-delay-warning" element={withPageSuspense(ProductionDelayWarningPage)} />

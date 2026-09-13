@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Col, List, Result, Typography } from 'antd';
+import { Button, Col, Result, Typography } from 'antd';
 import {
   AuditOutlined,
   CalendarOutlined,
@@ -24,6 +24,7 @@ import {
   ModuleCenterLayout,
   ModuleKpiRow,
   ModuleShortcutGrid,
+  ModuleFeedList,
   showMasonryCard,
   masonryWeightFromRows,
   resolveMasonryEmptyFallback,
@@ -31,7 +32,7 @@ import {
   type ModuleShortcutDef,
 } from '../../../kuaizhizao/components/module-center';
 
-const { Text, Paragraph, Link } = Typography;
+const { Text, Link } = Typography;
 
 const SHORTCUT_ICONS: Record<string, React.ReactNode> = {
   'form-request': <FileTextOutlined />,
@@ -128,18 +129,94 @@ const WorkbenchPage: React.FC = () => {
     [t],
   );
 
-  const openAnnouncement = (item: Record<string, unknown>) => {
+  const openAnnouncement = useCallback((item: Record<string, unknown>) => {
     const id = item.id;
     if (id != null) {
       navigate(`/apps/kuaioa/admin/announcements?id=${id}`);
       return;
     }
     navigate('/apps/kuaioa/admin/announcements');
-  };
+  }, [navigate]);
 
   const announcementItems = useMemo(
     () => [...pinnedAnnouncements, ...recentAnnouncements.filter((a) => !a.is_pinned)],
     [pinnedAnnouncements, recentAnnouncements],
+  );
+
+  const pendingApprovalFeedItems = useMemo(
+    () =>
+      pendingApprovals.map((item, index) => {
+        const path = resolveTaskDocUrl(item);
+        return {
+          id: String(item.id ?? item.task_id ?? `${item.title}-${index}`),
+          title: String(item.title ?? ''),
+          subtitle: item.submitted_at
+            ? formatDateTimeBySiteSetting(String(item.submitted_at))
+            : undefined,
+          onClick: path ? () => navigate(path) : undefined,
+        };
+      }),
+    [navigate, pendingApprovals],
+  );
+
+  const mySubmittedFeedItems = useMemo(
+    () =>
+      mySubmitted.map((item, index) => {
+        const path = buildKuaioaDocListUrl(String(item.entity_type ?? ''), item.id as number);
+        return {
+          id: String(item.id ?? `${item.doc_code}-${index}`),
+          title: `${String(item.doc_code ?? '')} ${String(item.title ?? '')}`.trim(),
+          subtitle: item.submitted_at
+            ? formatDateTimeBySiteSetting(String(item.submitted_at))
+            : undefined,
+          onClick: path ? () => navigate(path) : undefined,
+        };
+      }),
+    [mySubmitted, navigate],
+  );
+
+  const expiringLicenseFeedItems = useMemo(
+    () =>
+      expiringLicenses.map((item, index) => ({
+        id: String(item.id ?? item.license_code ?? index),
+        title: `${String(item.license_name ?? '')} (${String(item.license_code ?? '')})`.trim(),
+        subtitle: item.expiry_date
+          ? `${t('app.kuaioa.license.expiry')} ${formatDateBySiteSetting(String(item.expiry_date))}`
+          : undefined,
+      })),
+    [expiringLicenses, t],
+  );
+
+  const expiringWorkLicenseFeedItems = useMemo(
+    () =>
+      expiringWorkLicenses.map((item, index) => ({
+        id: String(item.id ?? item.license_code ?? index),
+        title: `${String(item.license_name ?? '')} (${String(item.license_code ?? '')})`.trim(),
+        subtitle: item.expiry_date
+          ? `${t('app.kuaioa.workLicense.expiry')} ${formatDateBySiteSetting(String(item.expiry_date))}`
+          : undefined,
+      })),
+    [expiringWorkLicenses, t],
+  );
+
+  const announcementFeedItems = useMemo(
+    () =>
+      announcementItems.map((item, index) => ({
+        id: String(item.id ?? `${item.title}-${index}`),
+        title: (
+          <>
+            {item.is_pinned ? (
+              <Text type="warning" style={{ marginRight: 8 }}>
+                [{t('app.kuaioa.announcement.pinned')}]
+              </Text>
+            ) : null}
+            {String(item.title ?? '')}
+          </>
+        ),
+        subtitle: String(item.content ?? ''),
+        onClick: () => openAnnouncement(item),
+      })),
+    [announcementItems, openAnnouncement, t],
   );
 
   const masonryEmptyFallback = resolveMasonryEmptyFallback(loading, [
@@ -179,53 +256,13 @@ const WorkbenchPage: React.FC = () => {
                 <Link onClick={() => navigate('/personal/tasks')}>{t('app.kuaioa.workbench.goTasks')}</Link>
               }
             >
-                <List
-                  dataSource={pendingApprovals}
-                  renderItem={(item) => {
-                    const path = resolveTaskDocUrl(item);
-                    return (
-                      <List.Item
-                        style={path ? { cursor: 'pointer' } : undefined}
-                        onClick={path ? () => navigate(path) : undefined}
-                      >
-                        <List.Item.Meta
-                          title={String(item.title ?? '')}
-                          description={
-                            item.submitted_at
-                              ? formatDateTimeBySiteSetting(String(item.submitted_at))
-                              : undefined
-                          }
-                        />
-                      </List.Item>
-                    );
-                  }}
-                />
+                <ModuleFeedList items={pendingApprovalFeedItems} />
             </ModuleActionPanel>
             ) : null}
 
             {showMasonryCard(loading, mySubmitted.length > 0, masonryEmptyFallback) ? (
             <ModuleActionPanel layout="masonry" title={t('app.kuaioa.workbench.mySubmittedPending')} masonryWeight={masonryWeightFromRows(mySubmitted.length)}>
-                <List
-                  dataSource={mySubmitted}
-                  renderItem={(item) => {
-                    const path = buildKuaioaDocListUrl(String(item.entity_type ?? ''), item.id as number);
-                    return (
-                      <List.Item
-                        style={path ? { cursor: 'pointer' } : undefined}
-                        onClick={path ? () => navigate(path) : undefined}
-                      >
-                        <List.Item.Meta
-                          title={`${String(item.doc_code ?? '')} ${String(item.title ?? '')}`}
-                          description={
-                            item.submitted_at
-                              ? formatDateTimeBySiteSetting(String(item.submitted_at))
-                              : undefined
-                          }
-                        />
-                      </List.Item>
-                    );
-                  }}
-                />
+                <ModuleFeedList items={mySubmittedFeedItems} />
             </ModuleActionPanel>
             ) : null}
 
@@ -240,21 +277,7 @@ const WorkbenchPage: React.FC = () => {
                 </Link>
               }
             >
-                <List
-                  dataSource={expiringLicenses}
-                  renderItem={(item) => (
-                    <List.Item>
-                      <List.Item.Meta
-                        title={`${String(item.license_name ?? '')} (${String(item.license_code ?? '')})`}
-                        description={
-                          item.expiry_date
-                            ? `${t('app.kuaioa.license.expiry')} ${formatDateBySiteSetting(String(item.expiry_date))}`
-                            : undefined
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
+                <ModuleFeedList items={expiringLicenseFeedItems} />
             </ModuleActionPanel>
             ) : null}
 
@@ -269,21 +292,7 @@ const WorkbenchPage: React.FC = () => {
                 </Link>
               }
             >
-                <List
-                  dataSource={expiringWorkLicenses}
-                  renderItem={(item) => (
-                    <List.Item>
-                      <List.Item.Meta
-                        title={`${String(item.license_name ?? '')} (${String(item.license_code ?? '')})`}
-                        description={
-                          item.expiry_date
-                            ? `${t('app.kuaioa.workLicense.expiry')} ${formatDateBySiteSetting(String(item.expiry_date))}`
-                            : undefined
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
+                <ModuleFeedList items={expiringWorkLicenseFeedItems} />
             </ModuleActionPanel>
             ) : null}
 
@@ -298,30 +307,7 @@ const WorkbenchPage: React.FC = () => {
                 </Link>
               }
             >
-                <List
-                  dataSource={announcementItems}
-                  renderItem={(item) => (
-                    <List.Item style={{ cursor: 'pointer' }} onClick={() => openAnnouncement(item)}>
-                      <List.Item.Meta
-                        title={
-                          <>
-                            {item.is_pinned ? (
-                              <Text type="warning" style={{ marginRight: 8 }}>
-                                [{t('app.kuaioa.announcement.pinned')}]
-                              </Text>
-                            ) : null}
-                            {String(item.title ?? '')}
-                          </>
-                        }
-                        description={
-                          <Paragraph ellipsis={{ rows: 2 }} style={{ marginBottom: 0 }}>
-                            {String(item.content ?? '')}
-                          </Paragraph>
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
+                <ModuleFeedList items={announcementFeedItems} />
             </ModuleActionPanel>
             ) : null}
           </ModuleActionMasonry>

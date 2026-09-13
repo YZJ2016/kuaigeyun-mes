@@ -690,6 +690,16 @@ const EquipmentDashboard: React.FC = () => {
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
       actionRow={
         <ModuleActionMasonry>
+          {showMasonryCard(todosLoading, todos.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.equipmentDashboard.todosTitle')}
+              loading={todosLoading}
+              masonryWeight={masonryWeightFromRows(Math.min(todos.length, TODO_DISPLAY_ROWS))}
+            >
+              <ModuleTodoList items={todos} emptyText={t('app.kuaizhizao.equipmentDashboard.noTodos')} />
+            </ModuleActionPanel>
+          ) : null}
           {showMasonryCard(boardLoading, hasAlerts, masonryEmptyFallback) ? (
             <ModuleActionPanel
               layout="masonry"
@@ -701,16 +711,6 @@ const EquipmentDashboard: React.FC = () => {
                 items={alertFeedItems}
                 emptyText={t('app.kuaizhizao.equipmentDashboard.noAlerts')}
               />
-            </ModuleActionPanel>
-          ) : null}
-          {showMasonryCard(todosLoading, todos.length > 0, masonryEmptyFallback) ? (
-            <ModuleActionPanel
-              layout="masonry"
-              title={t('app.kuaizhizao.equipmentDashboard.todosTitle')}
-              loading={todosLoading}
-              masonryWeight={masonryWeightFromRows(Math.min(todos.length, TODO_DISPLAY_ROWS))}
-            >
-              <ModuleTodoList items={todos} emptyText={t('app.kuaizhizao.equipmentDashboard.noTodos')} />
             </ModuleActionPanel>
           ) : null}
           {showMasonryCard(faultsLoading, pendingFaults.length > 0, masonryEmptyFallback) ? (
@@ -796,7 +796,13 @@ const EquipmentDashboard: React.FC = () => {
                 size="small"
                 dataSource={spareAlertRows}
                 pagination={false}
-                rowKey={(r, idx) => String(r.id ?? r.spare_part_id ?? idx)}
+                rowKey={(r) =>
+                  String(
+                    r.id ??
+                      r.spare_part_id ??
+                      `${r.part_name ?? r.spare_part_name ?? r.material_name ?? 'spare'}-${r.current_stock ?? r.current_quantity ?? ''}`,
+                  )
+                }
                 columns={spareAlertColumns}
               />
             </ModuleActionPanel>

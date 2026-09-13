@@ -32,7 +32,7 @@ import { apiRequest } from '../../../../../services/api';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   financeNoteService,
@@ -64,6 +64,26 @@ type Props = {
 };
 
 const NS = 'app.kuaicaiwu.notes';
+
+function serializeNoteFormPayload(values: Record<string, unknown>) {
+  const issueDate = toApiDateString(values.issue_date);
+  const dueDate = toApiDateString(values.due_date);
+  return {
+    ...values,
+    ...(issueDate ? { issue_date: issueDate } : {}),
+    ...(dueDate ? { due_date: dueDate } : {}),
+  };
+}
+
+function serializeNoteActionPayload(values: Record<string, unknown>) {
+  const discountDate = toApiDateString(values.discount_date);
+  const settleDate = toApiDateString(values.settle_date);
+  return {
+    ...values,
+    ...(discountDate ? { discount_date: discountDate } : {}),
+    ...(settleDate ? { settle_date: settleDate } : {}),
+  };
+}
 
 const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersistenceId }) => {
   const { t } = useTranslation();
@@ -429,7 +449,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
           const partnerId = isReceivable ? values.customer_id : values.supplier_id;
           const partner = partnerOptions.find((o) => o.value === partnerId);
           const payload = {
-            ...values,
+            ...serializeNoteFormPayload(values as Record<string, unknown>),
             customer_name: isReceivable ? partner?.label : undefined,
             supplier_name: isReceivable ? undefined : partner?.label,
           };
@@ -467,8 +487,18 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
         />
         <ProFormText name="bill_no" label={t(`${NS}.col.billNo`)} rules={[{ required: true }]} />
         <ProFormMoney name="amount" label={t(`${NS}.col.amount`)} rules={[{ required: true }]} />
-        <ProFormDatePicker name="issue_date" label={t(`${NS}.col.issueDate`)} rules={[{ required: true }]} />
-        <ProFormDatePicker name="due_date" label={t(`${NS}.col.dueDate`)} rules={[{ required: true }]} />
+        <ProFormDatePicker
+          name="issue_date"
+          label={t(`${NS}.col.issueDate`)}
+          rules={[{ required: true }]}
+          formItemProps={formDateFormItemProps}
+        />
+        <ProFormDatePicker
+          name="due_date"
+          label={t(`${NS}.col.dueDate`)}
+          rules={[{ required: true }]}
+          formItemProps={formDateFormItemProps}
+        />
         <ProFormDependency name={['bill_type']}>
           {({ bill_type }) =>
             bill_type === 'bank_acceptance' ? (
@@ -566,7 +596,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
               try {
                 await financeNoteService.applyAction(direction, actionModal.note.id, {
                   action: actionModal.action,
-                  ...values,
+                  ...serializeNoteActionPayload(values as Record<string, unknown>),
                 });
                 messageApi.success(t('common.operationSuccess'));
                 setActionModal(null);
@@ -592,12 +622,20 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
                   label={t(`${NS}.field.discountBank`)}
                   rules={[{ required: true }]}
                 />
-                <ProFormDatePicker name="discount_date" label={t(`${NS}.field.discountDate`)} />
+                <ProFormDatePicker
+                  name="discount_date"
+                  label={t(`${NS}.field.discountDate`)}
+                  formItemProps={formDateFormItemProps}
+                />
                 <ProFormMoney name="discount_interest" label={t(`${NS}.field.discountInterest`)} />
               </>
             ) : null}
             {actionModal.action === 'collect' || actionModal.action === 'honor' ? (
-              <ProFormDatePicker name="settle_date" label={t(`${NS}.field.settleDate`)} />
+              <ProFormDatePicker
+                name="settle_date"
+                label={t(`${NS}.field.settleDate`)}
+                formItemProps={formDateFormItemProps}
+              />
             ) : null}
           </ProForm>
         ) : null}

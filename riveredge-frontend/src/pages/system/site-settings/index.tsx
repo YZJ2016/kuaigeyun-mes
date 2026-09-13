@@ -297,7 +297,6 @@ const SiteSettingsPage: React.FC = () => {
     const hostPart = port ? `${hostname}:${port}` : hostname;
     return `${protocol}//${hostPart}/${currentTenantDomain}`;
   })();
-
   /**
    * 判断字符串是否是UUID格式
    */

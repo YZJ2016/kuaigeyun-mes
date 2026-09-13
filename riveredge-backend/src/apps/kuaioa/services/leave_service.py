@@ -112,4 +112,13 @@ class LeaveRequestService:
 async def apply_leave_request_decision(
     tenant_id: int, request_id: int, approved: bool, user_id: int
 ) -> None:
-    await apply_approval_decision(KuaioaLeaveRequest, tenant_id, request_id, approved, user_id)
+    await apply_approval_decision(
+        KuaioaLeaveRequest,
+        tenant_id,
+        request_id,
+        approved,
+        user_id,
+        audit_node_key=_CONFIG.audit_node_key,
+        entity_type=_CONFIG.entity_type,
+        doc_label=_CONFIG.title_prefix,
+    )

@@ -744,6 +744,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
         material_id: Optional[int] = None,
         warehouse_id: Optional[int] = None,
         operator_id: Optional[int] = None,
+        scheduled: bool = False,
     ) -> InventoryAlertCheckResponse:
         """
         批量检查库存余额并触发/解除预警（立即检查）。
@@ -837,6 +838,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
                     breached=breached,
                     operator_id=operator_id,
                     existing=before,
+                    notify_if_scheduled=scheduled,
                 )
                 if alert is None:
                     continue
@@ -884,6 +886,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
                     if expired_breached
                     else None
                 ),
+                notify_if_scheduled=scheduled,
             )
             if alert_exp is not None:
                 touched.append(alert_exp)
@@ -899,6 +902,73 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
             alerts=touched,
         )
 
+    @staticmethod
+    def _alert_type_label(alert_type: str) -> str:
+        if alert_type == "low_stock":
+            return "低库存"
+        if alert_type == "high_stock":
+            return "高库存"
+        if alert_type == "expired":
+            return "过期"
+        return alert_type
+
+    async def _inventory_alert_notified_today(self, tenant_id: int, alert_id: int) -> bool:
+        from core.models.message_log import MessageLog
+        from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+
+        site_today = to_site_date(resolve_business_datetime())
+        logs = await MessageLog.filter(
+            tenant_id=tenant_id,
+            type="internal",
+            deleted_at__isnull=True,
+        ).order_by("-created_at").limit(400)
+        for log in logs:
+            if to_site_date(log.created_at) != site_today:
+                continue
+            variables = log.variables if isinstance(log.variables, dict) else {}
+            if str(variables.get("inventory_alert_id") or "") == str(alert_id):
+                return True
+        return False
+
+    async def _dispatch_inventory_alert_notification(
+        self,
+        tenant_id: int,
+        alert: InventoryAlert,
+        *,
+        alert_type: str,
+        warehouse_name: str,
+        quantity: Decimal,
+        threshold_value: Decimal,
+        message: str,
+        operator_id: Optional[int],
+    ) -> None:
+        from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+            ACTION_TRIGGERED,
+            DOC_INVENTORY_ALERT,
+            dispatch_kuaizhizao_notification,
+        )
+
+        try:
+            await dispatch_kuaizhizao_notification(
+                tenant_id,
+                trigger_document=DOC_INVENTORY_ALERT,
+                trigger_action=ACTION_TRIGGERED,
+                variables={
+                    "material_code": alert.material_code or "",
+                    "material_name": alert.material_name or "",
+                    "warehouse_name": warehouse_name or "",
+                    "alert_type_label": self._alert_type_label(alert_type),
+                    "current_quantity": str(quantity),
+                    "threshold_value": str(threshold_value),
+                    "alert_message": message,
+                    "detail_path": "/apps/kuaizhizao/warehouse-management/inventory-alerts",
+                    "inventory_alert_id": str(alert.id),
+                },
+                context={"creator_user_id": operator_id},
+            )
+        except Exception as exc:
+            logger.warning("库存预警消息提醒失败 tenant={}: {}", tenant_id, exc)
+
     async def _upsert_open_alert(
         self,
         *,
@@ -913,6 +983,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
         operator_id: Optional[int] = None,
         existing: Optional[InventoryAlert] = None,
         override_message: Optional[str] = None,
+        notify_if_scheduled: bool = False,
     ) -> Optional[InventoryAlertResponse]:
         """有突破则创建/更新 pending；已恢复则自动 resolved。"""
         if existing is None:
@@ -955,6 +1026,19 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
             existing.alert_rule_id = threshold.rule_id
             existing.warehouse_name = warehouse_name or existing.warehouse_name
             await existing.save()
+            if notify_if_scheduled and not await self._inventory_alert_notified_today(
+                tenant_id, int(existing.id)
+            ):
+                await self._dispatch_inventory_alert_notification(
+                    tenant_id,
+                    existing,
+                    alert_type=alert_type,
+                    warehouse_name=warehouse_name,
+                    quantity=quantity,
+                    threshold_value=eff,
+                    message=message,
+                    operator_id=operator_id,
+                )
             return InventoryAlertResponse.model_validate(existing)
 
         alert = await InventoryAlert.create(
@@ -974,33 +1058,15 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
             status="pending",
             triggered_at=now,
         )
-        alert_resp = InventoryAlertResponse.model_validate(alert)
-        from apps.kuaizhizao.services.kuaizhizao_business_notification import (
-            ACTION_TRIGGERED,
-            DOC_INVENTORY_ALERT,
-            dispatch_kuaizhizao_notification,
+        await self._dispatch_inventory_alert_notification(
+            tenant_id,
+            alert,
+            alert_type=alert_type,
+            warehouse_name=warehouse_name,
+            quantity=quantity,
+            threshold_value=eff,
+            message=message,
+            operator_id=operator_id,
         )
-
-        alert_type_label = "低库存" if alert_type == "low_stock" else "高库存"
-        try:
-            await dispatch_kuaizhizao_notification(
-                tenant_id,
-                trigger_document=DOC_INVENTORY_ALERT,
-                trigger_action=ACTION_TRIGGERED,
-                variables={
-                    "material_code": alert.material_code or "",
-                    "material_name": alert.material_name or "",
-                    "warehouse_name": warehouse_name or "",
-                    "alert_type_label": alert_type_label,
-                    "current_quantity": str(quantity),
-                    "threshold_value": str(eff),
-                    "alert_message": message,
-                    "detail_path": "/apps/kuaizhizao/warehouse-management/inventory-alerts",
-                    "inventory_alert_id": str(alert.id),
-                },
-                context={"creator_user_id": operator_id},
-            )
-        except Exception as exc:
-            logger.warning("库存预警消息提醒失败 tenant={}: {}", tenant_id, exc)
-        return alert_resp
+        return InventoryAlertResponse.model_validate(alert)
 

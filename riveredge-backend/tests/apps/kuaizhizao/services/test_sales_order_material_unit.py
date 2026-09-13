@@ -62,3 +62,20 @@ def test_material_fields_without_master_uses_payload_unit():
     )
     _, _, _, unit = SalesOrderService._material_fields_from_master_or_payload(item, {})
     assert unit == "千克"
+
+
+def test_item_material_unit_for_response_prefers_line_snapshot():
+    item = SimpleNamespace(material_id=1, material_unit="千克")
+    mat_fallback = {1: {"unit": "克"}}
+    assert SalesOrderService._item_material_unit_for_response(item, mat_fallback) == "千克"
+
+
+def test_item_material_unit_for_response_falls_back_to_master_when_line_empty():
+    item = SimpleNamespace(material_id=1, material_unit="")
+    mat_fallback = {1: {"unit": "千克"}}
+    assert SalesOrderService._item_material_unit_for_response(item, mat_fallback) == "千克"
+
+
+def test_material_master_unit_fallback_uses_sale_scenario():
+    material = _material()
+    assert SalesOrderService._material_master_unit_fallback(material) == "千克"

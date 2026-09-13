@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import type { StatCard } from '../layout-templates';
-
 /** 快报表 ReportConfigSchema.extra.uni_report 段 */
 export interface UniReportExtraConfig {
   templateId?: string;
@@ -122,7 +120,6 @@ export type UniReportProps<T = Record<string, unknown>> = {
   columns?: ProColumns<T>[];
   request?: UniReportRequestFn<T>;
   summaryRequest?: (filters: Record<string, unknown>) => Promise<Record<string, number>>;
-  statCards?: StatCard[] | ((summary: Record<string, number>) => StatCard[]);
   exportConfig?: UniReportExportConfig;
   rowKey?: string | keyof T;
   actionRef?: React.MutableRefObject<ActionType | undefined>;

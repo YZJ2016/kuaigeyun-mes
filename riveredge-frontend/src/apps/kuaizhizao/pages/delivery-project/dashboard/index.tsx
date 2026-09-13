@@ -17,7 +17,18 @@ import {
   type ModuleShortcutDef,
 } from '../../../components/module-center';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
-import { deliveryProjectApi, DELIVERY_ALERT_KIND, DELIVERY_PROJECT_STATUS } from '../../../services/delivery-project';
+import {
+  deliveryProjectApi,
+  deliveryIssueApi,
+  deliveryNodeReportApi,
+  DELIVERY_ALERT_KIND,
+  DELIVERY_ISSUE_PRIORITY,
+  DELIVERY_ISSUE_STATUS,
+  DELIVERY_NODE_REPORT_STATUS,
+  DELIVERY_PROJECT_STATUS,
+  type DeliveryIssue,
+  type DeliveryNodeReport,
+} from '../../../services/delivery-project';
 import { renderDeliveryStatusTag } from '../shared/deliveryListPresentation';
 import DeliveryProjectGanttChart from '../components/DeliveryProjectGanttChart';
 
@@ -27,6 +38,18 @@ const DeliveryProjectDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { data, loading } = useDashboardRequest(deliveryProjectApi.dashboard, 'kz:delivery-dashboard');
+
+  const { data: openIssuesData, loading: openIssuesLoading } = useDashboardRequest(async () => {
+    const res = await deliveryIssueApi.list({ limit: 24 });
+    return (res?.items ?? [])
+      .filter((item) => item.status === 'open' || item.status === 'in_progress')
+      .slice(0, 6);
+  }, 'kz:delivery-dashboard:open-issues');
+
+  const { data: pendingReportsData, loading: pendingReportsLoading } = useDashboardRequest(async () => {
+    const res = await deliveryNodeReportApi.list({ limit: 6, status: 'submitted' });
+    return res?.items ?? [];
+  }, 'kz:delivery-dashboard:pending-reports');
 
   const openWorkbench = (projectId: number) => {
     navigate(`/apps/kuaizhizao/delivery-project/projects/${projectId}`);
@@ -123,6 +146,8 @@ const DeliveryProjectDashboard: React.FC = () => {
 
   const overdueNodes = data?.overdue_nodes ?? [];
   const alertRows = data?.alerts ?? [];
+  const openIssues = (openIssuesData ?? []) as DeliveryIssue[];
+  const pendingReports = (pendingReportsData ?? []) as DeliveryNodeReport[];
 
   const alertListPanel = (
     <ModuleActionPanel
@@ -130,6 +155,11 @@ const DeliveryProjectDashboard: React.FC = () => {
       title={t('app.kuaizhizao.deliveryProject.dashboard.alertList')}
       loading={loading}
       masonryWeight={2}
+      extra={
+        <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/projects')}>
+          {t('app.kuaizhizao.deliveryProject.dashboard.viewAll')}
+        </a>
+      }
     >
       <Table
         size="small"
@@ -198,23 +228,6 @@ const DeliveryProjectDashboard: React.FC = () => {
       }
       actionRow={
         <ModuleActionMasonry>
-          <ModuleActionPanel
-            layout="masonry"
-            title={t('app.kuaizhizao.deliveryProject.dashboard.recentProjects')}
-            loading={loading}
-            masonryWeight={masonryWeightFromRows(recentProjectItems.length)}
-            extra={
-              <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/projects')}>
-                {t('app.kuaizhizao.deliveryProject.dashboard.viewAll')}
-              </a>
-            }
-          >
-            <ModuleFeedList
-              items={recentProjectItems}
-              emptyText={t('app.kuaizhizao.deliveryProject.dashboard.noProjects')}
-            />
-          </ModuleActionPanel>
-
           {alertListPanel}
 
           <ModuleActionPanel
@@ -223,11 +236,9 @@ const DeliveryProjectDashboard: React.FC = () => {
             loading={loading}
             masonryWeight={2}
             extra={
-              overdueNodes.length > 0 ? (
-                <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/projects')}>
-                  {t('app.kuaizhizao.deliveryProject.dashboard.viewAll')}
-                </a>
-              ) : undefined
+              <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/projects')}>
+                {t('app.kuaizhizao.deliveryProject.dashboard.viewAll')}
+              </a>
             }
           >
             <Table
@@ -266,6 +277,107 @@ const DeliveryProjectDashboard: React.FC = () => {
                       {t('common.view')}
                     </Button>
                   ),
+                },
+              ]}
+            />
+          </ModuleActionPanel>
+
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.deliveryProject.dashboard.openIssuesList')}
+            loading={openIssuesLoading}
+            masonryWeight={masonryWeightFromRows(openIssues.length)}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/issues')}>
+                {t('app.kuaizhizao.deliveryProject.dashboard.viewAll')}
+              </a>
+            }
+          >
+            <Table
+              size="small"
+              tableLayout="fixed"
+              pagination={false}
+              rowKey={(r) => String(r.id)}
+              dataSource={openIssues}
+              locale={{ emptyText: t('common.noData') }}
+              columns={[
+                {
+                  title: t('app.kuaizhizao.deliveryProject.fields.issueCode'),
+                  dataIndex: 'issue_code',
+                  ellipsis: true,
+                },
+                {
+                  title: t('app.kuaizhizao.deliveryProject.fields.projectCode'),
+                  dataIndex: 'project_code',
+                  ellipsis: true,
+                },
+                {
+                  title: t('common.status'),
+                  dataIndex: 'status',
+                  width: 88,
+                  render: (v: string) => DELIVERY_ISSUE_STATUS[v] ?? v,
+                },
+                {
+                  title: t('app.kuaizhizao.deliveryProject.fields.priority'),
+                  dataIndex: 'priority',
+                  width: 72,
+                  render: (v: string) => DELIVERY_ISSUE_PRIORITY[v] ?? v,
+                },
+              ]}
+            />
+          </ModuleActionPanel>
+
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.deliveryProject.dashboard.recentProjects')}
+            loading={loading}
+            masonryWeight={masonryWeightFromRows(recentProjectItems.length)}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/projects')}>
+                {t('app.kuaizhizao.deliveryProject.dashboard.viewAll')}
+              </a>
+            }
+          >
+            <ModuleFeedList
+              items={recentProjectItems}
+              emptyText={t('app.kuaizhizao.deliveryProject.dashboard.noProjects')}
+            />
+          </ModuleActionPanel>
+
+          <ModuleActionPanel
+            layout="masonry"
+            title={t('app.kuaizhizao.deliveryProject.dashboard.pendingNodeReports')}
+            loading={pendingReportsLoading}
+            masonryWeight={masonryWeightFromRows(pendingReports.length)}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/node-reports')}>
+                {t('app.kuaizhizao.deliveryProject.dashboard.viewAll')}
+              </a>
+            }
+          >
+            <Table
+              size="small"
+              tableLayout="fixed"
+              pagination={false}
+              rowKey={(r) => String(r.id)}
+              dataSource={pendingReports}
+              locale={{ emptyText: t('common.noData') }}
+              columns={[
+                {
+                  title: t('app.kuaizhizao.deliveryProject.fields.reportCode'),
+                  dataIndex: 'report_code',
+                  ellipsis: true,
+                },
+                {
+                  title: t('app.kuaizhizao.deliveryProject.fields.nodeName'),
+                  dataIndex: 'node_name',
+                  ellipsis: true,
+                },
+                {
+                  title: t('common.status'),
+                  dataIndex: 'status',
+                  width: 88,
+                  render: (v: string) => DELIVERY_NODE_REPORT_STATUS[v] ?? v,
                 },
               ]}
             />

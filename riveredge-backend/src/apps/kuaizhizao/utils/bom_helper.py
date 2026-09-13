@@ -300,7 +300,7 @@ async def calculate_material_requirements_from_bom(
     """
     from apps.kuaizhizao.schemas.bom import MaterialRequirement
     from apps.kuaizhizao.utils.material_source_helper import expand_bom_with_source_control
-    from apps.kuaizhizao.utils.issue_method_resolver import resolve_issue_method
+    from apps.kuaizhizao.utils.issue_method_resolver import ISSUE_METHOD_PICK, resolve_issue_method
     from apps.master_data.constants.material_source_type import require_canonical_material_source_type
 
     # 始终优先按来源控制展开 BOM：穿透虚拟件（Phantom）、处理配置件/配置位与子件递归。
@@ -337,7 +337,10 @@ async def calculate_material_requirements_from_bom(
 
         requirements = []
         for req in by_component.values():
-            im = resolve_issue_method(req.get("issue_method"), req.get("source_type"))
+            im = resolve_issue_method(
+                req.get("issue_method") or ISSUE_METHOD_PICK,
+                req.get("source_type"),
+            )
             requirements.append(MaterialRequirement(
                 component_id=req["material_id"],
                 component_code=req["material_code"],
@@ -409,7 +412,7 @@ async def calculate_material_requirements_from_bom(
             unit=item.unit,
             lead_time=0,  # TODO: 从物料主数据获取
             issue_method=resolve_issue_method(
-                getattr(item, "issue_method", None),
+                getattr(item, "issue_method", None) or ISSUE_METHOD_PICK,
                 getattr(component, "source_type", None),
             ),
         )

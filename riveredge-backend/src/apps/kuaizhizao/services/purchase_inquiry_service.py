@@ -1669,9 +1669,12 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 "updated_by_name": user_info["name"],
             }).save()
         else:
-            from core.services.approval.audit_flow_guard import start_document_approval_or_raise
+            from core.services.approval.audit_flow_guard import (
+                approval_instance_finished_on_submit,
+                start_document_approval_or_raise,
+            )
 
-            await start_document_approval_or_raise(
+            instance = await start_document_approval_or_raise(
                 tenant_id=tenant_id,
                 user_id=user_id,
                 node_key="purchase_inquiry",
@@ -1687,6 +1690,14 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 "updated_by": user_id,
                 "updated_by_name": user_info["name"],
             }).save()
+            if approval_instance_finished_on_submit(instance):
+                return await self.approve_inquiry(
+                    tenant_id,
+                    inquiry_id,
+                    approved=True,
+                    user_id=user_id,
+                    is_auto_approve=True,
+                )
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
     async def withdraw_inquiry(
@@ -1775,7 +1786,21 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             }).save()
             return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
-        if is_auto_approve:
+        sync_after_flow = False
+        if audit_required and not is_auto_approve:
+            from core.services.approval.audit_flow_guard import (
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="purchase_inquiry",
+                entity_id=inquiry_id,
+            )
+            sync_after_flow = should_sync_doc_after_flow_completed(gate, approve=approved)
+
+        if is_auto_approve or sync_after_flow:
             return await _do_decide()
 
         if approved:

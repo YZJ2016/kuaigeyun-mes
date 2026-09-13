@@ -1601,8 +1601,9 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         rework_order.updated_by_name = user_info["name"]
         await rework_order.save()
 
+        approval_instance = None
         if await AuditBindingService.is_audit_enabled(tenant_id, "rework_order"):
-            instance = await ApprovalInstanceService.start_approval_for_node(
+            approval_instance = await ApprovalInstanceService.start_approval_for_node(
                 tenant_id=tenant_id,
                 user_id=submitted_by,
                 node_key="rework_order",
@@ -1614,19 +1615,41 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 business_type=bt,
                 send_notification=True,
             )
-            if instance is None:
+            if approval_instance is None:
                 raise ValidationError(
                     "审核已开启但未找到可用审批流程，请检查 rework_order 会签/库存验证绑定"
                 )
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance and approval_instance_finished_on_submit(approval_instance):
+            return await self.approve_rework_order(tenant_id, rework_order_id, submitted_by)
         return await self.get_rework_order_by_id(tenant_id, rework_order_id)
 
     async def approve_rework_order(
         self, tenant_id: int, rework_order_id: int, actor_id: int
     ) -> ReworkOrderResponse:
         """会签通过后进入可下达（approved）。"""
+        from core.services.approval.audit_binding_service import AuditBindingService
+
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
         if rework_order.status != "pending":
             raise BusinessLogicError("仅待审返工单可通过")
+        if await AuditBindingService.is_audit_enabled(tenant_id, "rework_order"):
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="rework_order",
+                entity_id=rework_order_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="返工单",
+                verb="审核",
+            )
         user_info = await self.get_user_info(actor_id)
         rework_order.status = "approved"
         rework_order.updated_by = actor_id
@@ -1638,9 +1661,27 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         self, tenant_id: int, rework_order_id: int, actor_id: int
     ) -> ReworkOrderResponse:
         """会签驳回退回草稿。"""
+        from core.services.approval.audit_binding_service import AuditBindingService
+
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
         if rework_order.status != "pending":
             raise BusinessLogicError("仅待审返工单可驳回")
+        if await AuditBindingService.is_audit_enabled(tenant_id, "rework_order"):
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="rework_order",
+                entity_id=rework_order_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="返工单",
+                verb="驳回",
+            )
         user_info = await self.get_user_info(actor_id)
         rework_order.status = "draft"
         rework_order.updated_by = actor_id

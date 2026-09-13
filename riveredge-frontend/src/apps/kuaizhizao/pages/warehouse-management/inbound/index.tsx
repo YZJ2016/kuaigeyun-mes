@@ -125,6 +125,7 @@ import type {
 } from '../../../services/quality-execution';
 import {
   type InboundHubOrder,
+  type InboundHubPageProps,
   type InboundReceiptType,
   inboundReceiptTypeLabel,
   inboundReceiptTypeSegmentOptions,
@@ -136,6 +137,8 @@ import {
   inboundSourceDocNo,
   resolveInboundHubOperator,
   resolveInboundHubDateRaw,
+  filterInboundPullCreateMenuSpecs,
+  resolveDefaultInboundQuickPullKey,
 } from './inboundHubTypes';
 import { toApiDateTimeString } from '../../../../../utils/formDate';
 import { inboundReceiptTypeMarkerValueEnum, renderInboundReceiptTypeMarkerTag } from '../shared/warehouseMarkerTags';
@@ -468,7 +471,19 @@ function renderInboundRowActions(nodes: React.ReactNode[], keyPrefix: string): R
   return nodes;
 }
 
-const InboundPage: React.FC = () => {
+const InboundPage: React.FC<InboundHubPageProps> = ({
+  fixedReceiptType,
+  scopedReceiptTypes,
+  headerTitle,
+  columnPersistenceId,
+}) => {
+  const hubScopedReceiptTypes = useMemo(
+    () => (fixedReceiptType ? [fixedReceiptType] : scopedReceiptTypes),
+    [fixedReceiptType, scopedReceiptTypes],
+  );
+  const initialReceiptTypeFilter = fixedReceiptType
+    ?? (scopedReceiptTypes?.length === 1 ? scopedReceiptTypes[0] : 'all');
+  const hideReceiptTypeFilter = Boolean(fixedReceiptType);
   const { message: messageApi } = App.useApp();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
@@ -482,12 +497,49 @@ const InboundPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const searchFormRef = useRef<ProFormInstance>();
   const quickPullRef = useRef<InboundQuickPullModalsRef>(null);
-  const receiptTypeFilterRef = useRef<string>('all');
-  const [receiptTypeFilter, setReceiptTypeFilter] = useState<string>('all');
+  const receiptTypeFilterRef = useRef<string>(initialReceiptTypeFilter);
+  const [receiptTypeFilter, setReceiptTypeFilter] = useState<string>(initialReceiptTypeFilter);
   const [showAmount, setShowAmount] = useWarehouseShowAmount();
+  const defaultInboundQuickPullKey = useMemo(
+    () => resolveDefaultInboundQuickPullKey(hubScopedReceiptTypes),
+    [hubScopedReceiptTypes],
+  );
+  const inboundPullMenuSpecs = useMemo(
+    () =>
+      filterInboundPullCreateMenuSpecs(
+        [
+          {
+            actionKey: 'purchase_receipt.pull_from_purchase_order',
+            onClick: () => quickPullRef.current?.open('purchase_order'),
+          },
+          {
+            actionKey: 'purchase_receipt.pull_from_receipt_notice',
+            onClick: () => quickPullRef.current?.open('receipt_notice'),
+          },
+          {
+            actionKey: 'inbound.pull_from_work_order',
+            onClick: () => quickPullRef.current?.open('work_order'),
+          },
+          {
+            actionKey: 'inbound.pull_from_work_order_for_production_return',
+            onClick: () => quickPullRef.current?.open('production_return'),
+          },
+          {
+            actionKey: 'inbound.pull_from_sales_order',
+            onClick: () => quickPullRef.current?.open('sales_return'),
+          },
+          {
+            actionKey: 'inbound.pull_from_outsource_work_order',
+            onClick: () => quickPullRef.current?.open('outsource'),
+          },
+        ],
+        hubScopedReceiptTypes,
+      ),
+    [hubScopedReceiptTypes],
+  );
   const handleCreate = useCallback(() => {
-    quickPullRef.current?.open('work_order');
-  }, []);
+    quickPullRef.current?.open(defaultInboundQuickPullKey);
+  }, [defaultInboundQuickPullKey]);
   useNewShortcut(handleCreate);
 
   const handleReceiptTypeFilterChange = useCallback((value: string) => {
@@ -502,16 +554,17 @@ const InboundPage: React.FC = () => {
   }, []);
 
   const receiptTypeSelect = useMemo(
-    () => (
-      <Select
-        value={receiptTypeFilter}
-        options={inboundReceiptTypeSegmentOptions(t)}
-        onChange={(v) => handleReceiptTypeFilterChange(String(v))}
-        popupMatchSelectWidth={false}
-        style={{ width: 160 }}
-      />
-    ),
-    [t, receiptTypeFilter, handleReceiptTypeFilterChange],
+    () =>
+      hideReceiptTypeFilter ? null : (
+        <Select
+          value={receiptTypeFilter}
+          options={inboundReceiptTypeSegmentOptions(t, hubScopedReceiptTypes)}
+          onChange={(v) => handleReceiptTypeFilterChange(String(v))}
+          popupMatchSelectWidth={false}
+          style={{ width: 160 }}
+        />
+      ),
+    [t, receiptTypeFilter, handleReceiptTypeFilterChange, hideReceiptTypeFilter, hubScopedReceiptTypes],
   );
   const pullLoadLabel = useMemo(
     () => withSingleNewShortcutHint(t('components.uniPull.loadFromDocument')),
@@ -2209,10 +2262,12 @@ const InboundPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle={t('app.kuaizhizao.warehouseInbound.title')}
+        headerTitle={headerTitle ?? t('app.kuaizhizao.warehouseInbound.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.purchaseReceipt)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound-width-v5"
+        columnPersistenceId={
+          columnPersistenceId ?? 'apps.kuaizhizao.pages.warehouse-management.inbound-width-v5'
+        }
         actionRef={actionRef}
         formRef={searchFormRef}
         rowKey={inboundRowKey}
@@ -2242,6 +2297,9 @@ const InboundPage: React.FC = () => {
               {
                 ...(searchFormValues as Record<string, unknown>),
                 receipt_type: typeFilter === 'all' ? undefined : typeFilter,
+                hub_scoped_receipt_types: hubScopedReceiptTypes?.length
+                  ? [...hubScopedReceiptTypes]
+                  : undefined,
               },
               sort,
             );
@@ -2293,32 +2351,8 @@ const InboundPage: React.FC = () => {
           listRowsRef.current = next;
         }}
         toolBarRender={() => {
-          const pullMenuItems = buildKuaizhizaoPullCreateMenuItems(t, [
-            {
-              actionKey: 'purchase_receipt.pull_from_purchase_order',
-              onClick: () => quickPullRef.current?.open('purchase_order'),
-            },
-            {
-              actionKey: 'purchase_receipt.pull_from_receipt_notice',
-              onClick: () => quickPullRef.current?.open('receipt_notice'),
-            },
-            {
-              actionKey: 'inbound.pull_from_work_order',
-              onClick: () => quickPullRef.current?.open('work_order'),
-            },
-            {
-              actionKey: 'inbound.pull_from_work_order_for_production_return',
-              onClick: () => quickPullRef.current?.open('production_return'),
-            },
-            {
-              actionKey: 'inbound.pull_from_sales_order',
-              onClick: () => quickPullRef.current?.open('sales_return'),
-            },
-            {
-              actionKey: 'inbound.pull_from_outsource_work_order',
-              onClick: () => quickPullRef.current?.open('outsource'),
-            },
-          ]);
+          if (!inboundPullMenuSpecs.length) return [];
+          const pullMenuItems = buildKuaizhizaoPullCreateMenuItems(t, inboundPullMenuSpecs);
           return [
             <UniPullLoadButton
               key="inbound-pull-load"

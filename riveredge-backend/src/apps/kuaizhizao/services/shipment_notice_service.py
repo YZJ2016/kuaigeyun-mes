@@ -447,6 +447,12 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                     raise BusinessLogicError(
                         "发货通知单审核已开启但未找到可用的审批流程，请在配置中心检查 shipment_notice 审批流程是否已激活"
                     )
+                from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+                if approval_instance_finished_on_submit(instance):
+                    return await self.approve_shipment_notice(
+                        tenant_id, notice.id, created_by
+                    )
             resp = ShipmentNoticeResponse.model_validate(notice)
             return await self._enrich_notice_response(tenant_id, notice, resp)
 
@@ -668,6 +674,10 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             updated_by=submitted_by,
             updated_by_name=(await self.get_user_info(submitted_by))["name"],
         )
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_shipment_notice(tenant_id, notice_id, submitted_by)
         return await self.get_shipment_notice_by_id(tenant_id, notice_id)
 
     async def approve_shipment_notice(
@@ -688,21 +698,21 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             tenant_id, "shipment_notice"
         )
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="shipment_notice",
                 entity_id=notice_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="发货通知单",
+                verb="审核",
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "发货通知单审核已开启但无进行中的审批流程，请先提交审批后再审核"
-                )
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="待发货",
             updated_by=approver_id,
@@ -730,21 +740,21 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             tenant_id, "shipment_notice"
         )
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="shipment_notice",
                 entity_id=notice_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="发货通知单",
+                verb="驳回",
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "发货通知单审核已开启但无进行中的审批流程，请先提交审批后再驳回"
-                )
         await ShipmentNotice.filter(tenant_id=tenant_id, id=notice_id).update(
             status="已驳回",
             updated_by=approver_id,

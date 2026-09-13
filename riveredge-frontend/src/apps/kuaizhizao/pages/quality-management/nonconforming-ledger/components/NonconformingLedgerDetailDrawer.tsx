@@ -155,6 +155,16 @@ export const NonconformingLedgerDetailDrawer: React.FC<NonconformingLedgerDetail
             dataIndex: 'downgrade_warehouse_name',
           },
           {
+            title: t('app.kuaizhizao.quality.nc.columns.finishedGoodsReceipt'),
+            dataIndex: 'finished_goods_receipt_id',
+            render: (_, row) => (row.finished_goods_receipt_id ? `#${row.finished_goods_receipt_id}` : '-'),
+          },
+          {
+            title: t('app.kuaizhizao.quality.nc.columns.purchaseReceipt'),
+            dataIndex: 'accept_purchase_receipt_id',
+            render: (_, row) => (row.accept_purchase_receipt_id ? `#${row.accept_purchase_receipt_id}` : '-'),
+          },
+          {
             title: t('app.kuaizhizao.quality.nc.columns.otherInbound'),
             dataIndex: 'other_inbound_id',
             render: (_, row) => (row.other_inbound_id ? `#${row.other_inbound_id}` : '-'),

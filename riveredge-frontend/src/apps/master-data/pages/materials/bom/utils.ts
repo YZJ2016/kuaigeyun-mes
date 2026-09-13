@@ -4,10 +4,6 @@ import { message } from 'antd'; // Add message import if needed or use arg
 const DEFAULT_ISSUE_METHOD_BY_SOURCE: Record<string, 'pick' | 'backflush' | 'none'> = {
   Phantom: 'none',
   Service: 'none',
-  Buy: 'backflush',
-  Make: 'pick',
-  Outsource: 'pick',
-  Configure: 'pick',
 };
 
 export function resolveIssueMethodForNode(

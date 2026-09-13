@@ -396,16 +396,34 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         status: str,
         message: str,
         hint: Optional[str] = None,
+        action: Optional[Dict[str, Any]] = None,
     ) -> None:
-        factors.append(
-            {
-                "key": key,
-                "category": category,
-                "status": status,
-                "message": message,
-                "hint": hint,
-            }
+        row: Dict[str, Any] = {
+            "key": key,
+            "category": category,
+            "status": status,
+            "message": message,
+            "hint": hint,
+        }
+        if action:
+            row["action"] = action
+        factors.append(row)
+
+    async def _work_center_label(self, tenant_id: int, work_center_id: int) -> str:
+        from apps.master_data.models.factory import WorkCenter
+
+        wc = await WorkCenter.get_or_none(
+            tenant_id=tenant_id,
+            id=int(work_center_id),
+            deleted_at__isnull=True,
         )
+        if not wc:
+            return f"工作中心 #{work_center_id}"
+        code = (getattr(wc, "code", None) or "").strip()
+        name = (getattr(wc, "name", None) or "").strip()
+        if code and name:
+            return f"{name}（{code}）"
+        return name or code or f"工作中心 #{work_center_id}"
 
     async def _resolve_reporting_work_center_id(
         self,
@@ -584,7 +602,12 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                             category="material",
                             status="missing",
                             message=f"物料「{label}」未维护单位成本",
-                            hint="请在标准成本库或物料成本中配置该物料单价",
+                            hint="轻财务 → 标准成本库：对象类型选「物料」，成本项选「材料成本」，填写单价并启用",
+                            action={
+                                "code": "standard_cost_material",
+                                "material_id": mid,
+                                "cost_item_type": "material_cost",
+                            },
                         )
                     else:
                         self._append_factor(
@@ -633,20 +656,29 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                         category="labor",
                         status="missing",
                         message=f"报工「{op_label}」无法解析工作中心",
-                        hint="请在工单工序或工序主数据中配置工作中心",
+                        hint=(
+                            "打开本工单 → 工序卡，为该工序选择工作中心；"
+                            "或在主数据 → 工序中为该工序配置默认工作中心（已下达工单需手工补绑）"
+                        ),
+                        action={
+                            "code": "work_order_operations",
+                            "work_order_id": int(work_order.id),
+                            "operation_name": op_label,
+                        },
                     )
                     continue
                 wc_id = int(wc_id)
                 if wc_id in seen_wc:
                     continue
                 seen_wc.add(wc_id)
+                wc_label = await self._work_center_label(tenant_id, wc_id)
                 if await self._has_standard_value(tenant_id, "work_center", wc_id, "labor_rate"):
                     self._append_factor(
                         factors,
                         key=f"labor_rate_{wc_id}",
                         category="labor",
                         status="ready",
-                        message=f"工作中心 #{wc_id} 已维护人工费率",
+                        message=f"{wc_label} 已维护人工费率",
                     )
                 else:
                     self._append_factor(
@@ -654,8 +686,13 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                         key=f"labor_rate_{wc_id}",
                         category="labor",
                         status="missing",
-                        message=f"工作中心 #{wc_id} 未维护人工费率 (labor_rate)",
-                        hint="请在标准成本库为该工作中心配置 labor_rate",
+                        message=f"{wc_label} 未维护人工费率",
+                        hint="轻财务 → 标准成本库：对象类型选「工作中心」，成本项选「人工费率」，填写元/工时并启用",
+                        action={
+                            "code": "standard_cost_work_center_rate",
+                            "work_center_id": wc_id,
+                            "cost_item_type": "labor_rate",
+                        },
                     )
 
         rules = await CostRule.filter(
@@ -702,8 +739,8 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                             key=rule_key,
                             category="manufacturing",
                             status="missing",
-                            message=f"规则「{rule.name}」未配置分摊比例 parameters.ratio",
-                            hint="请在成本核算规则中补全分摊比例",
+                            message=f"规则「{rule.name}」未配置分摊比例",
+                            hint="请在成本核算规则中补全「分摊比例」参数",
                         )
                 elif rule.calculation_method == "按工时":
                     if total_report_hours <= 0:
@@ -737,13 +774,22 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                                     category="manufacturing",
                                     status="missing",
                                     message=f"规则「{rule.name}」：报工「{op_label}」无法解析工作中心",
-                                    hint="请在工单工序或工序主数据中配置工作中心",
+                                    hint=(
+                                        "与人工成本相同：须在本工单工序或工序主数据上绑定工作中心，"
+                                        "否则按工时规则无法分摊制造费用"
+                                    ),
+                                    action={
+                                        "code": "work_order_operations",
+                                        "work_order_id": int(work_order.id),
+                                        "operation_name": op_label,
+                                    },
                                 )
                                 continue
                             wc_id = int(wc_id)
                             if wc_id in seen_overhead_wc:
                                 continue
                             seen_overhead_wc.add(wc_id)
+                            wc_label = await self._work_center_label(tenant_id, wc_id)
                             if await self._has_standard_value(
                                 tenant_id, "work_center", wc_id, "overhead_rate"
                             ):
@@ -752,7 +798,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                                     key=f"{rule_key}_rate_{wc_id}",
                                     category="manufacturing",
                                     status="ready",
-                                    message=f"规则「{rule.name}」：工作中心 #{wc_id} 已维护 overhead_rate",
+                                    message=f"规则「{rule.name}」：{wc_label} 已维护制造费用费率",
                                 )
                             else:
                                 rule_ready = False
@@ -761,8 +807,13 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                                     key=f"{rule_key}_rate_{wc_id}",
                                     category="manufacturing",
                                     status="missing",
-                                    message=f"规则「{rule.name}」：工作中心 #{wc_id} 未维护 overhead_rate",
-                                    hint="请在标准成本库为该工作中心配置 overhead_rate",
+                                    message=f"规则「{rule.name}」：{wc_label} 未维护制造费用费率",
+                                    hint="轻财务 → 标准成本库：对象类型选「工作中心」，成本项选「制造费用费率」，填写元/工时并启用",
+                                    action={
+                                        "code": "standard_cost_work_center_rate",
+                                        "work_center_id": wc_id,
+                                        "cost_item_type": "overhead_rate",
+                                    },
                                 )
                         if rule_ready and seen_overhead_wc:
                             self._append_factor(
@@ -770,7 +821,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                                 key=rule_key,
                                 category="manufacturing",
                                 status="ready",
-                                message=f"规则「{rule.name}」按工时：报工工序工作中心与 overhead_rate 已就绪",
+                                message=f"规则「{rule.name}」按工时：报工工序工作中心与制造费用费率已就绪",
                             )
 
         blocking_count = sum(1 for f in factors if f["status"] == "missing")
@@ -780,6 +831,8 @@ class CostCalculationService(AppBaseService[CostCalculation]):
             "target_type": "work_order",
             "target_id": work_order_id,
             "target_label": target_label,
+            "work_order_id": int(work_order.id),
+            "work_order_code": work_order.code,
             "ready": blocking_count == 0,
             "blocking_count": blocking_count,
             "warning_count": warning_count,
@@ -930,8 +983,8 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                         key=f"labor_rate_{op_name}",
                         category="labor",
                         status="missing",
-                        message=f"工序「{op_name}」：工作中心 #{wc_id} 未维护 labor_rate",
-                        hint="请在标准成本库配置人工费率",
+                        message=f"工序「{op_name}」：工作中心 #{wc_id} 未维护人工费率",
+                        hint="请在标准成本库配置「人工费率」",
                     )
             if ops_with_time == 0:
                 wc_id = await self._resolve_product_work_center_id(tenant_id, product)
@@ -997,7 +1050,8 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                             key=rule_key,
                             category="manufacturing",
                             status="missing",
-                            message=f"规则「{rule.name}」未配置分摊比例 parameters.ratio",
+                            message=f"规则「{rule.name}」未配置分摊比例",
+                            hint="请在成本核算规则中补全「分摊比例」参数",
                         )
                 elif rule.calculation_method == "按工时":
                     if total_std_hours <= 0:
@@ -1042,7 +1096,8 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                                     key=f"{rule_key}_rate_{wc_id}",
                                     category="manufacturing",
                                     status="missing",
-                                    message=f"规则「{rule.name}」：工作中心 #{wc_id} 未维护 overhead_rate",
+                                    message=f"规则「{rule.name}」：工作中心 #{wc_id} 未维护制造费用费率",
+                                    hint="请在标准成本库配置「制造费用费率」",
                                 )
                         if not missing_wc and not missing_rate:
                             self._append_factor(
@@ -1050,7 +1105,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                                 key=rule_key,
                                 category="manufacturing",
                                 status="ready",
-                                message=f"规则「{rule.name}」按工时：工序工作中心与 overhead_rate 已就绪",
+                                message=f"规则「{rule.name}」按工时：工序工作中心与制造费用费率已就绪",
                             )
                     else:
                         wc_id = await self._resolve_product_work_center_id(tenant_id, product)
@@ -1070,7 +1125,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                                 key=rule_key,
                                 category="manufacturing",
                                 status="ready",
-                                message=f"规则「{rule.name}」按工时：工作中心 #{wc_id} overhead_rate 已配置",
+                                message=f"规则「{rule.name}」按工时：工作中心 #{wc_id} 制造费用费率已配置",
                             )
                         else:
                             self._append_factor(
@@ -1078,7 +1133,8 @@ class CostCalculationService(AppBaseService[CostCalculation]):
                                 key=rule_key,
                                 category="manufacturing",
                                 status="missing",
-                                message=f"规则「{rule.name}」按工时：工作中心 #{wc_id} 未维护 overhead_rate",
+                                message=f"规则「{rule.name}」按工时：工作中心 #{wc_id} 未维护制造费用费率",
+                                hint="请在标准成本库配置「制造费用费率」",
                             )
 
         blocking_count = sum(1 for f in factors if f["status"] == "missing")
@@ -1274,7 +1330,7 @@ class CostCalculationService(AppBaseService[CostCalculation]):
         params = rule.rule_parameters if isinstance(rule.rule_parameters, dict) else {}
         if "ratio" not in params:
             raise ValidationError(
-                f"制造费用规则「{rule.name}」未配置分摊比例 parameters.ratio"
+                f"制造费用规则「{rule.name}」未配置分摊比例"
             )
         return Decimal(str(params["ratio"]))
 

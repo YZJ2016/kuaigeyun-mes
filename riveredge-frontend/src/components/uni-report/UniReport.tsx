@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../uni-table';
-import { ListPageTemplate, type StatCard } from '../layout-templates';
+import { ListPageTemplate } from '../layout-templates';
 import { UniReportMetaHeader } from './UniReportMetaHeader';
 import { buildUniReportSummaryFooter } from './UniReportSummaryFooter';
 import {
@@ -30,6 +30,8 @@ import { useUniReportPrint } from './useUniReportPrint';
 import type { UniReportProps } from './types';
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey';
 import { pickListPageToolbarSearchParams } from '../../utils/listLifecycleStage';
+import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
+import { resolveDefaultTablePageSize } from './uniReportPagination';
 
 /** 专业包 kuaireport：未 compose 时不可用，避免壳层静态依赖导致主仓白屏 */
 const KUAIREPORT_SERVICE = import.meta.glob('../../apps/kuaireport/services/kuaireport.ts');
@@ -123,24 +125,6 @@ function prependIndexColumn<T>(columns: ProColumns<T>[], t: (k: string) => strin
   ];
 }
 
-function buildStatCards(
-  summary: Record<string, number>,
-  statCardsProp: UniReportProps['statCards'],
-  kpiBindings: { key: string; title: string; precision?: number; suffix?: string }[] | undefined,
-  t: (k: string) => string,
-): StatCard[] {
-  if (typeof statCardsProp === 'function') return statCardsProp(summary);
-  if (statCardsProp?.length) return statCardsProp;
-  if (!kpiBindings?.length) return [];
-  return kpiBindings.map((k) => ({
-    key: k.key,
-    title: k.title.startsWith('components.') ? t(k.title) : k.title,
-    value: summary[k.key] ?? 0,
-    precision: k.precision,
-    suffix: k.suffix,
-  }));
-}
-
 function formatFilterSummary(values: Record<string, unknown>): string {
   return Object.entries(values)
     .filter(([, v]) => v != null && v !== '')
@@ -158,7 +142,6 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
   columns: columnsProp,
   request,
   summaryRequest,
-  statCards: statCardsProp,
   exportConfig,
   rowKey = 'id',
   actionRef: externalActionRef,
@@ -205,8 +188,6 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
   const showSummaryRow = showSummaryRowProp ?? configExtra.showSummaryRow ?? template.showSummaryRow ?? false;
   const summaryFields =
     summaryFieldsProp ?? configExtra.summaryFields ?? template.summaryFields ?? resolveSummaryFields(reportConfig, undefined);
-  const kpiBindings = configExtra.kpiBindings ?? template.kpiBindings;
-
   const baseColumns = useMemo(() => {
     if (mode === 'config' && reportConfig) {
       return reportConfigToColumns(reportConfig) as ProColumns<T>[];
@@ -260,11 +241,6 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
       </>
     );
   }, [beforeSearchButtons, periodFilterNode]);
-
-  const statCards = useMemo(
-    () => buildStatCards(globalSummary, statCardsProp, kpiBindings, t),
-    [globalSummary, statCardsProp, kpiBindings, t],
-  );
 
   const getFilters = useCallback(
     () => searchValuesRef.current as Record<string, unknown>,
@@ -419,10 +395,15 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
     });
   }, [columns, globalSummary, pageData, reportConfig, showIndexColumn, showSummaryRow, summaryFields]);
 
-  const reportPagination = useMemo(() => buildUniReportTablePagination(t), [t]);
+  const preferenceRevision = useUserPreferenceStore((s) => s.preferences);
+  const defaultPageSize = useMemo(() => resolveDefaultTablePageSize(), [preferenceRevision]);
+  const reportPagination = useMemo(
+    () => buildUniReportTablePagination(t, defaultPageSize),
+    [defaultPageSize, t],
+  );
 
   return (
-    <ListPageTemplate statCards={statCards}>
+    <ListPageTemplate>
       <UniReportMetaHeader title={title} subtitle={resolvedSubtitle} extraLeft={headerLeft} />
       {children}
       <UniTable<T>

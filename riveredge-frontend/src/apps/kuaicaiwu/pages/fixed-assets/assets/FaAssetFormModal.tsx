@@ -21,7 +21,7 @@ import {
   FA_CHANGE_METHOD_OPTIONS,
   FA_UNIT_OPTIONS,
   computeExpectedResidual,
-  computeMonthlyDepreciation,
+  computePeriodDepreciation,
   computeNetValue,
   computeRemainingPeriods,
   formatMoneyDisplay,
@@ -290,6 +290,20 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
             options={deprMethodOptions}
           />
         </Col>
+        <ProFormDependency name={['depreciation_method']}>
+          {({ depreciation_method }) =>
+            depreciation_method === 'units_of_production' ? (
+              <Col span={12}>
+                <ProFormDigit
+                  name="total_workload"
+                  label={t(`${NS}.form.totalWorkload`)}
+                  min={0.0001}
+                  rules={[{ required: true, message: t(`${NS}.form.totalWorkloadRequired`) }]}
+                />
+              </Col>
+            ) : null
+          }
+        </ProFormDependency>
         <Col span={12}>
           <ProFormDigit
             name="useful_life_months"
@@ -379,15 +393,42 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
           )}
         </ProFormDependency>
         <ProFormDependency
-          name={['original_value', 'residual_rate', 'useful_life_months']}
+          name={[
+            'depreciation_method',
+            'original_value',
+            'residual_rate',
+            'useful_life_months',
+            'depreciated_periods',
+            'accumulated_depreciation',
+            'impairment_value',
+            'total_workload',
+          ]}
         >
-          {({ original_value, residual_rate, useful_life_months }) => (
+          {({
+            depreciation_method,
+            original_value,
+            residual_rate,
+            useful_life_months,
+            depreciated_periods,
+            accumulated_depreciation,
+            impairment_value,
+            total_workload,
+          }) => (
             <Col span={12}>
               <Form.Item label={t(`${NS}.form.monthlyDepreciation`)}>
                 <Input
                   readOnly
                   value={formatMoneyDisplay(
-                    computeMonthlyDepreciation(original_value, residual_rate, useful_life_months),
+                    computePeriodDepreciation({
+                      depreciationMethod: depreciation_method,
+                      originalValue: original_value,
+                      residualRate: residual_rate,
+                      usefulLifeMonths: useful_life_months,
+                      depreciatedPeriods: depreciated_periods,
+                      accumulatedDepreciation: accumulated_depreciation,
+                      impairmentValue: impairment_value,
+                      totalWorkload: total_workload,
+                    }),
                   )}
                 />
               </Form.Item>

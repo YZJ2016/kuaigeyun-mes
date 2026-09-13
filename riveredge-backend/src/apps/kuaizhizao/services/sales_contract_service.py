@@ -1028,6 +1028,15 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract.review_status = ReviewStatus.PENDING
         contract.updated_by = submitted_by
         await contract.save()
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_contract(
+                tenant_id,
+                contract_id,
+                submitted_by,
+                submitter_name,
+            )
         return await self.get_contract_by_id(
             tenant_id, contract_id, current_user=current_user
         )
@@ -1049,21 +1058,21 @@ class SalesContractService(AppBaseService[SalesContract]):
             tenant_id, "sales_contract"
         )
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="sales_contract",
                 entity_id=contract_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="销售合同",
+                verb="审核",
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "销售合同审核已开启但无进行中的审批流程，请先提交审批后再审核"
-                )
 
         contract.status = "已生效"
         contract.review_status = ReviewStatus.APPROVED
@@ -1092,21 +1101,21 @@ class SalesContractService(AppBaseService[SalesContract]):
             tenant_id, "sales_contract"
         )
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="sales_contract",
                 entity_id=contract_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="销售合同",
+                verb="驳回",
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "销售合同审核已开启但无进行中的审批流程，请先提交审批后再驳回"
-                )
 
         contract.status = "草稿"
         contract.review_status = ReviewStatus.REJECTED
@@ -2497,9 +2506,12 @@ class SalesContractService(AppBaseService[SalesContract]):
             tenant_id, "sales_contract_change"
         )
         if audit_required:
-            from core.services.approval.audit_flow_guard import start_document_approval_or_raise
+            from core.services.approval.audit_flow_guard import (
+                approval_instance_finished_on_submit,
+                start_document_approval_or_raise,
+            )
 
-            await start_document_approval_or_raise(
+            instance = await start_document_approval_or_raise(
                 tenant_id=tenant_id,
                 user_id=operator_id,
                 node_key="sales_contract_change",
@@ -2512,11 +2524,12 @@ class SalesContractService(AppBaseService[SalesContract]):
             )
             change.status = "待审核"
             change.review_status = ReviewStatus.PENDING
-        else:
-            return await self.approve_contract_change(tenant_id, change_id, operator_id)
-        change.updated_by = operator_id
-        await change.save(update_fields=["status", "review_status", "updated_by", "updated_at"])
-        return await self._change_to_response(change)
+            change.updated_by = operator_id
+            await change.save(update_fields=["status", "review_status", "updated_by", "updated_at"])
+            if approval_instance_finished_on_submit(instance):
+                return await self.approve_contract_change(tenant_id, change_id, operator_id)
+            return await self._change_to_response(change)
+        return await self.approve_contract_change(tenant_id, change_id, operator_id)
 
     async def approve_contract_change(
         self,

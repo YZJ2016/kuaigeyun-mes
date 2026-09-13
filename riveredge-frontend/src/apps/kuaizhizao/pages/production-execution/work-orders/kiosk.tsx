@@ -50,6 +50,7 @@ import { formatDateTime } from '../../../../../utils/format';
 import { formatOperationInspectionSummary, getOperationCardPhase, getOperationProgressPercent, getOperationQualityMetrics, getProcessInspectionCardStatus, isOperationEffectivelyCompleted } from '../../../utils/workOrderReporting';
 import { fetchKuaiiotFillContext } from '../../../../../utils/kuaiiotFillContext';
 import { equipmentApi } from '../../../services/equipment';
+import { convertProductionInputToBaseQty } from '../../../../../utils/materialScenarioUnit';
 
 const { Search } = Input;
 const { Text, Title } = Typography;
@@ -71,7 +72,18 @@ interface WorkOrder {
   planned_end_date?: string;
   work_center_id?: number;
   work_center_name?: string;
+  product_unit?: string;
+  base_unit?: string;
+  unit_to_base_factor?: number;
 }
+
+const operationHasSimpleInspection = (operation: any) => {
+  if (!operation) return false;
+  const mode = operation.inspection_mode ?? operation.inspectionMode;
+  if (mode === 'simple') return true;
+  const dt = operation.defect_types ?? operation.defectTypes;
+  return Array.isArray(dt) && dt.length > 0;
+};
 
 const WorkOrdersKioskPage: React.FC = () => {
   const { t } = useTranslation()
@@ -326,6 +338,11 @@ const WorkOrdersKioskPage: React.FC = () => {
                 Object.entries(values).filter(([k]) => !['qualified_quantity', 'unqualified_quantity', 'work_hours', 'remarks'].includes(k))
             );
             
+            const qtyContext = selectedWorkOrder;
+            const reportedQtyBase = convertProductionInputToBaseQty(qty, qtyContext);
+            const qualifiedQtyBase = convertProductionInputToBaseQty(qualified, qtyContext);
+            const unqualifiedQtyBase = convertProductionInputToBaseQty(unqualified, qtyContext);
+
             const created = await reportingApi.create({
                 work_order_id: selectedWorkOrder.id!,
                 work_order_code: selectedWorkOrder.code || '',
@@ -335,9 +352,9 @@ const WorkOrdersKioskPage: React.FC = () => {
                 operation_name: activeOperation.operation_name || activeOperation.name || '',
                 worker_id: userInfo?.id ?? 0,
                 worker_name: userInfo?.full_name || userInfo?.username || '操作员',
-                reported_quantity: qty,
-                qualified_quantity: qualified,
-                unqualified_quantity: unqualified,
+                reported_quantity: reportedQtyBase,
+                qualified_quantity: qualifiedQtyBase,
+                unqualified_quantity: unqualifiedQtyBase,
                 work_hours: Number(values.work_hours) || 0,
                 status: 'pending',
                 reported_at: new Date().toISOString(),
@@ -346,17 +363,28 @@ const WorkOrdersKioskPage: React.FC = () => {
             });
             
             // 不合格数 > 0 且已选不良品类型时，创建不良品记录
-            if (unqualified > 0 && selectedDefectType && created?.id) {
+            if (
+                unqualified > 0 &&
+                selectedDefectType &&
+                created?.id &&
+                operationHasSimpleInspection(activeOperation)
+            ) {
+                const selectedDefect = defectTypeOptions.find((opt) => opt.code === selectedDefectType);
                 try {
                     await reportingApi.recordDefect(created.id.toString(), {
-                        defect_quantity: unqualified,
+                        defect_quantity: unqualifiedQtyBase,
                         defect_type: selectedDefectType,
-                        defect_reason: '报工终端录入',
+                        defect_reason: selectedDefect?.name || selectedDefectType,
                         disposition: 'quarantine',
                     });
-                } catch (defectErr) {
+                } catch (defectErr: unknown) {
                     console.error('创建不良品记录失败', defectErr);
-                    message.warning('报工成功，但不良品记录创建失败');
+                    const detail = defectErr instanceof Error ? defectErr.message : String(defectErr);
+                    message.warning(
+                        detail
+                            ? `${t('app.kuaizhizao.workReporting.defectCreateAfterReportFailed')}：${detail}`
+                            : t('app.kuaizhizao.workReporting.defectCreateAfterReportFailed'),
+                    );
                 }
             }
             

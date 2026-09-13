@@ -384,7 +384,7 @@ KUAIZHIZAO_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
         "trigger_document": DOC_INVENTORY_ALERT,
         "trigger_action": ACTION_TRIGGERED,
         "template_code": "KZ_INV_ALERT",
-        "recipient_scopes": [],
+        "recipient_scopes": ["user_specified"],
         "enabled": False,
     },
     {

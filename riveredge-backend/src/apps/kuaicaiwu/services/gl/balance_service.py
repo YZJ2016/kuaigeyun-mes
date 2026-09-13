@@ -481,12 +481,13 @@ class BalanceService:
                     bd, bc = running_debit - running_credit, Decimal("0")
                 else:
                     bd, bc = Decimal("0"), running_credit - running_debit
+                voucher_date = v.voucher_date.isoformat() if v.voucher_date else ""
                 entries.append(
                     {
                         "kind": "entry",
                         "voucher_id": v.id,
                         "voucher_code": v.voucher_code,
-                        "voucher_date": v.voucher_date.isoformat(),
+                        "voucher_date": voucher_date,
                         "status": v.status,
                         "summary": line.summary or v.summary,
                         "debit_amount": float(line.debit_amount or 0),

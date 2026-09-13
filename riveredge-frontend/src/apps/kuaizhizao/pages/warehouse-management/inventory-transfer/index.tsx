@@ -146,6 +146,13 @@ const InventoryTransferPage: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingTransferId, setEditingTransferId] = useState<number | null>(null);
   const editOriginalItemsRef = useRef<InventoryTransferItem[]>([]);
+  const pendingModalHydrationRef = useRef<
+    | { kind: 'create' }
+    | { kind: 'edit'; detail: InventoryTransfer; items: InventoryTransferItem[] }
+    | null
+  >(null);
+  const suppressWarehouseItemClearRef = useRef(false);
+  const createFromWarehouseRef = useRef<number | undefined>(undefined);
   const [itemModalVisible, setItemModalVisible] = useState(false);
   const [createTransferMode, setCreateTransferMode] = useState<'transfer' | 'bin_relocation'>('transfer');
   const formRef = useRef<any>(null);
@@ -281,10 +288,84 @@ const InventoryTransferPage: React.FC = () => {
     setIsEditMode(false);
     setEditingTransferId(null);
     editOriginalItemsRef.current = [];
+    pendingModalHydrationRef.current = null;
+    suppressWarehouseItemClearRef.current = false;
+    createFromWarehouseRef.current = undefined;
+    setSelectedCreateWarehouseId(undefined);
     setRowBatchOptions({});
     setRowBatchManaged({});
     formRef.current?.resetFields();
   };
+
+  const hydrateCreateModalForm = async (
+    payload: { kind: 'create' } | { kind: 'edit'; detail: InventoryTransfer; items: InventoryTransferItem[] },
+  ) => {
+    suppressWarehouseItemClearRef.current = true;
+    setRowBatchOptions({});
+    setRowBatchManaged({});
+
+    if (payload.kind === 'create') {
+      createFromWarehouseRef.current = undefined;
+      setCreateTransferMode('transfer');
+      setSelectedCreateWarehouseId(undefined);
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({
+        transfer_date: dayjs(),
+        transfer_mode: 'transfer',
+        items: [{ ...defaultTransferItem }],
+      });
+      suppressWarehouseItemClearRef.current = false;
+      return;
+    }
+
+    const { detail, items: detailItems } = payload;
+    const mode =
+      detail.transfer_mode ||
+      (detail.from_warehouse_id === detail.to_warehouse_id ? 'bin_relocation' : 'transfer');
+    createFromWarehouseRef.current = detail.from_warehouse_id;
+    setCreateTransferMode(mode);
+    setSelectedCreateWarehouseId(detail.from_warehouse_id);
+    formRef.current?.resetFields();
+    formRef.current?.setFieldsValue({
+      transfer_mode: mode,
+      from_warehouse_id: detail.from_warehouse_id,
+      to_warehouse_id: detail.to_warehouse_id,
+      _from_warehouse_name: detail.from_warehouse_name,
+      _to_warehouse_name: detail.to_warehouse_name,
+      transfer_date: detail.transfer_date ? dayjs(detail.transfer_date) : dayjs(),
+      transfer_reason: detail.transfer_reason,
+      remarks: detail.remarks,
+      attachments: detail.attachments,
+      items: (detailItems.length ? detailItems : [{ ...defaultTransferItem }]).map((it) => ({
+        id: it.id,
+        material_id: it.material_id,
+        material_code: it.material_code,
+        material_name: it.material_name,
+        material_unit: it.material_unit,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        from_storage_area_id: it.from_storage_area_id,
+        from_location_id: it.from_location_id,
+        to_storage_area_id: it.to_storage_area_id,
+        to_location_id: it.to_location_id,
+        batch_no: it.batch_no,
+        batch_managed: false,
+      })),
+    });
+    for (let i = 0; i < detailItems.length; i += 1) {
+      const it = detailItems[i];
+      await syncRowBatchOptions(i, it.material_id, detail.from_warehouse_id, it.batch_no);
+    }
+    suppressWarehouseItemClearRef.current = false;
+  };
+
+  const handleModalAfterOpenChange = useCallback((open: boolean) => {
+    if (!open) return;
+    const pending = pendingModalHydrationRef.current;
+    if (!pending) return;
+    pendingModalHydrationRef.current = null;
+    void hydrateCreateModalForm(pending);
+  }, []);
 
   const buildItemPayload = (
     it: Record<string, unknown>,
@@ -378,19 +459,8 @@ const InventoryTransferPage: React.FC = () => {
     setIsEditMode(false);
     setEditingTransferId(null);
     editOriginalItemsRef.current = [];
-    setRowBatchOptions({});
-    setRowBatchManaged({});
+    pendingModalHydrationRef.current = { kind: 'create' };
     setCreateModalVisible(true);
-    setCreateTransferMode('transfer');
-    setSelectedCreateWarehouseId(undefined);
-    setTimeout(() => {
-      formRef.current?.resetFields();
-      formRef.current?.setFieldsValue({
-        transfer_date: dayjs(),
-        transfer_mode: 'transfer',
-        items: [{ ...defaultTransferItem }],
-      });
-    }, 0);
   };
 
   const handleEdit = async (record: InventoryTransfer) => {
@@ -401,51 +471,12 @@ const InventoryTransferPage: React.FC = () => {
         messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgEditDraftOnly'));
         return;
       }
-      const mode =
-        detail.transfer_mode ||
-        (detail.from_warehouse_id === detail.to_warehouse_id ? 'bin_relocation' : 'transfer');
       const detailItems: InventoryTransferItem[] = Array.isArray(detail.items) ? detail.items : [];
       setIsEditMode(true);
       setEditingTransferId(detail.id ?? null);
       editOriginalItemsRef.current = detailItems;
-      setCreateTransferMode(mode);
-      setSelectedCreateWarehouseId(detail.from_warehouse_id);
-      setRowBatchOptions({});
-      setRowBatchManaged({});
+      pendingModalHydrationRef.current = { kind: 'edit', detail, items: detailItems };
       setCreateModalVisible(true);
-      setTimeout(async () => {
-        formRef.current?.resetFields();
-        formRef.current?.setFieldsValue({
-          transfer_mode: mode,
-          from_warehouse_id: detail.from_warehouse_id,
-          to_warehouse_id: detail.to_warehouse_id,
-          _from_warehouse_name: detail.from_warehouse_name,
-          _to_warehouse_name: detail.to_warehouse_name,
-          transfer_date: detail.transfer_date ? dayjs(detail.transfer_date) : dayjs(),
-          transfer_reason: detail.transfer_reason,
-          remarks: detail.remarks,
-          attachments: detail.attachments,
-          items: (detailItems.length ? detailItems : [{ ...defaultTransferItem }]).map((it) => ({
-            id: it.id,
-            material_id: it.material_id,
-            material_code: it.material_code,
-            material_name: it.material_name,
-            material_unit: it.material_unit,
-            quantity: it.quantity,
-            unit_price: it.unit_price,
-            from_storage_area_id: it.from_storage_area_id,
-            from_location_id: it.from_location_id,
-            to_storage_area_id: it.to_storage_area_id,
-            to_location_id: it.to_location_id,
-            batch_no: it.batch_no,
-            batch_managed: false,
-          })),
-        });
-        for (let i = 0; i < detailItems.length; i += 1) {
-          const it = detailItems[i];
-          await syncRowBatchOptions(i, it.material_id, detail.from_warehouse_id, it.batch_no);
-        }
-      }, 0);
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryTransfer.msgGetDetailFailed'));
     }
@@ -1124,8 +1155,10 @@ const InventoryTransferPage: React.FC = () => {
         open={createModalVisible}
         onClose={resetCreateModalState}
         onFinish={handleCreateSubmit}
+        afterOpenChange={handleModalAfterOpenChange}
         formRef={formRef}
         grid={false}
+        isEdit={isEditMode}
         width={createTransferMode === 'bin_relocation' ? MODAL_CONFIG.EXTRA_LARGE_WIDTH : MODAL_CONFIG.LARGE_WIDTH}
         {...MODAL_CONFIG}
       >
@@ -1165,15 +1198,25 @@ const InventoryTransferPage: React.FC = () => {
               onChange={(value, warehouse) => {
                 const warehouseName = String(warehouse?.name ?? '').trim();
                 const warehouseId = typeof value === 'number' ? value : Number(value);
+                const resolvedId = Number.isFinite(warehouseId) && warehouseId > 0 ? warehouseId : undefined;
                 formRef.current?.setFieldsValue({ _from_warehouse_name: warehouseName });
-                setSelectedCreateWarehouseId(Number.isFinite(warehouseId) && warehouseId > 0 ? warehouseId : undefined);
-                clearCreateFormItemMaterials();
+                setSelectedCreateWarehouseId(resolvedId);
                 if (createTransferMode === 'bin_relocation') {
                   formRef.current?.setFieldsValue({
                     to_warehouse_id: value,
                     _to_warehouse_name: warehouseName,
                   });
                 }
+                if (suppressWarehouseItemClearRef.current) {
+                  createFromWarehouseRef.current = resolvedId;
+                  return;
+                }
+                const previousId = createFromWarehouseRef.current;
+                createFromWarehouseRef.current = resolvedId;
+                if (previousId !== undefined && previousId === resolvedId) {
+                  return;
+                }
+                clearCreateFormItemMaterials();
               }}
             />
           </Col>

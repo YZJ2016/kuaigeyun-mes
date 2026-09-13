@@ -4,9 +4,9 @@
  * 查看报工触发的物料倒冲记录，支持按工单、物料、状态筛选，失败记录可重试。
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Tag } from 'antd';
+import { App, Button, Descriptions, Segmented, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { warehouseApi } from '../../../services/production';
 import { UniTable } from '../../../../../components/uni-table';
@@ -51,10 +51,14 @@ interface BackflushRecordItem {
   processed_by_name?: string;
 }
 
+type BackflushViewScope = 'all' | 'failed';
+
 const BackflushRecordsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const actionRef = useRef<any>(null);
+  const viewScopeRef = useRef<BackflushViewScope>('all');
+  const [viewScope, setViewScope] = useState<BackflushViewScope>('all');
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailRecord, setDetailRecord] = useState<BackflushRecordItem | null>(null);
@@ -250,9 +254,36 @@ const BackflushRecordsPage: React.FC = () => {
     [t, statusValueEnum]
   );
 
+  const handleViewScopeChange = useCallback((value: BackflushViewScope) => {
+    viewScopeRef.current = value;
+    setViewScope(value);
+    actionRef.current?.reload();
+  }, []);
+
+  const viewScopeSegment = useMemo(
+    () => (
+      <Segmented<BackflushViewScope>
+        value={viewScope}
+        options={[
+          { label: t('app.kuaizhizao.backflushRecords.viewAll'), value: 'all' },
+          { label: t('app.kuaizhizao.backflushRecords.viewFailed'), value: 'failed' },
+        ]}
+        onChange={(v) => handleViewScopeChange(v as BackflushViewScope)}
+      />
+    ),
+    [handleViewScopeChange, t, viewScope],
+  );
+
   const fetchRecords = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, unknown>) => {
     try {
-      const listParams = resolveBackflushRecordListParams(searchFormValues, sort);
+      const scopedStatus = viewScopeRef.current === 'failed' ? 'failed' : undefined;
+      const listParams = resolveBackflushRecordListParams(
+        {
+          ...(searchFormValues ?? {}),
+          ...(scopedStatus ? { status: scopedStatus } : {}),
+        },
+        sort,
+      );
       const res = await warehouseApi.backflushRecords.list({
         ...listParams,
         skip: ((params?.current || 1) - 1) * (params?.pageSize || 20),
@@ -278,8 +309,9 @@ const BackflushRecordsPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.backflushRecords.headerTitle')}
         actionRef={actionRef}
         columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.backflush-records-width-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.backflush-records-width-v4"
         request={fetchRecords}
+        beforeSearchButtons={viewScopeSegment}
         showAdvancedSearch
         pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter

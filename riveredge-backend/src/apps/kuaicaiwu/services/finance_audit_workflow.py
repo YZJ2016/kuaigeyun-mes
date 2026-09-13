@@ -144,6 +144,16 @@ async def submit_finance_review(
         review_status="待审核",
         **(await _updated_audit_kwargs(updated_by)),
     )
+    from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+    if approval_instance_finished_on_submit(instance):
+        await _auto_approve_finance(
+            model=model,
+            tenant_id=tenant_id,
+            doc_id=doc_id,
+            updated_by=updated_by,
+            node_key=node_key,
+        )
 
 
 async def withdraw_finance_review(
@@ -178,26 +188,22 @@ async def assert_finance_pending_approval_flow(
     doc_label: str,
     verb: str = "审核",
 ) -> None:
-    """审核已开时须存在 pending 审批实例，禁止撤销后空壳直审。"""
-    from core.services.approval.approval_instance_service import ApprovalInstanceService
+    """审核已开时须存在 pending 审批实例，或允许已结束流程补齐写回。"""
+    from core.services.approval.audit_flow_guard import (
+        assert_manual_approval_action_allowed,
+        get_approval_gate_status,
+    )
     from infra.services.business_config_service import BusinessConfigService
 
     audit_required = await BusinessConfigService().check_audit_required(tenant_id, node_key)
     if not audit_required:
         return
-    approval_status = await ApprovalInstanceService.get_approval_status(
+    gate = await get_approval_gate_status(
         tenant_id=tenant_id,
         entity_type=node_key,
         entity_id=doc_id,
     )
-    has_pending_flow = bool(
-        approval_status.get("has_instance")
-        and approval_status.get("status") == "pending"
-    )
-    if not has_pending_flow:
-        raise BusinessLogicError(
-            f"{doc_label}审核已开启但无进行中的审批流程，请先提交审批后再{verb}"
-        )
+    assert_manual_approval_action_allowed(gate, doc_label=doc_label, verb=verb)
 
 
 async def revoke_finance_review(

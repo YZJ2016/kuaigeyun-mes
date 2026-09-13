@@ -16,6 +16,9 @@ export async function withdrawOutboundDocument(record: OutboundHubOrder): Promis
     case 'material_borrow':
       await warehouseApi.materialBorrow.withdraw(id);
       return;
+    case 'purchase_return':
+      await warehouseApi.purchaseReturn.withdraw(id);
+      return;
     default:
       throw new Error('该类型不支持撤回');
   }
@@ -35,6 +38,9 @@ export async function deleteOutboundDocument(record: OutboundHubOrder): Promise<
       return;
     case 'material_borrow':
       await warehouseApi.materialBorrow.delete(id);
+      return;
+    case 'purchase_return':
+      await warehouseApi.purchaseReturn.delete(id);
       return;
     default:
       throw new Error('该类型不支持删除');
