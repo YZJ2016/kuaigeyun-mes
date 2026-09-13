@@ -213,6 +213,7 @@ class EquipmentService:
             apply_equipment_created_date_range,
             apply_equipment_keyword_filter,
             apply_equipment_updated_date_range,
+            apply_exclude_equipment_nature,
             pick_search_keyword,
             resolve_equipment_list_order_by,
         )
@@ -227,8 +228,7 @@ class EquipmentService:
             query = query.filter(category=category)
         if equipment_nature:
             query = query.filter(equipment_nature=equipment_nature)
-        if exclude_equipment_nature:
-            query = query.exclude(equipment_nature=exclude_equipment_nature)
+        query = apply_exclude_equipment_nature(query, exclude_equipment_nature)
         if status:
             query = query.filter(status=status)
         if is_active is not None:
@@ -412,11 +412,12 @@ class EquipmentService:
     ) -> Optional[set[int]]:
         if not equipment_nature and not exclude_equipment_nature:
             return None
+        from apps.kuaizhizao.services.equipment_list_core import apply_exclude_equipment_nature
+
         qs = Equipment.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if equipment_nature:
             qs = qs.filter(equipment_nature=equipment_nature)
-        if exclude_equipment_nature:
-            qs = qs.exclude(equipment_nature=exclude_equipment_nature)
+        qs = apply_exclude_equipment_nature(qs, exclude_equipment_nature)
         ids = await qs.values_list("id", flat=True)
         return set(ids)
 
@@ -502,10 +503,11 @@ class EquipmentService:
             is_active=True,
             needs_calibration=True,
         )
+        from apps.kuaizhizao.services.equipment_list_core import apply_exclude_equipment_nature
+
         if equipment_nature:
             eq_query = eq_query.filter(equipment_nature=equipment_nature)
-        if exclude_equipment_nature:
-            eq_query = eq_query.exclude(equipment_nature=exclude_equipment_nature)
+        eq_query = apply_exclude_equipment_nature(eq_query, exclude_equipment_nature)
         equipments = await eq_query
         results: List[dict] = []
         for eq in equipments:
