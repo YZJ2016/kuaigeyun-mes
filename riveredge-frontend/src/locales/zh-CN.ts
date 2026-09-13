@@ -29209,6 +29209,10 @@ export default {
     '销售订单菜单徽章改按发货状态统计',
   'pages.dashboard.updateLog.entries.sales-order-menu-badge-delivery-status.description':
     '左侧菜单销售订单徽章不再统计待审核与执行中订单，仅在有待交货或部分交货明细时提示；逾期未交仍显示红色，未开通财务模块的组织不再被大量蓝色徽章干扰。',
+  'pages.dashboard.updateLog.entries.equipment-ledger-null-nature-exclude-fix.title':
+    '设备台账未填性质时整表空白',
+  'pages.dashboard.updateLog.entries.equipment-ledger-null-nature-exclude-fix.description':
+    '修复设备台账排除测量设备时把「性质为空」一并滤掉，导致部分租户台账暂无数据、点检下拉仍能选到设备的问题。',
   'pages.dashboard.updateLog.entries.equipment-create-code-preview-fix.title':
     '新建设备弹窗编号预览报错修复',
   'pages.dashboard.updateLog.entries.equipment-create-code-preview-fix.description':

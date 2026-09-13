@@ -162,6 +162,19 @@ def pick_search_keyword(keyword: Optional[str] = None, search: Optional[str] = N
     return None
 
 
+def apply_exclude_equipment_nature(query, exclude_equipment_nature: Optional[str]):
+    """排除指定设备性质，并保留 nature 为空的记录。
+
+    ORM ``exclude(equipment_nature=x)`` 生成 ``NOT (equipment_nature = x)``，
+    SQL 三值逻辑下 NULL 行会被滤掉，导致未填性质的租户在设备台账（排除测量设备）
+    整表空白，而点检等未带 exclude 的下拉仍能看到设备。
+    """
+    nature = (exclude_equipment_nature or "").strip()
+    if not nature:
+        return query
+    return query.filter(Q(equipment_nature__isnull=True) | ~Q(equipment_nature=nature))
+
+
 def apply_master_crud_list_filters(
     query,
     *,

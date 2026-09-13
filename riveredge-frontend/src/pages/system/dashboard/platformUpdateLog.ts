@@ -36,6 +36,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'equipment-ledger-null-nature-exclude-fix',
+    date: '2026-09-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-ledger-null-nature-exclude-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equipment-ledger-null-nature-exclude-fix.description',
+  },
+  {
     id: 'menu-icon-pascal-lucide-resolve',
     date: '2026-09-13',
     type: 'fix',
