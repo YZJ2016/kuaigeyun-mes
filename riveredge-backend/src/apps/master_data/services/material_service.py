@@ -3645,12 +3645,12 @@ class MaterialService:
     ) -> None:
         """将分组最终使用的流水计数写回 core_code_sequences。"""
         from core.models.code_sequence import CodeSequence
+        from core.services.business.code_generation_service import CodeGenerationService
 
-        seq = await CodeSequence.get_or_none(
+        seq = await CodeGenerationService._resolve_active_code_sequence(
             code_rule_id=rule.id,
             tenant_id=tenant_id,
             scope_key=group_code,
-            deleted_at__isnull=True,
         )
         if seq:
             seq.current_seq = last_seq

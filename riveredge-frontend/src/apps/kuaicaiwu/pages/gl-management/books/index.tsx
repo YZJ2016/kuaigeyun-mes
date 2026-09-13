@@ -23,13 +23,22 @@ import { glService, type GlAccount, type GlVoucherLine } from '../../../services
 
 const NS = 'app.kuaicaiwu.gl.books';
 
+type Row = Record<string, unknown>;
+
 const asList = <T,>(res: unknown): T[] => {
   if (Array.isArray(res)) return res as T[];
   const obj = res as { data?: T[]; items?: T[]; rows?: T[]; entries?: T[] } | null;
   return obj?.data ?? obj?.items ?? obj?.rows ?? obj?.entries ?? [];
 };
 
-type Row = Record<string, unknown>;
+const extractDetailLedgerEntries = (res: unknown): Row[] => {
+  if (Array.isArray(res)) return res as Row[];
+  if (!res || typeof res !== 'object') return [];
+  const payload = res as { entries?: unknown; data?: { entries?: unknown } };
+  if (Array.isArray(payload.entries)) return payload.entries as Row[];
+  if (payload.data && Array.isArray(payload.data.entries)) return payload.data.entries as Row[];
+  return asList<Row>(res);
+};
 
 const GlBooksPage: React.FC = () => {
   const { t } = useTranslation();
@@ -101,10 +110,11 @@ const GlBooksPage: React.FC = () => {
 
   const accountOptions = useMemo(
     () =>
-      accounts
-        .filter((a) => a.is_leaf)
-        .map((a) => ({ label: `${a.account_code} ${a.account_name}`, value: a.id })),
-    [accounts],
+      accounts.map((a) => ({
+        label: `${a.account_code} ${a.account_name}${a.is_leaf ? '' : ` (${t(`${NS}.nonLeafAccount`, { defaultValue: '非末级' })})`}`,
+        value: a.id,
+      })),
+    [accounts, t],
   );
 
   const load = useCallback(async () => {
@@ -121,16 +131,15 @@ const GlBooksPage: React.FC = () => {
           setRows([]);
           return;
         }
-        const res = (await glService.detailLedger({
-          ...params,
-          account_id: accountId,
-          customer_id: auxCustomerId,
-          supplier_id: auxSupplierId,
-          department_id: auxDepartmentId,
-        })) as {
-          entries?: Row[];
-        };
-        data = asList<Row>(res?.entries ?? res);
+        data = extractDetailLedgerEntries(
+          await glService.detailLedger({
+            ...params,
+            account_id: accountId,
+            customer_id: auxCustomerId,
+            supplier_id: auxSupplierId,
+            department_id: auxDepartmentId,
+          }),
+        );
       } else if (activeTab === 'general') {
         const res = await glService.generalLedger(params);
         data = asList<Row>(res);
@@ -161,10 +170,14 @@ const GlBooksPage: React.FC = () => {
   }, [activeTab, year, month, includeUnposted, accountId, auxCustomerId, auxSupplierId, auxDepartmentId, messageApi, t]);
 
   useEffect(() => {
-    if (activeTab !== 'detail') {
-      void load();
+    if (activeTab === 'detail') {
+      if (!accountId) {
+        setRows([]);
+        return;
+      }
     }
-  }, [activeTab, year, month, includeUnposted]); // eslint-disable-line react-hooks/exhaustive-deps
+    void load();
+  }, [activeTab, year, month, includeUnposted, accountId, auxCustomerId, auxSupplierId, auxDepartmentId, load]);
 
   const money = (v: unknown) => Number(v || 0).toFixed(2);
 
@@ -490,10 +503,7 @@ const GlBooksPage: React.FC = () => {
 
         <Tabs
           activeKey={activeTab}
-          onChange={(key) => {
-            setActiveTab(key);
-            setRows([]);
-          }}
+          onChange={setActiveTab}
           items={[
             { key: 'balance', label: t(`${NS}.tab.balance`, { defaultValue: '科目余额表' }) },
             { key: 'detail', label: t(`${NS}.tab.detail`, { defaultValue: '明细账' }) },
@@ -509,7 +519,7 @@ const GlBooksPage: React.FC = () => {
 
         <Table
           rowKey={(r, i) =>
-            String(r.id ?? `${r.account_id ?? ''}-${r.voucher_code ?? ''}-${i}`)
+            String(r.id ?? `${r.kind ?? ''}-${r.account_id ?? ''}-${r.voucher_code ?? ''}-${i}`)
           }
           loading={loading}
           columns={columnsByTab as any}
@@ -517,6 +527,26 @@ const GlBooksPage: React.FC = () => {
           size="medium"
           pagination={{ pageSize: 50, showSizeChanger: true }}
           scroll={{ x: 960 }}
+          locale={{
+            emptyText:
+              activeTab === 'detail' && !accountId
+                ? t(`${NS}.detailSelectAccountHint`, {
+                    defaultValue: '请先选择科目，系统将自动加载明细账；也可从科目余额表点击科目行快速钻取',
+                  })
+                : undefined,
+          }}
+          onRow={(record) => {
+            if (activeTab !== 'balance' && activeTab !== 'general') return {};
+            const id = Number(record.account_id);
+            if (!Number.isFinite(id) || id <= 0) return {};
+            return {
+              style: { cursor: 'pointer' },
+              onClick: () => {
+                setAccountId(id);
+                setActiveTab('detail');
+              },
+            };
+          }}
         />
       </Space>
 

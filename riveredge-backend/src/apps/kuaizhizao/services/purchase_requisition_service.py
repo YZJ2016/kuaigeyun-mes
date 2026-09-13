@@ -824,9 +824,12 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_request")
         
         if audit_required:
-            from core.services.approval.audit_flow_guard import start_document_approval_or_raise
+            from core.services.approval.audit_flow_guard import (
+                approval_instance_finished_on_submit,
+                start_document_approval_or_raise,
+            )
 
-            await start_document_approval_or_raise(
+            instance = await start_document_approval_or_raise(
                 tenant_id=tenant_id,
                 user_id=submitted_by,
                 node_key="purchase_request",
@@ -839,15 +842,25 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             )
             req.status = DocumentStatus.PENDING_REVIEW.value
             req.review_status = ReviewStatus.PENDING.value
-        else:
-            req.status = DocumentStatus.CONFIRMED.value
-            req.review_status = ReviewStatus.APPROVED.value
-            
+            user_info = await self.get_user_info(submitted_by)
+            req.updated_by = submitted_by
+            req.updated_by_name = user_info["name"]
+            await req.save()
+            if approval_instance_finished_on_submit(instance):
+                return await self.approve_requisition(
+                    tenant_id,
+                    requisition_id,
+                    approved=True,
+                    approved_by=submitted_by,
+                    is_auto_approve=True,
+                )
+            return await self.get_requisition_by_id(tenant_id, requisition_id)
+        req.status = DocumentStatus.CONFIRMED.value
+        req.review_status = ReviewStatus.APPROVED.value
         user_info = await self.get_user_info(submitted_by)
         req.updated_by = submitted_by
         req.updated_by_name = user_info["name"]
         await req.save()
-
         return await self.get_requisition_by_id(tenant_id, requisition_id)
 
     async def approve_requisition(
@@ -913,7 +926,21 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             await row.save()
             return await self.get_requisition_by_id(tenant_id, requisition_id)
 
-        if is_auto_approve or not approved_by:
+        sync_after_flow = False
+        if audit_required and approved_by and not is_auto_approve:
+            from core.services.approval.audit_flow_guard import (
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="purchase_request",
+                entity_id=requisition_id,
+            )
+            sync_after_flow = should_sync_doc_after_flow_completed(gate, approve=approved)
+
+        if is_auto_approve or not approved_by or sync_after_flow:
             return await _do_decide()
 
         if approved:

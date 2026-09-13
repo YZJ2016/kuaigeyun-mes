@@ -709,37 +709,40 @@ def _optional_positive_int(value: Any) -> Optional[int]:
     return parsed if parsed > 0 else None
 
 
-async def returned_qty_by_purchase_order_item_ids(
+from apps.kuaizhizao.utils.purchase_return_qty import (
+    confirmed_returned_qty_by_purchase_order_item_ids,
+    returned_qty_by_purchase_order_item_ids,
+)
+
+
+async def sync_purchase_orders_after_purchase_return(
     tenant_id: int,
-    purchase_order_item_ids: List[int],
-) -> Dict[int, float]:
-    """按采购订单行统计已退货数量（含待退货，占用可退余量）。"""
-    result: Dict[int, float] = {int(i): 0.0 for i in purchase_order_item_ids}
-    if not purchase_order_item_ids:
-        return result
-    return_items = await PurchaseReturnItem.filter(
-        tenant_id=tenant_id,
-        purchase_order_item_id__in=list(result.keys()),
-    ).all()
-    if not return_items:
-        return result
-    return_ids = list({int(ri.return_id) for ri in return_items if ri.return_id})
-    active_return_ids: set[int] = set()
-    if return_ids:
-        returns = await PurchaseReturn.filter(
+    return_id: int,
+) -> None:
+    """采购退货确认/撤回后回写关联采购订单行的已到货/未到货。"""
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    order_ids: set[int] = set()
+    po_item_ids = [
+        int(i)
+        for i in await PurchaseReturnItem.filter(
             tenant_id=tenant_id,
-            id__in=return_ids,
-            deleted_at__isnull=True,
-        ).exclude(status="已取消").all()
-        active_return_ids = {int(r.id) for r in returns}
-    for ri in return_items:
-        if int(ri.return_id) not in active_return_ids:
-            continue
-        item_id = int(ri.purchase_order_item_id or 0)
-        if item_id <= 0:
-            continue
-        result[item_id] = result.get(item_id, 0.0) + float(ri.return_quantity or 0)
-    return result
+            return_id=return_id,
+        ).values_list("purchase_order_item_id", flat=True)
+        if i
+    ]
+    if po_item_ids:
+        for oid in await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            id__in=po_item_ids,
+        ).values_list("order_id", flat=True):
+            if oid:
+                order_ids.add(int(oid))
+    return_obj = await PurchaseReturn.get_or_none(tenant_id=tenant_id, id=return_id)
+    if return_obj and return_obj.purchase_order_id:
+        order_ids.add(int(return_obj.purchase_order_id))
+    if order_ids:
+        await sync_purchase_order_receipt_quantities_batch(tenant_id, order_ids)
 
 
 async def returned_qty_by_sales_order_item_ids(
@@ -1321,9 +1324,9 @@ async def sync_purchase_order_receipt_quantities(
     purchase_order_id: int,
 ) -> None:
     """
-    按已确认采购入库单回写采购订单行的已到货/未到货数量。
+    按已确认采购入库单减已确认采购退货，回写采购订单行的已到货/未到货数量。
 
-    避免入库确认后 PO 行 outstanding 未更新，导致重复下推入库触发容差校验失败。
+    避免入库/退货过账后 PO 行 outstanding 未更新，导致无法再次下推入库或触发容差校验失败。
     """
     if not purchase_order_id:
         return
@@ -1348,15 +1351,26 @@ async def sync_purchase_order_receipt_quantities_batch(
     if not order_items:
         return
 
+    po_item_ids = [int(po_item.id) for po_item in order_items]
     confirmed_by_item = await _sum_confirmed_purchase_receipt_qty_by_po_item_ids(
         tenant_id,
-        [int(po_item.id) for po_item in order_items],
+        po_item_ids,
     )
+    returned_by_item = await confirmed_returned_qty_by_purchase_order_item_ids(
+        tenant_id,
+        po_item_ids,
+    )
+    from apps.kuaizhizao.models.purchase_order import compute_po_item_received_outstanding
+
     for po_item in order_items:
         confirmed_qty = confirmed_by_item.get(int(po_item.id), Decimal("0"))
+        returned_qty = returned_by_item.get(int(po_item.id), Decimal("0"))
         ordered = Decimal(str(po_item.ordered_quantity or 0))
-        received = min(confirmed_qty, ordered) if ordered > 0 else confirmed_qty
-        outstanding = max(ordered - received, Decimal("0"))
+        received, outstanding = compute_po_item_received_outstanding(
+            ordered,
+            confirmed_qty,
+            returned_qty,
+        )
         current_received = Decimal(str(po_item.received_quantity or 0))
         current_outstanding = Decimal(str(po_item.outstanding_quantity or 0))
         if current_received != received or current_outstanding != outstanding:
@@ -2154,6 +2168,16 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             review_status="待审核",
             updated_by=submitted_by,
         )
+        # 空审批人 auto_pass 等可能在提交瞬间已结束流程；须先落待审再补齐业务写回
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_production_picking(
+                tenant_id=tenant_id,
+                picking_id=picking_id,
+                approver_id=submitted_by,
+                is_auto_approve=True,
+            )
         return await self.get_production_picking_by_id(tenant_id, picking_id)
 
     async def approve_production_picking(
@@ -2178,22 +2202,27 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "production_picking"
         )
-        if audit_required and not is_auto_approve:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+        approval_gate: dict = {}
+        sync_after_flow = False
+        if audit_required:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            approval_gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="production_picking",
                 entity_id=picking_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                approval_gate,
+                doc_label="生产领料单",
+                verb="审核",
+                is_auto_approve=is_auto_approve,
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "生产领料单审核已开启但无进行中的审批流程，请先提交审批后再审核"
-                )
+            sync_after_flow = should_sync_doc_after_flow_completed(approval_gate, approve=True)
 
         async def _do_approve() -> ProductionPickingResponse:
             approver_name = await self.get_user_name(approver_id)
@@ -2207,7 +2236,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             )
             return await self.get_production_picking_by_id(tenant_id, picking_id)
 
-        if is_auto_approve:
+        if is_auto_approve or sync_after_flow:
             return await _do_approve()
 
         result = await UniAuditService.approve_with_flow_fallback(
@@ -2242,22 +2271,27 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "production_picking"
         )
-        if audit_required and not is_auto_approve:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+        approval_gate: dict = {}
+        sync_after_flow = False
+        if audit_required:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            approval_gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="production_picking",
                 entity_id=picking_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                approval_gate,
+                doc_label="生产领料单",
+                verb="驳回",
+                is_auto_approve=is_auto_approve,
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "生产领料单审核已开启但无进行中的审批流程，请先提交审批后再驳回"
-                )
+            sync_after_flow = should_sync_doc_after_flow_completed(approval_gate, approve=False)
 
         async def _do_reject(_reason: Optional[str] = None) -> ProductionPickingResponse:
             await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
@@ -2268,7 +2302,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             )
             return await self.get_production_picking_by_id(tenant_id, picking_id)
 
-        if is_auto_approve:
+        if is_auto_approve or sync_after_flow:
             return await _do_reject(rejection_reason)
 
         result = await UniAuditService.reject_with_flow_fallback(
@@ -5119,10 +5153,12 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         source_type="finished_goods_receipt_revoke",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
-                    movement_type="other_outbound",
-                    operator_id=updated_by,
-                    operator_name=None,
-                )
+                        movement_type="fg_receipt_withdraw",
+                        from_warehouse_id=wh_id,
+                        idempotency_key=f"finished_goods_receipt:{receipt_id}:revoke:{item.id}",
+                        operator_id=updated_by,
+                        operator_name=None,
+                    )
 
                 await FinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                     status="待入库",
@@ -5532,6 +5568,53 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             raise ValidationError("末道工序报工合格数量为0，无法创建入库单")
         return total_qualified
 
+    async def _resolve_work_order_inbound_preview_quantities(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        work_order: Any,
+        quota: Dict[str, Any],
+        suggested: float,
+    ) -> tuple[float, float, float, float]:
+        """
+        解析工单入库预览数量。
+
+        - 启用 FQC 时：参考数量与可下推余量按检验合格数，而非工单计划数。
+        - 未启用 FQC 时：参考数量优先取建议合格数，否则为计划数。
+        """
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            resolve_inspection_policy,
+            sum_fqc_inbound_qualified_quantity,
+        )
+
+        planned = float(work_order.quantity or 0)
+        received = float(quota["received"])
+        pending = float(quota["pending"])
+        fqc_rem = quota.get("fqc_qualified_remaining")
+
+        eff, _, _ = await resolve_inspection_policy(
+            tenant_id, "fqc", material_id=int(work_order.product_id)
+        )
+        if eff != "none":
+            qualified_total = float(
+                await sum_fqc_inbound_qualified_quantity(
+                    tenant_id,
+                    work_order_id,
+                    int(work_order.product_id),
+                )
+            )
+            reference_qty = qualified_total
+            if fqc_rem is not None and float(fqc_rem) > 0:
+                effective_pending = min(pending, float(fqc_rem))
+            else:
+                effective_pending = 0.0
+        else:
+            reference_qty = float(suggested) if suggested > 0 else planned
+            effective_pending = min(pending, float(suggested)) if suggested > 0 else pending
+
+        receipt_qty = effective_pending if effective_pending > 0 else 0.0
+        return reference_qty, received, effective_pending, receipt_qty
+
     async def get_work_order_inbound_preview(
         self,
         tenant_id: int,
@@ -5560,25 +5643,33 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 work_order_id=work_order_id,
             )
 
-        planned = float(work_order.quantity or 0)
         quota = await self._get_work_order_inbound_quota(tenant_id, work_order_id)
-        received = quota["received"]
-        pending = quota["pending"]
+        pending = float(quota["pending"])
         suggested = await self._resolve_work_order_suggested_receipt_quantity(
             tenant_id, work_order_id, strict=False
         )
-        receipt_qty = min(suggested, pending) if pending > 0 else 0.0
+        reference_qty, received, effective_pending, receipt_qty = (
+            await self._resolve_work_order_inbound_preview_quantities(
+                tenant_id,
+                work_order_id,
+                work_order,
+                quota,
+                suggested,
+            )
+        )
         hint = None
         fqc_rem = quota.get("fqc_qualified_remaining")
         if pending <= 0:
             hint = "工单可入库数量已用尽，无法再取单入库"
-        elif suggested <= 0:
+        elif effective_pending <= 0 and fqc_rem is not None:
+            hint = "须先完成成品检验且存在合格数量后才能下推入库"
+        elif effective_pending <= 0 and suggested <= 0:
             hint = "暂无质检合格或末道已审报工数量，请手工填写入库数量"
         elif fqc_rem is not None and float(fqc_rem) <= 0:
             hint = f"可创建待入库单（最多 {pending}）；须先完成成品检验后才能确认入库"
         elif fqc_rem is not None:
             confirmable = min(pending, float(fqc_rem))
-            hint = f"可创建待入库单（最多 {pending}）；确认入库须 FQC 合格剩余 {confirmable}"
+            hint = f"可创建待入库单（最多 {effective_pending}）；确认入库须 FQC 合格剩余 {confirmable}"
 
         material = await Material.get_or_none(
             tenant_id=tenant_id,
@@ -5592,9 +5683,9 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             material_name=(getattr(material, "name", None) or work_order.product_name or ""),
             material_spec=getattr(material, "specification", None) or getattr(work_order, "product_spec", None),
             material_unit=material_unit,
-            source_doc_quantity=planned,
+            source_doc_quantity=reference_qty,
             source_received_quantity=received,
-            source_pending_quantity=pending,
+            source_pending_quantity=effective_pending,
             receipt_quantity=receipt_qty,
         )
         return WorkOrderInboundPreviewResponse(
@@ -6144,6 +6235,16 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 raise BusinessLogicError(
                     "销售出库审核已开启但未找到可用的审批流程，请在配置中心检查 sales_delivery 审批流程是否已激活"
                 )
+            from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+            if approval_instance_finished_on_submit(instance):
+                approved = await self.approve_sales_delivery(
+                    tenant_id,
+                    created_delivery_id,
+                    created_by,
+                    is_auto_approve=True,
+                )
+                return approved
         return SalesDeliveryResponse.model_validate(delivery_obj)
 
     async def get_sales_delivery_by_id(self, tenant_id: int, delivery_id: int) -> SalesDeliveryWithItemsResponse:
@@ -6522,6 +6623,16 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             review_status="待审核",
             updated_by=submitted_by,
         )
+        # 空审批人 auto_pass 等可能在提交瞬间已结束流程；须先落待审再补齐业务写回
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_sales_delivery(
+                tenant_id=tenant_id,
+                delivery_id=delivery_id,
+                approver_id=submitted_by,
+                is_auto_approve=True,
+            )
         return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
 
     async def approve_sales_delivery(
@@ -6548,22 +6659,27 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "sales_delivery"
         )
-        if audit_required and not is_auto_approve:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+        approval_gate: dict = {}
+        sync_after_flow = False
+        if audit_required:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            approval_gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="sales_delivery",
                 entity_id=delivery_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                approval_gate,
+                doc_label="销售出库单",
+                verb="审核",
+                is_auto_approve=is_auto_approve,
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "销售出库单审核已开启但无进行中的审批流程，请先提交审批后再审核"
-                )
+            sync_after_flow = should_sync_doc_after_flow_completed(approval_gate, approve=True)
 
         async def _do_approve() -> SalesDeliveryResponse:
             approver_name = await self.get_user_name(approver_id)
@@ -6577,7 +6693,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             )
             return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
 
-        if is_auto_approve:
+        if is_auto_approve or sync_after_flow:
             return await _do_approve()
 
         result = await UniAuditService.approve_with_flow_fallback(
@@ -6614,22 +6730,27 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "sales_delivery"
         )
-        if audit_required and not is_auto_approve:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+        approval_gate: dict = {}
+        sync_after_flow = False
+        if audit_required:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            approval_gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="sales_delivery",
                 entity_id=delivery_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                approval_gate,
+                doc_label="销售出库单",
+                verb="驳回",
+                is_auto_approve=is_auto_approve,
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "销售出库单审核已开启但无进行中的审批流程，请先提交审批后再驳回"
-                )
+            sync_after_flow = should_sync_doc_after_flow_completed(approval_gate, approve=False)
 
         async def _do_reject(_reason: Optional[str] = None) -> SalesDeliveryResponse:
             await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
@@ -6640,7 +6761,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             )
             return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
 
-        if is_auto_approve:
+        if is_auto_approve or sync_after_flow:
             return await _do_reject(rejection_reason)
 
         result = await UniAuditService.reject_with_flow_fallback(
@@ -10109,7 +10230,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         source_type="purchase_receipt_revoke",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt_obj.receipt_code,
-                        movement_type="other_outbound",
+                        movement_type="purchase_receipt_withdraw",
+                        from_warehouse_id=line_wh,
                         operator_id=updated_by,
                         operator_name=None,
                         idempotency_key=f"purchase_receipt:{receipt_id}:revoke:{item.id}",
@@ -11929,6 +12051,10 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             review_status="待审核",
             updated_by=submitted_by,
         )
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_sales_return(tenant_id, return_id, submitted_by)
         return await self.get_sales_return_by_id(tenant_id, return_id)
 
     async def approve_sales_return(
@@ -11951,21 +12077,21 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         assert_sales_return_capability(return_obj, "approve", audit_required=audit_required)
 
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="sales_return",
                 entity_id=return_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="销售退货单",
+                verb="审核",
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "销售退货单审核已开启但无进行中的审批流程，请先提交审批后再审核"
-                )
 
         approver_name = await self.get_user_name(approver_id)
         await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
@@ -11999,21 +12125,21 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         assert_sales_return_capability(return_obj, "reject", audit_required=audit_required)
 
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="sales_return",
                 entity_id=return_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="销售退货单",
+                verb="驳回",
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "销售退货单审核已开启但无进行中的审批流程，请先提交审批后再驳回"
-                )
 
         await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
             review_status="审核驳回",
@@ -13117,17 +13243,23 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         material_by_id = {int(m.id): m for m in materials}
         batch_mgmt_enabled = await _warehouse_batch_management_enabled(tenant_id)
 
+        return_quantities = _coerce_id_float_map(return_quantities)
+        qty_keys = set(return_quantities.keys()) if return_quantities else None
+
         return_items: List[PurchaseReturnItemCreate] = []
         for item in order_items:
+            item_id = int(item.id)
+            if qty_keys is not None and item_id not in qty_keys:
+                continue
             received_qty = Decimal(str(item.received_quantity or 0))
             if received_qty <= 0:
                 continue
-            returned_qty = Decimal(str(returned_by_item.get(int(item.id), 0.0)))
+            returned_qty = Decimal(str(returned_by_item.get(item_id, 0.0)))
             max_return_qty = received_qty - returned_qty
             if max_return_qty <= 0:
                 continue
-            if return_quantities and item.id in return_quantities:
-                selected_qty = Decimal(str(return_quantities[item.id]))
+            if return_quantities and item_id in return_quantities:
+                selected_qty = Decimal(str(return_quantities[item_id]))
             else:
                 selected_qty = max_return_qty
             if selected_qty <= 0:
@@ -13266,14 +13398,14 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             selectable = can_push and remaining > 0
             if pullable_only and not selectable:
                 continue
-            material_code = str(item.material_code or "").strip()
-            material_name = str(item.material_name or "").strip()
-            material_spec = str(item.material_spec or "").strip()
-            if kw:
-                haystack = " ".join([material_code, material_name, material_spec]).lower()
-                if kw not in haystack:
-                    continue
             candidate_items.append(item)
+
+        from apps.kuaizhizao.services.purchase_service import PurchaseService
+
+        purchase_svc = PurchaseService()
+        material_fallback = await purchase_svc._load_material_fallback_for_po_items(
+            tenant_id, candidate_items
+        )
 
         material_ids = {
             int(item.material_id)
@@ -13312,6 +13444,16 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             pushed = returned_by_item.get(int(item.id), 0.0)
             remaining = max(0.0, received - pushed)
             material = material_by_id.get(int(item.material_id or 0))
+            material_code, material_name = purchase_svc._resolve_po_item_material_display(
+                item, material_fallback
+            )
+            material_spec = str(item.material_spec or "").strip()
+            if not material_spec and material:
+                material_spec = str(getattr(material, "specification", None) or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
             requires_batch = bool(
                 batch_mgmt_enabled and material and getattr(material, "batch_managed", False)
             )
@@ -13336,9 +13478,9 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     "supplier_id": order.supplier_id,
                     "supplier_name": order.supplier_name,
                     "material_id": item.material_id,
-                    "material_code": str(item.material_code or "").strip(),
-                    "material_name": str(item.material_name or "").strip(),
-                    "material_spec": str(item.material_spec or "").strip() or None,
+                    "material_code": material_code,
+                    "material_name": material_name,
+                    "material_spec": material_spec or None,
                     "unit": item.unit or "件",
                     "suggested_quantity": received,
                     "pushed_quantity": pushed,
@@ -13673,6 +13815,10 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             review_status="待审核",
             updated_by=submitted_by,
         )
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_purchase_return(tenant_id, return_id, submitted_by)
         return await self.get_purchase_return_by_id(tenant_id, return_id)
 
     async def approve_purchase_return(
@@ -13697,21 +13843,21 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         assert_purchase_return_capability(return_obj, "approve", audit_required=audit_required)
 
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="purchase_return",
                 entity_id=return_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="采购退货单",
+                verb="审核",
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "采购退货单审核已开启但无进行中的审批流程，请先提交审批后再审核"
-                )
 
         approver_name = await self.get_user_name(approver_id)
         await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
@@ -13747,21 +13893,21 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         assert_purchase_return_capability(return_obj, "reject", audit_required=audit_required)
 
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="purchase_return",
                 entity_id=return_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="采购退货单",
+                verb="驳回",
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "采购退货单审核已开启但无进行中的审批流程，请先提交审批后再驳回"
-                )
 
         await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
             review_status="审核驳回",
@@ -14123,7 +14269,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         source_doc_id=return_id,
                         source_doc_code=ret_obj.return_code,
                         enforce_fifo=enforce_fifo,
-                        movement_type="other_outbound",
+                        movement_type="purchase_return",
                         operator_id=confirmed_by,
                         operator_name=None,
                     )
@@ -14138,6 +14284,8 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 await InventoryCostService().on_purchase_return_confirmed(tenant_id, return_id)
             except Exception as cost_e:
                 logger.warning("采购退货确认-成本处理失败: %s", cost_e)
+
+        await sync_purchase_orders_after_purchase_return(tenant_id, return_id)
 
         # 过账事务已提交。红字应付须在外层创建：create_payable 内部另有 in_transaction()，
         # 嵌套时部分环境会回滚退货状态/库存，但接口仍返回成功体。
@@ -14398,7 +14546,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     source_doc_id=return_id,
                     source_doc_code=return_obj.return_code,
                     ledger_production_date=ledger_production_date,
-                    movement_type="other_inbound",
+                    movement_type="purchase_return_withdraw",
                     operator_id=updated_by,
                     operator_name=None,
                 )
@@ -14413,6 +14561,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             await PurchaseReturnItem.filter(tenant_id=tenant_id, return_id=return_id).update(
                 status="待退货",
             )
+            await sync_purchase_orders_after_purchase_return(tenant_id, return_id)
             return await self.get_purchase_return_by_id(tenant_id, return_id)
 
     async def delete_purchase_return(self, tenant_id: int, return_id: int) -> bool:
@@ -14960,13 +15109,15 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
-                        source_type="other_inbound_revoke", 
+                        source_type="other_inbound_revoke",
                         source_doc_id=inbound_id,
                         source_doc_code=inbound_obj.inbound_code,
-                    movement_type="other_outbound",
-                    operator_id=updated_by,
-                    operator_name=None,
-                )
+                        movement_type="other_inbound_withdraw",
+                        from_warehouse_id=wh_id,
+                        idempotency_key=f"other_inbound:{inbound_id}:revoke:{item.id}",
+                        operator_id=updated_by,
+                        operator_name=None,
+                    )
                 
                 # 状态回归并清空接收人和接收时间
                 await OtherInbound.filter(tenant_id=tenant_id, id=inbound_id).update(

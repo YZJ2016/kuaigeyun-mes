@@ -1,7 +1,7 @@
 /**
  * 主内容区路由切换：极轻 opacity 过渡，避免位移带来的迟滞感。
  */
-.riveredge-route-transition {
+.riveredge-route-transition--enter {
   animation: riveredge-route-in 0.12s cubic-bezier(0.33, 1, 0.68, 1) both;
 }
 

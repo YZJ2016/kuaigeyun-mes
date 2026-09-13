@@ -35,7 +35,12 @@ class InventoryCostService:
     def _read_defaults_cost(defaults: Any, *keys: str) -> Optional[Decimal]:
         if not isinstance(defaults, dict):
             return None
-        for key in keys:
+        requested = keys or (
+            "moving_average_cost",
+            "standard_cost",
+            "purchase_price",
+        )
+        for key in requested:
             raw = defaults.get(key)
             if raw in (None, ""):
                 continue
@@ -46,32 +51,44 @@ class InventoryCostService:
                     return val
             except Exception:
                 continue
-        purchase = defaults.get("purchase") if isinstance(defaults.get("purchase"), dict) else {}
-        for key in (
-            "standard_price",
-            "purchase_price",
-            "default_purchase_price",
-            "defaultPurchasePrice",
-        ):
-            raw = purchase.get(key)
-            if raw in (None, ""):
-                continue
-            try:
-                val = Decimal(str(raw))
-                if val > 0:
-                    return val
-            except Exception:
-                continue
-        for key in ("default_purchase_price", "defaultPurchasePrice"):
-            raw = defaults.get(key)
-            if raw in (None, ""):
-                continue
-            try:
-                val = Decimal(str(raw))
-                if val > 0:
-                    return val
-            except Exception:
-                continue
+        allow_purchase_nested = any(
+            key
+            in {
+                "standard_cost",
+                "purchase_price",
+                "standard_price",
+                "default_purchase_price",
+                "defaultPurchasePrice",
+            }
+            for key in requested
+        )
+        if allow_purchase_nested:
+            purchase = defaults.get("purchase") if isinstance(defaults.get("purchase"), dict) else {}
+            for key in (
+                "standard_price",
+                "purchase_price",
+                "default_purchase_price",
+                "defaultPurchasePrice",
+            ):
+                raw = purchase.get(key)
+                if raw in (None, ""):
+                    continue
+                try:
+                    val = Decimal(str(raw))
+                    if val > 0:
+                        return val
+                except Exception:
+                    continue
+            for key in ("default_purchase_price", "defaultPurchasePrice"):
+                raw = defaults.get(key)
+                if raw in (None, ""):
+                    continue
+                try:
+                    val = Decimal(str(raw))
+                    if val > 0:
+                        return val
+                except Exception:
+                    continue
         return None
 
     @staticmethod
@@ -97,7 +114,12 @@ class InventoryCostService:
         )
         if not material:
             return None
-        from_defaults = self._read_defaults_cost(
+        return self.resolve_material_unit_cost(material)
+
+    @staticmethod
+    def resolve_material_unit_cost(material: Material) -> Optional[Decimal]:
+        """读取物料档案单价（未做基础单位换算，供单据行等业务场景）。"""
+        from_defaults = InventoryCostService._read_defaults_cost(
             material.defaults,
             "moving_average_cost",
             "standard_cost",
@@ -105,12 +127,58 @@ class InventoryCostService:
         )
         if from_defaults is not None:
             return from_defaults
-        return self._read_source_config_purchase_price(getattr(material, "source_config", None))
+        return InventoryCostService._read_source_config_purchase_price(
+            getattr(material, "source_config", None)
+        )
+
+    @staticmethod
+    def resolve_material_base_unit_cost(material: Material) -> Decimal:
+        """
+        库存金额专用：单价须与基础单位在库数量相乘。
+
+        - moving_average_cost：按基础单位存储（采购入库确认写入时已换算）
+        - standard_cost / purchase_price / source_config：按采购场景单位维护，须换算
+        """
+        from apps.kuaizhizao.utils.material_unit_utils import convert_purchase_unit_price_to_base
+
+        moving_avg = InventoryCostService._read_defaults_cost(
+            material.defaults, "moving_average_cost"
+        )
+        if moving_avg is not None:
+            return moving_avg
+
+        standard = InventoryCostService._read_defaults_cost(
+            material.defaults, "standard_cost", "purchase_price"
+        )
+        if standard is not None:
+            return convert_purchase_unit_price_to_base(material, standard)
+
+        source_price = InventoryCostService._read_source_config_purchase_price(
+            getattr(material, "source_config", None)
+        )
+        if source_price is not None:
+            return convert_purchase_unit_price_to_base(material, source_price)
+        return Decimal("0")
+
+    async def get_material_base_unit_cost(self, tenant_id: int, material_id: int) -> Decimal:
+        """库存 KPI / 分析报表：返回基础单位成本。"""
+        material = await Material.get_or_none(
+            tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
+        )
+        if not material:
+            return Decimal("0")
+        return self.resolve_material_base_unit_cost(material)
 
     async def get_material_unit_cost_or_zero(self, tenant_id: int, material_id: int) -> Decimal:
         """库存计价内部使用：无单价时按 0 处理。"""
         cost = await self.get_material_unit_cost(tenant_id, material_id)
         return cost if cost is not None else Decimal("0")
+
+    async def get_material_base_unit_cost_or_zero(
+        self, tenant_id: int, material_id: int
+    ) -> Decimal:
+        """库存数量为基础单位时的计价单价。"""
+        return await self.get_material_base_unit_cost(tenant_id, material_id)
 
     async def require_material_unit_cost(self, tenant_id: int, material_id: int) -> Decimal:
         cost = await self.get_material_unit_cost(tenant_id, material_id)
@@ -172,23 +240,12 @@ class InventoryCostService:
         return new_avg.quantize(Decimal("0.0001"))
 
     async def on_purchase_return_confirmed(self, tenant_id: int, return_id: int) -> None:
-        """采购退货出库：按当前移动平均价写入明细出库成本（均价不变）。"""
-        from apps.kuaizhizao.models.purchase_return_item import PurchaseReturnItem
+        """采购退货确认：保留明细采购/结算单价，不在此改写为库存成本。
 
-        items = await PurchaseReturnItem.filter(
-            tenant_id=tenant_id, return_id=return_id
-        ).all()
-        for item in items:
-            qty = self._decimal(item.return_quantity)
-            if qty <= 0:
-                continue
-            material_id = int(item.material_id)
-            unit_cost = await self.get_material_unit_cost_or_zero(tenant_id, material_id)
-            if unit_cost <= 0:
-                unit_cost = self._decimal(item.unit_price)
-            item.unit_price = unit_cost
-            item.total_amount = (qty * unit_cost).quantize(Decimal("0.01"))
-            await item.save(update_fields=["unit_price", "total_amount", "updated_at"])
+        退货单 unit_price 来自采购订单或入库下推，用于供应商对账与红字应付；
+        出库成本在库存流水/成本核算侧按移动平均解析，与销售退货确认路径一致。
+        """
+        return
 
     async def on_sales_return_confirmed(self, tenant_id: int, return_id: int) -> None:
         """销售退货入库：按退货单价或当前均价回写移动加权平均。"""
@@ -220,20 +277,47 @@ class InventoryCostService:
                 )
 
     async def on_purchase_receipt_confirmed(self, tenant_id: int, receipt_id: int) -> None:
+        from apps.kuaizhizao.utils.material_unit_utils import (
+            convert_to_base_quantity,
+            convert_unit_price_to_base,
+        )
+
         items = await PurchaseReceiptItem.filter(
             tenant_id=tenant_id, receipt_id=receipt_id
         ).all()
+        if not items:
+            return
+        material_ids = {int(item.material_id) for item in items if getattr(item, "material_id", None)}
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=list(material_ids),
+            deleted_at__isnull=True,
+        ).all()
+        material_by_id = {int(m.id): m for m in materials}
+
         for item in items:
             qty = self._decimal(item.receipt_quantity)
             if qty <= 0:
                 continue
+            material = material_by_id.get(int(item.material_id))
+            line_unit = getattr(item, "material_unit", None)
+            base_qty = (
+                convert_to_base_quantity(material, qty, from_unit=line_unit)
+                if material is not None
+                else qty
+            )
             unit_price = self._decimal(item.unit_price)
+            base_unit_price = (
+                convert_unit_price_to_base(material, unit_price, from_unit=line_unit)
+                if material is not None
+                else unit_price
+            )
             try:
                 await self.update_moving_average_cost(
                     tenant_id=tenant_id,
                     material_id=int(item.material_id),
-                    inbound_qty=qty,
-                    inbound_unit_price=unit_price,
+                    inbound_qty=base_qty,
+                    inbound_unit_price=base_unit_price,
                 )
             except Exception as exc:
                 logger.warning(

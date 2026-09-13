@@ -776,8 +776,9 @@ class SupplierEvaluationService(AppBaseService[SupplierEvaluation]):
         apply_update_audit(row, user)
         await row.save()
 
+        approval_instance = None
         if await AuditBindingService.is_audit_enabled(tenant_id, AUDIT_NODE):
-            instance = await ApprovalInstanceService.start_approval_for_node(
+            approval_instance = await ApprovalInstanceService.start_approval_for_node(
                 tenant_id=tenant_id,
                 user_id=user.id,
                 node_key=AUDIT_NODE,
@@ -788,10 +789,14 @@ class SupplierEvaluationService(AppBaseService[SupplierEvaluation]):
                 content=f"{row.supplier_name or row.supplier_code or ''} {row.period_year}",
                 send_notification=True,
             )
-            if instance is None:
+            if approval_instance is None:
                 raise ValidationError(
                     f"审核已开启但未找到可用审批流程，请检查 {AUDIT_NODE} 绑定"
                 )
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance and approval_instance_finished_on_submit(approval_instance):
+            return await self.approve(tenant_id, eval_id, user)
         return await self._to_response(tenant_id, row)
 
     async def approve(
@@ -800,6 +805,22 @@ class SupplierEvaluationService(AppBaseService[SupplierEvaluation]):
         row = await self._get_row(tenant_id, eval_id)
         if row.status != STATUS_PENDING:
             raise BusinessLogicError("仅待审评价可通过")
+        if await AuditBindingService.is_audit_enabled(tenant_id, AUDIT_NODE):
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type=AUDIT_NODE,
+                entity_id=eval_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="供应商评价",
+                verb="审核",
+            )
         now = resolve_business_datetime()
         # 批准时冻结版本；已有版本不覆盖，防止静默改写
         if not (row.formula_version or "").strip():
@@ -820,6 +841,22 @@ class SupplierEvaluationService(AppBaseService[SupplierEvaluation]):
         row = await self._get_row(tenant_id, eval_id)
         if row.status != STATUS_PENDING:
             raise BusinessLogicError("仅待审评价可驳回")
+        if await AuditBindingService.is_audit_enabled(tenant_id, AUDIT_NODE):
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type=AUDIT_NODE,
+                entity_id=eval_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="供应商评价",
+                verb="驳回",
+            )
         row.status = STATUS_REJECTED
         apply_update_audit(row, user)
         await row.save()

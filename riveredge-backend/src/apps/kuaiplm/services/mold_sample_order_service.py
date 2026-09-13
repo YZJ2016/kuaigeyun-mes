@@ -160,8 +160,9 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
         apply_update_audit(row, user)
         await row.save()
 
+        approval_instance = None
         if await AuditBindingService.is_audit_enabled(tenant_id, AUDIT_NODE):
-            instance = await ApprovalInstanceService.start_approval_for_node(
+            approval_instance = await ApprovalInstanceService.start_approval_for_node(
                 tenant_id=tenant_id,
                 user_id=user.id,
                 node_key=AUDIT_NODE,
@@ -173,10 +174,14 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
                 business_type=row.doc_kind,
                 send_notification=True,
             )
-            if instance is None:
+            if approval_instance is None:
                 raise ValidationError(
                     f"审核已开启但未找到可用审批流程，请检查 {AUDIT_NODE} 绑定"
                 )
+        from apps.kuaiplm.services.plm_audit_flow_sync import submit_instance_auto_passed
+
+        if submit_instance_auto_passed(approval_instance):
+            return await self.approve(tenant_id, order_id, user)
         return MoldSampleOrderResponse.model_validate(row)
 
     async def approve(
@@ -185,6 +190,16 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
         row = await self._get_row(tenant_id, order_id)
         if row.status != "pending":
             raise BusinessLogicError("仅待审单据可通过")
+        from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
+
+        await assert_plm_manual_approval_action(
+            tenant_id,
+            audit_node=AUDIT_NODE,
+            entity_type="mold_sample",
+            entity_id=order_id,
+            doc_label="开模打样",
+            verb="审核",
+        )
         row.status = "approved"
         row.approved_at = resolve_business_datetime()
         apply_update_audit(row, user)
@@ -197,6 +212,16 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
         row = await self._get_row(tenant_id, order_id)
         if row.status != "pending":
             raise BusinessLogicError("仅待审单据可驳回")
+        from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
+
+        await assert_plm_manual_approval_action(
+            tenant_id,
+            audit_node=AUDIT_NODE,
+            entity_type="mold_sample",
+            entity_id=order_id,
+            doc_label="开模打样",
+            verb="驳回",
+        )
         row.status = "rejected"
         apply_update_audit(row, user)
         await row.save()

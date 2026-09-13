@@ -27,7 +27,7 @@ export function ModuleCenterLayout({
 }: ModuleCenterLayoutProps) {
   return (
     <UniDashboard showSidebar={showSidebar}>
-      <Spin spinning={!!loading}>
+      <Spin spinning={!!loading} delay={400}>
         <Row gutter={[MODULE_CENTER_GUTTER, MODULE_CENTER_GUTTER]}>
           <Col span={24}>{kpiRow}</Col>
           {shortcutRow ? <Col span={24}>{shortcutRow}</Col> : null}

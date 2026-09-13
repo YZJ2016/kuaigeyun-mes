@@ -732,10 +732,15 @@ function sortWarehouseHubRows(
 export function resolveInboundHubListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
-): Record<string, string | number | undefined> {
+): Record<string, string | number | readonly string[] | undefined> {
   const s = searchFormValues ?? {};
   const { created_start_date, created_end_date, updated_start_date, updated_end_date } =
     resolveCommonDateRanges(s);
+  const hubScopedReceiptTypes = Array.isArray(s.hub_scoped_receipt_types)
+    ? s.hub_scoped_receipt_types.filter(
+        (type): type is string => typeof type === 'string' && type.trim() !== '',
+      )
+    : undefined;
   return {
     order_by: resolveOrderBy(sort),
     // 主体/单号列 dataIndex 可能为 receipt_code / return_code / inbound_code 等
@@ -750,6 +755,8 @@ export function resolveInboundHubListParams(
     ]),
     status: typeof s.status === 'string' && s.status && s.status !== 'all' ? s.status : undefined,
     receipt_type: typeof s.receipt_type === 'string' && s.receipt_type ? s.receipt_type : undefined,
+    hub_scoped_receipt_types:
+      hubScopedReceiptTypes?.length ? hubScopedReceiptTypes : undefined,
     warehouse_id: s.warehouse_id != null && s.warehouse_id !== '' ? Number(s.warehouse_id) : undefined,
     supplier_name: pickString(s, 'supplier_name'),
     created_start_date,
@@ -762,10 +769,15 @@ export function resolveInboundHubListParams(
 export function resolveOutboundHubListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
-): Record<string, string | number | undefined> {
+): Record<string, string | number | readonly string[] | undefined> {
   const s = searchFormValues ?? {};
   const { created_start_date, created_end_date, updated_start_date, updated_end_date } =
     resolveCommonDateRanges(s);
+  const hubScopedOutboundTypes = Array.isArray(s.hub_scoped_outbound_types)
+    ? s.hub_scoped_outbound_types.filter(
+        (type): type is string => typeof type === 'string' && type.trim() !== '',
+      )
+    : undefined;
   return {
     order_by: resolveOrderBy(sort),
     // 主体/单号、出库单号列 dataIndex 可能为 delivery_code / picking_code
@@ -778,6 +790,8 @@ export function resolveOutboundHubListParams(
     ]),
     status: typeof s.status === 'string' && s.status && s.status !== 'all' ? s.status : undefined,
     outbound_type: typeof s.outbound_type === 'string' && s.outbound_type ? s.outbound_type : undefined,
+    hub_scoped_outbound_types:
+      hubScopedOutboundTypes?.length ? hubScopedOutboundTypes : undefined,
     warehouse_id: s.warehouse_id != null && s.warehouse_id !== '' ? Number(s.warehouse_id) : undefined,
     warehouse_name: pickString(s, 'warehouse_name'),
     customer_name: pickString(s, 'customer_name'),

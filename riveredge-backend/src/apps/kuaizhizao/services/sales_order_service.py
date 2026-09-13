@@ -996,7 +996,9 @@ class SalesOrderService:
         mat_fallback = material_fallback or {}
 
         def _material_val(it: SalesOrderItem, attr: str, mat_key: str, max_len: int = 50) -> str:
-            """明细有 material_id 时优先物料主数据，否则用明细快照。"""
+            """编码/名称/规格优先主数据；单位优先行快照（多单位业务单据契约）。"""
+            if mat_key == "unit":
+                return self._item_material_unit_for_response(it, mat_fallback)
             mf = mat_fallback.get(it.material_id) if it.material_id else None
             if mf and mat_key in mf and mf[mat_key]:
                 return str(mf[mat_key])[:max_len]
@@ -1859,7 +1861,7 @@ class SalesOrderService:
                             "code": (m.main_code or getattr(m, "code", None) or "")[:50],
                             "name": (m.name or "")[:200],
                             "spec": (getattr(m, "specification", None) or "")[:200],
-                            "unit": (m.base_unit or "")[:20],
+                            "unit": self._material_master_unit_fallback(m),
                         }
 
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
@@ -2475,7 +2477,7 @@ class SalesOrderService:
                                 "code": (m.main_code or getattr(m, "code", None) or "")[:50],
                                 "name": (m.name or "")[:200],
                                 "spec": (getattr(m, "specification", None) or "")[:200],
-                                "unit": (m.base_unit or "")[:20],
+                                "unit": self._material_master_unit_fallback(m),
                             }
                     if fallback:
                         material_code_fallback_all[oid] = fallback
@@ -3058,7 +3060,9 @@ class SalesOrderService:
                     submitted_by, submitter_name, "提交",
                 )
             # 空审批人 auto_pass 等可能导致提交瞬间流程已通过；须先落待审再走审核通过
-            if getattr(instance, "status", None) == "approved":
+            from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+            if approval_instance_finished_on_submit(instance):
                 return await self.approve_sales_order(
                     tenant_id=tenant_id,
                     sales_order_id=sales_order_id,
@@ -3101,28 +3105,25 @@ class SalesOrderService:
         )
         if force_approval:
             audit_required = True
-        approval_status: dict = {}
-        if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+        flow_completed_approved = False
+        if audit_required and not is_auto_approve:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="sales_order",
                 entity_id=sales_order_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="销售订单",
+                verb="审核",
+                is_auto_approve=is_auto_approve,
             )
-            flow_completed_approved = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "approved"
-            )
-            # is_auto_approve / flow_completed_approved：回调写回或流程已结束但单据仍待审
-            if not has_pending_flow and not is_auto_approve and not flow_completed_approved:
-                raise BusinessLogicError(
-                    "销售订单审核已开启但无进行中的审批流程，请先提交审批后再审核"
-                )
+            flow_completed_approved = bool(gate.get("flow_completed_approved"))
 
         await self._validate_customer_credit_limit_before_release(
             tenant_id=tenant_id,
@@ -3256,27 +3257,25 @@ class SalesOrderService:
         )
         if force_approval:
             audit_required = True
-        approval_status: dict = {}
-        if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+        flow_completed_rejected = False
+        if audit_required and not is_auto_approve:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="sales_order",
                 entity_id=sales_order_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="销售订单",
+                verb="驳回",
+                is_auto_approve=is_auto_approve,
             )
-            flow_completed_rejected = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "rejected"
-            )
-            if not has_pending_flow and not is_auto_approve and not flow_completed_rejected:
-                raise BusinessLogicError(
-                    "销售订单审核已开启但无进行中的审批流程，请先提交审批后再驳回"
-                )
+            flow_completed_rejected = bool(gate.get("flow_completed_rejected"))
 
         from core.services.approval.uni_audit_service import UniAuditService
 
@@ -3461,6 +3460,28 @@ class SalesOrderService:
             deleted_at__isnull=True,
         ).all()
         return {m.id: m for m in materials}
+
+    @staticmethod
+    def _material_master_unit_fallback(material: Material) -> str:
+        from apps.kuaizhizao.utils.material_unit_utils import resolve_material_scenario_unit
+
+        return (
+            resolve_material_scenario_unit(material, "sale") or material.base_unit or ""
+        )[:20]
+
+    @staticmethod
+    def _item_material_unit_for_response(
+        item: Any,
+        mat_fallback: Optional[Dict[int, Dict[str, Any]]] = None,
+    ) -> str:
+        line_unit = str(getattr(item, "material_unit", None) or "").strip()
+        if line_unit:
+            return line_unit[:20]
+        mid = int(getattr(item, "material_id", None) or 0)
+        mf = (mat_fallback or {}).get(mid) if mid > 0 else None
+        if mf and mf.get("unit"):
+            return str(mf["unit"])[:20]
+        return ""
 
     @staticmethod
     def _material_fields_from_master_or_payload(
@@ -4070,7 +4091,7 @@ class SalesOrderService:
             if material_id > 0:
                 selected_by_material[material_id] = selected_by_material.get(material_id, Decimal("0")) + use_qty
             qty = float(use_qty)
-            delivery_date = it.delivery_date
+            delivery_date = it.delivery_date or order.delivery_date
             if selected_item_remarks is not None and item_id in selected_item_remarks:
                 line_remarks = str(selected_item_remarks[item_id] or "").strip() or None
             else:

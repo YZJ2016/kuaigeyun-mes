@@ -1,16 +1,30 @@
 import type { PaginationProps } from 'antd';
 
+import { useConfigStore } from '../../stores/configStore';
+import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
+
 /** 报表「全部」分页：与后端 REPORT_LIST_MAX_LIMIT 一致 */
 export const UNI_REPORT_PAGE_SIZE_ALL = 10_000;
 
 export const UNI_REPORT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100, UNI_REPORT_PAGE_SIZE_ALL] as const;
 
+/** 与 UniTable 一致：用户偏好 > 站点配置 > 20 */
+export function resolveDefaultTablePageSize(override?: number): number {
+  if (override != null && override > 0) {
+    return override;
+  }
+  const getPreference = useUserPreferenceStore.getState().getPreference;
+  const getConfig = useConfigStore.getState().getConfig;
+  return getPreference('ui.default_page_size', getConfig('ui.default_page_size', 20));
+}
+
 export function buildUniReportTablePagination(
   t: (key: string, options?: Record<string, unknown>) => string,
+  defaultPageSize?: number,
 ): PaginationProps {
+  const resolvedDefaultPageSize = resolveDefaultTablePageSize(defaultPageSize);
   return {
-    // 默认 50：避免首屏按「全部」请求/渲染上万行导致页卡死；仍可选「全部」
-    defaultPageSize: 50,
+    defaultPageSize: resolvedDefaultPageSize,
     showSizeChanger: {
       options: UNI_REPORT_PAGE_SIZE_OPTIONS.map((size) => ({
         value: size,

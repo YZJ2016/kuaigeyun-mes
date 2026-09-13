@@ -2,34 +2,24 @@ import React, { cloneElement, isValidElement } from 'react';
 import { Typography, theme } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useThemeStore } from '../../../../stores/themeStore';
-import { resolveQuickEntryChipVisual } from '../../../../components/quick-entry/quickEntryGradients';
 import type { ModuleShortcutDef } from './types';
 import { isModuleDashboardPlain } from './moduleDashboardTheme';
 
 const { Text } = Typography;
 
-function plainShortcutIcon(icon: React.ReactNode, colorPrimary: string): React.ReactNode {
+function normalizeShortcutIcon(icon: React.ReactNode, colorPrimary: string): React.ReactNode {
   if (!isValidElement(icon)) return icon;
   const prev = (icon.props as { style?: React.CSSProperties }).style;
   return cloneElement(icon, {
-    style: { ...prev, color: colorPrimary },
+    style: { ...prev, color: colorPrimary, fontSize: 20, lineHeight: 1 },
   } as { style?: React.CSSProperties });
 }
 
-function normalizeShortcutIcon(icon: React.ReactNode, colorPrimary: string): React.ReactNode {
-  const node = plainShortcutIcon(icon, colorPrimary);
-  if (!isValidElement(node)) return node;
-  const prev = (node.props as { style?: React.CSSProperties }).style;
-  return cloneElement(node, {
-    style: { ...prev, fontSize: 20, lineHeight: 1 },
-  } as { style?: React.CSSProperties });
-}
-
+/** 模块中心工作台快捷入口：图标与底纹统一主题色，不用 QuickEntry 多色芯片（右侧/顶部快捷入口不受影响） */
 export function ModuleShortcutGrid({ items }: { items: ModuleShortcutDef[] }) {
   const navigate = useNavigate();
   const { token } = theme.useToken();
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
-  const isDark = useThemeStore((s) => s.resolved.isDark);
   const plain = isModuleDashboardPlain(themeStyle);
 
   return (
@@ -48,77 +38,74 @@ export function ModuleShortcutGrid({ items }: { items: ModuleShortcutDef[] }) {
         gap: 8,
       }}
     >
-      {items.map((sc, index) => {
-        const chip = resolveQuickEntryChipVisual(index, isDark, token.colorBgContainer);
-        return (
-          <div
-            key={sc.key}
-            role="button"
-            tabIndex={0}
-            className="module-shortcut-grid__item"
-            onClick={() => navigate(sc.path)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                navigate(sc.path);
-              }
-            }}
+      {items.map((sc) => (
+        <div
+          key={sc.key}
+          role="button"
+          tabIndex={0}
+          className="module-shortcut-grid__item"
+          onClick={() => navigate(sc.path)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              navigate(sc.path);
+            }
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            gap: 8,
+            flex: '1 1 0',
+            minWidth: 128,
+            minHeight: 44,
+            padding: '10px 12px',
+            boxSizing: 'border-box',
+            borderRadius: token.borderRadius,
+            cursor: 'pointer',
+            userSelect: 'none',
+            transition: 'background 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = token.colorFillAlter;
+            e.currentTarget.style.boxShadow = 'none';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.boxShadow = 'none';
+          }}
+        >
+          <span
+            className="module-shortcut-grid__icon"
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              gap: 8,
-              flex: '1 1 0',
-              minWidth: 128,
-              minHeight: 44,
-              padding: '10px 12px',
-              boxSizing: 'border-box',
+              width: 36,
+              height: 36,
               borderRadius: token.borderRadius,
-              cursor: 'pointer',
-              userSelect: 'none',
-              transition: 'background 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = token.colorFillAlter;
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.boxShadow = 'none';
+              background: token.colorPrimaryBg,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
             }}
           >
-            <span
-              className="module-shortcut-grid__icon"
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: token.borderRadius,
-                background: plain ? token.colorPrimaryBg : chip.boxBg,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              {normalizeShortcutIcon(sc.icon, plain ? token.colorPrimary : chip.accent)}
-            </span>
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: 500,
-                color: token.colorText,
-                lineHeight: 1.35,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                minWidth: 0,
-              }}
-            >
-              {sc.title}
-            </Text>
-          </div>
-        );
-      })}
+            {normalizeShortcutIcon(sc.icon, token.colorPrimary)}
+          </span>
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: 500,
+              color: token.colorText,
+              lineHeight: 1.35,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              minWidth: 0,
+            }}
+          >
+            {sc.title}
+          </Text>
+        </div>
+      ))}
     </div>
   );
 }

@@ -401,6 +401,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
+        from apps.kuaizhizao.services.warehouse_service import sync_purchase_order_receipt_quantities
+
+        await sync_purchase_order_receipt_quantities(tenant_id, order_id)
+
         # 获取订单明细
         items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
         material_fallback = await self._load_material_fallback_for_po_items(tenant_id, items)
@@ -587,6 +591,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         # 不能直接 model_validate(order)：order.items 是 ReverseRelation，会导致 Pydantic 校验失败
         order_ids = [order.id for order in orders]
+        if order_ids:
+            from apps.kuaizhizao.services.warehouse_service import (
+                sync_purchase_order_receipt_quantities_batch,
+            )
+
+            await sync_purchase_order_receipt_quantities_batch(tenant_id, order_ids)
         totals_by_order = await self._batch_order_receipt_totals(tenant_id, order_ids)
         downstream_totals_by_order = await self._batch_order_downstream_totals(tenant_id, order_ids)
 
@@ -917,6 +927,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         total = await query.count()
         orders = await query.offset(skip).limit(limit).order_by("-created_at")
         order_ids = [order.id for order in orders]
+        if order_ids:
+            from apps.kuaizhizao.services.warehouse_service import (
+                sync_purchase_order_receipt_quantities_batch,
+            )
+
+            await sync_purchase_order_receipt_quantities_batch(tenant_id, order_ids)
         totals_by_order = await self._batch_order_receipt_totals(tenant_id, order_ids)
 
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle
@@ -1273,6 +1289,17 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             'updated_by': submitted_by
         }).save()
 
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if instance and approval_instance_finished_on_submit(instance):
+            from apps.kuaizhizao.schemas.purchase_order import PurchaseOrderApprove
+            return await self.approve_purchase_order(
+                tenant_id,
+                order_id,
+                PurchaseOrderApprove(approved=True),
+                submitted_by,
+            )
+
         return await self.get_purchase_order_by_id(tenant_id, order_id)
 
     async def withdraw_purchase_order(
@@ -1348,23 +1375,54 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "purchase_order"
         )
-        approval_status = await ApprovalInstanceService.get_approval_status(
+        from core.services.approval.audit_flow_guard import (
+            assert_manual_approval_action_allowed,
+            get_approval_gate_status,
+            should_sync_doc_after_flow_completed,
+        )
+
+        approval_gate = await get_approval_gate_status(
             tenant_id=tenant_id,
             entity_type="purchase_order",
             entity_id=order_id,
         )
+        approval_status = approval_gate["approval_status"]
         if audit_required:
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                approval_gate,
+                doc_label="采购订单",
+                verb="审核" if approve_data.approved else "驳回",
             )
-            if not has_pending_flow:
-                verb = "审核" if approve_data.approved else "驳回"
-                raise BusinessLogicError(
-                    f"采购订单审核已开启但无进行中的审批流程，请先提交审批后再{verb}"
-                )
 
         approver_name = await self.get_user_name(approved_by)
+
+        sync_after_flow = should_sync_doc_after_flow_completed(
+            approval_gate,
+            approve=approve_data.approved,
+        )
+        if sync_after_flow:
+            update_dict = {
+                'reviewer_id': approved_by,
+                'reviewer_name': approver_name,
+                'review_time': resolve_business_datetime(),
+                'review_remarks': approve_data.review_remarks,
+                'updated_by': approved_by,
+            }
+            if approve_data.approved:
+                update_dict['review_status'] = ReviewStatus.APPROVED.value
+                update_dict['status'] = DocumentStatus.CONFIRMED.value
+            else:
+                update_dict['review_status'] = ReviewStatus.REJECTED.value
+                update_dict['status'] = DocumentStatus.REJECTED.value
+            await order.update_from_dict(update_dict).save()
+            if update_dict.get("status") == DocumentStatus.CONFIRMED.value:
+                await order.refresh_from_db()
+                await self._ensure_prepayment_payment_after_confirm(
+                    tenant_id=tenant_id,
+                    order=order,
+                    operator_id=approved_by,
+                )
+            return await self.get_purchase_order_by_id(tenant_id, order_id)
 
         if approval_status.get("has_flow"):
             result = await ApprovalInstanceService.execute_approval(

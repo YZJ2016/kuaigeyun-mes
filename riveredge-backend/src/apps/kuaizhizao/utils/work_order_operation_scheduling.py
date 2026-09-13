@@ -79,11 +79,17 @@ def build_operation_time_slots(
     durations = [max(float(h), 0.0) for h in durations_hours]
     if all(h <= 0 for h in durations):
         cfg = work_hours if work_hours is not None else WorkHoursConfig.defaults()
-        raw = planned_start or planned_end or resolve_business_datetime()
-        anchor = normalize_schedule_anchor(raw, end_of_day=False)
-        snapped = snap_to_working_start(
-            anchor, holidays=holidays, config=cfg, overtime=overtime
-        )
+        if planned_end is not None:
+            anchor = normalize_schedule_anchor(planned_end, end_of_day=True)
+            snapped = snap_to_previous_working_end(
+                anchor, holidays=holidays, config=cfg, overtime=overtime
+            )
+        else:
+            raw = planned_start or resolve_business_datetime()
+            anchor = normalize_schedule_anchor(raw, end_of_day=False)
+            snapped = snap_to_working_start(
+                anchor, holidays=holidays, config=cfg, overtime=overtime
+            )
         return [(snapped, snapped) for _ in durations]
 
     if work_hours is not None:
@@ -147,7 +153,7 @@ def build_operation_time_slots_in_planned_window(
         return build_operation_time_slots(
             durations,
             planned_start=start,
-            planned_end=None,
+            planned_end=end,
             holidays=holidays,
             work_hours=work_hours if work_hours is not None else WorkHoursConfig.defaults(),
             overtime=overtime,
@@ -159,7 +165,7 @@ def build_operation_time_slots_in_planned_window(
         return build_operation_time_slots(
             durations,
             planned_start=start,
-            planned_end=None,
+            planned_end=end,
             holidays=holidays,
             work_hours=work_hours if work_hours is not None else WorkHoursConfig.defaults(),
             overtime=overtime,

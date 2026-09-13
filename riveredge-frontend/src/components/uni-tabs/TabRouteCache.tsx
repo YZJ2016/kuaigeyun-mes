@@ -202,11 +202,7 @@ export function TabRouteCache({
       ))}
 
       {!isActiveCreate && (
-        <div
-          key={`list-refresh-${refreshToken}`}
-          className="uni-tabs-route-cache-pane uni-tabs-route-cache-pane--active"
-          style={routePaneStyle}
-        >
+        <div className="uni-tabs-route-cache-pane uni-tabs-route-cache-pane--active" style={routePaneStyle}>
           <RouteTransition>{children}</RouteTransition>
         </div>
       )}

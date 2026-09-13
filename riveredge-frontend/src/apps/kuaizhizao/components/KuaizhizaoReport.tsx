@@ -6,16 +6,19 @@
  */
 import React, { useCallback, useMemo } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
 import { UniReport } from '../../../components/uni-report';
-import type { StatCard } from '../../../components/layout-templates';
 import {
   fetchKuaizhizaoReport,
   inferDomainFromPersistenceId,
   permissionResourceFromPersistenceId,
   resolveReportRoute,
   type KuaizhizaoReportDomain,
-  type KuaizhizaoReportStatCards,
 } from '../utils/kuaizhizaoReportCore';
+import {
+  augmentReportSearchFormValues,
+  mergeKuaizhizaoReportSearchColumns,
+} from '../utils/kuaizhizaoReportSearchColumns';
 
 export type KuaizhizaoReportProps<T extends Record<string, unknown> = Record<string, unknown>> = {
   title: string;
@@ -28,7 +31,6 @@ export type KuaizhizaoReportProps<T extends Record<string, unknown> = Record<str
   templateId?: string;
   summaryFields?: string[];
   rowKey?: string | keyof T;
-  statCards?: KuaizhizaoReportStatCards;
   children?: React.ReactNode;
   /** 功能区：模糊搜索之前（报表视图切换） */
   beforeSearchButtons?: React.ReactNode;
@@ -57,7 +59,6 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
   templateId: templateIdProp,
   summaryFields,
   rowKey = 'id',
-  statCards,
   children,
   beforeSearchButtons,
   params: paramsProp,
@@ -65,8 +66,18 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
   skipFuzzyPinyinClientFilter = true,
   request: requestOverride,
 }: KuaizhizaoReportProps<T>) {
+  const { t } = useTranslation();
   const domainHint = domainProp ?? inferDomainFromPersistenceId(columnPersistenceId);
   const route = useMemo(() => resolveReportRoute(reportType, domainHint), [reportType, domainHint]);
+  const mergedColumns = useMemo(
+    () =>
+      mergeKuaizhizaoReportSearchColumns(columns, {
+        domain: route.api,
+        reportType,
+        t,
+      }) as ProColumns<T>[],
+    [columns, reportType, route.api, t],
+  );
   const permissionResource =
     permissionResourceProp ?? permissionResourceFromPersistenceId(columnPersistenceId);
   const templateId = templateIdProp ?? route.templateId ?? 'queryTable';
@@ -74,6 +85,12 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
   const tableParams = useMemo(
     () => ({ reportType, ...(paramsProp || {}) }),
     [paramsProp, reportType],
+  );
+
+  const augmentSearch = useCallback(
+    (searchFormValues?: Record<string, unknown>) =>
+      augmentReportSearchFormValues(searchFormValues, mergedColumns, route.api),
+    [mergedColumns, route.api],
   );
 
   const defaultRequest = useCallback(
@@ -91,6 +108,22 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
     [reportType, domainHint],
   );
 
+  const effectiveRequest = useCallback(
+    async (
+      params: Record<string, unknown>,
+      sort?: Record<string, unknown>,
+      filter?: Record<string, unknown>,
+      searchFormValues?: Record<string, unknown>,
+    ) => {
+      const augmented = augmentSearch(searchFormValues);
+      if (requestOverride) {
+        return requestOverride(params, sort, filter, augmented);
+      }
+      return defaultRequest(params, sort, filter, augmented);
+    },
+    [augmentSearch, defaultRequest, requestOverride],
+  );
+
   const exportDomain = route.api === 'plan' ? 'plans' : route.api;
 
   return (
@@ -98,14 +131,13 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
       mode="page"
       title={title}
       templateId={templateId}
-      columns={columns}
+      columns={mergedColumns}
       columnPersistenceId={columnPersistenceId}
       permissionResource={permissionResource || undefined}
       exportConfig={{ domain: exportDomain, reportType: route.backendType }}
       summaryFields={summaryFields}
       rowKey={rowKey as string}
-      statCards={statCards as StatCard[] | ((summary: Record<string, number>) => StatCard[])}
-      request={requestOverride ?? defaultRequest}
+      request={effectiveRequest}
       skipFuzzyPinyinClientFilter={skipFuzzyPinyinClientFilter}
       beforeSearchButtons={beforeSearchButtons}
       periodFilterLabel={periodFilterLabel}

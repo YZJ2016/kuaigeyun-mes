@@ -969,7 +969,14 @@ async def record_fa_event(body: Dict[str, Any], current_user: Any = Depends(get_
     from decimal import Decimal
 
     event_type = str(body.get("event_type") or "FA_DEPRECIATION")
-    if event_type not in {"FA_DEPRECIATION", "FA_DISPOSAL", "FIXED_ASSET_DEPRECIATION", "FIXED_ASSET_DISPOSAL"}:
+    if event_type not in {
+        "FA_DEPRECIATION",
+        "FA_DISPOSAL",
+        "FA_IMPAIRMENT",
+        "FIXED_ASSET_DEPRECIATION",
+        "FIXED_ASSET_DISPOSAL",
+        "FIXED_ASSET_IMPAIRMENT",
+    }:
         raise HTTPException(status_code=400, detail="不支持的固定资产事件类型")
     try:
         await record_finance_accounting_event(

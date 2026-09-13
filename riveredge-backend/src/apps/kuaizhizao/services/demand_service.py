@@ -653,6 +653,15 @@ class DemandService(AppBaseService[Demand]):
             approval_instance=instance,
         )
 
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_demand(
+                tenant_id,
+                demand_id,
+                submitted_by,
+            )
+
         return await self.get_demand_by_id(tenant_id, demand_id)
 
     async def _mark_demand_submitted(
@@ -716,21 +725,28 @@ class DemandService(AppBaseService[Demand]):
         from apps.kuaizhizao.services.state_transition_service import StateTransitionService
 
         audit_required = await BusinessConfigService().check_audit_required(tenant_id, "demand")
+        sync_after_flow = False
         if audit_required:
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
+
+            approval_gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="demand",
                 entity_id=demand_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                approval_gate,
+                doc_label="需求",
+                verb="驳回" if rejection_reason else "审核",
             )
-            if not has_pending_flow:
-                verb = "驳回" if rejection_reason else "审核"
-                raise BusinessLogicError(
-                    f"需求审核已开启但无进行中的审批流程，请先提交审批后再{verb}"
-                )
+            sync_after_flow = should_sync_doc_after_flow_completed(
+                approval_gate,
+                approve=not rejection_reason,
+            )
 
         from_status = demand.status
 
@@ -769,6 +785,9 @@ class DemandService(AppBaseService[Demand]):
                 updated_by_name=approver_name,
             )
             return await self.get_demand_by_id(tenant_id, demand_id)
+
+        if sync_after_flow:
+            return await _do_write(rejection_reason if rejection_reason else None)
 
         if rejection_reason:
             result = await UniAuditService.reject_with_flow_fallback(

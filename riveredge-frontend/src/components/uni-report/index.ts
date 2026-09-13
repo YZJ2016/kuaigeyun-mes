@@ -17,6 +17,7 @@ export {
   UNI_REPORT_PAGE_SIZE_ALL,
   UNI_REPORT_PAGE_SIZE_OPTIONS,
   buildUniReportTablePagination,
+  resolveDefaultTablePageSize,
 } from './uniReportPagination';
 export {
   resolveUniReportScrollMode,

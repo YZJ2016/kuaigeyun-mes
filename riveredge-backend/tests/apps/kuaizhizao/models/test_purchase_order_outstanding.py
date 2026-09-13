@@ -3,7 +3,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from apps.kuaizhizao.models.purchase_order import effective_po_item_outstanding
+from apps.kuaizhizao.models.purchase_order import (
+    compute_po_item_received_outstanding,
+    effective_po_item_outstanding,
+)
 from apps.kuaizhizao.services.warehouse_service import _validate_purchase_receipt_tolerance
 from infra.exceptions.exceptions import BusinessLogicError
 
@@ -26,6 +29,26 @@ def test_effective_po_item_outstanding_caps_stale_stored_by_ordered_minus_receiv
 def test_effective_po_item_outstanding_uses_stored_when_not_above_computed():
     item = _po_item(received_quantity=Decimal("0"), outstanding_quantity=Decimal("100"))
     assert effective_po_item_outstanding(item) == Decimal("100")
+
+
+def test_compute_po_item_received_outstanding_subtracts_confirmed_returns():
+    received, outstanding = compute_po_item_received_outstanding(
+        Decimal("5"),
+        Decimal("5"),
+        Decimal("1"),
+    )
+    assert received == Decimal("4")
+    assert outstanding == Decimal("1")
+
+
+def test_compute_po_item_received_outstanding_caps_received_by_ordered():
+    received, outstanding = compute_po_item_received_outstanding(
+        Decimal("5"),
+        Decimal("8"),
+        Decimal("0"),
+    )
+    assert received == Decimal("5")
+    assert outstanding == Decimal("0")
 
 
 def test_validate_purchase_receipt_tolerance_reports_confirmed_and_pending_parts():

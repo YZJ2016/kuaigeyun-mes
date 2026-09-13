@@ -134,12 +134,18 @@ class BOMChangeService:
             change.status = "pending"
             await change.save()
             submitter_id = change.applicant_id or operator_id
-            await start_change_approval_flow(
+            instance = await start_change_approval_flow(
                 tenant_id,
                 "bom",
                 change,
                 submitter_id=submitter_id,
             )
+            from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+            if approval_instance_finished_on_submit(instance):
+                return await BOMChangeService.approve_change(
+                    tenant_id, str(change.uuid), operator_id, True
+                )
         else:
             change.status = "approved"
             change.approver_id = operator_id
@@ -366,6 +372,7 @@ class BOMChangeService:
         approval_comment: Optional[str] = None,
     ) -> BOMChangeResponse:
         """审批变更记录（优先走平台审批流）。"""
+        from apps.kuaiplm.services.engineering_change_audit import is_audit_required
         from core.services.approval.uni_audit_service import UniAuditService
 
         change = await BOMChange.filter(
@@ -379,6 +386,26 @@ class BOMChangeService:
 
         if change.status not in ("pending",):
             raise ValidationError(f"变更记录状态为 {change.status}，无法审批")
+
+        sync_after_flow = False
+        if await is_audit_required(tenant_id, "bom"):
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="bom_change",
+                entity_id=change.id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="BOM 工程变更",
+                verb="审核" if approved else "驳回",
+            )
+            sync_after_flow = should_sync_doc_after_flow_completed(gate, approve=approved)
 
         async def _do_approve() -> BOMChangeResponse:
             return await BOMChangeService._apply_approval_decision(
@@ -394,7 +421,9 @@ class BOMChangeService:
                 reason or approval_comment or "审批驳回",
             )
 
-        if approved:
+        if sync_after_flow:
+            result = await (_do_approve() if approved else _do_reject(approval_comment))
+        elif approved:
             result = await UniAuditService.approve_with_flow_fallback(
                 tenant_id=tenant_id,
                 entity_type="bom_change",

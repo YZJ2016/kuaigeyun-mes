@@ -12,7 +12,26 @@ from loguru import logger
 from core.models.scheduled_task import ScheduledTask
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.utils.cron_match import match_cron as _match_cron
-from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat, to_site_timezone
+
+# is_running 超过该时长视为 worker 异常退出，允许下一 tick 重新调度
+_STALE_RUNNING = timedelta(hours=1)
+
+
+def _site_wall_clock(dt: datetime) -> datetime:
+    """Cron / 一次性 date 触发按站点墙钟匹配（与配置中心 Cron 说明一致）。"""
+    return to_site_timezone(dt)
+
+
+def _same_site_minute(a: datetime, b: datetime) -> bool:
+    sa, sb = _site_wall_clock(a), _site_wall_clock(b)
+    return (sa.year, sa.month, sa.day, sa.hour, sa.minute) == (
+        sb.year,
+        sb.month,
+        sb.day,
+        sb.hour,
+        sb.minute,
+    )
 
 
 async def run_scheduled_task_scheduler_tick() -> Dict[str, Any]:
@@ -63,19 +82,41 @@ async def run_scheduled_task_scheduler_tick() -> Dict[str, Any]:
         }
 
 
+async def _clear_stale_running(task: ScheduledTask, now: datetime) -> bool:
+    """若 is_running 超时则复位，返回是否仍应视为运行中。"""
+    if not task.is_running:
+        return False
+    if not task.last_run_at or now - task.last_run_at < _STALE_RUNNING:
+        return True
+    logger.warning(
+        "定时任务 is_running 超时复位: {} ({}) last_run_at={}",
+        task.name,
+        task.uuid,
+        task.last_run_at,
+    )
+    await ScheduledTask.filter(id=task.id).update(is_running=False)
+    task.is_running = False
+    return False
+
+
 async def _should_execute_task(task: ScheduledTask, now: datetime) -> bool:
     """判断定时任务是否需要执行。"""
     trigger_type = task.trigger_type
     trigger_config = task.trigger_config or {}
 
-    if task.is_running:
+    if await _clear_stale_running(task, now):
         return False
 
     if trigger_type == "cron":
         cron_expr = trigger_config.get("cron")
         if not cron_expr:
             return False
-        return _match_cron(cron_expr, now)
+        site_now = _site_wall_clock(now)
+        if not _match_cron(cron_expr, site_now):
+            return False
+        if task.last_run_at and _same_site_minute(task.last_run_at, now):
+            return False
+        return True
 
     if trigger_type == "interval":
         seconds = trigger_config.get("seconds", 0)
@@ -102,7 +143,9 @@ async def _should_execute_task(task: ScheduledTask, now: datetime) -> bool:
             if task.last_run_at:
                 return False
 
-            time_diff = abs((now - target_time).total_seconds())
+            target_site = _site_wall_clock(resolve_business_datetime(target_time))
+            site_now = _site_wall_clock(now)
+            time_diff = abs((site_now - target_site).total_seconds())
             return time_diff <= 60
         except Exception as e:
             logger.error(f"解析日期触发器失败: {at_time}, 错误: {e}")

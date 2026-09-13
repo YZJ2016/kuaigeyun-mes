@@ -1833,12 +1833,19 @@ const PurchaseReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.purchaseOrder.col.orderCode'),
         dataIndex: 'order_code',
-        width: 168,
+        width: 136,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.materialCode'),
+        dataIndex: 'material_code',
+        width: 120,
         ellipsis: true,
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialName'),
         dataIndex: 'material_name',
+        width: 200,
         ellipsis: true,
         render: (_: unknown, record: PurchaseReturnPullLine) => (
           <MaterialStackedCell
@@ -1851,7 +1858,7 @@ const PurchaseReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.purchaseReturn.pull.warehouseColumn'),
         key: 'warehouse',
-        width: 150,
+        width: 136,
         render: (_: unknown, record: PurchaseReturnPullLine) => (
           <Select
             style={{ width: '100%', minWidth: 118 }}
@@ -1874,21 +1881,21 @@ const PurchaseReturnsPage: React.FC = () => {
       {
         title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
-        width: 100,
+        width: 88,
         align: 'right',
         render: (v) => formatQuantity(v),
       },
       {
         title: t('app.kuaizhizao.salesOrder.colShippedQty'),
         dataIndex: 'pushed_quantity',
-        width: 100,
+        width: 88,
         align: 'right',
         render: (v) => formatQuantity(v),
       },
       {
         title: t('app.kuaizhizao.salesOrder.colShippableQty'),
         dataIndex: 'remaining_quantity',
-        width: 100,
+        width: 88,
         align: 'right',
         render: (v) => formatQuantity(v),
       },
@@ -1896,7 +1903,7 @@ const PurchaseReturnsPage: React.FC = () => {
         title: t('app.kuaizhizao.purchaseReturn.import.batchNumber'),
         key: 'batch_number',
         dataIndex: 'suggested_batch_number',
-        width: 160,
+        width: 132,
         render: (_: unknown, record: PurchaseReturnPullLine) => {
           const options = (record.available_batches || [])
             .map((row) => String(row.batch_number || '').trim())
@@ -1955,19 +1962,19 @@ const PurchaseReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.receiptNotice.supplier'),
         dataIndex: 'supplier_name',
-        width: 140,
+        width: 120,
         ellipsis: true,
       },
       {
         title: t('app.kuaizhizao.purchaseOrder.col.deliveryDate'),
         dataIndex: 'required_date',
-        width: 112,
+        width: 100,
         render: (v) => (v ? formatBusinessDateOnly(String(v)) : '-'),
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.pull.gateStatus'),
         key: 'convert_status',
-        width: 100,
+        width: 96,
         align: 'center',
         render: (_: unknown, record: PurchaseReturnPullLine) =>
           renderPullCapabilityTag(
@@ -2633,6 +2640,7 @@ const PurchaseReturnsPage: React.FC = () => {
         onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
         okText={t('app.kuaizhizao.purchaseReturn.pull.ok')}
         footerHint={t('app.kuaizhizao.purchaseReturn.pull.warehouseHint')}
+        tableScroll={{ x: 1304, y: 360 }}
       />
 
       <UniPullQueryModal<PullIncomingInspectionCandidate>

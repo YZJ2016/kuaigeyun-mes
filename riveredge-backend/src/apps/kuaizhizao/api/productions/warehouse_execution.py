@@ -5243,7 +5243,15 @@ async def pull_purchase_return_from_purchase_order(
     purchase_order_id = request.get("purchase_order_id")
     warehouse_id = request.get("warehouse_id")
     warehouse_name = request.get("warehouse_name")
-    return_quantities = request.get("return_quantities")
+    return_quantities_raw = request.get("return_quantities")
+    return_quantities = None
+    if isinstance(return_quantities_raw, dict):
+        return_quantities = {}
+        for k, v in return_quantities_raw.items():
+            try:
+                return_quantities[int(k)] = float(v)
+            except (TypeError, ValueError):
+                continue
 
     if not purchase_order_id:
         raise ValidationError("必须提供采购订单ID")
@@ -5261,7 +5269,7 @@ async def pull_purchase_return_from_purchase_order(
         created_by=current_user.id,
         warehouse_id=int(warehouse_id),
         warehouse_name=warehouse_name,
-        return_quantities=return_quantities if isinstance(return_quantities, dict) else None,
+        return_quantities=return_quantities,
     )
 
 

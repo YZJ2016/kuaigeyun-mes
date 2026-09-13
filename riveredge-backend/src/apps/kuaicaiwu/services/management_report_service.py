@@ -61,7 +61,7 @@ class ManagementReportService:
 
         total = Decimal("0")
         for mid, qty in qty_by_material.items():
-            unit = await self._inventory_cost.get_material_unit_cost_or_zero(tenant_id, mid)
+            unit = await self._inventory_cost.get_material_base_unit_cost_or_zero(tenant_id, mid)
             total += qty * unit
         return total.quantize(Decimal("0.01"))
 

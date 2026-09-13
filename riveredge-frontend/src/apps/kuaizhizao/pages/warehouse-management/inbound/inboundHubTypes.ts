@@ -1,6 +1,10 @@
 /** Hub 聚合列表统一行类型 */
 
 import type { TFunction } from 'i18next';
+import type {
+  KuaizhizaoDocumentActionKey,
+  KuaizhizaoPullCreateMenuItemSpec,
+} from '../../../constants/documentActionRegistry';
 import {
   inboundHubCapabilityReasonMessage,
   salesReturnCapabilityReasonMessage,
@@ -18,6 +22,14 @@ export type InboundReceiptType =
   | 'outsource_product_return'
   | 'other_inbound'
   | 'material_return';
+
+/** 模块级 scoped 入库 Hub 包装页 props */
+export type InboundHubPageProps = {
+  fixedReceiptType?: InboundReceiptType;
+  scopedReceiptTypes?: readonly InboundReceiptType[];
+  headerTitle?: string;
+  columnPersistenceId?: string;
+};
 
 export interface InboundHubOrder {
   id?: number;
@@ -148,13 +160,18 @@ export function inboundReceiptTypeValueEnum(
   );
 }
 
-/** 列表工具栏快速筛选：全部 + 各入库类型 */
+/** 列表工具栏快速筛选：全部 + 各入库类型（可选 scoped 子集） */
 export function inboundReceiptTypeSegmentOptions(
   t: TFunction,
+  scopedTypes?: readonly InboundReceiptType[],
 ): Array<{ label: string; value: string }> {
+  const types = scopedTypes?.length
+    ? INBOUND_RECEIPT_TYPES.filter((type) => scopedTypes.includes(type))
+    : INBOUND_RECEIPT_TYPES;
+  const showAll = !scopedTypes?.length || scopedTypes.length > 1;
   return [
-    { label: t('app.kuaizhizao.warehouseCommon.allTypes'), value: 'all' },
-    ...INBOUND_RECEIPT_TYPES.map((type) => ({
+    ...(showAll ? [{ label: t('app.kuaizhizao.warehouseCommon.allTypes'), value: 'all' }] : []),
+    ...types.map((type) => ({
       label: inboundReceiptTypeLabel(t, type),
       value: type,
     })),
@@ -270,4 +287,85 @@ export function resolveInboundHubOperator(record: InboundHubOrder): string {
     if (s) return s;
   }
   return '';
+}
+
+/** 与 InboundQuickPullModals.open 键一致 */
+export type InboundHubQuickPullKey =
+  | 'purchase_order'
+  | 'receipt_notice'
+  | 'work_order'
+  | 'production_return'
+  | 'sales_return'
+  | 'outsource';
+
+const INBOUND_PULL_ACTION_RECEIPT_TYPES: Partial<
+  Record<KuaizhizaoDocumentActionKey, readonly InboundReceiptType[]>
+> = {
+  'purchase_receipt.pull_from_purchase_order': ['purchase'],
+  'purchase_receipt.pull_from_receipt_notice': ['purchase'],
+  'inbound.pull_from_work_order': ['finished_goods', 'semi_finished_goods'],
+  'inbound.pull_from_work_order_for_production_return': ['production_return'],
+  'inbound.pull_from_sales_order': ['sales_return'],
+  'inbound.pull_from_outsource_work_order': [
+    'outsource_receipt',
+    'outsource_material_return',
+    'outsource_product_return',
+  ],
+};
+
+const INBOUND_QUICK_PULL_KEY_RECEIPT_TYPES: Record<
+  InboundHubQuickPullKey,
+  readonly InboundReceiptType[]
+> = {
+  purchase_order: ['purchase'],
+  receipt_notice: ['purchase'],
+  work_order: ['finished_goods', 'semi_finished_goods'],
+  production_return: ['production_return'],
+  sales_return: ['sales_return'],
+  outsource: ['outsource_receipt', 'outsource_material_return', 'outsource_product_return'],
+};
+
+function inboundPullTargetsOverlapScope(
+  targets: readonly InboundReceiptType[],
+  scopedTypes?: readonly InboundReceiptType[],
+): boolean {
+  if (!scopedTypes?.length) return true;
+  return targets.some((type) => scopedTypes.includes(type));
+}
+
+export function isInboundPullActionInHubScope(
+  actionKey: KuaizhizaoDocumentActionKey,
+  scopedTypes?: readonly InboundReceiptType[],
+): boolean {
+  const targets = INBOUND_PULL_ACTION_RECEIPT_TYPES[actionKey];
+  if (!targets?.length) return !scopedTypes?.length;
+  return inboundPullTargetsOverlapScope(targets, scopedTypes);
+}
+
+export function filterInboundPullCreateMenuSpecs(
+  specs: KuaizhizaoPullCreateMenuItemSpec[],
+  scopedTypes?: readonly InboundReceiptType[],
+): KuaizhizaoPullCreateMenuItemSpec[] {
+  if (!scopedTypes?.length) return specs;
+  return specs.filter((spec) => isInboundPullActionInHubScope(spec.actionKey, scopedTypes));
+}
+
+export function resolveDefaultInboundQuickPullKey(
+  scopedTypes?: readonly InboundReceiptType[],
+): InboundHubQuickPullKey {
+  if (!scopedTypes?.length) return 'work_order';
+  const order: InboundHubQuickPullKey[] = [
+    'purchase_order',
+    'receipt_notice',
+    'work_order',
+    'production_return',
+    'sales_return',
+    'outsource',
+  ];
+  for (const key of order) {
+    if (inboundPullTargetsOverlapScope(INBOUND_QUICK_PULL_KEY_RECEIPT_TYPES[key], scopedTypes)) {
+      return key;
+    }
+  }
+  return 'work_order';
 }

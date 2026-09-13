@@ -846,6 +846,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
         """
         trigger_direct_inbound = False
         reporting_record_id_for_auto: Optional[int] = None
+        approval_instance_on_create = None
 
         if True:
             # 验证工单是否存在且状态正确
@@ -1192,7 +1193,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if reporting_record.status == "pending" and reporting_audit_required:
                 from core.services.approval.audit_flow_guard import start_document_approval_or_raise
 
-                await start_document_approval_or_raise(
+                approval_instance_on_create = await start_document_approval_or_raise(
                     tenant_id=tenant_id,
                     user_id=reported_by,
                     node_key="reporting_record",
@@ -1371,6 +1372,17 @@ class ReportingService(AppBaseService[ReportingRecord]):
             )
         else:
             inbound_result = None
+
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if (
+            approval_instance_on_create
+            and approval_instance_finished_on_submit(approval_instance_on_create)
+            and reporting_record.status == "pending"
+        ):
+            return await self.approve_reporting_record(
+                tenant_id, reporting_record.id, reported_by
+            )
 
         await self._sync_pending_inbound_receipts_if_needed(
             tenant_id=tenant_id,
@@ -2006,9 +2018,12 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 关审：提交即自动通过（与创建时 auto 路径一致）
             return await self.approve_reporting_record(tenant_id, record_id, submitted_by)
 
-        from core.services.approval.audit_flow_guard import start_document_approval_or_raise
+        from core.services.approval.audit_flow_guard import (
+            approval_instance_finished_on_submit,
+            start_document_approval_or_raise,
+        )
 
-        await start_document_approval_or_raise(
+        instance = await start_document_approval_or_raise(
             tenant_id=tenant_id,
             user_id=submitted_by,
             node_key="reporting_record",
@@ -2025,6 +2040,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
         record.status = "pending"
         record.rejection_reason = None
         await record.save()
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_reporting_record(tenant_id, record_id, submitted_by)
         return ReportingRecordResponse.model_validate(record)
 
     async def batch_revoke_reporting_approval(

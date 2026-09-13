@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from apps.kuaicaiwu.models.fixed_asset import (
     FaAsset,
@@ -14,11 +14,13 @@ from apps.kuaicaiwu.models.fixed_asset import (
 )
 from apps.kuaicaiwu.services.fa_core import (
     compute_net_value,
+    compute_period_depreciation,
     generate_daily_code,
     model_to_dict,
     quantize_money,
     touch_updated,
 )
+from apps.kuaicaiwu.services.fa_depreciation_methods import normalize_depreciation_method
 from apps.kuaicaiwu.services.accounting_event_service import AccountingEventService
 from apps.kuaicaiwu.services.finance_integration_hooks import record_finance_accounting_event
 from core.utils.timezone_utils import resolve_business_datetime
@@ -84,6 +86,8 @@ class FaDepreciationService:
         total = Decimal("0")
         lines: list[FaDepreciationRunLine] = []
         for asset in assets:
+            if normalize_depreciation_method(asset.depreciation_method) == "none":
+                continue
             if int(asset.depreciated_periods or 0) >= int(asset.useful_life_months or 0):
                 continue
             net = compute_net_value(
@@ -96,7 +100,16 @@ class FaDepreciationService:
             )
             if net <= residual:
                 continue
-            calc = quantize_money(asset.monthly_depreciation)
+            calc = compute_period_depreciation(
+                depreciation_method=asset.depreciation_method,
+                original_value=quantize_money(asset.original_value),
+                residual_rate=quantize_money(asset.residual_rate),
+                useful_life_months=int(asset.useful_life_months or 0),
+                depreciated_periods=int(asset.depreciated_periods or 0),
+                accumulated_depreciation=quantize_money(asset.accumulated_depreciation),
+                impairment_value=quantize_money(asset.impairment_value),
+                total_workload=getattr(asset, "total_workload", None),
+            )
             if calc <= 0:
                 continue
             if net - calc < residual:
@@ -299,7 +312,13 @@ class FaDepreciationService:
                 item["user_name"] = asset.user_name
                 item["original_value"] = float(asset.original_value or 0)
                 item["accumulated_depreciation"] = float(asset.accumulated_depreciation or 0)
-                item["net_value"] = float(compute_net_value(asset))
+                item["net_value"] = float(
+                    compute_net_value(
+                        quantize_money(asset.original_value),
+                        quantize_money(asset.accumulated_depreciation),
+                        quantize_money(asset.impairment_value),
+                    )
+                )
                 item["expense_account_code"] = asset.expense_account_code
             result.append(item)
         return result
@@ -428,6 +447,8 @@ class FaAdjustmentService:
                 "accumulated_depreciation_account_code": asset.accumulated_depreciation_account_code,
                 "department_id": asset.department_id,
                 "department_name": asset.department_name,
+                "period_year": row.period_year,
+                "period_month": row.period_month,
             },
         )
         row.status = "confirmed"
@@ -436,12 +457,137 @@ class FaAdjustmentService:
         return model_to_dict(row)
 
 
+_FA_VOUCHER_BUSINESS_TYPES = (
+    "fixed_asset",
+    "fixed_asset_adjustment",
+    "fixed_asset_disposal",
+    "fixed_asset_impairment",
+)
+
+
 class FaPeriodCloseService:
+    async def _get_close_row(self, tenant_id: int, close_id: int) -> FaPeriodClose:
+        row = await FaPeriodClose.get_or_none(
+            id=close_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("资产结账记录不存在")
+        return row
+
+    async def _collect_period_event_ids(
+        self, tenant_id: int, year: int, month: int
+    ) -> List[int]:
+        from apps.kuaicaiwu.models.accounting_event import AccountingEvent
+
+        event_ids: Set[int] = set()
+
+        run_ids = await FaDepreciationRun.filter(
+            tenant_id=tenant_id,
+            period_year=year,
+            period_month=month,
+            deleted_at__isnull=True,
+        ).values_list("id", flat=True)
+        if run_ids:
+            line_event_ids = await FaDepreciationRunLine.filter(
+                tenant_id=tenant_id,
+                run_id__in=list(run_ids),
+                deleted_at__isnull=True,
+                accounting_event_id__not_isnull=True,
+            ).values_list("accounting_event_id", flat=True)
+            event_ids.update(int(i) for i in line_event_ids if i)
+
+        confirmed_adj_ids = set(
+            await FaDepreciationAdjustment.filter(
+                tenant_id=tenant_id,
+                period_year=year,
+                period_month=month,
+                status="confirmed",
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+        )
+
+        events = await AccountingEvent.filter(
+            tenant_id=tenant_id,
+            business_type__in=_FA_VOUCHER_BUSINESS_TYPES,
+        ).all()
+        for ev in events:
+            if ev.id in event_ids:
+                continue
+            payload = ev.payload or {}
+            if (
+                int(payload.get("period_year") or 0) == year
+                and int(payload.get("period_month") or 0) == month
+            ):
+                event_ids.add(int(ev.id))
+                continue
+            if (
+                ev.source_doc_type == "fa_depr_adjustment"
+                and ev.source_doc_id in confirmed_adj_ids
+            ):
+                event_ids.add(int(ev.id))
+                continue
+            if ev.event_date and ev.event_date.year == year and ev.event_date.month == month:
+                event_ids.add(int(ev.id))
+        return sorted(event_ids)
+
+    async def _voucher_stats_for_period(
+        self, tenant_id: int, year: int, month: int
+    ) -> Dict[str, int]:
+        from apps.kuaicaiwu.models.voucher import Voucher
+
+        event_ids = await self._collect_period_event_ids(tenant_id, year, month)
+        if not event_ids:
+            return {
+                "fa_event_count": 0,
+                "voucher_pending_count": 0,
+                "voucher_draft_count": 0,
+                "voucher_reviewed_count": 0,
+                "voucher_posted_count": 0,
+            }
+
+        voucher_rows = await Voucher.filter(
+            tenant_id=tenant_id,
+            source_event_id__in=event_ids,
+            deleted_at__isnull=True,
+        ).exclude(status="cancelled").all()
+        voucher_by_event: Dict[int, str] = {}
+        for voucher in voucher_rows:
+            eid = int(voucher.source_event_id or 0)
+            if eid:
+                voucher_by_event[eid] = str(voucher.status or "")
+
+        draft = reviewed = posted = 0
+        for status in voucher_by_event.values():
+            if status == "draft":
+                draft += 1
+            elif status == "reviewed":
+                reviewed += 1
+            elif status == "posted":
+                posted += 1
+
+        linked = len(voucher_by_event)
+        return {
+            "fa_event_count": len(event_ids),
+            "voucher_pending_count": max(0, len(event_ids) - linked),
+            "voucher_draft_count": draft,
+            "voucher_reviewed_count": reviewed,
+            "voucher_posted_count": posted,
+        }
+
     async def list_closes(self, tenant_id: int) -> list[dict[str, Any]]:
         rows = await FaPeriodClose.filter(
             tenant_id=tenant_id, deleted_at__isnull=True
         ).order_by("-period_year", "-period_month")
-        return [model_to_dict(r) for r in rows]
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            item = model_to_dict(row)
+            item.update(
+                await self._voucher_stats_for_period(
+                    tenant_id, int(row.period_year), int(row.period_month)
+                )
+            )
+            items.append(item)
+        return items
 
     async def close_period(
         self, tenant_id: int, year: int, month: int, user: User, notes: Optional[str] = None
@@ -476,4 +622,82 @@ class FaPeriodCloseService:
             created_by=user.id,
             created_by_name=getattr(user, "name", None) or getattr(user, "username", None),
         )
-        return model_to_dict(row)
+        result = model_to_dict(row)
+        result.update(await self._voucher_stats_for_period(tenant_id, year, month))
+        return result
+
+    async def generate_period_vouchers(
+        self, tenant_id: int, close_id: int, user: User
+    ) -> dict[str, Any]:
+        row = await self._get_close_row(tenant_id, close_id)
+        year, month = int(row.period_year), int(row.period_month)
+        event_ids = await self._collect_period_event_ids(tenant_id, year, month)
+        if not event_ids:
+            raise BusinessLogicError(
+                f"{year:04d}-{month:02d} 期间没有可生成凭证的固定资产会计事件，请先确认折旧计提等业务"
+            )
+
+        from apps.kuaicaiwu.services.gl.integration_service import GlIntegrationReconcileService
+
+        result = await GlIntegrationReconcileService().generate_vouchers_from_pending_events(
+            tenant_id,
+            user.id,
+            event_ids=event_ids,
+        )
+        stats = await self._voucher_stats_for_period(tenant_id, year, month)
+        return {**result, **stats, "period_year": year, "period_month": month}
+
+    async def post_period_vouchers(
+        self, tenant_id: int, close_id: int, user: User
+    ) -> dict[str, Any]:
+        from apps.kuaicaiwu.models.voucher import Voucher
+        from apps.kuaicaiwu.services.posting_service import PostingService
+
+        row = await self._get_close_row(tenant_id, close_id)
+        year, month = int(row.period_year), int(row.period_month)
+        event_ids = await self._collect_period_event_ids(tenant_id, year, month)
+        if not event_ids:
+            raise BusinessLogicError(f"{year:04d}-{month:02d} 期间没有固定资产会计事件")
+
+        vouchers = await Voucher.filter(
+            tenant_id=tenant_id,
+            source_event_id__in=event_ids,
+            deleted_at__isnull=True,
+        ).exclude(status="cancelled").all()
+        if not vouchers:
+            raise BusinessLogicError("请先生成结账凭证")
+
+        posting = PostingService()
+        posted_count = 0
+        reviewed_count = 0
+        skipped = 0
+        errors: List[str] = []
+        for voucher in vouchers:
+            current = voucher
+            try:
+                if current.status == "posted":
+                    skipped += 1
+                    continue
+                if current.status == "draft":
+                    current = await posting.review_voucher(tenant_id, current.id, user.id)
+                    reviewed_count += 1
+                if current.status == "reviewed":
+                    current = await posting.post_voucher(tenant_id, current.id, user.id)
+                    posted_count += 1
+                else:
+                    skipped += 1
+            except Exception as exc:
+                skipped += 1
+                code = getattr(current, "voucher_code", None) or current.id
+                errors.append(f"{code}: {exc}")
+
+        stats = await self._voucher_stats_for_period(tenant_id, year, month)
+        return {
+            "posted_count": posted_count,
+            "reviewed_count": reviewed_count,
+            "skipped": skipped,
+            "errors": errors[:20],
+            **stats,
+            "period_year": year,
+            "period_month": month,
+        }

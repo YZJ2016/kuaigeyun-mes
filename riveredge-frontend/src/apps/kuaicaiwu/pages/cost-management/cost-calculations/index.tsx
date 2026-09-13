@@ -894,9 +894,11 @@ const CostCalculationPage: React.FC = () => {
         }
         loading={execCalcLoading}
         width={
-          workOrderCalcResult || workOrderReadiness
+          workOrderCalcResult
             ? MODAL_CONFIG.SMALL_WIDTH
-            : MODAL_CONFIG.TINY_WIDTH
+            : workOrderReadiness
+              ? MODAL_CONFIG.STANDARD_WIDTH
+              : MODAL_CONFIG.TINY_WIDTH
         }
         extraFooterAfter={
           workOrderCalcResult ? (
@@ -936,6 +938,7 @@ const CostCalculationPage: React.FC = () => {
             <CostCalculationFactorsPanel
               readiness={workOrderReadiness}
               loading={readinessLoading === 'work_order'}
+              targetKind="work_order"
             />
             <ProFormDatePicker
               name="calculation_date"
@@ -980,7 +983,11 @@ const CostCalculationPage: React.FC = () => {
         }
         loading={execCalcLoading}
         width={
-          productCalcResult || productReadiness ? MODAL_CONFIG.SMALL_WIDTH : MODAL_CONFIG.TINY_WIDTH
+          productCalcResult
+            ? MODAL_CONFIG.SMALL_WIDTH
+            : productReadiness
+              ? MODAL_CONFIG.STANDARD_WIDTH
+              : MODAL_CONFIG.TINY_WIDTH
         }
         extraFooterAfter={
           productCalcResult ? (
@@ -1040,6 +1047,7 @@ const CostCalculationPage: React.FC = () => {
             <CostCalculationFactorsPanel
               readiness={productReadiness}
               loading={readinessLoading === 'product'}
+              targetKind="product"
             />
             <ProFormSelect
               name="calculation_type"

@@ -2278,6 +2278,7 @@ const WorkOrdersPage: React.FC = () => {
   const [outsourcePreviewData, setOutsourcePreviewData] = useState<PushPreviewResponse | null>(null)
   const [outsourcePreviewSelectedOpIds, setOutsourcePreviewSelectedOpIds] = useState<number[]>([])
   const [outsourceLockedOperationId, setOutsourceLockedOperationId] = useState<number | null>(null)
+  const [outsourceLockedMaxQty, setOutsourceLockedMaxQty] = useState(0)
 
   // 冻结/解冻相关状态
   const [freezeModalVisible, setFreezeModalVisible] = useState(false)
@@ -3747,26 +3748,32 @@ const WorkOrdersPage: React.FC = () => {
         createdId
       ) {
         const uq = Number(values.unqualified_quantity) || 0
+        const defectQtyBase = convertProductionInputToBaseQty(uq, quickReportingWorkOrder)
         const defectOpts = getOperationDefectTypeOptions(quickReportingOperation)
         try {
           if (defectOpts.length > 0 && values.defect_type) {
             await reportingApi.recordDefect(String(createdId), {
-              defect_quantity: uq,
+              defect_quantity: defectQtyBase,
               defect_type: values.defect_type,
               defect_reason: '工单列表快速报工录入',
               disposition: 'quarantine',
             })
           } else if (defectOpts.length === 0 && (values.defect_reason_text || '').toString().trim()) {
             await reportingApi.recordDefect(String(createdId), {
-              defect_quantity: uq,
+              defect_quantity: defectQtyBase,
               defect_type: 'other',
               defect_reason: String(values.defect_reason_text).trim(),
               disposition: 'quarantine',
             })
           }
-        } catch (defectErr: any) {
+        } catch (defectErr: unknown) {
           console.error(defectErr)
-          messageApi.warning('报工成功，但不良品记录创建失败')
+          const detail = defectErr instanceof Error ? defectErr.message : String(defectErr)
+          messageApi.warning(
+            detail
+              ? `${t('app.kuaizhizao.workReporting.defectCreateAfterReportFailed')}：${detail}`
+              : t('app.kuaizhizao.workReporting.defectCreateAfterReportFailed'),
+          )
         }
       }
       messageApi.success('报工成功')
@@ -5566,14 +5573,30 @@ const WorkOrdersPage: React.FC = () => {
       messageApi.warning(t('app.kuaizhizao.outsourceOrder.pullSelectOperationFirst'))
       return
     }
+    const row = rowById.get(selectedId)
+    const maxQty = Number(
+      row?.max_push_quantity ?? outsourceOptionsByOpId[selectedId]?.outsourceable_quantity ?? 0,
+    )
     resetOutsourcePreview()
     setOutsourceLockedOperationId(selectedId)
+    setOutsourceLockedMaxQty(maxQty)
     setOutsourceModalVisible(true)
+  }, [
+    messageApi,
+    outsourceOptionsByOpId,
+    outsourcePreviewData,
+    outsourcePreviewSelectedOpIds,
+    resetOutsourcePreview,
+    t,
+  ])
+
+  useEffect(() => {
+    if (!outsourceModalVisible || !outsourceLockedOperationId) return
     outsourceFormRef.current?.setFieldsValue({
-      work_order_operation_id: selectedId,
+      work_order_operation_id: outsourceLockedOperationId,
       outsource_quantity: undefined,
     })
-  }, [messageApi, outsourcePreviewData, outsourcePreviewSelectedOpIds, resetOutsourcePreview, t])
+  }, [outsourceModalVisible, outsourceLockedOperationId])
 
   const handleCreateOutsource = async (record: WorkOrder) => {
     try {
@@ -5606,6 +5629,7 @@ const WorkOrdersPage: React.FC = () => {
       }
       setOutsourceOptionsByOpId(optionMap)
       setOutsourceLockedOperationId(null)
+      setOutsourceLockedMaxQty(0)
       outsourceFormRef.current?.resetFields()
 
       const preview = mapOutsourceOptionsToPullPreview(String(detail.code ?? ''), options, t)
@@ -5994,8 +6018,14 @@ const WorkOrdersPage: React.FC = () => {
         throw new Error('工单信息不存在')
       }
 
-      const selectedOpId = Number(values.work_order_operation_id)
-      const maxOutsourceQty = outsourceOptionsByOpId[selectedOpId]?.outsourceable_quantity ?? 0
+      const selectedOpId = Number(values.work_order_operation_id) || outsourceLockedOperationId
+      if (!selectedOpId) {
+        throw new Error('请选择工序')
+      }
+      const maxOutsourceQty =
+        outsourceLockedOperationId === selectedOpId && outsourceLockedMaxQty > 0
+          ? outsourceLockedMaxQty
+          : (outsourceOptionsByOpId[selectedOpId]?.outsourceable_quantity ?? 0)
       const outsourceQty = Number(values.outsource_quantity)
       if (!Number.isFinite(outsourceQty) || outsourceQty <= 0) {
         throw new Error('委外数量必须大于 0')
@@ -6005,7 +6035,7 @@ const WorkOrdersPage: React.FC = () => {
       }
 
       const submitData = {
-        work_order_operation_id: values.work_order_operation_id,
+        work_order_operation_id: selectedOpId,
         supplier_id: values.supplier_id,
         outsource_quantity: values.outsource_quantity,
         unit_price: values.unit_price,
@@ -6024,6 +6054,7 @@ const WorkOrdersPage: React.FC = () => {
       setOutsourceOptionsByOpId({})
       setOutsourceOptionsList([])
       setOutsourceLockedOperationId(null)
+      setOutsourceLockedMaxQty(0)
       outsourceFormRef.current?.resetFields()
       actionRef.current?.reload()
     } catch (error: any) {
@@ -10124,10 +10155,16 @@ const WorkOrdersPage: React.FC = () => {
           setOutsourceOptionsByOpId({})
           setOutsourceOptionsList([])
           setOutsourceLockedOperationId(null)
+          setOutsourceLockedMaxQty(0)
           outsourceFormRef.current?.resetFields()
         }}
         onFinish={handleSubmitOutsource}
         formRef={outsourceFormRef}
+        initialValues={
+          outsourceLockedOperationId
+            ? { work_order_operation_id: outsourceLockedOperationId }
+            : undefined
+        }
         {...MODAL_CONFIG}
       >
         {currentWorkOrderForOutsource && (
@@ -10170,24 +10207,14 @@ const WorkOrdersPage: React.FC = () => {
                   })()}
                 </Card>
                 <ProFormText name="work_order_operation_id" hidden />
+                <Alert
+                  type={outsourceLockedMaxQty > 0 ? 'info' : 'warning'}
+                  showIcon
+                  title={`可委外数量：${outsourceLockedMaxQty}`}
+                  style={{ marginBottom: 16 }}
+                />
               </>
             ) : null}
-            <ProFormDependency name={['work_order_operation_id']}>
-              {({ work_order_operation_id }) => {
-                const maxOutsourceQty = Number(
-                  outsourceOptionsByOpId[work_order_operation_id]?.outsourceable_quantity ?? 0
-                )
-                if (!work_order_operation_id) return null
-                return (
-                  <Alert
-                    type={maxOutsourceQty > 0 ? 'info' : 'warning'}
-                    showIcon
-                    title={`可委外数量：${maxOutsourceQty}`}
-                    style={{ marginBottom: 16 }}
-                  />
-                )
-              }}
-            </ProFormDependency>
             <ProFormSelect
               name="supplier_id"
               label="供应商"
@@ -10203,43 +10230,32 @@ const WorkOrdersPage: React.FC = () => {
                   (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
               }}
             />
-            <ProFormDependency name={['work_order_operation_id']}>
-              {({ work_order_operation_id }) => {
-                const maxOutsourceQty = Number(
-                  outsourceOptionsByOpId[work_order_operation_id]?.outsourceable_quantity ?? 0
-                )
-                return (
-                  <ProFormDigit
-                    name="outsource_quantity"
-                    label="委外数量"
-                    placeholder="请输入委外数量"
-                    rules={[
-                      { required: true, message: '请输入委外数量' },
-                      {
-                        validator: async (_, value) => {
-                          if (value == null || value === '') return
-                          const qty = Number(value)
-                          if (!Number.isFinite(qty) || qty <= 0) {
-                            throw new Error('委外数量必须大于 0')
-                          }
-                          if (work_order_operation_id && qty > maxOutsourceQty) {
-                            throw new Error(`委外数量不能超过可委外数量（${maxOutsourceQty}）`)
-                          }
-                        },
-                      },
-                    ]}
-                    min={0}
-                    max={maxOutsourceQty > 0 ? maxOutsourceQty : undefined}
-                    fieldProps={{ precision: 2 }}
-                    extra={
-                      work_order_operation_id
-                        ? `最多可委外 ${maxOutsourceQty}`
-                        : '请先选择工序'
-                    }
-                  />
-                )
-              }}
-            </ProFormDependency>
+            {outsourceLockedOperationId ? (
+              <ProFormDigit
+                name="outsource_quantity"
+                label="委外数量"
+                placeholder="请输入委外数量"
+                rules={[
+                  { required: true, message: '请输入委外数量' },
+                  {
+                    validator: async (_, value) => {
+                      if (value == null || value === '') return
+                      const qty = Number(value)
+                      if (!Number.isFinite(qty) || qty <= 0) {
+                        throw new Error('委外数量必须大于 0')
+                      }
+                      if (qty > outsourceLockedMaxQty) {
+                        throw new Error(`委外数量不能超过可委外数量（${outsourceLockedMaxQty}）`)
+                      }
+                    },
+                  },
+                ]}
+                min={0}
+                max={outsourceLockedMaxQty > 0 ? outsourceLockedMaxQty : undefined}
+                fieldProps={{ precision: 2 }}
+                extra={`最多可委外 ${outsourceLockedMaxQty}`}
+              />
+            ) : null}
             <ProFormDigit
               name="unit_price"
               label="单价"

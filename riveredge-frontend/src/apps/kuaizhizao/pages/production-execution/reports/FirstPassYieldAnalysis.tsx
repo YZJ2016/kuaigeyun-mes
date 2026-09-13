@@ -204,23 +204,6 @@ const FirstPassYieldAnalysis: React.FC = () => {
     view === 'work_order' ? workOrderColumns : view === 'rty' ? rtyColumns : operationColumns;
   const rowKey = view === 'work_order' ? 'id' : view === 'rty' ? 'product_code' : 'operation_name';
 
-  const statCards = useMemo(
-    () => (summary: Record<string, number>) =>
-      view === 'operation'
-        ? [
-            {
-              title: t('app.kuaizhizao.workReporting.statistics.statFirstPassYieldRate'),
-              value: `${summary.first_pass_yield_rate ?? 0}%`,
-            },
-            {
-              title: t('app.kuaizhizao.workReporting.statistics.statQualificationRate'),
-              value: `${summary.qualification_rate ?? 0}%`,
-            },
-          ]
-        : [],
-    [t, view],
-  );
-
   return (
     <KuaizhizaoReport
       columnPersistenceId="apps.kuaizhizao.pages.production-execution.reports.FirstPassYieldAnalysis-v4"
@@ -229,7 +212,6 @@ const FirstPassYieldAnalysis: React.FC = () => {
       rowKey={rowKey}
       columns={columns}
       summaryFields={['reported_quantity', 'qualified_quantity', 'unqualified_quantity']}
-      statCards={statCards}
       beforeSearchButtons={
         <ThemedSegmented
           surfaceBackground

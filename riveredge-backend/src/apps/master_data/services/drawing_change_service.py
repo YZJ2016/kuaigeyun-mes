@@ -113,12 +113,18 @@ class DrawingChangeService:
         if audit_required:
             row.status = "pending"
             await row.save()
-            await start_change_approval_flow(
+            instance = await start_change_approval_flow(
                 tenant_id,
                 "drawing",
                 row,
                 submitter_id=row.applicant_id or operator_id,
             )
+            from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+            if approval_instance_finished_on_submit(instance):
+                return await DrawingChangeService.approve_change(
+                    tenant_id, change_uuid, operator_id, True
+                )
         else:
             row.status = "approved"
             row.approver_id = operator_id
@@ -190,6 +196,26 @@ class DrawingChangeService:
         if row.status != "pending":
             raise ValidationError(f"变更记录状态为 {row.status}，无法审批")
 
+        sync_after_flow = False
+        if await is_audit_required(tenant_id, "drawing"):
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="drawing_change",
+                entity_id=row.id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="图纸工程变更",
+                verb="审核" if approved else "驳回",
+            )
+            sync_after_flow = should_sync_doc_after_flow_completed(gate, approve=approved)
+
         async def _do_approve() -> DrawingChangeResponse:
             row.status = "approved"
             row.approver_id = approver_id
@@ -205,7 +231,9 @@ class DrawingChangeService:
             await row.save()
             return _to_response(row)
 
-        if approved:
+        if sync_after_flow:
+            result = await (_do_approve() if approved else _do_reject(approval_comment))
+        elif approved:
             result = await UniAuditService.approve_with_flow_fallback(
                 tenant_id=tenant_id,
                 entity_type="drawing_change",

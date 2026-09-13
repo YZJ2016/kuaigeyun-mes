@@ -8,7 +8,7 @@
  */
 
 import React, { useState } from 'react';
-import { Card, Button, Modal, Tree, message, theme, Spin } from 'antd';
+import { App, Card, Button, Modal, Tree, theme, Spin } from 'antd';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -69,6 +69,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   iconVariant = 'vivid',
 }) => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const { token } = useToken();
   const navigate = useNavigate();
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle) as QuickEntryThemeStyle;

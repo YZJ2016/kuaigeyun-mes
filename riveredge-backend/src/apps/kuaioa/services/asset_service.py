@@ -174,8 +174,9 @@ class AssetPurchaseService:
             user=user,
             operator_id=user_id,
         )
+        approval_instance = None
         if await is_audit_required(tenant_id, AUDIT_NODE_ASSET_PURCHASE):
-            await start_approval(
+            approval_instance = await start_approval(
                 tenant_id,
                 node_key=AUDIT_NODE_ASSET_PURCHASE,
                 entity_type="kuaioa_asset_purchase",
@@ -197,6 +198,12 @@ class AssetPurchaseService:
                 remark="无需审批，自动通过",
                 user=user,
                 operator_id=user_id,
+            )
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance and approval_instance_finished_on_submit(approval_instance):
+            await apply_asset_purchase_decision(
+                tenant_id, purchase_id, True, user_id, is_auto_approve=True
             )
         return await self.get_purchase(tenant_id, purchase_id)
 
@@ -600,13 +607,29 @@ class AssetRegistryService:
 
 
 async def apply_asset_purchase_decision(
-    tenant_id: int, purchase_id: int, approved: bool, user_id: int
+    tenant_id: int,
+    purchase_id: int,
+    approved: bool,
+    user_id: int,
+    *,
+    is_auto_approve: bool = False,
 ) -> None:
+    from apps.kuaioa.services.approval_helper import assert_kuaioa_manual_approval_action
+
     row = await KuaioaAssetPurchase.get_or_none(
         id=purchase_id, tenant_id=tenant_id, deleted_at__isnull=True
     )
     if not row:
         return
+    await assert_kuaioa_manual_approval_action(
+        tenant_id,
+        audit_node_key=AUDIT_NODE_ASSET_PURCHASE,
+        entity_type="kuaioa_asset_purchase",
+        entity_id=purchase_id,
+        doc_label="固定资产采买",
+        verb="审核" if approved else "驳回",
+        is_auto_approve=is_auto_approve,
+    )
     row.status = "approved" if approved else "rejected"
     row.lifecycle_stage = STAGE_APPROVED if approved else STAGE_DRAFT
     await touch_updated(row, user_id)

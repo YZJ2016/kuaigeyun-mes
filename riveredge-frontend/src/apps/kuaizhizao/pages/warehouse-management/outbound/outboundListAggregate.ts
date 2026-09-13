@@ -57,15 +57,19 @@ export async function fetchOutboundHubList(
   const limit = (params.pageSize as number) || 20;
   const typeFilter = params.outbound_type as string | undefined;
   const hubStatus = params.status as string | undefined;
+  const scopedOutboundTypes = Array.isArray(params.hub_scoped_outbound_types)
+    ? (params.hub_scoped_outbound_types as OutboundHubOrder['outbound_type'][])
+    : undefined;
   const typed = Boolean(typeFilter);
   const fetchSkip = typed ? skip : 0;
   const fetchLimit = typed ? limit : skip + limit;
 
-  const fetchPicking = shouldFetchOutboundHubType(user, typeFilter, 'production_picking');
-  const fetchDelivery = shouldFetchOutboundHubType(user, typeFilter, 'sales_delivery');
-  const fetchOutsource = shouldFetchOutboundHubType(user, typeFilter, 'outsource_issue');
-  const fetchOther = shouldFetchOutboundHubType(user, typeFilter, 'other_outbound');
-  const fetchBorrow = shouldFetchOutboundHubType(user, typeFilter, 'material_borrow');
+  const fetchPicking = shouldFetchOutboundHubType(user, typeFilter, 'production_picking', scopedOutboundTypes);
+  const fetchDelivery = shouldFetchOutboundHubType(user, typeFilter, 'sales_delivery', scopedOutboundTypes);
+  const fetchOutsource = shouldFetchOutboundHubType(user, typeFilter, 'outsource_issue', scopedOutboundTypes);
+  const fetchOther = shouldFetchOutboundHubType(user, typeFilter, 'other_outbound', scopedOutboundTypes);
+  const fetchBorrow = shouldFetchOutboundHubType(user, typeFilter, 'material_borrow', scopedOutboundTypes);
+  const fetchPurchaseReturn = shouldFetchOutboundHubType(user, typeFilter, 'purchase_return', scopedOutboundTypes);
 
   const baseParams = {
     skip: fetchSkip,
@@ -82,7 +86,7 @@ export async function fetchOutboundHubList(
     updated_end_date: params.updated_end_date,
   };
 
-  const [pickingSettled, deliverySettled, outsourceSettled, otherSettled, borrowSettled] =
+  const [pickingSettled, deliverySettled, outsourceSettled, otherSettled, borrowSettled, purchaseReturnSettled] =
     await Promise.allSettled([
       fetchPicking
         ? warehouseApi.productionPicking.list({
@@ -114,6 +118,12 @@ export async function fetchOutboundHubList(
             status: sourceStatus(hubStatus, '待借出', '已借出'),
           })
         : Promise.resolve(emptyList),
+      fetchPurchaseReturn
+        ? warehouseApi.purchaseReturn.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, '待退货', '已退货'),
+          })
+        : Promise.resolve(emptyList),
     ]);
 
   const settledOrEmpty = (settled: PromiseSettledResult<unknown>) => {
@@ -126,6 +136,7 @@ export async function fetchOutboundHubList(
     outsourceSettled,
     otherSettled,
     borrowSettled,
+    purchaseReturnSettled,
   ].some((s) => s.status === 'rejected');
   if (anySourceFailed) {
     const firstReject = [
@@ -134,6 +145,7 @@ export async function fetchOutboundHubList(
       outsourceSettled,
       otherSettled,
       borrowSettled,
+      purchaseReturnSettled,
     ].find((s): s is PromiseRejectedResult => s.status === 'rejected');
     // 保留首个失败原因，供调用方决定是否提示；不中断其它来源数据合并
     console.warn('[outboundHub] partial list source failed', firstReject?.reason);
@@ -144,6 +156,7 @@ export async function fetchOutboundHubList(
   const outsourceRes = settledOrEmpty(outsourceSettled);
   const otherRes = settledOrEmpty(otherSettled);
   const borrowRes = settledOrEmpty(borrowSettled);
+  const purchaseReturnRes = settledOrEmpty(purchaseReturnSettled);
 
   const pickingData = fetchPicking
     ? await enrichers.enrichProductionPickingRecordsWithCustomFields(
@@ -201,6 +214,23 @@ export async function fetchOutboundHubList(
           }) as OutboundHubOrder,
       )
     : [];
+  const purchaseReturnData = fetchPurchaseReturn
+    ? toList(purchaseReturnRes).items.map(
+        (item) =>
+          ({
+            ...(item as Record<string, unknown>),
+            outbound_type: 'purchase_return' as const,
+            return_code: (item as Record<string, unknown>).return_code,
+            delivery_code: (item as Record<string, unknown>).return_code,
+            delivery_date:
+              (item as Record<string, unknown>).return_time ?? (item as Record<string, unknown>).created_at,
+            delivered_by: (item as Record<string, unknown>).returner_name,
+            total_quantity:
+              (item as Record<string, unknown>).total_quantity ??
+              (item as Record<string, unknown>).total_return_quantity,
+          }) as OutboundHubOrder,
+      )
+    : [];
 
   const combinedData: OutboundHubOrder[] = [
     ...pickingData,
@@ -208,6 +238,7 @@ export async function fetchOutboundHubList(
     ...outsourceData,
     ...otherData,
     ...borrowData,
+    ...purchaseReturnData,
   ].map(withOutboundHubDisplayFields);
 
   const sorted = sortOutboundHubRows(
@@ -220,7 +251,8 @@ export async function fetchOutboundHubList(
     (fetchDelivery ? toList(deliveryRes).total : 0) +
     (fetchOutsource ? toList(outsourceRes).total : 0) +
     (fetchOther ? toList(otherRes).total : 0) +
-    (fetchBorrow ? toList(borrowRes).total : 0);
+    (fetchBorrow ? toList(borrowRes).total : 0) +
+    (fetchPurchaseReturn ? toList(purchaseReturnRes).total : 0);
 
   if (typed) {
     return { data: sorted, success: !anySourceFailed, total: sourceTotal };

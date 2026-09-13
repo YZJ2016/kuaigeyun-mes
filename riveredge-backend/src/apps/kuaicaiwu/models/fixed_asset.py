@@ -74,6 +74,9 @@ class FaAsset(BaseModel):
         max_digits=20, decimal_places=4, default=0, description="减值准备"
     )
     useful_life_months = fields.IntField(default=60, description="使用月数")
+    total_workload = fields.DecimalField(
+        max_digits=20, decimal_places=4, null=True, description="预计总工作量（工作量法）"
+    )
     depreciated_periods = fields.IntField(default=0, description="已折旧期间数")
     accumulated_depreciation = fields.DecimalField(
         max_digits=20, decimal_places=4, default=0, description="累计折旧"

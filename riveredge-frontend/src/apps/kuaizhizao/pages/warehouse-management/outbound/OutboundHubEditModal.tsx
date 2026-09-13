@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Input, InputNumber, Row, Col, Select, Table, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG, WAREHOUSE_FORM_DETAIL_TABLE_FRAME_STYLES } from '../../../../../components/layout-templates';
+import { getPopupContainerInModal } from '../../../../../utils/modalEventIsolation';
 import { warehouseApi } from '../../../services/production';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { mapWarehouseSelectOptions, type WarehouseSelectOption } from './outboundEntryShared';
@@ -202,6 +203,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
         .map((it) => Number(it.id));
       if (!lineIds.length) {
         setPickingBatchOptionsByLineId({});
+        setBatchOptionsLoading(false);
         return;
       }
       setBatchOptionsLoading(true);
@@ -252,6 +254,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
       ];
       if (!batchMids.length) {
         setDeliveryBatchOptionsByMaterialId({});
+        setBatchOptionsLoading(false);
         return;
       }
       setBatchOptionsLoading(true);
@@ -311,16 +314,30 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     });
   }, []);
 
-  const loadDeliveryEditMaterialMeta = useCallback(async (detailData: OutboundEditDetail) => {
-    const items = detailData.items || [];
-    if (!items.length) {
-      setDeliveryMaterialMeta({});
-      return {};
-    }
-    const meta = await loadConfirmPreviewMaterialMeta(items);
-    setDeliveryMaterialMeta(meta);
-    return meta;
-  }, []);
+  const mapLinesForMaterialMeta = useCallback(
+    (items: OutboundLineItem[]) =>
+      items.map((it) => ({
+        id: it.id,
+        material_id: it.material_id,
+        material_code: it.material_code,
+        serial_numbers: it.serial_numbers as string[] | null | undefined,
+      })),
+    [],
+  );
+
+  const loadDeliveryEditMaterialMeta = useCallback(
+    async (detailData: OutboundEditDetail) => {
+      const items = detailData.items || [];
+      if (!items.length) {
+        setDeliveryMaterialMeta({});
+        return {};
+      }
+      const meta = await loadConfirmPreviewMaterialMeta(mapLinesForMaterialMeta(items));
+      setDeliveryMaterialMeta(meta);
+      return meta;
+    },
+    [mapLinesForMaterialMeta],
+  );
 
   const ensureDeliverySerialOptions = useCallback(
     async (lineId: number) => {
@@ -406,28 +423,14 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
         if (picking) {
           initPickingEditState(merged);
           setPickingWarehouseOptions(whOptions);
-          const meta = await loadConfirmPreviewMaterialMeta(merged.items || []);
+          const meta = await loadConfirmPreviewMaterialMeta(mapLinesForMaterialMeta(merged.items || []));
           if (cancelled) return;
           setDeliveryMaterialMeta(meta);
-          const warehouses: Record<number, { id: number; name: string }> = {};
-          (merged.items || []).forEach((it) => {
-            if (it?.id == null) return;
-            warehouses[Number(it.id)] = {
-              id: Number(it.warehouse_id ?? 0),
-              name: String(it.warehouse_name ?? ''),
-            };
-          });
-          await loadPickingBatchOptions(merged, meta, warehouses);
         } else {
           initDeliveryEditState(merged);
           setDeliveryWarehouseOptions(whOptions);
-          const meta = await loadDeliveryEditMaterialMeta(merged);
+          await loadDeliveryEditMaterialMeta(merged);
           if (cancelled) return;
-          await loadDeliveryBatchOptions(
-            merged,
-            meta,
-            Number(merged.warehouse_id ?? 0),
-          );
         }
       } catch (e: unknown) {
         if (cancelled) return;
@@ -447,10 +450,54 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     initPickingEditState,
     initDeliveryEditState,
     loadDeliveryEditMaterialMeta,
-    loadDeliveryBatchOptions,
-    loadPickingBatchOptions,
+    mapLinesForMaterialMeta,
     messageApi,
     t,
+  ]);
+
+  useEffect(() => {
+    if (!open || loading || !isDelivery || !detail?.items?.length) return;
+    if (!Object.keys(deliveryMaterialMeta).length) return;
+
+    const whId = Number(editableDeliveryWarehouse.id || detail.warehouse_id || 0);
+    let cancelled = false;
+    void (async () => {
+      await loadDeliveryBatchOptions(detail, deliveryMaterialMeta, whId);
+      if (cancelled) return;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    loading,
+    isDelivery,
+    detail,
+    deliveryMaterialMeta,
+    editableDeliveryWarehouse.id,
+    loadDeliveryBatchOptions,
+  ]);
+
+  useEffect(() => {
+    if (!open || loading || !isPicking || !detail?.items?.length) return;
+    if (!Object.keys(deliveryMaterialMeta).length) return;
+
+    let cancelled = false;
+    void (async () => {
+      await loadPickingBatchOptions(detail, deliveryMaterialMeta, editablePickingWarehouses);
+      if (cancelled) return;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    loading,
+    isPicking,
+    detail,
+    deliveryMaterialMeta,
+    editablePickingWarehouses,
+    loadPickingBatchOptions,
   ]);
 
   useEffect(() => {
@@ -780,6 +827,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
               options={pickingWarehouseOptions}
               value={current?.id > 0 ? current.id : undefined}
               placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
+              getPopupContainer={getPopupContainerInModal}
               onChange={(value, option) => {
                 const opt = option as { label?: string; name?: string } | undefined;
                 const name =
@@ -787,16 +835,10 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
                   opt?.name ||
                   pickingWarehouseOptions.find((o) => o.value === value)?.name ||
                   '';
-                setEditablePickingWarehouses((prev) => {
-                  const next = {
-                    ...prev,
-                    [rid]: { id: Number(value), name },
-                  };
-                  if (detail) {
-                    void loadPickingBatchOptions(detail, deliveryMaterialMeta, next);
-                  }
-                  return next;
-                });
+                setEditablePickingWarehouses((prev) => ({
+                  ...prev,
+                  [rid]: { id: Number(value), name },
+                }));
               }}
               showSearch
               optionFilterProp="label"
@@ -822,6 +864,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
               allowClear
               showSearch
               optionFilterProp="label"
+              getPopupContainer={getPopupContainerInModal}
               options={mergeBatchSelectOptions(opts, current)}
               value={current || undefined}
               placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectBatch')}
@@ -853,8 +896,6 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
       pickingBatchOptionsByLineId,
       batchOptionsLoading,
       mergeBatchSelectOptions,
-      detail,
-      loadPickingBatchOptions,
     ],
   );
 
@@ -907,6 +948,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
                   allowClear
                   showSearch
                   optionFilterProp="label"
+                  getPopupContainer={getPopupContainerInModal}
                   options={mergeBatchSelectOptions(opts, current)}
                   value={current || undefined}
                   placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectBatch')}
@@ -1007,6 +1049,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
               options={deliveryWarehouseOptions}
               value={editableDeliveryWarehouse.id > 0 ? editableDeliveryWarehouse.id : undefined}
               placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
+              getPopupContainer={getPopupContainerInModal}
               onChange={(value, option) => {
                 const opt = option as { label?: string; name?: string } | undefined;
                 const name =
@@ -1014,11 +1057,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
                   opt?.name ||
                   deliveryWarehouseOptions.find((o) => o.value === value)?.name ||
                   '';
-                const nextWh = { id: Number(value), name };
-                setEditableDeliveryWarehouse(nextWh);
-                if (detail) {
-                  void loadDeliveryBatchOptions(detail, deliveryMaterialMeta, nextWh.id);
-                }
+                setEditableDeliveryWarehouse({ id: Number(value), name });
               }}
               showSearch
               optionFilterProp="label"

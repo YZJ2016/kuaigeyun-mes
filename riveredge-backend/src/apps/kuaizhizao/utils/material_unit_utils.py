@@ -88,6 +88,32 @@ def convert_to_base_quantity(
     return qty * factor
 
 
+def convert_unit_price_to_base(
+    material: Any,
+    price: Any,
+    *,
+    from_unit: Optional[str] = None,
+) -> Decimal:
+    """
+    业务单位单价 → 基础单位单价。
+
+    库存数量与批次余额按基础单位汇总；defaults / 采购价 / 入库行单价常按采购或行单位维护。
+    """
+    unit_price = _decimal(price)
+    if unit_price <= 0:
+        return Decimal("0")
+    unit_name = from_unit or resolve_material_scenario_unit(material, "purchase")
+    factor = resolve_unit_to_base_factor(material, unit_name)
+    if factor <= 0 or factor == Decimal("1"):
+        return unit_price
+    return unit_price / factor
+
+
+def convert_purchase_unit_price_to_base(material: Any, price: Any) -> Decimal:
+    """物料 defaults / source_config 采购价换算为基础单位单价。"""
+    return convert_unit_price_to_base(material, price)
+
+
 def convert_from_base_quantity(
     material: Any,
     base_quantity: Any,

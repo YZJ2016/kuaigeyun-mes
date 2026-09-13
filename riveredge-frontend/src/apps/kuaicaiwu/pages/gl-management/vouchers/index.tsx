@@ -397,6 +397,20 @@ const GlVouchersPage: React.FC = () => {
             hideInSearch: true,
             render: (_, record) => {
               const acts: React.ReactNode[] = [];
+              const deleteButton = (
+                <Popconfirm
+                  key="delete"
+                  title={t(`${NS}.confirmDelete`, { defaultValue: '确认删除该凭证？删除后不可恢复' })}
+                  onConfirm={() =>
+                    void runAction(
+                      () => glService.deleteVoucher(record.id),
+                      t('common.deleteSuccess', { defaultValue: '删除成功' }),
+                    )
+                  }
+                >
+                  <Button {...rowActionKind('delete')} />
+                </Popconfirm>
+              );
               if (record.status === 'draft') {
                 acts.push(
                   <Button key="edit" {...rowActionKind('update')} onClick={() => void openEdit(record)} />,
@@ -416,20 +430,7 @@ const GlVouchersPage: React.FC = () => {
                     {t(`${NS}.action.review`)}
                   </Button>,
                 );
-                acts.push(
-                  <Popconfirm
-                    key="delete"
-                    title={t(`${NS}.confirmDelete`, { defaultValue: '确认删除该凭证？删除后不可恢复' })}
-                    onConfirm={() =>
-                      void runAction(
-                        () => glService.deleteVoucher(record.id),
-                        t('common.deleteSuccess', { defaultValue: '删除成功' }),
-                      )
-                    }
-                  >
-                    <Button {...rowActionKind('delete')} />
-                  </Popconfirm>,
-                );
+                acts.push(deleteButton);
                 acts.push(
                   <Popconfirm
                     key="obsolete"
@@ -493,6 +494,9 @@ const GlVouchersPage: React.FC = () => {
                     {t(`${NS}.action.unpost`)}
                   </Button>,
                 );
+              }
+              if (record.status === 'cancelled') {
+                acts.push(deleteButton);
               }
               return acts;
             },

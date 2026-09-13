@@ -101,6 +101,8 @@ export interface DefectLedgerItem {
   downgrade_warehouse_id?: number;
   downgrade_warehouse_name?: string;
   other_inbound_id?: number;
+  finished_goods_receipt_id?: number;
+  accept_purchase_receipt_id?: number;
   purchase_return_id?: number;
   rework_order_id?: number;
   scrap_record_id?: number;

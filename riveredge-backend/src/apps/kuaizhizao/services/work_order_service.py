@@ -1223,7 +1223,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             time_slots = build_operation_time_slots(
                 durations,
                 planned_start=wo_start,
-                planned_end=wo_end if wo_end and wo_start != wo_end else None,
+                planned_end=wo_end,
                 holidays=_holidays,
                 work_hours=_work_hours,
                 overtime=_overtime,
@@ -1282,10 +1282,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             work_order_operations.append(work_order_op)
         
-        # 工单头计划时间与工序槽对齐（含：午夜锚点→班次起点；无工时同刻；有工时拉长结束）
+        # 工单头：开工对齐首道工序；计划结束保留交期锚点（不因零工时工序槽被压成与开始同刻）
         if work_order_operations and time_slots:
             work_order.planned_start_date = resolve_business_datetime(time_slots[0][0])
-            work_order.planned_end_date = resolve_business_datetime(time_slots[-1][1])
+            if work_order.planned_end_date is None:
+                work_order.planned_end_date = resolve_business_datetime(time_slots[-1][1])
             await work_order.save()
         
         logger.info(f"为工单 {work_order.code} 自动生成了 {len(work_order_operations)} 个工序单")
@@ -1341,7 +1342,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             time_slots = build_operation_time_slots(
                 durations,
                 planned_start=wo_start,
-                planned_end=wo_end if wo_end and wo_start != wo_end else None,
+                planned_end=wo_end,
                 holidays=_holidays,
                 work_hours=_work_hours,
                 overtime=_overtime,
@@ -1363,8 +1364,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             wo_updates: Dict[str, Any] = {
                 "updated_by": updated_by,
                 "planned_start_date": resolve_business_datetime(time_slots[0][0]),
-                "planned_end_date": resolve_business_datetime(time_slots[-1][1]),
             }
+            if work_order.planned_end_date is not None:
+                wo_updates["planned_end_date"] = work_order.planned_end_date
+            else:
+                wo_updates["planned_end_date"] = resolve_business_datetime(time_slots[-1][1])
             await WorkOrder.filter(tenant_id=tenant_id, id=work_order.id).update(**wo_updates)
 
     async def resync_operations_to_work_order_planned_window(
@@ -4111,6 +4115,15 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             review_status="待审核",
             updated_by=submitted_by,
         )
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance_finished_on_submit(instance):
+            return await self.approve_work_order(
+                tenant_id,
+                work_order_id,
+                submitted_by,
+                is_auto_approve=True,
+            )
         return await self.get_work_order_by_id(tenant_id, work_order_id)
 
     async def approve_work_order(
@@ -4131,22 +4144,27 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "work_order"
         )
-        if audit_required and not is_auto_approve:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+        approval_gate: dict = {}
+        sync_after_flow = False
+        if audit_required:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            approval_gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="work_order",
                 entity_id=work_order_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                approval_gate,
+                doc_label="生产工单",
+                verb="审核",
+                is_auto_approve=is_auto_approve,
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "生产工单审核已开启但无进行中的审批流程，请先提交审批后再审核"
-                )
+            sync_after_flow = should_sync_doc_after_flow_completed(approval_gate, approve=True)
 
         from core.services.approval.uni_audit_service import UniAuditService
 
@@ -4161,7 +4179,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
             return await self.get_work_order_by_id(tenant_id, work_order_id)
 
-        if is_auto_approve:
+        if is_auto_approve or sync_after_flow:
             return await _do_approve()
 
         result = await UniAuditService.approve_with_flow_fallback(
@@ -4192,22 +4210,26 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "work_order"
         )
-        if audit_required and not is_auto_approve:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+        sync_after_flow = False
+        if audit_required:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            approval_gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="work_order",
                 entity_id=work_order_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                approval_gate,
+                doc_label="生产工单",
+                verb="驳回",
+                is_auto_approve=is_auto_approve,
             )
-            if not has_pending_flow:
-                raise BusinessLogicError(
-                    "生产工单审核已开启但无进行中的审批流程，请先提交审批后再驳回"
-                )
+            sync_after_flow = should_sync_doc_after_flow_completed(approval_gate, approve=False)
 
         from core.services.approval.uni_audit_service import UniAuditService
 
@@ -4219,7 +4241,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
             return await self.get_work_order_by_id(tenant_id, work_order_id)
 
-        if is_auto_approve:
+        if is_auto_approve or sync_after_flow:
             return await _do_reject(rejection_reason)
 
         result = await UniAuditService.reject_with_flow_fallback(

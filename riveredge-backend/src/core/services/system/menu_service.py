@@ -53,6 +53,8 @@ class ManifestMenuSortIndex(TypedDict):
 # 保证 manifest 仍是菜单顺序/结构的唯一真源，而无需每请求重读磁盘并重排。
 _MANIFEST_FINGERPRINT_CACHE: Optional[str] = None
 _CUSTOM_MENU_LAYOUT_KEY = "custom_menu_layout"
+# 侧栏/工作台导航树缓存段（仅作缓存键，不在读树时写库）。
+NAV_TREE_CACHE_SUFFIX = "nav_v2"
 
 
 class MenuService:
@@ -77,6 +79,63 @@ class MenuService:
         if n.startswith("menu."):
             return True
         return False
+
+    @staticmethod
+    def _should_repair_orphaned_manifest_parent(
+        menu: Menu,
+        manifest_parent_id: Optional[int],
+    ) -> bool:
+        """
+        应用 manifest 菜单被误提到根级（parent_id 为空）时，允许同步拉回 manifest 父级。
+
+        仅处理 parent_id 为空的孤儿；租户合法改挂载（parent_id 非空）仍受 tenant_parent_override 保护。
+        """
+        if manifest_parent_id is None:
+            return False
+        if not menu.application_uuid:
+            return False
+        if MenuService._is_app_root_menu_path(menu.path):
+            return False
+        if menu.parent_id is not None:
+            return False
+        return MenuService._is_synced_i18n_menu_name(menu.name)
+
+    @staticmethod
+    async def _batch_parent_uuid_by_id(
+        tenant_id: int,
+        parent_ids: set[int],
+    ) -> Dict[int, str]:
+        if not parent_ids:
+            return {}
+        rows = await Menu.filter(
+            tenant_id=tenant_id,
+            id__in=list(parent_ids),
+            deleted_at__isnull=True,
+        ).values("id", "uuid")
+        return {int(row["id"]): str(row["uuid"]) for row in rows}
+
+    @staticmethod
+    def _menu_payload_with_parent_uuid(
+        menu: Menu,
+        parent_uuid_by_id: Dict[int, str],
+    ) -> Dict[str, Any]:
+        """ORM 仅有 parent_id，MenuResponse 须显式填充 parent_uuid。"""
+        payload = MenuResponse.model_validate(menu).model_dump()
+        if menu.parent_id:
+            payload["parent_uuid"] = parent_uuid_by_id.get(int(menu.parent_id))
+        else:
+            payload["parent_uuid"] = None
+        return payload
+
+    @staticmethod
+    async def _menu_response_from_model(tenant_id: int, menu: Menu) -> MenuResponse:
+        parent_map = await MenuService._batch_parent_uuid_by_id(
+            tenant_id,
+            {int(menu.parent_id)} if menu.parent_id else set(),
+        )
+        return MenuResponse.model_validate(
+            MenuService._menu_payload_with_parent_uuid(menu, parent_map)
+        )
 
     @staticmethod
     def _apply_menu_display_name(menu: Menu, display_name: Optional[str]) -> None:
@@ -122,7 +181,11 @@ class MenuService:
         menu: Menu,
     ) -> MenuResponse:
         """菜单管理详情：应用根入口展示/编辑应用级名称与排序。"""
-        payload = MenuResponse.model_validate(menu).model_dump()
+        parent_map = await MenuService._batch_parent_uuid_by_id(
+            tenant_id,
+            {int(menu.parent_id)} if menu.parent_id else set(),
+        )
+        payload = MenuService._menu_payload_with_parent_uuid(menu, parent_map)
         if MenuService._is_app_root_menu_path(menu.path) and menu.application_uuid:
             app = await ApplicationService.get_application_by_uuid_optional(
                 tenant_id, str(menu.application_uuid)
@@ -707,7 +770,7 @@ class MenuService:
                 tenant_id=tenant_id,
                 is_active=True,
                 use_cache=False,
-                cache_key_suffix="nav_v1",
+                cache_key_suffix=NAV_TREE_CACHE_SUFFIX,
             )
             source_lookup = MenuService._collect_menu_tree_lookup(source_tree)
             await MenuService._validate_custom_menu_layout_nodes(
@@ -813,7 +876,7 @@ class MenuService:
         # 清除菜单缓存
         await MenuService._clear_menu_cache(tenant_id)
         
-        return MenuResponse.model_validate(menu)
+        return await MenuService._menu_response_from_model(tenant_id, menu)
     
     @staticmethod
     async def get_menu_by_uuid(
@@ -910,7 +973,14 @@ class MenuService:
             query = query.filter(is_active=is_active)
         
         menus = await query.order_by("sort_order", "created_at").all()
-        result = [MenuResponse.model_validate(menu) for menu in menus]
+        parent_ids = {int(m.parent_id) for m in menus if m.parent_id}
+        parent_map = await MenuService._batch_parent_uuid_by_id(tenant_id, parent_ids)
+        result = [
+            MenuResponse.model_validate(
+                MenuService._menu_payload_with_parent_uuid(menu, parent_map)
+            )
+            for menu in menus
+        ]
         
         # 缓存结果（序列化为字典列表）
         if use_cache:
@@ -1165,13 +1235,13 @@ class MenuService:
             m.sort_order or 0,
         ))
 
-        if overlay_manifest_sort and cache_key_suffix == "nav_v1":
+        if overlay_manifest_sort and cache_key_suffix == NAV_TREE_CACHE_SUFFIX:
             from apps.kuaioa.services.form_template_menu_extension import append_mounted_form_template_menus
 
             await append_mounted_form_template_menus(tenant_id, root_menus)
 
         if is_active is not None:
-            if cache_key_suffix == "nav_v1":
+            if cache_key_suffix == NAV_TREE_CACHE_SUFFIX:
                 root_menus = MenuService._filter_menu_tree_active_strict(root_menus)
             else:
                 root_menus = MenuService._filter_menu_tree_by_is_active(root_menus, is_active)
@@ -1288,9 +1358,22 @@ class MenuService:
                     current_parent_id = current_parent.parent_id
                 
                 menu.parent_id = parent.id
+                parent_relocated = True
             else:
-                menu.parent_id = None
-            parent_relocated = True
+                synced_app_menu = (
+                    bool(menu.application_uuid)
+                    and MenuService._is_synced_i18n_menu_name(menu.name)
+                    and not MenuService._is_app_root_menu_path(menu.path)
+                )
+                if synced_app_menu and menu.parent_id is not None:
+                    # 详情 API 曾缺 parent_uuid，前端提交 null 会误把 manifest 菜单提到根级
+                    parent_relocated = False
+                    meta = dict(menu.meta or {})
+                    if meta.pop(META_TENANT_PARENT_OVERRIDE, None):
+                        menu.meta = meta or None
+                else:
+                    menu.parent_id = None
+                    parent_relocated = True
         else:
             parent_relocated = False
 
@@ -1446,7 +1529,7 @@ class MenuService:
                 using_db=conn,
             )
         await MenuService._clear_menu_cache(tenant_id)
-        return MenuResponse.model_validate(menu)
+        return await MenuService._menu_response_from_model(tenant_id, menu)
 
     @staticmethod
     async def clear_tenant_backend_home(tenant_id: int) -> None:
@@ -1598,6 +1681,8 @@ class MenuService:
         # 性能优化：同步过程使用内存索引匹配，避免每个菜单节点重复访问数据库
         existing_menu_by_path: Dict[str, Menu] = {}
         existing_menu_by_parent_name: Dict[Tuple[Optional[int], str], Menu] = {}
+        # 无 path 分组被误提到根级时 (parent_id, name) 对不上 manifest，按结构名回捞同一应用行
+        existing_menu_by_structural_name: Dict[str, Menu] = {}
         for menu in existing_menus:
             if menu.path and menu.path not in existing_menu_by_path:
                 existing_menu_by_path[menu.path] = menu
@@ -1605,6 +1690,12 @@ class MenuService:
                 key = (menu.parent_id, menu.name)
                 if key not in existing_menu_by_parent_name:
                     existing_menu_by_parent_name[key] = menu
+                if (
+                    not menu.path
+                    and MenuService._is_synced_i18n_menu_name(menu.name)
+                    and menu.name not in existing_menu_by_structural_name
+                ):
+                    existing_menu_by_structural_name[menu.name] = menu
         
         # 递归创建或更新菜单
         created_count = 0
@@ -1669,6 +1760,11 @@ class MenuService:
             elif menu_name:
                 # 无 path 的菜单（如父级分组）：按 parent_id + name 匹配，从源头杜绝重复
                 existing_menu = existing_menu_by_parent_name.get((parent_id, menu_name))
+                if (
+                    existing_menu is None
+                    and MenuService._is_synced_i18n_menu_name(menu_name)
+                ):
+                    existing_menu = existing_menu_by_structural_name.get(menu_name)
             
             if existing_menu:
                 old_path = existing_menu.path
@@ -1695,6 +1791,13 @@ class MenuService:
                 )
                 if not tenant_parent_override:
                     existing_menu.parent_id = parent_id
+                elif MenuService._should_repair_orphaned_manifest_parent(
+                    existing_menu, parent_id
+                ):
+                    meta = dict(existing_menu.meta or {})
+                    meta.pop(META_TENANT_PARENT_OVERRIDE, None)
+                    existing_menu.meta = meta or None
+                    existing_menu.parent_id = parent_id
                 await existing_menu.save()
                 
                 # 从 existing_menu_map 中移除，表示已处理
@@ -1704,10 +1807,21 @@ class MenuService:
                     del existing_menu_by_path[old_path]
                 if old_name and existing_menu_by_parent_name.get((old_parent_id, old_name)) is existing_menu:
                     del existing_menu_by_parent_name[(old_parent_id, old_name)]
+                if (
+                    old_name
+                    and MenuService._is_synced_i18n_menu_name(old_name)
+                    and existing_menu_by_structural_name.get(old_name) is existing_menu
+                ):
+                    del existing_menu_by_structural_name[old_name]
                 if existing_menu.path:
                     existing_menu_by_path[existing_menu.path] = existing_menu
                 if existing_menu.name:
                     existing_menu_by_parent_name[(existing_menu.parent_id, existing_menu.name)] = existing_menu
+                    if (
+                        not existing_menu.path
+                        and MenuService._is_synced_i18n_menu_name(existing_menu.name)
+                    ):
+                        existing_menu_by_structural_name[existing_menu.name] = existing_menu
                 
                 menu_obj = existing_menu
                 synced_count += 1

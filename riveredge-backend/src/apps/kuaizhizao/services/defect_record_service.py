@@ -107,11 +107,17 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 defect_record.processed_by_name = user_info["name"]
                 await defect_record.save()
 
-                await self._release_defect_quantity_as_qualified(
-                    tenant_id=tenant_id,
-                    defect_record=defect_record,
-                    operator_id=approved_by,
-                )
+                if not self._accept_inbound_already_linked(defect_record):
+                    wh_id, _ = await self._resolve_defect_stock_warehouse(
+                        tenant_id,
+                        defect_record,
+                    )
+                    await self._execute_accept_concession_inbound(
+                        tenant_id=tenant_id,
+                        defect_record=defect_record,
+                        updated_by=approved_by,
+                        stock_warehouse_id=int(wh_id),
+                    )
                 await self._close_linked_quality_exceptions_after_disposition(
                     defect_record, approved_by
                 )
@@ -695,8 +701,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             raise ValidationError("报废处置必须指定扣减库存的仓库")
         if disposition == "accept" and not stock_warehouse_id:
             raise ValidationError("让步接收必须指定放行仓库")
-        if disposition == "quarantine" and not quarantine_warehouse_id:
-            raise ValidationError("隔离处置必须指定隔离仓库")
+        # 隔离仓可在副作用中按组织待检仓或产品默认仓解析；报工自动登记不良时不强制前端传仓库
 
         if disposition == "other":
             if not (defect_record.remarks or "").strip():
@@ -849,43 +854,446 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             return int(wh_id), str(wh_name or "")
         raise BusinessLogicError("未配置隔离仓或产品默认仓，无法处理不合格品库存")
 
-    async def _release_defect_quantity_as_qualified(
+    @staticmethod
+    def _accept_inbound_already_linked(defect_record: DefectRecord) -> bool:
+        return bool(
+            defect_record.finished_goods_receipt_id
+            or defect_record.accept_purchase_receipt_id
+            or defect_record.other_inbound_id
+        )
+
+    async def _resolve_accept_material_and_warehouse(
         self,
         tenant_id: int,
         defect_record: DefectRecord,
-        operator_id: int,
+        stock_warehouse_id: int,
+    ) -> tuple[str, str, str, int, str]:
+        from apps.master_data.models.material import Material
+        from apps.master_data.models.warehouse import Warehouse
+
+        material = await Material.get_or_none(
+            tenant_id=tenant_id,
+            id=int(defect_record.product_id),
+            deleted_at__isnull=True,
+        )
+        if not material:
+            raise NotFoundError(f"物料不存在: {defect_record.product_id}")
+
+        warehouse = await Warehouse.get_or_none(
+            tenant_id=tenant_id,
+            id=int(stock_warehouse_id),
+            deleted_at__isnull=True,
+        )
+        if not warehouse:
+            raise NotFoundError(f"放行仓库不存在: {stock_warehouse_id}")
+
+        material_code = (
+            getattr(material, "main_code", None)
+            or getattr(material, "code", "")
+            or defect_record.product_code
+            or ""
+        )
+        material_name = material.name or defect_record.product_name or ""
+        material_unit = material.base_unit or "个"
+        return (
+            material_code,
+            material_name,
+            material_unit,
+            int(warehouse.id),
+            str(warehouse.name or ""),
+        )
+
+    async def _execute_accept_via_finished_goods_receipt(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+        updated_by: int,
         *,
-        warehouse_id_override: Optional[int] = None,
+        stock_warehouse_id: int,
+        material_code: str,
+        material_name: str,
+        material_unit: str,
+        warehouse_id: int,
+        warehouse_name: str,
+        qty: float,
     ) -> None:
         from decimal import Decimal
-        from apps.kuaizhizao.services.inventory_service import InventoryService
-        from apps.master_data.constants.batch_quality_status import QUALIFIED
+        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+        from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+        from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
+            SemiFinishedGoodsReceiptService,
+        )
+        from apps.kuaizhizao.schemas.warehouse import (
+            FinishedGoodsReceiptCreate,
+            FinishedGoodsReceiptItemCreate,
+            SemiFinishedGoodsReceiptCreate,
+            SemiFinishedGoodsReceiptItemCreate,
+        )
+        from apps.kuaizhizao.services.work_order_inbound_bom_role import (
+            is_semi_finished_product_by_bom_role,
+        )
 
-        qty = Decimal(str(defect_record.defect_quantity or 0))
-        if qty <= 0:
+        inspection = await FinishedGoodsInspection.get_or_none(
+            tenant_id=tenant_id,
+            id=int(defect_record.finished_goods_inspection_id),
+            deleted_at__isnull=True,
+        )
+        if not inspection:
+            raise NotFoundError(f"成品检验单不存在: {defect_record.finished_goods_inspection_id}")
+        if not inspection.work_order_id:
+            raise BusinessLogicError("成品检验单未关联工单，无法生成成品入库单")
+
+        push_qty = Decimal(str(qty))
+        notes = f"由不合格品台账 {defect_record.code} 让步接收（检验 {inspection.inspection_code}）"
+        use_semi = await is_semi_finished_product_by_bom_role(tenant_id, inspection.material_id)
+
+        if use_semi:
+            sf_svc = SemiFinishedGoodsReceiptService()
+            receipt = await sf_svc.create_semi_finished_goods_receipt(
+                tenant_id=tenant_id,
+                receipt_data=SemiFinishedGoodsReceiptCreate(
+                    work_order_id=inspection.work_order_id,
+                    work_order_code=inspection.work_order_code,
+                    sales_order_id=inspection.sales_order_id,
+                    sales_order_code=inspection.sales_order_code,
+                    warehouse_id=warehouse_id,
+                    warehouse_name=warehouse_name,
+                    receipt_time=resolve_business_datetime(),
+                    status="待入库",
+                    notes=notes + "（半成品入库）",
+                ),
+                created_by=updated_by,
+                items=[
+                    SemiFinishedGoodsReceiptItemCreate(
+                        material_id=inspection.material_id,
+                        material_code=material_code or inspection.material_code,
+                        material_name=material_name or inspection.material_name,
+                        material_unit=material_unit,
+                        receipt_quantity=push_qty,
+                        qualified_quantity=push_qty,
+                        unqualified_quantity=0,
+                        batch_number=inspection.batch_number,
+                        quality_inspection_id=inspection.id,
+                        quality_status="合格",
+                    )
+                ],
+            )
+            defect_record.finished_goods_receipt_id = receipt.id
+            await defect_record.save()
+            confirmed = await sf_svc.confirm_receipt(
+                tenant_id=tenant_id,
+                receipt_id=receipt.id,
+                confirmed_by=updated_by,
+            )
+            receipt_code = confirmed.receipt_code
+            target_type = "semi_finished_goods_receipt"
+        else:
+            wh_svc = FinishedGoodsReceiptService()
+            receipt = await wh_svc.create_finished_goods_receipt(
+                tenant_id=tenant_id,
+                receipt_data=FinishedGoodsReceiptCreate(
+                    work_order_id=inspection.work_order_id,
+                    work_order_code=inspection.work_order_code,
+                    sales_order_id=inspection.sales_order_id,
+                    sales_order_code=inspection.sales_order_code,
+                    warehouse_id=warehouse_id,
+                    warehouse_name=warehouse_name,
+                    receipt_time=resolve_business_datetime(),
+                    status="待入库",
+                    notes=notes,
+                ),
+                created_by=updated_by,
+                items=[
+                    FinishedGoodsReceiptItemCreate(
+                        material_id=inspection.material_id,
+                        material_code=material_code or inspection.material_code,
+                        material_name=material_name or inspection.material_name,
+                        material_unit=material_unit,
+                        receipt_quantity=push_qty,
+                        qualified_quantity=push_qty,
+                        unqualified_quantity=0,
+                        batch_number=inspection.batch_number,
+                        quality_inspection_id=inspection.id,
+                        quality_status="合格",
+                    )
+                ],
+            )
+            defect_record.finished_goods_receipt_id = receipt.id
+            await defect_record.save()
+            confirmed = await wh_svc.confirm_receipt(
+                tenant_id=tenant_id,
+                receipt_id=receipt.id,
+                confirmed_by=updated_by,
+            )
+            receipt_code = confirmed.receipt_code
+            target_type = "finished_goods_receipt"
+
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+        await DocumentRelationNewService().create_relation(
+            tenant_id=tenant_id,
+            relation_data=DocumentRelationCreate(
+                source_type="finished_goods_inspection",
+                source_id=int(inspection.id),
+                source_code=inspection.inspection_code,
+                source_name=None,
+                target_type=target_type,
+                target_id=int(confirmed.id),
+                target_code=receipt_code,
+                target_name=None,
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="不合格品让步接收入库",
+            ),
+            created_by=updated_by,
+        )
+        logger.info(
+            f"不合格品 {defect_record.code} 已让步接收入库 {receipt_code}"
+        )
+
+    async def _execute_accept_via_purchase_receipt(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+        updated_by: int,
+        *,
+        stock_warehouse_id: int,
+        material_code: str,
+        material_name: str,
+        material_unit: str,
+        warehouse_id: int,
+        warehouse_name: str,
+        qty: float,
+    ) -> None:
+        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.services.warehouse_service import PurchaseReceiptService
+        from apps.kuaizhizao.schemas.warehouse import PurchaseReceiptCreate, PurchaseReceiptItemCreate
+
+        inspection = await IncomingInspection.get_or_none(
+            tenant_id=tenant_id,
+            id=int(defect_record.incoming_inspection_id),
+            deleted_at__isnull=True,
+        )
+        if not inspection:
+            raise NotFoundError(f"来料检验单不存在: {defect_record.incoming_inspection_id}")
+        if not inspection.supplier_id:
+            raise BusinessLogicError("来料检验未关联供应商，无法生成采购入库单")
+
+        purchase_order_id = 0
+        purchase_order_code = ""
+        if inspection.purchase_receipt_id:
+            orig = await PurchaseReceipt.get_or_none(
+                tenant_id=tenant_id,
+                id=int(inspection.purchase_receipt_id),
+                deleted_at__isnull=True,
+            )
+            if orig:
+                purchase_order_id = int(orig.purchase_order_id or 0)
+                purchase_order_code = str(orig.purchase_order_code or "")
+
+        material_spec = getattr(inspection, "material_spec", None)
+        receipt = await PurchaseReceiptService().create_purchase_receipt(
+            tenant_id=tenant_id,
+            receipt_data=PurchaseReceiptCreate(
+                purchase_order_id=purchase_order_id,
+                purchase_order_code=purchase_order_code,
+                supplier_id=int(inspection.supplier_id),
+                supplier_name=str(inspection.supplier_name or ""),
+                warehouse_id=warehouse_id,
+                warehouse_name=warehouse_name,
+                receipt_time=resolve_business_datetime(),
+                status="待入库",
+                notes=f"由不合格品台账 {defect_record.code} 让步接收（检验 {inspection.inspection_code}）",
+                items=[
+                    PurchaseReceiptItemCreate(
+                        material_id=int(defect_record.product_id),
+                        material_code=material_code or inspection.material_code,
+                        material_name=material_name or inspection.material_name,
+                        material_spec=material_spec,
+                        material_unit=material_unit or inspection.material_unit,
+                        receipt_quantity=qty,
+                        unit_price=0,
+                        total_amount=0,
+                        qualified_quantity=qty,
+                        unqualified_quantity=0,
+                        quality_status="合格",
+                    )
+                ],
+            ),
+            created_by=updated_by,
+        )
+
+        defect_record.accept_purchase_receipt_id = receipt.id
+        await defect_record.save()
+
+        confirmed = await PurchaseReceiptService().confirm_receipt(
+            tenant_id=tenant_id,
+            receipt_id=receipt.id,
+            confirmed_by=updated_by,
+        )
+
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+        await DocumentRelationNewService().create_relation(
+            tenant_id=tenant_id,
+            relation_data=DocumentRelationCreate(
+                source_type="incoming_inspection",
+                source_id=int(inspection.id),
+                source_code=inspection.inspection_code,
+                source_name=None,
+                target_type="purchase_receipt",
+                target_id=int(confirmed.id),
+                target_code=confirmed.receipt_code,
+                target_name=None,
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="不合格品让步接收入库",
+            ),
+            created_by=updated_by,
+        )
+        logger.info(
+            f"不合格品 {defect_record.code} 已让步接收入库 {confirmed.receipt_code}"
+        )
+
+    async def _execute_accept_via_other_inbound(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+        updated_by: int,
+        *,
+        material_code: str,
+        material_name: str,
+        material_unit: str,
+        warehouse_id: int,
+        warehouse_name: str,
+        qty: float,
+    ) -> None:
+        reason_desc_parts = [f"不合格品台账 {defect_record.code} 让步接收"]
+        if defect_record.incoming_inspection_code:
+            reason_desc_parts.append(f"来料检验 {defect_record.incoming_inspection_code}")
+        if defect_record.finished_goods_inspection_code:
+            reason_desc_parts.append(f"成品检验 {defect_record.finished_goods_inspection_code}")
+        if defect_record.process_inspection_code:
+            reason_desc_parts.append(f"过程检验 {defect_record.process_inspection_code}")
+        if defect_record.work_order_code:
+            reason_desc_parts.append(f"工单 {defect_record.work_order_code}")
+
+        from apps.kuaizhizao.services.warehouse_service import OtherInboundService
+        from apps.kuaizhizao.schemas.warehouse import OtherInboundCreate, OtherInboundItemCreate
+
+        inbound_service = OtherInboundService()
+        inbound = await inbound_service.create_other_inbound(
+            tenant_id=tenant_id,
+            inbound_data=OtherInboundCreate(
+                reason_type="让步接收",
+                reason_desc="；".join(reason_desc_parts),
+                warehouse_id=warehouse_id,
+                warehouse_name=warehouse_name,
+                notes=f"由不合格品台账 {defect_record.code} 自动生成",
+                items=[
+                    OtherInboundItemCreate(
+                        material_id=int(defect_record.product_id),
+                        material_code=material_code,
+                        material_name=material_name,
+                        material_unit=material_unit,
+                        inbound_quantity=qty,
+                        unit_price=0,
+                    )
+                ],
+            ),
+            created_by=updated_by,
+        )
+        confirmed = await inbound_service.confirm_inbound(
+            tenant_id=tenant_id,
+            inbound_id=inbound.id,
+            confirmed_by=updated_by,
+        )
+
+        defect_record.other_inbound_id = confirmed.id
+        await defect_record.save()
+        logger.info(
+            f"不合格品 {defect_record.code} 已让步接收入库 {confirmed.inbound_code}"
+        )
+
+    async def _execute_accept_concession_inbound(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+        updated_by: int,
+        *,
+        stock_warehouse_id: int,
+    ) -> None:
+        """让步接收：按来源检验生成对应入库单并确认过账。"""
+        if self._accept_inbound_already_linked(defect_record):
             return
-        wh_id, wh_name = await self._resolve_defect_stock_warehouse(
+
+        qty = float(defect_record.defect_quantity or 0)
+        if qty <= 0:
+            raise ValidationError("让步接收数量必须大于0")
+
+        (
+            material_code,
+            material_name,
+            material_unit,
+            warehouse_id,
+            warehouse_name,
+        ) = await self._resolve_accept_material_and_warehouse(
             tenant_id,
             defect_record,
-            warehouse_id_override=warehouse_id_override,
+            stock_warehouse_id,
         )
-        await InventoryService.increase_stock(
+
+        if defect_record.finished_goods_inspection_id:
+            await self._execute_accept_via_finished_goods_receipt(
+                tenant_id=tenant_id,
+                defect_record=defect_record,
+                updated_by=updated_by,
+                stock_warehouse_id=stock_warehouse_id,
+                material_code=material_code,
+                material_name=material_name,
+                material_unit=material_unit,
+                warehouse_id=warehouse_id,
+                warehouse_name=warehouse_name,
+                qty=qty,
+            )
+            return
+
+        if defect_record.incoming_inspection_id:
+            from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+            inspection = await IncomingInspection.get_or_none(
+                tenant_id=tenant_id,
+                id=int(defect_record.incoming_inspection_id),
+                deleted_at__isnull=True,
+            )
+            if inspection and inspection.supplier_id:
+                await self._execute_accept_via_purchase_receipt(
+                    tenant_id=tenant_id,
+                    defect_record=defect_record,
+                    updated_by=updated_by,
+                    stock_warehouse_id=stock_warehouse_id,
+                    material_code=material_code,
+                    material_name=material_name,
+                    material_unit=material_unit,
+                    warehouse_id=warehouse_id,
+                    warehouse_name=warehouse_name,
+                    qty=qty,
+                )
+                return
+
+        await self._execute_accept_via_other_inbound(
             tenant_id=tenant_id,
-            material_id=int(defect_record.product_id),
-            quantity=qty,
-            warehouse_id=wh_id,
-            source_type="defect_accept",
-            source_doc_id=int(defect_record.id),
-            source_doc_code=defect_record.code,
-            work_order_id=defect_record.work_order_id,
-            work_order_code=defect_record.work_order_code,
-            movement_type="defect_accept",
-            to_warehouse_id=wh_id,
-            to_warehouse_name=wh_name,
-            operator_id=operator_id,
-            remark=f"让步接收放行 {defect_record.code}",
-            idempotency_key=f"defect_accept:{defect_record.id}:qualified",
-            quality_status=QUALIFIED,
+            defect_record=defect_record,
+            updated_by=updated_by,
+            material_code=material_code,
+            material_name=material_name,
+            material_unit=material_unit,
+            warehouse_id=warehouse_id,
+            warehouse_name=warehouse_name,
+            qty=qty,
         )
 
     async def _inbound_defect_quantity_as(
@@ -1221,13 +1629,12 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         elif disposition == "accept":
             if not stock_warehouse_id:
                 raise ValidationError("让步接收必须指定放行仓库")
-            await self._release_defect_quantity_as_qualified(
+            await self._execute_accept_concession_inbound(
                 tenant_id=tenant_id,
                 defect_record=defect_record,
-                operator_id=updated_by,
-                warehouse_id_override=stock_warehouse_id,
+                updated_by=updated_by,
+                stock_warehouse_id=int(stock_warehouse_id),
             )
-            logger.info(f"不合格品 {defect_record.code} 已让步接收放行")
 
         elif disposition == "downgrade":
             await self._execute_downgrade_reuse(

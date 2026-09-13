@@ -51,6 +51,7 @@ def _process_deviation_payload(data: ProcessDeviationCreate | ProcessDeviationUp
 
 class _CollaborationServiceBase:
     def __init__(self, config: KuaioaApprovalDocConfig, content_getter: Callable[[Model], str]) -> None:
+        self._config = config
         self._svc = KuaioaApprovalDocService(config)
         self._model = config.model
         self._content_getter = content_getter
@@ -81,7 +82,16 @@ class _CollaborationServiceBase:
     async def apply_decision(
         self, tenant_id: int, request_id: int, approved: bool, user_id: int
     ) -> None:
-        await apply_approval_decision(self._model, tenant_id, request_id, approved, user_id)
+        await apply_approval_decision(
+            self._model,
+            tenant_id,
+            request_id,
+            approved,
+            user_id,
+            audit_node_key=self._config.audit_node_key,
+            entity_type=self._config.entity_type,
+            doc_label=self._config.title_prefix,
+        )
 
 
 _SPECIAL_PRICE = KuaioaApprovalDocConfig(
@@ -170,16 +180,43 @@ class ProcessDeviationService(_CollaborationServiceBase):
 async def apply_special_price_decision(
     tenant_id: int, request_id: int, approved: bool, user_id: int
 ) -> None:
-    await apply_approval_decision(KuaioaSpecialPriceRequest, tenant_id, request_id, approved, user_id)
+    await apply_approval_decision(
+        KuaioaSpecialPriceRequest,
+        tenant_id,
+        request_id,
+        approved,
+        user_id,
+        audit_node_key=_SPECIAL_PRICE.audit_node_key,
+        entity_type=_SPECIAL_PRICE.entity_type,
+        doc_label=_SPECIAL_PRICE.title_prefix,
+    )
 
 
 async def apply_concession_decision(
     tenant_id: int, request_id: int, approved: bool, user_id: int
 ) -> None:
-    await apply_approval_decision(KuaioaConcessionRequest, tenant_id, request_id, approved, user_id)
+    await apply_approval_decision(
+        KuaioaConcessionRequest,
+        tenant_id,
+        request_id,
+        approved,
+        user_id,
+        audit_node_key=_CONCESSION.audit_node_key,
+        entity_type=_CONCESSION.entity_type,
+        doc_label=_CONCESSION.title_prefix,
+    )
 
 
 async def apply_process_deviation_decision(
     tenant_id: int, request_id: int, approved: bool, user_id: int
 ) -> None:
-    await apply_approval_decision(KuaioaProcessDeviation, tenant_id, request_id, approved, user_id)
+    await apply_approval_decision(
+        KuaioaProcessDeviation,
+        tenant_id,
+        request_id,
+        approved,
+        user_id,
+        audit_node_key=_PROCESS_DEVIATION.audit_node_key,
+        entity_type=_PROCESS_DEVIATION.entity_type,
+        doc_label=_PROCESS_DEVIATION.title_prefix,
+    )

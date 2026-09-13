@@ -138,6 +138,15 @@ export async function getNavigationMenuTree(options?: {
   });
 }
 
+/** 与 useUnifiedMenuData / clearSessionQueries / 菜单管理页共用 */
+export const MENU_CUSTOM_LAYOUT_QUERY_KEY = 'menuCustomLayout';
+
+export function buildMenuCustomLayoutQueryKey(
+  tenantId: number | null | undefined,
+): readonly [typeof MENU_CUSTOM_LAYOUT_QUERY_KEY, number | null] {
+  return [MENU_CUSTOM_LAYOUT_QUERY_KEY, tenantId ?? null];
+}
+
 /** 获取租户级自组菜单布局（展示映射层） */
 export async function getMenuCustomLayout(): Promise<CustomMenuLayout> {
   return apiRequest<CustomMenuLayout>('/core/menus/custom-layout');

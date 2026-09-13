@@ -18,7 +18,6 @@ import {
   findMenuAncestryByPath,
   findMenuAncestryByUuid,
   renderQuickEntryMenuIcon,
-  resolveQuickEntryIconFromTree,
 } from './renderQuickEntryMenuIcon';
 
 export function findMenuInTree(menus: MenuTree[], uuid: string): MenuTree | null {
@@ -189,25 +188,27 @@ export function resolveQuickEntryDisplayItems(
           menuTree.length && entry.menu_uuid
             ? findMenuAncestryByUuid(menuTree, entry.menu_uuid)
             : null;
-        const resolvedPath = entry.menu_path || hit?.menu.path || '';
-        if (!resolvedPath) return null;
-        if (!hit && menuTree.length) {
-          hit = findMenuAncestryByPath(menuTree, resolvedPath);
+        const pathHint = entry.menu_path || hit?.menu.path || '';
+        if (!hit && menuTree.length && pathHint) {
+          hit = findMenuAncestryByPath(menuTree, pathHint);
+        }
+        // 导航树已加载但仍找不到：偏好里的菜单已下线/改路径，丢弃该项（禁止猜 icon）
+        if (menuTree.length > 0 && !hit) {
+          return null;
         }
 
         const menu = hit?.menu ?? null;
+        const resolvedPath = menu?.path || pathHint;
+        if (!resolvedPath) return null;
+
         const menuName = resolveQuickEntryMenuLabel(entry, resolvedPath, t, menu);
 
         return {
           ...entry,
+          menu_uuid: menu?.uuid || entry.menu_uuid,
           menu_name: menuName,
           menu_path: resolvedPath,
-          menu_icon: menuTree.length
-            ? resolveQuickEntryIconFromTree(menuTree, {
-                menu_uuid: entry.menu_uuid,
-                menu_path: resolvedPath,
-              })
-            : null,
+          menu_icon: menu ? renderQuickEntryMenuIcon(menu, hit?.ancestors ?? []) : null,
         };
       })
       .filter((item): item is QuickEntryDisplayItem => item !== null);

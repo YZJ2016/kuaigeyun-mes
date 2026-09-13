@@ -403,10 +403,12 @@ class PostingService:
         return voucher
 
     async def delete_draft_voucher(self, tenant_id: int, voucher_id: int) -> None:
-        """软删除制单凭证（与作废不同：从列表移除，业务事件可重新生成）。"""
+        """软删除制单或已作废凭证（从列表移除；业务事件可重新生成凭证）。"""
         voucher = await self._get(tenant_id, voucher_id)
-        if voucher.status != "draft":
-            raise ValidationError("仅制单状态凭证可删除；已审核请反审核后作废")
+        if voucher.status not in ("draft", "cancelled"):
+            raise ValidationError(
+                "仅制单或已作废凭证可删除；已审核请反审核后作废，已记账须先反记账"
+            )
         async with in_transaction():
             await VoucherLine.filter(tenant_id=tenant_id, voucher_id=voucher.id).delete()
             voucher.deleted_at = resolve_business_datetime()

@@ -845,6 +845,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_order_change")
         user_info = await self.get_user_info(operator_id)
         pending_approver_ids: List[int] = []
+        approval_instance = None
         if audit_required:
             doc.status = DocumentStatus.PENDING_REVIEW.value
             doc.review_status = ReviewStatus.PENDING.value
@@ -852,7 +853,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                 from core.models.approval_task import ApprovalTask
                 from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-                instance = await ApprovalInstanceService.start_approval_for_node(
+                approval_instance = await ApprovalInstanceService.start_approval_for_node(
                     tenant_id=tenant_id,
                     user_id=operator_id,
                     node_key="purchase_order_change",
@@ -865,17 +866,17 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         f"供应商: {doc.supplier_name or '—'}"
                     ),
                 )
-                if instance:
+                if approval_instance:
                     task_approver_ids = await ApprovalTask.filter(
                         tenant_id=tenant_id,
-                        approval_instance_id=instance.id,
+                        approval_instance_id=approval_instance.id,
                         status="pending",
                     ).values_list("approver_id", flat=True)
                     pending_approver_ids = [
                         int(uid) for uid in task_approver_ids if uid is not None and int(uid) > 0
                     ]
-                    if instance.current_approver_id and int(instance.current_approver_id) > 0:
-                        pending_approver_ids.append(int(instance.current_approver_id))
+                    if approval_instance.current_approver_id and int(approval_instance.current_approver_id) > 0:
+                        pending_approver_ids.append(int(approval_instance.current_approver_id))
                     pending_approver_ids = list(dict.fromkeys(pending_approver_ids))
             except Exception as exc:
                 from loguru import logger
@@ -933,6 +934,15 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             if await self._require_change_confirm(tenant_id):
                 return await self._to_detail(doc)
             return await self.apply(tenant_id, change_id, operator_id)
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance and approval_instance_finished_on_submit(approval_instance):
+            return await self.approve(
+                tenant_id,
+                change_id,
+                ApproveChangeRequest(approved=True),
+                operator_id,
+            )
         return await self._to_detail(doc)
 
     async def approve(
@@ -947,22 +957,21 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             tenant_id, "purchase_order_change"
         )
         if audit_required:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
 
-            approval_status = await ApprovalInstanceService.get_approval_status(
+            gate = await get_approval_gate_status(
                 tenant_id=tenant_id,
                 entity_type="purchase_order_change",
                 entity_id=change_id,
             )
-            has_pending_flow = bool(
-                approval_status.get("has_instance")
-                and approval_status.get("status") == "pending"
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="采购变更单",
+                verb="审核" if body.approved else "驳回",
             )
-            if not has_pending_flow:
-                verb = "审核" if body.approved else "驳回"
-                raise BusinessLogicError(
-                    f"采购变更单审核已开启但无进行中的审批流程，请先提交审批后再{verb}"
-                )
 
         doc.reviewer_id = operator_id
         doc.reviewer_name = await self.get_user_name(operator_id)

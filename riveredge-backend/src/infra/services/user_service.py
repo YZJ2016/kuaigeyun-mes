@@ -269,11 +269,19 @@ class UserService:
         if "password" in update_data:
             update_data["password_hash"] = hash_password(update_data.pop("password"))
         
+        admin_flag_changed = (
+            "is_tenant_admin" in update_data
+            and bool(update_data["is_tenant_admin"]) != bool(user.is_tenant_admin)
+        )
+
         # 执行更新
         for key, value in update_data.items():
             setattr(user, key, value)
         
         await user.save()
+
+        if admin_flag_changed:
+            await PermissionVersionService.bump(tenant_id=tenant_id, user_id=user.id)
         
         return user
     

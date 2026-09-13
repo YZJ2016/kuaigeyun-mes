@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional, Type
 from tortoise.models import Model
 
 from apps.kuaioa.services.approval_helper import (
+    assert_kuaioa_manual_approval_action,
     cancel_approval,
     enrich_with_approval,
     is_audit_required,
@@ -172,8 +173,9 @@ class KuaioaApprovalDocService:
         row.submitted_at = resolve_business_datetime()
         await touch_updated(row, user_id)
         await row.save()
+        approval_instance = None
         if await is_audit_required(tenant_id, self.config.audit_node_key):
-            await start_approval(
+            approval_instance = await start_approval(
                 tenant_id,
                 node_key=self.config.audit_node_key,
                 entity_type=self.config.entity_type,
@@ -187,6 +189,21 @@ class KuaioaApprovalDocService:
             row.status = "approved"
             await touch_updated(row, user_id)
             await row.save()
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance and approval_instance_finished_on_submit(approval_instance):
+            await apply_approval_decision(
+                self.config.model,
+                tenant_id,
+                row_id,
+                True,
+                user_id,
+                audit_node_key=self.config.audit_node_key,
+                entity_type=self.config.entity_type,
+                doc_label=self.config.title_prefix,
+                is_auto_approve=True,
+            )
+            return await self.get_row(tenant_id, row_id)
         return await self.get_row(tenant_id, row_id)
 
     async def revoke_row(self, tenant_id: int, row_id: int, user_id: int) -> dict[str, Any]:
@@ -215,10 +232,25 @@ async def apply_approval_decision(
     row_id: int,
     approved: bool,
     user_id: int,
+    *,
+    audit_node_key: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    doc_label: Optional[str] = None,
+    is_auto_approve: bool = False,
 ) -> None:
     row = await model.get_or_none(id=row_id, tenant_id=tenant_id, deleted_at__isnull=True)
     if not row:
         return
+    if audit_node_key and entity_type and doc_label:
+        await assert_kuaioa_manual_approval_action(
+            tenant_id,
+            audit_node_key=audit_node_key,
+            entity_type=entity_type,
+            entity_id=row_id,
+            doc_label=doc_label,
+            verb="审核" if approved else "驳回",
+            is_auto_approve=is_auto_approve,
+        )
     row.status = "approved" if approved else "rejected"
     await touch_updated(row, user_id)
     await row.save()

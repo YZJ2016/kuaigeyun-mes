@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 import { translatePathTitle } from '../../utils/menuTranslation'
 import { isRequestCancellation, swallowRequestCancellation } from '../../utils/requestCancellation'
+import { useRouteSoftRefresh } from '../../hooks/useRouteSoftRefresh'
 import {
   ProTable,
   ProCard,
@@ -1483,6 +1484,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     dropUniTableTanstackCache()
     return (nativeTableActionRef.current?.reloadAndRest as any)?.(...args)
   }, [dropUniTableTanstackCache])
+
+  useRouteSoftRefresh(() => {
+    void reloadWithTanstackCacheBust()
+  })
 
   /**
    * 请求序号：用户翻页/改筛选时，旧请求若仍在飞行（含 SWR 后台 revalidate），

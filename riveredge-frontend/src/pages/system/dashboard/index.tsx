@@ -835,7 +835,7 @@ export default function DashboardPage() {
             height={dashboardBottomThreeCardsFixedHeight}
             cardRadius={dashboardCardRadius}
             className="dashboard-section--with-tabs"
-            loading={todosLoading}
+            loading={todosLoading && !todosResult}
             title={
               <Space size={8}>
                 <span>{t('pages.dashboard.todoList')}</span>

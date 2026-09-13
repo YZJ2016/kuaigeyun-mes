@@ -84,6 +84,7 @@ import {
   updateApplication,
   syncApplicationManifest,
   syncAllManifestsAndMenus,
+  MENU_SYNC_STATUS_QUERY_KEY,
   scanApplications,
   Application,
 } from '../../../../services/application';
@@ -519,6 +520,7 @@ const ApplicationListPage: React.FC = () => {
       }
       actionRef.current?.reload();
       refreshApplicationMenusAfterBackendMenuChange();
+      queryClient.invalidateQueries({ queryKey: [...MENU_SYNC_STATUS_QUERY_KEY] });
     } catch (error: any) {
       messageApi.error({
         content: error?.message || t('pages.system.applications.syncAllFailed', { defaultValue: '菜单同步失败' }),

@@ -85,6 +85,15 @@ _DOC_TERMINAL_STATUSES: List[str] = [
     "completed",
 ]
 
+# 销售订单菜单徽章：仅统计明细交货状态未完成的订单（待交货/部分交货），不含待审核与纯执行中
+_SALES_ORDER_UNDELIVERED_ITEM_STATUSES: List[str] = ["待交货", "部分交货"]
+_SALES_ORDER_DELIVERY_EXCLUDED_STATUS: List[str] = list(
+    dict.fromkeys([*_DOC_TERMINAL_STATUSES, "DRAFT", "草稿"])
+)
+_SALES_ORDER_DELIVERY_EXCLUDED_REVIEW: List[str] = list(
+    dict.fromkeys([*_RV_PENDING, "REJECTED", "已驳回", "审核驳回", "驳回"])
+)
+
 _WORK_ORDER_TERMINAL: List[str] = [
     "completed",
     "已完成",
@@ -186,8 +195,29 @@ async def _section_exceptions(ctx: BadgeScopeCtx) -> BadgeFragment:
     }
 
 
-async def _section_sales(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
+def _sales_order_open_delivery_base(tenant_id: int):
+    """存在未发完货明细、且非草稿/终态/待审核/驳回的销售订单。"""
     from apps.kuaizhizao.models.sales_order import SalesOrder
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+    undelivered_order_ids = SalesOrderItem.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        delivery_status__in=_SALES_ORDER_UNDELIVERED_ITEM_STATUSES,
+    ).values_list("sales_order_id", flat=True)
+    return SalesOrder.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        id__in=undelivered_order_ids,
+    ).exclude(
+        status__in=_SALES_ORDER_DELIVERY_EXCLUDED_STATUS,
+    ).exclude(
+        review_status__in=_SALES_ORDER_DELIVERY_EXCLUDED_REVIEW,
+    )
+
+
+async def _section_sales(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
     from apps.kuaizhizao.models.sales_forecast import SalesForecast
 
     tid = ctx.tenant_id
@@ -195,26 +225,33 @@ async def _section_sales(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
         "IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认",
         "AUDITED", "RELEASED", "执行中",
     ]
+    so_delivery_base = _sales_order_open_delivery_base(tid)
+    undelivered_pending_item_ids = SalesOrderItem.filter(
+        tenant_id=tid,
+        deleted_at__isnull=True,
+        delivery_status="待交货",
+    ).values_list("sales_order_id", flat=True)
+    undelivered_partial_item_ids = SalesOrderItem.filter(
+        tenant_id=tid,
+        deleted_at__isnull=True,
+        delivery_status="部分交货",
+    ).values_list("sales_order_id", flat=True)
     so_overdue, so_pending, so_prog, sf_overdue, sf_pending, sf_prog = await _gather_counts(
         badge_count(
-            SalesOrder.filter(tenant_id=tid, deleted_at__isnull=True, delivery_date__lt=now_date).exclude(
-                status__in=_DOC_TERMINAL_STATUSES
+            so_delivery_base.filter(delivery_date__lt=now_date),
+            ctx,
+            RES_SALES_ORDER,
+        ),
+        badge_count(
+            so_delivery_base.filter(id__in=undelivered_pending_item_ids).exclude(
+                delivery_date__lt=now_date
             ),
             ctx,
             RES_SALES_ORDER,
         ),
         badge_count(
-            SalesOrder.filter(
-                tenant_id=tid,
-                deleted_at__isnull=True,
-                review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
-            ).exclude(status__in=["DRAFT", "草稿", *_DOC_TERMINAL_STATUSES]),
-            ctx,
-            RES_SALES_ORDER,
-        ),
-        badge_count(
-            SalesOrder.filter(tenant_id=tid, deleted_at__isnull=True, status__in=so_active).exclude(
-                status__in=_DOC_TERMINAL_STATUSES
+            so_delivery_base.filter(id__in=undelivered_partial_item_ids).exclude(
+                delivery_date__lt=now_date
             ),
             ctx,
             RES_SALES_ORDER,

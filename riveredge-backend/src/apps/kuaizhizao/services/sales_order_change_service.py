@@ -676,9 +676,12 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         assert_sales_order_change_capability(doc, "submit", has_change_content=has_content)
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "sales_order_change")
         if audit_required:
-            from core.services.approval.audit_flow_guard import start_document_approval_or_raise
+            from core.services.approval.audit_flow_guard import (
+                approval_instance_finished_on_submit,
+                start_document_approval_or_raise,
+            )
 
-            await start_document_approval_or_raise(
+            instance = await start_document_approval_or_raise(
                 tenant_id=tenant_id,
                 user_id=operator_id,
                 node_key="sales_order_change",
@@ -691,16 +694,25 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             )
             doc.status = DocumentStatus.PENDING_REVIEW.value
             doc.review_status = ReviewStatus.PENDING.value
-        else:
-            doc.status = DocumentStatus.AUDITED.value
-            doc.review_status = ReviewStatus.APPROVED.value
+            user_info = await self.get_user_info(operator_id)
+            doc.updated_by = operator_id
+            doc.updated_by_name = user_info["name"]
+            await doc.save()
+            if approval_instance_finished_on_submit(instance):
+                return await self.approve(
+                    tenant_id,
+                    change_id,
+                    ApproveChangeRequest(approved=True),
+                    operator_id,
+                )
+            return await self._to_detail(doc)
+        doc.status = DocumentStatus.AUDITED.value
+        doc.review_status = ReviewStatus.APPROVED.value
         user_info = await self.get_user_info(operator_id)
         doc.updated_by = operator_id
         doc.updated_by_name = user_info["name"]
         await doc.save()
-        if not audit_required:
-            return await self.apply(tenant_id, change_id, operator_id)
-        return await self._to_detail(doc)
+        return await self.apply(tenant_id, change_id, operator_id)
 
     async def approve(
         self, tenant_id: int, change_id: int, body: ApproveChangeRequest, operator_id: int

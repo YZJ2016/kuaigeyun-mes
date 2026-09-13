@@ -70,6 +70,7 @@ import {
   resolveOrderLineSalePrice,
   resolveSalesDocumentMaterialLinesPricing,
 } from '../../../../master-data/utils/resolve-partner-material-price';
+import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, DocumentFormPageLayout, DocumentFormPageHeaderActions, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
@@ -509,6 +510,10 @@ const QuotationMaterialSelectCell: React.FC<{
       );
       form.setFieldValue(['items', index, '_masterMaterialUuid'], material.uuid);
       form.setFieldValue(['items', index, 'variant_attributes'], undefined);
+      form.setFieldValue(
+        ['items', index, 'material_unit'],
+        resolveMaterialScenarioUnit(material, 'sale'),
+      );
       void applySalesDocumentLineMaterialPricing(form, index, material, {
         materialList,
         asOfField: 'quotation_date',
@@ -534,7 +539,6 @@ const QuotationMaterialSelectCell: React.FC<{
             material_code: 'mainCode',
             material_name: 'name',
             material_spec: 'specification',
-            material_unit: 'baseUnit',
           }}
           fallbackOption={fallback}
           formItemProps={{ style: { margin: 0 } }}

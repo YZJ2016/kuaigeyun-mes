@@ -193,10 +193,11 @@ class FreightBillService(AppBaseService):
         if bill.review_status not in {"draft", "rejected"}:
             raise BusinessLogicError("当前状态不可提交审核")
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "freight_bill")
+        approval_instance = None
         if audit_required:
             from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-            instance = await ApprovalInstanceService.start_approval_for_node(
+            approval_instance = await ApprovalInstanceService.start_approval_for_node(
                 tenant_id=tenant_id,
                 user_id=submitted_by,
                 node_key="freight_bill",
@@ -206,12 +207,16 @@ class FreightBillService(AppBaseService):
                 title=f"运费单审批: {bill.bill_code}",
                 content=f"承运商: {bill.carrier_name}, 金额: {bill.total_amount}",
             )
-            if not instance:
+            if not approval_instance:
                 raise BusinessLogicError("运费单审核已开启但未找到可用审批流程")
         bill.review_status = "pending"
         bill.status = "pending"
         bill.updated_by = submitted_by
         await bill.save()
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        if approval_instance and approval_instance_finished_on_submit(approval_instance):
+            return await self.approve_freight_bill(tenant_id, bill_id, submitted_by)
         return await self.get_bill(tenant_id, bill_id)
 
     async def _push_payable(self, tenant_id: int, bill: FreightBill, operator_id: int) -> None:
@@ -283,6 +288,23 @@ class FreightBillService(AppBaseService):
         bill = await self._get_bill(tenant_id, bill_id)
         if bill.review_status not in {"pending"}:
             raise BusinessLogicError("当前状态不可审核通过")
+        audit_required = await self.business_config_service.check_audit_required(tenant_id, "freight_bill")
+        if audit_required:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="freight_bill",
+                entity_id=bill_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="运费单",
+                verb="审核",
+            )
         now = resolve_business_datetime()
         user = await self.get_user_info(approver_id)
         bill.review_status = "approved"
@@ -306,6 +328,23 @@ class FreightBillService(AppBaseService):
         bill = await self._get_bill(tenant_id, bill_id)
         if bill.review_status not in {"pending"}:
             raise BusinessLogicError("当前状态不可驳回")
+        audit_required = await self.business_config_service.check_audit_required(tenant_id, "freight_bill")
+        if audit_required:
+            from core.services.approval.audit_flow_guard import (
+                assert_manual_approval_action_allowed,
+                get_approval_gate_status,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="freight_bill",
+                entity_id=bill_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="运费单",
+                verb="驳回",
+            )
         user = await self.get_user_info(approver_id)
         bill.review_status = "rejected"
         bill.status = "rejected"

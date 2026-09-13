@@ -90,6 +90,7 @@ import { isManualAuditEnabled } from '../../../../../utils/auditMode';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import {
   type OutboundHubOrder,
+  type OutboundHubPageProps,
   type OutboundIssueType,
   getOutboundIssueTypeLabel,
   outboundIssueTypeSegmentOptions,
@@ -105,6 +106,8 @@ import {
   outboundSourceDocNo,
   resolveOutboundHubOperator,
   outboundDocumentTrackingType,
+  filterOutboundPullCreateMenuSpecs,
+  resolveDefaultOutboundQuickPullKey,
 } from './outboundHubTypes';
 import { outboundIssueTypeMarkerValueEnum, renderOutboundIssueTypeMarkerTag } from '../shared/warehouseMarkerTags';
 import { StatusTag } from '../../../../../constants/statusBadges';
@@ -163,7 +166,19 @@ const OUTBOUND_WORKFLOW_PENDING_STATUSES = ['待审核', 'pending_review', 'pend
 const OUTBOUND_WORKFLOW_APPROVED_STATUSES = ['已通过', '审核通过', 'approved', 'APPROVED'];
 const OUTBOUND_WORKFLOW_REJECTED_STATUSES = ['已驳回', '审核驳回', 'rejected', 'REJECTED'];
 
-const OutboundPage: React.FC = () => {
+const OutboundPage: React.FC<OutboundHubPageProps> = ({
+  fixedOutboundType,
+  scopedOutboundTypes,
+  headerTitle,
+  columnPersistenceId,
+}) => {
+  const hubScopedOutboundTypes = useMemo(
+    () => (fixedOutboundType ? [fixedOutboundType] : scopedOutboundTypes),
+    [fixedOutboundType, scopedOutboundTypes],
+  );
+  const initialOutboundTypeFilter = fixedOutboundType
+    ?? (scopedOutboundTypes?.length === 1 ? scopedOutboundTypes[0] : 'all');
+  const hideOutboundTypeFilter = Boolean(fixedOutboundType);
   const { t } = useTranslation();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
@@ -175,8 +190,8 @@ const OutboundPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const searchFormRef = useRef<ProFormInstance>();
   const quickPullRef = useRef<OutboundQuickPullModalsRef>(null);
-  const outboundTypeFilterRef = useRef<string>('all');
-  const [outboundTypeFilter, setOutboundTypeFilter] = useState<string>('all');
+  const outboundTypeFilterRef = useRef<string>(initialOutboundTypeFilter);
+  const [outboundTypeFilter, setOutboundTypeFilter] = useState<string>(initialOutboundTypeFilter);
   const [showAmount, setShowAmount] = useWarehouseShowAmount();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
 
@@ -192,16 +207,17 @@ const OutboundPage: React.FC = () => {
   }, []);
 
   const outboundTypeSelect = useMemo(
-    () => (
-      <Select
-        value={outboundTypeFilter}
-        options={outboundIssueTypeSegmentOptions(t)}
-        onChange={(v) => handleOutboundTypeFilterChange(String(v))}
-        popupMatchSelectWidth={false}
-        style={{ width: 140 }}
-      />
-    ),
-    [t, outboundTypeFilter, handleOutboundTypeFilterChange],
+    () =>
+      hideOutboundTypeFilter ? null : (
+        <Select
+          value={outboundTypeFilter}
+          options={outboundIssueTypeSegmentOptions(t, hubScopedOutboundTypes)}
+          onChange={(v) => handleOutboundTypeFilterChange(String(v))}
+          popupMatchSelectWidth={false}
+          style={{ width: 140 }}
+        />
+      ),
+    [t, outboundTypeFilter, handleOutboundTypeFilterChange, hideOutboundTypeFilter, hubScopedOutboundTypes],
   );
 
   const {
@@ -244,6 +260,7 @@ const OutboundPage: React.FC = () => {
   const [executionConfig, setExecutionConfig] = useState<any>(null);
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
   const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
+  const purchaseReturnPerms = useResourcePermissions('kuaizhizao:purchase-return');
   const currentUser = useCurrentUser();
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
 
@@ -398,9 +415,46 @@ const OutboundPage: React.FC = () => {
     [handleOutboundTypeFilterChange, invalidateMenuBadgeCounts],
   );
 
-  const handleCreate = () => {
-    quickPullRef.current?.open('work_order');
-  };
+  const defaultOutboundQuickPullKey = useMemo(
+    () => resolveDefaultOutboundQuickPullKey(hubScopedOutboundTypes),
+    [hubScopedOutboundTypes],
+  );
+  const outboundPullMenuSpecs = useMemo(
+    () =>
+      filterOutboundPullCreateMenuSpecs(
+        [
+          {
+            key: 'pull-from-work-order',
+            actionKey: 'outbound.pull_from_work_order',
+            label: t('app.kuaizhizao.warehouseOutbound.pull.fromWorkOrder'),
+            onClick: () => quickPullRef.current?.open('work_order'),
+          },
+          {
+            actionKey: 'sales_delivery.pull_from_shipment_notice',
+            onClick: () => quickPullRef.current?.open('shipment_notice'),
+          },
+          {
+            key: 'pull-from-sales-order',
+            actionKey: 'sales_delivery.pull_from_sales_order',
+            onClick: () => quickPullRef.current?.open('sales_order'),
+          },
+          {
+            actionKey: 'outbound.pull_from_outsource_work_order',
+            onClick: () => quickPullRef.current?.open('outsource'),
+          },
+          {
+            key: 'pull-from-sales-delivery',
+            actionKey: 'delivery_note.pull_from_sales_delivery',
+            onClick: () => quickPullRef.current?.open('delivery_note'),
+          },
+        ],
+        hubScopedOutboundTypes,
+      ),
+    [hubScopedOutboundTypes, t],
+  );
+  const handleCreate = useCallback(() => {
+    quickPullRef.current?.open(defaultOutboundQuickPullKey);
+  }, [defaultOutboundQuickPullKey]);
 
   useNewShortcut(handleCreate);
   const pullLoadLabel = useMemo(
@@ -433,9 +487,23 @@ const OutboundPage: React.FC = () => {
         setCurrentOrder({ ...detailData, items: detailData.items as OutboundOrderItem[] });
         setOutboundTrackingRefreshKey((k) => k + 1);
         return;
+      } else if (record.outbound_type === 'purchase_return') {
+        detailData = await warehouseApi.purchaseReturn.get(record.id!.toString());
       }
       const merged = detailData
-        ? ({ ...detailData, outbound_type: record.outbound_type } as OutboundOrder)
+        ? ({
+            ...detailData,
+            outbound_type: record.outbound_type,
+            ...(record.outbound_type === 'purchase_return'
+              ? {
+                  delivery_code: (detailData as Record<string, unknown>).return_code,
+                  delivery_date:
+                    (detailData as Record<string, unknown>).return_time ??
+                    (detailData as Record<string, unknown>).created_at,
+                  delivered_by: (detailData as Record<string, unknown>).returner_name,
+                }
+              : {}),
+          } as OutboundOrder)
         : null;
       setCurrentOrder(merged);
       setOutboundTrackingRefreshKey((k) => k + 1);
@@ -509,9 +577,21 @@ const OutboundPage: React.FC = () => {
           detailData = (await warehouseApi.otherOutbound.get(id)) as Record<string, unknown>;
         } else if (record.outbound_type === 'material_borrow') {
           detailData = (await warehouseApi.materialBorrow.get(id)) as Record<string, unknown>;
+        } else if (record.outbound_type === 'purchase_return') {
+          detailData = (await warehouseApi.purchaseReturn.get(id)) as Record<string, unknown>;
         }
         if (detailData) {
-          const mergedOrder = { ...detailData, outbound_type: record.outbound_type } as OutboundOrder;
+          const mergedOrder = {
+            ...detailData,
+            outbound_type: record.outbound_type,
+            ...(record.outbound_type === 'purchase_return'
+              ? {
+                  delivery_code: detailData.return_code,
+                  delivery_date: detailData.return_time ?? detailData.created_at,
+                  delivered_by: detailData.returner_name,
+                }
+              : {}),
+          } as OutboundOrder;
           setCurrentOrder(mergedOrder);
           if (record.outbound_type === 'sales_delivery' && record.id != null) {
             await loadSalesDeliveryFieldValuesForDetail(record.id);
@@ -621,6 +701,9 @@ const OutboundPage: React.FC = () => {
     if (record.outbound_type === 'sales_delivery') {
       return outboundPerms.canAction?.('execute') ?? false;
     }
+    if (record.outbound_type === 'purchase_return') {
+      return purchaseReturnPerms.canAction?.('submit') ?? false;
+    }
     return outboundPerms.canAction?.('execute') ?? outboundPerms.canUpdate;
   };
 
@@ -718,6 +801,20 @@ const OutboundPage: React.FC = () => {
     }
   };
 
+  const executePurchaseReturnConfirm = async (record: OutboundOrder) => {
+    try {
+      await warehouseApi.purchaseReturn.confirm(String(record.id));
+      messageApi.success(t('app.kuaizhizao.purchaseReturn.confirmSuccess'));
+      invalidateMenuBadgeCounts();
+      await refreshOrderAfterConfirm(record);
+    } catch (e: unknown) {
+      const err = e as { message?: string; response?: { data?: { detail?: string } } };
+      messageApi.error(
+        err?.message || err?.response?.data?.detail || t('app.kuaizhizao.purchaseReturn.confirmFailed'),
+      );
+    }
+  };
+
   const handleConfirm = async (record: OutboundOrder) => {
     if (record.outbound_type === 'outsource_issue') return;
     if (!isOutboundConfirmable(record)) {
@@ -725,6 +822,16 @@ const OutboundPage: React.FC = () => {
         outboundConfirmCapabilityReasonMessage(record, t) ||
           t('app.kuaizhizao.warehouseOutbound.msg.noneConfirmable'),
       );
+      return;
+    }
+    if (record.outbound_type === 'purchase_return') {
+      getAntdModal().confirm({
+        title: t('app.kuaizhizao.purchaseReturn.confirmTitle'),
+        content: t('app.kuaizhizao.purchaseReturn.confirmContent', {
+          code: outboundDocumentCode(record),
+        }),
+        onOk: () => executePurchaseReturnConfirm(record),
+      });
       return;
     }
     openConfirmPreview(record);
@@ -736,6 +843,9 @@ const OutboundPage: React.FC = () => {
   const getOutboundStackedPrimary = (record: OutboundOrder): string => {
     if (record.outbound_type === 'sales_delivery' && record.customer_name) {
       return String(record.customer_name);
+    }
+    if (record.outbound_type === 'purchase_return' && record.supplier_name) {
+      return String(record.supplier_name);
     }
     if (record.work_order_code) return String(record.work_order_code);
     if (record.customer_name) return String(record.customer_name);
@@ -1094,7 +1204,10 @@ const OutboundPage: React.FC = () => {
             </Button>
             </ActionConfirmPopconfirm>
           )}
-          {isOutboundDeletable(record) && outboundPerms.canDelete && (
+          {isOutboundDeletable(record) &&
+            (record.outbound_type === 'purchase_return'
+              ? purchaseReturnPerms.canDelete
+              : outboundPerms.canDelete) && (
             <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseOutbound.msg.deleteConfirmOne')} description={t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code: outboundDocumentCode(record) || '-' })} okType="danger" onConfirm={() => executeDelete(record)}>
               <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
             </ActionConfirmPopconfirm>
@@ -1213,10 +1326,12 @@ const OutboundPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle={t('app.kuaizhizao.warehouseOutbound.title')}
+        headerTitle={headerTitle ?? t('app.kuaizhizao.warehouseOutbound.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesDelivery)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound-width-v6"
+        columnPersistenceId={
+          columnPersistenceId ?? 'apps.kuaizhizao.pages.warehouse-management.outbound-width-v6'
+        }
         actionRef={actionRef}
         formRef={searchFormRef}
         rowKey={outboundRowKey}
@@ -1246,6 +1361,9 @@ const OutboundPage: React.FC = () => {
               {
                 ...(searchFormValues as Record<string, unknown>),
                 outbound_type: typeFilter === 'all' ? undefined : typeFilter,
+                hub_scoped_outbound_types: hubScopedOutboundTypes?.length
+                  ? [...hubScopedOutboundTypes]
+                  : undefined,
               },
               sort,
             );
@@ -1294,41 +1412,19 @@ const OutboundPage: React.FC = () => {
           listRowsRef.current = next;
           setListRowsVersion((v) => v + 1);
         }}
-        toolBarRender={() => [
-          <UniPullLoadButton
-            key="pull"
-            compactKey="outbound-pull-load"
-            label={pullLoadLabel}
-            type="primary"
-            variant="solid"
-            menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
-              {
-                key: 'pull-from-work-order',
-                actionKey: 'outbound.pull_from_work_order',
-                label: t('app.kuaizhizao.warehouseOutbound.pull.fromWorkOrder'),
-                onClick: () => quickPullRef.current?.open('work_order'),
-              },
-              {
-                actionKey: 'sales_delivery.pull_from_shipment_notice',
-                onClick: () => quickPullRef.current?.open('shipment_notice'),
-              },
-              {
-                key: 'pull-from-sales-order',
-                actionKey: 'sales_delivery.pull_from_sales_order',
-                onClick: () => quickPullRef.current?.open('sales_order'),
-              },
-              {
-                actionKey: 'outbound.pull_from_outsource_work_order',
-                onClick: () => quickPullRef.current?.open('outsource'),
-              },
-              {
-                key: 'pull-from-sales-delivery',
-                actionKey: 'delivery_note.pull_from_sales_delivery',
-                onClick: () => quickPullRef.current?.open('delivery_note'),
-              },
-            ])}
-          />,
-        ]}
+        toolBarRender={() => {
+          if (!outboundPullMenuSpecs.length) return [];
+          return [
+            <UniPullLoadButton
+              key="pull"
+              compactKey="outbound-pull-load"
+              label={pullLoadLabel}
+              type="primary"
+              variant="solid"
+              menuItems={buildKuaizhizaoPullCreateMenuItems(t, outboundPullMenuSpecs)}
+            />,
+          ];
+        }}
         toolBarActionsAfterBatch={[
           <WarehouseShowAmountSwitch
             key="outbound-show-amount"

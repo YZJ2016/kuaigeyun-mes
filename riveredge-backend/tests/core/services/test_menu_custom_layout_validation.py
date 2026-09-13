@@ -198,6 +198,16 @@ def test_update_custom_menu_layout_source_keeps_disabled_with_menu_refs():
     assert "_validate_custom_menu_layout_nodes" in body
 
 
+def test_sync_repairs_orphaned_application_menu_parent():
+    """误挂根级的 manifest 分组须能被同步回应用树（结构名回捞 + 清除误打 override）。"""
+    src = open(
+        "src/core/services/system/menu_service.py", encoding="utf-8"
+    ).read()
+    assert "_should_repair_orphaned_manifest_parent" in src
+    assert "existing_menu_by_structural_name" in src
+    assert "META_TENANT_PARENT_OVERRIDE" in src
+
+
 def test_sync_all_menus_never_writes_custom_menu_layout():
     """一键同步菜单不得写自组布局键（源码契约）。"""
     src = open(

@@ -169,10 +169,14 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
         )
         user_info = await self.get_user_info(operator_id)
         async with in_transaction():
+            approval_instance = None
             if audit_required:
-                from core.services.approval.audit_flow_guard import start_document_approval_or_raise
+                from core.services.approval.audit_flow_guard import (
+                    approval_instance_finished_on_submit,
+                    start_document_approval_or_raise,
+                )
 
-                await start_document_approval_or_raise(
+                approval_instance = await start_document_approval_or_raise(
                     tenant_id=tenant_id,
                     user_id=operator_id,
                     node_key="purchase_arrival_delay",
@@ -194,6 +198,13 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
 
             if not audit_required:
                 await self._on_approved(tenant_id, doc, operator_id)
+            elif approval_instance and approval_instance_finished_on_submit(approval_instance):
+                return await self.approve(
+                    tenant_id,
+                    report_id,
+                    ApproveDelayReportRequest(approved=True),
+                    operator_id,
+                )
         return PurchaseArrivalDelayReportResponse.model_validate(await self._get_or_raise(tenant_id, report_id))
 
     async def approve(

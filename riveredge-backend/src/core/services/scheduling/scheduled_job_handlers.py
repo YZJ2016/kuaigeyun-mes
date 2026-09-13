@@ -12,7 +12,11 @@ Handler = Callable[[int, Dict[str, Any]], Awaitable[Dict[str, Any]]]
 async def _inventory_alert_check(tenant_id: int, _cfg: Dict[str, Any]) -> Dict[str, Any]:
     from apps.kuaizhizao.services.inventory_alert_service import InventoryAlertService
 
-    result = await InventoryAlertService().run_inventory_alert_check(tenant_id, operator_id=None)
+    result = await InventoryAlertService().run_inventory_alert_check(
+        tenant_id,
+        operator_id=None,
+        scheduled=True,
+    )
     return {
         "success": True,
         "checked_balances": result.checked_balances,

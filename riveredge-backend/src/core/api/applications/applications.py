@@ -405,6 +405,42 @@ async def get_application_center_capabilities(
     }
 
 
+@router.get("/test-sync")
+async def test_sync_endpoint():
+    """测试同步端点是否可访问"""
+    return {"message": "Sync endpoint is working", "timestamp": "2024-12-01"}
+
+
+@router.get("/menu-sync-status", status_code=status.HTTP_200_OK)
+async def get_menu_sync_status(
+    auth: AuthContext = Depends(get_auth_context),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    检测已启用应用菜单是否与当前 manifest 一致。
+
+    租户/平台管理员登录后用于提示是否需要执行「一键同步菜单」。
+    必须注册在 /{uuid} 之前，否则 path 会被当成应用 UUID。
+    """
+    _require_tenant_or_platform_admin(auth)
+    return await ApplicationService.get_menu_sync_status(tenant_id)
+
+
+@router.post("/sync-all-manifests-and-menus", status_code=status.HTTP_200_OK)
+async def sync_all_manifests_and_menus(
+    auth: AuthContext = Depends(get_auth_context),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量从 manifest.json 刷新已安装应用清单，并一次性同步所有菜单与权限。
+
+    应用中心「一键同步菜单」专用，避免前端按应用串行请求。
+    """
+    _require_tenant_or_platform_admin(auth)
+    result = await ApplicationService.sync_all_manifests_and_menus(tenant_id)
+    return result
+
+
 @router.get("/{uuid}", response_model=ApplicationResponse)
 async def get_application(
     uuid: str,
@@ -876,26 +912,6 @@ async def scan_and_register_plugins(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=detail
         )
-
-
-@router.get("/test-sync")
-async def test_sync_endpoint():
-    """测试同步端点是否可访问"""
-    return {"message": "Sync endpoint is working", "timestamp": "2024-12-01"}
-
-@router.post("/sync-all-manifests-and-menus", status_code=status.HTTP_200_OK)
-async def sync_all_manifests_and_menus(
-    auth: AuthContext = Depends(get_auth_context),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    批量从 manifest.json 刷新已安装应用清单，并一次性同步所有菜单与权限。
-
-    应用中心「一键同步菜单」专用，避免前端按应用串行请求。
-    """
-    _require_tenant_or_platform_admin(auth)
-    result = await ApplicationService.sync_all_manifests_and_menus(tenant_id)
-    return result
 
 
 @router.post("/sync-manifest/{app_code}")

@@ -43,7 +43,6 @@ import { searchUserDisplay, type UserDisplayItem } from '../../../../../services
 import { EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
-import { fetchEffectivePageCodeRule, testGenerateCode } from '../../../../../services/codeRule';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -366,47 +365,6 @@ const EquipmentPage: React.FC = () => {
       cancelled = true;
     };
   }, [ledgerGroupMode]);
-
-  /** 参考客商/供应商弹窗：打开后 reset 表单并向后端预览下一个可用编号（含重复跳过） */
-  useEffect(() => {
-    if (!modalVisible || isEdit) {
-      return;
-    }
-    let cancelled = false;
-    formRef.current?.resetFields();
-    void (async () => {
-      try {
-        const { ruleCode, autoGenerate } = await fetchEffectivePageCodeRule(
-          'kuaizhizao-equipment-management-equipment',
-        );
-        if (cancelled || !autoGenerate) {
-          return;
-        }
-        const preview = await testGenerateCode({
-          rule_code: ruleCode,
-          check_duplicate: true,
-          entity_type: 'equipment',
-        });
-        if (cancelled) {
-          return;
-        }
-        const code = (preview?.code ?? '').trim();
-        if (!code) {
-          messageApi.warning(t('app.master-data.codeRulePreviewHint'));
-          return;
-        }
-        formRef.current?.setFieldsValue({ code });
-      } catch (error: any) {
-        if (cancelled) {
-          return;
-        }
-        messageApi.error(error?.message || t('app.master-data.codeRuleAutoFailed'));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [modalVisible, isEdit, createCodeSessionKey, messageApi, t]);
 
   const handleCreate = () => {
     setIsEdit(false);

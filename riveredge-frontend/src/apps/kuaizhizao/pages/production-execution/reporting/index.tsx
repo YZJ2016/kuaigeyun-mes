@@ -947,19 +947,25 @@ const ReportingPage: React.FC = () => {
         createdId
       ) {
         const uq = Number(standardValues.unqualified_quantity) || 0;
+        const defectQtyBase = convertProductionInputToBaseQty(uq, workOrder);
         const selected =
           createFormDefectOptions.find((o) => o.value === standardValues.defect_type) ||
           getOperationDefectTypeOptions(operation).find((o) => o.value === standardValues.defect_type);
         try {
           await reportingApi.recordDefect(String(createdId), {
-            defect_quantity: uq,
+            defect_quantity: defectQtyBase,
             defect_type: selected?.code || String(standardValues.defect_type),
             defect_reason: selected?.name || selected?.label || String(standardValues.defect_type),
             disposition: 'quarantine',
           });
         } catch (defectErr: unknown) {
           console.error(defectErr);
-          messageApi.warning(t('app.kuaizhizao.workReporting.defectCreateAfterReportFailed'));
+          const detail = defectErr instanceof Error ? defectErr.message : String(defectErr);
+          messageApi.warning(
+            detail
+              ? `${t('app.kuaizhizao.workReporting.defectCreateAfterReportFailed')}：${detail}`
+              : t('app.kuaizhizao.workReporting.defectCreateAfterReportFailed'),
+          );
         }
       }
       messageApi.success(t('app.kuaizhizao.workReporting.createSuccess'));

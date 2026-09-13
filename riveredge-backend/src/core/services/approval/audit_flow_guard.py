@@ -42,6 +42,70 @@ async def start_document_approval_or_raise(
     return instance
 
 
+async def get_approval_gate_status(
+    *,
+    tenant_id: int,
+    entity_type: str,
+    entity_id: int,
+) -> dict:
+    """读取审批实例门控：pending / 已通过 / 已驳回。"""
+    from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+    approval_status = await ApprovalInstanceService.get_approval_status(
+        tenant_id=tenant_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
+    has_instance = bool(approval_status.get("has_instance"))
+    status = approval_status.get("status")
+    return {
+        "approval_status": approval_status,
+        "has_pending_flow": has_instance and status == "pending",
+        "flow_completed_approved": has_instance and status == "approved",
+        "flow_completed_rejected": has_instance and status == "rejected",
+    }
+
+
+def assert_manual_approval_action_allowed(
+    gate: dict,
+    *,
+    doc_label: str,
+    verb: str = "审核",
+    is_auto_approve: bool = False,
+) -> None:
+    """
+    人工审核/驳回前校验。
+    流程已结束但单据仍待审时允许补齐写回（空审批人 auto_pass / 完成回调曾失败）。
+    """
+    if is_auto_approve:
+        return
+    if gate.get("has_pending_flow"):
+        return
+    if verb == "审核" and gate.get("flow_completed_approved"):
+        return
+    if verb == "驳回" and gate.get("flow_completed_rejected"):
+        return
+    raise BusinessLogicError(
+        f"{doc_label}审核已开启但无进行中的审批流程，请先提交审批后再{verb}"
+    )
+
+
+def should_sync_doc_after_flow_completed(gate: dict, *, approve: bool) -> bool:
+    """流程实例已结束、单据仍待审时直接走业务写回，避免重复 execute_approval。"""
+    if approve:
+        return bool(gate.get("flow_completed_approved"))
+    return bool(gate.get("flow_completed_rejected"))
+
+
+def approval_instance_finished_on_submit(instance: Any) -> bool:
+    """提交瞬间 auto_pass 等导致实例已通过（单据可能尚未落待审）。"""
+    return getattr(instance, "status", None) == "approved"
+
+
+def approval_instance_rejected_on_submit(instance: Any) -> bool:
+    return getattr(instance, "status", None) == "rejected"
+
+
 async def assert_pending_approval_instance(
     *,
     tenant_id: int,
@@ -50,22 +114,18 @@ async def assert_pending_approval_instance(
     audit_required: bool,
     doc_label: str,
     verb: str = "审核",
+    is_auto_approve: bool = False,
 ) -> None:
-    """审核已开时须存在 pending 审批实例，禁止撤销后空壳直审。"""
-    if not audit_required:
+    """审核已开时须存在 pending 审批实例，或允许已结束流程补齐写回。"""
+    if not audit_required or is_auto_approve:
         return
-    from core.services.approval.approval_instance_service import ApprovalInstanceService
-
-    approval_status = await ApprovalInstanceService.get_approval_status(
+    gate = await get_approval_gate_status(
         tenant_id=tenant_id,
         entity_type=entity_type,
         entity_id=entity_id,
     )
-    has_pending_flow = bool(
-        approval_status.get("has_instance")
-        and approval_status.get("status") == "pending"
+    assert_manual_approval_action_allowed(
+        gate,
+        doc_label=doc_label,
+        verb=verb,
     )
-    if not has_pending_flow:
-        raise BusinessLogicError(
-            f"{doc_label}审核已开启但无进行中的审批流程，请先提交审批后再{verb}"
-        )

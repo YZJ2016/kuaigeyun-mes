@@ -10,27 +10,23 @@ ISSUE_METHOD_NONE = "none"
 
 VALID_ISSUE_METHODS = (ISSUE_METHOD_PICK, ISSUE_METHOD_BACKFLUSH, ISSUE_METHOD_NONE)
 
-_SOURCE_DEFAULTS = {
-    "Phantom": ISSUE_METHOD_NONE,
-    "Service": ISSUE_METHOD_NONE,
-    "Buy": ISSUE_METHOD_BACKFLUSH,
-    "CustomerProvided": ISSUE_METHOD_PICK,
-    "Gift": ISSUE_METHOD_PICK,
-    "Make": ISSUE_METHOD_PICK,
-    "Outsource": ISSUE_METHOD_PICK,
-    "Configure": ISSUE_METHOD_PICK,
-}
-
-
 def resolve_issue_method(
     bom_issue_method: Optional[str],
     source_type: Optional[str] = None,
 ) -> str:
+    """
+    解析 BOM 行发料方式。
+
+    行上未配置或与模型 default 一致时按 pick；仅虚拟件/服务在未配置时为 none。
+    不再按采购件来源隐式默认为倒冲（与 BOM 模型 default=pick、列表展示一致）。
+    """
     explicit = (bom_issue_method or "").strip().lower()
     if explicit in VALID_ISSUE_METHODS:
         return explicit
     st = (source_type or "").strip()
-    return _SOURCE_DEFAULTS.get(st, ISSUE_METHOD_PICK)
+    if st in ("Phantom", "Service"):
+        return ISSUE_METHOD_NONE
+    return ISSUE_METHOD_PICK
 
 
 def is_pick_material(bom_issue_method: Optional[str], source_type: Optional[str] = None) -> bool:

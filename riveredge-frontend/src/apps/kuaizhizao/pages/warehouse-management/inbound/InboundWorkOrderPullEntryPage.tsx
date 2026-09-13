@@ -175,7 +175,8 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
         setDisplayPendingQty(Number(ln.source_pending_quantity ?? 0));
         setDisplayDocQty(Number(ln.source_doc_quantity ?? 0));
         setDisplayReceivedQty(Number(ln.source_received_quantity ?? 0));
-        setReceiptQty(0);
+        const defaultReceiptQty = Number(ln.receipt_quantity ?? 0);
+        setReceiptQty(defaultReceiptQty > 0 ? defaultReceiptQty : 0);
         applyDraftOnce((draft) => {
           const qty = draftOptionalNumber(draft.receiptQty);
           if (qty != null) setReceiptQty(qty);

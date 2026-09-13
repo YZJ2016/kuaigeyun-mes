@@ -75,11 +75,7 @@ STATUS_LABEL_TO_CODE = {
     "scrapped": "scrapped",
 }
 
-DEPRECIATION_LABEL_TO_CODE = {
-    "年限平均法": "straight_line",
-    "直线法": "straight_line",
-    "straight_line": "straight_line",
-}
+from apps.kuaicaiwu.services.fa_depreciation_methods import DEPRECIATION_LABEL_TO_CODE
 
 
 def resolve_header_index_map(headers: List[Any]) -> Dict[str, int]:

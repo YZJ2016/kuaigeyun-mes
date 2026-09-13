@@ -21,7 +21,7 @@ from core.schemas.menu import (
     CustomMenuLayoutUpdate,
     CustomMenuLayoutResponse,
 )
-from core.services.system.menu_service import MenuService
+from core.services.system.menu_service import MenuService, NAV_TREE_CACHE_SUFFIX
 from core.api.deps.deps import get_current_tenant
 from core.api.deps.access import require_access
 from infra.api.deps.deps import get_current_user
@@ -141,6 +141,7 @@ async def get_navigation_menu_tree(
     """
     侧栏 / 工作台导航用菜单树：任意登录用户可读（仅返回 is_active=true）。
     可见性由前端按 RBAC 过滤；勿与菜单管理接口共用 system.menu 权限。
+    菜单与 manifest 对齐须由组织管理员确认后执行「一键同步菜单」，本接口只读。
     """
     use_cache = _menu_cache_enabled() and not fresh
 
@@ -148,7 +149,7 @@ async def get_navigation_menu_tree(
         tenant_id=tenant_id,
         is_active=True,
         use_cache=use_cache,
-        cache_key_suffix="nav_v1",
+        cache_key_suffix=NAV_TREE_CACHE_SUFFIX,
     )
 
 
