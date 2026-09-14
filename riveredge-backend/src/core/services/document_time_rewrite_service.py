@@ -182,6 +182,26 @@ REWRITE_SPECS: tuple[RewriteDocSpec, ...] = (
         date_fields=("receipt_date",),
         optional_datetime_fields=("review_time",),
     ),
+    RewriteDocSpec(
+        doc_type="equipment_spot_check",
+        label="设备点检单",
+        model_path="apps.kuaizhizao.models.equipment_ops:EquipmentSpotCheck",
+        code_field="document_no",
+        date_fields=("check_date",),
+        optional_datetime_fields=("reviewed_at",),
+        person_id_field="inspector_id",
+        person_name_field="inspector_name",
+    ),
+    RewriteDocSpec(
+        doc_type="equipment_route_patrol",
+        label="路线巡检单",
+        model_path="apps.kuaizhizao.models.equipment_ops:EquipmentRoutePatrol",
+        code_field="document_no",
+        date_fields=("patrol_date",),
+        optional_datetime_fields=(),
+        person_id_field="inspector_id",
+        person_name_field="inspector_name",
+    ),
 )
 
 
