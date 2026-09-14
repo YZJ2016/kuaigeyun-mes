@@ -29223,6 +29223,10 @@ export default {
     '销售订单菜单徽章改按发货状态统计',
   'pages.dashboard.updateLog.entries.sales-order-menu-badge-delivery-status.description':
     '左侧菜单销售订单徽章不再统计待审核与执行中订单，仅在有待交货或部分交货明细时提示；逾期未交仍显示红色，未开通财务模块的组织不再被大量蓝色徽章干扰。',
+  'pages.dashboard.updateLog.entries.equipment-spot-check-docno-collision-fix.title':
+    '设备点检连建不再因单号冲突报 500',
+  'pages.dashboard.updateLog.entries.equipment-spot-check-docno-collision-fix.description':
+    '点检/巡检在无编码规则时的兜底单号由「精确到秒」改为含微秒与随机后缀，避免短时间连续建单撞唯一约束导致服务器内部错误。',
   'pages.dashboard.updateLog.entries.units-load-preset-from-materials.title':
     '单位加载预设同步物料单位',
   'pages.dashboard.updateLog.entries.units-load-preset-from-materials.description':
