@@ -32,6 +32,33 @@ export interface EcnMaterialLine {
   owner_user_id?: number | null;
   owner_user_name?: string | null;
   remarks?: string | null;
+  extension_payload?: Record<string, unknown> | null;
+}
+
+export interface EcnFormProfileColumn {
+  key: string;
+  label: string;
+  sort?: number;
+  required?: boolean;
+  width?: number;
+  type?: string;
+}
+
+export interface EcnFormProfileFlag {
+  key: string;
+  label: string;
+  sort?: number;
+  type?: string;
+}
+
+export interface EcnFormProfile {
+  industry_profile_enabled?: boolean;
+  field_labels: Record<string, string>;
+  material_line_columns: EcnFormProfileColumn[];
+  signoff_depts: Array<{ code: string; label: string; sort?: number }>;
+  header_option_flags: EcnFormProfileFlag[];
+  entry_sources: Array<{ code: string; label: string; sort?: number }>;
+  validation_rules: Array<Record<string, unknown>>;
 }
 
 export interface EcnSignoff {
@@ -62,6 +89,7 @@ export interface EngineeringChange {
   erp_audit_status?: string | null;
   erp_audit_notes?: string | null;
   remarks?: string | null;
+  extension_payload?: Record<string, unknown> | null;
   submitted_at?: string | null;
   approved_at?: string | null;
   closed_at?: string | null;
@@ -79,6 +107,8 @@ export interface EngineeringChangeListResponse {
 }
 
 export const engineeringChangeApi = {
+  formProfile: async () =>
+    (await api.get(`${BASE}/meta/form-profile`)) as EcnFormProfile,
   list: async (params: Record<string, unknown>) =>
     (await api.get(BASE, { params })) as EngineeringChangeListResponse,
   get: async (id: number) => (await api.get(`${BASE}/${id}`)) as EngineeringChange,

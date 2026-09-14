@@ -17,6 +17,7 @@ class BomCollabLineIn(BaseModel):
     qty: Optional[Decimal] = None
     unit: Optional[str] = Field(None, max_length=20)
     remarks: Optional[str] = Field(None, max_length=500)
+    extension_payload: Optional[Dict[str, Any]] = None
 
 
 class BomCollabLineOut(BomCollabLineIn):
@@ -115,5 +116,18 @@ class BomCollabFormProfileSection(BaseModel):
     active: bool = True
 
 
+class BomCollabLineColumn(BaseModel):
+    key: str
+    label: str
+    sort: int = 0
+    width: Optional[int] = None
+    required: bool = False
+    type: Optional[str] = None
+
+
 class BomCollabFormProfile(BaseModel):
+    industry_profile_enabled: bool = Field(
+        False, description="是否已启用行业包 profile（false 时前端保持通用 UI）"
+    )
     sections: List[BomCollabFormProfileSection] = Field(default_factory=list)
+    line_columns: List[BomCollabLineColumn] = Field(default_factory=list)

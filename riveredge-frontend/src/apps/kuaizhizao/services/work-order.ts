@@ -536,6 +536,29 @@ export interface ReworkOrderListResponse {
   success: boolean;
 }
 
+export interface ReworkOrderFormProfile {
+  industry_profile_enabled?: boolean;
+  field_labels: Record<string, string>;
+  rework_path_types: Array<{ code: string; label: string; sort?: number }>;
+  form_sections: Array<{
+    key: string;
+    label: string;
+    sort?: number;
+    when_path_in?: string[];
+    fields: string[];
+  }>;
+  position_plan_columns: Array<{
+    key: string;
+    label: string;
+    sort?: number;
+    width?: number;
+    required?: boolean;
+    type?: string;
+  }>;
+  signoff_depts: Array<Record<string, unknown>>;
+  validation_rules: Array<Record<string, unknown>>;
+}
+
 export const reworkOrderApi = {
   list: async (params?: ReworkOrderListParams): Promise<ReworkOrderListResponse> => {
     const raw = await apiRequest<ReworkOrderListResponse | Record<string, unknown>[]>(
@@ -556,6 +579,10 @@ export const reworkOrderApi = {
   update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'PUT', data }),
   delete: async (id: string) => apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'DELETE' }),
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/rework-orders/${id}`, { method: 'GET' }),
+  formProfile: async () =>
+    apiRequest<ReworkOrderFormProfile>('/apps/kuaizhizao/rework-orders/meta/form-profile', {
+      method: 'GET',
+    }),
   createFromWorkOrder: async (workOrderId: string, data: any) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/rework`, { method: 'POST', data }),
   previewFromWorkOrder: async (

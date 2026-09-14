@@ -204,6 +204,7 @@ class ReworkOrder(BaseModel):
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")
+    extension_payload = fields.JSONField(null=True, description="行业扩展载荷")
     attachments = fields.JSONField(null=True, description="附件列表")
 
 

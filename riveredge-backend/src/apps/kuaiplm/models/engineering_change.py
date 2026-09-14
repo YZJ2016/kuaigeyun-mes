@@ -72,6 +72,7 @@ class EngineeringChange(BaseModel):
     )
     erp_audit_notes = fields.TextField(null=True, description="ERP 稽核说明")
     remarks = fields.TextField(null=True, description="备注")
+    extension_payload = fields.JSONField(null=True, description="行业扩展载荷（profile 溢出字段）")
     submitted_at = fields.DatetimeField(null=True)
     approved_at = fields.DatetimeField(null=True)
     closed_at = fields.DatetimeField(null=True)
@@ -105,6 +106,7 @@ class EngineeringChangeMaterialLine(BaseModel):
     owner_user_id = fields.IntField(null=True, description="行会签负责人快照")
     owner_user_name = fields.CharField(max_length=100, null=True)
     remarks = fields.CharField(max_length=500, null=True)
+    extension_payload = fields.JSONField(null=True, description="行业扩展载荷（profile 列溢出字段）")
     deleted_at = fields.DatetimeField(null=True)
 
 

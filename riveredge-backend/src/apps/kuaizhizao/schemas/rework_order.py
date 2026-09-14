@@ -5,7 +5,7 @@
 """
 
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
@@ -49,6 +49,7 @@ class ReworkOrderBase(BaseModel):
     operator_id: Optional[int] = Field(None, description="操作员ID")
     operator_name: Optional[str] = Field(None, max_length=100, description="操作员姓名")
     remarks: Optional[str] = Field(None, description="备注")
+    extension_payload: Optional[Dict[str, Any]] = Field(None, description="行业扩展载荷")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
@@ -101,6 +102,7 @@ class ReworkOrderPositionPlanItem(BaseModel):
     owner_user_id: Optional[int] = None
     owner_user_name: Optional[str] = Field(None, max_length=100)
     remarks: Optional[str] = Field(None, max_length=500)
+    extension_payload: Optional[Dict[str, Any]] = Field(None, description="排位行行业扩展载荷")
 
 
 class ReworkOrderSignoffItem(BaseModel):
@@ -180,6 +182,7 @@ class ReworkOrderCreate(ReworkOrderBase):
     position_plans: Optional[List[ReworkOrderPositionPlanItem]] = Field(
         None, description="排位策划行（会签型，与执行工序正交）"
     )
+    extension_payload: Optional[Dict[str, Any]] = Field(None, description="行业扩展载荷")
 
 
 class ReworkOrderUpdate(BaseModel):
@@ -212,6 +215,7 @@ class ReworkOrderUpdate(BaseModel):
     operator_name: Optional[str] = Field(None, description="操作员姓名")
     verification_required: Optional[bool] = Field(None, description="是否需要复检")
     remarks: Optional[str] = Field(None, description="备注")
+    extension_payload: Optional[Dict[str, Any]] = Field(None, description="行业扩展载荷")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     start_work_order_operation_id: Optional[int] = Field(None, description="动态路线起始工序")
     predefined_operation_ids: Optional[List[int]] = Field(None, description="预设路线工序列表")
@@ -432,3 +436,17 @@ class ReworkReportingOptionsResponse(BaseModel):
     remaining_input_quantity: Decimal = Decimal("0")
     total_qualified_quantity: Decimal = Decimal("0")
     operations: List[ReworkReportingOptionItem]
+
+
+class ReworkOrderFormProfile(BaseModel):
+    """返工单表单/排位/会签扩展 profile。"""
+
+    industry_profile_enabled: bool = Field(
+        False, description="是否已启用行业包 profile（false 时前端保持通用 UI）"
+    )
+    field_labels: Dict[str, str] = Field(default_factory=dict)
+    rework_path_types: List[Dict[str, Any]] = Field(default_factory=list)
+    form_sections: List[Dict[str, Any]] = Field(default_factory=list)
+    position_plan_columns: List[Dict[str, Any]] = Field(default_factory=list)
+    signoff_depts: List[Dict[str, Any]] = Field(default_factory=list)
+    validation_rules: List[Dict[str, Any]] = Field(default_factory=list)

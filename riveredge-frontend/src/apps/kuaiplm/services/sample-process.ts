@@ -61,6 +61,7 @@ export interface SampleProcessFormProfileItem {
 }
 
 export interface SampleProcessFormProfile {
+  industry_profile_enabled?: boolean;
   request_kinds: SampleProcessFormProfileItem[];
   attachment_types: SampleProcessFormProfileItem[];
   field_labels: Record<string, string>;

@@ -70,4 +70,6 @@ export interface MaterialUnitEnsurePresetsResult {
   units_created: number;
   conversions_created: number;
   units_backfilled: number;
+  /** 从现有物料 base_unit / units 补建的数量 */
+  units_from_materials: number;
 }

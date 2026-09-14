@@ -38,8 +38,78 @@ def _normalize_code(code: str) -> str:
     return str(code or "").strip()
 
 
+def _collect_unit_tokens_from_material(*, base_unit: Any, units: Any) -> list[str]:
+    """从物料基础单位与多单位 JSON 收集待入库编码/名称。"""
+    codes: list[str] = []
+    if base_unit:
+        codes.append(str(base_unit))
+    units_payload = units if isinstance(units, dict) else {}
+    for u in units_payload.get("units") or []:
+        if isinstance(u, dict) and u.get("unit"):
+            codes.append(str(u["unit"]))
+        elif isinstance(u, str) and u.strip():
+            codes.append(u)
+    scenarios = units_payload.get("scenarios") or {}
+    if isinstance(scenarios, dict):
+        for v in scenarios.values():
+            if v:
+                codes.append(str(v))
+    # 兼容直写/旧结构：顶层 unit / baseUnit / purchaseUnit 等
+    for key in ("unit", "baseUnit", "base_unit", "purchaseUnit", "purchase_unit", "stockUnit", "stock_unit"):
+        raw = units_payload.get(key)
+        if raw:
+            codes.append(str(raw))
+    return codes
+
+
 class MaterialUnitService:
     """单位目录 CRUD + 预设/回填。"""
+
+    @staticmethod
+    async def _load_existing_unit_keys(tenant_id: int) -> set[str]:
+        """已存在单位的 code/name 归一化集合，避免 N+1 与名称重复建档。"""
+        rows = await MaterialUnit.filter(tenant_id=tenant_id, deleted_at=None).only("code", "name")
+        keys: set[str] = set()
+        for row in rows:
+            code = _normalize_code(row.code)
+            name = _normalize_code(row.name)
+            if code:
+                keys.add(code)
+            if name:
+                keys.add(name)
+        return keys
+
+    @staticmethod
+    async def _ensure_unit_token(
+        tenant_id: int,
+        raw: str,
+        *,
+        existing_keys: set[str],
+        user: Optional[User],
+        is_system: bool = False,
+        sort_order: int = 999,
+        description: Optional[str] = None,
+        name: Optional[str] = None,
+    ) -> bool:
+        """若 code/name 均未命中则创建；返回是否新建。"""
+        code = _normalize_code(raw)
+        if not code or code in existing_keys:
+            return False
+        display_name = _normalize_code(name) or code
+        await MaterialUnit.create(
+            tenant_id=tenant_id,
+            code=code[:50],
+            name=display_name[:100],
+            description=description,
+            sort_order=sort_order,
+            is_system=is_system,
+            is_active=True,
+            **_actor_fields(user, creating=True),
+        )
+        existing_keys.add(code)
+        if display_name:
+            existing_keys.add(display_name)
+        return True
 
     @staticmethod
     async def list_units(
@@ -145,24 +215,23 @@ class MaterialUnitService:
         units_created = 0
         conversions_created = 0
         units_backfilled = 0
+        units_from_materials = 0
+
+        existing_keys = await MaterialUnitService._load_existing_unit_keys(tenant_id)
 
         for preset in SYSTEM_UNIT_PRESETS:
-            exists = await MaterialUnit.filter(
-                tenant_id=tenant_id, code=preset["code"], deleted_at=None
-            ).exists()
-            if exists:
-                continue
-            await MaterialUnit.create(
-                tenant_id=tenant_id,
-                code=preset["code"],
-                name=preset["name"],
-                description=preset.get("description"),
-                sort_order=preset["sort_order"],
+            created = await MaterialUnitService._ensure_unit_token(
+                tenant_id,
+                preset["code"],
+                existing_keys=existing_keys,
+                user=user,
                 is_system=True,
-                is_active=True,
-                **_actor_fields(user, creating=True),
+                sort_order=preset["sort_order"],
+                description=preset.get("description"),
+                name=preset["name"],
             )
-            units_created += 1
+            if created:
+                units_created += 1
 
         # 字典 MATERIAL_UNIT 历史项
         dicts = await DataDictionary.filter(tenant_id=tenant_id, code="MATERIAL_UNIT").all()
@@ -172,61 +241,41 @@ class MaterialUnitService:
                 code = _normalize_code(it.value or it.label or "")
                 if not code:
                     continue
-                exists = await MaterialUnit.filter(
-                    tenant_id=tenant_id, code=code, deleted_at=None
-                ).exists()
-                if exists:
+                if code in existing_keys:
                     continue
+                label = _normalize_code(it.label or code) or code
                 await MaterialUnit.create(
                     tenant_id=tenant_id,
-                    code=code,
-                    name=_normalize_code(it.label or code) or code,
+                    code=code[:50],
+                    name=label[:100],
                     description=it.description,
                     sort_order=int(getattr(it, "sort_order", 0) or 0),
                     is_system=False,
                     is_active=bool(getattr(it, "is_active", True)),
                     **_actor_fields(user, creating=True),
                 )
+                existing_keys.add(code)
+                if label:
+                    existing_keys.add(label)
                 units_backfilled += 1
 
-        # 物料上出现过的单位
+        # 物料上出现过的单位（含库表直写：只写了 base_unit / units JSON）
         materials = await Material.filter(tenant_id=tenant_id, deleted_at=None).only(
             "base_unit", "units"
         )
-        seen: set[str] = set()
         for m in materials:
-            codes: list[str] = []
-            if m.base_unit:
-                codes.append(str(m.base_unit))
-            units_payload = m.units if isinstance(m.units, dict) else {}
-            for u in units_payload.get("units") or []:
-                if isinstance(u, dict) and u.get("unit"):
-                    codes.append(str(u["unit"]))
-            scenarios = units_payload.get("scenarios") or {}
-            if isinstance(scenarios, dict):
-                for v in scenarios.values():
-                    if v:
-                        codes.append(str(v))
-            for raw in codes:
-                code = _normalize_code(raw)
-                if not code or code in seen:
-                    continue
-                seen.add(code)
-                exists = await MaterialUnit.filter(
-                    tenant_id=tenant_id, code=code, deleted_at=None
-                ).exists()
-                if exists:
-                    continue
-                await MaterialUnit.create(
-                    tenant_id=tenant_id,
-                    code=code,
-                    name=code,
+            for raw in _collect_unit_tokens_from_material(base_unit=m.base_unit, units=m.units):
+                created = await MaterialUnitService._ensure_unit_token(
+                    tenant_id,
+                    raw,
+                    existing_keys=existing_keys,
+                    user=user,
                     is_system=False,
-                    is_active=True,
                     sort_order=999,
-                    **_actor_fields(user, creating=True),
+                    description="来自物料回填",
                 )
-                units_backfilled += 1
+                if created:
+                    units_from_materials += 1
 
         for preset in SYSTEM_CONVERSION_PRESETS:
             exists = await MaterialUnitConversion.filter(
@@ -239,17 +288,14 @@ class MaterialUnitService:
                 continue
             # 确保两端单位存在
             for side in (preset["from_unit_code"], preset["to_unit_code"]):
-                if not await MaterialUnit.filter(
-                    tenant_id=tenant_id, code=side, deleted_at=None
-                ).exists():
-                    await MaterialUnit.create(
-                        tenant_id=tenant_id,
-                        code=side,
-                        name=side,
-                        is_system=True,
-                        is_active=True,
-                        **_actor_fields(user, creating=True),
-                    )
+                await MaterialUnitService._ensure_unit_token(
+                    tenant_id,
+                    side,
+                    existing_keys=existing_keys,
+                    user=user,
+                    is_system=True,
+                    sort_order=0,
+                )
             await MaterialUnitConversion.create(
                 tenant_id=tenant_id,
                 from_unit_code=preset["from_unit_code"],
@@ -267,6 +313,7 @@ class MaterialUnitService:
             units_created=units_created,
             conversions_created=conversions_created,
             units_backfilled=units_backfilled,
+            units_from_materials=units_from_materials,
         )
 
 

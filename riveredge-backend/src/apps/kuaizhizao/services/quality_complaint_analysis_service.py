@@ -115,13 +115,22 @@ async def build_quality_complaint_analysis_report(
             "supplier_response",
             "created_at",
             "closed_at",
+            "extension_payload",
         )
         data = []
         for row in rows:
             created = row.get("created_at")
+            ext = row.get("extension_payload") if isinstance(row.get("extension_payload"), dict) else {}
             data.append(
                 {
                     **row,
+                    "inspection_qty": ext.get("inspection_qty"),
+                    "defect_qty": ext.get("defect_qty"),
+                    "defect_rate_pct": ext.get("defect_rate_pct"),
+                    "used_qty": ext.get("used_qty"),
+                    "root_cause_analysis": ext.get("root_cause_analysis"),
+                    "corrective_action": ext.get("corrective_action"),
+                    "containment_action": ext.get("containment_action"),
                     "year_month": _year_month_of(created),
                     "business_type_label": QUALITY_COMPLAINT_TYPE_LABELS_ZH.get(
                         row.get("business_type") or "", row.get("business_type") or ""

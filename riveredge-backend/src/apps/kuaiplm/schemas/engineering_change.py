@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -23,6 +23,7 @@ class EcnMaterialLineIn(BaseModel):
     owner_user_id: Optional[int] = None
     owner_user_name: Optional[str] = Field(None, max_length=100)
     remarks: Optional[str] = Field(None, max_length=500)
+    extension_payload: Optional[dict] = None
 
 
 class EcnMaterialLineOut(EcnMaterialLineIn):
@@ -56,6 +57,7 @@ class EngineeringChangeCreate(BaseModel):
     ecn_code: Optional[str] = Field(None, max_length=50)
     change_reason: Optional[str] = None
     remarks: Optional[str] = None
+    extension_payload: Optional[dict] = None
     materials: List[EcnMaterialLineIn] = Field(default_factory=list)
 
 
@@ -63,6 +65,7 @@ class EngineeringChangeUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     change_reason: Optional[str] = None
     remarks: Optional[str] = None
+    extension_payload: Optional[dict] = None
     materials: Optional[List[EcnMaterialLineIn]] = None
 
 
@@ -89,6 +92,7 @@ class EngineeringChangeResponse(BaseModel):
     erp_audit_status: Optional[str] = None
     erp_audit_notes: Optional[str] = None
     remarks: Optional[str] = None
+    extension_payload: Optional[dict] = None
     submitted_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None
     closed_at: Optional[datetime] = None
@@ -125,3 +129,17 @@ class EngineeringChangeListItem(BaseModel):
 class EngineeringChangeListResponse(BaseModel):
     items: List[EngineeringChangeListItem]
     total: int
+
+
+class EcnFormProfile(BaseModel):
+    """ECN 表单/明细列扩展 profile（通用默认或行业包覆盖）。"""
+
+    industry_profile_enabled: bool = Field(
+        False, description="是否已启用行业包 profile（false 时前端保持通用 UI）"
+    )
+    field_labels: Dict[str, str] = Field(default_factory=dict)
+    material_line_columns: List[Dict[str, Any]] = Field(default_factory=list)
+    signoff_depts: List[Dict[str, Any]] = Field(default_factory=list)
+    header_option_flags: List[Dict[str, Any]] = Field(default_factory=list)
+    entry_sources: List[Dict[str, Any]] = Field(default_factory=list)
+    validation_rules: List[Dict[str, Any]] = Field(default_factory=list)

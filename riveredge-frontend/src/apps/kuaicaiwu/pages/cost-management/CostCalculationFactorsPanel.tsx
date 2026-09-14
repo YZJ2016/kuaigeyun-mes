@@ -165,7 +165,7 @@ export const CostCalculationFactorsPanel: React.FC<CostCalculationFactorsPanelPr
                     ? t('app.kuaicaiwu.costCalculation.guideProductIntro')
                     : t('app.kuaicaiwu.costCalculation.guideWorkOrderIntro')}
                 </Typography.Paragraph>
-                <Steps direction="vertical" size="small" current={-1} items={guideSteps} />
+                <Steps orientation="vertical" size="small" current={-1} items={guideSteps} />
                 <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 12 }}>
                   {t('app.kuaicaiwu.costCalculation.guideFooter')}
                 </Typography.Paragraph>

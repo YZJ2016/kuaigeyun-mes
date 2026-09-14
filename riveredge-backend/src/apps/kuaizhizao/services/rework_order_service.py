@@ -65,8 +65,12 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkOqcNotifyRequest,
     ReworkCancelRequest,
     ReworkHoldRequest,
+    ReworkOrderFormProfile,
 )
 from apps.kuaizhizao.schemas.reporting_record import ReportingRecordResponse
+from core.services.application.industry_extension_runtime_service import (
+    IndustryExtensionRuntimeService,
+)
 from apps.kuaizhizao.services.document_action_policy.rework_order import (
     capability_kwargs_from_context,
     derive_rework_order_capabilities,
@@ -96,6 +100,8 @@ from apps.kuaizhizao.utils.rework_order_constants import (
 )
 from loguru import logger
 
+
+REWORK_PROFILE_KEY = "kuaizhizao.rework_order"
 
 REWORK_ORDER_SORTABLE_FIELDS = frozenset({
     "code",
@@ -131,6 +137,59 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
     def __init__(self):
         super().__init__(ReworkOrder)
         self.business_config_service = BusinessConfigService()
+
+    async def _profile(self, tenant_id: int) -> Dict[str, Any]:
+        return await IndustryExtensionRuntimeService.resolve_profile(
+            tenant_id, REWORK_PROFILE_KEY
+        )
+
+    async def get_form_profile(self, tenant_id: int) -> ReworkOrderFormProfile:
+        enabled = await IndustryExtensionRuntimeService.is_industry_profile_enabled(
+            tenant_id, REWORK_PROFILE_KEY
+        )
+        profile = await self._profile(tenant_id)
+        return ReworkOrderFormProfile(
+            industry_profile_enabled=enabled,
+            field_labels=dict(profile.get("field_labels") or {}),
+            rework_path_types=list(profile.get("rework_path_types") or []),
+            form_sections=list(profile.get("form_sections") or []),
+            position_plan_columns=list(profile.get("position_plan_columns") or []),
+            signoff_depts=list(profile.get("signoff_depts") or []),
+            validation_rules=list(profile.get("validation_rules") or []),
+        )
+
+    @staticmethod
+    def _rework_path_type_from_payload(
+        extension_payload: Optional[Dict[str, Any]],
+    ) -> Optional[str]:
+        if not extension_payload or not isinstance(extension_payload, dict):
+            return None
+        raw = extension_payload.get("rework_path_type")
+        if raw is None or raw == "":
+            return None
+        return str(raw).strip().lower()
+
+    @staticmethod
+    def _signoff_depts_from_profile(
+        profile: Dict[str, Any], *, rework_path_type: Optional[str] = None
+    ) -> List[tuple[str, str]]:
+        items = profile.get("signoff_depts") or []
+        ordered: List[tuple[int, str, str]] = []
+        for item in items:
+            if not isinstance(item, dict) or not item.get("code"):
+                continue
+            when = item.get("when_path_in")
+            if when and (not rework_path_type or rework_path_type not in when):
+                continue
+            ordered.append(
+                (
+                    int(item.get("sort") or 0),
+                    str(item["code"]),
+                    str(item.get("label") or item["code"]),
+                )
+            )
+        ordered.sort(key=lambda x: x[0])
+        return [(code, name) for _, code, name in ordered]
 
     async def _sum_operation_display_unqualified(
         self,
@@ -402,13 +461,25 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         *,
         actor_id: int,
         actor_name: str,
+        rework_path_type: Optional[str] = None,
     ) -> None:
         existing = await ReworkOrderSignoff.filter(
             tenant_id=tenant_id, rework_order_id=rework_order_id, deleted_at__isnull=True
         ).count()
         if existing:
             return
-        for idx, (code, name) in enumerate(REWORK_SIGNOFF_DEPT_DEFAULTS):
+        enabled = await IndustryExtensionRuntimeService.is_industry_profile_enabled(
+            tenant_id, REWORK_PROFILE_KEY
+        )
+        if enabled:
+            profile = await self._profile(tenant_id)
+            dept_defs = self._signoff_depts_from_profile(
+                profile, rework_path_type=rework_path_type
+            )
+        else:
+            dept_defs = []
+        dept_defs = dept_defs or REWORK_SIGNOFF_DEPT_DEFAULTS
+        for idx, (code, name) in enumerate(dept_defs):
             await ReworkOrderSignoff.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -521,6 +592,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                     owner_user_id=item.owner_user_id,
                     owner_user_name=item.owner_user_name,
                     remarks=item.remarks,
+                    extension_payload=getattr(item, "extension_payload", None),
                     created_by=actor_id,
                     created_by_name=actor_name,
                     updated_by=actor_id,
@@ -739,6 +811,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 operator_name=rework_order_data.operator_name,
                 cost=Decimal("0"),
                 remarks=rework_order_data.remarks,
+                extension_payload=getattr(rework_order_data, "extension_payload", None),
                 attachments=getattr(rework_order_data, "attachments", None),
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -771,6 +844,9 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                     rework_order.id,
                     actor_id=created_by,
                     actor_name=user_info["name"],
+                    rework_path_type=self._rework_path_type_from_payload(
+                        getattr(rework_order_data, "extension_payload", None)
+                    ),
                 )
 
         if rework_order_data.original_work_order_id:
@@ -1212,11 +1288,17 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 or REWORK_BUSINESS_TYPE_DEFAULT
             ).strip().lower()
             if is_signoff_rework_business(next_bt):
+                path_type = self._rework_path_type_from_payload(
+                    update_data.get("extension_payload")
+                    if "extension_payload" in update_data
+                    else getattr(rework_order, "extension_payload", None)
+                )
                 await self._seed_default_signoffs(
                     tenant_id,
                     rework_order_id,
                     actor_id=updated_by,
                     actor_name=user_info["name"],
+                    rework_path_type=path_type,
                 )
 
             if "start_work_order_operation_id" in update_data or predefined_operation_ids is not None:
@@ -1595,6 +1677,9 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             rework_order_id,
             actor_id=submitted_by,
             actor_name=user_info["name"],
+            rework_path_type=self._rework_path_type_from_payload(
+                getattr(rework_order, "extension_payload", None)
+            ),
         )
         rework_order.status = "pending"
         rework_order.updated_by = submitted_by

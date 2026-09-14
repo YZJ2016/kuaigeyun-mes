@@ -158,7 +158,7 @@ const MeasuringInstrumentCalibrationRemindersPage: React.FC = () => {
         trigger="click"
         styles={{ body: { maxWidth: 280, padding: 12 } }}
         content={
-          <Space direction="vertical" size="middle" style={{ width: 256 }}>
+          <Space orientation="vertical" size="medium" style={{ width: 256 }}>
             <div
               style={{
                 whiteSpace: 'normal',

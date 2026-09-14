@@ -82,6 +82,7 @@ export interface LabRequest {
   report_rejected_at?: string | null;
   report_reject_reason?: string | null;
   remarks?: string | null;
+  extension_payload?: Record<string, unknown> | null;
   reject_reason?: string | null;
   measure_items?: LabRequestMeasureItem[];
   has_ng?: boolean;

@@ -1,81 +1,231 @@
 {
+
   "code": "kuaielectronics",
+
   "name": "电子制造",
-  "version": "0.4.2",
-  "description": "电子制造 / EMS-OEM 行业包：样品加工与 BOM 分区等替代扩展，以及 ESD 点检看板；OEM 签样包经标签工位 document 替代加载",
+
+  "version": "0.7.0",
+
+  "description": "电子制造 / EMS-OEM 行业包：样品/BOM/ECN/试流/返工 form-profile 种子与门控，行业菜单聚合，ESD 点检看板，OEM 签样 document 替代",
+
   "icon": "cpu",
+
   "author": "RiverEdge",
+
   "market_category": "industry",
+
   "is_pro": false,
+
   "entry_point": "../apps/kuaielectronics/index.tsx",
+
   "route_path": "/apps/kuaielectronics",
+
   "sort_order": 310,
+
   "industry_pack_menu": {
+
     "children": [
+
       {
+
         "title": "app.kuaielectronics.menu.esdDashboard",
+
         "path": "/apps/kuaielectronics/esd/dashboard",
+
         "permission": "kuaielectronics:esd:read",
-        "sort_order": 1
+
+        "sort_order": 70
+
       },
+
       {
+
         "title": "app.kuaielectronics.menu.esdInspection",
+
         "path": "/apps/kuaielectronics/esd/inspection",
+
         "permission": "kuaielectronics:esd:read",
-        "sort_order": 2
+
+        "sort_order": 80
+
       },
+
       {
+
         "title": "app.kuaielectronics.menu.esd",
+
         "path": "/apps/kuaielectronics/esd",
+
         "permission": "kuaielectronics:esd:read",
-        "sort_order": 3
+
+        "sort_order": 90
+
       }
+
     ]
+
   },
+
   "industry_extensions": [
+
     {
+
       "id": "electronics.sample_process",
+
       "kind": "replace",
+
       "strategy": "profile",
+
       "host_app": "kuaiplm",
+
       "menu_path": "/apps/kuaiplm/sample-process-applications",
+
       "resource": "kuaiplm:sample-process",
-      "profile_key": "kuaiplm.sample_process"
+
+      "profile_key": "kuaiplm.sample_process",
+
+      "menu_sort_order": 10
+
     },
+
     {
+
       "id": "electronics.bom_sections",
+
       "kind": "replace",
+
       "strategy": "profile",
+
       "host_app": "kuaiplm",
+
       "menu_path": "/apps/kuaiplm/bom-collaborations",
+
       "resource": "kuaiplm:bom-collab",
-      "profile_key": "kuaiplm.bom_collab"
+
+      "profile_key": "kuaiplm.bom_collab",
+
+      "menu_sort_order": 20
+
     },
+
     {
-      "id": "electronics.esd",
-      "kind": "standalone",
-      "pack_menu": true
-    },
-    {
-      "id": "electronics.label_oem",
+
+      "id": "electronics.ecn_form",
+
       "kind": "replace",
-      "strategy": "document",
+
+      "strategy": "profile",
+
+      "host_app": "kuaiplm",
+
+      "menu_path": "/apps/kuaiplm/change-management",
+
+      "resource": "kuaiplm:ecn",
+
+      "profile_key": "kuaiplm.ecn",
+
+      "menu_sort_order": 30
+
+    },
+
+    {
+
+      "id": "electronics.trial_flow_steps",
+
+      "kind": "replace",
+
+      "strategy": "profile",
+
+      "host_app": "kuaiplm",
+
+      "menu_path": "/apps/kuaiplm/trial-flows",
+
+      "resource": "kuaiplm:trial-flow",
+
+      "profile_key": "kuaiplm.trial_flow",
+
+      "menu_sort_order": 40
+
+    },
+
+    {
+
+      "id": "electronics.rework_form",
+
+      "kind": "replace",
+
+      "strategy": "profile",
+
       "host_app": "kuaizhizao",
+
+      "menu_path": "/apps/kuaizhizao/production-execution/rework-orders",
+
+      "resource": "kuaizhizao:rework-order",
+
+      "profile_key": "kuaizhizao.rework_order",
+
+      "menu_sort_order": 50
+
+    },
+
+    {
+
+      "id": "electronics.label_oem",
+
+      "kind": "replace",
+
+      "strategy": "document",
+
+      "host_app": "kuaizhizao",
+
       "menu_path": "/apps/kuaizhizao/production-execution/label-station",
+
       "resource": "kuaizhizao:label-station",
+
       "replacement_app": "kuaielectronics",
-      "replacement_path": "/apps/kuaielectronics/label-oem"
+
+      "replacement_path": "/apps/kuaielectronics/label-oem",
+
+      "menu_title": "app.kuaielectronics.menu.labelOem",
+
+      "menu_sort_order": 60
+
+    },
+
+    {
+
+      "id": "electronics.esd",
+
+      "kind": "standalone",
+
+      "pack_menu": true
+
     }
+
   ],
+
   "permissions": [
+
     "kuaielectronics:entry:read",
+
     "kuaielectronics:esd:read",
+
     "kuaielectronics:esd:update",
+
     "kuaielectronics:label-oem:read",
+
     "kuaielectronics:label-oem:update"
+
   ],
+
   "dependencies": {
+
     "riveredge-backend": ">=1.0.0",
+
     "riveredge-frontend": ">=1.0.0"
+
   }
+
 }
+
+

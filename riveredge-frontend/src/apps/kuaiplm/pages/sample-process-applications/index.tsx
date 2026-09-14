@@ -10,6 +10,7 @@ import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-compo
 import {
   ActionType,
   ProFormDatePicker,
+  ProFormDependency,
   ProFormInstance,
   ProFormSelect,
   ProFormText,
@@ -45,6 +46,11 @@ import { buildDocumentAuditColumns } from '../../../kuaizhizao/pages/shared/docu
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import Phase2ProjectSelect from '../../components/Phase2ProjectSelect';
+import { isIndustryFormProfileActive } from '../../../../utils/industryFormProfile';
+import {
+  isFieldRequiredForKind,
+  validationMessageForKind,
+} from '../../utils/sampleProcessFormProfile';
 import {
   sampleProcessApi,
   type SampleProcessApplication,
@@ -117,6 +123,16 @@ function activeProfileItems(profile: SampleProcessFormProfile | null, key: 'requ
     .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
 }
 
+function genericSampleProfileItems(
+  t: (key: string) => string,
+  key: 'request_kinds' | 'attachment_types',
+) {
+  if (key === 'request_kinds') {
+    return [{ code: 'general', label: t('app.kuaiplm.sampleProcess.kind.general'), sort: 10, active: true }];
+  }
+  return [{ code: 'other', label: t('app.kuaiplm.sampleProcess.attachmentType.other'), sort: 10, active: true }];
+}
+
 const SampleProcessApplicationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -152,16 +168,26 @@ const SampleProcessApplicationsPage: React.FC = () => {
     };
   }, [messageApi]);
 
-  const kindOptions = useMemo(() => activeProfileItems(formProfile, 'request_kinds'), [formProfile]);
+  const industryProfileActive = isIndustryFormProfileActive(formProfile);
+  const kindOptions = useMemo(
+    () =>
+      industryProfileActive
+        ? activeProfileItems(formProfile, 'request_kinds')
+        : genericSampleProfileItems(t, 'request_kinds'),
+    [formProfile, industryProfileActive, t],
+  );
   const attachmentOptions = useMemo(
-    () => activeProfileItems(formProfile, 'attachment_types'),
-    [formProfile],
+    () =>
+      industryProfileActive
+        ? activeProfileItems(formProfile, 'attachment_types')
+        : genericSampleProfileItems(t, 'attachment_types'),
+    [formProfile, industryProfileActive, t],
   );
   const materialCodeLabel =
-    formProfile?.field_labels?.material_code ||
+    (industryProfileActive && formProfile?.field_labels?.material_code) ||
     t('app.kuaiplm.sampleProcess.fields.materialCode');
   const materialVersionLabel =
-    formProfile?.field_labels?.material_version ||
+    (industryProfileActive && formProfile?.field_labels?.material_version) ||
     t('app.kuaiplm.sampleProcess.fields.materialVersion');
   const defaultKind = kindOptions[0]?.code || 'general';
   const defaultAttachment = attachmentOptions[0]?.code || 'other';
@@ -634,16 +660,41 @@ const SampleProcessApplicationsPage: React.FC = () => {
           rules={[{ required: true }]}
           colProps={{ span: 24 }}
         />
-        <ProFormText
-          name="material_code"
-          label={materialCodeLabel}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="material_version"
-          label={materialVersionLabel}
-          colProps={{ span: 12 }}
-        />
+        <ProFormDependency name={['request_kind']}>
+          {({ request_kind }) => {
+            const materialRequired = isFieldRequiredForKind(
+              formProfile,
+              String(request_kind || ''),
+              'material_code',
+              industryProfileActive,
+            );
+            const materialRuleMessage =
+              validationMessageForKind(
+                formProfile,
+                String(request_kind || ''),
+                industryProfileActive,
+              ) || t('common.required');
+            return (
+              <>
+                <ProFormText
+                  name="material_code"
+                  label={materialCodeLabel}
+                  colProps={{ span: 12 }}
+                  rules={
+                    materialRequired
+                      ? [{ required: true, message: materialRuleMessage }]
+                      : undefined
+                  }
+                />
+                <ProFormText
+                  name="material_version"
+                  label={materialVersionLabel}
+                  colProps={{ span: 12 }}
+                />
+              </>
+            );
+          }}
+        </ProFormDependency>
         <ProFormDatePicker
           name="release_date"
           label={t('app.kuaiplm.sampleProcess.fields.releaseDate')}

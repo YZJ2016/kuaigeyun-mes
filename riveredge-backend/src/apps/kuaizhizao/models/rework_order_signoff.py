@@ -102,4 +102,5 @@ class ReworkOrderPositionPlan(BaseModel):
     owner_user_id = fields.IntField(null=True)
     owner_user_name = fields.CharField(max_length=100, null=True, description="责任班组/主管")
     remarks = fields.CharField(max_length=500, null=True)
+    extension_payload = fields.JSONField(null=True, description="排位行行业扩展载荷")
     deleted_at = fields.DatetimeField(null=True)

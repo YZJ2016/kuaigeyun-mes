@@ -104,4 +104,7 @@ class MaterialUnitConversionResolveResponse(BaseModel):
 class MaterialUnitEnsurePresetsResponse(BaseModel):
     units_created: int = 0
     conversions_created: int = 0
-    units_backfilled: int = 0
+    units_backfilled: int = Field(0, description="从历史字典 MATERIAL_UNIT 补建的数量")
+    units_from_materials: int = Field(
+        0, description="从现有物料 base_unit / units JSON 补建的数量（含库表直写物料）"
+    )

@@ -251,3 +251,77 @@ async def rewrite_master_data_updated_at(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+class PolishWorkOrderTimesRequest(BaseModel):
+    work_order_ids: list[int] = Field(min_length=1)
+    work: WorkScheduleBody
+    include_header: bool = True
+    include_operations: bool = True
+    include_reporting: bool = True
+
+
+class PolishPurchasePricesRequest(BaseModel):
+    purchase_order_ids: list[int] = Field(min_length=1)
+
+
+class RewriteLoginLocationsRequest(BaseModel):
+    location: str = Field(min_length=1, max_length=200)
+
+
+@router.post("/polish-work-order-times", summary="修正工单头/工序/报工时间（工作时段）")
+async def polish_work_order_times(
+    body: PolishWorkOrderTimesRequest,
+    auth: AuthContext = Depends(require_permission_codes("system:document-time-rewrite:execute")),
+) -> dict[str, Any]:
+    from core.services.document_data_polish_service import DocumentDataPolishService
+
+    schedule = WorkScheduleParams(
+        weekdays=list(body.work.weekdays),
+        start_time=body.work.start_time,
+        end_time=body.work.end_time,
+        lookback_days=int(body.work.lookback_days),
+    )
+    try:
+        return await DocumentDataPolishService.polish_work_order_times(
+            tenant_id=int(auth.tenant_id),
+            work_order_ids=list(body.work_order_ids),
+            schedule=schedule,
+            include_header=bool(body.include_header),
+            include_operations=bool(body.include_operations),
+            include_reporting=bool(body.include_reporting),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/polish-purchase-prices", summary="修正采购单价并同步入库与应付")
+async def polish_purchase_prices(
+    body: PolishPurchasePricesRequest,
+    auth: AuthContext = Depends(require_permission_codes("system:document-time-rewrite:execute")),
+) -> dict[str, Any]:
+    from core.services.document_data_polish_service import DocumentDataPolishService
+
+    try:
+        return await DocumentDataPolishService.polish_purchase_prices(
+            tenant_id=int(auth.tenant_id),
+            purchase_order_ids=list(body.purchase_order_ids),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/rewrite-login-locations", summary="批量改写登录日志地点（仅地点字段）")
+async def rewrite_login_locations(
+    body: RewriteLoginLocationsRequest,
+    auth: AuthContext = Depends(require_permission_codes("system:document-time-rewrite:execute")),
+) -> dict[str, Any]:
+    from core.services.document_data_polish_service import DocumentDataPolishService
+
+    try:
+        return await DocumentDataPolishService.rewrite_login_locations(
+            tenant_id=int(auth.tenant_id),
+            location=body.location,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

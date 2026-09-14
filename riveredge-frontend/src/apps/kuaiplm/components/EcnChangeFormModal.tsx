@@ -1,12 +1,13 @@
 /**
- * 工程变更（ECN）新建/编辑弹窗 — 供变更工作台共用
+ * 工程变更（ECN）新建/编辑弹窗 — 物料列与头勾选项由 form-profile 驱动
  */
 
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ProFormInstance,
   ProFormSelect,
+  ProFormSwitch,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
@@ -19,9 +20,19 @@ import Phase2ProjectSelect from './Phase2ProjectSelect';
 import {
   engineeringChangeApi,
   type EcnChangeKind,
-  type EcnMaterialLine,
+  type EcnFormProfile,
   type EngineeringChange,
 } from '../services/engineering-change';
+import { isIndustryFormProfileActive } from '../../../utils/industryFormProfile';
+import {
+  buildHeaderExtensionPayload,
+  flattenMaterialLineForForm,
+  mergeHeaderExtensionIntoForm,
+  prepareMaterialLineForApi,
+  resolveEcnFieldLabel,
+  sortedMaterialColumns,
+  type EcnProfileColumn,
+} from '../utils/ecnFormProfile';
 
 const KIND_KEYS: EcnChangeKind[] = ['material', 'process', 'drawing', 'other'];
 const DISPOSITION_KEYS = ['scrap', 'use_up', 'rework', 'return', 'other'];
@@ -34,6 +45,56 @@ export interface EcnChangeFormModalProps {
   onSuccess: () => void;
 }
 
+function buildEmptyMaterialRow(columns: EcnProfileColumn[]): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  for (const col of columns) {
+    row[col.key] = col.type === 'decimal' ? undefined : '';
+  }
+  if (row.material_code === undefined) row.material_code = '';
+  if (row.material_name === undefined) row.material_name = '';
+  return row;
+}
+
+function renderMaterialCell(
+  col: EcnProfileColumn,
+  index: number,
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+) {
+  const fieldKey = col.key;
+  const required = col.required;
+  const rules = required ? [{ required: true, message: t('common.required') }] : undefined;
+
+  if (fieldKey === 'disposition') {
+    return (
+      <AntForm.Item name={[index, fieldKey]} rules={rules} style={{ marginBottom: 0 }}>
+        <Select
+          allowClear
+          size="small"
+          style={{ width: '100%' }}
+          options={DISPOSITION_KEYS.map((k) => ({
+            value: k,
+            label: t(`app.kuaiplm.ecn.disposition.${k}`),
+          }))}
+        />
+      </AntForm.Item>
+    );
+  }
+
+  if (col.type === 'decimal' || fieldKey === 'owner_user_id') {
+    return (
+      <AntForm.Item name={[index, fieldKey]} rules={rules} style={{ marginBottom: 0 }}>
+        <InputNumber size="small" style={{ width: '100%' }} />
+      </AntForm.Item>
+    );
+  }
+
+  return (
+    <AntForm.Item name={[index, fieldKey]} rules={rules} style={{ marginBottom: 0 }}>
+      <Input size="small" />
+    </AntForm.Item>
+  );
+}
+
 const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
   open,
   editing,
@@ -44,105 +105,79 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance | undefined>(undefined);
+  const [formProfile, setFormProfile] = useState<EcnFormProfile | null>(null);
 
   const kindLabel = (s: string) => t(`app.kuaiplm.ecn.changeKind.${s}`, { defaultValue: s });
 
   useEffect(() => {
     if (!open) return;
-    formRef.current?.resetFields();
-  }, [open, editing?.uuid]);
+    let cancelled = false;
+    void engineeringChangeApi
+      .formProfile()
+      .then((p) => {
+        if (!cancelled) setFormProfile(p);
+      })
+      .catch((e) => {
+        if (!cancelled) messageApi.error(getApiErrorMessage(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, messageApi]);
+
+  const industryActive = isIndustryFormProfileActive(formProfile);
+  const materialColumns = useMemo(
+    () => sortedMaterialColumns(formProfile, industryActive),
+    [formProfile, industryActive],
+  );
 
   const lineColumns = useMemo<ColumnsType>(
-    () => [
-      {
-        title: t('app.kuaiplm.ecn.fields.materialCode'),
-        dataIndex: 'material_code',
-        width: 130,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item
-            name={[index, 'material_code']}
-            rules={[{ required: true, message: t('common.required') }]}
-            style={{ marginBottom: 0 }}
-          >
-            <Input size="small" />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('app.kuaiplm.ecn.fields.materialName'),
-        dataIndex: 'material_name',
-        width: 140,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item
-            name={[index, 'material_name']}
-            rules={[{ required: true, message: t('common.required') }]}
-            style={{ marginBottom: 0 }}
-          >
-            <Input size="small" />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('app.kuaiplm.ecn.fields.beforeDesc'),
-        dataIndex: 'before_desc',
-        width: 120,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item name={[index, 'before_desc']} style={{ marginBottom: 0 }}>
-            <Input size="small" />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('app.kuaiplm.ecn.fields.afterDesc'),
-        dataIndex: 'after_desc',
-        width: 120,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item name={[index, 'after_desc']} style={{ marginBottom: 0 }}>
-            <Input size="small" />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('app.kuaiplm.ecn.fields.disposition'),
-        dataIndex: 'disposition',
-        width: 110,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item name={[index, 'disposition']} style={{ marginBottom: 0 }}>
-            <Select
-              allowClear
-              size="small"
-              style={{ width: '100%' }}
-              options={DISPOSITION_KEYS.map((k) => ({
-                value: k,
-                label: t(`app.kuaiplm.ecn.disposition.${k}`),
-              }))}
-            />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('app.kuaiplm.ecn.fields.ownerUserId'),
-        dataIndex: 'owner_user_id',
-        width: 100,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item name={[index, 'owner_user_id']} style={{ marginBottom: 0 }}>
-            <InputNumber size="small" style={{ width: '100%' }} />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('app.kuaiplm.ecn.fields.ownerUserName'),
-        dataIndex: 'owner_user_name',
-        width: 110,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item name={[index, 'owner_user_name']} style={{ marginBottom: 0 }}>
-            <Input size="small" />
-          </AntForm.Item>
-        ),
-      },
-    ],
-    [t],
+    () =>
+      materialColumns.map((col) => ({
+        title: col.label,
+        dataIndex: col.key,
+        width: col.width || 110,
+        render: (_: unknown, __: unknown, index: number) => renderMaterialCell(col, index, t),
+      })),
+    [materialColumns, t],
   );
+
+  const headerFlags = useMemo(
+    () =>
+      industryActive
+        ? [...(formProfile?.header_option_flags || [])].sort(
+            (a, b) => (a.sort ?? 0) - (b.sort ?? 0),
+          )
+        : [],
+    [formProfile, industryActive],
+  );
+
+  const initialValues = useMemo(() => {
+    const emptyRow = buildEmptyMaterialRow(materialColumns);
+    if (editing) {
+      return {
+        project_id: editing.project_id,
+        change_kind: editing.change_kind,
+        title: editing.title,
+        change_reason: editing.change_reason,
+        remarks: editing.remarks,
+        ...mergeHeaderExtensionIntoForm(editing),
+        materials: editing.materials?.length
+          ? editing.materials.map((m) => flattenMaterialLineForForm(m))
+          : [emptyRow],
+      };
+    }
+    return {
+      project_id: projectId,
+      change_kind: 'material',
+      materials: [emptyRow],
+    };
+  }, [editing, materialColumns, projectId]);
+
+  useEffect(() => {
+    if (!open) return;
+    formRef.current?.setFieldsValue(initialValues);
+  }, [open, editing?.uuid, formProfile, initialValues]);
 
   return (
     <FormModalTemplate
@@ -152,43 +187,15 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
       onClose={onClose}
       formRef={formRef}
       grid={false}
-      width={980}
-      initialValues={
-        editing
-          ? {
-              project_id: editing.project_id,
-              change_kind: editing.change_kind,
-              title: editing.title,
-              change_reason: editing.change_reason,
-              remarks: editing.remarks,
-              materials: editing.materials?.length
-                ? editing.materials
-                : [{ material_code: '', material_name: '' }],
-            }
-          : {
-              project_id: projectId,
-              change_kind: 'material',
-              materials: [{ material_code: '', material_name: '' }],
-            }
-      }
+      width={formProfile?.material_line_columns?.length ? 1180 : 980}
+      initialValues={initialValues}
       onFinish={async (values) => {
         try {
-          const cleanMaterials = ((values.materials || []) as EcnMaterialLine[])
+          const cleanMaterials = ((values.materials || []) as Record<string, unknown>[])
             .filter((m) => m?.material_code && m?.material_name)
-            .map((m) => ({
-              material_id: m.material_id ?? null,
-              material_code: String(m.material_code).trim(),
-              material_name: String(m.material_name).trim(),
-              before_desc: m.before_desc || null,
-              after_desc: m.after_desc || null,
-              stock_qty: m.stock_qty ?? null,
-              unit_price: m.unit_price ?? null,
-              cost_amount: m.cost_amount ?? null,
-              disposition: m.disposition || null,
-              owner_user_id: m.owner_user_id ?? null,
-              owner_user_name: m.owner_user_name || null,
-              remarks: m.remarks || null,
-            }));
+            .map((m) =>
+              industryActive ? prepareMaterialLineForApi(m, materialColumns) : m,
+            );
           if (!cleanMaterials.length) {
             messageApi.error(t('app.kuaiplm.ecn.messages.materialRequired'));
             throw new Error('material required');
@@ -199,6 +206,7 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
             title: String(values.title || '').trim(),
             change_reason: values.change_reason || null,
             remarks: values.remarks || null,
+            extension_payload: buildHeaderExtensionPayload(values, formProfile, industryActive),
             materials: cleanMaterials,
           };
           if (editing?.id) {
@@ -240,11 +248,31 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
           />
         </Col>
         <Col span={24}>
-          <ProFormTextArea name="change_reason" label={t('app.kuaiplm.ecn.fields.changeReason')} />
+          <ProFormTextArea
+            name="change_reason"
+            label={resolveEcnFieldLabel(
+              formProfile,
+              'change_reason',
+              t('app.kuaiplm.ecn.fields.changeReason'),
+            )}
+          />
         </Col>
-        <Col span={24}>
-          <ProFormTextArea name="remarks" label={t('common.remark')} />
-        </Col>
+        {headerFlags.map((flag) => {
+          const key = String(flag.key);
+          const label = String(flag.label || key);
+          if (flag.type === 'boolean') {
+            return (
+              <Col span={12} key={key}>
+                <ProFormSwitch name={key} label={label} />
+              </Col>
+            );
+          }
+          return (
+            <Col span={12} key={key}>
+              <ProFormText name={key} label={label} />
+            </Col>
+          );
+        })}
       </Row>
       <UniTableDetail
         name="materials"
@@ -252,9 +280,17 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
         required
         requiredMessage={t('app.kuaiplm.ecn.messages.materialRequired')}
         columns={lineColumns}
-        initialValue={{ material_code: '', material_name: '' }}
+        initialValue={buildEmptyMaterialRow(materialColumns)}
         minRows={1}
+        tableProps={{
+          scroll: { x: materialColumns.reduce((sum, c) => sum + (c.width || 110), 0) },
+        }}
       />
+      <Row gutter={16} style={{ marginTop: 16 }}>
+        <Col span={24}>
+          <ProFormTextArea name="remarks" label={t('common.remark')} />
+        </Col>
+      </Row>
     </FormModalTemplate>
   );
 };

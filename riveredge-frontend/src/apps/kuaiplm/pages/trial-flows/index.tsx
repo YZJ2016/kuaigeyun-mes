@@ -3,40 +3,30 @@
  * 菜单待 DoD 后挂入；路由 /apps/kuaiplm/trial-flows
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
   ActionType,
-  ProFormInstance,
-  ProFormSelect,
-  ProFormText,
-  ProFormTextArea,
 } from '@ant-design/pro-components';
 import {
   App,
   Button,
-  Col,
   Descriptions,
-  Form as AntForm,
   Input,
-  InputNumber,
   Modal,
   Result,
-  Row,
   Select,
   Space,
   Table,
 } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../components/uni-table';
-import { UniTableDetail } from '../../../../components/uni-table-detail';
 import { rowActionKind, RowActionButton } from '../../../../components/uni-action';
+import TrialFlowFormModal from '../../components/TrialFlowFormModal';
 import {
   DetailDrawerSection,
   DetailDrawerTemplate,
-  FormModalTemplate,
   ListPageTemplate,
   detailDrawerBasicColumn,
 } from '../../../../components/layout-templates';
@@ -57,14 +47,18 @@ import {
 import { buildDocumentAuditColumns } from '../../../kuaizhizao/pages/shared/documentAuditColumns';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
-import Phase2ProjectSelect from '../../components/Phase2ProjectSelect';
 import {
   trialFlowApi,
   type TrialFlow,
   type TrialFlowBusinessType,
-  type TrialFlowMaterialLine,
+  type TrialFlowFormProfile,
   type TrialFlowStatus,
 } from '../../services/trial-flow';
+import { isIndustryFormProfileActive } from '../../../../utils/industryFormProfile';
+import {
+  formatHeaderFieldDisplayValue,
+  sortedHeaderFields,
+} from '../../utils/trialFlowFormProfile';
 
 const RESOURCE = 'kuaiplm:trial-flow';
 const STATUS_KEYS: TrialFlowStatus[] = [
@@ -104,8 +98,8 @@ const TrialFlowsPage: React.FC = () => {
 
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<TrialFlow[]>([]);
-  const formRef = useRef<ProFormInstance | undefined>(undefined);
   const [modalOpen, setModalOpen] = useState(false);
+  const [formProfile, setFormProfile] = useState<TrialFlowFormProfile | null>(null);
   const [editing, setEditing] = useState<TrialFlow | null>(null);
   const [detail, setDetail] = useState<TrialFlow | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -118,6 +112,27 @@ const TrialFlowsPage: React.FC = () => {
   const [concludeOpen, setConcludeOpen] = useState(false);
   const [conclusion, setConclusion] = useState<string>('pass');
   const [conclusionSummary, setConclusionSummary] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    void trialFlowApi
+      .formProfile()
+      .then((p) => {
+        if (!cancelled) setFormProfile(p);
+      })
+      .catch(() => {
+        if (!cancelled) setFormProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const industryProfileActive = isIndustryFormProfileActive(formProfile);
+  const profileHeaderFields = useMemo(
+    () => sortedHeaderFields(formProfile, industryProfileActive),
+    [formProfile, industryProfileActive],
+  );
 
   const reload = useCallback(() => actionRef.current?.reload(), []);
   const refreshDetail = useCallback(async (id: number) => {
@@ -166,59 +181,6 @@ const TrialFlowsPage: React.FC = () => {
       }
     },
     [messageApi],
-  );
-
-  const lineColumns = useMemo<ColumnsType>(
-    () => [
-      {
-        title: t('app.kuaiplm.trialFlow.fields.materialCode'),
-        dataIndex: 'material_code',
-        width: 140,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item
-            name={[index, 'material_code']}
-            rules={[{ required: true, message: t('common.required') }]}
-            style={{ marginBottom: 0 }}
-          >
-            <Input size="small" />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('app.kuaiplm.trialFlow.fields.materialName'),
-        dataIndex: 'material_name',
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item
-            name={[index, 'material_name']}
-            rules={[{ required: true, message: t('common.required') }]}
-            style={{ marginBottom: 0 }}
-          >
-            <Input size="small" />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('app.kuaiplm.trialFlow.fields.qty'),
-        dataIndex: 'qty',
-        width: 100,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item name={[index, 'qty']} style={{ marginBottom: 0 }}>
-            <InputNumber size="small" style={{ width: '100%' }} />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('app.kuaiplm.trialFlow.fields.unit'),
-        dataIndex: 'unit',
-        width: 80,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item name={[index, 'unit']} style={{ marginBottom: 0 }}>
-            <Input size="small" />
-          </AntForm.Item>
-        ),
-      },
-    ],
-    [t],
   );
 
   const columns = useMemo<ProColumns<TrialFlow>[]>(() => {
@@ -382,6 +344,13 @@ const TrialFlowsPage: React.FC = () => {
         render: (_, r) => typeLabel(r.business_type),
       },
       { key: 'title', title: t('app.kuaiplm.trialFlow.fields.title'), dataIndex: 'title' },
+      ...profileHeaderFields.map((field) => ({
+        key: field.key,
+        title: field.label,
+        dataIndex: field.key,
+        render: (_: unknown, r: TrialFlow) =>
+          formatHeaderFieldDisplayValue(field, r.extension_payload?.[field.key], t),
+      })),
       {
         key: 'lifecycle',
         title: t('common.status'),
@@ -404,7 +373,7 @@ const TrialFlowsPage: React.FC = () => {
       cols as ProDescriptionsItemProps<Record<string, unknown>>[],
       GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK,
     );
-  }, [t, statusLabel, typeLabel]);
+  }, [t, statusLabel, typeLabel, profileHeaderFields]);
 
   return (
     <ListPageTemplate>
@@ -484,107 +453,16 @@ const TrialFlowsPage: React.FC = () => {
         }}
       />
 
-      <FormModalTemplate
-        key={editing?.uuid ?? 'create'}
-        title={editing ? t('common.edit') : t('common.create')}
+      <TrialFlowFormModal
         open={modalOpen}
+        editing={editing}
+        filterProjectId={filterProjectId}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);
         }}
-        formRef={formRef}
-        grid={false}
-        width={860}
-        initialValues={
-          editing
-            ? {
-                project_id: editing.project_id,
-                business_type: editing.business_type,
-                title: editing.title,
-                remarks: editing.remarks,
-                materials: editing.materials?.length
-                  ? editing.materials
-                  : [{ material_code: '', material_name: '' }],
-              }
-            : {
-                project_id: filterProjectId,
-                business_type: 'component',
-                materials: [{ material_code: '', material_name: '' }],
-              }
-        }
-        onFinish={async (values) => {
-          try {
-            const materials = ((values.materials || []) as TrialFlowMaterialLine[])
-              .filter((m) => m?.material_code && m?.material_name)
-              .map((m) => ({
-                material_id: m.material_id ?? null,
-                material_code: String(m.material_code).trim(),
-                material_name: String(m.material_name).trim(),
-                qty: m.qty ?? null,
-                unit: m.unit || null,
-                remarks: m.remarks || null,
-              }));
-            const payload = {
-              project_id: Number(values.project_id),
-              business_type: values.business_type as TrialFlowBusinessType,
-              title: String(values.title || '').trim(),
-              remarks: values.remarks || null,
-              materials,
-            };
-            if (editing?.id) {
-              await trialFlowApi.update(editing.id, payload);
-            } else {
-              await trialFlowApi.create(payload);
-            }
-            messageApi.success(t('common.saveSuccess'));
-            setModalOpen(false);
-            setEditing(null);
-            reload();
-          } catch (e) {
-            messageApi.error(getApiErrorMessage(e));
-            throw e;
-          }
-        }}
-      >
-        <Row gutter={16}>
-          <Col span={12}>
-            <Phase2ProjectSelect
-              name="project_id"
-              label={t('app.kuaiplm.trialFlow.fields.project')}
-              rules={[{ required: true }]}
-              disabled={!!editing}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormSelect
-              name="business_type"
-              label={t('app.kuaiplm.trialFlow.fields.businessType')}
-              rules={[{ required: true }]}
-              disabled={!!editing}
-              options={TYPE_KEYS.map((k) => ({ label: typeLabel(k), value: k }))}
-            />
-          </Col>
-          <Col span={24}>
-            <ProFormText
-              name="title"
-              label={t('app.kuaiplm.trialFlow.fields.title')}
-              rules={[{ required: true }]}
-            />
-          </Col>
-          <Col span={24}>
-            <ProFormTextArea name="remarks" label={t('common.remark')} />
-          </Col>
-        </Row>
-        <UniTableDetail
-          name="materials"
-          title={t('app.kuaiplm.trialFlow.fields.materials')}
-          required
-          requiredMessage={t('app.kuaiplm.trialFlow.messages.materialRequired')}
-          columns={lineColumns}
-          initialValue={{ material_code: '', material_name: '' }}
-          minRows={1}
-        />
-      </FormModalTemplate>
+        onSuccess={reload}
+      />
 
       <DetailDrawerTemplate
         open={!!detail}

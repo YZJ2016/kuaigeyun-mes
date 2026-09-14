@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.common.base_service import AppBaseService
@@ -18,12 +18,16 @@ from apps.kuaiplm.schemas.engineering_change import (
     EcnMaterialLineIn,
     EcnMaterialLineOut,
     EcnSignoffOut,
+    EcnFormProfile,
     EngineeringChangeCreate,
     EngineeringChangeErpAudit,
     EngineeringChangeListItem,
     EngineeringChangeListResponse,
     EngineeringChangeResponse,
     EngineeringChangeUpdate,
+)
+from core.services.application.industry_extension_runtime_service import (
+    IndustryExtensionRuntimeService,
 )
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.audit_binding_service import AuditBindingService
@@ -32,6 +36,7 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, Valid
 from infra.models.user import User
 
 AUDIT_NODE = "engineering_change"
+PROFILE_KEY = "kuaiplm.ecn"
 ALLOWED_STATUS = {
     "draft",
     "pending",
@@ -61,6 +66,41 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
     def __init__(self) -> None:
         super().__init__(EngineeringChange)
         self.model = EngineeringChange
+
+    async def _profile(self, tenant_id: int) -> Dict[str, Any]:
+        return await IndustryExtensionRuntimeService.resolve_profile(tenant_id, PROFILE_KEY)
+
+    async def get_form_profile(self, tenant_id: int) -> EcnFormProfile:
+        enabled = await IndustryExtensionRuntimeService.is_industry_profile_enabled(
+            tenant_id, PROFILE_KEY
+        )
+        profile = await self._profile(tenant_id)
+        return EcnFormProfile(
+            industry_profile_enabled=enabled,
+            field_labels=dict(profile.get("field_labels") or {}),
+            material_line_columns=list(profile.get("material_line_columns") or []),
+            signoff_depts=list(profile.get("signoff_depts") or []),
+            header_option_flags=list(profile.get("header_option_flags") or []),
+            entry_sources=list(profile.get("entry_sources") or []),
+            validation_rules=list(profile.get("validation_rules") or []),
+        )
+
+    @staticmethod
+    def _signoff_depts_from_profile(profile: Dict[str, Any]) -> List[tuple[str, str]]:
+        items = profile.get("signoff_depts") or []
+        ordered: List[tuple[int, str, str]] = []
+        for item in items:
+            if not isinstance(item, dict) or not item.get("code"):
+                continue
+            ordered.append(
+                (
+                    int(item.get("sort") or 0),
+                    str(item["code"]),
+                    str(item.get("label") or item["code"]),
+                )
+            )
+        ordered.sort(key=lambda x: x[0])
+        return [(code, name) for _, code, name in ordered]
 
     async def _ensure_code(self, tenant_id: int, code: Optional[str]) -> str:
         raw = (code or "").strip()
@@ -150,6 +190,7 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
                 owner_user_id=line.owner_user_id,
                 owner_user_name=line.owner_user_name,
                 remarks=line.remarks,
+                extension_payload=line.extension_payload,
             )
             apply_create_audit(row, user)
             await row.save()
@@ -157,8 +198,17 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
     async def _seed_signoffs(
         self, tenant_id: int, ecn_id: int, user: User
     ) -> List[EngineeringChangeSignoff]:
+        enabled = await IndustryExtensionRuntimeService.is_industry_profile_enabled(
+            tenant_id, PROFILE_KEY
+        )
+        if enabled:
+            profile = await self._profile(tenant_id)
+            dept_defs = self._signoff_depts_from_profile(profile)
+        else:
+            dept_defs = []
+        dept_defs = dept_defs or DEFAULT_SIGNOFF_DEPTS
         created: List[EngineeringChangeSignoff] = []
-        for order, (code, name) in enumerate(DEFAULT_SIGNOFF_DEPTS):
+        for order, (code, name) in enumerate(dept_defs):
             row = EngineeringChangeSignoff(
                 tenant_id=tenant_id,
                 ecn_id=ecn_id,
@@ -197,6 +247,7 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
             change_reason=payload.change_reason,
             status="draft",
             remarks=payload.remarks,
+            extension_payload=payload.extension_payload,
         )
         apply_create_audit(row, user)
         await row.save()

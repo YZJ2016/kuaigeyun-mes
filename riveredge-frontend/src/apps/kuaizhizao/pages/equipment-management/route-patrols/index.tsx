@@ -12,7 +12,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
-import { App, Button, Modal, Row, Col, Table, Switch, Input, Typography } from 'antd';
+import { App, Button, Modal, Row, Col, Table, Switch, Input, Space, Typography } from 'antd';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -377,16 +377,20 @@ const RoutePatrolsPage: React.FC = () => {
           return row.measured_value || ((row.is_pass ?? true) ? '是' : '否');
         }
         return (
-          <Input
-            size="small"
-            value={row.measured_value}
-            addonAfter={row.unit || undefined}
-            onChange={(e) => {
-              const next = [...previewLines];
-              next[index] = { ...next[index], measured_value: e.target.value };
-              setPreviewLines(next);
-            }}
-          />
+          <Space.Compact>
+            <Input
+              size="small"
+              value={row.measured_value}
+              onChange={(e) => {
+                const next = [...previewLines];
+                next[index] = { ...next[index], measured_value: e.target.value };
+                setPreviewLines(next);
+              }}
+            />
+            {row.unit ? (
+              <Input size="small" disabled value={row.unit} style={{ width: 56 }} />
+            ) : null}
+          </Space.Compact>
         );
       },
     },
