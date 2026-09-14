@@ -22,18 +22,18 @@ const STAGE_I18N: Record<string, string> = {
 export const getPurchaseReturnLifecycle = createLifecycleResolver({
   stageDefs: [
     { key: 'pending_return_goods', label: '待退货', labelKey: `${P}.statusPending` },
-    { key: 'done', label: '已退货', labelKey: `${P}.statusReturned` },
+    { key: 'returned_goods', label: '已退货', labelKey: `${P}.statusReturned` },
   ],
   statusToKey: {
     待退货: 'pending_return_goods',
-    已退货: 'done',
+    已退货: 'returned_goods',
     已取消: 'cancelled',
   },
   nextStepSuggestionKeys: {
     pending_return_goods: [],
-    done: [],
+    returned_goods: [],
   },
-  successKeys: ['done'],
+  successKeys: ['returned_goods'],
 });
 
 export function buildPurchaseReturnLifecycleValueEnum(

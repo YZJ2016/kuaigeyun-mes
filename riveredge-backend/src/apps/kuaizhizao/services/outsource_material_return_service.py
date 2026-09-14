@@ -290,6 +290,10 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
                 for r in rows
             },
         )
+        from apps.kuaizhizao.services.document_lifecycle_service import get_production_return_lifecycle
+
+        for row, resp in zip(rows, responses):
+            resp.lifecycle = get_production_return_lifecycle(row, milestones=[])
         return await enrich_outsource_docs_with_supplier(tenant_id, rows, responses)
 
     async def get_material_return(
@@ -304,4 +308,8 @@ class OutsourceMaterialReturnService(AppBaseService[OutsourceMaterialReturn]):
         ).first()
         if not row:
             raise NotFoundError(f"委外退料单ID {return_id} 不存在")
-        return OutsourceMaterialReturnResponse.model_validate(row)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_production_return_lifecycle
+
+        resp = OutsourceMaterialReturnResponse.model_validate(row)
+        resp.lifecycle = get_production_return_lifecycle(row)
+        return resp

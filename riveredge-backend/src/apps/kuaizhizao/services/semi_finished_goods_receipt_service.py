@@ -209,6 +209,9 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         ).all()
         resp = SemiFinishedGoodsReceiptWithItemsResponse.model_validate(receipt)
         resp.items = [SemiFinishedGoodsReceiptItemResponse.model_validate(i) for i in items]
+        from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle
+
+        resp.lifecycle = get_other_inbound_lifecycle(receipt)
         return resp
 
     async def list_semi_finished_goods_receipts(
@@ -273,6 +276,10 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             item_previews=item_previews,
             quantity_units=quantity_units,
         )
+        from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle
+
+        for receipt, resp in zip(receipts, responses):
+            resp.lifecycle = get_other_inbound_lifecycle(receipt, milestones=[])
         from apps.kuaizhizao.services.warehouse_service import enrich_production_receipts_with_customer
 
         enriched = await enrich_production_receipts_with_customer(tenant_id, receipts, responses)

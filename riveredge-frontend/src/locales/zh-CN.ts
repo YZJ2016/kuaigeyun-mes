@@ -29209,6 +29209,14 @@ export default {
     '销售订单菜单徽章改按发货状态统计',
   'pages.dashboard.updateLog.entries.sales-order-menu-badge-delivery-status.description':
     '左侧菜单销售订单徽章不再统计待审核与执行中订单，仅在有待交货或部分交货明细时提示；逾期未交仍显示红色，未开通财务模块的组织不再被大量蓝色徽章干扰。',
+  'pages.dashboard.updateLog.entries.inbound-hub-lifecycle-received-harden.title':
+    '入库管理生命周期阶段加固',
+  'pages.dashboard.updateLog.entries.inbound-hub-lifecycle-received-harden.description':
+    '已入库阶段接入全局 received；代工来料不再用未登记的 processed 作阶段 key；成品/半成品/生产退料/委外收退由后端下发生命周期，入库 Hub 与出库一致按真源硬校验展示。',
+  'pages.dashboard.updateLog.entries.outbound-hub-purchase-return-lifecycle-done-key.title':
+    '出库管理打开报错修复',
+  'pages.dashboard.updateLog.entries.outbound-hub-purchase-return-lifecycle-done-key.description':
+    '出库管理聚合采购退货时，生命周期阶段误用未登记的 done key 导致整页崩溃；已改为全局已退货阶段 returned_goods。',
   'pages.dashboard.updateLog.entries.equipment-ledger-null-nature-exclude-fix.title':
     '设备台账未填性质时整表空白',
   'pages.dashboard.updateLog.entries.equipment-ledger-null-nature-exclude-fix.description':

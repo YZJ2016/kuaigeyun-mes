@@ -1839,7 +1839,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getInboundLifecycle(record as Record<string, unknown>);
+        const lifecycle = getInboundLifecycle(record as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lifecycle.percent}

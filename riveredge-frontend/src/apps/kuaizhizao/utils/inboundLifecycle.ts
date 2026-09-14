@@ -1,89 +1,43 @@
 /**
- * 入库管理生命周期：草稿→已确认/待退料→已退料（生产退料）/已完成（采购/成品）
+ * 入库管理生命周期：以后端 lifecycle 为唯一真源（各入库类型阶段不同）。
+ * stageDefs 仅作类型对齐；展示文案与主轴顺序来自 record.lifecycle.main_stages。
+ * 禁止用单据 status 在前端拼装主轴（见 createLifecycleResolver）。
  */
 
-import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
-import type { BackendLifecycle } from './backendLifecycle';
-import { parseBackendLifecycle } from './backendLifecycle';
+import { createLifecycleResolver } from './createLifecycleResolver';
 
-function norm(s: string | undefined): string {
-  return (s ?? '').trim();
-}
-
-const STATUS_TO_STAGE: Record<string, string> = {
-  草稿: '草稿',
-  draft: '草稿',
-  DRAFT: '草稿',
-  待入库: '待入库',
-  已确认: '已确认',
-  已完成: '已完成',
-  completed: '已完成',
-  COMPLETED: '已完成',
-  /** 采购/成品入库确认后后端状态 */
-  已入库: '已入库',
-  已取消: '已取消',
-  待退料: '待退料',
-  已退料: '已退料',
-};
-
-function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecycle {
-  const status = norm(record?.status as string);
-  const stageName = (STATUS_TO_STAGE[status] ?? status) || '草稿';
-  const keyMap: Record<string, string> = {
-    草稿: 'draft',
-    待入库: 'pending_inbound',
-    已确认: 'confirmed',
-    已完成: 'completed',
-    已入库: 'completed',
-    已取消: 'cancelled',
-    待退料: 'pending_return',
-    已退料: 'returned',
-  };
-  const key = keyMap[stageName] ?? 'draft';
-  const stageDefs = [
+export const getInboundLifecycle = createLifecycleResolver({
+  stageDefs: [
+    { key: 'pending_inbound', label: '待入库' },
+    { key: 'received', label: '已入库' },
     { key: 'draft', label: '草稿' },
     { key: 'confirmed', label: '已确认' },
     { key: 'completed', label: '已完成' },
-  ];
-  const stageToIdx: Record<string, number> = {
-    草稿: 0,
-    待入库: 1,
-    已确认: 1,
-    已完成: 2,
-    已入库: 2,
-    已取消: 0,
-    待退料: 1,
-    已退料: 2,
-  };
-  const curIdx = stageToIdx[stageName] ?? 0;
-  const isException = stageName === '已取消';
-  const isDone = stageName === '已完成' || stageName === '已退料' || stageName === '已入库';
-  const mainStages = stageDefs.map((s, idx) => {
-    let st: 'done' | 'active' | 'pending' = 'pending';
-    if (isException) st = 'pending';
-    else if (idx < curIdx) st = 'done';
-    else if (idx === curIdx) st = 'active';
-    return { key: s.key, label: s.label, status: st };
-  });
-  return {
-    current_stage_key: key,
-    /** 列表接口常不带 lifecycle，需与后端采购入库「已入库」语义一致 */
-    current_stage_name: stageName === '已入库' ? '已入库' : stageName,
-    status: isException ? 'exception' : isDone ? 'success' : 'normal',
-    main_stages: mainStages,
-    next_step_suggestions: ['草稿', '待入库'].includes(stageName)
-      ? ['确认']
-      : ['已确认', '待退料'].includes(stageName)
-        ? ['完成']
-        : [],
-  };
-}
-
-export function getInboundLifecycle(
-  record: Record<string, unknown> | null | undefined
-): LifecycleResult {
-  if (!record) return { percent: 0, stageName: '-', mainStages: [] };
-  const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
-  if (backend?.main_stages?.length) return parseBackendLifecycle(backend);
-  return parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
-}
+    { key: 'pending_return', label: '待退料' },
+    { key: 'returned', label: '已退料' },
+    { key: 'pending_return_goods', label: '待退货' },
+    { key: 'pending_material_return', label: '待归还' },
+    { key: 'cancelled', label: '已取消' },
+  ],
+  statusToKey: {
+    待入库: 'pending_inbound',
+    已入库: 'received',
+    草稿: 'draft',
+    draft: 'draft',
+    已确认: 'confirmed',
+    已完成: 'completed',
+    completed: 'completed',
+    待退料: 'pending_return',
+    已退料: 'returned',
+    待退货: 'pending_return_goods',
+    已退货: 'completed',
+    待归还: 'pending_material_return',
+    已归还: 'returned',
+    已取消: 'cancelled',
+    cancelled: 'cancelled',
+  },
+  exceptionKeys: ['cancelled'],
+  exceptionStageKey: 'cancelled',
+  nextStepSuggestionKeys: {},
+  successKeys: ['received', 'completed', 'returned'],
+});

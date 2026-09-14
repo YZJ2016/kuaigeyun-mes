@@ -94,8 +94,8 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
   );
 
   const lifecycle = useMemo(
-    () => (contentReady ? getInboundLifecycle(effective) : null),
-    [contentReady, effective],
+    () => (contentReady ? getInboundLifecycle(effective as Record<string, unknown>, t) : null),
+    [contentReady, effective, t],
   );
   const nextSteps = lifecycle?.nextStepSuggestions;
 
