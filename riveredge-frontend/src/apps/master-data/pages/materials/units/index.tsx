@@ -105,9 +105,10 @@ const UnitsPage: React.FC = () => {
       const res = await materialUnitApi.ensurePresets();
       messageApi.success(
         t('app.master-data.units.loadPresetSuccess', {
-          units: res.units_created,
-          backfill: res.units_backfilled,
-          conversions: res.conversions_created,
+          units: res.units_created ?? 0,
+          backfill: res.units_backfilled ?? 0,
+          fromMaterials: res.units_from_materials ?? 0,
+          conversions: res.conversions_created ?? 0,
         }),
       );
       refreshMaterialUnitCaches();
@@ -904,13 +905,6 @@ const UnitsPage: React.FC = () => {
         activeTabKey={activeTabKey}
         onTabChange={(key) => setActiveTabKey(key as TabKey)}
         preserveMounted
-        tabBarExtraContent={
-          perms.canCreate ? (
-            <Button type="default" loading={presetLoading} onClick={() => void handleLoadPreset()}>
-              {t('app.master-data.units.loadPreset')}
-            </Button>
-          ) : null
-        }
         tabs={[
           {
             key: 'units',
@@ -928,6 +922,20 @@ const UnitsPage: React.FC = () => {
                 showCreateButton={perms.canCreate}
                 createButtonText={withSingleNewShortcutHint(t('app.master-data.units.createTitle'))}
                 onCreate={openCreateUnit}
+                toolBarActionsAfterCreate={
+                  perms.canCreate
+                    ? [
+                        <Button
+                          key="loadPreset"
+                          type="default"
+                          loading={presetLoading}
+                          onClick={() => void handleLoadPreset()}
+                        >
+                          {t('app.master-data.units.loadPreset')}
+                        </Button>,
+                      ]
+                    : []
+                }
                 enableRowSelection={perms.canDelete}
                 showDeleteButton={perms.canDelete}
                 deleteConfirmTitle={t('common.batchDeleteTitle')}

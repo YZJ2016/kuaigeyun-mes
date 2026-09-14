@@ -166,7 +166,6 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   onChange,
   formItemProps,
   fieldProps,
-  ...restProps
 }) => {
   const { style: formItemStyle, ...restFormItemProps } = formItemProps || {}
   const {
@@ -601,7 +600,6 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
           : undefined
       }
       {...restFieldProps}
-      {...restProps}
       mode={isMultiple ? 'multiple' : undefined}
     />
   );

@@ -32,6 +32,7 @@ class QualityComplaintBase(BaseModel):
     source_inspection_type: Optional[str] = Field(None, max_length=50)
     source_inspection_id: Optional[int] = None
     remarks: Optional[str] = None
+    extension_payload: Optional[dict] = None
 
 
 class QualityComplaintCreate(QualityComplaintBase):
@@ -66,6 +67,7 @@ class QualityComplaintUpdate(BaseModel):
     supplier_response: Optional[str] = None
     supplier_response_attachments: Optional[List[dict]] = None
     export_masked: Optional[bool] = None
+    extension_payload: Optional[dict] = None
 
 
 class QualityComplaintResponse(QualityComplaintBase):

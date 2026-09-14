@@ -124,6 +124,12 @@ class IndustryExtensionRuntimeService:
             tenant_id, app_code, replace_decls
         )
 
+        from core.services.system.menu_takeover_service import MenuTakeoverService
+
+        await MenuTakeoverService.apply_extension_pack_menu(
+            tenant_id, app_code, replace_decls
+        )
+
     @staticmethod
     async def _apply_document_replacements(
         tenant_id: int, app_code: str, replace_decls: List[IndustryExtensionDecl]
@@ -209,9 +215,12 @@ class IndustryExtensionRuntimeService:
     async def list_active_document_replacements(tenant_id: int) -> List[Dict[str, Any]]:
         """供宿主页 FE 解析：当前租户生效的 document 替代。"""
         return await IndustryExtensionRuntimeService._read_document_replacements(tenant_id)
+
+    @staticmethod
+    async def ensure_missing_profiles_for_module(tenant_id: int, app_code: str) -> int:
         """补写已启用模块仍缺失的 profile 键；已存在配置不覆盖。
 
-        用于包内后增扩展（如先启样品再补 BOM）后，菜单同步即可补齐，无需停用再启用。
+        用于包内后增扩展（如先启样品再补 ECN）后，菜单同步即可补齐，无需停用再启用。
         """
         if not is_industry_module_app_code(app_code):
             return 0
@@ -277,6 +286,11 @@ class IndustryExtensionRuntimeService:
             await IndustryExtensionRuntimeService._apply_document_replacements(
                 tenant_id, code, replace_decls
             )
+            from core.services.system.menu_takeover_service import MenuTakeoverService
+
+            await MenuTakeoverService.apply_extension_pack_menu(
+                tenant_id, code, replace_decls
+            )
         return total
 
     @staticmethod
@@ -297,6 +311,13 @@ class IndustryExtensionRuntimeService:
         await IndustryExtensionRuntimeService._revert_standalone_seeds(tenant_id, app_code, decls)
         await IndustryExtensionRuntimeService._clear_document_replacements_for_module(
             tenant_id, app_code
+        )
+
+        from core.services.system.menu_takeover_service import MenuTakeoverService
+
+        replace_decls = [d for d in decls if d.kind == "replace"]
+        await MenuTakeoverService.revert_extension_pack_menu(
+            tenant_id, app_code, replace_decls
         )
 
     @staticmethod
@@ -337,16 +358,9 @@ class IndustryExtensionRuntimeService:
     def _builtin_seed(app_code: str, profile_key: str) -> Optional[Dict[str, Any]]:
         if app_code != "kuaielectronics":
             return None
-        from apps.kuaielectronics.profiles import (
-            ELECTRONICS_BOM_COLLAB_SEED,
-            ELECTRONICS_SAMPLE_PROCESS_SEED,
-        )
+        from apps.kuaielectronics.profiles import resolve_electronics_profile_seed
 
-        mapping = {
-            "kuaiplm.sample_process": ELECTRONICS_SAMPLE_PROCESS_SEED,
-            "kuaiplm.bom_collab": ELECTRONICS_BOM_COLLAB_SEED,
-        }
-        seed = mapping.get(profile_key)
+        seed = resolve_electronics_profile_seed(profile_key)
         return copy.deepcopy(seed) if seed else None
 
     @staticmethod
@@ -370,6 +384,15 @@ class IndustryExtensionRuntimeService:
         row = await TenantConfig.filter(tenant_id=tenant_id, config_key=key).first()
         if row:
             await row.delete()
+
+    @staticmethod
+    async def is_industry_profile_enabled(tenant_id: int, profile_key: str) -> bool:
+        """租户是否已启用行业包写入的 profile（非通用默认）。"""
+        key = tenant_config_key_for_profile(profile_key)
+        row = await TenantService().get_tenant_config(tenant_id, key)
+        if not row or not isinstance(row.config_value, dict):
+            return False
+        return bool(row.config_value.get("enabled"))
 
     @staticmethod
     async def resolve_profile(tenant_id: int, profile_key: str) -> Dict[str, Any]:

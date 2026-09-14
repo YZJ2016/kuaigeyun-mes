@@ -74,4 +74,5 @@ class BomCollaborationLine(BaseModel):
     qty = fields.DecimalField(max_digits=18, decimal_places=4, null=True)
     unit = fields.CharField(max_length=20, null=True)
     remarks = fields.CharField(max_length=500, null=True)
+    extension_payload = fields.JSONField(null=True, description="行业扩展载荷")
     deleted_at = fields.DatetimeField(null=True)

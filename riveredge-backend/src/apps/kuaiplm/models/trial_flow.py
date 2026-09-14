@@ -73,6 +73,7 @@ class TrialFlow(BaseModel):
     )
     conclusion_summary = fields.TextField(null=True, description="结论说明")
     remarks = fields.TextField(null=True, description="备注")
+    extension_payload = fields.JSONField(null=True, description="行业扩展载荷（profile 头字段）")
     submitted_at = fields.DatetimeField(null=True)
     approved_at = fields.DatetimeField(null=True)
     concluded_at = fields.DatetimeField(null=True)

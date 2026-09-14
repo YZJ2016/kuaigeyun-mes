@@ -76,6 +76,9 @@ class SampleProcessListResponse(BaseModel):
 class SampleProcessFormProfile(BaseModel):
     """前端表单/列表消费的扩展 profile。"""
 
+    industry_profile_enabled: bool = Field(
+        False, description="是否已启用行业包 profile（false 时前端保持通用 UI）"
+    )
     request_kinds: List[Dict[str, Any]] = Field(default_factory=list)
     attachment_types: List[Dict[str, Any]] = Field(default_factory=list)
     field_labels: Dict[str, str] = Field(default_factory=dict)

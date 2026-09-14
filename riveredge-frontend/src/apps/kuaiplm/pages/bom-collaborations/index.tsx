@@ -57,6 +57,16 @@ import { buildDocumentAuditColumns } from '../../../kuaizhizao/pages/shared/docu
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import Phase2ProjectSelect from '../../components/Phase2ProjectSelect';
+import { isIndustryFormProfileActive } from '../../../../utils/industryFormProfile';
+import {
+  buildEmptyLineRecord,
+  buildLineDetailColumns,
+  flattenLineForForm,
+  isDecimalLineColumn,
+  prepareLineForApi,
+  sortedLineColumns,
+  type BomCollabProfileColumn,
+} from '../../utils/bomCollabFormProfile';
 import {
   bomCollabApi,
   type BomCollabFormProfile,
@@ -68,17 +78,39 @@ import {
 const RESOURCE = 'kuaiplm:bom-collab';
 const STATUS_KEYS: BomCollabStatus[] = ['draft', 'pending', 'approved', 'entered', 'rejected'];
 
-function normalizeLines(raw: BomCollabLine[] | undefined): BomCollabLine[] {
+function normalizeLines(
+  raw: BomCollabLine[] | undefined,
+  columns: BomCollabProfileColumn[],
+  industryActive: boolean,
+): BomCollabLine[] {
   return (raw || [])
-    .filter((m) => m?.material_code && m?.material_name)
-    .map((m) => ({
-      material_id: m.material_id ?? null,
-      material_code: String(m.material_code).trim(),
-      material_name: String(m.material_name).trim(),
-      qty: m.qty ?? null,
-      unit: m.unit || null,
-      remarks: m.remarks || null,
-    }));
+    .filter((m) => {
+      const code = String(m?.material_code ?? '').trim();
+      const name = String(m?.material_name ?? '').trim();
+      return code && name;
+    })
+    .map((m) => {
+      if (industryActive) {
+        return prepareLineForApi(m as Record<string, unknown>, columns);
+      }
+      return {
+        material_id: m.material_id ?? null,
+        material_code: String(m.material_code).trim(),
+        material_name: String(m.material_name).trim(),
+        qty: m.qty ?? null,
+        unit: m.unit || null,
+        remarks: m.remarks || null,
+      };
+    });
+}
+
+function mapLinesForForm(
+  lines: BomCollabLine[] | undefined,
+  industryActive: boolean,
+): Record<string, unknown>[] {
+  if (!lines?.length) return [];
+  if (!industryActive) return lines;
+  return lines.map((line) => flattenLineForForm(line));
 }
 
 const BomCollaborationsPage: React.FC = () => {
@@ -107,15 +139,30 @@ const BomCollaborationsPage: React.FC = () => {
     };
   }, [messageApi]);
 
+  const industryProfileActive = isIndustryFormProfileActive(formProfile);
+  const profileLineColumns = useMemo(
+    () => sortedLineColumns(industryProfileActive ? formProfile : null),
+    [formProfile, industryProfileActive],
+  );
+  const emptyLineRecord = useMemo(
+    () =>
+      industryProfileActive
+        ? buildEmptyLineRecord(profileLineColumns)
+        : { material_code: '', material_name: '' },
+    [industryProfileActive, profileLineColumns],
+  );
+
   const sectionLabel = useCallback(
     (key: 'electronics' | 'structure') => {
-      const hit = formProfile?.sections?.find((s) => s.key === key);
-      if (hit?.label) return hit.label;
+      if (industryProfileActive) {
+        const hit = formProfile?.sections?.find((s) => s.key === key);
+        if (hit?.label) return hit.label;
+      }
       return key === 'electronics'
         ? t('app.kuaiplm.bomCollab.fields.electronics')
         : t('app.kuaiplm.bomCollab.fields.structure');
     },
-    [formProfile, t],
+    [formProfile, industryProfileActive, t],
   );
   const electronicsLabel = sectionLabel('electronics');
   const structureLabel = sectionLabel('structure');
@@ -197,58 +244,80 @@ const BomCollaborationsPage: React.FC = () => {
     [messageApi],
   );
 
-  const lineColumns = useMemo<ColumnsType>(
-    () => [
-      {
-        title: t('app.kuaiplm.bomCollab.fields.materialCode'),
-        dataIndex: 'material_code',
-        width: 140,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item
-            name={[index, 'material_code']}
-            rules={[{ required: true, message: t('common.required') }]}
-            style={{ marginBottom: 0 }}
-          >
+  const lineColumns = useMemo<ColumnsType>(() => {
+    if (!industryProfileActive) {
+      return [
+        {
+          title: t('app.kuaiplm.bomCollab.fields.materialCode'),
+          dataIndex: 'material_code',
+          width: 140,
+          render: (_: unknown, __: unknown, index: number) => (
+            <AntForm.Item
+              name={[index, 'material_code']}
+              rules={[{ required: true, message: t('common.required') }]}
+              style={{ marginBottom: 0 }}
+            >
+              <Input size="small" />
+            </AntForm.Item>
+          ),
+        },
+        {
+          title: t('app.kuaiplm.bomCollab.fields.materialName'),
+          dataIndex: 'material_name',
+          render: (_: unknown, __: unknown, index: number) => (
+            <AntForm.Item
+              name={[index, 'material_name']}
+              rules={[{ required: true, message: t('common.required') }]}
+              style={{ marginBottom: 0 }}
+            >
+              <Input size="small" />
+            </AntForm.Item>
+          ),
+        },
+        {
+          title: t('app.kuaiplm.bomCollab.fields.qty'),
+          dataIndex: 'qty',
+          width: 100,
+          render: (_: unknown, __: unknown, index: number) => (
+            <AntForm.Item name={[index, 'qty']} style={{ marginBottom: 0 }}>
+              <InputNumber size="small" style={{ width: '100%' }} />
+            </AntForm.Item>
+          ),
+        },
+        {
+          title: t('app.kuaiplm.bomCollab.fields.unit'),
+          dataIndex: 'unit',
+          width: 80,
+          render: (_: unknown, __: unknown, index: number) => (
+            <AntForm.Item name={[index, 'unit']} style={{ marginBottom: 0 }}>
+              <Input size="small" />
+            </AntForm.Item>
+          ),
+        },
+      ];
+    }
+
+    return profileLineColumns.map((col) => ({
+      title: col.label,
+      dataIndex: col.key,
+      width: col.width,
+      render: (_: unknown, __: unknown, index: number) => {
+        const rules = col.required ? [{ required: true, message: t('common.required') }] : undefined;
+        if (isDecimalLineColumn(col)) {
+          return (
+            <AntForm.Item name={[index, col.key]} rules={rules} style={{ marginBottom: 0 }}>
+              <InputNumber size="small" style={{ width: '100%' }} />
+            </AntForm.Item>
+          );
+        }
+        return (
+          <AntForm.Item name={[index, col.key]} rules={rules} style={{ marginBottom: 0 }}>
             <Input size="small" />
           </AntForm.Item>
-        ),
+        );
       },
-      {
-        title: t('app.kuaiplm.bomCollab.fields.materialName'),
-        dataIndex: 'material_name',
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item
-            name={[index, 'material_name']}
-            rules={[{ required: true, message: t('common.required') }]}
-            style={{ marginBottom: 0 }}
-          >
-            <Input size="small" />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('app.kuaiplm.bomCollab.fields.qty'),
-        dataIndex: 'qty',
-        width: 100,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item name={[index, 'qty']} style={{ marginBottom: 0 }}>
-            <InputNumber size="small" style={{ width: '100%' }} />
-          </AntForm.Item>
-        ),
-      },
-      {
-        title: t('app.kuaiplm.bomCollab.fields.unit'),
-        dataIndex: 'unit',
-        width: 80,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item name={[index, 'unit']} style={{ marginBottom: 0 }}>
-            <Input size="small" />
-          </AntForm.Item>
-        ),
-      },
-    ],
-    [t],
-  );
+    }));
+  }, [industryProfileActive, profileLineColumns, t]);
 
   const columns = useMemo<ProColumns<BomCollaboration>[]>(() => {
     const cols: ProColumns<BomCollaboration>[] = [
@@ -463,28 +532,31 @@ const BomCollaborationsPage: React.FC = () => {
   }, [t, statusLabel]);
 
   const detailLineColumns = useMemo(
-    () => [
-      {
-        title: t('app.kuaiplm.bomCollab.fields.materialCode'),
-        dataIndex: 'material_code',
-        width: 140,
-      },
-      {
-        title: t('app.kuaiplm.bomCollab.fields.materialName'),
-        dataIndex: 'material_name',
-      },
-      {
-        title: t('app.kuaiplm.bomCollab.fields.qty'),
-        dataIndex: 'qty',
-        width: 90,
-      },
-      {
-        title: t('app.kuaiplm.bomCollab.fields.unit'),
-        dataIndex: 'unit',
-        width: 80,
-      },
-    ],
-    [t],
+    () =>
+      industryProfileActive
+        ? buildLineDetailColumns(formProfile, t)
+        : [
+            {
+              title: t('app.kuaiplm.bomCollab.fields.materialCode'),
+              dataIndex: 'material_code',
+              width: 140,
+            },
+            {
+              title: t('app.kuaiplm.bomCollab.fields.materialName'),
+              dataIndex: 'material_name',
+            },
+            {
+              title: t('app.kuaiplm.bomCollab.fields.qty'),
+              dataIndex: 'qty',
+              width: 90,
+            },
+            {
+              title: t('app.kuaiplm.bomCollab.fields.unit'),
+              dataIndex: 'unit',
+              width: 80,
+            },
+          ],
+    [formProfile, industryProfileActive, t],
   );
 
   return (
@@ -585,22 +657,30 @@ const BomCollaborationsPage: React.FC = () => {
                 title: editing.title,
                 remarks: editing.remarks,
                 electronics_lines: editing.electronics_lines?.length
-                  ? editing.electronics_lines
-                  : [{ material_code: '', material_name: '' }],
+                  ? mapLinesForForm(editing.electronics_lines, industryProfileActive)
+                  : [emptyLineRecord],
                 structure_lines: editing.structure_lines?.length
-                  ? editing.structure_lines
-                  : [{ material_code: '', material_name: '' }],
+                  ? mapLinesForForm(editing.structure_lines, industryProfileActive)
+                  : [emptyLineRecord],
               }
             : {
                 project_id: filterProjectId,
-                electronics_lines: [{ material_code: '', material_name: '' }],
-                structure_lines: [{ material_code: '', material_name: '' }],
+                electronics_lines: [emptyLineRecord],
+                structure_lines: [emptyLineRecord],
               }
         }
         onFinish={async (values) => {
           try {
-            const electronics = normalizeLines(values.electronics_lines);
-            const structure = normalizeLines(values.structure_lines);
+            const electronics = normalizeLines(
+              values.electronics_lines,
+              profileLineColumns,
+              industryProfileActive,
+            );
+            const structure = normalizeLines(
+              values.structure_lines,
+              profileLineColumns,
+              industryProfileActive,
+            );
             if (editing?.id) {
               await bomCollabApi.update(editing.id, {
                 title: String(values.title || '').trim(),
@@ -652,14 +732,14 @@ const BomCollaborationsPage: React.FC = () => {
           name="electronics_lines"
           title={`${electronicsLabel}${t('app.kuaiplm.bomCollab.fields.linesSuffix')}`}
           columns={lineColumns}
-          initialValue={{ material_code: '', material_name: '' }}
+          initialValue={emptyLineRecord}
           minRows={1}
         />
         <UniTableDetail
           name="structure_lines"
           title={`${structureLabel}${t('app.kuaiplm.bomCollab.fields.linesSuffix')}`}
           columns={lineColumns}
-          initialValue={{ material_code: '', material_name: '' }}
+          initialValue={emptyLineRecord}
           minRows={1}
         />
       </FormModalTemplate>

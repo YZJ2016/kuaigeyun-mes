@@ -44,6 +44,7 @@ export interface QualityComplaint {
   export_masked?: boolean;
   eight_d_report_id?: number;
   remarks?: string;
+  extension_payload?: Record<string, unknown> | null;
   created_by_name?: string;
   updated_by_name?: string;
   created_at?: string;

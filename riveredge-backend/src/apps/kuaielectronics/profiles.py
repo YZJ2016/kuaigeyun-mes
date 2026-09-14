@@ -1,8 +1,245 @@
-"""电子制造行业包：样品加工替代 profile 与 ESD 独立能力种子。"""
+"""电子制造行业包：样品/BOM/ECN/试流/返工 profile 种子与 ESD 独立能力。"""
 
 from __future__ import annotations
 
 from typing import Any, Dict, List
+
+# ---------------------------------------------------------------------------
+# R-04 工程变更（用户提供：变更单对照列 + 八部门会签 + 勾选项）
+# 列 key 映射通用 extension_payload / 现有中性字段；标签与必填由 profile 驱动
+# ---------------------------------------------------------------------------
+
+_ECN_MATERIAL_LINE_COLUMNS: List[Dict[str, Any]] = [
+    {"key": "material_code", "label": "物料编码", "sort": 5, "required": True, "width": 120},
+    {"key": "material_name", "label": "物料名称", "sort": 10, "required": True, "width": 140},
+    {"key": "before_material_code", "label": "修改前料号", "sort": 20, "width": 110},
+    {"key": "after_material_code", "label": "修改后料号", "sort": 25, "width": 110},
+    {"key": "before_desc", "label": "变更前描述", "sort": 30, "width": 120},
+    {"key": "after_desc", "label": "变更后描述", "sort": 35, "width": 120},
+    {"key": "unit_price", "label": "单价", "sort": 40, "width": 90, "type": "decimal"},
+    {"key": "cost_delta", "label": "成本增减", "sort": 45, "width": 90, "type": "decimal"},
+    {"key": "own_material_stock", "label": "自有材料库存", "sort": 50, "width": 100, "type": "decimal"},
+    {"key": "supplier_material_stock", "label": "供方材料库存", "sort": 55, "width": 100, "type": "decimal"},
+    {"key": "material_disposition", "label": "材料处理方式", "sort": 60, "width": 110},
+    {"key": "material_disposition_notes", "label": "材料处理备注", "sort": 65, "width": 120},
+    {"key": "wip_qty", "label": "在制品库存", "sort": 70, "width": 90, "type": "decimal", "dept": "plan"},
+    {"key": "wip_disposition", "label": "在制品处理", "sort": 75, "width": 110, "dept": "plan"},
+    {"key": "own_fg_stock", "label": "自有成品库存", "sort": 80, "width": 100, "type": "decimal", "dept": "sales"},
+    {"key": "customer_fg_stock", "label": "客户成品库存", "sort": 85, "width": 100, "type": "decimal", "dept": "sales"},
+    {"key": "fg_disposition", "label": "成品处理", "sort": 90, "width": 110, "dept": "sales"},
+    {"key": "shipment_remarks", "label": "出货备注", "sort": 95, "width": 120, "dept": "sales"},
+    {"key": "processing_repair_cost", "label": "加工返修费", "sort": 100, "width": 100, "type": "decimal"},
+    {"key": "disposition", "label": "库存处置", "sort": 105, "width": 100},
+    {"key": "owner_user_name", "label": "会签负责人", "sort": 110, "width": 100},
+    {"key": "remarks", "label": "备注", "sort": 115, "width": 120},
+]
+
+ELECTRONICS_ECN_SEED: Dict[str, Any] = {
+    "field_labels": {
+        "change_reason": "变更原因",
+        "content_before": "变更前内容",
+        "content_after": "变更后内容",
+        "change_product_type": "更改产品类型",
+        "change_method": "更改方式",
+        "erp_ecn_no": "ERP 变更单号",
+    },
+    "material_line_columns": _ECN_MATERIAL_LINE_COLUMNS,
+    "signoff_depts": [
+        {"code": "purchasing_regular", "label": "常规采购", "sort": 10, "parallel": True},
+        {"code": "purchasing_early", "label": "前期采购", "sort": 20, "parallel": True},
+        {"code": "qa", "label": "质量", "sort": 30, "parallel": True},
+        {"code": "prod", "label": "制造", "sort": 40, "parallel": True},
+        {"code": "smt", "label": "SMT", "sort": 50, "parallel": True},
+        {"code": "sales", "label": "销售", "sort": 60, "parallel": True},
+        {"code": "finance", "label": "财务", "sort": 70, "parallel": True},
+        {"code": "plan", "label": "计划", "sort": 80, "parallel": True},
+    ],
+    "header_option_flags": [
+        {"key": "old_material_disposition", "label": "旧物料处理方式", "sort": 10, "type": "text"},
+        {"key": "new_material_disposition", "label": "新物料处理方式", "sort": 20, "type": "text"},
+        {"key": "allow_mixed", "label": "新旧物料是否混用", "sort": 30, "type": "boolean"},
+        {"key": "intercept_work_order", "label": "是否拦截工单", "sort": 40, "type": "boolean"},
+        {"key": "product_label_change", "label": "变更后产品标识", "sort": 50, "type": "boolean"},
+        {"key": "need_production_prep", "label": "制造是否需要生产准备", "sort": 60, "type": "boolean"},
+        {"key": "involve_scrap", "label": "是否涉及报废", "sort": 70, "type": "boolean"},
+    ],
+    "entry_sources": [
+        {"code": "engineering_change", "label": "工程变更单", "sort": 10},
+        {"code": "design_change_request", "label": "设计更改申请单", "sort": 20},
+    ],
+    # 条件必填待用户提供《变更单填写说明》后追加 validation_rules
+    "validation_rules": [],
+}
+
+# ---------------------------------------------------------------------------
+# R-08 试流（用户提供：材料试流 / 结构试流 R-08-19 / 整机试生产报告）
+# ---------------------------------------------------------------------------
+
+ELECTRONICS_TRIAL_FLOW_SEED: Dict[str, Any] = {
+    "field_labels": {
+        "urgency_level": "级别",
+        "customer_code": "客户代码",
+        "order_no": "订单号",
+        "order_qty": "订单数量",
+        "trial_qty": "试流/试生产数量",
+        "trial_reason": "提出/试用原因",
+        "kit_date": "齐套日期",
+        "production_date": "生产日期",
+        "compatibility_requirements": "互配要求",
+        "precautions": "注意事项",
+        "sample_management": "样品管理",
+        "defect_rate": "不良率",
+    },
+    "header_fields": [
+        {"key": "urgency_level", "label": "级别", "sort": 10, "type": "select", "options": [
+            {"value": "normal", "label": "正常"},
+            {"value": "urgent", "label": "应急"},
+        ]},
+        {"key": "customer_code", "label": "客户代码", "sort": 20, "type": "text"},
+        {"key": "order_no", "label": "订单号", "sort": 30, "type": "text"},
+        {"key": "order_qty", "label": "订单数量", "sort": 40, "type": "decimal"},
+        {"key": "trial_qty", "label": "试流数量", "sort": 50, "type": "decimal"},
+        {"key": "trial_reason", "label": "提出原因", "sort": 60, "type": "textarea"},
+        {"key": "kit_date", "label": "齐套日期", "sort": 70, "type": "date"},
+        {"key": "production_date", "label": "生产日期", "sort": 80, "type": "date"},
+        {"key": "compatibility_requirements", "label": "互配要求", "sort": 90, "type": "textarea"},
+        {"key": "precautions", "label": "注意事项", "sort": 100, "type": "textarea"},
+        {"key": "sample_management", "label": "样品管理", "sort": 110, "type": "textarea"},
+    ],
+    "step_templates": {
+        "component": [
+            {"step_key": "rd_manager", "step_name": "经理审核", "dept_code": "rd", "sort": 10},
+            {"step_key": "purchasing", "step_name": "采购审核", "dept_code": "purchasing", "sort": 20},
+            {"step_key": "production", "step_name": "生产试流结果", "dept_code": "prod", "sort": 30},
+        ],
+        "structure": [
+            {"step_key": "rd_lead", "step_name": "研发组长", "dept_code": "rd", "sort": 10},
+            {"step_key": "rd_manager", "step_name": "研发经理", "dept_code": "rd", "sort": 20},
+            {"step_key": "purchasing", "step_name": "采购", "dept_code": "purchasing", "sort": 30},
+            {"step_key": "mc", "step_name": "物控", "dept_code": "plan", "sort": 40},
+            {"step_key": "production", "step_name": "生产", "dept_code": "prod", "sort": 50},
+            {"step_key": "pe", "step_name": "PE", "dept_code": "pe", "sort": 60},
+            {"step_key": "pqc", "step_name": "PQC", "dept_code": "pqc", "sort": 70},
+            {"step_key": "qa", "step_name": "QA", "dept_code": "qa", "sort": 80},
+        ],
+        "complete": [
+            {"step_key": "purchasing", "step_name": "采购填写型号订单", "dept_code": "purchasing", "sort": 10},
+            {"step_key": "iqc", "step_name": "IQC", "dept_code": "iqc", "sort": 20},
+            {"step_key": "pe", "step_name": "PE", "dept_code": "pe", "sort": 30},
+            {"step_key": "qc", "step_name": "QC", "dept_code": "qa", "sort": 40},
+            {"step_key": "qa", "step_name": "QA", "dept_code": "qa", "sort": 50},
+            {"step_key": "rd", "step_name": "研发", "dept_code": "rd", "sort": 60},
+            {"step_key": "manufacturing", "step_name": "制造工序", "dept_code": "prod", "sort": 70},
+            {"step_key": "conclusion_rd", "step_name": "研发中心结论", "dept_code": "rd", "sort": 80, "phase": "conclusion"},
+            {"step_key": "conclusion_qa", "step_name": "质量部结论", "dept_code": "qa", "sort": 90, "phase": "conclusion"},
+            {"step_key": "conclusion_prod", "step_name": "制造部结论", "dept_code": "prod", "sort": 100, "phase": "conclusion"},
+            {"step_key": "conclusion_purchasing", "step_name": "采购结论", "dept_code": "purchasing", "sort": 110, "phase": "conclusion"},
+        ],
+    },
+    "validation_rules": [],
+}
+
+# ---------------------------------------------------------------------------
+# R-11 返工（用户提供：销售返工单 FND/R-18-05 + 排位表 + AA/AB 路径）
+# ---------------------------------------------------------------------------
+
+ELECTRONICS_REWORK_SEED: Dict[str, Any] = {
+    "field_labels": {
+        "propose_dept": "提出部门",
+        "rework_reason": "返工原因",
+        "product_code": "原产品型号",
+        "target_product_code": "目标型号",
+        "rd_material_diff": "研发料号差异",
+        "estimated_cost_rmb": "预计费用(不含税RMB)",
+        "logistics_purchase_progress": "物流采购进度",
+        "manufacturing_process_notes": "返工工艺",
+        "scrap_rate_estimate": "材料报损率估算",
+        "labor_cost_estimate": "人工成本估算",
+        "quality_requirements_text": "质量要求",
+        "planned_rework_at": "返工计划时间",
+        "rework_inspection_record": "返工产品检验记录",
+        "product_line_code": "产品线码",
+    },
+    "rework_path_types": [
+        {"code": "aa", "label": "A-A", "sort": 10},
+        {"code": "ab", "label": "A-B", "sort": 20},
+    ],
+    "form_sections": [
+        {
+            "key": "propose",
+            "label": "返工提出",
+            "sort": 10,
+            "fields": ["propose_dept", "rework_reason", "product_code", "product_name", "quantity"],
+        },
+        {
+            "key": "rd_diff",
+            "label": "研发差异",
+            "sort": 20,
+            "when_path_in": ["ab"],
+            "fields": ["target_product_code", "target_product_name", "rd_material_diff"],
+        },
+        {
+            "key": "cost",
+            "label": "预计费用",
+            "sort": 30,
+            "fields": ["estimated_cost_rmb"],
+        },
+        {
+            "key": "logistics",
+            "label": "物流采购",
+            "sort": 40,
+            "fields": ["logistics_purchase_progress"],
+        },
+        {
+            "key": "manufacturing",
+            "label": "制造工艺",
+            "sort": 50,
+            "fields": ["manufacturing_process_notes", "scrap_rate_estimate", "labor_cost_estimate"],
+        },
+        {
+            "key": "quality",
+            "label": "质量要求",
+            "sort": 60,
+            "fields": ["quality_requirements_text"],
+        },
+        {
+            "key": "planning",
+            "label": "计划排产",
+            "sort": 70,
+            "fields": ["planned_rework_at"],
+        },
+        {
+            "key": "production",
+            "label": "生产线记录",
+            "sort": 80,
+            "fields": ["need_warehouse_in", "rework_inspection_record"],
+        },
+    ],
+    "position_plan_columns": [
+        {"key": "sequence", "label": "序号", "sort": 10, "width": 60},
+        {"key": "station_name", "label": "工序名称", "sort": 20, "width": 120, "required": True},
+        {"key": "job_category", "label": "岗位类别", "sort": 30, "width": 100},
+        {"key": "equipment_fixture", "label": "设备或工装", "sort": 40, "width": 120},
+        {"key": "standard_unit_seconds", "label": "标准工时(S/PCS)", "sort": 50, "width": 120, "type": "decimal"},
+        {"key": "theoretical_headcount", "label": "理论人数", "sort": 60, "width": 90, "type": "decimal"},
+        {"key": "actual_headcount", "label": "实际人数", "sort": 70, "width": 90, "type": "decimal"},
+        {"key": "control_points", "label": "控制要点", "sort": 80, "width": 160},
+        {"key": "remarks", "label": "备注", "sort": 90, "width": 120},
+    ],
+    "signoff_depts": [
+        {"code": "sales", "label": "销售", "sort": 10},
+        {"code": "rd", "label": "研发", "sort": 20, "when_path_in": ["ab"]},
+        {"code": "quality", "label": "质量", "sort": 30},
+        {"code": "manufacturing", "label": "制造", "sort": 40},
+        {"code": "purchasing", "label": "采购", "sort": 50},
+        {"code": "leadership", "label": "领导", "sort": 60},
+        {"code": "planning", "label": "计划", "sort": 70},
+        {"code": "warehouse", "label": "仓库", "sort": 80},
+        {"code": "manufacturing_exec", "label": "制造执行", "sort": 90},
+        {"code": "finance", "label": "财务", "sort": 100, "required_for_close": True},
+    ],
+    "validation_rules": [],
+}
 
 ELECTRONICS_SAMPLE_PROCESS_SEED: Dict[str, Any] = {
     "request_kinds": [
@@ -36,7 +273,34 @@ ELECTRONICS_BOM_COLLAB_SEED: Dict[str, Any] = {
         {"key": "electronics", "label": "电子分区", "sort": 10, "active": True},
         {"key": "structure", "label": "结构分区", "sort": 20, "active": True},
     ],
+    "line_columns": [
+        {"key": "designator", "label": "位号", "sort": 10, "width": 100},
+        {"key": "material_code", "label": "物料编码", "sort": 20, "width": 130, "required": True},
+        {"key": "material_name", "label": "物料名称", "sort": 30, "width": 140, "required": True},
+        {"key": "specification", "label": "规格型号", "sort": 40, "width": 120},
+        {"key": "footprint", "label": "封装", "sort": 50, "width": 90},
+        {"key": "qty", "label": "用量", "sort": 60, "width": 90, "type": "decimal"},
+        {"key": "unit", "label": "单位", "sort": 70, "width": 70},
+        {"key": "remarks", "label": "备注", "sort": 80, "width": 120},
+    ],
 }
+
+# manifest profile_key → 内置种子（IndustryExtensionRuntimeService 唯一入口）
+ELECTRONICS_PROFILE_SEEDS_BY_KEY: Dict[str, Dict[str, Any]] = {
+    "kuaiplm.sample_process": ELECTRONICS_SAMPLE_PROCESS_SEED,
+    "kuaiplm.bom_collab": ELECTRONICS_BOM_COLLAB_SEED,
+    "kuaiplm.ecn": ELECTRONICS_ECN_SEED,
+    "kuaiplm.trial_flow": ELECTRONICS_TRIAL_FLOW_SEED,
+    "kuaizhizao.rework_order": ELECTRONICS_REWORK_SEED,
+}
+
+
+def resolve_electronics_profile_seed(profile_key: str) -> Dict[str, Any] | None:
+    seed = ELECTRONICS_PROFILE_SEEDS_BY_KEY.get(profile_key)
+    if seed is None:
+        return None
+    return dict(seed)
+
 
 # ESD 预置方案编码（通用点检方案 domain=esd）
 ESD_SCHEME_CODE = "ESD-STD-DAILY"

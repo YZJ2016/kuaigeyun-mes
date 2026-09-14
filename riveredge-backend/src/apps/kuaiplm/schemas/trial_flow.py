@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -50,12 +50,14 @@ class TrialFlowCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     trial_code: Optional[str] = Field(None, max_length=50)
     remarks: Optional[str] = None
+    extension_payload: Optional[dict] = None
     materials: List[TrialFlowMaterialLineIn] = Field(default_factory=list)
 
 
 class TrialFlowUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     remarks: Optional[str] = None
+    extension_payload: Optional[dict] = None
     materials: Optional[List[TrialFlowMaterialLineIn]] = None
 
 
@@ -85,6 +87,7 @@ class TrialFlowResponse(BaseModel):
     conclusion: Optional[str] = None
     conclusion_summary: Optional[str] = None
     remarks: Optional[str] = None
+    extension_payload: Optional[dict] = None
     submitted_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None
     concluded_at: Optional[datetime] = None
@@ -122,3 +125,15 @@ class TrialFlowListItem(BaseModel):
 class TrialFlowListResponse(BaseModel):
     items: List[TrialFlowListItem]
     total: int
+
+
+class TrialFlowFormProfile(BaseModel):
+    """试流表单/工序链扩展 profile。"""
+
+    industry_profile_enabled: bool = Field(
+        False, description="是否已启用行业包 profile（false 时前端保持通用 UI）"
+    )
+    field_labels: Dict[str, str] = Field(default_factory=dict)
+    header_fields: List[Dict[str, Any]] = Field(default_factory=list)
+    step_templates: Dict[str, List[Dict[str, Any]]] = Field(default_factory=dict)
+    validation_rules: List[Dict[str, Any]] = Field(default_factory=list)

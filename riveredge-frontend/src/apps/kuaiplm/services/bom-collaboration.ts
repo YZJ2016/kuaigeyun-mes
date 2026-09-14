@@ -16,8 +16,19 @@ export interface BomCollabFormProfileSection {
   active?: boolean;
 }
 
+export interface BomCollabFormProfileLineColumn {
+  key: string;
+  label: string;
+  sort?: number;
+  width?: number;
+  required?: boolean;
+  type?: string;
+}
+
 export interface BomCollabFormProfile {
+  industry_profile_enabled?: boolean;
   sections: BomCollabFormProfileSection[];
+  line_columns?: BomCollabFormProfileLineColumn[];
 }
 
 export interface BomCollabLine {
@@ -31,6 +42,7 @@ export interface BomCollabLine {
   qty?: number | string | null;
   unit?: string | null;
   remarks?: string | null;
+  extension_payload?: Record<string, unknown> | null;
 }
 
 export interface BomCollaboration {

@@ -43,8 +43,12 @@ class SampleProcessService(AppBaseService[SampleProcessApplication]):
         return await IndustryExtensionRuntimeService.resolve_profile(tenant_id, PROFILE_KEY)
 
     async def get_form_profile(self, tenant_id: int) -> SampleProcessFormProfile:
+        enabled = await IndustryExtensionRuntimeService.is_industry_profile_enabled(
+            tenant_id, PROFILE_KEY
+        )
         profile = await self._profile(tenant_id)
         return SampleProcessFormProfile(
+            industry_profile_enabled=enabled,
             request_kinds=list(profile.get("request_kinds") or []),
             attachment_types=list(profile.get("attachment_types") or []),
             field_labels=dict(profile.get("field_labels") or {}),

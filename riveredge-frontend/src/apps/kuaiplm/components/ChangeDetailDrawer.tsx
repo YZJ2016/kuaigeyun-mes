@@ -2,7 +2,7 @@
  * 工程变更详情抽屉（BOM / 工艺路线 / 图纸 / ECN）
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { App, Button, Descriptions, Input, Modal, Select, Table } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -15,7 +15,13 @@ import {
   type ProcessRouteChangeRecord,
 } from '../../master-data/services/process-route-change';
 import { getDeskChange, getDrawingChange } from '../services/change-desk';
-import { engineeringChangeApi, type EngineeringChange } from '../services/engineering-change';
+import {
+  engineeringChangeApi,
+  type EcnFormProfile,
+  type EngineeringChange,
+} from '../services/engineering-change';
+import { isIndustryFormProfileActive } from '../../../utils/industryFormProfile';
+import { buildEcnDetailMaterialColumns } from '../utils/ecnFormProfile';
 import {
   buildBomChangeCreateUrl,
   buildMasterDataUrl,
@@ -80,6 +86,32 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose, o
   const [erpNo, setErpNo] = useState('');
   const [erpResult, setErpResult] = useState('pass');
   const [erpNotes, setErpNotes] = useState('');
+  const [ecnFormProfile, setEcnFormProfile] = useState<EcnFormProfile | null>(null);
+
+  useEffect(() => {
+    if (row?.change_category !== 'ecn') {
+      setEcnFormProfile(null);
+      return;
+    }
+    let cancelled = false;
+    void engineeringChangeApi
+      .formProfile()
+      .then((p) => {
+        if (!cancelled) setEcnFormProfile(p);
+      })
+      .catch(() => {
+        if (!cancelled) setEcnFormProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [row?.change_category]);
+
+  const ecnIndustryActive = isIndustryFormProfileActive(ecnFormProfile);
+  const ecnMaterialColumns = useMemo(
+    () => buildEcnDetailMaterialColumns(ecnFormProfile, t, ecnIndustryActive),
+    [ecnFormProfile, ecnIndustryActive, t],
+  );
 
   const load = useCallback(async () => {
     if (!row?.uuid || !row.change_category) {
@@ -237,6 +269,24 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose, o
                   ) : null}
                   {category === 'ecn' ? (
                     <>
+                      {(ecnFormProfile?.header_option_flags || []).map((flag) => {
+                        const key = String(flag.key || '');
+                        if (!key) return null;
+                        const raw = ecnDetail?.extension_payload?.[key];
+                        const display =
+                          flag.type === 'boolean'
+                            ? raw
+                              ? t('common.yes')
+                              : t('common.no')
+                            : raw != null && raw !== ''
+                              ? String(raw)
+                              : '-';
+                        return (
+                          <Descriptions.Item key={key} label={String(flag.label || key)}>
+                            {display}
+                          </Descriptions.Item>
+                        );
+                      })}
                       <Descriptions.Item label={t('app.kuaiplm.ecn.fields.erpEcnNo')}>
                         {ecnDetail?.erp_ecn_no || '-'}
                       </Descriptions.Item>
@@ -262,18 +312,10 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose, o
                     <Table
                       size="small"
                       pagination={false}
+                      scroll={{ x: 'max-content' }}
                       rowKey={(r) => String(r.id ?? r.material_code)}
                       dataSource={ecnDetail.materials || []}
-                      columns={[
-                        { title: t('app.kuaiplm.ecn.fields.materialCode'), dataIndex: 'material_code' },
-                        { title: t('app.kuaiplm.ecn.fields.materialName'), dataIndex: 'material_name' },
-                        { title: t('app.kuaiplm.ecn.fields.beforeDesc'), dataIndex: 'before_desc' },
-                        { title: t('app.kuaiplm.ecn.fields.afterDesc'), dataIndex: 'after_desc' },
-                        {
-                          title: t('app.kuaiplm.ecn.fields.ownerUserName'),
-                          dataIndex: 'owner_user_name',
-                        },
-                      ]}
+                      columns={ecnMaterialColumns}
                     />
                   </DetailDrawerSection>
                   <DetailDrawerSection title={t('app.kuaiplm.ecn.fields.signoffs')}>

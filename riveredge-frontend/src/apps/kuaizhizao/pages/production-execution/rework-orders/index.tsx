@@ -67,7 +67,26 @@ import {
 } from '../../../../../components/custom-fields';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import ReworkOrderCreateModal from '../../../components/ReworkOrderCreateModal';
+import {
+  ReworkOrderProfileExtensionFields,
+  ReworkOrderProfilePositionPlanList,
+} from '../../../components/ReworkOrderProfileFormBlocks';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import type { ReworkOrderFormProfile } from '../../../services/work-order';
+import { isIndustryFormProfileActive } from '../../../../../utils/industryFormProfile';
+import {
+  buildHeaderExtensionPayload,
+  buildPositionPlanDetailColumns,
+  flattenPositionPlanForForm,
+  mergeHeaderExtensionIntoForm,
+  preparePositionPlanForApi,
+  resolveHeaderStorageKey,
+  resolveReworkFieldLabel,
+  sectionsForPath,
+  sortedPositionPlanColumns,
+  formatProfileFieldDisplayValue,
+  inferProfileFieldType,
+} from '../../../utils/reworkOrderFormProfile';
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
@@ -107,7 +126,18 @@ interface ReworkOrder {
   qualified_quantity?: number;
   unqualified_quantity?: number;
   remarks?: string;
+  extension_payload?: Record<string, unknown> | null;
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
+  business_type?: string;
+  no_scrap_confirmed?: boolean;
+  need_warehouse_in?: boolean;
+  verify_month?: string;
+  show_to_customer?: boolean;
+  pqc_summary?: string;
+  material_reqs?: Array<Record<string, unknown>>;
+  scrap_lines?: Array<Record<string, unknown>>;
+  position_plans?: Array<Record<string, unknown>>;
+  signoffs?: Array<Record<string, unknown>>;
   created_at?: string;
   updated_at?: string;
   start_work_order_operation_id?: number;
@@ -203,6 +233,7 @@ const ReworkOrdersPage: React.FC = () => {
 
   // Modal 相关状态
   const [modalVisible, setModalVisible] = useState(false);
+  const [reworkFormProfile, setReworkFormProfile] = useState<ReworkOrderFormProfile | null>(null);
   const [applyPositionTemplateOpen, setApplyPositionTemplateOpen] = useState(false);
   const [applyPositionTemplateId, setApplyPositionTemplateId] = useState<number | undefined>();
   const [applyPositionTemplateOptions, setApplyPositionTemplateOptions] = useState<
@@ -218,6 +249,31 @@ const ReworkOrdersPage: React.FC = () => {
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [reworkOrderDetail, setReworkOrderDetail] = useState<ReworkOrder | null>(null);
+
+  const industryProfileActive = isIndustryFormProfileActive(reworkFormProfile);
+  const profilePositionColumns = useMemo(
+    () => sortedPositionPlanColumns(industryProfileActive ? reworkFormProfile : null),
+    [reworkFormProfile, industryProfileActive],
+  );
+  const hasProfilePositionColumns = Boolean(
+    industryProfileActive && reworkFormProfile?.position_plan_columns?.length,
+  );
+
+  useEffect(() => {
+    if (!modalVisible && !detailDrawerVisible) return;
+    let cancelled = false;
+    void reworkOrderApi
+      .formProfile()
+      .then((profile) => {
+        if (!cancelled) setReworkFormProfile(profile);
+      })
+      .catch(() => {
+        if (!cancelled) setReworkFormProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [modalVisible, detailDrawerVisible]);
 
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [reportSubmitLoading, setReportSubmitLoading] = useState(false);
@@ -417,6 +473,42 @@ const ReworkOrdersPage: React.FC = () => {
       render: (text) => text || '-',
     },
   ] as ProDescriptionsItemProps<ReworkOrder>[]), [t]);
+
+  const profileExtensionDescriptionItems = useMemo((): ProDescriptionsItemProps<ReworkOrder>[] => {
+    if (!industryProfileActive || !reworkFormProfile?.form_sections?.length || !reworkOrderDetail) {
+      return [];
+    }
+    const payload = (reworkOrderDetail.extension_payload || {}) as Record<string, unknown>;
+    const pathType = String(payload.rework_path_type || '').toLowerCase();
+    const items: ProDescriptionsItemProps<ReworkOrder>[] = [];
+    if (pathType && reworkFormProfile.rework_path_types?.length) {
+      const hit = reworkFormProfile.rework_path_types.find(
+        (p) => String(p.code).toLowerCase() === pathType,
+      );
+      if (hit) {
+        items.push({
+          title: t('app.kuaizhizao.reworkOrder.profilePathType'),
+          render: () => String(hit.label || hit.code),
+        });
+      }
+    }
+    for (const section of sectionsForPath(reworkFormProfile, pathType)) {
+      for (const fieldKey of section.fields) {
+        const storageKey = resolveHeaderStorageKey(fieldKey);
+        let raw = payload[fieldKey];
+        if ((raw === undefined || raw === null || raw === '') && storageKey !== fieldKey) {
+          raw = (reworkOrderDetail as Record<string, unknown>)[storageKey];
+        }
+        if (raw === undefined || raw === null || raw === '') continue;
+        items.push({
+          title: resolveReworkFieldLabel(reworkFormProfile, fieldKey, fieldKey),
+          render: () =>
+            formatProfileFieldDisplayValue(fieldKey, raw, t, inferProfileFieldType(fieldKey)),
+        });
+      }
+    }
+    return items;
+  }, [industryProfileActive, reworkFormProfile, reworkOrderDetail, t]);
 
   const detailCollaboration = useMemo(() => {
     if (!reworkOrderDetail) return undefined;
@@ -836,6 +928,18 @@ const ReworkOrdersPage: React.FC = () => {
           quantity: detail.quantity,
           rework_reason: detail.rework_reason,
           rework_type: detail.rework_type,
+          business_type: detail.business_type || 'simple_exec',
+          product_line_code: detail.product_line_code,
+          no_scrap_confirmed: detail.no_scrap_confirmed,
+          need_warehouse_in: detail.need_warehouse_in,
+          verify_month: detail.verify_month,
+          show_to_customer: detail.show_to_customer,
+          pqc_summary: detail.pqc_summary,
+          material_reqs: detail.material_reqs || [],
+          scrap_lines: detail.scrap_lines || [],
+          position_plans: (detail.position_plans || []).map((row) =>
+            flattenPositionPlanForForm(row as Record<string, unknown>),
+          ),
           planned_start_date: detail.planned_start_date,
           planned_end_date: detail.planned_end_date,
           completed_quantity: detail.completed_quantity,
@@ -847,6 +951,7 @@ const ReworkOrdersPage: React.FC = () => {
             ?? (detail.rework_operations || [])[0]?.work_order_operation_id,
           remarks: detail.remarks,
           attachments: mapAttachmentsToUploadList(detail.attachments),
+          ...mergeHeaderExtensionIntoForm(detail),
         });
         if (detail.id != null) {
           loadReworkFormFieldValues(detail.id).then((fieldFormValues) => {
@@ -1285,14 +1390,29 @@ const ReworkOrdersPage: React.FC = () => {
         }));
       }
       if (Array.isArray(standardValues.position_plans)) {
-        standardValues.position_plans = standardValues.position_plans.map((row: any, idx: number) => ({
-          ...row,
-          line_no: row.line_no || idx + 1,
-          sequence: row.sequence || idx + 1,
-          planned_start_at: toApiDateTimeString(row.planned_start_at) || null,
-          planned_end_at: toApiDateTimeString(row.planned_end_at) || null,
-        }));
+        standardValues.position_plans = standardValues.position_plans
+          .filter((row: any) => row?.station_name)
+          .map((row: any, idx: number) => {
+            const base = hasProfilePositionColumns
+              ? preparePositionPlanForApi(row, profilePositionColumns)
+              : row;
+            return {
+              ...base,
+              line_no: base.line_no || idx + 1,
+              sequence: base.sequence || idx + 1,
+              planned_start_at: toApiDateTimeString(base.planned_start_at) || null,
+              planned_end_at: toApiDateTimeString(base.planned_end_at) || null,
+            };
+          });
       }
+      if (values.planned_rework_at && !standardValues.planned_start_date) {
+        standardValues.planned_start_date = toApiDateTimeString(values.planned_rework_at);
+      }
+      standardValues.extension_payload = buildHeaderExtensionPayload(
+        values,
+        reworkFormProfile,
+        industryProfileActive,
+      );
       if (isEdit && currentReworkOrder?.id) {
         await reworkOrderApi.update(currentReworkOrder.id.toString(), standardValues);
         messageApi.success(t('app.kuaizhizao.reworkOrder.updateSuccess'));
@@ -1616,11 +1736,14 @@ const ReworkOrdersPage: React.FC = () => {
   });
 
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
-    detailBasicColumns.filter((col) => {
-                    if (col.dataIndex !== 'remarks') return true;
-                    return String(reworkOrderDetail?.remarks ?? '').trim().length > 0;
-                  }),
-                  reworkOrderDetail,
+    [
+      ...detailBasicColumns.filter((col) => {
+        if (col.dataIndex !== 'remarks') return true;
+        return String(reworkOrderDetail?.remarks ?? '').trim().length > 0;
+      }),
+      ...profileExtensionDescriptionItems,
+    ],
+    reworkOrderDetail,
     'rework_order',
   );
 
@@ -2019,6 +2142,9 @@ const ReworkOrdersPage: React.FC = () => {
             />
           </Col>
         </Row>
+        {industryProfileActive ? (
+          <ReworkOrderProfileExtensionFields profile={reworkFormProfile} />
+        ) : null}
         <ProFormDependency name={['business_type']}>
           {({ business_type }) =>
             business_type === 'multi_signoff' || business_type === 'inventory_verify' ? (
@@ -2098,25 +2224,29 @@ const ReworkOrdersPage: React.FC = () => {
                 >
                   {t('app.kuaizhizao.reworkOrder.applyPositionTemplate')}
                 </Button>
-                <ProFormList
-                  name="position_plans"
-                  label={t('app.kuaizhizao.reworkOrder.sectionPositionPlans')}
-                  creatorButtonProps={{ creatorButtonText: t('app.kuaizhizao.reworkOrder.addPositionPlan') }}
-                  copyIconProps={false}
-                >
-                  <ProFormGroup>
-                    <ProFormDigit name="sequence" label={t('app.kuaizhizao.reworkOrder.colSequence')} width="xs" min={1} initialValue={1} />
-                    <ProFormText name="station_name" label={t('app.kuaizhizao.reworkOrder.colStationName')} rules={[{ required: true }]} width="sm" />
-                    <ProFormText name="section_name" label={t('app.kuaizhizao.reworkOrder.colSectionName')} width="sm" />
-                    <ProFormText name="station_code" label={t('app.kuaizhizao.reworkOrder.colStationCode')} width="sm" />
-                    <ProFormDigit name="planned_headcount" label={t('app.kuaizhizao.reworkOrder.colPlannedHeadcount')} width="xs" min={0} />
-                    <ProFormDigit name="standard_minutes" label={t('app.kuaizhizao.reworkOrder.colStandardMinutes')} width="xs" min={0} />
-                    <ProFormDigit name="planned_qty" label={t('app.kuaizhizao.reworkOrder.colPlannedQty')} width="xs" min={0} />
-                    <ProFormDatePicker name="planned_start_at" label={t('app.kuaizhizao.reworkOrder.colPlannedStartAt')} fieldProps={{ showTime: true }} />
-                    <ProFormDatePicker name="planned_end_at" label={t('app.kuaizhizao.reworkOrder.colPlannedEndAt')} fieldProps={{ showTime: true }} />
-                    <ProFormText name="owner_user_name" label={t('app.kuaizhizao.reworkOrder.colOwner')} width="sm" />
-                  </ProFormGroup>
-                </ProFormList>
+                {industryProfileActive && hasProfilePositionColumns ? (
+                  <ReworkOrderProfilePositionPlanList profile={reworkFormProfile} />
+                ) : (
+                  <ProFormList
+                    name="position_plans"
+                    label={t('app.kuaizhizao.reworkOrder.sectionPositionPlans')}
+                    creatorButtonProps={{ creatorButtonText: t('app.kuaizhizao.reworkOrder.addPositionPlan') }}
+                    copyIconProps={false}
+                  >
+                    <ProFormGroup>
+                      <ProFormDigit name="sequence" label={t('app.kuaizhizao.reworkOrder.colSequence')} width="xs" min={1} initialValue={1} />
+                      <ProFormText name="station_name" label={t('app.kuaizhizao.reworkOrder.colStationName')} rules={[{ required: true }]} width="sm" />
+                      <ProFormText name="section_name" label={t('app.kuaizhizao.reworkOrder.colSectionName')} width="sm" />
+                      <ProFormText name="station_code" label={t('app.kuaizhizao.reworkOrder.colStationCode')} width="sm" />
+                      <ProFormDigit name="planned_headcount" label={t('app.kuaizhizao.reworkOrder.colPlannedHeadcount')} width="xs" min={0} />
+                      <ProFormDigit name="standard_minutes" label={t('app.kuaizhizao.reworkOrder.colStandardMinutes')} width="xs" min={0} />
+                      <ProFormDigit name="planned_qty" label={t('app.kuaizhizao.reworkOrder.colPlannedQty')} width="xs" min={0} />
+                      <ProFormDatePicker name="planned_start_at" label={t('app.kuaizhizao.reworkOrder.colPlannedStartAt')} fieldProps={{ showTime: true }} />
+                      <ProFormDatePicker name="planned_end_at" label={t('app.kuaizhizao.reworkOrder.colPlannedEndAt')} fieldProps={{ showTime: true }} />
+                      <ProFormText name="owner_user_name" label={t('app.kuaizhizao.reworkOrder.colOwner')} width="sm" />
+                    </ProFormGroup>
+                  </ProFormList>
+                )}
               </>
             ) : null
           }
@@ -2231,19 +2361,21 @@ const ReworkOrdersPage: React.FC = () => {
           }
           try {
             const tpl = await reworkPositionPlanTemplateApi.get(applyPositionTemplateId);
-            const lines = (tpl.items || []).map((item, idx) => ({
-              line_no: item.line_no || idx + 1,
-              sequence: item.sequence || idx + 1,
-              station_name: item.station_name,
-              section_name: item.section_name,
-              station_code: item.station_code,
-              planned_headcount: item.planned_headcount,
-              standard_minutes: item.standard_minutes,
-              planned_qty: item.planned_qty,
-              owner_user_id: item.owner_user_id,
-              owner_user_name: item.owner_user_name,
-              remarks: item.remarks,
-            }));
+            const lines = (tpl.items || []).map((item, idx) =>
+              flattenPositionPlanForForm({
+                line_no: item.line_no || idx + 1,
+                sequence: item.sequence || idx + 1,
+                station_name: item.station_name,
+                section_name: item.section_name,
+                station_code: item.station_code,
+                planned_headcount: item.planned_headcount,
+                standard_minutes: item.standard_minutes,
+                planned_qty: item.planned_qty,
+                owner_user_id: item.owner_user_id,
+                owner_user_name: item.owner_user_name,
+                remarks: item.remarks,
+              }),
+            );
             formRef.current?.setFieldsValue({ position_plans: lines });
             messageApi.success(t('app.kuaizhizao.reworkOrder.applyPositionTemplateSuccess'));
             setApplyPositionTemplateOpen(false);
@@ -2533,16 +2665,21 @@ const ReworkOrdersPage: React.FC = () => {
                     pagination={false}
                     rowKey={(row, i) => String((row as any).id ?? i)}
                     dataSource={(reworkOrderDetail as any).position_plans || []}
-                    columns={[
-                      { title: t('app.kuaizhizao.reworkOrder.colSequence'), dataIndex: 'sequence' },
-                      { title: t('app.kuaizhizao.reworkOrder.colStationName'), dataIndex: 'station_name' },
-                      { title: t('app.kuaizhizao.reworkOrder.colSectionName'), dataIndex: 'section_name' },
-                      { title: t('app.kuaizhizao.reworkOrder.colStationCode'), dataIndex: 'station_code' },
-                      { title: t('app.kuaizhizao.reworkOrder.colPlannedHeadcount'), dataIndex: 'planned_headcount' },
-                      { title: t('app.kuaizhizao.reworkOrder.colStandardMinutes'), dataIndex: 'standard_minutes' },
-                      { title: t('app.kuaizhizao.reworkOrder.colPlannedQty'), dataIndex: 'planned_qty' },
-                      { title: t('app.kuaizhizao.reworkOrder.colOwner'), dataIndex: 'owner_user_name' },
-                    ]}
+                    scroll={industryProfileActive && hasProfilePositionColumns ? { x: 960 } : undefined}
+                    columns={
+                      industryProfileActive && hasProfilePositionColumns
+                        ? buildPositionPlanDetailColumns(reworkFormProfile, t)
+                        : [
+                            { title: t('app.kuaizhizao.reworkOrder.colSequence'), dataIndex: 'sequence' },
+                            { title: t('app.kuaizhizao.reworkOrder.colStationName'), dataIndex: 'station_name' },
+                            { title: t('app.kuaizhizao.reworkOrder.colSectionName'), dataIndex: 'section_name' },
+                            { title: t('app.kuaizhizao.reworkOrder.colStationCode'), dataIndex: 'station_code' },
+                            { title: t('app.kuaizhizao.reworkOrder.colPlannedHeadcount'), dataIndex: 'planned_headcount' },
+                            { title: t('app.kuaizhizao.reworkOrder.colStandardMinutes'), dataIndex: 'standard_minutes' },
+                            { title: t('app.kuaizhizao.reworkOrder.colPlannedQty'), dataIndex: 'planned_qty' },
+                            { title: t('app.kuaizhizao.reworkOrder.colOwner'), dataIndex: 'owner_user_name' },
+                          ]
+                    }
                     locale={{ emptyText: t('app.kuaizhizao.salesOrder.emptyItems') }}
                   />
                   <Typography.Title level={5} style={{ marginTop: 12 }}>{t('app.kuaizhizao.reworkOrder.sectionSignoffs')}</Typography.Title>

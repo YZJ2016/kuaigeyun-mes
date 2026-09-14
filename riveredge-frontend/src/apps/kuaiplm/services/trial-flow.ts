@@ -41,6 +41,22 @@ export interface TrialFlowStep {
   filled_at?: string | null;
 }
 
+export interface TrialFlowFormProfileHeaderField {
+  key: string;
+  label: string;
+  sort?: number;
+  type?: string;
+  options?: Array<{ value: string; label: string }>;
+}
+
+export interface TrialFlowFormProfile {
+  industry_profile_enabled?: boolean;
+  field_labels: Record<string, string>;
+  header_fields: TrialFlowFormProfileHeaderField[];
+  step_templates: Record<string, Array<Record<string, unknown>>>;
+  validation_rules: Array<Record<string, unknown>>;
+}
+
 export interface TrialFlow {
   uuid: string;
   id?: number;
@@ -55,6 +71,7 @@ export interface TrialFlow {
   conclusion?: string | null;
   conclusion_summary?: string | null;
   remarks?: string | null;
+  extension_payload?: Record<string, unknown> | null;
   materials?: TrialFlowMaterialLine[];
   steps?: TrialFlowStep[];
   created_at?: string;
@@ -68,6 +85,7 @@ export interface TrialFlowPayload {
   business_type: TrialFlowBusinessType;
   title: string;
   remarks?: string | null;
+  extension_payload?: Record<string, unknown> | null;
   materials?: TrialFlowMaterialLine[];
 }
 
@@ -78,6 +96,7 @@ function unwrapList(res: unknown): { items: TrialFlow[]; total: number } {
 }
 
 export const trialFlowApi = {
+  formProfile: async () => (await api.get(`${BASE}/meta/form-profile`)) as TrialFlowFormProfile,
   list: async (params: {
     skip?: number;
     limit?: number;

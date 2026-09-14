@@ -26,6 +26,8 @@ class IndustryExtensionDecl:
     replacement_app: Optional[str] = None
     replacement_path: Optional[str] = None
     pack_menu: bool = True
+    menu_title: Optional[str] = None
+    menu_sort_order: Optional[int] = None
     seed: Optional[Dict[str, Any]] = None
 
 
@@ -84,6 +86,15 @@ def parse_industry_extensions(
         if seed is not None and not isinstance(seed, dict):
             raise ValueError(f"{module_app_code}/{ext_id}: seed 须为对象")
 
+        pack_menu = bool(item.get("pack_menu", True))
+        menu_title_raw = item.get("menu_title")
+        menu_title = str(menu_title_raw).strip() if menu_title_raw else None
+        menu_sort_order = (
+            int(item["menu_sort_order"])
+            if item.get("menu_sort_order") is not None
+            else None
+        )
+
         if strategy == "profile":
             profile_key = _require_str(item, "profile_key")
             out.append(
@@ -96,6 +107,9 @@ def parse_industry_extensions(
                     menu_path=menu_path,
                     resource=resource,
                     profile_key=profile_key,
+                    pack_menu=pack_menu,
+                    menu_title=menu_title,
+                    menu_sort_order=menu_sort_order,
                     seed=seed,
                 )
             )
@@ -113,6 +127,9 @@ def parse_industry_extensions(
                     resource=resource,
                     replacement_app=replacement_app,
                     replacement_path=replacement_path,
+                    pack_menu=pack_menu,
+                    menu_title=menu_title,
+                    menu_sort_order=menu_sort_order,
                 )
             )
     return out

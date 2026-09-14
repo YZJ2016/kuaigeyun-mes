@@ -36,6 +36,75 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'units-load-preset-from-materials',
+    date: '2026-09-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.units-load-preset-from-materials.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.units-load-preset-from-materials.description',
+  },
+  {
+    id: 'units-load-preset-after-create',
+    date: '2026-09-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.units-load-preset-after-create.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.units-load-preset-after-create.description',
+  },
+  {
+    id: 'phase1-field-deepening-wrap-up',
+    date: '2026-09-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.phase1-field-deepening-wrap-up.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.phase1-field-deepening-wrap-up.description',
+  },
+  {
+    id: 'industry-form-profile-gate-and-bom-collab-lines',
+    date: '2026-09-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.industry-form-profile-gate-and-bom-collab-lines.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.industry-form-profile-gate-and-bom-collab-lines.description',
+  },
+  {
+    id: 'industry-pack-extension-menu-aggregation',
+    date: '2026-09-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.industry-pack-extension-menu-aggregation.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.industry-pack-extension-menu-aggregation.description',
+  },
+  {
+    id: 'rework-order-form-profile-dynamic-fields',
+    date: '2026-09-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.rework-order-form-profile-dynamic-fields.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rework-order-form-profile-dynamic-fields.description',
+  },
+  {
+    id: 'trial-flow-form-profile-dynamic-fields',
+    date: '2026-09-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.trial-flow-form-profile-dynamic-fields.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.trial-flow-form-profile-dynamic-fields.description',
+  },
+  {
+    id: 'ecn-form-profile-dynamic-columns',
+    date: '2026-09-14',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.ecn-form-profile-dynamic-columns.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ecn-form-profile-dynamic-columns.description',
+  },
+  {
+    id: 'kuaielectronics-ecn-trial-rework-profiles',
+    date: '2026-09-14',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaielectronics-ecn-trial-rework-profiles.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaielectronics-ecn-trial-rework-profiles.description',
+  },
+  {
     id: 'inbound-hub-lifecycle-received-harden',
     date: '2026-09-14',
     type: 'fix',

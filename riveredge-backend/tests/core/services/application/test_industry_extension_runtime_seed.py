@@ -26,10 +26,16 @@ def test_electronics_builtin_seeds_cover_manifest_profile_keys():
     profile_keys = {
         d.profile_key for d in decls if d.kind == "replace" and d.strategy == "profile"
     }
-    assert profile_keys == {"kuaiplm.sample_process", "kuaiplm.bom_collab"}
+    assert profile_keys == {
+        "kuaiplm.sample_process",
+        "kuaiplm.bom_collab",
+        "kuaiplm.ecn",
+        "kuaiplm.trial_flow",
+        "kuaizhizao.rework_order",
+    }
     for key in profile_keys:
         seed = IndustryExtensionRuntimeService._builtin_seed("kuaielectronics", key)
-        assert seed is not None
+        assert seed is not None, key
         assert key in GENERIC_PROFILES_BY_KEY
     doc_ids = {
         d.id for d in decls if d.kind == "replace" and d.strategy == "document"

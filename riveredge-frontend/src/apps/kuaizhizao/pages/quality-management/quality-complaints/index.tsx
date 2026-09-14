@@ -44,6 +44,11 @@ import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uni
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
+  buildComplaintExtensionPayload,
+  flattenComplaintForForm,
+  getComplaintExtensionValue,
+} from '../../../utils/qualityComplaintExtension';
+import {
   qualityComplaintApi,
   type QualityComplaint,
   type QualityComplaintBusinessType,
@@ -363,6 +368,65 @@ const QualityComplaintsPage: React.FC = () => {
           },
           { title: t('app.kuaizhizao.qualityComplaint.colDescription'), dataIndex: 'description', span: 2 },
           {
+            title: t('app.kuaizhizao.qualityComplaint.colInspectionQty'),
+            dataIndex: 'inspection_qty',
+            render: (_, r) => {
+              const v = getComplaintExtensionValue(r, 'inspection_qty');
+              return v != null && v !== '' ? String(v) : '-';
+            },
+          },
+          {
+            title: t('app.kuaizhizao.qualityComplaint.colDefectQty'),
+            dataIndex: 'defect_qty',
+            render: (_, r) => {
+              const v = getComplaintExtensionValue(r, 'defect_qty');
+              return v != null && v !== '' ? String(v) : '-';
+            },
+          },
+          {
+            title: t('app.kuaizhizao.qualityComplaint.colDefectRatePct'),
+            dataIndex: 'defect_rate_pct',
+            render: (_, r) => {
+              const v = getComplaintExtensionValue(r, 'defect_rate_pct');
+              return v != null && v !== '' ? `${v}%` : '-';
+            },
+          },
+          {
+            title: t('app.kuaizhizao.qualityComplaint.colUsedQty'),
+            dataIndex: 'used_qty',
+            render: (_, r) => {
+              const v = getComplaintExtensionValue(r, 'used_qty');
+              return v != null && v !== '' ? String(v) : '-';
+            },
+          },
+          {
+            title: t('app.kuaizhizao.qualityComplaint.colRootCauseAnalysis'),
+            dataIndex: 'root_cause_analysis',
+            span: 2,
+            render: (_, r) => {
+              const v = getComplaintExtensionValue(r, 'root_cause_analysis');
+              return v != null && v !== '' ? String(v) : '-';
+            },
+          },
+          {
+            title: t('app.kuaizhizao.qualityComplaint.colCorrectiveAction'),
+            dataIndex: 'corrective_action',
+            span: 2,
+            render: (_, r) => {
+              const v = getComplaintExtensionValue(r, 'corrective_action');
+              return v != null && v !== '' ? String(v) : '-';
+            },
+          },
+          {
+            title: t('app.kuaizhizao.qualityComplaint.colContainmentAction'),
+            dataIndex: 'containment_action',
+            span: 2,
+            render: (_, r) => {
+              const v = getComplaintExtensionValue(r, 'containment_action');
+              return v != null && v !== '' ? String(v) : '-';
+            },
+          },
+          {
             title: t('app.kuaizhizao.qualityComplaint.colSupplierResponse'),
             dataIndex: 'supplier_response',
             span: 2,
@@ -457,19 +521,33 @@ const QualityComplaintsPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
         grid={false}
         initialValues={
-          editing || {
-            business_type: 'iqc_incoming',
-            sla_workdays: 5,
-          }
+          editing
+            ? flattenComplaintForForm(editing)
+            : {
+                business_type: 'iqc_incoming',
+                sla_workdays: 5,
+              }
         }
         onClose={() => setModalOpen(false)}
         onFinish={async (values) => {
           try {
+            const extension_payload = buildComplaintExtensionPayload(values);
+            const {
+              inspection_qty: _iq,
+              defect_qty: _dq,
+              defect_rate_pct: _dr,
+              used_qty: _uq,
+              root_cause_analysis: _rc,
+              corrective_action: _ca,
+              containment_action: _co,
+              ...payload
+            } = values;
+            const body = { ...payload, extension_payload };
             if (editing?.id) {
-              await qualityComplaintApi.update(editing.id, values);
+              await qualityComplaintApi.update(editing.id, body);
               messageApi.success(t('common.updateSuccess'));
             } else {
-              await qualityComplaintApi.create(values);
+              await qualityComplaintApi.create(body);
               messageApi.success(t('common.createSuccess'));
             }
             setModalOpen(false);
@@ -544,6 +622,44 @@ const QualityComplaintsPage: React.FC = () => {
           </Col>
         </Row>
         <ProFormTextArea name="description" label={t('app.kuaizhizao.qualityComplaint.colDescription')} />
+        <Row gutter={16}>
+          <Col span={8}>
+            <ProFormDigit
+              name="inspection_qty"
+              label={t('app.kuaizhizao.qualityComplaint.colInspectionQty')}
+              min={0}
+              fieldProps={{ precision: 4, style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormDigit
+              name="defect_qty"
+              label={t('app.kuaizhizao.qualityComplaint.colDefectQty')}
+              min={0}
+              fieldProps={{ precision: 4, style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={8}>
+            <ProFormDigit
+              name="used_qty"
+              label={t('app.kuaizhizao.qualityComplaint.colUsedQty')}
+              min={0}
+              fieldProps={{ precision: 4, style: { width: '100%' } }}
+            />
+          </Col>
+        </Row>
+        <ProFormTextArea
+          name="root_cause_analysis"
+          label={t('app.kuaizhizao.qualityComplaint.colRootCauseAnalysis')}
+        />
+        <ProFormTextArea
+          name="corrective_action"
+          label={t('app.kuaizhizao.qualityComplaint.colCorrectiveAction')}
+        />
+        <ProFormTextArea
+          name="containment_action"
+          label={t('app.kuaizhizao.qualityComplaint.colContainmentAction')}
+        />
         {editing?.status === 'processing' ? (
           <ProFormTextArea
             name="supplier_response"

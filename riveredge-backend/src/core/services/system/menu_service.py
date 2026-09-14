@@ -1907,7 +1907,12 @@ class MenuService:
 
         if not defer_menu_takeover and app and app.get("code"):
             from core.services.system.menu_takeover_service import MenuTakeoverService
-            await MenuTakeoverService.reapply_after_source_menu_sync(tenant_id, str(app["code"]))
+
+            app_code = str(app["code"])
+            await MenuTakeoverService.reapply_after_source_menu_sync(tenant_id, app_code)
+            await MenuTakeoverService.reapply_industry_pack_after_host_menu_sync(
+                tenant_id, app_code
+            )
 
         return synced_count
 
@@ -2002,6 +2007,9 @@ class MenuService:
             from core.services.system.menu_takeover_service import MenuTakeoverService
             for app_code in synced_app_codes:
                 await MenuTakeoverService.reapply_after_source_menu_sync(tenant_id, app_code)
+                await MenuTakeoverService.reapply_industry_pack_after_host_menu_sync(
+                    tenant_id, app_code
+                )
         if total > 0 or synced_app_codes:
             await MenuService._clear_menu_cache(tenant_id)
             logger.info(f"租户 {tenant_id} 菜单同步完成，共 {total} 个菜单")

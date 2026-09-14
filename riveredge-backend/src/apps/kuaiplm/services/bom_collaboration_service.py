@@ -54,6 +54,11 @@ class BomCollaborationService(AppBaseService[BomCollaboration]):
         return await IndustryExtensionRuntimeService.resolve_profile(tenant_id, PROFILE_KEY)
 
     async def get_form_profile(self, tenant_id: int) -> BomCollabFormProfile:
+        from apps.kuaiplm.schemas.bom_collaboration import BomCollabLineColumn
+
+        enabled = await IndustryExtensionRuntimeService.is_industry_profile_enabled(
+            tenant_id, PROFILE_KEY
+        )
         profile = await self._profile(tenant_id)
         sections: List[BomCollabFormProfileSection] = []
         for item in profile.get("sections") or []:
@@ -70,7 +75,26 @@ class BomCollaborationService(AppBaseService[BomCollaboration]):
                 )
             )
         sections.sort(key=lambda s: s.sort)
-        return BomCollabFormProfile(sections=sections)
+        line_columns: List[BomCollabLineColumn] = []
+        for item in profile.get("line_columns") or []:
+            if not isinstance(item, dict) or not item.get("key"):
+                continue
+            line_columns.append(
+                BomCollabLineColumn(
+                    key=str(item["key"]),
+                    label=str(item.get("label") or item["key"]),
+                    sort=int(item.get("sort") or 0),
+                    width=int(item["width"]) if item.get("width") is not None else None,
+                    required=bool(item.get("required")),
+                    type=str(item.get("type")) if item.get("type") else None,
+                )
+            )
+        line_columns.sort(key=lambda c: c.sort)
+        return BomCollabFormProfile(
+            industry_profile_enabled=enabled,
+            sections=sections,
+            line_columns=line_columns,
+        )
 
     def _section_label(self, profile: Dict[str, Any], section_key: str) -> str:
         for item in profile.get("sections") or []:
@@ -161,6 +185,7 @@ class BomCollaborationService(AppBaseService[BomCollaboration]):
                 qty=line.qty,
                 unit=line.unit,
                 remarks=(line.remarks or "").strip() or None,
+                extension_payload=getattr(line, "extension_payload", None),
             )
             apply_create_audit(row, user)
             await row.save()

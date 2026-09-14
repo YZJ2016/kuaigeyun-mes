@@ -45,6 +45,44 @@ QUALITY_COMPLAINT_AUDIT_NODE_BY_TYPE = {
     COMPLAINT_OQC: "quality_complaint_oqc",
     COMPLAINT_CUSTOMER: "quality_complaint_customer",
 }
+_COMPLAINT_EXTENSION_KEYS = frozenset(
+    {
+        "inspection_qty",
+        "defect_qty",
+        "defect_rate_pct",
+        "used_qty",
+        "root_cause_analysis",
+        "corrective_action",
+        "containment_action",
+    }
+)
+
+
+def _normalize_complaint_extension(
+    payload: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    if not payload or not isinstance(payload, dict):
+        return None
+    out: Dict[str, Any] = {}
+    for key, value in payload.items():
+        if key not in _COMPLAINT_EXTENSION_KEYS:
+            continue
+        if value is None or value == "":
+            continue
+        out[key] = value
+    inspection_qty = out.get("inspection_qty")
+    defect_qty = out.get("defect_qty")
+    if inspection_qty is not None and defect_qty is not None:
+        try:
+            iq = float(inspection_qty)
+            dq = float(defect_qty)
+            if iq > 0:
+                out["defect_rate_pct"] = round(dq / iq * 100, 4)
+        except (TypeError, ValueError):
+            pass
+    return out or None
+
+
 ALLOWED_STATUS = {
     "draft",
     "pending",
@@ -138,6 +176,7 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
             source_inspection_type=data.source_inspection_type,
             source_inspection_id=data.source_inspection_id,
             remarks=data.remarks,
+            extension_payload=_normalize_complaint_extension(data.extension_payload),
             status="draft",
         )
         apply_create_audit(row, user)
@@ -161,6 +200,10 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
             payload["business_type"] = self._validate_business_type(str(payload["business_type"]))
         if "defect_category" in payload:
             payload["defect_category"] = self._validate_defect_category(payload.get("defect_category"))
+        if "extension_payload" in payload:
+            payload["extension_payload"] = _normalize_complaint_extension(
+                payload.get("extension_payload")
+            )
         if row.status == "processing":
             allowed = {
                 "supplier_response",
@@ -169,6 +212,7 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
                 "remarks",
                 "attachments",
                 "eight_d_report_id",
+                "extension_payload",
             }
             payload = {k: v for k, v in payload.items() if k in allowed}
         for key, value in payload.items():

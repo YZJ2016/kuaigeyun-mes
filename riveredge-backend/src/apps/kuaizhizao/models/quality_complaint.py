@@ -72,4 +72,5 @@ class QualityComplaint(BaseModel):
     revoked_by_name = fields.CharField(max_length=100, null=True)
     revoke_reason = fields.TextField(null=True)
     remarks = fields.TextField(null=True)
+    extension_payload = fields.JSONField(null=True, description="扩展载荷（检验/不良/根因对策等）")
     deleted_at = fields.DatetimeField(null=True)

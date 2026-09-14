@@ -43,6 +43,11 @@ import {
 import { buildDocumentAuditColumns } from '../../../kuaizhizao/pages/shared/documentAuditColumns';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import {
+  buildLabRequestExtensionPayload,
+  flattenLabRequestForForm,
+  getLabRequestExtensionValue,
+} from '../../utils/labRequestExtension';
+import {
   labRequestApi,
   type LabRequest,
   type LabRequestBusinessType,
@@ -590,6 +595,21 @@ const LabRequestsPage: React.FC = () => {
           children: detail.material_code || '-',
         },
         {
+          key: 'delegate_dept',
+          label: t('app.kuaiplm.labRequest.fields.delegateDept'),
+          children: String(getLabRequestExtensionValue(detail, 'delegate_dept') || '-'),
+        },
+        {
+          key: 'test_dept',
+          label: t('app.kuaiplm.labRequest.fields.testDept'),
+          children: String(getLabRequestExtensionValue(detail, 'test_dept') || '-'),
+        },
+        {
+          key: 'inspection_slip_no',
+          label: t('app.kuaiplm.labRequest.fields.inspectionSlipNo'),
+          children: String(getLabRequestExtensionValue(detail, 'inspection_slip_no') || '-'),
+        },
+        {
           key: 'sample_desc',
           label: t('app.kuaiplm.labRequest.fields.sampleDesc'),
           children: detail.sample_desc || '-',
@@ -815,17 +835,7 @@ const LabRequestsPage: React.FC = () => {
         initialValues={
           editing
             ? {
-                title: editing.title,
-                business_type: editing.business_type || 'general',
-                priority: editing.priority || 'normal',
-                project_code: editing.project_code,
-                material_code: editing.material_code,
-                material_name: editing.material_name,
-                requester_name: editing.requester_name,
-                sample_desc: editing.sample_desc,
-                test_items: editing.test_items,
-                test_reason: editing.test_reason,
-                remarks: editing.remarks,
+                ...flattenLabRequestForForm(editing),
                 measure_items: (editing.measure_items || []).map((m, idx) => ({
                   line_no: m.line_no || idx + 1,
                   item_code: m.item_code,
@@ -846,8 +856,16 @@ const LabRequestsPage: React.FC = () => {
         }
         onFinish={async (values) => {
           try {
+            const extension_payload = buildLabRequestExtensionPayload(values);
+            const {
+              delegate_dept: _dd,
+              test_dept: _td,
+              inspection_slip_no: _is,
+              ...rest
+            } = values;
             const payload = {
-              ...values,
+              ...rest,
+              extension_payload,
               measure_items: (values.measure_items || []).map(
                 (row: Record<string, unknown>, idx: number) => ({
                   line_no: idx + 1,
@@ -925,6 +943,24 @@ const LabRequestsPage: React.FC = () => {
             <ProFormText
               name="requester_name"
               label={t('app.kuaiplm.labRequest.fields.requesterName')}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="delegate_dept"
+              label={t('app.kuaiplm.labRequest.fields.delegateDept')}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="test_dept"
+              label={t('app.kuaiplm.labRequest.fields.testDept')}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="inspection_slip_no"
+              label={t('app.kuaiplm.labRequest.fields.inspectionSlipNo')}
             />
           </Col>
           <Col span={12}>

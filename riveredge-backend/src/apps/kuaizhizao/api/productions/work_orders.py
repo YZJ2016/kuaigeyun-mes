@@ -102,6 +102,7 @@ from apps.kuaizhizao.schemas.rework_order import (
     ReworkFinanceSignRequest,
     ReworkPqcCheckRequest,
     ReworkOqcNotifyRequest,
+    ReworkOrderFormProfile,
     ReworkCancelRequest,
     ReworkHoldRequest,
 )
@@ -1502,6 +1503,18 @@ async def create_rework_order_from_work_order(
 
 
 # ============ 返工单管理 API ============
+
+@router.get(
+    "/rework-orders/meta/form-profile",
+    response_model=ReworkOrderFormProfile,
+    summary="Rework order form profile (generic or industry)",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:rework-order:read"))],
+)
+async def get_rework_order_form_profile(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await ReworkOrderService().get_form_profile(tenant_id)
+
 
 @router.post("/rework-orders", response_model=ReworkOrderResponse, summary="Create rework order")
 async def create_rework_order(

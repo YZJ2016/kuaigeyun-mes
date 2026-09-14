@@ -3520,6 +3520,9 @@ export default {
   'app.kuaiplm.labRequest.fields.materialCode': '物料编码',
   'app.kuaiplm.labRequest.fields.materialName': '物料名称',
   'app.kuaiplm.labRequest.fields.requesterName': '委托人',
+  'app.kuaiplm.labRequest.fields.delegateDept': '委托部门',
+  'app.kuaiplm.labRequest.fields.testDept': '检测部门',
+  'app.kuaiplm.labRequest.fields.inspectionSlipNo': '检验单号',
   'app.kuaiplm.labRequest.fields.sampleDesc': '样品说明',
   'app.kuaiplm.labRequest.fields.testItems': '试验项目',
   'app.kuaiplm.labRequest.fields.testReason': '试验原由',
@@ -4048,6 +4051,8 @@ export default {
   'app.kuaiplm.moldSample.messages.deleteOnlyDraft': '仅草稿或已驳回可删除，请重新勾选',
   'app.kuaiplm.trialFlow.title': '试流管理',
   'app.kuaiplm.trialFlow.createButton': '新建试流',
+  'app.kuaiplm.trialFlow.editButton': '编辑试流',
+  'app.kuaiplm.trialFlow.fields.stepPreview': '提交后将生成工序链',
   'app.kuaiplm.trialFlow.fields.code': '试流单号',
   'app.kuaiplm.trialFlow.fields.project': '研发项目',
   'app.kuaiplm.trialFlow.fields.businessType': '试流类型',
@@ -6042,6 +6047,13 @@ export default {
   'app.kuaizhizao.qualityComplaint.colDefectCategory': '缺陷分类',
   'app.kuaizhizao.qualityComplaint.colEightD': '关联8D',
   'app.kuaizhizao.qualityComplaint.colDescription': '问题描述',
+  'app.kuaizhizao.qualityComplaint.colInspectionQty': '检验数量',
+  'app.kuaizhizao.qualityComplaint.colDefectQty': '不良数量',
+  'app.kuaizhizao.qualityComplaint.colDefectRatePct': '不良率',
+  'app.kuaizhizao.qualityComplaint.colUsedQty': '使用数量',
+  'app.kuaizhizao.qualityComplaint.colRootCauseAnalysis': '根本原因分析',
+  'app.kuaizhizao.qualityComplaint.colCorrectiveAction': '纠正措施',
+  'app.kuaizhizao.qualityComplaint.colContainmentAction': '围堵措施',
   'app.kuaizhizao.qualityComplaint.defectCategory.performance': '性能',
   'app.kuaizhizao.qualityComplaint.defectCategory.structure': '结构',
   'app.kuaizhizao.qualityComplaint.defectCategory.appearance': '外观',
@@ -6304,6 +6316,7 @@ export default {
   'app.kuaizhizao.reworkOrder.fieldNoScrapConfirmed': '无报废确认',
   'app.kuaizhizao.reworkOrder.fieldNeedWarehouseIn': '是否入库',
   'app.kuaizhizao.reworkOrder.signoffChildrenHint': '会签型可维护物料到位、报废明细与排位策划（与制造执行工序分开）。',
+  'app.kuaizhizao.reworkOrder.profilePathType': '返工路径',
   'app.kuaizhizao.reworkOrder.sectionMaterialReqs': '物料需求',
   'app.kuaizhizao.reworkOrder.sectionScrapLines': '报废明细',
   'app.kuaizhizao.reworkOrder.sectionPositionPlans': '排位策划',
@@ -18544,7 +18557,8 @@ export default {
   'app.master-data.units.nameRequired': '请输入单位名称',
   'app.master-data.units.codeFollowsNameHint': '新建时编码与名称相同，可在列表中查看编码列',
   'app.master-data.units.loadPreset': '加载预设',
-  'app.master-data.units.loadPresetSuccess': '已加载预设：新建单位 {units}，回填 {backfill}，新建换算 {conversions}',
+  'app.master-data.units.loadPresetSuccess':
+    '已加载：预设单位 {units}，字典回填 {backfill}，物料补建 {fromMaterials}，换算 {conversions}',
   'app.master-data.units.systemCannotDelete': '系统内置不可删除',
   'app.master-data.units.fromUnit': '源单位',
   'app.master-data.units.toUnit': '目标单位',
@@ -29209,6 +29223,42 @@ export default {
     '销售订单菜单徽章改按发货状态统计',
   'pages.dashboard.updateLog.entries.sales-order-menu-badge-delivery-status.description':
     '左侧菜单销售订单徽章不再统计待审核与执行中订单，仅在有待交货或部分交货明细时提示；逾期未交仍显示红色，未开通财务模块的组织不再被大量蓝色徽章干扰。',
+  'pages.dashboard.updateLog.entries.units-load-preset-from-materials.title':
+    '单位加载预设同步物料单位',
+  'pages.dashboard.updateLog.entries.units-load-preset-from-materials.description':
+    '单位管理「加载预设」除系统预设与字典回填外，会扫描现有物料的基础单位与多单位 JSON，将库表直写等未进单位目录的单位补建入库，并在结果中单独统计物料补建数量。',
+  'pages.dashboard.updateLog.entries.units-load-preset-after-create.title':
+    '单位管理加载预设移到新建后',
+  'pages.dashboard.updateLog.entries.units-load-preset-after-create.description':
+    '单位管理「加载预设」从 Tab 栏右侧挪到「新建单位」按钮之后，与仓库等主数据页工具栏位置一致。',
+  'pages.dashboard.updateLog.entries.phase1-field-deepening-wrap-up.title':
+    '第一阶段字段深化收尾',
+  'pages.dashboard.updateLog.entries.phase1-field-deepening-wrap-up.description':
+    '质量投诉扩展检验/不良/根因对策字段；实验委托委托部门与检验单号；样品加工行业校验联动；电子制造 form-profile 五单据门控与菜单聚合齐备，待甲方联调验收。',
+  'pages.dashboard.updateLog.entries.industry-form-profile-gate-and-bom-collab-lines.title':
+    '行业 form-profile 门控与 BOM 协同深化',
+  'pages.dashboard.updateLog.entries.industry-form-profile-gate-and-bom-collab-lines.description':
+    '未启用电子制造等行业包时，样品/BOM/ECN/试流/返工保持通用界面；启用后按 form-profile 展示分区名、动态列与 extension_payload。BOM 协同明细支持位号、规格、封装等行业列。',
+  'pages.dashboard.updateLog.entries.industry-pack-extension-menu-aggregation.title':
+    '行业包聚合非通用单据菜单',
+  'pages.dashboard.updateLog.entries.industry-pack-extension-menu-aggregation.description':
+    '行业扩展 replace 声明自动生成行业包子菜单；启用电子制造等行业包后，样品/BOM/ECN/试流/返工等宿主菜单从快研发快制造侧栏隐藏，统一在行业包下查找。',
+  'pages.dashboard.updateLog.entries.rework-order-form-profile-dynamic-fields.title':
+    '返工单 form-profile 十段与排位',
+  'pages.dashboard.updateLog.entries.rework-order-form-profile-dynamic-fields.description':
+    '返工单编辑弹窗与详情抽屉接入 form-profile：A-A/A-B 路径、十段扩展字段、动态排位列与会签部门按路径筛选；行业扩展写入 extension_payload。',
+  'pages.dashboard.updateLog.entries.trial-flow-form-profile-dynamic-fields.title':
+    '试流管理 form-profile 动态字段',
+  'pages.dashboard.updateLog.entries.trial-flow-form-profile-dynamic-fields.description':
+    '试流新建编辑弹窗与详情抽屉的头字段、工序链预览改由 form-profile 驱动；行业扩展写入 extension_payload。',
+  'pages.dashboard.updateLog.entries.ecn-form-profile-dynamic-columns.title':
+    '工程变更单 form-profile 动态列',
+  'pages.dashboard.updateLog.entries.ecn-form-profile-dynamic-columns.description':
+    'ECN 新建编辑弹窗与详情抽屉的物料明细列、头勾选项改由 form-profile 驱动；行业溢出字段写入 extension_payload。',
+  'pages.dashboard.updateLog.entries.kuaielectronics-ecn-trial-rework-profiles.title':
+    '电子制造行业包 ECN 试流返工 profile',
+  'pages.dashboard.updateLog.entries.kuaielectronics-ecn-trial-rework-profiles.description':
+    '工程变更、试流、返工单的行业字段与会签/工序链改由 kuaielectronics profile 种子驱动；通用层仅保留 form-profile 读取接口，不再扩列。',
   'pages.dashboard.updateLog.entries.inbound-hub-lifecycle-received-harden.title':
     '入库管理生命周期阶段加固',
   'pages.dashboard.updateLog.entries.inbound-hub-lifecycle-received-harden.description':

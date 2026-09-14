@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from apps.kuaiplm.schemas.trial_flow import (
     TrialFlowConclude,
     TrialFlowCreate,
+    TrialFlowFormProfile,
     TrialFlowListResponse,
     TrialFlowResponse,
     TrialFlowStepFill,
@@ -31,6 +32,27 @@ def _http(exc: Exception) -> HTTPException:
     if isinstance(exc, (ValidationError, BusinessLogicError)):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+
+@router.get(
+    "/meta/form-profile",
+    response_model=TrialFlowFormProfile,
+    summary="Trial flow form profile (generic or industry)",
+)
+async def get_trial_flow_form_profile(
+    _auth=Depends(
+        require_access(
+            "kuaiplm.trial-flow",
+            "read",
+            required_permissions=["kuaiplm:trial-flow:read"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.get_form_profile(tenant_id)
+    except Exception as e:
+        raise _http(e)
 
 
 @router.get("", response_model=TrialFlowListResponse)

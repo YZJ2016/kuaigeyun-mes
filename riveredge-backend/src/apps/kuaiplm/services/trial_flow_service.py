@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.common.base_service import AppBaseService
@@ -17,6 +17,7 @@ from apps.kuaiplm.models.trial_flow import (
 from apps.kuaiplm.schemas.trial_flow import (
     TrialFlowConclude,
     TrialFlowCreate,
+    TrialFlowFormProfile,
     TrialFlowListItem,
     TrialFlowListResponse,
     TrialFlowMaterialLineIn,
@@ -26,6 +27,9 @@ from apps.kuaiplm.schemas.trial_flow import (
     TrialFlowStepOut,
     TrialFlowUpdate,
 )
+from core.services.application.industry_extension_runtime_service import (
+    IndustryExtensionRuntimeService,
+)
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.audit_binding_service import AuditBindingService
 from core.utils.timezone_utils import resolve_business_datetime
@@ -33,6 +37,7 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, Valid
 from infra.models.user import User
 
 AUDIT_NODE = "trial_flow"
+PROFILE_KEY = "kuaiplm.trial_flow"
 ALLOWED_STATUS = {
     "draft",
     "pending",
@@ -53,6 +58,48 @@ class TrialFlowService(AppBaseService[TrialFlow]):
     def __init__(self) -> None:
         super().__init__(TrialFlow)
         self.model = TrialFlow
+
+    async def _profile(self, tenant_id: int) -> Dict[str, Any]:
+        return await IndustryExtensionRuntimeService.resolve_profile(tenant_id, PROFILE_KEY)
+
+    async def get_form_profile(self, tenant_id: int) -> TrialFlowFormProfile:
+        enabled = await IndustryExtensionRuntimeService.is_industry_profile_enabled(
+            tenant_id, PROFILE_KEY
+        )
+        profile = await self._profile(tenant_id)
+        step_templates = profile.get("step_templates") or {}
+        return TrialFlowFormProfile(
+            industry_profile_enabled=enabled,
+            field_labels=dict(profile.get("field_labels") or {}),
+            header_fields=list(profile.get("header_fields") or []),
+            step_templates={
+                str(k): list(v or [])
+                for k, v in step_templates.items()
+                if isinstance(v, list)
+            },
+            validation_rules=list(profile.get("validation_rules") or []),
+        )
+
+    @staticmethod
+    def _steps_from_profile(
+        profile: Dict[str, Any], business_type: str
+    ) -> List[tuple[str, str, str]]:
+        templates = profile.get("step_templates") or {}
+        items = templates.get(business_type) or []
+        ordered: List[tuple[int, str, str, str]] = []
+        for item in items:
+            if not isinstance(item, dict) or not item.get("step_key"):
+                continue
+            ordered.append(
+                (
+                    int(item.get("sort") or 0),
+                    str(item["step_key"]),
+                    str(item.get("step_name") or item["step_key"]),
+                    str(item.get("dept_code") or ""),
+                )
+            )
+        ordered.sort(key=lambda x: x[0])
+        return [(key, name, dept) for _, key, name, dept in ordered]
 
     async def _ensure_code(self, tenant_id: int, code: Optional[str]) -> str:
         raw = (code or "").strip()
@@ -139,7 +186,10 @@ class TrialFlowService(AppBaseService[TrialFlow]):
     async def _seed_steps(
         self, tenant_id: int, trial_id: int, business_type: str, user: User
     ) -> List[TrialFlowStepResult]:
-        defs = DEFAULT_STEPS_BY_TYPE.get(business_type) or []
+        profile = await self._profile(tenant_id)
+        defs = self._steps_from_profile(profile, business_type) or (
+            DEFAULT_STEPS_BY_TYPE.get(business_type) or []
+        )
         created: List[TrialFlowStepResult] = []
         for order, (key, name, dept) in enumerate(defs):
             step = TrialFlowStepResult(
@@ -180,6 +230,7 @@ class TrialFlowService(AppBaseService[TrialFlow]):
             title=payload.title.strip(),
             status="draft",
             remarks=payload.remarks,
+            extension_payload=payload.extension_payload,
         )
         apply_create_audit(row, user)
         await row.save()
