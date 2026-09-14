@@ -36,6 +36,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'equipment-spot-check-docno-collision-fix',
+    date: '2026-09-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-spot-check-docno-collision-fix.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equipment-spot-check-docno-collision-fix.description',
+  },
+  {
     id: 'units-load-preset-from-materials',
     date: '2026-09-14',
     type: 'improvement',
