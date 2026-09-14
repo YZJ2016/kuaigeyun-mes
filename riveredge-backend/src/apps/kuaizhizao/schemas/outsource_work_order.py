@@ -340,6 +340,7 @@ class OutsourceMaterialReceiptResponse(OutsourceMaterialReceiptBase):
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="入库 Hub capabilities（document_action_policy）",
     )
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
     total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
     quantity_unit: Optional[str] = Field(
         None,
@@ -481,6 +482,7 @@ class OutsourceMaterialReturnResponse(OutsourceMaterialReturnBase):
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="入库 Hub capabilities（document_action_policy）",
     )
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
     total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
     quantity_unit: Optional[str] = Field(
         None,
@@ -559,6 +561,7 @@ class OutsourceProductReturnResponse(OutsourceProductReturnBase):
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="入库 Hub capabilities（document_action_policy）",
     )
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
     total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
     quantity_unit: Optional[str] = Field(
         None,

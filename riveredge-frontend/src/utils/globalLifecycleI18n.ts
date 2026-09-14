@@ -30,6 +30,8 @@ const DOCUMENT_STATUS_STAGE_KEYS = new Set([
   'closed',
   'partial_converted',
   'full_converted',
+  /** 与 locales documentStatus.received=已入库 对齐；其他入库/收货通知/代工来料终态 */
+  'received',
 ]);
 
 /** 仅 lifecycle.stage.* 的阶段 key（不含 documentStatus 已覆盖项） */
@@ -173,7 +175,7 @@ export const LIFECYCLE_ZH_LABEL_TO_KEY: Record<string, string> = {
   已下推计算: 'pushed',
   已下推入库: 'pushed',
   待入库: 'pending_inbound',
-  已入库: 'inbound',
+  已入库: 'received',
   待出库: 'pending_outbound',
   已出库: 'outbound',
   待退料: 'pending_return',

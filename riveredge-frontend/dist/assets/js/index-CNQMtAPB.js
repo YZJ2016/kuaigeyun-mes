@@ -1,0 +1,1 @@
+import{j as a}from"./vendor-CKBUIHtO.js";import{N as e}from"./clientRelease-p1K3Xvtk.js";const o=()=>a.jsx(e,{to:"/apps/kuaizhizao/warehouse-management/batching-center",replace:!0});export{o as default};

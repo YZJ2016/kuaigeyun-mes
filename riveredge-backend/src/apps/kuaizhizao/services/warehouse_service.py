@@ -4234,6 +4234,9 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
         response.total_quantity = float(
             sum(float(i.return_quantity or 0) for i in items)
         )
+        from apps.kuaizhizao.services.document_lifecycle_service import get_production_return_lifecycle
+
+        response.lifecycle = get_production_return_lifecycle(ret)
         return response
 
     async def list_production_returns(
@@ -4306,6 +4309,10 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
             item_previews=item_previews,
             quantity_units=quantity_units,
         )
+        from apps.kuaizhizao.services.document_lifecycle_service import get_production_return_lifecycle
+
+        for row, resp in zip(rets, enriched):
+            resp.lifecycle = get_production_return_lifecycle(row, milestones=[])
         return enriched, total
 
     async def update_production_return(
@@ -4840,6 +4847,9 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         items = await FinishedGoodsReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).all()
         resp = FinishedGoodsReceiptWithItemsResponse.model_validate(receipt)
         resp.items = [FinishedGoodsReceiptItemResponse.model_validate(i) for i in items]
+        from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle
+
+        resp.lifecycle = get_other_inbound_lifecycle(receipt)
         return resp
 
     async def list_finished_goods_receipts(
@@ -4907,6 +4917,10 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             item_previews=item_previews,
             quantity_units=quantity_units,
         )
+        from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle
+
+        for receipt, resp in zip(receipts, responses):
+            resp.lifecycle = get_other_inbound_lifecycle(receipt, milestones=[])
         enriched = await enrich_production_receipts_with_customer(tenant_id, receipts, responses)
         return enriched, total
 

@@ -36,6 +36,23 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'inbound-hub-lifecycle-received-harden',
+    date: '2026-09-14',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inbound-hub-lifecycle-received-harden.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inbound-hub-lifecycle-received-harden.description',
+  },
+  {
+    id: 'outbound-hub-purchase-return-lifecycle-done-key',
+    date: '2026-09-14',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.outbound-hub-purchase-return-lifecycle-done-key.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outbound-hub-purchase-return-lifecycle-done-key.description',
+  },
+  {
     id: 'equipment-ledger-null-nature-exclude-fix',
     date: '2026-09-13',
     type: 'fix',

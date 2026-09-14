@@ -659,6 +659,10 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                 for r in receipts
             },
         )
+        from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle
+
+        for receipt, resp in zip(receipts, responses):
+            resp.lifecycle = get_other_inbound_lifecycle(receipt, milestones=[])
         return await enrich_outsource_docs_with_supplier(tenant_id, receipts, responses)
 
     async def get_material_receipt(
@@ -691,6 +695,9 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         await self._normalize_legacy_draft_receipts([receipt])
 
         resp = OutsourceMaterialReceiptResponse.model_validate(receipt)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle
+
+        resp.lifecycle = get_other_inbound_lifecycle(receipt)
         enriched = await enrich_outsource_docs_with_supplier(tenant_id, [receipt], [resp])
         return enriched[0]
 

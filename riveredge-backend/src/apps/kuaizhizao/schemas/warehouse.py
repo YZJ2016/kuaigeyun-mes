@@ -246,6 +246,7 @@ class ProductionReturnResponse(ProductionReturnBase):
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
     total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
     quantity_unit: Optional[str] = Field(
         None,
@@ -446,6 +447,7 @@ class FinishedGoodsReceiptResponse(FinishedGoodsReceiptBase):
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
     total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
     quantity_unit: Optional[str] = Field(
         None,
@@ -562,6 +564,7 @@ class SemiFinishedGoodsReceiptResponse(SemiFinishedGoodsReceiptBase):
     capabilities: Optional[InboundHubCapabilities] = Field(
         None, description="业务态 capabilities（入库 Hub，document_action_policy）",
     )
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
     total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
     quantity_unit: Optional[str] = Field(
         None,

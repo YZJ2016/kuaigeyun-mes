@@ -1651,7 +1651,7 @@ def get_sales_return_lifecycle(
 # ---------------------------------------------------------------------------
 PURCHASE_RETURN_MAIN_STAGES = [
     {"key": "pending_return_goods", "label": "待退货"},
-    {"key": "done", "label": "已退货"},
+    {"key": "returned_goods", "label": "已退货"},
 ]
 
 _PURCHASE_RETURN_CANCELLED_STATUSES = frozenset({"已取消", "CANCELLED", "cancelled"})
@@ -1689,7 +1689,7 @@ def get_purchase_return_lifecycle(
         }
 
     is_completed = status in _PURCHASE_RETURN_COMPLETED_STATUSES
-    key = "done" if is_completed else "pending_return_goods"
+    key = "returned_goods" if is_completed else "pending_return_goods"
     stage_name = "已退货" if is_completed else "待退货"
 
     sub_stages = [
@@ -2213,7 +2213,7 @@ def get_inbound_lifecycle(
     record: Any,
     milestones: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
-    """入库单生命周期计算"""
+    """入库单生命周期计算（通用草稿→确认→完成轴）。"""
     status = _norm(getattr(record, "status", None))
     milestones = milestones or []
     status_map = {
@@ -2241,6 +2241,54 @@ def get_inbound_lifecycle(
         "main_stages": _build_main_stages(INBOUND_MAIN_STAGES, key, is_exception=is_exception),
         "sub_stages": None,
         "next_step_suggestions": ["确认"] if stage_name == "草稿" else ["完成"] if stage_name in ("已确认", "待退料") else [],
+        "milestones": milestones,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 生产退料单生命周期（待退料→已退料）
+# ---------------------------------------------------------------------------
+PRODUCTION_RETURN_MAIN_STAGES = [
+    {"key": "pending_return", "label": "待退料"},
+    {"key": "returned", "label": "已退料"},
+    {"key": "cancelled", "label": "已取消"},
+]
+
+
+def get_production_return_lifecycle(
+    record: Any,
+    milestones: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """生产退料单生命周期（待退料→已退料；阶段 key 与全局 lifecycle.stage.* 对齐）。"""
+    status = _norm(getattr(record, "status", None))
+    milestones = milestones or []
+    status_map = {
+        "待退料": "pending_return",
+        "pending_return": "pending_return",
+        "已退料": "returned",
+        "returned": "returned",
+        "已取消": "cancelled",
+        "cancelled": "cancelled",
+        # 委外退料/退货单据 status 为 draft/completed
+        "draft": "pending_return",
+        "completed": "returned",
+    }
+    key = status_map.get(status, "pending_return")
+    stage_name_map = {
+        "pending_return": "待退料",
+        "returned": "已退料",
+        "cancelled": "已取消",
+    }
+    stage_name = stage_name_map.get(key, status or "待退料")
+    return {
+        "current_stage_key": key,
+        "current_stage_name": stage_name,
+        "status": "exception" if key == "cancelled" else "success" if key == "returned" else "normal",
+        "main_stages": _build_main_stages(
+            PRODUCTION_RETURN_MAIN_STAGES, key, is_exception=(key == "cancelled")
+        ),
+        "sub_stages": None,
+        "next_step_suggestions": ["确认退料"] if key == "pending_return" else [],
         "milestones": milestones,
     }
 
@@ -2550,10 +2598,23 @@ def get_other_inbound_lifecycle(
     record: Any,
     milestones: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
-    """其他入库单生命周期计算"""
+    """其他入库 / 成品入库 / 半成品入库 / 委外收货类：待入库→已入库。
+
+    业务 status 可为中文（待入库/已入库）或英文（draft/completed）；
+    阶段 key 统一 pending_inbound / received，与 documentStatus.received 对齐。
+    """
     status = _norm(getattr(record, "status", None))
     milestones = milestones or []
-    status_map = {"待入库": "pending_inbound", "已入库": "received", "已取消": "cancelled"}
+    status_map = {
+        "待入库": "pending_inbound",
+        "已入库": "received",
+        "已取消": "cancelled",
+        "draft": "pending_inbound",
+        "pending": "pending_inbound",
+        "completed": "received",
+        "received": "received",
+        "cancelled": "cancelled",
+    }
     key = status_map.get(status, "pending_inbound")
     stage_name_map = {"pending_inbound": "待入库", "received": "已入库", "cancelled": "已取消"}
     stage_name = stage_name_map.get(key, status or "待入库")
@@ -2570,7 +2631,7 @@ def get_other_inbound_lifecycle(
 
 CUSTOMER_MATERIAL_REGISTRATION_MAIN_STAGES = [
     {"key": "pending_inbound", "label": "待入库"},
-    {"key": "processed", "label": "已入库"},
+    {"key": "received", "label": "已入库"},
     {"key": "cancelled", "label": "已取消"},
 ]
 
@@ -2579,28 +2640,32 @@ def get_customer_material_registration_lifecycle(
     record: Any,
     milestones: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """代工来料（客供料登记）生命周期计算"""
+    """代工来料（客供料登记）生命周期计算。
+
+    单据业务 status 仍为 pending/processed/cancelled；生命周期阶段 key 与全局
+    documentStatus.received（已入库）对齐，禁止再用未登记的 processed 冒充阶段 key。
+    """
     status = _norm(getattr(record, "status", None))
     milestones = milestones or []
     status_map = {
         "pending": "pending_inbound",
-        "processed": "processed",
+        "processed": "received",
         "cancelled": "cancelled",
         "待入库": "pending_inbound",
-        "已入库": "processed",
+        "已入库": "received",
         "已取消": "cancelled",
     }
     key = status_map.get(status, "pending_inbound")
     stage_name_map = {
         "pending_inbound": "待入库",
-        "processed": "已入库",
+        "received": "已入库",
         "cancelled": "已取消",
     }
     stage_name = stage_name_map.get(key, status or "待入库")
     return {
         "current_stage_key": key,
         "current_stage_name": stage_name,
-        "status": "exception" if key == "cancelled" else "success" if key == "processed" else "normal",
+        "status": "exception" if key == "cancelled" else "success" if key == "received" else "normal",
         "main_stages": _build_main_stages(
             CUSTOMER_MATERIAL_REGISTRATION_MAIN_STAGES, key, is_exception=(key == "cancelled")
         ),
