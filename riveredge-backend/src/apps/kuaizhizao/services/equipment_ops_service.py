@@ -79,7 +79,14 @@ T = TypeVar("T")
 
 
 def _now_doc_no(prefix: str) -> str:
-    return f"{prefix}{resolve_business_datetime().strftime('%Y%m%d%H%M%S')}"
+    """无编码规则时的兜底单号：须在并发连建时仍唯一（秒级不够）。"""
+    import secrets
+
+    now = resolve_business_datetime()
+    return (
+        f"{prefix}{now.strftime('%Y%m%d%H%M%S')}"
+        f"{now.microsecond:06d}{secrets.token_hex(2)}"
+    )
 
 
 async def _generate_code(tenant_id: int, rule_code: str, prefix: str) -> str:
