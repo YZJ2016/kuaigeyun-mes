@@ -29231,6 +29231,10 @@ export default {
     '销售订单菜单徽章改按发货状态统计',
   'pages.dashboard.updateLog.entries.sales-order-menu-badge-delivery-status.description':
     '左侧菜单销售订单徽章不再统计待审核与执行中订单，仅在有待交货或部分交货明细时提示；逾期未交仍显示红色，未开通财务模块的组织不再被大量蓝色徽章干扰。',
+  'pages.dashboard.updateLog.entries.mobile-server-settings-copy-plain.title':
+    '移动端服务器设置文案更易懂',
+  'pages.dashboard.updateLog.entries.mobile-server-settings-copy-plain.description':
+    '去掉具体域名与专业术语示例，改为面向普通用户的简短说明；测试连接与保存提示同步简化。',
   'pages.dashboard.updateLog.entries.sales-order-approve-approval-status-nameerror.title':
     '修复销售订单审核报 approval_status 未定义',
   'pages.dashboard.updateLog.entries.sales-order-approve-approval-status-nameerror.description':

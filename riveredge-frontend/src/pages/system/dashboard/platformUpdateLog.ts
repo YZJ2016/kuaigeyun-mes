@@ -36,6 +36,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'mobile-server-settings-copy-plain',
+    date: '2026-09-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-server-settings-copy-plain.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-server-settings-copy-plain.description',
+  },
+  {
     id: 'sales-order-approve-approval-status-nameerror',
     date: '2026-09-15',
     type: 'fix',
