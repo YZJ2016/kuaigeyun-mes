@@ -19,7 +19,7 @@ import {
   type CostSelectOption,
 } from '../costSelectData';
 import { formatCalculationType, getSourceTypeTag } from '../../../utils/costUiLabels';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount, formatQuantity } from '../../../../../utils/format';
 import { toApiDateString } from '../../../../../utils/formDate';
 
 interface PurchaseCostResult {
@@ -178,15 +178,15 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
               purchase_order_code: result.purchase_order_code,
               supplier_name: result.supplier_name,
               source_type: getSourceTypeTag('Buy', t),
-              quantity: result.quantity,
-              purchase_price: `¥${result.purchase_price?.toFixed(2)}`,
-              purchase_fee: `¥${result.purchase_fee?.toFixed(2)}`,
+              quantity: formatQuantity(result.quantity),
+              purchase_price: formatCurrencyAmount(result.purchase_price),
+              purchase_fee: formatCurrencyAmount(result.purchase_fee),
               total_cost: (
                 <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1890ff' }}>
-                  ¥{result.total_cost?.toFixed(2)}
+                  {formatCurrencyAmount(result.total_cost)}
                 </span>
               ),
-              unit_cost: `¥${result.unit_cost?.toFixed(2)}`,
+              unit_cost: formatCurrencyAmount(result.unit_cost),
               calculation_type: formatCalculationType(result.calculation_type, t),
               calculation_date: result.calculation_date ? formatDateTime(result.calculation_date, 'YYYY-MM-DD') : '-',
             }}

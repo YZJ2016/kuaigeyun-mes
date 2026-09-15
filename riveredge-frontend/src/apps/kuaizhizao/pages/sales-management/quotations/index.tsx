@@ -38,6 +38,7 @@ import {
   MaterialStackedCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { renderDocumentLineMaterialsPreview } from '../shared/documentLineMaterialsPreview';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniBatchButton, UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
@@ -1205,35 +1206,7 @@ const QuotationsPage: React.FC = () => {
       ellipsis: false,
       hideInSearch: true,
       onCell: () => ({ style: { whiteSpace: 'normal' } }),
-      render: (_, r) => {
-        const names = (r.items || [])
-          .map((it) => String(it.material_name ?? '').trim())
-          .filter((text) => text.length > 0);
-        if (names.length === 0) return '-';
-        const preview = names.slice(0, 2);
-        const restCount = names.length - preview.length;
-        return (
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              gap: 4,
-              minWidth: 0,
-              maxWidth: '100%',
-            }}
-          >
-            {preview.map((text, index) => (
-              <MarkerTag key={`${index}-${text}`}>{text}</MarkerTag>
-            ))}
-            {restCount > 0 ? (
-              <MarkerTag color="default">
-                {t('app.kuaizhizao.quotation.linesAndMore', { count: restCount })}
-              </MarkerTag>
-            ) : null}
-          </div>
-        );
-      },
+      render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
     },
     {
       title: t('app.kuaizhizao.salesOrder.totalQuantity'),

@@ -50,7 +50,7 @@ import type { Material } from '../../../types/material';
 import { useMaterialUnitOptions } from '../../../hooks/useMaterialUnitOptions';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-material-price';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatPrice } from '../../../../../utils/format';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   renderMasterActiveTag,
@@ -552,7 +552,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         align: 'right',
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => (r.unitPrice != null ? Number(r.unitPrice).toFixed(4) : '—'),
+        render: (_, r) => (r.unitPrice != null ? formatPrice(r.unitPrice) : '—'),
       },
       {
         // 长表头「属性 SKU 单价」+「N 条 SKU 价」徽章：勿标 MarkerBadge（会强制 ~80）

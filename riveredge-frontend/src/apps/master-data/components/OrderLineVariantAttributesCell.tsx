@@ -270,8 +270,11 @@ export const OrderLineVariantAttributesCell: React.FC<OrderLineVariantAttributes
                   </Typography.Paragraph>
                   <VariantAttributeFields
                     definitions={definitions}
+                    onDefinitionsChange={setDefinitions}
                     loading={defsLoading}
                     singleValueOnly
+                    enableEnumQuickAdd
+                    parentModalZIndex={1200}
                     colSpan={{ xs: 24, sm: 12, md: 8 }}
                   />
                 </Form>

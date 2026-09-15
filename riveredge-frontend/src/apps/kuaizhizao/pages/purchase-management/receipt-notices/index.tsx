@@ -131,7 +131,7 @@ import {
   hasDocumentAttachments,
 } from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { formatBusinessDateOnly, formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatPrice, formatAmount } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 interface ReceiptNoticeDetail extends ReceiptNotice {
@@ -924,14 +924,14 @@ const ReceiptNoticesPage: React.FC = () => {
         dataIndex: 'unit_price',
         width: 100,
         align: 'right',
-        render: (text: unknown) => (text != null ? Number(text).toFixed(2) : '-'),
+        render: (text: unknown) => formatPrice(text),
       },
       {
         title: t('app.kuaizhizao.shipmentNotice.amount'),
         dataIndex: 'total_amount',
         width: 110,
         align: 'right',
-        render: (text: unknown) => (text != null ? Number(text).toFixed(2) : '-'),
+        render: (text: unknown) => formatAmount(text),
       },
       {
         title: t('app.kuaizhizao.receiptNotice.plannedReceiptDate'),

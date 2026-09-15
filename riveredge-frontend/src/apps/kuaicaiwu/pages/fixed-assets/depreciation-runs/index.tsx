@@ -9,6 +9,7 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { formatAmount } from '../../../../../utils/format';
 import { fixedAssetService } from '../../../services/fixed-assets';
 
 const RESOURCE = 'kuaicaiwu:fixed-asset-depreciation';
@@ -196,7 +197,7 @@ const FaDepreciationRunsPage: React.FC = () => {
           columns={[
             { title: t(`${NS}.col.assetCode`), dataIndex: 'asset_code' },
             { title: t(`${NS}.col.assetName`), dataIndex: 'asset_name', ellipsis: true },
-            { title: t(`${NS}.col.calculated`), dataIndex: 'calculated_amount', render: (v) => Number(v).toFixed(2) },
+            { title: t(`${NS}.col.calculated`), dataIndex: 'calculated_amount', render: (v) => formatAmount(v) },
             {
               title: t(`${NS}.col.final`),
               dataIndex: 'final_amount',
@@ -215,7 +216,7 @@ const FaDepreciationRunsPage: React.FC = () => {
                     }}
                   />
                 ) : (
-                  Number(v).toFixed(2)
+                  formatAmount(v)
                 ),
             },
           ]}

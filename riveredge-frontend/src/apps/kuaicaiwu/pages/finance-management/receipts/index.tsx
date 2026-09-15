@@ -354,7 +354,7 @@ const ReceiptsPage: React.FC = () => {
       return false;
     }
     if (totalAmount > maxPush) {
-      messageApi.warning(t(`${R}.pullExceedMax`, { max: maxPush.toFixed(2) }));
+      messageApi.warning(t(`${R}.pullExceedMax`, { max: formatCurrencyAmount(maxPush) }));
       return false;
     }
     setPullSubmitting(true);

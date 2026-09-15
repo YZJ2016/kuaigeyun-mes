@@ -19,6 +19,7 @@ import {
   UNI_TABLE_STACKED_IDENTITY_CLASS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
+import { renderInlineMarkerTagPreview } from '../../../../../components/inline-marker-tag-preview';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { formatQuantity } from '../../../../../utils/format';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
@@ -110,31 +111,9 @@ export function renderInspectionPlanStepsPreview(
   steps: InspectionPlanStepItem[] | undefined,
   t: TFunction,
 ): React.ReactNode {
-  const labels = sortInspectionPlanStepLabels(steps);
-  if (labels.length === 0) return '-';
-  const preview = labels.slice(0, 2);
-  const restCount = labels.length - preview.length;
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        gap: 4,
-        minWidth: 0,
-        maxWidth: '100%',
-      }}
-    >
-      {preview.map((text, index) => (
-        <MarkerTag key={`${index}-${text}`}>{text}</MarkerTag>
-      ))}
-      {restCount > 0 ? (
-        <MarkerTag color="default">
-          {t('app.kuaizhizao.quality.plans.stepsAndMore', { count: restCount })}
-        </MarkerTag>
-      ) : null}
-    </div>
-  );
+  return renderInlineMarkerTagPreview(sortInspectionPlanStepLabels(steps), {
+    formatMore: (totalCount) => t('app.kuaizhizao.quality.plans.stepsAndMore', { count: totalCount }),
+  });
 }
 
 /** 质检方案列表：检验步骤列（余量列，吃掉视口剩余宽度；禁止 filler / max 上限） */

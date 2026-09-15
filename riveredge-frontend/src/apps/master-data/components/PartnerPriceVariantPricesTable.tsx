@@ -10,6 +10,7 @@ import { scalarAttrDisplay } from './MaterialVariantCombinationsTable';
 import { variantAttributeApi } from '../services/variant-attribute';
 import type { PartnerPriceVariantLine } from '../types/partner-price-book';
 import type { VariantAttributeDefinition } from '../types/variant-attribute';
+import { formatPrice } from '../../../utils/format';
 
 export interface PartnerPriceVariantPricesTableProps {
   rows?: PartnerPriceVariantLine[];
@@ -78,7 +79,7 @@ export const PartnerPriceVariantPricesTable: React.FC<PartnerPriceVariantPricesT
         width: 120,
         align: 'right' as const,
         render: (value: number | undefined) =>
-          value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(4) : '—',
+          value != null && Number.isFinite(Number(value)) ? formatPrice(value) : '—',
       },
     ],
     [definitions, t],

@@ -22,7 +22,7 @@ import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { normalizeCostListRows } from '../costSelectData';
 import { getSourceTypeSelectOptions, getSourceTypeTag } from '../../../utils/costUiLabels';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount, formatAmount } from '../../../../../utils/format';
 
 type ReportSection = 'comprehensive' | 'trend' | 'structure';
 
@@ -208,19 +208,19 @@ const CostReportPage: React.FC = () => {
               <Col xs={24} md={8}>
                 <Statistic title={t('app.kuaicaiwu.costCommon.col.materialCost')} value={result.structure_analysis.cost_composition.material_cost} prefix="¥" precision={amountDecimals} />
                 <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
-                  {t('app.kuaicaiwu.costReport.shareRate', { rate: result.structure_analysis.cost_rates.material_cost_rate.toFixed(2) })}
+                  {t('app.kuaicaiwu.costReport.shareRate', { rate: formatAmount(result.structure_analysis.cost_rates.material_cost_rate) })}
                 </div>
               </Col>
               <Col xs={24} md={8}>
                 <Statistic title={t('app.kuaicaiwu.costCommon.col.laborCost')} value={result.structure_analysis.cost_composition.labor_cost} prefix="¥" precision={amountDecimals} />
                 <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
-                  {t('app.kuaicaiwu.costReport.shareRate', { rate: result.structure_analysis.cost_rates.labor_cost_rate.toFixed(2) })}
+                  {t('app.kuaicaiwu.costReport.shareRate', { rate: formatAmount(result.structure_analysis.cost_rates.labor_cost_rate) })}
                 </div>
               </Col>
               <Col xs={24} md={8}>
                 <Statistic title={t('app.kuaicaiwu.costCommon.col.manufacturingCost')} value={result.structure_analysis.cost_composition.manufacturing_cost} prefix="¥" precision={amountDecimals} />
                 <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
-                  {t('app.kuaicaiwu.costReport.shareRate', { rate: result.structure_analysis.cost_rates.manufacturing_cost_rate.toFixed(2) })}
+                  {t('app.kuaicaiwu.costReport.shareRate', { rate: formatAmount(result.structure_analysis.cost_rates.manufacturing_cost_rate) })}
                 </div>
               </Col>
             </Row>
@@ -236,10 +236,10 @@ const CostReportPage: React.FC = () => {
                           column={1}
                           size="small"
                           dataSource={{
-                            total_cost: `¥${data.total_cost.toFixed(2)}`,
-                            material_cost: `¥${data.material_cost.toFixed(2)}`,
-                            labor_cost: `¥${data.labor_cost.toFixed(2)}`,
-                            manufacturing_cost: `¥${data.manufacturing_cost.toFixed(2)}`,
+                            total_cost: formatCurrencyAmount(data.total_cost),
+                            material_cost: formatCurrencyAmount(data.material_cost),
+                            labor_cost: formatCurrencyAmount(data.labor_cost),
+                            manufacturing_cost: formatCurrencyAmount(data.manufacturing_cost),
                             count: data.count,
                           }}
                           columns={structureBySourceColumns}

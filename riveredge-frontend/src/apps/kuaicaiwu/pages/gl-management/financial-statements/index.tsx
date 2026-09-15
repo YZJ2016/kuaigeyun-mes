@@ -7,7 +7,7 @@ import { App, Button, Checkbox, InputNumber, Modal, Space, Table, Typography } f
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { formatDateTimeBySiteSetting, formatAmount } from '../../../../../utils/format';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { useConfigStore } from '../../../../../stores';
 import { glService } from '../../../services/gl';
@@ -31,7 +31,7 @@ function resolveKind(pathname: string): StatementKind {
   return 'balance-sheet';
 }
 
-const money = (v: unknown) => Number(v || 0).toFixed(2);
+const money = (v: unknown) => formatAmount(v ?? 0);
 
 const GlFinancialStatementsPage: React.FC = () => {
   const { t } = useTranslation();

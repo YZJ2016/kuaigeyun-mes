@@ -33,6 +33,7 @@ import {
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { formatAmount } from '../../../../../utils/format';
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { canOpenLinkedDocumentDetail } from '../../../../kuaizhizao/utils/linkedDocumentDetail';
 import { glService, type GlAccount, type GlVoucher, type GlVoucherLine } from '../../../services/gl';
@@ -1017,11 +1018,11 @@ const GlVouchersPage: React.FC = () => {
             <Space>
               <Typography.Text>
                 {t(`${NS}.totalDebit`, { defaultValue: '借方合计' })}:{' '}
-                {lineTotalDebit.toFixed(2)}
+                {formatAmount(lineTotalDebit)}
               </Typography.Text>
               <Typography.Text>
                 {t(`${NS}.totalCredit`, { defaultValue: '贷方合计' })}:{' '}
-                {lineTotalCredit.toFixed(2)}
+                {formatAmount(lineTotalCredit)}
               </Typography.Text>
             </Space>
           )}

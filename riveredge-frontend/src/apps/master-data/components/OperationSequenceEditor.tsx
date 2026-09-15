@@ -3,7 +3,7 @@
  * 支持手柄拖拽排序（原生 HTML5，仅手柄）、添加工序、替换工序、删除工序
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -28,6 +28,7 @@ import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../utils/modalEventIsolation';
 import { PlusOutlined } from '@ant-design/icons';
+import { UniDropdown } from '../../../components/uni-dropdown';
 import { renderOperationReportingTypeMarker } from '../utils/operationMeta';
 import { operationApi } from '../services/process';
 import type { Operation } from '../types/process';
@@ -40,6 +41,10 @@ import {
 } from '../../../components/layout-templates/constants';
 import { SequenceIndexCell } from '../../../components/sequence-index-cell';
 import { inspectionPlanApi, unwrapInspectionPlanList } from '../../kuaizhizao/services/quality-execution';
+import {
+  InspectionPlanFormModal,
+  type InspectionPlanRecord,
+} from '../../kuaizhizao/components/InspectionPlanFormModal';
 import { ipqcFromOperation } from '../utils/processRouteSequenceUtils';
 
 const operationPickModalStyles = {
@@ -306,6 +311,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const operationFormModalZIndex = effectivePickModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const selectPopupZIndex = effectivePickModalZIndex;
   const operations = value ?? [];
+  const operationsRef = useRef(operations);
+  operationsRef.current = operations;
   const commitOperations = useCallback(
     (next: OperationItem[]) => {
       onChange?.(next);
@@ -322,13 +329,25 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   const [selectedOperationUuids, setSelectedOperationUuids] = useState<string[]>([]);
   const [replaceModalVisible, setReplaceModalVisible] = useState(false);
   const [operationFormModalOpen, setOperationFormModalOpen] = useState(false);
+  const [inspectionPlanQuickAddOpen, setInspectionPlanQuickAddOpen] = useState(false);
+  const [inspectionPlanQuickAddTargetUuid, setInspectionPlanQuickAddTargetUuid] = useState<string | null>(
+    null,
+  );
   const [replacingOperationUuid, setReplacingOperationUuid] = useState<string | null>(null);
   const [replacementOperationUuid, setReplacementOperationUuid] = useState<string | undefined>(undefined);
   const [draggingUuid, setDraggingUuid] = useState<string | null>(null);
 
   useEffect(() => {
-    onPickModalOpenChange?.(addModalVisible || replaceModalVisible || operationFormModalOpen);
-  }, [addModalVisible, replaceModalVisible, operationFormModalOpen, onPickModalOpenChange]);
+    onPickModalOpenChange?.(
+      addModalVisible || replaceModalVisible || operationFormModalOpen || inspectionPlanQuickAddOpen,
+    );
+  }, [
+    addModalVisible,
+    replaceModalVisible,
+    operationFormModalOpen,
+    inspectionPlanQuickAddOpen,
+    onPickModalOpenChange,
+  ]);
 
   const loadAllOperations = useCallback(async () => {
     try {
@@ -368,52 +387,99 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const plans = unwrapInspectionPlanList(
-          await inspectionPlanApi.list({ limit: 500 }),
-        );
-        if (cancelled) return;
-        setProcessPlanOptions(
-          (plans as Array<Record<string, unknown>>)
-            .filter((p) => String(p.plan_type || p.planType || '') === 'process')
-            .map((p) => {
-              const id = Number(p.id);
-              const code = String(p.plan_code || p.planCode || '');
-              const name = String(p.plan_name || p.planName || '');
-              const active = p.is_active ?? p.isActive;
-              const inactiveHint =
-                active === false ? ` (${t('common.disabled', { defaultValue: '停用' })})` : '';
-              return {
-                value: id,
-                name: name || code || String(id),
-                label: `${code ? `${code} ` : ''}${name}${inactiveHint}`.trim(),
-              };
-            })
-            .filter((o) => Number.isFinite(o.value) && o.value > 0),
-        );
-      } catch {
-        if (!cancelled) setProcessPlanOptions([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const loadProcessPlanOptions = useCallback(async () => {
+    try {
+      const plans = unwrapInspectionPlanList(await inspectionPlanApi.list({ limit: 500 }));
+      setProcessPlanOptions(
+        (plans as Array<Record<string, unknown>>)
+          .filter((p) => String(p.plan_type || p.planType || '') === 'process')
+          .map((p) => {
+            const id = Number(p.id);
+            const code = String(p.plan_code || p.planCode || '');
+            const name = String(p.plan_name || p.planName || '');
+            const active = p.is_active ?? p.isActive;
+            const inactiveHint =
+              active === false ? ` (${t('common.disabled', { defaultValue: '停用' })})` : '';
+            return {
+              value: id,
+              name: name || code || String(id),
+              label: `${code ? `${code} ` : ''}${name}${inactiveHint}`.trim(),
+            };
+          })
+          .filter((o) => Number.isFinite(o.value) && o.value > 0),
+      );
+    } catch {
+      setProcessPlanOptions([]);
+    }
   }, [t]);
 
-  const patchOutsource = (uuid: string, patch: Partial<OperationItem>) => {
-    commitOperations(
-      operations.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op)),
-    );
-  };
+  useEffect(() => {
+    void loadProcessPlanOptions();
+  }, [loadProcessPlanOptions]);
 
-  const patchInspection = (uuid: string, patch: Partial<OperationItem>) => {
-    commitOperations(
-      operations.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op)),
-    );
-  };
+  const patchOutsource = useCallback(
+    (uuid: string, patch: Partial<OperationItem>) => {
+      commitOperations(
+        operationsRef.current.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op)),
+      );
+    },
+    [commitOperations],
+  );
+
+  const patchInspection = useCallback(
+    (uuid: string, patch: Partial<OperationItem>) => {
+      commitOperations(
+        operationsRef.current.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op)),
+      );
+    },
+    [commitOperations],
+  );
+
+  const handleInspectionPlanQuickCreated = useCallback(
+    async (created: InspectionPlanRecord) => {
+      const targetUuid = inspectionPlanQuickAddTargetUuid;
+      const id = created?.id != null ? Number(created.id) : NaN;
+      const name = String(created.plan_name ?? '').trim();
+      const code = String(created.plan_code ?? '').trim();
+      const label = `${code ? `${code} ` : ''}${name}`.trim() || String(id);
+      const row = targetUuid
+        ? operationsRef.current.find((op) => op.uuid === targetUuid)
+        : undefined;
+      const prevIds = row?.inspectionPlanIds?.length
+        ? row.inspectionPlanIds
+        : row?.inspectionPlanId != null
+          ? [row.inspectionPlanId]
+          : [];
+      const prevNames = row?.inspectionPlanNames ?? [];
+      const nameById = new Map(processPlanOptions.map((p) => [p.value, p.name] as const));
+      await loadProcessPlanOptions();
+      if (Number.isFinite(id) && id > 0) {
+        setProcessPlanOptions((prev) =>
+          prev.some((o) => o.value === id)
+            ? prev
+            : [...prev, { value: id, name: name || code || String(id), label }],
+        );
+        if (targetUuid) {
+          const nextIds = [
+            ...new Set([...prevIds.map(Number).filter((n) => Number.isFinite(n) && n > 0), id]),
+          ];
+          const names = nextIds.map((planId, idx) => {
+            if (planId === id) return name || code || label;
+            return prevNames[idx] || nameById.get(planId) || '';
+          });
+          patchInspection(targetUuid, {
+            inspectionMode: 'plan',
+            inspectionPlanIds: nextIds,
+            inspectionPlanNames: names,
+            inspectionPlanId: nextIds[0],
+            inspectionPlanName: names[0] || undefined,
+          });
+        }
+      }
+      setInspectionPlanQuickAddTargetUuid(null);
+    },
+    [inspectionPlanQuickAddTargetUuid, loadProcessPlanOptions, patchInspection, processPlanOptions],
+  );
 
   const handleOperationQuickCreateSuccess = useCallback(
     (created: Operation) => {
@@ -764,7 +830,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                     : [])
               : [];
           return (
-            <Select
+            <UniDropdown
               size="small"
               mode="multiple"
               allowClear
@@ -803,6 +869,17 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                   </Tag>
                 );
               }}
+              quickCreate={
+                mode === 'plan'
+                  ? {
+                      label: t('field.operation.quickAddInspectionPlan'),
+                      onClick: () => {
+                        setInspectionPlanQuickAddTargetUuid(record.uuid);
+                        setInspectionPlanQuickAddOpen(true);
+                      },
+                    }
+                  : undefined
+              }
               {...selectPopupProps}
               onChange={(ids, opts) => {
                 const nextIds = (Array.isArray(ids) ? ids : [])
@@ -1049,6 +1126,20 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         onSuccess={handleOperationQuickCreateSuccess}
         zIndex={operationFormModalZIndex}
       />
+
+      {inspectionPlanQuickAddOpen ? (
+        <InspectionPlanFormModal
+          open
+          onClose={() => {
+            setInspectionPlanQuickAddOpen(false);
+            setInspectionPlanQuickAddTargetUuid(null);
+          }}
+          editId={null}
+          defaultPlanType="process"
+          onSuccess={handleInspectionPlanQuickCreated}
+          zIndex={operationFormModalZIndex}
+        />
+      ) : null}
     </>
   );
 

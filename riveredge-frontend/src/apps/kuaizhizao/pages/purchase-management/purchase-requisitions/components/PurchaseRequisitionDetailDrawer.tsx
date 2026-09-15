@@ -29,9 +29,8 @@ import {
   type PurchaseRequisitionItem,
 } from '../../../../services/purchase-requisition';
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
-import { formatDateBySiteSetting } from '../../../../../../utils/format';
+import { formatDateBySiteSetting, formatCurrencyPrice } from '../../../../../../utils/format';
 import { useAuditRequired } from '../../../../../../hooks/useAuditRequired';
-import { useNumericPrecision } from '../../../../../../hooks/useNumericPrecision';
 import type { AuditPhaseRecord } from '../../../../../../components/uni-audit/AuditPhaseBadge';
 
 const PURCHASE_REQUISITION_RESOURCE = 'kuaizhizao:purchase-requisition';
@@ -100,7 +99,6 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const auditRequired = useAuditRequired('purchase_request', false);
-  const { price: priceDecimals } = useNumericPrecision();
 
   const contentReady = Boolean(requisition);
   const showError = Boolean(error) && !contentReady && !loading;
@@ -320,7 +318,7 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
                   dataIndex: 'suggested_unit_price',
                   width: 140,
                   align: 'right',
-                  render: (v: number) => `¥${Number(v || 0).toFixed(priceDecimals)}`,
+                  render: (v: number) => formatCurrencyPrice(v),
                 },
                 {
                   title: t('app.kuaizhizao.purchaseRequisition.col.requiredDate'),

@@ -29,6 +29,7 @@ import {
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { formatAmount } from '../../../../../utils/format';
 import { glService, type GlAccount } from '../../../services/gl';
 const NS = 'app.kuaicaiwu.gl.cashier';
 
@@ -212,7 +213,7 @@ const GlCashierPage: React.FC = () => {
     }
   };
 
-  const money = (v: unknown) => Number(v || 0).toFixed(2);
+  const money = (v: unknown) => formatAmount(v ?? 0);
 
   const journalColumns = [
     { title: t(`${NS}.col.date`, { defaultValue: '日期' }), dataIndex: 'voucher_date', width: 110 },

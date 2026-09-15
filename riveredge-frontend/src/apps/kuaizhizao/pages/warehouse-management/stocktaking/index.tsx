@@ -42,7 +42,7 @@ import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
-import { formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { formatDateTime, formatQuantity, formatCurrencyAmount } from '../../../../../utils/format';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import { formDateRangeFormItemProps, toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils/formDate';
@@ -665,7 +665,7 @@ const StocktakingPage: React.FC = () => {
         const amount = Number(record.total_difference_amount ?? 0);
         return (
           <span style={{ color: amount > 0 ? '#ff4d4f' : '#52c41a' }}>
-            ¥{amount.toFixed(2)}
+            {formatCurrencyAmount(amount)}
           </span>
         );
       },
@@ -790,7 +790,7 @@ const StocktakingPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.stocktaking.colTotalDiffAmount'),
       dataIndex: 'total_difference_amount',
-      render: (dom: React.ReactNode, entity: Stocktaking) => `¥${Number(entity.total_difference_amount ?? 0).toFixed(2)}`,
+      render: (_dom: React.ReactNode, entity: Stocktaking) => formatCurrencyAmount(entity.total_difference_amount),
     },
     {
       title: t('common.remark'),
@@ -888,7 +888,7 @@ const StocktakingPage: React.FC = () => {
         const amount = Number(value ?? 0);
         return (
           <span style={{ color: amount > 0 ? '#ff4d4f' : amount < 0 ? '#1890ff' : '#52c41a' }}>
-            ¥{amount.toFixed(2)}
+            {formatCurrencyAmount(amount)}
           </span>
         );
       },

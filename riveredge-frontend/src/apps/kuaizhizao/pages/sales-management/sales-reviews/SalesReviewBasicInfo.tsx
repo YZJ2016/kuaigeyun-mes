@@ -9,7 +9,7 @@ import type { DescriptionsProps } from 'antd';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
-import { formatBusinessDateOnly } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatAmount } from '../../../../../utils/format';
 import type { SalesReview } from '../../../services/sales-review';
 import {
   renderSalesReviewRiskMarkerTag,
@@ -47,11 +47,6 @@ export const SALES_REVIEW_BASIC_FIELD_RANK = {
 const dash = (value: unknown) => {
   if (value == null || value === '') return '—';
   return String(value);
-};
-
-const formatMoney = (value: unknown) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n.toFixed(2) : '—';
 };
 
 export function buildSalesReviewBasicColumns(
@@ -102,7 +97,7 @@ export function buildSalesReviewBasicColumns(
     {
       title: t('app.kuaizhizao.salesReview.colTotalAmount'),
       dataIndex: 'total_amount',
-      render: (_, row) => formatMoney(row.total_amount),
+      render: (_, row) => formatAmount(row.total_amount),
     },
     {
       title: t('app.kuaizhizao.salesReview.fieldUrgency'),

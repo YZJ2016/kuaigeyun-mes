@@ -11,6 +11,7 @@ import { DetailDrawerSection } from '../../../../../components/layout-templates'
 import { WizardTemplate } from '../../../../../components/layout-templates/hmi';
 import { costCalculationApi } from '../../../services/cost';
 import { apiRequest } from '../../../../../services/api';
+import { formatAmount, formatCurrencyAmount, formatQuantity } from '../../../../../utils/format';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -86,7 +87,7 @@ const MonthlySettlementPage: React.FC = () => {
         t('app.kuaicaiwu.monthlySettlement.payrollImportHint', {
           period,
           count: res.employee_count,
-          amount: res.total_amount.toFixed(2),
+          amount: formatAmount(res.total_amount),
         }),
       );
       messageApi.success(t('app.kuaicaiwu.monthlySettlement.payrollImportSuccess'));
@@ -116,13 +117,18 @@ const MonthlySettlementPage: React.FC = () => {
   const productionSummaryColumns = useMemo(
     () => [
       { title: t('app.kuaicaiwu.monthlySettlement.col.productName'), dataIndex: 'product', ellipsis: true },
-      { title: t('app.kuaicaiwu.monthlySettlement.col.finishedQty'), dataIndex: 'quantity', width: 120 },
+      {
+        title: t('app.kuaicaiwu.monthlySettlement.col.finishedQty'),
+        dataIndex: 'quantity',
+        width: 120,
+        render: (val: number) => formatQuantity(val),
+      },
       { title: t('app.kuaicaiwu.monthlySettlement.col.totalHours'), dataIndex: 'hours', width: 120 },
       {
         title: t('app.kuaicaiwu.monthlySettlement.col.materialCostCollected'),
         dataIndex: 'material_cost',
         width: 160,
-        render: (val: number) => `￥${val.toLocaleString()}`,
+        render: (val: number) => formatCurrencyAmount(val),
       },
     ],
     [t],
@@ -131,18 +137,23 @@ const MonthlySettlementPage: React.FC = () => {
   const previewColumns = useMemo(
     () => [
       { title: t('app.kuaicaiwu.monthlySettlement.col.productName'), dataIndex: 'product', ellipsis: true },
-      { title: t('app.kuaicaiwu.monthlySettlement.col.finishedQty'), dataIndex: 'quantity', width: 120 },
+      {
+        title: t('app.kuaicaiwu.monthlySettlement.col.finishedQty'),
+        dataIndex: 'quantity',
+        width: 120,
+        render: (val: number) => formatQuantity(val),
+      },
       {
         title: t('app.kuaicaiwu.monthlySettlement.col.allocatedLabor'),
         dataIndex: 'allocated_labor',
         width: 140,
-        render: (val: string) => `￥${val}`,
+        render: (val: number) => formatCurrencyAmount(val),
       },
       {
         title: t('app.kuaicaiwu.monthlySettlement.col.estimatedUnitCost'),
         dataIndex: 'total_unit_cost',
         width: 140,
-        render: (val: string) => `￥${val}`,
+        render: (val: number) => formatCurrencyAmount(val),
       },
     ],
     [t],
@@ -226,8 +237,8 @@ const MonthlySettlementPage: React.FC = () => {
                 const total_cost = item.material_cost + allocated_labor;
                 return {
                   ...item,
-                  allocated_labor: allocated_labor.toFixed(2),
-                  total_unit_cost: (total_cost / (item.quantity || 1)).toFixed(2),
+                  allocated_labor,
+                  total_unit_cost: total_cost / (item.quantity || 1),
                 };
               })}
               pagination={false}

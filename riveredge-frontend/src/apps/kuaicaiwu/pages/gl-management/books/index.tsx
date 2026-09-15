@@ -18,6 +18,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { formatAmount } from '../../../../../utils/format';
 import { apiRequest } from '../../../../../services/api';
 import { glService, type GlAccount, type GlVoucherLine } from '../../../services/gl';
 
@@ -179,7 +180,7 @@ const GlBooksPage: React.FC = () => {
     void load();
   }, [activeTab, year, month, includeUnposted, accountId, auxCustomerId, auxSupplierId, auxDepartmentId, load]);
 
-  const money = (v: unknown) => Number(v || 0).toFixed(2);
+  const money = (v: unknown) => formatAmount(v ?? 0);
 
   const columnsByTab = useMemo(() => {
     if (activeTab === 'detail') {

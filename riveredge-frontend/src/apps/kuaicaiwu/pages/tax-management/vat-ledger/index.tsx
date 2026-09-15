@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { formatAmount } from '../../../../../utils/format';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { useConfigStore } from '../../../../../stores';
@@ -16,7 +17,7 @@ import VatLedgerPrintTemplate from './VatLedgerPrintTemplate';
 import { printVatLedgerNode } from './printVatLedger';
 
 const NS = 'app.kuaicaiwu.tax.vatLedger';
-const money = (v: number) => Number(v || 0).toFixed(2);
+const money = (v: number) => formatAmount(v ?? 0);
 
 const VatLedgerPage: React.FC = () => {
   const { t } = useTranslation();

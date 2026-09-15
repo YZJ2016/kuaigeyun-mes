@@ -11,7 +11,10 @@ from loguru import logger
 from infra.models.package import Package
 from infra.models.tenant import TenantPlan, tenant_plan_sort_rank
 from infra.schemas.package import PackageCreate, PackageUpdate
-from infra.domain.package_config import get_package_config as get_package_config_fallback
+from infra.domain.package_config import (
+    can_use_pro_apps,
+    get_package_config as get_package_config_fallback,
+)
 
 
 class PackageService:
@@ -21,6 +24,11 @@ class PackageService:
     提供套餐的 CRUD 操作和业务逻辑处理。
     注意：套餐管理是平台级功能，不涉及组织隔离。
     """
+
+    @staticmethod
+    def allow_pro_apps_for_plan(plan: TenantPlan) -> bool:
+        """组织 PRO 门控真源：按内置档位（专业/旗舰开，体验/基础关）。"""
+        return can_use_pro_apps(plan)
     
     @staticmethod
     def _normalize_allowed_app_codes(raw_codes: Optional[List[str]]) -> List[str]:
@@ -51,7 +59,7 @@ class PackageService:
 
         Example:
             >>> service = PackageService()
-            >>> package = await service.create_package(
+            >>> package = await PackageService().create_package(
             ...     PackageCreate(
             ...         name="基础版",
             ...         plan=TenantPlan.BASIC,
@@ -69,6 +77,8 @@ class PackageService:
             create_data["allowed_app_codes"] = self._normalize_allowed_app_codes(
                 create_data.get("allowed_app_codes")
             )
+        # PRO 开关与档位对齐（禁止专业档 allow_pro=false 导致换组织套餐仍锁 PRO）
+        create_data["allow_pro_apps"] = self.allow_pro_apps_for_plan(data.plan)
 
         package = await Package.create(
             **create_data
@@ -107,8 +117,9 @@ class PackageService:
 
     async def get_effective_package_config_for_plan(self, plan: TenantPlan) -> Dict[str, Any]:
         """
-        获取套餐能力配置（DB 优先，静态配置兜底）。
+        获取套餐能力配置（配额等 DB 优先；PRO 门控始终按档位真源）。
         """
+        allow_pro = self.allow_pro_apps_for_plan(plan)
         package = await self.get_package_by_plan(plan)
         if package:
             return {
@@ -116,7 +127,7 @@ class PackageService:
                 "max_users": int(package.max_users),
                 "max_storage_mb": int(package.max_storage_mb),
                 "max_branch_organizations": package.max_branch_organizations,
-                "allow_pro_apps": bool(package.allow_pro_apps),
+                "allow_pro_apps": allow_pro,
                 "allowed_app_codes": self._normalize_allowed_app_codes(package.allowed_app_codes or []),
                 "description": package.description or "",
             }
@@ -128,7 +139,7 @@ class PackageService:
             "max_users": int(fallback.get("max_users") or 0),
             "max_storage_mb": int(fallback.get("max_storage_mb") or 0),
             "max_branch_organizations": fallback.get("max_branch_organizations"),
-            "allow_pro_apps": bool(fallback.get("allow_pro_apps", False)),
+            "allow_pro_apps": allow_pro,
             "allowed_app_codes": self._normalize_allowed_app_codes(fallback.get("allowed_app_codes") or []),
             "description": fallback.get("description") or "",
         }
@@ -258,6 +269,12 @@ class PackageService:
             update_data["allowed_app_codes"] = self._normalize_allowed_app_codes(
                 update_data.get("allowed_app_codes")
             )
+        effective_plan = update_data.get("plan", package.plan)
+        if isinstance(effective_plan, str):
+            effective_plan = TenantPlan(effective_plan)
+        # 档位变更或显式提交时，PRO 开关与档位对齐
+        if "plan" in update_data or "allow_pro_apps" in update_data:
+            update_data["allow_pro_apps"] = self.allow_pro_apps_for_plan(effective_plan)
         for field, value in update_data.items():
             setattr(package, field, value)
         

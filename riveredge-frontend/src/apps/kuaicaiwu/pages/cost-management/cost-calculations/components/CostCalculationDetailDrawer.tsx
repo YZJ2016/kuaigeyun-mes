@@ -16,7 +16,7 @@ import {
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import { StructuredCostDataView } from '../../../../../../components/structured-cost-data-view';
 import { alignDescriptionColumns } from '../../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import { formatQuantity } from '../../../../../../utils/format';
+import { formatQuantity, formatCurrencyAmount } from '../../../../../../utils/format';
 import { getCostCalculationLifecycle } from '../../../../utils/costLifecycle';
 import { formatCalculationType } from '../../../../utils/costUiLabels';
 
@@ -49,7 +49,7 @@ const PLACEHOLDER: CostCalculationDetail = {
 };
 
 function formatMoney(value: unknown): string {
-  return `¥${value != null ? Number(value).toFixed(2) : '0.00'}`;
+  return formatCurrencyAmount(value ?? 0);
 }
 
 export type CostCalculationDetailDrawerProps = {

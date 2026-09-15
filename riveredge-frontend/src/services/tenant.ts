@@ -77,6 +77,12 @@ export function resolveTenantPlanMarkerColor(plan: string | TenantPlan | null | 
   return TENANT_PLAN_MARKER_COLORS[planKey] ?? 'default';
 }
 
+/** 与后端 can_use_pro_apps / PACKAGE_CONFIG 一致：仅专业、旗舰开放 PRO */
+export function tenantPlanAllowsProApps(plan: string | TenantPlan | null | undefined): boolean {
+  const key = String(plan || '').trim().toLowerCase();
+  return key === TenantPlan.PROFESSIONAL || key === TenantPlan.ENTERPRISE;
+}
+
 /**
  * 套餐配置接口
  */

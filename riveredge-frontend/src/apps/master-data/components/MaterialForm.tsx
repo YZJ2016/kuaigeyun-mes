@@ -29,7 +29,7 @@ import {
 import { UniDropdown } from '../../../components/uni-dropdown';
 import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, QuestionCircleOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
-import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
+import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton, ProFormItem, ProFormField } from '@ant-design/pro-components';
 import {
   formatMaterialGroupLabel,
   type Material,
@@ -74,7 +74,7 @@ import {
 } from '../utils/market-float-formula';
 import { buildImageUploadFileUrls, getFileByUuid, uploadMultipleFiles } from '../../../services/file';
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
-import { saveSuspendedModal } from '../utils/suspendedModal';
+import { BatchSerialRuleFormModal } from './BatchSerialRuleFormModal';
 import {
   MATERIAL_SOURCE_TYPE_VALUES,
   buildMaterialSourceTypeOptions,
@@ -2124,41 +2124,29 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const navigate = useNavigate();
+  const { token } = theme.useToken();
   const [batchRules, setBatchRules] = useState<{ id: number; name: string; code: string }[]>([]);
   const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
+  const [batchRuleQuickAddOpen, setBatchRuleQuickAddOpen] = useState(false);
+  const [serialRuleQuickAddOpen, setSerialRuleQuickAddOpen] = useState(false);
+  const ruleQuickAddZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
 
-  const handleGotoBatchRules = () => {
-    if (suspendedModalReturnPath) {
-      const values = formRef?.current?.getFieldsValue?.() ?? {};
-      saveSuspendedModal(suspendedModalReturnPath, values);
+  const loadRules = useCallback(async () => {
+    try {
+      const [batchRes, serialRes] = await Promise.all([
+        batchRuleApi.list({ pageSize: 200, isActive: true }),
+        serialRuleApi.list({ pageSize: 200, isActive: true }),
+      ]);
+      setBatchRules(batchRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
+      setSerialRules(serialRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
+    } catch {
+      // ignore
     }
-    navigate('/apps/master-data/materials/batch-rules');
-  };
-
-  const handleGotoSerialRules = () => {
-    if (suspendedModalReturnPath) {
-      const values = formRef?.current?.getFieldsValue?.() ?? {};
-      saveSuspendedModal(suspendedModalReturnPath, values);
-    }
-    navigate('/apps/master-data/materials/serial-rules');
-  };
+  }, []);
 
   useEffect(() => {
-    const loadRules = async () => {
-      try {
-        const [batchRes, serialRes] = await Promise.all([
-          batchRuleApi.list({ pageSize: 200, isActive: true }),
-          serialRuleApi.list({ pageSize: 200, isActive: true }),
-        ]);
-        setBatchRules(batchRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
-        setSerialRules(serialRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
-      } catch {
-        // ignore
-      }
-    };
-    loadRules();
-  }, []);
+    void loadRules();
+  }, [loadRules]);
 
   const groupId = ProForm.useWatch('groupId');
   const shelfLifeManaged = ProForm.useWatch('shelfLifeManaged');
@@ -2415,29 +2403,29 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         {({ batchManaged }) =>
           batchManaged ? (
             <Col span={12}>
-              <ProFormSelect
+              <ProFormField
                 name="defaultBatchRuleId"
-                label={
-                  <Space>
-                    <span>{t('app.master-data.materialForm.defaultBatchRule')}</span>
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<LinkOutlined />}
-                      onClick={handleGotoBatchRules}
-                      title={t('app.master-data.materialForm.gotoBatchRules')}
-                      style={{ padding: 0, height: 'auto' }}
-                    >
-                      {t('app.master-data.materialForm.createRule')}
-                    </Button>
-                  </Space>
-                }
-                placeholder={t('app.master-data.materialForm.defaultBatchRulePlaceholder')}
-                options={[
-                  { label: t('app.master-data.materialForm.systemDefaultRule'), value: SYSTEM_DEFAULT_RULE_VALUE },
-                  ...batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id })),
-                ]}
-                allowClear
+                label={t('app.master-data.materialForm.defaultBatchRule')}
+                renderFormItem={(p: any) => (
+                  <UniDropdown
+                    {...p.fieldProps}
+                    allowClear
+                    showSearch
+                    style={{ width: '100%' }}
+                    placeholder={t('app.master-data.materialForm.defaultBatchRulePlaceholder')}
+                    options={[
+                      {
+                        label: t('app.master-data.materialForm.systemDefaultRule'),
+                        value: SYSTEM_DEFAULT_RULE_VALUE,
+                      },
+                      ...batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id })),
+                    ]}
+                    quickCreate={{
+                      label: t('app.master-data.materialForm.quickAddBatchRule'),
+                      onClick: () => setBatchRuleQuickAddOpen(true),
+                    }}
+                  />
+                )}
               />
             </Col>
           ) : null
@@ -2447,29 +2435,29 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         {({ serialManaged }) =>
           serialManaged ? (
             <Col span={12}>
-              <ProFormSelect
+              <ProFormField
                 name="defaultSerialRuleId"
-                label={
-                  <Space>
-                    <span>{t('app.master-data.materialForm.defaultSerialRule')}</span>
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<LinkOutlined />}
-                      onClick={handleGotoSerialRules}
-                      title={t('app.master-data.materialForm.gotoSerialRules')}
-                      style={{ padding: 0, height: 'auto' }}
-                    >
-                      {t('app.master-data.materialForm.createRule')}
-                    </Button>
-                  </Space>
-                }
-                placeholder={t('app.master-data.materialForm.defaultSerialRulePlaceholder')}
-                options={[
-                  { label: t('app.master-data.materialForm.systemDefaultRule'), value: SYSTEM_DEFAULT_RULE_VALUE },
-                  ...serialRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id })),
-                ]}
-                allowClear
+                label={t('app.master-data.materialForm.defaultSerialRule')}
+                renderFormItem={(p: any) => (
+                  <UniDropdown
+                    {...p.fieldProps}
+                    allowClear
+                    showSearch
+                    style={{ width: '100%' }}
+                    placeholder={t('app.master-data.materialForm.defaultSerialRulePlaceholder')}
+                    options={[
+                      {
+                        label: t('app.master-data.materialForm.systemDefaultRule'),
+                        value: SYSTEM_DEFAULT_RULE_VALUE,
+                      },
+                      ...serialRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id })),
+                    ]}
+                    quickCreate={{
+                      label: t('app.master-data.materialForm.quickAddSerialRule'),
+                      onClick: () => setSerialRuleQuickAddOpen(true),
+                    }}
+                  />
+                )}
               />
             </Col>
           ) : null
@@ -2520,6 +2508,50 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         <ProFormSwitch name="isActive" label={t('app.master-data.materialForm.isActive')} />
       </Col>
     </Row>
+    {batchRuleQuickAddOpen ? (
+      <BatchSerialRuleFormModal
+        open
+        kind="batch"
+        editUuid={null}
+        onClose={() => setBatchRuleQuickAddOpen(false)}
+        zIndex={ruleQuickAddZIndex}
+        onSuccess={(created) => {
+          const id = Number(created.id);
+          void loadRules().then(() => {
+            if (Number.isFinite(id) && id > 0) {
+              setBatchRules((prev) =>
+                prev.some((r) => r.id === id)
+                  ? prev
+                  : [...prev, { id, name: created.name, code: created.code }],
+              );
+              formRef?.current?.setFieldsValue({ defaultBatchRuleId: id });
+            }
+          });
+        }}
+      />
+    ) : null}
+    {serialRuleQuickAddOpen ? (
+      <BatchSerialRuleFormModal
+        open
+        kind="serial"
+        editUuid={null}
+        onClose={() => setSerialRuleQuickAddOpen(false)}
+        zIndex={ruleQuickAddZIndex}
+        onSuccess={(created) => {
+          const id = Number(created.id);
+          void loadRules().then(() => {
+            if (Number.isFinite(id) && id > 0) {
+              setSerialRules((prev) =>
+                prev.some((r) => r.id === id)
+                  ? prev
+                  : [...prev, { id, name: created.name, code: created.code }],
+              );
+              formRef?.current?.setFieldsValue({ defaultSerialRuleId: id });
+            }
+          });
+        }}
+      />
+    ) : null}
     </>
   );
 };

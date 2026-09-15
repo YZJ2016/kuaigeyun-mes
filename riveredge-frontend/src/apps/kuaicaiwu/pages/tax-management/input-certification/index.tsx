@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { formatAmount } from '../../../../../utils/format';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { taxService } from '../../../services/tax';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
@@ -122,7 +123,7 @@ const InputCertificationPage: React.FC = () => {
             uniTableKeepWidth: true,
             resizable: false,
             hideInSearch: true,
-            render: (_, row) => Number(row.tax_amount || 0).toFixed(2),
+            render: (_, row) => formatAmount(row.tax_amount ?? 0),
           },
           {
             title: t(`${NS}.col.status`),

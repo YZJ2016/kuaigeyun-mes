@@ -19,6 +19,7 @@ import {
   type DeptOpinionFormState,
 } from './DeptOpinionsPanel';
 import { SalesReviewBasicInfo } from './SalesReviewBasicInfo';
+import { formatAmount, formatPrice, formatQuantity } from '../../../../../utils/format';
 
 export type SalesReviewReviewModalProps = {
   open: boolean;
@@ -123,26 +124,21 @@ export const SalesReviewReviewModal: React.FC<SalesReviewReviewModalProps> = ({
         dataIndex: 'quantity',
         width: 90,
         align: 'right' as const,
+        render: (v: unknown) => formatQuantity(v),
       },
       {
         title: t('app.kuaizhizao.salesReview.colUnitPrice'),
         dataIndex: 'unit_price',
         width: 100,
         align: 'right' as const,
-        render: (v: unknown) => {
-          const n = Number(v);
-          return Number.isFinite(n) ? n.toFixed(2) : '—';
-        },
+        render: (v: unknown) => formatPrice(v),
       },
       {
         title: t('app.kuaizhizao.salesReview.colAmount'),
         dataIndex: 'amount',
         width: 100,
         align: 'right' as const,
-        render: (v: unknown) => {
-          const n = Number(v);
-          return Number.isFinite(n) ? n.toFixed(2) : '—';
-        },
+        render: (v: unknown) => formatAmount(v),
       },
     ],
     [t],

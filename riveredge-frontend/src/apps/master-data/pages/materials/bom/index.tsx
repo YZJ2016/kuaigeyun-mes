@@ -27,7 +27,7 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { SecureImage } from '../../../../../components/secure-image';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
-import { StatusTag, RE_STATUS_BADGE_DRAFT } from '../../../../../constants/statusBadges';
+import { StatusTag, MarkerTag, RE_STATUS_BADGE_DRAFT } from '../../../../../constants/statusBadges';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { openPrintHtmlWindow } from '../../../../../utils/printResponseHelpers';
@@ -62,6 +62,8 @@ import {
 } from '../../../../../utils/loadImportDictionaryValues';
 import {
   buildMaterialSourceTypeOptions,
+  getMaterialSourceTypeLabel,
+  getMaterialSourceTypeTagColor,
   normalizeMaterialSourceType,
 } from '../../../utils/materialSourceType';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
@@ -82,12 +84,11 @@ import { isVariantSkuMaterial } from '../../../components/MaterialVariantCombina
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { flattenBomGroupsForExport, resolveBomExportGroup, loadBomExportNestedItems, collectBomExportMaterialIds, type BomExportGroupSummary } from './utils';
-import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
-const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.layout-v5';
+const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.layout-v7';
 const BOM_LIST_VIEW_TYPES = ['productBom', 'semiProductBom', 'allBom'] as const;
 type BomListViewType = (typeof BOM_LIST_VIEW_TYPES)[number];
 
@@ -685,8 +686,45 @@ const BOMPage: React.FC = () => {
     groupKeyToUuidsRef.current = next;
   };
 
-  /** 物料选中的版本 materialId -> groupKey，切换版本时更新并 reload */
+  /** 物料选中的版本 materialId -> groupKey；切换时只本地重建，禁止整表网络 reload */
   const [selectedVersionByMaterial, setSelectedVersionByMaterial] = useState<Record<number, string>>({});
+  const selectedVersionByMaterialRef = useRef<Record<number, string>>({});
+  selectedVersionByMaterialRef.current = selectedVersionByMaterial;
+  /** 版本切换软刷新：request 命中同页缓存则跳过 getGroups/getBatchItems */
+  const versionSwitchUseCacheRef = useRef(false);
+  const bomListPageCacheRef = useRef<{
+    cacheKey: string;
+    displayGroupRows: BOMGroupRow[];
+    allGroupRowsForNesting: BOMGroupRow[];
+    total: number;
+  } | null>(null);
+
+  const buildBomListPageCacheKey = (args: {
+    includeObsolete: boolean;
+    skip: number;
+    limit: number;
+    view: BomListViewType;
+    materialId?: number;
+    approvalStatus?: string;
+    keyword?: string;
+  }) =>
+    [
+      args.view,
+      args.includeObsolete ? '1' : '0',
+      args.skip,
+      args.limit,
+      args.materialId ?? '',
+      args.approvalStatus ?? '',
+      args.keyword ?? '',
+    ].join('|');
+
+  const applyBomVersionSelection = (materialId: number, groupKey: string) => {
+    const next = { ...selectedVersionByMaterialRef.current, [materialId]: groupKey };
+    selectedVersionByMaterialRef.current = next;
+    setSelectedVersionByMaterial(next);
+    versionSwitchUseCacheRef.current = true;
+    actionRef.current?.reload();
+  };
 
   /**
    * 加载用户列表
@@ -1089,9 +1127,23 @@ const BOMPage: React.FC = () => {
   /**
    * 删除整份BOM（主件下全部子件）
    */
-  const executeDeleteGroup = async (record: BOMGroupRow) => {
-    const uuids = record.items.map((i) => i.uuid);
-    if (!uuids.length) return;
+  const resolveGroupUuids = (record: BOMGroupRow | MaterialBOMRow): string[] => {
+    const selected = (record as MaterialBOMRow).selectedVersion ?? record;
+    const fromRow = collectUuidsFromGroupRow(record);
+    if (fromRow.length) return fromRow;
+    return (
+      groupKeyToUuidsRef.current.get(selected.groupKey) ??
+      groupKeyToUuidsRef.current.get(record.groupKey) ??
+      []
+    );
+  };
+
+  const executeDeleteGroup = async (record: BOMGroupRow | MaterialBOMRow) => {
+    const uuids = resolveGroupUuids(record);
+    if (!uuids.length) {
+      messageApi.error(t('app.master-data.bom.getRecordFailed'));
+      return;
+    }
     try {
       for (const uuid of uuids) await bomApi.delete(uuid);
       messageApi.success(t('common.deleteSuccess'));
@@ -1099,6 +1151,23 @@ const BOMPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error?.message || t('common.deleteFailed'));
     }
+  };
+
+  /** 「更多」菜单内无法稳定挂载 Popconfirm，删除确认走 Modal（与同页撤销审核一致） */
+  const handleDeleteGroupConfirm = (record: BOMGroupRow | MaterialBOMRow) => {
+    const uuids = resolveGroupUuids(record);
+    if (!uuids.length) {
+      messageApi.error(t('app.master-data.bom.getRecordFailed'));
+      return;
+    }
+    getAntdModal().confirm({
+      title: t('app.master-data.bom.deleteConfirmTitle'),
+      content: t('app.master-data.bom.deleteConfirmContent', { count: uuids.length }),
+      okText: t('common.delete'),
+      okType: 'danger',
+      cancelText: t('common.cancel'),
+      onOk: () => executeDeleteGroup(record),
+    });
   };
 
   /**
@@ -2743,8 +2812,7 @@ const BOMPage: React.FC = () => {
                 );
               }}
               onChange={(groupKey) => {
-                setSelectedVersionByMaterial((prev) => ({ ...prev, [r.materialId]: groupKey }));
-    actionRef.current?.reload();
+                applyBomVersionSelection(r.materialId, groupKey);
               }}
             />
           );
@@ -2813,6 +2881,36 @@ const BOMPage: React.FC = () => {
       },
     },
     {
+      title: t('app.master-data.bom.materialSource'),
+      key: 'source_type',
+      dataIndex: 'sourceType',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_: any, r: any) => {
+        const materialId = isRootRow(r) ? r.materialId : (r.componentId ?? r.materialId);
+        const fromMaterial = getMaterialSourceTypeFromRecord(
+          materialId == null ? null : materials.find((m) => m.id === materialId),
+        );
+        const raw =
+          fromMaterial ||
+          normalizeMaterialSourceType(
+            (r as { sourceType?: string; source_type?: string }).sourceType ??
+              (r as { source_type?: string }).source_type,
+          );
+        if (!raw) return '-';
+        const label = getMaterialSourceTypeLabel(raw, t);
+        if (!label || label === '-') return '-';
+        return (
+          <MarkerTag color={getMaterialSourceTypeTagColor(raw)} style={{ marginInlineEnd: 0 }}>
+            {label}
+          </MarkerTag>
+        );
+      },
+    },
+    {
       title: t('app.master-data.bom.quantityTitle'),
       dataIndex: 'quantity',
       width: 112,
@@ -2825,19 +2923,6 @@ const BOMPage: React.FC = () => {
         if (isRootRow(r)) return '-';
         const unitLabel = r.unit ? (unitValueToLabel[r.unit] || r.unit) : '';
         return `${r.quantity} ${unitLabel}`.trim() || '-';
-      },
-    },
-    {
-      title: t('common.unit'),
-      dataIndex: 'unit',
-      width: 88,
-      minWidth: 88,
-      uniTableKeepWidth: true,
-      resizable: false,
-      hideInSearch: true,
-      render: (_, r: any) => {
-        if (isRootRow(r)) return '-';
-        return (r.unit && unitValueToLabel[r.unit]) ? unitValueToLabel[r.unit] : (r.unit || '-');
       },
     },
     {
@@ -2916,19 +3001,20 @@ const BOMPage: React.FC = () => {
               {
                 key: 'setDefault',
                 icon: <StarOutlined />,
-                label: (
-                  <ActionConfirmPopconfirm
-                    title={t('app.master-data.bom.setDefaultVersionTitle')}
-                    description={t('app.master-data.bom.setDefaultVersionContent', {
+                label: t('app.master-data.bom.setDefault'),
+                disabled: r.isDefault,
+                onClick: () => {
+                  getAntdModal().confirm({
+                    title: t('app.master-data.bom.setDefaultVersionTitle'),
+                    content: t('app.master-data.bom.setDefaultVersionContent', {
                       bomCode: r.bomCode,
                       version: r.version,
-                    })}
-                    onConfirm={() => executeSetAsDefault(r)}
-                  >
-                    <span onClick={(e) => e.stopPropagation()}>{t('app.master-data.bom.setDefault')}</span>
-                  </ActionConfirmPopconfirm>
-                ),
-                disabled: r.isDefault,
+                    }),
+                    okText: t('common.confirm'),
+                    cancelText: t('common.cancel'),
+                    onOk: () => executeSetAsDefault(r),
+                  });
+                },
               },
               { key: 'createNewVersion', icon: <PlusOutlined />, label: t('app.master-data.bom.createNewVersion'), onClick: () => handleCreateVersion(r) },
               { key: 'versionHistory', icon: <HistoryOutlined />, label: t('app.master-data.bom.versionHistory'), onClick: () => handleViewVersionHistory(r) },
@@ -2939,18 +3025,10 @@ const BOMPage: React.FC = () => {
           ...(bomPerms.canDelete ? [{
             key: 'delete',
             icon: <DeleteOutlined />,
-            label: (
-              <ActionConfirmPopconfirm
-                title={t('app.master-data.bom.deleteConfirmTitle')}
-                description={t('app.master-data.bom.deleteConfirmContent', { count: record.items.length })}
-                okButtonProps={{ danger: true }}
-                onConfirm={() => executeDeleteGroup(record)}
-              >
-                <span onClick={(e) => e.stopPropagation()}>{t('common.delete')}</span>
-              </ActionConfirmPopconfirm>
-            ),
+            label: t('common.delete'),
             danger: true,
             disabled: isApproved,
+            onClick: () => handleDeleteGroupConfirm(record),
           }] : []),
         ];
         return [
@@ -3364,16 +3442,56 @@ const BOMPage: React.FC = () => {
               approvalStatus,
               keyword: keyword || undefined,
             };
+            const resolvedMaterialId =
+              materialId != null && !Number.isNaN(materialId) ? materialId : undefined;
+            const pageCacheKey = buildBomListPageCacheKey({
+              includeObsolete,
+              skip,
+              limit: pageSize,
+              view: bomViewTypeRef.current,
+              materialId: resolvedMaterialId,
+              approvalStatus,
+              keyword: keyword || undefined,
+            });
+            const preferVersionCache =
+              versionSwitchUseCacheRef.current && meta?.purpose !== 'prefetch';
+            versionSwitchUseCacheRef.current = false;
+            if (
+              preferVersionCache &&
+              bomListPageCacheRef.current &&
+              bomListPageCacheRef.current.cacheKey === pageCacheKey
+            ) {
+              const cached = bomListPageCacheRef.current;
+              const materialRows = groupBomsByMaterial(
+                cached.displayGroupRows,
+                selectedVersionByMaterialRef.current,
+                cached.allGroupRowsForNesting,
+              );
+              const { sortBy, sortOrder } = extractProTableSort(sort);
+              const sortedRows = sortMaterialBomRows(
+                materialRows,
+                sortBy,
+                sortOrder,
+                materialsRef.current,
+              );
+              return enrichBomListPage(
+                { data: sortedRows, success: true, total: cached.total },
+                { skipEnrich: false },
+              );
+            }
             const { data: groups, total } = await bomApi.getGroups({
               includeObsolete,
               skip,
               limit: pageSize,
               view: bomViewTypeRef.current,
-              materialId: materialId != null && !Number.isNaN(materialId) ? materialId : undefined,
+              materialId: resolvedMaterialId,
               approvalStatus,
               keyword: keyword || undefined,
             });
             if (groups.length === 0) {
+              if (meta?.purpose !== 'prefetch') {
+                bomListPageCacheRef.current = null;
+              }
               return { data: [], success: true, total: total ?? 0 };
             }
             const batchItems = await bomApi.getBatchItems(
@@ -3479,7 +3597,19 @@ const BOMPage: React.FC = () => {
             const resolvedMaterials = await ensureMaterialsByIds(
               collectBomMaterialIds([...displayGroupRows, ...allGroupRowsForNesting]),
             );
-            const materialRows = groupBomsByMaterial(displayGroupRows, selectedVersionByMaterial, allGroupRowsForNesting);
+            if (meta?.purpose !== 'prefetch') {
+              bomListPageCacheRef.current = {
+                cacheKey: pageCacheKey,
+                displayGroupRows,
+                allGroupRowsForNesting,
+                total: total ?? 0,
+              };
+            }
+            const materialRows = groupBomsByMaterial(
+              displayGroupRows,
+              selectedVersionByMaterialRef.current,
+              allGroupRowsForNesting,
+            );
             const { sortBy, sortOrder } = extractProTableSort(sort);
             const sortedRows = sortMaterialBomRows(materialRows, sortBy, sortOrder, resolvedMaterials);
             return enrichBomListPage(
@@ -4646,25 +4776,25 @@ const BOMPage: React.FC = () => {
                   }}
                 >
                   <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
-                    <div>
+                    <Space size={4} wrap>
                       <Tag color={index === 0 ? 'blue' : 'default'}>{row.version}</Tag>
                       {row.isDefault && <Tag color="gold">{t('app.master-data.bom.defaultTag')}</Tag>}
                       {row.isObsolete && <Tag color="default">{t('app.master-data.bom.obsoleteTag')}</Tag>}
                       {getApprovalStatusTag(row.approvalStatus)}
-                      <span style={{ marginLeft: 8, color: '#666' }}>
+                      <span style={{ color: '#666' }}>
                         {t('app.master-data.bom.versionHistoryItemCount')}: {row.itemCount}
                       </span>
                       {row.effectiveDate && (
-                        <span style={{ marginLeft: 8, color: '#999' }}>
+                        <span style={{ color: '#999' }}>
                           {t('app.master-data.bom.effectiveDateLabel')}: {formatDateTimeBySiteSetting(row.effectiveDate)}
                         </span>
                       )}
                       {row.createdByName && (
-                        <span style={{ marginLeft: 8, color: '#999' }}>
+                        <span style={{ color: '#999' }}>
                           {t('app.master-data.bom.versionHistoryOperator')}: {row.createdByName}
                         </span>
                       )}
-                    </div>
+                    </Space>
                     <Space>
                       {index < versionList.length - 1 && (
                         <Button

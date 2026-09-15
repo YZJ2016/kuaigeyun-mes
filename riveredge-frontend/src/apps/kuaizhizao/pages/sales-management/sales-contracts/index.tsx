@@ -2843,9 +2843,9 @@ const SalesContractsPage: React.FC = () => {
 
                     { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', ellipsis: true },
 
-                    { title: t('app.kuaizhizao.salesContract.contractQuantity'), dataIndex: 'contract_quantity', width: 100, align: 'right' as const },
+                    { title: t('app.kuaizhizao.salesContract.contractQuantity'), dataIndex: 'contract_quantity', width: 100, align: 'right' as const, render: formatQuantity },
 
-                    { title: t('app.kuaizhizao.salesContract.released'), dataIndex: 'released_quantity', width: 100, align: 'right' as const },
+                    { title: t('app.kuaizhizao.salesContract.released'), dataIndex: 'released_quantity', width: 100, align: 'right' as const, render: formatQuantity },
 
                     {
 
@@ -2854,13 +2854,13 @@ const SalesContractsPage: React.FC = () => {
                       width: 100,
                       align: 'right' as const,
 
-                      render: (_, r) => remainingItemQty(r),
+                      render: (_, r) => formatQuantity(remainingItemQty(r)),
 
                     },
 
-                    { title: t('app.kuaizhizao.salesContract.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (v) => `¥${Number(v).toFixed(2)}` },
+                    { title: t('app.kuaizhizao.salesContract.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (v) => formatCurrencyPrice(v) },
 
-                    { title: t('app.kuaizhizao.salesContract.amount'), dataIndex: 'total_amount', width: 120, align: 'right' as const, render: (v) => `¥${Number(v).toFixed(2)}` },
+                    { title: t('app.kuaizhizao.salesContract.amount'), dataIndex: 'total_amount', width: 120, align: 'right' as const, render: (v) => formatCurrencyAmount(v) },
 
                   ]}
 
@@ -2999,7 +2999,7 @@ const SalesContractsPage: React.FC = () => {
 
             { title: t('app.kuaizhizao.salesContract.changeTypeCol'), dataIndex: 'change_type', width: 100, render: (v) => changeTypeLabels[v as keyof typeof changeTypeLabels] ?? v },
 
-            { title: t('app.kuaizhizao.salesContract.deltaAmount'), dataIndex: 'delta_amount', render: (v) => `¥${Number(v ?? 0).toFixed(2)}` },
+            { title: t('app.kuaizhizao.salesContract.deltaAmount'), dataIndex: 'delta_amount', render: (v) => formatCurrencyAmount(v ?? 0) },
 
             { title: t('common.status'), dataIndex: 'status', width: 90, render: (v) => renderContractStatus(v) },
 

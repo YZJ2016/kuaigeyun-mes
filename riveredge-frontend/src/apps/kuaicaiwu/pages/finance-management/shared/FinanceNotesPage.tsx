@@ -32,6 +32,7 @@ import { apiRequest } from '../../../../../services/api';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { formatCurrencyAmount } from '../../../../../utils/format';
 import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
@@ -542,7 +543,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
                 {detail.customer_name || detail.supplier_name || '—'}
               </Descriptions.Item>
               <Descriptions.Item label={t(`${NS}.col.amount`)}>
-                ¥{Number(detail.amount).toFixed(2)}
+                {formatCurrencyAmount(detail.amount)}
               </Descriptions.Item>
               <Descriptions.Item label={t(`${NS}.col.issueDate`)}>{detail.issue_date}</Descriptions.Item>
               <Descriptions.Item label={t(`${NS}.col.dueDate`)}>{detail.due_date}</Descriptions.Item>

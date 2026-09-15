@@ -1,5 +1,6 @@
 import React, { forwardRef } from 'react';
 import type { VatLedgerSummary } from '../../../services/tax';
+import { formatAmount } from '../../../../../utils/format';
 
 type Props = {
   summary: VatLedgerSummary;
@@ -7,7 +8,7 @@ type Props = {
 };
 
 const VatLedgerPrintTemplate = forwardRef<HTMLDivElement, Props>(({ summary, companyName }, ref) => {
-  const money = (v: number) => Number(v || 0).toFixed(2);
+  const money = (v: number) => formatAmount(v ?? 0);
   return (
     <div ref={ref} style={{ padding: 24, fontFamily: 'SimSun, serif', color: '#000' }}>
       <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 700, marginBottom: 8 }}>

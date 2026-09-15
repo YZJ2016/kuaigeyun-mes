@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { formatAmount } from '../../../../../utils/format';
 import { glService, type GlAccount } from '../../../services/gl';
 const NS = 'app.kuaicaiwu.gl.openingBalances';
 
@@ -460,10 +461,10 @@ const OpeningBalancesPage: React.FC = () => {
               <Typography.Text>
                 {t(`${NS}.trialDetail`, {
                   defaultValue: '期初借 {{od}} / 贷 {{oc}}；期末借 {{ed}} / 贷 {{ec}}',
-                  od: Number(trial.opening_debit || 0).toFixed(2),
-                  oc: Number(trial.opening_credit || 0).toFixed(2),
-                  ed: Number(trial.ending_debit || 0).toFixed(2),
-                  ec: Number(trial.ending_credit || 0).toFixed(2),
+                  od: formatAmount(trial.opening_debit || 0),
+                  oc: formatAmount(trial.opening_credit || 0),
+                  ed: formatAmount(trial.ending_debit || 0),
+                  ec: formatAmount(trial.ending_credit || 0),
                 })}
               </Typography.Text>
             }

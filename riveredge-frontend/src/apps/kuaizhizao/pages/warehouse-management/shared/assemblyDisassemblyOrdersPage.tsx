@@ -37,7 +37,7 @@ import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleS
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useTranslation } from 'react-i18next';
-import { formatQuantity } from '../../../../../utils/format';
+import { formatQuantity, formatPrice, formatAmount } from '../../../../../utils/format';
 import { formDateRangeFormItemProps, toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils/formDate';
 import {
   WAREHOUSE_DOC_PINNED_STATUS_FIELD,
@@ -884,14 +884,14 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         dataIndex: 'unit_price',
         width: 90,
         align: 'right' as const,
-        render: (value: unknown) => Number(value || 0).toFixed(2),
+        render: (value: unknown) => formatPrice(value),
       },
       {
         title: t('app.kuaizhizao.warehouseCommon.colAmount'),
         dataIndex: 'amount',
         width: 90,
         align: 'right' as const,
-        render: (value: unknown) => Number(value || 0).toFixed(2),
+        render: (value: unknown) => formatAmount(value),
       },
       {
         title: t('common.status'),

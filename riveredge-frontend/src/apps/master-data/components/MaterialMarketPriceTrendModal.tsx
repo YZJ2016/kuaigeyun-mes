@@ -3,7 +3,7 @@ import { Empty, Modal, Result, Space, Spin, Typography } from 'antd';
 import { Line } from '@ant-design/charts';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { formatBusinessDateOnly } from '../../../utils/format';
+import { formatBusinessDateOnly, formatPrice } from '../../../utils/format';
 import { materialMarketPriceApi } from '../services/material-market-price';
 
 const { Text } = Typography;
@@ -97,7 +97,7 @@ export const MaterialMarketPriceTrendModal: React.FC<MaterialMarketPriceTrendMod
                 {t('app.master-data.marketPrices.trendAvgPrice')}
               </div>
               <Text strong style={{ color: '#1890ff' }}>
-                {avgPrice.toFixed(2)}
+                {formatPrice(avgPrice)}
               </Text>
             </div>
             <div style={{ textAlign: 'center' }}>
@@ -105,7 +105,7 @@ export const MaterialMarketPriceTrendModal: React.FC<MaterialMarketPriceTrendMod
                 {t('app.master-data.marketPrices.trendMinPrice')}
               </div>
               <Text strong style={{ color: '#52c41a' }}>
-                {minPrice.toFixed(2)}
+                {formatPrice(minPrice)}
               </Text>
             </div>
             <div style={{ textAlign: 'center' }}>
@@ -113,7 +113,7 @@ export const MaterialMarketPriceTrendModal: React.FC<MaterialMarketPriceTrendMod
                 {t('app.master-data.marketPrices.trendMaxPrice')}
               </div>
               <Text strong style={{ color: '#ff4d4f' }}>
-                {maxPrice.toFixed(2)}
+                {formatPrice(maxPrice)}
               </Text>
             </div>
           </Space>
@@ -128,7 +128,7 @@ export const MaterialMarketPriceTrendModal: React.FC<MaterialMarketPriceTrendMod
                 x: { title: false },
                 y: {
                   title: false,
-                  labelFormatter: (value: number) => toNumber(value).toFixed(2),
+                  labelFormatter: (value: number) => formatPrice(value),
                 },
               }}
               tooltip={{

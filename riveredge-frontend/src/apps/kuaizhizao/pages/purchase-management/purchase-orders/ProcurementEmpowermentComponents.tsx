@@ -14,7 +14,7 @@ import {
 } from '../../../services/purchase';
 import { getPriceComparison } from '../../../services/purchase-requisition';
 import dayjs from 'dayjs';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyPrice } from '../../../../../utils/format';
 
 const { Text, Title } = Typography;
 
@@ -45,7 +45,7 @@ export const MultiSupplierPriceComparison: React.FC<{ materialId: number; onSele
         key: 'price',
         width: 100,
         align: 'right' as const,
-        render: (p: number) => <Text strong>¥{Number(p).toFixed(2)}</Text>,
+        render: (p: number) => <Text strong>{formatCurrencyPrice(p)}</Text>,
       },
       {
         title: t('app.kuaizhizao.purchaseOrder.empower.purchaseDate'),

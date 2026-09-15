@@ -2,25 +2,52 @@
  * 套餐表单项组件（仅渲染字段，不包含 submitter）
  */
 
-import { ProFormText, ProFormDigit, ProFormSwitch, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import { useEffect, useMemo } from 'react';
+import { Form } from 'antd';
+import {
+  ProFormText,
+  ProFormDigit,
+  ProFormSwitch,
+  ProFormSelect,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { useQuery } from '@tanstack/react-query';
 import { getApplicationList } from '../../../services/application';
 import {
   TENANT_PLAN_SORT_ORDER,
   resolveTenantPlanLabelKey,
+  tenantPlanAllowsProApps,
 } from '../../../services/tenant';
 import { useTranslation } from 'react-i18next';
-import { useMemo } from 'react';
 
-interface PackageFormProps {
-  isEdit?: boolean;
+function AllowProAppsByPlanField() {
+  const { t } = useTranslation();
+  const form = Form.useFormInstance();
+  const plan = Form.useWatch('plan', form);
+  const allows = tenantPlanAllowsProApps(plan);
+
+  useEffect(() => {
+    if (plan == null || plan === '') return;
+    if (form.getFieldValue('allow_pro_apps') !== allows) {
+      form.setFieldValue('allow_pro_apps', allows);
+    }
+  }, [allows, form, plan]);
+
+  return (
+    <ProFormSwitch
+      name="allow_pro_apps"
+      label={t('pages.infra.package.allowProApps')}
+      disabled
+      extra={t('pages.infra.package.allowProAppsByPlanHelp')}
+    />
+  );
 }
 
-export default function PackageForm({ isEdit = false }: PackageFormProps) {
+export default function PackageForm() {
   const { t } = useTranslation();
 
-  /** 新建时类型选项：内置 TenantPlan 档位文案，禁止用套餐名称冒充类型；同档可建多套餐 */
+  /** 类型选项：内置 TenantPlan 档位文案，禁止用套餐名称冒充类型；同档可建多套餐 */
   const planOptions = useMemo(
     () =>
       TENANT_PLAN_SORT_ORDER.map((plan) => {
@@ -54,15 +81,13 @@ export default function PackageForm({ isEdit = false }: PackageFormProps) {
         rules={[{ required: true, message: t('pages.infra.package.nameRequired') }]}
       />
 
-      {!isEdit && (
-        <SafeProFormSelect
-          name="plan"
-          label={t('pages.infra.package.plan')}
-          options={planOptions}
-          rules={[{ required: true, message: t('pages.infra.package.planRequired') }]}
-          extra={t('pages.infra.package.planBuiltinHelp')}
-        />
-      )}
+      <SafeProFormSelect
+        name="plan"
+        label={t('pages.infra.package.plan')}
+        options={planOptions}
+        rules={[{ required: true, message: t('pages.infra.package.planRequired') }]}
+        extra={t('pages.infra.package.planBuiltinHelp')}
+      />
 
       <ProFormDigit
         name="max_users"
@@ -86,10 +111,7 @@ export default function PackageForm({ isEdit = false }: PackageFormProps) {
         tooltip={t('pages.infra.package.maxBranchOrganizationsHelp')}
       />
 
-      <ProFormSwitch
-        name="allow_pro_apps"
-        label={t('pages.infra.package.allowProApps')}
-      />
+      <AllowProAppsByPlanField />
 
       <ProFormSelect
         name="allowed_app_codes"

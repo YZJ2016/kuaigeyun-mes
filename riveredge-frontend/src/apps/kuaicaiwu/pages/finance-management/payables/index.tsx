@@ -49,7 +49,7 @@ import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
-import { formatDateTime, todaySiteDateString, formatCurrencyAmount } from '../../../../../utils/format';
+import { formatDateTime, todaySiteDateString, formatCurrencyAmount, formatAmount } from '../../../../../utils/format';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
   financeDocCodePartnerSearchColumns,
@@ -457,7 +457,7 @@ const PayableList: React.FC = () => {
             return false;
         }
         if (totalAmount > maxPush) {
-            messageApi.warning(t(`${P}.pullExceedMax`, { max: maxPush.toFixed(2) }));
+            messageApi.warning(t(`${P}.pullExceedMax`, { max: formatAmount(maxPush) }));
             return false;
         }
         const sourceLabel =

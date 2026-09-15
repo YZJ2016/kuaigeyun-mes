@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Table, Empty, Modal, Form, Input, Select, message, theme, Space, Tag, Row, Col } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, HolderOutlined } from '@ant-design/icons';
 import { SequenceIndexCell, StepDragHandleContext, getSequenceIndexBadgeStyle } from '../../../components/sequence-index-cell';
+import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../utils/modalEventIsolation';
 import {
   DndContext,
@@ -112,15 +113,22 @@ export interface InspectionPlanStepEditorProps {
   value?: InspectionPlanStepItem[];
   onChange?: (steps: InspectionPlanStepItem[]) => void;
   disabled?: boolean;
+  /** 外层弹窗 zIndex；传入后步骤弹窗会叠在其之上，避免嵌套快速新建时被挡住 */
+  parentModalZIndex?: number;
 }
 
 export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> = ({
   value = [],
   onChange,
   disabled = false,
+  parentModalZIndex,
 }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  const stepModalZIndex =
+    parentModalZIndex != null
+      ? parentModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET
+      : token.zIndexPopupBase + 100;
   const [steps, setSteps] = useState<InspectionPlanStepItem[]>(value);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -502,7 +510,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
         onCancel={closeStepModal}
         destroyOnHidden
         width={560}
-        zIndex={token.zIndexPopupBase + 100}
+        zIndex={stepModalZIndex}
         maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
         wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       >

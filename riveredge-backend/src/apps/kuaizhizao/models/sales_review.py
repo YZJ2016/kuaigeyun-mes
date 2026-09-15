@@ -36,7 +36,7 @@ class SalesReview(BaseModel):
     packaging_req = fields.TextField(null=True, description="包装要求")
     production_notes = fields.TextField(null=True, description="生产过程备注")
 
-    # draft / reviewing / rejected / passed / closed / cancelled
+    # draft / reviewing / rejected / passed / converted / cancelled
     status = fields.CharField(max_length=20, default="draft", description="状态")
     review_round = fields.IntField(default=0, description="下达轮次")
 

@@ -21,6 +21,7 @@ import {
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { formatAmount } from '../../../../../utils/format';
 import { glService } from '../../../services/gl';
 
 const NS = 'app.kuaicaiwu.gl.periodClose';
@@ -191,19 +192,19 @@ const PeriodClosePage: React.FC = () => {
       title: t(`${NS}.col.business`, { defaultValue: '业务余额' }),
       dataIndex: 'business_balance',
       align: 'right' as const,
-      render: (v: number) => Number(v || 0).toFixed(2),
+      render: (v: number) => formatAmount(v ?? 0),
     },
     {
       title: t(`${NS}.col.gl`, { defaultValue: '总账余额' }),
       dataIndex: 'gl_balance',
       align: 'right' as const,
-      render: (v: number) => Number(v || 0).toFixed(2),
+      render: (v: number) => formatAmount(v ?? 0),
     },
     {
       title: t(`${NS}.col.diff`, { defaultValue: '差异' }),
       dataIndex: 'diff',
       align: 'right' as const,
-      render: (v: number) => Number(v || 0).toFixed(2),
+      render: (v: number) => formatAmount(v ?? 0),
     },
     {
       title: t(`${NS}.col.result`, { defaultValue: '结果' }),
@@ -258,7 +259,7 @@ const PeriodClosePage: React.FC = () => {
       title: t(`${NS}.col.remaining`, { defaultValue: '剩余' }),
       dataIndex: 'remaining',
       align: 'right' as const,
-      render: (v: number) => Number(v || 0).toFixed(2),
+      render: (v: number) => formatAmount(v ?? 0),
     },
     {
       title: t('common.action', { defaultValue: '操作' }),

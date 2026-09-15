@@ -372,7 +372,7 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
       ) || 0;
     const totalAmount = Number(values.total_amount) || 0;
     if (totalAmount <= 0 || totalAmount > maxPush) {
-      messageApi.warning(t(`${NS}.amountExceedMax`, { max: maxPush.toFixed(2) }));
+      messageApi.warning(t(`${NS}.amountExceedMax`, { max: formatCurrencyAmount(maxPush) }));
       return false;
     }
     setPullSubmitting(true);
