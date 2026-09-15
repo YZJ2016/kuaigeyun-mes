@@ -389,7 +389,7 @@ wizard_show_home_panel() {
     wizard_panel_menu_item "3" "更新系统" "fetch+reset 拉最新 → 迁移重启（低配固定传统部署）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
     wizard_panel_section "OPS 运维"
-    wizard_panel_menu_item "5" "详情" "服务状态 · 基线依赖 · 特殊依赖（PDF/OCR/向量/敏感词）"
+    wizard_panel_menu_item "5" "详情" "服务状态 · 基线依赖 · 可选能力依赖"
     wizard_panel_menu_short "${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[9]${WIZARD_RESET} 低配模式  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
     wizard_panel_bot
     echo ""
@@ -1180,9 +1180,11 @@ wizard_report_component() {
         ok) wizard_say_ok "${name} — 就绪" ;;
         missing) wizard_say_warn "${name} — 未安装" ;;
         installing) wizard_say_warn "${name} — 后台补装进行中" ;;
-        skipped) wizard_say_ok "${name} — 已禁用补装 (PLAYWRIGHT_POSTINSTALL_ENABLE=0)" ;;
-        disabled-present) wizard_say_ok "${name} — 补装已关，浏览器仍在" ;;
-        disabled-missing) wizard_say_warn "${name} — 补装已关且浏览器未装" ;;
+        skipped) wizard_say_ok "${name} — 包就绪 · 补装关闭" ;;
+        disabled-present) wizard_say_ok "${name} — 浏览器就绪 · 补装关闭" ;;
+        disabled-missing) wizard_say_warn "${name} — 补装关闭 · 浏览器未装" ;;
+        deps-missing) wizard_say_warn "${name} — 缺系统共享库" ;;
+        pending) wizard_say_ok "${name} — 待配置数据库" ;;
         old:*) wizard_say_warn "${name} — 版本 ${status#old:}，需要升级" ;;
         *) wizard_say_warn "${name} — ${status}" ;;
     esac
@@ -1215,7 +1217,7 @@ wizard_env_scan() {
     else
         wizard_say "部分基线依赖尚未就绪，下一阶段将自动安装"
     fi
-    wizard_say "特殊依赖（Playwright / 发票 OCR / pgvector / 敏感词）安装时仍会处理，状态见菜单 [5] 详情"
+    wizard_say "可选能力依赖（PDF / OCR / 向量 / 敏感词）按需安装，不用可忽略；状态见菜单 [5] 详情"
     return $failed
 }
 
@@ -1631,7 +1633,7 @@ wizard_install_deps() {
     if [ "$check_rc" -eq 0 ]; then
         wizard_finalize_local_database || return 1
         wizard_say_ok "环境软件安装全部完成"
-        wizard_say "特殊依赖将在迁移/启动时处理，状态见菜单 [5] 详情"
+        wizard_say "可选能力依赖将在迁移/启动时按需处理（不用可忽略），状态见菜单 [5] 详情"
         return 0
     fi
     wizard_say_fail "环境复核未通过"
@@ -1755,7 +1757,7 @@ wizard_update_app() {
     fi
 
     wizard_run_deploy_step release_meta_final "确认发版信息与运行 commit 一致" "$log" record_deploy_release_metadata || return 1
-    wizard_say_ok "系统更新已全部完成（特殊依赖状态见菜单 [5] 详情）"
+    wizard_say_ok "系统更新已全部完成（可选能力依赖状态见菜单 [5] 详情）"
 }
 
 wizard_show_summary() {

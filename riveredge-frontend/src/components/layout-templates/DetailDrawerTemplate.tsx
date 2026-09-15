@@ -15,6 +15,7 @@ import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { DRAWER_CONFIG } from './constants';
 import { getDrawerFloatingWrapperStyle } from './drawerFloatingChrome';
+import { useOptionalDetailDrawerChrome } from './DetailDrawerChromeContext';
 import { DetailDrawerSection } from './DetailDrawerSection';
 import { DetailDrawerLinesScroll } from './DetailDrawerLinesScroll';
 import { DetailDrawerInlineFullChain,
@@ -237,10 +238,11 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   const { token } = theme.useToken();
   const { fullChainEnabled, fullChainShowCreatedAt, operationLogEnabled, basicUpdatedAtEnabled } =
     useDetailDrawerFeatures();
+  const linkedChrome = useOptionalDetailDrawerChrome();
   const drawerSize = size;
   const isPresetDrawerSize = drawerSize === 'default' || drawerSize === 'large';
   const isNumericDrawerSize = typeof drawerSize === 'number';
-  const resolvedPlacement = placement ?? 'right';
+  const resolvedPlacement = placement ?? linkedChrome?.placement ?? 'right';
 
   const drawerFloatingWrapperStyle = useMemo(
     (): CSSProperties =>

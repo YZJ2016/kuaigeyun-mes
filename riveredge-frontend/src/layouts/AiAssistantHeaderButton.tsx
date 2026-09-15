@@ -1,7 +1,6 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { Tooltip } from 'antd';
-import Lottie from 'lottie-react';
-import assistAnimation from '../../static/lottie/assist.json';
+import { KuAiLottieMark } from '../components/ai-assistant/KuAiLottieMark';
 
 type Props = {
   tooltip: string;
@@ -16,8 +15,6 @@ export const AiAssistantHeaderButton = React.memo(function AiAssistantHeaderButt
   onClick,
   isDarkHeader = false,
 }: Props) {
-  const lottieRef = useRef<any>(null);
-
   return (
     <Tooltip title={tooltip}>
       <span className="ai-assistant-lottie-btn-wrapper">
@@ -26,28 +23,11 @@ export const AiAssistantHeaderButton = React.memo(function AiAssistantHeaderButt
           tabIndex={0}
           onClick={onClick}
           onKeyDown={(e) => e.key === 'Enter' && onClick()}
-          onMouseEnter={() => {
-            lottieRef.current?.goToAndPlay?.(0, true);
-          }}
-          onMouseLeave={() => {
-            lottieRef.current?.goToAndStop?.(0, true);
-          }}
           className={
             isDarkHeader ? 'ai-assistant-lottie-btn ai-assistant-lottie-btn--dark-header' : 'ai-assistant-lottie-btn'
           }
         >
-          <Lottie
-            lottieRef={lottieRef}
-            animationData={assistAnimation}
-            loop
-            autoplay={false}
-            style={{
-              width: 54,
-              height: 54,
-              display: 'block',
-              opacity: 1,
-            }}
-          />
+          <KuAiLottieMark size={54} hoverPlay />
         </span>
       </span>
     </Tooltip>

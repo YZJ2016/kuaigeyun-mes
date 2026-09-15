@@ -1,23 +1,21 @@
 """
 PDF报表生成引擎模块
 
-使用 xhtml2pdf 生成 PDF 报表文件（纯 Python，无 GTK 运行时依赖）。
-
-Author: Luigi Lu
-Date: 2025-01-15
+统一使用 Playwright Chromium 生成 PDF（与业务打印同源，依赖 optional pdf extra）。
 """
 
 from typing import Dict, Any
 from io import BytesIO
 from loguru import logger
-from xhtml2pdf import pisa
+
+from core.services.pdf.playwright_engine import run_playwright_with_dedicated_loop
 
 
 class PDFEngine:
     """
     PDF报表生成引擎
 
-    使用 xhtml2pdf 生成 PDF 文件。
+    使用 Playwright 将 HTML 转为 PDF。
     """
 
     def generate(self, config: Dict[str, Any], data: Dict[str, Any]) -> BytesIO:
@@ -32,14 +30,13 @@ class PDFEngine:
             BytesIO: PDF文件流
 
         """
-        # 生成HTML内容
         html_content = self._generate_html(config, data)
-
-        # 转换为 PDF（xhtml2pdf）
-        output = BytesIO()
-        pdf_result = pisa.CreatePDF(src=html_content, dest=output, encoding="utf-8")
-        if pdf_result.err:
-            raise RuntimeError("xhtml2pdf 生成 PDF 失败")
+        try:
+            pdf_bytes = run_playwright_with_dedicated_loop(html_content)
+        except RuntimeError as exc:
+            logger.error("Playwright PDF 生成失败: {}", exc)
+            raise
+        output = BytesIO(pdf_bytes)
         output.seek(0)
         return output
 
@@ -55,13 +52,14 @@ class PDFEngine:
             str: HTML内容
         """
         components = config.get("components", [])
-        
+
         html_parts = [
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
             "<meta charset='UTF-8'>",
             "<style>",
+            "@page { size: A4 portrait; margin: 12mm; }",
             "body { font-family: 'Microsoft YaHei', Arial, sans-serif; padding: 20px; }",
             "table { border-collapse: collapse; width: 100%; margin: 10px 0; }",
             "th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }",
@@ -72,7 +70,6 @@ class PDFEngine:
             "<body>",
         ]
 
-        # 渲染组件
         for component in components:
             html_parts.append(self._render_component_html(component, data))
 
@@ -101,7 +98,6 @@ class PDFEngine:
         elif component_type == "text":
             return self._render_text_html(component)
         elif component_type == "chart":
-            # PDF中图表需要转换为图片，这里简化实现
             logger.warning("PDF图表渲染暂未实现")
             return "<div>图表组件（暂未实现）</div>"
         elif component_type == "image":
@@ -125,13 +121,11 @@ class PDFEngine:
 
         html_parts = ["<table>", "<thead>", "<tr>"]
 
-        # 表头
         for col in columns:
             html_parts.append(f"<th>{col.get('title', col.get('dataIndex', ''))}</th>")
 
         html_parts.extend(["</tr>", "</thead>", "<tbody>"])
 
-        # 数据行
         for row_data in table_data:
             html_parts.append("<tr>")
             for col in columns:
@@ -178,4 +172,3 @@ class PDFEngine:
         src = component.get("src", "")
         alt = component.get("alt", "")
         return f'<img src="{src}" alt="{alt}" style="max-width: 100%;" />'
-

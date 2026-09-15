@@ -35,6 +35,7 @@ from infra.domain.security.security import (
 )
 from infra.domain.tenant_context import set_current_tenant_id
 from infra.domain.tenant.guest_tenant_admin import guest_may_be_tenant_admin
+from infra.exceptions.exceptions import RiverEdgeException
 from infra.services.tenant_service import TenantService
 from core.services.authorization.user_permission_service import UserPermissionService
 from core.services.authorization.permission_version_service import PermissionVersionService
@@ -1299,6 +1300,9 @@ class AuthService:
             return result
             
         except HTTPException:
+            raise
+        except RiverEdgeException:
+            # 封禁/鉴权等业务异常必须原样抛出，禁止吞成「请联系管理员」
             raise
         except Exception as e:
             import traceback

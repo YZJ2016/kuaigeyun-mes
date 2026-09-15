@@ -6,16 +6,25 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
-import { getClientDownloadQrOrigin, getTenantClientDownloads, type TenantClientDownload } from '../../services/clientRelease';
+import {
+  getClientDownloadQrOrigin,
+  getTenantClientDownloads,
+  getTenantHeaderMiniprogramQr,
+  type TenantClientDownload,
+} from '../../services/clientRelease';
+import { normalizeFilePreviewUrl } from '../../services/file';
 import { getTenantId } from '../../utils/auth';
 import {
   isLoopbackDownloadUrl,
   isPageLoopback,
   resolvePublicDownloadUrl,
 } from '../../utils/resolvePublicDownloadUrl';
-import { useGlobalStore } from '../../stores';
 
 const { Text } = Typography;
+
+const QR_SIZE = 136;
+const TITLE_MIN_HEIGHT = 20;
+const FOOTER_MIN_HEIGHT = 36;
 
 function formatFileSize(bytes?: number | null): string {
   if (bytes == null || bytes <= 0) return '';
@@ -23,7 +32,100 @@ function formatFileSize(bytes?: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function DownloadQrCard({
+function QrCodeColumn({
+  title,
+  hint,
+  footerExtra,
+  children,
+}: {
+  title: React.ReactNode;
+  hint?: React.ReactNode;
+  footerExtra?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const { token } = theme.useToken();
+
+  return (
+    <div
+      style={{
+        flex: '1 1 0',
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        padding: '0 6px',
+      }}
+    >
+      <Text
+        strong
+        style={{
+          display: 'block',
+          textAlign: 'center',
+          fontSize: 13,
+          lineHeight: `${TITLE_MIN_HEIGHT}px`,
+          minHeight: TITLE_MIN_HEIGHT,
+        }}
+      >
+        {title}
+      </Text>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginTop: 10,
+          background: token.colorBgContainer,
+          padding: 10,
+          borderRadius: token.borderRadius,
+          border: `1px solid ${token.colorBorderSecondary}`,
+          minHeight: QR_SIZE + 20,
+        }}
+      >
+        {children}
+      </div>
+      <div
+        style={{
+          minHeight: FOOTER_MIN_HEIGHT,
+          marginTop: 8,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          gap: 2,
+        }}
+      >
+        {hint ? (
+          <Text type="secondary" style={{ textAlign: 'center', fontSize: 11, lineHeight: 1.45 }}>
+            {hint}
+          </Text>
+        ) : null}
+        {footerExtra ? (
+          <Text type="secondary" style={{ textAlign: 'center', fontSize: 11, lineHeight: 1.45 }}>
+            {footerExtra}
+          </Text>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MiniprogramQrColumn({ imageUrl }: { imageUrl: string }) {
+  const { t } = useTranslation();
+
+  return (
+    <QrCodeColumn title={t('ui.header.miniprogramQr.title')} hint={t('ui.header.miniprogramQr.hint')}>
+      <img
+        src={imageUrl}
+        alt={t('ui.header.miniprogramQr.title')}
+        width={QR_SIZE}
+        height={QR_SIZE}
+        style={{ objectFit: 'contain', display: 'block' }}
+      />
+    </QrCodeColumn>
+  );
+}
+
+function DownloadQrColumn({
   item,
   qrOrigin,
   originLoading,
@@ -33,60 +135,28 @@ function DownloadQrCard({
   originLoading: boolean;
 }) {
   const { t } = useTranslation();
-  const { token } = theme.useToken();
   const downloadUrl = resolvePublicDownloadUrl(item.url, qrOrigin);
   const sizeLabel = formatFileSize(item.size_bytes);
+  const footerExtra = sizeLabel ? `v${item.app_version}，${sizeLabel}` : `v${item.app_version}`;
   const blocked = isPageLoopback() && !qrOrigin && !originLoading;
   const showQr = !originLoading && !blocked && !isLoopbackDownloadUrl(downloadUrl);
 
   return (
-    <div style={{ padding: '12px 0' }}>
-      <div style={{ marginBottom: 8, textAlign: 'center' }}>
-        <Text strong>{item.display_name}</Text>
-        <div>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            v{item.app_version}
-            {sizeLabel ? ` - ${sizeLabel}` : ''}
-          </Text>
-        </div>
-      </div>
+    <QrCodeColumn
+      title={item.display_name}
+      hint={showQr ? t('ui.header.clientDownload.hint') : undefined}
+      footerExtra={showQr ? footerExtra : undefined}
+    >
       {originLoading ? (
-        <div style={{ padding: '24px 0', textAlign: 'center' }}>
-          <Spin size="small" />
-        </div>
+        <Spin size="small" />
       ) : blocked ? (
         <Alert type="warning" showIcon title={t('ui.header.clientDownload.lanOriginFailed')} />
       ) : showQr ? (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            marginBottom: 8,
-            background: token.colorBgContainer,
-            padding: 8,
-            borderRadius: token.borderRadius,
-            border: `1px solid ${token.colorBorderSecondary}`,
-          }}
-        >
-          <QRCodeSVG value={downloadUrl} size={148} />
-        </div>
+        <QRCodeSVG value={downloadUrl} size={QR_SIZE} />
       ) : (
         <Alert type="error" showIcon title={t('ui.header.clientDownload.loopbackBlocked')} />
       )}
-      {showQr ? (
-        <>
-          <Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 12, marginTop: 4 }}>
-            {t('ui.header.clientDownload.scanHint')}
-          </Text>
-          <Text
-            type="secondary"
-            style={{ display: 'block', textAlign: 'center', fontSize: 11, marginTop: 4, lineHeight: 1.5 }}
-          >
-            {t('ui.header.clientDownload.scanTip')}
-          </Text>
-        </>
-      ) : null}
-    </div>
+    </QrCodeColumn>
   );
 }
 
@@ -101,9 +171,27 @@ export const HeaderClientDownloadButton: React.FC = () => {
   const [open, setOpen] = useState(false);
   const frontendPort = window.location.port ? Number(window.location.port) : undefined;
 
-  const { data: downloads = [], isLoading, isFetching, refetch } = useQuery({
+  const {
+    data: downloads = [],
+    isLoading: downloadsLoading,
+    isFetching: downloadsFetching,
+    refetch: refetchDownloads,
+  } = useQuery({
     queryKey: ['tenantClientDownloads', tenantId],
     queryFn: getTenantClientDownloads,
+    enabled: tenantId != null,
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  const {
+    data: miniprogram,
+    isLoading: miniprogramLoading,
+    isFetching: miniprogramFetching,
+    refetch: refetchMiniprogram,
+  } = useQuery({
+    queryKey: ['tenantHeaderMiniprogramQr', tenantId],
+    queryFn: getTenantHeaderMiniprogramQr,
     enabled: tenantId != null,
     staleTime: 60_000,
     retry: 1,
@@ -133,50 +221,58 @@ export const HeaderClientDownloadButton: React.FC = () => {
     [downloads],
   );
 
-  // 首屏未加载完或无可下载项时不展示；后台 refetch（点开下拉）不得卸载按钮
-  if (!tenantId || isLoading || visibleDownloads.length === 0) {
+  const miniprogramImageUrl = miniprogram?.image_url
+    ? normalizeFilePreviewUrl(miniprogram.image_url)
+    : null;
+  const showMiniprogram = Boolean(miniprogram?.enabled && miniprogramImageUrl);
+  const showDownloads = visibleDownloads.length > 0;
+  const initialLoading = downloadsLoading || miniprogramLoading;
+  const columnCount = (showMiniprogram ? 1 : 0) + visibleDownloads.length;
+  const popupWidth = columnCount <= 1 ? 260 : Math.min(520, columnCount * 240 + 32);
+
+  if (!tenantId || initialLoading || (!showMiniprogram && !showDownloads)) {
     return null;
   }
+
+  const loading = miniprogramFetching || downloadsLoading || downloadsFetching;
 
   const popup = (
     <div
       style={{
-        width: 280,
-        maxHeight: 480,
-        overflowY: 'auto',
+        width: popupWidth,
         backgroundColor: token.colorBgElevated,
         borderRadius: token.borderRadiusLG,
         boxShadow: token.boxShadowSecondary,
-        padding: '12px 16px',
+        padding: '14px 16px',
       }}
     >
-      <Text strong style={{ display: 'block', marginBottom: 4 }}>
-        {t('ui.header.clientDownload.title')}
-      </Text>
-      <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-        {t('ui.header.clientDownload.subtitle')}
-      </Text>
-      {isLoading || isFetching ? (
+      {loading ? (
         <div style={{ padding: '32px 0', textAlign: 'center' }}>
           <Spin />
         </div>
       ) : (
-        visibleDownloads.map((item, index) => (
-          <div
-            key={item.client_key}
-            style={
-              index < visibleDownloads.length - 1
-                ? { borderBottom: `1px solid ${token.colorBorderSecondary}` }
-                : undefined
-            }
-          >
-            <DownloadQrCard
-              item={item}
-              qrOrigin={qrOrigin}
-              originLoading={originLoading}
-            />
-          </div>
-        ))
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            gap: 12,
+          }}
+        >
+          {showMiniprogram && miniprogramImageUrl ? (
+            <MiniprogramQrColumn imageUrl={miniprogramImageUrl} />
+          ) : null}
+          {showDownloads
+            ? visibleDownloads.map((item) => (
+                <DownloadQrColumn
+                  key={item.client_key}
+                  item={item}
+                  qrOrigin={qrOrigin}
+                  originLoading={originLoading}
+                />
+              ))
+            : null}
+        </div>
       )}
     </div>
   );
@@ -187,8 +283,11 @@ export const HeaderClientDownloadButton: React.FC = () => {
       onOpenChange={(next) => {
         setOpen(next);
         if (next) {
-          void refetch();
-          void refetchOrigin();
+          void refetchDownloads();
+          void refetchMiniprogram();
+          if (showDownloads) {
+            void refetchOrigin();
+          }
         }
       }}
       popupRender={() => popup}

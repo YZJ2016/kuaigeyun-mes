@@ -7,6 +7,24 @@ export function isUnreadMessage(message: UserMessage): boolean {
   return message.status === 'pending' || message.status === 'sending' || message.status === 'success';
 }
 
+/** 站内信是否属于审批类（与个人消息「审批」分类一致） */
+export function isApprovalUserMessage(message: UserMessage): boolean {
+  const vars = message.variables || {};
+  const category = String(vars.message_category || '').trim().toLowerCase();
+  if (category === 'approval') {
+    return true;
+  }
+  const action = String(vars.trigger_action || '').trim().toLowerCase();
+  if (action === 'pending' || action === 'rejected' || action === 'urge' || action === 'cc') {
+    return true;
+  }
+  const subject = String(message.subject || '').trim();
+  if (/^待审批[:：]/.test(subject) || subject.includes('待审批')) {
+    return true;
+  }
+  return false;
+}
+
 export function getStatusTag(status: string, t: TFunction) {
   const statusMap: Record<string, { color: string; text: string }> = {
     pending: { color: 'default', text: t('pages.personal.messages.statusPending') },

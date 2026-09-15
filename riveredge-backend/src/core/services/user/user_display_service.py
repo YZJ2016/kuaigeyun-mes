@@ -72,6 +72,7 @@ class UserDisplayService:
                 username=user.username,
                 user_id=user.id,
             ),
+            avatar=user.avatar,
             department_uuid=dept_uuid,
             roles=UserDisplayService._roles_data(user),
         )
@@ -220,6 +221,7 @@ class UserDisplayService:
                     username=user.username,
                     user_id=user.id,
                 ),
+                avatar=user.avatar,
             )
             for user in users
         ]

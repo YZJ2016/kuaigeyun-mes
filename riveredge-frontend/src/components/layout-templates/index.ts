@@ -42,6 +42,12 @@ export type { ProjectWorkbenchToolbarProps } from './ProjectWorkbenchToolbar'
 export { DetailDrawerTemplate } from './DetailDrawerTemplate'
 export type { DetailDrawerTemplateProps } from './DetailDrawerTemplate'
 export {
+  DetailDrawerChromeProvider,
+  useOptionalDetailDrawerChrome,
+} from './DetailDrawerChromeContext'
+export type { DetailDrawerChrome } from './DetailDrawerChromeContext'
+export { useStackedOverlayZIndex } from './useStackedOverlayZIndex'
+export {
   detailDrawerDescriptionItems,
   filterDetailDrawerBasicColumns,
   useDetailDrawerDescriptionItems,

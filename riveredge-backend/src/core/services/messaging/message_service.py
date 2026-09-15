@@ -110,18 +110,66 @@ class MessageService:
                 if user_id > 0:
                     from core.services.messaging.push_dispatch_service import schedule_internal_message_push
 
+                    variables_dict = (
+                        dict(message_log.variables)
+                        if isinstance(message_log.variables, dict)
+                        else None
+                    )
                     schedule_internal_message_push(
                         tenant_id=tenant_id,
                         user_id=user_id,
                         subject=subject or "新消息",
                         content=content or "",
                         message_log_uuid=str(message_log.uuid),
-                        variables=(
-                            dict(message_log.variables)
-                            if isinstance(message_log.variables, dict)
-                            else None
-                        ),
+                        variables=variables_dict,
                     )
+                    from core.services.realtime.dispatch import schedule_user_realtime_event
+                    from core.services.realtime.events import resolve_message_event
+
+                    schedule_user_realtime_event(
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        event=resolve_message_event(variables_dict),
+                        payload={
+                            "message_log_uuid": str(message_log.uuid),
+                            "subject": subject or "新消息",
+                            "variables": variables_dict,
+                        },
+                    )
+                    try:
+                        from core.services.im.im_service import ImService
+
+                        template_code = (
+                            str(template.code).strip()
+                            if template is not None and getattr(template, "code", None)
+                            else (
+                                str(request.template_code).strip()
+                                if request.template_code
+                                else None
+                            )
+                        )
+                        await ImService.mirror_module_notification(
+                            tenant_id=tenant_id,
+                            subject=subject,
+                            content=content,
+                            message_log_uuid=str(message_log.uuid),
+                            template_code=template_code,
+                            variables=variables_dict,
+                            business_document=request.business_document,
+                            entity_uuid=(
+                                str(request.entity_uuid)
+                                if request.entity_uuid
+                                else None
+                            ),
+                            business_action=request.business_action,
+                        )
+                    except Exception:
+                        from loguru import logger
+
+                        logger.exception(
+                            "IM 模块群同步失败 message_log={}",
+                            message_log.uuid,
+                        )
             except (TypeError, ValueError):
                 pass
             return SendMessageResponse(

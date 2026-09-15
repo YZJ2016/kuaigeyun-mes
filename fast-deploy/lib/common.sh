@@ -89,16 +89,50 @@ special_deps_status_label() {
     case "$1" in
         ok) echo "就绪" ;;
         missing) echo "未安装" ;;
-        deps-missing) echo "缺系统库" ;;
-        installing) echo "补装中" ;;
-        skipped) echo "已禁用(关闭补装)" ;;
-        disabled-present) echo "补装已关 · 浏览器仍在" ;;
-        disabled-missing) echo "补装已关 · 浏览器未装" ;;
-        pending) echo "待配置" ;;
+        deps-missing) echo "缺系统共享库" ;;
+        installing) echo "后台补装中" ;;
+        skipped) echo "包就绪 · 补装关闭" ;;
+        disabled-present) echo "浏览器就绪 · 补装关闭" ;;
+        disabled-missing) echo "补装关闭 · 浏览器未装" ;;
+        pending) echo "待配置数据库" ;;
         n/a|na) echo "不适用" ;;
         old:*) echo "需升级 (${1#old:})" ;;
         *) echo "$1" ;;
     esac
+}
+
+print_special_deps_header() {
+    echo "=== 可选能力依赖 ==="
+    echo "  仅在使用打印 PDF、发票 OCR、KU-AI 向量或敏感词过滤时需要；不用对应功能可忽略未就绪项。"
+    echo "  迁移/启动时会按需尝试安装；完整日志: DEPLOY_SPECIAL_DEPS_VERBOSE=1 ./fast-deploy/deploy.sh start"
+    echo ""
+}
+
+print_special_deps_group() {
+    printf '  · %s\n' "$1"
+}
+
+print_special_deps_item() {
+    printf '      %-22s %s\n' "$1" "$(special_deps_status_label "$2")"
+}
+
+print_special_deps_footnotes() {
+    local pw_st=$1 cr_st=$2
+    local has_note=0
+    if [ "$cr_st" = "deps-missing" ]; then
+        [ "$has_note" -eq 0 ] && { echo "  提示:"; has_note=1; }
+        echo "    - Chromium 缺 Linux 共享库，打印 PDF 会失败。"
+        echo "      修复: cd riveredge-backend && sudo $(resolve_uv) run --extra pdf python -m playwright install-deps chromium"
+    fi
+    if [ "$cr_st" = "disabled-missing" ] || [ "$cr_st" = "disabled-present" ] || [ "$cr_st" = "skipped" ] || [ "$pw_st" = "skipped" ]; then
+        [ "$has_note" -eq 0 ] && { echo "  提示:"; has_note=1; }
+        if low_spec_mode_enabled 2>/dev/null; then
+            echo "    - 低配模式关闭了 Chromium 后台补装；已有浏览器仍可用于打印，不会自动下载新浏览器。"
+        else
+            echo "    - PLAYWRIGHT_POSTINSTALL_ENABLE=0：仅关闭后台补装，不会删除已有 Chromium。"
+        fi
+    fi
+    [ "$has_note" -eq 1 ] && echo ""
 }
 
 print_support_contact() {
@@ -4074,9 +4108,6 @@ cmd_details() {
     echo "=== 基线依赖 ==="
     cmd_check_baseline || true
     echo ""
-    echo "=== 特殊依赖（打印 PDF / 发票 OCR / 向量库 / 敏感词）==="
-    echo "  状态可在此查看；安装/更新主流程默认少刷这些日志（仍会装）。"
-    echo "  完整特殊日志: DEPLOY_SPECIAL_DEPS_VERBOSE=1 ./fast-deploy/deploy.sh start"
     cmd_check_special || true
     if [ "$DEPLOY_MODE" = "prod" ]; then
         echo ""
@@ -4096,15 +4127,15 @@ print_special_deps_hint() {
     case "$st_cr" in
         ok|disabled-present) ;;
         installing)
-            echo "  特殊依赖: Chromium 后台补装中 — 详情见菜单 [5] 或 ./fast-deploy/deploy.sh details"
+            echo "  可选依赖: Chromium 后台补装中（不用打印 PDF 可忽略）— 详情见菜单 [5]"
             ;;
         disabled-missing|skipped)
             if [ "$st_pw" = "skipped" ] || [ "$st_cr" = "disabled-missing" ]; then
-                echo "  特殊依赖: Chromium 补装已关闭 — 打印 PDF 需手动 install 或关闭低配后补装，见菜单 [5]"
+                echo "  可选依赖: 打印 PDF 补装已关闭（不用打印可忽略）— 详情见菜单 [5]"
             fi
             ;;
         *)
-            echo "  特殊依赖: 部分能力可能未就绪 — 详情见菜单 [5] 或 ./fast-deploy/deploy.sh details"
+            echo "  可选依赖: 部分增强能力未就绪（按需安装）— 详情见菜单 [5]"
             ;;
     esac
 }
@@ -4166,28 +4197,40 @@ cmd_check_baseline() {
 }
 
 cmd_check_special() {
-    local failed=0 st
-    st="$(check_playwright)"; print_dep_check_line "Playwright" "$st"
-    case "$st" in ok|skipped) ;; *) failed=1 ;; esac
-    st="$(check_playwright_chromium)"; print_dep_check_line "Chromium" "$st"
-    case "$st" in ok|skipped|installing|disabled-present) ;; *) failed=1 ;; esac
-    if [ "$st" = "deps-missing" ]; then
-        echo "  说明: Chromium 二进制已在，但缺 Linux 共享库（打印会报 error while loading shared libraries）。"
-        echo "  修复: cd riveredge-backend && sudo $(resolve_uv) run --extra pdf python -m playwright install-deps chromium"
-        echo "  然后: ./fast-deploy/deploy.sh details   # 应显示 Chromium 就绪"
-    fi
-    if [ "$st" = "disabled-missing" ] || [ "$st" = "disabled-present" ] || [ "$st" = "skipped" ]; then
-        if low_spec_mode_enabled 2>/dev/null; then
-            echo "  说明: 低配模式关闭了 Chromium 后台补装；已装的浏览器仍可用，打印 PDF 不自动补装。"
-        else
-            echo "  说明: PLAYWRIGHT_POSTINSTALL_ENABLE=0，仅关闭后台补装，不会删已有 Chromium。"
-        fi
-    fi
-    st="$(check_invoice_parse_runtime)"; print_dep_check_line "发票系统库" "$st"; [ "$st" = "ok" ] || failed=1
-    st="$(check_ocr)"; print_dep_check_line "发票OCR" "$st"; [ "$st" = "ok" ] || failed=1
-    st="$(check_pgvector)"; print_dep_check_line "pgvector" "$st"
+    local failed=0 st pw_st cr_st
+    print_special_deps_header
+
+    print_special_deps_group "打印 PDF（报表 / 单据，可跳过）"
+    pw_st="$(check_playwright)"
+    print_special_deps_item "Playwright Python 包" "$pw_st"
+    case "$pw_st" in ok|skipped) ;; *) failed=1 ;; esac
+    cr_st="$(check_playwright_chromium)"
+    print_special_deps_item "Chromium 浏览器" "$cr_st"
+    case "$cr_st" in ok|skipped|installing|disabled-present) ;; *) failed=1 ;; esac
+    echo ""
+
+    print_special_deps_group "发票解析（二维码 / OCR，可跳过）"
+    st="$(check_invoice_parse_runtime)"
+    print_special_deps_item "系统库 (zbar 等)" "$st"
+    [ "$st" = "ok" ] || failed=1
+    st="$(check_ocr)"
+    print_special_deps_item "OCR Python 包" "$st"
+    [ "$st" = "ok" ] || failed=1
+    echo ""
+
+    print_special_deps_group "KU-AI 向量检索（可跳过）"
+    st="$(check_pgvector)"
+    print_special_deps_item "PostgreSQL pgvector" "$st"
     case "$st" in ok|pending) ;; *) failed=1 ;; esac
-    st="$(check_sensitive_lexicon)"; print_dep_check_line "敏感词词库" "$st"; [ "$st" = "ok" ] || failed=1
+    echo ""
+
+    print_special_deps_group "敏感词过滤（组织开启时，可跳过）"
+    st="$(check_sensitive_lexicon)"
+    print_special_deps_item "词库 lexicon.pack" "$st"
+    [ "$st" = "ok" ] || failed=1
+    echo ""
+
+    print_special_deps_footnotes "$pw_st" "$cr_st"
     return $failed
 }
 
@@ -5278,8 +5321,7 @@ cmd_check() {
         failed=1
     fi
     echo ""
-    echo "=== 特殊依赖 ==="
-    # 特殊依赖不计入 check 失败：未装 Chromium 不应阻断 install 复核；状态见 details
+    # 可选能力依赖不计入 check 失败：未装 Chromium 等不应阻断 install 复核
     cmd_check_special || true
     return $failed
 }

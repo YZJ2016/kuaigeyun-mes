@@ -254,13 +254,13 @@ class StationService(WorkOrderService):
 
     async def _push_andon_event(self, tenant_id: int, event: str, record: StationAndonCall) -> None:
         try:
-            from core.services.websocket.websocket_service import WebSocketService
+            from core.services.realtime.dispatch import schedule_tenant_realtime_event
 
-            await WebSocketService.push_to_tenant(
-                tenant_id,
-                "andon",
-                {
-                    "event": event,
+            schedule_tenant_realtime_event(
+                tenant_id=tenant_id,
+                scope="andon",
+                event=f"andon.{event}",
+                payload={
                     "andon_id": record.id,
                     "call_type": record.call_type,
                     "status": record.status,

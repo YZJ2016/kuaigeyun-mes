@@ -22,7 +22,7 @@ import { NAVIGATION_MENU_TREE_QUERY_KEY } from '../../hooks/useUnifiedMenuData';
 const DISMISS_STORAGE_KEY_PREFIX = 'menu-sync-prompt:dismissed';
 const NOTIFICATION_KEY_PREFIX = 'menu-sync-prompt';
 /** 抬高于右下角 IterationFloatButton（bottom: 24），避免被盖住 */
-const NOTIFICATION_BOTTOM_OFFSET = 96;
+const NOTIFICATION_BOTTOM_OFFSET = 88;
 
 function buildDismissStorageKey(tenantId: number, manifestFingerprint: string): string {
   return `${DISMISS_STORAGE_KEY_PREFIX}:${tenantId}:${manifestFingerprint}`;

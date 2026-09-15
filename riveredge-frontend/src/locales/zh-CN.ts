@@ -290,17 +290,14 @@ export default {
   'ui.aiAssistant.requestError': '请求失败',
   'ui.aiAssistant.chatUnavailable': '对话接口不可用，请确认后端已更新并重启服务',
   'ui.aiAssistant.chatRequestFailed': '请求失败 ({{status}})',
-  'ui.header.clientDownload.tooltip': '扫码下载客户端',
+  'ui.header.clientDownload.tooltip': '移动端：小程序与客户端下载',
   'ui.header.clientDownload.title': '客户端下载',
-  'ui.header.clientDownload.subtitle': '使用手机浏览器扫描二维码安装',
-  'ui.header.clientDownload.scanHint': '请用手机浏览器扫码下载',
-  'ui.header.clientDownload.scanTip': '勿用微信扫一扫，链接可能被拦截',
+  'ui.header.clientDownload.hint': '浏览器扫码安装，勿用微信',
   'ui.header.clientDownload.lanOriginFailed': '无法解析局域网地址，请配置 BASE_URL 或改用局域网 IP 打开本页',
   'ui.header.clientDownload.loopbackBlocked': '下载地址仍为 127.0.0.1，手机无法访问，请重启后端或配置 BASE_URL',
   'ui.header.miniprogramQr.tooltip': '小程序码',
   'ui.header.miniprogramQr.title': '微信小程序',
-  'ui.header.miniprogramQr.subtitle': '使用微信扫一扫打开小程序',
-  'ui.header.miniprogramQr.scanHint': '请用微信扫一扫识别小程序码',
+  'ui.header.miniprogramQr.hint': '微信扫一扫',
   'ui.message.switchedTenant': '已切换组织上下文',
   'ui.message.autoSelectedTenant': '已自动选择组织: {{name}}',
   'ui.message.tenantOptionsLoadFailed': '组织列表加载失败，请重试',
@@ -746,6 +743,102 @@ export default {
   'pages.personal.preferences.styleCustomization': '样式微调',
   'pages.personal.preferences.colorScheme': '颜色方案',
   'pages.personal.preferences.miscOptions': '界面辅助',
+
+  'pages.personal.im.conversations': '会话',
+  'pages.personal.im.newChat': '发起',
+  'pages.personal.im.peerUserIdPlaceholder': '对方用户 ID',
+  'pages.personal.im.peerUserIdRequired': '请填写有效的用户 ID',
+  'pages.personal.im.noConversations': '暂无会话',
+  'pages.personal.im.untitled': '未命名会话',
+  'pages.personal.im.selectConversation': '请选择或新建会话',
+  'pages.personal.im.noMessages': '暂无消息',
+  'pages.personal.im.inputPlaceholder': '输入消息',
+  'pages.personal.im.send': '发送',
+  'pages.personal.im.sendFailed': '发送失败',
+  'pages.personal.im.createFailed': '创建会话失败',
+  'components.uniIm.title': '在线消息',
+  'components.uniIm.tooltip': '在线消息',
+  'components.uniIm.navLabel': '消息分类',
+  'components.uniIm.nav.direct': '个人',
+  'components.uniIm.nav.group': '群聊',
+  'components.uniIm.nav.approval': '审批',
+  'components.uniIm.nav.system': '消息',
+  'components.uniIm.nav.todo': '待办',
+  'components.uniIm.nav.reminder': '提醒',
+  'components.uniIm.emptyGroup': '暂无群聊，可点上方创建或进入公共群聊',
+  'components.uniIm.emptyApproval': '暂无审批消息',
+  'components.uniIm.emptySystem': '暂无系统消息',
+  'components.uniIm.emptyTodos': '暂无待办',
+  'components.uniIm.emptyReminders': '暂无提醒',
+  'components.uniIm.selectNotify': '请选择一条消息',
+  'components.uniIm.selectTask': '选择左侧事项，或在下方新建',
+  'components.uniIm.todoInputPlaceholder': '输入待办内容',
+  'components.uniIm.reminderInputPlaceholder': '输入提醒内容',
+  'components.uniIm.remindAtPlaceholder': '提醒时间',
+  'components.uniIm.remindAtRequired': '请选择提醒时间',
+  'components.uniIm.remindAtLabel': '提醒时间：{{time}}',
+  'components.uniIm.taskCreatedAt': '创建时间：{{time}}',
+  'components.uniIm.addTodo': '添加待办',
+  'components.uniIm.addReminder': '添加提醒',
+  'components.uniIm.addToTodo': '加入待办',
+  'components.uniIm.addToReminder': '加入提醒',
+  'components.uniIm.remindMessageContentLabel': '消息内容',
+  'components.uniIm.remindRemarkLabel': '备注',
+  'components.uniIm.remindRemarkPlaceholder': '选填，补充说明',
+  'components.uniIm.createGroup': '创建群聊',
+  'components.uniIm.groupCreated': '群聊已创建',
+  'components.uniIm.groupCreateFailed': '创建群聊失败',
+  'components.uniIm.groupUpdated': '群聊已更新',
+  'components.uniIm.groupUpdateFailed': '更新群聊失败',
+  'components.uniIm.groupSettings': '群聊设置',
+  'components.uniIm.groupName': '群聊名称',
+  'components.uniIm.groupNameRequired': '请输入群聊名称',
+  'components.uniIm.groupNamePlaceholder': '自定义群名称',
+  'components.uniIm.groupMembers': '群成员',
+  'components.uniIm.groupMembersHint': '含自己至少 2 人；再选 1 人即可创建',
+  'components.uniIm.groupMembersPlaceholder': '搜索并选择成员',
+  'components.uniIm.groupNeedMembers': '请至少再选择 1 名成员',
+  'components.uniIm.groupModules': '绑定模块',
+  'components.uniIm.groupModulesHint': '绑定后，该模块相关的站内自动推送会同步到本群',
+  'components.uniIm.groupModulesPlaceholder': '可选，可多选',
+  'components.uniIm.publicGroupTitle': '公共群聊',
+  'components.uniIm.publicGroupMembersHint': '公共群聊面向全员，成员由系统自动维护',
+  'components.uniIm.pin': '置顶',
+  'components.uniIm.unpin': '取消置顶',
+  'components.uniIm.pinSuccess': '已置顶',
+  'components.uniIm.unpinSuccess': '已取消置顶',
+  'components.uniIm.pinFailed': '置顶操作失败',
+  'components.uniIm.groupInputPlaceholder': '输入消息，可用 @ 提及成员或 @KU-AI',
+  'components.uniIm.systemSender': '系统通知',
+  'components.uniIm.addedToTodo': '已加入待办',
+  'components.uniIm.addedToReminder': '已加入提醒',
+  'components.uniIm.recall': '撤回',
+  'components.uniIm.recallSuccess': '已撤回',
+  'components.uniIm.recallFailed': '撤回失败',
+  'components.uniIm.recallExpired': '超过2分钟无法撤回',
+  'components.uniIm.markTodoDone': '标记完成',
+  'components.uniIm.taskCreated': '已创建',
+  'components.uniIm.taskCreateFailed': '创建失败',
+  'components.uniIm.taskCompleted': '已完成',
+  'components.uniIm.taskCompleteFailed': '完成失败',
+  'components.uniIm.noTaskPermission': '无权使用待办，请联系管理员',
+  'components.uniIm.openDocumentDetail': '打开单据详情',
+  'components.uniIm.documentNotFound': '未找到对应单据',
+  'components.uniIm.documentResolveFailed': '解析单据失败',
+  'components.uniIm.documentDetailUnavailable': '当前无法打开单据详情',
+  'components.uniIm.minimize': '最小化',
+  'components.uniIm.restore': '展开在线消息',
+  'components.uniIm.searchPlaceholder': '搜索',
+  'components.uniIm.yesterday': '昨天',
+  'components.uniIm.sendHint': 'Enter 发送',
+  'components.uniIm.self': '我',
+  'components.uniIm.kuAiSubtitle': '智能助手，随时解答业务问题',
+  'components.uniIm.kuAiEmptyChat': '向 KU-AI 提问，回复会显示在此对话框',
+  'components.uniIm.kuAiUnavailablePlaceholder': 'KU-AI 未就绪，请先完成模型配置',
+  'components.uniIm.emptyDirectUsers': '暂无其他用户',
+  'components.uniIm.noUserListPermission': '无权查看组织用户列表，请联系管理员',
+  'components.uniIm.listPaneResize': '拖动调节列表与对话区宽度',
+  'components.uniIm.listPaneWidthLevel': '第 {{level}} 档，{{width}} 像素',
 
   'pages.personal.messages.loadStatsFailed': '加载消息统计失败',
   'pages.personal.messages.selectToMark': '请选择要标记的消息',
@@ -23662,7 +23755,7 @@ export default {
   'pages.infra.clientReleases.miniprogramQrButton': '小程序码',
   'pages.infra.clientReleases.miniprogramQrModalTitle': '顶栏小程序码',
   'pages.infra.clientReleases.miniprogramQrEnabled': '开启顶栏展示',
-  'pages.infra.clientReleases.miniprogramQrEnabledHint': '开启后，登录主界面顶栏手机图标前显示小程序入口',
+  'pages.infra.clientReleases.miniprogramQrEnabledHint': '开启后，登录主界面顶栏手机图标下拉内展示小程序码（与客户端下载同一入口）',
   'pages.infra.clientReleases.miniprogramQrUpload': '上传小程序码',
   'pages.infra.clientReleases.miniprogramQrDragHint': '点击或拖拽小程序码图片到此处',
   'pages.infra.clientReleases.miniprogramQrDragSubHint': '支持 PNG / JPG / WEBP，建议正方形清晰小程序码',
@@ -29231,6 +29324,262 @@ export default {
     '销售订单菜单徽章改按发货状态统计',
   'pages.dashboard.updateLog.entries.sales-order-menu-badge-delivery-status.description':
     '左侧菜单销售订单徽章不再统计待审核与执行中订单，仅在有待交货或部分交货明细时提示；逾期未交仍显示红色，未开通财务模块的组织不再被大量蓝色徽章干扰。',
+  'pages.dashboard.updateLog.entries.uni-im-list-pane-resize.title':
+    '在线消息列表栏支持四档拖动调宽',
+  'pages.dashboard.updateLog.entries.uni-im-list-pane-resize.description':
+    '第二栏会话列表右缘可拖动调节宽度，220、260、300、340 像素四档吸附，松手后记住偏好；键盘左右键亦可切换档位。',
+  'pages.dashboard.updateLog.entries.uni-im-pin-icon-right.title':
+    '在线消息置顶图标改到列表右侧',
+  'pages.dashboard.updateLog.entries.uni-im-pin-icon-right.description':
+    '个人与群聊列表的置顶图钉从标题左侧移到行尾，避免挤占会话名称。',
+  'pages.dashboard.updateLog.entries.uni-im-realtime-refresh.title':
+    '在线消息顶栏与对话框支持近实时刷新',
+  'pages.dashboard.updateLog.entries.uni-im-realtime-refresh.description':
+    '默认启用 Socket.IO 推送，开发代理打通 /socket.io；顶栏未读与打开中的会话列表/消息另有短轮询兜底，新消息可及时出现在角标与聊天窗。',
+  'pages.dashboard.updateLog.entries.uni-im-ai-reply-markdown.title':
+    '在线消息中 KU-AI 回复按 Markdown 渲染',
+  'pages.dashboard.updateLog.entries.uni-im-ai-reply-markdown.description':
+    '群聊等会话里助手回复的加粗、列表、表格、代码块等 Markdown 语法会正确排版显示，不再把原始标记一并打出。',
+  'pages.dashboard.updateLog.entries.uni-im-print-modal-zindex-stack.title':
+    '详情抽屉内打开打印预览不再被压住',
+  'pages.dashboard.updateLog.entries.uni-im-print-modal-zindex-stack.description':
+    '从在线消息等场景打开的详情抽屉上点击打印时，打印预览弹窗按父级抽屉层级自动抬升，保证新 Modal 叠在当前 Drawer 之上。',
+  'pages.dashboard.updateLog.entries.uni-im-conversation-pin.title':
+    '在线消息支持右键置顶个人与群聊',
+  'pages.dashboard.updateLog.entries.uni-im-conversation-pin.description':
+    '个人、群聊列表可右键置顶或取消置顶；公共群聊默认置顶，置顶项排在列表前部。',
+  'pages.dashboard.updateLog.entries.uni-im-doc-detail-drawer-left.title':
+    '在线消息点开单据详情改从左侧滑出',
+  'pages.dashboard.updateLog.entries.uni-im-doc-detail-drawer-left.description':
+    '聊天里点击单据编号打开详情时，抽屉从屏幕左侧滑入，不再与右侧消息窗叠在一起；列表页打开详情仍为右侧。',
+  'pages.dashboard.updateLog.entries.uni-im-notify-list-icon-colors.title':
+    '在线消息审批与消息列表图标配色区分',
+  'pages.dashboard.updateLog.entries.uni-im-notify-list-icon-colors.description':
+    '审批列表使用橙色印章图标，消息列表使用蓝色气泡图标，一眼可区分两类条目。',
+  'pages.dashboard.updateLog.entries.uni-im-list-avatar-32.title':
+    '在线消息列表头像改为 32×32',
+  'pages.dashboard.updateLog.entries.uni-im-list-avatar-32.description':
+    '会话与联系人列表头像统一为 32×32，与收窄后的侧栏、半屏窗口更协调。',
+  'pages.dashboard.updateLog.entries.uni-im-window-max-half-viewport.title':
+    '在线消息窗口总宽收至半屏',
+  'pages.dashboard.updateLog.entries.uni-im-window-max-half-viewport.description':
+    '面板总宽不超过屏幕一半；左侧导航栏略收窄，列表与聊天区在上限内按比例分配，避免遮挡过多业务页。',
+  'pages.dashboard.updateLog.entries.uni-im-nav-contrast-theme-pill.title':
+    '在线消息侧栏配色更清晰',
+  'pages.dashboard.updateLog.entries.uni-im-nav-contrast-theme-pill.description':
+    '侧栏底色略加深、未选中项提亮；当前选中项改为主题色实心底配白字图标，对比更分明，不再蓝字叠灰底发糊。',
+  'pages.dashboard.updateLog.entries.uni-im-nav-active-token-primary.title':
+    '在线消息侧栏激活项真正使用主题色',
+  'pages.dashboard.updateLog.entries.uni-im-nav-active-token-primary.description':
+    '选中「个人」「群聊」等导航时，图标与文案改为当前系统主题色；此前 CSS 变量未注入会回落成黑色。',
+  'pages.dashboard.updateLog.entries.uni-im-approval-inbox-split.title':
+    '待审批消息归入审批分组',
+  'pages.dashboard.updateLog.entries.uni-im-approval-inbox-split.description':
+    '在线消息侧栏中，待审批等审批类站内信从「消息」移至「审批」；普通系统通知仍在「消息」，未读角标分别统计。',
+  'pages.dashboard.updateLog.entries.uni-im-group-chat.title':
+    '在线消息支持公共群与创建群聊',
+  'pages.dashboard.updateLog.entries.uni-im-group-chat.description':
+    '默认公共群聊全员可发言；可自定义名称创建群聊（至少 2 人），并可绑定多个业务模块以同步站内推送；群内支持 @成员 与 @KU-AI 让智能助手参与回复。',
+  'pages.dashboard.updateLog.entries.guest-login-ban-message.title':
+    '体验登录封禁原因不再被吞掉',
+  'pages.dashboard.updateLog.entries.guest-login-ban-message.description':
+    '免注册体验登录若因敏感词封禁等业务原因失败，将直接提示真实原因，不再统一显示「请联系管理员」。',
+  'pages.dashboard.updateLog.entries.uni-im-peer-avatar-fetch.title':
+    '在线消息对方头像可正常显示',
+  'pages.dashboard.updateLog.entries.uni-im-peer-avatar-fetch.description':
+    '人员展示接口返回头像文件 UUID；会话列表与聊天气泡按发送者加载真实头像，不再一律显示姓名首字。',
+  'pages.dashboard.updateLog.entries.uni-im-list-title-time-only.title':
+    '在线消息列表改为标题与时间两行',
+  'pages.dashboard.updateLog.entries.uni-im-list-title-time-only.description':
+    '会话、联系人与系统消息列表每项仅显示标题一行、时间一行，不再展示预览摘要，列表更紧凑易扫读。',
+  'pages.dashboard.updateLog.entries.uni-im-nav-active-theme-color.title':
+    '在线消息侧栏激活项改用主题色',
+  'pages.dashboard.updateLog.entries.uni-im-nav-active-theme-color.description':
+    '个人、群聊等导航当前选中项的图标与文案使用系统主题色，并配以浅主题底，便于一眼区分激活态。',
+  'pages.dashboard.updateLog.entries.uni-im-remind-message-plain.title':
+    '加入提醒消息区去掉左侧色条',
+  'pages.dashboard.updateLog.entries.uni-im-remind-message-plain.description':
+    '「加入提醒」标签改为「消息内容」；原文展示改为四周描边浅底，不再使用左侧品牌色竖条。',
+  'pages.dashboard.updateLog.entries.uni-im-remind-cn-hour.title':
+    '对话中文钟点识别不再偏差',
+  'pages.dashboard.updateLog.entries.uni-im-remind-cn-hour.description':
+    '「明天上午八点」等中文数字钟点可正确解析为 8:00；此前只认阿拉伯数字，会回落成默认上午 9 点。',
+  'pages.dashboard.updateLog.entries.uni-im-remind-modal-fields.title':
+    '加入提醒可看原文并填写备注',
+  'pages.dashboard.updateLog.entries.uni-im-remind-modal-fields.description':
+    '从对话加入提醒时展示「消息内容（应用原文）」引用块，并可选填备注；提醒标题仍用原文，备注写入事项内容。',
+  'pages.dashboard.updateLog.entries.uni-im-remind-modal-zindex.title':
+    '加入提醒弹窗不再被消息窗遮挡',
+  'pages.dashboard.updateLog.entries.uni-im-remind-modal-zindex.description':
+    '从对话添加提醒时，弹窗与遮罩层级高于在线消息窗口，可完整操作提醒时间与确认。',
+  'pages.dashboard.updateLog.entries.float-fab-im-feedback-swap.title':
+    '在线消息与系统反馈悬浮球对调位置',
+  'pages.dashboard.updateLog.entries.float-fab-im-feedback-swap.description':
+    '最小化后的在线消息悬浮球贴右下角，系统反馈按钮上移；关闭消息窗时反馈按钮仍回到右下角。',
+  'pages.dashboard.updateLog.entries.uni-im-doc-code-link.title':
+    '对话单号可点击打开单据详情',
+  'pages.dashboard.updateLog.entries.uni-im-doc-code-link.description':
+    '消息中的单据编号自动识别为下划线链接，点击后按编号精确解析并打开关联单据详情抽屉（不按前缀猜测类型）。',
+  'pages.dashboard.updateLog.entries.uni-im-time-link-remind.title':
+    '对话时间改为下划线链接添加提醒',
+  'pages.dashboard.updateLog.entries.uni-im-time-link-remind.description':
+    '消息中的「明天三点」「下周一」等时间显示为下划线链接，点击后再打开加入提醒；不再自动弹出提醒窗。',
+  'pages.dashboard.updateLog.entries.uni-im-bubble-side-icons.title':
+    '消息操作改为气泡旁小图标',
+  'pages.dashboard.updateLog.entries.uni-im-bubble-side-icons.description':
+    '待办、提醒、撤回改为悬停时出现在气泡外侧的小图标（己方在左、对方在右），不再占行，避免对话气泡上下跳动。',
+  'pages.dashboard.updateLog.entries.uni-im-minimize-fab.title':
+    '在线消息支持最小化悬浮球',
+  'pages.dashboard.updateLog.entries.uni-im-minimize-fab.description':
+    '对话框标题栏关闭左侧增加最小化；最小化后右下角显示绿色悬浮球，点击即可恢复会话窗口。',
+  'pages.dashboard.updateLog.entries.uni-im-auto-remind-from-time-text.title':
+    '对话含时间时自动加入提醒',
+  'pages.dashboard.updateLog.entries.uni-im-auto-remind-from-time-text.description':
+    '发送或新收到含「明天三点」「下周一」「3月15日」等时间表达的消息时，自动弹出加入提醒并尽量预填解析到的时刻。',
+  'pages.dashboard.updateLog.entries.uni-im-bubble-actions-recall.title':
+    '在线消息气泡可加提醒与撤回',
+  'pages.dashboard.updateLog.entries.uni-im-bubble-actions-recall.description':
+    '消息操作条改为不撑开气泡宽度；支持加入提醒（选时间）与发送后2分钟内撤回。',
+  'pages.dashboard.updateLog.entries.uni-im-nav-real-frosted-glass.title':
+    '在线消息第一栏真毛玻璃',
+  'pages.dashboard.updateLog.entries.uni-im-nav-real-frosted-glass.description':
+    '修复父级 overflow 阻断 backdrop-filter 的问题，降低底色不透明度并加强模糊，第一栏可透视背后页面呈现磨砂玻璃，而不再只是半透明灰。',
+  'pages.dashboard.updateLog.entries.uni-im-todo-reminder.title':
+    '在线消息待办与提醒',
+  'pages.dashboard.updateLog.entries.uni-im-todo-reminder.description':
+    '第一栏底部新增待办、提醒；对话气泡可加入待办，待办支持勾选完成，提醒可设时间。',
+  'pages.dashboard.updateLog.entries.uni-im-open-chat-perf.title':
+    '在线消息打开对话加速',
+  'pages.dashboard.updateLog.entries.uni-im-open-chat-perf.description':
+    '点击已有会话联系人立即切到对话框，不再每次请求创建会话；悬停预取消息；新建会话接口改为只返回本会话，避免全量重算未读。',
+  'pages.dashboard.updateLog.entries.uni-im-nav-opacity-align-settings.title':
+    '在线消息侧栏透明度对齐系统配置面板',
+  'pages.dashboard.updateLog.entries.uni-im-nav-opacity-align-settings.description':
+    '第一栏深灰磨砂改为约 78% 不透明度，模糊 24px、饱和度 180%，与系统配置按钮弹出面板的托盘磨砂参数一致，避免过透。',
+  'pages.dashboard.updateLog.entries.uni-im-resize-col2-col3-only.title':
+    '在线消息仅第二三栏可拖动调宽',
+  'pages.dashboard.updateLog.entries.uni-im-resize-col2-col3-only.description':
+    '第一栏导航固定 76px 不再拖动；仅在第二栏与第三栏分界拖动调节列表与对话区宽度（四档吸附），加宽列表时总宽仍可向左扩展。',
+  'pages.dashboard.updateLog.entries.uni-im-resize-handle-overlay.title':
+    '在线消息栏间拖柄改为叠加不占宽',
+  'pages.dashboard.updateLog.entries.uni-im-resize-handle-overlay.description':
+    '第一栏与第二栏、第二栏与第三栏之间的拖动分隔改为叠在分界线上的透明热区，不再占用布局宽度，列宽即为可见内容宽。',
+  'pages.dashboard.updateLog.entries.uni-im-window-expand-left.title':
+    '在线消息加宽侧栏可向左扩展总宽',
+  'pages.dashboard.updateLog.entries.uni-im-window-expand-left.description':
+    '拖宽第一栏或第二栏时，面板总宽可突破默认 1000px 并向左伸展，尽量保持第三栏原有可用宽度；上限为视口可用宽度。',
+  'pages.dashboard.updateLog.entries.uni-im-nav-frost-backdrop-fix.title':
+    '在线消息侧栏磨砂透明生效',
+  'pages.dashboard.updateLog.entries.uni-im-nav-frost-backdrop-fix.description':
+    '面板外壳改为透明并去掉会阻断 backdrop-filter 的 transform 入场动画；第一栏深灰半透明可透视背后页面，第二、三栏仍为实底。',
+  'pages.dashboard.updateLog.entries.uni-im-nav-rail-resize.title':
+    '在线消息导航栏支持四档拖动调宽',
+  'pages.dashboard.updateLog.entries.uni-im-nav-rail-resize.description':
+    '第一栏与第二栏之间可拖动调节导航宽度，64、76、92、112 像素四档吸附并记住偏好；键盘左右键亦可切换。',
+  'pages.dashboard.updateLog.entries.uni-im-nav-dark-frost.title':
+    '在线消息侧栏改为深灰磨砂',
+  'pages.dashboard.updateLog.entries.uni-im-nav-dark-frost.description':
+    '第一栏功能导航改为深灰半透明磨砂背景，图标与标签使用浅色字，选中态为浅白浮层，与第二栏列表形成对比。',
+  'pages.dashboard.updateLog.entries.uni-im-direct-unread-sort.title':
+    '在线消息个人列表未读排到最上',
+  'pages.dashboard.updateLog.entries.uni-im-direct-unread-sort.description':
+    '「个人」分类在 KU-AI 置顶之下优先展示有未读的会话；并改进会话标题与联系人展示名匹配，避免未读角标有数却排不到列表顶部。',
+  'pages.dashboard.updateLog.entries.uni-im-kuai-inline-chat.title':
+    '在线消息内直接对话 KU-AI',
+  'pages.dashboard.updateLog.entries.uni-im-kuai-inline-chat.description':
+    '个人列表点击 KU-AI 不再打开独立助手面板，改为在第三栏对话框内流式对话，输入与发送沿用当前 IM 布局。',
+  'pages.dashboard.updateLog.entries.uni-im-kuai-list-avatar-header-fit.title':
+    '在线消息 KU-AI 头像按顶栏原样放入列表',
+  'pages.dashboard.updateLog.entries.uni-im-kuai-list-avatar-header-fit.description':
+    '列表 KU-AI 不再放大裁切 Lottie；与顶栏相同的 54px 完整机器人居中放进 40px 圆槽，耳机与紫圆完整可见，外径与用户头像对齐。',
+  'pages.dashboard.updateLog.entries.uni-im-kuai-list-avatar-size.title':
+    '在线消息 KU-AI 列表头像与用户同径',
+  'pages.dashboard.updateLog.entries.uni-im-kuai-list-avatar-size.description':
+    'KU-AI 列表头像改用与用户相同的 40px 圆形 Avatar 容器，Lottie 按 2.55 倍圆形裁切放大，紫圆视觉直径与下方用户头像一致。',
+  'pages.dashboard.updateLog.entries.uni-im-kuai-lottie-avatar.title':
+    '在线消息 KU-AI 改用顶栏同款机器人头像',
+  'pages.dashboard.updateLog.entries.uni-im-kuai-lottie-avatar.description':
+    '个人列表置顶 KU-AI 与顶栏一致直接渲染 Lottie 小机器人，不再套方形 Avatar 或方形裁切，圆形观感与下方用户头像对齐。',
+  'pages.dashboard.updateLog.entries.uni-im-chat-avatar-sender-fix.title':
+    '在线消息聊天气泡头像按发送者显示',
+  'pages.dashboard.updateLog.entries.uni-im-chat-avatar-sender-fix.description':
+    '修复对话框内己方消息误显示对方姓名首字的问题；按 sender_id 识别发送者，己方复用个人真实头像，对方从联系人解析姓名。',
+  'pages.dashboard.updateLog.entries.uni-im-message-order-fix.title':
+    '在线消息对话顺序修正',
+  'pages.dashboard.updateLog.entries.uni-im-message-order-fix.description':
+    '修复聊天气泡区消息顺序颠倒的问题；接口已按发送时间正序返回，前端不再二次反转，先发的消息显示在上方。',
+  'pages.dashboard.updateLog.entries.uni-im-avatar-circle.title':
+    '在线消息头像统一为圆形',
+  'pages.dashboard.updateLog.entries.uni-im-avatar-circle.description':
+    '在线消息侧栏、会话列表与聊天气泡中的头像全部改为圆形，并复用系统 Avatar 与文字头像样式，与顶栏个人中心保持一致。',
+  'pages.dashboard.updateLog.entries.uni-im-direct-contact-recent-sort.title':
+    '在线消息个人列表按最近对话排序',
+  'pages.dashboard.updateLog.entries.uni-im-direct-contact-recent-sort.description':
+    '「个人」分类除置顶 KU-AI 外，组织用户按最近一条单聊消息时间倒序排列；尚未聊过的用户排在后面并按姓名排序。',
+  'pages.dashboard.updateLog.entries.uni-im-list-pane-resize-no-ticks.title':
+    '在线消息列表拖柄去掉档位刻度',
+  'pages.dashboard.updateLog.entries.uni-im-list-pane-resize-no-ticks.description':
+    '第二栏与第三栏之间的宽度拖柄保留拖动与四档吸附，移除中间竖条刻度，界面更简洁。',
+  'pages.dashboard.updateLog.entries.uni-im-direct-kuai-users.title':
+    '在线消息个人栏置顶 KU-AI 并列出组织用户',
+  'pages.dashboard.updateLog.entries.uni-im-direct-kuai-users.description':
+    '「个人」分类首行固定 KU-AI 入口，点击打开顶栏同款助手；下方按姓名列出当前组织启用用户，支持搜索筛选，点选即可发起单聊并展示历史未读。',
+  'pages.dashboard.updateLog.entries.uni-im-nav-user-avatar.title':
+    '在线消息侧栏接入用户真实头像',
+  'pages.dashboard.updateLog.entries.uni-im-nav-user-avatar.description':
+    '第一栏顶部头像与顶栏个人中心一致，优先展示上传头像，无图时回退姓名首字。',
+  'pages.dashboard.updateLog.entries.uni-im-nav-frost-labels.title':
+    '在线消息侧栏磨砂透明与文字标签',
+  'pages.dashboard.updateLog.entries.uni-im-nav-frost-labels.description':
+    '第一栏功能导航改为磨砂半透明背景，个人、群聊、审批、消息图标下方直接显示中文标签，便于一眼识别分类。',
+  'pages.dashboard.updateLog.entries.uni-im-merge-notification-bell.title':
+    '消息通知并入在线消息',
+  'pages.dashboard.updateLog.entries.uni-im-merge-notification-bell.description':
+    '移除顶栏铃铛图标；原消息通知列表迁入在线消息「消息」分类，未读统计合并至会话图标角标，支持查看全部跳转消息中心。',
+  'pages.dashboard.updateLog.entries.uni-im-wechat-three-column.title':
+    '在线消息三栏布局仿微信 PC 端',
+  'pages.dashboard.updateLog.entries.uni-im-wechat-three-column.description':
+    '左侧功能栏展示个人、群聊、审批、消息四类入口并带未读角标；中间为会话列表，右侧为对话框；去掉顶部总标题，关闭按钮移至第三栏标题栏。',
+  'pages.dashboard.updateLog.entries.uni-im-header-entry.title':
+    '在线消息改由顶栏图标打开',
+  'pages.dashboard.updateLog.entries.uni-im-header-entry.description':
+    '移除右下角快沟通悬浮按钮；顶栏新增会话图标打开「在线消息」弹窗，未读角标与 KU-AI 同款右下角面板布局保留；系统「消息通知」铃铛仍独立。',
+  'pages.dashboard.updateLog.entries.header-mobile-qr-balance.title':
+    '顶栏移动端二维码下拉视觉平衡',
+  'pages.dashboard.updateLog.entries.header-mobile-qr-balance.description':
+    '小程序码与客户端下载码两栏标题下二维码对齐，版本号与包体大小移至底部；去掉中间分隔线与重复说明。',
+  'pages.dashboard.updateLog.entries.uni-im-kuai-panel-style.title':
+    '快沟通面板对齐 KU-AI 视觉规范',
+  'pages.dashboard.updateLog.entries.uni-im-kuai-panel-style.description':
+    '快沟通弹窗高度与 KU-AI 一致（600–720px），宽度加宽至 920px 以容纳会话列表与聊天区；采用圆角白底与细边框，不使用流光光晕边框；顶栏与输入区风格与 KU-AI 统一。',
+  'pages.dashboard.updateLog.entries.header-mobile-miniprogram-merge.title':
+    '顶栏小程序码并入手机图标',
+  'pages.dashboard.updateLog.entries.header-mobile-miniprogram-merge.description':
+    '移除独立微信图标；开启小程序码后，与 Android/iOS 客户端下载同在顶栏手机图标下拉中展示，减少顶栏按钮。',
+  'pages.dashboard.updateLog.entries.uni-im-wechat-dock-modal.title':
+    '快沟通改为右下角悬浮微信式窗口',
+  'pages.dashboard.updateLog.entries.uni-im-wechat-dock-modal.description':
+    '即时会话组件 UniIm 在界面上显示为「快沟通」，不再占用独立菜单与 /personal/im 路由；登录后在右下角打开仿 PC 微信双栏弹窗，支持未读角标、气泡对话与发起单聊。',
+  'pages.dashboard.updateLog.entries.prometheus-http-metrics.title':
+    'HTTP 性能指标改导出 Prometheus',
+  'pages.dashboard.updateLog.entries.prometheus-http-metrics.description':
+    '进程内性能统计改为 prometheus-client 直方图与计数器，各实例暴露 /metrics 供抓取；保留 X-Response-Time 与慢 API 日志，性能 API 指向指标入口。',
+  'pages.dashboard.updateLog.entries.pdf-playwright-single-stack.title':
+    '报表 PDF 统一 Playwright 引擎',
+  'pages.dashboard.updateLog.entries.pdf-playwright-single-stack.description':
+    '移除未入依赖的 xhtml2pdf 路径，报表与打印共用 Playwright Chromium；Playwright 逻辑抽到 core 层，避免生产 ImportError 与双套排版。',
+  'pages.dashboard.updateLog.entries.realtime-legacy-ws-collapse.title':
+    '工位 Andon 改走 RealtimePublisher 并移除自写 WebSocket',
+  'pages.dashboard.updateLog.entries.realtime-legacy-ws-collapse.description':
+    'Andon 事件经 RealtimePublisher 推送租户频道；删除后端自写 WebSocket hub 与前端闲置 websocket 客户端，避免多 worker 下连接表错乱与双实时栈分叉。',
+  'pages.dashboard.updateLog.entries.realtime-socketio-in-process.title':
+    '实时推送默认支持 python-socketio 同进程',
+  'pages.dashboard.updateLog.entries.realtime-socketio-in-process.description':
+    'REALTIME_BACKEND=socketio 时 uv 依赖即可启用，无需独立 Centrifugo；Centrifugo 仍可选用于超大规模。',
+  'pages.dashboard.updateLog.entries.realtime-centrifugo-im-p0.title':
+    '实时推送与 IM 会话试点（Centrifugo）',
+  'pages.dashboard.updateLog.entries.realtime-centrifugo-im-p0.description':
+    '后端 RealtimePublisher 抽象（noop/centrifugo 可切换）；站内信、审批与 AI 流式挂钩推送；PC 订阅个人频道并保留轮询兜底；新增 IM 会话 API 与 /personal/im 页。',
   'pages.dashboard.updateLog.entries.mobile-server-settings-copy-plain.title':
     '移动端服务器设置文案更易懂',
   'pages.dashboard.updateLog.entries.mobile-server-settings-copy-plain.description':

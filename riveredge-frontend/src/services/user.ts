@@ -438,6 +438,8 @@ export interface UserDisplayItem {
   username: string;
   full_name?: string | null;
   label: string;
+  /** 头像文件 UUID；无则空 */
+  avatar?: string | null;
   department_uuid?: string | null;
   roles?: UserDisplayRoleItem[];
 }
