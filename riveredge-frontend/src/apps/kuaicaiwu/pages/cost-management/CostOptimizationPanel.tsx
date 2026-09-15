@@ -14,6 +14,7 @@ import dayjs from 'dayjs';
 import { normalizeCostListRows } from './costSelectData';
 import { formatSourceType, getPriorityTag, getSourceTypeTag } from '../../utils/costUiLabels';
 import { toApiDateString } from '../../../../utils/formDate';
+import { formatCurrencyAmount, formatAmount } from '../../../../utils/format';
 
 export interface OptimizationSuggestion {
   suggestion_type: string;
@@ -143,7 +144,7 @@ const CostOptimizationPanel: React.FC = () => {
                 material_code: result.material_code,
                 material_name: result.material_name,
                 current_source_type: getSourceTypeTag(result.current_source_type, t),
-                current_cost: `¥${result.current_cost?.total_cost?.toFixed(2)}`,
+                current_cost: formatCurrencyAmount(result.current_cost?.total_cost),
               }}
               columns={summaryColumns}
             />
@@ -170,7 +171,7 @@ const CostOptimizationPanel: React.FC = () => {
                     extra={
                       <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#52c41a' }}>
                         {t('app.kuaicaiwu.costOptimization.estimatedSavings', {
-                          amount: item.potential_savings.toFixed(2),
+                          amount: formatAmount(item.potential_savings),
                         })}
                       </span>
                     }
@@ -181,10 +182,10 @@ const CostOptimizationPanel: React.FC = () => {
                       dataSource={{
                         from: getSourceTypeTag(item.from_source_type, t),
                         to: getSourceTypeTag(item.to_source_type, t),
-                        current_cost: `¥${item.current_cost.toFixed(2)}`,
-                        alternative_cost: `¥${item.alternative_cost.toFixed(2)}`,
-                        potential_savings: `¥${item.potential_savings.toFixed(2)}`,
-                        savings_rate: `${item.savings_rate.toFixed(2)}%`,
+                        current_cost: formatCurrencyAmount(item.current_cost),
+                        alternative_cost: formatCurrencyAmount(item.alternative_cost),
+                        potential_savings: formatCurrencyAmount(item.potential_savings),
+                        savings_rate: `${formatAmount(item.savings_rate)}%`,
                       }}
                       columns={suggestionColumns}
                     />

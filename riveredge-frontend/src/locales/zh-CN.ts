@@ -1555,6 +1555,7 @@ export default {
   'documentStatus.released': '已下达',
   'documentStatus.split': '已拆分',
   'documentStatus.closed': '已关闭',
+  'documentStatus.converted': '已转单',
   'documentStatus.partial_converted': '部分转单',
   'documentStatus.full_converted': '全部转单',
   'documentStatus.pending_inspection': '待检验',
@@ -2731,7 +2732,7 @@ export default {
   'app.kuaizhizao.common.materialBatchSourcePlaceholder': '来源类型',
   /** 单据列表「明细」列（物料名预览） */
   'app.kuaizhizao.common.colLineMaterials': '明细',
-  'app.kuaizhizao.common.linesAndMore': '等{{count}}项',
+  'app.kuaizhizao.common.linesAndMore': '等共{{count}}条',
   'app.uniDetail.sectionBasic': '基本信息',
   'app.uniDetail.sectionCollaboration': '生命周期',
   'app.uniDetail.sectionLines': '明细信息',
@@ -7424,7 +7425,7 @@ export default {
   'app.kuaizhizao.quotation.colSeries': '系列编码',
   'app.kuaizhizao.quotation.colVersion': '版本',
   'app.kuaizhizao.quotation.colLineMaterials': '明细',
-  'app.kuaizhizao.quotation.linesAndMore': '等{{count}}项',
+  'app.kuaizhizao.quotation.linesAndMore': '等共{{count}}条',
   'app.kuaizhizao.quotation.versionDisplay': '第{{n}}版',
   'app.kuaizhizao.quotation.colVersionState': '版本状态',
   'app.kuaizhizao.quotation.latestTag': '当前最新',
@@ -19275,6 +19276,11 @@ export default {
   'app.master-data.serials.generateCountRange': '生成数量必须在1-1000之间',
   'app.master-data.serials.generateSuccess': '成功生成 {{count}} 个序列号',
   'app.master-data.serials.generateFailed': '生成序列号失败',
+  'app.master-data.variantAttributes.quickAddEnumValue': '快速新增属性值',
+  'app.master-data.variantAttributes.quickAddEnumValueTitle': '新增{{name}}属性值',
+  'app.master-data.variantAttributes.quickAddEnumValuePlaceholder': '请输入属性值',
+  'app.master-data.variantAttributes.enumValueRequired': '请输入属性值',
+  'app.master-data.variantAttributes.enumValueExists': '该属性值已存在',
   'app.master-data.variantAttributes.getDetailFailed': '获取属性定义详情失败',
   'app.master-data.variantAttributes.enumValuesRequired': '枚举类型必须提供至少一个枚举值',
   'app.master-data.variantAttributes.loadPreset': '加载预设',
@@ -20395,6 +20401,8 @@ export default {
   'app.master-data.materialForm.serialManaged': '序列号管理',
   'app.master-data.materialForm.defaultBatchRule': '默认批号规则',
   'app.master-data.materialForm.createRule': '新建规则',
+  'app.master-data.materialForm.quickAddBatchRule': '快速新增批号规则',
+  'app.master-data.materialForm.quickAddSerialRule': '快速新增序列号规则',
   'app.master-data.materialForm.gotoBatchRules': '跳转到批号规则管理',
   'app.master-data.materialForm.gotoSerialRules': '跳转到序列号规则管理',
   'app.master-data.suspendedModal.returnToForm': '返回继续填写',
@@ -23140,7 +23148,7 @@ export default {
   'app.kuaizhizao.quality.plans.columns.applicableMaterial': '适用物料',
   'app.kuaizhizao.quality.plans.columns.version': '版本',
   'app.kuaizhizao.quality.plans.columns.inspectionSteps': '质检步骤',
-  'app.kuaizhizao.quality.plans.stepsAndMore': '等{{count}}条',
+  'app.kuaizhizao.quality.plans.stepsAndMore': '等共{{count}}条',
   'app.kuaizhizao.quality.plans.columns.activeStatus': '启用状态',
   'app.kuaizhizao.quality.plans.form.planCode': '方案编号',
   'app.kuaizhizao.quality.plans.form.planName': '方案名称',
@@ -29223,6 +29231,78 @@ export default {
     '销售订单菜单徽章改按发货状态统计',
   'pages.dashboard.updateLog.entries.sales-order-menu-badge-delivery-status.description':
     '左侧菜单销售订单徽章不再统计待审核与执行中订单，仅在有待交货或部分交货明细时提示；逾期未交仍显示红色，未开通财务模块的组织不再被大量蓝色徽章干扰。',
+  'pages.dashboard.updateLog.entries.sales-order-approve-approval-status-nameerror.title':
+    '修复销售订单审核报 approval_status 未定义',
+  'pages.dashboard.updateLog.entries.sales-order-approve-approval-status-nameerror.description':
+    '销售订单审核/驳回误用未赋值的 approval_status 变量导致 NameError；改为沿用审批门控 gate 中已解析的流程完成标志。',
+  'pages.dashboard.updateLog.entries.tenant-plan-pro-apps-gate-by-tier.title':
+    '修复换专业套餐后应用中心仍锁 PRO',
+  'pages.dashboard.updateLog.entries.tenant-plan-pro-apps-gate-by-tier.description':
+    '组织 PRO 能力改按套餐档位判定（专业/旗舰开放）；纠正库内专业档「允许PRO」为关导致升档后仍提示需升级专业版的问题，并回填历史套餐数据。',
+  'pages.dashboard.updateLog.entries.package-edit-change-plan.title':
+    '编辑套餐可改套餐类型',
+  'pages.dashboard.updateLog.entries.package-edit-change-plan.description':
+    '套餐管理编辑弹窗恢复「套餐类型」选择（体验/基础/专业/旗舰），与新建一致；更新接口同步允许修改档位。',
+  'pages.dashboard.updateLog.entries.numeric-display-format-contract-sweep.title':
+    '数量金额展示统一走 format 契约',
+  'pages.dashboard.updateLog.entries.numeric-display-format-contract-sweep.description':
+    '销售/采购/仓储、价格本与价格趋势，以及轻财务应收应付、发票、核销、账簿凭证、成本月结、对账工作台等页面的数量、单价、金额裸 toFixed 或手拼 ¥ 改为 formatQuantity、formatPrice/formatAmount 与 formatCurrency*，跟随站点小数位配置。',
+  'pages.dashboard.updateLog.entries.sales-order-detail-qty-formatQuantity.title':
+    '销售订单详情数量展示去掉多余小数',
+  'pages.dashboard.updateLog.entries.sales-order-detail-qty-formatQuantity.description':
+    '详情明细的数量、已交数量、剩余数量改为走 formatQuantity，跟随数量小数位配置并去掉无意义尾零。',
+  'pages.dashboard.updateLog.entries.sales-review-status-converted.title':
+    '订单评审下推后状态改为已转单',
+  'pages.dashboard.updateLog.entries.sales-review-status-converted.description':
+    '订单评审通过并下推销售订单后，状态由「已关闭」改为「已转单」，与报价/询价转单语义一致；历史已下推单据一并回填。',
+  'pages.dashboard.updateLog.entries.variant-attr-enum-value-quick-add.title':
+    '属性组合可选值支持快速新增',
+  'pages.dashboard.updateLog.entries.variant-attr-enum-value-quick-add.description':
+    '物料属性管理「新增行」及单据行配置属性时，枚举属性下拉底部可快速新增属性值并写入属性定义，保存后自动选中。',
+  'pages.dashboard.updateLog.entries.material-batch-serial-rule-quick-add.title':
+    '物料编辑可快速新增批号与序列号规则',
+  'pages.dashboard.updateLog.entries.material-batch-serial-rule-quick-add.description':
+    '编辑物料时默认批号/序列号规则下拉底部支持快速新增，不再跳转规则管理页，也不再使用标签旁链接；保存后自动刷新并选中。',
+  'pages.dashboard.updateLog.entries.material-inspection-plan-quick-add.title':
+    '物料质检选项可快速新增检验方案',
+  'pages.dashboard.updateLog.entries.material-inspection-plan-quick-add.description':
+    '编辑物料「质检选项」分场景策略时，默认质检方案下拉支持快速新建；按 IQC/FQC/OQC 锁定方案类型，保存后自动选中。',
+  'pages.dashboard.updateLog.entries.inspection-plan-step-modal-zindex-nested.title':
+    '质检方案嵌套添加步骤弹窗不再被挡住',
+  'pages.dashboard.updateLog.entries.inspection-plan-step-modal-zindex-nested.description':
+    '从工艺路线等外层弹窗快速新建质检方案时，添加/编辑检验步骤的弹窗按父层 zIndex 叠放，避免被「新建质检方案」挡住。',
+  'pages.dashboard.updateLog.entries.process-route-inspection-plan-quick-add.title':
+    '工艺路线编辑可快速新增检验方案',
+  'pages.dashboard.updateLog.entries.process-route-inspection-plan-quick-add.description':
+    '编辑工艺路线时，工序「检验方案」下拉支持快速新增过程质检方案，保存后自动刷新选项并勾选到当前工序。',
+  'pages.dashboard.updateLog.entries.inline-marker-tag-preview-shared.title':
+    '列表明细预览统一为徽章等共 N 条',
+  'pages.dashboard.updateLog.entries.inline-marker-tag-preview-shared.description':
+    '全站单据「明细」列（销售/采购/仓储/售后等）与质检步骤统一走 inline-marker-tag-preview：前 2 条徽章、等共总数条、字号继承正文；禁止页面再手写 Tag 预览。',
+  'pages.dashboard.updateLog.entries.inspection-plan-steps-tag-font-size.title':
+    '质检方案步骤徽章字号与列表正文一致',
+  'pages.dashboard.updateLog.entries.inspection-plan-steps-tag-font-size.description':
+    '质检方案列表「质检步骤」预览徽章改为继承表格正文字号与行高，不再偏小。',
+  'pages.dashboard.updateLog.entries.bom-draft-delete-more-menu-confirm.title':
+    '草稿 BOM 更多菜单删除可弹出确认',
+  'pages.dashboard.updateLog.entries.bom-draft-delete-more-menu-confirm.description':
+    '物料清单「更多」内删除/设为默认改为菜单点击后弹出确认，并正确解析当前版本子件 uuid，避免下拉关闭导致点了无反应。',
+  'pages.dashboard.updateLog.entries.bom-version-switch-local-rebuild.title':
+    '物料清单版本切换即时生效',
+  'pages.dashboard.updateLog.entries.bom-version-switch-local-rebuild.description':
+    '列表版本下拉改为同步记住选中并从当前页已加载数据本地重建，避免整表重拉导致卡住与需多次点击才切换成功。',
+  'pages.dashboard.updateLog.entries.bom-list-hide-redundant-unit-column.title':
+    '物料清单列表去掉重复单位列',
+  'pages.dashboard.updateLog.entries.bom-list-hide-redundant-unit-column.description':
+    '用量列已展示「数量 + 单位」，列表不再单独显示单位列，避免与用量重复。',
+  'pages.dashboard.updateLog.entries.bom-version-history-badge-gap.title':
+    'BOM 版本历史徽章间距修复',
+  'pages.dashboard.updateLog.entries.bom-version-history-badge-gap.description':
+    '版本历史弹窗中版本号、默认/失效与审核状态徽章改为 Space 排布，避免徽章贴合无间距。',
+  'pages.dashboard.updateLog.entries.bom-list-material-source-column.title':
+    '物料清单列表增加物料来源列',
+  'pages.dashboard.updateLog.entries.bom-list-material-source-column.description':
+    '工程 BOM 列表在工艺路线与版本之间展示物料来源（自制/采购/委外等），根行与子件均取自物料主数据，未配置时回退 BOM 行来源。',
   'pages.dashboard.updateLog.entries.equipment-spot-check-docno-collision-fix.title':
     '设备点检连建不再因单号冲突报 500',
   'pages.dashboard.updateLog.entries.equipment-spot-check-docno-collision-fix.description':
@@ -30645,6 +30725,8 @@ export default {
   'pages.infra.package.maxBranchOrganizations': '分支组织上限',
   'pages.infra.package.maxBranchOrganizationsHelp': '留空表示不限制；0 表示不允许创建分支组织',
   'pages.infra.package.allowProApps': '允许PRO应用',
+  'pages.infra.package.allowProAppsByPlanHelp':
+    '由套餐类型决定：专业版、旗舰版自动允许；体验版、基础版不允许。',
   'pages.infra.package.allowedApps': '允许加载APP',
   'pages.infra.package.allowedAppsHelp': '留空表示不限制；非空时仅允许加载所选应用',
   'pages.infra.package.allowedAppsCount': '已限制 {{count}} 个应用',
@@ -33598,6 +33680,8 @@ export default {
   'app.kuaizhizao.salesReview.status.passed': '已通过',
   'app.kuaizhizao.salesReview.status.rejected': '已驳回',
   'app.kuaizhizao.salesReview.status.reviewing': '评审中',
+  'app.kuaizhizao.salesReview.status.converted': '已转单',
+  'app.kuaizhizao.salesReview.status.cancelled': '已取消',
   'app.kuaizhizao.salesReview.submitDeptOpinion': '提交部门意见',
   'app.kuaizhizao.salesReview.urgency.high': '高',
   'app.kuaizhizao.salesReview.urgency.low': '低',

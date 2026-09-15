@@ -73,7 +73,7 @@ import {
 } from '../../../components/LedgerAccountFormFields';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { purchaseInvoiceCapabilityReasonMessage } from '../../../utils/purchaseInvoiceCapabilityMessages';
-import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount, formatAmount } from '../../../../../utils/format';
 import {
   FINANCE_INVOICE_PINNED_REVIEW_FIELD,
   financeDocCodePartnerSearchColumns,
@@ -418,7 +418,7 @@ const PurchaseInvoiceList: React.FC = () => {
       { maxTotalIncl: maxPush },
     );
     if (moneyExceedsMax(estimatedTotal, maxPush)) {
-      messageApi.warning(t(`${P}.pullExceedMax`, { max: Number(maxPush).toFixed(2) }));
+      messageApi.warning(t(`${P}.pullExceedMax`, { max: formatCurrencyAmount(maxPush) }));
       return false;
     }
     const sourceLabel =
@@ -446,7 +446,7 @@ const PurchaseInvoiceList: React.FC = () => {
         return false;
       }
       if (settleAmt > maxSettle) {
-        messageApi.warning(t(`${P}.concurrentPaymentExceedMax`, { max: maxSettle.toFixed(2) }));
+        messageApi.warning(t(`${P}.concurrentPaymentExceedMax`, { max: formatCurrencyAmount(maxSettle) }));
         return false;
       }
       try {
@@ -817,10 +817,10 @@ const PurchaseInvoiceList: React.FC = () => {
       maxTotalIncl: pullPreviewMaxPush,
     });
     if (mode === 'tax_inclusive') {
-      return t(`${P}.form.amountHintExcl`, { amount: resolved.invoiceAmountExcl.toFixed(2) });
+      return t(`${P}.form.amountHintExcl`, { amount: formatAmount(resolved.invoiceAmountExcl) });
     }
     return t(`${P}.form.amountHintIncl`, {
-      amount: resolved.totalIncl.toFixed(2),
+      amount: formatAmount(resolved.totalIncl),
     });
   }, [pullAmountInputMode, pullInvoiceAmountWatch, pullTaxRateWatch, pullPreviewMaxPush, t]);
 
@@ -1232,7 +1232,7 @@ const PurchaseInvoiceList: React.FC = () => {
                       name="concurrent_payment_enabled"
                       label={t(`${P}.concurrentPayment`)}
                       extra={t(`${P}.concurrentPaymentHint`, {
-                        max: Number(pullPreviewData.remaining_settle_amount || 0).toFixed(2),
+                        max: formatAmount(pullPreviewData.remaining_settle_amount || 0),
                       })}
                       colProps={financeColFull}
                     />

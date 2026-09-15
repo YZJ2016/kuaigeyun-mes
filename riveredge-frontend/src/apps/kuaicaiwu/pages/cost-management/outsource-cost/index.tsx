@@ -14,7 +14,7 @@ import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { loadOutsourceWorkOrderSelectOptions, normalizeCostListRows, type CostSelectOption } from '../costSelectData';
 import { formatCalculationType, getSourceTypeTag } from '../../../utils/costUiLabels';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount, formatQuantity } from '../../../../../utils/format';
 import { toApiDateString } from '../../../../../utils/formDate';
 
 interface OutsourceCostResult {
@@ -160,15 +160,15 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
               outsource_work_order_code: result.outsource_work_order_code,
               supplier_name: result.supplier_name,
               source_type: getSourceTypeTag('Outsource', t),
-              quantity: result.quantity,
-              material_cost: `¥${result.material_cost?.toFixed(2)}`,
-              processing_cost: `¥${result.processing_cost?.toFixed(2)}`,
+              quantity: formatQuantity(result.quantity),
+              material_cost: formatCurrencyAmount(result.material_cost),
+              processing_cost: formatCurrencyAmount(result.processing_cost),
               total_cost: (
                 <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1890ff' }}>
-                  ¥{result.total_cost?.toFixed(2)}
+                  {formatCurrencyAmount(result.total_cost)}
                 </span>
               ),
-              unit_cost: `¥${result.unit_cost?.toFixed(2)}`,
+              unit_cost: formatCurrencyAmount(result.unit_cost),
               calculation_type: formatCalculationType(result.calculation_type, t),
               calculation_date: result.calculation_date ? formatDateTime(result.calculation_date, 'YYYY-MM-DD') : '-',
             }}

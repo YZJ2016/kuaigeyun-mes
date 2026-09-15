@@ -9,7 +9,7 @@ export type SalesReviewStatus =
   | 'reviewing'
   | 'rejected'
   | 'passed'
-  | 'closed'
+  | 'converted'
   | 'cancelled';
 
 export type SalesReviewDeptCode = 'tech' | 'process' | 'purchase' | 'production' | 'quality';

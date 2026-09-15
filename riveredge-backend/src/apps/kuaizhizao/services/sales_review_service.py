@@ -835,7 +835,7 @@ class SalesReviewService(AppBaseService):
             created_by=current_user.id,
         )
         await SalesReview.filter(id=review_id).update(
-            status="closed",
+            status="converted",
             sales_order_id=sales_order.id,
             sales_order_code=sales_order.order_code,
             **_audit_update_kwargs(current_user),

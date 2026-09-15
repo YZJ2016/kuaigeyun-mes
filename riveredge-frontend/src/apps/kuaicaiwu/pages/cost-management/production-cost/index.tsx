@@ -14,7 +14,7 @@ import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { normalizeCostListRows } from '../costSelectData';
 import { formatCalculationType, formatSourceType, getSourceTypeTag } from '../../../utils/costUiLabels';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount, formatQuantity } from '../../../../../utils/format';
 import { toApiDateString } from '../../../../../utils/formDate';
 
 interface ProductionCostResult {
@@ -124,16 +124,16 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
               material_code: result.material_code,
               material_name: result.material_name,
               source_type: getSourceTypeTag(result.source_type, t),
-              quantity: result.quantity,
-              material_cost: `¥${result.material_cost?.toFixed(2)}`,
-              labor_cost: `¥${result.labor_cost?.toFixed(2)}`,
-              manufacturing_cost: `¥${result.manufacturing_cost?.toFixed(2)}`,
+              quantity: formatQuantity(result.quantity),
+              material_cost: formatCurrencyAmount(result.material_cost),
+              labor_cost: formatCurrencyAmount(result.labor_cost),
+              manufacturing_cost: formatCurrencyAmount(result.manufacturing_cost),
               total_cost: (
                 <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1890ff' }}>
-                  ¥{result.total_cost?.toFixed(2)}
+                  {formatCurrencyAmount(result.total_cost)}
                 </span>
               ),
-              unit_cost: `¥${result.unit_cost?.toFixed(2)}`,
+              unit_cost: formatCurrencyAmount(result.unit_cost),
               calculation_type: formatCalculationType(result.calculation_type, t),
               calculation_date: result.calculation_date ? formatDateTime(result.calculation_date, 'YYYY-MM-DD') : '-',
             }}

@@ -79,7 +79,7 @@ import {
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
-import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount, formatAmount } from '../../../../../utils/format';
 import {
   FINANCE_INVOICE_PINNED_REVIEW_FIELD,
   financeDocCodePartnerSearchColumns,
@@ -380,7 +380,7 @@ const SalesInvoicesPage: React.FC = () => {
       { maxTotalIncl: maxPush },
     );
     if (moneyExceedsMax(estimatedTotal, maxPush)) {
-      messageApi.warning(t(`${P}.pullExceedMax`, { max: Number(maxPush).toFixed(2) }));
+      messageApi.warning(t(`${P}.pullExceedMax`, { max: formatCurrencyAmount(maxPush) }));
       return false;
     }
     const wantReceipt = Boolean(values.concurrent_receipt_enabled) && pullPreviewKind === 'receivable';
@@ -392,7 +392,7 @@ const SalesInvoicesPage: React.FC = () => {
         return false;
       }
       if (settleAmt > maxSettle) {
-        messageApi.warning(t(`${P}.concurrentReceiptExceedMax`, { max: maxSettle.toFixed(2) }));
+        messageApi.warning(t(`${P}.concurrentReceiptExceedMax`, { max: formatCurrencyAmount(maxSettle) }));
         return false;
       }
       try {
@@ -899,10 +899,10 @@ const SalesInvoicesPage: React.FC = () => {
       maxTotalIncl: pullPreviewMaxPush,
     });
     if (mode === 'tax_inclusive') {
-      return t(`${P}.form.amountHintExcl`, { amount: resolved.invoiceAmountExcl.toFixed(2) });
+      return t(`${P}.form.amountHintExcl`, { amount: formatAmount(resolved.invoiceAmountExcl) });
     }
     return t(`${P}.form.amountHintIncl`, {
-      amount: resolved.totalIncl.toFixed(2),
+      amount: formatAmount(resolved.totalIncl),
     });
   }, [pullAmountInputMode, pullInvoiceAmountWatch, pullTaxRateWatch, pullPreviewMaxPush, t]);
 
@@ -1306,7 +1306,7 @@ const SalesInvoicesPage: React.FC = () => {
                       name="concurrent_receipt_enabled"
                       label={t(`${P}.concurrentReceipt`)}
                       extra={t(`${P}.concurrentReceiptHint`, {
-                        max: Number(pullPreviewData.remaining_settle_amount || 0).toFixed(2),
+                        max: formatAmount(pullPreviewData.remaining_settle_amount || 0),
                       })}
                       colProps={financeColFull}
                     />

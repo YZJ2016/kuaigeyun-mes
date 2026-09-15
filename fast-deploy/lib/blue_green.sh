@@ -328,8 +328,17 @@ bg_start_backend_slot() {
         echo $! >"$pidf"
     )
     if ! bg_wait_health_on_port "$port" "$BACKEND_START_TIMEOUT"; then
-        log_error "backend-${slot} 启动失败，查看 $(bg_backend_log_file "$slot")"
-        tail -30 "$(bg_backend_log_file "$slot")" >&2 || true
+        local _bg_pid _bg_log
+        _bg_log="$(bg_backend_log_file "$slot")"
+        _bg_pid="$(cat "$pidf" 2>/dev/null || true)"
+        if [ -n "$_bg_pid" ] && kill -0 "$_bg_pid" 2>/dev/null; then
+            log_error "backend-${slot} 在 ${BACKEND_START_TIMEOUT}s 内 /health 未就绪（进程仍在启动，多为冷启动超时）"
+            log_error "可在 fast-deploy/config/deploy.env 提高 BACKEND_START_TIMEOUT，或开启 LOW_SPEC_MODE"
+        else
+            log_error "backend-${slot} 启动失败（进程已退出），查看 ${_bg_log}"
+        fi
+        log_error "最近日志 ${_bg_log}："
+        tail -40 "$_bg_log" >&2 || true
         return 1
     fi
     if [ "$(bg_active_slot)" = "$slot" ]; then

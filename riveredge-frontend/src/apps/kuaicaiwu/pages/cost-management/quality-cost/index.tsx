@@ -15,7 +15,7 @@ import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { loadWorkOrderSelectOptions, normalizeCostListRows, type CostSelectOption } from '../costSelectData';
 import { formatCalculationType } from '../../../utils/costUiLabels';
-import { formatDateTime } from '../../../../../utils/format';
+import { formatDateTime, formatCurrencyAmount } from '../../../../../utils/format';
 import { toApiDateString } from '../../../../../utils/formDate';
 
 interface QualityCostResult {
@@ -157,7 +157,7 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
             dataSource={{
               total_quality_cost: (
                 <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#1890ff' }}>
-                  ¥{result.total_quality_cost?.toFixed(2)}
+                  {formatCurrencyAmount(result.total_quality_cost)}
                 </span>
               ),
               calculation_type: formatCalculationType(result.calculation_type, t),

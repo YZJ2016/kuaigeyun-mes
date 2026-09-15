@@ -161,7 +161,7 @@ import {
   hasDocumentAttachments,
 } from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, formatCurrencyAmount } from '../../../../../utils/format';;
+import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, formatCurrencyAmount, formatCurrencyPrice } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 const PURCHASE_RETURN_RESOURCE = 'kuaizhizao:purchase-return';
@@ -1813,14 +1813,14 @@ const PurchaseReturnsPage: React.FC = () => {
         dataIndex: 'unit_price',
         width: 100,
         align: 'right' as const,
-        render: (text: number) => `¥${text || 0}`,
+        render: (text: number) => formatCurrencyPrice(text),
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.amount'),
         dataIndex: 'total_amount',
         width: 100,
         align: 'right' as const,
-        render: (text: number) => `¥${text || 0}`,
+        render: (text: number) => formatCurrencyAmount(text),
       },
       { title: t('app.kuaizhizao.purchaseReturn.import.batchNumber'), dataIndex: 'batch_number', width: 120 },
       { title: t('app.kuaizhizao.purchaseReturn.location'), dataIndex: 'location_code', width: 100 },

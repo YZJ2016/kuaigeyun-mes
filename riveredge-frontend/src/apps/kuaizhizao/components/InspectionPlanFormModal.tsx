@@ -287,7 +287,12 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
       </Row>
 
       <ProFormItem label={t('app.kuaizhizao.quality.plans.form.steps')} style={{ width: '100%' }} required={requireSteps}>
-        <InspectionPlanStepEditor value={steps} onChange={setSteps} disabled={false} />
+        <InspectionPlanStepEditor
+          value={steps}
+          onChange={setSteps}
+          disabled={false}
+          parentModalZIndex={zIndex}
+        />
       </ProFormItem>
 
       <Row gutter={16}>

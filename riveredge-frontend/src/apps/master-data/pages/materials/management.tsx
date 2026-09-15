@@ -114,6 +114,7 @@ import { buildDetailDrawerEditExtra } from '../../../kuaizhizao/pages/equipment-
 import { MasterDataDetailDrawer } from '../shared/masterDataDetailDrawer'
 import {
   MODAL_CONFIG,
+  MODAL_NESTED_ABOVE_PARENT_OFFSET,
   LIST_PAGE_TABLE_SCROLL,
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
 } from '../../../../components/layout-templates/constants'
@@ -4944,6 +4945,7 @@ const MaterialsManagementPage: React.FC = () => {
                 scope="material"
                 value={batchInspectionStages}
                 onChange={setBatchInspectionStages}
+                nestedModalZIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
               />
             </div>
           </div>

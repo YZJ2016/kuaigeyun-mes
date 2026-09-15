@@ -100,7 +100,7 @@ import {
 } from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { formatBusinessDateOnly, formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatPrice, formatAmount, todaySiteDateString } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -655,7 +655,7 @@ const ShipmentNoticesPage: React.FC = () => {
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
-        render: (text: unknown) => (text != null ? Number(text).toFixed(2) : '-'),
+        render: (text: unknown) => formatPrice(text),
       },
       {
         title: t('app.kuaizhizao.shipmentNotice.amount'),
@@ -665,7 +665,7 @@ const ShipmentNoticesPage: React.FC = () => {
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
-        render: (text: unknown) => (text != null ? Number(text).toFixed(2) : '-'),
+        render: (text: unknown) => formatAmount(text),
       },
       {
         title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'),

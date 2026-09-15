@@ -46,7 +46,7 @@ import {
   quotationCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { formatDateTime, formatBusinessDateOnly, todaySiteDateString, formatAmount } from '../../../../../utils/format';
+import { formatDateTime, formatBusinessDateOnly, todaySiteDateString, formatAmount, formatPrice, formatQuantity } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
@@ -828,10 +828,7 @@ const SalesReviewsPage: React.FC = () => {
             uniTableKeepWidth: true,
             resizable: false,
             align: 'right',
-            render: (_, row) => {
-              const n = Number(row.total_amount);
-              return Number.isFinite(n) ? n.toFixed(2) : '—';
-            },
+            render: (_, row) => formatAmount(row.total_amount),
           },
           {
             title: t('common.status'),
@@ -943,26 +940,21 @@ const SalesReviewsPage: React.FC = () => {
         dataIndex: 'quantity',
         width: 90,
         align: 'right' as const,
+        render: (v: unknown) => formatQuantity(v),
       },
       {
         title: t('app.kuaizhizao.salesReview.colUnitPrice'),
         dataIndex: 'unit_price',
         width: 100,
         align: 'right' as const,
-        render: (v: unknown) => {
-          const n = Number(v);
-          return Number.isFinite(n) ? n.toFixed(2) : '—';
-        },
+        render: (v: unknown) => formatPrice(v),
       },
       {
         title: t('app.kuaizhizao.salesReview.colAmount'),
         dataIndex: 'amount',
         width: 110,
         align: 'right' as const,
-        render: (v: unknown) => {
-          const n = Number(v);
-          return Number.isFinite(n) ? n.toFixed(2) : '—';
-        },
+        render: (v: unknown) => formatAmount(v),
       },
     ],
     [t],
@@ -1065,7 +1057,7 @@ const SalesReviewsPage: React.FC = () => {
                 { label: translateSalesReviewStatus(t, 'reviewing'), value: 'reviewing' },
                 { label: translateSalesReviewStatus(t, 'passed'), value: 'passed' },
                 { label: translateSalesReviewStatus(t, 'rejected'), value: 'rejected' },
-                { label: translateSalesReviewStatus(t, 'closed'), value: 'closed' },
+                { label: translateSalesReviewStatus(t, 'converted'), value: 'converted' },
                 { label: translateSalesReviewStatus(t, 'cancelled'), value: 'cancelled' },
               ]}
             />
@@ -1345,7 +1337,7 @@ const SalesReviewsPage: React.FC = () => {
                 {pushPreview.item_count}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.salesReview.colTotalAmount')}>
-                {Number(pushPreview.total_amount).toFixed(2)}
+                {formatAmount(pushPreview.total_amount)}
               </Descriptions.Item>
             </Descriptions>
           </Space>

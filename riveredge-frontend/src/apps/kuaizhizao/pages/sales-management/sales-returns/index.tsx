@@ -1567,7 +1567,7 @@ const SalesReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesReturn.totalAmount'),
         dataIndex: 'total_amount',
-        render: (_, record) => `¥${Number(record.total_amount ?? 0).toLocaleString()}`,
+        render: (_, record) => formatCurrencyAmount(record.total_amount),
       },
       {
         title: t('app.kuaizhizao.salesReturn.returnTime'),

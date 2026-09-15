@@ -36,6 +36,148 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'sales-order-approve-approval-status-nameerror',
+    date: '2026-09-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-approve-approval-status-nameerror.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-approve-approval-status-nameerror.description',
+  },
+  {
+    id: 'tenant-plan-pro-apps-gate-by-tier',
+    date: '2026-09-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tenant-plan-pro-apps-gate-by-tier.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tenant-plan-pro-apps-gate-by-tier.description',
+  },
+  {
+    id: 'package-edit-change-plan',
+    date: '2026-09-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.package-edit-change-plan.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.package-edit-change-plan.description',
+  },
+  {
+    id: 'numeric-display-format-contract-sweep',
+    date: '2026-09-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.numeric-display-format-contract-sweep.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.numeric-display-format-contract-sweep.description',
+  },
+  {
+    id: 'sales-order-detail-qty-formatQuantity',
+    date: '2026-09-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-detail-qty-formatQuantity.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-detail-qty-formatQuantity.description',
+  },
+  {
+    id: 'sales-review-status-converted',
+    date: '2026-09-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-review-status-converted.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-review-status-converted.description',
+  },
+  {
+    id: 'variant-attr-enum-value-quick-add',
+    date: '2026-09-15',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.variant-attr-enum-value-quick-add.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.variant-attr-enum-value-quick-add.description',
+  },
+  {
+    id: 'material-batch-serial-rule-quick-add',
+    date: '2026-09-15',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.material-batch-serial-rule-quick-add.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-batch-serial-rule-quick-add.description',
+  },
+  {
+    id: 'material-inspection-plan-quick-add',
+    date: '2026-09-15',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.material-inspection-plan-quick-add.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-inspection-plan-quick-add.description',
+  },
+  {
+    id: 'inspection-plan-step-modal-zindex-nested',
+    date: '2026-09-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inspection-plan-step-modal-zindex-nested.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inspection-plan-step-modal-zindex-nested.description',
+  },
+  {
+    id: 'process-route-inspection-plan-quick-add',
+    date: '2026-09-15',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.process-route-inspection-plan-quick-add.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.process-route-inspection-plan-quick-add.description',
+  },
+  {
+    id: 'inline-marker-tag-preview-shared',
+    date: '2026-09-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.inline-marker-tag-preview-shared.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inline-marker-tag-preview-shared.description',
+  },
+  {
+    id: 'inspection-plan-steps-tag-font-size',
+    date: '2026-09-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.inspection-plan-steps-tag-font-size.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inspection-plan-steps-tag-font-size.description',
+  },
+  {
+    id: 'bom-draft-delete-more-menu-confirm',
+    date: '2026-09-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.bom-draft-delete-more-menu-confirm.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.bom-draft-delete-more-menu-confirm.description',
+  },
+  {
+    id: 'bom-version-switch-local-rebuild',
+    date: '2026-09-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.bom-version-switch-local-rebuild.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.bom-version-switch-local-rebuild.description',
+  },
+  {
+    id: 'bom-list-hide-redundant-unit-column',
+    date: '2026-09-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.bom-list-hide-redundant-unit-column.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.bom-list-hide-redundant-unit-column.description',
+  },
+  {
+    id: 'bom-version-history-badge-gap',
+    date: '2026-09-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.bom-version-history-badge-gap.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.bom-version-history-badge-gap.description',
+  },
+  {
+    id: 'bom-list-material-source-column',
+    date: '2026-09-15',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.bom-list-material-source-column.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.bom-list-material-source-column.description',
+  },
+  {
     id: 'equipment-spot-check-docno-collision-fix',
     date: '2026-09-14',
     type: 'fix',

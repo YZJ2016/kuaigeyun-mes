@@ -38,6 +38,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../.
 import type { SalesOrder, SalesOrderItem } from '../../../../services/sales-order';
 import { listSalesOrderChangesByOrder, type SalesOrderChange } from '../../../../services/sales-order-change';
 import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintModal';
+import { formatQuantity } from '../../../../../../utils/format';
 import { UniWorkflowActions } from '../../../../../../components/uni-workflow-actions';
 import { rowActionKind } from '../../../../../../components/uni-action';
 import { isManualAuditEnabled } from '../../../../../../utils/auditMode';
@@ -616,7 +617,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 render: (val: number, record: SalesOrderItem) => (
                   <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
                     <MaterialInventoryIndicator materialId={record.material_id} requiredQuantity={record.required_quantity} />
-                    {val ?? 0}
+                    {formatQuantity(val)}
                   </span>
                 ),
               },
@@ -655,14 +656,14 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 dataIndex: 'delivered_quantity',
                 width: 100,
                 align: 'right' as const,
-                render: (text: number) => text || 0,
+                render: (text: number) => formatQuantity(text ?? 0),
               },
               {
                 title: t('app.kuaizhizao.salesOrder.remainingQty'),
                 dataIndex: 'remaining_quantity',
                 width: 100,
                 align: 'right' as const,
-                render: (text: number) => text || 0,
+                render: (text: number) => formatQuantity(text ?? 0),
               },
             ]}
             dataSource={order.items}

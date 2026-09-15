@@ -16,6 +16,7 @@ import {
 import { managementReportService } from '../../../services/management-report';
 import { agingService } from '../../../services/statistics/aging';
 import { apiRequest } from '../../../../../services/api';
+import { formatCurrencyAmount } from '../../../../../utils/format';
 import { useDashboardRequest } from '../../../../kuaizhizao/utils/dashboardRequestOptions';
 import FinanceAgingPanel from '../../../components/FinanceAgingPanel';
 import {
@@ -35,7 +36,7 @@ import type { ModuleKpiDef, ModuleShortcutDef, ModuleTodoItem } from '../../../.
 const PERIOD_DAYS = 30;
 
 function formatMoney(value?: number) {
-  return `¥${Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  return formatCurrencyAmount(value ?? 0);
 }
 
 const FinanceCenterDashboard: React.FC = () => {

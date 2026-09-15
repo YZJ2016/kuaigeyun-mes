@@ -16,7 +16,7 @@ import {
   ProFormItem,
 } from '@ant-design/pro-components';
 import { FormModalTemplate } from '../../../components/layout-templates';
-import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
+import { MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { useCustomFields } from '../../../hooks/useCustomFields';
@@ -326,7 +326,12 @@ export const MaterialGroupFormModal: React.FC<MaterialGroupFormModalProps> = ({
                     </span>
                   }
                 >
-                  <InspectionStagesEditor scope="material" />
+                  <InspectionStagesEditor
+                    scope="material"
+                    nestedModalZIndex={
+                      zIndex != null ? zIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET : undefined
+                    }
+                  />
                 </ProFormItem>
               </>
             ),

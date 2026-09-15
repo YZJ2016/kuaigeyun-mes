@@ -31,6 +31,7 @@ import { MarkerTag } from '../../../../../constants/statusBadges';
 import type { FinanceVoucherLinkHandlers } from '../../../components/FinanceVoucherDetailProvider';
 import type { FinanceVoucherLinkFields } from '../../../types/finance/financeVoucherLinks';
 import { FinanceVoucherRelationLinks } from '../../../utils/financeVoucherRelationLinks';
+import { formatCurrencyAmount } from '../../../../../utils/format';
 
 export type FinanceVoucherKind = 'receipt' | 'payment';
 export type FinanceVoucherDetail = (ReceiptVoucher | PaymentVoucher) & FinanceVoucherLinkFields;
@@ -64,7 +65,7 @@ const PAYMENT_PLACEHOLDER: PaymentVoucher = {
 };
 
 function formatMoney(value: unknown): string {
-  return `¥${Number(value ?? 0).toFixed(2)}`;
+  return formatCurrencyAmount(value ?? 0);
 }
 
 export type FinanceVoucherDetailDrawerProps = {

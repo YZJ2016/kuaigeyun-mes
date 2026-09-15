@@ -43,7 +43,7 @@ import { DocumentLineUnitSelect, QuantityWithUnitDisplay } from '../../../../../
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
-import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import {formatDateTime, formatQuantity, formatCurrencyAmount, formatCurrencyPrice} from '../../../../../utils/format';
 import { formDateRangeFormItemProps, toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
@@ -906,7 +906,7 @@ const InventoryTransferPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
-      render: (_, record) => `¥${Number(record.total_amount ?? 0).toFixed(2)}`,
+      render: (_, record) => formatCurrencyAmount(record.total_amount),
     },
     ...buildDocumentAuditColumns<InventoryTransfer>(t),
     {
@@ -999,7 +999,7 @@ const InventoryTransferPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.inventoryTransfer.colTotalAmount'),
         dataIndex: 'total_amount',
-        render: (_dom, entity) => `¥${Number(entity.total_amount ?? 0).toFixed(2)}`,
+        render: (_dom, entity) => formatCurrencyAmount(entity.total_amount),
       },
       { title: t('app.kuaizhizao.inventoryTransfer.formTransferReason'), dataIndex: 'transfer_reason' },
       { title: t('common.remark'), dataIndex: 'remarks', span: 3 },
@@ -1038,14 +1038,14 @@ const InventoryTransferPage: React.FC = () => {
         dataIndex: 'unit_price',
         width: 100,
         align: 'right' as const,
-        render: (value: number | string) => `¥${Number(value ?? 0).toFixed(2)}`,
+        render: (value: number | string) => formatCurrencyPrice(value),
       },
       {
         title: t('app.kuaizhizao.warehouseCommon.colAmount'),
         dataIndex: 'amount',
         width: 100,
         align: 'right' as const,
-        render: (value: number | string) => `¥${Number(value ?? 0).toFixed(2)}`,
+        render: (value: number | string) => formatCurrencyAmount(value),
       },
       { title: t('app.kuaizhizao.warehouseReports.colBatchNo'), dataIndex: 'batch_no', width: 100 },
       {

@@ -352,7 +352,7 @@ const PaymentsPage: React.FC = () => {
       return false;
     }
     if (totalAmount > maxPush) {
-      messageApi.warning(t(`${P}.pullExceedMax`, { max: maxPush.toFixed(2) }));
+      messageApi.warning(t(`${P}.pullExceedMax`, { max: formatCurrencyAmount(maxPush) }));
       return false;
     }
     setPullSubmitting(true);

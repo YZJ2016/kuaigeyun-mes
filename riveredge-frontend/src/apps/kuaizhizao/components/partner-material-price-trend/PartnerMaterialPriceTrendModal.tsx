@@ -3,7 +3,7 @@ import { Empty, Modal, Result, Space, Spin, Table, Typography } from 'antd';
 import { Line } from '@ant-design/charts';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { formatDateBySiteSetting } from '../../../../utils/format';
+import { formatDateBySiteSetting, formatCurrencyPrice } from '../../../../utils/format';
 import {
   fetchPartnerMaterialPriceTrend,
   partnerMaterialPriceTrendQueryKey,
@@ -94,7 +94,7 @@ export const PartnerMaterialPriceTrendModal: React.FC<PartnerMaterialPriceTrendM
         align: 'right' as const,
         render: (value: number) => (
           <Text strong style={{ color: current > 0 && toNumber(value) < current ? '#52c41a' : 'inherit' }}>
-            ¥{toNumber(value).toFixed(2)}
+            {formatCurrencyPrice(value)}
           </Text>
         ),
       },
@@ -149,7 +149,7 @@ export const PartnerMaterialPriceTrendModal: React.FC<PartnerMaterialPriceTrendM
                 {t('app.kuaizhizao.purchaseOrder.empower.avgPrice')}
               </div>
               <Text strong style={{ color: '#1890ff' }}>
-                ¥{avgPrice.toFixed(2)}
+                {formatCurrencyPrice(avgPrice)}
               </Text>
             </div>
             <div style={{ textAlign: 'center' }}>
@@ -157,7 +157,7 @@ export const PartnerMaterialPriceTrendModal: React.FC<PartnerMaterialPriceTrendM
                 {t('app.kuaizhizao.purchaseOrder.empower.minPrice')}
               </div>
               <Text strong style={{ color: '#52c41a' }}>
-                ¥{minPrice.toFixed(2)}
+                {formatCurrencyPrice(minPrice)}
               </Text>
             </div>
             <div style={{ textAlign: 'center' }}>
@@ -165,7 +165,7 @@ export const PartnerMaterialPriceTrendModal: React.FC<PartnerMaterialPriceTrendM
                 {t('app.kuaizhizao.purchaseOrder.empower.maxPrice')}
               </div>
               <Text strong style={{ color: '#ff4d4f' }}>
-                ¥{maxPrice.toFixed(2)}
+                {formatCurrencyPrice(maxPrice)}
               </Text>
             </div>
           </Space>
@@ -179,7 +179,7 @@ export const PartnerMaterialPriceTrendModal: React.FC<PartnerMaterialPriceTrendM
                 shapeField="smooth"
                 axis={{
                   x: { title: false },
-                  y: { title: false, labelFormatter: (value: number) => `¥${toNumber(value).toFixed(2)}` },
+                  y: { title: false, labelFormatter: (value: number) => formatCurrencyPrice(value) },
                 }}
                 tooltip={{
                   title: (datum: { date?: string; order_code?: string }) =>

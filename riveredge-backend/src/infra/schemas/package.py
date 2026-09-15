@@ -60,6 +60,7 @@ class PackageUpdate(BaseModel):
     """
     
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="套餐名称")
+    plan: Optional[TenantPlan] = Field(None, description="套餐类型")
     max_users: Optional[int] = Field(None, ge=1, description="最大用户数限制")
     max_storage_mb: Optional[int] = Field(None, ge=0, description="最大存储空间限制（MB）")
     max_branch_organizations: Optional[int] = Field(None, ge=0, description="最大分支组织数量（null=不限制）")

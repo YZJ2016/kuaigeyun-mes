@@ -107,7 +107,7 @@ import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import dayjs from 'dayjs';
-import { formatBusinessDateOnly, formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatQuantity, todaySiteDateString, formatCurrencyAmount, formatCurrencyPrice } from '../../../../../utils/format';
 import { quantizeNumericByPlaces } from '../../../../../services/businessConfig';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -337,17 +337,6 @@ const defaultOrderItem = {
   tax_rate: 0,
   required_date: undefined,
 };
-
-/** 安全提取金额数值（兼容 number、string、{ value } 对象） */
-function formatAmount(val: unknown): string {
-  const num =
-    typeof val === 'number' && !isNaN(val)
-      ? val
-      : val && typeof val === 'object' && 'value' in val && typeof (val as { value?: unknown }).value === 'number'
-        ? (val as { value: number }).value
-        : parseFloat(String(val ?? 0));
-  return (isNaN(num) ? 0 : num).toLocaleString();
-}
 
 /** 采购订单头表 tax_rate 存小数（0.13），表单与详情展示用百分比 */
 function purchaseOrderTaxRateToPercent(raw: unknown): number {
@@ -988,7 +977,7 @@ const PurchaseOrdersPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
-      render: (text: any) => `¥${formatAmount(text)}`,
+      render: (text: any) => formatCurrencyAmount(text),
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.totalQuantity'),
@@ -1168,14 +1157,14 @@ const PurchaseOrdersPage: React.FC = () => {
         dataIndex: 'unit_price',
         width: 100,
         align: 'right',
-        render: (text: unknown) => `¥${formatAmount(text)}`,
+        render: (text: unknown) => formatCurrencyPrice(text),
       },
       {
         title: t('app.kuaizhizao.purchaseOrder.col.totalPrice'),
         dataIndex: 'total_price',
         width: 110,
         align: 'right',
-        render: (text: unknown) => `¥${formatAmount(text)}`,
+        render: (text: unknown) => formatCurrencyAmount(text),
       },
       {
         title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'),

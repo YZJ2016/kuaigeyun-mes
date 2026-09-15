@@ -3208,11 +3208,6 @@ class SalesOrderService:
                 logger.warning("销售订单审核消息提醒失败 tenant={} order={}: {}", tenant_id, sales_order_id, exc)
             return SalesOrderResponse(**out)
 
-        flow_completed_approved = bool(
-            audit_required
-            and approval_status.get("has_instance")
-            and approval_status.get("status") == "approved"
-        )
         if is_auto_approve or flow_completed_approved:
             return await _do_approve()
 
@@ -3301,11 +3296,6 @@ class SalesOrderService:
                 )
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
-        flow_completed_rejected = bool(
-            audit_required
-            and approval_status.get("has_instance")
-            and approval_status.get("status") == "rejected"
-        )
         if is_auto_approve or flow_completed_rejected:
             return await _do_reject(rejection_reason)
 

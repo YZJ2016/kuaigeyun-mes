@@ -49,7 +49,8 @@ WINDOWS_BOOT_ENV_FILE="$FAST_DEPLOY_CONFIG_DIR/boot-service.env"
 DEPLOY_MODE="${DEPLOY_MODE:-dev}"
 USE_MIRROR="${USE_MIRROR:-1}"
 if [ "$DEPLOY_MODE" = "prod" ]; then
-    BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-90}"
+    # 冷启动需等 lifespan 内 reload_apps + 全应用路由注册后 /health 才通；弱机常超 90s
+    BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-180}"
 else
     BACKEND_START_TIMEOUT="${BACKEND_START_TIMEOUT:-120}"
 fi

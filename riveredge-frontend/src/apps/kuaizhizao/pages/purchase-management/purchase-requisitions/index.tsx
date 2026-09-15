@@ -136,7 +136,7 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, todaySiteDateString, formatCurrencyAmount } from '../../../../../utils/format';;
+import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, todaySiteDateString, formatCurrencyAmount, formatCurrencyPrice } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -1738,7 +1738,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         width: 100,
         align: 'right',
         render: (text: unknown) =>
-          text != null ? `¥${formatNumber(text, priceDecimals)}` : '-',
+          text != null ? formatCurrencyPrice(text) : '-',
       },
       {
         title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
@@ -1748,7 +1748,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         render: (_: unknown, record) => {
           const qty = Number(record.quantity ?? 0);
           const price = Number(record.suggested_unit_price ?? 0);
-          return `¥${formatNumber(qty * price, amountDecimals)}`;
+          return formatCurrencyAmount(qty * price);
         },
       },
       {
@@ -1792,7 +1792,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         ),
       },
     ],
-    [t, lifecycleValueEnum, purchaseRequestAuditEnabled, priceDecimals, amountDecimals],
+    [t, lifecycleValueEnum, purchaseRequestAuditEnabled],
   );
 
   const renderPurchaseRequisitionForm = () => (

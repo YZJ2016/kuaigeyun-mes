@@ -4,6 +4,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { formatAmount } from '../../../../../utils/format';
 import {
   glService,
   type GlPendingAccountingEvent,
@@ -127,7 +128,7 @@ const GenerateFromEventsModal: React.FC<Props> = ({ open, onClose, onSuccess }) 
         dataIndex: 'amount',
         width: 110,
         align: 'right',
-        render: (v: number) => Number(v || 0).toFixed(2),
+        render: (v: number) => formatAmount(v ?? 0),
       },
       {
         title: t(`${NS}.events.col.summary`, { defaultValue: '摘要' }),

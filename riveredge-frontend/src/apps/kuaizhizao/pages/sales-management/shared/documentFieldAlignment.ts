@@ -401,7 +401,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   drawing_where_used_code: 20.06,
   drawing_where_used_name: 20.07,
   drawing_where_used_extra: 20.08,
-  /** 工程 BOM 列表：物料叠列 → 版本 → BOM 叠列 → 工艺路线 → 损耗 */
+  /** 工程 BOM 列表：物料叠列 → BOM 叠列 → 工艺路线 → 物料来源 → 版本 → 用量（含单位）/损耗 */
   bom_material_stacked: 10,
   bom_name_stacked: 11,
   processRoute: 20.25,

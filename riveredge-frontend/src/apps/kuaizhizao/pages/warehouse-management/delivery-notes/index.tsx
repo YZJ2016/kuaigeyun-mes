@@ -65,7 +65,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { resolveDeliveryNoticeQualityCertificates } from '../../../services/print';
 import { SafetyCertificateOutlined } from '@ant-design/icons';
-import { formatBusinessDateOnly, formatDateTime, formatQuantity, todaySiteDateString } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatAmount, todaySiteDateString } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
@@ -285,8 +285,7 @@ const DeliveryNotesPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
-      render: (v: number | null | undefined) =>
-        v != null && !Number.isNaN(Number(v)) ? Number(v).toFixed(2) : '-',
+      render: (v: number | null | undefined) => formatAmount(v),
     },
     {
       title: t('app.kuaizhizao.deliveryNote.col.carrier'),

@@ -48,7 +48,7 @@ import { receivableCapabilityReasonMessage } from '../../../utils/receivableCapa
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
-import { formatDateTime, todaySiteDateString, formatCurrencyAmount } from '../../../../../utils/format';
+import { formatDateTime, todaySiteDateString, formatCurrencyAmount, formatAmount } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   DocumentPushProgressBar,
@@ -453,7 +453,7 @@ const ReceivableList: React.FC = () => {
             return false;
         }
         if (totalAmount > maxPush) {
-            messageApi.warning(t(`${P}.pullExceedMax`, { max: maxPush.toFixed(2) }));
+            messageApi.warning(t(`${P}.pullExceedMax`, { max: formatAmount(maxPush) }));
             return false;
         }
         const today = formatDateTime(dayjs(), 'YYYY-MM-DD');

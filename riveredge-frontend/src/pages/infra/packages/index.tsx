@@ -423,7 +423,7 @@ export default function PackageManagementPage() {
         }
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <PackageForm isEdit />
+        <PackageForm />
       </FormModalTemplate>
 
       {/* 创建弹窗 */}

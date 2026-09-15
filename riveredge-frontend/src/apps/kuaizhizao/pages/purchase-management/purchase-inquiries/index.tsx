@@ -103,7 +103,7 @@ import {
   KUAIZHIZAO_DOC_HOST,
   loadSupplierFormReferenceList,
 } from '../../../../../utils/documentFormReferenceLoad';
-import { formatBusinessDateOnly, formatDateTime, formatDateBySiteSetting, formatNumber, formatQuantity, formatCurrencyAmount } from '../../../../../utils/format';;
+import { formatBusinessDateOnly, formatDateTime, formatDateBySiteSetting, formatNumber, formatQuantity, formatCurrencyAmount, formatPrice } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -1482,7 +1482,7 @@ const PurchaseInquiriesPage: React.FC = () => {
           const rowAwardedCell = row.cells.find((cell) => cell.is_awarded && cell.quote_item_id);
           const rowLocked = !!rowAwardedCell;
           const selected = awardSelection[row.inquiry_item_id] === c.quote_item_id;
-          const priceText = c.unit_price != null ? Number(c.unit_price).toFixed(4) : '-';
+          const priceText = c.unit_price != null ? formatPrice(c.unit_price) : '-';
           return (
             <Space size={4} align="center" wrap={false} style={{ whiteSpace: 'nowrap' }}>
               <Button

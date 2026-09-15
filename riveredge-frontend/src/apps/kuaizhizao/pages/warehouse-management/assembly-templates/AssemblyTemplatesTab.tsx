@@ -35,7 +35,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { assemblyTemplateApi } from '../../../services/assembly-template';
-import { formatDateTimeBySiteSetting, formatQuantity } from '../../../../../utils/format';
+import { formatDateTimeBySiteSetting, formatQuantity, formatPrice } from '../../../../../utils/format';
 const ASSEMBLY_ORDERS_RESOURCE = 'kuaizhizao:warehouse-management-assembly-orders';
 
 type TemplateItem = {
@@ -452,7 +452,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
         dataIndex: 'unit_price',
         width: 90,
         align: 'right' as const,
-        render: (v: number) => Number(v || 0).toFixed(2),
+        render: (v: number) => formatPrice(v),
       },
       { title: t('common.remark'), dataIndex: 'remarks' },
       {

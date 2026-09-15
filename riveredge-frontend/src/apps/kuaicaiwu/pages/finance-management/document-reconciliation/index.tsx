@@ -16,7 +16,7 @@ import {
 import { formatSettlementType } from '../../../utils/financeUiLabels';
 import { documentReconciliationGapReasonMessage } from '../../../utils/documentReconciliationCapabilityMessages';
 import { renderFinanceHierarchyDocType } from '../../../utils/partnerStatementLineDisplay';
-import { formatQuantity } from '../../../../../utils/format';
+import { formatAmount, formatCurrencyAmount } from '../../../../../utils/format';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   documentReconciliationGapSearchColumns,
@@ -491,7 +491,7 @@ const DocumentReconciliationPage: React.FC = () => {
         <Card size="small" style={{ marginBottom: 16 }}>
           {t(`${D}.summary`, {
             count: gapSummary.gap_count ?? 0,
-            amount: Number(gapSummary.open_balance_total ?? 0).toFixed(2),
+            amount: formatAmount(gapSummary.open_balance_total ?? 0),
           })}
         </Card>
       ) : null}
@@ -603,25 +603,21 @@ const DocumentReconciliationPage: React.FC = () => {
                 <span>
                   {t(`${S}.preview.col.docAmount`)}
                   {' '}
-                  ¥
-                  {formatQuantity(step.quantity)}
+                  {formatCurrencyAmount(step.quantity)}
                   {' - '}
                   {t(`${S}.preview.col.settledAmount`)}
                   {' '}
-                  ¥
-                  {formatQuantity(step.pushed_quantity ?? 0)}
+                  {formatCurrencyAmount(step.pushed_quantity ?? 0)}
                   {' - '}
                   {t(`${S}.preview.col.settleableAmount`)}
                   {' '}
-                  ¥
-                  {formatQuantity(step.max_push_quantity ?? 0)}
+                  {formatCurrencyAmount(step.max_push_quantity ?? 0)}
                 </span>
               ) : step.amount != null ? (
                 <span>
                   {t('app.kuaicaiwu.invoice.line.amount')}
                   {' '}
-                  ¥
-                  {Number(step.amount).toFixed(2)}
+                  {formatCurrencyAmount(step.amount)}
                 </span>
               ) : null}
             </Space>

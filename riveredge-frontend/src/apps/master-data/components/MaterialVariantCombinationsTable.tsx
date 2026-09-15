@@ -16,6 +16,7 @@ import {
   Table,
   Tag,
   Typography,
+  theme,
 } from 'antd';
 import { DeleteOutlined, ImportOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -31,6 +32,7 @@ import {
 } from '../utils/variantComboImport';
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../constants/materialDefaults';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../utils/modalEventIsolation';
+import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { getAntdModal } from '../../../utils/antdAppApis';
 const LazyUniImport = lazy(() =>
   import('../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -228,6 +230,8 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
+  const addRowModalZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const effectiveVariantManaged = resolveMaterialVariantManaged(material, variantManagedOverride);
   const [definitions, setDefinitions] = useState<VariantAttributeDefinition[]>([]);
   const [definitionsLoading, setDefinitionsLoading] = useState(false);
@@ -877,6 +881,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
         onOk={() => void handleAddSubmit()}
         destroyOnHidden
         width={560}
+        zIndex={addRowModalZIndex}
         maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
         wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       >
@@ -886,7 +891,10 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
         <Form form={addForm} layout="vertical">
           <VariantAttributeFields
             definitions={definitions}
+            onDefinitionsChange={setDefinitions}
             singleValueOnly
+            enableEnumQuickAdd
+            parentModalZIndex={addRowModalZIndex}
             colSpan={{ xs: 24, sm: 12, md: 12 }}
           />
         </Form>

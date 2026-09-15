@@ -33,7 +33,7 @@ import {
 } from '../../../sales-management/shared/documentFieldAlignment';
 import { OrderPaymentMilestonesReadOnly } from '../../../sales-management/shared/orderPaymentMilestonesFields';
 import { MarkerTag } from '../../../../../../constants/statusBadges';
-import { formatDateTimeBySiteSetting } from '../../../../../../utils/format';
+import { formatDateTimeBySiteSetting, formatCurrencyAmount, formatCurrencyPrice } from '../../../../../../utils/format';
 import { resolveSystemDictionaryItemLabel } from '../../../../../../utils/systemDictionaryI18n';
 import { useAuditRequired } from '../../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
@@ -65,16 +65,6 @@ export const PURCHASE_ORDER_WORKFLOW_PROPS = {
   ],
   rejectedStatuses: ['已驳回', 'rejected', 'REJECTED', DocumentStatus.REJECTED, ReviewStatusEnum.REJECTED],
 };
-
-function formatAmount(val: unknown): string {
-  const num =
-    typeof val === 'number' && !Number.isNaN(val)
-      ? val
-      : val && typeof val === 'object' && 'value' in val && typeof (val as { value?: unknown }).value === 'number'
-        ? (val as { value: number }).value
-        : parseFloat(String(val ?? 0));
-  return (Number.isNaN(num) ? 0 : num).toLocaleString();
-}
 
 export type PurchaseOrderDetailDrawerProps = {
   open: boolean;
@@ -258,12 +248,12 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
           {
             title: t('app.kuaizhizao.purchaseOrder.col.orderAmount'),
             dataIndex: 'total_amount',
-            render: (text) => `¥${formatAmount(text)}`,
+            render: (text) => formatCurrencyAmount(text),
           },
           {
             title: t('app.kuaizhizao.purchaseOrder.totalFeeAmount'),
             dataIndex: 'total_fee_amount',
-            render: (text) => (text != null && Number(text) > 0 ? `¥${formatAmount(text)}` : '-'),
+            render: (text) => (text != null && Number(text) > 0 ? formatCurrencyAmount(text) : '-'),
           },
         ] as ProDescriptionsItemProps<PurchaseOrder>[],
         GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK,
@@ -364,7 +354,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                 <div style={{ marginBottom: 12 }}>
                   <Typography.Text type="secondary">
                     {t('app.kuaizhizao.purchaseOrder.totalFeeAmount')}：
-                    <strong>¥{formatAmount(effective.total_fee_amount)}</strong>
+                    <strong>{formatCurrencyAmount(effective.total_fee_amount)}</strong>
                   </Typography.Text>
                 </div>
                 <Table
@@ -384,7 +374,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                       dataIndex: 'amount',
                       width: 120,
                       align: 'right',
-                      render: (val: unknown) => `¥${formatAmount(val)}`,
+                      render: (val: unknown) => formatCurrencyAmount(val),
                     },
                     {
                       title: t('app.kuaizhizao.salesOrder.feeBearer'),
@@ -468,7 +458,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                   align: 'right',
                   render: (text: number, row: PurchaseOrderItem) => (
                     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                      ¥{text}
+                      {formatCurrencyPrice(text)}
                       {(row as PurchaseOrderItem & { price_settlement_status?: string }).price_settlement_status ===
                       'PROVISIONAL' ? (
                         <MarkerTag color="warning">{t('app.kuaizhizao.purchaseOrder.priceProvisional')}</MarkerTag>
@@ -481,7 +471,7 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                   dataIndex: 'total_price',
                   width: 120,
                   align: 'right',
-                  render: (text: number) => `¥${text?.toLocaleString()}`,
+                  render: (text: number) => formatCurrencyAmount(text),
                 },
                 {
                   title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'),

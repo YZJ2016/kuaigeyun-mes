@@ -88,7 +88,7 @@ import { formatCalculationType,
   getSourceTypeTag,
   getVarianceTypeTag,
 } from '../../../utils/costUiLabels';
-import {formatDateTime, formatQuantity} from '../../../../../utils/format';
+import {formatDateTime, formatQuantity, formatCurrencyAmount, formatAmount} from '../../../../../utils/format';
 import {
   COST_CALCULATION_PINNED_STATUS_FIELD,
   costCalculationSearchColumns,
@@ -433,13 +433,13 @@ const CostCalculationPage: React.FC = () => {
 
   const buildCalcResultSummary = useCallback(
     (result: CostCalculation) => {
-      const money = (v?: number) => (v != null ? `¥${Number(v).toFixed(2)}` : '-');
+      const money = (v?: number) => (v != null ? formatCurrencyAmount(v) : '-');
       return {
         calculation_no: result.calculation_no ?? '-',
         work_order_code: result.work_order_code ?? undefined,
         product_code: result.product_code ?? '-',
         product_name: result.product_name ?? '-',
-        quantity: result.quantity ?? '-',
+        quantity: result.quantity != null ? formatQuantity(result.quantity) : '-',
         material_cost: money(result.material_cost),
         labor_cost: money(result.labor_cost),
         manufacturing_cost: money(result.manufacturing_cost),
@@ -713,7 +713,7 @@ const CostCalculationPage: React.FC = () => {
         resizable: false,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => `¥${r.material_cost != null ? Number(r.material_cost).toFixed(2) : '0.00'}`,
+        render: (_, r) => formatCurrencyAmount(r.material_cost ?? 0),
       },
       {
         title: t('app.kuaicaiwu.costCommon.col.laborCost'),
@@ -725,7 +725,7 @@ const CostCalculationPage: React.FC = () => {
         resizable: false,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => `¥${r.labor_cost != null ? Number(r.labor_cost).toFixed(2) : '0.00'}`,
+        render: (_, r) => formatCurrencyAmount(r.labor_cost ?? 0),
       },
       {
         title: t('app.kuaicaiwu.costCommon.col.manufacturingCost'),
@@ -737,7 +737,7 @@ const CostCalculationPage: React.FC = () => {
         resizable: false,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => `¥${r.manufacturing_cost != null ? Number(r.manufacturing_cost).toFixed(2) : '0.00'}`,
+        render: (_, r) => formatCurrencyAmount(r.manufacturing_cost ?? 0),
       },
       {
         title: t('app.kuaicaiwu.costCommon.col.totalCost'),
@@ -749,7 +749,7 @@ const CostCalculationPage: React.FC = () => {
         resizable: false,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => `¥${r.total_cost != null ? Number(r.total_cost).toFixed(2) : '0.00'}`,
+        render: (_, r) => formatCurrencyAmount(r.total_cost ?? 0),
       },
       {
         title: t('app.kuaicaiwu.costCommon.col.unitCost'),
@@ -761,7 +761,7 @@ const CostCalculationPage: React.FC = () => {
         resizable: false,
         hideInSearch: true,
         sorter: true,
-        render: (_, r) => `¥${r.unit_cost != null ? Number(r.unit_cost).toFixed(2) : '0.00'}`,
+        render: (_, r) => formatCurrencyAmount(r.unit_cost ?? 0),
       },
       {
         title: t('app.kuaicaiwu.costCommon.col.calculationDate'),
@@ -1159,9 +1159,11 @@ const CostCalculationPage: React.FC = () => {
                       bordered
                       style={{ marginTop: 16 }}
                       dataSource={{
-                        material_cost_difference: `¥${compareData.material_cost_difference?.toFixed(2) || '0.00'}`,
-                        labor_cost_difference: `¥${compareData.labor_cost_difference?.toFixed(2) || '0.00'}`,
-                        manufacturing_cost_difference: `¥${compareData.manufacturing_cost_difference?.toFixed(2) || '0.00'}`,
+                        material_cost_difference: formatCurrencyAmount(compareData.material_cost_difference ?? 0),
+                        labor_cost_difference: formatCurrencyAmount(compareData.labor_cost_difference ?? 0),
+                        manufacturing_cost_difference: formatCurrencyAmount(
+                          compareData.manufacturing_cost_difference ?? 0,
+                        ),
                       }}
                       columns={[
                         { title: t('app.kuaicaiwu.costCalculation.materialCostDifference'), dataIndex: 'material_cost_difference' },
@@ -1340,10 +1342,10 @@ const CostCalculationPage: React.FC = () => {
                         title={formatVarianceType(materialCompareResult.cost_variance.variance_type, t)}
                         description={
                           <div>
-                            <p>{t('app.kuaicaiwu.costComparison.totalVariance', { amount: materialCompareResult.cost_variance.total_cost_variance.toFixed(2) })}</p>
-                            <p>{t('app.kuaicaiwu.costComparison.totalVarianceRate', { rate: materialCompareResult.cost_variance.total_cost_variance_rate.toFixed(2) })}</p>
-                            <p>{t('app.kuaicaiwu.costComparison.unitVariance', { amount: materialCompareResult.cost_variance.unit_cost_variance.toFixed(2) })}</p>
-                            <p>{t('app.kuaicaiwu.costComparison.unitVarianceRate', { rate: materialCompareResult.cost_variance.unit_cost_variance_rate.toFixed(2) })}</p>
+                            <p>{t('app.kuaicaiwu.costComparison.totalVariance', { amount: formatAmount(materialCompareResult.cost_variance.total_cost_variance) })}</p>
+                            <p>{t('app.kuaicaiwu.costComparison.totalVarianceRate', { rate: formatAmount(materialCompareResult.cost_variance.total_cost_variance_rate) })}</p>
+                            <p>{t('app.kuaicaiwu.costComparison.unitVariance', { amount: formatAmount(materialCompareResult.cost_variance.unit_cost_variance) })}</p>
+                            <p>{t('app.kuaicaiwu.costComparison.unitVarianceRate', { rate: formatAmount(materialCompareResult.cost_variance.unit_cost_variance_rate) })}</p>
                           </div>
                         }
                         type={

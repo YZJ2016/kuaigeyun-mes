@@ -45,6 +45,7 @@ import {
   type SalesReviewCreatePayload,
   type SalesReviewItemInput,
 } from '../../../services/sales-review';
+import { formatAmount } from '../../../../../utils/format';
 
 const getCustomerId = (c: any): number | null => {
   const id = Number(c?.id ?? c?.customer_id);
@@ -85,7 +86,7 @@ function LineAmountCell({ index }: { index: number }) {
   const qty = Number(row?.quantity ?? 0);
   const price = Number(row?.unit_price ?? 0);
   const amount = Number.isFinite(qty) && Number.isFinite(price) ? qty * price : 0;
-  return <span>{amount.toFixed(2)}</span>;
+  return <span>{formatAmount(amount)}</span>;
 }
 
 export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({

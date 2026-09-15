@@ -1,4 +1,4 @@
-import { formatCurrencyAmount } from '../../../../../utils/format';
+import { formatCurrencyAmount, formatAmount } from '../../../../../utils/format';
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
   rowActionKind,
@@ -416,7 +416,7 @@ const SettlementPage: React.FC = () => {
       return;
     }
     if (settleAmount <= 0 || settleAmount > arMaxSettle) {
-      message.error(t(`${P}.pullExceedMax`, { max: arMaxSettle.toFixed(2) }));
+      message.error(t(`${P}.pullExceedMax`, { max: formatAmount(arMaxSettle) }));
       return;
     }
     setSettleSubmitting(true);
@@ -447,7 +447,7 @@ const SettlementPage: React.FC = () => {
       return;
     }
     if (settleAmount <= 0 || settleAmount > apMaxSettle) {
-      message.error(t(`${P}.pullExceedMax`, { max: apMaxSettle.toFixed(2) }));
+      message.error(t(`${P}.pullExceedMax`, { max: formatAmount(apMaxSettle) }));
       return;
     }
     setSettleSubmitting(true);
