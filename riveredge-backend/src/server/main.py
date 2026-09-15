@@ -113,7 +113,8 @@ from core.api.print_devices.print_devices import router as print_devices_router
 from core.api.working_hours_configs.working_hours_configs import router as working_hours_configs_router
 from core.api.reports.report_templates import router as report_templates_router
 from core.api.qrcode import router as qrcode_router
-from core.api.websocket import websocket_router
+from core.api.realtime import realtime_router
+from core.api.im import im_router
 from core.api.user_profile.user_profile import router as user_profile_router
 from core.api.user_preferences.user_preferences import router as user_preferences_router
 from core.api.user_messages.user_messages import router as user_messages_router
@@ -646,6 +647,17 @@ def load_plugin_routes():
 
 logger.info("ℹ️ 事件任务处理器在 Taskiq Worker 启动时按已安装应用注册（API 进程不预加载 workflow）")
 
+# Prometheus 指标（供各实例 scrape，与 /health 同级不鉴权）
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from starlette.responses import Response
+
+
+@app.get("/metrics", include_in_schema=False)
+async def prometheus_metrics():
+    """导出 Prometheus 格式 HTTP 性能等指标。"""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 # 健康检查端点
 @app.get("/health")
 async def health_check():
@@ -931,10 +943,11 @@ app.include_router(print_devices_router, prefix="/api/v1/core")
 app.include_router(working_hours_configs_router, prefix="/api/v1/core")
 app.include_router(report_templates_router, prefix="/api/v1/core")
 app.include_router(qrcode_router, prefix="/api/v1/core")
-app.include_router(websocket_router, prefix="/api/v1/core")
+app.include_router(realtime_router, prefix="/api/v1/core")
 app.include_router(user_profile_router, prefix="/api/v1/personal")
 app.include_router(user_preferences_router, prefix="/api/v1/personal")
 app.include_router(user_messages_router, prefix="/api/v1/personal")
+app.include_router(im_router, prefix="/api/v1/personal")
 app.include_router(user_tasks_router, prefix="/api/v1/personal")
 app.include_router(data_backups_router, prefix="/api/v1/core")
 app.include_router(operation_logs_router, prefix="/api/v1/core")
@@ -959,6 +972,10 @@ app.include_router(business_board_title_router, prefix="/api/v1/core")
 app.include_router(plugin_manager_router, prefix="/api/v1/core")
 
 # 应用级 API 路由由 ApplicationRegistryService + ApplicationRouteManager 在 lifespan 中按 DB 已安装应用动态注册
+
+from core.services.realtime.socketio_server import wrap_app_with_socketio
+
+app = wrap_app_with_socketio(app)
 
 if __name__ == "__main__":
     import uvicorn

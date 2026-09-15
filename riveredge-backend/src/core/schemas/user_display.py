@@ -19,6 +19,7 @@ class UserDisplayItem(BaseModel):
     username: str
     full_name: Optional[str] = None
     label: str = Field(..., description="下拉与只读展示用文案")
+    avatar: Optional[str] = Field(None, description="头像文件 UUID（文件管理），无则空")
     department_uuid: Optional[str] = None
     roles: list[UserDisplayRoleItem] = Field(default_factory=list, description="用户角色（展示用）")
 

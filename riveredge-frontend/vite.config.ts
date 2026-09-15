@@ -131,6 +131,13 @@ export default defineConfig({
           });
         },
       } as ProxyOptions,
+      // 实时推送 python-socketio（与后端 REALTIME_BACKEND=socketio 同源路径）
+      '/socket.io': {
+        target: process.env.VITE_API_TARGET || `http://${process.env.VITE_BACKEND_HOST || '127.0.0.1'}:${process.env.VITE_BACKEND_PORT || '8200'}`,
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+      } as ProxyOptions,
       '/static/client-packages': {
         target: process.env.VITE_API_TARGET || `http://${process.env.VITE_BACKEND_HOST || '127.0.0.1'}:${process.env.VITE_BACKEND_PORT || '8200'}`,
         changeOrigin: true,

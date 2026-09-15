@@ -181,6 +181,57 @@ class DocumentTrackingService:
         desc = (relation_desc or "").strip()
         return mode in ("auto", "system") or ("自动" in desc)
 
+    async def resolve_documents_by_code(
+        self,
+        *,
+        tenant_id: int,
+        code: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        按单据编号在登记表中精确匹配，返回可能的 document_type + document_id。
+        不做前缀猜测；多命中时全部返回，由调用方选择可打开类型。
+        """
+        import asyncio
+
+        from infra.exceptions.exceptions import ValidationError
+
+        normalized = (code or "").strip()
+        if not normalized:
+            raise ValidationError("单据编号不能为空")
+
+        # 跳过非编号类字段，避免误命中
+        skip_fields = {"uuid", "name", "period", "work_order_code"}
+        registry = DOCUMENT_MODEL_REGISTRY()
+
+        async def _lookup(document_type: str, model, code_field: str) -> Optional[Dict[str, Any]]:
+            if code_field in skip_fields:
+                return None
+            filters: Dict[str, Any] = {
+                "tenant_id": tenant_id,
+                code_field: normalized,
+            }
+            query = model.filter(**filters)
+            if hasattr(model, "deleted_at"):
+                query = query.filter(deleted_at__isnull=True)
+            if document_type == "sales_invoice":
+                query = query.filter(category="OUT")
+            row = await query.first()
+            if not row:
+                return None
+            return {
+                "document_type": document_type,
+                "document_id": int(row.id),
+                "document_code": normalized,
+            }
+
+        tasks = [
+            _lookup(doc_type, model, code_field)
+            for doc_type, (model, code_field) in registry.items()
+        ]
+        results = await asyncio.gather(*tasks)
+        return [item for item in results if item]
+
+
     async def _resolve_relation_flags(
         self,
         tenant_id: int,

@@ -362,6 +362,38 @@ class InfraSettings(BaseSettings):
         description="FCM 服务账号 JSON 文件路径或内联 JSON 字符串",
     )
 
+    # 实时推送（noop 关闭；默认 socketio 同进程，可回退 HTTP 轮询）
+    REALTIME_BACKEND: str = Field(
+        default="socketio",
+        description="实时传输：noop | socketio（uv 同进程，推荐）| centrifugo（独立 Go 服务，可选）",
+    )
+    REALTIME_SOCKET_PATH: str = Field(
+        default="/socket.io",
+        description="python-socketio 挂载路径（与前端 io path 一致）",
+    )
+    CENTRIFUGO_API_URL: str = Field(
+        default="http://127.0.0.1:8001",
+        description="Centrifugo HTTP API 地址（服务端 publish）",
+    )
+    CENTRIFUGO_API_KEY: str = Field(
+        default="",
+        description="Centrifugo HTTP API Key",
+    )
+    CENTRIFUGO_TOKEN_HMAC_SECRET: str = Field(
+        default="",
+        description="Centrifugo 连接 JWT HMAC 密钥（与 centrifugo config 一致）",
+    )
+    REALTIME_WS_PUBLIC_URL: str = Field(
+        default="",
+        description="浏览器 WebSocket 公网地址；留空则前端走同源 /connection/websocket",
+    )
+    REALTIME_TOKEN_TTL_SECONDS: int = Field(
+        default=3600,
+        ge=300,
+        le=86400,
+        description="Centrifugo 连接 JWT 有效期（秒）",
+    )
+
     @property
     def BASE_URL(self) -> str:
         """

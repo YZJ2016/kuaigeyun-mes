@@ -25,7 +25,6 @@ import {
   FullscreenExitOutlined,
   CloseOutlined,
   LockOutlined,
-  BellOutlined,
   DeleteOutlined,
   PlayCircleOutlined,
   SendOutlined,
@@ -59,6 +58,7 @@ import { prefetchSystemRoute, prefetchSystemRoutes } from '../routes/systemRoute
 import { PRO_APP_CODES } from '../pages/system/applications/proAppCatalog';
 import { layoutShellQueryOptions } from '../config/reactQuery';
 import { useDocumentVisible } from '../hooks/useDocumentVisible';
+import { useRealtimeInbox } from '../hooks/useRealtimeInbox';
 import { useBasicLayoutInlineStyles, type BasicLayoutStyleContext } from './basicLayout/buildInlineLayoutStyles';
 import { LayoutStyleInjector } from './basicLayout/LayoutStyleInjector';
 import SplitSidebarMenu from './basicLayout/SplitSidebarMenu';
@@ -77,7 +77,6 @@ import { readSidebarMenuDensityPref } from './basicLayout/sidebarMenuDensity';
 import dayjs from 'dayjs';
 import { nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
 import { useSiteLogoUrl } from '../hooks/useSiteLogoUrl';
-import { getUserMessageStats, getUserMessages, markMessagesRead, type UserMessage } from '../services/userMessage';
 import { formatDateTime } from '../utils/format';
 
 /** 仅注册系统面板用到的 fluent-color 图标，避免整包 ~1.7MB 进 vendor */
@@ -108,9 +107,11 @@ import TenantSelector from '../components/tenant-selector';
 import TopBarSearch from '../components/TopBarSearch';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
-import { HeaderClientDownloadButton, HeaderMiniprogramQrButton } from '../components/header-client-download';
+import { HeaderClientDownloadButton } from '../components/header-client-download';
 import ThemeEditor from '../components/theme-editor';
 import IterationFloatButton from '../components/iteration-float-button';
+import { UniImHeaderButton, UniImPanel } from '../components/uni-im';
+import { LinkedDocumentDetailProvider } from '../components/linked-document-detail';
 import MenuSyncPrompt from '../components/menu-sync-prompt';
 import { RouteTransition } from '../components/route-transition';
 const TenantBootstrapModal = React.lazy(() => import('../components/tenant-bootstrap-modal'));
@@ -1052,36 +1053,28 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     [effectiveHome, tenantBackendHome?.path, enableSystemDashboard],
   );
 
-  // 消息下拉菜单状态
-  const [messageDropdownOpen, setMessageDropdownOpen] = useState(false);
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
   const [aiAssistantEverOpened, setAiAssistantEverOpened] = useState(false);
   const openAiAssistant = useCallback(() => {
     setAiAssistantEverOpened(true);
     setAiAssistantOpen(true);
   }, []);
+  const [uniImOpen, setUniImOpen] = useState(false);
+  const [uniImMinimized, setUniImMinimized] = useState(false);
+  const [uniImEverOpened, setUniImEverOpened] = useState(false);
+  const openUniIm = useCallback(() => {
+    setUniImEverOpened(true);
+    setUniImMinimized(false);
+    setUniImOpen(true);
+  }, []);
+  const closeUniIm = useCallback(() => {
+    setUniImOpen(false);
+    setUniImMinimized(false);
+  }, []);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
 
-  // 获取消息统计
-  const { data: messageStats, refetch: refetchMessageStats } = useQuery({
-    queryKey: ['userMessageStats'],
-    queryFn: () => getUserMessageStats(),
-    ...layoutShellQueryOptions,
-    staleTime: 60 * 1000,
-    refetchInterval: documentVisible ? 3 * 60 * 1000 : false,
-    enabled: !!currentUser && documentVisible,
-  });
-
-  // 获取最近的消息列表（仅在下拉菜单打开时获取）
-  const { data: recentMessages, isLoading: recentMessagesLoading, refetch: refetchRecentMessages } = useQuery({
-    queryKey: ['recentUserMessages'],
-    queryFn: () => getUserMessages({ page: 1, page_size: 10, unread_only: false }),
-    staleTime: 30 * 1000, // 30 秒缓存
-    enabled: !!currentUser && messageDropdownOpen, // 只在用户登录且下拉菜单打开时获取
-  });
-
-  // 未读消息数量
-  const unreadCount = messageStats?.unread || 0;
+  // 实时推送（REALTIME_BACKEND=centrifugo 时生效；noop 时 hook 内部无连接，轮询仍兜底）
+  useRealtimeInbox({ enabled: !!currentUser && documentVisible });
 
   // 判断字符串是否是UUID格式（菜单 name 过滤，与站点 Logo 无关）
   const isUUID = (str: string): boolean => {
@@ -2832,191 +2825,27 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           );
           }
 
-          // 顶栏小程序码（开启且已上传图片时显示）- 置于手机客户端下载前
-          actions.push(<HeaderMiniprogramQrButton key="miniprogram-qr" />);
-
-          // 租户可下载客户端（扫码安装）- 置于消息铃铛前
+          // 移动端入口：小程序码 + 客户端下载（合并为手机图标下拉）
           actions.push(<HeaderClientDownloadButton key="client-download" />);
 
-          // 消息提醒（带数量徽标）- 平板/手机也显示
+          // 在线消息（IM 会话）
           actions.push(
-            <Dropdown
-              key="notifications"
-              placement="bottomRight"
-              trigger={['click']}
-              arrow={false}
-              classNames={{ root: 'header-actions-dropdown' }}
-              open={messageDropdownOpen}
-              onOpenChange={(open) => {
-                setMessageDropdownOpen(open);
-                if (open) {
-                  refetchRecentMessages();
-                  refetchMessageStats();
+            <UniImHeaderButton
+              key="uni-im"
+              panelOpen={uniImOpen && !uniImMinimized}
+              onClick={() => {
+                if (uniImOpen && uniImMinimized) {
+                  setUniImMinimized(false);
+                  return;
                 }
+                if (uniImOpen) {
+                  closeUniIm();
+                  return;
+                }
+                openUniIm();
               }}
-              popupRender={() => {
-                const messages = recentMessages?.items || [];
-                const isUnread = (msg: UserMessage) =>
-                  msg.status === 'pending' || msg.status === 'sending' || msg.status === 'success';
-
-                return (
-                  <div
-                    style={{
-                      width: 400,
-                      maxHeight: 500,
-                      backgroundColor: token.colorBgElevated,
-                      borderRadius: token.borderRadiusLG,
-                      boxShadow: token.boxShadowSecondary,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {/* 标题栏 */}
-                    <div
-                      style={{
-                        padding: '12px 16px',
-                        borderBottom: `1px solid ${token.colorBorder}`,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Space size={8} align="center">
-                        <Typography.Text strong style={{ fontSize: 16 }}>
-                          {t('ui.message.notification')}
-                        </Typography.Text>
-                        {unreadCount > 0 && (
-                          <Badge
-                            count={unreadCount}
-                            size="small"
-                          />
-                        )}
-                      </Space>
-                      <Button
-                        type="link"
-                        size="small"
-                        onClick={() => {
-                          setMessageDropdownOpen(false);
-                          navigate('/personal/messages');
-                        }}
-                      >
-                        {t('pages.dashboard.viewAll')} <RightOutlined />
-                      </Button>
-                    </div>
-
-                    {/* 消息列表 */}
-                    <div
-                      style={{
-                        maxHeight: 400,
-                        overflowY: 'auto',
-                      }}
-                    >
-                      {recentMessagesLoading ? (
-                        <div style={{ padding: '40px', textAlign: 'center' }}>
-                          <Spin />
-                        </div>
-                      ) : messages.length > 0 ? (
-                        <div>
-                          {messages.map((item: UserMessage) => {
-                            const unread = isUnread(item);
-                            return (
-                              <div
-                                key={item.uuid}
-                                style={{
-                                  padding: '12px 16px',
-                                  cursor: 'pointer',
-                                  backgroundColor: unread ? token.colorFillAlter : 'transparent',
-                                  borderBottom: `1px solid ${token.colorBorderSecondary}`,
-                                  display: 'flex',
-                                  alignItems: 'flex-start',
-                                  gap: 12,
-                                }}
-                                onClick={async () => {
-                                  setMessageDropdownOpen(false);
-                                  navigate('/personal/messages');
-                                  if (unread) {
-                                    try {
-                                      await markMessagesRead({
-                                        message_uuids: [item.uuid],
-                                      });
-                                      refetchMessageStats();
-                                      refetchRecentMessages();
-                                    } catch (error) {
-                                      // 静默失败
-                                    }
-                                  }
-                                }}
-                              >
-                                <Badge dot={unread}>
-                                  <Avatar
-                                    size={40}
-                                    style={{
-                                      backgroundColor: unread ? token.colorPrimary : token.colorFillTertiary,
-                                    }}
-                                    icon={<BellOutlined />}
-                                  />
-                                </Badge>
-                                <div style={{ minWidth: 0, flex: 1 }}>
-                                  <Typography.Text strong={unread} ellipsis style={{ maxWidth: 250 }}>
-                                    {item.subject || t('common.noSubject')}
-                                  </Typography.Text>
-                                  <Typography.Paragraph
-                                    ellipsis={{ rows: 2 }}
-                                    style={{
-                                      marginBottom: 4,
-                                      marginTop: 2,
-                                      fontSize: 12,
-                                      color: token.colorTextSecondary,
-                                      whiteSpace: 'pre-wrap',
-                                    }}
-                                  >
-                                    {item.content}
-                                  </Typography.Paragraph>
-                                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                                    {item.sent_at
-                                      ? formatDateTime(item.sent_at, 'YYYY-MM-DD HH:mm')
-                                      : formatDateTime(item.created_at, 'YYYY-MM-DD HH:mm')}
-                                  </Typography.Text>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <Empty
-                          description={t('common.noMessages')}
-                          style={{ padding: '40px 0' }}
-                          image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        />
-                      )}
-                    </div>
-                  </div>
-                );
-              }}
-            >
-              <Tooltip title={t('ui.message.notification')} open={messageDropdownOpen ? false : undefined}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<BellOutlined />}
-                  className={
-                    unreadCount > 0
-                      ? 'riveredge-header-notification-bell riveredge-header-notification-btn--has-count'
-                      : 'riveredge-header-notification-bell'
-                  }
-                  {...(unreadCount > 0
-                    ? {
-                        'data-unread-count': unreadCount > 99 ? '99+' : String(unreadCount),
-                      }
-                    : {})}
-                  onClick={() => {
-                    setMessageDropdownOpen(!messageDropdownOpen);
-                  }}
-                />
-              </Tooltip>
-            </Dropdown>
+            />,
           );
-          
-
 
           if (!isMobileOrTablet) {
           // 语言切换下拉菜单
@@ -3647,8 +3476,21 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       {/* 组织管理员：菜单结构变更时征求同意后再同步 */}
       <MenuSyncPrompt />
 
-      {/* 右下角悬浮按钮：迭代提示与意见反馈 */}
-      <IterationFloatButton />
+      {/* UNI-IM：顶栏入口 + 右下角弹窗（非独立路由） */}
+      {uniImEverOpened ? (
+        <LinkedDocumentDetailProvider>
+          <UniImPanel
+            open={uniImOpen}
+            minimized={uniImMinimized}
+            onMinimizedChange={setUniImMinimized}
+            onClose={closeUniIm}
+            hasKuAiEntry={hasAiAssistantEntry}
+          />
+        </LinkedDocumentDetailProvider>
+      ) : null}
+
+      {/* 右下角悬浮按钮：迭代提示与意见反馈（IM 悬浮球可见时上移） */}
+      <IterationFloatButton elevated={uniImOpen && uniImMinimized} />
     </>
   );
 }

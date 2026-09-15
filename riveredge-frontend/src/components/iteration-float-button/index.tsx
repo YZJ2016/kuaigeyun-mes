@@ -37,7 +37,12 @@ function provenanceTagColor(status: BuildProvenanceStatus): string {
   return 'default';
 }
 
-export default function IterationFloatButton() {
+type IterationFloatButtonProps = {
+  /** 与在线消息悬浮球同时出现时上移，把右下角让给 IM */
+  elevated?: boolean;
+};
+
+export default function IterationFloatButton({ elevated = false }: IterationFloatButtonProps) {
   const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const displayTimezone = useConfigStore((s) => {
@@ -97,7 +102,7 @@ export default function IterationFloatButton() {
         type="primary"
         tooltip={t('components.iterationFloatButton.tooltip')}
         onClick={handleOpen}
-        style={{ right: 24, bottom: 24 }}
+        style={{ right: 24, bottom: elevated ? 96 : 24 }}
       />
       <Modal
         title={t('components.iterationFloatButton.modalTitle')}

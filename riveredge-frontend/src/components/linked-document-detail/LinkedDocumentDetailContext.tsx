@@ -1,16 +1,18 @@
 /**
  * 关联单据详情抽屉（当前页嵌套打开，不跳转列表）。
- * 唯一入口：openLinkedDocumentDetail(type, id)。
+ * 唯一入口：openLinkedDocumentDetail(type, id, options?)。
  * 内容：各单据原版 DetailDrawerTemplate 插槽壳（禁止 Brief / plainBody 另写）。
  */
 
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import type { DrawerProps } from 'antd';
 import { theme } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
   canOpenLinkedDocumentDetail,
   normalizeLinkedDocumentType,
 } from '../../apps/kuaizhizao/utils/linkedDocumentDetail';
+import { DetailDrawerChromeProvider } from '../layout-templates';
 import { SalesOrderLinkedDetailDrawer } from './drawers/SalesOrderLinkedDetailDrawer';
 import { PurchaseOrderLinkedDetailDrawer } from './drawers/PurchaseOrderLinkedDetailDrawer';
 import { QuotationLinkedDetailDrawer } from './drawers/QuotationLinkedDetailDrawer';
@@ -26,10 +28,21 @@ import { ReportingRecordLinkedDetailDrawer } from './drawers/ReportingRecordLink
 import { PerformanceSummaryLinkedDetailDrawer } from './drawers/PerformanceSummaryLinkedDetailDrawer';
 import { AfterSalesLinkedDetailDrawer } from './drawers/AfterSalesLinkedDetailDrawer';
 
-/** 高于列表详情抽屉与报价单内嵌关联抽屉（常见 base+50） */
-const LINKED_DRAWER_Z_OFFSET = 60;
+/** 高于列表详情抽屉、报价内嵌关联，以及在线消息壳（z-index 1050） */
+const LINKED_DRAWER_Z_OFFSET = 80;
+/** 在线消息右下角壳层，关联抽屉须压过它 */
+const UNI_IM_SHELL_Z_INDEX = 1050;
 
-type OpenFn = (documentType: string, documentId: number) => boolean;
+export type OpenLinkedDocumentDetailOptions = {
+  /** 停靠侧；在线消息等从右侧浮层打开时传 left，避免挡住聊天窗 */
+  placement?: DrawerProps['placement'];
+};
+
+type OpenFn = (
+  documentType: string,
+  documentId: number,
+  options?: OpenLinkedDocumentDetailOptions,
+) => boolean;
 
 type CtxValue = {
   openLinkedDocumentDetail: OpenFn;
@@ -50,7 +63,11 @@ export function useOptionalLinkedDocumentDetail(): CtxValue | null {
   return useContext(LinkedDocumentDetailContext);
 }
 
-type Target = { documentType: string; documentId: number };
+type Target = {
+  documentType: string;
+  documentId: number;
+  placement?: DrawerProps['placement'];
+};
 
 function LinkedDocumentDetailHost({
   target,
@@ -60,16 +77,27 @@ function LinkedDocumentDetailHost({
   onClose: () => void;
 }) {
   const { token } = theme.useToken();
-  const zIndex = token.zIndexPopupBase + LINKED_DRAWER_Z_OFFSET;
+  const zIndex = Math.max(
+    token.zIndexPopupBase + LINKED_DRAWER_Z_OFFSET,
+    UNI_IM_SHELL_Z_INDEX + 10,
+  );
   const open = Boolean(target);
   const documentType = target?.documentType ?? '';
   const documentId = target?.documentId ?? 0;
+  const chrome = useMemo(
+    () => ({
+      placement: target?.placement ?? 'right',
+      zIndex,
+    }),
+    [target?.placement, zIndex],
+  );
 
   if (!open || documentId <= 0) return null;
 
+  let drawer: React.ReactNode = null;
   switch (documentType) {
     case 'sales_order':
-      return (
+      drawer = (
         <SalesOrderLinkedDetailDrawer
           open
           documentId={documentId}
@@ -77,8 +105,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'purchase_order':
-      return (
+      drawer = (
         <PurchaseOrderLinkedDetailDrawer
           open
           documentId={documentId}
@@ -86,8 +115,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'quotation':
-      return (
+      drawer = (
         <QuotationLinkedDetailDrawer
           open
           documentId={documentId}
@@ -95,8 +125,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'sales_delivery':
-      return (
+      drawer = (
         <SalesDeliveryLinkedDetailDrawer
           open
           documentId={documentId}
@@ -104,8 +135,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'purchase_receipt':
-      return (
+      drawer = (
         <PurchaseReceiptLinkedDetailDrawer
           open
           documentId={documentId}
@@ -113,8 +145,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'sales_forecast':
-      return (
+      drawer = (
         <SalesForecastLinkedDetailDrawer
           open
           documentId={documentId}
@@ -122,8 +155,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'demand':
-      return (
+      drawer = (
         <DemandLinkedDetailDrawer
           open
           documentId={documentId}
@@ -131,8 +165,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'purchase_requisition':
-      return (
+      drawer = (
         <PurchaseRequisitionLinkedDetailDrawer
           open
           documentId={documentId}
@@ -140,8 +175,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'demand_computation':
-      return (
+      drawer = (
         <DemandComputationLinkedDetailDrawer
           open
           documentId={documentId}
@@ -149,8 +185,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'work_order':
-      return (
+      drawer = (
         <WorkOrderLinkedDetailDrawer
           open
           documentId={documentId}
@@ -158,8 +195,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'freight_order':
-      return (
+      drawer = (
         <FreightOrderLinkedDetailDrawer
           open
           documentId={documentId}
@@ -167,8 +205,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'reporting_record':
-      return (
+      drawer = (
         <ReportingRecordLinkedDetailDrawer
           open
           documentId={documentId}
@@ -176,8 +215,9 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'performance_summary':
-      return (
+      drawer = (
         <PerformanceSummaryLinkedDetailDrawer
           open
           documentId={documentId}
@@ -185,6 +225,7 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     case 'after_sales_ticket':
     case 'install_execution':
     case 'service_asset':
@@ -193,7 +234,7 @@ function LinkedDocumentDetailHost({
     case 'spare_part_requisition':
     case 'service_settlement':
     case 'customer_return_visit':
-      return (
+      drawer = (
         <AfterSalesLinkedDetailDrawer
           open
           documentType={documentType}
@@ -202,9 +243,12 @@ function LinkedDocumentDetailHost({
           zIndex={zIndex}
         />
       );
+      break;
     default:
       return null;
   }
+
+  return <DetailDrawerChromeProvider value={chrome}>{drawer}</DetailDrawerChromeProvider>;
 }
 
 export function LinkedDocumentDetailProvider({ children }: { children: React.ReactNode }) {
@@ -212,7 +256,7 @@ export function LinkedDocumentDetailProvider({ children }: { children: React.Rea
   const [target, setTarget] = useState<Target | null>(null);
 
   const openLinkedDocumentDetail = useCallback<OpenFn>(
-    (documentType, documentId) => {
+    (documentType, documentId, options) => {
       const type = normalizeLinkedDocumentType(documentType);
       const id = Number(documentId);
       if (!canOpenLinkedDocumentDetail(type) || !Number.isFinite(id) || id <= 0) return false;
@@ -220,7 +264,11 @@ export function LinkedDocumentDetailProvider({ children }: { children: React.Rea
         navigate(`/apps/kuaizhizao/delivery-project/projects/${id}`);
         return true;
       }
-      setTarget({ documentType: type, documentId: id });
+      setTarget({
+        documentType: type,
+        documentId: id,
+        placement: options?.placement,
+      });
       return true;
     },
     [navigate],
@@ -243,7 +291,8 @@ export function openLinkedDocumentDetailOrFalse(
   ctx: CtxValue | null,
   documentType: string,
   documentId: number,
+  options?: OpenLinkedDocumentDetailOptions,
 ): boolean {
   if (!ctx) return false;
-  return ctx.openLinkedDocumentDetail(documentType, documentId);
+  return ctx.openLinkedDocumentDetail(documentType, documentId, options);
 }

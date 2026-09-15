@@ -1,1 +1,0 @@
-import{R as s,at as p,j as i,au as P}from"./vendor--Nq-2deO.js";import{a as d}from"./index-COBTwvdf.js";var l=["fieldProps","proFieldProps"],m=function(r,o){var e=r.fieldProps,a=r.proFieldProps,t=p(r,l);return i.jsx(d,P({ref:o,valueType:"textarea",fieldProps:e,proFieldProps:a},t))};const u=s.forwardRef(m);export{u as P};

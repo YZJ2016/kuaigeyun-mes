@@ -88,8 +88,21 @@ async def create_chat_completion(
         "temperature": temperature if temperature is not None else 0.7,
     }
     if stream:
+        from core.services.realtime.ai_stream_bridge import wrap_ai_sse_stream
+
         stream_iter = CompletionService.stream_chat(config, payload)
-        return StreamingResponse(stream_iter, media_type="text/event-stream")
+        session_id = None
+        if isinstance(context, dict):
+            raw_session = context.get("session_id")
+            if raw_session is not None:
+                session_id = str(raw_session)
+        wrapped = wrap_ai_sse_stream(
+            stream_iter,
+            tenant_id=ai_auth.tenant_id,
+            user_id=ai_auth.user.id,
+            session_id=session_id,
+        )
+        return StreamingResponse(wrapped, media_type="text/event-stream")
 
     runner = AgentRunner(config=config, tool_executor=None)
     return await runner.run(

@@ -11,6 +11,7 @@ import { DOCUMENT_TYPE_TO_CODE, PRINT_TEMPLATE_SCHEMAS } from '../../../config/p
 import { loadKuaizhizaoPrintTemplatePresets } from '../services/print';
 import { buildKuaizhizaoPrintApiPath, getPrintTemplateDocumentTypesForPicker } from '../utils/kuaizhizaoPrintConfig';
 import { MODAL_CONFIG } from '../../../components/layout-templates';
+import { useStackedOverlayZIndex } from '../../../components/layout-templates/useStackedOverlayZIndex';
 import { handleError } from '../../../utils/errorHandler';
 import {
   downloadPrintPdfFromApiResult,
@@ -69,6 +70,8 @@ interface KuaizhizaoDocumentPrintModalProps {
   pdfDownloadFilename?: string;
   /** 成功触发浏览器打印后回调（如报价单 record-print） */
   onAfterPrint?: () => void | Promise<void>;
+  /** 显式 zIndex；默认按详情抽屉 chrome / 侧链抬层 */
+  zIndex?: number;
 }
 
 const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> = ({
@@ -81,9 +84,11 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
   title = '打印预览',
   pdfDownloadFilename,
   onAfterPrint,
+  zIndex: zIndexProp,
 }) => {
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
+  const stackedZIndex = useStackedOverlayZIndex(zIndexProp);
   const previewScreenOptions = useMemo(
     () => ({ borderRadius: token.borderRadiusLG }),
     [token.borderRadiusLG],
@@ -277,6 +282,7 @@ const KuaizhizaoDocumentPrintModal: React.FC<KuaizhizaoDocumentPrintModalProps> 
       onCancel={onClose}
       width={960}
       centered
+      zIndex={stackedZIndex}
       styles={{ body: { paddingTop: 12, paddingBottom: 16 } }}
       footer={
         <Space>
