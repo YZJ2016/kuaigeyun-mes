@@ -1,0 +1,1 @@
+import{bj as r,c1 as o}from"./main-Doc9a6V4.js";function n(e){const t=(e||"待审核").trim();return t==="已通过"||t==="已驳回"||t==="待审核"?t:"待审核"}function i(e){const t=n(e);return r(t)}function u(e,t){return o(e,t)}function a(e){return n(e)==="已通过"}export{u as c,a as i,i as m,n};

@@ -29328,6 +29328,10 @@ export default {
     '在线消息列表栏支持四档拖动调宽',
   'pages.dashboard.updateLog.entries.uni-im-list-pane-resize.description':
     '第二栏会话列表右缘可拖动调节宽度，220、260、300、340 像素四档吸附，松手后记住偏好；键盘左右键亦可切换档位。',
+  'pages.dashboard.updateLog.entries.uni-im-react-hooks-300.title':
+    '修复在线消息偶发 React #300 报错',
+  'pages.dashboard.updateLog.entries.uni-im-react-hooks-300.description':
+    '在线消息面板在权限或页面可见性变化时提前 return，导致 Hook 调用次数不一致；已将全部 Hook 移到提前返回之前，避免 Rendered fewer hooks than expected。',
   'pages.dashboard.updateLog.entries.uni-im-pin-icon-right.title':
     '在线消息置顶图标改到列表右侧',
   'pages.dashboard.updateLog.entries.uni-im-pin-icon-right.description':
