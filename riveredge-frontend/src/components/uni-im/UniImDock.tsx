@@ -1204,82 +1204,6 @@ export default function UniImPanel({
     [enabled, queryClient],
   );
 
-  if (!enabled) {
-    return null;
-  }
-
-  const selfLabel =
-    currentUser?.full_name || currentUser?.username || t('components.uniIm.self');
-  const navAvatarSize = 32;
-  const listAvatarSize = 32;
-  const messageAvatarSize = 36;
-
-  const renderListAvatar = (
-    fullName?: string | null,
-    username?: string,
-    options?: {
-      className?: string;
-      style?: React.CSSProperties;
-      icon?: React.ReactNode;
-      imageSrc?: string;
-      useTextAvatar?: boolean;
-      onImageError?: () => void;
-    },
-  ) => {
-    const useTextAvatar = options?.useTextAvatar ?? true;
-    const imageSrc = options?.imageSrc;
-    return (
-      <Avatar
-        size={listAvatarSize}
-        src={!useTextAvatar && imageSrc ? imageSrc : undefined}
-        onError={options?.onImageError}
-        className={`${styles.imAvatar}${options?.className ? ` ${options.className}` : ''}`}
-        style={{
-          ...(useTextAvatar || !imageSrc
-            ? getTextAvatarCircleStyle(token)
-            : getImageAvatarCircleStyle()),
-          fontSize: getAvatarFontSize(listAvatarSize),
-          fontWeight: 500,
-          ...options?.style,
-        }}
-      >
-        {options?.icon ??
-          (useTextAvatar || !imageSrc
-            ? getAvatarText(fullName ?? undefined, username)
-            : null)}
-      </Avatar>
-    );
-  };
-
-  const renderMessageAvatar = (
-    fullName?: string | null,
-    username?: string,
-    isSelf = false,
-    imageSrc?: string,
-    useTextAvatar = true,
-    onImageError?: () => void,
-  ) => (
-    <Avatar
-      size={messageAvatarSize}
-      src={!useTextAvatar && imageSrc ? imageSrc : undefined}
-      onError={onImageError}
-      className={`${styles.imAvatar}${isSelf ? ` ${styles.msgAvatarSelf}` : ''}`}
-      style={{
-        ...(isSelf
-          ? useTextAvatar
-            ? { backgroundColor: '#576b95', color: '#ffffff', border: 'none', boxShadow: 'none' }
-            : getImageAvatarCircleStyle()
-          : useTextAvatar || !imageSrc
-            ? getTextAvatarCircleStyle(token)
-            : getImageAvatarCircleStyle()),
-        fontSize: getAvatarFontSize(messageAvatarSize),
-        fontWeight: 500,
-      }}
-    >
-      {useTextAvatar || !imageSrc ? getAvatarText(fullName ?? undefined, username) : null}
-    </Avatar>
-  );
-
   const resolveMessageSender = useCallback(
     (item: ImMessage) => {
       const senderId = Number(item.sender_id);
@@ -1361,6 +1285,82 @@ export default function UniImPanel({
       showTextAvatar,
       t,
     ],
+  );
+
+  if (!enabled) {
+    return null;
+  }
+
+  const selfLabel =
+    currentUser?.full_name || currentUser?.username || t('components.uniIm.self');
+  const navAvatarSize = 32;
+  const listAvatarSize = 32;
+  const messageAvatarSize = 36;
+
+  const renderListAvatar = (
+    fullName?: string | null,
+    username?: string,
+    options?: {
+      className?: string;
+      style?: React.CSSProperties;
+      icon?: React.ReactNode;
+      imageSrc?: string;
+      useTextAvatar?: boolean;
+      onImageError?: () => void;
+    },
+  ) => {
+    const useTextAvatar = options?.useTextAvatar ?? true;
+    const imageSrc = options?.imageSrc;
+    return (
+      <Avatar
+        size={listAvatarSize}
+        src={!useTextAvatar && imageSrc ? imageSrc : undefined}
+        onError={options?.onImageError}
+        className={`${styles.imAvatar}${options?.className ? ` ${options.className}` : ''}`}
+        style={{
+          ...(useTextAvatar || !imageSrc
+            ? getTextAvatarCircleStyle(token)
+            : getImageAvatarCircleStyle()),
+          fontSize: getAvatarFontSize(listAvatarSize),
+          fontWeight: 500,
+          ...options?.style,
+        }}
+      >
+        {options?.icon ??
+          (useTextAvatar || !imageSrc
+            ? getAvatarText(fullName ?? undefined, username)
+            : null)}
+      </Avatar>
+    );
+  };
+
+  const renderMessageAvatar = (
+    fullName?: string | null,
+    username?: string,
+    isSelf = false,
+    imageSrc?: string,
+    useTextAvatar = true,
+    onImageError?: () => void,
+  ) => (
+    <Avatar
+      size={messageAvatarSize}
+      src={!useTextAvatar && imageSrc ? imageSrc : undefined}
+      onError={onImageError}
+      className={`${styles.imAvatar}${isSelf ? ` ${styles.msgAvatarSelf}` : ''}`}
+      style={{
+        ...(isSelf
+          ? useTextAvatar
+            ? { backgroundColor: '#576b95', color: '#ffffff', border: 'none', boxShadow: 'none' }
+            : getImageAvatarCircleStyle()
+          : useTextAvatar || !imageSrc
+            ? getTextAvatarCircleStyle(token)
+            : getImageAvatarCircleStyle()),
+        fontSize: getAvatarFontSize(messageAvatarSize),
+        fontWeight: 500,
+      }}
+    >
+      {useTextAvatar || !imageSrc ? getAvatarText(fullName ?? undefined, username) : null}
+    </Avatar>
   );
 
   const renderConversationItem = (item: ImConversation) => {
