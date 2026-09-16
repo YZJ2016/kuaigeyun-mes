@@ -206,31 +206,13 @@ function isSameUserId(
 
 function resolveDirectConversationForUser(
   user: UserDisplayItem,
-  directConvByTitle: Map<string, ImConversation>,
+  directByPeerId: Map<number, ImConversation>,
 ): ImConversation | undefined {
-  const candidates = [user.label, user.full_name, user.username]
-    .filter((value): value is string => !!value?.trim())
-    .map((value) => value.trim());
-  for (const candidate of candidates) {
-    const conv = directConvByTitle.get(candidate);
-    if (conv) {
-      return conv;
-    }
+  const peerId = Number(user.id);
+  if (!Number.isFinite(peerId) || peerId <= 0) {
+    return undefined;
   }
-  // 会话标题多为 full_name，展示名可能是「姓名 (工号)」
-  for (const [title, conv] of directConvByTitle) {
-    for (const candidate of candidates) {
-      if (
-        candidate === title ||
-        candidate.startsWith(`${title} `) ||
-        candidate.startsWith(`${title}(`) ||
-        candidate.startsWith(`${title}（`)
-      ) {
-        return conv;
-      }
-    }
-  }
-  return undefined;
+  return directByPeerId.get(peerId);
 }
 
 function compareDirectListOrder(
@@ -473,20 +455,25 @@ export default function UniImPanel({
       });
   }, [activeSection, items]);
 
-  const directConvByTitle = useMemo(() => {
-    const map = new Map<string, ImConversation>();
+  const directByPeerId = useMemo(() => {
+    const map = new Map<number, ImConversation>();
     for (const item of items) {
-      if (item.kind !== 'direct' || !item.title?.trim()) {
+      if (item.kind !== 'direct' || item.peer_user_id == null) {
         continue;
       }
-      map.set(item.title.trim(), item);
+      const peerId = Number(item.peer_user_id);
+      if (!Number.isFinite(peerId) || peerId <= 0) {
+        continue;
+      }
+      map.set(peerId, item);
     }
     return map;
   }, [items]);
 
   const directContactUsers = useMemo(() => {
-    const selfId = currentUser?.id;
-    const rows = (directUsersData?.items ?? []).filter((user) => user.id !== selfId);
+    const rows = (directUsersData?.items ?? []).filter(
+      (user) => !isSameUserId(user.id, currentUser?.id),
+    );
     return rows;
   }, [currentUser?.id, directUsersData?.items]);
 
@@ -497,7 +484,7 @@ export default function UniImPanel({
   const directListRows = useMemo((): DirectListRow[] => {
     const matched = new Set<string>();
     const userRows: DirectListRow[] = directContactUsers.map((user) => {
-      const conv = resolveDirectConversationForUser(user, directConvByTitle);
+      const conv = resolveDirectConversationForUser(user, directByPeerId);
       if (conv) {
         matched.add(conv.uuid);
       }
@@ -550,7 +537,7 @@ export default function UniImPanel({
             };
       return compareDirectListOrder(left, right);
     });
-  }, [contactKeyword, directContactUsers, directConvByTitle, items]);
+  }, [contactKeyword, directContactUsers, directByPeerId, items]);
 
   const directListHasRows = directListRows.length > 0;
 
@@ -1287,6 +1274,16 @@ export default function UniImPanel({
     ],
   );
 
+  const directPeerLabel = useMemo(() => {
+    if (selectedConversation?.kind !== 'direct' || selectedConversation.peer_user_id == null) {
+      return null;
+    }
+    const peer = directContactUsers.find((user) =>
+      isSameUserId(user.id, selectedConversation.peer_user_id),
+    );
+    return peer?.label || peer?.full_name || peer?.username || null;
+  }, [directContactUsers, selectedConversation]);
+
   if (!enabled) {
     return null;
   }
@@ -1583,7 +1580,9 @@ export default function UniImPanel({
           : t('components.uniIm.selectNotify')
         : selectedConversation?.is_public
           ? t('components.uniIm.publicGroupTitle')
-          : selectedConversation?.title || t('pages.personal.im.selectConversation');
+          : directPeerLabel ||
+            selectedConversation?.title ||
+            t('pages.personal.im.selectConversation');
 
   const hasSelection = isTaskSection
     ? !!selectedTask

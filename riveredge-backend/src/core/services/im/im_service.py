@@ -77,6 +77,32 @@ class ImService:
         ).count()
 
     @staticmethod
+    async def _resolve_direct_peer(
+        *,
+        tenant_id: int,
+        viewer_user_id: int,
+        conversation_id: int,
+    ) -> tuple[Optional[int], Optional[str]]:
+        """私聊：相对当前用户解析对方 id 与展示名。"""
+        members = await ImConversationMember.filter(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            deleted_at__isnull=True,
+        ).all()
+        peer_id = next((m.user_id for m in members if m.user_id != viewer_user_id), None)
+        if peer_id is None:
+            return None, None
+        peer = await User.filter(
+            id=peer_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not peer:
+            return peer_id, None
+        name = (peer.full_name or peer.username or "").strip()
+        return peer_id, name or None
+
+    @staticmethod
     async def to_conversation_response(
         *,
         tenant_id: int,
@@ -97,12 +123,23 @@ class ImService:
                 conversation_id=conv.id,
                 last_read_at=member.last_read_at,
             )
+        title = conv.title
+        peer_user_id: Optional[int] = None
+        if conv.kind == "direct":
+            peer_user_id, peer_title = await ImService._resolve_direct_peer(
+                tenant_id=tenant_id,
+                viewer_user_id=user_id,
+                conversation_id=conv.id,
+            )
+            if peer_title:
+                title = peer_title
         return ImConversationResponse(
             uuid=conv.uuid,
             kind=conv.kind,
-            title=conv.title,
+            title=title,
             is_public=bool(conv.is_public),
             is_pinned=bool(member.is_pinned) if member else False,
+            peer_user_id=peer_user_id,
             module_codes=await ImService._module_codes_for_conversation(
                 tenant_id=tenant_id,
                 conversation_id=conv.id,
