@@ -660,9 +660,12 @@ class CodeGenerationService:
                     entity_type=entity_type
                 )
                 if is_duplicate:
-                    # 如果编码已存在，返回空字符串（表示无法生成唯一编码）
-                    # 这种情况应该由业务层处理（如提示用户修改版本号）
-                    return ""
+                    # 无流水号规则（如 BOM-物料编码-版本）撞号时无法自增避让，须明确报错，
+                    # 禁止返回空串再被 API 误报成「规则未启用」。
+                    raise ValidationError(
+                        f"按当前规则生成的编号「{test_code}」已存在，"
+                        f"请修改版本号或规则字段后重试（规则代码：{rule_code}）"
+                    )
             return test_code
         
         # 获取序号配置（优先从组件读取，否则使用旧字段）

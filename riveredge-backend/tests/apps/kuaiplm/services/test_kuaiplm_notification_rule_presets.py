@@ -7,11 +7,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from apps.kuaiplm.services.kuaiplm_business_notification import (
+    ACTION_ANNUAL_LAB_MONTH_DUE,
+    ACTION_ECN_CLOSED,
     ACTION_LAB_REPORT_APPROVED,
     ACTION_LAB_REPORT_REJECTED,
     ACTION_LAB_REPORT_SUBMITTED,
     ACTION_TRIAL_APPROVAL_OVERDUE,
     ACTION_TRIAL_STEP_OVERDUE,
+    TRIGGER_ANNUAL_LAB_PLAN,
+    TRIGGER_ENGINEERING_CHANGE,
     TRIGGER_LAB_REQUEST,
     TRIGGER_TRIAL_FLOW,
 )
@@ -31,6 +35,8 @@ def test_presets_cover_trial_and_lab_report_actions():
     assert (TRIGGER_LAB_REQUEST, ACTION_LAB_REPORT_SUBMITTED) in pairs
     assert (TRIGGER_LAB_REQUEST, ACTION_LAB_REPORT_APPROVED) in pairs
     assert (TRIGGER_LAB_REQUEST, ACTION_LAB_REPORT_REJECTED) in pairs
+    assert (TRIGGER_ANNUAL_LAB_PLAN, ACTION_ANNUAL_LAB_MONTH_DUE) in pairs
+    assert (TRIGGER_ENGINEERING_CHANGE, ACTION_ECN_CLOSED) in pairs
 
 
 @pytest.mark.asyncio
@@ -38,7 +44,7 @@ async def test_load_presets_creates_rules_when_empty():
     with patch(
         "apps.kuaiplm.services.kuaiplm_notification_rule_presets.MessageTemplateService.load_preset_sme",
         new_callable=AsyncMock,
-        return_value=5,
+        return_value=7,
     ), patch(
         "apps.kuaiplm.services.kuaiplm_notification_rule_presets.BusinessConfigService"
     ) as cfg_cls, patch(
@@ -54,9 +60,9 @@ async def test_load_presets_creates_rules_when_empty():
         cfg.get_business_config = AsyncMock(return_value={"parameters": {}})
         cfg.batch_update_process_parameters = AsyncMock()
         result = await load_kuaiplm_notification_rule_presets(1)
-        assert result["created"] == 5
+        assert result["created"] == 7
         cfg.batch_update_process_parameters.assert_awaited_once()
         saved = cfg.batch_update_process_parameters.await_args.args[1]
         rules = saved["notifications"]["rules"]
-        assert len(rules) == 5
+        assert len(rules) == 7
         assert rules[0]["trigger_document"] == TRIGGER_TRIAL_FLOW

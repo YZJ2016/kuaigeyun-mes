@@ -6,6 +6,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useRequest } from 'ahooks';
+
 import { useTranslation } from 'react-i18next';
 
 import type { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
@@ -147,6 +149,8 @@ import {
   type SupplierEvaluationStatus,
 } from '../../../services/supplier-evaluation';
 
+import { supplierAuditPlanApi } from '../../../../kuaielectronics/services/supplier-audit-plan';
+
 
 
 const RESOURCE = 'kuaizhizao:supplier-eval';
@@ -252,6 +256,11 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   const perms = useResourcePermissions(RESOURCE);
 
+  const { data: auditPlanGuide } = useRequest(() => supplierAuditPlanApi.getGuide(), {
+    ready: perms.canRead,
+  });
+  const showAuditPlanGuide = Boolean(auditPlanGuide?.enabled);
+
   const evalActionRef = useRef<ActionType>();
   const envActionRef = useRef<ActionType>();
   const templateActionRef = useRef<ActionType>();
@@ -272,6 +281,7 @@ const SupplierEvaluationsPage: React.FC = () => {
   const [envModalOpen, setEnvModalOpen] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [auditPlanGuideOpen, setAuditPlanGuideOpen] = useState(false);
   const [editingEval, setEditingEval] = useState<SupplierEvaluation | null>(null);
   const [editingEnv, setEditingEnv] = useState<SupplierEvalEnvDocument | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<SupplierEvalTemplate | null>(null);
@@ -710,6 +720,17 @@ const SupplierEvaluationsPage: React.FC = () => {
       </MarkerTag>
     );
   };
+
+  const planGuideToolbar = useMemo(() => {
+    if (!showAuditPlanGuide) {
+      return undefined;
+    }
+    return [
+      <Button key="audit-plan-guide" onClick={() => setAuditPlanGuideOpen(true)}>
+        {t('app.kuaielectronics.supplierAuditPlan.viewGuide')}
+      </Button>,
+    ];
+  }, [showAuditPlanGuide, t]);
 
   const renderPlanProgress = (row: SupplierEvalPlan) => {
     const total = row.line_count ?? 0;
@@ -2104,6 +2125,8 @@ const SupplierEvaluationsPage: React.FC = () => {
                   planRowsRef.current = rows;
 
                 }}
+
+                toolBarActionsBeforeCreate={planGuideToolbar}
 
                 showCreateButton={perms.canCreate}
 
@@ -3808,6 +3831,52 @@ const SupplierEvaluationsPage: React.FC = () => {
       />
 
 
+
+      <Modal
+        title={t('app.kuaielectronics.supplierAuditPlan.modalTitle')}
+        open={auditPlanGuideOpen}
+        destroyOnHidden
+        width={920}
+        footer={null}
+        onCancel={() => setAuditPlanGuideOpen(false)}
+      >
+        <Table
+          size="small"
+          rowKey="key"
+          pagination={false}
+          style={{ marginBottom: 16 }}
+          dataSource={auditPlanGuide?.line_fields || []}
+          columns={[
+            {
+              title: t('app.kuaielectronics.supplierAuditPlan.colField'),
+              dataIndex: 'label',
+            },
+            {
+              title: t('app.kuaielectronics.supplierAuditPlan.colType'),
+              dataIndex: 'type',
+              width: 120,
+            },
+          ]}
+        />
+        {auditPlanGuide?.month_tracking ? (
+          <Table
+            size="small"
+            rowKey="key"
+            pagination={false}
+            dataSource={auditPlanGuide.month_tracking.row_kinds || []}
+            columns={[
+              {
+                title: t('app.kuaielectronics.supplierAuditPlan.monthTracking'),
+                dataIndex: 'label',
+              },
+              {
+                title: t('app.kuaielectronics.supplierAuditPlan.months'),
+                render: () => (auditPlanGuide.month_tracking?.months || []).join('、'),
+              },
+            ]}
+          />
+        ) : null}
+      </Modal>
 
       <Modal
 

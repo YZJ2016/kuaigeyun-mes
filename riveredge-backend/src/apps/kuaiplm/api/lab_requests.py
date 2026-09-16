@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from apps.kuaiplm.schemas.lab_request import (
     LabRequestCompleteRequest,
     LabRequestCreate,
+    LabRequestFillOutsourcePriceRequest,
     LabRequestLinkExceptionRequest,
     LabRequestListResponse,
     LabRequestMeasureOverrideRequest,
@@ -167,6 +168,26 @@ async def submit_lab_request(
 ):
     try:
         return await service.submit(tenant_id, request_id, current_user)
+    except Exception as e:
+        raise _http(e) from e
+
+
+@router.post("/{request_id}/fill-outsource-price", response_model=LabRequestResponse)
+async def fill_lab_request_outsource_price(
+    request_id: int,
+    data: LabRequestFillOutsourcePriceRequest,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(
+        require_access(
+            "kuaiplm.lab-request",
+            "update",
+            required_permissions=["kuaiplm:lab-request:update"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.fill_outsource_price(tenant_id, request_id, data, current_user)
     except Exception as e:
         raise _http(e) from e
 

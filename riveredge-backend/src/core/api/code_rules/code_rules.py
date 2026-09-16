@@ -412,7 +412,11 @@ async def test_generate_code(
         if not (code or "").strip():
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"编码规则 {request.rule_code} 未生成有效编号，请检查规则是否已启用并保存",
+                detail=(
+                    f"编码规则 {request.rule_code} 未生成有效编号："
+                    f"请确认规则已启用、已保存且含有效组件；"
+                    f"若规则无流水号且依赖表单字段，请检查物料/版本等上下文是否已填"
+                ),
             )
         return CodeGenerationResponse(code=code, rule_name=rule_name)
     except ValidationError as e:

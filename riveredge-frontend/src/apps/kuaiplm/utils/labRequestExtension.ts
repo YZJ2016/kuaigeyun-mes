@@ -8,6 +8,10 @@ export const LAB_REQUEST_EXTENSION_KEYS = [
   'delegate_dept',
   'test_dept',
   'inspection_slip_no',
+  'structure_special_test',
+  'electronics_special_test',
+  'structure_manager_approved',
+  'electronics_manager_approved',
 ] as const;
 
 export type LabRequestExtensionKey = (typeof LAB_REQUEST_EXTENSION_KEYS)[number];

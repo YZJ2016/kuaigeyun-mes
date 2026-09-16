@@ -8,12 +8,18 @@ from uuid import UUID
 from loguru import logger
 
 from apps.kuaiplm.services.kuaiplm_business_notification import (
+    ACTION_ANNUAL_LAB_MONTH_DUE,
+    ACTION_ECN_CLOSED,
     ACTION_LAB_REPORT_APPROVED,
     ACTION_LAB_REPORT_REJECTED,
     ACTION_LAB_REPORT_SUBMITTED,
+    ACTION_PENDING_APPROVAL_OVERDUE,
     ACTION_TRIAL_APPROVAL_OVERDUE,
     ACTION_TRIAL_STEP_OVERDUE,
+    TRIGGER_ANNUAL_LAB_PLAN,
+    TRIGGER_ENGINEERING_CHANGE,
     TRIGGER_LAB_REQUEST,
+    TRIGGER_PENDING_APPROVAL,
     TRIGGER_TRIAL_FLOW,
 )
 from core.models.message_template import MessageTemplate
@@ -42,6 +48,15 @@ KUAIPLM_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
         "enabled": False,
     },
     {
+        "id": "plm_preset_pending_approval_overdue",
+        "scene_name": "研发文件待审超时",
+        "trigger_document": TRIGGER_PENDING_APPROVAL,
+        "trigger_action": ACTION_PENDING_APPROVAL_OVERDUE,
+        "template_code": "PLM_PENDING_APPROVAL_OVERDUE",
+        "recipient_scopes": ["pending_approvers"],
+        "enabled": False,
+    },
+    {
         "id": "plm_preset_lab_report_submitted",
         "scene_name": "实验报告待批准",
         "trigger_document": TRIGGER_LAB_REQUEST,
@@ -66,6 +81,24 @@ KUAIPLM_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
         "trigger_action": ACTION_LAB_REPORT_REJECTED,
         "template_code": "PLM_LAB_REPORT_REJECTED",
         "recipient_scopes": ["creator", "report_submitter"],
+        "enabled": False,
+    },
+    {
+        "id": "plm_preset_annual_lab_month_due",
+        "scene_name": "年度例式下月任务提醒",
+        "trigger_document": TRIGGER_ANNUAL_LAB_PLAN,
+        "trigger_action": ACTION_ANNUAL_LAB_MONTH_DUE,
+        "template_code": "PLM_ANNUAL_LAB_MONTH_DUE",
+        "recipient_scopes": ["month_owner"],
+        "enabled": False,
+    },
+    {
+        "id": "plm_preset_ecn_closed",
+        "scene_name": "工程变更关闭广播",
+        "trigger_document": TRIGGER_ENGINEERING_CHANGE,
+        "trigger_action": ACTION_ECN_CLOSED,
+        "template_code": "PLM_ECN_CLOSED",
+        "recipient_scopes": ["ecn_close_participants", "creator"],
         "enabled": False,
     },
 ]

@@ -8,12 +8,14 @@ from core.models.base import BaseModel
 CHANGE_KIND_MATERIAL = "material"
 CHANGE_KIND_PROCESS = "process"
 CHANGE_KIND_DRAWING = "drawing"
+CHANGE_KIND_DOC_TEMPLATE = "doc_template"
 CHANGE_KIND_OTHER = "other"
 CHANGE_KINDS = frozenset(
     {
         CHANGE_KIND_MATERIAL,
         CHANGE_KIND_PROCESS,
         CHANGE_KIND_DRAWING,
+        CHANGE_KIND_DOC_TEMPLATE,
         CHANGE_KIND_OTHER,
     }
 )
@@ -55,7 +57,7 @@ class EngineeringChange(BaseModel):
     project_name = fields.CharField(max_length=200, null=True, description="项目名称快照")
     change_kind = fields.CharField(
         max_length=20,
-        description="material/process/drawing/other",
+        description="material/process/drawing/doc_template/other",
     )
     title = fields.CharField(max_length=200, description="标题")
     change_reason = fields.TextField(null=True, description="变更原因")

@@ -42,6 +42,12 @@ class LabRequest(BaseModel):
     sample_desc = fields.TextField(null=True, description="样品说明")
     test_items = fields.TextField(null=True, description="试验项目说明")
     test_reason = fields.TextField(null=True, description="试验原由")
+    outsource_price = fields.DecimalField(
+        max_digits=18, decimal_places=4, null=True, description="委外试验价格（#64 采购填）"
+    )
+    price_filled_by = fields.IntField(null=True, description="价格填写人")
+    price_filled_by_name = fields.CharField(max_length=100, null=True, description="价格填写人姓名")
+    price_filled_at = fields.DatetimeField(null=True, description="价格填写时刻")
     requester_name = fields.CharField(max_length=100, null=True, description="委托人")
     lab_owner_name = fields.CharField(max_length=100, null=True, description="实验室受理人")
     expected_complete_at = fields.DatetimeField(null=True, description="预计完成时刻")

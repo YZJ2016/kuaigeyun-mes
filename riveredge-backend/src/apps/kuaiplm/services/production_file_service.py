@@ -407,6 +407,22 @@ class ProductionFileService(AppBaseService[ProductionFile]):
                     f"审核已开启但未找到可用审批流程，请检查 {AUDIT_NODE} 绑定"
                 )
         from apps.kuaiplm.services.plm_audit_flow_sync import submit_instance_auto_passed
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_PRODUCTION_FILE,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_submit(
+            tenant_id,
+            entity_type=ENTITY_PRODUCTION_FILE,
+            entity_id=row.id,
+            entity_uuid=str(row.uuid),
+            submitted_at=row.submitted_at,
+            doc_code=row.file_code,
+            title=row.title or row.file_code,
+            project_code=row.project_code,
+            doc_label="生产文件 ",
+        )
 
         if submit_instance_auto_passed(approval_instance):
             return await self.approve(tenant_id, file_id, user)
@@ -475,6 +491,17 @@ class ProductionFileService(AppBaseService[ProductionFile]):
             row.release_date = ver.release_date
             apply_update_audit(row, user)
             await row.save()
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_PRODUCTION_FILE,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_terminal(
+            tenant_id,
+            entity_type=ENTITY_PRODUCTION_FILE,
+            entity_id=file_id,
+            reason="审核通过",
+        )
         return ProductionFileResponse.model_validate(row)
 
     async def reject(
@@ -503,6 +530,17 @@ class ProductionFileService(AppBaseService[ProductionFile]):
             ver.is_production_effective = False
             apply_update_audit(ver, user)
             await ver.save()
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_PRODUCTION_FILE,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_terminal(
+            tenant_id,
+            entity_type=ENTITY_PRODUCTION_FILE,
+            entity_id=file_id,
+            reason="已驳回",
+        )
         return ProductionFileResponse.model_validate(row)
 
     async def revise(

@@ -311,6 +311,93 @@ class RdProjectResponse(BaseModel):
     gates: List[RdProjectGateResponse] = Field(default_factory=list)
     progress: float = 0
     not_executed: bool = False
+    system_archive_summary: Optional["RdProjectSystemArchiveSummary"] = None
+
+
+class RdProjectSystemArchiveUploadTemplate(BaseModel):
+    title: str
+    columns: List[str] = Field(default_factory=list)
+    hint: Optional[str] = None
+
+
+class RdProjectSystemArchiveItemResponse(BaseModel):
+    id: int
+    uuid: str
+    tenant_id: int
+    project_id: int
+    archive_type_code: str
+    archive_type_name: str
+    sort_order: int
+    fill_status: str
+    modes: List[str] = Field(default_factory=list)
+    link_target_types: List[str] = Field(default_factory=list)
+    template_key: Optional[str] = None
+    upload_template: Optional[RdProjectSystemArchiveUploadTemplate] = None
+    file_uuid: Optional[str] = None
+    file_name: Optional[str] = None
+    file_url: Optional[str] = None
+    linked_target_type: Optional[str] = None
+    linked_target_id: Optional[int] = None
+    linked_target_uuid: Optional[str] = None
+    linked_target_code: Optional[str] = None
+    linked_target_name: Optional[str] = None
+    acceptance_status: str
+    acceptance_notes: Optional[str] = None
+    accepted_at: Optional[datetime] = None
+    accepted_by: Optional[int] = None
+    accepted_by_name: Optional[str] = None
+    missing_notes: Optional[str] = None
+    missing_marked_at: Optional[datetime] = None
+    missing_marked_by: Optional[int] = None
+    missing_marked_by_name: Optional[str] = None
+    notes: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
+class RdProjectSystemArchiveSummary(BaseModel):
+    total: int
+    filled: int
+    empty: int
+    missing_marked: int
+    accepted: int
+    pending_acceptance: int
+    complete: bool
+    all_accepted: bool
+
+
+class RdProjectSystemArchiveListResponse(BaseModel):
+    items: List[RdProjectSystemArchiveItemResponse]
+    summary: RdProjectSystemArchiveSummary
+    templates: Dict[str, RdProjectSystemArchiveUploadTemplate] = Field(default_factory=dict)
+
+
+class RdProjectSystemArchiveUploadRequest(BaseModel):
+    file_uuid: str
+    file_name: Optional[str] = None
+    file_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class RdProjectSystemArchiveLinkRequest(BaseModel):
+    linked_target_type: str
+    linked_target_id: Optional[int] = None
+    linked_target_uuid: Optional[str] = None
+    linked_target_code: Optional[str] = None
+    linked_target_name: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class RdProjectSystemArchiveMissingRequest(BaseModel):
+    missing_notes: str
+
+
+class RdProjectSystemArchiveAcceptRequest(BaseModel):
+    acceptance_notes: Optional[str] = None
+
+
+class RdProjectSystemArchiveRejectRequest(BaseModel):
+    acceptance_notes: str
 
 
 class RelatedArticleSummary(BaseModel):
@@ -360,6 +447,7 @@ class RdProjectWorkbenchResponse(RdProjectResponse):
     links: List[RdProjectLinkResponse] = Field(default_factory=list)
     related_articles: List[RelatedArticleSummary] = Field(default_factory=list)
     collaboration: ProjectCollaborationSummary = Field(default_factory=ProjectCollaborationSummary)
+    system_archive: Optional[RdProjectSystemArchiveListResponse] = None
 
 
 class PushTrialWorkOrderRequest(BaseModel):

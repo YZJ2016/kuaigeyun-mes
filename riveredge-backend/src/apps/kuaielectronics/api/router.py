@@ -67,8 +67,27 @@ async def health(tenant_id: int = Depends(get_current_tenant)) -> dict:
     ],
 )
 async def extensions_summary(tenant_id: int = Depends(get_current_tenant)) -> dict:
+    from apps.kuaielectronics.services.license_catalog_seed_service import (
+        get_license_catalog_summary,
+    )
+
     decls = IndustryExtensionRuntimeService.declarations_for_module("kuaielectronics")
     docs = await IndustryExtensionRuntimeService.list_active_document_replacements(tenant_id)
+    license_catalog = await get_license_catalog_summary(tenant_id)
+    from apps.kuaielectronics.services.production_file_checklist_seed_service import (
+        get_production_file_checklist_summary,
+    )
+
+    production_file_checklist = await get_production_file_checklist_summary(tenant_id)
+    from apps.kuaielectronics.services.supplier_eval_seed_service import (
+        get_supplier_audit_plan_guide_summary,
+    )
+    from apps.kuaielectronics.services.training_template_seed_service import (
+        get_annual_training_plan_schema_summary,
+    )
+
+    annual_training_plan = await get_annual_training_plan_schema_summary(tenant_id)
+    supplier_audit_plan = await get_supplier_audit_plan_guide_summary(tenant_id)
     return {
         "module": "kuaielectronics",
         "declared": [
@@ -84,7 +103,86 @@ async def extensions_summary(tenant_id: int = Depends(get_current_tenant)) -> di
             for d in decls
         ],
         "active_document_replacements": docs,
+        "license_catalog": license_catalog,
+        "production_file_checklist": production_file_checklist,
+        "annual_training_plan": annual_training_plan,
+        "supplier_audit_plan": supplier_audit_plan,
     }
+
+
+@router.get(
+    "/annual-training-plan-schema",
+    summary="年度培训计划行字段对照（FND/R-04-01）",
+    dependencies=[Depends(require_permission_codes("kuaielectronics:entry:read"))],
+)
+async def get_annual_training_plan_schema(
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from apps.kuaielectronics.services.training_template_seed_service import (
+        get_annual_training_plan_schema_summary,
+    )
+
+    return await get_annual_training_plan_schema_summary(tenant_id)
+
+
+@router.get(
+    "/supplier-audit-plan-guide",
+    summary="供方年度监督审核计划排程对照",
+    dependencies=[Depends(require_permission_codes("kuaielectronics:entry:read"))],
+)
+async def get_supplier_audit_plan_guide(
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from apps.kuaielectronics.services.supplier_eval_seed_service import (
+        get_supplier_audit_plan_guide_summary,
+    )
+
+    return await get_supplier_audit_plan_guide_summary(tenant_id)
+
+
+@router.get(
+    "/production-file-checklist",
+    summary="电子制造 OA 上线资料清单（含生产文件对照）",
+    dependencies=[Depends(require_permission_codes("kuaielectronics:entry:read"))],
+)
+async def get_production_file_checklist(
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from apps.kuaielectronics.services.production_file_checklist_seed_service import (
+        get_production_file_checklist_summary,
+    )
+
+    return await get_production_file_checklist_summary(tenant_id)
+
+
+@router.get(
+    "/license-catalog",
+    summary="证照合规 15 类事项清单（行业预置）",
+    dependencies=[Depends(require_permission_codes("kuaielectronics:entry:read"))],
+)
+async def get_license_catalog(tenant_id: int = Depends(get_current_tenant)) -> Dict[str, Any]:
+    from apps.kuaielectronics.services.license_catalog_seed_service import (
+        get_license_catalog_summary,
+    )
+
+    return await get_license_catalog_summary(tenant_id)
+
+
+@router.post(
+    "/license-catalog/apply-stubs",
+    summary="按行业证照清单生成缺失台账占位",
+    dependencies=[Depends(require_permission_codes("kuaioa:license:create"))],
+)
+async def apply_license_catalog_stubs(
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from apps.kuaielectronics.services.license_catalog_seed_service import (
+        apply_license_catalog_stubs as apply_stubs,
+    )
+
+    result = await apply_stubs(tenant_id, current_user.id)
+    return {"success": True, **result}
 
 
 @router.get(

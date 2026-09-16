@@ -305,6 +305,16 @@ class FormRequestService:
             await apply_form_request_decision(
                 tenant_id, request_id, True, user_id, is_auto_approve=True
             )
+        else:
+            from apps.kuaioa.services.kuaioa_form_request_reminder_service import (
+                KuaioaFormRequestReminderService,
+            )
+
+            row = await KuaioaFormRequest.get_or_none(
+                id=request_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if row:
+                await KuaioaFormRequestReminderService.sync_after_submit(tenant_id, row)
         return await self.get_request(tenant_id, request_id)
 
     async def revoke_request(self, tenant_id: int, request_id: int, user_id: int) -> dict[str, Any]:
@@ -324,6 +334,13 @@ class FormRequestService:
             entity_type="kuaioa_form_request",
             entity_id=int(row.id),
             operator_id=user_id,
+        )
+        from apps.kuaioa.services.kuaioa_form_request_reminder_service import (
+            KuaioaFormRequestReminderService,
+        )
+
+        await KuaioaFormRequestReminderService.sync_after_terminal(
+            tenant_id, request_id, reason="已撤销"
         )
         return model_to_dict(row)
 
@@ -355,3 +372,12 @@ async def apply_form_request_decision(
     row.status = "approved" if approved else "rejected"
     await touch_updated(row, user_id)
     await row.save()
+    from apps.kuaioa.services.kuaioa_form_request_reminder_service import (
+        KuaioaFormRequestReminderService,
+    )
+
+    await KuaioaFormRequestReminderService.sync_after_terminal(
+        tenant_id,
+        request_id,
+        reason="审核通过" if approved else "已驳回",
+    )

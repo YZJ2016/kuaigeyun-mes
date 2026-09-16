@@ -539,6 +539,8 @@ export interface ReworkOrderListResponse {
 export interface ReworkOrderFormProfile {
   industry_profile_enabled?: boolean;
   field_labels: Record<string, string>;
+  product_line_options?: Array<{ code: string; label: string; sort?: number }>;
+  rework_code_format_hint?: string | null;
   rework_path_types: Array<{ code: string; label: string; sort?: number }>;
   form_sections: Array<{
     key: string;

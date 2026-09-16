@@ -87,8 +87,11 @@ from core.services.file.document_version_policy import (
     filter_version_rows,
     resolve_audience,
 )
-from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
+
+RD_DELIVERABLE_AUDIT_NODE = "rd_deliverable"
+RD_DELIVERABLE_ENTITY_TYPE = "rd_deliverable"
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 
 
@@ -173,6 +176,7 @@ class RdProjectService(AppBaseService[RdProject]):
         gates_by_project: Optional[Dict[int, List[RdProjectGate]]] = None,
         members: Optional[List[RdProjectMemberResponse]] = None,
         not_executed: Optional[bool] = None,
+        archive_summaries: Optional[Dict[int, Dict[str, Any]]] = None,
     ) -> RdProjectResponse:
         data = RdProjectResponse.model_validate(project)
         if project.source_project_id and source_codes:
@@ -190,6 +194,12 @@ class RdProjectService(AppBaseService[RdProject]):
             data.not_executed = not_executed
         elif gates is not None and project.status == RdProjectStatus.IN_PROGRESS.value:
             data.not_executed = gates_not_executed(gates)
+        if archive_summaries is not None:
+            from apps.kuaiplm.schemas.rd_project import RdProjectSystemArchiveSummary
+
+            summary = archive_summaries.get(int(project.id))
+            if summary:
+                data.system_archive_summary = RdProjectSystemArchiveSummary.model_validate(summary)
         return data
 
     async def _load_not_executed_flags(
@@ -510,6 +520,13 @@ class RdProjectService(AppBaseService[RdProject]):
             await self._copy_inherit_links(
                 tenant_id, inherit_links_from.id, project.id, created_by
             )
+        from apps.kuaiplm.services.rd_project_system_archive_service import (
+            RdProjectSystemArchiveService,
+        )
+
+        await RdProjectSystemArchiveService().seed_for_project(
+            tenant_id, int(project.id), actor_id=created_by
+        )
         return project
 
     async def _seed_gate_tasks(
@@ -680,12 +697,20 @@ class RdProjectService(AppBaseService[RdProject]):
         not_executed_flags = await self._load_not_executed_flags(
             tenant_id, [int(r.id) for r in rows]
         )
+        from apps.kuaiplm.services.rd_project_system_archive_service import (
+            RdProjectSystemArchiveService,
+        )
+
+        archive_summaries = await RdProjectSystemArchiveService().load_summaries_for_projects(
+            tenant_id, [int(r.id) for r in rows]
+        )
         return [
             self._to_project_response(
                 r,
                 source_codes,
                 gates_by_project,
                 not_executed=not_executed_flags.get(int(r.id), True),
+                archive_summaries=archive_summaries,
             )
             for r in rows
         ], total
@@ -696,12 +721,20 @@ class RdProjectService(AppBaseService[RdProject]):
         gates_by_project = await self._load_gates_by_project(tenant_id, [int(project.id)])
         members = await self._load_project_members(tenant_id, int(project.id))
         not_executed_flags = await self._load_not_executed_flags(tenant_id, [project_id])
+        from apps.kuaiplm.services.rd_project_system_archive_service import (
+            RdProjectSystemArchiveService,
+        )
+
+        archive_summaries = await RdProjectSystemArchiveService().load_summaries_for_projects(
+            tenant_id, [project_id]
+        )
         return self._to_project_response(
             project,
             source_codes,
             gates_by_project,
             members,
             not_executed=not_executed_flags.get(project_id, True),
+            archive_summaries=archive_summaries,
         )
 
     async def get_workbench(self, tenant_id: int, project_id: int) -> RdProjectWorkbenchResponse:
@@ -790,6 +823,14 @@ class RdProjectService(AppBaseService[RdProject]):
             members,
             not_executed=not_executed_flags.get(project_id, True),
         )
+        from apps.kuaiplm.schemas.rd_project import RdProjectSystemArchiveListResponse
+        from apps.kuaiplm.services.rd_project_system_archive_service import (
+            RdProjectSystemArchiveService,
+        )
+
+        archive_payload = await RdProjectSystemArchiveService().list_for_project(
+            tenant_id, project_id
+        )
         return RdProjectWorkbenchResponse.model_validate({
             **base.model_dump(),
             "gates": [RdProjectGateResponse.model_validate(g) for g in gates],
@@ -798,6 +839,7 @@ class RdProjectService(AppBaseService[RdProject]):
             "links": [RdProjectLinkResponse.model_validate(l) for l in links],
             "related_articles": related_articles,
             "progress": progress,
+            "system_archive": RdProjectSystemArchiveListResponse.model_validate(archive_payload),
             "collaboration": ProjectCollaborationSummary(
                 requirement_count=req_count,
                 design_review_count=dr_count,
@@ -1187,28 +1229,178 @@ class RdProjectService(AppBaseService[RdProject]):
             status = str(data.status).strip().upper()
             if status not in {s.value for s in RdDeliverableStatus}:
                 raise BusinessLogicError(f"非法交付物状态: {status}")
+            if status in {
+                RdDeliverableStatus.SUBMITTED.value,
+                RdDeliverableStatus.APPROVED.value,
+            }:
+                raise BusinessLogicError("提交与批准须走专用接口")
             update_fields["status"] = status
-            if status == RdDeliverableStatus.SUBMITTED.value:
-                update_fields["submitted_at"] = resolve_business_datetime()
-            if status == RdDeliverableStatus.APPROVED.value:
-                update_fields["approved_at"] = resolve_business_datetime()
 
         async with in_transaction():
             await row.update_from_dict(update_fields).save()
             row = await RdProjectDeliverable.get(id=deliverable_id)
-            if row.status == RdDeliverableStatus.APPROVED.value:
-                await RdProjectDeliverableVersion.filter(
-                    tenant_id=tenant_id,
-                    deliverable_id=row.id,
-                    is_effective=True,
-                    deleted_at__isnull=True,
-                ).exclude(version=row.version).update(
-                    is_effective=False,
-                    status="obsolete",
-                    obsolete_at=resolve_business_datetime(),
-                )
             await self._ensure_deliverable_version_row(row, actor_name=user_info["name"])
         return RdProjectDeliverableResponse.model_validate(row)
+
+    async def _get_deliverable_or_404(
+        self, tenant_id: int, project_id: int, deliverable_id: int
+    ) -> RdProjectDeliverable:
+        row = await RdProjectDeliverable.get_or_none(
+            tenant_id=tenant_id,
+            id=deliverable_id,
+            project_id=project_id,
+            deleted_at__isnull=True,
+        )
+        if not row:
+            raise NotFoundError(f"交付物不存在: {deliverable_id}")
+        return row
+
+    async def _apply_deliverable_approved(
+        self,
+        tenant_id: int,
+        row: RdProjectDeliverable,
+        *,
+        actor_id: int,
+        actor_name: str,
+    ) -> RdProjectDeliverable:
+        async with in_transaction():
+            row.status = RdDeliverableStatus.APPROVED.value
+            row.approved_at = resolve_business_datetime()
+            row.updated_by = actor_id
+            row.updated_by_name = actor_name
+            await row.save()
+            await RdProjectDeliverableVersion.filter(
+                tenant_id=tenant_id,
+                deliverable_id=row.id,
+                is_effective=True,
+                deleted_at__isnull=True,
+            ).exclude(version=row.version).update(
+                is_effective=False,
+                status="obsolete",
+                obsolete_at=resolve_business_datetime(),
+            )
+            await self._ensure_deliverable_version_row(row, actor_name=actor_name)
+        return row
+
+    async def submit_deliverable(
+        self,
+        tenant_id: int,
+        project_id: int,
+        deliverable_id: int,
+        user: User,
+    ) -> RdProjectDeliverableResponse:
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+        from core.services.approval.audit_binding_service import AuditBindingService
+        from apps.kuaiplm.services.plm_audit_flow_sync import submit_instance_auto_passed
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_RD_DELIVERABLE as REMINDER_ENTITY,
+            PlmPendingApprovalReminderService,
+        )
+
+        row = await self._get_deliverable_or_404(tenant_id, project_id, deliverable_id)
+        if row.status != RdDeliverableStatus.PENDING.value:
+            raise BusinessLogicError("仅待提交交付物可提交审核")
+        if not row.file_uuid and not (row.file_url or "").strip():
+            raise ValidationError("提交前须上传文件")
+
+        project = await self._get_project_or_404(tenant_id, project_id)
+        user_info = await self.get_user_info(user.id)
+        now = resolve_business_datetime()
+        row.status = RdDeliverableStatus.SUBMITTED.value
+        row.submitted_at = now
+        row.updated_by = user.id
+        row.updated_by_name = user_info["name"]
+        await row.save()
+        await self._ensure_deliverable_version_row(row, actor_name=user_info["name"])
+
+        approval_instance = None
+        if await AuditBindingService.is_audit_enabled(tenant_id, RD_DELIVERABLE_AUDIT_NODE):
+            approval_instance = await ApprovalInstanceService.start_approval_for_node(
+                tenant_id=tenant_id,
+                user_id=user.id,
+                node_key=RD_DELIVERABLE_AUDIT_NODE,
+                entity_type=RD_DELIVERABLE_ENTITY_TYPE,
+                entity_id=row.id,
+                entity_uuid=str(row.uuid),
+                title=f"研发交付物审核 {row.name} {row.version}",
+                content=row.description or row.name,
+                business_type=(row.deliverable_type or ""),
+                send_notification=True,
+            )
+            if approval_instance is None:
+                raise ValidationError(
+                    f"审核已开启但未找到可用审批流程，请检查 {RD_DELIVERABLE_AUDIT_NODE} 绑定"
+                )
+
+        await PlmPendingApprovalReminderService.sync_after_submit(
+            tenant_id,
+            entity_type=REMINDER_ENTITY,
+            entity_id=row.id,
+            entity_uuid=str(row.uuid),
+            submitted_at=row.submitted_at,
+            doc_code=row.name,
+            title=row.name,
+            project_code=project.project_code,
+            doc_label="研发交付物 ",
+        )
+
+        if submit_instance_auto_passed(approval_instance):
+            approved = await self.approve_deliverable(
+                tenant_id, project_id, deliverable_id, user
+            )
+            return approved
+        return RdProjectDeliverableResponse.model_validate(row)
+
+    async def approve_deliverable(
+        self,
+        tenant_id: int,
+        project_id: int,
+        deliverable_id: int,
+        user: User,
+    ) -> RdProjectDeliverableResponse:
+        from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_RD_DELIVERABLE as REMINDER_ENTITY,
+            PlmPendingApprovalReminderService,
+        )
+
+        row = await self._get_deliverable_or_404(tenant_id, project_id, deliverable_id)
+        if row.status != RdDeliverableStatus.SUBMITTED.value:
+            raise BusinessLogicError("仅待审交付物可通过")
+        await assert_plm_manual_approval_action(
+            tenant_id,
+            audit_node=RD_DELIVERABLE_AUDIT_NODE,
+            entity_type=RD_DELIVERABLE_ENTITY_TYPE,
+            entity_id=deliverable_id,
+            doc_label="研发交付物",
+            verb="审核",
+        )
+        user_info = await self.get_user_info(user.id)
+        row = await self._apply_deliverable_approved(
+            tenant_id,
+            row,
+            actor_id=user.id,
+            actor_name=user_info["name"],
+        )
+        await PlmPendingApprovalReminderService.sync_after_terminal(
+            tenant_id,
+            entity_type=REMINDER_ENTITY,
+            entity_id=deliverable_id,
+            reason="审核通过",
+        )
+        return RdProjectDeliverableResponse.model_validate(row)
+
+    async def approve_deliverable_by_id(
+        self, tenant_id: int, deliverable_id: int, user: User
+    ) -> RdProjectDeliverableResponse:
+        row = await RdProjectDeliverable.get_or_none(
+            tenant_id=tenant_id, id=deliverable_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError(f"交付物不存在: {deliverable_id}")
+        return await self.approve_deliverable(
+            tenant_id, row.project_id, deliverable_id, user
+        )
 
     async def list_deliverable_versions(
         self,
@@ -1338,8 +1530,20 @@ class RdProjectService(AppBaseService[RdProject]):
             RdDeliverableStatus.SUBMITTED.value,
         ):
             raise BusinessLogicError("仅草稿或已提交交付物可驳回")
+        if row.status == RdDeliverableStatus.SUBMITTED.value:
+            from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
+
+            await assert_plm_manual_approval_action(
+                tenant_id,
+                audit_node=RD_DELIVERABLE_AUDIT_NODE,
+                entity_type=RD_DELIVERABLE_ENTITY_TYPE,
+                entity_id=deliverable_id,
+                doc_label="研发交付物",
+                verb="驳回",
+            )
         user_info = await self.get_user_info(actor_id)
         reason = (payload.reason if payload else None) or None
+        was_pending_approval = row.status == RdDeliverableStatus.SUBMITTED.value
 
         async with in_transaction():
             draft_ver = await RdProjectDeliverableVersion.filter(
@@ -1396,7 +1600,43 @@ class RdProjectService(AppBaseService[RdProject]):
             row.updated_by = actor_id
             row.updated_by_name = user_info["name"]
             await row.save()
+        if was_pending_approval:
+            from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+                ENTITY_RD_DELIVERABLE as REMINDER_ENTITY,
+                PlmPendingApprovalReminderService,
+            )
+
+            await PlmPendingApprovalReminderService.sync_after_terminal(
+                tenant_id,
+                entity_type=REMINDER_ENTITY,
+                entity_id=deliverable_id,
+                reason="已驳回",
+            )
         return RdProjectDeliverableResponse.model_validate(row)
+
+    async def reject_deliverable_by_id(
+        self,
+        tenant_id: int,
+        deliverable_id: int,
+        user: User,
+        *,
+        reason: Optional[str] = None,
+    ) -> RdProjectDeliverableResponse:
+        from apps.kuaiplm.schemas.rd_project import RdProjectDeliverableRejectRequest
+
+        row = await RdProjectDeliverable.get_or_none(
+            tenant_id=tenant_id, id=deliverable_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError(f"交付物不存在: {deliverable_id}")
+        payload = RdProjectDeliverableRejectRequest(reason=reason) if reason else None
+        return await self.reject_deliverable(
+            tenant_id,
+            row.project_id,
+            deliverable_id,
+            payload,
+            actor_id=user.id,
+        )
 
     async def delete_deliverable(
         self, tenant_id: int, project_id: int, deliverable_id: int, deleted_by: int

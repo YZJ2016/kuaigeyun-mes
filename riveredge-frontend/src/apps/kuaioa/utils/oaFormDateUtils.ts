@@ -60,3 +60,26 @@ export function mapOaFormValuesToPayload(
   }
   return payload;
 }
+
+/** 表单单文件字段 ↔ 后端 attachment_uuids 列表 */
+export function mapOaAttachmentListToFormField(
+  record: Record<string, unknown>,
+  formField = 'attachment_file',
+  listField = 'attachment_uuids',
+): Record<string, unknown> {
+  const uuids = record[listField];
+  return {
+    ...record,
+    [formField]: Array.isArray(uuids) && uuids.length ? uuids[0] : undefined,
+  };
+}
+
+export function mapOaAttachmentFormFieldToList(
+  values: Record<string, unknown>,
+  formField = 'attachment_file',
+  listField = 'attachment_uuids',
+): Record<string, unknown> {
+  const { [formField]: raw, ...rest } = values;
+  const uuid = serializeFileFieldValue(raw);
+  return { ...rest, [listField]: uuid ? [uuid] : [] };
+}

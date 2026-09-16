@@ -10,4 +10,10 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaioa.models.announcement",
     "apps.kuaioa.models.seal",
     "apps.kuaioa.models.collaboration",
+    "apps.kuaioa.models.employee",
+    "apps.kuaioa.models.attendance",
+    "apps.kuaioa.models.payroll",
+    "apps.kuaioa.models.welfare",
+    "apps.kuaioa.models.post_subsidy",
+    "apps.kuaioa.models.minimum_wage",
 ]

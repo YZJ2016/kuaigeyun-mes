@@ -307,10 +307,13 @@ export interface ProcessRouteVersionCompareResult {
   }>;
 }
 
+export type SopDomain = 'pe' | 'qc';
+
 export interface SOP {
   id: number;
   uuid: string;
   tenantId: number;
+  sopDomain: SopDomain;
   code: string;
   name: string;
   operationId?: number;
@@ -354,6 +357,7 @@ export interface SOP {
 }
 
 export interface SOPCreate {
+  sopDomain: SopDomain;
   code: string;
   name: string;
   operationId?: number;
@@ -406,6 +410,7 @@ export interface SOPUpdate {
 export interface SOPListParams {
   skip?: number;
   limit?: number;
+  sopDomain?: SopDomain;
   operationId?: number;
   isActive?: boolean;
   carrier?: string;

@@ -352,6 +352,24 @@ const RdProjectsListPage: React.FC = () => {
         ...RD_GATE_PROGRESS_REMAINDER_COLUMN_DEFAULTS,
         render: (_, row) => renderRdGateProgressCell(t, row.gates),
       },
+      {
+        title: t('app.kuaiplm.rdProjects.systemArchive.listColumn'),
+        dataIndex: 'system_archive_summary',
+        key: 'system_archive_summary',
+        width: 108,
+        minWidth: 108,
+        uniTableKeepWidth: true,
+        resizable: false,
+        search: false,
+        render: (_, row) => {
+          const s = row.system_archive_summary;
+          if (!s) return '—';
+          return t('app.kuaiplm.rdProjects.systemArchive.listCell', {
+            filled: s.filled,
+            total: s.total,
+          });
+        },
+      },
       ...plmCreatedUpdatedColumns<RdProject>(t),
       {
         title: t('app.kuaiplm.common.columns.lifecycle'),

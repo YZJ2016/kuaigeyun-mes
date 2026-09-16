@@ -2,6 +2,9 @@
 
 from fastapi import APIRouter, Depends
 
+from apps.kuaioa.services.kuaioa_form_notification_presets import (
+    load_kuaioa_form_notification_rule_presets,
+)
 from apps.kuaioa.services.kuaioa_license_notification_presets import (
     load_kuaioa_license_notification_rule_presets,
 )
@@ -29,4 +32,16 @@ async def load_license_notification_presets(
     tenant_id: int = Depends(get_current_tenant),
 ):
     result = await load_kuaioa_license_notification_rule_presets(tenant_id)
+    return {"data": result, "success": True}
+
+
+@router.post(
+    "/notification-rule-presets/form-request/load",
+    summary="Load general signoff form request notification presets",
+)
+async def load_form_request_notification_presets(
+    _auth=Depends(require_access("kuaioa.workbench", "read", required_permissions=["kuaioa:workbench:read"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    result = await load_kuaioa_form_notification_rule_presets(tenant_id)
     return {"data": result, "success": True}

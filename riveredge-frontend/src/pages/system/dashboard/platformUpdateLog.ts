@@ -36,6 +36,277 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'rework-menu-restore-pack-menu-false',
+    date: '2026-09-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.rework-menu-restore-pack-menu-false.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rework-menu-restore-pack-menu-false.description',
+  },
+  {
+    id: 'prototype-build-sheet-audit-cols',
+    date: '2026-09-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.prototype-build-sheet-audit-cols.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.prototype-build-sheet-audit-cols.description',
+  },
+  {
+    id: 'bom-code-preview-wait-material',
+    date: '2026-09-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.bom-code-preview-wait-material.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.bom-code-preview-wait-material.description',
+  },
+  {
+    id: 'bom-code-duplicate-preview-msg',
+    date: '2026-09-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.bom-code-duplicate-preview-msg.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.bom-code-duplicate-preview-msg.description',
+  },
+  {
+    id: 'electronics-pack-menu-scope',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.electronics-pack-menu-scope.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.electronics-pack-menu-scope.description',
+  },
+  {
+    id: 'kuaiplm-router-import-fix-r15',
+    date: '2026-09-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-router-import-fix-r15.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaiplm-router-import-fix-r15.description',
+  },
+  {
+    id: 'kuaioa-menu-hr-r01',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-menu-hr-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-menu-hr-r01.description',
+  },
+  {
+    id: 'kuaioa-hr-excel-remainder-r01',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-hr-excel-remainder-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-hr-excel-remainder-r01.description',
+  },
+  {
+    id: 'kuaioa-welfare-annual-r01',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-welfare-annual-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-welfare-annual-r01.description',
+  },
+  {
+    id: 'kuaioa-payroll-living-r01',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-payroll-living-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-payroll-living-r01.description',
+  },
+  {
+    id: 'it-admin-asset-lifecycle-r14',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.it-admin-asset-lifecycle-r14.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.it-admin-asset-lifecycle-r14.description',
+  },
+  {
+    id: 'rd-project-archive-phase-r10',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-project-archive-phase-r10.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.rd-project-archive-phase-r10.description',
+  },
+  {
+    id: 'prototype-build-sheet-r10',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.prototype-build-sheet-r10.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.prototype-build-sheet-r10.description',
+  },
+  {
+    id: 'kuaioa-attendance-monthly-r01',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-attendance-monthly-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-attendance-monthly-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-profile-r01',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-profile-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-profile-r01.description',
+  },
+  {
+    id: 'structure-trial-flow-13step-r09',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.structure-trial-flow-13step-r09.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.structure-trial-flow-13step-r09.description',
+  },
+  {
+    id: 'structure-form-approval-8h-r09',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.structure-form-approval-8h-r09.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.structure-form-approval-8h-r09.description',
+  },
+  {
+    id: 'rd-deliverable-approval-24h-r31',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-deliverable-approval-24h-r31.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-deliverable-approval-24h-r31.description',
+  },
+  {
+    id: 'hr-schedule-split-menu-r01',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.hr-schedule-split-menu-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.hr-schedule-split-menu-r01.description',
+  },
+  {
+    id: 'ecn-doc-template-change-kind-r08',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.ecn-doc-template-change-kind-r08.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ecn-doc-template-change-kind-r08.description',
+  },
+  {
+    id: 'lab-request-outsource-price-r64',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.lab-request-outsource-price-r64.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.lab-request-outsource-price-r64.description',
+  },
+  {
+    id: 'rework-material-required-at-r11',
+    date: '2026-09-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.rework-material-required-at-r11.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.rework-material-required-at-r11.description',
+  },
+  {
+    id: 'ecn-closed-notification-r04',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.ecn-closed-notification-r04.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.ecn-closed-notification-r04.description',
+  },
+  {
+    id: 'training-approval-flow-r12',
+    date: '2026-09-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.training-approval-flow-r12.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.training-approval-flow-r12.description',
+  },
+  {
+    id: 'qc-sop-domain-r01-55',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.qc-sop-domain-r01-55.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.qc-sop-domain-r01-55.description',
+  },
+  {
+    id: 'annual-lab-plan-next-month-reminder-r07',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.annual-lab-plan-next-month-reminder-r07.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.annual-lab-plan-next-month-reminder-r07.description',
+  },
+  {
+    id: 'rd-project-system-archive-r01-70',
+    date: '2026-09-16',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-project-system-archive-r01-70.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-project-system-archive-r01-70.description',
+  },
+  {
+    id: 'training-plan-annual-distributed-notify',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.training-plan-annual-distributed-notify.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.training-plan-annual-distributed-notify.description',
+  },
+  {
+    id: 'phase2-acceptance-verify-script',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.phase2-acceptance-verify-script.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.phase2-acceptance-verify-script.description',
+  },
+  {
+    id: 'phase2-training-plan-supplier-schedule-guides',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.phase2-training-plan-supplier-schedule-guides.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.phase2-training-plan-supplier-schedule-guides.description',
+  },
+  {
+    id: 'phase2-annual-audit-production-checklist',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.phase2-annual-audit-production-checklist.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.phase2-annual-audit-production-checklist.description',
+  },
+  {
+    id: 'phase2-calibration-license-stubs',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.phase2-calibration-license-stubs.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.phase2-calibration-license-stubs.description',
+  },
+  {
+    id: 'phase2-training-license-industry-seeds',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.phase2-training-license-industry-seeds.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.phase2-training-license-industry-seeds.description',
+  },
+  {
+    id: 'phase2-industry-seeds-production-daily-supplier-eval',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.phase2-industry-seeds-production-daily-supplier-eval.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.phase2-industry-seeds-production-daily-supplier-eval.description',
+  },
+  {
+    id: 'phase1-acceptance-partial-product-line-ecn-validation',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.phase1-acceptance-partial-product-line-ecn-validation.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.phase1-acceptance-partial-product-line-ecn-validation.description',
+  },
+  {
+    id: 'uni-im-open-chat-scroll-bottom',
+    date: '2026-09-16',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-im-open-chat-scroll-bottom.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.uni-im-open-chat-scroll-bottom.description',
+  },
+  {
     id: 'uni-im-direct-peer-title',
     date: '2026-09-16',
     type: 'fix',

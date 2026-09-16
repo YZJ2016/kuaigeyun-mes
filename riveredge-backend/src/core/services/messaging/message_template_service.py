@@ -1052,6 +1052,44 @@ class MessageTemplateService:
             "is_active": True,
         },
         {
+            "name": "PLM 待审超时",
+            "code": "PLM_PENDING_APPROVAL_OVERDUE",
+            "type": "internal",
+            "description": "研发交付物/固件/生产文件提交后超过 24 小时仍未审核",
+            "subject": "【待审超时】{doc_label}{doc_code} 已超过 {delay_hours} 小时",
+            "content": (
+                "{doc_label}{doc_code}（{title}）"
+                " 项目 {project_code} 已超过 {delay_hours} 小时未审核，请尽快处理。"
+            ),
+            "variables": {
+                "doc_code": "单号或名称",
+                "title": "标题",
+                "project_code": "项目代号（可选前缀）",
+                "doc_label": "单据类型标签",
+                "delay_hours": "超时小时数",
+                "entity_type": "实体类型",
+            },
+            "is_active": True,
+        },
+        {
+            "name": "通用会签待审超时",
+            "code": "KUAIOA_FORM_REQUEST_OVERDUE",
+            "type": "internal",
+            "description": "5M/物料申请/样品检验等通用会签提交后超过 8 小时仍未审核",
+            "subject": "【会签待审】{request_code} 已超过 {delay_hours} 小时",
+            "content": (
+                "申请 {request_code}（{title}）类型 {business_type} "
+                "已超过 {delay_hours} 小时未审核，请尽快处理。"
+            ),
+            "variables": {
+                "request_code": "申请单号",
+                "title": "标题",
+                "business_type": "业务类型",
+                "delay_hours": "超时小时数",
+            },
+            "is_active": True,
+        },
+        {
             "name": "实验报告待批准",
             "code": "PLM_LAB_REPORT_SUBMITTED",
             "type": "internal",
@@ -1105,6 +1143,45 @@ class MessageTemplateService:
             "is_active": True,
         },
         {
+            "name": "工程变更关闭广播",
+            "code": "PLM_ECN_CLOSED",
+            "type": "internal",
+            "description": "ERP 稽核通过后通知常规采购、前期采购及会签相关人员",
+            "subject": "【工程变更已关闭】{ecn_code} {title}",
+            "content": (
+                "变更单 {ecn_code}（{title}）已在 ERP 完成更新并通过稽核，"
+                "ERP 单号 {erp_ecn_no}。请各部门按各自处理意见执行。"
+            ),
+            "variables": {
+                "ecn_code": "变更单号",
+                "title": "标题",
+                "erp_ecn_no": "ERP 单号",
+                "detail_path": "详情路径",
+            },
+            "is_active": True,
+        },
+        {
+            "name": "年度例式下月任务提醒",
+            "code": "PLM_ANNUAL_LAB_MONTH_DUE",
+            "type": "internal",
+            "description": "年度例式实验计划月度任务到期前提醒责任人",
+            "subject": "【年度例式】{year_month} {month_title} 任务即将到期",
+            "content": (
+                "年度计划 {plan_code}（{plan_title}）{year_month} 任务「{month_title}」"
+                "将于 {due_at} 到期，责任人 {owner_user_name}，请按计划执行实验、上传报告并记录不良。"
+            ),
+            "variables": {
+                "plan_code": "计划单号",
+                "plan_title": "计划标题",
+                "year_month": "任务月份",
+                "month_title": "月度任务",
+                "owner_user_name": "责任人",
+                "due_at": "到期时刻",
+                "detail_path": "详情路径",
+            },
+            "is_active": True,
+        },
+        {
             "name": "部门培训申请窗口提醒",
             "code": "OA_TRAINING_DEPT_APPLICATION_WINDOW",
             "type": "internal",
@@ -1137,6 +1214,24 @@ class MessageTemplateService:
                 "plan_year": "计划年度",
                 "detail_path": "详情路径",
                 "due_at": "提醒时间",
+            },
+            "is_active": True,
+        },
+        {
+            "name": "年度培训计划批准下发",
+            "code": "OA_TRAINING_ANNUAL_PLAN_DISTRIBUTED",
+            "type": "internal",
+            "description": "年度培训计划审批通过后下发各部门及体系查阅",
+            "subject": "【年度培训计划】{plan_year} 年度已下发",
+            "content": (
+                "{plan_year} 年度培训计划（{plan_code} {plan_name}）已批准下发，"
+                "请本部门查阅。入口：{detail_path}"
+            ),
+            "variables": {
+                "plan_year": "计划年度",
+                "plan_code": "计划编号",
+                "plan_name": "计划名称",
+                "detail_path": "详情路径",
             },
             "is_active": True,
         },

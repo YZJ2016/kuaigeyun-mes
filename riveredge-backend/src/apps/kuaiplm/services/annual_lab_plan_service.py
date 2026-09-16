@@ -201,6 +201,12 @@ class AnnualLabPlanService(AppBaseService[AnnualLabPlan]):
                 remarks=remarks,
             )
             await row.save()
+        if plan.status == PLAN_STATUS_APPROVED:
+            from apps.kuaiplm.services.annual_lab_plan_reminder_service import (
+                AnnualLabPlanReminderService,
+            )
+
+            await AnnualLabPlanReminderService.sync_plan(tenant_id, plan.id)
 
     async def create(
         self, tenant_id: int, data: AnnualLabPlanCreate, current_user: User
@@ -329,6 +335,11 @@ class AnnualLabPlanService(AppBaseService[AnnualLabPlan]):
         row.rejected_at = None
         apply_update_audit(row, current_user)
         await row.save()
+        from apps.kuaiplm.services.annual_lab_plan_reminder_service import (
+            AnnualLabPlanReminderService,
+        )
+
+        await AnnualLabPlanReminderService.sync_plan(tenant_id, row.id)
         return await self._to_response(row)
 
     async def reject(
@@ -361,6 +372,13 @@ class AnnualLabPlanService(AppBaseService[AnnualLabPlan]):
         row.closed_at = resolve_business_datetime()
         apply_update_audit(row, current_user)
         await row.save()
+        from apps.kuaiplm.services.annual_lab_plan_reminder_service import (
+            AnnualLabPlanReminderService,
+        )
+
+        await AnnualLabPlanReminderService.stop_plan(
+            tenant_id, row.id, reason="年度计划已关闭"
+        )
         return await self._to_response(row)
 
     async def delete(
@@ -432,6 +450,18 @@ class AnnualLabPlanService(AppBaseService[AnnualLabPlan]):
         await month.save()
         apply_update_audit(plan, current_user)
         await plan.save()
+        from apps.kuaiplm.services.annual_lab_plan_reminder_service import (
+            AnnualLabPlanReminderService,
+        )
+
+        if month.month_status == MONTH_STATUS_COMPLETED:
+            await AnnualLabPlanReminderService.stop_month(
+                tenant_id, month.id, reason="月度任务已完成"
+            )
+        else:
+            await AnnualLabPlanReminderService.ensure_month_reminder(
+                tenant_id, plan, month
+            )
         return await self._to_response(plan)
 
     async def submit_issue(

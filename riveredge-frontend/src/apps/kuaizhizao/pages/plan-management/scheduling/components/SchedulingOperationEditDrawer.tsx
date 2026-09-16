@@ -338,7 +338,7 @@ const SchedulingOperationEditDrawer: React.FC<SchedulingOperationEditDrawerProps
           style={{ marginBottom: 12 }}
           title={t('app.kuaizhizao.scheduling.prep.rateWarningTitle', { items: rateWarnings.join('、') })}
           description={
-            <Link to="/apps/kuaizhizao/performance/employee-configs">
+            <Link to="/apps/kuaioa/hr/employee-configs">
               {t('app.kuaizhizao.scheduling.prep.gotoPerformanceConfig')}
             </Link>
           }

@@ -253,6 +253,7 @@ class AssetPurchaseService:
             STAGE_CARDED,
             STAGE_FINANCE_AUDITED,
             STAGE_WRITTEN_OFF,
+            STAGE_SCRAPPED,
         }
         if target not in allowed:
             raise BusinessLogicError(f"不支持的生命周期阶段: {target}")
@@ -261,7 +262,9 @@ class AssetPurchaseService:
         if _stage_index(target) <= _stage_index(current):
             raise BusinessLogicError("生命周期阶段不可回退或重复推进")
         if _stage_index(target) != _stage_index(current) + 1:
-            raise BusinessLogicError("请按采买→付款→入库→领料→建卡→财务审核→销账顺序推进")
+            raise BusinessLogicError(
+                "请按采买→付款→入库→领料→建卡→财务审核→销账→原设备报废顺序推进"
+            )
 
         if target == STAGE_PAID:
             if data.payment_amount is None:
@@ -289,6 +292,11 @@ class AssetPurchaseService:
                 status=ASSET_STATUS_WRITTEN_OFF,
                 written_off_at=resolve_business_datetime(),
             )
+
+        if target == STAGE_SCRAPPED:
+            await KuaioaAsset.filter(
+                tenant_id=tenant_id, purchase_id=purchase_id, deleted_at__isnull=True
+            ).update(status=ASSET_STATUS_SCRAPPED)
 
         row.lifecycle_stage = target
         if data.file_uuid:
@@ -538,11 +546,14 @@ class AssetRegistryService:
         )
         if not row:
             raise NotFoundError("固定资产不存在")
+        if row.status != ASSET_STATUS_WRITTEN_OFF:
+            raise BusinessLogicError("须先完成财务销账再报废")
         row.status = ASSET_STATUS_SCRAPPED
         await touch_updated(row, user_id)
         await row.save()
         user = await User.get_or_none(id=user_id)
-        await AssetPurchaseService()._append_event(
+        purchase_service = AssetPurchaseService()
+        await purchase_service._append_event(
             tenant_id,
             purchase_id=row.purchase_id,
             asset_id=asset_id,
@@ -551,6 +562,20 @@ class AssetRegistryService:
             user=user,
             operator_id=user_id,
         )
+        if row.purchase_id:
+            purchase = await KuaioaAssetPurchase.get_or_none(
+                id=row.purchase_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if purchase:
+                remaining = await KuaioaAsset.filter(
+                    tenant_id=tenant_id,
+                    purchase_id=row.purchase_id,
+                    deleted_at__isnull=True,
+                ).exclude(status=ASSET_STATUS_SCRAPPED).count()
+                if remaining == 0:
+                    purchase.lifecycle_stage = STAGE_SCRAPPED
+                    await touch_updated(purchase, user_id)
+                    await purchase.save()
         return model_to_dict(row)
 
     async def finance_audit_asset(

@@ -70,9 +70,13 @@ export function buildAssetPurchaseStageOptions(t: TFunction) {
 
 export function buildLeaveTypeOptions(t: TFunction) {
   return [
-    { label: t('app.kuaioa.leave.type.annual'), value: 'annual' },
-    { label: t('app.kuaioa.leave.type.sick'), value: 'sick' },
     { label: t('app.kuaioa.leave.type.personal'), value: 'personal' },
+    { label: t('app.kuaioa.leave.type.sick'), value: 'sick' },
+    { label: t('app.kuaioa.leave.type.wedding'), value: 'wedding' },
+    { label: t('app.kuaioa.leave.type.funeral'), value: 'funeral' },
+    { label: t('app.kuaioa.leave.type.maternity'), value: 'maternity' },
+    { label: t('app.kuaioa.leave.type.paternity'), value: 'paternity' },
+    { label: t('app.kuaioa.leave.type.annual'), value: 'annual' },
     { label: t('app.kuaioa.leave.type.business_trip'), value: 'business_trip' },
   ];
 }

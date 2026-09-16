@@ -346,6 +346,36 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
                     f"物料行 {line.material_code} 须指定会签负责人"
                 )
 
+        profile = await self._profile(tenant_id)
+        enabled = await IndustryExtensionRuntimeService.is_industry_profile_enabled(
+            tenant_id, PROFILE_KEY
+        )
+        if enabled:
+            required = IndustryExtensionRuntimeService.require_fields_for_kind(
+                profile, row.change_kind
+            )
+            payload = row.extension_payload if isinstance(row.extension_payload, dict) else {}
+            for field_key in required:
+                if field_key == "change_reason":
+                    if not (row.change_reason or "").strip():
+                        msg = (
+                            IndustryExtensionRuntimeService.validation_message(
+                                profile, row.change_kind
+                            )
+                            or "请填写变更原因"
+                        )
+                        raise ValidationError(msg)
+                    continue
+                value = payload.get(field_key)
+                if value is None or value == "":
+                    msg = (
+                        IndustryExtensionRuntimeService.validation_message(
+                            profile, row.change_kind
+                        )
+                        or f"请填写 {field_key}"
+                    )
+                    raise ValidationError(msg)
+
         row.status = "pending"
         row.submitted_at = resolve_business_datetime()
         row.erp_audit_status = None
@@ -448,6 +478,17 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
             row.status = "erp_failed"
         apply_update_audit(row, user)
         await row.save()
+        if result == "pass":
+            from apps.kuaiplm.services.kuaiplm_business_notification import notify_ecn_closed
+
+            await notify_ecn_closed(
+                tenant_id,
+                ecn_id=ecn_id,
+                ecn_code=row.ecn_code,
+                title=row.title,
+                erp_ecn_no=row.erp_ecn_no or "",
+                creator_user_id=row.created_by,
+            )
         mats, signoffs = await self._load_children(tenant_id, ecn_id)
         return self._to_response(row, mats, signoffs)
 

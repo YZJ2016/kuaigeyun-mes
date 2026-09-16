@@ -14,7 +14,7 @@ export type EcnStatus =
   | 'erp_failed'
   | 'closed';
 
-export type EcnChangeKind = 'material' | 'process' | 'drawing' | 'other';
+export type EcnChangeKind = 'material' | 'process' | 'drawing' | 'doc_template' | 'other';
 
 export interface EcnMaterialLine {
   id?: number;

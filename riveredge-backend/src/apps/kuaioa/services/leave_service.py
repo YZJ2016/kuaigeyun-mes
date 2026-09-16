@@ -122,3 +122,13 @@ async def apply_leave_request_decision(
         entity_type=_CONFIG.entity_type,
         doc_label=_CONFIG.title_prefix,
     )
+    if not approved:
+        return
+    leave = await KuaioaLeaveRequest.get_or_none(
+        id=request_id, tenant_id=tenant_id, deleted_at__isnull=True
+    )
+    if not leave:
+        return
+    from apps.kuaioa.services.attendance_service import AttendanceService
+
+    await AttendanceService().apply_leave_to_attendance(tenant_id, leave, user_id)

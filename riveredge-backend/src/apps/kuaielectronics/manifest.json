@@ -4,7 +4,7 @@
 
   "name": "电子制造",
 
-  "version": "0.7.0",
+  "version": "0.8.4",
 
   "description": "电子制造 / EMS-OEM 行业包：样品/BOM/ECN/试流/返工 form-profile 种子与门控，行业菜单聚合，ESD 点检看板，OEM 签样 document 替代",
 
@@ -84,7 +84,9 @@
 
       "profile_key": "kuaiplm.sample_process",
 
-      "menu_sort_order": 10
+      "menu_sort_order": 10,
+
+      "pack_menu": false
 
     },
 
@@ -104,7 +106,9 @@
 
       "profile_key": "kuaiplm.bom_collab",
 
-      "menu_sort_order": 20
+      "menu_sort_order": 20,
+
+      "pack_menu": false
 
     },
 
@@ -124,7 +128,9 @@
 
       "profile_key": "kuaiplm.ecn",
 
-      "menu_sort_order": 30
+      "menu_sort_order": 30,
+
+      "pack_menu": false
 
     },
 
@@ -144,7 +150,9 @@
 
       "profile_key": "kuaiplm.trial_flow",
 
-      "menu_sort_order": 40
+      "menu_sort_order": 40,
+
+      "pack_menu": false
 
     },
 
@@ -164,7 +172,9 @@
 
       "profile_key": "kuaizhizao.rework_order",
 
-      "menu_sort_order": 50
+      "menu_sort_order": 50,
+
+      "pack_menu": false
 
     },
 
@@ -199,6 +209,54 @@
       "kind": "standalone",
 
       "pack_menu": true
+
+    },
+
+    {
+
+      "id": "electronics.production_daily",
+
+      "kind": "standalone"
+
+    },
+
+    {
+
+      "id": "electronics.supplier_eval",
+
+      "kind": "standalone"
+
+    },
+
+    {
+
+      "id": "electronics.training_templates",
+
+      "kind": "standalone"
+
+    },
+
+    {
+
+      "id": "electronics.license_catalog",
+
+      "kind": "standalone"
+
+    },
+
+    {
+
+      "id": "electronics.calibration_notify",
+
+      "kind": "standalone"
+
+    },
+
+    {
+
+      "id": "electronics.production_file_checklist",
+
+      "kind": "standalone"
 
     }
 

@@ -83,10 +83,17 @@ import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../..
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const SOP_PAGE_CODE = 'master-data-process-sop';
 
+export type SopPageDomain = 'pe' | 'qc';
+
+export interface SOPPageProps {
+  /** 固定业务域：pe=PE制造工段 qc=QC材料SOP */
+  fixedSopDomain?: SopPageDomain;
+}
+
 /**
  * 标准操作SOP管理列表页面组件
  */
-const SOPPage: React.FC = () => {
+const SOPPage: React.FC<SOPPageProps> = ({ fixedSopDomain = 'pe' }) => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
@@ -502,6 +509,7 @@ const SOPPage: React.FC = () => {
           return;
         }
         payload.code = finalCode;
+        payload.sop_domain = fixedSopDomain;
 
         const created = await sopApi.create(payload as unknown as SOPCreate);
         await saveSopCustomFieldValues(created.id, customData);
@@ -593,7 +601,14 @@ const SOPPage: React.FC = () => {
         }
         operationId = op.id;
       }
-      items.push({ code, name, version: version || undefined, isActive, operationId });
+      items.push({
+        sopDomain: fixedSopDomain,
+        code,
+        name,
+        version: version || undefined,
+        isActive,
+        operationId,
+      });
     });
     if (errors.length > 0) {
       getAntdModal().warning({
@@ -1317,7 +1332,11 @@ const SOPPage: React.FC = () => {
       <UniTable<SOP>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.sop')}
-        columnPersistenceId="apps.master-data.pages.process.sop.list-v5"
+        columnPersistenceId={
+          fixedSopDomain === 'qc'
+            ? 'apps.kuaizhizao.pages.quality-management.qc-sop.list-v1'
+            : 'apps.master-data.pages.process.sop.list-v6'
+        }
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
@@ -1326,6 +1345,7 @@ const SOPPage: React.FC = () => {
           const apiParams = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
+            sopDomain: fixedSopDomain,
             isActive: listParams.isActive as boolean | undefined,
             operationId: listParams.operationId as number | undefined,
             material_uuid: listParams.material_uuid as string | undefined,
@@ -1376,7 +1396,11 @@ const SOPPage: React.FC = () => {
           showSizeChanger: true,
         }}
         showCreateButton
-        createButtonText={t('app.master-data.sop.createTitle') + NEW_SHORTCUT_HINT}
+        createButtonText={
+          (fixedSopDomain === 'qc'
+            ? t('app.kuaizhizao.qcSop.createTitle')
+            : t('app.master-data.sop.createTitle')) + NEW_SHORTCUT_HINT
+        }
         onCreate={handleSelectSingleCreate}
         showDeleteButton
         onDelete={handleBatchDelete}

@@ -38,6 +38,7 @@ const MaterialReviewsPage = lazy(() => import('./pages/material-reviews/index'))
 const BomCollaborationsPage = lazy(() => import('./pages/bom-collaborations/index'));
 const ProjectProposalsPage = lazy(() => import('./pages/project-proposals/index'));
 const MoldSampleOrdersPage = lazy(() => import('./pages/mold-sample-orders/index'));
+const PrototypeBuildSheetsPage = lazy(() => import('./pages/prototype-build-sheets/index'));
 const PendingInboxPage = lazy(() => import('./pages/pending-inbox/index'));
 
 const KuaiplmApp: React.FC = () => (
@@ -69,6 +70,7 @@ const KuaiplmApp: React.FC = () => (
     <Route path="bom-collaborations" element={withPageSuspense(BomCollaborationsPage)} />
     <Route path="project-proposals" element={withPageSuspense(ProjectProposalsPage)} />
     <Route path="mold-sample-orders" element={withPageSuspense(MoldSampleOrdersPage)} />
+    <Route path="prototype-build-sheets" element={withPageSuspense(PrototypeBuildSheetsPage)} />
     <Route path="" element={<Navigate to="dashboard" replace />} />
   </Routes>
 );

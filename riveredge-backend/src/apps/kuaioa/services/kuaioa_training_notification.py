@@ -14,6 +14,7 @@ ACTION_ANNUAL_PLAN_WINDOW = "annual_plan_window"
 ACTION_CONTENT_DUE = "content_due"
 ACTION_SPECIAL_WORK_WINDOW = "special_work_window"
 ACTION_LICENSE_EXPIRING = "license_expiring"
+ACTION_ANNUAL_PLAN_DISTRIBUTED = "annual_plan_distributed"
 
 
 async def dispatch_kuaioa_training_notification(

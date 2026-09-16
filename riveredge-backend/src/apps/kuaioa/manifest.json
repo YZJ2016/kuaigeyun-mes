@@ -74,15 +74,94 @@
         "sort_order": 2,
         "children": [
           {
+            "title": "app.kuaioa.menu.employees",
+            "path": "/apps/kuaioa/hr/employees",
+            "permission": "kuaioa:employee:read",
+            "sort_order": 0
+          },
+          {
+            "title": "app.kuaioa.menu.employee-movements",
+            "path": "/apps/kuaioa/hr/employee-movements",
+            "permission": "kuaioa:employee:read",
+            "sort_order": 1
+          },
+          {
             "title": "app.kuaioa.menu.leave",
             "path": "/apps/kuaioa/hr/leave",
             "permission": "kuaioa:leave:read",
-            "sort_order": 0
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaioa.menu.attendance",
+            "path": "/apps/kuaioa/hr/attendance",
+            "permission": "kuaioa:attendance:read",
+            "sort_order": 3
+          },
+          {
+            "title": "app.kuaioa.menu.group.payroll",
+            "icon": "wallet",
+            "sort_order": 4,
+            "children": [
+              {
+                "title": "app.kuaioa.menu.living-advances",
+                "path": "/apps/kuaioa/hr/living-advances",
+                "permission": "kuaioa:living-advance:read",
+                "sort_order": 0
+              },
+              {
+                "title": "app.kuaioa.menu.rewards",
+                "path": "/apps/kuaioa/hr/rewards",
+                "permission": "kuaioa:reward:read",
+                "sort_order": 1
+              },
+              {
+                "title": "app.kuaioa.menu.payroll-settlements",
+                "path": "/apps/kuaioa/hr/payroll-settlements",
+                "permission": "kuaioa:payroll:read",
+                "sort_order": 2
+              },
+              {
+                "title": "app.kuaioa.menu.living-payout",
+                "path": "/apps/kuaioa/hr/living-payout",
+                "permission": "kuaioa:living-advance:read",
+                "sort_order": 3
+              },
+              {
+                "title": "app.kuaioa.menu.welfare-batches",
+                "path": "/apps/kuaioa/hr/welfare-batches",
+                "permission": "kuaioa:welfare:read",
+                "sort_order": 4
+              },
+              {
+                "title": "app.kuaioa.menu.annual-payroll-stats",
+                "path": "/apps/kuaioa/hr/annual-payroll-stats",
+                "permission": "kuaioa:payroll:read",
+                "sort_order": 5
+              },
+              {
+                "title": "app.kuaioa.menu.personal-payroll",
+                "path": "/apps/kuaioa/hr/personal-payroll",
+                "permission": "kuaioa:payroll:read",
+                "sort_order": 6
+              },
+              {
+                "title": "app.kuaioa.menu.post-subsidies",
+                "path": "/apps/kuaioa/hr/post-subsidies",
+                "permission": "kuaioa:post-subsidy:read",
+                "sort_order": 7
+              },
+              {
+                "title": "app.kuaioa.menu.minimum-wage",
+                "path": "/apps/kuaioa/hr/minimum-wage",
+                "permission": "kuaioa:minimum-wage:read",
+                "sort_order": 8
+              }
+            ]
           },
           {
             "title": "app.kuaioa.menu.group.training",
             "icon": "bookOpen",
-            "sort_order": 1,
+            "sort_order": 5,
             "children": [
               {
                 "title": "app.kuaioa.menu.dept-training-applications",
@@ -111,22 +190,85 @@
             ]
           },
           {
-            "title": "app.kuaioa.menu.special-work-qualifications",
-            "path": "/apps/kuaioa/hr/special-work-qualifications",
-            "permission": "kuaioa:special-work-qualification:read",
-            "sort_order": 2
+            "title": "app.kuaioa.menu.group.shopfloor-pay",
+            "icon": "activity",
+            "sort_order": 6,
+            "children": [
+              {
+                "title": "app.kuaioa.menu.skills",
+                "path": "/apps/kuaioa/hr/skills",
+                "permission": "kuaizhizao:performance-skills:read",
+                "sort_order": 0
+              },
+              {
+                "title": "app.kuaioa.menu.hourly-rates",
+                "path": "/apps/kuaioa/hr/hourly-rates",
+                "permission": "kuaizhizao:performance-hourly-rates:read",
+                "sort_order": 1
+              },
+              {
+                "title": "app.kuaioa.menu.kpi-definitions",
+                "path": "/apps/kuaioa/hr/kpi-definitions",
+                "permission": "kuaizhizao:performance-kpi-definitions:read",
+                "sort_order": 2
+              },
+              {
+                "title": "app.kuaioa.menu.employee-configs",
+                "path": "/apps/kuaioa/hr/employee-configs",
+                "permission": "kuaizhizao:performance-employee-configs:read",
+                "sort_order": 3
+              },
+              {
+                "title": "app.kuaioa.menu.performance-summaries",
+                "path": "/apps/kuaioa/hr/performance-summaries",
+                "permission": "kuaizhizao:performance-summaries:read",
+                "sort_order": 4
+              },
+              {
+                "title": "app.kuaioa.menu.group.performance-reports",
+                "icon": "fileText",
+                "sort_order": 5,
+                "children": [
+                  {
+                    "title": "app.kuaioa.menu.employee-efficiency-ranking",
+                    "path": "/apps/kuaioa/hr/reports/employee-efficiency-ranking",
+                    "permission": "kuaizhizao:performance-reports-employee-efficiency-ranking:read",
+                    "sort_order": 0
+                  },
+                  {
+                    "title": "app.kuaioa.menu.piece-rate-salary-summary",
+                    "path": "/apps/kuaioa/hr/reports/piece-rate-salary-summary",
+                    "permission": "kuaizhizao:performance-reports-piece-rate-salary-summary:read",
+                    "sort_order": 1
+                  }
+                ]
+              }
+            ]
           },
           {
-            "title": "app.kuaioa.menu.work-licenses",
-            "path": "/apps/kuaioa/hr/work-licenses",
-            "permission": "kuaioa:work-license:read",
-            "sort_order": 3
-          },
-          {
-            "title": "app.kuaioa.menu.licenses",
-            "path": "/apps/kuaioa/compliance/licenses",
-            "permission": "kuaioa:license:read",
-            "sort_order": 4
+            "title": "app.kuaioa.menu.group.compliance",
+            "icon": "shield",
+            "sort_order": 7,
+            "children": [
+              {
+                "title": "app.kuaioa.menu.licenses",
+                "path": "/apps/kuaioa/compliance/licenses",
+                "permission": "kuaioa:license:read",
+                "sort_order": 0
+              },
+              {
+                "title": "app.kuaioa.menu.special-work-qualifications",
+                "path": "/apps/kuaioa/hr/special-work-qualifications",
+                "permission": "kuaioa:special-work-qualification:read",
+                "sort_order": 1
+              },
+              {
+                "title": "app.kuaioa.menu.work-licenses",
+                "path": "/apps/kuaioa/hr/work-licenses",
+                "permission": "kuaioa:work-license:read",
+                "sort_order": 2
+              }
+            ]
           }
         ]
       },
@@ -148,10 +290,23 @@
             "sort_order": 1
           },
           {
-            "title": "app.kuaioa.menu.asset-purchases",
-            "path": "/apps/kuaioa/assets/purchases",
-            "permission": "kuaioa:asset-purchase:read",
-            "sort_order": 2
+            "title": "app.kuaioa.menu.group.assets",
+            "icon": "package",
+            "sort_order": 2,
+            "children": [
+              {
+                "title": "app.kuaioa.menu.asset-purchases",
+                "path": "/apps/kuaioa/assets/purchases",
+                "permission": "kuaioa:asset-purchase:read",
+                "sort_order": 0
+              },
+              {
+                "title": "app.kuaioa.menu.assets",
+                "path": "/apps/kuaioa/assets/registry",
+                "permission": "kuaioa:asset:read",
+                "sort_order": 1
+              }
+            ]
           }
         ]
       }
@@ -241,10 +396,51 @@
     "kuaioa:leave:approve",
     "kuaioa:leave:reject",
     "kuaioa:leave:revoke",
+    "kuaioa:employee:read",
+    "kuaioa:employee:create",
+    "kuaioa:employee:update",
+    "kuaioa:employee:delete",
+    "kuaioa:employee:export",
+    "kuaioa:attendance:read",
+    "kuaioa:attendance:create",
+    "kuaioa:attendance:update",
+    "kuaioa:attendance:delete",
+    "kuaioa:attendance:submit",
+    "kuaioa:attendance:export",
+    "kuaioa:living-advance:read",
+    "kuaioa:living-advance:create",
+    "kuaioa:living-advance:update",
+    "kuaioa:living-advance:delete",
+    "kuaioa:living-advance:export",
+    "kuaioa:reward:read",
+    "kuaioa:reward:create",
+    "kuaioa:reward:update",
+    "kuaioa:reward:delete",
+    "kuaioa:payroll:read",
+    "kuaioa:payroll:create",
+    "kuaioa:payroll:update",
+    "kuaioa:payroll:delete",
+    "kuaioa:payroll:submit",
+    "kuaioa:payroll:export",
+    "kuaioa:welfare:read",
+    "kuaioa:welfare:create",
+    "kuaioa:welfare:update",
+    "kuaioa:welfare:delete",
+    "kuaioa:welfare:submit",
+    "kuaioa:welfare:export",
+    "kuaioa:post-subsidy:read",
+    "kuaioa:post-subsidy:create",
+    "kuaioa:post-subsidy:update",
+    "kuaioa:post-subsidy:delete",
+    "kuaioa:minimum-wage:read",
+    "kuaioa:minimum-wage:create",
+    "kuaioa:minimum-wage:update",
+    "kuaioa:minimum-wage:delete",
     "kuaioa:license:read",
     "kuaioa:license:create",
     "kuaioa:license:update",
     "kuaioa:license:delete",
+    "kuaioa:license:export",
     "kuaioa:asset-purchase:read",
     "kuaioa:asset-purchase:create",
     "kuaioa:asset-purchase:update",
@@ -253,10 +449,13 @@
     "kuaioa:asset-purchase:approve",
     "kuaioa:asset-purchase:reject",
     "kuaioa:asset-purchase:revoke",
+    "kuaioa:asset-purchase:export",
     "kuaioa:asset:read",
     "kuaioa:asset:create",
     "kuaioa:asset:update",
     "kuaioa:asset:delete",
+    "kuaioa:asset:export",
+    "kuaioa:asset:print",
     "kuaioa:announcement:read",
     "kuaioa:announcement:create",
     "kuaioa:announcement:update",

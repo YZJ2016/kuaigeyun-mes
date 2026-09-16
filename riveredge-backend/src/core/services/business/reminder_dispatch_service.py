@@ -35,9 +35,12 @@ def _ensure_domain_handlers() -> None:
     global _HANDLERS_LOADED
     if _HANDLERS_LOADED:
         return
+    from apps.kuaiplm.services import annual_lab_plan_reminder_service  # noqa: F401
     from apps.kuaiplm.services import trial_flow_reminder_service  # noqa: F401
+    from apps.kuaiplm.services import plm_pending_approval_reminder_service  # noqa: F401
     from apps.kuaioa.services import training_reminder_service  # noqa: F401
     from apps.kuaioa.services import license_reminder_service  # noqa: F401
+    from apps.kuaioa.services import kuaioa_form_request_reminder_service  # noqa: F401
     from apps.kuaizhizao.services import equipment_calibration_reminder_service  # noqa: F401
     from apps.kuaizhizao.services import inventory_verify_reminder_service  # noqa: F401
     from apps.kuaizhizao.services import mold_signback_reminder_service  # noqa: F401

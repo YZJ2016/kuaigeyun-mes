@@ -136,6 +136,7 @@ const SupplierEvaluationsPage = lazy(() => import('./pages/quality-management/su
 const OQCInspectionPage = lazy(() => import('./pages/quality-management/oqc-inspection'));
 const SPCMonitorPage = lazy(() => import('./pages/quality-management/spc-monitor'));
 const SystemDocumentsPage = lazy(() => import('./pages/quality-management/system-documents'));
+const QcSopPage = lazy(() => import('./pages/quality-management/qc-sop'));
 const InternalAuditsPage = lazy(() => import('./pages/quality-management/internal-audits'));
 const ManagementReviewsPage = lazy(() => import('./pages/quality-management/management-reviews'));
 const IsoClausesPage = lazy(() => import('./pages/quality-management/iso-clauses'));
@@ -272,11 +273,6 @@ const HolidaysPage = lazy(() => import('./pages/performance/holidays'));
 const ShiftsPage = lazy(() => import('./pages/performance/shifts'));
 const ShiftRostersPage = lazy(() => import('./pages/performance/shift-rosters'));
 const WorkCalendarPage = lazy(() => import('./pages/performance/work-calendar'));
-const SkillsPage = lazy(() => import('./pages/performance/skills'));
-const EmployeeConfigsPage = lazy(() => import('./pages/performance/employee-configs'));
-const HourlyRatesPage = lazy(() => import('./pages/performance/hourly-rates'));
-const KpiDefinitionsPage = lazy(() => import('./pages/performance/kpi-definitions'));
-const SummariesPage = lazy(() => import('./pages/performance/summaries'));
 
 const OUTSOURCE_BASE = '/apps/kuaizhizao/outsource-management';
 
@@ -383,10 +379,6 @@ const StocktakingHistoryPage = lazy(() => import('./pages/warehouse-management/r
 const TransferTrackingPage = lazy(() => import('./pages/warehouse-management/reports/TransferTracking'));
 const InboundDetailPage = lazy(() => import('./pages/warehouse-management/reports/InboundDetail'));
 const OutboundDetailPage = lazy(() => import('./pages/warehouse-management/reports/OutboundDetail'));
-
-// 绩效管理报表
-const EmployeeEfficiencyRankingPage = lazy(() => import('./pages/performance/reports/EmployeeEfficiencyRanking'));
-const PieceRateSalarySummaryPage = lazy(() => import('./pages/performance/reports/PieceRateSalarySummary'));
 
 const KuaizhizaoApp: React.FC = () => {
   return (
@@ -537,6 +529,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/spc-monitor" element={withPageSuspense(SPCMonitorPage)} />
       <Route path="quality-management/iso-clauses" element={withPageSuspense(IsoClausesPage)} />
       <Route path="quality-management/system-documents" element={withPageSuspense(SystemDocumentsPage)} />
+      <Route path="quality-management/qc-sop" element={withPageSuspense(QcSopPage)} />
       <Route path="quality-management/internal-audits" element={withPageSuspense(InternalAuditsPage)} />
       <Route path="quality-management/management-reviews" element={withPageSuspense(ManagementReviewsPage)} />
       <Route path="quality-management/fai-orders/:id/balloon" element={withPageSuspense(FaiBalloonPage)} />
@@ -619,7 +612,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="equipment-management/spare-part-requisitions" element={withPageSuspense(SparePartRequisitionsPage)} />
       <Route path="equipment-management/equipment-transfers" element={withPageSuspense(EquipmentTransfersPage)} />
 
-      {/* 绩效管理路由 */}
+      {/* 排班管理路由（原绩效管理中的排班簇）；技能/计薪页已迁入轻办公人事 */}
       <Route
         path="performance/dashboard"
         element={<Navigate to="/apps/kuaizhizao/performance/holidays" replace />}
@@ -628,11 +621,31 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="performance/shifts" element={withPageSuspense(ShiftsPage)} />
       <Route path="performance/shift-rosters" element={withPageSuspense(ShiftRostersPage)} />
       <Route path="performance/work-calendar" element={withPageSuspense(WorkCalendarPage)} />
-      <Route path="performance/skills" element={withPageSuspense(SkillsPage)} />
-      <Route path="performance/employee-configs" element={withPageSuspense(EmployeeConfigsPage)} />
-      <Route path="performance/hourly-rates" element={withPageSuspense(HourlyRatesPage)} />
-      <Route path="performance/kpi-definitions" element={withPageSuspense(KpiDefinitionsPage)} />
-      <Route path="performance/summaries" element={withPageSuspense(SummariesPage)} />
+      <Route path="performance/skills" element={<Navigate to="/apps/kuaioa/hr/skills" replace />} />
+      <Route
+        path="performance/employee-configs"
+        element={<Navigate to="/apps/kuaioa/hr/employee-configs" replace />}
+      />
+      <Route
+        path="performance/hourly-rates"
+        element={<Navigate to="/apps/kuaioa/hr/hourly-rates" replace />}
+      />
+      <Route
+        path="performance/kpi-definitions"
+        element={<Navigate to="/apps/kuaioa/hr/kpi-definitions" replace />}
+      />
+      <Route
+        path="performance/summaries"
+        element={<Navigate to="/apps/kuaioa/hr/performance-summaries" replace />}
+      />
+      <Route
+        path="performance/reports/employee-efficiency-ranking"
+        element={<Navigate to="/apps/kuaioa/hr/reports/employee-efficiency-ranking" replace />}
+      />
+      <Route
+        path="performance/reports/piece-rate-salary-summary"
+        element={<Navigate to="/apps/kuaioa/hr/reports/piece-rate-salary-summary" replace />}
+      />
 
       {/* 仓储管理路由 */}
       <Route path="warehouse-management/dashboard" element={withPageSuspense(WarehouseDashboard)} />
@@ -804,9 +817,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/reports/stocktaking-history" element={withPageSuspense(StocktakingHistoryPage)} />
       <Route path="warehouse-management/reports/transfer-tracking" element={withPageSuspense(TransferTrackingPage)} />
 
-      {/* 绩效管理报表 */}
-      <Route path="performance/reports/employee-efficiency-ranking" element={withPageSuspense(EmployeeEfficiencyRankingPage)} />
-      <Route path="performance/reports/piece-rate-salary-summary" element={withPageSuspense(PieceRateSalarySummaryPage)} />
       {/* 详情抽屉时间显示：不进菜单，仅地址栏 /apps/kuaizhizao/timeconfig */}
       <Route path="timeconfig" element={withPageSuspense(TimeconfigPage)} />
       {/* 默认路由 - 应用首页 */}

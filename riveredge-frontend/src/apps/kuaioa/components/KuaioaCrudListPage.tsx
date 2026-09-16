@@ -155,6 +155,15 @@ type Props = {
   onCreateSuccess?: (record: Record<string, unknown>) => void;
   /** 新建弹窗打开时的默认字段值 */
   createFormDefaults?: Record<string, unknown>;
+  /** 工具栏新建按钮左侧追加节点（如行业包一键生成） */
+  toolBarActionsBeforeCreate?: React.ReactNode[];
+  /** 列表导出（须 manifest export 权限） */
+  showExportButton?: boolean;
+  onExport?: (
+    type: 'currentPage' | 'selected' | 'all',
+    selectedRowKeys?: React.Key[],
+    pageData?: Record<string, unknown>[],
+  ) => Promise<void>;
 };
 
 type KuaioaListScope = 'all' | 'expiring';
@@ -200,6 +209,9 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   expiringListFn,
   onCreateSuccess,
   createFormDefaults,
+  toolBarActionsBeforeCreate,
+  showExportButton = false,
+  onExport,
 }) => {
   const { t } = useTranslation();
   const currentUser = useCurrentUser();
@@ -661,6 +673,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
           tableRowsRef.current = rows;
         }}
         permissionResource={resource}
+        toolBarActionsBeforeCreate={toolBarActionsBeforeCreate}
         beforeSearchButtons={
           expiringListFn ? (
             <ThemedSegmented
@@ -704,6 +717,8 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         deleteButtonText={t('common.batchDelete')}
         deleteConfirmTitle={t('common.confirmBatchDelete')}
         deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
+        showExportButton={showExportButton}
+        onExport={onExport}
       />
 
       <FormModalTemplate

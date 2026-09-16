@@ -39,6 +39,7 @@ export interface RdProject {
   gates?: RdProjectGate[];
   progress?: number;
   not_executed?: boolean;
+  system_archive_summary?: RdProjectSystemArchiveSummary | null;
   notes?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -130,6 +131,54 @@ export interface RdProjectLink {
   notes?: string | null;
 }
 
+export interface RdProjectSystemArchiveUploadTemplate {
+  title: string;
+  columns: string[];
+  hint?: string;
+}
+
+export interface RdProjectSystemArchiveSummary {
+  total: number;
+  filled: number;
+  empty: number;
+  missing_marked: number;
+  accepted: number;
+  pending_acceptance: number;
+  complete: boolean;
+  all_accepted: boolean;
+}
+
+export interface RdProjectSystemArchiveItem {
+  id?: number;
+  uuid?: string;
+  project_id?: number;
+  archive_type_code?: string;
+  archive_type_name?: string;
+  sort_order?: number;
+  fill_status?: string;
+  modes?: string[];
+  link_target_types?: string[];
+  template_key?: string | null;
+  upload_template?: RdProjectSystemArchiveUploadTemplate | null;
+  file_uuid?: string | null;
+  file_name?: string | null;
+  file_url?: string | null;
+  linked_target_type?: string | null;
+  linked_target_id?: number | null;
+  linked_target_uuid?: string | null;
+  linked_target_code?: string | null;
+  linked_target_name?: string | null;
+  acceptance_status?: string;
+  acceptance_notes?: string | null;
+  missing_notes?: string | null;
+}
+
+export interface RdProjectSystemArchiveList {
+  items: RdProjectSystemArchiveItem[];
+  summary: RdProjectSystemArchiveSummary;
+  templates?: Record<string, RdProjectSystemArchiveUploadTemplate>;
+}
+
 export interface ProjectCollaborationSummary {
   requirement_count?: number;
   design_review_count?: number;
@@ -152,6 +201,7 @@ const WORKBENCH_NESTED_KEYS = new Set([
   'related_articles',
   'progress',
   'collaboration',
+  'system_archive',
 ]);
 
 function normalizeWorkbench(raw: Record<string, unknown>): RdProjectWorkbench {
@@ -206,6 +256,7 @@ export interface RdProjectWorkbench {
   }>;
   progress?: number;
   collaboration?: ProjectCollaborationSummary;
+  system_archive?: RdProjectSystemArchiveList | null;
 }
 
 export interface RdProjectListParams {
@@ -336,6 +387,26 @@ export async function reviseRdProjectDeliverable(
   );
 }
 
+export async function submitRdProjectDeliverable(
+  projectId: number | string,
+  deliverableId: number | string,
+) {
+  return apiRequest<RdProjectDeliverable>(
+    `${BASE}/${projectId}/deliverables/${deliverableId}/submit`,
+    { method: 'POST' },
+  );
+}
+
+export async function approveRdProjectDeliverable(
+  projectId: number | string,
+  deliverableId: number | string,
+) {
+  return apiRequest<RdProjectDeliverable>(
+    `${BASE}/${projectId}/deliverables/${deliverableId}/approve`,
+    { method: 'POST' },
+  );
+}
+
 export async function rejectRdProjectDeliverable(
   projectId: number | string,
   deliverableId: number | string,
@@ -344,6 +415,79 @@ export async function rejectRdProjectDeliverable(
   return apiRequest<RdProjectDeliverable>(
     `${BASE}/${projectId}/deliverables/${deliverableId}/reject`,
     { method: 'POST', data: data ?? {} },
+  );
+}
+
+export async function getRdProjectSystemArchive(projectId: number | string) {
+  return apiRequest<RdProjectSystemArchiveList>(`${BASE}/${projectId}/system-archive`);
+}
+
+export async function uploadSystemArchiveItem(
+  projectId: number | string,
+  itemId: number | string,
+  data: { file_uuid: string; file_name?: string; file_url?: string; notes?: string },
+) {
+  return apiRequest<RdProjectSystemArchiveItem>(
+    `${BASE}/${projectId}/system-archive/${itemId}/upload`,
+    { method: 'POST', data },
+  );
+}
+
+export async function linkSystemArchiveItem(
+  projectId: number | string,
+  itemId: number | string,
+  data: {
+    linked_target_type: string;
+    linked_target_id?: number;
+    linked_target_uuid?: string;
+    linked_target_code?: string;
+    linked_target_name?: string;
+    notes?: string;
+  },
+) {
+  return apiRequest<RdProjectSystemArchiveItem>(
+    `${BASE}/${projectId}/system-archive/${itemId}/link`,
+    { method: 'POST', data },
+  );
+}
+
+export async function markSystemArchiveMissing(
+  projectId: number | string,
+  itemId: number | string,
+  data: { missing_notes: string },
+) {
+  return apiRequest<RdProjectSystemArchiveItem>(
+    `${BASE}/${projectId}/system-archive/${itemId}/mark-missing`,
+    { method: 'POST', data },
+  );
+}
+
+export async function clearSystemArchiveItem(projectId: number | string, itemId: number | string) {
+  return apiRequest<RdProjectSystemArchiveItem>(
+    `${BASE}/${projectId}/system-archive/${itemId}/clear`,
+    { method: 'POST' },
+  );
+}
+
+export async function acceptSystemArchiveItem(
+  projectId: number | string,
+  itemId: number | string,
+  data?: { acceptance_notes?: string },
+) {
+  return apiRequest<RdProjectSystemArchiveItem>(
+    `${BASE}/${projectId}/system-archive/${itemId}/accept`,
+    { method: 'POST', data: data ?? {} },
+  );
+}
+
+export async function rejectSystemArchiveItem(
+  projectId: number | string,
+  itemId: number | string,
+  data: { acceptance_notes: string },
+) {
+  return apiRequest<RdProjectSystemArchiveItem>(
+    `${BASE}/${projectId}/system-archive/${itemId}/reject`,
+    { method: 'POST', data },
   );
 }
 

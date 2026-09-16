@@ -182,15 +182,21 @@
             "permission": "kuaizhizao:quality-management-system-documents:read"
           },
           {
+            "title": "app.kuaizhizao.menu.quality-management.qc-sop",
+            "path": "/apps/kuaizhizao/quality-management/qc-sop",
+            "sort_order": 2,
+            "permission": "master-data:process:sop:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.quality-management.internal-audits",
             "path": "/apps/kuaizhizao/quality-management/internal-audits",
-            "sort_order": 2,
+            "sort_order": 3,
             "permission": "kuaizhizao:quality-management-internal-audits:read"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.management-reviews",
             "path": "/apps/kuaizhizao/quality-management/management-reviews",
-            "sort_order": 3,
+            "sort_order": 4,
             "permission": "kuaizhizao:quality-management-management-reviews:read"
           }
         ]

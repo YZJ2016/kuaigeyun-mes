@@ -51,7 +51,7 @@ class EcnSignoffOut(BaseModel):
 
 
 class EngineeringChangeCreate(BaseModel):
-    change_kind: str = Field(..., description="material/process/drawing/other")
+    change_kind: str = Field(..., description="material/process/drawing/doc_template/other")
     title: str = Field(..., min_length=1, max_length=200)
     project_id: Optional[int] = None
     ecn_code: Optional[str] = Field(None, max_length=50)

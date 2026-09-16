@@ -2760,6 +2760,45 @@ class ApprovalInstanceService:
                 )
                 logger.info(f"固定资产采买 {entity_id} 审批回调完成: {approval_instance.status}")
 
+            async def _handle_kuaioa_dept_training_application() -> None:
+                from apps.kuaioa.services.training_workflow_service import (
+                    apply_dept_training_application_decision,
+                )
+
+                approved = approval_instance.status == "approved"
+                await apply_dept_training_application_decision(
+                    tenant_id, entity_id, approved, approver_id
+                )
+                logger.info(
+                    f"部门培训申请 {entity_id} 审批回调完成: {approval_instance.status}"
+                )
+
+            async def _handle_kuaioa_training_plan() -> None:
+                from apps.kuaioa.services.training_workflow_service import (
+                    apply_training_plan_decision,
+                )
+
+                approved = approval_instance.status == "approved"
+                await apply_training_plan_decision(
+                    tenant_id, entity_id, approved, approver_id
+                )
+                logger.info(
+                    f"年度培训计划 {entity_id} 审批回调完成: {approval_instance.status}"
+                )
+
+            async def _handle_kuaioa_special_work_qualification() -> None:
+                from apps.kuaioa.services.training_workflow_service import (
+                    apply_special_work_qualification_decision,
+                )
+
+                approved = approval_instance.status == "approved"
+                await apply_special_work_qualification_decision(
+                    tenant_id, entity_id, approved, approver_id
+                )
+                logger.info(
+                    f"特殊作业资格 {entity_id} 审批回调完成: {approval_instance.status}"
+                )
+
             async def _handle_sales_delivery() -> None:
                 from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
 
@@ -2948,6 +2987,40 @@ class ApprovalInstanceService:
                 elif approval_instance.status == "rejected":
                     await svc.reject(tenant_id, int(entity_id), approver)
                 logger.info(f"样品加工申请 {entity_id} 审批回调完成: {approval_instance.status}")
+
+            async def _handle_prototype_build_sheet() -> None:
+                from apps.kuaiplm.services.prototype_build_sheet_service import (
+                    PrototypeBuildSheetService,
+                )
+                from infra.models.user import User
+
+                if not entity_id:
+                    return
+                approver = await User.get_or_none(id=approver_id)
+                if not approver:
+                    return
+                svc = PrototypeBuildSheetService()
+                if approval_instance.status == "approved":
+                    await svc.approve(tenant_id, int(entity_id), approver)
+                elif approval_instance.status == "rejected":
+                    await svc.reject(tenant_id, int(entity_id), approver)
+                logger.info(f"样机制作书 {entity_id} 审批回调完成: {approval_instance.status}")
+
+            async def _handle_rd_deliverable() -> None:
+                from apps.kuaiplm.services.rd_project_service import RdProjectService
+                from infra.models.user import User
+
+                if not entity_id:
+                    return
+                approver = await User.get_or_none(id=approver_id)
+                if not approver:
+                    return
+                svc = RdProjectService()
+                if approval_instance.status == "approved":
+                    await svc.approve_deliverable_by_id(tenant_id, int(entity_id), approver)
+                elif approval_instance.status == "rejected":
+                    await svc.reject_deliverable_by_id(tenant_id, int(entity_id), approver)
+                logger.info(f"研发交付物 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_material_review() -> None:
                 from apps.kuaiplm.services.material_review_service import MaterialReviewService
@@ -3175,6 +3248,9 @@ class ApprovalInstanceService:
                 "quotation": _handle_quotation,
                 "kuaioa_form_request": _handle_kuaioa_form_request,
                 "kuaioa_asset_purchase": _handle_kuaioa_asset_purchase,
+                "kuaioa_dept_training_application": _handle_kuaioa_dept_training_application,
+                "kuaioa_training_plan": _handle_kuaioa_training_plan,
+                "kuaioa_special_work_qualification": _handle_kuaioa_special_work_qualification,
                 "sales_delivery": _handle_sales_delivery,
                 "production_picking": _handle_production_picking,
                 "payable": _handle_payable,
@@ -3187,6 +3263,8 @@ class ApprovalInstanceService:
                 "quality_complaint": _handle_quality_complaint,
                 "engineering_change": _handle_engineering_change,
                 "sample_process": _handle_sample_process,
+                "prototype_build_sheet": _handle_prototype_build_sheet,
+                "rd_deliverable": _handle_rd_deliverable,
                 "material_review": _handle_material_review,
                 "bom_collaboration": _handle_bom_collaboration,
                 "project_proposal": _handle_project_proposal,

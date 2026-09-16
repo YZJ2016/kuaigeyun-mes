@@ -445,6 +445,8 @@ class ReworkOrderFormProfile(BaseModel):
         False, description="是否已启用行业包 profile（false 时前端保持通用 UI）"
     )
     field_labels: Dict[str, str] = Field(default_factory=dict)
+    product_line_options: List[Dict[str, Any]] = Field(default_factory=list)
+    rework_code_format_hint: Optional[str] = Field(None, description="返工单号格式说明")
     rework_path_types: List[Dict[str, Any]] = Field(default_factory=list)
     form_sections: List[Dict[str, Any]] = Field(default_factory=list)
     position_plan_columns: List[Dict[str, Any]] = Field(default_factory=list)

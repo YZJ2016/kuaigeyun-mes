@@ -1085,10 +1085,10 @@
       },
       {
         "title": "app.kuaizhizao.menu.performance-management",
-        "icon": "trophy",
+        "icon": "calendar",
         "sort_order": 11,
         "meta": {
-          "module": "performance"
+          "module": "schedule"
         },
         "children": [
           {
@@ -1101,68 +1101,19 @@
             "title": "app.kuaizhizao.menu.performance-management.shifts",
             "path": "/apps/kuaizhizao/performance/shifts",
             "permission": "kuaizhizao:performance-shifts:read",
-            "sort_order": 2
+            "sort_order": 1
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.shift-rosters",
             "path": "/apps/kuaizhizao/performance/shift-rosters",
             "permission": "kuaizhizao:performance-shift-rosters:read",
-            "sort_order": 3
+            "sort_order": 2
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.work-calendar",
             "path": "/apps/kuaizhizao/performance/work-calendar",
             "permission": "kuaizhizao:performance-work-calendar:read",
-            "sort_order": 4
-          },
-          {
-            "title": "app.kuaizhizao.menu.performance-management.skills",
-            "path": "/apps/kuaizhizao/performance/skills",
-            "permission": "kuaizhizao:performance-skills:read",
-            "sort_order": 5
-          },
-          {
-            "title": "app.kuaizhizao.menu.performance-management.hourly-rates",
-            "path": "/apps/kuaizhizao/performance/hourly-rates",
-            "permission": "kuaizhizao:performance-hourly-rates:read",
-            "sort_order": 6
-          },
-          {
-            "title": "app.kuaizhizao.menu.performance-management.kpi-definitions",
-            "path": "/apps/kuaizhizao/performance/kpi-definitions",
-            "permission": "kuaizhizao:performance-kpi-definitions:read",
-            "sort_order": 7
-          },
-          {
-            "title": "app.kuaizhizao.menu.performance-management.employee-configs",
-            "path": "/apps/kuaizhizao/performance/employee-configs",
-            "permission": "kuaizhizao:performance-employee-configs:read",
-            "sort_order": 8
-          },
-          {
-            "title": "app.kuaizhizao.menu.performance-management.summaries",
-            "path": "/apps/kuaizhizao/performance/summaries",
-            "permission": "kuaizhizao:performance-summaries:read",
-            "sort_order": 9
-          },
-          {
-            "title": "app.kuaizhizao.menu.performance-management.reports",
-            "icon": "fileText",
-            "sort_order": 10,
-            "children": [
-              {
-                "title": "app.kuaizhizao.menu.reports.employee-efficiency-ranking",
-                "path": "/apps/kuaizhizao/performance/reports/employee-efficiency-ranking",
-                "sort_order": 1,
-                "permission": "kuaizhizao:performance-reports-employee-efficiency-ranking:read"
-              },
-              {
-                "title": "app.kuaizhizao.menu.reports.piece-rate-salary-summary",
-                "path": "/apps/kuaizhizao/performance/reports/piece-rate-salary-summary",
-                "sort_order": 2,
-                "permission": "kuaizhizao:performance-reports-piece-rate-salary-summary:read"
-              }
-            ]
+            "sort_order": 3
           }
         ]
       }

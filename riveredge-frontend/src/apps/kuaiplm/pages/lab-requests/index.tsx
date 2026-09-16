@@ -14,7 +14,19 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Form as AntForm, Input, Modal, Result, Row, Select, Table } from 'antd';
+import {
+  App,
+  Button,
+  Col,
+  Form as AntForm,
+  Input,
+  InputNumber,
+  Modal,
+  Result,
+  Row,
+  Select,
+  Table,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../components/uni-table';
 import { UniTableDetail } from '../../../../components/uni-table-detail';
@@ -136,6 +148,8 @@ const LabRequestsPage: React.FC = () => {
   const [reportTitle, setReportTitle] = useState('');
   const [reportSummary, setReportSummary] = useState('');
   const [reportUrl, setReportUrl] = useState('');
+  const [priceOpen, setPriceOpen] = useState(false);
+  const [priceValue, setPriceValue] = useState<number | null>(null);
   const [ruleOptions, setRuleOptions] = useState<LabJudgmentRuleOption[]>([]);
 
   useEffect(() => {
@@ -620,6 +634,28 @@ const LabRequestsPage: React.FC = () => {
           children: detail.test_items || '-',
         },
         {
+          key: 'test_reason',
+          label: t('app.kuaiplm.labRequest.fields.testReason'),
+          children: detail.test_reason || '-',
+        },
+        ...(detail.business_type === 'outsource'
+          ? ([
+              {
+                key: 'outsource_price',
+                label: t('app.kuaiplm.labRequest.fields.outsourcePrice'),
+                children:
+                  detail.outsource_price != null && detail.outsource_price !== ''
+                    ? String(detail.outsource_price)
+                    : '-',
+              },
+              {
+                key: 'price_filled_by_name',
+                label: t('app.kuaiplm.labRequest.fields.priceFilledBy'),
+                children: detail.price_filled_by_name || '-',
+              },
+            ] as ProDescriptionsItemProps[])
+          : []),
+        {
           key: 'result_summary',
           label: t('app.kuaiplm.labRequest.fields.resultSummary'),
           children: detail.result_summary || '-',
@@ -984,6 +1020,20 @@ const LabRequestsPage: React.FC = () => {
               fieldProps={{ rows: 1 }}
             />
           </Col>
+          <Col span={12}>
+            <ProFormTextArea
+              name="structure_special_test"
+              label={t('app.kuaiplm.labRequest.fields.structureSpecialTest')}
+              fieldProps={{ rows: 2 }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormTextArea
+              name="electronics_special_test"
+              label={t('app.kuaiplm.labRequest.fields.electronicsSpecialTest')}
+              fieldProps={{ rows: 2 }}
+            />
+          </Col>
         </Row>
         <UniTableDetail
           name="measure_items"
@@ -1079,6 +1129,20 @@ const LabRequestsPage: React.FC = () => {
           detail && !detailError ? (
             <div>
               <div style={{ marginBottom: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {detail.business_type === 'outsource' &&
+                detail.status === 'pending' &&
+                perms.canUpdate &&
+                (detail.outsource_price == null || detail.outsource_price === '') ? (
+                  <Button
+                    type="primary"
+                    onClick={() => {
+                      setPriceValue(null);
+                      setPriceOpen(true);
+                    }}
+                  >
+                    {t('app.kuaiplm.labRequest.actions.fillOutsourcePrice')}
+                  </Button>
+                ) : null}
                 {(detail.status === 'in_lab' || detail.status === 'completed') &&
                 canExecute &&
                 detail.report_status !== 'pending' &&
@@ -1185,6 +1249,37 @@ const LabRequestsPage: React.FC = () => {
         }
         supplementaryTitle={t('app.kuaiplm.labRequest.report.sectionTitle')}
       />
+
+      <Modal
+        title={t('app.kuaiplm.labRequest.actions.fillOutsourcePrice')}
+        open={priceOpen}
+        onCancel={() => setPriceOpen(false)}
+        onOk={async () => {
+          if (detail?.id == null || priceValue == null || priceValue <= 0) {
+            messageApi.warning(t('app.kuaiplm.labRequest.messages.outsourcePriceRequired'));
+            return;
+          }
+          try {
+            const updated = await labRequestApi.fillOutsourcePrice(detail.id, priceValue);
+            setDetail(updated);
+            messageApi.success(t('common.saveSuccess'));
+            setPriceOpen(false);
+            actionRef.current?.reload();
+          } catch (e) {
+            messageApi.error(getApiErrorMessage(e));
+          }
+        }}
+        destroyOnHidden
+      >
+        <div style={{ marginBottom: 8 }}>{t('app.kuaiplm.labRequest.fields.outsourcePrice')}</div>
+        <InputNumber
+          style={{ width: '100%' }}
+          min={0.0001}
+          precision={4}
+          value={priceValue}
+          onChange={(v) => setPriceValue(typeof v === 'number' ? v : null)}
+        />
+      </Modal>
 
       <Modal
         title={t('app.kuaiplm.labRequest.actions.complete')}

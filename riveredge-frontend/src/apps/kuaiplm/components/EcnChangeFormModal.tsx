@@ -34,7 +34,7 @@ import {
   type EcnProfileColumn,
 } from '../utils/ecnFormProfile';
 
-const KIND_KEYS: EcnChangeKind[] = ['material', 'process', 'drawing', 'other'];
+const KIND_KEYS: EcnChangeKind[] = ['material', 'process', 'drawing', 'doc_template', 'other'];
 const DISPOSITION_KEYS = ['scrap', 'use_up', 'rework', 'return', 'other'];
 
 export interface EcnChangeFormModalProps {
@@ -162,6 +162,8 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
         change_reason: editing.change_reason,
         remarks: editing.remarks,
         ...mergeHeaderExtensionIntoForm(editing),
+        entry_source:
+          (editing.extension_payload?.entry_source as string | undefined) || 'engineering_change',
         materials: editing.materials?.length
           ? editing.materials.map((m) => flattenMaterialLineForForm(m))
           : [emptyRow],
@@ -170,9 +172,23 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
     return {
       project_id: projectId,
       change_kind: 'material',
+      entry_source: 'engineering_change',
       materials: [emptyRow],
     };
   }, [editing, materialColumns, projectId]);
+
+  const entrySourceOptions = useMemo(
+    () =>
+      industryActive && formProfile?.entry_sources?.length
+        ? [...formProfile.entry_sources]
+            .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+            .map((item) => ({
+              value: item.code,
+              label: item.label || item.code,
+            }))
+        : [],
+    [formProfile, industryActive],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -200,13 +216,24 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
             messageApi.error(t('app.kuaiplm.ecn.messages.materialRequired'));
             throw new Error('material required');
           }
+          const headerPayload = buildHeaderExtensionPayload(values, formProfile, industryActive) || {};
+          const entrySource = values.entry_source
+            ? String(values.entry_source).trim()
+            : '';
+          const extension_payload =
+            entrySource || Object.keys(headerPayload).length
+              ? {
+                  ...headerPayload,
+                  ...(entrySource ? { entry_source: entrySource } : {}),
+                }
+              : null;
           const payload = {
             project_id: values.project_id ? Number(values.project_id) : null,
             change_kind: values.change_kind,
             title: String(values.title || '').trim(),
             change_reason: values.change_reason || null,
             remarks: values.remarks || null,
-            extension_payload: buildHeaderExtensionPayload(values, formProfile, industryActive),
+            extension_payload,
             materials: cleanMaterials,
           };
           if (editing?.id) {
@@ -231,7 +258,7 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
             disabled={!!editing}
           />
         </Col>
-        <Col span={8}>
+        <Col span={entrySourceOptions.length ? 8 : 12}>
           <ProFormSelect
             name="change_kind"
             label={t('app.kuaiplm.ecn.fields.changeKind')}
@@ -240,7 +267,18 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
             options={KIND_KEYS.map((k) => ({ value: k, label: kindLabel(k) }))}
           />
         </Col>
-        <Col span={8}>
+        {entrySourceOptions.length ? (
+          <Col span={8}>
+            <ProFormSelect
+              name="entry_source"
+              label={t('app.kuaiplm.ecn.fields.entrySource')}
+              rules={[{ required: true }]}
+              disabled={!!editing}
+              options={entrySourceOptions}
+            />
+          </Col>
+        ) : null}
+        <Col span={entrySourceOptions.length ? 8 : 12}>
           <ProFormText
             name="title"
             label={t('app.kuaiplm.ecn.fields.title')}

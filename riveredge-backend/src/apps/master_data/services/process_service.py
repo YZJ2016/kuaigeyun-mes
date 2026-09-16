@@ -2003,9 +2003,12 @@ class ProcessService:
                 base_name = f"{route_name} - {op_display}"
                 name = _sop_name_truncate(base_name + title_extra)
 
+                from apps.master_data.constants.sop_domain import SOP_DOMAIN_PE
+
                 sop_payload = {
                     "code": code,
                     "name": name,
+                    "sop_domain": SOP_DOMAIN_PE,
                     "operation_id": op_id,
                     "material_uuids": mat_uuids_arg,
                     "material_group_uuids": grp_uuids_arg,
@@ -2057,6 +2060,7 @@ class ProcessService:
         tenant_id: int,
         skip: int = 0,
         limit: int = 100,
+        sop_domain: Optional[str] = None,
         operation_id: Optional[int] = None,
         is_active: Optional[bool] = None,
         carrier: Optional[str] = None,
@@ -2090,9 +2094,16 @@ class ProcessService:
         Returns:
             (SOP列表, 总条数)
         """
+        from apps.master_data.constants.sop_domain import SOP_DOMAINS, SOP_DOMAIN_PE
+
+        domain = (sop_domain or SOP_DOMAIN_PE).strip().lower()
+        if domain not in SOP_DOMAINS:
+            raise ValidationError(f"非法 SOP 业务域: {sop_domain}")
+
         query = SOP.filter(
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            deleted_at__isnull=True,
+            sop_domain=domain,
         )
         
         if operation_id is not None:
@@ -2303,12 +2314,15 @@ class ProcessService:
                 )
             return await base_q.order_by("code").prefetch_related("operation").first()
 
+        from apps.master_data.constants.sop_domain import SOP_DOMAIN_PE
+
         # 1) 优先：绑定该具体物料的 SOP
         q_material = SOP.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             is_active=True,
             control_status="effective",
+            sop_domain=SOP_DOMAIN_PE,
             material_uuids__contains=[material_uuid],
         )
         sop = await _pick_for_scope(q_material)
@@ -2332,6 +2346,7 @@ class ProcessService:
                     deleted_at__isnull=True,
                     is_active=True,
                     control_status="effective",
+                    sop_domain=SOP_DOMAIN_PE,
                     material_group_uuids__contains=[group_uuid],
                 )
                 sop2 = await _pick_for_scope(q_group)
@@ -2345,6 +2360,7 @@ class ProcessService:
                 deleted_at__isnull=True,
                 is_active=True,
                 control_status="effective",
+                sop_domain=SOP_DOMAIN_PE,
                 operation_id=op_id,
             )
             sop3 = await q3.order_by("code").prefetch_related("operation").first()
@@ -2380,6 +2396,8 @@ class ProcessService:
         ).first()
         if not material:
             # 工单产品无对应物料，fallback 仅按工序
+            from apps.master_data.constants.sop_domain import SOP_DOMAIN_PE
+
             op = await Operation.filter(
                 tenant_id=tenant_id, id=operation_id, deleted_at__isnull=True
             ).first()
@@ -2390,6 +2408,7 @@ class ProcessService:
                 deleted_at__isnull=True,
                 is_active=True,
                 control_status="effective",
+                sop_domain=SOP_DOMAIN_PE,
                 operation_id=op.id,
             )
             sop = await q.order_by("code").prefetch_related("operation").first()
@@ -2433,11 +2452,14 @@ class ProcessService:
                 seen.add(rid)
                 ordered.append(row)
 
+        from apps.master_data.constants.sop_domain import SOP_DOMAIN_PE
+
         base = dict(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             is_active=True,
             control_status="effective",
+            sop_domain=SOP_DOMAIN_PE,
         )
         group_uuid: Optional[str] = None
         if material_uuid:

@@ -68,6 +68,8 @@ import {
   deleteRdProjectTask,
   createRdProjectDeliverable,
   updateRdProjectDeliverable,
+  submitRdProjectDeliverable,
+  approveRdProjectDeliverable,
   deleteRdProjectDeliverable,
   listRdProjectDeliverableVersions,
   reviseRdProjectDeliverable,
@@ -86,6 +88,7 @@ import {
 } from '../../services/rd-project';
 import { openMasterDataInNewTab, openProjectLinkInNewTab, type EngineeringLinkType } from '../../services/master-data-links';
 import { RdProjectGateStepper } from '../../components/RdProjectGateStepper';
+import { RdProjectSystemArchivePanel } from '../../components/RdProjectSystemArchivePanel';
 import EngineeringLinkTargetSelect from '../../components/EngineeringLinkTargetSelect';
 import {
   getKuaiplmDeliverableStatusOptions,
@@ -300,6 +303,7 @@ const RdProjectDetailPage: React.FC = () => {
   const articles = workbench?.related_articles ?? [];
   const progress = workbench?.progress ?? 0;
   const collaboration = workbench?.collaboration ?? {};
+  const systemArchive = workbench?.system_archive ?? null;
 
   useEffect(() => {
     if (gates.length === 0) return;
@@ -712,27 +716,35 @@ const RdProjectDetailPage: React.FC = () => {
                       >
                         {t('app.kuaiplm.rdProjects.detail.deliverable.versions')}
                       </Button>
-                      {row.status !== 'SUBMITTED' && row.status !== 'APPROVED' ? (
+                      {row.status === 'PENDING' ? (
                         <Button
                           type="link"
                           size="small"
                           onClick={async () => {
-                            await updateRdProjectDeliverable(id!, row.id!, { status: 'SUBMITTED' });
-                            messageApi.success(t('app.kuaiplm.rdProjects.detail.deliverable.submitSuccess'));
-                            load();
+                            try {
+                              await submitRdProjectDeliverable(id!, row.id!);
+                              messageApi.success(t('app.kuaiplm.rdProjects.detail.deliverable.submitSuccess'));
+                              load();
+                            } catch (error: any) {
+                              messageApi.error(error?.message || t('common.operationFailed'));
+                            }
                           }}
                         >
                           {t('app.kuaiplm.common.deliverableStatus.submitted')}
                         </Button>
                       ) : null}
-                      {row.status !== 'APPROVED' && row.status !== 'REJECTED' ? (
+                      {row.status === 'SUBMITTED' ? (
                         <Button
                           type="link"
                           size="small"
                           onClick={async () => {
-                            await updateRdProjectDeliverable(id!, row.id!, { status: 'APPROVED' });
-                            messageApi.success(t('app.kuaiplm.rdProjects.detail.deliverable.approveSuccess'));
-                            load();
+                            try {
+                              await approveRdProjectDeliverable(id!, row.id!);
+                              messageApi.success(t('app.kuaiplm.rdProjects.detail.deliverable.approveSuccess'));
+                              load();
+                            } catch (error: any) {
+                              messageApi.error(error?.message || t('common.operationFailed'));
+                            }
                           }}
                         >
                           {t('app.kuaiplm.common.actions.approve')}
@@ -1159,6 +1171,17 @@ const RdProjectDetailPage: React.FC = () => {
             </Card>
           </Col>
         </Row>
+
+        {isRdProject ? (
+          <Card size="small" title={t('app.kuaiplm.rdProjects.systemArchive.sectionTitle')}>
+            <RdProjectSystemArchivePanel
+              projectId={projectId}
+              archive={systemArchive}
+              canUpdate={projectPerms.canUpdate}
+              onChanged={load}
+            />
+          </Card>
+        ) : null}
       </Space>
 
       <FormModalTemplate

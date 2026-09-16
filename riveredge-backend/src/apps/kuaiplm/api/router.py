@@ -23,6 +23,7 @@ from .material_reviews import router as material_reviews_router
 from .bom_collaborations import router as bom_collaborations_router
 from .project_proposals import router as project_proposals_router
 from .mold_sample_orders import router as mold_sample_orders_router
+from .prototype_build_sheets import router as prototype_build_sheets_router
 from .routes_config import router as config_router
 
 router = APIRouter(tags=["App - Kuaiplm - Overview"])
@@ -45,6 +46,7 @@ router.include_router(material_reviews_router)
 router.include_router(bom_collaborations_router)
 router.include_router(project_proposals_router)
 router.include_router(mold_sample_orders_router)
+router.include_router(prototype_build_sheets_router)
 router.include_router(config_router)
 
 

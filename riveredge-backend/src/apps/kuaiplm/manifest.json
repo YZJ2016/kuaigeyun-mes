@@ -95,10 +95,16 @@
             "sort_order": 7
           },
           {
+            "title": "app.kuaiplm.menu.prototype-build-sheets",
+            "path": "/apps/kuaiplm/prototype-build-sheets",
+            "permission": "kuaiplm:prototype-build-sheet:read",
+            "sort_order": 8
+          },
+          {
             "title": "app.kuaiplm.menu.trial-flows",
             "path": "/apps/kuaiplm/trial-flows",
             "permission": "kuaiplm:trial-flow:read",
-            "sort_order": 8
+            "sort_order": 9
           },
           {
             "title": "app.kuaiplm.menu.phase2.requirements",
@@ -264,6 +270,9 @@
     "kuaiplm:project:create",
     "kuaiplm:project:delete",
     "kuaiplm:project:update",
+    "kuaiplm:project:submit",
+    "kuaiplm:project:approve",
+    "kuaiplm:project:reject",
     "kuaiplm:project:export",
     "kuaiplm:gate-template:read",
     "kuaiplm:gate-template:create",
@@ -405,7 +414,18 @@
     "kuaiplm:mold-sample:execute",
     "kuaiplm:mold-sample:complete",
     "kuaiplm:mold-sample:print",
-    "kuaiplm:mold-sample:export"
+    "kuaiplm:mold-sample:export",
+    "kuaiplm:prototype-build-sheet:read",
+    "kuaiplm:prototype-build-sheet:create",
+    "kuaiplm:prototype-build-sheet:update",
+    "kuaiplm:prototype-build-sheet:delete",
+    "kuaiplm:prototype-build-sheet:submit",
+    "kuaiplm:prototype-build-sheet:approve",
+    "kuaiplm:prototype-build-sheet:reject",
+    "kuaiplm:prototype-build-sheet:revoke",
+    "kuaiplm:prototype-build-sheet:execute",
+    "kuaiplm:prototype-build-sheet:complete",
+    "kuaiplm:prototype-build-sheet:export"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",
@@ -507,6 +527,24 @@
       "entity_type": "mold_sample",
       "resource": "kuaiplm:mold-sample",
       "name": "开模打样审核",
+      "template": "simple",
+      "config_category": "common",
+      "business_type": ""
+    },
+    {
+      "node_key": "rd_deliverable",
+      "entity_type": "rd_deliverable",
+      "resource": "kuaiplm:project",
+      "name": "研发交付物审核",
+      "template": "simple",
+      "config_category": "common",
+      "business_type": ""
+    },
+    {
+      "node_key": "prototype_build_sheet",
+      "entity_type": "prototype_build_sheet",
+      "resource": "kuaiplm:prototype-build-sheet",
+      "name": "样机制作书审核",
       "template": "simple",
       "config_category": "common",
       "business_type": ""

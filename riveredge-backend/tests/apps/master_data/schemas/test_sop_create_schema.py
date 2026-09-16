@@ -4,17 +4,32 @@ from apps.master_data.schemas.process_schemas import SOPCreate
 
 
 def test_sop_create_omits_attachments():
-    data = SOPCreate(code="SOP0001", name="测试 SOP")
+    data = SOPCreate(sop_domain="pe", code="SOP0001", name="测试 SOP")
     assert data.attachments is None
+    assert data.sop_domain == "pe"
+
+
+def test_sop_create_accepts_qc_domain():
+    data = SOPCreate(sop_domain="qc", code="QCSOP001", name="IQC 材料 SOP")
+    assert data.sop_domain == "qc"
+
+
+def test_sop_create_rejects_invalid_domain():
+    try:
+        SOPCreate(sop_domain="invalid", code="SOP0001", name="测试 SOP")
+        assert False, "expected validation error"
+    except Exception as exc:
+        assert "pe 或 qc" in str(exc)
 
 
 def test_sop_create_accepts_empty_attachments_list():
-    data = SOPCreate(code="SOP0001", name="测试 SOP", attachments=[])
+    data = SOPCreate(sop_domain="pe", code="SOP0001", name="测试 SOP", attachments=[])
     assert data.attachments == []
 
 
 def test_sop_create_accepts_upload_file_dicts():
     data = SOPCreate(
+        sop_domain="pe",
         code="SOP0001",
         name="测试 SOP",
         attachments=[{"uid": "file-uuid-1", "name": "扫描件.pdf", "status": "done"}],
@@ -24,7 +39,7 @@ def test_sop_create_accepts_upload_file_dicts():
 
 def test_sop_create_rejects_non_dict_attachment_items():
     try:
-        SOPCreate(code="SOP0001", name="测试 SOP", attachments=["bad"])
+        SOPCreate(sop_domain="pe", code="SOP0001", name="测试 SOP", attachments=["bad"])
         assert False, "expected validation error"
     except Exception as exc:
         assert "valid dictionary" in str(exc)

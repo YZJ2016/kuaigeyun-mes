@@ -118,6 +118,8 @@ export function resolveSopListParams(
       if (carrier) extra.carrier = carrier;
       const controlStatus = pickOptionalString(search, 'controlStatus');
       if (controlStatus) extra.control_status = controlStatus;
+      const sopDomain = pickOptionalString(search, 'sopDomain');
+      if (sopDomain) extra.sop_domain = sopDomain;
       return extra;
     },
   });

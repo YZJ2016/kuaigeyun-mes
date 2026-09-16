@@ -999,6 +999,60 @@ async def _dispatch_sample_process(
     _unsupported("sample_process", action)
 
 
+async def _dispatch_prototype_build_sheet(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.services.prototype_build_sheet_service import PrototypeBuildSheetService
+
+    svc = PrototypeBuildSheetService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("prototype_build_sheet", action)
+    _unsupported("prototype_build_sheet", action)
+
+
+async def _dispatch_rd_deliverable(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.models.rd_project import RdProjectDeliverable
+    from apps.kuaiplm.services.rd_project_service import RdProjectService
+
+    svc = RdProjectService()
+    user = await _resolve_user_or_raise(user_id)
+    row = await RdProjectDeliverable.get_or_none(
+        tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+    )
+    if row is None:
+        raise ValidationError(f"研发交付物不存在: {entity_id}")
+    if action == "submit":
+        return await svc.submit_deliverable(tenant_id, row.project_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve_deliverable(tenant_id, row.project_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject_deliverable_by_id(
+            tenant_id, entity_id, user, reason=reason
+        )
+    if action in ("withdraw", "revoke"):
+        _unsupported("rd_deliverable", action)
+    _unsupported("rd_deliverable", action)
+
+
 async def _dispatch_material_review(
     action: str,
     *,
@@ -1190,10 +1244,39 @@ def _make_kuaioa_dispatch(
         if action == "submit":
             return await getattr(svc, submit_method)(tenant_id, entity_id, user_id)
         if action == "approve":
-            await getattr(mod, decision_fn)(tenant_id, entity_id, True, user_id)
+            from core.services.approval.uni_audit_service import UniAuditService
+
+            async def flow_approve() -> Any:
+                await getattr(mod, decision_fn)(tenant_id, entity_id, True, user_id)
+                return await get_fn(tenant_id, entity_id)
+
+            result = await UniAuditService.approve_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type=entity_key,
+                entity_id=entity_id,
+                approver_id=user_id,
+                flow_approve=flow_approve,
+            )
+            if result is not None:
+                return result
             return await get_fn(tenant_id, entity_id)
         if action == "reject":
-            await getattr(mod, decision_fn)(tenant_id, entity_id, False, user_id)
+            from core.services.approval.uni_audit_service import UniAuditService
+
+            async def flow_reject() -> Any:
+                await getattr(mod, decision_fn)(tenant_id, entity_id, False, user_id)
+                return await get_fn(tenant_id, entity_id)
+
+            result = await UniAuditService.reject_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type=entity_key,
+                entity_id=entity_id,
+                approver_id=user_id,
+                reason=reason,
+                flow_reject=flow_reject,
+            )
+            if result is not None:
+                return result
             return await get_fn(tenant_id, entity_id)
         if action == "revoke":
             return await getattr(svc, revoke_method)(tenant_id, entity_id, user_id)
@@ -1322,6 +1405,8 @@ HANDLERS: Dict[str, DispatchFn] = {
     "supplier_evaluation": _dispatch_supplier_evaluation,
     "engineering_change": _dispatch_engineering_change,
     "sample_process": _dispatch_sample_process,
+    "prototype_build_sheet": _dispatch_prototype_build_sheet,
+    "rd_deliverable": _dispatch_rd_deliverable,
     "material_review": _dispatch_material_review,
     "bom_collaboration": _dispatch_bom_collaboration,
     "project_proposal": _dispatch_project_proposal,

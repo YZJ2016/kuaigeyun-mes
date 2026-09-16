@@ -166,43 +166,67 @@ class MenuTakeoverService:
         module_app_code: str,
         decls: List[IndustryExtensionDecl],
     ) -> int:
-        """行业包启用时：将 replace 扩展对应宿主菜单从侧栏隐藏，入口改由行业包聚合。"""
-        updated = 0
+        """按当前 pack_menu 同步宿主侧栏：应聚合的隐藏，不再聚合（含 pack_menu 改 false）的恢复。"""
+        suppress_by_host: dict[str, set[str]] = {}
+        host_apps: set[str] = set()
         for decl in decls:
-            if decl.kind != "replace" or not decl.pack_menu or not decl.host_app or not decl.menu_path:
+            if decl.kind != "replace" or not decl.host_app or not decl.menu_path:
                 continue
-            source_uuid = await MenuTakeoverService._get_app_uuid(tenant_id, decl.host_app)
+            host = str(decl.host_app)
+            host_apps.add(host)
+            # 仅 profile + pack_menu 隐藏宿主；document 替代只打 meta，宿主入口仍可见
+            if decl.pack_menu and decl.strategy == "profile":
+                suppress_by_host.setdefault(host, set()).add(str(decl.menu_path).strip())
+
+        updated = 0
+        restored = 0
+        for host_app in host_apps:
+            source_uuid = await MenuTakeoverService._get_app_uuid(tenant_id, host_app)
             if not source_uuid:
                 continue
-            target = str(decl.menu_path).strip()
+            targets = suppress_by_host.get(host_app, set())
             menus = await Menu.filter(
                 tenant_id=tenant_id,
                 application_uuid=source_uuid,
                 deleted_at__isnull=True,
             ).all()
             for menu in menus:
-                if not MenuTakeoverService._path_matches_menu_target(menu.path, target):
-                    continue
                 meta: Dict[str, Any] = dict(menu.meta or {})
-                if (
-                    not menu.is_active
-                    and meta.get(META_SUPPRESSED_BY_INDUSTRY_PACK) == module_app_code
-                ):
-                    continue
-                if menu.is_active or meta.get(META_SUPPRESSED_BY_INDUSTRY_PACK) != module_app_code:
-                    meta[META_SUPPRESSED_BY_INDUSTRY_PACK] = module_app_code
-                    menu.meta = meta
-                    menu.is_active = False
+                tagged = meta.get(META_SUPPRESSED_BY_INDUSTRY_PACK) == module_app_code
+                should_suppress = any(
+                    MenuTakeoverService._path_matches_menu_target(menu.path, target)
+                    for target in targets
+                )
+                if should_suppress:
+                    if (
+                        not menu.is_active
+                        and meta.get(META_SUPPRESSED_BY_INDUSTRY_PACK) == module_app_code
+                    ):
+                        continue
+                    if (
+                        menu.is_active
+                        or meta.get(META_SUPPRESSED_BY_INDUSTRY_PACK) != module_app_code
+                    ):
+                        meta[META_SUPPRESSED_BY_INDUSTRY_PACK] = module_app_code
+                        menu.meta = meta
+                        menu.is_active = False
+                        await menu.save(update_fields=["meta", "is_active", "updated_at"])
+                        updated += 1
+                elif tagged:
+                    meta.pop(META_SUPPRESSED_BY_INDUSTRY_PACK, None)
+                    menu.meta = meta or None
+                    menu.is_active = True
                     await menu.save(update_fields=["meta", "is_active", "updated_at"])
-                    updated += 1
-        if updated:
+                    restored += 1
+        if updated or restored:
             logger.info(
-                "industry_pack_menu_suppressed tenant={} module={} count={}",
+                "industry_pack_menu_synced tenant={} module={} suppressed={} restored={}",
                 tenant_id,
                 module_app_code,
                 updated,
+                restored,
             )
-        return updated
+        return updated + restored
 
     @staticmethod
     async def revert_extension_pack_menu(
@@ -210,12 +234,12 @@ class MenuTakeoverService:
         module_app_code: str,
         decls: List[IndustryExtensionDecl],
     ) -> int:
-        """行业包停用时恢复被聚合隐藏的宿主菜单。"""
+        """行业包停用时恢复被聚合隐藏的宿主菜单（按 meta 标记，不依赖当前 pack_menu）。"""
         restored = 0
         host_apps = {
             str(decl.host_app)
             for decl in decls
-            if decl.kind == "replace" and decl.pack_menu and decl.host_app
+            if decl.kind == "replace" and decl.host_app
         }
         for host_app in host_apps:
             source_uuid = await MenuTakeoverService._get_app_uuid(tenant_id, host_app)
@@ -229,8 +253,7 @@ class MenuTakeoverService:
             for menu in menus:
                 meta: Dict[str, Any] = dict(menu.meta or {})
                 tagged = meta.get(META_SUPPRESSED_BY_INDUSTRY_PACK) == module_app_code
-                orphaned = not menu.is_active and not tagged
-                if not tagged and not orphaned:
+                if not tagged:
                     continue
                 meta.pop(META_SUPPRESSED_BY_INDUSTRY_PACK, None)
                 menu.meta = meta or None
@@ -239,7 +262,7 @@ class MenuTakeoverService:
                 restored += 1
         if restored:
             logger.info(
-                "industry_pack_menu_restored tenant={} module={} count={}",
+                "industry_pack_menu_restored tenant={} module={} restored={}",
                 tenant_id,
                 module_app_code,
                 restored,

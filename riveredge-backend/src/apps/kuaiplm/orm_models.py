@@ -6,6 +6,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaiplm.models.phase2",
     "apps.kuaiplm.models.rd_project",
     "apps.kuaiplm.models.rd_project_deliverable_version",
+    "apps.kuaiplm.models.rd_project_system_archive",
     "apps.kuaiplm.models.product_firmware",
     "apps.kuaiplm.models.production_file",
     "apps.kuaiplm.models.trial_flow",
@@ -18,4 +19,5 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaiplm.models.bom_collaboration",
     "apps.kuaiplm.models.project_proposal",
     "apps.kuaiplm.models.mold_sample_order",
+    "apps.kuaiplm.models.prototype_build_sheet",
 ]

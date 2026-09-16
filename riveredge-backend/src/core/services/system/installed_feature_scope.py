@@ -169,9 +169,12 @@ _MESSAGE_TEMPLATE_REQUIRES_APPS: Dict[str, FrozenSet[str]] = {
     "KZ_WO_REMIND_BATCHING": frozenset({"kuaizhizao"}),
     "PLM_TRIAL_APPROVAL_OVERDUE": frozenset({"kuaiplm"}),
     "PLM_TRIAL_STEP_OVERDUE": frozenset({"kuaiplm"}),
+    "PLM_PENDING_APPROVAL_OVERDUE": frozenset({"kuaiplm"}),
+    "KUAIOA_FORM_REQUEST_OVERDUE": frozenset({"kuaioa"}),
     "PLM_LAB_REPORT_SUBMITTED": frozenset({"kuaiplm"}),
     "PLM_LAB_REPORT_APPROVED": frozenset({"kuaiplm"}),
     "PLM_LAB_REPORT_REJECTED": frozenset({"kuaiplm"}),
+    "PLM_ANNUAL_LAB_MONTH_DUE": frozenset({"kuaiplm"}),
 }
 
 # 邮件类全局预设已下线（邮件渠道未建设）；无「始终加载」的核心模板

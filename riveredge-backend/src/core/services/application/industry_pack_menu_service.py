@@ -283,7 +283,12 @@ class IndustryPackMenuService:
 
     @staticmethod
     async def rebuild_pack_menus(tenant_id: int) -> int:
+        from core.config.industry_pack import is_industry_module_app_code
+        from core.services.application.industry_extension_runtime_service import (
+            IndustryExtensionRuntimeService,
+        )
         from core.services.system.menu_service import MenuService
+        from core.services.system.menu_takeover_service import MenuTakeoverService
 
         shell = await IndustryPackMenuService.get_shell_application(tenant_id)
         if not shell:
@@ -315,6 +320,27 @@ class IndustryPackMenuService:
             preserve_existing_is_active=False,
             skip_permission_sync=False,
         )
+
+        # pack_menu 从 true→false 后须交还宿主侧栏（如返工单回快制造）
+        from core.services.application.application_service import ApplicationService
+
+        apps = await ApplicationService.list_applications(
+            tenant_id=tenant_id,
+            skip=0,
+            limit=500,
+            is_installed=True,
+            is_active=True,
+        )
+        for app in apps:
+            module_code = str(app.get("code") or "")
+            if not is_industry_module_app_code(module_code):
+                continue
+            decls = IndustryExtensionRuntimeService.declarations_for_module(module_code)
+            replace_decls = [d for d in decls if d.kind == "replace"]
+            await MenuTakeoverService.apply_extension_pack_menu(
+                tenant_id, module_code, replace_decls
+            )
+
         await MenuService._clear_menu_cache(tenant_id)
         logger.info(
             f"租户 {tenant_id} 行业包菜单已重建，子模块 {len(children)} 个，同步 {count} 项"

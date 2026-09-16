@@ -3,6 +3,8 @@
 from datetime import datetime
 from typing import List, Optional
 
+from decimal import Decimal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -151,6 +153,10 @@ class LabRequestResponse(LabRequestBase):
     report_approved_by_name: Optional[str] = None
     report_rejected_at: Optional[datetime] = None
     report_reject_reason: Optional[str] = None
+    outsource_price: Optional[Decimal] = None
+    price_filled_by: Optional[int] = None
+    price_filled_by_name: Optional[str] = None
+    price_filled_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     submitted_at: Optional[datetime] = None
@@ -185,6 +191,8 @@ class LabRequestListItem(BaseModel):
     project_code: Optional[str] = None
     material_code: Optional[str] = None
     material_name: Optional[str] = None
+    outsource_price: Optional[Decimal] = None
+    price_filled_by_name: Optional[str] = None
     requester_name: Optional[str] = None
     lab_owner_name: Optional[str] = None
     expected_complete_at: Optional[datetime] = None
@@ -201,6 +209,10 @@ class LabRequestListResponse(BaseModel):
     data: List[LabRequestListItem]
     total: int
     success: bool = True
+
+
+class LabRequestFillOutsourcePriceRequest(BaseModel):
+    outsource_price: Decimal = Field(..., gt=0, description="委外试验价格")
 
 
 class LabRequestRejectRequest(BaseModel):

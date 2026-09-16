@@ -395,15 +395,15 @@ export const CODE_RULE_PAGES: CodeRulePageConfig[] = [
     ruleCode: 'ROLE_CODE',
     allowManualEdit: true,
   },
-  // 快格轻制造 - 绩效管理（技能）
+  // 轻办公 - 人事技能管理（页面自快制造迁入）
   {
     pageCode: 'master-data-performance-skill',
     pageName: '技能管理',
-    pagePath: '/apps/kuaizhizao/performance/skills',
+    pagePath: '/apps/kuaioa/hr/skills',
     codeField: 'code',
     codeFieldLabel: '技能编号',
-    module: '快格轻制造',
-    moduleIcon: 'production',
+    module: '轻办公',
+    moduleIcon: 'briefcase',
     autoGenerate: false,
   },
   

@@ -558,6 +558,12 @@ class SOPBase(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+    sop_domain: str = Field(
+        ...,
+        max_length=10,
+        description="业务域 pe=PE制造工段SOP qc=QC材料SOP",
+        validation_alias=AliasChoices("sop_domain", "sopDomain"),
+    )
     code: str = Field(..., max_length=100, description="SOP编码")
     name: str = Field(..., max_length=200, description="SOP名称")
     operation_id: Optional[int] = Field(
@@ -655,6 +661,15 @@ class SOPBase(BaseModel):
         description="关联质量体系文件UUID",
         validation_alias=AliasChoices("qms_document_uuid", "qmsDocumentUuid"),
     )
+
+    @validator("sop_domain")
+    def validate_sop_domain(cls, v):
+        from apps.master_data.constants.sop_domain import SOP_DOMAINS
+
+        domain = (v or "").strip().lower()
+        if domain not in SOP_DOMAINS:
+            raise ValueError("sop_domain 必须是 pe 或 qc")
+        return domain
 
     @validator("carrier")
     def validate_carrier(cls, v):

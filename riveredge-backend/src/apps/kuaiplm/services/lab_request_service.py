@@ -17,6 +17,7 @@ from apps.kuaiplm.models.lab_request import LabRequest, LabRequestMeasureItem
 from apps.kuaiplm.schemas.lab_request import (
     LabRequestCompleteRequest,
     LabRequestCreate,
+    LabRequestFillOutsourcePriceRequest,
     LabRequestLinkExceptionRequest,
     LabRequestListItem,
     LabRequestListResponse,
@@ -465,12 +466,38 @@ class LabRequestService(AppBaseService[LabRequest]):
         await row.save()
         return await self._to_response(row)
 
+    async def fill_outsource_price(
+        self,
+        tenant_id: int,
+        request_id: int,
+        data: LabRequestFillOutsourcePriceRequest,
+        current_user: User,
+    ) -> LabRequestResponse:
+        row = await self._get_row(tenant_id, request_id)
+        if row.business_type != "outsource":
+            raise BusinessLogicError("仅委外试验申请可填写价格")
+        if row.status != "pending":
+            raise BusinessLogicError("仅待受理状态可填写委外价格")
+        row.outsource_price = data.outsource_price
+        row.price_filled_by = current_user.id
+        row.price_filled_by_name = (
+            getattr(current_user, "full_name", None)
+            or getattr(current_user, "username", None)
+            or str(current_user.id)
+        )
+        row.price_filled_at = resolve_business_datetime()
+        apply_update_audit(row, current_user)
+        await row.save()
+        return await self._to_response(row)
+
     async def accept(
         self, tenant_id: int, request_id: int, current_user: User
     ) -> LabRequestResponse:
         row = await self._get_row(tenant_id, request_id)
         if row.status != "pending":
             raise BusinessLogicError("仅待受理状态可由实验室受理")
+        if row.business_type == "outsource" and row.outsource_price is None:
+            raise ValidationError("委外试验须由采购填写价格后方可受理")
         row.status = "in_lab"
         row.accepted_at = resolve_business_datetime()
         row.started_at = row.started_at or resolve_business_datetime()

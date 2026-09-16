@@ -522,6 +522,12 @@ class SOP(BaseModel):
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
 
+    sop_domain = fields.CharField(
+        max_length=10,
+        default="pe",
+        description="业务域 pe=PE制造工段SOP qc=QC材料SOP",
+    )
+
     # 文控：载体与受控状态
     carrier = fields.CharField(
         max_length=20,

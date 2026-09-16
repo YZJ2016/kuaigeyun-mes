@@ -27,6 +27,13 @@ from apps.kuaiplm.schemas.rd_project import (
     RdProjectLinkCreate,
     RdProjectLinkResponse,
     RdProjectResponse,
+    RdProjectSystemArchiveAcceptRequest,
+    RdProjectSystemArchiveItemResponse,
+    RdProjectSystemArchiveLinkRequest,
+    RdProjectSystemArchiveListResponse,
+    RdProjectSystemArchiveMissingRequest,
+    RdProjectSystemArchiveRejectRequest,
+    RdProjectSystemArchiveUploadRequest,
     RdProjectTaskCreate,
     RdProjectTaskResponse,
     RdProjectTaskUpdate,
@@ -34,14 +41,16 @@ from apps.kuaiplm.schemas.rd_project import (
     RdProjectWorkbenchResponse,
 )
 from apps.kuaiplm.services.rd_project_service import RdProjectService
+from apps.kuaiplm.services.rd_project_system_archive_service import RdProjectSystemArchiveService
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.user_permission_service import UserPermissionService
 from infra.api.deps.deps import get_current_user
-from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 router = APIRouter(prefix="/rd-projects", tags=["App - Kuaiplm - RD Projects"])
 service = RdProjectService()
+archive_service = RdProjectSystemArchiveService()
 
 
 def _err(status_code: int, message: str, route: str, tenant_id: Optional[int] = None) -> HTTPException:
@@ -346,6 +355,76 @@ async def revise_deliverable(
 
 
 @router.post(
+    "/{project_id}/deliverables/{deliverable_id}/submit",
+    response_model=RdProjectDeliverableResponse,
+    summary="Submit deliverable for approval",
+)
+async def submit_deliverable(
+    project_id: int = Path(...),
+    deliverable_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(
+        require_access(
+            "kuaiplm.project",
+            "submit",
+            required_permissions=["kuaiplm:project:submit"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.submit_deliverable(
+            tenant_id, project_id, deliverable_id, current_user
+        )
+    except NotFoundError as e:
+        raise _err(
+            404, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}/submit", tenant_id
+        )
+    except (BusinessLogicError, ValidationError) as e:
+        raise _err(
+            400, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}/submit", tenant_id
+        )
+
+
+@router.post(
+    "/{project_id}/deliverables/{deliverable_id}/approve",
+    response_model=RdProjectDeliverableResponse,
+    summary="Approve submitted deliverable",
+)
+async def approve_deliverable(
+    project_id: int = Path(...),
+    deliverable_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(
+        require_access(
+            "kuaiplm.project",
+            "approve",
+            required_permissions=["kuaiplm:project:approve"],
+        )
+    ),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.approve_deliverable(
+            tenant_id, project_id, deliverable_id, current_user
+        )
+    except NotFoundError as e:
+        raise _err(
+            404,
+            str(e),
+            f"/rd-projects/{project_id}/deliverables/{deliverable_id}/approve",
+            tenant_id,
+        )
+    except BusinessLogicError as e:
+        raise _err(
+            400,
+            str(e),
+            f"/rd-projects/{project_id}/deliverables/{deliverable_id}/approve",
+            tenant_id,
+        )
+
+
+@router.post(
     "/{project_id}/deliverables/{deliverable_id}/reject",
     response_model=RdProjectDeliverableResponse,
     summary="Reject pending deliverable revision",
@@ -432,3 +511,210 @@ async def spawn_delivery_project(
         return await service.spawn_delivery_project(tenant_id, project_id, current_user)
     except (NotFoundError, BusinessLogicError) as e:
         raise _err(400, str(e), f"/rd-projects/{project_id}/spawn-delivery-project", tenant_id)
+
+
+@router.get(
+    "/{project_id}/system-archive",
+    response_model=RdProjectSystemArchiveListResponse,
+    summary="List project system archive checklist (R-01 #70)",
+)
+async def list_system_archive(
+    project_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.project", "read", required_permissions=["kuaiplm:project:read"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    del current_user
+    return RdProjectSystemArchiveListResponse.model_validate(
+        await archive_service.list_for_project(tenant_id, project_id)
+    )
+
+
+@router.post(
+    "/{project_id}/system-archive/{item_id}/upload",
+    response_model=RdProjectSystemArchiveItemResponse,
+    summary="Upload file for system archive item",
+)
+async def upload_system_archive(
+    data: RdProjectSystemArchiveUploadRequest,
+    project_id: int = Path(...),
+    item_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        actor_name = getattr(current_user, "full_name", None) or getattr(current_user, "username", None)
+        return RdProjectSystemArchiveItemResponse.model_validate(
+            await archive_service.upload_file(
+                tenant_id,
+                project_id,
+                item_id,
+                file_uuid=data.file_uuid,
+                file_name=data.file_name,
+                file_url=data.file_url,
+                actor_id=current_user.id,
+                actor_name=actor_name,
+                notes=data.notes,
+            )
+        )
+    except NotFoundError as e:
+        raise _err(404, str(e), f"/rd-projects/{project_id}/system-archive/{item_id}/upload", tenant_id)
+    except BusinessLogicError as e:
+        raise _err(400, str(e), f"/rd-projects/{project_id}/system-archive/{item_id}/upload", tenant_id)
+
+
+@router.post(
+    "/{project_id}/system-archive/{item_id}/link",
+    response_model=RdProjectSystemArchiveItemResponse,
+    summary="Link existing document for system archive item",
+)
+async def link_system_archive(
+    data: RdProjectSystemArchiveLinkRequest,
+    project_id: int = Path(...),
+    item_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        actor_name = getattr(current_user, "full_name", None) or getattr(current_user, "username", None)
+        return RdProjectSystemArchiveItemResponse.model_validate(
+            await archive_service.link_target(
+                tenant_id,
+                project_id,
+                item_id,
+                linked_target_type=data.linked_target_type,
+                linked_target_id=data.linked_target_id,
+                linked_target_uuid=data.linked_target_uuid,
+                linked_target_code=data.linked_target_code,
+                linked_target_name=data.linked_target_name,
+                actor_id=current_user.id,
+                actor_name=actor_name,
+                notes=data.notes,
+            )
+        )
+    except NotFoundError as e:
+        raise _err(404, str(e), f"/rd-projects/{project_id}/system-archive/{item_id}/link", tenant_id)
+    except BusinessLogicError as e:
+        raise _err(400, str(e), f"/rd-projects/{project_id}/system-archive/{item_id}/link", tenant_id)
+
+
+@router.post(
+    "/{project_id}/system-archive/{item_id}/mark-missing",
+    response_model=RdProjectSystemArchiveItemResponse,
+    summary="Mark system archive item as pending supplement",
+)
+async def mark_system_archive_missing(
+    data: RdProjectSystemArchiveMissingRequest,
+    project_id: int = Path(...),
+    item_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        actor_name = getattr(current_user, "full_name", None) or getattr(current_user, "username", None)
+        return RdProjectSystemArchiveItemResponse.model_validate(
+            await archive_service.mark_missing(
+                tenant_id,
+                project_id,
+                item_id,
+                missing_notes=data.missing_notes,
+                actor_id=current_user.id,
+                actor_name=actor_name,
+            )
+        )
+    except NotFoundError as e:
+        raise _err(404, str(e), f"/rd-projects/{project_id}/system-archive/{item_id}/mark-missing", tenant_id)
+    except BusinessLogicError as e:
+        raise _err(400, str(e), f"/rd-projects/{project_id}/system-archive/{item_id}/mark-missing", tenant_id)
+
+
+@router.post(
+    "/{project_id}/system-archive/{item_id}/clear",
+    response_model=RdProjectSystemArchiveItemResponse,
+    summary="Clear system archive item content",
+)
+async def clear_system_archive(
+    project_id: int = Path(...),
+    item_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        actor_name = getattr(current_user, "full_name", None) or getattr(current_user, "username", None)
+        return RdProjectSystemArchiveItemResponse.model_validate(
+            await archive_service.clear_content(
+                tenant_id,
+                project_id,
+                item_id,
+                actor_id=current_user.id,
+                actor_name=actor_name,
+            )
+        )
+    except NotFoundError as e:
+        raise _err(404, str(e), f"/rd-projects/{project_id}/system-archive/{item_id}/clear", tenant_id)
+
+
+@router.post(
+    "/{project_id}/system-archive/{item_id}/accept",
+    response_model=RdProjectSystemArchiveItemResponse,
+    summary="Accept system archive item",
+)
+async def accept_system_archive(
+    data: RdProjectSystemArchiveAcceptRequest,
+    project_id: int = Path(...),
+    item_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        actor_name = getattr(current_user, "full_name", None) or getattr(current_user, "username", None)
+        return RdProjectSystemArchiveItemResponse.model_validate(
+            await archive_service.accept_item(
+                tenant_id,
+                project_id,
+                item_id,
+                acceptance_notes=data.acceptance_notes,
+                actor_id=current_user.id,
+                actor_name=actor_name,
+            )
+        )
+    except NotFoundError as e:
+        raise _err(404, str(e), f"/rd-projects/{project_id}/system-archive/{item_id}/accept", tenant_id)
+    except BusinessLogicError as e:
+        raise _err(400, str(e), f"/rd-projects/{project_id}/system-archive/{item_id}/accept", tenant_id)
+
+
+@router.post(
+    "/{project_id}/system-archive/{item_id}/reject",
+    response_model=RdProjectSystemArchiveItemResponse,
+    summary="Reject system archive item acceptance",
+)
+async def reject_system_archive(
+    data: RdProjectSystemArchiveRejectRequest,
+    project_id: int = Path(...),
+    item_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.project", "update", required_permissions=["kuaiplm:project:update"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        actor_name = getattr(current_user, "full_name", None) or getattr(current_user, "username", None)
+        return RdProjectSystemArchiveItemResponse.model_validate(
+            await archive_service.reject_item(
+                tenant_id,
+                project_id,
+                item_id,
+                acceptance_notes=data.acceptance_notes,
+                actor_id=current_user.id,
+                actor_name=actor_name,
+            )
+        )
+    except NotFoundError as e:
+        raise _err(404, str(e), f"/rd-projects/{project_id}/system-archive/{item_id}/reject", tenant_id)
+    except BusinessLogicError as e:
+        raise _err(400, str(e), f"/rd-projects/{project_id}/system-archive/{item_id}/reject", tenant_id)

@@ -1,6 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { App, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useRequest } from 'ahooks';
 import KuaioaCrudListPage from '../../../components/KuaioaCrudListPage';
+import { licenseCatalogApi } from '../../../../kuaielectronics/services/license-catalog';
 import {
   createComplianceLicense,
   deleteComplianceLicense,
@@ -13,14 +16,58 @@ import {
   buildLicenseNotifyChannelOptions,
   buildLicenseTypeOptions,
 } from '../../../utils/oaFormEnums';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 
 const LicensesPage: React.FC = () => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
+  const perms = useResourcePermissions('kuaioa:license');
   const typeOptions = useMemo(() => buildLicenseTypeOptions(t), [t]);
   const channelOptions = useMemo(() => buildLicenseNotifyChannelOptions(t), [t]);
+  const [listKey, setListKey] = useState(0);
+  const [applying, setApplying] = useState(false);
+
+  const { data: catalog } = useRequest(() => licenseCatalogApi.getSummary(), {
+    ready: perms.canRead,
+  });
+
+  const showApplyFromCatalog = Boolean(catalog?.enabled && perms.canCreate);
+
+  const applyToolbarButtons = useMemo(() => {
+    if (!showApplyFromCatalog) {
+      return undefined;
+    }
+    return [
+      <Button
+        key="apply-license-catalog"
+        loading={applying}
+        onClick={async () => {
+          setApplying(true);
+          try {
+            const res = await licenseCatalogApi.applyStubs();
+            message.success(
+              t('app.kuaielectronics.licenseCatalog.applySuccess', {
+                created: res.created ?? 0,
+                skipped: res.skipped ?? 0,
+              }),
+            );
+            setListKey((value) => value + 1);
+          } catch (error) {
+            message.error(getApiErrorMessage(error, t('common.failed')));
+          } finally {
+            setApplying(false);
+          }
+        }}
+      >
+        {t('app.kuaielectronics.licenseCatalog.applyStubs')}
+      </Button>,
+    ];
+  }, [applying, message, showApplyFromCatalog, t]);
 
   return (
     <KuaioaCrudListPage
+      key={listKey}
       createButtonKey="app.kuaioa.license.createButton"
       resource="kuaioa:license"
       codeField="license_code"
@@ -30,10 +77,11 @@ const LicensesPage: React.FC = () => {
       detailVariant="master"
       getDetailFn={getComplianceLicense}
       columnPersistenceId="apps.kuaioa.license.list-v6"
+      toolBarActionsBeforeCreate={applyToolbarButtons}
       createFormDefaults={{
         notify_enabled: true,
         notify_channels: ['internal'],
-        reminder_days: 30,
+        reminder_days: catalog?.default_reminder_days ?? 30,
       }}
       fields={[
         { name: 'license_code', labelKey: 'app.kuaioa.license.code', width: 140 },

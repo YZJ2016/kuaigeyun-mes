@@ -67,7 +67,14 @@ ELECTRONICS_ECN_SEED: Dict[str, Any] = {
         {"code": "engineering_change", "label": "工程变更单", "sort": 10},
         {"code": "design_change_request", "label": "设计更改申请单", "sort": 20},
     ],
-    # 条件必填待用户提供《变更单填写说明》后追加 validation_rules
+    "change_kinds": [
+        {"code": "material", "label": "物料变更", "sort": 10},
+        {"code": "process", "label": "工艺变更", "sort": 20},
+        {"code": "drawing", "label": "图纸变更", "sort": 30},
+        {"code": "doc_template", "label": "文件套模板变更", "sort": 35},
+        {"code": "other", "label": "其它变更", "sort": 40},
+    ],
+    # 条件必填待《变更单填写说明》可读后追加 when_change_kind_in 规则（当前文件无单元格内容）
     "validation_rules": [],
 }
 
@@ -113,14 +120,19 @@ ELECTRONICS_TRIAL_FLOW_SEED: Dict[str, Any] = {
             {"step_key": "production", "step_name": "生产试流结果", "dept_code": "prod", "sort": 30},
         ],
         "structure": [
-            {"step_key": "rd_lead", "step_name": "研发组长", "dept_code": "rd", "sort": 10},
-            {"step_key": "rd_manager", "step_name": "研发经理", "dept_code": "rd", "sort": 20},
-            {"step_key": "purchasing", "step_name": "采购", "dept_code": "purchasing", "sort": 30},
-            {"step_key": "mc", "step_name": "物控", "dept_code": "plan", "sort": 40},
-            {"step_key": "production", "step_name": "生产", "dept_code": "prod", "sort": 50},
-            {"step_key": "pe", "step_name": "PE", "dept_code": "pe", "sort": 60},
-            {"step_key": "pqc", "step_name": "PQC", "dept_code": "pqc", "sort": 70},
-            {"step_key": "qa", "step_name": "QA", "dept_code": "qa", "sort": 80},
+            {"step_key": "plan", "step_name": "生产计划排产", "dept_code": "plan", "sort": 10},
+            {"step_key": "purchasing", "step_name": "采购下单跟进", "dept_code": "purchasing", "sort": 20},
+            {"step_key": "mc", "step_name": "物控会签", "dept_code": "plan", "sort": 30},
+            {"step_key": "wh_receive", "step_name": "仓库收料核对齐套", "dept_code": "warehouse", "sort": 40},
+            {"step_key": "wh_to_iqc", "step_name": "仓库送检IQC", "dept_code": "warehouse", "sort": 50},
+            {"step_key": "iqc", "step_name": "IQC组合装配检验入库", "dept_code": "iqc", "sort": 60},
+            {"step_key": "wh_issue", "step_name": "仓库齐套发料", "dept_code": "warehouse", "sort": 70},
+            {"step_key": "line_receive", "step_name": "产线收料试组装", "dept_code": "prod", "sort": 80},
+            {"step_key": "pe_pqc_check", "step_name": "PE/PQC核对试流品标识", "dept_code": "pe", "sort": 90},
+            {"step_key": "prod_trial", "step_name": "生产试流", "dept_code": "prod", "sort": 100},
+            {"step_key": "trial_result", "step_name": "PQC/PE/OQC填试流结果", "dept_code": "pqc", "sort": 110},
+            {"step_key": "rd_conclusion", "step_name": "研发结论", "dept_code": "rd", "sort": 120, "phase": "conclusion"},
+            {"step_key": "rd_signoff_close", "step_name": "研发会签关闭", "dept_code": "rd", "sort": 130, "phase": "conclusion"},
         ],
         "complete": [
             {"step_key": "purchasing", "step_name": "采购填写型号订单", "dept_code": "purchasing", "sort": 10},
@@ -160,6 +172,11 @@ ELECTRONICS_REWORK_SEED: Dict[str, Any] = {
         "rework_inspection_record": "返工产品检验记录",
         "product_line_code": "产品线码",
     },
+    # 真源：启动协调/成品 材料返工单号编码规则2026-9-7.xls「编号」页（FR+码+年+流水）；完整码表待产品线码表.docx
+    "product_line_options": [
+        {"code": "1", "label": "遥控器", "sort": 10},
+    ],
+    "rework_code_format_hint": "FR + 产品线码 + 年份 + 流水号",
     "rework_path_types": [
         {"code": "aa", "label": "A-A", "sort": 10},
         {"code": "ab", "label": "A-B", "sort": 20},
@@ -268,6 +285,54 @@ ELECTRONICS_SAMPLE_PROCESS_SEED: Dict[str, Any] = {
     ],
 }
 
+ELECTRONICS_LAB_REQUEST_SEED: Dict[str, Any] = {
+    "business_type_labels": {
+        "project_material": "材料试验",
+        "project_product": "整机例试",
+    },
+    "extension_fields": {
+        "project_product": [
+            {
+                "key": "structure_special_test",
+                "label": "结构特殊试验说明",
+                "sort": 10,
+                "type": "textarea",
+            },
+            {
+                "key": "electronics_special_test",
+                "label": "电子特殊试验说明",
+                "sort": 20,
+                "type": "textarea",
+            },
+            {
+                "key": "structure_manager_approved",
+                "label": "结构经理已审批",
+                "sort": 30,
+                "type": "boolean",
+            },
+            {
+                "key": "electronics_manager_approved",
+                "label": "电子经理已审批",
+                "sort": 40,
+                "type": "boolean",
+            },
+        ],
+    },
+}
+
+ELECTRONICS_RD_DELIVERABLE_SEED: Dict[str, Any] = {
+    "drawing_types": [
+        {"code": "silkscreen", "label": "丝印图纸", "sort": 10, "active": True},
+        {"code": "assembly", "label": "总装图纸", "sort": 20, "active": True},
+        {"code": "packaging", "label": "包装图纸", "sort": 30, "active": True},
+        {"code": "pcb_assembly", "label": "线路板组件图纸", "sort": 40, "active": True},
+    ],
+    "customer_doc_types": [
+        {"code": "spec_sheet", "label": "规格书", "sort": 10, "active": True},
+        {"code": "approval_sheet", "label": "承认书", "sort": 20, "active": True},
+    ],
+}
+
 ELECTRONICS_BOM_COLLAB_SEED: Dict[str, Any] = {
     "sections": [
         {"key": "electronics", "label": "电子分区", "sort": 10, "active": True},
@@ -291,6 +356,8 @@ ELECTRONICS_PROFILE_SEEDS_BY_KEY: Dict[str, Dict[str, Any]] = {
     "kuaiplm.bom_collab": ELECTRONICS_BOM_COLLAB_SEED,
     "kuaiplm.ecn": ELECTRONICS_ECN_SEED,
     "kuaiplm.trial_flow": ELECTRONICS_TRIAL_FLOW_SEED,
+    "kuaiplm.lab_request": ELECTRONICS_LAB_REQUEST_SEED,
+    "kuaiplm.rd_deliverable": ELECTRONICS_RD_DELIVERABLE_SEED,
     "kuaizhizao.rework_order": ELECTRONICS_REWORK_SEED,
 }
 

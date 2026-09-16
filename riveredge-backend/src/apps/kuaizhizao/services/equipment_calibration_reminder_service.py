@@ -135,9 +135,11 @@ async def dispatch_equipment_calibration_reminder(
 
     from apps.kuaizhizao.services.equipment_calibration_settings_service import (
         get_calibration_reminder_advance_days,
+        get_calibration_reminder_notify_channels,
     )
 
     advance_days = await get_calibration_reminder_advance_days(tenant_id)
+    notify_channels = await get_calibration_reminder_notify_channels(tenant_id)
     rule_code = str(event.rule_code or "")
     if rule_code == RULE_DUE_SOON:
         action = ACTION_DUE_SOON
@@ -164,6 +166,7 @@ async def dispatch_equipment_calibration_reminder(
     context = {
         "creator_user_id": getattr(equipment, "responsible_person_id", None)
         or getattr(equipment, "created_by", None),
+        "preferred_channels": notify_channels,
     }
     sent = await dispatch_kuaizhizao_notification(
         tenant_id,

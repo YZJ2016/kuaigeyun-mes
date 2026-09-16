@@ -29,43 +29,18 @@ from infra.models.user import User
 
 ALLOWED_FIELD_TYPES = frozenset({"text", "number", "textarea", "select"})
 
+# 通用默认：仅中性班组日报；产线/DADP/异常三类字段 schema 由 kuaielectronics 行业包预置。
 DEFAULT_TEMPLATES: list[dict[str, Any]] = [
     {
-        "template_code": "line_daily",
-        "template_name": "产线日报",
-        "description": "通用产线/班组生产日报（可改字段）",
+        "template_code": "general_shift",
+        "template_name": "班组日报",
+        "description": "通用班组生产日报（字段可配置；行业包可另预置产线/DADP/异常模板）",
         "sort_order": 10,
         "field_schema": [
-            {"key": "plan_qty", "label": "计划产量", "type": "number", "required": False},
-            {"key": "actual_qty", "label": "实际产量", "type": "number", "required": True},
-            {"key": "ok_qty", "label": "合格数", "type": "number", "required": False},
-            {"key": "ng_qty", "label": "不良数", "type": "number", "required": False},
-            {"key": "manpower", "label": "出勤人数", "type": "number", "required": False},
+            {"key": "report_date", "label": "日期", "type": "text", "required": True},
+            {"key": "shift_group", "label": "班组", "type": "text", "required": True},
+            {"key": "actual_qty", "label": "完成数量", "type": "number", "required": True},
             {"key": "note", "label": "说明", "type": "textarea", "required": False},
-        ],
-    },
-    {
-        "template_code": "dadp_daily",
-        "template_name": "DADP日报",
-        "description": "DADP 类日报模板（可改字段）",
-        "sort_order": 20,
-        "field_schema": [
-            {"key": "item_name", "label": "项目", "type": "text", "required": True},
-            {"key": "plan_qty", "label": "计划数", "type": "number", "required": False},
-            {"key": "actual_qty", "label": "完成数", "type": "number", "required": True},
-            {"key": "progress_note", "label": "进度说明", "type": "textarea", "required": False},
-        ],
-    },
-    {
-        "template_code": "exception_daily",
-        "template_name": "异常日报",
-        "description": "异常类日报模板（可改字段）",
-        "sort_order": 30,
-        "field_schema": [
-            {"key": "exception_type", "label": "异常类型", "type": "text", "required": True},
-            {"key": "exception_count", "label": "异常次数", "type": "number", "required": False},
-            {"key": "impact_qty", "label": "影响数量", "type": "number", "required": False},
-            {"key": "exception_desc", "label": "异常描述", "type": "textarea", "required": True},
         ],
     },
 ]

@@ -336,6 +336,22 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
                     f"审核已开启但未找到可用审批流程，请检查 {AUDIT_NODE} 绑定"
                 )
         from apps.kuaiplm.services.plm_audit_flow_sync import submit_instance_auto_passed
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_PRODUCT_FIRMWARE,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_submit(
+            tenant_id,
+            entity_type=ENTITY_PRODUCT_FIRMWARE,
+            entity_id=row.id,
+            entity_uuid=str(row.uuid),
+            submitted_at=row.submitted_at,
+            doc_code=row.firmware_code,
+            title=row.title or row.firmware_code,
+            project_code=row.project_code,
+            doc_label="产品固件 ",
+        )
 
         if submit_instance_auto_passed(approval_instance):
             return await self.approve(tenant_id, firmware_id, user)
@@ -361,6 +377,17 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
         row.approved_at = resolve_business_datetime()
         apply_update_audit(row, user)
         await row.save()
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_PRODUCT_FIRMWARE,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_terminal(
+            tenant_id,
+            entity_type=ENTITY_PRODUCT_FIRMWARE,
+            entity_id=firmware_id,
+            reason="审核通过",
+        )
         return ProductFirmwareResponse.model_validate(row)
 
     async def reject(
@@ -383,6 +410,17 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
         row.submitted_at = None
         apply_update_audit(row, user)
         await row.save()
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_PRODUCT_FIRMWARE,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_terminal(
+            tenant_id,
+            entity_type=ENTITY_PRODUCT_FIRMWARE,
+            entity_id=firmware_id,
+            reason="已驳回",
+        )
         return ProductFirmwareResponse.model_validate(row)
 
     async def release(

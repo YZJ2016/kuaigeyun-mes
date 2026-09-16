@@ -5,6 +5,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { useRequest } from 'ahooks';
 import { useTranslation } from 'react-i18next';
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
@@ -16,7 +17,7 @@ import {
   ProFormTextArea,
   ProFormUploadDragger,
 } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Input, Modal, Result, Table } from 'antd';
+import { App, Button, Descriptions, Input, Modal, Result, Table, Tag } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind } from '../../../../components/uni-action';
@@ -57,6 +58,10 @@ import {
   type ProductionFileStatus,
   type ProductionFileVersion,
 } from '../../services/production-file';
+import {
+  productionFileChecklistApi,
+  type ProductionFileChecklistItem,
+} from '../../../kuaielectronics/services/production-file-checklist';
 
 const RESOURCE = 'kuaiplm:production-file';
 const FILE_CATEGORY = 'production_file';
@@ -111,6 +116,12 @@ const ProductionFilesPage: React.FC = () => {
   const [issueOpen, setIssueOpen] = useState(false);
   const [issueRow, setIssueRow] = useState<ProductionFile | null>(null);
   const [receiverNames, setReceiverNames] = useState('');
+  const [checklistOpen, setChecklistOpen] = useState(false);
+
+  const { data: checklist } = useRequest(() => productionFileChecklistApi.getSummary(), {
+    ready: perms.canRead,
+  });
+  const showIndustryChecklist = Boolean(checklist?.enabled);
 
   const reload = useCallback(() => actionRef.current?.reload(), []);
   const isPe = catalogKind === 'pe_production';
@@ -513,6 +524,33 @@ const ProductionFilesPage: React.FC = () => {
     return keys.map((k) => ({ label: typeLabel(k), value: k }));
   }, [isPe, typeLabel]);
 
+  const checklistToolbar = useMemo(() => {
+    if (!showIndustryChecklist) {
+      return undefined;
+    }
+    return [
+      <Button key="industry-checklist" onClick={() => setChecklistOpen(true)}>
+        {t('app.kuaielectronics.productionFileChecklist.viewButton')}
+      </Button>,
+    ];
+  }, [showIndustryChecklist, t]);
+
+  const checklistRows = useMemo(() => {
+    if (!checklist?.items?.length) {
+      return [] as ProductionFileChecklistItem[];
+    }
+    if (catalogKind === 'rd_tool') {
+      return checklist.items.filter(
+        (item) =>
+          item.host_module === 'kuaiplm.production_file' || item.catalog_kind === 'rd_tool',
+      );
+    }
+    return checklist.items.filter(
+      (item) =>
+        item.host_module === 'kuaiplm.production_file' || item.catalog_kind === 'pe_production',
+    );
+  }, [catalogKind, checklist?.items]);
+
   const renderCatalogTable = (kind: ProductionFileCatalogKind) => (
     <UniTable<ProductionFile>
       key={kind}
@@ -527,6 +565,7 @@ const ProductionFilesPage: React.FC = () => {
       onTableDataChange={(rows) => {
         tableRowsRef.current = rows;
       }}
+      toolBarActionsBeforeCreate={kind === catalogKind ? checklistToolbar : undefined}
       showCreateButton={perms.canCreate}
       createButtonText={t('app.kuaiplm.productionFile.createButton')}
       onCreate={openCreate}
@@ -919,6 +958,47 @@ const ProductionFilesPage: React.FC = () => {
           ) : null
         }
       />
+
+      <Modal
+        title={t('app.kuaielectronics.productionFileChecklist.modalTitle')}
+        open={checklistOpen}
+        destroyOnHidden
+        width={880}
+        footer={null}
+        onCancel={() => setChecklistOpen(false)}
+      >
+        <Table<ProductionFileChecklistItem>
+          size="small"
+          rowKey="item_code"
+          pagination={false}
+          dataSource={checklistRows.length ? checklistRows : checklist?.items || []}
+          columns={[
+            {
+              title: t('app.kuaielectronics.productionFileChecklist.colPriority'),
+              dataIndex: 'priority',
+              width: 100,
+              render: (value: string) =>
+                value ? <Tag variant="filled">{value}</Tag> : '—',
+            },
+            {
+              title: t('app.kuaielectronics.productionFileChecklist.colName'),
+              dataIndex: 'item_name',
+              ellipsis: true,
+            },
+            {
+              title: t('app.kuaielectronics.productionFileChecklist.colPurpose'),
+              dataIndex: 'purpose',
+              ellipsis: true,
+            },
+            {
+              title: t('app.kuaielectronics.productionFileChecklist.colModule'),
+              dataIndex: 'host_module',
+              width: 160,
+              ellipsis: true,
+            },
+          ]}
+        />
+      </Modal>
 
       <Modal
         title={t('app.kuaiplm.productionFile.actions.issue')}

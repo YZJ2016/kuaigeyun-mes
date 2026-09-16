@@ -864,44 +864,40 @@ const BOMPage: React.FC = () => {
       return;
     }
 
-    // 直接从后端API获取配置，而不是使用本地配置
+    // 默认规则为 BOM-物料编码-版本：未选主物料时不应预览，否则会空跑并误报「规则未启用」
+    const formValues = formRef.current?.getFieldsValue();
+    const materialId = formValues?.materialId;
+    if (!materialId) {
+      return;
+    }
+    const selectedMaterial = materials.find((m) => m.id === materialId);
+    const materialCode = selectedMaterial?.mainCode || selectedMaterial?.code;
+    if (!materialCode) {
+      return;
+    }
+
     try {
       const config = await getCodeRulePageConfig('master-data-engineering-bom');
-      
+
       if (!config?.autoGenerate || !config?.ruleCode) {
         console.warn('BOM编号自动生成未启用或规则代码不存在:', config);
         return;
       }
 
-      const ruleCode = config.ruleCode;
-
-      // 获取当前表单值
-      const formValues = formRef.current?.getFieldsValue();
-      const materialId = formValues?.materialId;
       const version = formValues?.version || '1.0';
-      
-      // 构建编号规则的上下文
       const context: Record<string, any> = {
         version,
+        material_code: materialCode,
+        material_name: selectedMaterial?.name,
       };
-      
-      // 如果选择了主物料，添加物料信息到上下文
-      if (materialId) {
-        const selectedMaterial = materials.find(m => m.id === materialId);
-        if (selectedMaterial) {
-          context.material_code = selectedMaterial.mainCode || selectedMaterial.code;
-          context.material_name = selectedMaterial.name;
-        }
-      }
-      
-      const codeResponse = await testGenerateCode({ 
-        rule_code: ruleCode,
+
+      const codeResponse = await testGenerateCode({
+        rule_code: config.ruleCode,
         context,
         check_duplicate: true,
         entity_type: 'bom',
       });
-      
-      // 如果返回的编号不为空，更新表单字段（总是更新预览）
+
       if (codeResponse.code) {
         formRef.current?.setFieldsValue({
           bomCode: codeResponse.code,
@@ -910,6 +906,7 @@ const BOMPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error('获取编号规则配置或生成编号失败:', error?.message || error);
+      messageApi.error(error?.message || t('components.codeField.generateFailed'));
     }
   };
 
@@ -941,12 +938,11 @@ const BOMPage: React.FC = () => {
 
   const handleBomModalAfterOpenChange = (open: boolean) => {
     if (!open || isEdit) return;
-    // Modal + ProForm 挂载完成后再触发自动编号，避免 formRef 未就绪导致回填丢失。
+    // 仅补默认版本；编号等选了主物料后再生成（见 materialId / version onChange）。
     requestAnimationFrame(() => {
       formRef.current?.setFieldsValue({
         version: formRef.current?.getFieldValue('version') || '1.0',
       });
-      void regenerateBOMCode();
       regenerateBomName();
     });
   };
@@ -4113,7 +4109,8 @@ const BOMPage: React.FC = () => {
                 name="bomCode"
                 label={t('app.master-data.bom.bomCode')}
                 colProps={{ span: 12 }}
-                autoGenerateOnCreate={!isEdit}
+                // 规则依赖主物料编码：未选物料时禁止自动预览，避免一打开弹窗就误报
+                autoGenerateOnCreate={false}
                 showGenerateButton={false}
                 documentId={isEdit ? editFormHeaderId ?? undefined : undefined}
                 context={context}

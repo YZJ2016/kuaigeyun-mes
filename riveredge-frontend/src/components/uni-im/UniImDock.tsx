@@ -1,7 +1,7 @@
 /**
  * UNI-IM：顶栏入口 + 右下角三栏弹窗（仿微信 PC 端，非独立路由）
  */
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -272,7 +272,7 @@ export default function UniImPanel({
   const [listPaneWidthLevel, setListPaneWidthLevel] = React.useState(readStoredListPaneWidthLevel);
   const [dragListPaneWidth, setDragListPaneWidth] = React.useState<number | null>(null);
   const listPaneResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messageListRef = useRef<HTMLDivElement | null>(null);
 
   const listPaneWidth = dragListPaneWidth ?? LIST_PANE_WIDTH_LEVELS[listPaneWidthLevel];
   const listPaneResizing = dragListPaneWidth != null;
@@ -1031,11 +1031,16 @@ export default function UniImPanel({
     });
   }, [isNotifySection, open, queryClient, sectionNotifyItems, selectedNotifyUuid]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || !selectedUuid || isNotifySection) {
       return;
     }
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messageListRef.current;
+    if (!el) {
+      return;
+    }
+    // 打开会话直接落底，避免 smooth 从顶滑到底
+    el.scrollTop = el.scrollHeight;
   }, [isNotifySection, messageItems.length, open, selectedUuid]);
 
   const onSend = useCallback(async () => {
@@ -1932,7 +1937,7 @@ export default function UniImPanel({
                 </div>
               ) : (
                 <>
-                  <div className={styles.messageList}>
+                  <div className={styles.messageList} ref={messageListRef}>
                     {msgLoading ? (
                       <div className={styles.emptyChat}>{t('common.loading')}</div>
                     ) : messageItems.length === 0 ? (
@@ -2032,7 +2037,6 @@ export default function UniImPanel({
                         );
                       })
                     )}
-                    <div ref={messagesEndRef} />
                   </div>
                   {canCompose ? (
                     <div className={styles.composer}>

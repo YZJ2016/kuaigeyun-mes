@@ -1416,6 +1416,9 @@ async def list_sops(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    sop_domain: Optional[str] = Query(
+        None, alias="sopDomain", description="业务域 pe=PE制造 qc=QC材料"
+    ),
     operation_id: Optional[int] = Query(None, alias="operationId", description="工序ID（过滤）"),
     is_active: Optional[bool] = Query(None, alias="isActive", description="是否启用"),
     carrier: Optional[str] = Query(None, description="载体 electronic/paper/hybrid"),
@@ -1443,6 +1446,7 @@ async def list_sops(
         tenant_id,
         skip,
         limit,
+        sop_domain=sop_domain,
         operation_id=operation_id,
         is_active=is_active,
         carrier=carrier,

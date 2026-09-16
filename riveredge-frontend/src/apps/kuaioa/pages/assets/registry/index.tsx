@@ -16,6 +16,31 @@ import {
   writeOffFixedAsset,
 } from '../../../services/assets';
 import { buildOaAssetStatusEnum } from '../../../utils/oaFormEnums';
+import {
+  mapOaAttachmentFormFieldToList,
+  mapOaAttachmentListToFormField,
+  mapOaFormValuesToPayload,
+} from '../../../utils/oaFormDateUtils';
+import { runKuaioaListExport } from '../../../utils/kuaioaListExport';
+import type { KuaioaFieldConfig } from '../../../components/KuaioaCrudListPage';
+
+const REGISTRY_FIELDS: KuaioaFieldConfig[] = [
+  { name: 'asset_code', labelKey: 'app.kuaioa.asset.code', width: 140 },
+  { name: 'asset_name', labelKey: 'app.kuaioa.asset.name', required: true, width: 200 },
+  { name: 'asset_category', labelKey: 'app.kuaioa.asset.category', width: 120 },
+  { name: 'custodian_name', labelKey: 'app.kuaioa.asset.custodian', width: 120 },
+  { name: 'location', labelKey: 'app.kuaioa.asset.location', width: 140 },
+  { name: 'department_name', labelKey: 'app.kuaioa.common.department', hideInTable: true },
+  { name: 'purchase_date', labelKey: 'app.kuaioa.asset.purchaseDate', hideInTable: true, type: 'date' },
+  { name: 'status', labelKey: 'common.status', width: 100 },
+  { name: 'notes', labelKey: 'common.remark', hideInTable: true, type: 'textarea' },
+  {
+    name: 'attachment_file',
+    labelKey: 'app.kuaioa.common.attachment',
+    type: 'file',
+    hideInTable: true,
+  },
+];
 
 const AssetsRegistryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -24,6 +49,19 @@ const AssetsRegistryPage: React.FC = () => {
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignRecord, setAssignRecord] = useState<Record<string, unknown> | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  const exportColumns = useMemo(
+    () => [
+      { key: 'asset_code', title: t('app.kuaioa.asset.code') },
+      { key: 'asset_name', title: t('app.kuaioa.asset.name') },
+      { key: 'asset_category', title: t('app.kuaioa.asset.category') },
+      { key: 'custodian_name', title: t('app.kuaioa.asset.custodian') },
+      { key: 'location', title: t('app.kuaioa.asset.location') },
+      { key: 'status', title: t('common.status') },
+      { key: 'department_name', title: t('app.kuaioa.common.department') },
+    ],
+    [t],
+  );
 
   const triggerReload = () => setReloadKey((value) => value + 1);
 
@@ -41,21 +79,28 @@ const AssetsRegistryPage: React.FC = () => {
         detailVariant="master"
         getDetailFn={getFixedAsset}
         columnPersistenceId="apps.kuaioa.asset.registry.list-v5"
-        fields={[
-          { name: 'asset_code', labelKey: 'app.kuaioa.asset.code', width: 140 },
-          { name: 'asset_name', labelKey: 'app.kuaioa.asset.name', required: true, width: 200 },
-          { name: 'asset_category', labelKey: 'app.kuaioa.asset.category', width: 120 },
-          { name: 'custodian_name', labelKey: 'app.kuaioa.asset.custodian', width: 120 },
-          { name: 'location', labelKey: 'app.kuaioa.asset.location', width: 140 },
-          { name: 'department_name', labelKey: 'app.kuaioa.common.department', hideInTable: true },
-          { name: 'purchase_date', labelKey: 'app.kuaioa.asset.purchaseDate', hideInTable: true, type: 'date' },
-          { name: 'status', labelKey: 'common.status', width: 100 },
-          { name: 'notes', labelKey: 'common.remark', hideInTable: true, type: 'textarea' },
-        ]}
+        fields={REGISTRY_FIELDS}
+        mapRecordToFormValues={(record) => mapOaAttachmentListToFormField(record)}
+        mapFormValuesToPayload={(values) =>
+          mapOaAttachmentFormFieldToList(mapOaFormValuesToPayload(REGISTRY_FIELDS, values))
+        }
         listFn={listFixedAssets}
         createFn={createFixedAsset}
         updateFn={updateFixedAsset}
         deleteFn={deleteFixedAsset}
+        showExportButton
+        onExport={async (type, keys, pageData) => {
+          await runKuaioaListExport({
+            type,
+            keys,
+            pageData,
+            listFn: listFixedAssets,
+            columns: exportColumns,
+            filename: t('app.kuaioa.asset.exportFileName'),
+            messageApi: messageApi,
+            noDataText: t('common.exportNoData'),
+          });
+        }}
         extraActions={[
           {
             key: 'assign',
@@ -99,7 +144,8 @@ const AssetsRegistryPage: React.FC = () => {
           {
             key: 'scrap',
             labelKey: 'app.kuaioa.asset.scrap',
-            visible: (r) => r.status !== 'scrapped' && r.status !== 'written_off',
+            requireUpdate: true,
+            visible: (r) => r.status === 'written_off',
             onClick: async (r) => {
               await scrapFixedAsset(Number(r.id));
             },

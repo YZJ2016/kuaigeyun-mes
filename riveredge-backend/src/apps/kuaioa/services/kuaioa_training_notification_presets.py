@@ -8,6 +8,7 @@ from uuid import UUID
 from loguru import logger
 
 from apps.kuaioa.services.kuaioa_training_notification import (
+    ACTION_ANNUAL_PLAN_DISTRIBUTED,
     ACTION_ANNUAL_PLAN_WINDOW,
     ACTION_CONTENT_DUE,
     ACTION_DEPT_APPLICATION_WINDOW,
@@ -38,6 +39,15 @@ KUAIOA_TRAINING_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
         "trigger_action": ACTION_ANNUAL_PLAN_WINDOW,
         "recipient_scopes": ["user_specified"],
         "template_code": "OA_TRAINING_ANNUAL_PLAN_WINDOW",
+        "enabled": False,
+    },
+    {
+        "id": "oa_preset_training_annual_plan_distributed",
+        "scene_name": "年度培训计划批准下发",
+        "trigger_document": DOC_TRAINING,
+        "trigger_action": ACTION_ANNUAL_PLAN_DISTRIBUTED,
+        "recipient_scopes": ["user_specified"],
+        "template_code": "OA_TRAINING_ANNUAL_PLAN_DISTRIBUTED",
         "enabled": False,
     },
     {

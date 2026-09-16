@@ -66,6 +66,10 @@ export interface LabRequest {
   sample_desc?: string | null;
   test_items?: string | null;
   test_reason?: string | null;
+  outsource_price?: number | string | null;
+  price_filled_by?: number | null;
+  price_filled_by_name?: string | null;
+  price_filled_at?: string | null;
   requester_name?: string | null;
   lab_owner_name?: string | null;
   expected_complete_at?: string | null;
@@ -126,6 +130,8 @@ export const labRequestApi = {
   delete: async (id: string | number) => api.delete(`${BASE}/${id}`),
   submit: async (id: string | number) =>
     (await api.post(`${BASE}/${id}/submit`)) as LabRequest,
+  fillOutsourcePrice: async (id: string | number, outsource_price: number | string) =>
+    (await api.post(`${BASE}/${id}/fill-outsource-price`, { outsource_price })) as LabRequest,
   accept: async (id: string | number) =>
     (await api.post(`${BASE}/${id}/accept`)) as LabRequest,
   complete: async (

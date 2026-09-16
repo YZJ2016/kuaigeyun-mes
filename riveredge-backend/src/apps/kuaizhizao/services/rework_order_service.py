@@ -151,6 +151,8 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         return ReworkOrderFormProfile(
             industry_profile_enabled=enabled,
             field_labels=dict(profile.get("field_labels") or {}),
+            product_line_options=list(profile.get("product_line_options") or []),
+            rework_code_format_hint=profile.get("rework_code_format_hint"),
             rework_path_types=list(profile.get("rework_path_types") or []),
             form_sections=list(profile.get("form_sections") or []),
             position_plan_columns=list(profile.get("position_plan_columns") or []),
@@ -1201,6 +1203,25 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             "success": True,
         }
 
+    async def validate_material_req_required_at(
+        self, tenant_id: int, rework_order_id: int
+    ) -> None:
+        """会签型返工：物料需求行须全部填写到位时间（采购节点）。"""
+        mats = await ReworkOrderMaterialReq.filter(
+            tenant_id=tenant_id,
+            rework_order_id=rework_order_id,
+            deleted_at__isnull=True,
+        ).all()
+        if not mats:
+            return
+        missing = [m for m in mats if not m.required_at]
+        if missing:
+            codes = ", ".join(
+                (m.material_code or m.material_name or str(m.line_no)) for m in missing[:5]
+            )
+            suffix = f" 等 {len(missing)} 行" if len(missing) > 5 else ""
+            raise ValidationError(f"采购会签须填写物料分项到位时间：{codes}{suffix}")
+
     async def update_rework_order(
         self,
         tenant_id: int,
@@ -1228,9 +1249,6 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             # 获取返工单
             rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
 
-            if rework_order.status != "draft":
-                raise BusinessLogicError("仅草稿态返工单允许修改")
-
             user_info = await self.get_user_info(updated_by)
 
             update_data = rework_order_data.model_dump(exclude_unset=True)
@@ -1239,6 +1257,27 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             scrap_lines = update_data.pop("scrap_lines", None)
             position_plans = update_data.pop("position_plans", None)
             predefined_operation_ids = update_data.pop("predefined_operation_ids", None)
+
+            if rework_order.status == "pending":
+                if (
+                    scrap_lines is not None
+                    or position_plans is not None
+                    or predefined_operation_ids is not None
+                    or update_data
+                ):
+                    raise BusinessLogicError("会签审核中仅允许更新物料需求到位时间")
+                if material_reqs is not None:
+                    await self._replace_child_lines(
+                        tenant_id,
+                        rework_order_id,
+                        material_reqs=material_reqs,
+                        actor_id=updated_by,
+                        actor_name=user_info["name"],
+                    )
+                return await self.get_rework_order_by_id(tenant_id, rework_order_id)
+
+            if rework_order.status != "draft":
+                raise BusinessLogicError("仅草稿态返工单允许修改")
             if "business_type" in update_data:
                 bt = str(update_data.get("business_type") or "").strip().lower()
                 if bt not in REWORK_BUSINESS_TYPES:
@@ -1735,6 +1774,9 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 doc_label="返工单",
                 verb="审核",
             )
+        bt = str(getattr(rework_order, "business_type", None) or "").strip().lower()
+        if is_signoff_rework_business(bt):
+            await self.validate_material_req_required_at(tenant_id, rework_order_id)
         user_info = await self.get_user_info(actor_id)
         rework_order.status = "approved"
         rework_order.updated_by = actor_id

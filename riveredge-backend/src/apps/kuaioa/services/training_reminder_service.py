@@ -320,6 +320,20 @@ async def dispatch_training_reminder(
         ).exists():
             await ReminderEventService.mark_stopped(tenant_id, event.id, "年度计划已批准")
             return "stopped"
+        from apps.kuaioa.services.training_distribution_service import (
+            filter_dept_application_window_recipient_ids,
+            resolve_dept_application_window_recipient_ids,
+        )
+
+        candidate_ids = await resolve_dept_application_window_recipient_ids(tenant_id)
+        recipient_ids = await filter_dept_application_window_recipient_ids(
+            tenant_id, plan_year, candidate_ids
+        )
+        if candidate_ids and not recipient_ids:
+            await ReminderEventService.mark_stopped(
+                tenant_id, event.id, "各部门申请均已批准，本窗口提醒跳过"
+            )
+            return "stopped"
         open_depts = await KuaioaDeptTrainingApplication.filter(
             tenant_id=tenant_id,
             plan_year=plan_year,
@@ -335,6 +349,7 @@ async def dispatch_training_reminder(
                 "detail_path": "/apps/kuaioa/hr/dept-training-applications",
                 "due_at": to_api_isoformat(event.planned_at) or "—",
             },
+            context={"form_notify_user_ids": recipient_ids} if recipient_ids else {},
         )
         return "sent" if sent else "sent"
 

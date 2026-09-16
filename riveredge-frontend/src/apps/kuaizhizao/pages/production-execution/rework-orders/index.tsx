@@ -84,6 +84,7 @@ import {
   resolveReworkFieldLabel,
   sectionsForPath,
   sortedPositionPlanColumns,
+  sortedProductLineOptions,
   formatProfileFieldDisplayValue,
   inferProfileFieldType,
 } from '../../../utils/reworkOrderFormProfile';
@@ -253,6 +254,10 @@ const ReworkOrdersPage: React.FC = () => {
   const industryProfileActive = isIndustryFormProfileActive(reworkFormProfile);
   const profilePositionColumns = useMemo(
     () => sortedPositionPlanColumns(industryProfileActive ? reworkFormProfile : null),
+    [reworkFormProfile, industryProfileActive],
+  );
+  const productLineOptions = useMemo(
+    () => sortedProductLineOptions(industryProfileActive ? reworkFormProfile : null),
     [reworkFormProfile, industryProfileActive],
   );
   const hasProfilePositionColumns = Boolean(
@@ -2135,11 +2140,23 @@ const ReworkOrdersPage: React.FC = () => {
         </Row>
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormText
-              name="product_line_code"
-              label={t('app.kuaizhizao.reworkOrder.colProductLine')}
-              placeholder={t('app.kuaizhizao.reworkOrder.formProductLinePlaceholder')}
-            />
+            {industryProfileActive && productLineOptions.length ? (
+              <ProFormSelect
+                name="product_line_code"
+                label={
+                  reworkFormProfile?.field_labels?.product_line_code ||
+                  t('app.kuaizhizao.reworkOrder.colProductLine')
+                }
+                options={productLineOptions.map((o) => ({ value: o.code, label: o.label }))}
+                extra={reworkFormProfile?.rework_code_format_hint || undefined}
+              />
+            ) : (
+              <ProFormText
+                name="product_line_code"
+                label={t('app.kuaizhizao.reworkOrder.colProductLine')}
+                placeholder={t('app.kuaizhizao.reworkOrder.formProductLinePlaceholder')}
+              />
+            )}
           </Col>
         </Row>
         {industryProfileActive ? (

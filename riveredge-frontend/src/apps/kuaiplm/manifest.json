@@ -94,10 +94,16 @@
             "sort_order": 7
           },
           {
+            "title": "app.kuaiplm.menu.prototype-build-sheets",
+            "path": "/apps/kuaiplm/prototype-build-sheets",
+            "permission": "kuaiplm:prototype-build-sheet:read",
+            "sort_order": 8
+          },
+          {
             "title": "app.kuaiplm.menu.trial-flows",
             "path": "/apps/kuaiplm/trial-flows",
             "permission": "kuaiplm:trial-flow:read",
-            "sort_order": 8
+            "sort_order": 9
           },
           {
             "title": "app.kuaiplm.menu.phase2.requirements",
@@ -396,7 +402,18 @@
     "kuaiplm:mold-sample:execute",
     "kuaiplm:mold-sample:complete",
     "kuaiplm:mold-sample:print",
-    "kuaiplm:mold-sample:export"
+    "kuaiplm:mold-sample:export",
+    "kuaiplm:prototype-build-sheet:read",
+    "kuaiplm:prototype-build-sheet:create",
+    "kuaiplm:prototype-build-sheet:update",
+    "kuaiplm:prototype-build-sheet:delete",
+    "kuaiplm:prototype-build-sheet:submit",
+    "kuaiplm:prototype-build-sheet:approve",
+    "kuaiplm:prototype-build-sheet:reject",
+    "kuaiplm:prototype-build-sheet:revoke",
+    "kuaiplm:prototype-build-sheet:execute",
+    "kuaiplm:prototype-build-sheet:complete",
+    "kuaiplm:prototype-build-sheet:export"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

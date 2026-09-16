@@ -86,6 +86,7 @@ export const KUAIPLM_ECN_CHANGE_KIND_I18N: Record<string, string> = {
   material: 'app.kuaiplm.ecn.changeKind.material',
   process: 'app.kuaiplm.ecn.changeKind.process',
   drawing: 'app.kuaiplm.ecn.changeKind.drawing',
+  doc_template: 'app.kuaiplm.ecn.changeKind.doc_template',
   other: 'app.kuaiplm.ecn.changeKind.other',
 };
 

@@ -604,3 +604,106 @@ async def load_kuaizhizao_notification_rule_presets(tenant_id: int) -> Dict[str,
         "skipped_missing_template": skipped_missing_template,
         "total_rules": len(existing),
     }
+
+
+CALIBRATION_NOTIFICATION_PRESET_IDS = frozenset(
+    {
+        "kz_preset_equipment_calibration_due_soon",
+        "kz_preset_equipment_calibration_due_overdue",
+    }
+)
+
+
+async def ensure_kuaizhizao_notification_rules_for_preset_ids(
+    tenant_id: int,
+    *,
+    preset_ids: frozenset[str],
+    enabled: bool,
+) -> Dict[str, int]:
+    """按 preset id 补齐/更新消息规则（用于行业包外校提醒等窄域启停）。"""
+    target_presets = [
+        p
+        for p in KUAIZHIZAO_NOTIFICATION_RULE_PRESETS
+        if str(p.get("id") or "") in preset_ids
+    ]
+    if not target_presets:
+        return {"created": 0, "updated": 0, "templates_created": 0}
+
+    template_codes = {
+        str(p.get("template_code") or "").strip()
+        for p in target_presets
+        if str(p.get("template_code") or "").strip()
+    }
+    templates_created = await MessageTemplateService.load_preset_sme(
+        tenant_id,
+        only_codes=template_codes,
+    )
+
+    cfg = await BusinessConfigService().get_business_config(tenant_id)
+    existing = _normalize_rules((cfg.get("parameters") or {}).get("notifications"))
+    existing_keys = {_rule_identity(r) for r in existing}
+    existing_ids = {str(r.get("id") or "") for r in existing if r.get("id")}
+    preset_index = {str(p.get("id") or ""): p for p in target_presets}
+
+    updated = 0
+    created = 0
+    for rule in existing:
+        preset_id = str(rule.get("id") or "")
+        preset = preset_index.get(preset_id)
+        if not preset:
+            continue
+        if rule.get("enabled") is not enabled:
+            rule["enabled"] = enabled
+            updated += 1
+        rule["channels"] = [BUILTIN_IN_APP_CHANNEL_UUID]
+        rule["channel_uuids"] = [BUILTIN_IN_APP_CHANNEL_UUID]
+        merged_scopes, changed = _merge_recipient_scopes_from_preset(
+            rule.get("recipient_scopes"),
+            list(preset.get("recipient_scopes") or []),
+        )
+        if changed:
+            rule["recipient_scopes"] = merged_scopes
+            updated += 1
+
+    for preset in target_presets:
+        preset_id = str(preset.get("id") or "")
+        doc, action = _rule_identity(preset)
+        if (doc, action) in existing_keys or (preset_id and preset_id in existing_ids):
+            continue
+        template_code = str(preset.get("template_code") or "").strip()
+        template_uuid = await _template_uuid_by_code(tenant_id, template_code)
+        if not template_uuid:
+            continue
+        existing.append(
+            {
+                "id": preset_id or f"kz_preset_{doc}_{action}",
+                "scene_name": preset.get("scene_name") or f"{doc} {action}",
+                "enabled": enabled,
+                "trigger_document": doc,
+                "trigger_action": action,
+                "channel_uuids": [BUILTIN_IN_APP_CHANNEL_UUID],
+                "channels": [BUILTIN_IN_APP_CHANNEL_UUID],
+                "recipient_scopes": list(preset.get("recipient_scopes") or []),
+                "recipient_user_ids": [],
+                "form_notify_default_user_ids": [],
+                "template_uuid": template_uuid,
+                "template": template_uuid,
+                "template_code": template_code,
+            }
+        )
+        existing_keys.add((doc, action))
+        if preset_id:
+            existing_ids.add(preset_id)
+        created += 1
+
+    if created > 0 or updated > 0:
+        await BusinessConfigService().batch_update_process_parameters(
+            tenant_id,
+            {"notifications": {"rules": existing}},
+        )
+
+    return {
+        "created": created,
+        "updated": updated,
+        "templates_created": templates_created,
+    }

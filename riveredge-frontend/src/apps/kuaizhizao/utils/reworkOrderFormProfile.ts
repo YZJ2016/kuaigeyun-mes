@@ -106,6 +106,18 @@ const DEFAULT_POSITION_COLUMNS: ReworkProfileColumn[] = [
   { key: 'remarks', label: '备注', sort: 90, width: 120 },
 ];
 
+export function sortedProductLineOptions(profile: ReworkOrderFormProfile | null) {
+  const raw = profile?.product_line_options || [];
+  return [...raw]
+    .filter((o) => o?.code)
+    .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+    .map((o) => ({
+      code: String(o.code),
+      label: String(o.label || o.code),
+      sort: o.sort,
+    }));
+}
+
 export function sortedPositionPlanColumns(profile: ReworkOrderFormProfile | null): ReworkProfileColumn[] {
   const raw = profile?.position_plan_columns?.length
     ? profile.position_plan_columns

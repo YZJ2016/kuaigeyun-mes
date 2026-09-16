@@ -282,6 +282,7 @@ class IndustryExtensionRuntimeService:
                 tenant_id, code
             )
             decls = IndustryExtensionRuntimeService.declarations_for_module(code)
+            await IndustryExtensionRuntimeService._apply_standalone_seeds(tenant_id, code, decls)
             replace_decls = [d for d in decls if d.kind == "replace"]
             await IndustryExtensionRuntimeService._apply_document_replacements(
                 tenant_id, code, replace_decls
@@ -336,6 +337,72 @@ class IndustryExtensionRuntimeService:
                     tenant_id,
                     decl.id,
                 )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.production_daily":
+                from apps.kuaielectronics.services.production_daily_seed_service import (
+                    ensure_electronics_production_daily_templates,
+                )
+
+                await ensure_electronics_production_daily_templates(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_applied tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.supplier_eval":
+                from apps.kuaielectronics.services.supplier_eval_seed_service import (
+                    ensure_electronics_supplier_eval_templates,
+                )
+
+                await ensure_electronics_supplier_eval_templates(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_applied tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.training_templates":
+                from apps.kuaielectronics.services.training_template_seed_service import (
+                    ensure_electronics_training_templates,
+                )
+
+                await ensure_electronics_training_templates(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_applied tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.license_catalog":
+                from apps.kuaielectronics.services.license_catalog_seed_service import (
+                    ensure_electronics_license_catalog,
+                )
+
+                await ensure_electronics_license_catalog(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_applied tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.calibration_notify":
+                from apps.kuaielectronics.services.calibration_notify_seed_service import (
+                    ensure_electronics_calibration_notify,
+                )
+
+                await ensure_electronics_calibration_notify(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_applied tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.production_file_checklist":
+                from apps.kuaielectronics.services.production_file_checklist_seed_service import (
+                    ensure_electronics_production_file_checklist,
+                )
+
+                await ensure_electronics_production_file_checklist(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_applied tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
 
     @staticmethod
     async def _revert_standalone_seeds(
@@ -348,6 +415,72 @@ class IndustryExtensionRuntimeService:
                 from apps.kuaielectronics.services.esd_seed_service import deactivate_esd_scheme
 
                 await deactivate_esd_scheme(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_reverted tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.production_daily":
+                from apps.kuaielectronics.services.production_daily_seed_service import (
+                    deactivate_electronics_production_daily_templates,
+                )
+
+                await deactivate_electronics_production_daily_templates(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_reverted tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.supplier_eval":
+                from apps.kuaielectronics.services.supplier_eval_seed_service import (
+                    deactivate_electronics_supplier_eval_templates,
+                )
+
+                await deactivate_electronics_supplier_eval_templates(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_reverted tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.training_templates":
+                from apps.kuaielectronics.services.training_template_seed_service import (
+                    deactivate_electronics_training_templates,
+                )
+
+                await deactivate_electronics_training_templates(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_reverted tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.license_catalog":
+                from apps.kuaielectronics.services.license_catalog_seed_service import (
+                    deactivate_electronics_license_catalog,
+                )
+
+                await deactivate_electronics_license_catalog(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_reverted tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.calibration_notify":
+                from apps.kuaielectronics.services.calibration_notify_seed_service import (
+                    deactivate_electronics_calibration_notify,
+                )
+
+                await deactivate_electronics_calibration_notify(tenant_id)
+                logger.info(
+                    "industry_ext_standalone_reverted tenant={} extension={}",
+                    tenant_id,
+                    decl.id,
+                )
+            elif app_code == "kuaielectronics" and decl.id == "electronics.production_file_checklist":
+                from apps.kuaielectronics.services.production_file_checklist_seed_service import (
+                    deactivate_electronics_production_file_checklist,
+                )
+
+                await deactivate_electronics_production_file_checklist(tenant_id)
                 logger.info(
                     "industry_ext_standalone_reverted tenant={} extension={}",
                     tenant_id,
@@ -431,13 +564,22 @@ class IndustryExtensionRuntimeService:
         )
 
     @staticmethod
+    def _rule_matches_kind(rule: Dict[str, Any], kind: str) -> bool:
+        when_kind = rule.get("when_kind_in") or []
+        when_change = rule.get("when_change_kind_in") or []
+        if when_change:
+            return kind in when_change
+        if when_kind:
+            return kind in when_kind
+        return False
+
+    @staticmethod
     def require_fields_for_kind(profile: Dict[str, Any], kind: str) -> List[str]:
         required: List[str] = []
         for rule in profile.get("validation_rules") or []:
             if not isinstance(rule, dict):
                 continue
-            when = rule.get("when_kind_in") or []
-            if kind in when:
+            if IndustryExtensionRuntimeService._rule_matches_kind(rule, kind):
                 for f in rule.get("require") or []:
                     required.append(str(f))
         return required
@@ -447,7 +589,6 @@ class IndustryExtensionRuntimeService:
         for rule in profile.get("validation_rules") or []:
             if not isinstance(rule, dict):
                 continue
-            when = rule.get("when_kind_in") or []
-            if kind in when and rule.get("message"):
+            if IndustryExtensionRuntimeService._rule_matches_kind(rule, kind) and rule.get("message"):
                 return str(rule["message"])
         return None

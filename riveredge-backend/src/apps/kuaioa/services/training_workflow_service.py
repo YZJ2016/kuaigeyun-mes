@@ -288,10 +288,13 @@ async def apply_training_plan_decision(
     if not row:
         return
     row.distributed_at = resolve_business_datetime()
+    row.status = "distributed"
     await touch_updated(row, user_id)
     await row.save()
+    from apps.kuaioa.services.training_distribution_service import notify_annual_plan_distributed
     from apps.kuaioa.services.training_reminder_service import TrainingReminderService
 
+    await notify_annual_plan_distributed(tenant_id, row)
     if row.plan_year:
         await TrainingReminderService.stop_dept_application_campaign(
             tenant_id, int(row.plan_year), reason="年度培训计划已批准下发"

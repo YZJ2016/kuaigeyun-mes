@@ -236,6 +236,27 @@ def _parse_location_from_provider(
     return None
 
 
+# 第三方 IP 库常把台湾标成独立国家/地区；登录地点须统一写成「中国 …」
+_TAIWAN_IN_LOCATION = re.compile(r"(台湾|台灣|Taiwan)", re.IGNORECASE)
+
+
+def normalize_login_location_label(label: Optional[str]) -> Optional[str]:
+    """登录地点人为规范：涉及台湾且未冠「中国」时，在前补「中国」。"""
+    if label is None:
+        return None
+    text = " ".join(str(label).split())
+    if not text:
+        return None
+    if not _TAIWAN_IN_LOCATION.search(text):
+        return text
+    if text.startswith("中国"):
+        return text
+    if text[:5].lower() == "china" and (len(text) == 5 or text[5].isspace()):
+        rest = text[5:].lstrip()
+        return f"中国 {rest}" if rest else "中国"
+    return f"中国 {text}"
+
+
 def format_location_label(
     country: Optional[str] = None,
     region: Optional[str] = None,
@@ -252,7 +273,7 @@ def format_location_label(
         parts.append(r)
     if city_s and city_s != c:
         parts.append(city_s)
-    return " ".join(parts) if parts else None
+    return normalize_login_location_label(" ".join(parts) if parts else None)
 
 
 def _format_location_from_detail(detail: Dict[str, Any]) -> Optional[str]:
@@ -303,7 +324,7 @@ async def _lookup_location_from_login_logs(ip: str) -> Optional[str]:
             label = str(row.login_location).strip()
             # 拒绝历史虚拟横杠格式
             if label and not label.startswith("中国-"):
-                return label
+                return normalize_login_location_label(label)
     except Exception as e:
         logger.debug(f"从登录日志回查地点失败: {ip}, {e}")
     return None
@@ -448,7 +469,7 @@ async def get_ip_location(ip: str, timeout: float = 2.5) -> Optional[str]:
 
     cached = _cache_get_location(ip)
     if cached:
-        return cached
+        return normalize_login_location_label(cached)
 
     detail = await get_ip_location_detail(ip, timeout=timeout)
     if detail:
