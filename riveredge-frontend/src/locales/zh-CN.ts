@@ -29328,6 +29328,10 @@ export default {
     '在线消息列表栏支持四档拖动调宽',
   'pages.dashboard.updateLog.entries.uni-im-list-pane-resize.description':
     '第二栏会话列表右缘可拖动调节宽度，220、260、300、340 像素四档吸附，松手后记住偏好；键盘左右键亦可切换档位。',
+  'pages.dashboard.updateLog.entries.uni-im-direct-peer-title.title':
+    '修复私聊列表把对方显示成自己姓名',
+  'pages.dashboard.updateLog.entries.uni-im-direct-peer-title.description':
+    '私聊标题按当前登录人解析对方用户，并返回 peer_user_id；列表按对方用户 id 匹配会话，不再用落库标题模糊对名，避免对方发起的会话把自己的名字当成会话名。',
   'pages.dashboard.updateLog.entries.uni-im-react-hooks-300.title':
     '修复在线消息偶发 React #300 报错',
   'pages.dashboard.updateLog.entries.uni-im-react-hooks-300.description':

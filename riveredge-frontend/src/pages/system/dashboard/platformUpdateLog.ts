@@ -36,6 +36,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'uni-im-direct-peer-title',
+    date: '2026-09-16',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-im-direct-peer-title.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.uni-im-direct-peer-title.description',
+  },
+  {
     id: 'uni-im-react-hooks-300',
     date: '2026-09-16',
     type: 'fix',

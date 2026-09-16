@@ -12,6 +12,8 @@ class ImConversationResponse(BaseModel):
     title: Optional[str] = None
     is_public: bool = False
     is_pinned: bool = False
+    # 私聊对方用户 id；群聊为空
+    peer_user_id: Optional[int] = None
     module_codes: list[str] = Field(default_factory=list)
     member_count: int = 0
     last_message_at: Optional[datetime] = None

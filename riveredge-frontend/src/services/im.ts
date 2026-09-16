@@ -10,6 +10,8 @@ export interface ImConversation {
   title?: string | null;
   is_public?: boolean;
   is_pinned?: boolean;
+  /** 私聊对方用户 id；群聊为空 */
+  peer_user_id?: number | null;
   module_codes?: string[];
   member_count?: number;
   last_message_at?: string | null;
