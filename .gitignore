@@ -25,8 +25,7 @@ riveredge-frontend/.expo/
 *.tsbuildinfo
 
 # ===== 构建产物 =====
-# 前端 dist 由部署机/CI 本地 npm run build 生成，勿纳入 Git（体积大且每次构建 hash 全变）。
-riveredge-frontend/dist/
+# riveredge-frontend/dist/ 不忽略：支持本机构建后提交，云服务器拉取即用（弱机器上现构建过慢）。
 # 误生成在 src 下的构建输出勿提交：
 riveredge-frontend/src/dist/
 riveredge-frontend/src/dev-dist/
