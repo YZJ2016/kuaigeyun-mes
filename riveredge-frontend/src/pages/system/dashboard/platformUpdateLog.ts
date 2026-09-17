@@ -36,6 +36,336 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'delivery-workbench-operation-column-r01',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workbench-operation-column-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-workbench-operation-column-r01.description',
+  },
+  {
+    id: 'delivery-workbench-table-three-bucket-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workbench-table-three-bucket-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-workbench-table-three-bucket-r01.description',
+  },
+  {
+    id: 'delivery-node-report-detail-i18n-r01',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-node-report-detail-i18n-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-node-report-detail-i18n-r01.description',
+  },
+  {
+    id: 'delivery-workbench-recent-issue-actions-r01',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workbench-recent-issue-actions-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-workbench-recent-issue-actions-r01.description',
+  },
+  {
+    id: 'delivery-workbench-recent-report-view-r01',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workbench-recent-report-view-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-workbench-recent-report-view-r01.description',
+  },
+  {
+    id: 'delivery-node-task-core-task-textarea-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-node-task-core-task-textarea-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-node-task-core-task-textarea-r01.description',
+  },
+  {
+    id: 'delivery-workbench-recent-report-actions-r01',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workbench-recent-report-actions-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-workbench-recent-report-actions-r01.description',
+  },
+  {
+    id: 'delivery-workbench-related-attachments-uni-detail-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workbench-related-attachments-uni-detail-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-workbench-related-attachments-uni-detail-r01.description',
+  },
+  {
+    id: 'delivery-node-task-core-task-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-node-task-core-task-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-node-task-core-task-r01.description',
+  },
+  {
+    id: 'delivery-workbench-related-attachments-r01',
+    date: '2026-09-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workbench-related-attachments-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-workbench-related-attachments-r01.description',
+  },
+  {
+    id: 'delivery-node-task-attachments-r01',
+    date: '2026-09-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-node-task-attachments-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-node-task-attachments-r01.description',
+  },
+  {
+    id: 'delivery-linked-doc-status-zh-r01',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-linked-doc-status-zh-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-linked-doc-status-zh-r01.description',
+  },
+  {
+    id: 'delivery-linked-doc-progress-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-linked-doc-progress-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-linked-doc-progress-r01.description',
+  },
+  {
+    id: 'delivery-linked-doc-code-copy-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-linked-doc-code-copy-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-linked-doc-code-copy-r01.description',
+  },
+  {
+    id: 'delivery-linked-doc-type-nav-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-linked-doc-type-nav-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-linked-doc-type-nav-r01.description',
+  },
+  {
+    id: 'delivery-workbench-hooks-r01',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workbench-hooks-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-workbench-hooks-r01.description',
+  },
+  {
+    id: 'delivery-related-panel-slim-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-related-panel-slim-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-related-panel-slim-r01.description',
+  },
+  {
+    id: 'delivery-linked-doc-columns-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-linked-doc-columns-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-linked-doc-columns-r01.description',
+  },
+  {
+    id: 'delivery-node-schedule-revision-db-r01',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-node-schedule-revision-db-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-node-schedule-revision-db-r01.description',
+  },
+  {
+    id: 'delivery-workbench-scroll-r01',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workbench-scroll-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-workbench-scroll-r01.description',
+  },
+  {
+    id: 'partner-fictional-names-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-fictional-names-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.partner-fictional-names-r01.description',
+  },
+  {
+    id: 'delivery-node-schedule-history-timeline-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-node-schedule-history-timeline-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-node-schedule-history-timeline-r01.description',
+  },
+  {
+    id: 'delivery-node-document-create-r01',
+    date: '2026-09-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-node-document-create-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-node-document-create-r01.description',
+  },
+  {
+    id: 'delivery-template-task-owner-members-r01',
+    date: '2026-09-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-template-task-owner-members-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-template-task-owner-members-r01.description',
+  },
+  {
+    id: 'delivery-node-task-operate-split-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-node-task-operate-split-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-node-task-operate-split-r01.description',
+  },
+  {
+    id: 'delivery-node-schedule-revision-r01',
+    date: '2026-09-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-node-schedule-revision-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-node-schedule-revision-r01.description',
+  },
+  {
+    id: 'delivery-task-participant-mode-r01',
+    date: '2026-09-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-task-participant-mode-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-task-participant-mode-r01.description',
+  },
+  {
+    id: 'delivery-product-model-duration-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-product-model-duration-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-product-model-duration-r01.description',
+  },
+  {
+    id: 'delivery-spec-tier-generic-labels-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-spec-tier-generic-labels-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-spec-tier-generic-labels-r01.description',
+  },
+  {
+    id: 'delivery-template-duration-rules-layout-r01',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-template-duration-rules-layout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-template-duration-rules-layout-r01.description',
+  },
+  {
+    id: 'delivery-template-duration-rules-form-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-template-duration-rules-form-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-template-duration-rules-form-r01.description',
+  },
+  {
+    id: 'delivery-procurement-parallel-schedule-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-procurement-parallel-schedule-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-procurement-parallel-schedule-r01.description',
+  },
+  {
+    id: 'delivery-dashboard-gantt-view-mode-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-view-mode-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-view-mode-r01.description',
+  },
+  {
+    id: 'delivery-dashboard-gantt-expand-height-r01',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-expand-height-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-expand-height-r01.description',
+  },
+  {
+    id: 'delivery-dashboard-gantt-project-dimension-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-project-dimension-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-project-dimension-r01.description',
+  },
+  {
+    id: 'delivery-project-list-sort-delivery-date-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-project-list-sort-delivery-date-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-project-list-sort-delivery-date-r01.description',
+  },
+  {
+    id: 'uni-warehouse-select-reference-display',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-warehouse-select-reference-display.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-warehouse-select-reference-display.description',
+  },
+  {
+    id: 'delivery-demo-spec-tier-board-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-demo-spec-tier-board-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-demo-spec-tier-board-r01.description',
+  },
+  {
+    id: 'delivery-workshop-board-drop-page-title-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workshop-board-drop-page-title-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-workshop-board-drop-page-title-r01.description',
+  },
+  {
+    id: 'delivery-phase2-sideline-duration-wo-r01',
+    date: '2026-09-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-phase2-sideline-duration-wo-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.delivery-phase2-sideline-duration-wo-r01.description',
+  },
+  {
+    id: 'delivery-workshop-board-r01',
+    date: '2026-09-17',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.delivery-workshop-board-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.delivery-workshop-board-r01.description',
+  },
+  {
+    id: 'infra-packages-pagesize-le-100',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.infra-packages-pagesize-le-100.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.infra-packages-pagesize-le-100.description',
+  },
+  {
+    id: 'production-files-hide-industry-checklist',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.production-files-hide-industry-checklist.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.production-files-hide-industry-checklist.description',
+  },
+  {
+    id: 'kuaiplm-system-archive-created-by',
+    date: '2026-09-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-system-archive-created-by.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaiplm-system-archive-created-by.description',
+  },
+  {
     id: 'rework-menu-restore-pack-menu-false',
     date: '2026-09-16',
     type: 'fix',

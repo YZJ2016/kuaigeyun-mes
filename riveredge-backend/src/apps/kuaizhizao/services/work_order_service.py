@@ -8177,6 +8177,16 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 # 节点时间记录失败不影响主流程，记录日志
                 logger.warning(f"记录工单指定结束节点时间失败: {e}")
 
+            try:
+                from apps.kuaizhizao.services.delivery_project_service import DeliveryProjectService
+
+                actor = await User.get_or_none(id=completed_by, tenant_id=tenant_id)
+                await DeliveryProjectService().apply_work_order_completed(
+                    tenant_id, work_order_id, actor_user=actor
+                )
+            except Exception as e:
+                logger.warning(f"工单指定结束回写交付节点失败: {e}")
+
             logger.info(f"工单 {work_order.code} 已指定结束")
             return await self.get_work_order_by_id(tenant_id, work_order_id)
 

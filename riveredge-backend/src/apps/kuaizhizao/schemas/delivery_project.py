@@ -21,12 +21,36 @@ class DeliveryMemberResponse(BaseModel):
 
 # --- 流程模板 ---
 
+class DeliveryTaskParticipantActionResponse(BaseModel):
+    user_id: int
+    user_name: str
+    role: str
+    action: str
+    status: str
+    acted_at: Optional[str] = None
+    remark: Optional[str] = None
+    kit_status: Optional[str] = None
+    progress_percent: Optional[Decimal] = None
+
+
+class DeliveryTaskParticipantActionSubmit(BaseModel):
+    remark: Optional[str] = None
+    kit_status: Optional[str] = None
+    progress_percent: Optional[Decimal] = None
+
+
 class DeliveryProcessTemplateNodeTaskBase(BaseModel):
     task_key: str
     task_name: str
+    core_task: Optional[str] = None
     sort_order: int = 0
     default_owner_role: Optional[str] = None
+    owner_id: Optional[int] = None
+    owner_name: Optional[str] = None
+    members: List[DeliveryMemberInput] = Field(default_factory=list)
     planned_duration_days: int = 0
+    track_mode: str = "progress"
+    participant_mode: str = "solo"
 
 
 class DeliveryProcessTemplateNodeTaskCreate(DeliveryProcessTemplateNodeTaskBase):
@@ -47,6 +71,8 @@ class DeliveryProcessTemplateNodeBase(BaseModel):
     sort_order: int = 0
     default_owner_role: Optional[str] = None
     planned_duration_days: int = 0
+    schedule_group: Optional[str] = None
+    duration_rules: Optional[Dict[str, Any]] = None
     is_critical: bool = False
     is_milestone: bool = False
     tasks: List[DeliveryProcessTemplateNodeTaskCreate] = Field(default_factory=list)
@@ -64,6 +90,8 @@ class DeliveryProcessTemplateNodeResponse(BaseModel):
     sort_order: int = 0
     default_owner_role: Optional[str] = None
     planned_duration_days: int = 0
+    schedule_group: Optional[str] = None
+    duration_rules: Optional[Dict[str, Any]] = None
     is_critical: bool = False
     is_milestone: bool = False
     tasks: List[DeliveryProcessTemplateNodeTaskResponse] = Field(default_factory=list)
@@ -118,6 +146,7 @@ class DeliveryProjectNodeTaskResponse(BaseModel):
     template_task_id: Optional[int] = None
     task_key: Optional[str] = None
     task_name: str
+    core_task: Optional[str] = None
     sort_order: int = 0
     status: str
     owner_id: Optional[int] = None
@@ -128,6 +157,11 @@ class DeliveryProjectNodeTaskResponse(BaseModel):
     actual_start_date: Optional[date] = None
     actual_end_date: Optional[date] = None
     progress_percent: Decimal = Decimal("0")
+    track_mode: str = "progress"
+    kit_status: str = "none"
+    participant_mode: str = "solo"
+    participant_actions: List[DeliveryTaskParticipantActionResponse] = Field(default_factory=list)
+    attachments: Optional[List[Dict[str, Any]]] = None
 
     class Config:
         from_attributes = True
@@ -136,6 +170,7 @@ class DeliveryProjectNodeTaskResponse(BaseModel):
 class DeliveryProjectNodeTaskCreate(BaseModel):
     node_id: int
     task_name: str
+    core_task: Optional[str] = None
     sort_order: int = 0
     owner_id: Optional[int] = None
     members: List[DeliveryMemberInput] = Field(default_factory=list)
@@ -143,10 +178,15 @@ class DeliveryProjectNodeTaskCreate(BaseModel):
     planned_end_date: Optional[date] = None
     actual_start_date: Optional[date] = None
     actual_end_date: Optional[date] = None
+    track_mode: str = "progress"
+    kit_status: str = "none"
+    participant_mode: str = "solo"
+    attachments: Optional[List[Dict[str, Any]]] = None
 
 
 class DeliveryProjectNodeTaskUpdate(BaseModel):
     task_name: Optional[str] = None
+    core_task: Optional[str] = None
     sort_order: Optional[int] = None
     status: Optional[str] = None
     owner_id: Optional[int] = None
@@ -156,6 +196,10 @@ class DeliveryProjectNodeTaskUpdate(BaseModel):
     actual_start_date: Optional[date] = None
     actual_end_date: Optional[date] = None
     progress_percent: Optional[Decimal] = None
+    track_mode: Optional[str] = None
+    kit_status: Optional[str] = None
+    participant_mode: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
 
 
 class DeliveryProjectNodeResponse(BaseModel):
@@ -195,6 +239,11 @@ class DeliveryProjectCreate(BaseModel):
     planned_start_date: Optional[date] = None
     planned_end_date: Optional[date] = None
     notes: Optional[str] = None
+    config_attrs: Optional[Dict[str, Any]] = None
+    board_section: str = "active"
+    parent_project_id: Optional[int] = None
+    parent_sync_task_key: Optional[str] = None
+    line_role: str = "main"
 
 
 class DeliveryProjectUpdate(BaseModel):
@@ -207,11 +256,28 @@ class DeliveryProjectUpdate(BaseModel):
     notes: Optional[str] = None
     planned_start_date: Optional[date] = None
     planned_end_date: Optional[date] = None
+    config_attrs: Optional[Dict[str, Any]] = None
+    board_section: Optional[str] = None
+    parent_sync_task_key: Optional[str] = None
 
 
 class DeliveryProjectCompleteRequest(BaseModel):
     force: bool = False
     reason: Optional[str] = None
+
+
+class DeliverySidelineCreate(BaseModel):
+    """从主线创建旁线交付项目"""
+
+    project_name: str
+    process_template_id: Optional[int] = None
+    parent_sync_task_key: str
+    delivery_date: Optional[date] = None
+    owner_id: Optional[int] = None
+    members: List[DeliveryMemberInput] = Field(default_factory=list)
+    notes: Optional[str] = None
+    config_attrs: Optional[Dict[str, Any]] = None
+    planned_start_date: Optional[date] = None
 
 
 class DeliveryProjectChangeTemplateRequest(BaseModel):
@@ -224,6 +290,27 @@ class DeliveryProjectNodeUpdate(BaseModel):
     planned_end_date: Optional[date] = None
     actual_start_date: Optional[date] = None
     actual_end_date: Optional[date] = None
+    edit_reason: Optional[str] = None
+
+
+class DeliveryProjectNodeScheduleChangeItem(BaseModel):
+    field: str
+    before: Optional[str] = None
+    after: Optional[str] = None
+
+
+class DeliveryProjectNodeScheduleRevisionResponse(BaseModel):
+    id: int
+    project_id: int
+    node_id: int
+    edit_reason: str
+    changes: List[DeliveryProjectNodeScheduleChangeItem] = Field(default_factory=list)
+    edited_by_id: Optional[int] = None
+    edited_by_name: Optional[str] = None
+    edited_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class DeliveryProjectNodeDocumentCreate(BaseModel):
@@ -243,6 +330,11 @@ class DeliveryProjectNodeDocumentResponse(BaseModel):
     doc_id: int
     doc_code: str
     title: Optional[str] = None
+    party_name: Optional[str] = None
+    doc_date: Optional[date] = None
+    status: Optional[str] = None
+    review_status: Optional[str] = None
+    progress_percent: Optional[float] = Field(None, description="源单据完成进度 0-100")
     linked_at: Optional[datetime] = None
     linked_by_name: Optional[str] = None
 
@@ -296,6 +388,13 @@ class DeliveryProjectResponse(BaseModel):
     actual_start_date: Optional[date] = None
     actual_end_date: Optional[date] = None
     notes: Optional[str] = None
+    config_attrs: Optional[Dict[str, Any]] = None
+    board_section: str = "active"
+    parent_project_id: Optional[int] = None
+    parent_project_code: Optional[str] = None
+    parent_sync_task_key: Optional[str] = None
+    line_role: str = "main"
+    sideline_count: int = 0
     nodes: List[DeliveryProjectNodeResponse] = Field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -317,9 +416,14 @@ class DeliveryProjectListResponse(BaseModel):
     member_count: int = 0
     material_code: Optional[str] = None
     material_name: Optional[str] = None
+    material_spec: Optional[str] = None
     status: str
     progress_percent: Decimal
     current_node_name: Optional[str] = None
+    board_section: str = "active"
+    config_attrs: Optional[Dict[str, Any]] = None
+    parent_project_id: Optional[int] = None
+    line_role: str = "main"
     nodes: List[DeliveryProjectNodeResponse] = Field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -471,11 +575,22 @@ class DeliveryIssueListEnvelope(BaseModel):
     total: int
 
 
+class DeliveryWorkbenchRelatedAttachment(BaseModel):
+    uid: str
+    name: Optional[str] = None
+    url: Optional[str] = None
+    source_type: str
+    source_id: int
+    source_label: str
+    node_name: Optional[str] = None
+
+
 class DeliveryProjectWorkbenchResponse(DeliveryProjectResponse):
     recent_reports: List[DeliveryNodeReportResponse] = Field(default_factory=list)
     open_issues: List[DeliveryIssueResponse] = Field(default_factory=list)
     linked_rd_project: Optional[DeliveryLinkedRdProjectSummary] = None
     node_documents: List[DeliveryProjectNodeDocumentResponse] = Field(default_factory=list)
+    related_attachments: List[DeliveryWorkbenchRelatedAttachment] = Field(default_factory=list)
 
 
 # --- 交付中心 / 跟进表 ---
@@ -645,3 +760,56 @@ class DeliveryIssueProgressRow(BaseModel):
 class DeliveryIssueProgressEnvelope(BaseModel):
     items: List[DeliveryIssueProgressRow]
     total: int
+
+
+class DeliveryWorkshopBoardColumn(BaseModel):
+    """车间台账动态列（模板任务）"""
+
+    task_key: str
+    task_name: str
+    node_key: str
+    node_name: str
+    track_mode: str = "progress"
+    sort_order: int = 0
+
+
+class DeliveryWorkshopBoardCell(BaseModel):
+    task_id: Optional[int] = None
+    task_key: str
+    node_key: str
+    track_mode: str = "progress"
+    kit_status: str = "none"
+    status: Optional[str] = None
+    actual_end_date: Optional[date] = None
+    owner_name: Optional[str] = None
+
+
+class DeliveryWorkshopBoardRow(BaseModel):
+    project_id: int
+    project_code: str
+    project_name: str
+    customer_name: Optional[str] = None
+    material_code: Optional[str] = None
+    material_name: Optional[str] = None
+    material_spec: Optional[str] = None
+    delivery_date: Optional[date] = None
+    owner_name: Optional[str] = None
+    status: str
+    progress_percent: Decimal
+    board_section: str = "active"
+    config_attrs: Optional[Dict[str, Any]] = None
+    cells: List[DeliveryWorkshopBoardCell] = Field(default_factory=list)
+
+
+class DeliveryWorkshopBoardEnvelope(BaseModel):
+    columns: List[DeliveryWorkshopBoardColumn] = Field(default_factory=list)
+    items: List[DeliveryWorkshopBoardRow] = Field(default_factory=list)
+    total: int = 0
+
+
+class DeliveryWorkshopBoardCellPatch(BaseModel):
+    project_id: int
+    task_id: int
+    kit_status: Optional[str] = None
+    actual_end_date: Optional[date] = None
+    status: Optional[str] = None

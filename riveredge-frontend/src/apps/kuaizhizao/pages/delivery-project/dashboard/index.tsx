@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Button, Table } from 'antd';
+import React, { useMemo, useState } from 'react';
+import { Button, Segmented, Space, Table } from 'antd';
 import { ProjectOutlined, ClockCircleOutlined, ExclamationCircleOutlined, FileTextOutlined, FormOutlined, AuditOutlined, CalendarOutlined, BugOutlined, BarChartOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -30,14 +30,26 @@ import {
   type DeliveryNodeReport,
 } from '../../../services/delivery-project';
 import { renderDeliveryStatusTag } from '../shared/deliveryListPresentation';
-import DeliveryProjectGanttChart from '../components/DeliveryProjectGanttChart';
+import DeliveryProjectGanttChart, {
+  type DeliveryGanttViewMode,
+} from '../components/DeliveryProjectGanttChart';
 
 import { formatBusinessDateOnly } from '../../../../../utils/format';
 
 const DeliveryProjectDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [ganttViewMode, setGanttViewMode] = useState<DeliveryGanttViewMode>('week');
   const { data, loading } = useDashboardRequest(deliveryProjectApi.dashboard, 'kz:delivery-dashboard');
+
+  const ganttViewOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.deliveryProject.gantt.viewDay'), value: 'day' as const },
+      { label: t('app.kuaizhizao.deliveryProject.gantt.viewWeek'), value: 'week' as const },
+      { label: t('app.kuaizhizao.deliveryProject.gantt.viewMonth'), value: 'month' as const },
+    ],
+    [t],
+  );
 
   const { data: openIssuesData, loading: openIssuesLoading } = useDashboardRequest(async () => {
     const res = await deliveryIssueApi.list({ limit: 24 });
@@ -215,15 +227,23 @@ const DeliveryProjectDashboard: React.FC = () => {
         <ModuleChartPanel
           title={t('app.kuaizhizao.deliveryProject.dashboard.ganttTitle')}
           extra={
-            <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/projects')}>
-              {t('app.kuaizhizao.deliveryProject.dashboard.viewAll')}
-            </a>
+            <Space size={12} align="center">
+              <Segmented
+                size="small"
+                value={ganttViewMode}
+                options={ganttViewOptions}
+                onChange={(value) => setGanttViewMode(value as DeliveryGanttViewMode)}
+              />
+              <a onClick={() => navigate('/apps/kuaizhizao/delivery-project/projects')}>
+                {t('app.kuaizhizao.deliveryProject.dashboard.viewAll')}
+              </a>
+            </Space>
           }
           loading={loading}
           fitContent
           layout="standalone"
         >
-          <DeliveryProjectGanttChart items={data?.project_gantt ?? []} />
+          <DeliveryProjectGanttChart items={data?.project_gantt ?? []} viewMode={ganttViewMode} />
         </ModuleChartPanel>
       }
       actionRow={

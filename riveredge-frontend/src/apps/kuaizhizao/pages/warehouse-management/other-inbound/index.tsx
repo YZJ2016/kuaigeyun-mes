@@ -1009,6 +1009,7 @@ const OtherInboundPage: React.FC = () => {
               label={t('app.kuaizhizao.warehouseOtherInbound.field.warehouse')}
               placeholder={t('app.kuaizhizao.warehouseOtherInbound.field.selectWarehouse')}
               required
+              hostResource="kuaizhizao:other-inbound"
               onChange={(val, wh) => {
                 updateSelectedWarehouseId(val);
                 formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' });

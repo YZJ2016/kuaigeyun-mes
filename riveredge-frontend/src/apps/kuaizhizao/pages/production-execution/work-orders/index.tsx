@@ -215,6 +215,11 @@ import {
 } from '../../../../../utils/documentFormReferenceLoad'
 import { OperationPickPanel } from '../../../../master-data/components/OperationSequenceEditor'
 import { useNavigate, useLocation } from 'react-router-dom'
+import {
+  completeDeliveryNodeDocumentLinkIfPending,
+  isDeliveryCreateQuery,
+  stripDeliveryCreateQuery,
+} from '../../delivery-project/shared/deliveryNodeDocumentLink'
 import { inboundProductionReturnEntryPath, inboundWorkOrderEntryPath } from '../../warehouse-management/inbound/inboundPaths'
 import { outboundWorkOrderEntryPath } from '../../warehouse-management/outbound/outboundPaths'
 import { navigateToOutboundHubAfterBatchPicking } from '../../warehouse-management/outbound/outboundHubNavigation'
@@ -2086,6 +2091,7 @@ const WorkOrdersPage: React.FC = () => {
 
   // Modal 相关状态（创建/编辑工单）
   const [modalVisible, setModalVisible] = useState(false)
+  const deliveryCreatePrefillRef = useRef<{ salesOrderId?: number } | null>(null)
   const [createWorkOrderMode, setCreateWorkOrderMode] = useState<'normal' | 'peer_group'>('normal')
   const [isEdit, setIsEdit] = useState(false)
   const [currentWorkOrder, setCurrentWorkOrder] = useState<WorkOrder | null>(null)
@@ -2688,6 +2694,31 @@ const WorkOrdersPage: React.FC = () => {
     // FormModalTemplate 设置了 destroyOnHidden，每次打开 ProForm 都会重新挂载为空，
     // 不需要用 setTimeout 等 ref 就绪再 resetFields
   }
+
+  useEffect(() => {
+    if (!isDeliveryCreateQuery(location.search)) return
+    const sp = new URLSearchParams(location.search)
+    const salesOrderIdRaw = sp.get('sales_order_id')
+    deliveryCreatePrefillRef.current = {
+      salesOrderId: salesOrderIdRaw ? Number(salesOrderIdRaw) : undefined,
+    }
+    handleCreate()
+    navigate(`${location.pathname}${stripDeliveryCreateQuery(location.search)}`, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search])
+
+  useEffect(() => {
+    if (!modalVisible || isEdit || !deliveryCreatePrefillRef.current?.salesOrderId || !formRef.current) {
+      return
+    }
+    const salesOrderId = deliveryCreatePrefillRef.current.salesOrderId
+    deliveryCreatePrefillRef.current = null
+    formRef.current.setFieldsValue({
+      sales_order_id: salesOrderId,
+      production_mode: 'MTO',
+    })
+    setProductionMode('MTO')
+  }, [modalVisible, isEdit])
 
   const resetComputationPullPreview = useCallback(() => {
     setComputationPullPreviewOpen(false)
@@ -5077,6 +5108,22 @@ const WorkOrdersPage: React.FC = () => {
         messageApi.success(`工单创建成功！系统已自动匹配工艺路线并生成工序单${childHint}`)
         if (created?.id != null) {
           await saveWorkOrderCustomFieldValues(created.id, customData)
+          const linked = await completeDeliveryNodeDocumentLinkIfPending({
+            docType: 'work_order',
+            docId: Number(created.id),
+            docCode: String(created.code ?? created.work_order_code ?? created.id),
+            title: created.product_name ?? null,
+            navigate,
+            message: messageApi,
+            t,
+          })
+          if (linked) {
+            setModalVisible(false)
+            resetWorkOrderFormFieldValues()
+            invalidateStatistics()
+            actionRef.current?.reload()
+            return
+          }
         }
       }
       setModalVisible(false)

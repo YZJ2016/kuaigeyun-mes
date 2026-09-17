@@ -8,7 +8,12 @@ import { App, Button, Popconfirm } from 'antd';
 import dayjs from 'dayjs';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  completeDeliveryNodeDocumentLinkIfPending,
+  isDeliveryCreateQuery,
+  stripDeliveryCreateQuery,
+} from '../../../kuaizhizao/pages/delivery-project/shared/deliveryNodeDocumentLink';
 import { UniTable } from '../../../../components/uni-table';
 import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -68,6 +73,7 @@ const RdProjectsListPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const projectPerms = useResourcePermissions('kuaiplm.project');
   const navigate = useNavigate();
+  const location = useLocation();
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<RdProject[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
@@ -128,6 +134,12 @@ const RdProjectsListPage: React.FC = () => {
     setCreateOpen(true);
   }, []);
   useNewShortcut(projectPerms.canCreate ? handleCreate : undefined);
+
+  useEffect(() => {
+    if (!isDeliveryCreateQuery(location.search)) return;
+    handleCreate();
+    navigate(`${location.pathname}${stripDeliveryCreateQuery(location.search)}`, { replace: true });
+  }, [location.search, handleCreate, location.pathname, navigate]);
 
   const openDetail = useCallback(
     (id?: number) => {
@@ -649,7 +661,7 @@ const RdProjectsListPage: React.FC = () => {
         }}
         formRef={formRef}
         onFinish={async (values) => {
-          await createRdProject({
+          const created = await createRdProject({
             project_code: values.project_code,
             project_name: values.project_name,
             project_type: 'RD',
@@ -665,10 +677,24 @@ const RdProjectsListPage: React.FC = () => {
               : undefined,
             notes: values.notes,
           });
+          const linked = await completeDeliveryNodeDocumentLinkIfPending({
+            docType: 'rd_project',
+            docId: Number(created.id),
+            docCode: created.project_code,
+            title: created.project_name ?? null,
+            navigate,
+            message: messageApi,
+            t,
+          });
+          if (linked) {
+            setCreateOpen(false);
+            resetFormActors();
+            return;
+          }
           messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
           resetFormActors();
-    actionRef.current?.reload();
+          actionRef.current?.reload();
         }}
       >
         {projectFormFields}

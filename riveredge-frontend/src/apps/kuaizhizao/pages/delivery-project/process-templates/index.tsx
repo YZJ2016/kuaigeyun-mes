@@ -11,11 +11,13 @@ import {
   InputNumber,
   List,
   Popconfirm,
+  Select,
   Space,
   Spin,
   Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -35,10 +37,16 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import {
+  DELIVERY_TASK_PARTICIPANT_MODE,
   deliveryProcessTemplateApi,
   type DeliveryProcessTemplate,
   type DeliveryProcessTemplateNode,
 } from '../../../services/delivery-project';
+import DurationRulesByProductModelEditor from '../components/DurationRulesByProductModelEditor';
+import {
+  TemplateTaskMembersPicker,
+  TemplateTaskOwnerPicker,
+} from '../components/TemplateTaskUserPickers';
 
 const RESOURCE = 'kuaizhizao:delivery-process-template';
 const GT = 'app.kuaiplm.gateTemplates';
@@ -159,9 +167,23 @@ const ProcessTemplatesPage: React.FC = () => {
                   node_name: n.node_name,
                   sort_order: n.sort_order || idx + 1,
                   planned_duration_days: n.planned_duration_days,
+                  duration_rules: n.duration_rules || null,
                   is_critical: n.is_critical,
                   is_milestone: n.is_milestone,
                   default_owner_role: n.default_owner_role,
+                  tasks: (n.tasks ?? []).map((task, tIdx) => ({
+                    task_key: (task.task_key || `task_${tIdx + 1}`).trim(),
+                    task_name: task.task_name.trim(),
+                    core_task: task.core_task?.trim() || null,
+                    sort_order: task.sort_order ?? tIdx + 1,
+                    default_owner_role: task.default_owner_role,
+                    owner_id: task.owner_id ?? null,
+                    owner_name: task.owner_name ?? null,
+                    members: task.members ?? [],
+                    planned_duration_days: task.planned_duration_days ?? 0,
+                    track_mode: task.track_mode || 'progress',
+                    participant_mode: task.participant_mode || 'solo',
+                  })),
                 }))
               : [emptyNode(1, t(`${GT}.newStageName`, { order: 1 }))],
           });
@@ -189,9 +211,23 @@ const ProcessTemplatesPage: React.FC = () => {
           node_name: n.node_name,
           sort_order: n.sort_order || idx + 1,
           planned_duration_days: n.planned_duration_days,
+          duration_rules: n.duration_rules || null,
           is_critical: n.is_critical,
           is_milestone: n.is_milestone,
           default_owner_role: n.default_owner_role,
+          tasks: (n.tasks ?? []).map((task, tIdx) => ({
+            task_key: (task.task_key || `task_${tIdx + 1}`).trim(),
+            task_name: task.task_name.trim(),
+            core_task: task.core_task?.trim() || null,
+            sort_order: task.sort_order ?? tIdx + 1,
+            default_owner_role: task.default_owner_role,
+            owner_id: task.owner_id ?? null,
+            owner_name: task.owner_name ?? null,
+            members: task.members ?? [],
+            planned_duration_days: task.planned_duration_days ?? 0,
+            track_mode: task.track_mode || 'progress',
+            participant_mode: task.participant_mode || 'solo',
+          })),
         })),
       });
       messageApi.success(t('common.createSuccess'));
@@ -263,15 +299,22 @@ const ProcessTemplatesPage: React.FC = () => {
         node_name: node.node_name.trim(),
         sort_order: node.sort_order || idx + 1,
         planned_duration_days: node.planned_duration_days ?? 0,
+        duration_rules: node.duration_rules || null,
         is_critical: node.is_critical,
         is_milestone: node.is_milestone,
         default_owner_role: node.default_owner_role,
         tasks: (node.tasks ?? []).map((task, tIdx) => ({
           task_key: (task.task_key || `task_${tIdx + 1}`).trim(),
           task_name: task.task_name.trim(),
+          core_task: task.core_task?.trim() || null,
           sort_order: task.sort_order ?? tIdx + 1,
           default_owner_role: task.default_owner_role,
+          owner_id: task.owner_id ?? null,
+          owner_name: task.owner_name ?? null,
+          members: task.members ?? [],
           planned_duration_days: task.planned_duration_days ?? 0,
+          track_mode: task.track_mode || 'progress',
+          participant_mode: task.participant_mode || 'solo',
         })),
       }));
       const updated = await deliveryProcessTemplateApi.update(detail.id, { nodes: payload });
@@ -349,6 +392,26 @@ const ProcessTemplatesPage: React.FC = () => {
         ),
       },
       {
+        title: (
+          <Tooltip title={t('app.kuaizhizao.deliveryProject.durationRulesHint')}>
+            <span>{t('app.kuaizhizao.deliveryProject.fields.durationRules')}</span>
+          </Tooltip>
+        ),
+        dataIndex: 'duration_rules',
+        width: 196,
+        render: (_, record, index) => (
+          <DurationRulesByProductModelEditor
+            value={record.duration_rules ?? null}
+            disabled={!perms.canUpdate}
+            onChange={(duration_rules) => {
+              setNodes((prev) =>
+                prev.map((n, i) => (i === index ? { ...n, duration_rules } : n)),
+              );
+            }}
+          />
+        ),
+      },
+      {
         title: t('app.kuaizhizao.deliveryProject.fields.isCritical'),
         dataIndex: 'is_critical',
         width: 88,
@@ -394,7 +457,7 @@ const ProcessTemplatesPage: React.FC = () => {
           ) : null,
       },
     ],
-    [perms.canUpdate, t],
+    [messageApi, perms.canUpdate, t],
   );
 
   const leftPanel = (
@@ -566,6 +629,9 @@ const ProcessTemplatesPage: React.FC = () => {
                                       task_name: t('app.kuaizhizao.deliveryProject.newTemplateTask'),
                                       sort_order: nextOrder,
                                       planned_duration_days: 0,
+                                      track_mode: 'progress',
+                                      participant_mode: 'solo',
+                                      members: [],
                                     },
                                   ],
                                 }
@@ -581,6 +647,7 @@ const ProcessTemplatesPage: React.FC = () => {
                 <Table
                   size="small"
                   pagination={false}
+                  scroll={{ x: 1200 }}
                   rowKey={(_, tIdx) => `${record._key}-t-${tIdx}`}
                   dataSource={tasks}
                   columns={[
@@ -607,6 +674,7 @@ const ProcessTemplatesPage: React.FC = () => {
                     },
                     {
                       title: t('app.kuaizhizao.deliveryProject.fields.taskName'),
+                      width: 120,
                       render: (_, task, tIdx) => (
                         <Input
                           value={task.task_name}
@@ -618,6 +686,80 @@ const ProcessTemplatesPage: React.FC = () => {
                                 if (i !== index) return n;
                                 const next = [...(n.tasks ?? [])];
                                 next[tIdx] = { ...next[tIdx], task_name: val };
+                                return { ...n, tasks: next };
+                              }),
+                            );
+                          }}
+                        />
+                      ),
+                    },
+                    {
+                      title: t('app.kuaizhizao.deliveryProject.fields.coreTask'),
+                      render: (_, task, tIdx) => (
+                        <Input.TextArea
+                          value={task.core_task ?? ''}
+                          disabled={!perms.canUpdate}
+                          rows={2}
+                          maxLength={500}
+                          showCount
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNodes((prev) =>
+                              prev.map((n, i) => {
+                                if (i !== index) return n;
+                                const next = [...(n.tasks ?? [])];
+                                next[tIdx] = { ...next[tIdx], core_task: val };
+                                return { ...n, tasks: next };
+                              }),
+                            );
+                          }}
+                        />
+                      ),
+                    },
+                    {
+                      title: t('app.kuaizhizao.deliveryProject.fields.ownerName'),
+                      width: 100,
+                      render: (_, task, tIdx) => (
+                        <TemplateTaskOwnerPicker
+                          ownerId={task.owner_id}
+                          ownerName={task.owner_name}
+                          disabled={!perms.canUpdate}
+                          onChange={(owner) => {
+                            setNodes((prev) =>
+                              prev.map((n, i) => {
+                                if (i !== index) return n;
+                                const next = [...(n.tasks ?? [])];
+                                const current = next[tIdx];
+                                const members = (current.members ?? []).filter(
+                                  (m) => m.user_id !== owner?.user_id,
+                                );
+                                next[tIdx] = {
+                                  ...current,
+                                  owner_id: owner?.user_id ?? null,
+                                  owner_name: owner?.user_name ?? null,
+                                  members,
+                                };
+                                return { ...n, tasks: next };
+                              }),
+                            );
+                          }}
+                        />
+                      ),
+                    },
+                    {
+                      title: t('app.kuaizhizao.deliveryProject.fields.members'),
+                      width: 220,
+                      render: (_, task, tIdx) => (
+                        <TemplateTaskMembersPicker
+                          members={task.members}
+                          ownerId={task.owner_id}
+                          disabled={!perms.canUpdate}
+                          onChange={(members) => {
+                            setNodes((prev) =>
+                              prev.map((n, i) => {
+                                if (i !== index) return n;
+                                const next = [...(n.tasks ?? [])];
+                                next[tIdx] = { ...next[tIdx], members };
                                 return { ...n, tasks: next };
                               }),
                             );
@@ -643,6 +785,62 @@ const ProcessTemplatesPage: React.FC = () => {
                                   ...next[tIdx],
                                   planned_duration_days: Number(val ?? 0),
                                 };
+                                return { ...n, tasks: next };
+                              }),
+                            );
+                          }}
+                        />
+                      ),
+                    },
+                    {
+                      title: t('app.kuaizhizao.deliveryProject.fields.trackMode'),
+                      width: 110,
+                      render: (_, task, tIdx) => (
+                        <Select
+                          style={{ width: '100%' }}
+                          value={task.track_mode || 'progress'}
+                          disabled={!perms.canUpdate}
+                          options={[
+                            {
+                              value: 'progress',
+                              label: t('app.kuaizhizao.deliveryProject.trackMode.progress'),
+                            },
+                            {
+                              value: 'kit',
+                              label: t('app.kuaizhizao.deliveryProject.trackMode.kit'),
+                            },
+                          ]}
+                          onChange={(val) => {
+                            setNodes((prev) =>
+                              prev.map((n, i) => {
+                                if (i !== index) return n;
+                                const next = [...(n.tasks ?? [])];
+                                next[tIdx] = { ...next[tIdx], track_mode: val };
+                                return { ...n, tasks: next };
+                              }),
+                            );
+                          }}
+                        />
+                      ),
+                    },
+                    {
+                      title: t('app.kuaizhizao.deliveryProject.fields.participantMode'),
+                      width: 100,
+                      render: (_, task, tIdx) => (
+                        <Select
+                          style={{ width: '100%' }}
+                          value={task.participant_mode || 'solo'}
+                          disabled={!perms.canUpdate}
+                          options={Object.entries(DELIVERY_TASK_PARTICIPANT_MODE).map(([value, label]) => ({
+                            value,
+                            label,
+                          }))}
+                          onChange={(val) => {
+                            setNodes((prev) =>
+                              prev.map((n, i) => {
+                                if (i !== index) return n;
+                                const next = [...(n.tasks ?? [])];
+                                next[tIdx] = { ...next[tIdx], participant_mode: val };
                                 return { ...n, tasks: next };
                               }),
                             );

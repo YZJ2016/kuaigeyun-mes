@@ -36,6 +36,8 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             "missing_marked_by" INT,
             "missing_marked_by_name" VARCHAR(100),
             "notes" TEXT,
+            "created_by" INT,
+            "created_by_name" VARCHAR(100),
             "updated_by" INT,
             "updated_by_name" VARCHAR(100),
             CONSTRAINT "uq_rd_sys_archive_tenant_project_type"

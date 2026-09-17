@@ -2,9 +2,24 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { App } from 'antd';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
-import { warehouseApi } from '../../apps/master-data/services/warehouse';
 import { Warehouse } from '../../apps/master-data/types/warehouse';
 import { NamePath } from 'antd/es/form/interface';
+import {
+  ReferenceDisplayAccessError,
+  searchReferenceDisplay,
+  type ReferenceDisplayItem,
+} from '../../utils/referenceDisplay';
+
+const WAREHOUSE_REFERENCE_RESOURCE = 'master-data:warehouse:warehouse';
+
+function mapWarehouseDisplayItem(item: ReferenceDisplayItem): Warehouse {
+  return {
+    id: Number(item.id),
+    uuid: String(item.uuid ?? ''),
+    code: String(item.code ?? ''),
+    name: String(item.name ?? ''),
+  } as Warehouse;
+}
 
 interface UniWarehouseSelectProps {
   /** 表单字段名称 */
@@ -21,6 +36,8 @@ interface UniWarehouseSelectProps {
   readonly?: boolean;
   /** 只展示启用的仓库，默认为 true */
   activeOnly?: boolean;
+  /** 宿主 {app}:{module}，供引用展示隐式鉴权；未传时按当前路由菜单自动推断 */
+  hostResource?: string;
   /** 自定义宽度 */
   width?: number | 'sm' | 'md' | 'xl' | 'xs' | 'lg';
   /** 值改变时的回调，额外返回完整的 warehouse 对象 */
@@ -34,7 +51,7 @@ interface UniWarehouseSelectProps {
  *
  * @description
  * 内置防抖搜索与列表数据的自动拉取。
- * 解决了各业务组件中重复手写 `loadWarehouses` 以及维护 `warehouseList` 的模板代码。
+ * 走 reference display + 宿主隐式授权，避免业务单据页因缺少主数据仓库 read 而 403。
  */
 export const UniWarehouseSelect: React.FC<UniWarehouseSelectProps> = ({
   name,
@@ -44,6 +61,7 @@ export const UniWarehouseSelect: React.FC<UniWarehouseSelectProps> = ({
   disabled = false,
   readonly = false,
   activeOnly = true,
+  hostResource,
   width,
   onChange,
   ...restProps
@@ -55,16 +73,21 @@ export const UniWarehouseSelect: React.FC<UniWarehouseSelectProps> = ({
   const fetchWarehouses = async (searchText: string = '') => {
     setLoading(true);
     try {
-      const response: any = await warehouseApi.list({
-        ...(searchText ? { keyword: searchText.trim() } : {}),
-        ...(activeOnly ? { is_active: true } : {}),
+      const response = await searchReferenceDisplay({
+        resource: WAREHOUSE_REFERENCE_RESOURCE,
+        hostResource,
+        keyword: searchText.trim() || undefined,
+        isActive: activeOnly ? true : undefined,
+        pageSize: 200,
       });
-      // 兼容不同服务层的返回结构
-      const items = response.items || response.data || response || [];
-      setData(items);
+      setData((response.items || []).map(mapWarehouseDisplayItem));
     } catch (error) {
       console.error('Failed to fetch warehouses:', error);
-      message.error('加载仓库列表失败，请稍后重试');
+      if (error instanceof ReferenceDisplayAccessError) {
+        message.error(error.message);
+      } else {
+        message.error('加载仓库列表失败，请稍后重试');
+      }
     } finally {
       setLoading(false);
     }
@@ -79,7 +102,7 @@ export const UniWarehouseSelect: React.FC<UniWarehouseSelectProps> = ({
     // 初始加载一次默认数据
     fetchWarehouses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hostResource, activeOnly]);
 
   const handleChange = (val: number, _option: any) => {
     if (onChange) {
@@ -92,7 +115,7 @@ export const UniWarehouseSelect: React.FC<UniWarehouseSelectProps> = ({
 
   const options = useMemo(() => {
     return data.map((item) => ({
-      label: `${item.code} ${item.name}`,
+      label: `${item.code} ${item.name}`.trim() || String(item.id),
       value: item.id || item.uuid,
       key: item.id || item.uuid,
     }));

@@ -116,6 +116,7 @@ const DeliveryProjectDetailPage = lazy(() => import('./pages/delivery-project/pr
 const DeliveryProcessTemplatesPage = lazy(() => import('./pages/delivery-project/process-templates'));
 const DeliveryNodeReportsPage = lazy(() => import('./pages/delivery-project/node-reports'));
 const DeliverySchedulesPage = lazy(() => import('./pages/delivery-project/schedules'));
+const DeliveryWorkshopBoardPage = lazy(() => import('./pages/delivery-project/workshop-board'));
 const DeliveryIssuesPage = lazy(() => import('./pages/delivery-project/issues'));
 const DeliveryProgressSummaryReportPage = lazy(() => import('./pages/delivery-project/reports/progress-summary'));
 const DeliveryProcessProgressReportPage = lazy(() => import('./pages/delivery-project/reports/process-progress'));
@@ -396,6 +397,7 @@ const KuaizhizaoApp: React.FC = () => {
         element={<Navigate to="/apps/kuaizhizao/delivery-project/projects" replace />}
       />
       <Route path="delivery-project/schedules" element={withPageSuspense(DeliverySchedulesPage)} />
+      <Route path="delivery-project/workshop-board" element={withPageSuspense(DeliveryWorkshopBoardPage)} />
       <Route path="delivery-project/issues" element={withPageSuspense(DeliveryIssuesPage)} />
       <Route path="delivery-project/reports/progress-summary" element={withPageSuspense(DeliveryProgressSummaryReportPage)} />
       <Route path="delivery-project/reports/process-progress" element={withPageSuspense(DeliveryProcessProgressReportPage)} />

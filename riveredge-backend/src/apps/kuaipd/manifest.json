@@ -49,9 +49,19 @@
             "permission": "kuaizhizao:delivery-project:read"
           },
           {
+            "title": "app.kuaizhizao.menu.delivery-project.workshop-board",
+            "path": "/apps/kuaizhizao/delivery-project/workshop-board",
+            "sort_order": 2,
+            "meta": {
+              "module": "delivery",
+              "node": "delivery_workshop_board"
+            },
+            "permission": "kuaizhizao:delivery-project:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.delivery-project.process-templates",
             "path": "/apps/kuaizhizao/delivery-project/process-templates",
-            "sort_order": 2,
+            "sort_order": 3,
             "meta": {
               "module": "delivery",
               "node": "delivery_process_template"
@@ -61,7 +71,7 @@
           {
             "title": "app.kuaizhizao.menu.delivery-project.node-reports",
             "path": "/apps/kuaizhizao/delivery-project/node-reports",
-            "sort_order": 3,
+            "sort_order": 4,
             "meta": {
               "module": "delivery",
               "node": "delivery_node_report"
@@ -71,7 +81,7 @@
           {
             "title": "app.kuaizhizao.menu.delivery-project.schedules",
             "path": "/apps/kuaizhizao/delivery-project/schedules",
-            "sort_order": 4,
+            "sort_order": 5,
             "meta": {
               "module": "delivery",
               "node": "delivery_schedule"
@@ -81,7 +91,7 @@
           {
             "title": "app.kuaizhizao.menu.delivery-project.issues",
             "path": "/apps/kuaizhizao/delivery-project/issues",
-            "sort_order": 5,
+            "sort_order": 6,
             "meta": {
               "module": "delivery",
               "node": "delivery_issue"
@@ -91,7 +101,7 @@
           {
             "title": "app.kuaizhizao.menu.delivery-project.reports",
             "icon": "fileText",
-            "sort_order": 6,
+            "sort_order": 7,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.delivery-project.reports.progress-summary",

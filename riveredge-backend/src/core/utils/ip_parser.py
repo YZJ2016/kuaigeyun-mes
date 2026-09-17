@@ -257,6 +257,50 @@ def normalize_login_location_label(label: Optional[str]) -> Optional[str]:
     return f"中国 {text}"
 
 
+_SKIP_ADMIN_LABELS = frozenset({"市辖区", "县"})
+
+
+def format_manual_user_location_label(labels: Optional[Any]) -> Optional[str]:
+    """将站点「用户位置」手工行政区标签格式化为登录地点文案。"""
+    if not isinstance(labels, (list, tuple)) or not labels:
+        return None
+    parts = [
+        str(x).strip()
+        for x in labels
+        if x is not None and str(x).strip() and str(x).strip() not in _SKIP_ADMIN_LABELS
+    ]
+    if not parts:
+        parts = [str(x).strip() for x in labels if x is not None and str(x).strip()]
+    if not parts:
+        return None
+    text = " ".join(parts)
+    if not text.startswith("中国") and not (
+        text[:5].lower() == "china" and (len(text) == 5 or text[5].isspace())
+    ):
+        text = f"中国 {text}"
+    return normalize_login_location_label(text)
+
+
+async def resolve_login_location_for_tenant(
+    tenant_id: Optional[int],
+    ip_location: Optional[str],
+) -> Optional[str]:
+    """登录地点：站点手工用户位置优先，否则用 IP 解析结果。"""
+    if tenant_id:
+        try:
+            from core.services.system.site_setting_service import SiteSettingService
+
+            site = await SiteSettingService.get_settings(int(tenant_id))
+            raw = (site.settings or {}).get("user_location") if site else None
+            if isinstance(raw, dict) and raw.get("mode") == "manual":
+                manual = format_manual_user_location_label(raw.get("region_labels"))
+                if manual:
+                    return manual
+        except Exception as e:
+            logger.debug(f"读取站点用户位置失败 tenant_id={tenant_id}: {e}")
+    return normalize_login_location_label(ip_location)
+
+
 def format_location_label(
     country: Optional[str] = None,
     region: Optional[str] = None,

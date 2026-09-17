@@ -297,6 +297,11 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "kuaizhizao:delivery-notice:create",
         "kuaizhizao:delivery-notice:update",
     ),
+    "delivery_node_task_attachments": (
+        "kuaizhizao:delivery-project:create",
+        "kuaizhizao:delivery-project:update",
+        "kuaizhizao:delivery-project:execute",
+    ),
     "stocktaking_attachments": (
         "kuaizhizao:warehouse-management-stocktaking:create",
         "kuaizhizao:warehouse-management-stocktaking:update",

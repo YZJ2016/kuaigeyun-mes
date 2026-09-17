@@ -1445,10 +1445,16 @@ class AuthService:
                 logger.debug(f"IP地址解析失败: {login_ip}, 错误: {e}")
 
             from core.utils.client_channel import resolve_login_device_from_request
+            from core.utils.ip_parser import resolve_login_location_for_tenant
 
             login_device = resolve_login_device_from_request(
                 request,
                 ua_device_fallback=ip_info.get("device"),
+            )
+
+            login_location = await resolve_login_location_for_tenant(
+                tenant_id,
+                ip_info.get("location"),
             )
 
             # 通过服务接口记录登录事件
@@ -1462,7 +1468,7 @@ class AuthService:
                     username=username,
                     login_ip=login_ip,
                     user_agent=user_agent,
-                    login_location=ip_info.get("location"),  # IP地理位置
+                    login_location=login_location,
                     login_device=login_device,  # 优先 X-Client-Channel，否则 UA
                     login_browser=ip_info.get("browser"),  # 浏览器信息
                     success=(login_status == "success"),

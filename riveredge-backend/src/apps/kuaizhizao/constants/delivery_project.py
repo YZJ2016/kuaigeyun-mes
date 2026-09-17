@@ -54,6 +54,53 @@ class DeliveryNodeTaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class DeliveryTaskTrackMode(str, Enum):
+    """节点任务跟踪方式：进度百分比 / 齐套有无"""
+
+    PROGRESS = "progress"
+    KIT = "kit"
+
+
+class DeliveryTaskParticipantMode(str, Enum):
+    """节点任务协作方式：负责人独占 / 会签 / 或签 / 分人操作"""
+
+    SOLO = "solo"
+    SIGNOFF_ALL = "signoff_all"
+    SIGNOFF_ANY = "signoff_any"
+    EACH_ACT = "each_act"
+
+
+class DeliveryTaskParticipantActionStatus(str, Enum):
+    PENDING = "pending"
+    DONE = "done"
+
+
+class DeliveryTaskKitStatus(str, Enum):
+    NONE = "none"
+    READY = "ready"
+    NA = "na"
+
+
+class DeliveryBoardSection(str, Enum):
+    """车间台账分段（对齐 Excel 库存/退回/在制/已发）"""
+
+    INVENTORY = "inventory"
+    RETURNED = "returned"
+    ACTIVE = "active"
+    SHIPPED = "shipped"
+
+
+class DeliveryLineRole(str, Enum):
+    """主线 / 旁线（换热器等部件独立履约）"""
+
+    MAIN = "main"
+    SIDELINE = "sideline"
+
+
+# 机台配置属性中用于型号工期匹配的约定键（值为租户产品型号）
+DELIVERY_CONFIG_ATTR_PRODUCT_MODEL = "product_model"
+
+
 DELIVERY_PROJECT_STATUS_LABELS: Dict[str, str] = {
     DeliveryProjectStatus.DRAFT.value: "草稿",
     DeliveryProjectStatus.IN_PROGRESS.value: "进行中",
@@ -102,6 +149,41 @@ DELIVERY_NODE_TASK_STATUS_LABELS: Dict[str, str] = {
     DeliveryNodeTaskStatus.IN_PROGRESS.value: "进行中",
     DeliveryNodeTaskStatus.DONE.value: "已完成",
     DeliveryNodeTaskStatus.CANCELLED.value: "已取消",
+}
+
+DELIVERY_TASK_TRACK_MODE_LABELS: Dict[str, str] = {
+    DeliveryTaskTrackMode.PROGRESS.value: "进度",
+    DeliveryTaskTrackMode.KIT.value: "齐套",
+}
+
+DELIVERY_TASK_PARTICIPANT_MODE_LABELS: Dict[str, str] = {
+    DeliveryTaskParticipantMode.SOLO.value: "负责人",
+    DeliveryTaskParticipantMode.SIGNOFF_ALL.value: "会签",
+    DeliveryTaskParticipantMode.SIGNOFF_ANY.value: "或签",
+    DeliveryTaskParticipantMode.EACH_ACT.value: "分人操作",
+}
+
+DELIVERY_TASK_PARTICIPANT_ACTION_STATUS_LABELS: Dict[str, str] = {
+    DeliveryTaskParticipantActionStatus.PENDING.value: "待确认",
+    DeliveryTaskParticipantActionStatus.DONE.value: "已确认",
+}
+
+DELIVERY_TASK_KIT_STATUS_LABELS: Dict[str, str] = {
+    DeliveryTaskKitStatus.NONE.value: "无",
+    DeliveryTaskKitStatus.READY.value: "有",
+    DeliveryTaskKitStatus.NA.value: "不适用",
+}
+
+DELIVERY_BOARD_SECTION_LABELS: Dict[str, str] = {
+    DeliveryBoardSection.INVENTORY.value: "库存",
+    DeliveryBoardSection.RETURNED.value: "退回",
+    DeliveryBoardSection.ACTIVE.value: "在制",
+    DeliveryBoardSection.SHIPPED.value: "已发",
+}
+
+DELIVERY_LINE_ROLE_LABELS: Dict[str, str] = {
+    DeliveryLineRole.MAIN.value: "主线",
+    DeliveryLineRole.SIDELINE.value: "旁线",
 }
 
 DEFAULT_DELIVERY_PROCESS_NODES: List[Dict[str, Any]] = [

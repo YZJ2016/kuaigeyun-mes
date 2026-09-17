@@ -1889,6 +1889,15 @@ export default {
   'common.select': '选择',
   'common.import': '导入',
   'common.submit': '提交',
+  'common.submitted': '已提交',
+  'common.approve': '通过',
+  'common.reject': '驳回',
+  'common.approved': '已通过',
+  'common.approveSuccess': '审核通过',
+  'common.rejectSuccess': '已驳回',
+  'common.updated': '已更新',
+  'common.created': '已创建',
+  'common.deleted': '已删除',
   'common.quantity': '数量',
   'common.unit': '单位',
   'common.name': '名称',
@@ -5983,6 +5992,56 @@ export default {
   'app.kuaizhizao.menu.delivery-project.reports.progress-summary': '进度汇总',
   'app.kuaizhizao.menu.delivery-project.reports.process-progress': '项目流程进度表',
   'app.kuaizhizao.menu.delivery-project.reports.issue-progress': '项目进度问题报表',
+  'app.kuaizhizao.menu.delivery-project.workshop-board': '车间台账',
+  'app.kuaizhizao.deliveryProject.fields.boardSection': '台账分区',
+  'app.kuaizhizao.deliveryProject.fields.trackMode': '跟踪方式',
+  'app.kuaizhizao.deliveryProject.boardSection.active': '在制',
+  'app.kuaizhizao.deliveryProject.boardSection.inventory': '库存',
+  'app.kuaizhizao.deliveryProject.boardSection.returned': '退回',
+  'app.kuaizhizao.deliveryProject.boardSection.shipped': '已发',
+  'app.kuaizhizao.deliveryProject.trackMode.progress': '进度',
+  'app.kuaizhizao.deliveryProject.trackMode.kit': '齐套',
+  'app.kuaizhizao.deliveryProject.fields.participantMode': '协作方式',
+  'app.kuaizhizao.deliveryProject.fields.kitStatus': '齐套状态',
+  'app.kuaizhizao.deliveryProject.participantMode.solo': '负责人',
+  'app.kuaizhizao.deliveryProject.participantMode.signoff_all': '会签',
+  'app.kuaizhizao.deliveryProject.participantMode.signoff_any': '或签',
+  'app.kuaizhizao.deliveryProject.participantMode.each_act': '分人操作',
+  'app.kuaizhizao.deliveryProject.participantProgress': '已确认 {{done}} / {{total}}',
+  'app.kuaizhizao.deliveryProject.participantProgressShort': '{{done}}/{{total}}',
+  'app.kuaizhizao.deliveryProject.participantConfirm': '确认',
+  'app.kuaizhizao.deliveryProject.participantRemarkPlaceholder': '备注（可选）',
+  'app.kuaizhizao.deliveryProject.participantActionSuccess': '确认已提交',
+  'app.kuaizhizao.deliveryProject.configAttrs.controllerModel': '电控型号',
+  'app.kuaizhizao.deliveryProject.configAttrs.productModel': '产品型号',
+  'app.kuaizhizao.deliveryProject.configAttrs.productModelPlaceholder': '与流程模板型号工期键一致',
+  'app.kuaizhizao.deliveryProject.configAttrs.handedness': '左右手',
+  'app.kuaizhizao.deliveryProject.configAttrs.intakeExhaust': '进出风',
+  'app.kuaizhizao.deliveryProject.configAttrs.fan': '风机',
+  'app.kuaizhizao.deliveryProject.configAttrs.clothSlot': '布槽',
+  'app.kuaizhizao.deliveryProject.configAttrs.barrel': '滚筒',
+  'app.kuaizhizao.deliveryProject.workshopBoard.title': '车间台账',
+  'app.kuaizhizao.deliveryProject.workshopBoard.noTask': '该列尚未生成任务，请先启动项目并应用流程模板',
+  'app.kuaizhizao.deliveryProject.fields.durationRules': '型号工期',
+  'app.kuaizhizao.deliveryProject.durationRulesHint':
+    '按项目产品型号自动取计划天数；点击设置各型号工期',
+  'app.kuaizhizao.deliveryProject.durationRulesFormHint':
+    '项目产品型号与下列键一致时取对应天数；未填型号沿用左侧「工期(天)」',
+  'app.kuaizhizao.deliveryProject.durationRulesUnset': '设置型号',
+  'app.kuaizhizao.deliveryProject.durationRulesDayUnit': '天',
+  'app.kuaizhizao.deliveryProject.durationRulesModelDays': '{{model}} {{days}}天',
+  'app.kuaizhizao.deliveryProject.durationRulesDaysPlaceholder': '留空',
+  'app.kuaizhizao.deliveryProject.durationRulesMore': '还有 {{count}} 个型号',
+  'app.kuaizhizao.deliveryProject.durationRulesCustomModel': '产品型号',
+  'app.kuaizhizao.deliveryProject.durationRulesAddModel': '添加型号',
+  'app.kuaizhizao.deliveryProject.durationRulesEmptyHint': '请先添加产品型号并填写计划天数',
+  'app.kuaizhizao.deliveryProject.durationRulesClear': '清空',
+  'app.kuaizhizao.deliveryProject.fields.parentProject': '主线项目',
+  'app.kuaizhizao.deliveryProject.fields.sidelines': '旁线项目',
+  'app.kuaizhizao.deliveryProject.fields.parentSyncTaskKey': '回写齐套任务标识',
+  'app.kuaizhizao.deliveryProject.parentSyncTaskKeyHint': '旁线结案后，将主线上该任务标识置为齐套「有」',
+  'app.kuaizhizao.deliveryProject.noSidelines': '暂无旁线',
+  'app.kuaizhizao.deliveryProject.createSideline': '新建旁线项目',
   'app.kuaizhizao.deliveryProject.dashboard.activeProjects': '在制项目',
   'app.kuaizhizao.deliveryProject.dashboard.overdueNodes': '逾期节点',
   'app.kuaizhizao.deliveryProject.dashboard.atRiskProjects': '交期风险项目',
@@ -6000,8 +6059,13 @@ export default {
   'app.kuaizhizao.deliveryProject.dashboard.alertKind': '预警类型',
   'app.kuaizhizao.deliveryProject.dashboard.viewFollowUp': '项目跟进表',
   'app.kuaizhizao.deliveryProject.gantt.scale.month': '%Y年%m月',
+  'app.kuaizhizao.deliveryProject.gantt.scale.monthShort': '%m月',
+  'app.kuaizhizao.deliveryProject.gantt.scale.year': '%Y年',
   'app.kuaizhizao.deliveryProject.gantt.scale.week': '第%W周',
-  'app.kuaizhizao.deliveryProject.gantt.empty': '暂无在制交付项目，启动项目后将在此展示节点计划时间轴',
+  'app.kuaizhizao.deliveryProject.gantt.viewDay': '日',
+  'app.kuaizhizao.deliveryProject.gantt.viewWeek': '周',
+  'app.kuaizhizao.deliveryProject.gantt.viewMonth': '月',
+  'app.kuaizhizao.deliveryProject.gantt.empty': '暂无在制交付项目，启动项目后将在此展示项目计划时间轴，展开可查看各节点',
   'app.kuaizhizao.deliveryProject.gantt.columns.projectNode': '项目 / 节点',
   'app.kuaizhizao.deliveryProject.gantt.columns.plannedStart': '计划开始',
   'app.kuaizhizao.deliveryProject.gantt.columns.plannedEnd': '计划完成',
@@ -6018,6 +6082,9 @@ export default {
   'app.kuaizhizao.deliveryProject.fields.members': '成员',
   'app.kuaizhizao.deliveryProject.fields.taskKey': '任务标识',
   'app.kuaizhizao.deliveryProject.fields.taskName': '任务名称',
+  'app.kuaizhizao.deliveryProject.fields.coreTask': '核心任务',
+  'app.kuaizhizao.deliveryProject.fields.taskAttachments': '附件',
+  'app.kuaizhizao.deliveryProject.taskAttachmentCount': '{{count}} 个附件',
   'app.kuaizhizao.deliveryProject.fields.taskCount': '子任务数',
   'app.kuaizhizao.deliveryProject.fields.material': '产品',
   'app.kuaizhizao.deliveryProject.fields.currentNode': '当前节点',
@@ -6029,6 +6096,10 @@ export default {
   'app.kuaizhizao.deliveryProject.fields.plannedStartDate': '计划开始',
   'app.kuaizhizao.deliveryProject.fields.actualStartDate': '实际开始',
   'app.kuaizhizao.deliveryProject.fields.actualEndDate': '实际完成',
+  'app.kuaizhizao.deliveryProject.fields.editReason': '编辑原因',
+  'app.kuaizhizao.deliveryProject.fields.editedAt': '编辑时间',
+  'app.kuaizhizao.deliveryProject.fields.editedByName': '编辑人',
+  'app.kuaizhizao.deliveryProject.fields.changeDetail': '变更明细',
   'app.kuaizhizao.deliveryProject.fields.assigneeName': '责任人',
   'app.kuaizhizao.deliveryProject.fields.durationDays': '工期(天)',
   'app.kuaizhizao.deliveryProject.fields.isCritical': '关键卡',
@@ -6056,6 +6127,10 @@ export default {
   'app.kuaizhizao.deliveryProject.deleteNodeTaskConfirm': '确定删除该子任务？',
   'app.kuaizhizao.deliveryProject.templateNodeTasks': '预置子任务',
   'app.kuaizhizao.deliveryProject.addTemplateTask': '添加预置任务',
+  'app.kuaizhizao.deliveryProject.templateTaskOwnerOptional': '可选，留空则在项目工作台指定',
+  'app.kuaizhizao.deliveryProject.templateTaskMembersOptional': '可选，留空则在项目工作台指定',
+  'app.kuaizhizao.deliveryProject.templateTaskOwnerOptional': '可选，留空则在项目工作台指定',
+  'app.kuaizhizao.deliveryProject.templateTaskMembersOptional': '可选，留空则在项目工作台指定',
   'app.kuaizhizao.deliveryProject.newTemplateTask': '新任务',
   'app.kuaizhizao.deliveryProject.startProject': '启动项目',
   'app.kuaizhizao.deliveryProject.pauseProject': '暂停项目',
@@ -6081,13 +6156,28 @@ export default {
   'app.kuaizhizao.deliveryProject.schedule.reportOverdue': '汇报逾期',
   'app.kuaizhizao.deliveryProject.schedule.overdue': '逾期',
   'app.kuaizhizao.deliveryProject.assignOwner': '指定负责人',
+  'app.kuaizhizao.deliveryProject.nodeTaskOperate': '操作',
+  'app.kuaizhizao.deliveryProject.nodeTaskOperateSuccess': '任务操作已提交',
   'app.kuaizhizao.deliveryProject.editNodeSchedule': '编辑节点计划',
+  'app.kuaizhizao.deliveryProject.nodeScheduleEditReasonHint': '修改负责人或计划/实际日期时必填',
+  'app.kuaizhizao.deliveryProject.nodeScheduleEditReasonRequired': '请填写编辑原因',
+  'app.kuaizhizao.deliveryProject.nodeScheduleEditTab': '计划编辑',
+  'app.kuaizhizao.deliveryProject.nodeScheduleHistory': '编辑历史',
+  'app.kuaizhizao.deliveryProject.nodeScheduleHistoryEmpty': '暂无编辑记录',
   'app.kuaizhizao.deliveryProject.startNode': '开始节点',
   'app.kuaizhizao.deliveryProject.completeNode': '完成节点',
   'app.kuaizhizao.deliveryProject.nodeStarted': '节点已开始',
   'app.kuaizhizao.deliveryProject.nodeCompleted': '节点已完成',
   'app.kuaizhizao.deliveryProject.completeNodeConfirm': '确认完成该节点？未完成子任务或未审汇报将无法通过。',
   'app.kuaizhizao.deliveryProject.linkDocument': '关联单据',
+  'app.kuaizhizao.deliveryProject.nodeDocumentLinkExisting': '关联已有',
+  'app.kuaizhizao.deliveryProject.nodeDocumentCreateNew': '直接新建',
+  'app.kuaizhizao.deliveryProject.nodeDocumentGoCreate': '前往新建',
+  'app.kuaizhizao.deliveryProject.nodeDocumentCreateAutoLinkHint':
+    '保存后将自动关联到当前节点，并返回交付项目工作台。',
+  'app.kuaizhizao.deliveryProject.nodeDocumentCreateManualLinkHint':
+    '将打开对应单据新建页；保存后请返回工作台，在关联已有中选择该单据完成关联。',
+  'app.kuaizhizao.deliveryProject.nodeDocumentCreateLinked': '已新建并关联{{docType}} {{docCode}}',
   'app.kuaizhizao.deliveryProject.unlinkDocument': '解绑',
   'app.kuaizhizao.deliveryProject.unlinkDocumentConfirm': '确认解绑该关联单据？',
   'app.kuaizhizao.deliveryProject.noLinkedDocuments': '暂无关联单据',
@@ -6096,6 +6186,10 @@ export default {
   'app.kuaizhizao.deliveryProject.docTitleAutoHint': '可选，选择单据后自动带出',
   'app.kuaizhizao.deliveryProject.fields.docType': '单据类型',
   'app.kuaizhizao.deliveryProject.fields.docCode': '单据编码',
+  'app.kuaizhizao.deliveryProject.fields.linkedDocPartyName': '对象',
+  'app.kuaizhizao.deliveryProject.fields.linkedDocDate': '单据日期',
+  'app.kuaizhizao.deliveryProject.fields.linkedDocProgress': '完成进度',
+  'app.kuaizhizao.deliveryProject.fields.linkedAt': '关联时间',
   'app.kuaizhizao.deliveryProject.fields.docId': '单据ID',
   'app.kuaizhizao.deliveryProject.fields.selectDocument': '选择单据',
   'app.kuaizhizao.deliveryProject.fields.docTitle': '展示标题',
@@ -6115,6 +6209,12 @@ export default {
   'app.kuaizhizao.deliveryProject.workbench.linkedRdProject': '来源研发项目',
   'app.kuaizhizao.deliveryProject.workbench.openReportsList': '节点汇报列表',
   'app.kuaizhizao.deliveryProject.workbench.openIssuesList': '问题跟踪列表',
+  'app.kuaizhizao.deliveryProject.workbench.openRelatedAttachments': '关联附件',
+  'app.kuaizhizao.deliveryProject.workbench.relatedAttachmentsEmpty': '暂无关联附件',
+  'app.kuaizhizao.deliveryProject.workbench.relatedAttachmentFileName': '文件名',
+  'app.kuaizhizao.deliveryProject.workbench.relatedAttachmentSource': '来源',
+  'app.kuaizhizao.deliveryProject.workbench.relatedAttachmentSourceReport': '节点汇报 {{code}}',
+  'app.kuaizhizao.deliveryProject.workbench.relatedAttachmentSourceTask': '节点子任务 {{name}}',
   'app.kuaizhizao.deliveryProject.workbench.nodeStepper.title': '交付流程节点',
   'app.kuaizhizao.deliveryProject.workbench.nodeStepper.completedCount': '已完成 {{completed}} / {{total}}',
   'app.kuaizhizao.deliveryProject.workbench.progressDetail.nodes': '流程节点',
@@ -19520,7 +19620,7 @@ export default {
   'app.master-data.bom.importExample.unit': '个',
   'app.master-data.bom.importExample.wasteRate': '0%',
   'app.master-data.customers.importExample.code': 'CUST-WX-001',
-  'app.master-data.customers.importExample.name': '无锡盛世高新装备有限公司',
+  'app.master-data.customers.importExample.name': '苏州云帆纺织科技有限公司',
   'app.master-data.customers.importExample.shortName': '盛世高新',
   'app.master-data.customers.importExample.contactPerson': '张经理',
   'app.master-data.customers.importExample.phone': '0510-81110001',
@@ -19528,7 +19628,7 @@ export default {
   'app.master-data.customers.importExample.address': '无锡市新吴区机电五支路1000号',
   'app.master-data.customers.importExample.category': '制造业',
   'app.master-data.suppliers.importExample.code': 'SUPP-WX-001',
-  'app.master-data.suppliers.importExample.name': '无锡德力精密零件有限公司',
+  'app.master-data.suppliers.importExample.name': '智控电气系统集成公司',
   'app.master-data.suppliers.importExample.shortName': '德力精密',
   'app.master-data.suppliers.importExample.contactPerson': '王经理',
   'app.master-data.suppliers.importExample.phone': '0510-82220002',
@@ -24723,6 +24823,7 @@ export default {
   'pages.system.files.category.other_outbound_attachments': '其他出库单附件',
   'pages.system.files.category.material_borrow_attachments': '借料单附件',
   'pages.system.files.category.delivery_notice_attachments': '送货单附件',
+  'pages.system.files.category.delivery_node_task_attachments': '交付节点子任务附件',
   'pages.system.files.category.stocktaking_attachments': '盘点单附件',
   'pages.system.files.category.inventory_transfer_attachments': '调拨单附件',
   'pages.system.files.category.assembly_order_attachments': '组装单附件',
@@ -26023,16 +26124,16 @@ export default {
   'pages.system.printTemplatesDesign.sampleNotes1': '交期 7 天，含税含运费。',
   'pages.system.printTemplatesDesign.sampleMaterial1': '铝合金壳体',
   'pages.system.printTemplatesDesign.sampleUnit1': '件',
-  'pages.system.printTemplatesDesign.sampleCustomer2': '华南电子装备集团有限公司',
+  'pages.system.printTemplatesDesign.sampleCustomer2': '无锡锦程塑机销售中心',
   'pages.system.printTemplatesDesign.sampleNotes2': '用于测试长明细分页、表头重复、尾部金额对齐。',
-  'pages.system.printTemplatesDesign.sampleCustomer3': '华东自动化设备有限公司',
+  'pages.system.printTemplatesDesign.sampleCustomer3': '常州清澜染整装备厂',
   'pages.system.printTemplatesDesign.sampleNotes3': '备注第一行：本报价含13%增值税。\\n备注第二行：付款方式月结30天。\\n备注第三行：如需开模费用请另行确认。\\n备注第四行：报价有效期15天。',
   'pages.system.printTemplatesDesign.sampleMaterial2': '控制面板总成',
   'pages.system.printTemplatesDesign.sampleUnit2': '套',
   'pages.system.printTemplatesDesign.sampleMaterial3': '支架组件',
-  'pages.system.printTemplatesDesign.sampleCustomer4': '华北装备制造有限公司',
+  'pages.system.printTemplatesDesign.sampleCustomer4': '南通恒拓机械有限公司',
   'pages.system.printTemplatesDesign.sampleNotes4': '请按生产排期分批交付。',
-  'pages.system.printTemplatesDesign.sampleSupplier1': '苏州金属材料有限公司',
+  'pages.system.printTemplatesDesign.sampleSupplier1': '智控电气系统集成公司',
   'pages.system.printTemplatesDesign.sampleNotes5': '来料请附材质证明与质检报告。',
   'pages.system.printTemplatesDesign.sampleName1': '示例单据',
   'pages.system.printTemplatesDesign.sampleNotes6': '请按实际单据字段调整样本 JSON。',
@@ -29962,6 +30063,178 @@ export default {
     '单位管理加载预设移到新建后',
   'pages.dashboard.updateLog.entries.units-load-preset-after-create.description':
     '单位管理「加载预设」从 Tab 栏右侧挪到「新建单位」按钮之后，与仓库等主数据页工具栏位置一致。',
+  'pages.dashboard.updateLog.entries.uni-warehouse-select-reference-display.title':
+    '修复业务单据选仓库因缺少主数据权限失败',
+  'pages.dashboard.updateLog.entries.uni-warehouse-select-reference-display.description':
+    '统一仓库下拉改走引用展示接口，按当前单据宿主权限加载仓库列表，不再直调主数据仓库接口导致仅有仓储业务权限时提示加载失败。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-operation-column-r01.title':
+    '交付工作台操作列宽按实测收窄',
+  'pages.dashboard.updateLog.entries.delivery-workbench-operation-column-r01.description':
+    '子任务、关联单据、最近汇报与问题等表格的操作列改为按动作条实测定宽，不再占用三槽加更多的首帧预算，右固定组不再出现大块留白。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-table-three-bucket-r01.title':
+    '交付工作台表格对齐三桶列宽规范',
+  'pages.dashboard.updateLog.entries.delivery-workbench-table-three-bucket-r01.description':
+    '子任务、关联单据、最近汇报与问题等表格统一走布局引擎三桶分配，状态与操作列右固定，余量列自适应视口。',
+  'pages.dashboard.updateLog.entries.delivery-node-report-detail-i18n-r01.title':
+    '节点汇报详情审核按钮文案补全',
+  'pages.dashboard.updateLog.entries.delivery-node-report-detail-i18n-r01.description':
+    '补全 common.approve、common.reject 等简体中文文案，详情抽屉右上角不再显示 i18n 键名。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-recent-issue-actions-r01.title':
+    '交付工作台最近问题优先级与操作列',
+  'pages.dashboard.updateLog.entries.delivery-workbench-recent-issue-actions-r01.description':
+    '协同事项最近问题优先级改为中文徽章与配色，并增加查看、编辑、处理与关闭等操作；新建问题优先级对齐标准码值。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-recent-report-view-r01.title':
+    '交付工作台最近节点汇报支持查看',
+  'pages.dashboard.updateLog.entries.delivery-workbench-recent-report-view-r01.description':
+    '已提交等非草稿状态的节点汇报在协同事项列表中显示查看按钮，可打开详情抽屉。',
+  'pages.dashboard.updateLog.entries.delivery-node-task-core-task-textarea-r01.title':
+    '节点子任务核心任务改为多行输入',
+  'pages.dashboard.updateLog.entries.delivery-node-task-core-task-textarea-r01.description':
+    '子任务新建与编辑弹窗中，核心任务改为通栏多行文本框，便于填写较长说明。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-recent-report-actions-r01.title':
+    '交付工作台最近节点汇报支持编辑提交',
+  'pages.dashboard.updateLog.entries.delivery-workbench-recent-report-actions-r01.description':
+    '协同事项最近节点汇报表增加操作列，草稿可编辑、提交或删除，无需跳转列表页。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-related-attachments-uni-detail-r01.title':
+    '交付工作台关联附件抽屉对齐 uni-detail',
+  'pages.dashboard.updateLog.entries.delivery-workbench-related-attachments-uni-detail-r01.description':
+    '协同事项关联附件改为 UniDetail 壳与明细区表格样式，统一抽屉宽度与空态展示。',
+  'pages.dashboard.updateLog.entries.delivery-node-task-core-task-r01.title':
+    '节点子任务增加核心任务字段',
+  'pages.dashboard.updateLog.entries.delivery-node-task-core-task-r01.description':
+    '子任务新建与编辑支持填写核心任务，表单改为两栏布局；流程模板预置子任务同步维护该字段。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-related-attachments-r01.title':
+    '交付工作台协同事项增加关联附件',
+  'pages.dashboard.updateLog.entries.delivery-workbench-related-attachments-r01.description':
+    '协同事项区新增关联附件入口，汇总本项目节点汇报与子任务附件并可点击打开。',
+  'pages.dashboard.updateLog.entries.delivery-node-task-attachments-r01.title':
+    '节点子任务支持上传附件',
+  'pages.dashboard.updateLog.entries.delivery-node-task-attachments-r01.description':
+    '交付工作台节点子任务新建、编辑与操作时可上传附件，列表展示附件数量。',
+  'pages.dashboard.updateLog.entries.delivery-linked-doc-status-zh-r01.title':
+    '节点关联单据状态显示中文',
+  'pages.dashboard.updateLog.entries.delivery-linked-doc-status-zh-r01.description':
+    '交付工作台关联单据的状态列统一走单据状态码表，APPROVED 等英文码显示为审核通过等中文。',
+  'pages.dashboard.updateLog.entries.delivery-linked-doc-progress-r01.title':
+    '节点关联单据展示完成进度',
+  'pages.dashboard.updateLog.entries.delivery-linked-doc-progress-r01.description':
+    '交付工作台关联单据表格新增完成进度列，按源单据类型读取收货、交货、完工或任务进度。',
+  'pages.dashboard.updateLog.entries.delivery-linked-doc-code-copy-r01.title':
+    '节点关联单据编码支持快速复制',
+  'pages.dashboard.updateLog.entries.delivery-linked-doc-code-copy-r01.description':
+    '交付工作台关联单据表格中单据编码旁增加复制按钮，可一键复制单号。',
+  'pages.dashboard.updateLog.entries.delivery-linked-doc-type-nav-r01.title':
+    '节点关联单据类型可跳转列表',
+  'pages.dashboard.updateLog.entries.delivery-linked-doc-type-nav-r01.description':
+    '交付工作台关联单据表格中点击「采购订单」等单据类型，可跳转到对应单据列表页。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-hooks-r01.title':
+    '修复交付项目工作台 Hooks 报错',
+  'pages.dashboard.updateLog.entries.delivery-workbench-hooks-r01.description':
+    '关联单据列配置 useMemo 移到 loading 早退之前，避免「Rendered more hooks than during the previous render」。',
+  'pages.dashboard.updateLog.entries.delivery-related-panel-slim-r01.title':
+    '交付工作台关联区不再重复列节点单据',
+  'pages.dashboard.updateLog.entries.delivery-related-panel-slim-r01.description':
+    '右侧「关联」面板去掉各节点关联单据清单；节点面板保留关联单据表格作为唯一入口。',
+  'pages.dashboard.updateLog.entries.delivery-linked-doc-columns-r01.title':
+    '交付节点关联单据列信息更丰富',
+  'pages.dashboard.updateLog.entries.delivery-linked-doc-columns-r01.description':
+    '工作台关联单据表格增加对象、单据日期、状态与关联时间，并按源单据实时读取摘要。',
+  'pages.dashboard.updateLog.entries.delivery-node-schedule-revision-db-r01.title':
+    '修复节点计划编辑历史查询报错',
+  'pages.dashboard.updateLog.entries.delivery-node-schedule-revision-db-r01.description':
+    '补齐交付节点计划编辑历史表的 uuid 与审计列，打开「编辑节点计划」不再 500。',
+  'pages.dashboard.updateLog.entries.delivery-workbench-scroll-r01.title':
+    '交付项目工作台可滚动查看关联单据',
+  'pages.dashboard.updateLog.entries.delivery-workbench-scroll-r01.description':
+    '修复工作台节点区限高导致底部「关联单据」被裁切、无法下滚的问题；长内容改由标签页内容区滚动。',
+  'pages.dashboard.updateLog.entries.partner-fictional-names-r01.title':
+    '演示客商名称改为虚构行业样例',
+  'pages.dashboard.updateLog.entries.partner-fictional-names-r01.description':
+    '客户/供应商脱敏使用与 Excel 原始字段无字面重叠的虚构企业名，界面不再出现原表中的公司片段或别名。',
+  'pages.dashboard.updateLog.entries.delivery-node-schedule-history-timeline-r01.title':
+    '节点计划编辑历史改为时间轴',
+  'pages.dashboard.updateLog.entries.delivery-node-schedule-history-timeline-r01.description':
+    '编辑节点计划弹窗分为「计划编辑 / 编辑历史」两个 Tab；历史记录以时间轴展示编辑人、原因与变更明细。',
+  'pages.dashboard.updateLog.entries.delivery-node-document-create-r01.title':
+    '交付节点关联单据支持直接新建',
+  'pages.dashboard.updateLog.entries.delivery-node-document-create-r01.description':
+    '工作台关联单据弹窗可切换「直接新建」，工单/采购订单/研发项目保存后自动关联并返回工作台。',
+  'pages.dashboard.updateLog.entries.delivery-template-task-owner-members-r01.title':
+    '流程模板预置子任务可配负责人与成员',
+  'pages.dashboard.updateLog.entries.delivery-template-task-owner-members-r01.description':
+    '交付流程模板预置子任务新增负责人、成员列，可选填写；创建项目时带入实例，未填则在工作台补全。',
+  'pages.dashboard.updateLog.entries.delivery-node-task-operate-split-r01.title':
+    '交付子任务编辑与操作分离',
+  'pages.dashboard.updateLog.entries.delivery-node-task-operate-split-r01.description':
+    '节点子任务「编辑」仅改计划与人员；「操作」单独完成或会签确认（类似报工），协作方式列始终展示模式名称。',
+  'pages.dashboard.updateLog.entries.delivery-node-schedule-revision-r01.title':
+    '交付节点计划编辑留痕',
+  'pages.dashboard.updateLog.entries.delivery-node-schedule-revision-r01.description':
+    '编辑节点计划时须填写编辑原因；弹窗底部展示历史记录，含编辑人、时间与变更明细（负责人、计划/实际日期）。',
+  'pages.dashboard.updateLog.entries.delivery-task-participant-mode-r01.title':
+    '交付子任务支持关联人员协作',
+  'pages.dashboard.updateLog.entries.delivery-task-participant-mode-r01.description':
+    '流程模板可配置协作方式（负责人 / 会签 / 或签 / 分人操作）；工作台关联人员可分别确认，全员会签完成后任务自动完成；交期联合确认默认可会签。',
+  'pages.dashboard.updateLog.entries.delivery-product-model-duration-r01.title':
+    '交付型号工期统一为产品型号',
+  'pages.dashboard.updateLog.entries.delivery-product-model-duration-r01.description':
+    '流程模板「型号工期」与项目配置字段改为产品型号 product_model，不再使用规格档位 spec_tier 表述；已有数据自动迁移键名。',
+  'pages.dashboard.updateLog.entries.delivery-spec-tier-generic-labels-r01.title':
+    '交付规格档位改用通用代号示例',
+  'pages.dashboard.updateLog.entries.delivery-spec-tier-generic-labels-r01.description':
+    '产品层流程模板不再预设某一客户的型号段（如 2HT），默认示例改为 A～G；租户按自家机台型号或规格段自定义键，与项目 spec_tier 对齐即可。',
+  'pages.dashboard.updateLog.entries.delivery-template-duration-rules-layout-r01.title':
+    '流程模板档位工期列排版优化',
+  'pages.dashboard.updateLog.entries.delivery-template-duration-rules-layout-r01.description':
+    '摘要改为按档位序号展示标签，修复「还有 N 档」计数未替换；弹层改为栅格对齐。',
+  'pages.dashboard.updateLog.entries.delivery-template-duration-rules-form-r01.title':
+    '流程模板档位工期改为表单配置',
+  'pages.dashboard.updateLog.entries.delivery-template-duration-rules-form-r01.description':
+    '流程模板不再手填 JSON，改为按规格档位逐行填写计划天数，并支持添加自定义档位代号。',
+  'pages.dashboard.updateLog.entries.delivery-procurement-parallel-schedule-r01.title':
+    '交付项目一类～四类采购改为并行排程',
+  'pages.dashboard.updateLog.entries.delivery-procurement-parallel-schedule-r01.description':
+    '流程模板节点支持 schedule_group；一类～四类采购同起点计划，整体采购周期按最长档计算，并重算已有项目计划日。',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-view-mode-r01.title':
+    '交付中心甘特图增加日周月视图切换',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-view-mode-r01.description':
+    '项目进度甘特图标题栏增加日、周、月三档时间刻度切换，默认周视图便于总览在制项目计划。',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-expand-height-r01.title':
+    '交付中心甘特图展开节点时高度自适应',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-expand-height-r01.description':
+    '项目展开子节点后，甘特图容器随行数增高，避免节点行被裁切。',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-project-dimension-r01.title':
+    '交付中心甘特图改为项目维度展示',
+  'pages.dashboard.updateLog.entries.delivery-dashboard-gantt-project-dimension-r01.description':
+    '看板甘特图默认一行一项目，与在制项目 KPI 对齐；点击展开可查看各节点计划条，避免单号重复刷屏。',
+  'pages.dashboard.updateLog.entries.delivery-project-list-sort-delivery-date-r01.title':
+    '交付项目列表默认按交期倒序',
+  'pages.dashboard.updateLog.entries.delivery-project-list-sort-delivery-date-r01.description':
+    '列表默认按交期从新到旧排序，交期列支持点击排序；演示脚本可按交期自动模拟走完已到交期项目。',
+  'pages.dashboard.updateLog.entries.delivery-demo-spec-tier-board-r01.title':
+    '交付演示：车间台账规格档位与模板工期说明',
+  'pages.dashboard.updateLog.entries.delivery-demo-spec-tier-board-r01.description':
+    '车间台账增加规格档位列；流程模板档位工期列增加按 spec_tier 解析说明。',
+  'pages.dashboard.updateLog.entries.delivery-workshop-board-drop-page-title-r01.title':
+    '车间台账去掉重复页标题',
+  'pages.dashboard.updateLog.entries.delivery-workshop-board-drop-page-title-r01.description':
+    '列表页标题由路由/标签承担，已去掉 ListPageTemplate 与表头重复的「车间台账」文案。',
+  'pages.dashboard.updateLog.entries.delivery-phase2-sideline-duration-wo-r01.title':
+    '交付项目规格档位工期旁线与工单回写',
+  'pages.dashboard.updateLog.entries.delivery-phase2-sideline-duration-wo-r01.description':
+    '流程模板节点可按规格档位配置工期；支持旁线项目结案回写主线齐套任务；已挂链工单完工后显式推进交付节点进度。',
+  'pages.dashboard.updateLog.entries.delivery-workshop-board-r01.title': '交付项目车间台账与机台配置',
+  'pages.dashboard.updateLog.entries.delivery-workshop-board-r01.description':
+    '交付项目支持台账分区与机台配置属性；流程模板任务可设齐套跟踪；新增车间台账宽表，可直接维护齐套状态与完成日期。',
+  'pages.dashboard.updateLog.entries.infra-packages-pagesize-le-100.title': '租户列表拉套餐分页超限 422',
+  'pages.dashboard.updateLog.entries.infra-packages-pagesize-le-100.description':
+    '组织列表加载套餐配置时 pageSize=200 超过接口上限 100，已改为 100，避免 422。',
+  'pages.dashboard.updateLog.entries.production-files-hide-industry-checklist.title': '生产文件页不再显示行业上线清单',
+  'pages.dashboard.updateLog.entries.production-files-hide-industry-checklist.description':
+    '生产文件工具栏去掉「行业上线清单」入口及弹窗，避免行业扩展清单干扰日常建档。',
+  'pages.dashboard.updateLog.entries.kuaiplm-system-archive-created-by.title': '快研发多表缺审计列导致 500',
+  'pages.dashboard.updateLog.entries.kuaiplm-system-archive-created-by.description':
+    '体系归档、年度计划月度台账、实验委托实测行建表漏写 BaseModel 审计列，列表/明细查询报列不存在；已补迁移并对齐建表脚本。',
   'pages.dashboard.updateLog.entries.rework-menu-restore-pack-menu-false.title': '行业扩展单据菜单交还宿主应用',
   'pages.dashboard.updateLog.entries.rework-menu-restore-pack-menu-false.description':
     '电子制造关闭 pack_menu 后，样品加工/BOM协作/工程变更/试流/返工未从宿主侧栏交还；已按声明同步隐藏与恢复，行业包仅保留 ESD 与 OEM 签样。',
@@ -33017,7 +33290,7 @@ export default {
   'app.kuaizhizao.purchaseReturn.import.location': '库位',
   'app.kuaizhizao.purchaseReturn.import.notesExample': '备注说明',
   'app.kuaizhizao.purchaseReturn.listImport.importing': '正在导入采购退货单...',
-  'app.kuaizhizao.purchaseReturn.listImport.exampleSupplier': '示例供应商',
+  'app.kuaizhizao.purchaseReturn.listImport.exampleSupplier': '川汇流体科技有限公司',
   'app.kuaizhizao.purchaseReturn.listImport.exampleWarehouse': '原料仓',
   'app.kuaizhizao.shipmentNotice.totalAmount': '总预计金额',
   'app.kuaizhizao.shipmentNotice.totalQuantity': '总通知数量',

@@ -19,51 +19,62 @@ import {
   Select,
   Space,
   Spin,
-  Table,
+  Tabs,
+  Timeline,
   Typography,
   Card,
   Row,
   Col,
   theme,
 } from 'antd';
-import { BugOutlined, FileTextOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons';
+import { BugOutlined, FileTextOutlined, LinkOutlined, PaperClipOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import {
+  ProForm,
   ProFormDatePicker,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
+import DocumentAttachmentsField from '../../../../components/DocumentAttachmentsField';
 import {
+  mapAttachmentsToUploadList,
+  normalizeDocumentAttachments,
+  openDocumentAttachment,
+} from '../../../../utils/documentAttachments';
+import {
+  DRAWER_CONFIG,
   FormModalTemplate,
   ListPageTemplate,
   MODAL_CONFIG,
   ProjectWorkbenchToolbar,
 } from '../../../../../../components/layout-templates';
+import { UniDetail } from '../../../../../../components/uni-detail';
 import { useLeaveFormTab } from '../../../../../../components/uni-tabs/navigateClosingTab';
 import { LinkedDocumentCode } from '../../../../../../components/linked-document-code';
 import { useOptionalLinkedDocumentDetail } from '../../../../../../components/linked-document-detail/LinkedDocumentDetailContext';
 import { resolveKuaizhizaoDocumentAction } from '../../../../constants/documentActionRegistry';
 import { renderDeliveryProgressCell, resolveDeliveryProgressStatus } from '../../shared/deliveryProgressColumn';
-import { renderDeliveryIssuePriorityTag, renderDeliveryStatusTag } from '../../shared/deliveryListPresentation';
+import { renderDeliveryStatusTag } from '../../shared/deliveryListPresentation';
 import { MarkerTag } from '../../../../../../constants/statusBadges';
-import { formatBusinessDateOnly } from '../../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTimeBySiteSetting } from '../../../../../../utils/format';
 import { resolveUserDisplay, type User } from '../../../../../../services/user';
+import { useCurrentUser } from '../../../../../../hooks/useCurrentUser';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import {
   deliveryIssueApi,
   deliveryNodeReportApi,
   deliveryProcessTemplateApi,
   deliveryProjectApi,
+  DELIVERY_ISSUE_PRIORITY,
   DELIVERY_ISSUE_STATUS,
   DELIVERY_ISSUE_TYPE,
-  DELIVERY_NODE_DOCUMENT_TYPES,
-  DELIVERY_NODE_REPORT_STATUS,
+  DELIVERY_NODE_DOCUMENT_LIST_PATHS,
   DELIVERY_NODE_STATUS,
-  DELIVERY_NODE_TASK_STATUS,
   DELIVERY_PROJECT_STATUS,
+  DELIVERY_TASK_PARTICIPANT_MODE,
   type DeliveryIssue,
   type DeliveryLinkedRdProject,
   type DeliveryMember,
@@ -72,11 +83,24 @@ import {
   type DeliveryProject,
   type DeliveryProjectNode,
   type DeliveryProjectNodeDocument,
+  type DeliveryProjectNodeScheduleRevision,
   type DeliveryProjectNodeTask,
+  type DeliveryWorkbenchRelatedAttachment,
 } from '../../../../services/delivery-project';
 import { UniUserSelect } from '../../../../../../components/uni-user-select';
 import DeliveryProjectNodeStepper from '../../components/DeliveryProjectNodeStepper';
-import DeliveryNodeDocumentSelect from '../../shared/DeliveryNodeDocumentSelect';
+import DeliveryNodeTaskOperateModal from '../../components/DeliveryNodeTaskOperateModal';
+import DeliveryNodeDocumentLinkModal from '../../components/DeliveryNodeDocumentLinkModal';
+import DeliveryNodeReportDetailDrawer from '../../node-reports/components/DeliveryNodeReportDetailDrawer';
+import DeliveryIssueDetailDrawer from '../../issues/components/DeliveryIssueDetailDrawer';
+import { buildLinkedDocumentColumns } from '../../shared/deliveryLinkedDocumentPresentation';
+import DeliveryWorkbenchTable from '../../shared/DeliveryWorkbenchTable';
+import {
+  buildWorkbenchNodeTaskColumns,
+  buildWorkbenchRecentIssueColumns,
+  buildWorkbenchRecentReportColumns,
+} from '../../shared/deliveryWorkbenchTableColumns';
+import { workbenchKeepWidth, workbenchRemainderFlex } from '../../shared/deliveryWorkbenchTableLayout';
 import './workbench.less';
 
 const PLACEHOLDER: DeliveryProject = {
@@ -88,12 +112,8 @@ const PLACEHOLDER: DeliveryProject = {
 };
 
 const RESOURCE = 'kuaizhizao:delivery-project';
-
-/** 侧栏窄表：单号列宽够 DNR/DPI 不换行 */
-const WORKBENCH_SIDE_CODE_COL = 148;
-const WORKBENCH_SIDE_NODE_COL = 56;
-const WORKBENCH_SIDE_BADGE_COL = 72;
-const WORKBENCH_SIDE_PRIORITY_COL = 64;
+const REPORT_RESOURCE = 'kuaizhizao:delivery-node-report';
+const ISSUE_RESOURCE = 'kuaizhizao:delivery-issue';
 
 export const DeliveryProjectWorkbench: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -104,9 +124,14 @@ export const DeliveryProjectWorkbench: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const leaveProjectsList = useLeaveFormTab('/apps/kuaizhizao/delivery-project/projects');
+  const currentUser = useCurrentUser();
   const perms = useResourcePermissions(RESOURCE);
+  const reportPerms = useResourcePermissions(REPORT_RESOURCE);
+  const issuePerms = useResourcePermissions(ISSUE_RESOURCE);
+  const canRead = perms.canRead;
   const canUpdate = perms.canUpdate;
   const canExecute = perms.canAction?.('execute') ?? false;
+  const canParticipantAct = canExecute || canUpdate;
   const canDelete = perms.canDelete;
   const linkedDetail = useOptionalLinkedDocumentDetail();
   const pushShipmentAction = resolveKuaizhizaoDocumentAction(t, 'shipment_notice.pull_from_sales_order');
@@ -119,29 +144,88 @@ export const DeliveryProjectWorkbench: React.FC = () => {
   const [issues, setIssues] = useState<DeliveryIssue[]>([]);
   const [nodeScheduleModalOpen, setNodeScheduleModalOpen] = useState(false);
   const [nodeScheduleEditing, setNodeScheduleEditing] = useState<DeliveryProjectNode | null>(null);
+  const [nodeScheduleRevisions, setNodeScheduleRevisions] = useState<DeliveryProjectNodeScheduleRevision[]>([]);
+  const [nodeScheduleRevisionsLoading, setNodeScheduleRevisionsLoading] = useState(false);
+  const [nodeScheduleTab, setNodeScheduleTab] = useState<'edit' | 'history'>('edit');
   const [nodeScheduleForm] = Form.useForm();
   const nodeScheduleOwnerRef = useRef<number | undefined>();
+
+  const formatNodeScheduleDate = (value: dayjs.Dayjs | undefined) =>
+    value ? value.format('YYYY-MM-DD') : null;
+
+  const hasNodeScheduleChanges = (
+    node: DeliveryProjectNode,
+    values: Record<string, unknown>,
+    ownerId: number | undefined,
+  ) => {
+    const fmt = formatNodeScheduleDate;
+    if ((ownerId ?? null) !== (node.owner_id ?? null)) return true;
+    if (fmt(values.planned_start_date as dayjs.Dayjs | undefined) !== (node.planned_start_date ?? null)) {
+      return true;
+    }
+    if (fmt(values.planned_end_date as dayjs.Dayjs | undefined) !== (node.planned_end_date ?? null)) {
+      return true;
+    }
+    if (fmt(values.actual_start_date as dayjs.Dayjs | undefined) !== (node.actual_start_date ?? null)) {
+      return true;
+    }
+    if (fmt(values.actual_end_date as dayjs.Dayjs | undefined) !== (node.actual_end_date ?? null)) {
+      return true;
+    }
+    return false;
+  };
+
+  const renderNodeScheduleFieldLabel = (field: string) => {
+    const keyMap: Record<string, string> = {
+      owner_name: 'app.kuaizhizao.deliveryProject.fields.ownerName',
+      planned_start_date: 'app.kuaizhizao.deliveryProject.fields.plannedStartDate',
+      planned_end_date: 'app.kuaizhizao.deliveryProject.fields.plannedEndDate',
+      actual_start_date: 'app.kuaizhizao.deliveryProject.fields.actualStartDate',
+      actual_end_date: 'app.kuaizhizao.deliveryProject.fields.actualEndDate',
+    };
+    const key = keyMap[field];
+    return key ? t(key) : field;
+  };
+
+  const formatNodeScheduleHistoryValue = (field: string, value?: string | null) => {
+    if (value == null || value === '') return t('common.dash');
+    if (field === 'owner_name') return value;
+    if (field.endsWith('_date')) return formatBusinessDateOnly(value);
+    return value;
+  };
   const [nodeDocuments, setNodeDocuments] = useState<DeliveryProjectNodeDocument[]>([]);
+  const [relatedAttachments, setRelatedAttachments] = useState<DeliveryWorkbenchRelatedAttachment[]>([]);
+  const [attachmentsDrawerOpen, setAttachmentsDrawerOpen] = useState(false);
   const [docLinkModalOpen, setDocLinkModalOpen] = useState(false);
-  const [docLinkNode, setDocLinkNode] = useState<DeliveryProjectNode | null>(null);
-  const [docLinkForm] = Form.useForm();
+  const [docLinkNodeId, setDocLinkNodeId] = useState<number | null>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [templateOptions, setTemplateOptions] = useState<DeliveryProcessTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number>();
   const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskOperateOpen, setTaskOperateOpen] = useState(false);
+  const [taskOperating, setTaskOperating] = useState<DeliveryProjectNodeTask | null>(null);
   const [taskEditingNode, setTaskEditingNode] = useState<DeliveryProjectNode | null>(null);
   const [editingTask, setEditingTask] = useState<DeliveryProjectNodeTask | null>(null);
-  const [taskForm] = Form.useForm();
+  const [taskForm] = ProForm.useForm();
   const taskOwnerRef = useRef<number | undefined>();
   const taskOwnerNameRef = useRef<string | undefined>();
   const taskMembersRef = useRef<DeliveryMember[]>([]);
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [editingReport, setEditingReport] = useState<DeliveryNodeReport | null>(null);
+  const [reportDetailOpen, setReportDetailOpen] = useState(false);
+  const [reportDetailId, setReportDetailId] = useState<number>();
   const [issueModalOpen, setIssueModalOpen] = useState(false);
+  const [editingIssue, setEditingIssue] = useState<DeliveryIssue | null>(null);
+  const [issueDetailOpen, setIssueDetailOpen] = useState(false);
+  const [issueDetailId, setIssueDetailId] = useState<number>();
   const [reportForm] = Form.useForm();
   const [issueForm] = Form.useForm();
   const [editOpen, setEditOpen] = useState(false);
   const [activeNodeKey, setActiveNodeKey] = useState<string>();
   const [templates, setTemplates] = useState<DeliveryProcessTemplate[]>([]);
+  const [sidelines, setSidelines] = useState<DeliveryProject[]>([]);
+  const [sidelineModalOpen, setSidelineModalOpen] = useState(false);
+  const [sidelineForm] = Form.useForm();
   const editFormRef = useRef<ProFormInstance>();
   const selectedOwnerRef = useRef<number | undefined>();
   const selectedMembersRef = useRef<DeliveryMember[]>([]);
@@ -157,12 +241,21 @@ export const DeliveryProjectWorkbench: React.FC = () => {
       setIssues(data.open_issues ?? []);
       setLinkedRdProject(data.linked_rd_project ?? null);
       setNodeDocuments(data.node_documents ?? []);
+      setRelatedAttachments(data.related_attachments ?? []);
+      if ((data.line_role || 'main') === 'main') {
+        const side = await deliveryProjectApi.listSidelines(projectId);
+        setSidelines(side.items || []);
+      } else {
+        setSidelines([]);
+      }
     } catch (e: unknown) {
       setError((e as Error)?.message ?? t('common.loadFailed'));
       setProject(null);
       setReports([]);
       setIssues([]);
       setLinkedRdProject(null);
+      setSidelines([]);
+      setRelatedAttachments([]);
     } finally {
       setLoading(false);
     }
@@ -280,6 +373,7 @@ export const DeliveryProjectWorkbench: React.FC = () => {
   );
 
   const openCreateReport = (node?: DeliveryProjectNode) => {
+    setEditingReport(null);
     reportForm.resetFields();
     reportForm.setFieldsValue({
       node_id: node?.id,
@@ -290,15 +384,95 @@ export const DeliveryProjectWorkbench: React.FC = () => {
     setReportModalOpen(true);
   };
 
+  const openReportDetail = (report: DeliveryNodeReport) => {
+    setReportDetailId(report.id);
+    setReportDetailOpen(true);
+  };
+
+  const openEditReport = (report: DeliveryNodeReport) => {
+    setReportDetailOpen(false);
+    setEditingReport(report);
+    reportForm.resetFields();
+    reportForm.setFieldsValue({
+      node_id: report.node_id,
+      report_date: dayjs(report.report_date),
+      progress_percent: Number(report.progress_percent ?? 0),
+      content: report.content,
+    });
+    setReportModalOpen(true);
+  };
+
+  const submitReportRow = async (report: DeliveryNodeReport) => {
+    try {
+      await deliveryNodeReportApi.submit(report.id);
+      message.success(t('common.submitted'));
+      await load();
+    } catch (e: unknown) {
+      message.error((e as Error)?.message ?? t('common.operationFailed'));
+    }
+  };
+
+  const confirmDeleteReport = async (report: DeliveryNodeReport) => {
+    try {
+      await deliveryNodeReportApi.delete(report.id);
+      message.success(t('common.deleted'));
+      await load();
+    } catch (e: unknown) {
+      message.error((e as Error)?.message ?? t('common.operationFailed'));
+    }
+  };
+
   const openCreateIssue = (node?: DeliveryProjectNode) => {
+    setEditingIssue(null);
     issueForm.resetFields();
     issueForm.setFieldsValue({
       node_id: node?.id,
       issue_type: 'quality',
-      priority: 'medium',
+      priority: 'normal',
       status: 'open',
     });
     setIssueModalOpen(true);
+  };
+
+  const openIssueDetail = (issue: DeliveryIssue) => {
+    setIssueDetailId(issue.id);
+    setIssueDetailOpen(true);
+  };
+
+  const openEditIssue = async (issue: DeliveryIssue) => {
+    setIssueDetailOpen(false);
+    const detail = await deliveryIssueApi.get(issue.id);
+    setEditingIssue(detail);
+    issueForm.resetFields();
+    issueForm.setFieldsValue({
+      node_id: detail.node_id,
+      title: detail.title,
+      issue_type: detail.issue_type,
+      priority: detail.priority,
+      description: detail.description,
+      due_date: detail.due_date ? dayjs(detail.due_date) : undefined,
+    });
+    setIssueModalOpen(true);
+  };
+
+  const updateIssueStatus = async (issue: DeliveryIssue, status: string, successKey: string) => {
+    try {
+      await deliveryIssueApi.update(issue.id, { status });
+      message.success(t(successKey));
+      await load();
+    } catch (e: unknown) {
+      message.error((e as Error)?.message ?? t('common.operationFailed'));
+    }
+  };
+
+  const confirmDeleteIssue = async (issue: DeliveryIssue) => {
+    try {
+      await deliveryIssueApi.delete(issue.id);
+      message.success(t('common.deleted'));
+      await load();
+    } catch (e: unknown) {
+      message.error((e as Error)?.message ?? t('common.operationFailed'));
+    }
   };
 
   const openSalesOrderForPush = () => {
@@ -337,17 +511,29 @@ export const DeliveryProjectWorkbench: React.FC = () => {
   };
 
   const openNodeScheduleModal = async (node: DeliveryProjectNode) => {
+    if (!projectId) return;
     nodeScheduleOwnerRef.current = node.owner_id ?? undefined;
     setNodeScheduleEditing(node);
+    setNodeScheduleRevisions([]);
+    setNodeScheduleTab('edit');
     nodeScheduleForm.resetFields();
+    setNodeScheduleModalOpen(true);
+    setNodeScheduleRevisionsLoading(true);
     let ownerUuid: string | undefined;
-    if (node.owner_id) {
-      try {
-        const resolved = await resolveUserDisplay({ user_ids: [node.owner_id] });
-        ownerUuid = resolved[0]?.uuid;
-      } catch {
-        ownerUuid = undefined;
-      }
+    try {
+      const [resolved, revisions] = await Promise.all([
+        node.owner_id
+          ? resolveUserDisplay({ user_ids: [node.owner_id] }).catch(() => [])
+          : Promise.resolve([] as User[]),
+        deliveryProjectApi.listNodeScheduleRevisions(projectId, node.id),
+      ]);
+      ownerUuid = resolved[0]?.uuid;
+      setNodeScheduleRevisions(revisions);
+    } catch {
+      ownerUuid = undefined;
+      setNodeScheduleRevisions([]);
+    } finally {
+      setNodeScheduleRevisionsLoading(false);
     }
     nodeScheduleForm.setFieldsValue({
       owner_uuid: ownerUuid,
@@ -355,22 +541,41 @@ export const DeliveryProjectWorkbench: React.FC = () => {
       planned_end_date: node.planned_end_date ? dayjs(node.planned_end_date) : undefined,
       actual_start_date: node.actual_start_date ? dayjs(node.actual_start_date) : undefined,
       actual_end_date: node.actual_end_date ? dayjs(node.actual_end_date) : undefined,
+      edit_reason: undefined,
     });
-    setNodeScheduleModalOpen(true);
   };
 
   const saveNodeSchedule = async () => {
     if (!projectId || !nodeScheduleEditing) return;
     try {
       const values = await nodeScheduleForm.validateFields();
-      const fmt = (v: dayjs.Dayjs | undefined) => v?.format('YYYY-MM-DD');
-      await deliveryProjectApi.updateNode(projectId, nodeScheduleEditing.id, {
+      const fmt = formatNodeScheduleDate;
+      const changed = hasNodeScheduleChanges(
+        nodeScheduleEditing,
+        values,
+        nodeScheduleOwnerRef.current,
+      );
+      const editReason = String(values.edit_reason ?? '').trim();
+      if (changed && !editReason) {
+        nodeScheduleForm.setFields([
+          {
+            name: 'edit_reason',
+            errors: [t('app.kuaizhizao.deliveryProject.nodeScheduleEditReasonRequired')],
+          },
+        ]);
+        return;
+      }
+      const payload: Record<string, unknown> = {
         owner_id: nodeScheduleOwnerRef.current ?? null,
         planned_start_date: fmt(values.planned_start_date as dayjs.Dayjs | undefined),
         planned_end_date: fmt(values.planned_end_date as dayjs.Dayjs | undefined),
         actual_start_date: fmt(values.actual_start_date as dayjs.Dayjs | undefined),
         actual_end_date: fmt(values.actual_end_date as dayjs.Dayjs | undefined),
-      });
+      };
+      if (changed) {
+        payload.edit_reason = editReason;
+      }
+      await deliveryProjectApi.updateNode(projectId, nodeScheduleEditing.id, payload);
       message.success(t('common.updated'));
       setNodeScheduleModalOpen(false);
       setNodeScheduleEditing(null);
@@ -404,31 +609,23 @@ export const DeliveryProjectWorkbench: React.FC = () => {
   };
 
   const openDocLinkModal = (node: DeliveryProjectNode) => {
-    setDocLinkNode(node);
-    docLinkForm.resetFields();
-    docLinkForm.setFieldsValue({ node_id: node.id });
+    setDocLinkNodeId(node.id);
     setDocLinkModalOpen(true);
   };
 
-  const saveDocLink = async () => {
+  const saveDocLink = async (payload: {
+    node_id: number;
+    doc_type: string;
+    doc_id: number;
+    doc_code: string;
+    title?: string;
+  }) => {
     if (!projectId) return;
-    try {
-      const values = await docLinkForm.validateFields();
-      await deliveryProjectApi.linkNodeDocument(projectId, {
-        node_id: values.node_id as number,
-        doc_type: values.doc_type as string,
-        doc_id: values.doc_id as number,
-        doc_code: values.doc_code as string,
-        title: values.title as string | undefined,
-      });
-      message.success(t('common.updated'));
-      setDocLinkModalOpen(false);
-      setDocLinkNode(null);
-      await load();
-    } catch (e: unknown) {
-      if ((e as { errorFields?: unknown })?.errorFields) return;
-      message.error((e as Error)?.message ?? t('common.operationFailed'));
-    }
+    await deliveryProjectApi.linkNodeDocument(projectId, payload);
+    message.success(t('common.updated'));
+    setDocLinkModalOpen(false);
+    setDocLinkNodeId(null);
+    await load();
   };
 
   const confirmUnlinkDoc = async (link: DeliveryProjectNodeDocument) => {
@@ -479,15 +676,20 @@ export const DeliveryProjectWorkbench: React.FC = () => {
     }
     taskForm.setFieldsValue({
       task_name: task?.task_name,
-      status: task?.status ?? 'todo',
+      core_task: task?.core_task ?? undefined,
+      participant_mode: task?.participant_mode ?? 'solo',
       owner_uuid: ownerUuid,
       member_uuids: memberUuids,
       planned_start_date: task?.planned_start_date ? dayjs(task.planned_start_date) : undefined,
       planned_end_date: task?.planned_end_date ? dayjs(task.planned_end_date) : undefined,
-      actual_start_date: task?.actual_start_date ? dayjs(task.actual_start_date) : undefined,
-      actual_end_date: task?.actual_end_date ? dayjs(task.actual_end_date) : undefined,
+      attachments: mapAttachmentsToUploadList(task?.attachments),
     });
     setTaskModalOpen(true);
+  };
+
+  const openTaskOperateModal = (task: DeliveryProjectNodeTask) => {
+    setTaskOperating(task);
+    setTaskOperateOpen(true);
   };
 
   const saveNodeTask = async () => {
@@ -495,17 +697,18 @@ export const DeliveryProjectWorkbench: React.FC = () => {
     try {
       const values = await taskForm.validateFields();
       const fmt = (v: dayjs.Dayjs | undefined) => v?.format('YYYY-MM-DD');
+      const participantMode = (values.participant_mode as string) || 'solo';
       const payload = {
         node_id: taskEditingNode.id,
         task_name: values.task_name as string,
-        status: values.status as string,
+        core_task: (values.core_task as string | undefined)?.trim() || null,
+        participant_mode: participantMode,
         owner_id: taskOwnerRef.current ?? null,
         owner_name: taskOwnerNameRef.current ?? null,
         members: taskMembersRef.current,
         planned_start_date: fmt(values.planned_start_date as dayjs.Dayjs | undefined),
         planned_end_date: fmt(values.planned_end_date as dayjs.Dayjs | undefined),
-        actual_start_date: fmt(values.actual_start_date as dayjs.Dayjs | undefined),
-        actual_end_date: fmt(values.actual_end_date as dayjs.Dayjs | undefined),
+        attachments: normalizeDocumentAttachments(values.attachments),
       };
       if (editingTask?.id) {
         await deliveryProjectApi.updateNodeTask(projectId, editingTask.id, payload);
@@ -535,15 +738,24 @@ export const DeliveryProjectWorkbench: React.FC = () => {
     try {
       const values = await reportForm.validateFields();
       const reportDate = values.report_date as dayjs.Dayjs;
-      await deliveryNodeReportApi.create({
-        project_id: projectId,
-        node_id: values.node_id as number,
+      const payload = {
         report_date: reportDate.format('YYYY-MM-DD'),
         progress_percent: values.progress_percent as number,
         content: values.content as string | undefined,
-      });
-      message.success(t('common.created'));
+      };
+      if (editingReport?.id) {
+        await deliveryNodeReportApi.update(editingReport.id, payload);
+        message.success(t('common.updated'));
+      } else {
+        await deliveryNodeReportApi.create({
+          project_id: projectId,
+          node_id: values.node_id as number,
+          ...payload,
+        });
+        message.success(t('common.created'));
+      }
       setReportModalOpen(false);
+      setEditingReport(null);
       await load();
     } catch (e: unknown) {
       if ((e as { errorFields?: unknown })?.errorFields) return;
@@ -556,17 +768,26 @@ export const DeliveryProjectWorkbench: React.FC = () => {
     try {
       const values = await issueForm.validateFields();
       const dueDate = values.due_date as dayjs.Dayjs | undefined;
-      await deliveryIssueApi.create({
-        project_id: projectId,
+      const payload = {
         node_id: values.node_id as number | undefined,
         title: values.title as string,
         issue_type: values.issue_type as string,
         priority: values.priority as string,
         description: values.description as string | undefined,
         due_date: dueDate?.format('YYYY-MM-DD'),
-      });
-      message.success(t('common.created'));
+      };
+      if (editingIssue?.id) {
+        await deliveryIssueApi.update(editingIssue.id, payload);
+        message.success(t('common.updated'));
+      } else {
+        await deliveryIssueApi.create({
+          project_id: projectId,
+          ...payload,
+        });
+        message.success(t('common.created'));
+      }
       setIssueModalOpen(false);
+      setEditingIssue(null);
       await load();
     } catch (e: unknown) {
       if ((e as { errorFields?: unknown })?.errorFields) return;
@@ -618,6 +839,131 @@ export const DeliveryProjectWorkbench: React.FC = () => {
       shippingNode.status === 'completed'
     );
   }, [allNodesDone, effective.current_node_key, effective.nodes, effective.status]);
+
+  const openLinkedDocTypeList = useCallback(
+    (docType: string) => {
+      const path = DELIVERY_NODE_DOCUMENT_LIST_PATHS[docType as keyof typeof DELIVERY_NODE_DOCUMENT_LIST_PATHS];
+      if (path) {
+        navigate(path);
+      }
+    },
+    [navigate],
+  );
+
+  const linkedDocumentColumns = useMemo(
+    () =>
+      buildLinkedDocumentColumns({
+        t,
+        canUpdate,
+        onOpen: openLinkedDoc,
+        onOpenDocTypeList: openLinkedDocTypeList,
+        onUnlink: (link) => void confirmUnlinkDoc(link),
+      }),
+    [t, canUpdate, openLinkedDoc, openLinkedDocTypeList, confirmUnlinkDoc],
+  );
+
+  const recentReportColumns = useMemo(
+    () =>
+      buildWorkbenchRecentReportColumns({
+        t,
+        canRead,
+        canUpdate: reportPerms.canUpdate,
+        canDelete: reportPerms.canDelete,
+        onView: openReportDetail,
+        onEdit: openEditReport,
+        onSubmit: (report) => void submitReportRow(report),
+        onDelete: (report) => void confirmDeleteReport(report),
+      }),
+    [t, canRead, reportPerms.canUpdate, reportPerms.canDelete, openReportDetail, openEditReport, submitReportRow, confirmDeleteReport],
+  );
+
+  const recentIssueColumns = useMemo(
+    () =>
+      buildWorkbenchRecentIssueColumns({
+        t,
+        canRead,
+        canUpdate: issuePerms.canUpdate,
+        canDelete: issuePerms.canDelete,
+        onView: openIssueDetail,
+        onEdit: (issue) => void openEditIssue(issue),
+        onStart: (issue) => void updateIssueStatus(issue, 'in_progress', 'common.updated'),
+        onResolve: (issue) =>
+          void updateIssueStatus(issue, 'resolved', 'app.kuaizhizao.deliveryProject.issueResolved'),
+        onClose: (issue) =>
+          void updateIssueStatus(issue, 'closed', 'app.kuaizhizao.deliveryProject.issueClosed'),
+        onDelete: (issue) => void confirmDeleteIssue(issue),
+      }),
+    [
+      t,
+      canRead,
+      issuePerms.canUpdate,
+      issuePerms.canDelete,
+      openIssueDetail,
+      openEditIssue,
+      updateIssueStatus,
+      confirmDeleteIssue,
+    ],
+  );
+
+  const resolveRelatedAttachmentSourceLabel = useCallback(
+    (row: DeliveryWorkbenchRelatedAttachment) => {
+      if (row.source_type === 'node_report') {
+        return t('app.kuaizhizao.deliveryProject.workbench.relatedAttachmentSourceReport', {
+          code: row.source_label,
+        });
+      }
+      if (row.source_type === 'node_task') {
+        return t('app.kuaizhizao.deliveryProject.workbench.relatedAttachmentSourceTask', {
+          name: row.source_label,
+        });
+      }
+      return row.source_label;
+    },
+    [t],
+  );
+
+  const relatedAttachmentColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.deliveryProject.workbench.relatedAttachmentFileName'),
+        dataIndex: 'name',
+        key: 'name',
+        ...workbenchRemainderFlex(160),
+        render: (name: string | null | undefined, row: DeliveryWorkbenchRelatedAttachment) => (
+          <Button
+            type="link"
+            size="small"
+            style={{ padding: 0, height: 'auto' }}
+            onClick={() => {
+              void openDocumentAttachment({ uid: row.uid, name: name ?? undefined }).catch(() => {
+                message.error(t('components.documentAttachments.openFailed'));
+              });
+            }}
+          >
+            {name?.trim() || row.uid}
+          </Button>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.deliveryProject.fields.nodeName'),
+        dataIndex: 'node_name',
+        key: 'node_name',
+        ...workbenchKeepWidth(88),
+      },
+      {
+        title: t('app.kuaizhizao.deliveryProject.workbench.relatedAttachmentSource'),
+        dataIndex: 'source_label',
+        key: 'source_label',
+        ...workbenchKeepWidth(120),
+        render: (_: unknown, row: DeliveryWorkbenchRelatedAttachment) => (
+          <Typography.Text ellipsis={{ tooltip: resolveRelatedAttachmentSourceLabel(row) }}>
+            {resolveRelatedAttachmentSourceLabel(row)}
+          </Typography.Text>
+        ),
+      },
+    ],
+    [message, resolveRelatedAttachmentSourceLabel, t],
+  );
 
   const canCompleteProject =
     canUpdate && effective.status === 'in_progress' && (allNodesDone || atShippingOrCompleted);
@@ -720,7 +1066,14 @@ export const DeliveryProjectWorkbench: React.FC = () => {
         <Card
           size="small"
           className="delivery-project-node-section-card"
-          title={t('app.kuaizhizao.deliveryProject.workbench.section.nodeInfo')}
+          title={
+            <Space size={8} align="center">
+              <span>{t('app.kuaizhizao.deliveryProject.workbench.section.nodeInfo')}</span>
+              <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
+                {t('app.kuaizhizao.deliveryProject.fields.taskCount')} {nodeTasks.length}
+              </Typography.Text>
+            </Space>
+          }
           extra={
             canNodeAction ? (
               <Space wrap>
@@ -750,7 +1103,7 @@ export const DeliveryProjectWorkbench: React.FC = () => {
             ) : null
           }
         >
-          <Descriptions column={2} size="small">
+          <Descriptions column={{ xs: 1, sm: 2, lg: 3 }} size="small">
             <Descriptions.Item label={t('app.kuaizhizao.deliveryProject.fields.status')}>
               {renderDeliveryStatusTag(node.status, DELIVERY_NODE_STATUS)}
             </Descriptions.Item>
@@ -786,67 +1139,7 @@ export const DeliveryProjectWorkbench: React.FC = () => {
             <Descriptions.Item label={t('app.kuaizhizao.deliveryProject.fields.isMilestone')}>
               {node.is_milestone ? <MarkerTag variant="filled" color="gold">{t('common.yes')}</MarkerTag> : t('common.no')}
             </Descriptions.Item>
-            <Descriptions.Item label={t('app.kuaizhizao.deliveryProject.fields.taskCount')}>
-              {nodeTasks.length}
-            </Descriptions.Item>
           </Descriptions>
-        </Card>
-
-        <Card
-          size="small"
-          className="delivery-project-node-section-card"
-          title={t('app.kuaizhizao.deliveryProject.workbench.section.linkedDocuments')}
-          extra={
-            canUpdate ? (
-              <Button type="link" size="small" icon={<LinkOutlined />} onClick={() => openDocLinkModal(node)}>
-                {t('app.kuaizhizao.deliveryProject.linkDocument')}
-              </Button>
-            ) : null
-          }
-        >
-          <Table
-            rowKey="id"
-            size="small"
-            tableLayout="fixed"
-            className="delivery-project-workbench-node-table"
-            pagination={false}
-            locale={{ emptyText: t('app.kuaizhizao.deliveryProject.noLinkedDocuments') }}
-            dataSource={nodeDocs}
-            columns={[
-              {
-                title: t('app.kuaizhizao.deliveryProject.fields.docType'),
-                dataIndex: 'doc_type',
-                width: 88,
-                ellipsis: true,
-                render: (v: string) => DELIVERY_NODE_DOCUMENT_TYPES[v] ?? v,
-              },
-              {
-                title: t('app.kuaizhizao.deliveryProject.fields.docCode'),
-                dataIndex: 'doc_code',
-                ellipsis: true,
-                render: (_: unknown, row: DeliveryProjectNodeDocument) => (
-                  <Button type="link" size="small" style={{ padding: 0, height: 'auto' }} onClick={() => openLinkedDoc(row)}>
-                    {row.doc_code}
-                  </Button>
-                ),
-              },
-              {
-                title: t('common.actions'),
-                width: 56,
-                render: (_: unknown, row: DeliveryProjectNodeDocument) =>
-                  canUpdate ? (
-                    <Popconfirm
-                      title={t('app.kuaizhizao.deliveryProject.unlinkDocumentConfirm')}
-                      onConfirm={() => void confirmUnlinkDoc(row)}
-                    >
-                      <Button type="link" size="small" danger>
-                        {t('app.kuaizhizao.deliveryProject.unlinkDocument')}
-                      </Button>
-                    </Popconfirm>
-                  ) : null,
-              },
-            ]}
-          />
         </Card>
 
         <Card
@@ -861,69 +1154,44 @@ export const DeliveryProjectWorkbench: React.FC = () => {
             ) : null
           }
         >
-          <Table
+          <DeliveryWorkbenchTable
             rowKey="id"
             size="small"
-            tableLayout="fixed"
             className="delivery-project-workbench-node-table"
             pagination={false}
             locale={{ emptyText: t('app.kuaizhizao.deliveryProject.noNodeTasks') }}
             dataSource={nodeTasks}
-            columns={[
-              { title: t('app.kuaizhizao.deliveryProject.fields.taskName'), dataIndex: 'task_name', ellipsis: true },
-              {
-                title: t('app.kuaizhizao.deliveryProject.fields.ownerName'),
-                dataIndex: 'owner_name',
-                width: 80,
-                ellipsis: true,
-                render: (v) => v || '—',
-              },
-              {
-                title: t('app.kuaizhizao.deliveryProject.fields.members'),
-                dataIndex: 'members',
-                width: 100,
-                ellipsis: true,
-                render: (members: DeliveryMember[] | undefined) =>
-                  members?.length
-                    ? members.map((m) => m.user_name || String(m.user_id)).join('、')
-                    : '—',
-              },
-              {
-                title: t('app.kuaizhizao.deliveryProject.fields.plannedEndDate'),
-                dataIndex: 'planned_end_date',
-                width: 96,
-                render: (v) => formatBusinessDateOnly(v) || '—',
-              },
-              {
-                title: t('app.kuaizhizao.deliveryProject.fields.status'),
-                dataIndex: 'status',
-                width: 80,
-                render: (v) => renderDeliveryStatusTag(String(v), DELIVERY_NODE_TASK_STATUS),
-              },
-              ...(canUpdate
-                ? [
-                    {
-                      title: t('common.actions'),
-                      width: 104,
-                      render: (_: unknown, task: DeliveryProjectNodeTask) => (
-                        <Space size="small">
-                          <Button type="link" size="small" onClick={() => void openTaskModal(node, task)}>
-                            {t('common.edit')}
-                          </Button>
-                          <Popconfirm
-                            title={t('app.kuaizhizao.deliveryProject.deleteNodeTaskConfirm')}
-                            onConfirm={() => void confirmDeleteNodeTask(task)}
-                          >
-                            <Button type="link" size="small" danger>
-                              {t('common.delete')}
-                            </Button>
-                          </Popconfirm>
-                        </Space>
-                      ),
-                    },
-                  ]
-                : []),
-            ]}
+            columns={buildWorkbenchNodeTaskColumns({
+              t,
+              canUpdate,
+              canParticipantAct,
+              onEdit: (task) => void openTaskModal(node, task),
+              onOperate: openTaskOperateModal,
+              onDelete: (task) => void confirmDeleteNodeTask(task),
+            })}
+          />
+        </Card>
+
+        <Card
+          size="small"
+          className="delivery-project-node-section-card"
+          title={t('app.kuaizhizao.deliveryProject.workbench.section.linkedDocuments')}
+          extra={
+            canUpdate ? (
+              <Button type="link" size="small" icon={<LinkOutlined />} onClick={() => openDocLinkModal(node)}>
+                {t('app.kuaizhizao.deliveryProject.linkDocument')}
+              </Button>
+            ) : null
+          }
+        >
+          <DeliveryWorkbenchTable
+            rowKey="id"
+            size="small"
+            className="delivery-project-workbench-node-table"
+            pagination={false}
+            locale={{ emptyText: t('app.kuaizhizao.deliveryProject.noLinkedDocuments') }}
+            dataSource={nodeDocs}
+            columns={linkedDocumentColumns}
           />
         </Card>
       </Space>
@@ -936,14 +1204,21 @@ export const DeliveryProjectWorkbench: React.FC = () => {
       title: t('app.kuaizhizao.deliveryProject.workbench.openReportsList'),
       count: reports.length,
       icon: FileTextOutlined,
-      path: `/apps/kuaizhizao/delivery-project/node-reports?project_id=${projectId}`,
+      onClick: () => navigate(`/apps/kuaizhizao/delivery-project/node-reports?project_id=${projectId}`),
     },
     {
       key: 'issues',
       title: t('app.kuaizhizao.deliveryProject.workbench.openIssuesList'),
       count: issues.length,
       icon: BugOutlined,
-      path: `/apps/kuaizhizao/delivery-project/issues?project_id=${projectId}`,
+      onClick: () => navigate(`/apps/kuaizhizao/delivery-project/issues?project_id=${projectId}`),
+    },
+    {
+      key: 'attachments',
+      title: t('app.kuaizhizao.deliveryProject.workbench.openRelatedAttachments'),
+      count: relatedAttachments.length,
+      icon: PaperClipOutlined,
+      onClick: () => setAttachmentsDrawerOpen(true),
     },
   ];
 
@@ -992,20 +1267,6 @@ export const DeliveryProjectWorkbench: React.FC = () => {
           </Space>
         </Descriptions.Item>
       ) : null}
-      {nodeDocuments.length > 0 ? (
-        <Descriptions.Item label={t('app.kuaizhizao.deliveryProject.workbench.section.allLinkedDocuments')}>
-          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-            {nodeDocuments.map((doc) => (
-              <Space key={doc.id} wrap>
-                <Typography.Text type="secondary">{doc.node_name}</Typography.Text>
-                <Button type="link" size="small" style={{ padding: 0, height: 'auto' }} onClick={() => openLinkedDoc(doc)}>
-                  {DELIVERY_NODE_DOCUMENT_TYPES[doc.doc_type] ?? doc.doc_type} {doc.doc_code}
-                </Button>
-              </Space>
-            ))}
-          </Space>
-        </Descriptions.Item>
-      ) : null}
     </Descriptions>
   );
 
@@ -1047,6 +1308,73 @@ export const DeliveryProjectWorkbench: React.FC = () => {
                 <Descriptions.Item label={t('app.kuaizhizao.deliveryProject.fields.customerName')}>
                   {effective.customer_name || '—'}
                 </Descriptions.Item>
+                {(effective.config_attrs as Record<string, unknown> | null | undefined)?.product_model ? (
+                  <Descriptions.Item label={t('app.kuaizhizao.deliveryProject.configAttrs.productModel')}>
+                    {String((effective.config_attrs as Record<string, unknown>).product_model)}
+                  </Descriptions.Item>
+                ) : null}
+                {effective.line_role === 'sideline' && effective.parent_project_id ? (
+                  <Descriptions.Item label={t('app.kuaizhizao.deliveryProject.fields.parentProject')}>
+                    <a
+                      onClick={() =>
+                        navigate(`/apps/kuaizhizao/delivery-project/projects/${effective.parent_project_id}`)
+                      }
+                    >
+                      {effective.parent_project_code || `#${effective.parent_project_id}`}
+                    </a>
+                    {effective.parent_sync_task_key
+                      ? ` → ${effective.parent_sync_task_key}`
+                      : null}
+                  </Descriptions.Item>
+                ) : null}
+                {(effective.line_role || 'main') === 'main' ? (
+                  <Descriptions.Item label={t('app.kuaizhizao.deliveryProject.fields.sidelines')}>
+                    {sidelines.length === 0 ? (
+                      <Space size={8} wrap align="center">
+                        <Typography.Text type="secondary">
+                          {t('app.kuaizhizao.deliveryProject.noSidelines')}
+                        </Typography.Text>
+                        {canUpdate ? (
+                          <Button
+                            type="link"
+                            size="small"
+                            style={{ padding: 0, height: 'auto' }}
+                            onClick={() => {
+                              sidelineForm.resetFields();
+                              setSidelineModalOpen(true);
+                            }}
+                          >
+                            {t('app.kuaizhizao.deliveryProject.createSideline')}
+                          </Button>
+                        ) : null}
+                      </Space>
+                    ) : (
+                      <Space orientation="vertical" size={4} style={{ width: '100%' }}>
+                        {sidelines.map((s) => (
+                          <a
+                            key={s.id}
+                            onClick={() => navigate(`/apps/kuaizhizao/delivery-project/projects/${s.id}`)}
+                          >
+                            {s.project_code} {s.project_name}
+                          </a>
+                        ))}
+                        {canUpdate ? (
+                          <Button
+                            type="link"
+                            size="small"
+                            style={{ padding: 0, height: 'auto' }}
+                            onClick={() => {
+                              sidelineForm.resetFields();
+                              setSidelineModalOpen(true);
+                            }}
+                          >
+                            {t('app.kuaizhizao.deliveryProject.createSideline')}
+                          </Button>
+                        ) : null}
+                      </Space>
+                    )}
+                  </Descriptions.Item>
+                ) : null}
               </Descriptions>
             </Col>
             <Col xs={24} md={8}>
@@ -1101,11 +1429,11 @@ export const DeliveryProjectWorkbench: React.FC = () => {
                 {collabShortcuts.map((item) => {
                   const Icon = item.icon;
                   return (
-                    <Col span={12} key={item.key}>
+                    <Col span={8} key={item.key}>
                       <Card
                         hoverable
                         size="small"
-                        onClick={() => navigate(item.path)}
+                        onClick={item.onClick}
                         styles={{
                           body: {
                             padding: '10px 6px',
@@ -1156,34 +1484,14 @@ export const DeliveryProjectWorkbench: React.FC = () => {
               }
               style={{ marginBottom: 16 }}
             >
-              <Table
+              <DeliveryWorkbenchTable
                 rowKey="id"
                 size="small"
-                tableLayout="fixed"
                 className="delivery-project-workbench-side-table"
                 pagination={false}
                 dataSource={reports}
                 locale={{ emptyText: t('app.kuaizhizao.deliveryProject.workbench.collabEmpty') }}
-                columns={[
-                  {
-                    title: t('app.kuaizhizao.deliveryProject.fields.reportCode'),
-                    dataIndex: 'report_code',
-                    width: WORKBENCH_SIDE_CODE_COL,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t('app.kuaizhizao.deliveryProject.fields.nodeName'),
-                    dataIndex: 'node_name',
-                    width: WORKBENCH_SIDE_NODE_COL,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t('app.kuaizhizao.deliveryProject.fields.status'),
-                    dataIndex: 'status',
-                    width: WORKBENCH_SIDE_BADGE_COL,
-                    render: (v) => renderDeliveryStatusTag(v, DELIVERY_NODE_REPORT_STATUS),
-                  },
-                ]}
+                columns={recentReportColumns}
               />
             </Card>
 
@@ -1198,33 +1506,14 @@ export const DeliveryProjectWorkbench: React.FC = () => {
                 ) : null
               }
             >
-              <Table
+              <DeliveryWorkbenchTable
                 rowKey="id"
                 size="small"
-                tableLayout="fixed"
                 className="delivery-project-workbench-side-table"
                 pagination={false}
                 dataSource={issues}
                 locale={{ emptyText: t('app.kuaizhizao.deliveryProject.workbench.collabEmpty') }}
-                columns={[
-                  {
-                    title: t('app.kuaizhizao.deliveryProject.fields.issueCode'),
-                    dataIndex: 'issue_code',
-                    width: WORKBENCH_SIDE_CODE_COL,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t('app.kuaizhizao.deliveryProject.fields.title'),
-                    dataIndex: 'title',
-                    ellipsis: true,
-                  },
-                  {
-                    title: t('app.kuaizhizao.deliveryProject.fields.priority'),
-                    dataIndex: 'priority',
-                    width: WORKBENCH_SIDE_PRIORITY_COL,
-                    render: (v) => renderDeliveryIssuePriorityTag(v),
-                  },
-                ]}
+                columns={recentIssueColumns}
               />
             </Card>
           </Col>
@@ -1236,52 +1525,112 @@ export const DeliveryProjectWorkbench: React.FC = () => {
       open={nodeScheduleModalOpen}
       onCancel={() => setNodeScheduleModalOpen(false)}
       onOk={() => void saveNodeSchedule()}
+      width={MODAL_CONFIG.STANDARD_WIDTH}
       destroyOnHidden
     >
-      <Form form={nodeScheduleForm} layout="vertical">
-        <UniUserSelect
-          name="owner_uuid"
-          label={t('app.kuaizhizao.deliveryProject.fields.ownerName')}
-          onChange={(_value, user) => {
-            const picked = Array.isArray(user) ? user[0] : user;
-            nodeScheduleOwnerRef.current = picked?.id;
-          }}
-        />
-        <Form.Item name="planned_start_date" label={t('app.kuaizhizao.deliveryProject.fields.plannedStartDate')}>
-          <DatePicker style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item name="planned_end_date" label={t('app.kuaizhizao.deliveryProject.fields.plannedEndDate')}>
-          <DatePicker style={{ width: '100%' }} />
-        </Form.Item>
-        {nodeScheduleEditing && nodeScheduleEditing.status !== 'not_started' ? (
-          <>
-            <Form.Item name="actual_start_date" label={t('app.kuaizhizao.deliveryProject.fields.actualStartDate')}>
-              <DatePicker style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="actual_end_date" label={t('app.kuaizhizao.deliveryProject.fields.actualEndDate')}>
-              <DatePicker style={{ width: '100%' }} />
-            </Form.Item>
-          </>
-        ) : null}
-      </Form>
+      <Tabs
+        activeKey={nodeScheduleTab}
+        onChange={(key) => setNodeScheduleTab(key as 'edit' | 'history')}
+        items={[
+          {
+            key: 'edit',
+            label: t('app.kuaizhizao.deliveryProject.nodeScheduleEditTab'),
+            children: (
+              <Form form={nodeScheduleForm} layout="vertical">
+                <UniUserSelect
+                  name="owner_uuid"
+                  label={t('app.kuaizhizao.deliveryProject.fields.ownerName')}
+                  onChange={(_value, user) => {
+                    const picked = Array.isArray(user) ? user[0] : user;
+                    nodeScheduleOwnerRef.current = picked?.id;
+                  }}
+                />
+                <Form.Item name="planned_start_date" label={t('app.kuaizhizao.deliveryProject.fields.plannedStartDate')}>
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item name="planned_end_date" label={t('app.kuaizhizao.deliveryProject.fields.plannedEndDate')}>
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+                {nodeScheduleEditing && nodeScheduleEditing.status !== 'not_started' ? (
+                  <>
+                    <Form.Item name="actual_start_date" label={t('app.kuaizhizao.deliveryProject.fields.actualStartDate')}>
+                      <DatePicker style={{ width: '100%' }} />
+                    </Form.Item>
+                    <Form.Item name="actual_end_date" label={t('app.kuaizhizao.deliveryProject.fields.actualEndDate')}>
+                      <DatePicker style={{ width: '100%' }} />
+                    </Form.Item>
+                  </>
+                ) : null}
+                <Form.Item
+                  name="edit_reason"
+                  label={t('app.kuaizhizao.deliveryProject.fields.editReason')}
+                  extra={t('app.kuaizhizao.deliveryProject.nodeScheduleEditReasonHint')}
+                >
+                  <Input.TextArea rows={2} maxLength={500} showCount />
+                </Form.Item>
+              </Form>
+            ),
+          },
+          {
+            key: 'history',
+            label: t('app.kuaizhizao.deliveryProject.nodeScheduleHistory'),
+            children: (
+              <Spin spinning={nodeScheduleRevisionsLoading}>
+                {nodeScheduleRevisions.length ? (
+                  <div style={{ maxHeight: 360, overflowY: 'auto', paddingTop: 4 }}>
+                    <Timeline
+                      items={nodeScheduleRevisions.map((revision) => ({
+                        label: formatDateTimeBySiteSetting(revision.edited_at),
+                        children: (
+                          <Space orientation="vertical" size={4} style={{ width: '100%' }}>
+                            <Typography.Text strong>
+                              {revision.edited_by_name || t('common.dash')}
+                            </Typography.Text>
+                            <Typography.Text>{revision.edit_reason}</Typography.Text>
+                            {revision.changes?.length ? (
+                              <Space orientation="vertical" size={2}>
+                                {revision.changes.map((item) => (
+                                  <Typography.Text
+                                    key={`${revision.id}-${item.field}-${item.before}-${item.after}`}
+                                    type="secondary"
+                                  >
+                                    {renderNodeScheduleFieldLabel(item.field)}:{' '}
+                                    {formatNodeScheduleHistoryValue(item.field, item.before)} →{' '}
+                                    {formatNodeScheduleHistoryValue(item.field, item.after)}
+                                  </Typography.Text>
+                                ))}
+                              </Space>
+                            ) : null}
+                          </Space>
+                        ),
+                      }))}
+                    />
+                  </div>
+                ) : (
+                  <Empty description={t('app.kuaizhizao.deliveryProject.nodeScheduleHistoryEmpty')} />
+                )}
+              </Spin>
+            ),
+          },
+        ]}
+      />
     </Modal>
-    <Modal
-      title={t('app.kuaizhizao.deliveryProject.linkDocument')}
-      open={docLinkModalOpen}
-      onCancel={() => setDocLinkModalOpen(false)}
-      onOk={() => void saveDocLink()}
-      destroyOnHidden
-    >
-      <Form form={docLinkForm} layout="vertical">
-        <DeliveryNodeDocumentSelect
-          customerId={project?.customer_id}
-          salesOrderId={project?.sales_order_id}
-        />
-        <Form.Item name="node_id" hidden>
-          <InputNumber />
-        </Form.Item>
-      </Form>
-    </Modal>
+    {docLinkNodeId ? (
+      <DeliveryNodeDocumentLinkModal
+        open={docLinkModalOpen}
+        projectId={projectId}
+        nodeId={docLinkNodeId}
+        returnPath={location.pathname}
+        customerId={project?.customer_id}
+        salesOrderId={project?.sales_order_id}
+        onClose={() => {
+          setDocLinkModalOpen(false);
+          setDocLinkNodeId(null);
+        }}
+        onLinked={load}
+        onLinkExisting={saveDocLink}
+      />
+    ) : null}
     <Modal
       title={t('app.kuaizhizao.deliveryProject.changeTemplate')}
       open={templateModalOpen}
@@ -1307,6 +1656,7 @@ export const DeliveryProjectWorkbench: React.FC = () => {
           : t('app.kuaizhizao.deliveryProject.addNodeTask')
       }
       open={taskModalOpen}
+      width={MODAL_CONFIG.LARGE_WIDTH}
       onCancel={() => {
         setTaskModalOpen(false);
         setEditingTask(null);
@@ -1315,25 +1665,33 @@ export const DeliveryProjectWorkbench: React.FC = () => {
       onOk={() => void saveNodeTask()}
       destroyOnHidden
     >
-      <Form form={taskForm} layout="vertical">
-        <Form.Item
+      <ProForm form={taskForm} layout="vertical" submitter={false} grid>
+        <ProFormText
           name="task_name"
           label={t('app.kuaizhizao.deliveryProject.fields.taskName')}
+          colProps={{ span: 12 }}
           rules={[{ required: true }]}
-        >
-          <Input />
-        </Form.Item>
-        <Form.Item name="status" label={t('app.kuaizhizao.deliveryProject.fields.status')} initialValue="todo">
-          <Select
-            options={Object.entries(DELIVERY_NODE_TASK_STATUS).map(([value, label]) => ({
-              value,
-              label,
-            }))}
-          />
-        </Form.Item>
+        />
+        <ProFormSelect
+          name="participant_mode"
+          label={t('app.kuaizhizao.deliveryProject.fields.participantMode')}
+          initialValue="solo"
+          colProps={{ span: 12 }}
+          options={Object.entries(DELIVERY_TASK_PARTICIPANT_MODE).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
+        <ProFormTextArea
+          name="core_task"
+          label={t('app.kuaizhizao.deliveryProject.fields.coreTask')}
+          colProps={{ span: 24 }}
+          fieldProps={{ rows: 3, showCount: true, maxLength: 500 }}
+        />
         <UniUserSelect
           name="owner_uuid"
           label={t('app.kuaizhizao.deliveryProject.fields.ownerName')}
+          colProps={{ span: 12 }}
           onChange={(_value, user) => {
             const picked = Array.isArray(user) ? user[0] : user;
             taskOwnerRef.current = picked?.id;
@@ -1349,6 +1707,7 @@ export const DeliveryProjectWorkbench: React.FC = () => {
           name="member_uuids"
           label={t('app.kuaizhizao.deliveryProject.fields.members')}
           mode="multiple"
+          colProps={{ span: 12 }}
           onChange={(_value, users) => {
             const list = (Array.isArray(users) ? users : users ? [users] : []) as User[];
             taskMembersRef.current = list
@@ -1359,30 +1718,99 @@ export const DeliveryProjectWorkbench: React.FC = () => {
               }));
           }}
         />
-        <Form.Item name="planned_start_date" label={t('app.kuaizhizao.deliveryProject.fields.plannedStartDate')}>
-          <DatePicker style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item name="planned_end_date" label={t('app.kuaizhizao.deliveryProject.fields.plannedEndDate')}>
-          <DatePicker style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item name="actual_start_date" label={t('app.kuaizhizao.deliveryProject.fields.actualStartDate')}>
-          <DatePicker style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item name="actual_end_date" label={t('app.kuaizhizao.deliveryProject.fields.actualEndDate')}>
-          <DatePicker style={{ width: '100%' }} />
-        </Form.Item>
-      </Form>
+        <ProFormDatePicker
+          name="planned_start_date"
+          label={t('app.kuaizhizao.deliveryProject.fields.plannedStartDate')}
+          colProps={{ span: 12 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormDatePicker
+          name="planned_end_date"
+          label={t('app.kuaizhizao.deliveryProject.fields.plannedEndDate')}
+          colProps={{ span: 12 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <DocumentAttachmentsField category="delivery_node_task_attachments" label={false} />
+      </ProForm>
     </Modal>
+    <UniDetail
+      title={t('app.kuaizhizao.deliveryProject.workbench.openRelatedAttachments')}
+      open={attachmentsDrawerOpen}
+      onClose={() => setAttachmentsDrawerOpen(false)}
+      size={DRAWER_CONFIG.STANDARD_WIDTH}
+      linesTitle={t('app.kuaizhizao.deliveryProject.fields.taskAttachments')}
+      lines={
+        relatedAttachments.length > 0 ? (
+          <DeliveryWorkbenchTable
+            className="uni-detail-table"
+            rowKey={(row) => `${row.source_type}-${row.source_id}-${row.uid}`}
+            size="small"
+            pagination={false}
+            dataSource={relatedAttachments}
+            columns={relatedAttachmentColumns}
+          />
+        ) : (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={t('app.kuaizhizao.deliveryProject.workbench.relatedAttachmentsEmpty')}
+          />
+        )
+      }
+    />
+    <DeliveryIssueDetailDrawer
+      open={issueDetailOpen}
+      issueId={issueDetailId}
+      onClose={() => {
+        setIssueDetailOpen(false);
+        setIssueDetailId(undefined);
+      }}
+      onChanged={load}
+      canUpdate={issuePerms.canUpdate}
+      canDelete={issuePerms.canDelete}
+      onEdit={(issue) => void openEditIssue(issue)}
+    />
+    <DeliveryNodeReportDetailDrawer
+      open={reportDetailOpen}
+      reportId={reportDetailId}
+      onClose={() => {
+        setReportDetailOpen(false);
+        setReportDetailId(undefined);
+      }}
+      onChanged={load}
+      canUpdate={reportPerms.canUpdate}
+      canDelete={reportPerms.canDelete}
+      canApprove={reportPerms.canAction?.('approve') ?? false}
+      onEdit={(report) => openEditReport(report)}
+    />
+    <DeliveryNodeTaskOperateModal
+      open={taskOperateOpen}
+      projectId={projectId}
+      task={taskOperating}
+      currentUserId={currentUser?.id}
+      canAct={canParticipantAct}
+      onClose={() => {
+        setTaskOperateOpen(false);
+        setTaskOperating(null);
+      }}
+      onUpdated={load}
+    />
     <Modal
-      title={t('app.kuaizhizao.deliveryProject.createReport')}
+      title={
+        editingReport
+          ? t('app.kuaizhizao.deliveryProject.editReport')
+          : t('app.kuaizhizao.deliveryProject.createReport')
+      }
       open={reportModalOpen}
-      onCancel={() => setReportModalOpen(false)}
+      onCancel={() => {
+        setReportModalOpen(false);
+        setEditingReport(null);
+      }}
       onOk={() => void saveReport()}
       destroyOnHidden
     >
       <Form form={reportForm} layout="vertical">
         <Form.Item name="node_id" label={t('app.kuaizhizao.deliveryProject.fields.nodeName')} rules={[{ required: true }]}>
-          <Select options={nodeOptions} placeholder={t('common.pleaseSelect')} />
+          <Select disabled={Boolean(editingReport)} options={nodeOptions} placeholder={t('common.pleaseSelect')} />
         </Form.Item>
         <Form.Item name="report_date" label={t('app.kuaizhizao.deliveryProject.fields.reportDate')} rules={[{ required: true }]}>
           <DatePicker style={{ width: '100%' }} />
@@ -1396,9 +1824,16 @@ export const DeliveryProjectWorkbench: React.FC = () => {
       </Form>
     </Modal>
     <Modal
-      title={t('app.kuaizhizao.deliveryProject.createIssue')}
+      title={
+        editingIssue
+          ? t('app.kuaizhizao.deliveryProject.editIssue')
+          : t('app.kuaizhizao.deliveryProject.createIssue')
+      }
       open={issueModalOpen}
-      onCancel={() => setIssueModalOpen(false)}
+      onCancel={() => {
+        setIssueModalOpen(false);
+        setEditingIssue(null);
+      }}
       onOk={() => void saveIssue()}
       destroyOnHidden
     >
@@ -1413,13 +1848,56 @@ export const DeliveryProjectWorkbench: React.FC = () => {
           <Select options={Object.entries(DELIVERY_ISSUE_TYPE).map(([value, label]) => ({ value, label }))} />
         </Form.Item>
         <Form.Item name="priority" label={t('app.kuaizhizao.deliveryProject.fields.priority')} rules={[{ required: true }]}>
-          <Select options={Object.entries({ low: '低', medium: '中', high: '高', urgent: '紧急' }).map(([value, label]) => ({ value, label }))} />
+          <Select options={Object.entries(DELIVERY_ISSUE_PRIORITY).map(([value, label]) => ({ value, label }))} />
         </Form.Item>
         <Form.Item name="due_date" label={t('app.kuaizhizao.deliveryProject.fields.dueDate')}>
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
         <Form.Item name="description" label={t('app.kuaizhizao.deliveryProject.fields.description')}>
           <Input.TextArea rows={3} />
+        </Form.Item>
+      </Form>
+    </Modal>
+    <Modal
+      title={t('app.kuaizhizao.deliveryProject.createSideline')}
+      open={sidelineModalOpen}
+      destroyOnHidden
+      onCancel={() => setSidelineModalOpen(false)}
+      onOk={() => {
+        void sidelineForm.validateFields().then(async (values) => {
+          try {
+            const created = await deliveryProjectApi.createSideline(projectId, {
+              project_name: values.project_name as string,
+              parent_sync_task_key: values.parent_sync_task_key as string,
+              notes: values.notes as string | undefined,
+            });
+            message.success(t('common.created'));
+            setSidelineModalOpen(false);
+            navigate(`/apps/kuaizhizao/delivery-project/projects/${created.id}`);
+          } catch (e: unknown) {
+            message.error((e as Error)?.message ?? t('common.createFailed'));
+          }
+        });
+      }}
+    >
+      <Form form={sidelineForm} layout="vertical">
+        <Form.Item
+          name="project_name"
+          label={t('app.kuaizhizao.deliveryProject.fields.projectName')}
+          rules={[{ required: true }]}
+        >
+          <Input />
+        </Form.Item>
+        <Form.Item
+          name="parent_sync_task_key"
+          label={t('app.kuaizhizao.deliveryProject.fields.parentSyncTaskKey')}
+          rules={[{ required: true }]}
+          extra={t('app.kuaizhizao.deliveryProject.parentSyncTaskKeyHint')}
+        >
+          <Input placeholder="heat_exchanger" />
+        </Form.Item>
+        <Form.Item name="notes" label={t('app.kuaizhizao.deliveryProject.fields.notes')}>
+          <Input.TextArea rows={2} />
         </Form.Item>
       </Form>
     </Modal>

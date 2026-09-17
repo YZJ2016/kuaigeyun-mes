@@ -1,14 +1,14 @@
 """交付流程模板服务
 
 契约：模板节点可挂预置子任务；创建交付项目时由 project service 派生为节点任务实例。
-成员不在模板预置（因人因项目而异）。
+子任务负责人与成员可在模板预置（可选），未填时在项目工作台补全。
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from tortoise.transactions import in_transaction
 
@@ -21,6 +21,8 @@ from apps.kuaizhizao.models.delivery_project import (
     DeliveryProcessTemplateNodeTask,
 )
 from apps.kuaizhizao.schemas.delivery_project import (
+    DeliveryMemberInput,
+    DeliveryMemberResponse,
     DeliveryProcessTemplateCreate,
     DeliveryProcessTemplateListEnvelope,
     DeliveryProcessTemplateNodeCreate,
@@ -63,6 +65,67 @@ class DeliveryProcessTemplateService(AppBaseService[DeliveryProcessTemplate]):
             tenant_id=tenant_id, template_id=template_id
         ).order_by("sort_order", "id")
 
+    @staticmethod
+    def _serialize_template_task_members(
+        members: Optional[List[DeliveryMemberInput]],
+        owner_id: Optional[int] = None,
+    ) -> Optional[List[Dict[str, Any]]]:
+        if not members:
+            return None
+        payload: List[Dict[str, Any]] = []
+        seen: set[int] = set()
+        for item in members:
+            if not item.user_id or item.user_id in seen:
+                continue
+            if owner_id and item.user_id == owner_id:
+                continue
+            seen.add(item.user_id)
+            payload.append(
+                {
+                    "user_id": item.user_id,
+                    "user_name": (item.user_name or "").strip() or str(item.user_id),
+                }
+            )
+        return payload or None
+
+    @staticmethod
+    def _parse_template_task_members(raw: Any) -> List[DeliveryMemberResponse]:
+        if not isinstance(raw, list):
+            return []
+        members: List[DeliveryMemberResponse] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            user_id = item.get("user_id")
+            if not user_id:
+                continue
+            members.append(
+                DeliveryMemberResponse(
+                    user_id=int(user_id),
+                    user_name=str(item.get("user_name") or user_id),
+                )
+            )
+        return members
+
+    def _task_to_response(
+        self, task: DeliveryProcessTemplateNodeTask
+    ) -> DeliveryProcessTemplateNodeTaskResponse:
+        return DeliveryProcessTemplateNodeTaskResponse(
+            id=task.id,
+            template_node_id=task.template_node_id,
+            task_key=task.task_key,
+            task_name=task.task_name,
+            core_task=getattr(task, "core_task", None),
+            sort_order=task.sort_order,
+            default_owner_role=task.default_owner_role,
+            owner_id=getattr(task, "owner_id", None),
+            owner_name=getattr(task, "owner_name", None),
+            members=self._parse_template_task_members(getattr(task, "members_json", None)),
+            planned_duration_days=task.planned_duration_days,
+            track_mode=getattr(task, "track_mode", None) or "progress",
+            participant_mode=getattr(task, "participant_mode", None) or "solo",
+        )
+
     async def _load_tasks_by_node(
         self, tenant_id: int, node_ids: List[int]
     ) -> Dict[int, List[DeliveryProcessTemplateNodeTask]]:
@@ -102,18 +165,33 @@ class DeliveryProcessTemplateService(AppBaseService[DeliveryProcessTemplate]):
                 sort_order=node.sort_order if node.sort_order else idx + 1,
                 default_owner_role=node.default_owner_role,
                 planned_duration_days=node.planned_duration_days,
+                schedule_group=(node.schedule_group or "").strip() or None,
+                duration_rules=self._normalize_duration_rules(
+                    getattr(node, "duration_rules", None)
+                ),
                 is_critical=node.is_critical,
                 is_milestone=node.is_milestone,
             )
             for t_idx, task in enumerate(node.tasks or []):
+                owner_id = getattr(task, "owner_id", None)
+                owner_name = (getattr(task, "owner_name", None) or "").strip() or None
+                members_json = self._serialize_template_task_members(
+                    getattr(task, "members", None), owner_id=owner_id
+                )
                 await DeliveryProcessTemplateNodeTask.create(
                     tenant_id=tenant_id,
                     template_node_id=created.id,
                     task_key=task.task_key or f"task_{t_idx + 1}",
                     task_name=task.task_name,
+                    core_task=(getattr(task, "core_task", None) or "").strip() or None,
                     sort_order=task.sort_order if task.sort_order else t_idx + 1,
                     default_owner_role=task.default_owner_role,
+                    owner_id=owner_id,
+                    owner_name=owner_name,
+                    members_json=members_json,
                     planned_duration_days=task.planned_duration_days or 0,
+                    track_mode=getattr(task, "track_mode", None) or "progress",
+                    participant_mode=getattr(task, "participant_mode", None) or "solo",
                 )
 
     async def _to_response(
@@ -135,11 +213,12 @@ class DeliveryProcessTemplateService(AppBaseService[DeliveryProcessTemplate]):
                     sort_order=n.sort_order,
                     default_owner_role=n.default_owner_role,
                     planned_duration_days=n.planned_duration_days,
+                    schedule_group=getattr(n, "schedule_group", None),
+                    duration_rules=getattr(n, "duration_rules", None),
                     is_critical=n.is_critical,
                     is_milestone=n.is_milestone,
                     tasks=[
-                        DeliveryProcessTemplateNodeTaskResponse.model_validate(t)
-                        for t in tasks_by_node.get(n.id, [])
+                        self._task_to_response(t) for t in tasks_by_node.get(n.id, [])
                     ],
                 )
             )
@@ -270,17 +349,107 @@ class DeliveryProcessTemplateService(AppBaseService[DeliveryProcessTemplate]):
         return await self._to_response(row)
 
     @staticmethod
+    def _normalize_duration_rules(raw) -> Optional[dict]:
+        if raw is None:
+            return None
+        if not isinstance(raw, dict):
+            raise ValidationError("节点 duration_rules 必须为对象")
+        attr_key = raw.get("attr_key")
+        days_by_value = raw.get("days_by_value")
+        if not attr_key or not isinstance(attr_key, str) or not attr_key.strip():
+            raise ValidationError("duration_rules.attr_key 必填")
+        if not isinstance(days_by_value, dict) or not days_by_value:
+            raise ValidationError("duration_rules.days_by_value 须为非空对象")
+        normalized: Dict[str, int] = {}
+        for key, days in days_by_value.items():
+            k = str(key).strip()
+            if not k:
+                raise ValidationError("duration_rules.days_by_value 键不可为空")
+            try:
+                d = int(days)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError(f"duration_rules 型号 {k} 工期无效") from exc
+            if d < 0:
+                raise ValidationError(f"duration_rules 型号 {k} 工期不可为负")
+            normalized[k] = d
+        return {"attr_key": attr_key.strip(), "days_by_value": normalized}
+
+    @staticmethod
+    def resolve_node_duration_days(node: DeliveryProcessTemplateNode, config_attrs=None) -> int:
+        """按产品型号规则解析节点工期；无匹配则用 planned_duration_days。"""
+        base = max(int(node.planned_duration_days or 0), 0)
+        rules = getattr(node, "duration_rules", None)
+        if not isinstance(rules, dict):
+            return base
+        attr_key = rules.get("attr_key")
+        days_by_value = rules.get("days_by_value")
+        if not attr_key or not isinstance(days_by_value, dict):
+            return base
+        attrs = config_attrs if isinstance(config_attrs, dict) else {}
+        raw_val = attrs.get(attr_key)
+        if raw_val is None or raw_val == "":
+            return base
+        product_model = str(raw_val).strip()
+        if product_model not in days_by_value:
+            raise ValidationError(
+                f"节点 {node.node_key} 未配置产品型号 {product_model} 的工期，请补全 duration_rules 或修改项目配置"
+            )
+        return max(int(days_by_value[product_model]), 0)
+
+    @staticmethod
+    def _node_schedule_group(node: DeliveryProcessTemplateNode) -> str:
+        return (getattr(node, "schedule_group", None) or "").strip()
+
+    @staticmethod
     def compute_node_planned_dates(
         start_date,
         template_nodes: List[DeliveryProcessTemplateNode],
+        config_attrs=None,
     ):
-        """按模板工期累加计划起止。"""
+        """按模板工期排计划；同一 schedule_group 内节点并行（同起点，下游按组内最长工期推进）。"""
+        ordered = sorted(template_nodes, key=lambda n: (n.sort_order or 0, n.id or 0))
         cursor = start_date
         result = []
-        for node in template_nodes:
+        i = 0
+        while i < len(ordered):
+            node = ordered[i]
+            group = DeliveryProcessTemplateService._node_schedule_group(node)
+            if group:
+                group_nodes = [node]
+                j = i + 1
+                while j < len(ordered):
+                    if DeliveryProcessTemplateService._node_schedule_group(ordered[j]) != group:
+                        break
+                    group_nodes.append(ordered[j])
+                    j += 1
+                group_start = cursor
+                group_max_end = group_start
+                max_duration = 0
+                for group_node in group_nodes:
+                    duration = DeliveryProcessTemplateService.resolve_node_duration_days(
+                        group_node, config_attrs
+                    )
+                    max_duration = max(max_duration, duration)
+                    node_end = group_start + timedelta(days=duration) if duration else group_start
+                    if node_end > group_max_end:
+                        group_max_end = node_end
+                    result.append((group_node, group_start, node_end))
+                if max_duration > 0:
+                    cursor = group_max_end + timedelta(days=1)
+                else:
+                    cursor = group_max_end
+                i = j
+                continue
+
+            duration = DeliveryProcessTemplateService.resolve_node_duration_days(
+                node, config_attrs
+            )
             node_start = cursor
-            duration = max(int(node.planned_duration_days or 0), 0)
             node_end = node_start + timedelta(days=duration) if duration else node_start
             result.append((node, node_start, node_end))
-            cursor = node_end + timedelta(days=1) if duration else node_end
+            if duration > 0:
+                cursor = node_end + timedelta(days=1)
+            else:
+                cursor = node_end
+            i += 1
         return result

@@ -313,6 +313,30 @@
   overflow: hidden;
 }
 
+/* 项目/8D 等工作台：节点面板+关联单据可超出视口，由 uni-tabs-content 滚动 */
+.uni-tabs-content-page-outer:has(.project-workbench-shell) {
+  height: auto;
+  min-height: 100%;
+}
+
+.uni-tabs-content-page-inner:has(.project-workbench-shell) {
+  height: auto;
+  min-height: 100%;
+}
+
+.uni-tabs-route-cache-pane:has(.project-workbench-shell) {
+  height: auto;
+  min-height: 100%;
+  flex: 1 0 auto;
+}
+
+.uni-tabs-content-page-inner:has(.project-workbench-shell) > .riveredge-route-transition,
+.uni-tabs-route-cache-pane:has(.project-workbench-shell) > .riveredge-route-transition {
+  height: auto;
+  min-height: 100%;
+  flex: 1 0 auto;
+}
+
 .multi-tab-list-page-container {
   min-height: 0;
 }

@@ -740,7 +740,7 @@ const SuperAdminTenantList: React.FC = () => {
   useEffect(() => {
     getPackageList({
       page: 1,
-      pageSize: 200,
+      pageSize: 100,
       sort: 'created_at',
       order: 'asc',
     })

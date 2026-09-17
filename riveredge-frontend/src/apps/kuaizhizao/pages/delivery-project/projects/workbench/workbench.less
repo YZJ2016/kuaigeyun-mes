@@ -1,6 +1,11 @@
 @import '../../../../../../components/layout-templates/projectWorkbenchShell.less';
 
-.delivery-project-workbench-side-table {
+.delivery-workbench-table-host {
+  width: 100%;
+  min-width: 0;
+}
+
+.delivery-workbench-table {
   .ant-table {
     table-layout: fixed;
   }
@@ -13,6 +18,23 @@
   .ant-table-cell-ellipsis {
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .ant-table-tbody > tr > td.uni-table-operation-cell,
+  .ant-table-thead > tr > th.uni-table-operation-cell {
+    overflow: hidden;
+  }
+
+  .ant-table-tbody > tr > td.uni-table-operation-cell .uni-table-operation-actions {
+    width: max-content;
+    flex: none;
+  }
+}
+
+.delivery-project-workbench-side-table {
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    white-space: nowrap;
   }
 }
 
@@ -32,10 +54,6 @@
   }
 
   .delivery-project-workbench-node-table {
-    .ant-table {
-      table-layout: fixed;
-    }
-
     .ant-table-thead > tr > th,
     .ant-table-tbody > tr > td {
       white-space: nowrap;

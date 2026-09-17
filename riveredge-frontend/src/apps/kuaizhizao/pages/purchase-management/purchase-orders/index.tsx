@@ -12,6 +12,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { completeDeliveryNodeDocumentLinkIfPending } from '../../delivery-project/shared/deliveryNodeDocumentLink';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
@@ -2608,6 +2609,22 @@ const PurchaseOrdersPage: React.FC = () => {
         orderId = (created as any)?.id;
         if (!submitAfterSaveRef.current) {
           messageApi.success(t('app.kuaizhizao.purchaseOrder.createSuccess'));
+        }
+        if (orderId != null) {
+          const createdOrder = created as PurchaseOrder;
+          const linked = await completeDeliveryNodeDocumentLinkIfPending({
+            docType: 'purchase_order',
+            docId: orderId,
+            docCode: createdOrder.order_code,
+            title: createdOrder.supplier_name ?? null,
+            navigate,
+            message: messageApi,
+            t,
+          });
+          if (linked) {
+            submitAfterSaveRef.current = false;
+            return;
+          }
         }
       }
 

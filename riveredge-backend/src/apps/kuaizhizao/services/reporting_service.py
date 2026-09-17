@@ -384,6 +384,22 @@ async def sync_work_order_operations_completion(
                 work_order_id,
                 exc,
             )
+        try:
+            from apps.kuaizhizao.services.delivery_project_service import DeliveryProjectService
+
+            actor = None
+            if work_order.updated_by:
+                actor = await User.get_or_none(id=work_order.updated_by, tenant_id=tenant_id)
+            await DeliveryProjectService().apply_work_order_completed(
+                tenant_id, work_order_id, actor_user=actor
+            )
+        except Exception as exc:
+            logger.warning(
+                "工单完工回写交付节点失败 tenant={} wo={}: {}",
+                tenant_id,
+                work_order_id,
+                exc,
+            )
     elif (
         not all_completed
         and work_order.status == "completed"
@@ -1312,6 +1328,26 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 except Exception as exc:
                     logger.warning(
                         "工单完工消息提醒失败 tenant={} wo={}: {}",
+                        tenant_id,
+                        work_order.id,
+                        exc,
+                    )
+                try:
+                    from apps.kuaizhizao.services.delivery_project_service import (
+                        DeliveryProjectService,
+                    )
+
+                    actor = None
+                    if work_order.updated_by:
+                        actor = await User.get_or_none(
+                            id=work_order.updated_by, tenant_id=tenant_id
+                        )
+                    await DeliveryProjectService().apply_work_order_completed(
+                        tenant_id, work_order.id, actor_user=actor
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "工单完工回写交付节点失败 tenant={} wo={}: {}",
                         tenant_id,
                         work_order.id,
                         exc,

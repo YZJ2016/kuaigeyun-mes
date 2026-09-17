@@ -17,10 +17,16 @@ from apps.kuaizhizao.schemas.delivery_project import (
     DeliveryProjectNodeTaskCreate,
     DeliveryProjectNodeTaskResponse,
     DeliveryProjectNodeTaskUpdate,
+    DeliveryTaskParticipantActionSubmit,
+    DeliveryProjectNodeScheduleRevisionResponse,
     DeliveryProjectNodeUpdate,
     DeliveryProjectResponse,
     DeliveryProjectUpdate,
     DeliveryProjectWorkbenchResponse,
+    DeliverySidelineCreate,
+    DeliveryWorkshopBoardCell,
+    DeliveryWorkshopBoardCellPatch,
+    DeliveryWorkshopBoardEnvelope,
 )
 from apps.kuaizhizao.services.delivery_project_service import (
     DELIVERY_PROJECT_SORTABLE_FIELDS,
@@ -67,6 +73,7 @@ async def list_projects(
     sales_order_id: Optional[int] = Query(None),
     customer_id: Optional[int] = Query(None),
     current_node_key: Optional[str] = Query(None),
+    board_section: Optional[str] = Query(None),
     order_by: Optional[str] = Query(None),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -75,17 +82,65 @@ async def list_projects(
         field = order_by.lstrip("-")
         if field in DELIVERY_PROJECT_SORTABLE_FIELDS:
             safe_order_by = order_by
-    return await _service.list_projects(
-        tenant_id,
-        skip=skip,
-        limit=limit,
-        keyword=keyword,
-        status=status,
-        sales_order_id=sales_order_id,
-        customer_id=customer_id,
-        current_node_key=current_node_key,
-        order_by=safe_order_by,
-    )
+    try:
+        return await _service.list_projects(
+            tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            status=status,
+            sales_order_id=sales_order_id,
+            customer_id=customer_id,
+            current_node_key=current_node_key,
+            board_section=board_section,
+            order_by=safe_order_by,
+        )
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.get("/workshop-board", response_model=DeliveryWorkshopBoardEnvelope, summary="Workshop board")
+async def list_workshop_board(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    keyword: Optional[str] = Query(None),
+    board_section: Optional[str] = Query(None),
+    project_status: Optional[str] = Query(None, alias="status"),
+    process_template_id: Optional[int] = Query(None),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.list_workshop_board(
+            tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            board_section=board_section,
+            status=project_status,
+            process_template_id=process_template_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.patch(
+    "/workshop-board/cells",
+    response_model=DeliveryWorkshopBoardCell,
+    summary="Patch workshop board cell",
+)
+async def patch_workshop_board_cell(
+    body: DeliveryWorkshopBoardCellPatch,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.patch_workshop_board_cell(tenant_id, body, current_user)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
 @router.get("/{project_id:int}/workbench", response_model=DeliveryProjectWorkbenchResponse, summary="Get delivery project workbench")
@@ -97,6 +152,40 @@ async def get_project_workbench(
         return await _service.get_workbench(tenant_id, project_id)
     except NotFoundError as e:
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+
+
+@router.get(
+    "/{project_id:int}/sidelines",
+    response_model=DeliveryProjectListEnvelope,
+    summary="List sideline delivery projects",
+)
+async def list_sidelines(
+    project_id: int = Path(...),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.list_sidelines(tenant_id, project_id)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+
+
+@router.post(
+    "/{project_id:int}/sidelines",
+    response_model=DeliveryProjectResponse,
+    summary="Create sideline delivery project",
+)
+async def create_sideline(
+    body: DeliverySidelineCreate,
+    project_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.create_sideline(tenant_id, project_id, body, current_user)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
 
 @router.get("/{project_id:int}", response_model=DeliveryProjectResponse, summary="Get delivery project")
@@ -238,6 +327,23 @@ async def change_project_template(
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
     except ValidationError as e:
         raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.get(
+    "/{project_id:int}/nodes/{node_id:int}/schedule-revisions",
+    response_model=list[DeliveryProjectNodeScheduleRevisionResponse],
+    summary="List delivery project node schedule revisions",
+)
+async def list_node_schedule_revisions(
+    project_id: int = Path(...),
+    node_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.list_node_schedule_revisions(tenant_id, project_id, node_id)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 
 
 @router.put(
@@ -385,6 +491,28 @@ async def update_node_task(
 ):
     try:
         return await _service.update_node_task(tenant_id, project_id, task_id, body, current_user)
+    except NotFoundError as e:
+        raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post(
+    "/{project_id:int}/node-tasks/{task_id:int}/participant-action",
+    response_model=DeliveryProjectNodeTaskResponse,
+    summary="Submit delivery project node task participant action",
+)
+async def submit_node_task_participant_action(
+    body: DeliveryTaskParticipantActionSubmit,
+    project_id: int = Path(...),
+    task_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.submit_node_task_participant_action(
+            tenant_id, project_id, task_id, body, current_user
+        )
     except NotFoundError as e:
         raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
     except ValidationError as e:

@@ -213,6 +213,10 @@ const DeliveryProjectsPage: React.FC = () => {
 
         notes: detail.notes,
 
+        board_section: detail.board_section || 'active',
+
+        config_attrs: detail.config_attrs || {},
+
         owner_uuid: ownerUuid,
 
         member_uuids: memberUuids,
@@ -368,11 +372,15 @@ const DeliveryProjectsPage: React.FC = () => {
 
         dataIndex: 'delivery_date',
 
-        key: 'delivery_project_date',
+        key: 'delivery_date',
 
         width: 110,
 
         uniTableKeepWidth: true,
+
+        sorter: true,
+
+        defaultSortOrder: 'descend',
 
         render: (_, r) => formatBusinessDateOnly(r.delivery_date),
 
@@ -546,6 +554,10 @@ const DeliveryProjectsPage: React.FC = () => {
 
         notes: values.notes as string | undefined,
 
+        board_section: (values.board_section as string) || 'active',
+
+        config_attrs: (values.config_attrs as Record<string, unknown>) || {},
+
       });
 
       message.success(t('common.created'));
@@ -585,6 +597,10 @@ const DeliveryProjectsPage: React.FC = () => {
         members: selectedMembersRef.current,
 
         notes: values.notes as string | undefined,
+
+        board_section: (values.board_section as string) || 'active',
+
+        config_attrs: (values.config_attrs as Record<string, unknown>) || {},
 
       });
 
@@ -717,6 +733,54 @@ const DeliveryProjectsPage: React.FC = () => {
 
       />
 
+      <ProFormSelect
+        name="board_section"
+        label={t('app.kuaizhizao.deliveryProject.fields.boardSection')}
+        colProps={{ span: 12 }}
+        initialValue="active"
+        options={[
+          { value: 'active', label: t('app.kuaizhizao.deliveryProject.boardSection.active') },
+          { value: 'inventory', label: t('app.kuaizhizao.deliveryProject.boardSection.inventory') },
+          { value: 'returned', label: t('app.kuaizhizao.deliveryProject.boardSection.returned') },
+          { value: 'shipped', label: t('app.kuaizhizao.deliveryProject.boardSection.shipped') },
+        ]}
+      />
+      <ProFormText
+        name={['config_attrs', 'controller_model']}
+        label={t('app.kuaizhizao.deliveryProject.configAttrs.controllerModel')}
+        colProps={{ span: 12 }}
+      />
+      <ProFormText
+        name={['config_attrs', 'product_model']}
+        label={t('app.kuaizhizao.deliveryProject.configAttrs.productModel')}
+        colProps={{ span: 12 }}
+        placeholder={t('app.kuaizhizao.deliveryProject.configAttrs.productModelPlaceholder')}
+      />
+      <ProFormText
+        name={['config_attrs', 'handedness']}
+        label={t('app.kuaizhizao.deliveryProject.configAttrs.handedness')}
+        colProps={{ span: 12 }}
+      />
+      <ProFormText
+        name={['config_attrs', 'intake_exhaust']}
+        label={t('app.kuaizhizao.deliveryProject.configAttrs.intakeExhaust')}
+        colProps={{ span: 12 }}
+      />
+      <ProFormText
+        name={['config_attrs', 'fan']}
+        label={t('app.kuaizhizao.deliveryProject.configAttrs.fan')}
+        colProps={{ span: 12 }}
+      />
+      <ProFormText
+        name={['config_attrs', 'cloth_slot']}
+        label={t('app.kuaizhizao.deliveryProject.configAttrs.clothSlot')}
+        colProps={{ span: 12 }}
+      />
+      <ProFormText
+        name={['config_attrs', 'barrel']}
+        label={t('app.kuaizhizao.deliveryProject.configAttrs.barrel')}
+        colProps={{ span: 12 }}
+      />
       <ProFormTextArea
 
         name="notes"
@@ -793,11 +857,20 @@ const DeliveryProjectsPage: React.FC = () => {
             };
             lastListParamsRef.current = listParams;
 
+            const sort = params.sort as Record<string, 'ascend' | 'descend' | null> | undefined;
+            const sortKey = sort ? Object.keys(sort)[0] : undefined;
+            const orderBy =
+              sortKey && sort[sortKey]
+                ? `${sort[sortKey] === 'descend' ? '-' : ''}${sortKey}`
+                : '-delivery_date';
+
             const res = await deliveryProjectApi.list({
 
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
 
               limit: params.pageSize ?? 20,
+
+              order_by: orderBy,
 
               ...listParams,
 

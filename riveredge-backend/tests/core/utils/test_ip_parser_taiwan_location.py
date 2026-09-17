@@ -1,4 +1,8 @@
-from core.utils.ip_parser import format_location_label, normalize_login_location_label
+from core.utils.ip_parser import (
+    format_location_label,
+    format_manual_user_location_label,
+    normalize_login_location_label,
+)
 
 
 def test_normalize_prefixes_taiwan_without_china():
@@ -23,3 +27,15 @@ def test_format_location_label_applies_taiwan_rule():
     assert format_location_label(country="台湾", region="Taoyuan", city="桃園區") == (
         "中国 台湾 Taoyuan 桃園區"
     )
+
+
+def test_format_manual_user_location_label():
+    assert format_manual_user_location_label(["青海省", "西宁市", "城东区"]) == (
+        "中国 青海省 西宁市 城东区"
+    )
+    assert format_manual_user_location_label(["北京市", "市辖区", "东城区"]) == (
+        "中国 北京市 东城区"
+    )
+    assert format_manual_user_location_label(["台湾省", "台北市"]) == "中国 台湾省 台北市"
+    assert format_manual_user_location_label([]) is None
+    assert format_manual_user_location_label(None) is None

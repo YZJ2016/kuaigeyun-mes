@@ -47,6 +47,15 @@ class DeliveryProcessTemplateNode(BaseModel):
     sort_order = fields.IntField(default=0, description="排序")
     default_owner_role = fields.CharField(max_length=50, null=True, description="默认负责人角色")
     planned_duration_days = fields.IntField(default=0, description="计划工期（天）")
+    schedule_group = fields.CharField(
+        max_length=50,
+        null=True,
+        description="排程并行组：同组节点计划同起点，下游按组内最长工期推进",
+    )
+    duration_rules = fields.JSONField(
+        null=True,
+        description="型号工期 {attr_key, days_by_value}",
+    )
     is_critical = fields.BooleanField(default=False, description="是否关键卡点")
     is_milestone = fields.BooleanField(default=False, description="是否里程碑")
 
@@ -65,9 +74,23 @@ class DeliveryProcessTemplateNodeTask(BaseModel):
     template_node_id = fields.IntField(description="模板节点ID")
     task_key = fields.CharField(max_length=50, description="任务标识")
     task_name = fields.CharField(max_length=200, description="任务名称")
+    core_task = fields.CharField(max_length=500, null=True, description="核心任务")
     sort_order = fields.IntField(default=0, description="排序")
     default_owner_role = fields.CharField(max_length=50, null=True, description="默认负责人角色")
     planned_duration_days = fields.IntField(default=0, description="计划工期（天）")
+    track_mode = fields.CharField(
+        max_length=20,
+        default="progress",
+        description="跟踪方式 progress/kit",
+    )
+    participant_mode = fields.CharField(
+        max_length=20,
+        default="solo",
+        description="协作方式 solo/signoff_all/signoff_any/each_act",
+    )
+    owner_id = fields.IntField(null=True, description="预置负责人ID")
+    owner_name = fields.CharField(max_length=100, null=True, description="预置负责人姓名")
+    members_json = fields.JSONField(null=True, description="预置成员 [{user_id,user_name}]")
 
     class Meta:
         table = "apps_kuaizhizao_delivery_process_template_node_tasks"
@@ -111,6 +134,23 @@ class DeliveryProject(BaseModel):
     actual_start_date = fields.DateField(null=True, description="实际开始")
     actual_end_date = fields.DateField(null=True, description="实际结束")
     notes = fields.TextField(null=True, description="备注")
+    config_attrs = fields.JSONField(null=True, description="机台配置属性（通用键值）")
+    board_section = fields.CharField(
+        max_length=30,
+        default="active",
+        description="车间台账分段 inventory/returned/active/shipped",
+    )
+    parent_project_id = fields.IntField(null=True, description="主线交付项目ID（旁线填写）")
+    parent_sync_task_key = fields.CharField(
+        max_length=50,
+        null=True,
+        description="旁线结案后回写主线齐套任务标识",
+    )
+    line_role = fields.CharField(
+        max_length=20,
+        default="main",
+        description="主线/旁线 main/sideline",
+    )
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:
@@ -122,6 +162,8 @@ class DeliveryProject(BaseModel):
             ("tenant_id", "sales_order_id"),
             ("tenant_id", "customer_id"),
             ("tenant_id", "delivery_date"),
+            ("tenant_id", "board_section"),
+            ("tenant_id", "parent_project_id"),
         ]
 
     class PydanticMeta:
@@ -192,6 +234,7 @@ class DeliveryProjectNodeTask(BaseModel):
     template_task_id = fields.IntField(null=True, description="模板任务ID")
     task_key = fields.CharField(max_length=50, null=True, description="任务标识")
     task_name = fields.CharField(max_length=200, description="任务名称")
+    core_task = fields.CharField(max_length=500, null=True, description="核心任务")
     sort_order = fields.IntField(default=0, description="排序")
     status = fields.CharField(
         max_length=30,
@@ -206,6 +249,26 @@ class DeliveryProjectNodeTask(BaseModel):
     actual_start_date = fields.DateField(null=True, description="实际开始")
     actual_end_date = fields.DateField(null=True, description="实际结束")
     progress_percent = fields.DecimalField(max_digits=5, decimal_places=2, default=0, description="完成%")
+    track_mode = fields.CharField(
+        max_length=20,
+        default="progress",
+        description="跟踪方式 progress/kit",
+    )
+    kit_status = fields.CharField(
+        max_length=20,
+        default="none",
+        description="齐套状态 none/ready/na",
+    )
+    participant_mode = fields.CharField(
+        max_length=20,
+        default="solo",
+        description="协作方式 solo/signoff_all/signoff_any/each_act",
+    )
+    participant_actions_json = fields.JSONField(
+        null=True,
+        description="关联人员操作记录 [{user_id,user_name,role,action,status,acted_at,remark,...}]",
+    )
+    attachments = fields.JSONField(null=True, description="附件")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:
@@ -338,6 +401,28 @@ class DeliveryProjectNodeDocument(BaseModel):
 
     class PydanticMeta:
         exclude = ["deleted_at"]
+
+
+class DeliveryProjectNodeScheduleRevision(BaseModel):
+    """交付项目节点计划编辑历史"""
+
+    id = fields.IntField(pk=True, description="主键ID")
+    tenant_id = fields.IntField(description="租户ID")
+    project_id = fields.IntField(description="项目ID")
+    node_id = fields.IntField(description="节点ID")
+    edit_reason = fields.TextField(description="编辑原因")
+    changes_json = fields.JSONField(description="变更明细 [{field,before,after}]")
+    edited_by_id = fields.IntField(null=True, description="编辑人ID")
+    edited_by_name = fields.CharField(max_length=100, null=True, description="编辑人姓名")
+    edited_at = fields.DatetimeField(description="编辑时间")
+
+    class Meta:
+        table = "apps_kuaizhizao_delivery_project_node_schedule_revisions"
+        table_description = "快制造 - 交付项目节点计划编辑历史"
+        indexes = [
+            ("tenant_id", "project_id", "node_id"),
+            ("tenant_id", "edited_at"),
+        ]
 
 
 class DeliveryProjectNodeAlertSent(BaseModel):

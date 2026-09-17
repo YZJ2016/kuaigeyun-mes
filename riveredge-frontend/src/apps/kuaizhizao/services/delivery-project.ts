@@ -18,6 +18,11 @@ export interface DeliveryProjectNodeDocument {
   doc_id: number;
   doc_code: string;
   title?: string | null;
+  party_name?: string | null;
+  doc_date?: string | null;
+  status?: string | null;
+  review_status?: string | null;
+  progress_percent?: number | null;
   linked_at?: string | null;
   linked_by_name?: string | null;
 }
@@ -37,6 +42,18 @@ export interface DeliveryAlertRow {
   project_owner_name?: string | null;
 }
 
+export interface DeliveryTaskParticipantAction {
+  user_id: number;
+  user_name: string;
+  role: string;
+  action: string;
+  status: string;
+  acted_at?: string | null;
+  remark?: string | null;
+  kit_status?: string | null;
+  progress_percent?: number | string | null;
+}
+
 export interface DeliveryProjectNodeTask {
   id: number;
   project_id: number;
@@ -44,6 +61,7 @@ export interface DeliveryProjectNodeTask {
   template_task_id?: number | null;
   task_key?: string | null;
   task_name: string;
+  core_task?: string | null;
   sort_order: number;
   status: string;
   owner_id?: number | null;
@@ -54,6 +72,11 @@ export interface DeliveryProjectNodeTask {
   actual_start_date?: string | null;
   actual_end_date?: string | null;
   progress_percent?: number | string;
+  track_mode?: string;
+  kit_status?: string;
+  participant_mode?: string;
+  participant_actions?: DeliveryTaskParticipantAction[];
+  attachments?: Array<{ uid?: string; name?: string; status?: string; url?: string }> | null;
 }
 
 export interface DeliveryProjectNode {
@@ -73,6 +96,23 @@ export interface DeliveryProjectNode {
   is_critical: boolean;
   is_milestone: boolean;
   tasks?: DeliveryProjectNodeTask[];
+}
+
+export interface DeliveryProjectNodeScheduleChangeItem {
+  field: string;
+  before?: string | null;
+  after?: string | null;
+}
+
+export interface DeliveryProjectNodeScheduleRevision {
+  id: number;
+  project_id: number;
+  node_id: number;
+  edit_reason: string;
+  changes: DeliveryProjectNodeScheduleChangeItem[];
+  edited_by_id?: number | null;
+  edited_by_name?: string | null;
+  edited_at: string;
 }
 
 export interface DeliveryProject {
@@ -102,6 +142,13 @@ export interface DeliveryProject {
   actual_end_date?: string | null;
   notes?: string | null;
   rd_project_id?: number | null;
+  config_attrs?: Record<string, unknown> | null;
+  board_section?: string;
+  parent_project_id?: number | null;
+  parent_project_code?: string | null;
+  parent_sync_task_key?: string | null;
+  line_role?: string;
+  sideline_count?: number;
   nodes?: DeliveryProjectNode[];
   created_at?: string;
   updated_at?: string;
@@ -115,11 +162,22 @@ export interface DeliveryLinkedRdProject {
   project_name: string;
 }
 
+export interface DeliveryWorkbenchRelatedAttachment {
+  uid: string;
+  name?: string | null;
+  url?: string | null;
+  source_type: 'node_report' | 'node_task' | string;
+  source_id: number;
+  source_label: string;
+  node_name?: string | null;
+}
+
 export interface DeliveryProjectWorkbench extends DeliveryProject {
   recent_reports?: DeliveryNodeReport[];
   open_issues?: DeliveryIssue[];
   linked_rd_project?: DeliveryLinkedRdProject | null;
   node_documents?: DeliveryProjectNodeDocument[];
+  related_attachments?: DeliveryWorkbenchRelatedAttachment[];
 }
 
 export interface DeliveryProcessTemplateNodeTask {
@@ -127,9 +185,15 @@ export interface DeliveryProcessTemplateNodeTask {
   template_node_id?: number;
   task_key: string;
   task_name: string;
+  core_task?: string | null;
   sort_order: number;
   default_owner_role?: string | null;
+  owner_id?: number | null;
+  owner_name?: string | null;
+  members?: DeliveryMember[];
   planned_duration_days?: number;
+  track_mode?: string;
+  participant_mode?: string;
 }
 
 export interface DeliveryProcessTemplateNode {
@@ -140,6 +204,10 @@ export interface DeliveryProcessTemplateNode {
   sort_order: number;
   default_owner_role?: string | null;
   planned_duration_days: number;
+  duration_rules?: {
+    attr_key: string;
+    days_by_value: Record<string, number>;
+  } | null;
   is_critical: boolean;
   is_milestone: boolean;
   tasks?: DeliveryProcessTemplateNodeTask[];
@@ -325,14 +393,125 @@ export interface DeliveryIssueProgressRow {
   created_at?: string | null;
 }
 
+export interface DeliveryWorkshopBoardColumn {
+  task_key: string;
+  task_name: string;
+  node_key: string;
+  node_name: string;
+  track_mode: string;
+  sort_order: number;
+}
+
+export interface DeliveryWorkshopBoardCell {
+  task_id?: number | null;
+  task_key: string;
+  node_key: string;
+  track_mode: string;
+  kit_status: string;
+  status?: string | null;
+  actual_end_date?: string | null;
+  owner_name?: string | null;
+}
+
+export interface DeliveryWorkshopBoardRow {
+  project_id: number;
+  project_code: string;
+  project_name: string;
+  customer_name?: string | null;
+  material_code?: string | null;
+  material_name?: string | null;
+  material_spec?: string | null;
+  delivery_date?: string | null;
+  owner_name?: string | null;
+  status: string;
+  progress_percent: number | string;
+  board_section: string;
+  config_attrs?: Record<string, unknown> | null;
+  cells: DeliveryWorkshopBoardCell[];
+}
+
+export const DELIVERY_BOARD_SECTION: Record<string, string> = {
+  inventory: '库存',
+  returned: '退回',
+  active: '在制',
+  shipped: '已发',
+};
+
+export const DELIVERY_KIT_STATUS: Record<string, string> = {
+  none: '无',
+  ready: '有',
+  na: '不适用',
+};
+
+export const DELIVERY_TASK_TRACK_MODE: Record<string, string> = {
+  progress: '进度',
+  kit: '齐套',
+};
+
+export const DELIVERY_TASK_PARTICIPANT_MODE: Record<string, string> = {
+  solo: '负责人',
+  signoff_all: '会签',
+  signoff_any: '或签',
+  each_act: '分人操作',
+};
+
+export const DELIVERY_TASK_PARTICIPANT_ACTION_STATUS: Record<string, string> = {
+  pending: '待确认',
+  done: '已确认',
+};
+
+export const DELIVERY_LINE_ROLE: Record<string, string> = {
+  main: '主线',
+  sideline: '旁线',
+};
+
 const BASE = '/apps/kuaizhizao';
 
 export const deliveryProjectApi = {
   list: (params?: Record<string, unknown>) =>
     apiRequest<{ items: DeliveryProject[]; total: number }>(`${BASE}/delivery-projects`, { method: 'GET', params }),
+  workshopBoard: (params?: Record<string, unknown>) =>
+    apiRequest<{
+      columns: DeliveryWorkshopBoardColumn[];
+      items: DeliveryWorkshopBoardRow[];
+      total: number;
+    }>(`${BASE}/delivery-projects/workshop-board`, { method: 'GET', params }),
+  patchWorkshopBoardCell: (data: {
+    project_id: number;
+    task_id: number;
+    kit_status?: string;
+    actual_end_date?: string | null;
+    status?: string;
+  }) =>
+    apiRequest<DeliveryWorkshopBoardCell>(`${BASE}/delivery-projects/workshop-board/cells`, {
+      method: 'PATCH',
+      data,
+    }),
   get: (id: number) => apiRequest<DeliveryProject>(`${BASE}/delivery-projects/${id}`, { method: 'GET' }),
   getWorkbench: (id: number) =>
     apiRequest<DeliveryProjectWorkbench>(`${BASE}/delivery-projects/${id}/workbench`, { method: 'GET' }),
+  listSidelines: (id: number) =>
+    apiRequest<{ items: DeliveryProject[]; total: number }>(
+      `${BASE}/delivery-projects/${id}/sidelines`,
+      { method: 'GET' },
+    ),
+  createSideline: (
+    id: number,
+    data: {
+      project_name: string;
+      parent_sync_task_key: string;
+      process_template_id?: number;
+      delivery_date?: string;
+      owner_id?: number;
+      notes?: string;
+      config_attrs?: Record<string, unknown>;
+      planned_start_date?: string;
+    },
+  ) =>
+    apiRequest<DeliveryProject>(`${BASE}/delivery-projects/${id}/sidelines`, {
+      method: 'POST',
+      data,
+    }),
   create: (data: Record<string, unknown>) =>
     apiRequest<DeliveryProject>(`${BASE}/delivery-projects`, { method: 'POST', data }),
   update: (id: number, data: Record<string, unknown>) =>
@@ -351,6 +530,11 @@ export const deliveryProjectApi = {
     }),
   updateNode: (projectId: number, nodeId: number, data: Record<string, unknown>) =>
     apiRequest<DeliveryProjectNode>(`${BASE}/delivery-projects/${projectId}/nodes/${nodeId}`, { method: 'PUT', data }),
+  listNodeScheduleRevisions: (projectId: number, nodeId: number) =>
+    apiRequest<DeliveryProjectNodeScheduleRevision[]>(
+      `${BASE}/delivery-projects/${projectId}/nodes/${nodeId}/schedule-revisions`,
+      { method: 'GET' },
+    ),
   startNode: (projectId: number, nodeId: number) =>
     apiRequest<DeliveryProjectNode>(`${BASE}/delivery-projects/${projectId}/nodes/${nodeId}/start`, { method: 'POST' }),
   completeNode: (projectId: number, nodeId: number) =>
@@ -379,6 +563,15 @@ export const deliveryProjectApi = {
     }),
   deleteNodeTask: (projectId: number, taskId: number) =>
     apiRequest(`${BASE}/delivery-projects/${projectId}/node-tasks/${taskId}`, { method: 'DELETE' }),
+  submitNodeTaskParticipantAction: (
+    projectId: number,
+    taskId: number,
+    data: { remark?: string; kit_status?: string; progress_percent?: number },
+  ) =>
+    apiRequest<DeliveryProjectNodeTask>(
+      `${BASE}/delivery-projects/${projectId}/node-tasks/${taskId}/participant-action`,
+      { method: 'POST', data },
+    ),
   progressSummary: (params?: Record<string, unknown>) =>
     apiRequest<{ items: DeliveryProgressSummaryRow[]; total: number }>(
       `${BASE}/delivery-reports/progress-summary`,
@@ -451,6 +644,17 @@ export const DELIVERY_NODE_DOCUMENT_TYPES: Record<string, string> = {
   sales_delivery: '销售出库',
   quality_inspection: '检验单',
   rd_project: '研发项目',
+};
+
+/** 节点关联单据类型 → 对应单据列表页 */
+export const DELIVERY_NODE_DOCUMENT_LIST_PATHS: Record<keyof typeof DELIVERY_NODE_DOCUMENT_TYPES, string> = {
+  sales_order: '/apps/kuaizhizao/sales-management/sales-orders',
+  purchase_order: '/apps/kuaizhizao/purchase-management/purchase-orders',
+  work_order: '/apps/kuaizhizao/production-execution/work-orders',
+  purchase_receipt: '/apps/kuaizhizao/purchase-management/inbound',
+  sales_delivery: '/apps/kuaizhizao/sales-management/outbound',
+  quality_inspection: '/apps/kuaizhizao/quality-management/incoming-inspection',
+  rd_project: '/apps/kuaiplm/rd-projects',
 };
 
 export const DELIVERY_ALERT_KIND: Record<string, string> = {
