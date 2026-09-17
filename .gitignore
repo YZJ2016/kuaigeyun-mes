@@ -92,6 +92,9 @@ riveredge-frontend/src/apps/haoligo/
 # 本地构建发布脚本（各人自选保留，不提交）
 build-web.sh
 Build.web.sh
+# 仓库统一发布入口（fast-deploy 内）须纳入版本库；Windows 下与 Build.web.sh 大小写冲突
+!fast-deploy/build.web.sh
+!fast-deploy/lib/build_web_git.sh
 
 bin/
 deploy/

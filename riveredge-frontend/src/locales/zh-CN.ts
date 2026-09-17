@@ -30067,6 +30067,10 @@ export default {
     '修复业务单据选仓库因缺少主数据权限失败',
   'pages.dashboard.updateLog.entries.uni-warehouse-select-reference-display.description':
     '统一仓库下拉改走引用展示接口，按当前单据宿主权限加载仓库列表，不再直调主数据仓库接口导致仅有仓储业务权限时提示加载失败。',
+  'pages.dashboard.updateLog.entries.build-web-single-dist-r01.title':
+    'Web 构建发布脚本仅保留一份 dist',
+  'pages.dashboard.updateLog.entries.build-web-single-dist-r01.description':
+    'build.web.sh 发布前剥离历史 dist、构建后仅 tip 提交最新产物，并以 force-with-lease 推送，避免 Git 仓库因多次构建膨胀。',
   'pages.dashboard.updateLog.entries.delivery-workbench-operation-column-r01.title':
     '交付工作台操作列宽按实测收窄',
   'pages.dashboard.updateLog.entries.delivery-workbench-operation-column-r01.description':

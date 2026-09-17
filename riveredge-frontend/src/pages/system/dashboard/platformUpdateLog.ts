@@ -36,6 +36,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'build-web-single-dist-r01',
+    date: '2026-09-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.build-web-single-dist-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.build-web-single-dist-r01.description',
+  },
+  {
     id: 'delivery-workbench-operation-column-r01',
     date: '2026-09-17',
     type: 'fix',
