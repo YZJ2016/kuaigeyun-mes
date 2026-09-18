@@ -168,7 +168,7 @@ async def batch_delivery_occupied_by_order_item(
 ) -> tuple[Dict[int, Dict[int, Decimal]], Dict[int, Dict[int, Decimal]]]:
     """未完结销售出库占用：按订单行汇总 + 无行关联历史明细按物料汇总（待分配）。"""
     if not sales_order_ids:
-        return {}
+        return ({}, {})
 
     delivery_rows = await SalesDelivery.filter(
         tenant_id=tenant_id,

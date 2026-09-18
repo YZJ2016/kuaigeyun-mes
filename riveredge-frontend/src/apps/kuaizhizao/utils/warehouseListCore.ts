@@ -4,6 +4,23 @@ import { parseSalesReportDateRange } from '../services/reports';
 
 export const WAREHOUSE_DOC_PINNED_STATUS_FIELD = 'status';
 
+type InventoryLocationRow = {
+  storage_area_name?: string | null;
+  location_name?: string | null;
+  location_code?: string | null;
+};
+
+/** 即时库存 / 批次库存：库区 + 库位名称展示（汇总行 location_name 已为合并文案） */
+export function formatInventoryLocationDisplay(row: InventoryLocationRow): string {
+  const area = String(row.storage_area_name ?? '').trim();
+  const name = String(row.location_name ?? '').trim();
+  if (name.includes('、')) return name;
+  if (area && name) return `${area} / ${name}`;
+  if (name) return name;
+  if (area) return area;
+  return String(row.location_code ?? '').trim();
+}
+
 export function normalizeWarehouseListResponse(res: unknown): { data: unknown[]; total: number } {
   if (Array.isArray(res)) {
     return { data: res, total: res.length };
@@ -695,8 +712,6 @@ function hubSortValue(row: Record<string, unknown>, field: string): unknown {
         row.delivery_time,
         row.borrow_time,
         row.issued_at,
-        row.created_at,
-        row.createdAt,
       ];
       for (const value of candidates) {
         if (value == null) continue;

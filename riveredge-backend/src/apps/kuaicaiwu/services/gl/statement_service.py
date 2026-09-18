@@ -9,7 +9,11 @@ from apps.kuaicaiwu.models.chart_of_account import ChartOfAccount
 from apps.kuaicaiwu.models.gl_cash_flow_item import GlCashFlowItem
 from apps.kuaicaiwu.models.voucher import Voucher
 from apps.kuaicaiwu.models.voucher_line import VoucherLine
+from apps.kuaicaiwu.services.gl.balance_aggregate import aggregate_balances_by_account
 from apps.kuaicaiwu.services.gl.balance_service import BalanceService
+
+# 兼容既有 import 路径（tests / 外部模块）
+__all__ = ["StatementService", "aggregate_balances_by_account", "signed_amount"]
 from apps.kuaicaiwu.services.gl.balance_sheet_template import build_balance_sheet_rows
 from apps.kuaicaiwu.services.gl.cash_flow_classify import (
     ensure_cash_flow_items_seeded,
@@ -21,18 +25,6 @@ from apps.kuaicaiwu.services.gl.cash_flow_statement_template import build_cash_f
 from apps.kuaicaiwu.services.gl.income_statement_template import build_income_statement_rows
 from apps.kuaicaiwu.services.gl.settings_service import GlSettingsService
 
-BALANCE_FIELDS = (
-    "opening_debit",
-    "opening_credit",
-    "period_debit",
-    "period_credit",
-    "year_debit",
-    "year_credit",
-    "ending_debit",
-    "ending_credit",
-)
-
-
 def _d(v: Any) -> Decimal:
     return Decimal(str(v or 0))
 
@@ -42,30 +34,6 @@ def signed_amount(debit: Any, credit: Any, balance_direction: str) -> Decimal:
     if str(balance_direction or "debit").lower() == "credit":
         return _d(credit) - _d(debit)
     return _d(debit) - _d(credit)
-
-
-def aggregate_balances_by_account(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """法定报表按科目汇总，去掉辅助核算拆行。"""
-    by_account: Dict[int, Dict[str, Any]] = {}
-    for row in rows:
-        account_id = int(row.get("account_id") or 0)
-        if not account_id:
-            continue
-        item = by_account.get(account_id)
-        if not item:
-            item = {
-                "account_id": account_id,
-                "account_code": row.get("account_code"),
-                "account_name": row.get("account_name") or "",
-                "account_type": row.get("account_type") or "",
-                **{field: 0.0 for field in BALANCE_FIELDS},
-            }
-            by_account[account_id] = item
-        for field in BALANCE_FIELDS:
-            item[field] = float(_d(item[field]) + _d(row.get(field)))
-    result = list(by_account.values())
-    result.sort(key=lambda x: str(x.get("account_code") or ""))
-    return result
 
 
 def _line(

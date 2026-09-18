@@ -30,6 +30,13 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
 
+def _resolve_voucher_attachment_fields(data: Dict[str, Any]) -> tuple[Optional[List[Any]], int]:
+    if "attachments" in data:
+        attachments = list(data.get("attachments") or [])
+        return attachments, len(attachments)
+    return None, int(data.get("attachment_count") or 0)
+
+
 def _d(v: Any) -> Decimal:
     return Decimal(str(v or 0))
 
@@ -265,6 +272,7 @@ class PostingService:
         elif word not in {"记", "收", "付", "转"}:
             raise ValidationError("凭证字仅支持：记/收/付/转")
         code = data.get("voucher_code") or await self._next_voucher_code(tenant_id, word, voucher_date)
+        attachments, attachment_count = _resolve_voucher_attachment_fields(data)
         async with in_transaction():
             voucher = await Voucher.create(
                 tenant_id=tenant_id,
@@ -276,7 +284,8 @@ class PostingService:
                 period_month=int(data.get("period_month") or voucher_date.month),
                 status="draft",
                 summary=data.get("summary") or (lines[0].get("summary") if lines else None),
-                attachment_count=int(data.get("attachment_count") or 0),
+                attachment_count=attachment_count,
+                attachments=attachments,
                 source_event_id=data.get("source_event_id"),
                 source_doc_type=data.get("source_doc_type"),
                 source_doc_id=data.get("source_doc_id"),
@@ -326,7 +335,11 @@ class PostingService:
             voucher.period_month = voucher.voucher_date.month
         if "summary" in data:
             voucher.summary = data.get("summary")
-        if "attachment_count" in data:
+        if "attachments" in data:
+            attachments = list(data.get("attachments") or [])
+            voucher.attachments = attachments
+            voucher.attachment_count = len(attachments)
+        elif "attachment_count" in data:
             voucher.attachment_count = int(data.get("attachment_count") or 0)
         if "voucher_word" in data:
             voucher.voucher_word = str(data.get("voucher_word") or "记")
@@ -366,13 +379,20 @@ class PostingService:
         if not draft_lines:
             raise ValidationError(f"事件 {event.event_code} 无法生成凭证分录（请维护科目表与模板）")
 
+        from apps.kuaicaiwu.services.gl.integration_service import (
+            GlIntegrationReconcileService,
+            _resolve_event_summary_display,
+        )
+
         voucher_date = event.event_date or to_site_date(resolve_business_datetime())
         return await self.create_manual_voucher(
             tenant_id,
             created_by,
             {
                 "voucher_date": voucher_date,
-                "summary": event.notes or event.event_type,
+                "summary": _resolve_event_summary_display(event.event_type, event.notes)
+                or GlIntegrationReconcileService.event_type_label(event.event_type)
+                or event.event_type,
                 "source_event_id": event.id,
                 "source_doc_type": event.source_doc_type,
                 "source_doc_id": event.source_doc_id,
@@ -604,6 +624,7 @@ class PostingService:
             "status": voucher.status,
             "summary": voucher.summary,
             "attachment_count": voucher.attachment_count,
+            "attachments": voucher.attachments,
             "source_event_id": voucher.source_event_id,
             "source_doc_type": voucher.source_doc_type,
             "source_doc_id": voucher.source_doc_id,

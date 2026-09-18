@@ -18,6 +18,7 @@ from core.schemas.role import (
     RoleListItem,
     PermissionInfo,
     RoleUserListResponse,
+    RoleUsersMutate,
 )
 from core.services.authorization.role_service import RoleService
 from core.services.authorization.role_permission_matrix_service import RolePermissionMatrixService
@@ -455,6 +456,56 @@ async def list_role_users(
         return await RoleService.list_role_users(tenant_id=tenant_id, role_uuid=role_uuid)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/{role_uuid}/users", response_model=RoleUserListResponse)
+async def add_role_users(
+    role_uuid: str,
+    body: RoleUsersMutate,
+    _auth: object = Depends(require_access("system.role", "assign")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """为角色追加关联用户。"""
+    try:
+        return await RoleService.add_role_users(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid,
+            user_uuids=body.user_uuids,
+            current_user_id=current_user.id,
+            current_user=current_user,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.delete("/{role_uuid}/users/{user_uuid}", response_model=RoleUserListResponse)
+async def remove_role_user(
+    role_uuid: str,
+    user_uuid: str,
+    _auth: object = Depends(require_access("system.role", "assign")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从角色移除单个关联用户。"""
+    try:
+        return await RoleService.remove_role_users(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid,
+            user_uuids=[user_uuid],
+            current_user_id=current_user.id,
+            current_user=current_user,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.put("/{role_uuid}/function-grants", response_model=RoleFunctionGrantsResponse)

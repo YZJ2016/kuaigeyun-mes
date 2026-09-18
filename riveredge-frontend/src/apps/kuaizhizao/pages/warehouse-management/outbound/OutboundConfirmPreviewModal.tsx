@@ -44,7 +44,7 @@ import {
   useOutboundOperatorSelect,
 } from './outboundEntryShared';
 import { buildInboundConfirmReceiverPayload } from '../inbound/inboundEntryShared';
-import { toApiDateTimeString } from '../../../../../utils/formDate';
+import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import { formatQuantity } from '../../../../../utils/format';
 import { useGlobalStore } from '../../../../../stores';
 import { isAdminBypass } from '../../../../../utils/permission';
@@ -154,7 +154,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
-  const [documentDate, setDocumentDate] = useState<Dayjs>(() => dayjs());
+  const [documentDate, setDocumentDate] = useState<Dayjs | null>(null);
   const operatorHook = useOutboundOperatorSelect();
   const [materialMeta, setMaterialMeta] = useState<Record<number, ConfirmPreviewMaterialMeta>>({});
   const [batchOptionsByMaterialId, setBatchOptionsByMaterialId] = useState<
@@ -237,7 +237,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     if (!open || recordId == null || !outboundType) {
       setDetail(null);
       setOqcEnsure(null);
-      setDocumentDate(dayjs());
+      setDocumentDate(null);
       form.resetFields();
       return;
     }
@@ -260,10 +260,13 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         }
         setDetail(detailData);
         if (outboundType === 'sales_delivery') {
-          const rawDate =
-            detailData.delivery_time ?? detailData.delivery_date ?? detailData.created_at;
-          const parsed = rawDate != null ? dayjs(String(rawDate)) : dayjs();
-          setDocumentDate(parsed.isValid() ? parsed : dayjs());
+          const rawDate = detailData.delivery_time ?? detailData.delivery_date;
+          if (rawDate != null) {
+            const parsed = dayjs(String(rawDate));
+            setDocumentDate(parsed.isValid() ? parsed.startOf('day') : null);
+          } else {
+            setDocumentDate(null);
+          }
           const rawDelivererId = detailData.deliverer_id;
           const delivererId =
             rawDelivererId != null && Number(rawDelivererId) > 0
@@ -780,10 +783,6 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectOperatorRequired'));
         return;
       }
-      if (!documentDate?.isValid()) {
-        messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectDocumentDateRequired'));
-        return;
-      }
     }
     const vals = form.getFieldsValue(true);
     const negativeStockWarnings: string[] = [];
@@ -897,7 +896,9 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       const header =
         record.outbound_type === 'sales_delivery'
           ? {
-              delivery_time: toApiDateTimeString(documentDate),
+              ...(documentDate?.isValid()
+                ? { delivery_time: toApiBusinessDocumentDateTime(documentDate) }
+                : {}),
               deliverer_id: operatorPayload.receiver_id,
               deliverer_name: operatorPayload.receiver_name,
             }
@@ -1062,11 +1063,11 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         <Form layout="vertical" style={{ marginBottom: 12 }} requiredMark={false}>
           <Row gutter={16}>
             <Col xs={24} sm={12} md={8}>
-              <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.documentDate')} required>
+              <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.documentDate')}>
                 <DatePicker
                   style={{ width: '100%' }}
                   value={documentDate}
-                  onChange={(v) => setDocumentDate(v ?? dayjs())}
+                  onChange={(v) => setDocumentDate(v ? v.startOf('day') : null)}
                   disabled={loading || submitting}
                 />
               </Form.Item>

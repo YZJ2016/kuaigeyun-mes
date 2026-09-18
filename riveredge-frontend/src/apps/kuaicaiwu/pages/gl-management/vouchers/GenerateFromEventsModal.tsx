@@ -9,6 +9,11 @@ import {
   glService,
   type GlPendingAccountingEvent,
 } from '../../../services/gl';
+import {
+  normalizeGlSourceDocTypeOptions,
+  resolveGlAccountingEventSummary,
+  resolveGlSourceDocTypeLabel,
+} from '../../../utils/glAccountingEventDisplay';
 
 const NS = 'app.kuaicaiwu.gl.vouchers';
 
@@ -90,6 +95,11 @@ const GenerateFromEventsModal: React.FC<Props> = ({ open, onClose, onSuccess }) 
     [businessTypes, rows],
   );
 
+  const sourceDocTypeOptions = useMemo(
+    () => normalizeGlSourceDocTypeOptions(sourceDocTypes, t),
+    [sourceDocTypes, t],
+  );
+
   const columns: ColumnsType<GlPendingAccountingEvent> = useMemo(
     () => [
       {
@@ -108,7 +118,8 @@ const GenerateFromEventsModal: React.FC<Props> = ({ open, onClose, onSuccess }) 
         dataIndex: 'source_doc_type_label',
         width: 120,
         ellipsis: true,
-        render: (v: string | null | undefined, r) => v || r.source_doc_type || '—',
+        render: (_v, r) =>
+          resolveGlSourceDocTypeLabel(r.source_doc_type, t, r.source_doc_type_label) || '—',
       },
       {
         title: t(`${NS}.events.col.source`, { defaultValue: '来源单号' }),
@@ -134,8 +145,7 @@ const GenerateFromEventsModal: React.FC<Props> = ({ open, onClose, onSuccess }) 
         title: t(`${NS}.events.col.summary`, { defaultValue: '摘要' }),
         dataIndex: 'notes',
         ellipsis: true,
-        render: (v: string | null, r) =>
-          v || r.event_type_label || r.event_type || '—',
+        render: (_v, r) => resolveGlAccountingEventSummary(r, t),
       },
       {
         title: t(`${NS}.events.col.voucher`, { defaultValue: '凭证' }),
@@ -245,7 +255,7 @@ const GenerateFromEventsModal: React.FC<Props> = ({ open, onClose, onSuccess }) 
             placeholder={t(`${NS}.events.filterSourceType`, { defaultValue: '按来源单据类型筛选' })}
             style={{ minWidth: 200 }}
             value={sourceDocType}
-            options={sourceDocTypes}
+            options={sourceDocTypeOptions}
             disabled={sourceDocTypes.length === 0}
             onChange={(v) => setSourceDocType(v || undefined)}
           />

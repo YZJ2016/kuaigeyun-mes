@@ -105,6 +105,7 @@ class VoucherBody(BaseSchema):
     period_month: Optional[int] = None
     summary: Optional[str] = None
     attachment_count: int = 0
+    attachments: Optional[List[dict]] = None
     lines: List[VoucherLineBody]
 
 
@@ -577,6 +578,10 @@ async def book_balance_sheet(
     aux_only: bool = False,
     current_user: Any = Depends(get_current_user),
 ):
+    books_view = not aux_only and not any(
+        v is not None
+        for v in (customer_id, supplier_id, department_id, employee_id, project_id)
+    )
     return await balance_service.account_balance_sheet(
         current_user.tenant_id,
         year,
@@ -590,6 +595,8 @@ async def book_balance_sheet(
         employee_id=employee_id,
         project_id=project_id,
         aux_only=aux_only,
+        merge_aux=books_view,
+        rollup_hierarchy=books_view,
     )
 
 

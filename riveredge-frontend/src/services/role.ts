@@ -148,6 +148,27 @@ export async function getRoleUsers(roleUuid: string): Promise<RoleUserListRespon
   return apiRequest<RoleUserListResponse>(`/core/roles/${roleUuid}/users`);
 }
 
+/** 为角色追加关联用户 */
+export async function addRoleUsers(
+  roleUuid: string,
+  userUuids: string[],
+): Promise<RoleUserListResponse> {
+  return apiRequest<RoleUserListResponse>(`/core/roles/${roleUuid}/users`, {
+    method: 'POST',
+    data: { user_uuids: userUuids },
+  });
+}
+
+/** 从角色移除单个关联用户 */
+export async function removeRoleUser(
+  roleUuid: string,
+  userUuid: string,
+): Promise<RoleUserListResponse> {
+  return apiRequest<RoleUserListResponse>(`/core/roles/${roleUuid}/users/${userUuid}`, {
+    method: 'DELETE',
+  });
+}
+
 /**
  * 创建角色
  * 

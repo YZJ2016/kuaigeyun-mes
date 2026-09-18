@@ -1,7 +1,7 @@
 /**
  * 总账凭证
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import {
   ProFormDatePicker,
@@ -11,12 +11,15 @@ import {
 import {
   App,
   Button,
+  Descriptions,
   Input,
   InputNumber,
+  Modal,
   Popconfirm,
   Select,
   Space,
   Table,
+  Tooltip,
   Typography,
 } from 'antd';
 import { ThunderboltOutlined, DeleteOutlined, OrderedListOutlined } from '@ant-design/icons';
@@ -39,6 +42,14 @@ import { canOpenLinkedDocumentDetail } from '../../../../kuaizhizao/utils/linked
 import { glService, type GlAccount, type GlVoucher, type GlVoucherLine } from '../../../services/gl';
 import { apiRequest } from '../../../../../services/api';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import {
+  mapAttachmentsToUploadList,
+  normalizeDocumentAttachments,
+  openDocumentAttachment,
+  type DocumentAttachmentFile,
+} from '../../../../kuaizhizao/utils/documentAttachments';
+import { resolveGlSourceDocTypeLabel } from '../../../utils/glAccountingEventDisplay';
 import GenerateFromEventsModal from './GenerateFromEventsModal';
 import ReorganizeVouchersModal from './ReorganizeVouchersModal';
 
@@ -89,6 +100,8 @@ const GlVouchersPage: React.FC = () => {
   const [lines, setLines] = useState<DraftLine[]>([emptyLine(), emptyLine()]);
   const [genModalOpen, setGenModalOpen] = useState(false);
   const [reorganizeModalOpen, setReorganizeModalOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailVoucher, setDetailVoucher] = useState<GlVoucher | null>(null);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<{ label: string; value: number }[]>([]);
@@ -226,6 +239,45 @@ const GlVouchersPage: React.FC = () => {
     setModalOpen(true);
   };
 
+  const openDetail = useCallback(
+    async (record: GlVoucher) => {
+      try {
+        const detail = (await glService.getVoucher(record.id)) as GlVoucher;
+        setDetailVoucher(detail);
+        setDetailOpen(true);
+      } catch (error) {
+        messageApi.error(getApiErrorMessage(error, t('common.loadFailed', { defaultValue: '加载失败' })));
+      }
+    },
+    [messageApi, t],
+  );
+
+  const renderAccountSummaryCell = useCallback(
+    (text: string | undefined, record: GlVoucher) => {
+      const value = String(text || '').trim();
+      if (!value) return '—';
+      return (
+        <Tooltip title={value}>
+          <a
+            onClick={(e) => {
+              e.stopPropagation();
+              void openDetail(record);
+            }}
+            style={{
+              display: 'block',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {value}
+          </a>
+        </Tooltip>
+      );
+    },
+    [openDetail],
+  );
+
   const openEdit = async (record: GlVoucher) => {
     try {
       const detail = (await glService.getVoucher(record.id)) as GlVoucher;
@@ -269,6 +321,20 @@ const GlVouchersPage: React.FC = () => {
             hideInSearch: true,
             copyable: true,
             ellipsis: true,
+            render: (_, r) => {
+              const code = String(r.voucher_code || '').trim();
+              if (!code) return '—';
+              return (
+                <a
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void openDetail(r);
+                  }}
+                >
+                  {code}
+                </a>
+              );
+            },
           },
           {
             title: t(`${NS}.col.keyword`),
@@ -329,7 +395,8 @@ const GlVouchersPage: React.FC = () => {
               const type = String(r.source_doc_type || '');
               const id = Number(r.source_doc_id || 0);
               if (!type || !id) return '—';
-              const label = `${type}#${id}`;
+              const typeLabel = resolveGlSourceDocTypeLabel(type, t);
+              const label = `${typeLabel}#${id}`;
               if (canOpenLinkedDocumentDetail(type)) {
                 return (
                   <a
@@ -353,7 +420,7 @@ const GlVouchersPage: React.FC = () => {
             resizable: false,
             hideInSearch: true,
             ellipsis: true,
-            render: (_, r) => r.debit_accounts || '—',
+            render: (_, r) => renderAccountSummaryCell(r.debit_accounts, r),
           },
           {
             title: t(`${NS}.col.creditAccounts`, { defaultValue: '贷方科目' }),
@@ -364,7 +431,7 @@ const GlVouchersPage: React.FC = () => {
             resizable: false,
             hideInSearch: true,
             ellipsis: true,
-            render: (_, r) => r.credit_accounts || '—',
+            render: (_, r) => renderAccountSummaryCell(r.credit_accounts, r),
           },
           {
             title: t(`${NS}.col.debit`),
@@ -410,7 +477,13 @@ const GlVouchersPage: React.FC = () => {
             fixed: 'right',
             hideInSearch: true,
             render: (_, record) => {
-              const acts: React.ReactNode[] = [];
+              const acts: React.ReactNode[] = [
+                <Button
+                  key="detail"
+                  {...rowActionKind('detail')}
+                  onClick={() => void openDetail(record)}
+                />,
+              ];
               const deleteButton = (
                 <Popconfirm
                   key="delete"
@@ -518,8 +591,10 @@ const GlVouchersPage: React.FC = () => {
         ],
         GLOBAL_DOC_LIST_FIELD_RANK,
       ),
-    [t, linked],
+    [t, linked, openDetail, renderAccountSummaryCell],
   );
+
+  const detailLines = (detailVoucher?.lines as GlVoucherLine[] | undefined) || [];
 
 
   const lineTotalDebit = lines.reduce((s, l) => s + Number(l.debit_amount || 0), 0);
@@ -535,12 +610,17 @@ const GlVouchersPage: React.FC = () => {
       messageApi.error(t(`${NS}.unbalanced`, { defaultValue: '借贷不平衡' }));
       return;
     }
+    const attachments = normalizeDocumentAttachments(
+      values.attachments as DocumentAttachmentFile[] | undefined,
+    );
     const payload = {
       voucher_word: (values.voucher_word as string) || '记',
       voucher_date: values.voucher_date
         ? dayjs(values.voucher_date as string).format('YYYY-MM-DD')
         : undefined,
       summary: values.summary || undefined,
+      attachments,
+      attachment_count: attachments.length,
       lines: validLines.map((l) => ({
         account_id: l.account_id,
         debit_amount: Number(l.debit_amount || 0),
@@ -961,6 +1041,139 @@ const GlVouchersPage: React.FC = () => {
         }}
       />
 
+      <Modal
+        title={t(`${NS}.detailTitle`, { defaultValue: '凭证详情' })}
+        open={detailOpen}
+        onCancel={() => {
+          setDetailOpen(false);
+          setDetailVoucher(null);
+        }}
+        footer={
+          detailVoucher?.status === 'draft' ? (
+            <Space>
+              <Button
+                type="primary"
+                onClick={() => {
+                  setDetailOpen(false);
+                  void openEdit(detailVoucher);
+                }}
+              >
+                {t(`${NS}.action.editFromDetail`, { defaultValue: '编辑凭证' })}
+              </Button>
+              <Button
+                onClick={() => {
+                  setDetailOpen(false);
+                  setDetailVoucher(null);
+                }}
+              >
+                {t('common.close', { defaultValue: '关闭' })}
+              </Button>
+            </Space>
+          ) : (
+            <Button
+              onClick={() => {
+                setDetailOpen(false);
+                setDetailVoucher(null);
+              }}
+            >
+              {t('common.close', { defaultValue: '关闭' })}
+            </Button>
+          )
+        }
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        destroyOnHidden
+      >
+        {detailVoucher ? (
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
+            <Descriptions size="small" column={2} bordered>
+              <Descriptions.Item label={t(`${NS}.col.voucherCode`, { defaultValue: '凭证号' })}>
+                {detailVoucher.voucher_code || '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t(`${NS}.col.voucherDate`, { defaultValue: '凭证日期' })}>
+                {detailVoucher.voucher_date || '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t(`${NS}.col.period`, { defaultValue: '期间' })}>
+                {detailVoucher.period_year && detailVoucher.period_month
+                  ? `${detailVoucher.period_year}-${String(detailVoucher.period_month).padStart(2, '0')}`
+                  : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.status', { defaultValue: '状态' })}>
+                <StatusTag color={statusColor(detailVoucher.status)}>
+                  {statusLabel(detailVoucher.status)}
+                </StatusTag>
+              </Descriptions.Item>
+              <Descriptions.Item label={t(`${NS}.col.summary`, { defaultValue: '摘要' })} span={2}>
+                {detailVoucher.summary || '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t(`${NS}.col.debit`, { defaultValue: '借方合计' })}>
+                {formatAmount(detailVoucher.total_debit ?? 0)}
+              </Descriptions.Item>
+              <Descriptions.Item label={t(`${NS}.col.credit`, { defaultValue: '贷方合计' })}>
+                {formatAmount(detailVoucher.total_credit ?? 0)}
+              </Descriptions.Item>
+              <Descriptions.Item label={t(`${NS}.field.attachments`, { defaultValue: '原始凭证' })}>
+                {(detailVoucher.attachments?.length ?? 0) > 0 ? (
+                  <Space orientation="vertical" size={4}>
+                    {detailVoucher.attachments!.map((file) => (
+                      <Typography.Link
+                        key={file.uid || file.name}
+                        onClick={() => {
+                          void openDocumentAttachment(file).catch(() => {
+                            messageApi.error(
+                              t('components.documentAttachments.openFailed', {
+                                defaultValue: '打开附件失败',
+                              }),
+                            );
+                          });
+                        }}
+                      >
+                        {file.name || file.uid || t('components.documentAttachments.label')}
+                      </Typography.Link>
+                    ))}
+                  </Space>
+                ) : (
+                  '—'
+                )}
+              </Descriptions.Item>
+            </Descriptions>
+            <Table
+              rowKey={(r, i) => String(r.id ?? i)}
+              size="medium"
+              pagination={false}
+              dataSource={detailLines}
+              columns={[
+                {
+                  title: t(`${NS}.line.account`, { defaultValue: '科目' }),
+                  key: 'account',
+                  width: 220,
+                  render: (_: unknown, line: GlVoucherLine) =>
+                    `${line.account_code || ''} ${line.account_name || ''}`.trim() || '—',
+                },
+                {
+                  title: t(`${NS}.line.summary`, { defaultValue: '摘要' }),
+                  dataIndex: 'summary',
+                  ellipsis: true,
+                },
+                {
+                  title: t(`${NS}.col.debit`, { defaultValue: '借方' }),
+                  dataIndex: 'debit_amount',
+                  align: 'right' as const,
+                  width: 120,
+                  render: (v: unknown) => formatAmount(v ?? 0),
+                },
+                {
+                  title: t(`${NS}.col.credit`, { defaultValue: '贷方' }),
+                  dataIndex: 'credit_amount',
+                  align: 'right' as const,
+                  width: 120,
+                  render: (v: unknown) => formatAmount(v ?? 0),
+                },
+              ]}
+            />
+          </Space>
+        ) : null}
+      </Modal>
+
       <FormModalTemplate
         title={
           editing
@@ -981,6 +1194,7 @@ const GlVouchersPage: React.FC = () => {
                 voucher_word: editing.voucher_word || '记',
                 voucher_date: editing.voucher_date ? dayjs(editing.voucher_date) : dayjs(),
                 summary: editing.summary,
+                attachments: mapAttachmentsToUploadList(editing.attachments),
               }
             : { voucher_date: dayjs(), voucher_word: '记' }
         }
@@ -1039,6 +1253,10 @@ const GlVouchersPage: React.FC = () => {
               </Typography.Text>
             </Space>
           )}
+        />
+        <DocumentAttachmentsField
+          category="gl_voucher_attachments"
+          label={t(`${NS}.field.attachments`, { defaultValue: '原始凭证' })}
         />
       </FormModalTemplate>
 

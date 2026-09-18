@@ -27444,6 +27444,13 @@ export default {
   'pages.system.roles.roleUsers': '角色关联用户：',
   'pages.system.roles.roleUsersPanelTitle': '关联用户',
   'pages.system.roles.roleUsersEmpty': '暂无用户拥有此角色',
+  'pages.system.roles.roleUsersAdd': '新增',
+  'pages.system.roles.roleUsersAddTitle': '关联用户',
+  'pages.system.roles.roleUsersAddPlaceholder': '请选择要关联的用户',
+  'pages.system.roles.roleUsersAddSuccess': '已关联用户',
+  'pages.system.roles.roleUsersRemoveSuccess': '已移除关联',
+  'pages.system.roles.roleUsersRemoveConfirmTitle': '移除关联用户',
+  'pages.system.roles.roleUsersRemoveConfirm': '确定将「{{name}}」从该角色移除？不影响该用户其它角色。',
   'pages.system.roles.statsItemUnit': ' 项',
   'pages.system.roles.statsUserUnit': ' 人',
 
@@ -30291,6 +30298,18 @@ export default {
     '库存查询列表增加库位列',
   'pages.dashboard.updateLog.entries.warehouse-inventory-location-r01.description':
     '即时库存、批次库存与线边仓库存写入并展示库位；入库确认时落库位快照，历史采购/其他入库明细回填已有批次。',
+  'pages.dashboard.updateLog.entries.sales-outbound-document-date-business-r02.title':
+    '修复销售出库制单日期被确认时刻覆盖',
+  'pages.dashboard.updateLog.entries.sales-outbound-document-date-business-r02.description':
+    '取单与确认出库不再默认今天或带入当前时分秒；用户手填时按业务日历日写入，未填则列表为空，不用创建时间兜底。',
+  'pages.dashboard.updateLog.entries.gl-voucher-events-i18n-r02.title':
+    '补全从业务事件生成凭证的中文展示',
+  'pages.dashboard.updateLog.entries.gl-voucher-events-i18n-r02.description':
+    '来源类型筛选与列表、摘要不再显示 PurchaseOrder、PURCHASE_INVOICE_CREATED 等英文码；凭证列表来源单据同步显示中文类型名。',
+  'pages.dashboard.updateLog.entries.warehouse-inventory-location-name-r01.title':
+    '即时库存库位列改为显示库区与库位名称',
+  'pages.dashboard.updateLog.entries.warehouse-inventory-location-name-r01.description':
+    '即时库存与批次库存查询按库位主数据解析库区、库位名称展示，不再仅显示库位编码；同一物料多库位时以名称合并列出。',
   'pages.dashboard.updateLog.entries.gl-voucher-events-source-type-label-r01.title':
     '业务事件生成凭证时来源类型显示中文',
   'pages.dashboard.updateLog.entries.gl-voucher-events-source-type-label-r01.description':
@@ -30327,6 +30346,26 @@ export default {
     '修复调拨单明细不显示物料名称',
   'pages.dashboard.updateLog.entries.inventory-transfer-material-snapshot-r01.description':
     '调拨明细创建与更新时按物料主数据写入编码/名称/单位快照；历史空快照已回填。列表「明细」列与详情调拨明细表可正常显示物料名称。',
+  'pages.dashboard.updateLog.entries.gl-voucher-attachments-r01.title':
+    '填制凭证支持上传原始凭证',
+  'pages.dashboard.updateLog.entries.gl-voucher-attachments-r01.description':
+    '填制与编辑凭证时可上传原始凭证附件，附单据数随附件自动统计；凭证详情可预览与下载附件。',
+  'pages.dashboard.updateLog.entries.gl-voucher-list-detail-r01.title':
+    '凭证列表可查看分录详情',
+  'pages.dashboard.updateLog.entries.gl-voucher-list-detail-r01.description':
+    '凭证号、借方科目、贷方科目支持点击查看完整分录；悬停显示全部科目名称，多行分录不再被截断后无法查看。',
+  'pages.dashboard.updateLog.entries.gl-books-balance-rollup-r01.title':
+    '修复账簿查询科目余额表发生额汇总不全',
+  'pages.dashboard.updateLog.entries.gl-books-balance-rollup-r01.description':
+    '科目余额表与总账查询合并辅助核算拆行，并将下级明细科目余额逐层累加到上级科目，与凭证分录口径一致。',
+  'pages.dashboard.updateLog.entries.sales-order-repush-after-delivery-delete-r01.title':
+    '修复删除销售出库后无法再次下推',
+  'pages.dashboard.updateLog.entries.sales-order-repush-after-delivery-delete-r01.description':
+    '删除未确认的销售出库单时，同步软删关联发货通知，释放订单可下推数量；删除后销售订单可再次创建销售出库单。',
+  'pages.dashboard.updateLog.entries.sales-delivery-confirm-item-updates-r01.title':
+    '修复销售出库确认过账报错',
+  'pages.dashboard.updateLog.entries.sales-delivery-confirm-item-updates-r01.description':
+    '确认出库时库位/批号写入逻辑已归位到 SalesDeliveryService，不再因方法挂错类而报 AttributeError。',
   'pages.dashboard.updateLog.entries.material-shortage-purchase-action-r01.title':
     '修复缺料异常采购误导向可视排产',
   'pages.dashboard.updateLog.entries.material-shortage-purchase-action-r01.description':
@@ -30346,6 +30385,10 @@ export default {
   'pages.dashboard.updateLog.entries.work-order-split-push-r01.title': '修复拆分工单无法下推',
   'pages.dashboard.updateLog.entries.work-order-split-push-r01.description':
     '工单列表工具栏下推现识别拆分子工单行；已拆分主工单提示请勾选子工单，不再误报所选记录不在当前列表或整单下推项全灰。',
+  'pages.dashboard.updateLog.entries.role-users-add-remove-r01.title':
+    '角色权限页可直接新增删除关联用户',
+  'pages.dashboard.updateLog.entries.role-users-add-remove-r01.description':
+    '角色管理右侧「关联用户」支持直接添加用户到当前角色、从角色移除（不影响用户其它角色）；需角色分配权限，管理员角色变更仍受管理员身份校验。',
   'pages.dashboard.updateLog.entries.sales-tax-exclusive-price-anchor-r01.title':
     '销售明细不含税单价切换含税后再填税率不再被压价',
   'pages.dashboard.updateLog.entries.sales-tax-exclusive-price-anchor-r01.description':
@@ -34311,7 +34354,10 @@ export default {
   'app.kuaicaiwu.gl.vouchers.confirmObsolete': '确认作废该凭证？',
   'app.kuaicaiwu.gl.vouchers.create': '填制凭证',
   'app.kuaicaiwu.gl.vouchers.createTitle': '填制凭证',
+  'app.kuaicaiwu.gl.vouchers.detailTitle': '凭证详情',
+  'app.kuaicaiwu.gl.vouchers.action.editFromDetail': '编辑凭证',
   'app.kuaicaiwu.gl.vouchers.editTitle': '编辑凭证',
+  'app.kuaicaiwu.gl.vouchers.field.attachments': '原始凭证',
   'app.kuaicaiwu.gl.vouchers.field.date': '凭证日期',
   'app.kuaicaiwu.gl.vouchers.field.summary': '摘要',
   'app.kuaicaiwu.gl.vouchers.field.voucherWord': '凭证字',
@@ -34348,6 +34394,42 @@ export default {
   'app.kuaicaiwu.gl.vouchers.events.col.summary': '摘要',
   'app.kuaicaiwu.gl.vouchers.events.col.voucher': '凭证',
   'app.kuaicaiwu.gl.vouchers.events.notGenerated': '未生成',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.purchase_order': '采购订单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.PurchaseOrder': '采购订单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.sales_order': '销售订单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.SalesOrder': '销售订单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.purchase_receipt': '采购入库单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.PurchaseReceipt': '采购入库单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.sales_delivery': '销售出库单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.SalesDelivery': '销售出库单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.receivable': '应收单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.Receivable': '应收单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.payable': '应付单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.Payable': '应付单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.receipt': '收款单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.payment': '付款单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.purchase_invoice': '采购发票',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.PurchaseInvoice': '采购发票',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.sales_invoice': '销售发票',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.SalesInvoice': '销售发票',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.sales_return': '销售退货单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.purchase_return': '采购退货单',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.fixed_asset': '固定资产',
+  'app.kuaicaiwu.gl.vouchers.events.sourceDocType.fa_asset': '固定资产',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.PURCHASE_INVOICE_CREATED': '采购发票创建',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.INVOICE_CREATED': '销售发票创建',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.PAYABLE_CREATED': '应付单创建',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.RECEIVABLE_CREATED': '应收单创建',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.SETTLEMENT_RECEIVABLE_COMPLETED': '应收核销完成',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.SETTLEMENT_PAYABLE_COMPLETED': '应付核销完成',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.PURCHASE_ORDER_TO_PREPAYMENT': '采购订单转预付',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.SALES_ORDER_TO_PREPAYMENT': '销售订单转预收',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.PAYMENT_REFUND_CONFIRMED': '付款退款确认',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.RECEIPT_REFUND_CONFIRMED': '收款退款确认',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.FA_DEPRECIATION': '固定资产折旧',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.FA_IMPAIRMENT': '固定资产减值',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.FA_DISPOSAL': '固定资产处置',
+  'app.kuaicaiwu.gl.vouchers.events.eventType.FX_REVALUATION_PERIOD_END': '期末汇兑损益',
   'app.kuaicaiwu.gl.vouchers.line.account': '科目',
   'app.kuaicaiwu.gl.vouchers.nonLeafAccountOption': '{{account}}（非末级）',
   'app.kuaicaiwu.gl.vouchers.line.cashFlow': '现金流量',

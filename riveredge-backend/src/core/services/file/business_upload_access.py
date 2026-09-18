@@ -359,6 +359,10 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "kuaicaiwu:bank-account:create",
         "kuaicaiwu:bank-account:update",
     ),
+    "gl_voucher_attachments": (
+        "kuaicaiwu:gl:create",
+        "kuaicaiwu:gl:update",
+    ),
 }
 
 

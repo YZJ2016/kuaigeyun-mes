@@ -253,6 +253,8 @@ class BalanceService:
         account_code_from: Optional[str] = None,
         account_code_to: Optional[str] = None,
         aux_only: bool = False,
+        merge_aux: bool = False,
+        rollup_hierarchy: bool = False,
         customer_id: Optional[int] = None,
         supplier_id: Optional[int] = None,
         department_id: Optional[int] = None,
@@ -370,6 +372,21 @@ class BalanceService:
             acc = accounts.get(r["account_id"])
             r["account_name"] = acc.account_name if acc else ""
             r["account_type"] = acc.account_type if acc else ""
+
+        aux_filtered = any(
+            v is not None
+            for v in (customer_id, supplier_id, department_id, employee_id, project_id)
+        )
+        books_view = not aux_only and not aux_filtered
+        if books_view and merge_aux:
+            from apps.kuaicaiwu.services.gl.balance_aggregate import aggregate_balances_by_account
+
+            result = aggregate_balances_by_account(result)
+        if books_view and rollup_hierarchy:
+            from apps.kuaicaiwu.services.gl.balance_aggregate import rollup_balances_to_ancestors
+
+            result = rollup_balances_to_ancestors(result, accounts)
+
         result.sort(key=lambda x: str(x.get("account_code") or ""))
         return result
 
@@ -380,9 +397,16 @@ class BalanceService:
         month: int,
         *,
         include_unposted: bool = False,
+        merge_aux: bool = True,
+        rollup_hierarchy: bool = True,
     ) -> Dict[str, Any]:
         rows = await self.account_balance_sheet(
-            tenant_id, year, month, include_unposted=include_unposted
+            tenant_id,
+            year,
+            month,
+            include_unposted=include_unposted,
+            merge_aux=merge_aux,
+            rollup_hierarchy=rollup_hierarchy,
         )
         opening_d = sum(Decimal(str(r["opening_debit"])) for r in rows)
         opening_c = sum(Decimal(str(r["opening_credit"])) for r in rows)
@@ -516,10 +540,17 @@ class BalanceService:
         month: int,
         *,
         include_unposted: bool = False,
+        merge_aux: bool = True,
+        rollup_hierarchy: bool = True,
     ) -> List[Dict[str, Any]]:
         """总分类账：按科目汇总本期发生与余额。"""
         return await self.account_balance_sheet(
-            tenant_id, year, month, include_unposted=include_unposted
+            tenant_id,
+            year,
+            month,
+            include_unposted=include_unposted,
+            merge_aux=merge_aux,
+            rollup_hierarchy=rollup_hierarchy,
         )
 
     async def voucher_summary(

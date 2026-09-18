@@ -29,6 +29,7 @@ class Voucher(BaseModel):
     status = fields.CharField(max_length=20, default="draft", description="draft/reviewed/posted/cancelled")
     summary = fields.CharField(max_length=500, null=True, description="摘要")
     attachment_count = fields.IntField(default=0, description="附单据数")
+    attachments = fields.JSONField(null=True, description="原始凭证附件列表")
     source_event_id = fields.IntField(null=True, description="来源会计事件ID")
     source_doc_type = fields.CharField(max_length=50, null=True, description="来源单据类型")
     source_doc_id = fields.IntField(null=True, description="来源单据ID")

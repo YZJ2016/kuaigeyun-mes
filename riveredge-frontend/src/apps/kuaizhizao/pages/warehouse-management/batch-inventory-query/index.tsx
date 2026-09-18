@@ -14,7 +14,10 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { apiRequest } from '../../../../../services/api';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
-import { resolveInventoryBatchLineListParams } from '../../../utils/warehouseListCore';
+import {
+  formatInventoryLocationDisplay,
+  resolveInventoryBatchLineListParams,
+} from '../../../utils/warehouseListCore';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
@@ -50,6 +53,8 @@ interface BatchInventoryItem {
   status: string;
   warehouse_id: number | null;
   warehouse_name: string | null;
+  storage_area_name?: string | null;
+  location_name?: string | null;
   location_code?: string | null;
 }
 
@@ -427,8 +432,8 @@ const BatchInventoryQuery: React.FC = () => {
       },
       {
         title: t('app.kuaizhizao.warehouseInventory.colLocation'),
-        dataIndex: 'location_code',
-        key: 'location_code',
+        dataIndex: 'location_name',
+        key: 'location_name',
         width: 120,
         minWidth: 120,
         uniTableKeepWidth: true,
@@ -436,7 +441,7 @@ const BatchInventoryQuery: React.FC = () => {
         ellipsis: true,
         hideInSearch: true,
         render: (_, record) => {
-          const text = String(record.location_code ?? '').trim();
+          const text = formatInventoryLocationDisplay(record);
           return text || '—';
         },
       },
@@ -609,7 +614,7 @@ const BatchInventoryQuery: React.FC = () => {
           r.production_date,
           r.expiry_date,
           r.quantity,
-          r.location_code,
+          formatInventoryLocationDisplay(r) || '-',
           r.in_transit_quantity ?? 0,
           r.alert_label,
           r.supplier_batch_no,

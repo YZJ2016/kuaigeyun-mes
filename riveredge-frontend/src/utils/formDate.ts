@@ -157,6 +157,13 @@ export function toApiDateString(value: unknown): string | undefined {
   return wallCalendarDateString(d);
 }
 
+/** 制单日期等业务日：站点日历日 00:00:00（禁止 DatePicker 带入当前时分秒） */
+export function toApiBusinessDocumentDateTime(value: unknown): string | undefined {
+  const dateStr = toApiDateString(value);
+  if (!dateStr) return undefined;
+  return `${dateStr} 00:00:00`;
+}
+
 /** 提交 API：站点墙钟 YYYY-MM-DD HH:mm:ss（禁止 toISOString） */
 export function toApiDateTimeString(value: unknown): string | undefined {
   if (value == null || value === '') return undefined;

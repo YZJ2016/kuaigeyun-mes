@@ -20,7 +20,13 @@ from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 from loguru import logger
 
-from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str, to_api_isoformat
+from core.utils.timezone_utils import (
+    coerce_business_datetime_to_utc,
+    resolve_business_datetime,
+    to_site_date,
+    today_site_str,
+    to_api_isoformat,
+)
 from apps.common.audit_actor import audit_response_fields
 from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
 
@@ -2489,118 +2495,6 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 serial_numbers=None,
                 notes=item.notes,
             )
-
-    async def _split_sales_delivery_item_for_batch_allocations(
-        self,
-        tenant_id: int,
-        delivery_id: int,
-        item: SalesDeliveryItem,
-        cleaned_allocs: List[Tuple[str, Decimal]],
-        target_qty: Decimal,
-        item_update: Dict[str, Any],
-    ) -> None:
-        """销售出库多批分摊：更新首行并按批克隆追加明细。"""
-        qty_eps = Decimal("0.0001")
-        alloc_sum = sum((q for _, q in cleaned_allocs), Decimal(0))
-        if abs(alloc_sum - target_qty) > qty_eps:
-            raise ValidationError(
-                f"物料 {item.material_code} 多批分摊合计({alloc_sum})须等于本行出库量({target_qty})"
-            )
-        first_batch, first_qty = cleaned_allocs[0]
-        unit_price = Decimal(str(item.unit_price or 0))
-        item_update["batch_number"] = first_batch
-        item_update["delivery_quantity"] = first_qty
-        item_update["total_amount"] = first_qty * unit_price
-        await SalesDeliveryItem.filter(
-            tenant_id=tenant_id, id=item.id, delivery_id=delivery_id
-        ).update(**item_update)
-        item = await SalesDeliveryItem.get(tenant_id=tenant_id, id=item.id)
-        for batch_no, qty in cleaned_allocs[1:]:
-            await SalesDeliveryItem.create(
-                tenant_id=tenant_id,
-                delivery_id=delivery_id,
-                sales_order_item_id=item.sales_order_item_id,
-                shipment_notice_item_id=item.shipment_notice_item_id,
-                material_id=item.material_id,
-                material_code=item.material_code,
-                material_name=item.material_name,
-                material_spec=item.material_spec,
-                material_unit=item.material_unit,
-                delivery_quantity=qty,
-                unit_price=item.unit_price,
-                unit_cost=item.unit_cost,
-                total_amount=qty * unit_price,
-                is_gift=item.is_gift,
-                gift_ref_unit_price=item.gift_ref_unit_price,
-                location_id=item.location_id,
-                location_code=item.location_code,
-                batch_number=batch_no,
-                expiry_date=item.expiry_date,
-                serial_numbers=None,
-                demand_id=item.demand_id,
-                demand_item_id=item.demand_item_id,
-                status=item.status or "待出库",
-                notes=item.notes,
-            )
-
-    async def _apply_sales_delivery_confirm_item_updates(
-        self,
-        tenant_id: int,
-        delivery_id: int,
-        items: List[OutboundConfirmationItem],
-    ) -> None:
-        """确认出库前写入库位/批号；多批分摊时按批拆明细（一批一扣）。"""
-        for item_data in items:
-            item = await SalesDeliveryItem.get_or_none(
-                tenant_id=tenant_id, id=item_data.item_id, delivery_id=delivery_id
-            )
-            if not item:
-                raise NotFoundError(f"出库明细不存在: {item_data.item_id}")
-
-            item_update: Dict[str, Any] = {}
-            if item_data.location_id:
-                item_update["location_id"] = item_data.location_id
-                item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
-            if item_data.serial_numbers is not None:
-                item_update["serial_numbers"] = json.dumps(item_data.serial_numbers)
-
-            cleaned_allocs = _clean_outbound_batch_allocations(item_data.batch_allocations)
-
-            if len(cleaned_allocs) > 1 and item_data.serial_numbers:
-                serials = _parse_serial_numbers(item_data.serial_numbers)
-                if serials:
-                    raise BusinessLogicError(
-                        f"物料 {item.material_code} 启用序列号管理时，确认出库暂不支持同一次拆多批"
-                    )
-
-            if len(cleaned_allocs) > 1:
-                target_qty = Decimal(str(item.delivery_quantity or 0))
-                if target_qty <= 0:
-                    raise ValidationError(f"物料 {item.material_code} 出库数量须大于 0")
-                await self._split_sales_delivery_item_for_batch_allocations(
-                    tenant_id=tenant_id,
-                    delivery_id=delivery_id,
-                    item=item,
-                    cleaned_allocs=cleaned_allocs,
-                    target_qty=target_qty,
-                    item_update=item_update,
-                )
-                continue
-
-            if cleaned_allocs:
-                batch_no, alloc_qty = cleaned_allocs[0]
-                item_update["batch_number"] = batch_no
-                if len(cleaned_allocs) == 1 and alloc_qty > 0:
-                    unit_price = Decimal(str(item.unit_price or 0))
-                    item_update["delivery_quantity"] = alloc_qty
-                    item_update["total_amount"] = alloc_qty * unit_price
-            elif item_data.batch_number:
-                item_update["batch_number"] = str(item_data.batch_number).strip() or None
-
-            if item_update:
-                await SalesDeliveryItem.filter(
-                    tenant_id=tenant_id, id=item_data.item_id, delivery_id=delivery_id
-                ).update(**item_update)
 
     async def _apply_production_picking_confirm_item_updates(
         self,
@@ -6267,7 +6161,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 customer_name=delivery_data.customer_name,
                 warehouse_id=delivery_data.warehouse_id,
                 warehouse_name=delivery_data.warehouse_name,
-                delivery_time=delivery_data.delivery_time,
+                delivery_time=coerce_business_datetime_to_utc(delivery_data.delivery_time),
                 deliverer_id=delivery_data.deliverer_id,
                 deliverer_name=delivery_data.deliverer_name,
                 reviewer_id=delivery_data.reviewer_id,
@@ -6828,15 +6722,15 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
         async with in_transaction():
             now = resolve_business_datetime()
+            # 关联发货通知须一并软删：仅重置为「待发货」时通知行仍占用可下推量，会导致销售订单无法再次下推出库。
             await ShipmentNotice.filter(
                 tenant_id=tenant_id,
                 sales_delivery_id=delivery_id,
                 deleted_at__isnull=True,
             ).update(
+                deleted_at=now,
                 sales_delivery_id=None,
                 sales_delivery_code=None,
-                status="待发货",
-                notified_at=None,
             )
             await DeliveryNotice.filter(
                 tenant_id=tenant_id,
@@ -8342,6 +8236,118 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 await oi.save()
                 qty -= take
 
+    async def _split_sales_delivery_item_for_batch_allocations(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        item: SalesDeliveryItem,
+        cleaned_allocs: List[Tuple[str, Decimal]],
+        target_qty: Decimal,
+        item_update: Dict[str, Any],
+    ) -> None:
+        """销售出库多批分摊：更新首行并按批克隆追加明细。"""
+        qty_eps = Decimal("0.0001")
+        alloc_sum = sum((q for _, q in cleaned_allocs), Decimal(0))
+        if abs(alloc_sum - target_qty) > qty_eps:
+            raise ValidationError(
+                f"物料 {item.material_code} 多批分摊合计({alloc_sum})须等于本行出库量({target_qty})"
+            )
+        first_batch, first_qty = cleaned_allocs[0]
+        unit_price = Decimal(str(item.unit_price or 0))
+        item_update["batch_number"] = first_batch
+        item_update["delivery_quantity"] = first_qty
+        item_update["total_amount"] = first_qty * unit_price
+        await SalesDeliveryItem.filter(
+            tenant_id=tenant_id, id=item.id, delivery_id=delivery_id
+        ).update(**item_update)
+        item = await SalesDeliveryItem.get(tenant_id=tenant_id, id=item.id)
+        for batch_no, qty in cleaned_allocs[1:]:
+            await SalesDeliveryItem.create(
+                tenant_id=tenant_id,
+                delivery_id=delivery_id,
+                sales_order_item_id=item.sales_order_item_id,
+                shipment_notice_item_id=item.shipment_notice_item_id,
+                material_id=item.material_id,
+                material_code=item.material_code,
+                material_name=item.material_name,
+                material_spec=item.material_spec,
+                material_unit=item.material_unit,
+                delivery_quantity=qty,
+                unit_price=item.unit_price,
+                unit_cost=item.unit_cost,
+                total_amount=qty * unit_price,
+                is_gift=item.is_gift,
+                gift_ref_unit_price=item.gift_ref_unit_price,
+                location_id=item.location_id,
+                location_code=item.location_code,
+                batch_number=batch_no,
+                expiry_date=item.expiry_date,
+                serial_numbers=None,
+                demand_id=item.demand_id,
+                demand_item_id=item.demand_item_id,
+                status=item.status or "待出库",
+                notes=item.notes,
+            )
+
+    async def _apply_sales_delivery_confirm_item_updates(
+        self,
+        tenant_id: int,
+        delivery_id: int,
+        items: List[OutboundConfirmationItem],
+    ) -> None:
+        """确认出库前写入库位/批号；多批分摊时按批拆明细（一批一扣）。"""
+        for item_data in items:
+            item = await SalesDeliveryItem.get_or_none(
+                tenant_id=tenant_id, id=item_data.item_id, delivery_id=delivery_id
+            )
+            if not item:
+                raise NotFoundError(f"出库明细不存在: {item_data.item_id}")
+
+            item_update: Dict[str, Any] = {}
+            if item_data.location_id:
+                item_update["location_id"] = item_data.location_id
+                item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
+            if item_data.serial_numbers is not None:
+                item_update["serial_numbers"] = json.dumps(item_data.serial_numbers)
+
+            cleaned_allocs = _clean_outbound_batch_allocations(item_data.batch_allocations)
+
+            if len(cleaned_allocs) > 1 and item_data.serial_numbers:
+                serials = _parse_serial_numbers(item_data.serial_numbers)
+                if serials:
+                    raise BusinessLogicError(
+                        f"物料 {item.material_code} 启用序列号管理时，确认出库暂不支持同一次拆多批"
+                    )
+
+            if len(cleaned_allocs) > 1:
+                target_qty = Decimal(str(item.delivery_quantity or 0))
+                if target_qty <= 0:
+                    raise ValidationError(f"物料 {item.material_code} 出库数量须大于 0")
+                await self._split_sales_delivery_item_for_batch_allocations(
+                    tenant_id=tenant_id,
+                    delivery_id=delivery_id,
+                    item=item,
+                    cleaned_allocs=cleaned_allocs,
+                    target_qty=target_qty,
+                    item_update=item_update,
+                )
+                continue
+
+            if cleaned_allocs:
+                batch_no, alloc_qty = cleaned_allocs[0]
+                item_update["batch_number"] = batch_no
+                if len(cleaned_allocs) == 1 and alloc_qty > 0:
+                    unit_price = Decimal(str(item.unit_price or 0))
+                    item_update["delivery_quantity"] = alloc_qty
+                    item_update["total_amount"] = alloc_qty * unit_price
+            elif item_data.batch_number:
+                item_update["batch_number"] = str(item_data.batch_number).strip() or None
+
+            if item_update:
+                await SalesDeliveryItem.filter(
+                    tenant_id=tenant_id, id=item_data.item_id, delivery_id=delivery_id
+                ).update(**item_update)
+
     @serialize_stock_document("sales_delivery", "delivery_id")
     async def confirm_delivery(
         self,
@@ -8456,7 +8462,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 if confirm_request and confirm_request.delivery_time
                 else getattr(sd_row, "delivery_time", None)
             )
-            confirm_time = resolve_business_datetime(time_source)
+            confirm_time = coerce_business_datetime_to_utc(time_source)
 
             sd_row.status = "已出库"
             sd_row.deliverer_id = deliverer_id

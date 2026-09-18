@@ -256,7 +256,7 @@ export function pickOutboundHubDateCandidate(...values: unknown[]): unknown {
   return null;
 }
 
-/** Hub 统一「出库日期」原始值 */
+/** Hub 统一「制单日期」原始值（禁止用 created_at 冒充业务制单日） */
 export function resolveOutboundHubDateRaw(record: OutboundHubOrder): unknown {
   const row = record as Record<string, unknown>;
   return pickOutboundHubDateCandidate(
@@ -272,8 +272,6 @@ export function resolveOutboundHubDateRaw(record: OutboundHubOrder): unknown {
     row.returnTime,
     row.issued_at,
     row.issuedAt,
-    row.created_at,
-    row.createdAt,
   );
 }
 

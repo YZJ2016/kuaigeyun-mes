@@ -210,3 +210,9 @@ class RoleUserListResponse(BaseModel):
     items: List[RoleUserListItem] = Field(default_factory=list, description="用户列表")
     total: int = Field(..., description="用户总数")
 
+
+class RoleUsersMutate(BaseModel):
+    """角色关联用户增删请求。"""
+
+    user_uuids: List[str] = Field(..., min_length=1, description="用户 UUID 列表")
+

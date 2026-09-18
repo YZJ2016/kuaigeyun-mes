@@ -74,6 +74,20 @@ _EVENT_TYPE_LABELS: Dict[str, str] = {
 }
 
 
+def _resolve_event_summary_display(
+    event_type: Optional[str],
+    notes: Optional[str],
+) -> Optional[str]:
+    """列表摘要：禁止裸 event_type / 英文事件码占位。"""
+    et = str(event_type or "").strip()
+    raw_notes = str(notes or "").strip()
+    if raw_notes and raw_notes != et and raw_notes not in _EVENT_TYPE_LABELS:
+        return raw_notes
+    if et in _EVENT_TYPE_LABELS:
+        return _EVENT_TYPE_LABELS[et]
+    return raw_notes or et or None
+
+
 def _pascal_to_snake(value: str) -> str:
     """PurchaseOrder → purchase_order；已是 snake/小写则原样小写。"""
     text = str(value or "").strip()
@@ -319,9 +333,7 @@ class GlIntegrationReconcileService:
                     "amount": float(ev.amount or 0),
                     "currency": ev.currency,
                     "event_date": ev.event_date.isoformat() if ev.event_date else None,
-                    "notes": ev.notes
-                    or self.event_type_label(ev.event_type)
-                    or None,
+                    "notes": _resolve_event_summary_display(ev.event_type, ev.notes),
                     "has_voucher": has_voucher,
                     "voucher_id": voucher.id if voucher else None,
                     "voucher_code": voucher.voucher_code if voucher else None,

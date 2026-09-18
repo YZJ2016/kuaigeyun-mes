@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 import type { UploadFile } from 'antd/es/upload/interface';
 import {
   draftDayjs,
@@ -39,7 +39,7 @@ import {
 import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundSalesOrderEntryPath } from './outboundPaths';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { toApiDateTimeString } from '../../../../../utils/formDate';
+import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import { reportDocumentStatusText } from '../../../utils/reportPresentation';
 
 const OutboundSalesOrderPullEntryPage: React.FC = () => {
@@ -62,7 +62,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [maxQuantities, setMaxQuantities] = useState<Record<number, number>>({});
   const [lineWh, setLineWh] = useState<Record<number, number>>({});
-  const [deliveryTime, setDeliveryTime] = useState(() => dayjs());
+  const [deliveryTime, setDeliveryTime] = useState<Dayjs | null>(null);
   const [notes, setNotes] = useState('');
   const [attachments, setAttachments] = useState<UploadFile[]>([]);
   const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
@@ -240,7 +240,10 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
           if (draft.lineWh) {
             setLineWh((prev) => mergeRecordMaps(prev, draft.lineWh as Record<number, number>));
           }
-          if (draft.deliveryTime) setDeliveryTime(draftDayjs(draft.deliveryTime));
+          if (draft.deliveryTime) {
+            const parsed = draftDayjs(draft.deliveryTime);
+            setDeliveryTime(parsed?.isValid() ? parsed.startOf('day') : null);
+          }
           if (typeof draft.notes === 'string') setNotes(draft.notes);
           operatorHook.restoreReceiver(
             typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
@@ -315,7 +318,9 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
         customer_name: String(order?.customer_name ?? ''),
         warehouse_id: headerWhId,
         warehouse_name: whOpt?.name,
-        delivery_time: toApiDateTimeString(deliveryTime),
+        ...(deliveryTime?.isValid()
+          ? { delivery_time: toApiBusinessDocumentDateTime(deliveryTime) }
+          : {}),
         deliverer_id: operatorHook.receiverId,
         deliverer_name: operatorHook.receiverName.trim() || undefined,
         // 备注已在下推创建时写入，避免 update 覆盖掉来源说明
@@ -406,7 +411,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
                     <DatePicker
                       style={{ width: '100%' }}
                       value={deliveryTime}
-                      onChange={(v) => setDeliveryTime(v ?? dayjs())}
+                      onChange={(v) => setDeliveryTime(v ? v.startOf('day') : null)}
                     />
                   </Form.Item>
                 </Col>

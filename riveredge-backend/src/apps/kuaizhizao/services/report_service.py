@@ -2359,6 +2359,97 @@ class ReportService:
             return int(resolved[0]), self._normalize_warehouse_display_name(resolved[1])
         return None, self._normalize_warehouse_display_name(None)
 
+    @staticmethod
+    def _inventory_location_display_label(row: Dict[str, Any]) -> Optional[str]:
+        area = str(row.get("storage_area_name") or "").strip()
+        name = str(row.get("location_name") or "").strip()
+        if area and name:
+            return f"{area} / {name}"
+        if name:
+            return name
+        if area:
+            return area
+        code = str(row.get("location_code") or "").strip()
+        return code or None
+
+    async def _enrich_inventory_rows_location_fields(
+        self,
+        tenant_id: int,
+        rows: List[Dict[str, Any]],
+    ) -> None:
+        from apps.master_data.models.warehouse import StorageArea, StorageLocation
+
+        location_ids = {
+            int(r["location_id"])
+            for r in rows
+            if r.get("location_id") is not None and int(r.get("location_id") or 0) > 0
+        }
+        codes_without_id = {
+            str(r.get("location_code") or "").strip()
+            for r in rows
+            if not r.get("location_id") and str(r.get("location_code") or "").strip()
+        }
+        if not location_ids and not codes_without_id:
+            return
+
+        by_id: Dict[int, Any] = {}
+        by_code: Dict[str, Any] = {}
+        area_by_id: Dict[int, Any] = {}
+
+        if location_ids:
+            locs = await StorageLocation.filter(
+                tenant_id=tenant_id,
+                id__in=list(location_ids),
+                deleted_at__isnull=True,
+            ).all()
+            by_id = {int(loc.id): loc for loc in locs}
+            area_ids = {int(loc.storage_area_id) for loc in locs if loc.storage_area_id}
+            if area_ids:
+                areas = await StorageArea.filter(
+                    tenant_id=tenant_id,
+                    id__in=list(area_ids),
+                    deleted_at__isnull=True,
+                ).all()
+                area_by_id = {int(a.id): a for a in areas}
+
+        if codes_without_id:
+            locs_by_code = await StorageLocation.filter(
+                tenant_id=tenant_id,
+                code__in=list(codes_without_id),
+                deleted_at__isnull=True,
+            ).all()
+            by_code = {str(loc.code): loc for loc in locs_by_code}
+            missing_area_ids = {
+                int(loc.storage_area_id)
+                for loc in locs_by_code
+                if loc.storage_area_id and int(loc.storage_area_id) not in area_by_id
+            }
+            if missing_area_ids:
+                areas = await StorageArea.filter(
+                    tenant_id=tenant_id,
+                    id__in=list(missing_area_ids),
+                    deleted_at__isnull=True,
+                ).all()
+                area_by_id.update({int(a.id): a for a in areas})
+
+        for row in rows:
+            loc = None
+            lid = row.get("location_id")
+            if lid is not None and int(lid or 0) > 0:
+                loc = by_id.get(int(lid))
+            if not loc:
+                code = str(row.get("location_code") or "").strip()
+                if code:
+                    loc = by_code.get(code)
+            if not loc:
+                continue
+            row["location_name"] = loc.name
+            row["location_code"] = loc.code or row.get("location_code")
+            area = area_by_id.get(int(loc.storage_area_id)) if loc.storage_area_id else None
+            if area:
+                row["storage_area_name"] = area.name
+                row["storage_area_code"] = area.code
+
     async def _load_inventory_rows(
         self,
         tenant_id: int,
@@ -2488,6 +2579,7 @@ class ReportService:
                 "location_id": getattr(l, "location_id", None),
                 "location_code": getattr(l, "location_code", None),
             })
+        await self._enrich_inventory_rows_location_fields(tenant_id, rows)
         return rows
 
     async def _enrich_inventory_balance_material_fields(
@@ -2820,17 +2912,17 @@ class ReportService:
                     "status": "无库存",
                     "warehouse_id": warehouse_id_key if warehouse_id_key > 0 else None,
                     "warehouse_name": warehouse_name,
-                    "_location_codes": set(),
+                    "_location_labels": set(),
                 }
             grouped[key]["quantity"] += float(it.get("quantity") or 0)
-            loc_code = str(it.get("location_code") or "").strip()
-            if loc_code:
-                grouped[key]["_location_codes"].add(loc_code)
+            loc_label = self._inventory_location_display_label(it)
+            if loc_label:
+                grouped[key]["_location_labels"].add(loc_label)
         balances = list(grouped.values())
         for b in balances:
             b["status"] = "在库" if float(b.get("quantity") or 0) > 0 else "无库存"
-            loc_codes = b.pop("_location_codes", set())
-            b["location_code"] = "、".join(sorted(loc_codes)) if loc_codes else None
+            loc_labels = b.pop("_location_labels", set())
+            b["location_name"] = "、".join(sorted(loc_labels)) if loc_labels else None
         await self._enrich_inventory_balance_material_fields(tenant_id, balances)
         balances = self._apply_inventory_filters(
             balances,

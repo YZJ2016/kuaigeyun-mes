@@ -359,6 +359,124 @@ class RoleService:
             for user in users
         ]
         return {"items": items, "total": len(items)}
+
+    @staticmethod
+    async def _authorize_role_users_mutation(
+        *,
+        tenant_id: int,
+        role: Role,
+        users: list[User],
+        current_user_id: int,
+        current_user: User | None,
+        granting: bool,
+    ) -> None:
+        """管理员角色或管理员账号的关联变更须由管理员操作。"""
+        from types import SimpleNamespace
+
+        from core.services.user.user_administrator_guard import authorize_administrator_management
+
+        role_uuids = [role.uuid] if granting else None
+        data = SimpleNamespace(
+            role_uuids=role_uuids,
+            is_tenant_admin=None,
+            is_infra_admin=None,
+        )
+        for user in users:
+            await authorize_administrator_management(
+                tenant_id,
+                data,
+                current_user_id,
+                current_user=current_user,
+                target_user=user,
+            )
+
+    @staticmethod
+    async def add_role_users(
+        *,
+        tenant_id: int,
+        role_uuid: str,
+        user_uuids: list[str],
+        current_user_id: int,
+        current_user: User | None = None,
+    ) -> dict:
+        """为角色追加用户（保留用户既有其它角色）。"""
+        role = await RoleService.get_role_by_uuid(tenant_id, role_uuid)
+        uuids = sorted({str(u).strip() for u in user_uuids if str(u).strip()})
+        if not uuids:
+            raise ValidationError("请选择要关联的用户")
+
+        users = await User.filter(
+            uuid__in=uuids,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).all()
+        if len(users) != len(uuids):
+            raise ValidationError("所选用户中存在无效或不属于当前组织的用户，请重新选择")
+
+        await RoleService._authorize_role_users_mutation(
+            tenant_id=tenant_id,
+            role=role,
+            users=users,
+            current_user_id=current_user_id,
+            current_user=current_user,
+            granting=True,
+        )
+
+        existing_ids = set(
+            await UserRole.filter(
+                role_id=role.id,
+                user_id__in=[u.id for u in users],
+            ).values_list("user_id", flat=True)
+        )
+        to_add = [u for u in users if u.id not in existing_ids]
+        if to_add:
+            await UserRole.bulk_create(
+                [UserRole(user_id=u.id, role_id=role.id) for u in to_add],
+                ignore_conflicts=True,
+            )
+            for u in to_add:
+                await PermissionVersionService.bump(tenant_id=tenant_id, user_id=u.id)
+
+        return await RoleService.list_role_users(tenant_id, role_uuid)
+
+    @staticmethod
+    async def remove_role_users(
+        *,
+        tenant_id: int,
+        role_uuid: str,
+        user_uuids: list[str],
+        current_user_id: int,
+        current_user: User | None = None,
+    ) -> dict:
+        """从角色移除用户（不影响用户其它角色）。"""
+        role = await RoleService.get_role_by_uuid(tenant_id, role_uuid)
+        uuids = sorted({str(u).strip() for u in user_uuids if str(u).strip()})
+        if not uuids:
+            raise ValidationError("请选择要移除的用户")
+
+        users = await User.filter(
+            uuid__in=uuids,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).all()
+        if len(users) != len(uuids):
+            raise ValidationError("所选用户中存在无效或不属于当前组织的用户，请重新选择")
+
+        await RoleService._authorize_role_users_mutation(
+            tenant_id=tenant_id,
+            role=role,
+            users=users,
+            current_user_id=current_user_id,
+            current_user=current_user,
+            granting=False,
+        )
+
+        user_ids = [u.id for u in users]
+        await UserRole.filter(role_id=role.id, user_id__in=user_ids).delete()
+        for u in users:
+            await PermissionVersionService.bump(tenant_id=tenant_id, user_id=u.id)
+
+        return await RoleService.list_role_users(tenant_id, role_uuid)
     
     @staticmethod
     async def update_role(

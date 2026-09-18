@@ -46,6 +46,8 @@ export type GlVoucher = {
   period_month: number;
   status: string;
   summary?: string;
+  attachment_count?: number;
+  attachments?: Array<{ uid?: string; name?: string; status?: string; url?: string }>;
   total_debit: number;
   total_credit: number;
   debit_accounts?: string;

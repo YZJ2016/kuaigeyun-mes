@@ -69,12 +69,18 @@ import {
   getRoleFieldPolicies,
   saveRoleFieldPolicies,
   getRoleUsers,
+  addRoleUsers,
+  removeRoleUser,
   Role,
   Permission,
   DataPermissionPolicy,
   FieldPermissionPolicy,
   RoleUserListItem,
 } from '../../../services/role';
+import { searchUserDisplay } from '../../../services/user';
+import { formatUserDisplayLabel } from '../../../utils/userDisplay';
+import { ActionConfirmPopconfirm } from '../../../components/action-confirm';
+import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
 import { refreshCurrentUserInStore } from '../../../services/auth';
 import { useGlobalStore } from '../../../stores';
 import { RoleFormModal } from '../roles/components/RoleFormModal';
@@ -534,6 +540,14 @@ const RolesPermissionsPage: React.FC = () => {
   const [roleUsersLoading, setRoleUsersLoading] = useState(false);
   const [userFormOpen, setUserFormOpen] = useState(false);
   const [userEditUuid, setUserEditUuid] = useState<string | null>(null);
+  const [addRoleUsersOpen, setAddRoleUsersOpen] = useState(false);
+  const [addRoleUserUuids, setAddRoleUserUuids] = useState<string[]>([]);
+  const [addRoleUsersSubmitting, setAddRoleUsersSubmitting] = useState(false);
+  const [addRoleUserOptions, setAddRoleUserOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [addRoleUserOptionsLoading, setAddRoleUserOptionsLoading] = useState(false);
+  const [removingRoleUserUuid, setRemovingRoleUserUuid] = useState<string | null>(null);
+  const roleResourcePerms = useResourcePermissions('system:role');
+  const canAssignRoleUsers = Boolean(roleResourcePerms.canAction?.('assign'));
   // 权限相关状态
   /** 功能权限：服务端矩阵（菜单树 + granted_codes） */
   const [functionGrants, setFunctionGrants] = useState<RoleFunctionGrants | null>(null);
@@ -1269,17 +1283,79 @@ const RolesPermissionsPage: React.FC = () => {
     [applyScopeToResources, messageApi, selectedDataResources, t, visibleDataResourceKeys]
   );
 
+  const applyRoleUsersResult = useCallback((roleUuid: string, res: { items?: RoleUserListItem[]; total?: number }) => {
+    const items = res.items || [];
+    const total = res.total ?? items.length;
+    setRoleUsers(items);
+    setSelectedRole((prev) => (prev?.uuid === roleUuid ? { ...prev, user_count: total } : prev));
+    setRoles((prev) => prev.map((r) => (r.uuid === roleUuid ? { ...r, user_count: total } : r)));
+  }, []);
+
   const loadRoleUsers = useCallback(async (roleUuid: string) => {
     try {
       setRoleUsersLoading(true);
       const res = await getRoleUsers(roleUuid);
-      setRoleUsers(res.items || []);
+      applyRoleUsersResult(roleUuid, res);
     } catch {
       setRoleUsers([]);
     } finally {
       setRoleUsersLoading(false);
     }
-  }, []);
+  }, [applyRoleUsersResult]);
+
+  const openAddRoleUsersModal = useCallback(async () => {
+    if (!selectedRole?.uuid || !canAssignRoleUsers) return;
+    setAddRoleUserUuids([]);
+    setAddRoleUsersOpen(true);
+    setAddRoleUserOptionsLoading(true);
+    try {
+      const res = await searchUserDisplay({ page: 1, page_size: 200, is_active: true });
+      const linked = new Set(roleUsers.map((u) => u.uuid));
+      setAddRoleUserOptions(
+        (res.items || [])
+          .filter((u) => u.uuid && !linked.has(u.uuid))
+          .map((u) => ({
+            value: u.uuid,
+            label: formatUserDisplayLabel(u),
+          })),
+      );
+    } catch (e: any) {
+      messageApi.error(getApiErrorMessage(e, t('common.loadFailed')));
+      setAddRoleUserOptions([]);
+    } finally {
+      setAddRoleUserOptionsLoading(false);
+    }
+  }, [selectedRole?.uuid, canAssignRoleUsers, roleUsers, messageApi, t]);
+
+  const handleConfirmAddRoleUsers = useCallback(async () => {
+    if (!selectedRole?.uuid || addRoleUserUuids.length === 0) return;
+    try {
+      setAddRoleUsersSubmitting(true);
+      const res = await addRoleUsers(selectedRole.uuid, addRoleUserUuids);
+      applyRoleUsersResult(selectedRole.uuid, res);
+      setAddRoleUsersOpen(false);
+      setAddRoleUserUuids([]);
+      messageApi.success(t('pages.system.roles.roleUsersAddSuccess'));
+    } catch (e: any) {
+      messageApi.error(getApiErrorMessage(e, t('common.operationFailed')));
+    } finally {
+      setAddRoleUsersSubmitting(false);
+    }
+  }, [selectedRole?.uuid, addRoleUserUuids, applyRoleUsersResult, messageApi, t]);
+
+  const handleRemoveRoleUser = useCallback(async (userUuid: string) => {
+    if (!selectedRole?.uuid || !canAssignRoleUsers) return;
+    try {
+      setRemovingRoleUserUuid(userUuid);
+      const res = await removeRoleUser(selectedRole.uuid, userUuid);
+      applyRoleUsersResult(selectedRole.uuid, res);
+      messageApi.success(t('pages.system.roles.roleUsersRemoveSuccess'));
+    } catch (e: any) {
+      messageApi.error(getApiErrorMessage(e, t('common.operationFailed')));
+    } finally {
+      setRemovingRoleUserUuid(null);
+    }
+  }, [selectedRole?.uuid, canAssignRoleUsers, applyRoleUsersResult, messageApi, t]);
 
   const handleSelectRole = async (role: Role) => {
     try {
@@ -2317,13 +2393,24 @@ const RolesPermissionsPage: React.FC = () => {
           }}
         >
           <div className="roles-permissions-column-header-row roles-permissions-column-header-row--primary roles-permissions-column-header-row--right">
-            <Space size={6}>
+            <Space size={6} style={{ flex: 1, minWidth: 0 }}>
               <TeamOutlined />
               <span style={{ fontWeight: 600 }}>
                 {t('pages.system.roles.roleUsersPanelTitle', { defaultValue: '关联用户' })}
               </span>
               <Tag color="blue">{roleUsers.length}</Tag>
             </Space>
+            {canAssignRoleUsers ? (
+              <Button
+                type="link"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => void openAddRoleUsersModal()}
+                style={{ paddingInline: 4, flexShrink: 0 }}
+              >
+                {t('pages.system.roles.roleUsersAdd')}
+              </Button>
+            ) : null}
           </div>
           <div className="roles-permissions-users-panel-body">
             <div className="scrollbar-like-modal roles-permissions-users-list-body">
@@ -2341,11 +2428,38 @@ const RolesPermissionsPage: React.FC = () => {
                           setUserEditUuid(user.uuid);
                           setUserFormOpen(true);
                         }}
+                        actions={
+                          canAssignRoleUsers
+                            ? [
+                                <span
+                                  key="remove"
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                >
+                                  <ActionConfirmPopconfirm
+                                    title={t('pages.system.roles.roleUsersRemoveConfirmTitle')}
+                                    description={t('pages.system.roles.roleUsersRemoveConfirm', {
+                                      name: displayName,
+                                    })}
+                                    onConfirm={() => handleRemoveRoleUser(user.uuid)}
+                                  >
+                                    <Button
+                                      type="link"
+                                      size="small"
+                                      danger
+                                      icon={<DeleteOutlined />}
+                                      loading={removingRoleUserUuid === user.uuid}
+                                    />
+                                  </ActionConfirmPopconfirm>
+                                </span>,
+                              ]
+                            : undefined
+                        }
                       >
                         <List.Item.Meta
                           title={
                             <Space size={6} wrap>
-                              <Typography.Text ellipsis style={{ maxWidth: 160 }}>
+                              <Typography.Text ellipsis style={{ maxWidth: canAssignRoleUsers ? 120 : 160 }}>
                                 {displayName}
                               </Typography.Text>
                               {!user.is_active ? (
@@ -2368,7 +2482,18 @@ const RolesPermissionsPage: React.FC = () => {
               ) : (
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={t('pages.system.roles.roleUsersEmpty', { defaultValue: '暂无用户拥有此角色' })}
+                  description={
+                    canAssignRoleUsers ? (
+                      <Space orientation="vertical" size={8}>
+                        <span>{t('pages.system.roles.roleUsersEmpty', { defaultValue: '暂无用户拥有此角色' })}</span>
+                        <Button type="link" icon={<PlusOutlined />} onClick={() => void openAddRoleUsersModal()}>
+                          {t('pages.system.roles.roleUsersAdd')}
+                        </Button>
+                      </Space>
+                    ) : (
+                      t('pages.system.roles.roleUsersEmpty', { defaultValue: '暂无用户拥有此角色' })
+                    )
+                  }
                   style={{ margin: '32px 0' }}
                 />
               )}
@@ -2427,6 +2552,35 @@ const RolesPermissionsPage: React.FC = () => {
           }
         }}
       />
+
+      <Modal
+        title={t('pages.system.roles.roleUsersAddTitle')}
+        open={addRoleUsersOpen}
+        onCancel={() => {
+          if (addRoleUsersSubmitting) return;
+          setAddRoleUsersOpen(false);
+          setAddRoleUserUuids([]);
+        }}
+        onOk={() => void handleConfirmAddRoleUsers()}
+        okButtonProps={{ disabled: addRoleUserUuids.length === 0, loading: addRoleUsersSubmitting }}
+        confirmLoading={addRoleUsersSubmitting}
+        destroyOnHidden
+        width={480}
+      >
+        <Select
+          mode="multiple"
+          showSearch
+          allowClear
+          style={{ width: '100%' }}
+          placeholder={t('pages.system.roles.roleUsersAddPlaceholder')}
+          value={addRoleUserUuids}
+          onChange={(vals) => setAddRoleUserUuids(vals as string[])}
+          options={addRoleUserOptions}
+          loading={addRoleUserOptionsLoading}
+          optionFilterProp="label"
+          maxTagCount="responsive"
+        />
+      </Modal>
 
       {/* 加载角色预设预览：可勾选后确认 */}
       <Modal

@@ -14,7 +14,10 @@ import {
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { apiRequest } from '../../../../../services/api';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
-import { resolveInventoryMaterialBalanceListParams } from '../../../utils/warehouseListCore';
+import {
+  formatInventoryLocationDisplay,
+  resolveInventoryMaterialBalanceListParams,
+} from '../../../utils/warehouseListCore';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import { fetchAllCurrentPageItems } from '../../../../../utils/fetchAllListPages';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
@@ -47,6 +50,8 @@ interface InventoryItem {
   status: string;
   warehouse_id?: number | null;
   warehouse_name: string | null;
+  storage_area_name?: string | null;
+  location_name?: string | null;
   location_code?: string | null;
 }
 
@@ -236,7 +241,7 @@ const InventoryPage: React.FC = () => {
         r.texture,
         r.material_unit,
         r.quantity,
-        r.location_code,
+        formatInventoryLocationDisplay(r) || '-',
         r.in_transit_quantity ?? 0,
         r.alert_label,
         r.status,
@@ -398,15 +403,15 @@ const InventoryPage: React.FC = () => {
           },
           {
             title: t('app.kuaizhizao.warehouseInventory.colLocation'),
-            dataIndex: 'location_code',
-            key: 'location_code',
+            dataIndex: 'location_name',
+            key: 'location_name',
             width: 120,
             minWidth: 120,
             uniTableKeepWidth: true,
             resizable: false,
             ellipsis: true,
             hideInSearch: true,
-            render: (_, r) => renderCell(r.location_code),
+            render: (_, r) => renderCell(formatInventoryLocationDisplay(r)),
           },
           {
             title: t('app.kuaizhizao.warehouseInventory.colInTransit'),

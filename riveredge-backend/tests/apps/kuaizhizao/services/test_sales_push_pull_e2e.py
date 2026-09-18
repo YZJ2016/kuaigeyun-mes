@@ -194,6 +194,53 @@ def test_delivery_occupancy_by_order_line():
     asyncio.run(_run())
 
 
+def test_soft_deleted_delivery_does_not_occupy_pushable_qty():
+    async def _run():
+        items = [_item(item_id=1, remaining_quantity="10")]
+        deliveries = [
+            {
+                "id": 301,
+                "sales_order_id": 1,
+                "status": "待出库",
+                "deleted_at": "2026-09-18T12:00:00",
+            },
+        ]
+        delivery_items = [
+            {
+                "delivery_id": 301,
+                "sales_order_item_id": 1,
+                "material_id": 100,
+                "delivery_quantity": Decimal("10"),
+            },
+        ]
+        with _patch_orm(deliveries=deliveries, delivery_items=delivery_items):
+            pushable = await push_qty.get_pushable_qty_for_order_items(1, 1, items)
+        assert pushable[1] == Decimal("10")
+
+    asyncio.run(_run())
+
+
+def test_soft_deleted_notice_does_not_occupy_pushable_qty():
+    async def _run():
+        items = [_item(item_id=1, remaining_quantity="10")]
+        notices = [
+            {
+                "id": 101,
+                "sales_order_id": 1,
+                "status": "待发货",
+                "deleted_at": "2026-09-18T12:00:00",
+            },
+        ]
+        notice_items = [
+            {"notice_id": 101, "sales_order_item_id": 1, "notice_quantity": Decimal("10")},
+        ]
+        with _patch_orm(notices=notices, notice_items=notice_items):
+            pushable = await push_qty.get_pushable_qty_for_order_items(1, 1, items)
+        assert pushable[1] == Decimal("10")
+
+    asyncio.run(_run())
+
+
 def test_pull_from_sales_order_rejects_zero_remaining():
     async def _run():
         from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService

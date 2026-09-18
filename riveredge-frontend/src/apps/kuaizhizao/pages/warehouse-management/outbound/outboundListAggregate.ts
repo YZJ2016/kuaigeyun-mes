@@ -201,8 +201,6 @@ export async function fetchOutboundHubList(
                 (item as Record<string, unknown>).deliveryTime,
                 (item as Record<string, unknown>).delivery_date,
                 (item as Record<string, unknown>).deliveryDate,
-                (item as Record<string, unknown>).created_at,
-                (item as Record<string, unknown>).createdAt,
               ),
               delivered_by: (item as Record<string, unknown>).deliverer_name,
             }) as OutboundHubOrder,

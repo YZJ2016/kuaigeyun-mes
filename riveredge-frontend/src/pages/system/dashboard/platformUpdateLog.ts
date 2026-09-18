@@ -36,6 +36,70 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'role-users-add-remove-r01',
+    date: '2026-09-18',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.role-users-add-remove-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.role-users-add-remove-r01.description',
+  },
+  {
+    id: 'sales-outbound-document-date-business-r02',
+    date: '2026-09-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-outbound-document-date-business-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-outbound-document-date-business-r02.description',
+  },
+  {
+    id: 'gl-voucher-events-i18n-r02',
+    date: '2026-09-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.gl-voucher-events-i18n-r02.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.gl-voucher-events-i18n-r02.description',
+  },
+  {
+    id: 'warehouse-inventory-location-name-r01',
+    date: '2026-09-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-inventory-location-name-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.warehouse-inventory-location-name-r01.description',
+  },
+  {
+    id: 'gl-voucher-attachments-r01',
+    date: '2026-09-18',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.gl-voucher-attachments-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.gl-voucher-attachments-r01.description',
+  },
+  {
+    id: 'gl-voucher-list-detail-r01',
+    date: '2026-09-18',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.gl-voucher-list-detail-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.gl-voucher-list-detail-r01.description',
+  },
+  {
+    id: 'gl-books-balance-rollup-r01',
+    date: '2026-09-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.gl-books-balance-rollup-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.gl-books-balance-rollup-r01.description',
+  },
+  {
+    id: 'sales-order-repush-after-delivery-delete-r01',
+    date: '2026-09-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-repush-after-delivery-delete-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-order-repush-after-delivery-delete-r01.description',
+  },
+  {
+    id: 'sales-delivery-confirm-item-updates-r01',
+    date: '2026-09-18',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-delivery-confirm-item-updates-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-delivery-confirm-item-updates-r01.description',
+  },
+  {
     id: 'material-shortage-purchase-action-r01',
     date: '2026-09-18',
     type: 'fix',
