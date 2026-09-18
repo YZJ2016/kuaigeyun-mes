@@ -65,6 +65,8 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 const P = 'app.kuaizhizao.maintenancePlan';
 
 function toApiDateTimeString(value: unknown): string | undefined {
@@ -135,6 +137,7 @@ const MaintenancePlansPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
+  const currentUser = useCurrentUser();
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const planDetailDrawerZIndex = token.zIndexPopupBase;
@@ -371,6 +374,9 @@ const MaintenancePlansPage: React.FC = () => {
     setSparePartLines([]);
     setExecuteFormInitialValues({
       equipment_uuid: equipmentUuids[0],
+      executor_uuid: currentUser?.uuid,
+      executor_id: currentUser?.id,
+      executor_name: currentUser?.full_name || currentUser?.username,
       execution_date: dayjs(),
       execution_result: '正常',
       execution_content: t(`${P}.executionContentTemplate`, { name: record.plan_name }),
@@ -446,6 +452,8 @@ const MaintenancePlansPage: React.FC = () => {
           formatDateTimeBySiteSetting(new Date()),
         execution_content: values.execution_content,
         execution_result: values.execution_result ?? '正常',
+        executor_id: values.executor_id,
+        executor_name: values.executor_name,
         status: '已确认',
         attachments: normalizeDocumentAttachments(values.attachments),
         spare_parts_used: validParts.length ? { items: validParts } : undefined,
@@ -1097,6 +1105,25 @@ const MaintenancePlansPage: React.FC = () => {
             </Col>
           </Row>
         )}
+        <Row gutter={16}>
+          <Col span={12}>
+            <UniUserSelect
+              name="executor_uuid"
+              label={t(`${P}.form.executor`)}
+              placeholder={t(`${P}.form.selectExecutor`)}
+              required
+              onChange={(_value, user) => {
+                const picked = Array.isArray(user) ? user[0] : user;
+                executeFormRef.current?.setFieldsValue({
+                  executor_id: picked?.id ?? undefined,
+                  executor_name: picked?.full_name || picked?.username || undefined,
+                });
+              }}
+            />
+            <ProFormText name="executor_id" hidden />
+            <ProFormText name="executor_name" hidden />
+          </Col>
+        </Row>
         <Row gutter={16}>
           <Col span={12}>
             <ProFormDatePicker

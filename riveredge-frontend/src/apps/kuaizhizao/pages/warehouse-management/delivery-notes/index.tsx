@@ -84,6 +84,21 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import {
+  buildUniPushMenuItems,
+  buildUniPushToolbarDisabledReason,
+  UniPushToolbarButton,
+} from '../../../../../components/uni-push';
+function deliveryNoticeCapabilityReasonMessage(
+  code: string | null | undefined,
+  t: (key: string) => string,
+): string {
+  if (!code) return '';
+  const key = `app.kuaizhizao.deliveryNote.capability.${code}`;
+  const translated = t(key);
+  return translated !== key ? translated : code;
+}
+
 interface DeliveryNotice {
   id?: number;
   notice_code?: string;
@@ -108,6 +123,9 @@ interface DeliveryNotice {
   updated_at?: string;
   /** 列表明细物料名预览 */
   items?: Array<{ material_name?: string | null }>;
+  capabilities?: {
+    push_freight_order?: { allowed?: boolean; reason?: string | null };
+  };
 }
 
 interface DeliveryNoticeDetail extends DeliveryNotice {
@@ -161,7 +179,10 @@ const DeliveryNotesPage: React.FC = () => {
   const { canPrint: canPrintQualityCertificate } = useResourcePermissions(
     'kuaizhizao:quality-management-finished-goods-inspection',
   );
-  const formRef = useRef<any>(null);
+  const freightOrderPerms = useResourcePermissions('kuaizhizao:freight-order');
+  const createFormRef = useRef<any>(null);
+  const editFormRef = useRef<any>(null);
+  const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [customerList, setCustomerList] = useState<any[]>([]);
   const defaultDeliveryItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', notice_quantity: 1, unit_price: 0 };
@@ -170,9 +191,15 @@ const DeliveryNotesPage: React.FC = () => {
     void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.salesDelivery).then(setCustomerList);
   }, []);
 
+  const getActiveFormRef = useCallback(
+    () => (editModalVisible ? editFormRef : createFormRef),
+    [editModalVisible],
+  );
+
   const appendDeliveryNoteItemsFromMaterials = useCallback(
     (selected: Material[]) => {
-      const current = formRef.current?.getFieldValue('items') ?? [];
+      const activeFormRef = getActiveFormRef();
+      const current = activeFormRef.current?.getFieldValue('items') ?? [];
       const newRows = selected.map((m) => ({
         material_id: m.id,
         material_code: m.mainCode ?? m.code ?? '',
@@ -181,10 +208,10 @@ const DeliveryNotesPage: React.FC = () => {
         notice_quantity: 1,
         unit_price: 0,
       }));
-      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      activeFormRef.current?.setFieldsValue({ items: [...current, ...newRows] });
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
-    [messageApi, t]
+    [getActiveFormRef, messageApi, t],
   );
 
   const columns: ProColumns<DeliveryNotice>[] = useMemo(() => alignProColumns<DeliveryNotice>([
@@ -416,7 +443,7 @@ const DeliveryNotesPage: React.FC = () => {
         notice_quantity: Number(it.notice_quantity) || 0,
         unit_price: Number(it.unit_price) || 0,
       }));
-      formRef.current?.setFieldsValue({
+      setPendingEditFormValues({
         sales_delivery_id: detail.sales_delivery_id,
         sales_delivery_code: detail.sales_delivery_code,
         sales_order_id: detail.sales_order_id,
@@ -560,13 +587,105 @@ const DeliveryNotesPage: React.FC = () => {
   const canToolbarPrintCertificate =
     canToolbarPrint && canPrintQualityCertificate;
 
+  const selectedDeliveryNoticeForPush = useMemo(
+    () => (selectedRowKeys.length === 1 ? selectedDeliveryNoticeForBatch[0] : undefined),
+    [selectedDeliveryNoticeForBatch, selectedRowKeys.length],
+  );
+
+  const canPushFreightOrderToolbar = useMemo(() => {
+    if (!selectedDeliveryNoticeForPush || !freightOrderPerms.canCreate) return false;
+    return selectedDeliveryNoticeForPush.capabilities?.push_freight_order?.allowed === true;
+  }, [freightOrderPerms.canCreate, selectedDeliveryNoticeForPush]);
+
+  const handlePushToFreightOrder = useCallback(
+    async (records: DeliveryNotice[]) => {
+      const ids = records
+        .map((row) => Number(row.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+      if (!ids.length) return;
+      try {
+        const res = await deliveryNoticeApi.pushToFreightOrders(ids);
+        messageApi.success(res.message || t('app.kuaizhizao.deliveryNote.msg.pushFreightSuccess'));
+        setSelectedRowKeys([]);
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.deliveryNote.msg.pushFreightFailed')),
+        );
+      }
+    },
+    [invalidateMenuBadgeCounts, messageApi, t],
+  );
+
+  const toolbarPushMenuItems = useMemo(
+    () =>
+      buildUniPushMenuItems([
+        {
+          key: 'push-freight-order',
+          label: t('app.kuaizhizao.deliveryNote.action.pushFreightOrder'),
+          disabled: !canPushFreightOrderToolbar,
+          title:
+            selectedDeliveryNoticeForPush && !canPushFreightOrderToolbar
+              ? !freightOrderPerms.canCreate
+                ? t('app.kuaizhizao.deliveryNote.msg.pushFreightNoPermission')
+                : deliveryNoticeCapabilityReasonMessage(
+                    selectedDeliveryNoticeForPush.capabilities?.push_freight_order?.reason,
+                    t,
+                  )
+              : undefined,
+          onClick: () => {
+            if (selectedDeliveryNoticeForPush && canPushFreightOrderToolbar) {
+              void handlePushToFreightOrder([selectedDeliveryNoticeForPush]);
+            }
+          },
+          targetDocumentType: 'freight_order',
+        },
+      ]),
+    [
+      canPushFreightOrderToolbar,
+      freightOrderPerms.canCreate,
+      handlePushToFreightOrder,
+      selectedDeliveryNoticeForPush,
+      t,
+    ],
+  );
+
+  const deliveryNoticeToolbarPushDisabledReason = useMemo(() => {
+    const base = buildUniPushToolbarDisabledReason(t, {
+      selectedCount: selectedRowKeys.length,
+      hasSelectedRecord: !!selectedDeliveryNoticeForPush,
+    });
+    if (base) return base;
+    if (!freightOrderPerms.canCreate) {
+      return t('app.kuaizhizao.deliveryNote.msg.pushFreightNoPermission');
+    }
+    if (
+      selectedDeliveryNoticeForPush &&
+      selectedDeliveryNoticeForPush.capabilities?.push_freight_order?.allowed !== true
+    ) {
+      return (
+        deliveryNoticeCapabilityReasonMessage(
+          selectedDeliveryNoticeForPush.capabilities?.push_freight_order?.reason,
+          t,
+        ) || t('app.kuaizhizao.deliveryNote.msg.pushFreightNotAllowed')
+      );
+    }
+    return undefined;
+  }, [
+    freightOrderPerms.canCreate,
+    selectedDeliveryNoticeForPush,
+    selectedRowKeys.length,
+    t,
+  ]);
+
   /** 参考销售订单：先打开弹窗，再执行其他逻辑 */
   const handleCreate = () => {
     setCreateModalVisible(true);
     setEditingId(null);
     setTimeout(() => {
-      formRef.current?.resetFields();
-      formRef.current?.setFieldsValue({ items: [defaultDeliveryItem] });
+      createFormRef.current?.resetFields();
+      createFormRef.current?.setFieldsValue({ items: [defaultDeliveryItem] });
     }, 0);
   };
   useNewShortcut(handleCreate);
@@ -877,7 +996,7 @@ const DeliveryNotesPage: React.FC = () => {
     [t],
   );
 
-  const renderForm = (onFinish: (values: any) => Promise<void>) => (
+  const renderForm = (activeFormRef: React.RefObject<any>, onFinish: (values: any) => Promise<void>) => (
     <>
       <Row gutter={16}>
         <Col span={12}>
@@ -887,7 +1006,7 @@ const DeliveryNotesPage: React.FC = () => {
               options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
               onChange={(v) => {
                 const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
-                if (cust) formRef.current?.setFieldsValue({ customer_name: cust.name || cust.customer_name, customer_contact: cust.contact, customer_phone: cust.phone });
+                if (cust) activeFormRef.current?.setFieldsValue({ customer_name: cust.name || cust.customer_name, customer_contact: cust.contact, customer_phone: cust.phone });
               }}
             />
           </ProFormItem>
@@ -930,14 +1049,14 @@ const DeliveryNotesPage: React.FC = () => {
             }}
             onChange={async (val) => {
               if (val == null || val === '') {
-                formRef.current?.setFieldsValue({
+                activeFormRef.current?.setFieldsValue({
                   sales_delivery_code: undefined,
                 });
                 return;
               }
               try {
                 const d: any = await warehouseApi.salesDelivery.get(String(val));
-                formRef.current?.setFieldsValue({
+                activeFormRef.current?.setFieldsValue({
                   sales_delivery_code: d.delivery_code ?? d.code,
                   sales_order_id: d.sales_order_id,
                   sales_order_code: d.sales_order_code,
@@ -975,12 +1094,12 @@ const DeliveryNotesPage: React.FC = () => {
             }}
             onChange={async (val) => {
               if (val == null || val === '') {
-                formRef.current?.setFieldsValue({ sales_order_code: undefined });
+                activeFormRef.current?.setFieldsValue({ sales_order_code: undefined });
                 return;
               }
               try {
                 const o = await getSalesOrder(Number(val), false, false);
-                formRef.current?.setFieldsValue({ sales_order_code: o.order_code });
+                activeFormRef.current?.setFieldsValue({ sales_order_code: o.order_code });
               } catch {
                 /* ignore */
               }
@@ -993,7 +1112,7 @@ const DeliveryNotesPage: React.FC = () => {
       <Row gutter={16}>
         <Col span={12}>
           <ProFormItem name="planned_delivery_date" label={t('app.kuaizhizao.deliveryNote.field.plannedDeliveryDate')}>
-            <FutureDatePicker getForm={() => formRef.current} t={t} style={{ width: '100%' }} />
+            <FutureDatePicker getForm={() => activeFormRef.current} t={t} style={{ width: '100%' }} />
           </ProFormItem>
         </Col>
         <Col span={12}>
@@ -1051,8 +1170,8 @@ const DeliveryNotesPage: React.FC = () => {
                                 material_name: 'name',
                               }}
                               onChange={(_val, material) => {
-                                if (!material || !formRef.current) return;
-                                formRef.current.setFieldValue(
+                                if (!material || !activeFormRef.current) return;
+                                activeFormRef.current.setFieldValue(
                                   ['items', index, 'material_unit'],
                                   resolveMaterialScenarioUnit(material, 'sale'),
                                 );
@@ -1076,11 +1195,11 @@ const DeliveryNotesPage: React.FC = () => {
                     <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
                       {({ getFieldValue }: any) => {
                         const materialId = getFieldValue(['items', index, 'material_id']);
-                        if (!formRef.current) return null;
+                        if (!activeFormRef.current) return null;
                         return (
                           <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
                             <DocumentLineUnitSelect
-                              form={formRef.current}
+                              form={activeFormRef.current}
                               listName="items"
                               rowIndex={index}
                               fields={{ quantity: 'notice_quantity', unit: 'material_unit' }}
@@ -1218,6 +1337,20 @@ const DeliveryNotesPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.deliveryNote.msg.deleteConfirm', { count })}
+          toolBarActionsAfterBatch={[
+            <UniPushToolbarButton
+              key={`delivery-note-push-freight-${selectedDeliveryNoticeForPush?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={selectedRowKeys.length !== 1 || !selectedDeliveryNoticeForPush}
+              disabledReason={deliveryNoticeToolbarPushDisabledReason}
+              sourceDocument={
+                selectedDeliveryNoticeForPush?.id
+                  ? { type: 'delivery_notice', id: Number(selectedDeliveryNoticeForPush.id) }
+                  : null
+              }
+              pushTargets={{ 'push-freight-order': 'freight_order' }}
+            />,
+          ]}
           showImportButton={false}
           showExportButton
           rightToolBarActionsBeforeExport={
@@ -1428,24 +1561,36 @@ const DeliveryNotesPage: React.FC = () => {
         title={t('app.kuaizhizao.deliveryNote.create')}
         open={createModalVisible}
         onClose={() => setCreateModalVisible(false)}
-        formRef={formRef}
+        formRef={createFormRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
+        initialValues={{ items: [defaultDeliveryItem] }}
       >
-        {renderForm(handleCreateSubmit)}
+        {renderForm(createFormRef, handleCreateSubmit)}
       </FormModalTemplate>
 
       <FormModalTemplate
         title={t('app.kuaizhizao.deliveryNote.edit')}
         open={editModalVisible}
+        isEdit
         onClose={() => setEditModalVisible(false)}
-        formRef={formRef}
+        afterOpenChange={(open) => {
+          if (open && pendingEditFormValues) {
+            editFormRef.current?.setFieldsValue(pendingEditFormValues);
+            return;
+          }
+          if (!open) {
+            setPendingEditFormValues(null);
+            editFormRef.current?.resetFields?.();
+          }
+        }}
+        formRef={editFormRef}
         onFinish={handleEditSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
       >
-        {renderForm(handleEditSubmit)}
+        {renderForm(editFormRef, handleEditSubmit)}
       </FormModalTemplate>
 
       <UniMaterialBatchPicker

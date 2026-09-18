@@ -38,6 +38,9 @@ import {
 } from './contract-line-items-shared';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
+import {
+  applyDocumentLineTaxRateChange,
+} from '../../../utils/documentLineAmounts';
 
 export type ContractItemsFormTableProps = {
   formRef: React.RefObject<ProFormInstance | undefined>;
@@ -88,7 +91,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
       <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
         {({ getFieldValue }) => {
           const priceType = salesFormPriceType(getFieldValue('price_type'));
-          const showTaxColumns = priceType === 'tax_inclusive';
+          const showTaxBreakdownColumns = priceType === 'tax_inclusive';
           const detailColumns = [
                     {
                       title: productColumnTitle,
@@ -214,7 +217,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                         </Form.Item>
                       ),
                     },
-                    ...(showTaxColumns
+                    ...(showTaxBreakdownColumns
                       ? [
                           {
                             title: t('app.kuaizhizao.salesOrder.exclAmount'),
@@ -247,31 +250,40 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                           },
                         ]
                       : []),
-                    ...(showTaxColumns
+                    {
+                      title: (
+                        <TaxRateBatchColumnTitle
+                          onBatch={() => {
+                            const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                            if (itemsVal.length === 0) return;
+                            const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
+                            if (rate != null && rate !== '') {
+                              const num = Math.round(parseFloat(rate));
+                              if (!Number.isNaN(num) && num >= 0 && num <= 100) {
+                                const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
+                                const next = itemsVal.map((it: any) =>
+                                  applyDocumentLineTaxRateChange({
+                                    row: it,
+                                    qty: it.contract_quantity,
+                                    newTaxRate: num,
+                                    priceType: pt,
+                                    priceDecimals,
+                                  }),
+                                );
+                                formRef.current?.setFieldsValue({ items: next });
+                              }
+                            }
+                          }}
+                        />
+                      ),
+                      dataIndex: 'tax_rate',
+                      width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
+                      ...DOCUMENT_DETAIL_NUM_COL,
+                      onCell: () => ({ className: 'quotation-tax-rate-col' }),
+                      render: (_: unknown, __: unknown, index: number) => <TaxRateDetailCell index={index} />,
+                    },
+                    ...(showTaxBreakdownColumns
                       ? [
-                          {
-                            title: (
-                              <TaxRateBatchColumnTitle
-                                onBatch={() => {
-                                  const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
-                                  if (itemsVal.length === 0) return;
-                                  const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
-                                  if (rate != null && rate !== '') {
-                                    const num = Math.round(parseFloat(rate));
-                                    if (!Number.isNaN(num) && num >= 0 && num <= 100) {
-                                      const next = itemsVal.map((it: any) => ({ ...it, tax_rate: num }));
-                                      formRef.current?.setFieldsValue({ items: next });
-                                    }
-                                  }
-                                }}
-                              />
-                            ),
-                            dataIndex: 'tax_rate',
-                            width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
-                            ...DOCUMENT_DETAIL_NUM_COL,
-                            onCell: () => ({ className: 'quotation-tax-rate-col' }),
-                            render: (_: unknown, __: unknown, index: number) => <TaxRateDetailCell index={index} />,
-                          },
                           {
                             title: t('app.kuaizhizao.salesOrder.taxAmount'),
                             width: DOCUMENT_DETAIL_COL_WIDTH.taxAmount,
@@ -304,13 +316,13 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                         ]
                       : []),
                     {
-                      title: showTaxColumns
+                      title: showTaxBreakdownColumns
                         ? t('app.kuaizhizao.salesOrder.inclAmount')
                         : t('app.kuaizhizao.salesOrder.exclAmount'),
                       width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: unknown, __: unknown, index: number) =>
-                        showTaxColumns ? (
+                        showTaxBreakdownColumns ? (
                           <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                             {({ getFieldValue: gf2 }: any) => {
                               const itemsVal = gf2('items') ?? [];

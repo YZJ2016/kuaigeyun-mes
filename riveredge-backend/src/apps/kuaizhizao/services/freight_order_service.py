@@ -24,6 +24,7 @@ from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.schemas.logistics import (
     FreightOrderCreate,
     FreightOrderReceiptCreate,
+    FreightOrderSourceInput,
     FreightOrderUpdate,
     FreightPullCandidate,
     FreightTrackingEventCreate,
@@ -564,6 +565,77 @@ class FreightOrderService(AppBaseService):
                 )
             await self._apply_order_address_geocode(order)
         return await self.get_order(tenant_id, int(order.id))
+
+    async def create_orders_from_delivery_notices(
+        self,
+        tenant_id: int,
+        notice_ids: List[int],
+        *,
+        created_by: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """按送货单下推发货管理单（每张送货单生成一张草稿货运单）。"""
+        from apps.kuaizhizao.services.document_action_policy.delivery_notice import (
+            assert_delivery_notice_push_freight,
+        )
+
+        selected_ids = sorted({int(v) for v in notice_ids if v is not None})
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条送货单")
+        notices = await DeliveryNotice.filter(
+            tenant_id=tenant_id,
+            id__in=selected_ids,
+            deleted_at__isnull=True,
+        ).all()
+        notice_by_id = {int(row.id): row for row in notices}
+        if len(notice_by_id) != len(selected_ids):
+            raise NotFoundError("送货单不存在")
+        linked = await self._active_linked_source_keys(tenant_id)
+        created: List[Dict[str, Any]] = []
+        for notice_id in selected_ids:
+            notice = notice_by_id[notice_id]
+            has_freight = ("delivery_notice", notice_id) in linked
+            assert_delivery_notice_push_freight(
+                notice,
+                has_active_freight_order=has_freight,
+            )
+            planned_arrive_at = None
+            if notice.planned_delivery_date:
+                from datetime import datetime, time
+
+                planned_arrive_at = datetime.combine(
+                    notice.planned_delivery_date,
+                    time.min,
+                )
+            order = await self.create_order(
+                tenant_id,
+                FreightOrderCreate(
+                    business_direction="sales_outbound",
+                    tracking_number=notice.tracking_number,
+                    recipient_phone=notice.customer_phone,
+                    destination_address=notice.shipping_address,
+                    planned_arrive_at=planned_arrive_at,
+                    remark=notice.notes,
+                    sources=[
+                        FreightOrderSourceInput(
+                            source_type="delivery_notice",
+                            source_id=int(notice.id),
+                            source_code=str(notice.notice_code or ""),
+                            partner_name=str(notice.customer_name or ""),
+                        )
+                    ],
+                ),
+                created_by=created_by,
+            )
+            linked.add(("delivery_notice", notice_id))
+            created.append(
+                {
+                    "notice_id": int(notice.id),
+                    "notice_code": str(notice.notice_code or ""),
+                    "freight_order_id": int(order["id"]),
+                    "freight_order_code": str(order.get("order_code") or ""),
+                }
+            )
+        return created
 
     async def update_order(self, tenant_id: int, order_id: int, data: FreightOrderUpdate, *, updated_by: Optional[int] = None) -> Dict[str, Any]:
         order = await FreightOrder.get_or_none(id=order_id, tenant_id=tenant_id, deleted_at__isnull=True)

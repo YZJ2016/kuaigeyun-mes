@@ -8,7 +8,7 @@ const SalesOutboundPage: React.FC = () => {
     <OutboundHub
       fixedOutboundType="sales_delivery"
       headerTitle={t('app.kuaizhizao.menu.sales-management.outbound')}
-      columnPersistenceId="apps.kuaizhizao.pages.sales-management.outbound-width-v1"
+      columnPersistenceId="apps.kuaizhizao.pages.sales-management.outbound-width-v2"
     />
   );
 };

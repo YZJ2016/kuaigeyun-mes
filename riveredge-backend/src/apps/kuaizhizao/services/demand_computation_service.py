@@ -5812,6 +5812,61 @@ class DemandComputationService(AppBaseService):
             tip = "确认后将按默认供应商分组生成采购订单草稿。"
         return preview_items, summary, tip, has_blocking, blocking_reason
 
+    async def _enrich_push_preview_items_material_meta(
+        self,
+        tenant_id: int,
+        preview_items: List[Dict[str, Any]],
+        computation_items: List[Any],
+    ) -> None:
+        """为下推预览明细补充规格与物料分组（供前端筛选展示）。"""
+        if not preview_items:
+            return
+        from apps.master_data.models.material import Material, MaterialGroup
+
+        item_by_id = {
+            int(row.id): row for row in computation_items if getattr(row, "id", None) is not None
+        }
+        material_ids = sorted(
+            {
+                int(row["material_id"])
+                for row in preview_items
+                if row.get("material_id") is not None
+            }
+        )
+        material_rows = (
+            await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
+            if material_ids
+            else []
+        )
+        material_by_id = {int(row.id): row for row in material_rows}
+        group_ids = sorted(
+            {
+                int(getattr(row, "group_id", 0) or 0)
+                for row in material_rows
+                if getattr(row, "group_id", None)
+            }
+        )
+        group_rows = (
+            await MaterialGroup.filter(tenant_id=tenant_id, id__in=group_ids).all()
+            if group_ids
+            else []
+        )
+        group_name_by_id = {int(row.id): str(row.name or "").strip() for row in group_rows}
+
+        for row in preview_items:
+            comp_item = item_by_id.get(int(row.get("item_id") or 0))
+            material = material_by_id.get(int(row.get("material_id") or 0))
+            spec = ""
+            if comp_item is not None:
+                spec = str(getattr(comp_item, "material_spec", "") or "").strip()
+            if not spec and material is not None:
+                spec = str(getattr(material, "specification", "") or "").strip()
+            row["material_spec"] = spec or None
+            group_name = ""
+            if material is not None and getattr(material, "group_id", None):
+                group_name = group_name_by_id.get(int(material.group_id), "")
+            row["material_group_name"] = group_name or None
+
     async def get_push_preview(
         self,
         tenant_id: int,
@@ -6020,6 +6075,12 @@ class DemandComputationService(AppBaseService):
         source_sales_order_attachments = await summarize_sales_order_attachments_for_computation(
             tenant_id=tenant_id,
             computation_id=computation_id,
+        )
+
+        await self._enrich_push_preview_items_material_meta(
+            tenant_id,
+            preview_items,
+            items,
         )
 
         return {

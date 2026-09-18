@@ -59,6 +59,7 @@ class PostingService:
         lines: List[Dict[str, Any]],
         *,
         allow_controlled: bool,
+        require_aux: bool = True,
     ) -> List[Dict[str, Any]]:
         if not lines or len(lines) < 2:
             raise ValidationError("凭证至少两行分录")
@@ -94,16 +95,18 @@ class PostingService:
                 raise ValidationError("金额不能为负")
             if (debit > 0 and credit > 0) or (debit == 0 and credit == 0):
                 raise ValidationError(f"第{idx}行借贷只能一侧有金额")
-            if account.aux_customer and not raw.get("customer_id"):
-                raise ValidationError(f"科目 {account.account_code} 须录入客户辅助核算")
-            if account.aux_supplier and not raw.get("supplier_id"):
-                raise ValidationError(f"科目 {account.account_code} 须录入供应商辅助核算")
-            if account.aux_department and not raw.get("department_id"):
-                raise ValidationError(f"科目 {account.account_code} 须录入部门辅助核算")
-            if getattr(account, "aux_employee", False) and not raw.get("employee_id"):
-                raise ValidationError(f"科目 {account.account_code} 须录入职员辅助核算")
-            if getattr(account, "aux_project", False) and not raw.get("project_id"):
-                raise ValidationError(f"科目 {account.account_code} 须录入项目辅助核算")
+            # 辅助核算：手工制单默认必填；从业务事件生成时非必填（界面无处录入，有则写入）
+            if require_aux:
+                if account.aux_customer and not raw.get("customer_id"):
+                    raise ValidationError(f"科目 {account.account_code} 须录入客户辅助核算")
+                if account.aux_supplier and not raw.get("supplier_id"):
+                    raise ValidationError(f"科目 {account.account_code} 须录入供应商辅助核算")
+                if account.aux_department and not raw.get("department_id"):
+                    raise ValidationError(f"科目 {account.account_code} 须录入部门辅助核算")
+                if getattr(account, "aux_employee", False) and not raw.get("employee_id"):
+                    raise ValidationError(f"科目 {account.account_code} 须录入职员辅助核算")
+                if getattr(account, "aux_project", False) and not raw.get("project_id"):
+                    raise ValidationError(f"科目 {account.account_code} 须录入项目辅助核算")
             total_debit += debit
             total_credit += credit
             normalized.append(
@@ -137,6 +140,41 @@ class PostingService:
             raise ValidationError("凭证借贷不平衡")
         if total_debit == 0:
             raise ValidationError("凭证金额不能为0")
+
+        from apps.kuaicaiwu.services.gl.cash_flow_classify import (
+            infer_cash_flow_item_code,
+            is_monetary_account,
+            pick_counterpart_codes,
+            resolve_cash_flow_item_id,
+        )
+
+        account_code_by_id = {
+            int(item["_account"].id): str(item["_account"].account_code or "")
+            for item in normalized
+        }
+        line_dicts = [
+            {
+                "account_id": int(item["account_id"]),
+                "account_code": str(item.get("account_code") or ""),
+                "debit_amount": item["debit_amount"],
+                "credit_amount": item["credit_amount"],
+            }
+            for item in normalized
+        ]
+        for item in normalized:
+            account = item["_account"]
+            if item.get("cash_flow_item_id") or not is_monetary_account(account):
+                continue
+            counterparts = pick_counterpart_codes(
+                int(item["account_id"]), line_dicts, account_code_by_id
+            )
+            cf_code = infer_cash_flow_item_code(
+                cash_debit=item["debit_amount"],
+                cash_credit=item["credit_amount"],
+                counterpart_account_codes=counterparts,
+            )
+            item["cash_flow_item_id"] = await resolve_cash_flow_item_id(tenant_id, cf_code)
+
         for item in normalized:
             item.pop("_account", None)
         return normalized
@@ -204,6 +242,7 @@ class PostingService:
         data: Dict[str, Any],
         *,
         allow_controlled: Optional[bool] = None,
+        require_aux: bool = True,
     ) -> Voucher:
         settings = await self.settings_service.get_or_create(tenant_id)
         voucher_date = data.get("voucher_date") or to_site_date(resolve_business_datetime())
@@ -218,6 +257,7 @@ class PostingService:
             tenant_id,
             data.get("lines") or [],
             allow_controlled=controlled_ok,
+            require_aux=require_aux,
         )
         word = str(data.get("voucher_word") or "记")
         if not getattr(settings, "enable_voucher_words", True):
@@ -271,10 +311,13 @@ class PostingService:
         allow_controlled = bool(settings.allow_gl_entry_on_controlled) or bool(
             voucher.source_event_id
         )
+        # 事件生成凭证：辅助核算非必填（与创建口径一致）；手工凭证仍必填
+        require_aux = not bool(voucher.source_event_id)
         lines = await self._validate_lines(
             tenant_id,
             data.get("lines") or [],
             allow_controlled=allow_controlled,
+            require_aux=require_aux,
         )
         if data.get("voucher_date"):
             vd = data["voucher_date"]
@@ -336,6 +379,7 @@ class PostingService:
                 "lines": draft_lines,
             },
             allow_controlled=True,
+            require_aux=False,
         )
 
     async def review_voucher(self, tenant_id: int, voucher_id: int, reviewer_id: int) -> Voucher:

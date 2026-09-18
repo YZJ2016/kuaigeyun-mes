@@ -467,9 +467,9 @@ class SalesOrderService:
     ) -> Dict[int, Dict[str, float]]:
         """
         批量计算销售订单账款/发票进度（0-100）。
-        - invoice_amount_progress：销项发票（或应收立账）相对订单金额的覆盖度
-        - collection_progress：已收款相对订单金额
-        - invoice_progress：二者较小值，开票与收款均完成时为 100
+        - invoice_amount_progress：销项发票相对订单金额的覆盖度（仅计有效销项发票，不含出库应收立账）
+        - collection_progress：已收款相对订单金额（可含出库立账应收的核销）
+        - invoice_progress：二者较小值；开票与收款均完成时为 100（生命周期「已完成」）
         """
         if not orders:
             return {}
@@ -482,7 +482,6 @@ class SalesOrderService:
 
         invoiced_by_order: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
         received_by_order: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
-        receivable_total_by_order: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
 
         if code_to_order_id:
             invoice_rows = await Invoice.filter(
@@ -525,17 +524,12 @@ class SalesOrderService:
                 source_type=RECEIVABLE_SOURCE_SALES_DELIVERY,
                 source_id__in=all_delivery_ids,
                 deleted_at__isnull=True,
-            ).values_list(
-                "source_id", "total_amount", "received_amount"
-            )
-            for source_id, total_amount, received_amount in recv_from_delivery:
+            ).values_list("source_id", "received_amount")
+            for source_id, received_amount in recv_from_delivery:
                 oid = delivery_to_order.get(int(source_id))
                 if not oid:
                     continue
-                total = Decimal(str(total_amount or 0))
-                received = Decimal(str(received_amount or 0))
-                receivable_total_by_order[oid] += total
-                received_by_order[oid] += received
+                received_by_order[oid] += Decimal(str(received_amount or 0))
 
         result: Dict[int, Dict[str, float]] = {}
         order_ids = [int(o.id) for o in orders if o.id]
@@ -563,11 +557,7 @@ class SalesOrderService:
                 }
                 continue
 
-            invoiced = max(
-                invoiced_by_order.get(order.id, Decimal("0")),
-                receivable_total_by_order.get(order.id, Decimal("0")),
-            )
-
+            invoiced = invoiced_by_order.get(order.id, Decimal("0"))
             received = received_by_order.get(order.id, Decimal("0"))
             invoice_amount_progress = float(
                 min(Decimal("100"), (invoiced / order_amount) * Decimal("100"))
@@ -1096,6 +1086,7 @@ class SalesOrderService:
         pushable_by_item: Optional[Dict[int, Decimal]] = None,
         has_existing_delivery_project: bool = False,
         has_remaining_work_order_qty: Optional[bool] = None,
+        has_remaining_invoice_amount: bool = True,
     ) -> dict[str, bool]:
         item_list = items or []
         has_items = len(item_list) > 0
@@ -1128,6 +1119,7 @@ class SalesOrderService:
             "has_pushable_qty": has_pushable_qty,
             "has_remaining_work_order_qty": remaining_wo,
             "has_existing_delivery_project": has_existing_delivery_project,
+            "has_remaining_invoice_amount": has_remaining_invoice_amount,
         }
 
     async def _assert_sales_order_capability_for_order(
@@ -1159,10 +1151,16 @@ class SalesOrderService:
                 Decimal("0"),
             )
         remaining_wo = order_total - pushed_wo_qty
+        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
+
+        invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
+            tenant_id, order
+        )
         ctx = self._sales_order_capability_context(
             order, items, demand, pushable_by_item=pushable_by_item,
             has_existing_delivery_project=has_existing_delivery_project,
             has_remaining_work_order_qty=remaining_wo > 0,
+            has_remaining_invoice_amount=invoice_remainder > Decimal("0"),
         )
         if action == "delete":
             from apps.kuaizhizao.services.sales_order_code_sync import (
@@ -1937,6 +1935,11 @@ class SalesOrderService:
         has_downstream_documents = await sales_order_has_downstream_documents(
             tenant_id, sales_order_id
         )
+        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
+
+        invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
+            tenant_id, order
+        )
         resp = enrich_sales_order_capabilities_on_response(
             order,
             self._order_to_response(
@@ -1961,6 +1964,7 @@ class SalesOrderService:
                 order, items, demand, pushable_by_item=pushable_by_item,
                 has_existing_delivery_project=has_existing_delivery_project,
                 has_remaining_work_order_qty=remaining_wo > 0,
+                has_remaining_invoice_amount=invoice_remainder > Decimal("0"),
             ),
         )
         from core.config.code_rule_pages import CODE_RULE_PAGES
@@ -2529,6 +2533,12 @@ class SalesOrderService:
 
         downstream_by_order = await sales_order_downstream_by_ids(tenant_id, order_ids)
 
+        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
+
+        invoice_remainder_by_order = await SalesInvoiceService().batch_sales_order_invoice_remainder(
+            tenant_id, orders
+        )
+
         # 6. 组装响应
         sales_orders = []
         for order in orders:
@@ -2588,6 +2598,10 @@ class SalesOrderService:
                             order.id, False
                         ),
                         has_remaining_work_order_qty=remaining_qty > 0,
+                        has_remaining_invoice_amount=invoice_remainder_by_order.get(
+                            int(order.id), Decimal("0")
+                        )
+                        > Decimal("0"),
                     ),
                 )
             )
@@ -5157,6 +5171,12 @@ class SalesOrderService:
         pushable_by_item = await get_pushable_qty_for_order_items(
             tenant_id, sales_order_id, items
         )
+        from apps.kuaizhizao.utils.over_qty_tolerance import (
+            OverQtyToleranceResolver,
+            max_pushable_with_issue_tolerance,
+        )
+
+        tolerance_resolver = OverQtyToleranceResolver(tenant_id)
 
         from apps.kuaizhizao.services.shipment_notice_service import (
             ShipmentNoticeService,
@@ -5191,7 +5211,13 @@ class SalesOrderService:
             total_amt = Decimal("0")
             for it in items:
                 item_id = int(getattr(it, "id", 0) or 0)
-                remaining_qty = pushable_by_item.get(item_id, Decimal("0"))
+                base_push = pushable_by_item.get(item_id, Decimal("0"))
+                remaining_qty, _ = await max_pushable_with_issue_tolerance(
+                    tenant_id,
+                    material_id=int(it.material_id),
+                    base_pushable=base_push,
+                    resolver=tolerance_resolver,
+                )
                 qty = qty_override.get(item_id, remaining_qty)
                 qty = max(Decimal("0"), Decimal(str(qty)))
                 if qty <= Decimal("0"):
@@ -5528,6 +5554,12 @@ class SalesOrderService:
         pushable_by_item = await get_pushable_qty_for_order_items(
             tenant_id, sales_order_id, items
         )
+        from apps.kuaizhizao.utils.over_qty_tolerance import (
+            OverQtyToleranceResolver,
+            max_pushable_with_issue_tolerance,
+        )
+
+        tolerance_resolver = OverQtyToleranceResolver(tenant_id)
         material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
         from apps.master_data.services.material_service import (
             resolve_primary_default_warehouse_from_material,
@@ -5538,7 +5570,13 @@ class SalesOrderService:
             order_qty = Decimal(str(it.order_quantity or 0))
             delivered_qty = Decimal(str(it.delivered_quantity or 0))
             item_id = int(it.id)
-            max_push_qty = pushable_by_item.get(item_id, Decimal("0"))
+            base_push = pushable_by_item.get(item_id, Decimal("0"))
+            max_push_qty, issue_pct = await max_pushable_with_issue_tolerance(
+                tenant_id,
+                material_id=int(it.material_id),
+                base_pushable=base_push,
+                resolver=tolerance_resolver,
+            )
             material_code, material_name = self._resolve_item_material_display(it, material_fallback)
             line_wh_id: Optional[int] = None
             line_wh_name: Optional[str] = None
@@ -5558,6 +5596,7 @@ class SalesOrderService:
                     "quantity": float(order_qty),
                     "pushed_quantity": float(delivered_qty),
                     "max_push_quantity": float(max_push_qty),
+                    "over_issue_tolerance_pct": float(issue_pct),
                     "delivery_date": str(it.delivery_date) if it.delivery_date else None,
                     "suggested_action": "发货",
                     "warehouse_id": line_wh_id,
@@ -5604,6 +5643,12 @@ class SalesOrderService:
         pushable_by_item = await get_pushable_qty_for_order_items(
             tenant_id, sales_order_id, items
         )
+        from apps.kuaizhizao.utils.over_qty_tolerance import (
+            OverQtyToleranceResolver,
+            max_pushable_with_issue_tolerance,
+        )
+
+        tolerance_resolver = OverQtyToleranceResolver(tenant_id)
         material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
         from apps.master_data.services.material_service import (
             resolve_primary_default_warehouse_from_material,
@@ -5615,7 +5660,13 @@ class SalesOrderService:
                 continue
             delivered_qty = Decimal(str(it.delivered_quantity or 0))
             item_id = int(it.id)
-            max_push_qty = pushable_by_item.get(item_id, Decimal("0"))
+            base_push = pushable_by_item.get(item_id, Decimal("0"))
+            max_push_qty, issue_pct = await max_pushable_with_issue_tolerance(
+                tenant_id,
+                material_id=int(it.material_id),
+                base_pushable=base_push,
+                resolver=tolerance_resolver,
+            )
             material_code, material_name = self._resolve_item_material_display(it, material_fallback)
             line_wh_id: Optional[int] = None
             line_wh_name: Optional[str] = None
@@ -5635,6 +5686,7 @@ class SalesOrderService:
                     "quantity": float(order_qty),
                     "pushed_quantity": float(delivered_qty),
                     "max_push_quantity": float(max_push_qty),
+                    "over_issue_tolerance_pct": float(issue_pct),
                     "delivery_date": str(it.delivery_date) if it.delivery_date else None,
                     "warehouse_id": line_wh_id,
                     "warehouse_name": line_wh_name,
@@ -5658,7 +5710,7 @@ class SalesOrderService:
     async def preview_push_sales_order_to_invoice(
         self, tenant_id: int, sales_order_id: int
     ) -> Dict[str, Any]:
-        """下推销售发票预览：返回订单明细数量、已下推、可下推。"""
+        """下推销售发票预览：返回订单明细数量、已开票金额、可开票金额。"""
         order = await SalesOrder.get_or_none(
             tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
         )
@@ -5675,6 +5727,28 @@ class SalesOrderService:
         if order_total <= Decimal("0"):
             raise BusinessLogicError("订单无计费金额，无法下推销售发票")
 
+        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
+
+        invoice_svc = SalesInvoiceService()
+        invoice_preview_items = await invoice_svc._build_preview_items_for_sales_order(
+            tenant_id, order
+        )
+        if not invoice_preview_items:
+            raise BusinessLogicError("订单无可开票金额，无法下推销售发票")
+        amount_row = invoice_preview_items[0]
+        order_amount = float(amount_row.get("quantity") or 0)
+        pushed_amount = float(amount_row.get("pushed_quantity") or 0)
+        remaining_amount = float(amount_row.get("max_push_quantity") or 0)
+        if remaining_amount <= 0:
+            from apps.kuaizhizao.services.document_action_policy.types import CAPABILITY_REASON_MESSAGES
+
+            raise BusinessLogicError(
+                CAPABILITY_REASON_MESSAGES.get(
+                    "sales_order.push_invoice.already_fully_invoiced",
+                    "销售订单可开票金额已全部开票",
+                )
+            )
+
         material_fallback = await self._load_material_fallback_for_items(tenant_id, items)
         preview_items: List[Dict[str, Any]] = []
         for it in items:
@@ -5689,7 +5763,7 @@ class SalesOrderService:
                     "material_name": material_name,
                     "quantity": float(qty),
                     "pushed_quantity": 0.0,
-                    "max_push_quantity": float(qty),
+                    "max_push_quantity": float(qty) if remaining_amount > 0 else 0.0,
                 }
             )
 
@@ -5698,9 +5772,11 @@ class SalesOrderService:
 
         return {
             "target_type": "sales_invoice",
-            "summary": f"请确认将下推的订单明细（{len(preview_items)} 行）",
+            "summary": (
+                f"可开票 ¥{remaining_amount:,.2f}（订单 ¥{order_amount:,.2f}，已开票 ¥{pushed_amount:,.2f}）"
+            ),
             "items": preview_items,
-            "tip": "确认后将按全部订单明细生成销售发票草稿。",
+            "tip": "确认后将按全部订单明细生成销售发票草稿；可开票金额不足时将无法下推。",
         }
 
     async def preview_push_sales_order_to_sales_return(
@@ -5842,6 +5918,21 @@ class SalesOrderService:
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         await self._assert_sales_order_capability_for_order(tenant_id, order, "push_invoice")
+
+        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
+
+        invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
+            tenant_id, order
+        )
+        if invoice_remainder <= Decimal("0"):
+            from apps.kuaizhizao.services.document_action_policy.types import CAPABILITY_REASON_MESSAGES
+
+            raise BusinessLogicError(
+                CAPABILITY_REASON_MESSAGES.get(
+                    "sales_order.push_invoice.already_fully_invoiced",
+                    "销售订单可开票金额已全部开票",
+                )
+            )
 
         items = await SalesOrderItem.filter(
             tenant_id=tenant_id, sales_order_id=sales_order_id

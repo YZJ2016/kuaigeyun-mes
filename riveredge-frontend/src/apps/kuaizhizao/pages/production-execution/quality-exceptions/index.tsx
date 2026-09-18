@@ -9,6 +9,7 @@
 
 import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
@@ -156,6 +157,20 @@ const QualityExceptionsPage: React.FC = () => {
     setCurrentRecord(record);
     setDetailDrawerVisible(true);
   };
+
+  const openDetailById = useCallback(
+    async (id: number) => {
+      try {
+        const detail = await apiRequest<QualityException>(`/apps/kuaizhizao/exceptions/quality/${id}`);
+        setCurrentRecord(detail);
+        setDetailDrawerVisible(true);
+      } catch {
+        messageApi.error(t(`${Q}.message.fetchListFailed`));
+      }
+    },
+    [messageApi, t],
+  );
+  useDocumentHighlightDeepLink(openDetailById);
 
   const openHandleModal = (record: QualityException, action: string) => {
     setCurrentRecord(record);

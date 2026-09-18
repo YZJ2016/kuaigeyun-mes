@@ -349,7 +349,7 @@ export async function loadPlugin(
 
     // 生产：发版后旧 chunk 已下线 → 自动硬刷新一次；勿提示 compose/Vite
     if (import.meta.env.PROD && isStaleChunkError(errorObj)) {
-      if (reloadForStaleChunkOnce()) {
+      if (reloadForStaleChunkOnce(`plugin ${pluginCode}: ${errorObj.message}`)) {
         return new Promise<PluginRoute[]>(() => {});
       }
       throw new Error(

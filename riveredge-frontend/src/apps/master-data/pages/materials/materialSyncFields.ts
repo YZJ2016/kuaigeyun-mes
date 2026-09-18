@@ -36,6 +36,8 @@ export const MATERIAL_SYNC_AVAILABLE_TARGET_FIELDS: SyncTargetField[] = [
   { value: 'customs_code', labelKey: 'app.master-data.materials.syncField.customsCode' },
   { value: 'over_report_mode', labelKey: 'app.master-data.materials.syncField.overReportMode' },
   { value: 'over_report_value', labelKey: 'app.master-data.materials.syncField.overReportValue' },
+  { value: 'over_receipt_tolerance_pct', labelKey: 'app.master-data.materials.syncField.overReceiptTolerancePct' },
+  { value: 'over_issue_tolerance_pct', labelKey: 'app.master-data.materials.syncField.overIssueTolerancePct' },
   { value: 'inspection_mode', labelKey: 'app.master-data.materials.syncField.inspectionMode' },
 ];
 

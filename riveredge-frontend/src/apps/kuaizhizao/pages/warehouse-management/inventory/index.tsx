@@ -47,6 +47,7 @@ interface InventoryItem {
   status: string;
   warehouse_id?: number | null;
   warehouse_name: string | null;
+  location_code?: string | null;
 }
 
 interface InventorySummary {
@@ -219,6 +220,7 @@ const InventoryPage: React.FC = () => {
       t('app.kuaizhizao.warehouseInventory.colTexture'),
       t('common.unit'),
       t('app.kuaizhizao.warehouseReports.colStockQty'),
+      t('app.kuaizhizao.warehouseInventory.colLocation'),
       t('app.kuaizhizao.warehouseInventory.colInTransit'),
       t('app.kuaizhizao.warehouseInventory.colAlert'),
       t('common.status'),
@@ -234,6 +236,7 @@ const InventoryPage: React.FC = () => {
         r.texture,
         r.material_unit,
         r.quantity,
+        r.location_code,
         r.in_transit_quantity ?? 0,
         r.alert_label,
         r.status,
@@ -394,6 +397,18 @@ const InventoryPage: React.FC = () => {
             },
           },
           {
+            title: t('app.kuaizhizao.warehouseInventory.colLocation'),
+            dataIndex: 'location_code',
+            key: 'location_code',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, r) => renderCell(r.location_code),
+          },
+          {
             title: t('app.kuaizhizao.warehouseInventory.colInTransit'),
             dataIndex: 'in_transit_quantity',
             width: 88,
@@ -533,7 +548,7 @@ const InventoryPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.inventory')}
         headerActions={tableHeaderActions}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-width-v4"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-width-v5"
         actionRef={actionRef}
         columns={columns}
         request={fetchInventory}

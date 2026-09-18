@@ -1283,6 +1283,11 @@ export const materialBatchApi = {
 };
 
 /**
+ * 物料序列号单次批量生成上限（与后端 POST /serials/generate 的 count le=1000 一致）。
+ */
+export const MATERIAL_SERIAL_GENERATE_MAX_COUNT = 1000;
+
+/**
  * 物料序列号 API 服务
  */
 export const materialSerialApi = {

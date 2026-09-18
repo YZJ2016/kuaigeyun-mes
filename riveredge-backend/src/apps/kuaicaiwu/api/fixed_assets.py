@@ -82,7 +82,8 @@ class FaAssetBody(BaseSchema):
     total_workload: Optional[Decimal] = None
     original_value: Decimal = Field(Decimal("0"))
     impairment_value: Decimal = Field(Decimal("0"))
-    useful_life_months: int = Field(60, ge=1)
+    # 工作量法可不填期间数；其它方法默认 60
+    useful_life_months: Optional[int] = Field(60, ge=1)
     depreciated_periods: int = Field(0, ge=0)
     accumulated_depreciation: Decimal = Field(Decimal("0"))
     residual_rate: Decimal = Field(Decimal("0.05"))

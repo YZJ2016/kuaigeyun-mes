@@ -241,6 +241,12 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             order_items,
             exclude_notice_id=int(notice.id),
         )
+        from apps.kuaizhizao.utils.over_qty_tolerance import (
+            OverQtyToleranceResolver,
+            max_pushable_with_issue_tolerance,
+        )
+
+        tolerance_resolver = OverQtyToleranceResolver(tenant_id)
         order_item_by_id = {int(it.id): it for it in order_items}
 
         for n_item in notice_items:
@@ -256,7 +262,13 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             if not so_item:
                 raise BusinessLogicError(f"发货通知明细缺少有效的订单行关联: {so_item_id}")
 
-            available_qty = pushable_by_item.get(so_item_id, Decimal("0"))
+            base_qty = pushable_by_item.get(so_item_id, Decimal("0"))
+            available_qty, _ = await max_pushable_with_issue_tolerance(
+                tenant_id,
+                material_id=int(so_item.material_id),
+                base_pushable=base_qty,
+                resolver=tolerance_resolver,
+            )
             if qty > available_qty:
                 material_label = (
                     getattr(so_item, "material_code", None)
@@ -944,6 +956,20 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                     continue
                 reserved_by_item_id[int(so_item_id)] += Decimal(str(rit.notice_quantity or 0))
 
+        from apps.kuaizhizao.utils.over_qty_tolerance import (
+            OverQtyToleranceResolver,
+            max_pushable_with_issue_tolerance,
+        )
+        from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
+
+        pushable_by_item = await get_pushable_qty_for_order_items(
+            tenant_id,
+            int(notice.sales_order_id),
+            order_items,
+            exclude_notice_id=int(notice.id),
+        )
+        tolerance_resolver = OverQtyToleranceResolver(tenant_id)
+
         preview_items: List[Dict[str, Any]] = []
         line_blocking_issues: List[str] = []
         for n_item in notice_items:
@@ -952,21 +978,21 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             reserved_qty = Decimal("0")
             available_qty = notice_qty
             order_qty = notice_qty
+            issue_pct = Decimal("0")
 
             if so_item_id is not None:
                 so_item_id = int(so_item_id)
                 so_item = order_item_by_id.get(so_item_id)
                 if so_item:
                     order_qty = Decimal(str(so_item.order_quantity or 0))
-                    remaining_qty = (
-                        Decimal(str(so_item.remaining_quantity))
-                        if getattr(so_item, "remaining_quantity", None) is not None
-                        else Decimal(str(so_item.order_quantity or 0))
-                        - Decimal(str(so_item.delivered_quantity or 0))
+                    base_push = pushable_by_item.get(so_item_id, Decimal("0"))
+                    available_qty, issue_pct = await max_pushable_with_issue_tolerance(
+                        tenant_id,
+                        material_id=int(so_item.material_id),
+                        base_pushable=base_push,
+                        resolver=tolerance_resolver,
                     )
-                    remaining_qty = max(Decimal("0"), remaining_qty)
                     reserved_qty = reserved_by_item_id.get(so_item_id, Decimal("0"))
-                    available_qty = max(Decimal("0"), remaining_qty - reserved_qty)
                     if notice_qty > available_qty:
                         material_label = (
                             getattr(so_item, "material_code", None)
@@ -986,6 +1012,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 "pushed_quantity": float(reserved_qty),
                 "max_push_quantity": float(available_qty),
                 "notice_quantity": float(notice_qty),
+                "over_issue_tolerance_pct": float(issue_pct),
                 "warehouse_id": int(n_item.warehouse_id) if getattr(n_item, "warehouse_id", None) else None,
                 "warehouse_name": getattr(n_item, "warehouse_name", None),
             })

@@ -123,6 +123,13 @@ async def audit_requisition(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except (ValidationError, BusinessLogicError) as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception(
+            "after_sales_spare_part_requisition_audit_failed requisition_id={} tenant_id={}",
+            requisition_id,
+            tenant_id,
+        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e) or "审核失败")
 
 
 @router.post("/{requisition_id}/reject", response_model=AfterSalesSparePartRequisitionResponse, summary="Reject requisition")
@@ -136,7 +143,7 @@ async def reject_requisition(
         return await _service.reject(tenant_id, requisition_id, body, current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except BusinessLogicError as e:
+    except (ValidationError, BusinessLogicError) as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 

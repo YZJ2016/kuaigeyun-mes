@@ -59,6 +59,7 @@ export type GlPendingAccountingEvent = {
   id: number;
   event_code: string;
   event_type: string;
+  event_type_label?: string | null;
   business_type: string;
   business_type_label: string;
   source_doc_type?: string | null;
@@ -310,6 +311,15 @@ export const glService = {
     >(`${BASE}/transfer-templates`, { method: 'GET' }),
   upsertTransferTemplate: (data: Record<string, unknown>) =>
     apiRequest<Record<string, unknown>>(`${BASE}/transfer-templates`, { method: 'POST', data }),
+  updateTransferTemplate: (templateId: number, data: Record<string, unknown>) =>
+    apiRequest<Record<string, unknown>>(`${BASE}/transfer-templates/${templateId}`, {
+      method: 'PUT',
+      data,
+    }),
+  deleteTransferTemplate: (templateId: number) =>
+    apiRequest<Record<string, unknown>>(`${BASE}/transfer-templates/${templateId}`, {
+      method: 'DELETE',
+    }),
   runTransferTemplate: (templateId: number, year: number, month: number) =>
     apiRequest<Record<string, unknown>>(`${BASE}/transfer-templates/${templateId}/run`, {
       method: 'POST',

@@ -12,7 +12,7 @@ import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
   detailDrawerBasicColumn,
-  detailDrawerDescriptionItems,
+  useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { alignDescriptionColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
@@ -255,6 +255,13 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
     ? t(`${prefix}.detailDrawerTitle`, { code })
     : t(`${prefix}.detailTitle`);
 
+  const voucherDocumentType = isReceipt ? 'finance_receipt' : 'finance_payment';
+  const basicItems = useDetailDrawerDescriptionItems(
+    basicColumns,
+    contentReady ? effective : null,
+    voucherDocumentType,
+  );
+
   if (!open) return null;
 
   return (
@@ -286,7 +293,7 @@ export const FinanceVoucherDetailDrawer: React.FC<FinanceVoucherDetailDrawerProp
           <Descriptions
             column={detailDrawerBasicColumn(false)}
             size="small"
-            items={detailDrawerDescriptionItems(basicColumns, effective)}
+            items={basicItems}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

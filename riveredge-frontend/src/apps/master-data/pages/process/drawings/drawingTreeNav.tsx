@@ -85,6 +85,18 @@ export function folderUuidFromTreeKey(key: string): string | null {
   return key.slice(7);
 }
 
+export function findDrawingFolderByUuid(
+  folders: DrawingFolder[],
+  uuid: string,
+): DrawingFolder | null {
+  for (const folder of folders) {
+    if (folder.uuid === uuid) return folder;
+    const nested = findDrawingFolderByUuid(folder.children ?? [], uuid);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 export function inferNavModeFromTreeKey(key: string): DrawingNavMode | null {
   if (key.startsWith('type:')) return 'type';
   if (key.startsWith('status:')) return 'status';

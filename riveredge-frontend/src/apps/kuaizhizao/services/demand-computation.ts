@@ -567,6 +567,8 @@ export interface ComputationPushPreviewItem {
   material_id?: number
   material_code: string
   material_name: string
+  material_spec?: string | null
+  material_group_name?: string | null
   quantity: number
   pushed_quantity: number
   max_push_quantity: number

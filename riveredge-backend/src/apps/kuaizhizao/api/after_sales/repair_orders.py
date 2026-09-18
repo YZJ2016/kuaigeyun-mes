@@ -129,3 +129,45 @@ async def delete_order(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{order_id}/push-to-dispatch", summary="Push repair order to service dispatch")
+async def push_to_dispatch(
+    order_id: int = Path(..., description="维修单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.push_to_dispatch(tenant_id, order_id, current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValidationError, BusinessLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{order_id}/push-to-settlement", summary="Push repair order to service settlement")
+async def push_to_settlement(
+    order_id: int = Path(..., description="维修单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.push_to_settlement(tenant_id, order_id, current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValidationError, BusinessLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{order_id}/push-to-return-visit", summary="Push repair order to customer return visit")
+async def push_to_return_visit(
+    order_id: int = Path(..., description="维修单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.push_to_return_visit(tenant_id, order_id, current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValidationError, BusinessLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

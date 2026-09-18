@@ -63,6 +63,10 @@ class FaAssetService:
             workload = payload.get("total_workload")
             if workload is None or quantize_money(workload) <= 0:
                 raise ValidationError("工作量法须填写预计总工作量")
+        elif method != "none":
+            life = int(payload.get("useful_life_months") or 0)
+            if life <= 0:
+                raise ValidationError("须填写预计使用期间数")
         return payload
 
     def _recalc_depreciation_fields(self, payload: dict[str, Any]) -> dict[str, Any]:

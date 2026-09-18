@@ -106,6 +106,9 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         *,
         transfer_id: Optional[int] = None,
     ) -> InventoryTransferItem:
+        from apps.master_data.models.material import Material
+        from apps.kuaizhizao.services.warehouse_service import _resolve_material_snapshot_fields
+
         from_wh = getattr(item_data, "from_warehouse_id", None) or transfer.from_warehouse_id
         to_wh = getattr(item_data, "to_warehouse_id", None) or transfer.to_warehouse_id
 
@@ -117,24 +120,28 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             to_location_id=getattr(item_data, "to_location_id", None),
         )
 
-        amount = item_data.quantity * item_data.unit_price
-        material_unit = str(getattr(item_data, "material_unit", None) or "").strip() or None
-        if not material_unit:
-            from apps.master_data.models.material import Material
+        material = await Material.get_or_none(
+            tenant_id=tenant_id,
+            id=item_data.material_id,
+            deleted_at__isnull=True,
+        )
+        if not material:
+            raise ValidationError(f"物料不存在: {item_data.material_id}")
 
-            material = await Material.get_or_none(
-                tenant_id=tenant_id,
-                id=item_data.material_id,
-                deleted_at__isnull=True,
-            )
-            material_unit = str(getattr(material, "base_unit", None) or "个") if material else "个"
+        material_code, material_name, material_unit, _ = _resolve_material_snapshot_fields(
+            material, item_data
+        )
+        if not material_code or not material_name:
+            raise ValidationError("物料编码/名称不能为空，请重新选择物料")
+
+        amount = item_data.quantity * item_data.unit_price
         return await InventoryTransferItem.create(
             tenant_id=tenant_id,
             uuid=str(uuid.uuid4()),
             transfer_id=transfer_id or transfer.id,
             material_id=item_data.material_id,
-            material_code=item_data.material_code,
-            material_name=item_data.material_name,
+            material_code=material_code,
+            material_name=material_name,
             material_unit=material_unit,
             from_warehouse_id=from_wh,
             from_storage_area_id=getattr(item_data, "from_storage_area_id", None),
@@ -570,6 +577,43 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
             # 获取更新人信息
             user_info = await self.get_user_info(updated_by)
+
+            if item_data.material_id is not None:
+                item.material_id = item_data.material_id
+            if item_data.material_code is not None:
+                item.material_code = item_data.material_code
+            if item_data.material_name is not None:
+                item.material_name = item_data.material_name
+            if item_data.material_unit is not None:
+                item.material_unit = item_data.material_unit
+
+            need_material_snapshot = (
+                not str(item.material_code or "").strip()
+                or not str(item.material_name or "").strip()
+                or not str(item.material_unit or "").strip()
+                or item_data.material_id is not None
+            )
+            if need_material_snapshot:
+                from apps.master_data.models.material import Material
+                from apps.kuaizhizao.services.warehouse_service import (
+                    _resolve_material_snapshot_fields,
+                )
+
+                material = await Material.get_or_none(
+                    tenant_id=tenant_id,
+                    id=item.material_id,
+                    deleted_at__isnull=True,
+                )
+                if not material:
+                    raise ValidationError(f"物料不存在: {item.material_id}")
+                material_code, material_name, material_unit, _ = _resolve_material_snapshot_fields(
+                    material, item
+                )
+                if not material_code or not material_name:
+                    raise ValidationError("物料编码/名称不能为空，请重新选择物料")
+                item.material_code = material_code
+                item.material_name = material_name
+                item.material_unit = material_unit
 
             # 更新字段
             if item_data.quantity is not None:

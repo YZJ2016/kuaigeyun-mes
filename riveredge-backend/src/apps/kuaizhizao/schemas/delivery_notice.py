@@ -11,7 +11,10 @@ from datetime import datetime, date
 from typing import Optional, List, Any, Dict
 from pydantic import Field
 from core.schemas.base import BaseSchema
-from apps.kuaizhizao.services.document_action_policy.types import SalesDeliveryPullCapabilities
+from apps.kuaizhizao.services.document_action_policy.types import (
+    DeliveryNoticeCapabilities,
+    SalesDeliveryPullCapabilities,
+)
 from apps.kuaizhizao.schemas.warehouse import DocumentLineMaterialPreview
 
 
@@ -71,6 +74,9 @@ class DeliveryNoticeListResponse(DeliveryNoticeResponse):
     """送货单列表响应schema"""
     items: Optional[List[DocumentLineMaterialPreview]] = Field(
         None, description="明细物料名预览（列表「明细」列）",
+    )
+    capabilities: Optional[DeliveryNoticeCapabilities] = Field(
+        None, description="业务态 capabilities（下推发货管理单等）",
     )
 
 
@@ -165,3 +171,20 @@ class DeliveryNoticePullCandidateListResponse(BaseSchema):
     data: List[DeliveryNoticePullCandidate]
     total: int
     success: bool = True
+
+
+class DeliveryNoticePushFreightRequest(BaseSchema):
+    notice_ids: List[int] = Field(..., min_length=1, description="送货单 ID 列表")
+
+
+class DeliveryNoticePushFreightResult(BaseSchema):
+    notice_id: int
+    notice_code: str
+    freight_order_id: int
+    freight_order_code: str
+
+
+class DeliveryNoticePushFreightResponse(BaseSchema):
+    success: bool = True
+    message: str
+    items: List[DeliveryNoticePushFreightResult] = Field(default_factory=list)

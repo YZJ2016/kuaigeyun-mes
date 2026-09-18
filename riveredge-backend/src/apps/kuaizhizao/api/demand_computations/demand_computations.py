@@ -524,7 +524,11 @@ async def recompute_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=err_msg)
 
 
-@router.post("/change-events", summary="Create demand change event and analyze impact")
+@router.post(
+    "/change-events",
+    summary="Create demand change event and analyze impact",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-change:create"))],
+)
 async def create_change_event(
     body: DemandChangeEventCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -552,7 +556,11 @@ async def create_change_event(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get("/change-events/pending", summary="List pending demand change events")
+@router.get(
+    "/change-events/pending",
+    summary="List pending demand change events",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-change:read"))],
+)
 async def list_pending_change_events(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -581,7 +589,11 @@ async def list_pending_change_events(
     )
 
 
-@router.get("/change-events/{event_id}/impact", summary="Get change impact details")
+@router.get(
+    "/change-events/{event_id}/impact",
+    summary="Get change impact details",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-change:read"))],
+)
 async def get_change_impact(
     event_id: int = Path(..., description="事件ID"),
     current_user: User = Depends(get_current_user),
@@ -593,7 +605,7 @@ async def get_change_impact(
 @router.post(
     "/change-events/{event_id}/replan-task",
     summary="Ensure replan task for change event",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:update"))],
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-demand-change:update"))],
 )
 async def ensure_replan_task_for_event(
     event_id: int = Path(..., description="事件ID"),

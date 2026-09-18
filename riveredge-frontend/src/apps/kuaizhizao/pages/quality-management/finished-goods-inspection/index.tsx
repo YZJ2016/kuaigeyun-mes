@@ -112,10 +112,10 @@ import { formatQuantity, todaySiteDateString } from '../../../../../utils/format
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import {
   InspectionConductQuantityFields,
-  InspectionDefectQuantityField,
   InspectionNonconformanceReasonField,
   normalizeInspectionConductPayload,
 } from '../../../../../components/quantity-with-unit/inspectionConductQuantities';
+import { CreateInspectionDefectModal } from '../components/CreateInspectionDefectModal';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
@@ -139,10 +139,8 @@ import {
   mergeQualityDisposalOptions,
   renderQualityDocStatusTag,
   renderQualityQualityStatusTag,
-  getQualityDefectTypeOptions,
   qualityInspectionUniAuditProps,
 } from '../components/qualityMeta';
-import { DispositionConditionalFields } from '../components/DispositionConditionalFields';
 import {
   filterDeletableQualityInspectionRecords,
   filterRevokeConductQualityInspectionRecords,
@@ -387,7 +385,6 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   // 创建不合格品记录Modal状态
   const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
   const [currentDefectInspection, setCurrentDefectInspection] = useState<FinishedGoodsInspection | null>(null);
-  const defectFormRef = useRef<any>(null);
 
   // 统计数据（从接口获取）
   const { data: statsData } = useQuery({
@@ -644,61 +641,6 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const handleCreateDefect = (record: FinishedGoodsInspection) => {
     setCurrentDefectInspection(record);
     setCreateDefectModalVisible(true);
-    defectFormRef.current?.setFieldsValue({
-      defect_quantity: record.unqualified_quantity || 0,
-      defect_type: 'other',
-      defect_reason: '',
-      disposition: 'rework', // 成品检验不合格默认返工
-      remarks: '',
-    });
-  };
-
-  // 处理创建不合格品记录提交
-  const handleCreateDefectSubmit = async (values: any) => {
-    try {
-      if (currentDefectInspection?.id) {
-        await qualityApi.finishedGoodsInspection.createDefect(currentDefectInspection.id.toString(), {
-          defect_quantity: values.defect_quantity,
-          defect_type: values.defect_type,
-          defect_reason: values.defect_reason,
-          disposition: values.disposition,
-          quarantine_warehouse_id: values.quarantine_warehouse_id,
-          stock_warehouse_id: values.stock_warehouse_id,
-          downgrade_material_id: values.downgrade_material_id,
-          downgrade_warehouse_id: values.downgrade_warehouse_id,
-          remarks: values.remarks,
-        });
-      }
-
-      messageApi.success(
-        canReadNcLedger ? {
-          content: (
-            <Space>
-              <span>{t('app.kuaizhizao.quality.common.messages.createDefectSuccess')}</span>
-              <Button
-                type="link"
-                size="small"
-                onClick={() =>
-                  window.open(
-                    `/apps/kuaizhizao/quality-management/nonconforming-ledger?finished_goods_inspection_id=${currentDefectInspection?.id || ''}`,
-                    '_blank'
-                  )
-                }
-              >
-                {t('app.kuaizhizao.quality.common.actions.viewLedger')}
-              </Button>
-            </Space>
-          ),
-        } : t('app.kuaizhizao.quality.common.messages.createDefectSuccess')
-      );
-      setCreateDefectModalVisible(false);
-      defectFormRef.current?.resetFields();
-      invalidateStats();
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.quality.common.messages.createDefectFailed'));
-      throw error;
-    }
   };
 
   const resetPushReworkPreview = () => {
@@ -1552,91 +1494,27 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         )}
       />
 
-      {/* 创建不合格品记录Modal */}
-      <FormModalTemplate
-        title={t('app.kuaizhizao.quality.common.modal.createDefectTitle')}
+      <CreateInspectionDefectModal
         open={createDefectModalVisible}
         onClose={() => {
           setCreateDefectModalVisible(false);
-          defectFormRef.current?.resetFields();
+          setCurrentDefectInspection(null);
         }}
-        onFinish={handleCreateDefectSubmit}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={defectFormRef}
-      >
-        {currentDefectInspection && (
-          <Card title={t('app.kuaizhizao.quality.common.sections.inspectionInfo')} size="small" style={{ marginBottom: 16 }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <strong>{t('app.kuaizhizao.quality.common.label.inspectionCode')}：</strong>{currentDefectInspection.inspection_code}
-              </Col>
-              <Col span={12}>
-                <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>{currentDefectInspection.material_name}
-              </Col>
-            </Row>
-            <Row gutter={16} style={{ marginTop: 8 }}>
-              <Col span={12}>
-                <strong>{t('app.kuaizhizao.quality.common.label.unqualifiedQty')}：</strong>
-                {formatQuantityWithUnit(
-                  currentDefectInspection.unqualified_quantity,
-                  currentDefectInspection.material_unit,
-                )}
-              </Col>
-            </Row>
-          </Card>
-        )}
-        <InspectionDefectQuantityField
-          materialId={currentDefectInspection?.material_id}
-          materialUnit={currentDefectInspection?.material_unit}
-          maxQuantity={Number(currentDefectInspection?.unqualified_quantity || 0)}
-          t={t}
-        />
-        <ProFormSelect
-          name="defect_type"
-          label={t('app.kuaizhizao.quality.common.form.defectType')}
-          placeholder={t('app.kuaizhizao.quality.common.placeholder.defectType')}
-          rules={[{ required: true, message: t('app.kuaizhizao.quality.common.validation.requiredDefectType') }]}
-          options={getQualityDefectTypeOptions(t)}
-        />
-        <ProFormTextArea
-          name="defect_reason"
-          label={t('app.kuaizhizao.quality.common.form.defectReason')}
-          placeholder={t('app.kuaizhizao.quality.common.placeholder.defectReason')}
-          rules={[{ required: true, message: t('app.kuaizhizao.quality.common.validation.requiredDefectReason') }]}
-          fieldProps={{ rows: 3 }}
-        />
-        <ProFormItem name="disposition" label={t('app.kuaizhizao.quality.common.form.disposition')} rules={[{ required: true, message: t('app.kuaizhizao.quality.common.validation.requiredDisposition') }]}>
-          <UniDropdown
-            placeholder={t('app.kuaizhizao.quality.common.form.selectDisposition')}
-            showSearch
-            allowClear
-            loading={disposalLoading}
-            options={disposalOptions}
-            quickCreate={{ label: t('app.kuaizhizao.quality.common.form.dataDictionaryManage'), onClick: () => navigate('/system/data-dictionaries') }}
-          />
-        </ProFormItem>
-        <DispositionConditionalFields />
-        <ProFormDependency name={['disposition']}>
-          {({ disposition }) => (
-            <ProFormTextArea
-              name="remarks"
-              label={t('common.remark')}
-              placeholder={t('common.remark')}
-              fieldProps={{ rows: 2 }}
-              rules={
-                disposition === 'other'
-                  ? [
-                      {
-                        required: true,
-                        message: t('app.kuaizhizao.quality.common.validation.requiredOtherRemarks'),
-                      },
-                    ]
-                  : undefined
-              }
-            />
-          )}
-        </ProFormDependency>
-      </FormModalTemplate>
+        onSuccess={() => {
+          invalidateStats();
+          actionRef.current?.reload();
+        }}
+        inspection={currentDefectInspection}
+        source="finished"
+        defaultDisposition="rework"
+        disposalOptions={disposalOptions}
+        disposalLoading={disposalLoading}
+        canReadNcLedger={canReadNcLedger}
+        ledgerQueryParam="finished_goods_inspection_id"
+        createDefectBatch={(inspectionId, lines) =>
+          qualityApi.finishedGoodsInspection.createDefectBatch(inspectionId, { lines })
+        }
+      />
 
       <Modal
         title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}

@@ -10,6 +10,7 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDependency } from '@ant-design/pro-components';
 import { App, Button, Space, Popconfirm, Typography, Row, Col, Descriptions, Tooltip } from 'antd';
 import { CheckOutlined, WarningOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons';
@@ -450,6 +451,10 @@ const InventoryAlertPage: React.FC = () => {
       setDetailLoading(false);
     }
   };
+
+  useDocumentHighlightDeepLink((id) => {
+    void handleDetail({ id });
+  });
 
   /**
    * 处理预警

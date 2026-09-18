@@ -361,6 +361,9 @@ class PermissionSyncService:
                 execute_grants = await cls._propagate_quality_inspection_execute_grants(
                     conn, tenant_id=tenant_id
                 )
+                execute_grants += await cls._propagate_split_module_grants(
+                    conn, tenant_id=tenant_id
+                )
                 baseline_grants = await cls._ensure_baseline_role_grants(
                     conn, tenant_id=tenant_id
                 )
@@ -574,6 +577,83 @@ class PermissionSyncService:
                     execute_id,
                 )
                 granted += max(0, int(after or 0) - int(before or 0))
+        return granted
+
+    # 委外/需求变更：菜单曾共用一码，拆分后把旧码授权幂等复制到新模块（不删旧码）
+    _SPLIT_MODULE_GRANT_SOURCES: dict[str, tuple[str, ...]] = {
+        "kuaizhizao:outsource-work-order": ("kuaizhizao:outsource-order",),
+        "kuaizhizao:outsource-issue": ("kuaizhizao:outsource-order",),
+        "kuaizhizao:outsource-receipt": ("kuaizhizao:outsource-order",),
+        "kuaizhizao:outsource-material-return": ("kuaizhizao:outsource-order",),
+        "kuaizhizao:outsource-product-return": ("kuaizhizao:outsource-order",),
+        "kuaizhizao:outsource-settlement": ("kuaizhizao:outsource-order",),
+        "kuaizhizao:plan-management-demand-change": ("kuaizhizao:plan-management-demand-computation",),
+    }
+
+    @classmethod
+    async def _propagate_split_module_grants(cls, conn, *, tenant_id: int) -> int:
+        """将共用旧模块授权追加到拆分出的新模块（同 action），避免既有角色失权。"""
+        granted = 0
+        for target_prefix, source_prefixes in cls._SPLIT_MODULE_GRANT_SOURCES.items():
+            target_rows = await conn.fetch(
+                """
+                SELECT id, code FROM core_permissions
+                WHERE tenant_id = $1
+                  AND deleted_at IS NULL
+                  AND code LIKE $2
+                """,
+                tenant_id,
+                f"{target_prefix}:%",
+            )
+            if not target_rows:
+                continue
+            for target in target_rows:
+                target_code = str(target["code"])
+                action = target_code.rsplit(":", 1)[-1]
+                target_id = int(target["id"])
+                for source_prefix in source_prefixes:
+                    source_code = f"{source_prefix}:{action}"
+                    source_row = await conn.fetchrow(
+                        """
+                        SELECT id FROM core_permissions
+                        WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL
+                        """,
+                        tenant_id,
+                        source_code,
+                    )
+                    if not source_row:
+                        continue
+                    before = await conn.fetchval(
+                        """
+                        SELECT COUNT(*) FROM core_role_permissions
+                        WHERE permission_id = $1
+                        """,
+                        target_id,
+                    )
+                    await conn.execute(
+                        """
+                        INSERT INTO core_role_permissions (role_id, permission_id, created_at)
+                        SELECT rp.role_id, $2, rp.created_at
+                        FROM core_role_permissions rp
+                        WHERE rp.permission_id = $1
+                          AND NOT EXISTS (
+                            SELECT 1
+                            FROM core_role_permissions rp2
+                            WHERE rp2.role_id = rp.role_id
+                              AND rp2.permission_id = $2
+                          )
+                        """,
+                        int(source_row["id"]),
+                        target_id,
+                    )
+                    after = await conn.fetchval(
+                        """
+                        SELECT COUNT(*) FROM core_role_permissions
+                        WHERE permission_id = $1
+                        """,
+                        target_id,
+                    )
+                    granted += max(0, int(after or 0) - int(before or 0))
         return granted
 
     @classmethod

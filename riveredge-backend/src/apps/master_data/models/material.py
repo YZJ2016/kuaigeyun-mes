@@ -200,6 +200,19 @@ class Material(BaseModel):
         description="超报值：fixed 为额外数量，percent 为计划数量的百分数",
     )
 
+    over_receipt_tolerance_pct = fields.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        null=True,
+        description="超收容差百分数(0-100)，空则继承组织采购容差",
+    )
+    over_issue_tolerance_pct = fields.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        null=True,
+        description="超发容差百分数(0-100)，空则继承组织仓储超发比例",
+    )
+
     # 质检选项（简易质检：只管合格数量；方案质检：与快制造质检模块联动）
     inspection_mode = fields.CharField(
         max_length=20,

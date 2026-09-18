@@ -701,6 +701,7 @@ const ProcessRoutesPage: React.FC = () => {
         }}
         detail={processRouteDetail}
         detailColumns={processRouteDetailColumns}
+        documentType="process_route"
         basicColumn={1}
         customFields={customFields}
         customFieldValues={customFieldValues}

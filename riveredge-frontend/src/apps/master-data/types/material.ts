@@ -175,6 +175,12 @@ export interface Material {
   over_report_mode?: string;
   overReportValue?: number;
   over_report_value?: number;
+  /** 超收容差(%)，空则继承组织采购默认 */
+  overReceiptTolerancePct?: number | null;
+  over_receipt_tolerance_pct?: number | null;
+  /** 超发容差(%)，空则继承组织仓储默认 */
+  overIssueTolerancePct?: number | null;
+  over_issue_tolerance_pct?: number | null;
   /** 物料附件（图片/文件 UUID 或 { uuid/uid }） */
   images?: Array<string | { uuid?: string; uid?: string; name?: string; url?: string }>;
   createdAt: string;
@@ -302,6 +308,8 @@ export interface MaterialCreate {
   sourceType?: string; // 物料来源类型（Make/Buy/Outsource/Phantom/CustomerProvided/Gift/Service）
   sourceTypes?: string[]; // 物料来源类型（多选）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
+  overReceiptTolerancePct?: number | null;
+  overIssueTolerancePct?: number | null;
 }
 
 export interface MaterialUpdate {
@@ -336,6 +344,8 @@ export interface MaterialUpdate {
   sourceConfig?: Record<string, any>; // 物料来源相关配置
   /** 自制件默认工艺路线 FK（产品工艺页保存） */
   process_route_id?: number | null;
+  overReceiptTolerancePct?: number | null;
+  overIssueTolerancePct?: number | null;
 }
 
 export interface MaterialListParams {

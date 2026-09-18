@@ -669,25 +669,46 @@ function hubSortValue(row: Record<string, unknown>, field: string): unknown {
   switch (field) {
     case 'receipt_code':
       return row.receipt_code ?? row.return_code ?? row.inbound_code ?? row.registration_code;
-    case 'receipt_date':
-      return (
-        row.receipt_date ??
-        row.receipt_time ??
-        row.return_time ??
-        row.registration_date ??
-        row.created_at
-      );
+    case 'receipt_date': {
+      const candidates = [
+        row.receipt_date,
+        row.receipt_time,
+        row.receiptTime,
+        row.return_time,
+        row.registration_date,
+        row.created_at,
+        row.createdAt,
+      ];
+      for (const value of candidates) {
+        if (value == null) continue;
+        if (typeof value === 'string' && value.trim() === '') continue;
+        return value;
+      }
+      return null;
+    }
     case 'delivery_code':
       return row.delivery_code ?? row.picking_code ?? row.outbound_code ?? row.borrow_code;
-    case 'delivery_date':
-      return (
-        row.delivery_date ??
-        row.picking_time ??
-        row.delivery_time ??
-        row.borrow_time ??
-        row.issued_at ??
-        row.created_at
-      );
+    case 'delivery_date': {
+      const candidates = [
+        row.delivery_date,
+        row.picking_time,
+        row.delivery_time,
+        row.borrow_time,
+        row.issued_at,
+        row.created_at,
+        row.createdAt,
+      ];
+      for (const value of candidates) {
+        if (value == null) continue;
+        if (typeof value === 'string' && value.trim() === '') continue;
+        return value;
+      }
+      return null;
+    }
+    case 'updated_at':
+      return row.updated_at ?? row.updatedAt;
+    case 'created_at':
+      return row.created_at ?? row.createdAt;
     default:
       return row[field];
   }
@@ -712,9 +733,10 @@ function sortWarehouseHubRows(
   sorted.sort((a, b) => {
     const av = hubSortValue(a, field);
     const bv = hubSortValue(b, field);
+    // 缺时间戳一律靠后，避免降序时无 updated_at 的源（如委外驼峰字段）长期占首行
     if (av == null && bv == null) return 0;
-    if (av == null) return reverse ? -1 : 1;
-    if (bv == null) return reverse ? 1 : -1;
+    if (av == null) return 1;
+    if (bv == null) return -1;
     if (numericFields.has(field)) {
       const an = Number(av);
       const bn = Number(bv);

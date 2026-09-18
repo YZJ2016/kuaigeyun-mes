@@ -757,7 +757,11 @@ case "$CMD" in
     "")
         mkdir -p .logs
         stop_all
-        if start_backend 1 && start_worker && start_frontend; then
+        # 前端必须先起：Vite 只做反向代理，不依赖后端就绪。
+        # 若排在 start_backend（最长等 90s health）+ start_worker 之后，前端会离线约 2 分钟，
+        # 期间浏览器里的 @vite/client 进入 "server connection lost. Polling for restart..."，
+        # 并在 Vite 回来的那一秒执行 location.reload() —— 表现为「系统开着好一会儿后页面自己刷一下」。
+        if start_frontend && start_backend 1 && start_worker; then
             if [ "$WITH_H5" = "1" ]; then
                 start_mobile || {
                     log_error "PC 端已起，手机端失败，请查看 .logs/mobile.log"

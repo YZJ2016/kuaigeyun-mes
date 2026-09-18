@@ -319,6 +319,22 @@ class MessageTemplateService:
             "is_active": True,
         },
         {
+            "name": "销售交期提前提醒",
+            "code": "KZ_SALES_DELIVERY_DUE_SOON",
+            "type": "internal",
+            "description": "销售订单交货日期到期前提醒（提前天数由消息规则配置）",
+            "subject": "【交期提醒】销售订单 {order_code} 将于 {delivery_date} 交货",
+            "content": "销售订单 {order_code} 将于 {delivery_date} 交货（距交期约 {days_left} 天），客户：{customer_name}。\n请仓库及相关负责人提前备货与安排。",
+            "variables": {
+                "order_code": "订单号",
+                "delivery_date": "交货日期",
+                "customer_name": "客户",
+                "days_left": "距交期天数",
+                "advance_days": "提前提醒天数",
+            },
+            "is_active": True,
+        },
+        {
             "name": "订单评审已下达",
             "code": "KZ_SALES_REVIEW_ISSUED",
             "type": "internal",
@@ -388,6 +404,28 @@ class MessageTemplateService:
                 "severity": "严重度",
                 "material_name": "物料",
                 "problem_description": "问题描述",
+            },
+            "is_active": True,
+        },
+        {
+            "name": "质检单新建待检",
+            "code": "KZ_QUALITY_INSPECTION_CREATED",
+            "type": "internal",
+            "description": "工单下推或系统创建质检单后提醒质检人员",
+            "subject": "【{inspection_type}待办】{inspection_code}",
+            "content": (
+                "已新建{inspection_type}单 {inspection_code}。\n"
+                "来源工单：{work_order_code}\n"
+                "物料：{material_name}\n"
+                "检验数量：{inspection_quantity}\n"
+                "请尽快完成检验。"
+            ),
+            "variables": {
+                "inspection_code": "检验单号",
+                "inspection_type": "检验类型",
+                "work_order_code": "工单号",
+                "material_name": "物料",
+                "inspection_quantity": "检验数量",
             },
             "is_active": True,
         },
@@ -884,6 +922,22 @@ class MessageTemplateService:
                 "product_name": "产品",
                 "completed_operation_name": "已完成工序",
                 "next_operation_name": "下一工序",
+            },
+            "is_active": True,
+        },
+        {
+            "name": "工序派工提醒",
+            "code": "KZ_WO_OPERATION_ASSIGNED",
+            "type": "internal",
+            "description": "工序临时派工后通知被指派人员",
+            "subject": "【工序派工】工单 {work_order_code}「{operation_name}」",
+            "content": "工单 {work_order_code} 的工序「{operation_name}」已派工给您。\n产品：{product_name}\n派工人：{assigned_by_name}\n请及时查看并安排生产。",
+            "variables": {
+                "work_order_code": "工单号",
+                "product_name": "产品",
+                "operation_name": "工序",
+                "assigned_by_name": "派工人",
+                "assigned_worker_name": "被派工人",
             },
             "is_active": True,
         },

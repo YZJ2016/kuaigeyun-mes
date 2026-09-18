@@ -18,11 +18,33 @@ import { resolveInboundHubDateRaw, resolveInboundHubOperator } from './inboundHu
 function withInboundHubDisplayFields(row: InboundHubOrder): InboundHubOrder {
   const dateRaw = resolveInboundHubDateRaw(row);
   const operator = resolveInboundHubOperator(row);
+  // 委外等源可能返回 camelCase；Hub 默认按 updated_at 降序，缺 snake_case 会被当成空值顶到最前
+  const rowRec = row as Record<string, unknown>;
+  const updatedAt = rowRec.updated_at ?? rowRec.updatedAt;
+  const createdAt = rowRec.created_at ?? rowRec.createdAt;
+  const updatedByName = rowRec.updated_by_name ?? rowRec.updatedByName;
+  const createdByName = rowRec.created_by_name ?? rowRec.createdByName;
+  // 制单日期归一：取业务日 YYYY-MM-DD，覆盖空串 receipt_date，避免挡住 receipt_time
+  let receiptDate: string | undefined;
+  if (dateRaw != null && String(dateRaw).trim() !== '') {
+    const text = String(dateRaw).trim();
+    receiptDate = /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : text;
+  }
   return {
     ...row,
-    ...(dateRaw != null && String(dateRaw).trim() !== ''
-      ? { receipt_date: String(dateRaw) }
+    ...(updatedAt != null && String(updatedAt).trim() !== ''
+      ? { updated_at: String(updatedAt) }
       : {}),
+    ...(createdAt != null && String(createdAt).trim() !== ''
+      ? { created_at: String(createdAt) }
+      : {}),
+    ...(updatedByName != null && String(updatedByName).trim() !== ''
+      ? { updated_by_name: String(updatedByName) }
+      : {}),
+    ...(createdByName != null && String(createdByName).trim() !== ''
+      ? { created_by_name: String(createdByName) }
+      : {}),
+    ...(receiptDate ? { receipt_date: receiptDate } : {}),
     ...(operator ? { received_by: operator } : {}),
   };
 }

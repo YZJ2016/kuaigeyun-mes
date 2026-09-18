@@ -269,7 +269,7 @@
             "meta": {
               "module": "demand"
             },
-            "permission": "kuaizhizao:plan-management-demand-computation:read"
+            "permission": "kuaizhizao:plan-management-demand-change:read"
           },
           {
             "title": "app.kuaizhizao.menu.plan-management.scheduling",
@@ -724,7 +724,7 @@
               "module": "outsource",
               "node": "outsource_work_order"
             },
-            "permission": "kuaizhizao:outsource-order:read"
+            "permission": "kuaizhizao:outsource-work-order:read"
           },
           {
             "title": "app.kuaizhizao.menu.outsource-management.outsource-orders",
@@ -742,9 +742,9 @@
             "sort_order": 3,
             "meta": {
               "module": "outsource",
-              "node": "outsource_order"
+              "node": "outsource_issue"
             },
-            "permission": "kuaizhizao:outsource-order:read"
+            "permission": "kuaizhizao:outsource-issue:read"
           },
           {
             "title": "app.kuaizhizao.menu.outsource-management.outsource-receipt",
@@ -752,9 +752,9 @@
             "sort_order": 4,
             "meta": {
               "module": "outsource",
-              "node": "outsource_order"
+              "node": "outsource_receipt"
             },
-            "permission": "kuaizhizao:outsource-order:read"
+            "permission": "kuaizhizao:outsource-receipt:read"
           },
           {
             "title": "app.kuaizhizao.menu.outsource-management.outsource-material-return",
@@ -762,9 +762,9 @@
             "sort_order": 5,
             "meta": {
               "module": "outsource",
-              "node": "outsource_order"
+              "node": "outsource_material_return"
             },
-            "permission": "kuaizhizao:outsource-order:read"
+            "permission": "kuaizhizao:outsource-material-return:read"
           },
           {
             "title": "app.kuaizhizao.menu.outsource-management.outsource-product-return",
@@ -772,9 +772,9 @@
             "sort_order": 6,
             "meta": {
               "module": "outsource",
-              "node": "outsource_order"
+              "node": "outsource_product_return"
             },
-            "permission": "kuaizhizao:outsource-order:read"
+            "permission": "kuaizhizao:outsource-product-return:read"
           },
           {
             "title": "app.kuaizhizao.menu.outsource-management.settlements",
@@ -783,7 +783,7 @@
             "meta": {
               "module": "outsource"
             },
-            "permission": "kuaizhizao:outsource-order:read"
+            "permission": "kuaizhizao:outsource-settlement:read"
           },
           {
             "title": "app.kuaizhizao.menu.outsource-management.reports",
@@ -985,24 +985,38 @@
                 "icon": "barcode"
               },
               {
+                "title": "app.kuaizhizao.menu.warehouse-management.batch-ledger-query",
+                "path": "/apps/master-data/materials/batches",
+                "permission": "master-data:material-batch:read",
+                "sort_order": 3,
+                "icon": "layers"
+              },
+              {
+                "title": "app.kuaizhizao.menu.warehouse-management.serial-inventory-query",
+                "path": "/apps/master-data/materials/serials",
+                "permission": "master-data:material-serial:read",
+                "sort_order": 4,
+                "icon": "hash"
+              },
+              {
                 "title": "app.kuaizhizao.menu.warehouse-management.line-side-warehouse",
                 "path": "/apps/kuaizhizao/warehouse-management/line-side-warehouse",
                 "permission": "kuaizhizao:warehouse-management-line-side-warehouse:read",
-                "sort_order": 3,
+                "sort_order": 5,
                 "icon": "map-pin"
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.backflush-records",
                 "path": "/apps/kuaizhizao/warehouse-management/backflush-records",
                 "permission": "kuaizhizao:warehouse-management-backflush-records:read",
-                "sort_order": 4,
+                "sort_order": 6,
                 "icon": "refresh-cw"
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.replenishment-suggestions",
                 "path": "/apps/kuaizhizao/warehouse-management/replenishment-suggestions",
                 "permission": "kuaizhizao:warehouse-management-replenishment-suggestions:read",
-                "sort_order": 5,
+                "sort_order": 7,
                 "icon": "trendingUp"
               },
               {
@@ -1010,13 +1024,13 @@
                 "path": "/apps/kuaizhizao/warehouse-management/inventory-alert",
                 "icon": "alert-triangle",
                 "permission": "kuaizhizao:warehouse-management-inventory-alert:read",
-                "sort_order": 6
+                "sort_order": 8
               },
               {
                 "title": "app.kuaizhizao.menu.warehouse-management.barcode-mapping-rules",
                 "path": "/apps/kuaizhizao/warehouse-management/barcode-mapping-rules",
                 "permission": "kuaizhizao:warehouse-management-barcode-mapping-rules:read",
-                "sort_order": 7,
+                "sort_order": 9,
                 "icon": "scanLine"
               }
             ]
@@ -1289,7 +1303,7 @@
       "data_scope_key": null
     },
     "outsource-work-order": {
-      "permission_prefix": "kuaizhizao:outsource-order",
+      "permission_prefix": "kuaizhizao:outsource-work-order",
       "display_fields": [
         "id",
         "uuid",
@@ -1297,7 +1311,7 @@
         "name",
         "label"
       ],
-      "data_scope_key": "kuaizhizao:outsource-order"
+      "data_scope_key": "kuaizhizao:outsource-work-order"
     },
     "purchase-receipt": {
       "permission_prefix": "kuaizhizao:inbound",
@@ -1617,6 +1631,61 @@
         "label"
       ],
       "data_scope_key": null
+    },
+    "outsource-issue": {
+      "permission_prefix": "kuaizhizao:outsource-issue",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:outsource-issue"
+    },
+    "outsource-receipt": {
+      "permission_prefix": "kuaizhizao:outsource-receipt",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:outsource-receipt"
+    },
+    "outsource-material-return": {
+      "permission_prefix": "kuaizhizao:outsource-material-return",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:outsource-material-return"
+    },
+    "outsource-product-return": {
+      "permission_prefix": "kuaizhizao:outsource-product-return",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:outsource-product-return"
+    },
+    "outsource-settlement": {
+      "permission_prefix": "kuaizhizao:outsource-settlement",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:outsource-settlement"
     }
   },
   "module_references": {
@@ -1740,6 +1809,35 @@
     ],
     "__all_modules__": [
       "*"
+    ],
+    "outsource-work-order": [
+      "master-data:supply-chain:supplier",
+      "master-data:material"
+    ],
+    "outsource-issue": [
+      "master-data:supply-chain:supplier",
+      "master-data:material",
+      "master-data:process:operation"
+    ],
+    "outsource-receipt": [
+      "master-data:supply-chain:supplier",
+      "master-data:material",
+      "master-data:process:operation"
+    ],
+    "outsource-material-return": [
+      "master-data:supply-chain:supplier",
+      "master-data:material",
+      "master-data:process:operation"
+    ],
+    "outsource-product-return": [
+      "master-data:supply-chain:supplier",
+      "master-data:material",
+      "master-data:process:operation"
+    ],
+    "outsource-settlement": [
+      "master-data:supply-chain:supplier",
+      "master-data:material",
+      "master-data:process:operation"
     ]
   },
   "permissions": [
@@ -2448,6 +2546,78 @@
     "kuaizhizao:outsource-order:revoke",
     "kuaizhizao:outsource-order:submit",
     "kuaizhizao:outsource-order:update",
+    "kuaizhizao:outsource-issue:approve",
+    "kuaizhizao:outsource-issue:audit",
+    "kuaizhizao:outsource-issue:create",
+    "kuaizhizao:outsource-issue:delete",
+    "kuaizhizao:outsource-issue:export",
+    "kuaizhizao:outsource-issue:import",
+    "kuaizhizao:outsource-issue:print",
+    "kuaizhizao:outsource-issue:read",
+    "kuaizhizao:outsource-issue:reject",
+    "kuaizhizao:outsource-issue:revoke",
+    "kuaizhizao:outsource-issue:submit",
+    "kuaizhizao:outsource-issue:update",
+    "kuaizhizao:outsource-material-return:approve",
+    "kuaizhizao:outsource-material-return:audit",
+    "kuaizhizao:outsource-material-return:create",
+    "kuaizhizao:outsource-material-return:delete",
+    "kuaizhizao:outsource-material-return:export",
+    "kuaizhizao:outsource-material-return:import",
+    "kuaizhizao:outsource-material-return:print",
+    "kuaizhizao:outsource-material-return:read",
+    "kuaizhizao:outsource-material-return:reject",
+    "kuaizhizao:outsource-material-return:revoke",
+    "kuaizhizao:outsource-material-return:submit",
+    "kuaizhizao:outsource-material-return:update",
+    "kuaizhizao:outsource-product-return:approve",
+    "kuaizhizao:outsource-product-return:audit",
+    "kuaizhizao:outsource-product-return:create",
+    "kuaizhizao:outsource-product-return:delete",
+    "kuaizhizao:outsource-product-return:export",
+    "kuaizhizao:outsource-product-return:import",
+    "kuaizhizao:outsource-product-return:print",
+    "kuaizhizao:outsource-product-return:read",
+    "kuaizhizao:outsource-product-return:reject",
+    "kuaizhizao:outsource-product-return:revoke",
+    "kuaizhizao:outsource-product-return:submit",
+    "kuaizhizao:outsource-product-return:update",
+    "kuaizhizao:outsource-receipt:approve",
+    "kuaizhizao:outsource-receipt:audit",
+    "kuaizhizao:outsource-receipt:create",
+    "kuaizhizao:outsource-receipt:delete",
+    "kuaizhizao:outsource-receipt:export",
+    "kuaizhizao:outsource-receipt:import",
+    "kuaizhizao:outsource-receipt:print",
+    "kuaizhizao:outsource-receipt:read",
+    "kuaizhizao:outsource-receipt:reject",
+    "kuaizhizao:outsource-receipt:revoke",
+    "kuaizhizao:outsource-receipt:submit",
+    "kuaizhizao:outsource-receipt:update",
+    "kuaizhizao:outsource-settlement:approve",
+    "kuaizhizao:outsource-settlement:audit",
+    "kuaizhizao:outsource-settlement:create",
+    "kuaizhizao:outsource-settlement:delete",
+    "kuaizhizao:outsource-settlement:export",
+    "kuaizhizao:outsource-settlement:import",
+    "kuaizhizao:outsource-settlement:print",
+    "kuaizhizao:outsource-settlement:read",
+    "kuaizhizao:outsource-settlement:reject",
+    "kuaizhizao:outsource-settlement:revoke",
+    "kuaizhizao:outsource-settlement:submit",
+    "kuaizhizao:outsource-settlement:update",
+    "kuaizhizao:outsource-work-order:approve",
+    "kuaizhizao:outsource-work-order:audit",
+    "kuaizhizao:outsource-work-order:create",
+    "kuaizhizao:outsource-work-order:delete",
+    "kuaizhizao:outsource-work-order:export",
+    "kuaizhizao:outsource-work-order:import",
+    "kuaizhizao:outsource-work-order:print",
+    "kuaizhizao:outsource-work-order:read",
+    "kuaizhizao:outsource-work-order:reject",
+    "kuaizhizao:outsource-work-order:revoke",
+    "kuaizhizao:outsource-work-order:submit",
+    "kuaizhizao:outsource-work-order:update",
     "kuaizhizao:outsource-management-dashboard:print",
     "kuaizhizao:outsource-management-dashboard:read",
     "kuaizhizao:performance-employee-configs:approve",
@@ -2570,6 +2740,12 @@
     "kuaizhizao:plan-management-demand-computation:revoke",
     "kuaizhizao:plan-management-demand-computation:submit",
     "kuaizhizao:plan-management-demand-computation:update",
+    "kuaizhizao:plan-management-demand-change:create",
+    "kuaizhizao:plan-management-demand-change:delete",
+    "kuaizhizao:plan-management-demand-change:export",
+    "kuaizhizao:plan-management-demand-change:print",
+    "kuaizhizao:plan-management-demand-change:read",
+    "kuaizhizao:plan-management-demand-change:update",
     "kuaizhizao:plan-management-demand-management:approve",
     "kuaizhizao:plan-management-demand-management:audit",
     "kuaizhizao:plan-management-demand-management:create",
@@ -4640,6 +4816,246 @@
       "rule_code": "TOOL_CODE",
       "allow_manual_edit": true,
       "skip_date": true
+    },
+    {
+      "page_code": "kuaizhizao-equipment-spot-check",
+      "page_name": "设备点检",
+      "page_path": "/apps/kuaizhizao/equipment-management/spot-checks",
+      "code_field": "document_no",
+      "code_field_label": "点检单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "equipment_spot_check_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-equipment-route-patrol",
+      "page_name": "路线巡检",
+      "page_path": "/apps/kuaizhizao/equipment-management/route-patrols",
+      "code_field": "document_no",
+      "code_field_label": "巡检单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "equipment_route_patrol_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-equipment-fault",
+      "page_name": "报修维修",
+      "page_path": "/apps/kuaizhizao/equipment-management/equipment-faults",
+      "code_field": "fault_no",
+      "code_field_label": "故障单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "equipment_fault_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-equipment-repair",
+      "page_name": "维修台账",
+      "page_path": "/apps/kuaizhizao/equipment-management/equipment-repairs",
+      "code_field": "repair_no",
+      "code_field_label": "维修单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "equipment_repair_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-maintenance-plan",
+      "page_name": "维护保养计划",
+      "page_path": "/apps/kuaizhizao/equipment-management/maintenance-plans",
+      "code_field": "plan_no",
+      "code_field_label": "计划编号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "maintenance_plan_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-maintenance-execution",
+      "page_name": "保养执行记录",
+      "page_path": "/apps/kuaizhizao/equipment-management/maintenance-executions",
+      "code_field": "execution_no",
+      "code_field_label": "执行编号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "maintenance_execution_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-equipment-scrap",
+      "page_name": "设备报废",
+      "page_path": "/apps/kuaizhizao/equipment-management/equipment-scrap",
+      "code_field": "application_no",
+      "code_field_label": "报废申请单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "equipment_scrap_application_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-equipment-transfer",
+      "page_name": "设备调拨",
+      "page_path": "/apps/kuaizhizao/equipment-management/equipment-transfers",
+      "code_field": "application_no",
+      "code_field_label": "调拨申请单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "equipment_transfer_application_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-mold-trial",
+      "page_name": "模具试模",
+      "page_path": "/apps/kuaizhizao/equipment-management/mold-trials",
+      "code_field": "document_no",
+      "code_field_label": "试模单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "mold_trial_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-mold-borrow",
+      "page_name": "模具领用",
+      "page_path": "/apps/kuaizhizao/equipment-management/mold-borrows",
+      "code_field": "document_no",
+      "code_field_label": "领用单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "mold_borrow_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-mold-return",
+      "page_name": "模具归还",
+      "page_path": "/apps/kuaizhizao/equipment-management/mold-returns",
+      "code_field": "document_no",
+      "code_field_label": "归还单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "mold_return_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-mold-maintenance",
+      "page_name": "模具保养",
+      "page_path": "/apps/kuaizhizao/equipment-management/mold-maintenances",
+      "code_field": "document_no",
+      "code_field_label": "保养单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "mold_maintenance_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-mold-repair",
+      "page_name": "模具维修",
+      "page_path": "/apps/kuaizhizao/equipment-management/mold-repairs",
+      "code_field": "document_no",
+      "code_field_label": "维修单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "mold_repair_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-mold-scrap",
+      "page_name": "模具报废",
+      "page_path": "/apps/kuaizhizao/equipment-management/mold-scrap-applications",
+      "code_field": "application_no",
+      "code_field_label": "报废申请单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "mold_scrap_application_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-tool-borrow",
+      "page_name": "工装领用",
+      "page_path": "/apps/kuaizhizao/equipment-management/tool-borrows",
+      "code_field": "document_no",
+      "code_field_label": "领用单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "tool_borrow_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-tool-return",
+      "page_name": "工装归还",
+      "page_path": "/apps/kuaizhizao/equipment-management/tool-returns",
+      "code_field": "document_no",
+      "code_field_label": "归还单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "tool_return_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-tool-maintenance",
+      "page_name": "工装保养",
+      "page_path": "/apps/kuaizhizao/equipment-management/tool-maintenances",
+      "code_field": "document_no",
+      "code_field_label": "保养单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "tool_maintenance_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-tool-repair",
+      "page_name": "工装维修",
+      "page_path": "/apps/kuaizhizao/equipment-management/tool-repairs",
+      "code_field": "document_no",
+      "code_field_label": "维修单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "tool_repair_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-tool-calibration",
+      "page_name": "工装校准",
+      "page_path": "/apps/kuaizhizao/equipment-management/tool-calibrations",
+      "code_field": "document_no",
+      "code_field_label": "校准单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "tool_calibration_code",
+      "allow_manual_edit": false
+    },
+    {
+      "page_code": "kuaizhizao-tool-scrap",
+      "page_name": "工装报废",
+      "page_path": "/apps/kuaizhizao/equipment-management/tool-scrap-applications",
+      "code_field": "application_no",
+      "code_field_label": "报废申请单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "tool_scrap_application_code",
+      "allow_manual_edit": false
     },
     {
       "page_code": "kuaizhizao-production-outsource-work-order",

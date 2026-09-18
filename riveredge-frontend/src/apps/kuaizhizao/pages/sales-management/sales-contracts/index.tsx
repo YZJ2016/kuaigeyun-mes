@@ -25,6 +25,11 @@ import { toApiDateString, formDateRangeFormItemProps } from '../../../../../util
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { deferConvertLineItemsByPriceType } from '../../../../../utils/priceTypeSwitch';
 import {
+  applyDocumentLineTaxRateChange,
+  EXCLUSIVE_UNIT_ANCHOR_KEY,
+  stripExclusiveUnitAnchor,
+} from '../../../utils/documentLineAmounts';
+import {
   DEFAULT_SALES_PRICE_TYPE,
   normalizeSalesPriceType,
   salesFormPriceType,
@@ -558,6 +563,48 @@ const SalesContractsPage: React.FC = () => {
       priceDecimals,
     });
   }, [priceDecimals]);
+
+  const handleContractFormValuesChange = useCallback(
+    (changed: Record<string, unknown>, all: Record<string, unknown>) => {
+      const changedItems = changed.items;
+      if (!Array.isArray(changedItems)) return;
+      const priceType = salesFormPriceType(all.price_type);
+      const currentItems = normalizeFormListItems<any>(all.items);
+      let dirty = false;
+      const nextItems = currentItems.map((row, index) => {
+        const patch = changedItems[index];
+        if (patch == null || typeof patch !== 'object') return row;
+        const keys = Object.keys(patch as object);
+        if (keys.includes('tax_rate')) {
+          const applied = applyDocumentLineTaxRateChange({
+            row,
+            qty: row.contract_quantity,
+            newTaxRate: row.tax_rate,
+            priceType,
+            priceDecimals,
+          });
+          if (
+            Number(applied.unit_price) !== Number(row.unit_price) ||
+            Number(applied.item_amount) !== Number(row.item_amount) ||
+            (applied[EXCLUSIVE_UNIT_ANCHOR_KEY] != null) !== (row[EXCLUSIVE_UNIT_ANCHOR_KEY] != null)
+          ) {
+            dirty = true;
+            return applied;
+          }
+          return row;
+        }
+        if (keys.includes('unit_price') && row[EXCLUSIVE_UNIT_ANCHOR_KEY] != null) {
+          dirty = true;
+          return stripExclusiveUnitAnchor(row);
+        }
+        return row;
+      });
+      if (dirty) {
+        formRef.current?.setFieldsValue({ items: nextItems });
+      }
+    },
+    [priceDecimals],
+  );
 
 
   const refreshContractLinePriceByVariant = useCallback(
@@ -2437,6 +2484,7 @@ const SalesContractsPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
+                onValuesChange={handleContractFormValuesChange}
                 onFinish={(values) => handleFormSubmit(values, { asDraft: false })}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];

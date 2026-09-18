@@ -72,6 +72,42 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         with_lines = {int(row) for row in rows if row is not None}
         return {int(delivery_id): int(delivery_id) in with_lines for delivery_id in sales_delivery_ids}
 
+    async def batch_sales_delivery_notice_remaining_flags(
+        self,
+        tenant_id: int,
+        sales_delivery_ids: List[int],
+    ) -> Dict[int, Dict[str, bool]]:
+        """列表下推送货单：按剩余可通知量计算 has_lines / has_remaining。"""
+        result: Dict[int, Dict[str, bool]] = {
+            int(delivery_id): {"has_lines": False, "has_remaining": False}
+            for delivery_id in sales_delivery_ids
+        }
+        if not sales_delivery_ids:
+            return result
+        items = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id,
+            delivery_id__in=sales_delivery_ids,
+            delivery_quantity__gt=0,
+        ).all()
+        if not items:
+            return result
+        noticed_by_item = await self.noticed_qty_by_sales_delivery_item_ids(
+            tenant_id,
+            [int(row.id) for row in items if row.id is not None],
+        )
+        for item in items:
+            delivery_id = int(item.delivery_id)
+            if delivery_id not in result:
+                continue
+            result[delivery_id]["has_lines"] = True
+            remaining = max(
+                0.0,
+                float(item.delivery_quantity or 0) - noticed_by_item.get(int(item.id), 0.0),
+            )
+            if remaining > 0:
+                result[delivery_id]["has_remaining"] = True
+        return result
+
     async def noticed_qty_by_sales_delivery_item_ids(
         self,
         tenant_id: int,
@@ -590,11 +626,57 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         item_previews = await batch_document_item_material_previews(
             tenant_id, DeliveryNoticeItem, "notice_id", notice_ids
         )
+        freight_linked = await self.batch_delivery_notice_freight_linked_flags(tenant_id, notice_ids)
+        from apps.kuaizhizao.services.document_action_policy.delivery_notice import (
+            derive_delivery_notice_capabilities,
+        )
+
         responses = [DeliveryNoticeListResponse.model_validate(r) for r in notices]
         for notice, resp in zip(notices, responses):
             resp.lifecycle = get_delivery_notice_lifecycle(notice, milestones=[])
             resp.items = item_previews.get(int(notice.id), [])
+            resp.capabilities = derive_delivery_notice_capabilities(
+                notice,
+                has_active_freight_order=freight_linked.get(int(notice.id), False),
+            )
         return responses, total
+
+    async def batch_delivery_notice_freight_linked_flags(
+        self,
+        tenant_id: int,
+        notice_ids: List[int],
+    ) -> dict[int, bool]:
+        if not notice_ids:
+            return {}
+        from apps.kuaizhizao.services.freight_order_service import FreightOrderService
+
+        linked = await FreightOrderService()._active_linked_source_keys(tenant_id)
+        return {
+            int(nid): ("delivery_notice", int(nid)) in linked
+            for nid in notice_ids
+        }
+
+    async def push_to_freight_orders(
+        self,
+        tenant_id: int,
+        notice_ids: List[int],
+        created_by: int,
+    ) -> dict:
+        from apps.kuaizhizao.services.freight_order_service import FreightOrderService
+
+        created = await FreightOrderService().create_orders_from_delivery_notices(
+            tenant_id,
+            notice_ids,
+            created_by=created_by,
+        )
+        if len(created) == 1:
+            item = created[0]
+            message = (
+                f"已创建发货管理单 {item['freight_order_code']}"
+            )
+        else:
+            message = f"已创建 {len(created)} 张发货管理单"
+        return {"success": True, "message": message, "items": created}
 
     async def update_delivery_notice(
         self,

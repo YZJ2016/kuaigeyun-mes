@@ -7,6 +7,11 @@ import { ActionConfirmPopconfirm } from '../../../../../components/action-confir
 import { DetailDrawerActions, ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { UniTable } from '../../../../../components/uni-table';
+import {
+  buildUniPushMenuItems,
+  buildUniPushToolbarDisabledReason,
+  UniPushToolbarButton,
+} from '../../../../../components/uni-push';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { formatDateTime } from '../../../../../utils/format';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -21,14 +26,30 @@ import { repairOrderApi, type RepairOrder } from '../../../services/after-sales-
 import RepairOrderFormModal from './RepairOrderFormModal';
 import { RepairOrderDetailDrawer } from './components/RepairOrderDetailDrawer';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
 
 const RESOURCE = 'kuaizhizao:repair-order';
+
+function repairPushReason(
+  reason: string | null | undefined,
+  t: (key: string) => string,
+): string {
+  if (!reason) return '';
+  const key = `app.kuaizhizao.afterSalesService.repairOrder.capability.${reason}`;
+  const translated = t(key);
+  return translated !== key ? translated : reason;
+}
 
 const RepairOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
+  const dispatchPerms = useResourcePermissions('kuaizhizao:service-dispatch');
+  const settlementPerms = useResourcePermissions('kuaizhizao:service-settlement');
+  const visitPerms = useResourcePermissions('kuaizhizao:customer-return-visit');
   const actionRef = useRef<ActionType>();
+  const listRowsRef = useRef<RepairOrder[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<RepairOrder | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -65,13 +86,175 @@ const RepairOrdersPage: React.FC = () => {
 
   const executeconfirmDelete = async (row: RepairOrder) => {
     await repairOrderApi.delete(row.id);
-        messageApi.success(t('common.deleteSuccess'));
-        if (detail?.id === row.id) {
-          setDetailOpen(false);
-          setDetail(null);
-        }
+    messageApi.success(t('common.deleteSuccess'));
+    if (detail?.id === row.id) {
+      setDetailOpen(false);
+      setDetail(null);
+    }
     actionRef.current?.reload();
   };
+
+  const selectedRepairForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    const id = Number(selectedRowKeys[0]);
+    return listRowsRef.current.find((row) => row.id === id) ?? null;
+  }, [selectedRowKeys]);
+
+  const pushDispatch = useCallback(
+    async (record: RepairOrder) => {
+      try {
+        const res = await repairOrderApi.pushToDispatch(record.id);
+        messageApi.success(
+          res.message ||
+            t('app.kuaizhizao.afterSalesService.repairOrder.pushDispatchSuccess', {
+              code: res.dispatch_code,
+            }),
+        );
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+      } catch (error) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.repairOrder.pushFailed')),
+        );
+      }
+    },
+    [messageApi, t],
+  );
+
+  const pushSettlement = useCallback(
+    async (record: RepairOrder) => {
+      try {
+        const res = await repairOrderApi.pushToSettlement(record.id);
+        messageApi.success(
+          res.message ||
+            t('app.kuaizhizao.afterSalesService.repairOrder.pushSettlementSuccess', {
+              code: res.settlement_code,
+            }),
+        );
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+      } catch (error) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.repairOrder.pushFailed')),
+        );
+      }
+    },
+    [messageApi, t],
+  );
+
+  const pushReturnVisit = useCallback(
+    async (record: RepairOrder) => {
+      try {
+        const res = await repairOrderApi.pushToReturnVisit(record.id);
+        messageApi.success(
+          res.message ||
+            t('app.kuaizhizao.afterSalesService.repairOrder.pushVisitSuccess', {
+              code: res.visit_code,
+            }),
+        );
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+      } catch (error) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.repairOrder.pushFailed')),
+        );
+      }
+    },
+    [messageApi, t],
+  );
+
+  const confirmPush = useCallback(
+    (title: string, onOk: () => void) => {
+      getAntdModal().confirm({
+        title,
+        onOk,
+      });
+    },
+    [],
+  );
+
+  const toolbarPushMenuItems = useMemo(() => {
+    const record = selectedRepairForToolbar;
+    const dispatchBlocked =
+      !dispatchPerms.canCreate
+        ? t('app.kuaizhizao.afterSalesService.repairOrder.push.dispatchNoPermission')
+        : record && record.capabilities?.push_dispatch?.allowed !== true
+          ? repairPushReason(record.capabilities?.push_dispatch?.reason, t)
+          : undefined;
+    const settlementBlocked =
+      !settlementPerms.canCreate
+        ? t('app.kuaizhizao.afterSalesService.repairOrder.push.settlementNoPermission')
+        : record && record.capabilities?.push_settlement?.allowed !== true
+          ? repairPushReason(record.capabilities?.push_settlement?.reason, t)
+          : undefined;
+    const visitBlocked =
+      !visitPerms.canCreate
+        ? t('app.kuaizhizao.afterSalesService.repairOrder.push.visitNoPermission')
+        : record && record.capabilities?.push_return_visit?.allowed !== true
+          ? repairPushReason(record.capabilities?.push_return_visit?.reason, t)
+          : undefined;
+
+    return buildUniPushMenuItems([
+      {
+        key: 'push-dispatch',
+        label: t('app.kuaizhizao.afterSalesService.repairOrder.actionPushDispatch'),
+        disabled: !!dispatchBlocked || !record,
+        title: dispatchBlocked,
+        onClick: () => {
+          if (!record || dispatchBlocked) return;
+          confirmPush(t('app.kuaizhizao.afterSalesService.repairOrder.actionPushDispatch'), () => {
+            void pushDispatch(record);
+          });
+        },
+        targetDocumentType: 'service_dispatch',
+      },
+      {
+        key: 'push-settlement',
+        label: t('app.kuaizhizao.afterSalesService.repairOrder.actionPushSettlement'),
+        disabled: !!settlementBlocked || !record,
+        title: settlementBlocked,
+        onClick: () => {
+          if (!record || settlementBlocked) return;
+          confirmPush(t('app.kuaizhizao.afterSalesService.repairOrder.actionPushSettlement'), () => {
+            void pushSettlement(record);
+          });
+        },
+        targetDocumentType: 'service_settlement',
+      },
+      {
+        key: 'push-return-visit',
+        label: t('app.kuaizhizao.afterSalesService.repairOrder.actionPushReturnVisit'),
+        disabled: !!visitBlocked || !record,
+        title: visitBlocked,
+        onClick: () => {
+          if (!record || visitBlocked) return;
+          confirmPush(t('app.kuaizhizao.afterSalesService.repairOrder.actionPushReturnVisit'), () => {
+            void pushReturnVisit(record);
+          });
+        },
+        targetDocumentType: 'customer_return_visit',
+      },
+    ]);
+  }, [
+    confirmPush,
+    dispatchPerms.canCreate,
+    pushDispatch,
+    pushReturnVisit,
+    pushSettlement,
+    selectedRepairForToolbar,
+    settlementPerms.canCreate,
+    t,
+    visitPerms.canCreate,
+  ]);
+
+  const toolbarPushDisabledReason = useMemo(
+    () =>
+      buildUniPushToolbarDisabledReason(t, {
+        selectedCount: selectedRowKeys.length,
+        hasSelectedRecord: !!selectedRepairForToolbar,
+      }),
+    [selectedRepairForToolbar, selectedRowKeys.length, t],
+  );
 
   const columns: ProColumns<RepairOrder>[] = useMemo(
     () =>
@@ -80,8 +263,8 @@ const RepairOrdersPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.afterSalesService.repairOrder.field.orderCode'),
             dataIndex: 'order_code',
-            width: 188,
-            minWidth: 188,
+            width: 180,
+            minWidth: 180,
             uniTableKeepWidth: true,
             resizable: false,
             fixed: 'left',
@@ -99,7 +282,6 @@ const RepairOrdersPage: React.FC = () => {
             render: (_, row) => renderAfterSalesTypeMarker(row.repair_mode),
           },
           {
-            // 故障描述长短不一：唯一 RemainderFlex（客户列统一 KeepWidth，勿再吃余量）
             title: t('app.kuaizhizao.afterSalesService.repairOrder.field.faultDescription'),
             dataIndex: 'fault_description',
             minWidth: 160,
@@ -132,23 +314,28 @@ const RepairOrdersPage: React.FC = () => {
             key: 'action',
             fixed: 'right',
             hideInSearch: true,
+            valueType: 'option',
             render: (_, row) => [
-              <Button {...rowActionKind('read')} key="read" onClick={() => openDetail(row)} />,
-              perms.canUpdate && row.status !== '已关闭' ? (
-                <Button
-                  {...rowActionKind('update')}
-                  key="edit"
-                  onClick={() => void openEdit(row)}
-                />
-              ) : null,
+              rowActionKind('detail', {
+                key: 'detail',
+                onClick: () => openDetail(row),
+              }),
+              perms.canUpdate && row.status !== '已关闭'
+                ? rowActionKind('edit', {
+                    key: 'edit',
+                    onClick: () => {
+                      void openEdit(row);
+                    },
+                  })
+                : null,
               perms.canDelete && row.status === '待派工' ? (
-                <ActionConfirmPopconfirm title={t('common.confirmDelete')} onConfirm={() => executeconfirmDelete(row)}>
-              <Button
-                  {...rowActionKind('delete')}
+                <ActionConfirmPopconfirm
                   key="delete"
-                  onClick={(e) => e.stopPropagation()}
-                />
-            </ActionConfirmPopconfirm>
+                  title={t('common.confirmDelete')}
+                  onConfirm={() => executeconfirmDelete(row)}
+                >
+                  {rowActionKind('delete', { key: 'delete-trigger' })}
+                </ActionConfirmPopconfirm>
               ) : null,
             ],
           },
@@ -162,10 +349,10 @@ const RepairOrdersPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<RepairOrder>
         viewTypes={['table', 'help']}
-          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesRepair)}
+        helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesRepair)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v6"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v7"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.repair-orders')}
         request={async (params) => {
@@ -177,18 +364,47 @@ const RepairOrdersPage: React.FC = () => {
           });
           return { data: res.items, total: res.total, success: true };
         }}
+        onTableDataChange={(rows) => {
+          listRowsRef.current = rows;
+        }}
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaizhizao.afterSalesService.repairOrder.createTitle')}
         onCreate={() => {
           setEditing(null);
           setModalOpen(true);
         }}
-        enableRowSelection={perms.canDelete}
+        toolBarRender={() => [
+          <UniPushToolbarButton
+            key={`repair-push-${selectedRepairForToolbar?.id ?? 'none'}`}
+            menuItems={toolbarPushMenuItems}
+            disabled={selectedRowKeys.length !== 1 || !selectedRepairForToolbar}
+            disabledReason={toolbarPushDisabledReason}
+            sourceDocument={
+              selectedRepairForToolbar?.id
+                ? { type: 'repair_order', id: Number(selectedRepairForToolbar.id) }
+                : null
+            }
+            pushTargets={{
+              'push-dispatch': 'service_dispatch',
+              'push-settlement': 'service_settlement',
+              'push-return-visit': 'customer_return_visit',
+            }}
+          />,
+        ]}
+        enableRowSelection={
+          perms.canDelete ||
+          dispatchPerms.canCreate ||
+          settlementPerms.canCreate ||
+          visitPerms.canCreate
+        }
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {
           await Promise.all(keys.map((key) => repairOrderApi.delete(Number(key))));
-    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-    actionRef.current?.reload();
+          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
         }}
       />
 
@@ -207,7 +423,7 @@ const RepairOrdersPage: React.FC = () => {
             await repairOrderApi.create(payload);
             messageApi.success(t('common.createSuccess'));
           }
-    actionRef.current?.reload();
+          actionRef.current?.reload();
         }}
       />
 
@@ -252,7 +468,7 @@ const RepairOrdersPage: React.FC = () => {
                       if (!detail) return;
                       await repairOrderApi.close(detail.id);
                       setDetail(await repairOrderApi.get(detail.id));
-    actionRef.current?.reload();
+                      actionRef.current?.reload();
                       messageApi.success(t('app.kuaizhizao.afterSalesService.repairOrder.closeSuccess'));
                     }}
                   >

@@ -19,7 +19,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
-import { materialSerialApi } from '../../../../master-data/services/material';
+import { materialSerialApi, MATERIAL_SERIAL_GENERATE_MAX_COUNT } from '../../../../master-data/services/material';
 import {
   getPurchaseOrder,
   pushPurchaseOrderToReceipt,
@@ -43,6 +43,7 @@ import {
   enrichPurchaseOrderItemsMaterial,
   fetchStorageLocationsForWarehouse,
   getOutstandingPoItems,
+  getPoItemReceivableMax,
   normalizePurchaseOrderDetail,
 } from './inboundPoReceiptEntryUtils';
 import type { PurchaseReceiptEntryHandoff } from './inboundPullEntryTypes';
@@ -266,7 +267,7 @@ const InboundPoPullEntryPage: React.FC = () => {
         const enrichedOutstanding = getOutstandingPoItems(detail);
         const qtyMap: Record<number, number> = {};
         enrichedOutstanding.forEach((it) => {
-          if (it.id != null) qtyMap[it.id] = Number(it.outstanding_quantity ?? 0);
+          if (it.id != null) qtyMap[it.id] = getPoItemReceivableMax(it);
         });
         const headerWh =
           (detail as PurchaseOrder & { warehouse_id?: number }).warehouse_id != null
@@ -363,8 +364,12 @@ const InboundPoPullEntryPage: React.FC = () => {
     const meta = materialMeta[poItemId];
     if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged) || !meta?.materialUuid) return;
     const count = Math.max(1, Math.floor(Number(qty) || 1));
-    if (count > 100) {
-      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.serialMax100'));
+    if (count > MATERIAL_SERIAL_GENERATE_MAX_COUNT) {
+      messageApi.warning(
+        t('app.kuaizhizao.warehouseInbound.msg.serialMax100', {
+          max: MATERIAL_SERIAL_GENERATE_MAX_COUNT,
+        }),
+      );
       return;
     }
     setGeneratingSerialId(poItemId);
@@ -432,7 +437,7 @@ const InboundPoPullEntryPage: React.FC = () => {
     for (const it of outstandingItems) {
       if (it.id == null) continue;
       const qty = quantities[it.id] ?? 0;
-      const max = Number(it.outstanding_quantity ?? 0);
+      const max = getPoItemReceivableMax(it);
       if (qty <= 0) continue;
       hasPositiveQty = true;
       if (qty > max) {
@@ -549,6 +554,13 @@ const InboundPoPullEntryPage: React.FC = () => {
       { title: t('app.kuaizhizao.warehouseInbound.col.purchaseQty'), dataIndex: 'ordered_quantity', width: 100, align: 'right' as const , render: formatQuantity },
       { title: t('app.kuaizhizao.warehouseInbound.col.receivedQty'), dataIndex: 'received_quantity', width: 90, align: 'right' as const },
       { title: t('app.kuaizhizao.warehouseInbound.col.outstandingQty'), dataIndex: 'outstanding_quantity', width: 90, align: 'right' as const },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.maxReceivableQty'),
+        key: 'max_receivable_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (_: unknown, record: PurchaseOrderItem) => getPoItemReceivableMax(record),
+      },
       {
         title: (
           <span>
@@ -671,7 +683,7 @@ const InboundPoPullEntryPage: React.FC = () => {
           record.id != null ? (
             <InputNumber
               min={0}
-              max={Number(record.outstanding_quantity ?? 0)}
+              max={getPoItemReceivableMax(record)}
               precision={4}
               value={quantities[record.id] ?? 0}
               onChange={(v) => setQuantities((prev) => ({ ...prev, [record.id!]: Number(v) || 0 }))}

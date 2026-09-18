@@ -24,15 +24,19 @@
     <!--
       首屏加载看门狗：
       - module script error（如 /assets/ 404）→ 立即硬错误
-      - 15s 内未卸掉 first-paint（Vite 冷启动等）→ sessionStorage 最多自动 reload 2 次
+      - 15s 内未卸掉 first-paint 且主 JS 确实没拿到 → sessionStorage 最多自动 reload 2 次
+      - 主 JS 已下载完成（仅解析/执行慢或运行时报错）→ 不自动 reload，刷新解决不了，直接硬错误
       - 重试耗尽仍未挂载 → 硬错误 + 点击重试
       - first-paint 被卸掉 → 清除重试计数
+      - 每次自动 reload 都把原因写入 localStorage['re:last-auto-reload']，否则刷新会清空现场
     -->
     <script>
       (function () {
         var RETRY_KEY = 're_app_boot_retry';
         var MAX_AUTO_RELOAD = 2;
         var timeoutMs = 15000;
+        // 主 JS 已送达但未挂载时的额外等待（解析/执行慢的机器），到点仍未挂载才报错
+        var EXTENDED_WAIT_MS = 30000;
         var hardErrorShown = false;
         var timer = null;
 
@@ -59,6 +63,36 @@
           return !!(fp && fp.isConnected);
         }
 
+        // 入口 module script 是否已完整下达。已到位说明是解析/执行或运行时问题，
+        // 再 reload 只会原样重来；只有真的没拿到资源时刷新才有意义。
+        function entryScriptDelivered() {
+          try {
+            var el = document.querySelector('script[type="module"][src]');
+            if (!el || !performance || !performance.getEntriesByType) return false;
+            var src = el.getAttribute('src') || '';
+            var entries = performance.getEntriesByType('resource');
+            for (var i = 0; i < entries.length; i++) {
+              var e = entries[i];
+              if (e.name.indexOf(src.replace(/^\.\//, '')) === -1) continue;
+              if (e.responseEnd > 0 && e.decodedBodySize !== 0) return true;
+            }
+            return false;
+          } catch (err) {
+            return false;
+          }
+        }
+
+        function recordAutoReloadReason(reason, detail) {
+          try {
+            localStorage.setItem('re:last-auto-reload', JSON.stringify({
+              at: new Date().toISOString(),
+              reason: reason,
+              detail: detail,
+              from: location.href
+            }));
+          } catch (e) { /* ignore */ }
+        }
+
         function showHardError() {
           if (hardErrorShown || document.getElementById('app-load-timeout')) return;
           if (!firstPaintStillPresent()) return;
@@ -68,6 +102,15 @@
           wrap.id = 'app-load-timeout';
           wrap.style.cssText = 'position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;z-index:9999;';
           wrap.innerHTML = '<div style="text-align:center;color:#666;max-width:320px;padding:16px;"><p style="margin-bottom:12px;">页面未能完成加载，请检查网络或静态资源路径（如 /assets/ 是否可访问）</p><p><a href="javascript:location.reload()" style="color:#1890ff;">点击重试</a></p></div>';
+          document.body.appendChild(wrap);
+        }
+
+        function showStartingHint() {
+          if (document.getElementById('app-load-starting-hint')) return;
+          var wrap = document.createElement('div');
+          wrap.id = 'app-load-starting-hint';
+          wrap.style.cssText = 'position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;z-index:9999;';
+          wrap.innerHTML = '<div style="text-align:center;color:#666;max-width:320px;padding:16px;"><p style="margin-bottom:0;">主程序已下载，正在初始化，请稍候…</p></div>';
           document.body.appendChild(wrap);
         }
 
@@ -82,10 +125,20 @@
 
         function onBootTimeout() {
           if (!firstPaintStillPresent() || hardErrorShown) return;
+          if (entryScriptDelivered()) {
+            // 主 JS 已送达却仍未挂载：解析/执行慢或启动报错，reload 只会原样重来。
+            // 改为继续等一段固定时长，期间若挂载成功由 MutationObserver 清掉提示。
+            recordAutoReloadReason('boot-slow-no-reload', '主 JS 已下载完成，' + timeoutMs + 'ms 内未挂载，未自动刷新');
+            showStartingHint();
+            if (timer) { clearTimeout(timer); }
+            timer = setTimeout(showHardError, EXTENDED_WAIT_MS);
+            return;
+          }
           var count = getRetryCount();
           if (count < MAX_AUTO_RELOAD) {
             setRetryCount(count + 1);
             showRetryHint(count + 1, MAX_AUTO_RELOAD);
+            recordAutoReloadReason('boot-timeout', '未取到主 JS，第 ' + (count + 1) + '/' + MAX_AUTO_RELOAD + ' 次自动重试');
             location.reload();
             return;
           }
@@ -102,6 +155,8 @@
               if (timer) { clearTimeout(timer); timer = null; }
               var hint = document.getElementById('app-load-retry-hint');
               if (hint) hint.remove();
+              var starting = document.getElementById('app-load-starting-hint');
+              if (starting) starting.remove();
               var err = document.getElementById('app-load-timeout');
               if (err) err.remove();
             }

@@ -10,6 +10,7 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
@@ -135,6 +136,22 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
     setCurrentRecord(record);
     setDetailDrawerVisible(true);
   };
+
+  const openDetailById = useCallback(
+    async (id: number) => {
+      try {
+        const detail = await apiRequest<DeliveryDelayException>(
+          `/apps/kuaizhizao/exceptions/delivery-delay/${id}`,
+        );
+        setCurrentRecord(detail);
+        setDetailDrawerVisible(true);
+      } catch {
+        messageApi.error(t(`${P}.message.fetchListFailed`));
+      }
+    },
+    [messageApi, t],
+  );
+  useDocumentHighlightDeepLink(openDetailById);
 
   const openHandleModal = (record: DeliveryDelayException, action: string) => {
     setCurrentRecord(record);

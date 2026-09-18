@@ -421,6 +421,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             response.buyer_name = await self.get_user_name(int(response.buyer_id))
         # 手动设置items（编码/名称以物料主数据为准，避免明细行仅存 material_id 时名称为空）
         response.items = []
+        await self._apply_po_item_receipt_tolerance_fields(tenant_id, items)
         for item in items:
             item_resp = PurchaseOrderItemResponse.model_validate(item)
             material_code, material_name = self._resolve_po_item_material_display(item, material_fallback)
@@ -428,6 +429,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 item_resp.material_code = material_code
             if material_name:
                 item_resp.material_name = material_name
+            if getattr(item, "_max_receivable_quantity", None) is not None:
+                item_resp.max_receivable_quantity = item._max_receivable_quantity
+            if getattr(item, "_over_receipt_tolerance_pct", None) is not None:
+                item_resp.over_receipt_tolerance_pct = item._over_receipt_tolerance_pct
             response.items.append(item_resp)
         # 生命周期
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle, get_document_milestones
@@ -1783,6 +1788,32 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     related_entity_id=order_id,
                 )
 
+    async def _apply_po_item_receipt_tolerance_fields(
+        self,
+        tenant_id: int,
+        items: List[PurchaseOrderItem],
+    ) -> None:
+        """为采购订单明细附加容差后剩余可收（物料覆盖组织默认）。"""
+        if not items:
+            return
+        from apps.kuaizhizao.utils.over_qty_tolerance import (
+            OverQtyToleranceResolver,
+            max_remaining_after_tolerance,
+        )
+
+        resolver = OverQtyToleranceResolver(tenant_id)
+        material_ids = [int(it.material_id) for it in items if int(getattr(it, "material_id", 0) or 0) > 0]
+        await resolver.preload_materials(material_ids)
+        for item in items:
+            mid = int(getattr(item, "material_id", 0) or 0)
+            ordered = Decimal(str(getattr(item, "ordered_quantity", 0) or 0))
+            received = Decimal(str(getattr(item, "received_quantity", 0) or 0))
+            pct = await resolver.resolve_over_receipt_pct(mid)
+            item._over_receipt_tolerance_pct = pct
+            item._max_receivable_quantity = max_remaining_after_tolerance(
+                ordered, received, pct
+            )
+
     async def _load_material_fallback_for_po_items(
         self,
         tenant_id: int,
@@ -1882,20 +1913,36 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             noticed_raw = await noticed_qty_by_po_item_ids(tenant_id, [order_id])
             noticed_by_item = {k: float(v) for k, v in noticed_raw.items()}
         material_fallback = await self._load_material_fallback_for_po_items(tenant_id, order_items)
+        from apps.kuaizhizao.utils.over_qty_tolerance import (
+            OverQtyToleranceResolver,
+            max_remaining_after_tolerance,
+        )
+
+        tolerance_resolver = OverQtyToleranceResolver(tenant_id)
+        material_ids = [int(it.material_id) for it in order_items if int(getattr(it, "material_id", 0) or 0) > 0]
+        await tolerance_resolver.preload_materials(material_ids)
         preview_items: List[Dict[str, Any]] = []
         for item in order_items:
             ordered = float(item.ordered_quantity or 0)
             received = float(item.received_quantity or 0)
             outstanding = float(effective_po_item_outstanding(item))
-            if outstanding <= 0:
+            receipt_pct = await tolerance_resolver.resolve_over_receipt_pct(int(item.material_id))
+            toleranced_cap = float(
+                max_remaining_after_tolerance(
+                    Decimal(str(ordered)),
+                    Decimal(str(received)),
+                    receipt_pct,
+                )
+            )
+            if outstanding <= 0 and toleranced_cap <= 0:
                 continue
             occupied = occupied_by_item.get(int(item.id), 0.0)
             noticed = noticed_by_item.get(int(item.id), 0.0)
             if subtract_noticed:
-                max_push = min(outstanding, max(0.0, ordered - noticed))
+                max_push = min(toleranced_cap, max(0.0, ordered - noticed))
                 pushed_quantity = noticed
             else:
-                max_push = outstanding - occupied
+                max_push = toleranced_cap - occupied
                 pushed_quantity = received + occupied
             if max_push <= 0:
                 continue
@@ -1913,6 +1960,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     "quantity": ordered,
                     "pushed_quantity": pushed_quantity,
                     "max_push_quantity": max_push,
+                    "over_receipt_tolerance_pct": float(receipt_pct),
                 }
             )
         return preview_items, order_items

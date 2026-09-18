@@ -28,6 +28,7 @@ export type KuaizhizaoDocumentActionKey =
   | 'purchase_return.pull_from_purchase_order'
   | 'purchase_receipt.pull_from_receipt_notice'
   | 'purchase_return.pull_from_incoming_inspection'
+  | 'incoming_inspection.pull_from_purchase_order'
   | 'incoming_inspection.pull_from_purchase_receipt'
   | 'incoming_inspection.pull_from_customer_material_registration'
   | 'process_inspection.pull_from_work_order'
@@ -50,6 +51,7 @@ export type KuaizhizaoDocumentActionKey =
   | 'inbound.pull_from_purchase_order'
   | 'inbound.pull_from_work_order'
   | 'inbound.pull_from_finished_goods_inspection'
+  | 'inbound.pull_from_incoming_inspection'
   | 'inbound.pull_from_sales_order'
   | 'inbound.pull_from_outsource_work_order'
   | 'inbound.pull_from_work_order_for_production_return';
@@ -309,6 +311,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     sourceLabelKey: documentActionI18n('purchase_return.pull_from_incoming_inspection', 'source'),
     targetLabelKey: documentActionI18n('purchase_return.pull_from_incoming_inspection', 'target'),
   },
+  'incoming_inspection.pull_from_purchase_order': {
+    key: 'incoming_inspection.pull_from_purchase_order',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('incoming_inspection.pull_from_purchase_order', 'label'),
+    sourceLabelKey: documentActionI18n('incoming_inspection.pull_from_purchase_order', 'source'),
+    targetLabelKey: documentActionI18n('incoming_inspection.pull_from_purchase_order', 'target'),
+  },
   'incoming_inspection.pull_from_purchase_receipt': {
     key: 'incoming_inspection.pull_from_purchase_receipt',
     module: 'kuaizhizao',
@@ -488,6 +498,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('inbound.pull_from_finished_goods_inspection', 'label'),
     sourceLabelKey: documentActionI18n('inbound.pull_from_finished_goods_inspection', 'source'),
     targetLabelKey: documentActionI18n('inbound.pull_from_finished_goods_inspection', 'target'),
+  },
+  'inbound.pull_from_incoming_inspection': {
+    key: 'inbound.pull_from_incoming_inspection',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('inbound.pull_from_incoming_inspection', 'label'),
+    sourceLabelKey: documentActionI18n('inbound.pull_from_incoming_inspection', 'source'),
+    targetLabelKey: documentActionI18n('inbound.pull_from_incoming_inspection', 'target'),
   },
   'inbound.pull_from_sales_order': {
     key: 'inbound.pull_from_sales_order',

@@ -32,6 +32,7 @@ export interface PurchaseOrderCapabilities {
   push_receipt?: ActionCapability;
   push_invoice?: ActionCapability;
   push_purchase_return?: ActionCapability;
+  push_incoming_inspection?: ActionCapability;
   create_change_order?: ActionCapability;
   print?: ActionCapability;
 }
@@ -154,6 +155,9 @@ export interface PurchaseOrderItem {
   total_price?: number;
   received_quantity?: number;
   outstanding_quantity?: number;
+  /** 容差后剩余可收（物料覆盖组织默认） */
+  max_receivable_quantity?: number;
+  over_receipt_tolerance_pct?: number;
   required_date?: string;
   actual_delivery_date?: string;
   source_id?: number;

@@ -63,6 +63,34 @@ async def record_finance_accounting_event(
                 )
                 enriched.setdefault("partner_id", enriched.get("supplier_id"))
                 enriched.setdefault("partner_name", enriched.get("supplier_name"))
+        _tdt = str(target_doc_type or "").strip().lower().replace("-", "").replace("_", "")
+        if target_doc_id and _tdt in {"purchaseinvoice"}:
+            from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+
+            row = await PurchaseInvoice.get_or_none(tenant_id=tenant_id, id=target_doc_id)
+            if row:
+                enriched.setdefault("supplier_id", getattr(row, "supplier_id", None))
+                enriched.setdefault("supplier_name", getattr(row, "supplier_name", None))
+                enriched.setdefault("partner_id", enriched.get("supplier_id"))
+                enriched.setdefault("partner_name", enriched.get("supplier_name"))
+        if target_doc_id and _tdt == "invoice":
+            from apps.kuaicaiwu.models.invoice import Invoice
+
+            row = await Invoice.get_or_none(
+                tenant_id=tenant_id, id=target_doc_id, deleted_at__isnull=True
+            )
+            if row:
+                pid = getattr(row, "partner_id", None)
+                pname = getattr(row, "partner_name", None)
+                enriched.setdefault("partner_id", pid)
+                enriched.setdefault("partner_name", pname)
+                category = str(getattr(row, "category", "") or "").upper()
+                if category == "OUT":
+                    enriched.setdefault("customer_id", pid)
+                    enriched.setdefault("customer_name", pname)
+                elif category == "IN":
+                    enriched.setdefault("supplier_id", pid)
+                    enriched.setdefault("supplier_name", pname)
 
         await AccountingEventService.record_event(
             tenant_id=tenant_id,
@@ -138,6 +166,113 @@ async def link_finance_document_relation(
             target_id,
             e,
         )
+
+
+async def cleanup_payables_for_purchase_receipt(
+    *,
+    tenant_id: int,
+    receipt_id: int,
+    receipt_code: Optional[str] = None,
+) -> int:
+    """
+    采购入库撤回确认 / 删除时，清理由该入库单生成的应付单。
+
+    仅处理来源为采购入库的应付（不含订单里程碑、采购退货冲减等）。
+    已有付款、退款或关联采购发票时拒绝清理，由调用方中止撤回/删除，避免账务悬空。
+    """
+    from apps.kuaicaiwu.constants.finance_source_types import PAYABLE_SOURCE_PURCHASE_RECEIPT
+    from apps.kuaicaiwu.models.payable import Payable
+    from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+    from apps.kuaicaiwu.services.finance_service import PayableService
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
+    from infra.exceptions.exceptions import BusinessLogicError
+
+    receipt_id = int(receipt_id)
+    source_types = (PAYABLE_SOURCE_PURCHASE_RECEIPT, "purchase_receipt")
+    by_id: dict[int, Any] = {}
+
+    for row in await Payable.filter(
+        tenant_id=tenant_id,
+        source_id=receipt_id,
+        source_type__in=list(source_types),
+        deleted_at__isnull=True,
+    ).all():
+        by_id[int(row.id)] = row
+
+    rel_rows = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_type="purchase_receipt",
+        source_id=receipt_id,
+        target_type="payable",
+    ).all()
+    rel_payable_ids = [int(r.target_id) for r in rel_rows if getattr(r, "target_id", None)]
+    if rel_payable_ids:
+        for row in await Payable.filter(
+            tenant_id=tenant_id,
+            id__in=rel_payable_ids,
+            deleted_at__isnull=True,
+        ).all():
+            st = str(getattr(row, "source_type", "") or "").strip()
+            # 关联表可能链到其它来源应付，仅清理采购入库来源，避免误删里程碑/手工单
+            if st in source_types:
+                by_id[int(row.id)] = row
+
+    code = str(receipt_code or "").strip()
+    if code:
+        for row in await Payable.filter(
+            tenant_id=tenant_id,
+            source_code=code,
+            source_type__in=list(source_types),
+            deleted_at__isnull=True,
+        ).all():
+            by_id[int(row.id)] = row
+
+    if not by_id:
+        return 0
+
+    money = _q_money
+    payable_svc = PayableService()
+    deleted = 0
+    for payable_id, payable in by_id.items():
+        code_label = str(getattr(payable, "payable_code", None) or payable_id)
+        if money(getattr(payable, "paid_amount", 0) or 0) > Decimal("0.00"):
+            raise BusinessLogicError(
+                f"关联应付单 {code_label} 已有付款，无法撤回或删除入库单，请先处理付款"
+            )
+        if money(getattr(payable, "refunded_amount", 0) or 0) > Decimal("0.00"):
+            raise BusinessLogicError(
+                f"关联应付单 {code_label} 已有退款，无法撤回或删除入库单，请先处理退款"
+            )
+        inv_count = await PurchaseInvoice.filter(
+            tenant_id=tenant_id,
+            payable_id=payable_id,
+            deleted_at__isnull=True,
+        ).count()
+        if inv_count > 0:
+            raise BusinessLogicError(
+                f"关联应付单 {code_label} 已关联采购发票，无法撤回或删除入库单，请先处理发票"
+            )
+
+        await payable_svc.delete_payable(tenant_id, payable_id)
+        await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            target_type="payable",
+            target_id=payable_id,
+        ).delete()
+        await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="payable",
+            source_id=payable_id,
+        ).delete()
+        deleted += 1
+        logger.info(
+            "采购入库撤回/删除已清理应付单 tenant_id=%s receipt_id=%s payable_id=%s code=%s",
+            tenant_id,
+            receipt_id,
+            payable_id,
+            code_label,
+        )
+    return deleted
 
 
 async def _resolve_bank_account_for_voucher(

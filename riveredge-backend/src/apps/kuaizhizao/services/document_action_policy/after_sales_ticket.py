@@ -26,6 +26,7 @@ def derive_after_sales_ticket_capabilities(
     has_items: bool = False,
     has_returnable_qty: bool = False,
     existing_repair_order_code: Optional[str] = None,
+    existing_visit_code: Optional[str] = None,
 ) -> AfterSalesTicketCapabilities:
     status = str(getattr(ticket, "status", "") or "").strip()
     request_type = str(getattr(ticket, "request_type", "") or "").strip()
@@ -73,12 +74,23 @@ def derive_after_sales_ticket_capabilities(
         repair_allowed = True
         repair_reason = None
 
+    visit_allowed = False
+    visit_reason = "after_sales_ticket.push_return_visit.not_allowed"
+    if closed:
+        visit_reason = "after_sales_ticket.push_return_visit.closed"
+    elif existing_visit_code:
+        visit_reason = "after_sales_ticket.push_return_visit.already_exists"
+    else:
+        visit_allowed = True
+        visit_reason = None
+
     return AfterSalesTicketCapabilities(
         update=update_cap,
         delete=delete_cap,
         close=close_cap,
         push_sales_return=_cap(push_allowed, push_reason),
         push_repair_order=_cap(repair_allowed, repair_reason),
+        push_return_visit=_cap(visit_allowed, visit_reason),
     )
 
 
@@ -89,12 +101,14 @@ def assert_after_sales_ticket_capability(
     has_items: bool = False,
     has_returnable_qty: bool = False,
     existing_repair_order_code: Optional[str] = None,
+    existing_visit_code: Optional[str] = None,
 ) -> None:
     caps = derive_after_sales_ticket_capabilities(
         ticket,
         has_items=has_items,
         has_returnable_qty=has_returnable_qty,
         existing_repair_order_code=existing_repair_order_code,
+        existing_visit_code=existing_visit_code,
     )
     cap_map = {
         "update": caps.update,
@@ -102,6 +116,7 @@ def assert_after_sales_ticket_capability(
         "close": caps.close,
         "push_sales_return": caps.push_sales_return,
         "push_repair_order": caps.push_repair_order,
+        "push_return_visit": caps.push_return_visit,
     }
     cap = cap_map.get(action)
     if cap is None:

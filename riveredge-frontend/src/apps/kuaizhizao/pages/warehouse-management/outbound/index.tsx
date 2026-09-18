@@ -39,18 +39,29 @@ import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspec
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
 import dayjs from 'dayjs';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
+import {
+  buildKuaizhizaoPullCreateMenuItems,
+  resolveKuaizhizaoDocumentAction,
+} from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import {
+  buildUniPushMenuItems,
+  buildUniPushToolbarDisabledReason,
+  UniPushToolbarButton,
+} from '../../../../../components/uni-push';
+import { deliveryNoticeApi } from '../../../services/delivery-notice';
+import { salesDeliveryCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import OutboundQuickPullModals, {
   type OutboundQuickPullModalsRef,
   type OutboundQuickPullSuccessDetail,
 } from './OutboundQuickPullModals';
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
 import OutboundHubEditModal from './OutboundHubEditModal';
-import { formatQuantity } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatQuantity } from '../../../../../utils/format';
 import { renderWarehouseHeaderQuantity } from '../shared/warehouseListQuantity';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
@@ -105,6 +116,7 @@ import {
   outboundDocumentCode,
   outboundSourceDocNo,
   resolveOutboundHubOperator,
+  resolveOutboundHubDateRaw,
   outboundDocumentTrackingType,
   filterOutboundPullCreateMenuSpecs,
   resolveDefaultOutboundQuickPullKey,
@@ -171,6 +183,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
   scopedOutboundTypes,
   headerTitle,
   columnPersistenceId,
+  permissionResource = 'kuaizhizao:outbound',
 }) => {
   const hubScopedOutboundTypes = useMemo(
     () => (fixedOutboundType ? [fixedOutboundType] : scopedOutboundTypes),
@@ -244,8 +257,10 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
           { docTypes: ['production_picking'], customFields: productionPickingListCustomFields },
         ],
         'outbound_type',
+        // 原生「制单日期」列已读 delivery_time；同名自定义列会显示为空并排在出库人之后
+        [t('app.kuaizhizao.warehouseOutbound.field.documentDate')],
       ),
-    [salesDeliveryListCustomFields, productionPickingListCustomFields],
+    [salesDeliveryListCustomFields, productionPickingListCustomFields, t],
   );
 
   // Drawer 相关状态（详情查看）
@@ -258,9 +273,10 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
   const [editModalRecord, setEditModalRecord] = useState<OutboundOrder | null>(null);
 
   const [executionConfig, setExecutionConfig] = useState<any>(null);
-  const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
+  const outboundPerms = useResourcePermissions(permissionResource);
   const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
   const purchaseReturnPerms = useResourcePermissions('kuaizhizao:purchase-return');
+  const deliveryNoticePerms = useResourcePermissions('kuaizhizao:delivery-notice');
   const currentUser = useCurrentUser();
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
 
@@ -739,6 +755,151 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
     [selectedRowKeys, resolveOutboundRowByKey],
   );
 
+  const showSalesDeliveryPush = useMemo(() => {
+    if (hubScopedOutboundTypes?.length) {
+      return hubScopedOutboundTypes.includes('sales_delivery');
+    }
+    return true;
+  }, [hubScopedOutboundTypes]);
+
+  const pushToDeliveryNoticeAction = useMemo(
+    () => resolveKuaizhizaoDocumentAction(t, 'delivery_note.pull_from_sales_delivery'),
+    [t],
+  );
+
+  const selectedSalesDeliveryForPush = useMemo(() => {
+    if (!showSalesDeliveryPush || selectedOutboundForBatch.length !== 1) return null;
+    const row = selectedOutboundForBatch[0];
+    if (!row || row.outbound_type !== 'sales_delivery' || row.id == null) return null;
+    return row;
+  }, [selectedOutboundForBatch, showSalesDeliveryPush]);
+
+  const handlePushToDeliveryNotice = useCallback(
+    async (record: OutboundOrder) => {
+      const salesDeliveryId = Number(record.id);
+      if (!Number.isFinite(salesDeliveryId) || salesDeliveryId <= 0) return;
+      try {
+        const linesRes = await deliveryNoticeApi.listSalesDeliveryPullLines({
+          skip: 0,
+          limit: 500,
+          sales_delivery_id: salesDeliveryId,
+          pullable_only: true,
+        });
+        const selectedIds = (linesRes?.data ?? [])
+          .filter((row) => Number(row.remaining_quantity ?? 0) > 0)
+          .map((row) => Number(row.id))
+          .filter((id) => Number.isFinite(id) && id > 0);
+        if (!selectedIds.length) {
+          const reason = salesDeliveryCapabilityReasonMessage(
+            record.capabilities?.push_delivery_notice?.reason,
+            t,
+          );
+          messageApi.warning(
+            reason ||
+              t('app.kuaizhizao.salesDelivery.capability.sales_delivery.push_delivery_notice.no_lines'),
+          );
+          return;
+        }
+        const res = await deliveryNoticeApi.pullFromSalesDeliveryItems(selectedIds);
+        messageApi.success(
+          res.message ||
+            t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+              source: pushToDeliveryNoticeAction.sourceLabel,
+              target: pushToDeliveryNoticeAction.targetLabel,
+            }),
+        );
+        invalidateMenuBadgeCounts();
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(
+            error,
+            t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+              source: pushToDeliveryNoticeAction.sourceLabel,
+              target: pushToDeliveryNoticeAction.targetLabel,
+            }),
+          ),
+        );
+      }
+    },
+    [invalidateMenuBadgeCounts, messageApi, pushToDeliveryNoticeAction, t],
+  );
+
+  const canPushDeliveryNoticeToolbar = useMemo(() => {
+    if (!selectedSalesDeliveryForPush || !deliveryNoticePerms.canCreate) return false;
+    return selectedSalesDeliveryForPush.capabilities?.push_delivery_notice?.allowed === true;
+  }, [deliveryNoticePerms.canCreate, selectedSalesDeliveryForPush]);
+
+  const toolbarPushMenuItems = useMemo(
+    () =>
+      buildUniPushMenuItems([
+        {
+          key: 'push-delivery-notice',
+          label: pushToDeliveryNoticeAction.label,
+          disabled: !canPushDeliveryNoticeToolbar,
+          title:
+            selectedSalesDeliveryForPush && !canPushDeliveryNoticeToolbar
+              ? !deliveryNoticePerms.canCreate
+                ? t('app.kuaizhizao.warehouseOutbound.push.deliveryNoticeNoPermission')
+                : salesDeliveryCapabilityReasonMessage(
+                    selectedSalesDeliveryForPush.capabilities?.push_delivery_notice?.reason,
+                    t,
+                  )
+              : undefined,
+          onClick: () => {
+            if (selectedSalesDeliveryForPush && canPushDeliveryNoticeToolbar) {
+              void handlePushToDeliveryNotice(selectedSalesDeliveryForPush);
+            }
+          },
+          targetDocumentType: 'delivery_notice',
+        },
+      ]),
+    [
+      canPushDeliveryNoticeToolbar,
+      deliveryNoticePerms.canCreate,
+      handlePushToDeliveryNotice,
+      pushToDeliveryNoticeAction.label,
+      selectedSalesDeliveryForPush,
+      t,
+    ],
+  );
+
+  const salesDeliveryToolbarPushDisabledReason = useMemo(() => {
+    const base = buildUniPushToolbarDisabledReason(t, {
+      selectedCount: selectedRowKeys.length,
+      hasSelectedRecord: !!selectedSalesDeliveryForPush,
+      extraReason:
+        selectedRowKeys.length === 1 &&
+        selectedOutboundForBatch[0] &&
+        selectedOutboundForBatch[0].outbound_type !== 'sales_delivery'
+          ? t('app.kuaizhizao.warehouseOutbound.push.salesDeliveryOnly')
+          : undefined,
+    });
+    if (base) return base;
+    if (!deliveryNoticePerms.canCreate) {
+      return t('app.kuaizhizao.warehouseOutbound.push.deliveryNoticeNoPermission');
+    }
+    if (
+      selectedSalesDeliveryForPush &&
+      selectedSalesDeliveryForPush.capabilities?.push_delivery_notice?.allowed !== true
+    ) {
+      return (
+        salesDeliveryCapabilityReasonMessage(
+          selectedSalesDeliveryForPush.capabilities?.push_delivery_notice?.reason,
+          t,
+        ) || t('app.kuaizhizao.warehouseOutbound.push.noActions')
+      );
+    }
+    return undefined;
+  }, [
+    deliveryNoticePerms.canCreate,
+    selectedOutboundForBatch,
+    selectedRowKeys.length,
+    selectedSalesDeliveryForPush,
+    t,
+  ]);
+
   const canToolbarPrint = useMemo(() => {
     if (!outboundPerms.canPrint || selectedRowKeys.length !== 1) return false;
     const row = selectedOutboundForBatch[0];
@@ -1055,6 +1216,24 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
     },
     {
+      title: t('app.kuaizhizao.warehouseOutbound.field.documentDate'),
+      key: 'delivery_date',
+      dataIndex: 'delivery_date',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+      render: (_, record) => {
+        const raw = resolveOutboundHubDateRaw(record);
+        return raw != null && String(raw).trim() !== ''
+          ? formatBusinessDateOnly(String(raw))
+          : '-';
+      },
+    },
+    {
       title: t('app.kuaizhizao.warehouseOutbound.col.operatorPerson'),
       key: 'biz_time_operator',
       dataIndex: 'biz_time_operator',
@@ -1330,7 +1509,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesDelivery)}
         columnPersistenceId={
-          columnPersistenceId ?? 'apps.kuaizhizao.pages.warehouse-management.outbound-width-v6'
+          columnPersistenceId ?? 'apps.kuaizhizao.pages.warehouse-management.outbound-width-v9'
         }
         actionRef={actionRef}
         formRef={searchFormRef}
@@ -1340,7 +1519,11 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         beforeSearchButtons={outboundTypeSelect}
         pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter
-        enableRowSelection={outboundPerms.canDelete || outboundPerms.canPrint}
+        enableRowSelection={
+          outboundPerms.canDelete ||
+          outboundPerms.canPrint ||
+          (showSalesDeliveryPush && deliveryNoticePerms.canCreate)
+        }
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton={outboundPerms.canDelete}
@@ -1431,6 +1614,22 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
             checked={showAmount}
             onChange={setShowAmount}
           />,
+          ...(showSalesDeliveryPush
+            ? [
+                <UniPushToolbarButton
+                  key={`outbound-push-delivery-notice-${selectedSalesDeliveryForPush?.id ?? 'none'}`}
+                  menuItems={toolbarPushMenuItems}
+                  disabled={selectedRowKeys.length !== 1 || !selectedSalesDeliveryForPush}
+                  disabledReason={salesDeliveryToolbarPushDisabledReason}
+                  sourceDocument={
+                    selectedSalesDeliveryForPush?.id
+                      ? { type: 'sales_delivery', id: Number(selectedSalesDeliveryForPush.id) }
+                      : null
+                  }
+                  pushTargets={{ 'push-delivery-notice': 'delivery_notice' }}
+                />,
+              ]
+            : []),
         ]}
         showPrintButton={outboundPerms.canPrint}
         printButtonDisabled={!canToolbarPrint}

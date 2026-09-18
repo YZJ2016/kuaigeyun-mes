@@ -71,4 +71,22 @@ describe('buildHubMergedCustomFieldColumns', () => {
     expect(columns).toHaveLength(1)
     expect(columns[0].key).toBe('custom_hub_制单日期')
   })
+
+  it('excludes labels that duplicate native document-date columns', () => {
+    const columns = buildHubMergedCustomFieldColumns(
+      [
+        {
+          docTypes: ['sales_delivery'],
+          customFields: [
+            field({ id: 1, code: 'doc_date', label: '制单日期' }),
+            field({ id: 2, code: 'remark_x', label: '备注扩展' }),
+          ],
+        },
+      ],
+      'outbound_type',
+      ['制单日期'],
+    )
+    expect(columns).toHaveLength(1)
+    expect(columns[0].key).toBe('custom_remark_x')
+  })
 })

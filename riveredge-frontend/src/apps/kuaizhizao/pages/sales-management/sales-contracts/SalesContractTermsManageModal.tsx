@@ -12,7 +12,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Tabs, Transfer } from 'antd';
+import { App, Button, Modal, Select, Tabs } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
@@ -252,12 +252,11 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
     [t, message],
   );
 
-  const transferDataSource = useMemo(
+  const termItemSelectOptions = useMemo(
     () =>
       allItems.map((it) => ({
-        key: String(it.id),
-        title: it.term_name,
-        description: it.term_code || it.content?.slice(0, 40),
+        value: it.id!,
+        label: it.term_code ? `${it.term_name} (${it.term_code})` : it.term_name,
       })),
     [allItems],
   );
@@ -464,20 +463,16 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
           rules={[{ required: true, message: t('common.required') }]}
         />
         <div style={{ marginBottom: 8 }}>{t('app.kuaizhizao.salesContract.terms.selectItems')}</div>
-        <Transfer
-          dataSource={transferDataSource}
-          titles={[
-            t('app.kuaizhizao.salesContract.terms.availableItems'),
-            t('app.kuaizhizao.salesContract.terms.selectedItems'),
-          ]}
-          targetKeys={selectedItemIds.map(String)}
-          onChange={(keys) => setSelectedItemIds(keys.map(Number))}
-          render={(item) => item.title}
-          styles={{
-            root: { width: '100%' },
-            section: { flex: 1, width: 'auto', minWidth: 0, height: 280 },
-          }}
+        <Select
+          mode="multiple"
+          style={{ width: '100%' }}
+          placeholder={t('app.kuaizhizao.salesContract.terms.selectItemsPlaceholder')}
+          value={selectedItemIds}
+          onChange={(ids) => setSelectedItemIds(ids)}
+          options={termItemSelectOptions}
+          optionFilterProp="label"
           showSearch
+          maxTagCount="responsive"
         />
         <ProFormTextArea name="description" label={t('common.remark')} />
         <ProFormSwitch name="is_active" label={t('common.enabled')} />

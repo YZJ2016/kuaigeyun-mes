@@ -58,16 +58,53 @@ def test_double_declining_higher_than_straight_early_periods():
 
 
 def test_units_of_production_requires_workload():
-    dep = compute_period_depreciation(
+    """卡片展示为单位折旧额，不按期间数均摊成假月折旧。"""
+    unit = compute_period_depreciation(
         depreciation_method="units_of_production",
         original_value=Decimal("100000"),
         residual_rate=Decimal("0.05"),
-        useful_life_months=60,
-        total_workload=Decimal("60000"),
+        useful_life_months=0,
+        total_workload=Decimal("100000"),
         depreciated_periods=0,
         accumulated_depreciation=Decimal("0"),
     )
-    assert dep == Decimal("1583.3333")
+    # (100000 - 5000) / 100000 = 0.95
+    assert unit == Decimal("0.9500")
+
+    period = compute_period_depreciation(
+        depreciation_method="units_of_production",
+        original_value=Decimal("100000"),
+        residual_rate=Decimal("0.05"),
+        useful_life_months=0,
+        total_workload=Decimal("100000"),
+        period_workload=Decimal("1000"),
+        depreciated_periods=0,
+        accumulated_depreciation=Decimal("0"),
+    )
+    assert period == Decimal("950.0000")
+
+
+def test_sum_of_years_uses_years_not_months():
+    """60 月 = 5 年：年数总和 15，首年月折旧 = 90000×5/15/12 = 2500。"""
+    dep = compute_period_depreciation(
+        depreciation_method="sum_of_years",
+        original_value=Decimal("100000"),
+        residual_rate=Decimal("0.10"),
+        useful_life_months=60,
+        depreciated_periods=0,
+        accumulated_depreciation=Decimal("0"),
+    )
+    assert dep == Decimal("2500.0000")
+
+    year2 = compute_period_depreciation(
+        depreciation_method="sum_of_years",
+        original_value=Decimal("100000"),
+        residual_rate=Decimal("0.10"),
+        useful_life_months=60,
+        depreciated_periods=12,
+        accumulated_depreciation=Decimal("30000"),
+    )
+    assert year2 == Decimal("2000.0000")
 
 
 def test_straight_line_recalculates_after_impairment():

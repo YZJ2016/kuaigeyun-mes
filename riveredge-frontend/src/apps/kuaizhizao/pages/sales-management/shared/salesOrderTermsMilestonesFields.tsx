@@ -149,7 +149,11 @@ export function SalesOrderContractTermsFields({
                 </div>
               ))}
             </Card>
-          ) : null}
+          ) : (
+            <Typography.Text type="secondary">
+              {t('app.kuaizhizao.salesOrder.terms.emptyPreview')}
+            </Typography.Text>
+          )}
         </>
       )}
     </>

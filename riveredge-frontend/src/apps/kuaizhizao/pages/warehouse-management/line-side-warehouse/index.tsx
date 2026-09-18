@@ -48,6 +48,7 @@ interface LineSideInventoryItem {
   expiry_date?: string | null;
   quantity: number;
   reserved_quantity: number;
+  location_code?: string | null;
   work_order_id?: number | null;
   work_order_code: string | null;
   status: string;
@@ -197,6 +198,21 @@ const LineSideWarehousePage: React.FC = () => {
             },
           },
           {
+            title: t('app.kuaizhizao.warehouseInventory.colLocation'),
+            dataIndex: 'location_code',
+            key: 'location_code',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, record) => {
+              const text = String(record.location_code ?? '').trim();
+              return text || '—';
+            },
+          },
+          {
             title: t(`${P}.colReservedQty`),
             dataIndex: 'reserved_quantity',
             width: 110,
@@ -287,7 +303,7 @@ const LineSideWarehousePage: React.FC = () => {
         headerTitle={t(`${P}.headerTitle`)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.line-side-warehouse-width-v5"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.line-side-warehouse-width-v6"
         viewTypes={['table', 'help']}
         helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.lineSideWarehouse')}
         request={fetchInventory}

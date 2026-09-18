@@ -13,6 +13,7 @@ import {
 import { getMaterialUnitDisplayMapShared, resolveMaterialUnitLabel } from '../../utils/materialUnitDisplay';
 import { fetchMaterialForUnitSelectCache } from '../material-unit-select';
 import { UniUserSelect } from '../uni-user-select';
+import { useNumericPrecisionPlaces } from '../../hooks/useNumericPrecision';
 import { QuantityWithUnit, type QuantityWithUnitValue } from './index';
 import { unitAddonFieldProps } from './unitAddonFieldProps';
 import {
@@ -59,19 +60,25 @@ function bundleToDocumentQty(
   return convertFromBaseQuantity(material, baseQty, documentUnit);
 }
 
-/** 检验数量合计比较：统一成 number，并按表单 2 位小数口径，与后端 assert_inspection_quantities_balanced 一致 */
+function roundBusinessQuantity(value: unknown, decimalPlaces: number): number {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return 0;
+  const factor = 10 ** decimalPlaces;
+  return Math.round(n * factor) / factor;
+}
+
+/** 检验数量合计比较：按配置数量小数位量化，与后端 assert_inspection_quantities_balanced 一致 */
 function qtySumNotBalancedWithInspection(
   qualified: unknown,
   unqualified: unknown,
   inspectionQuantity: unknown,
+  decimalPlaces: number,
 ): boolean {
-  const q = Number(qualified ?? 0);
-  const u = Number(unqualified ?? 0);
-  const max = Number(inspectionQuantity ?? 0);
+  const q = roundBusinessQuantity(qualified, decimalPlaces);
+  const u = roundBusinessQuantity(unqualified, decimalPlaces);
+  const max = roundBusinessQuantity(inspectionQuantity, decimalPlaces);
   if (!Number.isFinite(q) || !Number.isFinite(u) || !Number.isFinite(max)) return true;
-  const sum = Math.round((q + u) * 100) / 100;
-  const lim = Math.round(max * 100) / 100;
-  return sum !== lim;
+  return q + u !== max;
 }
 
 export type InspectionConductQuantityFieldsProps = {
@@ -135,6 +142,7 @@ export function InspectionConductQuantityFields({
   inspection,
 }: InspectionConductQuantityFieldsProps) {
   const form = Form.useFormInstance();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const [material, setMaterial] = useState<Material | null>(null);
   const [unitLabelMap, setUnitLabelMap] = useState<Record<string, string>>({});
   const stepResults = Form.useWatch('conduct_step_results', form) as
@@ -251,7 +259,14 @@ export function InspectionConductQuantityFields({
                     getFieldValue('unqualified_qty_with_unit') as QuantityWithUnitValue | undefined,
                     documentUnit,
                   );
-                  if (qtySumNotBalancedWithInspection(qualifiedDoc, unqualifiedDoc, inspectionQuantity)) {
+                  if (
+                    qtySumNotBalancedWithInspection(
+                      qualifiedDoc,
+                      unqualifiedDoc,
+                      inspectionQuantity,
+                      quantityDecimals,
+                    )
+                  ) {
                     return Promise.reject(t('app.kuaizhizao.quality.common.validation.qtySumMustEqual'));
                   }
                   return stepFailQtyRule(unqualifiedDoc);
@@ -264,6 +279,7 @@ export function InspectionConductQuantityFields({
               material={material}
               scenario={scenario}
               preferredUnit={documentUnit}
+              quantityPrecision={quantityDecimals}
             />
           </ProFormItem>
         </Col>
@@ -282,7 +298,14 @@ export function InspectionConductQuantityFields({
                     getFieldValue('qualified_qty_with_unit') as QuantityWithUnitValue | undefined,
                     documentUnit,
                   );
-                  if (qtySumNotBalancedWithInspection(qualifiedDoc, unqualifiedDoc, inspectionQuantity)) {
+                  if (
+                    qtySumNotBalancedWithInspection(
+                      qualifiedDoc,
+                      unqualifiedDoc,
+                      inspectionQuantity,
+                      quantityDecimals,
+                    )
+                  ) {
                     return Promise.reject(t('app.kuaizhizao.quality.common.validation.qtySumMustEqual'));
                   }
                   return stepFailQtyRule(unqualifiedDoc);
@@ -295,6 +318,7 @@ export function InspectionConductQuantityFields({
               material={material}
               scenario={scenario}
               preferredUnit={documentUnit}
+              quantityPrecision={quantityDecimals}
             />
           </ProFormItem>
         </Col>
@@ -326,6 +350,7 @@ export function InspectionConductQuantityFields({
                   value,
                   getFieldValue('unqualified_quantity'),
                   inspectionQuantity,
+                  quantityDecimals,
                 )
               ) {
                 return Promise.reject(t('app.kuaizhizao.quality.common.validation.qtySumMustEqual'));
@@ -334,7 +359,7 @@ export function InspectionConductQuantityFields({
             },
           }),
         ]}
-        fieldProps={{ precision: 2, ...addonProps }}
+        fieldProps={{ precision: quantityDecimals, ...addonProps }}
       />
       <ProFormDigit
         name="unqualified_quantity"
@@ -352,6 +377,7 @@ export function InspectionConductQuantityFields({
                   getFieldValue('qualified_quantity'),
                   value,
                   inspectionQuantity,
+                  quantityDecimals,
                 )
               ) {
                 return Promise.reject(t('app.kuaizhizao.quality.common.validation.qtySumMustEqual'));
@@ -360,7 +386,7 @@ export function InspectionConductQuantityFields({
             },
           }),
         ]}
-        fieldProps={{ precision: 2, ...addonProps }}
+        fieldProps={{ precision: quantityDecimals, ...addonProps }}
       />
       <InspectionConductInspectorField t={t} />
     </>
@@ -404,6 +430,7 @@ export function InspectionDefectQuantityField({
   maxQuantity,
   t,
 }: InspectionDefectQuantityFieldProps) {
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const [unitLabelMap, setUnitLabelMap] = useState<Record<string, string>>({});
   const [resolvedUnit, setResolvedUnit] = useState(String(materialUnit ?? '').trim());
 
@@ -455,7 +482,7 @@ export function InspectionDefectQuantityField({
             ]
           : []),
       ]}
-      fieldProps={{ precision: 2, ...addonProps }}
+      fieldProps={{ precision: quantityDecimals, ...addonProps }}
     />
   );
 }

@@ -10,7 +10,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Row, Col } from 'antd';
+import { App, Button, Modal, Row, Col, Input } from 'antd';
 import dayjs from 'dayjs';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { MarkerTag } from '../../../../../constants/statusBadges';
@@ -22,12 +22,13 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { rowActionKind } from '../../../../../components/uni-action';
 import { moldApi } from '../../../services/equipment';
 import { trialsApi } from '../../../services/moldOps';
-import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import {
+  APPROVAL_DOC_PINNED_STATUS_FIELD,
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
@@ -36,7 +37,6 @@ import {
   EquipmentMasterDetailDrawer,
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
@@ -56,6 +56,7 @@ interface MoldTrial {
   trial_result?: string;
   supplier?: string;
   trial_count?: number;
+  status?: string;
   remark?: string;
   updated_at?: string;
 }
@@ -79,6 +80,7 @@ const MoldTrialsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
+  const canAudit = perms.canAction?.('audit') ?? perms.canAction?.('approve') ?? false;
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -89,8 +91,26 @@ const MoldTrialsPage: React.FC = () => {
   );
   const [submitting, setSubmitting] = useState(false);
   const [moldOptions, setMoldOptions] = useState<{ label: string; value: number }[]>([]);
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectTarget, setRejectTarget] = useState<MoldTrial | null>(null);
   const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
     useEquipmentDetailDrawer<MoldTrial>();
+
+  const approvalStatusValueEnum = useMemo(
+    () => ({
+      草稿: { text: '草稿' },
+      已提交: { text: '已提交' },
+      进行中: { text: '进行中' },
+      已完成: { text: '已完成' },
+      已驳回: { text: '已驳回' },
+    }),
+    [],
+  );
+  const canEditStatus = (status?: string) => status === '草稿' || status === '已驳回';
+  const canDeleteStatus = (status?: string) =>
+    status === '草稿' || status === '已驳回' || status === '进行中';
+  const canApproveStatus = (status?: string) => status === '已提交' || status === '进行中';
 
   const handleDetail = (record: MoldTrial) => {
     if (!record.id) return;
@@ -146,12 +166,61 @@ const MoldTrialsPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (keys: React.Key[]) => {
-    for (const id of keys) {
-          await trialsApi.delete(Number(id));
-        }
-    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-    actionRef.current?.reload();
+  const executeDelete = async (keys: React.Key[]) => {
+    try {
+      for (const id of keys) {
+        await trialsApi.delete(Number(id));
+      }
+      messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    }
+  };
+
+  const handleSubmitDoc = async (record: MoldTrial) => {
+    if (!record.id) return;
+    try {
+      await trialsApi.submit(record.id);
+      messageApi.success(t(`${P}.submitSuccess`));
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    }
+  };
+
+  const handleApprove = async (record: MoldTrial) => {
+    if (!record.id) return;
+    try {
+      await trialsApi.approve(record.id);
+      messageApi.success(t(`${P}.approveSuccess`));
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    }
+  };
+
+  const openReject = (record: MoldTrial) => {
+    setRejectTarget(record);
+    setRejectReason('');
+    setRejectModalVisible(true);
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!rejectTarget?.id) return;
+    if (!rejectReason.trim()) {
+      messageApi.warning(t(`${P}.form.rejectReasonRequired`));
+      return;
+    }
+    try {
+      await trialsApi.reject(rejectTarget.id, { reject_reason: rejectReason.trim() });
+      messageApi.success(t(`${P}.rejectSuccess`));
+      setRejectModalVisible(false);
+      setRejectTarget(null);
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    }
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
@@ -195,6 +264,11 @@ const MoldTrialsPage: React.FC = () => {
           return <MarkerTag color={color}>{r.trial_result ?? '-'}</MarkerTag>;
         },
       },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
+      },
       { title: t('common.remark'), dataIndex: 'remark', span: 2 },
     ],
     [t],
@@ -216,6 +290,14 @@ const MoldTrialsPage: React.FC = () => {
         hideInTable: true,
         formItemProps: formDateRangeFormItemProps,
         search: { order: 11 } as ProColumns['search'],
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: approvalStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
       },
       {
         title: t(`${P}.col.trialNo`),
@@ -292,6 +374,14 @@ const MoldTrialsPage: React.FC = () => {
       },
       ...buildDocumentAuditColumns<Record<string, unknown>>(t),
       {
+        title: t('common.status'),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        hideInSearch: true,
+        fixed: 'right',
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status ?? '-'),
+      },
+      {
         title: t('common.actions'),
         key: 'option',
         fixed: 'right',
@@ -309,7 +399,7 @@ const MoldTrialsPage: React.FC = () => {
             >
               {t('common.detail')}
             </Button>
-            {perms.canUpdate && (
+            {perms.canUpdate && canEditStatus(record.status) && (
               <Button
                 {...rowActionKind('update')}
                 type="link"
@@ -322,24 +412,66 @@ const MoldTrialsPage: React.FC = () => {
                 {t('common.edit')}
               </Button>
             )}
-            {perms.canDelete && (
-              <ActionConfirmPopconfirm title={t('common.deleteTitle')} onConfirm={() => record.id && void executeDelete([record.id])}>
+            {perms.canAction?.('submit') && canEditStatus(record.status) && (
               <Button
-                {...rowActionKind('delete')}
+                {...rowActionKind('submit')}
                 type="link"
                 size="small"
-                danger
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleSubmitDoc(record);
+                }}
               >
-                {t('common.delete')}
+                {t('common.submit')}
               </Button>
-            </ActionConfirmPopconfirm>
-          )}
+            )}
+            {canAudit && canApproveStatus(record.status) && (
+              <Button
+                {...rowActionKind('approve')}
+                type="link"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleApprove(record);
+                }}
+              >
+                {t(`${P}.action.approve`)}
+              </Button>
+            )}
+            {canAudit && canApproveStatus(record.status) && (
+              <Button
+                {...rowActionKind('reject')}
+                type="link"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openReject(record);
+                }}
+              >
+                {t(`${P}.action.reject`)}
+              </Button>
+            )}
+            {perms.canDelete && canDeleteStatus(record.status) && (
+              <ActionConfirmPopconfirm
+                title={t('common.deleteTitle')}
+                onConfirm={() => record.id && void executeDelete([record.id])}
+              >
+                <Button
+                  {...rowActionKind('delete')}
+                  type="link"
+                  size="small"
+                  danger
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('common.delete')}
+                </Button>
+              </ActionConfirmPopconfirm>
+            )}
           </>
         ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms],
+    [t, perms, canAudit, approvalStatusValueEnum],
   );
 
   return (
@@ -354,6 +486,7 @@ const MoldTrialsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
+          pinnedTabsField={APPROVAL_DOC_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
           request={async (params, sort, _filter, searchFormValues) => {
             try {
@@ -377,7 +510,7 @@ const MoldTrialsPage: React.FC = () => {
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
           
-          onDelete={handleDelete}
+          onDelete={executeDelete}
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
@@ -424,7 +557,12 @@ const MoldTrialsPage: React.FC = () => {
             <ProFormText name="supplier" label={t(`${P}.col.supplier`)} />
           </Col>
           <Col span={12}>
-            <ProFormSelect name="result" label={t(`${P}.col.result`)} options={resultOptions} />
+            <ProFormSelect
+              name="result"
+              label={t(`${P}.col.result`)}
+              options={resultOptions}
+              rules={[{ required: true }]}
+            />
           </Col>
           <Col span={24}>
             <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
@@ -439,12 +577,30 @@ const MoldTrialsPage: React.FC = () => {
         title={`${t('common.detail')}${detail?.document_no ?? detail?.trial_no ? ` - ${detail.document_no ?? detail.trial_no}` : ''}`}
         onClose={closeDetail}
         basicColumns={detailColumns}
-        extra={buildDetailDrawerEditExtra(t, Boolean(detail && perms.canUpdate), () => {
-          if (!detail) return;
-          closeDetail();
-          void handleEdit(detail);
-        })}
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(detail && perms.canUpdate && canEditStatus(detail.status)),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
       />
+
+      <Modal
+        title={t(`${P}.rejectModal`)}
+        open={rejectModalVisible}
+        onOk={() => void handleRejectConfirm()}
+        onCancel={() => setRejectModalVisible(false)}
+      >
+        <Input.TextArea
+          rows={4}
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+          placeholder={t(`${P}.form.rejectReason`)}
+        />
+      </Modal>
     </>
   );
 };

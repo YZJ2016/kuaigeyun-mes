@@ -8,7 +8,7 @@ Date: 2025-01-15
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from decimal import Decimal
 
 from tortoise.queryset import Q
@@ -22,7 +22,8 @@ from apps.kuaizhizao.schemas.defect_record import (
     DefectRecordResponse,
     DefectRecordListResponse,
     DefectRecordUpdate,
-    DefectRecordCreateFromInspection
+    DefectRecordCreateFromInspection,
+    DefectRecordCreateFromInspectionBatch,
 )
 
 from apps.common.base_service import AppBaseService
@@ -567,7 +568,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                     raise ValidationError("处置为「其他」时必须填写备注")
 
             if disposition == "scrap" and not stock_warehouse_id:
-                raise ValidationError("报废处置必须指定扣减库存的仓库")
+                raise ValidationError("报废处置必须指定报废入库仓库")
 
             if disposition == "accept" and not stock_warehouse_id:
                 raise ValidationError("让步接收必须指定放行仓库")
@@ -616,9 +617,43 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         if disposition == "return" and not defect_record.incoming_inspection_id:
             raise BusinessLogicError("退货处置仅适用于来料检验关联的不合格品，过程/成品请改用其他处置")
         if disposition in ("rework", "scrap") and not defect_record.work_order_id:
-            raise BusinessLogicError("来料不合格品无法直接返工或报废，请选择退货、隔离、降级回用或其他处置")
-        if disposition == "scrap" and not defect_record.operation_id:
-            raise BusinessLogicError("报废处置需要工单与工序信息，来料不合格品请走退货流程")
+            if defect_record.incoming_inspection_id:
+                raise BusinessLogicError(
+                    "来料不合格品无法直接返工或报废，请选择退货、隔离、降级回用或其他处置"
+                )
+            raise BusinessLogicError("返工或报废处置需要关联工单")
+
+    async def _resolve_scrap_operation_fields(
+        self,
+        tenant_id: int,
+        defect_record: DefectRecord,
+    ) -> tuple[int, str, str]:
+        """报废单工序：优先台账已有工序；成品检验等无工序时取工单末道工序。"""
+        if defect_record.operation_id:
+            return (
+                int(defect_record.operation_id),
+                str(defect_record.operation_code or ""),
+                str(defect_record.operation_name or ""),
+            )
+        if not defect_record.work_order_id:
+            raise BusinessLogicError("报废处置需要关联工单")
+        woo = (
+            await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=int(defect_record.work_order_id),
+                deleted_at__isnull=True,
+            )
+            .order_by("-sequence", "-id")
+            .first()
+        )
+        if woo and woo.operation_id:
+            return (
+                int(woo.operation_id),
+                str(woo.operation_code or ""),
+                str(woo.operation_name or ""),
+            )
+        # 工单无工序排程时仍允许成品检验报废过账
+        return (0, "FQC", "成品检验")
 
     @staticmethod
     def _resolve_linked_inspection(defect_record: DefectRecord) -> Optional[tuple[str, int]]:
@@ -698,10 +733,26 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         self._validate_disposition_choice(defect_record, disposition)
 
         if disposition == "scrap" and not stock_warehouse_id:
-            raise ValidationError("报废处置必须指定扣减库存的仓库")
+            raise ValidationError("报废处置必须指定报废入库仓库")
         if disposition == "accept" and not stock_warehouse_id:
             raise ValidationError("让步接收必须指定放行仓库")
-        # 隔离仓可在副作用中按组织待检仓或产品默认仓解析；报工自动登记不良时不强制前端传仓库
+        # 隔离：仅当调用方显式传入 quarantine_warehouse_id（如「更新处置」）时才闭环入待检仓。
+        # 创建登记默认 disposition=quarantine 且未选仓时保持草稿，即使组织已配置待检仓也不自动已处理。
+        if disposition == "quarantine" and not quarantine_warehouse_id:
+            if not (defect_record.quarantine_location or "").strip():
+                from apps.master_data.models.warehouse import Warehouse
+
+                wh = await Warehouse.filter(
+                    tenant_id=tenant_id,
+                    warehouse_type="quarantine",
+                    is_active=True,
+                    deleted_at__isnull=True,
+                ).order_by("id").first()
+                if wh:
+                    defect_record.quarantine_location = str(wh.name or "").strip() or None
+                    if defect_record.quarantine_location:
+                        await defect_record.save()
+            return await DefectRecord.get(id=defect_id)
 
         if disposition == "other":
             if not (defect_record.remarks or "").strip():
@@ -1344,33 +1395,41 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         tenant_id: int,
         defect_record: DefectRecord,
         operator_id: int,
+        *,
+        movement_type: str = "defect_downgrade_writeoff",
+        source_type: str = "defect_downgrade",
+        remark: Optional[str] = None,
+        idempotency_prefix: str = "defect_downgrade",
+        include_qualified: bool = False,
     ) -> None:
         from decimal import Decimal
         from apps.kuaizhizao.services.inventory_service import InventoryService
-        from apps.master_data.constants.batch_quality_status import QUARANTINE, UNQUALIFIED
+        from apps.master_data.constants.batch_quality_status import QUARANTINE, UNQUALIFIED, QUALIFIED
         from infra.exceptions.exceptions import BusinessLogicError
 
         qty = Decimal(str(defect_record.defect_quantity or 0))
         if qty <= 0:
             return
         wh_id, _ = await self._resolve_defect_stock_warehouse(tenant_id, defect_record)
-        for status in (UNQUALIFIED, QUARANTINE):
+        statuses = (UNQUALIFIED, QUARANTINE, QUALIFIED) if include_qualified else (UNQUALIFIED, QUARANTINE)
+        note = remark or f"核销原产品 {defect_record.code}"
+        for status in statuses:
             try:
                 await InventoryService.decrease_stock(
                     tenant_id=tenant_id,
                     material_id=int(defect_record.product_id),
                     quantity=qty,
                     warehouse_id=wh_id,
-                    source_type="defect_downgrade",
+                    source_type=source_type,
                     source_doc_id=int(defect_record.id),
                     source_doc_code=defect_record.code,
                     work_order_id=defect_record.work_order_id,
                     work_order_code=defect_record.work_order_code,
-                    movement_type="defect_downgrade_writeoff",
+                    movement_type=movement_type,
                     from_warehouse_id=wh_id,
                     operator_id=operator_id,
-                    remark=f"降级改判核销原产品 {defect_record.code}",
-                    idempotency_key=f"defect_downgrade:{defect_record.id}:writeoff:{status}",
+                    remark=note,
+                    idempotency_key=f"{idempotency_prefix}:{defect_record.id}:writeoff:{status}",
                     stock_quality_status=status,
                 )
                 return
@@ -1510,36 +1569,95 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             logger.info(f"不合格品 {defect_record.code} 已创建返工单 {rework_order.code}")
 
         elif disposition == "scrap":
-            if not defect_record.work_order_id or not defect_record.operation_id:
-                raise BusinessLogicError("报废处置需要工单与工序信息，来料不合格品请走退货流程")
-            if defect_record.scrap_record_id:
-                # 已关联报废单：若仍为草稿则确认过账
-                from apps.kuaizhizao.models.scrap_record import ScrapRecord
-                from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
+            if not defect_record.work_order_id:
+                if defect_record.incoming_inspection_id:
+                    raise BusinessLogicError(
+                        "来料不合格品无法直接报废，请选择退货、隔离、降级回用或其他处置"
+                    )
+                raise BusinessLogicError("报废处置需要关联工单")
+            operation_id, operation_code, operation_name = await self._resolve_scrap_operation_fields(
+                tenant_id, defect_record
+            )
+            if not defect_record.operation_id:
+                defect_record.operation_id = operation_id
+                defect_record.operation_code = operation_code
+                defect_record.operation_name = operation_name
+                await defect_record.save()
+            if not stock_warehouse_id:
+                raise ValidationError("报废处置必须指定报废入库仓库")
+            from apps.master_data.constants.batch_quality_status import UNQUALIFIED
+            from apps.master_data.models.warehouse import Warehouse
+            from apps.kuaizhizao.models.scrap_record import ScrapRecord
+            from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
 
+            scrap_wh_id = int(stock_warehouse_id)
+            scrap_wh = await Warehouse.get_or_none(
+                tenant_id=tenant_id,
+                id=scrap_wh_id,
+                deleted_at__isnull=True,
+            )
+            if not scrap_wh:
+                raise NotFoundError(f"报废仓库不存在: {scrap_wh_id}")
+            scrap_wh_name = str(scrap_wh.name or "")
+
+            if defect_record.scrap_record_id:
                 existing = await ScrapRecord.get_or_none(
                     id=defect_record.scrap_record_id,
                     tenant_id=tenant_id,
                     deleted_at__isnull=True,
                 )
                 if existing and existing.status == "draft":
+                    await self._write_off_defect_product_stock(
+                        tenant_id=tenant_id,
+                        defect_record=defect_record,
+                        operator_id=updated_by,
+                        movement_type="defect_scrap_writeoff",
+                        source_type="defect_disposition",
+                        remark=f"不合格品报废核销 {defect_record.code}",
+                        idempotency_prefix="defect_scrap",
+                        include_qualified=True,
+                    )
+                    await self._inbound_defect_quantity_as(
+                        tenant_id=tenant_id,
+                        defect_record=defect_record,
+                        quality_status=UNQUALIFIED,
+                        operator_id=updated_by,
+                        warehouse_id_override=scrap_wh_id,
+                        movement_type="defect_scrap",
+                        idempotency_suffix="scrap",
+                    )
                     await ScrapRecordService().approve_scrap_record(
                         tenant_id=tenant_id,
                         scrap_id=existing.id,
                         approved=True,
                         approved_by=updated_by,
+                        post_inventory=False,
                     )
                 return
+
+            await self._write_off_defect_product_stock(
+                tenant_id=tenant_id,
+                defect_record=defect_record,
+                operator_id=updated_by,
+                movement_type="defect_scrap_writeoff",
+                source_type="defect_disposition",
+                remark=f"不合格品报废核销 {defect_record.code}",
+                idempotency_prefix="defect_scrap",
+                include_qualified=True,
+            )
+            await self._inbound_defect_quantity_as(
+                tenant_id=tenant_id,
+                defect_record=defect_record,
+                quality_status=UNQUALIFIED,
+                operator_id=updated_by,
+                warehouse_id_override=scrap_wh_id,
+                movement_type="defect_scrap",
+                idempotency_suffix="scrap",
+            )
+
             import uuid
             from decimal import Decimal
-            from apps.kuaizhizao.models.scrap_record import ScrapRecord
-            from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
 
-            wh_id, _ = await self._resolve_defect_stock_warehouse(
-                tenant_id,
-                defect_record,
-                warehouse_id_override=stock_warehouse_id,
-            )
             today = today_site_str()
             code = await self.generate_code(
                 tenant_id=tenant_id,
@@ -1554,9 +1672,9 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 reporting_record_id=defect_record.reporting_record_id,
                 work_order_id=defect_record.work_order_id,
                 work_order_code=defect_record.work_order_code,
-                operation_id=defect_record.operation_id,
-                operation_code=defect_record.operation_code or "",
-                operation_name=defect_record.operation_name or "",
+                operation_id=operation_id,
+                operation_code=operation_code,
+                operation_name=operation_name,
                 product_id=defect_record.product_id,
                 product_code=defect_record.product_code,
                 product_name=defect_record.product_name,
@@ -1564,7 +1682,8 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 total_cost=Decimal("0"),
                 scrap_reason=f"不合格品报废：{defect_record.defect_reason}",
                 scrap_type="quality",
-                warehouse_id=wh_id,
+                warehouse_id=scrap_wh_id,
+                warehouse_name=scrap_wh_name,
                 status="draft",
                 remarks=f"从不合格品台账 {defect_record.code} 创建",
                 created_by=updated_by,
@@ -1579,37 +1698,29 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 scrap_id=scrap_record.id,
                 approved=True,
                 approved_by=updated_by,
+                post_inventory=False,
             )
-            logger.info(f"不合格品 {defect_record.code} 已创建并确认报废记录 {scrap_record.code}")
+            logger.info(
+                f"不合格品 {defect_record.code} 已报废入库至 {scrap_wh_name} 并确认报废记录 {scrap_record.code}"
+            )
 
         elif disposition == "quarantine":
+            if not quarantine_warehouse_id:
+                raise ValidationError("隔离处置必须指定隔离仓库")
             location = quarantine_location or defect_record.quarantine_location
-            wh_override = quarantine_warehouse_id
-            if wh_override:
-                from apps.master_data.models.warehouse import Warehouse
+            wh_override = int(quarantine_warehouse_id)
+            from apps.master_data.models.warehouse import Warehouse
 
-                wh = await Warehouse.get_or_none(
-                    tenant_id=tenant_id,
-                    id=int(wh_override),
-                    deleted_at__isnull=True,
-                )
-                if not wh:
-                    raise NotFoundError(f"隔离仓库不存在: {wh_override}")
-                location = location or str(wh.name or "")
+            wh = await Warehouse.get_or_none(
+                tenant_id=tenant_id,
+                id=wh_override,
+                deleted_at__isnull=True,
+            )
+            if not wh:
+                raise NotFoundError(f"隔离仓库不存在: {wh_override}")
+            location = location or str(wh.name or "")
             if not location:
-                from apps.master_data.models.warehouse import Warehouse
-
-                wh = await Warehouse.filter(
-                    tenant_id=tenant_id,
-                    warehouse_type="quarantine",
-                    is_active=True,
-                    deleted_at__isnull=True,
-                ).order_by("id").first()
-                if wh:
-                    location = wh.name
-                    wh_override = int(wh.id)
-                else:
-                    raise BusinessLogicError("未配置待检仓（quarantine）且未指定隔离仓库")
+                raise ValidationError("隔离处置缺少隔离位置或仓库名称")
             defect_record.quarantine_location = location
             await defect_record.save()
             from apps.master_data.constants.batch_quality_status import QUARANTINE
@@ -1666,6 +1777,105 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             downgrade_warehouse_id=downgrade_warehouse_id,
         )
 
+    @staticmethod
+    def _dec_qty(value: Any) -> Decimal:
+        try:
+            return Decimal(str(value or 0))
+        except Exception:
+            return Decimal("0")
+
+    async def _sum_registered_defect_quantity(
+        self,
+        tenant_id: int,
+        *,
+        incoming_inspection_id: Optional[int] = None,
+        process_inspection_id: Optional[int] = None,
+        finished_goods_inspection_id: Optional[int] = None,
+        reporting_record_id: Optional[int] = None,
+    ) -> Decimal:
+        query = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        query &= ~Q(status="cancelled")
+        if incoming_inspection_id is not None:
+            query &= Q(incoming_inspection_id=int(incoming_inspection_id))
+        elif process_inspection_id is not None:
+            query &= Q(process_inspection_id=int(process_inspection_id))
+        elif finished_goods_inspection_id is not None:
+            query &= Q(finished_goods_inspection_id=int(finished_goods_inspection_id))
+        elif reporting_record_id is not None:
+            query &= Q(reporting_record_id=int(reporting_record_id))
+        else:
+            return Decimal("0")
+        rows = await DefectRecord.filter(query).all()
+        return sum(self._dec_qty(row.defect_quantity) for row in rows)
+
+    @staticmethod
+    def _assert_defect_quantity_budget(
+        new_quantity: Decimal,
+        *,
+        existing_registered: Decimal,
+        unqualified_quantity: Decimal,
+    ) -> None:
+        remaining = max(
+            Decimal("0"),
+            DefectRecordService._dec_qty(unqualified_quantity) - existing_registered,
+        )
+        qty = DefectRecordService._dec_qty(new_quantity)
+        if qty <= 0:
+            raise ValidationError("不合格品数量必须大于 0")
+        if qty > remaining:
+            raise ValidationError(
+                f"不合格品数量({qty})不能超过待登记不合格数量({remaining})"
+            )
+
+    @staticmethod
+    def _validate_defect_line_for_source(
+        defect_data: DefectRecordCreateFromInspection,
+        source: Literal["incoming", "process", "finished"],
+    ) -> None:
+        if source == "incoming":
+            if defect_data.disposition in ("rework", "scrap"):
+                raise BusinessLogicError(
+                    "来料不合格品无法直接返工或报废，请选择退货、隔离、降级回用或其他处置"
+                )
+        elif source == "process":
+            if defect_data.disposition == "return":
+                raise BusinessLogicError("过程检验不合格品不能使用退货处置，请选择返工、报废、隔离等")
+        elif source == "finished":
+            if defect_data.disposition == "return":
+                raise BusinessLogicError("成品检验不合格品不能使用退货处置，请选择返工、报废、隔离等")
+        if defect_data.disposition == "other" and not (defect_data.remarks or "").strip():
+            raise ValidationError("处置为「其他」时必须填写备注")
+        if defect_data.disposition == "downgrade" and (
+            not defect_data.downgrade_material_id or not defect_data.downgrade_warehouse_id
+        ):
+            raise ValidationError("降级回用必须指定目标原料物料与入库仓库")
+
+    def _validate_defect_lines_batch(
+        self,
+        lines: List[DefectRecordCreateFromInspection],
+        *,
+        existing_registered: Decimal,
+        unqualified_quantity: Decimal,
+        source: Literal["incoming", "process", "finished"],
+    ) -> Decimal:
+        if not lines:
+            raise ValidationError("至少登记一行不合格明细")
+        total_new = sum(self._dec_qty(line.defect_quantity) for line in lines)
+        remaining = max(Decimal("0"), self._dec_qty(unqualified_quantity) - existing_registered)
+        if total_new <= 0:
+            raise ValidationError("明细数量合计必须大于 0")
+        if total_new > remaining:
+            raise ValidationError(
+                f"明细数量合计({total_new})不能超过待登记不合格数量({remaining})"
+            )
+        for line in lines:
+            if self._dec_qty(line.defect_quantity) <= 0:
+                raise ValidationError("每行不合格品数量必须大于 0")
+            if not (line.defect_reason or "").strip():
+                raise ValidationError("每行必须填写不合格原因")
+            self._validate_defect_line_for_source(line, source)
+        return total_new
+
     async def create_defect_from_incoming_inspection(
         self,
         tenant_id: int,
@@ -1710,20 +1920,18 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             )
             assert_quality_inspection_capability(inspection, "create_defect")
 
-            # 验证不合格数量
-            if defect_data.defect_quantity > inspection.unqualified_quantity:
-                raise ValidationError(
-                    f"不合格品数量({defect_data.defect_quantity})不能超过检验单的不合格数量({inspection.unqualified_quantity})"
-                )
-
-            if defect_data.disposition in ("rework", "scrap"):
-                raise BusinessLogicError("来料不合格品无法直接返工或报废，请选择退货、隔离、降级回用或其他处置")
-            if defect_data.disposition == "other" and not (defect_data.remarks or "").strip():
-                raise ValidationError("处置为「其他」时必须填写备注")
-            if defect_data.disposition == "downgrade" and (
-                not defect_data.downgrade_material_id or not defect_data.downgrade_warehouse_id
-            ):
-                raise ValidationError("降级回用必须指定目标原料物料与入库仓库")
+            existing_registered = await self._sum_registered_defect_quantity(
+                tenant_id,
+                incoming_inspection_id=inspection_id,
+            )
+            self._assert_defect_quantity_budget(
+                defect_data.defect_quantity,
+                existing_registered=existing_registered,
+                unqualified_quantity=inspection.unqualified_quantity,
+            )
+            if not (defect_data.defect_reason or "").strip():
+                raise ValidationError("必须填写不合格原因")
+            self._validate_defect_line_for_source(defect_data, "incoming")
 
             # 生成不良品记录编码
             today = today_site_str()
@@ -1826,20 +2034,18 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             )
             assert_quality_inspection_capability(inspection, "create_defect")
 
-            # 验证不合格数量
-            if defect_data.defect_quantity > inspection.unqualified_quantity:
-                raise ValidationError(
-                    f"不合格品数量({defect_data.defect_quantity})不能超过检验单的不合格数量({inspection.unqualified_quantity})"
-                )
-
-            if defect_data.disposition == "return":
-                raise BusinessLogicError("过程检验不合格品不能使用退货处置，请选择返工、报废、隔离等")
-            if defect_data.disposition == "other" and not (defect_data.remarks or "").strip():
-                raise ValidationError("处置为「其他」时必须填写备注")
-            if defect_data.disposition == "downgrade" and (
-                not defect_data.downgrade_material_id or not defect_data.downgrade_warehouse_id
-            ):
-                raise ValidationError("降级回用必须指定目标原料物料与入库仓库")
+            existing_registered = await self._sum_registered_defect_quantity(
+                tenant_id,
+                process_inspection_id=inspection_id,
+            )
+            self._assert_defect_quantity_budget(
+                defect_data.defect_quantity,
+                existing_registered=existing_registered,
+                unqualified_quantity=inspection.unqualified_quantity,
+            )
+            if not (defect_data.defect_reason or "").strip():
+                raise ValidationError("必须填写不合格原因")
+            self._validate_defect_line_for_source(defect_data, "process")
 
             # 生成不良品记录编码
             today = today_site_str()
@@ -1947,20 +2153,18 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             )
             assert_quality_inspection_capability(inspection, "create_defect")
 
-            # 验证不合格数量
-            if defect_data.defect_quantity > inspection.unqualified_quantity:
-                raise ValidationError(
-                    f"不合格品数量({defect_data.defect_quantity})不能超过检验单的不合格数量({inspection.unqualified_quantity})"
-                )
-
-            if defect_data.disposition == "return":
-                raise BusinessLogicError("成品检验不合格品不能使用退货处置，请选择返工、报废、隔离等")
-            if defect_data.disposition == "other" and not (defect_data.remarks or "").strip():
-                raise ValidationError("处置为「其他」时必须填写备注")
-            if defect_data.disposition == "downgrade" and (
-                not defect_data.downgrade_material_id or not defect_data.downgrade_warehouse_id
-            ):
-                raise ValidationError("降级回用必须指定目标原料物料与入库仓库")
+            existing_registered = await self._sum_registered_defect_quantity(
+                tenant_id,
+                finished_goods_inspection_id=inspection_id,
+            )
+            self._assert_defect_quantity_budget(
+                defect_data.defect_quantity,
+                existing_registered=existing_registered,
+                unqualified_quantity=inspection.unqualified_quantity,
+            )
+            if not (defect_data.defect_reason or "").strip():
+                raise ValidationError("必须填写不合格原因")
+            self._validate_defect_line_for_source(defect_data, "finished")
 
             # 生成不良品记录编码
             today = today_site_str()
@@ -2020,3 +2224,304 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             stock_warehouse_id=getattr(defect_data, "stock_warehouse_id", None),
         )
         return DefectRecordResponse.model_validate(defect_record)
+
+    @staticmethod
+    def _merge_defect_problem_descriptions(lines: List[DefectRecordCreateFromInspection]) -> str:
+        seen: List[str] = []
+        for line in lines:
+            text = str(line.defect_reason or "").strip()
+            if text and text not in seen:
+                seen.append(text)
+        return "；".join(seen) if seen else "检验不合格"
+
+    async def create_defects_batch_from_incoming_inspection(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        batch: DefectRecordCreateFromInspectionBatch,
+        created_by: int,
+    ) -> List[DefectRecordResponse]:
+        await self._assert_defect_handling_enabled(tenant_id)
+        import uuid
+        from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+        created_payloads: List[tuple[int, DefectRecordCreateFromInspection]] = []
+
+        async with in_transaction():
+            inspection = await IncomingInspection.get_or_none(
+                id=inspection_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not inspection:
+                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+
+            from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+                assert_quality_inspection_capability,
+            )
+
+            assert_quality_inspection_capability(inspection, "create_defect")
+            existing_registered = await self._sum_registered_defect_quantity(
+                tenant_id,
+                incoming_inspection_id=inspection_id,
+            )
+            self._validate_defect_lines_batch(
+                batch.lines,
+                existing_registered=existing_registered,
+                unqualified_quantity=inspection.unqualified_quantity,
+                source="incoming",
+            )
+
+            user_info = await self.get_user_info(created_by)
+            today = today_site_str()
+
+            for line in batch.lines:
+                code = await self.generate_code(
+                    tenant_id=tenant_id,
+                    code_type="DEFECT_RECORD_CODE",
+                    prefix=f"DF{today}",
+                )
+                defect_record = await DefectRecord.create(
+                    tenant_id=tenant_id,
+                    uuid=str(uuid.uuid4()),
+                    code=code,
+                    incoming_inspection_id=inspection_id,
+                    incoming_inspection_code=inspection.inspection_code,
+                    product_id=inspection.material_id,
+                    product_code=inspection.material_code,
+                    product_name=inspection.material_name,
+                    defect_quantity=line.defect_quantity,
+                    defect_type=line.defect_type,
+                    defect_reason=line.defect_reason,
+                    disposition=line.disposition,
+                    status="draft",
+                    remarks=line.remarks,
+                    created_by=created_by,
+                    created_by_name=user_info["name"],
+                    updated_by=created_by,
+                    updated_by_name=user_info["name"],
+                )
+                created_payloads.append((int(defect_record.id), line))
+                logger.info(
+                    f"从来料检验单 {inspection.inspection_code} 批量创建不合格品记录: {code}"
+                )
+
+            from apps.kuaizhizao.services.exception_service import ExceptionService
+
+            await ExceptionService().create_from_inspection(
+                tenant_id=tenant_id,
+                source_type="incoming_inspection",
+                source_id=inspection_id,
+                created_by=created_by,
+                problem_description=self._merge_defect_problem_descriptions(batch.lines),
+            )
+
+        responses: List[DefectRecordResponse] = []
+        for created_id, line in created_payloads:
+            defect_record = await self._maybe_execute_downgrade_after_create(
+                tenant_id=tenant_id,
+                defect_record=await DefectRecord.get(id=created_id),
+                created_by=created_by,
+                downgrade_material_id=line.downgrade_material_id,
+                downgrade_warehouse_id=line.downgrade_warehouse_id,
+                quarantine_location=getattr(line, "quarantine_location", None),
+                quarantine_warehouse_id=getattr(line, "quarantine_warehouse_id", None),
+                stock_warehouse_id=getattr(line, "stock_warehouse_id", None),
+            )
+            responses.append(DefectRecordResponse.model_validate(defect_record))
+        return responses
+
+    async def create_defects_batch_from_process_inspection(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        batch: DefectRecordCreateFromInspectionBatch,
+        created_by: int,
+    ) -> List[DefectRecordResponse]:
+        await self._assert_defect_handling_enabled(tenant_id)
+        import uuid
+        from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+        created_payloads: List[tuple[int, DefectRecordCreateFromInspection]] = []
+
+        async with in_transaction():
+            inspection = await ProcessInspection.get_or_none(
+                id=inspection_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not inspection:
+                raise NotFoundError(f"过程检验单不存在: {inspection_id}")
+
+            from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+                assert_quality_inspection_capability,
+            )
+
+            assert_quality_inspection_capability(inspection, "create_defect")
+            existing_registered = await self._sum_registered_defect_quantity(
+                tenant_id,
+                process_inspection_id=inspection_id,
+            )
+            self._validate_defect_lines_batch(
+                batch.lines,
+                existing_registered=existing_registered,
+                unqualified_quantity=inspection.unqualified_quantity,
+                source="process",
+            )
+
+            user_info = await self.get_user_info(created_by)
+            today = today_site_str()
+
+            for line in batch.lines:
+                code = await self.generate_code(
+                    tenant_id=tenant_id,
+                    code_type="DEFECT_RECORD_CODE",
+                    prefix=f"DF{today}",
+                )
+                defect_record = await DefectRecord.create(
+                    tenant_id=tenant_id,
+                    uuid=str(uuid.uuid4()),
+                    code=code,
+                    process_inspection_id=inspection_id,
+                    process_inspection_code=inspection.inspection_code,
+                    work_order_id=inspection.work_order_id,
+                    work_order_code=inspection.work_order_code,
+                    operation_id=inspection.operation_id,
+                    operation_code=inspection.operation_code,
+                    operation_name=inspection.operation_name,
+                    product_id=inspection.material_id,
+                    product_code=inspection.material_code,
+                    product_name=inspection.material_name,
+                    defect_quantity=line.defect_quantity,
+                    defect_type=line.defect_type,
+                    defect_reason=line.defect_reason,
+                    disposition=line.disposition,
+                    status="draft",
+                    remarks=line.remarks,
+                    created_by=created_by,
+                    created_by_name=user_info["name"],
+                    updated_by=created_by,
+                    updated_by_name=user_info["name"],
+                )
+                created_payloads.append((int(defect_record.id), line))
+
+            from apps.kuaizhizao.services.exception_service import ExceptionService
+
+            await ExceptionService().create_from_inspection(
+                tenant_id=tenant_id,
+                source_type="process_inspection",
+                source_id=inspection_id,
+                created_by=created_by,
+                problem_description=self._merge_defect_problem_descriptions(batch.lines),
+            )
+
+        responses: List[DefectRecordResponse] = []
+        for created_id, line in created_payloads:
+            defect_record = await self._maybe_execute_downgrade_after_create(
+                tenant_id=tenant_id,
+                defect_record=await DefectRecord.get(id=created_id),
+                created_by=created_by,
+                downgrade_material_id=line.downgrade_material_id,
+                downgrade_warehouse_id=line.downgrade_warehouse_id,
+                quarantine_location=getattr(line, "quarantine_location", None),
+                quarantine_warehouse_id=getattr(line, "quarantine_warehouse_id", None),
+                stock_warehouse_id=getattr(line, "stock_warehouse_id", None),
+            )
+            responses.append(DefectRecordResponse.model_validate(defect_record))
+        return responses
+
+    async def create_defects_batch_from_finished_goods_inspection(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        batch: DefectRecordCreateFromInspectionBatch,
+        created_by: int,
+    ) -> List[DefectRecordResponse]:
+        await self._assert_defect_handling_enabled(tenant_id)
+        import uuid
+        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+
+        created_payloads: List[tuple[int, DefectRecordCreateFromInspection]] = []
+
+        async with in_transaction():
+            inspection = await FinishedGoodsInspection.get_or_none(
+                id=inspection_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not inspection:
+                raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+
+            from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+                assert_quality_inspection_capability,
+            )
+
+            assert_quality_inspection_capability(inspection, "create_defect")
+            existing_registered = await self._sum_registered_defect_quantity(
+                tenant_id,
+                finished_goods_inspection_id=inspection_id,
+            )
+            self._validate_defect_lines_batch(
+                batch.lines,
+                existing_registered=existing_registered,
+                unqualified_quantity=inspection.unqualified_quantity,
+                source="finished",
+            )
+
+            user_info = await self.get_user_info(created_by)
+            today = today_site_str()
+
+            for line in batch.lines:
+                code = await self.generate_code(
+                    tenant_id=tenant_id,
+                    code_type="DEFECT_RECORD_CODE",
+                    prefix=f"DF{today}",
+                )
+                defect_record = await DefectRecord.create(
+                    tenant_id=tenant_id,
+                    uuid=str(uuid.uuid4()),
+                    code=code,
+                    finished_goods_inspection_id=inspection_id,
+                    finished_goods_inspection_code=inspection.inspection_code,
+                    work_order_id=inspection.work_order_id,
+                    work_order_code=inspection.work_order_code,
+                    product_id=inspection.material_id,
+                    product_code=inspection.material_code,
+                    product_name=inspection.material_name,
+                    defect_quantity=line.defect_quantity,
+                    defect_type=line.defect_type,
+                    defect_reason=line.defect_reason,
+                    disposition=line.disposition,
+                    status="draft",
+                    remarks=line.remarks,
+                    created_by=created_by,
+                    created_by_name=user_info["name"],
+                    updated_by=created_by,
+                    updated_by_name=user_info["name"],
+                )
+                created_payloads.append((int(defect_record.id), line))
+
+            from apps.kuaizhizao.services.exception_service import ExceptionService
+
+            await ExceptionService().create_from_inspection(
+                tenant_id=tenant_id,
+                source_type="finished_goods_inspection",
+                source_id=inspection_id,
+                created_by=created_by,
+                problem_description=self._merge_defect_problem_descriptions(batch.lines),
+            )
+
+        responses: List[DefectRecordResponse] = []
+        for created_id, line in created_payloads:
+            defect_record = await self._maybe_execute_downgrade_after_create(
+                tenant_id=tenant_id,
+                defect_record=await DefectRecord.get(id=created_id),
+                created_by=created_by,
+                downgrade_material_id=line.downgrade_material_id,
+                downgrade_warehouse_id=line.downgrade_warehouse_id,
+                quarantine_location=getattr(line, "quarantine_location", None),
+                quarantine_warehouse_id=getattr(line, "quarantine_warehouse_id", None),
+                stock_warehouse_id=getattr(line, "stock_warehouse_id", None),
+            )
+            responses.append(DefectRecordResponse.model_validate(defect_record))
+        return responses

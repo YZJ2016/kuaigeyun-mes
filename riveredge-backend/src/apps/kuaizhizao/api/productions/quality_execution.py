@@ -26,6 +26,7 @@ from apps.kuaizhizao.services.quality_service import (
 )
 from apps.kuaizhizao.schemas.defect_record import (
     DefectRecordCreateFromInspection,
+    DefectRecordCreateFromInspectionBatch,
     DefectRecordResponse,
 )
 from apps.kuaizhizao.schemas.quality import (
@@ -134,6 +135,31 @@ async def _assert_work_order_visible_by_id(
         tenant_id=tenant_id,
         user=current_user,
         resource="kuaizhizao:work-order",
+    )
+
+
+async def _assert_purchase_order_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    purchase_order_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+    if not purchase_order_id:
+        return
+    order = await PurchaseOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=purchase_order_id,
+        deleted_at__isnull=True,
+    )
+    if not order:
+        return
+    await DataScopeService.assert_row_visible(
+        order,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:purchase-order",
     )
 
 
@@ -597,6 +623,60 @@ async def push_incoming_inspection_to_purchase_return(
 
 
 @router.get(
+    "/incoming-inspections/{inspection_id}/push-to-purchase-receipt/preview",
+    summary="Preview push incoming inspection to purchase receipt",
+)
+async def preview_push_incoming_inspection_to_purchase_receipt(
+    inspection_id: int = Path(..., description="来料检验单ID"),
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """采购订单来源的来料检验合格下推采购入库单预览。"""
+    await _assert_incoming_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    return await IncomingInspectionService().preview_push_to_purchase_receipt(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+    )
+
+
+@router.post(
+    "/incoming-inspections/{inspection_id}/push-to-purchase-receipt",
+    response_model=Dict[str, Any],
+    summary="Push incoming inspection to purchase receipt",
+)
+async def push_incoming_inspection_to_purchase_receipt(
+    inspection_id: int = Path(..., description="来料检验单ID"),
+    body: Optional[Dict[str, Any]] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """采购订单来源的来料检验合格下推采购入库单。"""
+    await _assert_incoming_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    quantity = None
+    warehouse_id = None
+    if body:
+        if body.get("quantity") is not None:
+            quantity = float(body["quantity"])
+        if body.get("warehouse_id") is not None:
+            warehouse_id = int(body["warehouse_id"])
+    return await IncomingInspectionService().push_to_purchase_receipt(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        created_by=current_user.id,
+        quantity=quantity,
+        warehouse_id=warehouse_id,
+    )
+
+
+@router.get(
     "/incoming-inspections/pull-candidates/purchase-receipts",
     summary="List purchase receipt pull candidates for incoming inspection",
 )
@@ -727,6 +807,37 @@ async def create_inspection_from_purchase_receipt(
         selected_item_ids=selected_item_ids,
         include_unset_iqc=include_unset_iqc,
         inspection_plan_id=inspection_plan_id,
+    )
+
+
+@router.post(
+    "/incoming-inspections/from-purchase-order/{purchase_order_id}",
+    response_model=List[IncomingInspectionResponse],
+    summary="Create incoming inspection from purchase order",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-incoming-inspection:create"))
+    ],
+)
+async def create_inspection_from_purchase_order(
+    purchase_order_id: int = Path(..., description="采购订单ID"),
+    body: Optional[Dict[str, Any]] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[IncomingInspectionResponse]:
+    """从采购订单下推来料检验单（到货前检验）。"""
+    await _assert_purchase_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        purchase_order_id=purchase_order_id,
+    )
+    selected_item_ids = None
+    if body and body.get("selected_item_ids") is not None:
+        selected_item_ids = [int(i) for i in (body.get("selected_item_ids") or []) if i is not None]
+    return await IncomingInspectionService().create_inspection_from_purchase_order(
+        tenant_id=tenant_id,
+        purchase_order_id=purchase_order_id,
+        created_by=current_user.id,
+        selected_item_ids=selected_item_ids,
     )
 
 
@@ -935,6 +1046,37 @@ async def create_defect_from_incoming_inspection(
             inspection_id=inspection_id,
             defect_data=defect_data,
             created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/incoming-inspections/{inspection_id}/create-defect-batch",
+    response_model=List[DefectRecordResponse],
+    summary="Batch create defects from incoming inspection",
+)
+async def create_defects_batch_from_incoming_inspection(
+    inspection_id: int = Path(..., description="来料检验单ID"),
+    batch: DefectRecordCreateFromInspectionBatch = Body(..., description="不合格品明细行"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[DefectRecordResponse]:
+    try:
+        await _assert_incoming_inspection_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            inspection_id=inspection_id,
+        )
+        return await defect_record_service.create_defects_batch_from_incoming_inspection(
+            tenant_id=tenant_id,
+            inspection_id=inspection_id,
+            batch=batch,
+            created_by=current_user.id,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -1317,6 +1459,37 @@ async def create_defect_from_process_inspection(
             inspection_id=inspection_id,
             defect_data=defect_data,
             created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/process-inspections/{inspection_id}/create-defect-batch",
+    response_model=List[DefectRecordResponse],
+    summary="Batch create defects from in-process inspection",
+)
+async def create_defects_batch_from_process_inspection(
+    inspection_id: int = Path(..., description="过程检验单ID"),
+    batch: DefectRecordCreateFromInspectionBatch = Body(..., description="不合格品明细行"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[DefectRecordResponse]:
+    try:
+        await _assert_process_inspection_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            inspection_id=inspection_id,
+        )
+        return await defect_record_service.create_defects_batch_from_process_inspection(
+            tenant_id=tenant_id,
+            inspection_id=inspection_id,
+            batch=batch,
+            created_by=current_user.id,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -1892,6 +2065,37 @@ async def create_defect_from_finished_goods_inspection(
             inspection_id=inspection_id,
             defect_data=defect_data,
             created_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/finished-goods-inspections/{inspection_id}/create-defect-batch",
+    response_model=List[DefectRecordResponse],
+    summary="Batch create defects from FG inspection",
+)
+async def create_defects_batch_from_finished_goods_inspection(
+    inspection_id: int = Path(..., description="成品检验单ID"),
+    batch: DefectRecordCreateFromInspectionBatch = Body(..., description="不合格品明细行"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[DefectRecordResponse]:
+    try:
+        await _assert_finished_goods_inspection_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            inspection_id=inspection_id,
+        )
+        return await defect_record_service.create_defects_batch_from_finished_goods_inspection(
+            tenant_id=tenant_id,
+            inspection_id=inspection_id,
+            batch=batch,
+            created_by=current_user.id,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

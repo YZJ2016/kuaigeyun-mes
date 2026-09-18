@@ -148,6 +148,171 @@ class VoucherTemplateService:
             "department_name": payload.get("department_name"),
         }
 
+    @staticmethod
+    def _norm_doc_type(value: Optional[str]) -> str:
+        return str(value or "").strip().lower().replace("-", "").replace("_", "")
+
+    async def _resolve_partner_from_event(
+        self, tenant_id: int, event: AccountingEvent
+    ) -> Dict[str, Any]:
+        """从事件 payload 取客商；缺字段时回查目标/来源单据（有则写入，无则留空）。"""
+        partner = self._partner_from_event(event)
+        lookups: List[tuple[str, int]] = []
+        tid = int(event.target_doc_id or 0)
+        sid = int(event.source_doc_id or 0)
+        if tid > 0:
+            lookups.append((self._norm_doc_type(event.target_doc_type), tid))
+        if sid > 0:
+            lookups.append((self._norm_doc_type(event.source_doc_type), sid))
+
+        for doc_type, doc_id in lookups:
+            if not partner.get("supplier_id") and doc_type in {"payable", "payables"}:
+                from apps.kuaicaiwu.models.payable import Payable
+
+                row = await Payable.get_or_none(tenant_id=tenant_id, id=doc_id)
+                if row:
+                    partner["supplier_id"] = getattr(row, "supplier_id", None) or getattr(
+                        row, "partner_id", None
+                    )
+                    partner["supplier_name"] = getattr(row, "supplier_name", None) or getattr(
+                        row, "partner_name", None
+                    )
+            if not partner.get("supplier_id") and doc_type in {
+                "purchaseinvoice",
+                "purchaseorder",
+            }:
+                if doc_type == "purchaseinvoice":
+                    from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+
+                    row = await PurchaseInvoice.get_or_none(tenant_id=tenant_id, id=doc_id)
+                else:
+                    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+                    row = await PurchaseOrder.get_or_none(
+                        tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True
+                    )
+                if row:
+                    partner["supplier_id"] = getattr(row, "supplier_id", None)
+                    partner["supplier_name"] = getattr(row, "supplier_name", None)
+            if not partner.get("customer_id") and doc_type in {"receivable", "receivables"}:
+                from apps.kuaicaiwu.models.receivable import Receivable
+
+                row = await Receivable.get_or_none(tenant_id=tenant_id, id=doc_id)
+                if row:
+                    partner["customer_id"] = getattr(row, "customer_id", None) or getattr(
+                        row, "partner_id", None
+                    )
+                    partner["customer_name"] = getattr(row, "customer_name", None) or getattr(
+                        row, "partner_name", None
+                    )
+            if not partner.get("customer_id") and doc_type in {"salesorder", "salesdelivery"}:
+                if doc_type == "salesorder":
+                    from apps.kuaizhizao.models.sales_order import SalesOrder
+
+                    row = await SalesOrder.get_or_none(
+                        tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True
+                    )
+                else:
+                    from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+                    row = await SalesDelivery.get_or_none(
+                        tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True
+                    )
+                if row:
+                    partner["customer_id"] = getattr(row, "customer_id", None) or getattr(
+                        row, "partner_id", None
+                    )
+                    partner["customer_name"] = getattr(row, "customer_name", None) or getattr(
+                        row, "partner_name", None
+                    )
+            if not partner.get("customer_id") and doc_type in {"receipt", "receipts"}:
+                from apps.kuaicaiwu.models.receipt import Receipt
+
+                row = await Receipt.get_or_none(tenant_id=tenant_id, id=doc_id)
+                if row:
+                    partner["customer_id"] = getattr(row, "customer_id", None) or getattr(
+                        row, "partner_id", None
+                    )
+                    partner["customer_name"] = getattr(row, "customer_name", None) or getattr(
+                        row, "partner_name", None
+                    )
+            if not partner.get("supplier_id") and doc_type in {"payment", "payments"}:
+                from apps.kuaicaiwu.models.payment import Payment
+
+                row = await Payment.get_or_none(tenant_id=tenant_id, id=doc_id)
+                if row:
+                    partner["supplier_id"] = getattr(row, "supplier_id", None) or getattr(
+                        row, "partner_id", None
+                    )
+                    partner["supplier_name"] = getattr(row, "supplier_name", None) or getattr(
+                        row, "partner_name", None
+                    )
+            if doc_type == "invoice" and (
+                not partner.get("customer_id") or not partner.get("supplier_id")
+            ):
+                from apps.kuaicaiwu.models.invoice import Invoice
+
+                row = await Invoice.get_or_none(
+                    tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True
+                )
+                if row:
+                    pid = getattr(row, "partner_id", None)
+                    pname = getattr(row, "partner_name", None)
+                    category = str(getattr(row, "category", "") or "").upper()
+                    if category == "OUT" and not partner.get("customer_id"):
+                        partner["customer_id"] = pid
+                        partner["customer_name"] = pname
+                    elif category == "IN" and not partner.get("supplier_id"):
+                        partner["supplier_id"] = pid
+                        partner["supplier_name"] = pname
+                    else:
+                        if not partner.get("customer_id"):
+                            partner["customer_id"] = pid
+                            partner["customer_name"] = pname
+                        if not partner.get("supplier_id"):
+                            partner["supplier_id"] = pid
+                            partner["supplier_name"] = pname
+        payload = event.payload or {}
+        if not partner.get("customer_id") and payload.get("receipt_id"):
+            from apps.kuaicaiwu.models.receipt import Receipt
+
+            row = await Receipt.get_or_none(
+                tenant_id=tenant_id, id=int(payload["receipt_id"])
+            )
+            if row:
+                partner["customer_id"] = getattr(row, "customer_id", None) or getattr(
+                    row, "partner_id", None
+                )
+                partner["customer_name"] = getattr(row, "customer_name", None) or getattr(
+                    row, "partner_name", None
+                )
+        if not partner.get("supplier_id") and payload.get("payment_id"):
+            from apps.kuaicaiwu.models.payment import Payment
+
+            row = await Payment.get_or_none(
+                tenant_id=tenant_id, id=int(payload["payment_id"])
+            )
+            if row:
+                partner["supplier_id"] = getattr(row, "supplier_id", None) or getattr(
+                    row, "partner_id", None
+                )
+                partner["supplier_name"] = getattr(row, "supplier_name", None) or getattr(
+                    row, "partner_name", None
+                )
+        return partner
+
+    @staticmethod
+    def _fa_depreciation_template_rows(
+        payload: Dict[str, Any], *, summary: str
+    ) -> List[Dict[str, str]]:
+        """计提折旧/摊销：借 折旧费用科目，贷 累计折旧(摊销)科目。"""
+        expense_code = payload.get("expense_account_code") or "6602"
+        accum_code = payload.get("accumulated_depreciation_account_code") or "1602"
+        return [
+            {"side": "debit", "account_code": expense_code, "summary": summary},
+            {"side": "credit", "account_code": accum_code, "summary": summary},
+        ]
+
     async def build_draft_lines_from_event(
         self,
         tenant_id: int,
@@ -157,13 +322,8 @@ class VoucherTemplateService:
         template_key = self.EVENT_ALIASES.get(raw_key, raw_key)
         payload = event.payload or {}
         if template_key == "fa_depreciation":
-            expense_code = payload.get("expense_account_code") or "6602"
-            accum_code = payload.get("accumulated_depreciation_account_code") or "1602"
             summary = event.notes or "计提折旧"
-            rows = [
-                {"side": "debit", "account_code": expense_code, "summary": summary},
-                {"side": "credit", "account_code": accum_code, "summary": summary},
-            ]
+            rows = self._fa_depreciation_template_rows(payload, summary=summary)
         elif template_key == "fa_disposal":
             accum_code = payload.get("accumulated_depreciation_account_code") or "1602"
             asset_code = payload.get("asset_account_code") or "1601"
@@ -188,7 +348,15 @@ class VoucherTemplateService:
         if amount <= 0:
             return []
 
-        partner = self._partner_from_event(event)
+        partner = await self._resolve_partner_from_event(tenant_id, event)
+        from apps.kuaicaiwu.services.gl.cash_flow_classify import (
+            is_monetary_account,
+            resolve_cash_flow_item_id,
+            template_cash_flow_item_code,
+        )
+
+        cf_code = template_cash_flow_item_code(template_key)
+        cf_item_id = await resolve_cash_flow_item_id(tenant_id, cf_code) if cf_code else None
         lines: List[Dict[str, Any]] = []
         for idx, row in enumerate(rows, start=1):
             account = await self._resolve_account(tenant_id, row["account_code"])
@@ -214,5 +382,7 @@ class VoucherTemplateService:
             if account.aux_department:
                 line["department_id"] = partner.get("department_id")
                 line["department_name"] = partner.get("department_name")
+            if cf_item_id and is_monetary_account(account):
+                line["cash_flow_item_id"] = cf_item_id
             lines.append(line)
         return lines

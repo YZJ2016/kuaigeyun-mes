@@ -31,6 +31,8 @@ import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../
 
 const RESOURCE = 'kuaizhizao:after-sales-spare-part-requisition';
 
+type DetailActionKey = 'submit' | 'audit' | 'reject';
+
 const AfterSalesSparePartRequisitionsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -47,6 +49,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
   const detailRetryIdRef = useRef<number | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
+  const [detailActionLoading, setDetailActionLoading] = useState<DetailActionKey | null>(null);
 
   const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
@@ -69,10 +72,75 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
     void loadDetail(row.id);
   };
 
-  const refreshDetail = async (id: number) => {
+  const refreshDetail = useCallback(async (id: number) => {
     setDetail(await afterSalesSparePartRequisitionApi.get(id));
     actionRef.current?.reload();
-  };
+  }, []);
+
+  const executeSubmit = useCallback(
+    async (id: number) => {
+      setDetailActionLoading('submit');
+      try {
+        await afterSalesSparePartRequisitionApi.submit(id);
+        await refreshDetail(id);
+        messageApi.success(t('app.kuaizhizao.afterSalesService.sparePartRequisition.submitSuccess'));
+      } catch (error) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.sparePartRequisition.submitFailed')),
+        );
+      } finally {
+        setDetailActionLoading(null);
+      }
+    },
+    [messageApi, refreshDetail, t],
+  );
+
+  const executeAudit = useCallback(
+    async (id: number) => {
+      setDetailActionLoading('audit');
+      try {
+        await afterSalesSparePartRequisitionApi.audit(id);
+        await refreshDetail(id);
+        messageApi.success(t('app.kuaizhizao.afterSalesService.sparePartRequisition.auditSuccess'));
+      } catch (error) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.sparePartRequisition.auditFailed')),
+        );
+      } finally {
+        setDetailActionLoading(null);
+      }
+    },
+    [messageApi, refreshDetail, t],
+  );
+
+  const executeReject = useCallback(
+    async (id: number, reviewRemarks: string) => {
+      const remarks = reviewRemarks.trim();
+      if (!remarks) {
+        messageApi.error(t('app.kuaizhizao.afterSalesService.sparePartRequisition.rejectRemarksRequired'));
+        throw new Error('reject_remarks_required');
+      }
+      setDetailActionLoading('reject');
+      try {
+        await afterSalesSparePartRequisitionApi.reject(id, { review_remarks: remarks });
+        setRejectOpen(false);
+        setRejectRemarks('');
+        await refreshDetail(id);
+        messageApi.success(t('app.kuaizhizao.afterSalesService.sparePartRequisition.rejectSuccess'));
+      } catch (error) {
+        if (error instanceof Error && error.message === 'reject_remarks_required') {
+          throw error;
+        }
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.afterSalesService.sparePartRequisition.rejectFailed')),
+        );
+        throw error;
+      } finally {
+        setDetailActionLoading(null);
+      }
+    },
+    [messageApi, refreshDetail, t],
+  );
 
   const openEdit = async (row: AfterSalesSparePartRequisition) => {
     setEditing(await afterSalesSparePartRequisitionApi.get(row.id));
@@ -162,13 +230,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
                 <Button
                   key="submit"
                   {...rowActionKind('submit')}
-                  onClick={async () => {
-                    await afterSalesSparePartRequisitionApi.submit(row.id);
-                    messageApi.success(
-                      t('app.kuaizhizao.afterSalesService.sparePartRequisition.submitSuccess'),
-                    );
-    actionRef.current?.reload();
-                  }}
+                  onClick={() => void executeSubmit(row.id)}
                 />
               ) : null,
               perms.canDelete && canEditRow(row.status) ? (
@@ -185,7 +247,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [messageApi, perms, t],
+    [executeSubmit, perms, t],
   );
 
   return (
@@ -271,13 +333,11 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
                 render: (
                   <Button
                     icon={<SendOutlined />}
-                    onClick={async () => {
+                    loading={detailActionLoading === 'submit'}
+                    disabled={detailActionLoading != null}
+                    onClick={() => {
                       if (!detail) return;
-                      await afterSalesSparePartRequisitionApi.submit(detail.id);
-                      await refreshDetail(detail.id);
-                      messageApi.success(
-                        t('app.kuaizhizao.afterSalesService.sparePartRequisition.submitSuccess'),
-                      );
+                      void executeSubmit(detail.id);
                     }}
                   >
                     {t('components.uniAction.submit')}
@@ -291,13 +351,11 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
                   <Button
                     type="primary"
                     icon={<CheckOutlined />}
-                    onClick={async () => {
+                    loading={detailActionLoading === 'audit'}
+                    disabled={detailActionLoading != null}
+                    onClick={() => {
                       if (!detail) return;
-                      await afterSalesSparePartRequisitionApi.audit(detail.id);
-                      await refreshDetail(detail.id);
-                      messageApi.success(
-                        t('app.kuaizhizao.afterSalesService.sparePartRequisition.auditSuccess'),
-                      );
+                      void executeAudit(detail.id);
                     }}
                   >
                     {t('components.uniAction.audit')}
@@ -311,6 +369,7 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
                   <Button
                     danger
                     icon={<CloseOutlined />}
+                    disabled={detailActionLoading != null}
                     onClick={() => {
                       setRejectRemarks('');
                       setRejectOpen(true);
@@ -330,12 +389,10 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
         title={t('app.kuaizhizao.afterSalesService.sparePartRequisition.rejectTitle')}
         onCancel={() => setRejectOpen(false)}
         destroyOnHidden
+        confirmLoading={detailActionLoading === 'reject'}
         onOk={async () => {
           if (!detail) return;
-          await afterSalesSparePartRequisitionApi.reject(detail.id, { review_remarks: rejectRemarks });
-          setRejectOpen(false);
-          await refreshDetail(detail.id);
-          messageApi.success(t('app.kuaizhizao.afterSalesService.sparePartRequisition.rejectSuccess'));
+          await executeReject(detail.id, rejectRemarks);
         }}
       >
         <Input.TextArea

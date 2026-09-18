@@ -94,6 +94,11 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
 
         assert_outsource_work_order_capability(outsource_work_order, "push_outsource_issue")
 
+        if not issue_data.warehouse_id or int(issue_data.warehouse_id) <= 0:
+            raise ValidationError(
+                f"物料 {issue_data.material_code or issue_data.material_name} 须指定出库仓库"
+            )
+
         user_info = await self.get_user_info(created_by)
         stock_payload: Optional[Dict[str, Any]] = None
         response: Optional[OutsourceMaterialIssueResponse] = None
@@ -315,6 +320,10 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
         for line in batch_data.lines:
             wh_id = line.warehouse_id or batch_data.warehouse_id
             wh_name = line.warehouse_name or batch_data.warehouse_name
+            if not wh_id or int(wh_id) <= 0:
+                raise ValidationError(
+                    f"物料 {line.material_code or line.material_name} 须指定出库仓库"
+                )
             issue_data = OutsourceMaterialIssueCreate(
                 outsource_work_order_id=batch_data.outsource_work_order_id,
                 outsource_work_order_code=batch_data.outsource_work_order_code,

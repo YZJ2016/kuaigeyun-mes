@@ -51,13 +51,23 @@ class ProductionPickingCreate(ProductionPickingBase):
     pass
 
 
+class OutboundConfirmationBatchAllocation(BaseSchema):
+    """出库/领料一行物料按批号分摊数量（多批合计须对齐本行出库量）"""
+    batch_number: str = Field(..., min_length=1, max_length=50, description="批次号")
+    quantity: float = Field(..., gt=0, description="本批出库数量")
+
+
 class ProductionPickingItemEditLine(BaseSchema):
     """生产领料单明细编辑行（确认领料前）"""
     id: int = Field(..., description="明细ID")
     required_quantity: Optional[float] = Field(None, gt=0, description="应领数量")
     warehouse_id: Optional[int] = Field(None, description="出库仓库ID")
     warehouse_name: Optional[str] = Field(None, max_length=100, description="出库仓库名称")
-    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号（单批时使用；多批请用 batch_allocations）")
+    batch_allocations: Optional[List[OutboundConfirmationBatchAllocation]] = Field(
+        None,
+        description="多批号分摊；保存时按批拆明细",
+    )
     notes: Optional[str] = Field(None, description="明细备注")
 
 
@@ -680,7 +690,11 @@ class SalesDeliveryItemEditLine(BaseSchema):
     """销售出库单明细编辑行（确认出库前）"""
     id: int = Field(..., description="明细ID")
     delivery_quantity: Optional[float] = Field(None, gt=0, description="出库数量")
-    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号（单批时使用；多批请用 batch_allocations）")
+    batch_allocations: Optional[List[OutboundConfirmationBatchAllocation]] = Field(
+        None,
+        description="多批号分摊；保存时按批拆明细",
+    )
     serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     notes: Optional[str] = Field(None, description="明细备注")
 
@@ -1783,12 +1797,6 @@ class InboundConfirmationRequest(BaseSchema):
 
 # === 出库确认通用 Schema ===
 
-class OutboundConfirmationBatchAllocation(BaseSchema):
-    """确认出库时一行物料按批号分摊数量（多批合计应对齐本行发料量）"""
-    batch_number: str = Field(..., min_length=1, max_length=50, description="批次号")
-    quantity: float = Field(..., gt=0, description="本批出库数量")
-
-
 class OutboundConfirmationItem(BaseSchema):
     """出库确认明细字段（支持在确认时补齐或修改批号/库位/仓库/序列号）"""
     item_id: int = Field(..., description="明细ID")
@@ -1799,7 +1807,7 @@ class OutboundConfirmationItem(BaseSchema):
     batch_number: Optional[str] = Field(None, description="批次号（单批时使用；多批请用 batch_allocations）")
     batch_allocations: Optional[List[OutboundConfirmationBatchAllocation]] = Field(
         None,
-        description="多批号分摊；确认生产领料时按批拆明细后扣库存",
+        description="多批号分摊；确认出库/领料时按批拆明细后扣库存",
     )
     serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
 

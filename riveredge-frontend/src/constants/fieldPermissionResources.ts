@@ -6,6 +6,7 @@ export const KUAIZHIZAO_QUOTATION_FIELD_RESOURCE = 'kuaizhizao:quotation';
 export const KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE = 'kuaizhizao:sales-contract';
 export const KUAIZHIZAO_PURCHASE_ORDER_FIELD_RESOURCE = 'kuaizhizao:purchase-order';
 export const KUAIZHIZAO_OUTSOURCE_ORDER_FIELD_RESOURCE = 'kuaizhizao:outsource-order';
+export const KUAIZHIZAO_OUTSOURCE_WORK_ORDER_FIELD_RESOURCE = 'kuaizhizao:outsource-work-order';
 export const KUAIZHIZAO_PURCHASE_REQUISITION_FIELD_RESOURCE = 'kuaizhizao:purchase-requisition';
 export const KUAIZHIZAO_DEMAND_FIELD_RESOURCE = 'kuaizhizao:demand';
 export const KUAIZHIZAO_WAREHOUSE_INVENTORY_FIELD_RESOURCE = 'kuaizhizao:warehouse-management-inventory';

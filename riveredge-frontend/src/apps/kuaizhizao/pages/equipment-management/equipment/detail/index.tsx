@@ -161,7 +161,7 @@ const EquipmentDetailPage: React.FC = () => {
     trackingRefreshKey,
   );
 
-  const traceColumns = useEquipmentTraceColumns(t);
+  const traceColumns = useEquipmentTraceColumns(t, timeFieldHidden, basicUpdatedAtEnabled);
 
   const loadPageData = useCallback(async () => {
     if (!uuid) return;

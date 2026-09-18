@@ -75,7 +75,11 @@ export function DashboardTodoListItem({
             className="dashboard-todo-item__action"
             onClick={(e) => {
               e.stopPropagation();
-              onHandle(item.id);
+              if (item.link) {
+                onNavigate?.(item.link);
+                return;
+              }
+              onHandle?.(item.id);
             }}
           >
             {t('pages.dashboard.handle')}

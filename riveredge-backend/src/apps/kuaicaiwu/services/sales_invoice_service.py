@@ -325,6 +325,51 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             payload["goods_offset"] = money_to_json_float(offset)
         return payload
 
+    async def batch_sales_order_invoice_remainder(
+        self,
+        tenant_id: int,
+        orders: List[Any],
+    ) -> Dict[int, Decimal]:
+        """批量计算销售订单剩余可开票金额（价税合计口径，与下推门控一致）。"""
+        if not orders:
+            return {}
+        order_ids = [int(o.id) for o in orders if getattr(o, "id", None)]
+        if not order_ids:
+            return {}
+        code_by_id = {
+            int(o.id): str(getattr(o, "order_code", None) or o.id) for o in orders if getattr(o, "id", None)
+        }
+        pushed_map = await self._sum_pushed_totals_by_source(
+            tenant_id, "sales_order", order_ids, code_by_id
+        )
+        remainders: Dict[int, Decimal] = {}
+        for order in orders:
+            oid = getattr(order, "id", None)
+            if oid is None:
+                continue
+            oid_int = int(oid)
+            total = Decimal(str(getattr(order, "total_amount", 0) or 0))
+            if total <= 0:
+                remainders[oid_int] = Decimal("0")
+                continue
+            pushed = pushed_map.get(oid_int, Decimal("0"))
+            preview_items = await self._build_preview_items_for_sales_order(
+                tenant_id, order, pushed=pushed
+            )
+            if not preview_items:
+                remainders[oid_int] = Decimal("0")
+            else:
+                remainders[oid_int] = Decimal(str(preview_items[0].get("max_push_quantity") or 0))
+        return remainders
+
+    async def resolve_sales_order_invoice_remainder(
+        self,
+        tenant_id: int,
+        order: Any,
+    ) -> Decimal:
+        remainders = await self.batch_sales_order_invoice_remainder(tenant_id, [order])
+        return remainders.get(int(order.id), Decimal("0"))
+
     async def _build_preview_items_for_sales_order(
         self,
         tenant_id: int,

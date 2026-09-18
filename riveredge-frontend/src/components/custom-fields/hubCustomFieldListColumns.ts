@@ -51,6 +51,7 @@ export function dedupeCustomFieldsByLabel(fields: CustomField[]): CustomField[] 
 
 /**
  * 将多组自定义字段合并为 Hub 列表列：同 label 只保留一列，按 docType 解析字段定义与取值。
+ * @param excludeLabels 与 Hub 原生列同名的自定义字段（如「制单日期」）不再出列，避免挡住原生业务日
  */
 export function buildHubMergedCustomFieldColumns<
   TRecord extends Record<string, unknown> & {
@@ -60,13 +61,20 @@ export function buildHubMergedCustomFieldColumns<
 >(
   groups: HubCustomFieldListGroup[],
   typeField: HubCustomFieldDocTypeField,
+  excludeLabels?: readonly string[],
 ): ProColumns<TRecord>[] {
+  const excluded = new Set(
+    (excludeLabels ?? [])
+      .map((label) => label.trim().toLowerCase())
+      .filter((label) => label.length > 0),
+  )
   const byLabel = new Map<string, HubFieldEntry[]>()
 
   for (const group of groups) {
     for (const field of dedupeCustomFieldsByLabel(group.customFields)) {
       const label = normalizeCustomFieldLabel(field)
       if (!label) continue
+      if (excluded.has(label.toLowerCase())) continue
       const list = byLabel.get(label) ?? []
       list.push({
         docTypes: group.docTypes,

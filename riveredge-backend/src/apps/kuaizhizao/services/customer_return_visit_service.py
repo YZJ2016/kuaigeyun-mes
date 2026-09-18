@@ -120,6 +120,16 @@ class CustomerReturnVisitService:
         }
         apply_create_audit(payload, current_user)
         row = await CustomerReturnVisit.create(**payload)
+        from apps.kuaizhizao.services.after_sales_upstream_status import (
+            sync_upstream_on_visit_created,
+        )
+
+        await sync_upstream_on_visit_created(
+            tenant_id,
+            source_type=source_type,
+            source_id=data.source_id,
+            current_user=current_user,
+        )
         return await cls._to_response(row)
 
     @classmethod

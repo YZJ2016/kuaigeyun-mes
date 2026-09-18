@@ -1,5 +1,6 @@
 /**
  * 从委外工单取单开委外发料 — 独立 Tab 页
+ * 出库仓库在明细行选择（多物料可存不同仓）；可用库存按行仓显示
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,7 +13,6 @@ import {
   Col,
   Form,
   Row,
-  Select,
   Space,
   Spin,
   Typography,
@@ -44,6 +44,7 @@ import {
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
 import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
+import { loadAvailableQtyByMaterialWarehouse } from './outboundConfirmInventoryOptions';
 
 const OutboundOutsourcePullEntryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -60,7 +61,8 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [workOrder, setWorkOrder] = useState<Record<string, unknown> | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
-  const [warehouseId, setWarehouseId] = useState<number | undefined>();
+  const [stockByMaterialWh, setStockByMaterialWh] = useState<Record<number, Record<number, number>>>({});
+  const [stockByWhStatus, setStockByWhStatus] = useState<'idle' | 'loading' | 'ready'>('idle');
   const [notes, setNotes] = useState('');
   const [issueLines, setIssueLines] = useState<OutsourceIssueLine[]>([]);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
@@ -80,6 +82,20 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
     [issueLines],
   );
 
+  const pickMaterialIdsKey = useMemo(
+    () =>
+      [
+        ...new Set(
+          issueLines
+            .map((line) => line.materialId)
+            .filter((id) => Number.isFinite(id) && id > 0),
+        ),
+      ]
+        .sort((a, b) => a - b)
+        .join(','),
+    [issueLines],
+  );
+
   const leavePage = useCallback(() => {
     clearDraft();
     navigateLeavingPullEntry(
@@ -91,12 +107,16 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
 
   useEffect(() => {
     bindSnapshot(() => ({
-      warehouseId,
       notes,
       issueQuantities: Object.fromEntries(issueLines.map((line) => [line.materialId, line.issueQuantity])),
+      lineWarehouses: Object.fromEntries(
+        issueLines
+          .filter((line) => line.warehouseId != null && line.warehouseId > 0)
+          .map((line) => [line.materialId, line.warehouseId]),
+      ),
     }));
     persistNow();
-  }, [warehouseId, notes, issueLines, bindSnapshot, persistNow]);
+  }, [notes, issueLines, bindSnapshot, persistNow]);
 
   useEffect(() => {
     if (!(Number.isFinite(woId) && woId > 0)) {
@@ -116,6 +136,50 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
       removeCustomPageTitle(pagePath);
     };
   }, [pagePath, pageTitle]);
+
+  useEffect(() => {
+    const mids = pickMaterialIdsKey
+      .split(',')
+      .map((s) => Number(s))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (!mids.length) {
+      setStockByMaterialWh({});
+      setStockByWhStatus('idle');
+      return;
+    }
+    let cancelled = false;
+    setStockByWhStatus('loading');
+    void loadAvailableQtyByMaterialWarehouse(mids)
+      .then((map) => {
+        if (!cancelled) {
+          setStockByMaterialWh(map);
+          setStockByWhStatus('ready');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStockByMaterialWh({});
+          setStockByWhStatus('idle');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pickMaterialIdsKey]);
+
+  /** 库存就绪后回写已选仓行的可用数量 */
+  useEffect(() => {
+    if (stockByWhStatus !== 'ready') return;
+    setIssueLines((prev) =>
+      prev.map((line) => {
+        const whId = Number(line.warehouseId ?? 0);
+        if (!(whId > 0)) return line;
+        const available = Number(stockByMaterialWh[line.materialId]?.[whId] ?? 0);
+        if (available === line.availableQuantity) return line;
+        return { ...line, availableQuantity: available };
+      }),
+    );
+  }, [stockByMaterialWh, stockByWhStatus]);
 
   useEffect(() => {
     if (!Number.isFinite(woId) || woId <= 0 || initRef.current) return;
@@ -148,18 +212,25 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
               requiredQuantity: Number(line.requiredQuantity ?? line.required_quantity ?? 0),
               issuedQuantity: Number(line.issuedQuantity ?? line.issued_quantity ?? 0),
               pendingQuantity: pending,
-              availableQuantity: Number(line.availableQuantity ?? line.available_quantity ?? 0),
+              availableQuantity: 0,
               issueQuantity: 0,
             };
           }),
         );
         applyDraftOnce((draft) => {
-          const whId = draftOptionalNumber(draft.warehouseId);
-          if (whId != null) setWarehouseId(whId);
           if (typeof draft.notes === 'string') setNotes(draft.notes);
           if (draft.issueQuantities) {
             setIssueLines((prev) =>
               mergeMaterialIssueQuantities(prev, draft.issueQuantities as Record<number, number>),
+            );
+          }
+          const whByMaterial = draft.lineWarehouses as Record<number, number> | undefined;
+          if (whByMaterial && typeof whByMaterial === 'object') {
+            setIssueLines((prev) =>
+              prev.map((row) => {
+                const whId = draftOptionalNumber(whByMaterial[row.materialId]);
+                return whId != null && whId > 0 ? { ...row, warehouseId: whId } : row;
+              }),
             );
           }
         });
@@ -172,18 +243,51 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
     })();
   }, [woId, leavePage, messageApi, t, applyDraftOnce]);
 
-  const submit = async () => {
-    if (!warehouseId || !(warehouseId > 0)) {
-      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'));
-      return;
-    }
-    const whOpt = warehouseOptions.find((o) => o.value === warehouseId);
-    if (!whOpt) return;
+  const handleBatchSetWarehouse = useCallback(
+    (warehouseId: number) => {
+      if (!(warehouseId > 0) || !issueLines.length) return;
+      setIssueLines((prev) =>
+        prev.map((line) => {
+          const available =
+            stockByWhStatus === 'ready'
+              ? Number(stockByMaterialWh[line.materialId]?.[warehouseId] ?? 0)
+              : line.availableQuantity;
+          return { ...line, warehouseId, availableQuantity: available };
+        }),
+      );
+      messageApi.success(
+        t('app.kuaizhizao.warehouseOutbound.entry.batchWarehouseApplied', { count: issueLines.length }),
+      );
+    },
+    [issueLines.length, messageApi, stockByMaterialWh, stockByWhStatus, t],
+  );
 
+  const submit = async () => {
     const activeLines = issueLines.filter((line) => line.issueQuantity > 0);
     if (!activeLines.length) {
       messageApi.warning(t('app.kuaizhizao.warehouseOutbound.entry.fillIssueQty'));
       return;
+    }
+
+    for (const line of activeLines) {
+      const whId = Number(line.warehouseId ?? 0);
+      if (!(whId > 0)) {
+        messageApi.error(
+          t('app.kuaizhizao.warehouseOutbound.msg.selectLineWarehouse', {
+            material: line.materialName || line.materialCode || line.materialId,
+          }),
+        );
+        return;
+      }
+      const whOpt = warehouseOptions.find((o) => o.value === whId);
+      if (!whOpt) {
+        messageApi.error(
+          t('app.kuaizhizao.warehouseOutbound.msg.selectLineWarehouse', {
+            material: line.materialName || line.materialCode || line.materialId,
+          }),
+        );
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -191,16 +295,20 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
       await outsourceMaterialIssueApi.createBatch({
         outsource_work_order_id: woId,
         outsource_work_order_code: woCode,
-        warehouse_id: warehouseId,
-        warehouse_name: whOpt.name,
         remarks: notes.trim() || undefined,
-        lines: activeLines.map((line) => ({
-          material_id: line.materialId,
-          material_code: line.materialCode,
-          material_name: line.materialName,
-          quantity: line.issueQuantity,
-          unit: line.unit,
-        })),
+        lines: activeLines.map((line) => {
+          const whId = Number(line.warehouseId);
+          const whOpt = warehouseOptions.find((o) => o.value === whId)!;
+          return {
+            material_id: line.materialId,
+            material_code: line.materialCode,
+            material_name: line.materialName,
+            quantity: line.issueQuantity,
+            unit: line.unit,
+            warehouse_id: whId,
+            warehouse_name: whOpt.name,
+          };
+        }),
       });
       invalidateMenuBadgeCounts();
       clearDraft();
@@ -260,24 +368,6 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
                     <ReadOnlyFormValue value={String(workOrder.supplier_name ?? workOrder.supplierName ?? '')} />
                   </Form.Item>
                 </Col>
-                <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.warehouse')} required>
-                    <Select
-                      style={{ width: '100%' }}
-                      placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
-                      options={warehouseOptions}
-                      value={warehouseId}
-                      onChange={setWarehouseId}
-                      showSearch
-                      filterOption={(input, opt) =>
-                        (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
-                      }
-                    />
-                  </Form.Item>
-                </Col>
-                <Col xs={24}>
-                  <OutboundEntryRemarksSection value={notes} onChange={setNotes} />
-                </Col>
               </Row>
               <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
                 {t('app.kuaizhizao.warehouseOutbound.entry.totalIssueQty', { qty: totalIssueQty })}
@@ -288,7 +378,16 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
                 onLinesChange={setIssueLines}
                 previewMessage={previewMessage}
                 allowManualLines={allowManualLines}
+                warehouseOptions={warehouseOptions}
+                stockByMaterialWh={stockByMaterialWh}
+                stockByWhStatus={stockByWhStatus}
+                onBatchSetWarehouse={handleBatchSetWarehouse}
               />
+              <Row gutter={16} style={{ marginTop: 16 }}>
+                <Col xs={24}>
+                  <OutboundEntryRemarksSection value={notes} onChange={setNotes} />
+                </Col>
+              </Row>
             </Form>
           )}
         </Card>

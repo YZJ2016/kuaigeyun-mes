@@ -47,6 +47,7 @@ from apps.kuaizhizao.services.kuaizhizao_business_notification import (
     DOC_PURCHASE_ORDER_CHANGE,
     DOC_QUALITY_EXCEPTION,
     DOC_QUALITY_COMPLAINT,
+    DOC_QUALITY_INSPECTION,
     DOC_REWORK_ORDER,
     DOC_SALES_ORDER,
     DOC_SALES_REVIEW,
@@ -68,6 +69,16 @@ KUAIZHIZAO_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
         "trigger_action": ACTION_DELIVERY_DELAYED,
         "template_code": "KZ_SALES_DELIVERY_DELAYED",
         "recipient_scopes": ["salesman", "creator"],
+        "enabled": False,
+    },
+    {
+        "id": "kz_preset_sales_delivery_due_soon",
+        "scene_name": "销售订单交期提前提醒",
+        "trigger_document": DOC_SALES_ORDER,
+        "trigger_action": ACTION_DUE_SOON,
+        "template_code": "KZ_SALES_DELIVERY_DUE_SOON",
+        "recipient_scopes": ["salesman", "creator"],
+        "advance_days": 3,
         "enabled": False,
     },
     {
@@ -113,6 +124,15 @@ KUAIZHIZAO_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
         "trigger_action": ACTION_CREATED,
         "template_code": "KZ_QUALITY_EXCEPTION_CREATED",
         "recipient_scopes": ["creator", "user_specified"],
+        "enabled": False,
+    },
+    {
+        "id": "kz_preset_quality_inspection_created",
+        "scene_name": "质检单新建待检",
+        "trigger_document": DOC_QUALITY_INSPECTION,
+        "trigger_action": ACTION_CREATED,
+        "template_code": "KZ_QUALITY_INSPECTION_CREATED",
+        "recipient_scopes": ["user_specified"],
         "enabled": False,
     },
     {
@@ -341,6 +361,15 @@ KUAIZHIZAO_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
         "template_code": "KZ_WO_NEXT_OPERATION",
         "recipient_scopes": ["next_operation_assignees"],
         "enabled": True,
+    },
+    {
+        "id": "kz_preset_wo_operation_assigned",
+        "scene_name": "工序派工提醒",
+        "trigger_document": DOC_WORK_ORDER,
+        "trigger_action": ACTION_ASSIGNED,
+        "template_code": "KZ_WO_OPERATION_ASSIGNED",
+        "recipient_scopes": ["operation_assignees"],
+        "enabled": False,
     },
     {
         "id": "kz_preset_wo_reworked",
@@ -582,6 +611,11 @@ async def load_kuaizhizao_notification_rule_presets(tenant_id: int) -> Dict[str,
                 "template_uuid": template_uuid,
                 "template": template_uuid,
                 "template_code": template_code,
+                **(
+                    {"advance_days": int(preset["advance_days"])}
+                    if preset.get("advance_days") is not None
+                    else {}
+                ),
             }
         )
         existing_keys.add((doc, action))
@@ -689,6 +723,11 @@ async def ensure_kuaizhizao_notification_rules_for_preset_ids(
                 "template_uuid": template_uuid,
                 "template": template_uuid,
                 "template_code": template_code,
+                **(
+                    {"advance_days": int(preset["advance_days"])}
+                    if preset.get("advance_days") is not None
+                    else {}
+                ),
             }
         )
         existing_keys.add((doc, action))

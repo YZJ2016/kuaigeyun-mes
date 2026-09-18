@@ -352,7 +352,10 @@ export const DETAIL_DRAWER_TIME_GROUPS: DetailDrawerTimeGroup[] = [
   {
     documentType: 'spare_part_requisition',
     titleKey: 'app.kuaizhizao.timeconfig.group.spare_part_requisition',
-    fields: [field('spare_part_requisition', 'reviewed_at')],
+    fields: [
+      field('spare_part_requisition', 'reviewed_at'),
+      field('spare_part_requisition', 'created_at'),
+    ],
   },
   {
     documentType: 'customer_return_visit',
@@ -400,7 +403,7 @@ export const DETAIL_DRAWER_TIME_GROUPS: DetailDrawerTimeGroup[] = [
   {
     documentType: 'equipment_fault',
     titleKey: 'app.kuaizhizao.timeconfig.group.equipment_fault',
-    fields: [field('equipment_fault', 'fault_date')],
+    fields: [field('equipment_fault', 'fault_date'), field('equipment_fault', 'created_at')],
   },
   {
     documentType: 'maintenance_plan',
@@ -408,12 +411,16 @@ export const DETAIL_DRAWER_TIME_GROUPS: DetailDrawerTimeGroup[] = [
     fields: [
       field('maintenance_plan', 'planned_start_date'),
       field('maintenance_plan', 'planned_end_date'),
+      field('maintenance_plan', 'created_at'),
     ],
   },
   {
     documentType: 'maintenance_execution',
     titleKey: 'app.kuaizhizao.timeconfig.group.maintenance_execution',
-    fields: [field('maintenance_execution', 'execution_date')],
+    fields: [
+      field('maintenance_execution', 'execution_date'),
+      field('maintenance_execution', 'created_at'),
+    ],
   },
   {
     documentType: 'maintenance_reminder',
@@ -423,7 +430,7 @@ export const DETAIL_DRAWER_TIME_GROUPS: DetailDrawerTimeGroup[] = [
   {
     documentType: 'equipment_repair',
     titleKey: 'app.kuaizhizao.timeconfig.group.equipment_repair',
-    fields: [field('equipment_repair', 'repair_date')],
+    fields: [field('equipment_repair', 'repair_date'), field('equipment_repair', 'created_at')],
   },
   {
     documentType: 'equipment_calibration',
@@ -449,7 +456,111 @@ export const DETAIL_DRAWER_TIME_GROUPS: DetailDrawerTimeGroup[] = [
       field('tool_calibration', 'expiry_date'),
     ],
   },
+  {
+    documentType: 'equipment_spot_check',
+    titleKey: 'app.kuaizhizao.timeconfig.group.equipment_spot_check',
+    fields: [field('equipment_spot_check', 'created_at')],
+  },
+  {
+    documentType: 'equipment_route_patrol',
+    titleKey: 'app.kuaizhizao.timeconfig.group.equipment_route_patrol',
+    fields: [field('equipment_route_patrol', 'created_at')],
+  },
+  {
+    documentType: 'equipment_scrap',
+    titleKey: 'app.kuaizhizao.timeconfig.group.equipment_scrap',
+    fields: [field('equipment_scrap', 'created_at')],
+  },
+  {
+    documentType: 'bom',
+    titleKey: 'app.kuaizhizao.timeconfig.group.bom',
+    fields: [
+      field('bom', 'approved_at'),
+      field('bom', 'created_at'),
+      field('bom', 'updated_at'),
+    ],
+  },
+  {
+    documentType: 'defect_type',
+    titleKey: 'app.kuaizhizao.timeconfig.group.defect_type',
+    fields: [field('defect_type', 'created_at'), field('defect_type', 'updated_at')],
+  },
+  {
+    documentType: 'operation',
+    titleKey: 'app.kuaizhizao.timeconfig.group.operation',
+    fields: [field('operation', 'created_at'), field('operation', 'updated_at')],
+  },
+  {
+    documentType: 'process_route',
+    titleKey: 'app.kuaizhizao.timeconfig.group.process_route',
+    fields: [field('process_route', 'created_at'), field('process_route', 'updated_at')],
+  },
+  {
+    documentType: 'customer',
+    titleKey: 'app.kuaizhizao.timeconfig.group.customer',
+    fields: [field('customer', 'created_at'), field('customer', 'updated_at')],
+  },
+  {
+    documentType: 'supplier',
+    titleKey: 'app.kuaizhizao.timeconfig.group.supplier',
+    fields: [field('supplier', 'created_at'), field('supplier', 'updated_at')],
+  },
+  {
+    documentType: 'warehouse',
+    titleKey: 'app.kuaizhizao.timeconfig.group.warehouse',
+    fields: [field('warehouse', 'created_at'), field('warehouse', 'updated_at')],
+  },
+  {
+    documentType: 'warehouse_doc',
+    titleKey: 'app.kuaizhizao.timeconfig.group.warehouse_doc',
+    fields: [field('warehouse_doc', 'created_at'), field('warehouse_doc', 'updated_at')],
+  },
+  {
+    documentType: 'finance_receipt',
+    titleKey: 'app.kuaizhizao.timeconfig.group.finance_receipt',
+    fields: [
+      field('finance_receipt', 'receipt_date'),
+      field('finance_receipt', 'created_at'),
+    ],
+  },
+  {
+    documentType: 'finance_payment',
+    titleKey: 'app.kuaizhizao.timeconfig.group.finance_payment',
+    fields: [
+      field('finance_payment', 'payment_date'),
+      field('finance_payment', 'created_at'),
+    ],
+  },
+  {
+    documentType: 'payable',
+    titleKey: 'app.kuaizhizao.timeconfig.group.payable',
+    fields: [field('payable', '__operation_log__')],
+  },
+  {
+    documentType: 'nonconforming_ledger',
+    titleKey: 'app.kuaizhizao.timeconfig.group.nonconforming_ledger',
+    fields: [field('nonconforming_ledger', 'created_at'), field('nonconforming_ledger', 'updated_at')],
+  },
 ];
+
+/** 仓储类单据详情：可统一用 warehouse_doc 组的创建/更新时间开关 */
+export const WAREHOUSE_DETAIL_DOCUMENT_TYPES = new Set([
+  'inbound',
+  'other_inbound',
+  'outbound',
+  'other_outbound',
+  'delivery_note',
+  'inventory_transfer',
+  'material_borrow',
+  'material_return',
+  'stocktaking',
+  'customer_material_registration',
+  'inventory_alert',
+  'replenishment_suggestion',
+  'assembly_disassembly',
+  'packing_binding',
+  'warehouse_doc',
+]);
 
 const CATALOG_KEYS = new Set(DETAIL_DRAWER_TIME_GROUPS.flatMap((g) => g.fields.map((f) => f.key)));
 
@@ -472,6 +583,34 @@ export function isCreatedAtFieldKey(fieldKey: string): boolean {
   return fieldKey === 'created_at' || fieldKey === 'createdAt';
 }
 
+/** 列 dataIndex 与 timeconfig 目录 key 对齐（camelCase ↔ snake_case） */
+export function normalizeDetailTimeFieldKey(fieldKey: string): string {
+  if (fieldKey === 'createdAt') return 'created_at';
+  if (fieldKey === 'updatedAt') return 'updated_at';
+  if (fieldKey === 'approvedAt') return 'approved_at';
+  return fieldKey;
+}
+
+function isHiddenByDocumentField(
+  documentType: string,
+  fieldKey: string,
+  hiddenMap: Record<string, boolean>,
+): boolean {
+  const normalized = normalizeDetailTimeFieldKey(fieldKey);
+  const candidates = normalized === fieldKey ? [fieldKey] : [fieldKey, normalized];
+  for (const fk of candidates) {
+    if (hiddenMap[`${documentType}.${fk}`] === true) return true;
+  }
+  if (
+    WAREHOUSE_DETAIL_DOCUMENT_TYPES.has(documentType) &&
+    (hiddenMap[`warehouse_doc.${normalized}`] === true ||
+      hiddenMap[`warehouse_doc.${fieldKey}`] === true)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /** hiddenMap: key -> true 表示隐藏。updated_at 走独立开关。 */
 export function isDetailTimeFieldHidden(
   fieldKey: string,
@@ -480,8 +619,33 @@ export function isDetailTimeFieldHidden(
   showUpdatedAt: boolean,
 ): boolean {
   if (!fieldKey) return false;
+  if (fieldKey === '__operation_log__') return false;
   if (isUpdatedAtFieldKey(fieldKey) && !showUpdatedAt) return true;
   if (isCreatedAtFieldKey(fieldKey) && hiddenMap['common.created_at'] === true) return true;
-  if (documentType && hiddenMap[`${documentType}.${fieldKey}`] === true) return true;
+  if (documentType && isHiddenByDocumentField(documentType, fieldKey, hiddenMap)) return true;
   return false;
+}
+
+/** 单据级操作记录：payable.__operation_log__ 等 */
+export function isDetailOperationLogEnabledForDocument(
+  documentType: string | undefined,
+  hiddenMap: Record<string, boolean>,
+  globalEnabled: boolean,
+): boolean {
+  if (!globalEnabled) return false;
+  if (documentType && hiddenMap[`${documentType}.__operation_log__`] === true) return false;
+  return true;
+}
+
+/** 表格列：按 timeconfig 过滤创建时间等列 */
+export function filterTableColumnsByDetailTime<T extends { dataIndex?: unknown; key?: unknown }>(
+  columns: T[],
+  documentType: string | undefined,
+  hiddenMap: Record<string, boolean>,
+  showUpdatedAt: boolean,
+): T[] {
+  return columns.filter((col) => {
+    const fieldKey = resolveColumnDataIndex(col);
+    return !isDetailTimeFieldHidden(fieldKey, documentType, hiddenMap, showUpdatedAt);
+  });
 }

@@ -84,6 +84,7 @@ import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../
 const AFTER_SALES_TICKET_RESOURCE = 'kuaizhizao:after-sales-ticket';
 const SALES_RETURN_RESOURCE = 'kuaizhizao:sales-return';
 const REPAIR_ORDER_RESOURCE = 'kuaizhizao:repair-order';
+const RETURN_VISIT_RESOURCE = 'kuaizhizao:customer-return-visit';
 
 
 type PullSalesOrderCandidate = {
@@ -122,6 +123,7 @@ const AfterSalesTicketsPage: React.FC = () => {
   const perms = useResourcePermissions(AFTER_SALES_TICKET_RESOURCE);
   const salesReturnPerms = useResourcePermissions(SALES_RETURN_RESOURCE);
   const repairOrderPerms = useResourcePermissions(REPAIR_ORDER_RESOURCE);
+  const returnVisitPerms = useResourcePermissions(RETURN_VISIT_RESOURCE);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AfterSalesTicket | null>(null);
@@ -416,10 +418,61 @@ const AfterSalesTicketsPage: React.FC = () => {
     [message, pushSalesReturnDisabledReason, t],
   );
 
+  const pushReturnVisitDisabledReason = useCallback(
+    (record: AfterSalesTicket | null | undefined): string | undefined => {
+      if (!record) return undefined;
+      if (!perms.canUpdate) return permDeniedTitle;
+      if (!returnVisitPerms.canCreate) return permDeniedTitle;
+      if (!record.capabilities?.push_return_visit?.allowed) {
+        return (
+          afterSalesTicketCapabilityReasonMessage(
+            record.capabilities?.push_return_visit?.reason,
+            t,
+          ) || t('app.kuaizhizao.afterSalesTicket.pushVisitFailed')
+        );
+      }
+      return undefined;
+    },
+    [permDeniedTitle, perms.canUpdate, returnVisitPerms.canCreate, t],
+  );
+
+  const handlePushReturnVisit = useCallback(
+    (record: AfterSalesTicket) => {
+      const blocked = pushReturnVisitDisabledReason(record);
+      if (blocked) {
+        message.warning(blocked);
+        return;
+      }
+      getAntdModal().confirm({
+        title: t('app.kuaizhizao.afterSalesTicket.actionPushReturnVisit'),
+        content: t('app.kuaizhizao.afterSalesTicket.pushVisitConfirm', {
+          code: record.ticket_code,
+        }),
+        onOk: async () => {
+          try {
+            const res = await afterSalesTicketApi.pushToReturnVisit(record.id);
+            message.success(
+              res?.visit_code
+                ? `${t('app.kuaizhizao.afterSalesTicket.pushVisitSuccess')}：${res.visit_code}`
+                : t('app.kuaizhizao.afterSalesTicket.pushVisitSuccess'),
+            );
+            reloadTable();
+            refreshOpenDetail();
+          } catch (e: any) {
+            message.error(e?.message || t('app.kuaizhizao.afterSalesTicket.pushVisitFailed'));
+            throw e;
+          }
+        },
+      });
+    },
+    [message, pushReturnVisitDisabledReason, refreshOpenDetail, t],
+  );
+
   const toolbarPushMenuItems = useMemo(() => {
     const record = selectedTicketForToolbar;
     const returnDisabled = pushSalesReturnDisabledReason(record);
     const repairDisabled = pushRepairDisabledReason(record);
+    const visitDisabled = pushReturnVisitDisabledReason(record);
     return buildUniPushMenuItems([
       {
         key: 'push-sales-return',
@@ -441,11 +494,23 @@ const AfterSalesTicketsPage: React.FC = () => {
           handlePushRepair(record);
         },
       },
+      {
+        key: 'push-return-visit',
+        label: t('app.kuaizhizao.afterSalesTicket.actionPushReturnVisit'),
+        disabled: !!visitDisabled,
+        title: visitDisabled,
+        onClick: () => {
+          if (!record || visitDisabled) return;
+          handlePushReturnVisit(record);
+        },
+      },
     ]);
   }, [
     handlePushRepair,
+    handlePushReturnVisit,
     openPushSalesReturn,
     pushRepairDisabledReason,
+    pushReturnVisitDisabledReason,
     pushSalesReturnDisabledReason,
     selectedTicketForToolbar,
     t,
@@ -1017,7 +1082,10 @@ const AfterSalesTicketsPage: React.FC = () => {
           columns={columns}
           enableRowSelection={
             perms.canDelete ||
-            (perms.canUpdate && (salesReturnPerms.canCreate || repairOrderPerms.canCreate))
+            (perms.canUpdate &&
+              (salesReturnPerms.canCreate ||
+                repairOrderPerms.canCreate ||
+                returnVisitPerms.canCreate))
           }
           options={{ reload: true, density: true, setting: true }}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}

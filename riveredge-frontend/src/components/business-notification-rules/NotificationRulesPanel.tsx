@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Layout, Modal, Descriptions, Spin, Typography, Divider } from 'antd';
 import type { ActionType, ProFormInstance } from '@ant-design/pro-components';
-import { ProFormSelect, ProFormDependency, ProFormCheckbox, ProFormSwitch } from '@ant-design/pro-components';
+import { ProFormSelect, ProFormDependency, ProFormCheckbox, ProFormSwitch, ProFormDigit } from '@ant-design/pro-components';
 import { UniTable } from '../uni-table';
 import { FormModalTemplate } from '../layout-templates';
 import { getBusinessConfig, batchUpdateProcessParameters } from '../../services/businessConfig';
@@ -45,6 +45,53 @@ import {
 } from './notificationChannelRefs';
 import { stripMiddleDotSeparator } from './stripMiddleDotSeparator';
 import { getAntdModal } from '../../utils/antdAppApis';
+import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin';
+
+type NotificationRuleTableRow = {
+  id: string;
+  scene: string;
+  document: string;
+  action: string;
+  channels: string;
+  recipients: string;
+  template: string;
+  enabled: boolean;
+  raw: Record<string, unknown>;
+};
+
+const NOTIFICATION_RULE_SEARCH_FIELDS: (keyof Pick<
+  NotificationRuleTableRow,
+  'scene' | 'document' | 'action' | 'template' | 'channels' | 'recipients'
+>)[] = ['scene', 'document', 'action', 'template', 'channels', 'recipients'];
+
+const compactSearchToken = (value: string) => value.toLowerCase().replace(/[\s\-_]+/g, '');
+
+async function filterNotificationRuleRows(
+  rows: NotificationRuleTableRow[],
+  searchFormValues?: Record<string, unknown>,
+): Promise<NotificationRuleTableRow[]> {
+  const keyword = String(searchFormValues?.keyword ?? '').trim();
+  if (!keyword) return rows;
+
+  const keywordLower = keyword.toLowerCase();
+  const keywordCompact = compactSearchToken(keyword);
+  const usePinyin = isPinyinKeyword(keyword);
+  const keywordUpper = keyword.toUpperCase();
+
+  const matched = await Promise.all(
+    rows.map(async (row) => {
+      for (const field of NOTIFICATION_RULE_SEARCH_FIELDS) {
+        const valueStr = String(row[field] ?? '').trim();
+        if (!valueStr || valueStr === '-') continue;
+        if (valueStr.toLowerCase().includes(keywordLower)) return row;
+        if (keywordCompact && compactSearchToken(valueStr).includes(keywordCompact)) return row;
+        if (usePinyin && (await matchPinyinInitialsAsync(valueStr, keywordUpper))) return row;
+      }
+      return null;
+    }),
+  );
+  return matched.filter((row): row is NotificationRuleTableRow => row !== null);
+}
 function splitRecipientScopes(scopes: unknown): {
   recipient_role_scopes: string[];
   enable_form_user_notify: boolean;
@@ -384,6 +431,15 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
         ...toRecipientUserIdFieldValues(values),
         template_uuid: values.template || '',
         template: values.template || '',
+        ...(String(values.trigger_document) === 'sales_order' &&
+        String(values.trigger_action) === 'due_soon'
+          ? {
+              advance_days: Math.min(
+                90,
+                Math.max(1, Number(values.advance_days) || 3),
+              ),
+            }
+          : {}),
       };
       const allowedActions = (cfg.actionOptions[String(newRule.trigger_document)] || []).map((it) => it.value);
       if (!allowedActions.includes(String(newRule.trigger_action))) {
@@ -444,6 +500,8 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
       form_notify_default_user_ids: userFields.form_notify_default_user_ids,
       template: row.raw?.template_uuid || row.raw?.template || undefined,
       rule_enabled: row.raw?.enabled !== false,
+      advance_days:
+        row.raw?.advance_days != null ? Number(row.raw.advance_days) || 3 : 3,
     });
     setNotificationModalOpen(true);
   };
@@ -543,7 +601,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
         lastRes = await load();
       }
       await queryClient.invalidateQueries({ queryKey: BUSINESS_CONFIG_QUERY_KEY });
-      queryClient.removeQueries({ queryKey: ['uniTable', 'notification-rules.config-center'], exact: false });
+      queryClient.removeQueries({ queryKey: ['uniTable', 'notification-rules.config-center-r01'], exact: false });
       await refetchBusinessConfig();
       notificationTableActionRef.current?.reload?.();
       const res = lastRes || { created: 0, updated: 0, total_rules: 0 };
@@ -690,13 +748,15 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
             ) : null}
             <Spin spinning={loading || isFetching}>
               <UniTable
-                columnPersistenceId="notification-rules.config-center"
+                columnPersistenceId="notification-rules.config-center-r01"
                 permissionResource="system:config-center"
                 actionRef={notificationTableActionRef}
                 tanstackQuery={{ enabled: false }}
                 rowKey="id"
                 pagination={false}
                 search={false}
+                showAdvancedSearch={false}
+                fuzzySearchPlaceholder={t('pages.system.configCenter.notification.searchPlaceholder')}
                 options={false}
                 enableRowSelection
                 showCreateButton={hasDocumentOptions}
@@ -730,12 +790,53 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                   setNotificationModalOpen(true);
                 }}
                 columns={[
-                  { title: t('pages.system.configCenter.notification.column.scene'), dataIndex: 'scene', width: 180 },
-                  { title: t('pages.system.configCenter.notification.column.document'), dataIndex: 'document', width: 120 },
-                  { title: t('pages.system.configCenter.notification.column.template'), dataIndex: 'template', width: 220 },
-                  { title: t('pages.system.configCenter.notification.column.action'), dataIndex: 'action', width: 140 },
-                  { title: t('pages.system.configCenter.notification.column.channels'), dataIndex: 'channels', width: 180, ellipsis: true },
-                  { title: t('pages.system.configCenter.notification.column.recipients'), dataIndex: 'recipients', width: 220, ellipsis: true },
+                  {
+                    title: t('pages.system.configCenter.notification.column.scene'),
+                    dataIndex: 'scene',
+                    minWidth: 200,
+                    uniTableRemainderFlex: true,
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('pages.system.configCenter.notification.column.document'),
+                    dataIndex: 'document',
+                    width: 120,
+                    minWidth: 120,
+                    uniTableKeepWidth: true,
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('pages.system.configCenter.notification.column.template'),
+                    dataIndex: 'template',
+                    width: 220,
+                    minWidth: 160,
+                    uniTableKeepWidth: true,
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('pages.system.configCenter.notification.column.action'),
+                    dataIndex: 'action',
+                    width: 140,
+                    minWidth: 120,
+                    uniTableKeepWidth: true,
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('pages.system.configCenter.notification.column.channels'),
+                    dataIndex: 'channels',
+                    width: 180,
+                    minWidth: 140,
+                    uniTableKeepWidth: true,
+                    ellipsis: true,
+                  },
+                  {
+                    title: t('pages.system.configCenter.notification.column.recipients'),
+                    dataIndex: 'recipients',
+                    width: 220,
+                    minWidth: 160,
+                    uniTableKeepWidth: true,
+                    ellipsis: true,
+                  },
                   {
                     title: t('common.status'),
                     dataIndex: 'enabled',
@@ -767,11 +868,17 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                     },
                   },
                 ]}
-                request={async () => ({
-                  data: notificationRuleRows,
-                  success: true,
-                  total: notificationRuleRows.length,
-                })}
+                request={async (_params, _sort, _filter, searchFormValues) => {
+                  const filtered = await filterNotificationRuleRows(
+                    notificationRuleRows as NotificationRuleTableRow[],
+                    searchFormValues,
+                  );
+                  return {
+                    data: filtered,
+                    success: true,
+                    total: filtered.length,
+                  };
+                }}
               />
             </Spin>
           </div>
@@ -833,6 +940,27 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
               }
               return null;
             }}
+          </ProFormDependency>
+          <ProFormDependency name={['trigger_document', 'trigger_action']}>
+            {({ trigger_document, trigger_action }) =>
+              String(trigger_document) === 'sales_order' && String(trigger_action) === 'due_soon' ? (
+                <ProFormDigit
+                  name="advance_days"
+                  label={t('pages.system.configCenter.notification.form.advanceDays')}
+                  initialValue={3}
+                  min={1}
+                  max={90}
+                  fieldProps={{ precision: 0 }}
+                  rules={[
+                    {
+                      required: true,
+                      message: t('pages.system.configCenter.notification.form.advanceDaysRequired'),
+                    },
+                  ]}
+                  extra={t('pages.system.configCenter.notification.form.advanceDaysHint')}
+                />
+              ) : null
+            }
           </ProFormDependency>
           <ProFormSelect
             name="template"

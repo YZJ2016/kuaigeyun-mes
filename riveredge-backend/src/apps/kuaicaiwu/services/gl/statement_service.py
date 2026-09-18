@@ -11,8 +11,15 @@ from apps.kuaicaiwu.models.voucher import Voucher
 from apps.kuaicaiwu.models.voucher_line import VoucherLine
 from apps.kuaicaiwu.services.gl.balance_service import BalanceService
 from apps.kuaicaiwu.services.gl.balance_sheet_template import build_balance_sheet_rows
+from apps.kuaicaiwu.services.gl.cash_flow_classify import (
+    ensure_cash_flow_items_seeded,
+    infer_cash_flow_item_code,
+    is_monetary_account,
+    pick_counterpart_codes,
+)
 from apps.kuaicaiwu.services.gl.cash_flow_statement_template import build_cash_flow_rows
 from apps.kuaicaiwu.services.gl.income_statement_template import build_income_statement_rows
+from apps.kuaicaiwu.services.gl.settings_service import GlSettingsService
 
 BALANCE_FIELDS = (
     "opening_debit",
@@ -154,12 +161,18 @@ class StatementService:
         year: int,
         month: int,
     ) -> tuple[Dict[str, Decimal], Dict[str, Decimal]]:
+        await ensure_cash_flow_items_seeded(tenant_id)
         items = await GlCashFlowItem.filter(
             tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
         ).all()
         code_by_id = {int(item.id): str(item.item_code) for item in items}
         period_totals: Dict[str, Decimal] = {}
         year_totals: Dict[str, Decimal] = {}
+
+        settings = await GlSettingsService().get_or_create(tenant_id)
+        designated_ids = set(int(x) for x in (settings.cash_account_ids or [])) | set(
+            int(x) for x in (settings.bank_account_ids or [])
+        )
 
         vouchers = await Voucher.filter(
             tenant_id=tenant_id,
@@ -168,31 +181,64 @@ class StatementService:
             status="posted",
             deleted_at__isnull=True,
         ).all()
+        if not vouchers:
+            return period_totals, year_totals
+
+        voucher_ids = [int(v.id) for v in vouchers]
+        all_lines = await VoucherLine.filter(
+            tenant_id=tenant_id, voucher_id__in=voucher_ids
+        ).all()
+        lines_by_voucher: Dict[int, List[VoucherLine]] = {}
+        account_ids: set[int] = set()
+        for line in all_lines:
+            lines_by_voucher.setdefault(int(line.voucher_id), []).append(line)
+            if line.account_id:
+                account_ids.add(int(line.account_id))
+
+        accounts = await ChartOfAccount.filter(
+            tenant_id=tenant_id, id__in=list(account_ids), deleted_at__isnull=True
+        ).all()
+        account_by_id = {int(a.id): a for a in accounts}
+        account_code_by_id = {int(a.id): str(a.account_code or "") for a in accounts}
+
         for voucher in vouchers:
             is_period = int(voucher.period_month) == int(month)
-            lines = await VoucherLine.filter(tenant_id=tenant_id, voucher_id=voucher.id).all()
+            lines = lines_by_voucher.get(int(voucher.id), [])
+            line_dicts = [
+                {
+                    "account_id": int(ln.account_id or 0),
+                    "account_code": account_code_by_id.get(int(ln.account_id or 0), ""),
+                    "debit_amount": ln.debit_amount,
+                    "credit_amount": ln.credit_amount,
+                }
+                for ln in lines
+            ]
             for line in lines:
-                account = await ChartOfAccount.get_or_none(
-                    tenant_id=tenant_id, id=line.account_id, deleted_at__isnull=True
-                )
-                if not account or not (account.is_cash_journal or account.is_bank_journal):
+                account = account_by_id.get(int(line.account_id or 0))
+                if not account or not is_monetary_account(
+                    account, designated_ids=designated_ids
+                ):
+                    continue
+                movement = _d(line.debit_amount) - _d(line.credit_amount)
+                if movement == 0:
                     continue
                 cf_id = int(line.cash_flow_item_id or 0)
                 item_code = code_by_id.get(cf_id)
                 if not item_code:
-                    continue
-                item = next((row for row in items if row.id == cf_id), None)
-                if not item:
-                    continue
-                if item.direction == "outflow":
-                    amt = _d(line.credit_amount) or _d(line.debit_amount)
-                    signed = -amt
-                else:
-                    amt = _d(line.debit_amount) or _d(line.credit_amount)
-                    signed = amt
-                year_totals[item_code] = year_totals.get(item_code, Decimal("0")) + signed
+                    counterparts = pick_counterpart_codes(
+                        int(line.account_id or 0), line_dicts, account_code_by_id
+                    )
+                    item_code = infer_cash_flow_item_code(
+                        cash_debit=line.debit_amount,
+                        cash_credit=line.credit_amount,
+                        counterpart_account_codes=counterparts,
+                    )
+                # 现金资产：借增为流入(+)，贷减为流出(-)；与报表净额公式一致
+                year_totals[item_code] = year_totals.get(item_code, Decimal("0")) + movement
                 if is_period:
-                    period_totals[item_code] = period_totals.get(item_code, Decimal("0")) + signed
+                    period_totals[item_code] = (
+                        period_totals.get(item_code, Decimal("0")) + movement
+                    )
         return period_totals, year_totals
 
     async def cash_flow_statement(
@@ -208,13 +254,13 @@ class StatementService:
             if month == 1
             else await self._period_balances(tenant_id, year, 1, include_unposted=False)
         )
-        cash_codes = ("1001", "1002", "1012")
+        cash_prefixes = ("1001", "1002", "1012")
 
         def _cash_balance(rows: List[Dict[str, Any]], *, measure: str) -> Decimal:
             total = Decimal("0")
             for row in rows:
                 code = str(row.get("account_code") or "")
-                if code not in cash_codes:
+                if not any(code.startswith(p) for p in cash_prefixes):
                     continue
                 direction = str(row.get("balance_direction") or "debit")
                 if measure == "opening":

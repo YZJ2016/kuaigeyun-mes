@@ -697,6 +697,40 @@ async def upsert_transfer_template(
         raise _err(exc)
 
 
+@router.put("/transfer-templates/{template_id}")
+async def update_transfer_template(
+    template_id: int,
+    body: Dict[str, Any],
+    current_user: Any = Depends(get_current_user),
+):
+    try:
+        row = await transfer_service.update_template(
+            current_user.tenant_id, template_id, body
+        )
+        return {
+            "id": row.id,
+            "template_code": row.template_code,
+            "template_name": row.template_name,
+            "template_type": row.template_type,
+            "lines": row.lines,
+            "is_active": row.is_active,
+        }
+    except (ValidationError, NotFoundError) as exc:
+        raise _err(exc)
+
+
+@router.delete("/transfer-templates/{template_id}")
+async def delete_transfer_template(
+    template_id: int,
+    current_user: Any = Depends(get_current_user),
+):
+    try:
+        await transfer_service.delete_template(current_user.tenant_id, template_id)
+        return {"success": True}
+    except NotFoundError as exc:
+        raise _err(exc)
+
+
 @router.post("/transfer-templates/{template_id}/run")
 async def run_transfer_template(
     template_id: int,
@@ -755,6 +789,7 @@ async def list_reconcile_items(
     month: int = Query(..., ge=1, le=12),
     side: Optional[str] = None,
     unmatched_only: bool = False,
+    sync_enterprise: bool = Query(True),
     current_user: Any = Depends(get_current_user),
 ):
     return await cashier_service.list_reconcile_items(
@@ -764,6 +799,7 @@ async def list_reconcile_items(
         month,
         side=side,
         unmatched_only=unmatched_only,
+        sync_enterprise=sync_enterprise,
     )
 
 

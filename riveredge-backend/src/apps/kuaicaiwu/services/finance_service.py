@@ -209,7 +209,13 @@ class PayableService(AppBaseService[Payable]):
                         currency="CNY",
                         operator_id=created_by,
                         operator_name=(user_info or {}).get("name"),
-                        payload={"status": payable.status},
+                        payload={
+                            "status": payable.status,
+                            "supplier_id": payable.supplier_id,
+                            "supplier_name": payable.supplier_name,
+                            "partner_id": payable.supplier_id,
+                            "partner_name": payable.supplier_name,
+                        },
                     )
                     created_id = payable.id
                 if submit_review:
@@ -687,7 +693,8 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 **payload,
             )
             if invoice_data.purchase_order_id:
-                event_source_type, event_source_id = "PurchaseOrder", invoice_data.purchase_order_id
+                # 与 hooks / 标签表一致：snake_case purchase_order（勿写 PurchaseOrder）
+                event_source_type, event_source_id = "purchase_order", invoice_data.purchase_order_id
             elif invoice_data.payable_id:
                 event_source_type, event_source_id = "Payable", invoice_data.payable_id
             else:
@@ -704,7 +711,14 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 operator_id=created_by,
                 source_doc_type=event_source_type,
                 source_doc_id=event_source_id,
-                payload={"status": invoice.status},
+                payload={
+                    "status": invoice.status,
+                    "supplier_id": invoice.supplier_id,
+                    "supplier_name": invoice.supplier_name,
+                    "partner_id": invoice.supplier_id,
+                    "partner_name": invoice.supplier_name,
+                },
+                notes="采购发票创建",
             )
             auto_payable_id = await self._maybe_auto_generate_payable_for_purchase_invoice(
                 tenant_id=tenant_id,
@@ -1154,7 +1168,13 @@ class ReceivableService(AppBaseService[Receivable]):
                         currency="CNY",
                         operator_id=created_by,
                         operator_name=(user_info or {}).get("name"),
-                        payload={"status": receivable.status},
+                        payload={
+                            "status": receivable.status,
+                            "customer_id": receivable.customer_id,
+                            "customer_name": receivable.customer_name,
+                            "partner_id": receivable.customer_id,
+                            "partner_name": receivable.customer_name,
+                        },
                     )
                     created_id = receivable.id
                 if submit_review:
@@ -2050,6 +2070,10 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
                 "receipt_id": receipt_id,
                 "writeoff_applied": receivable_writeoff_applied or receipt_writeoff_applied,
                 "fx": fx_snapshot,
+                "customer_id": receivable.customer_id,
+                "customer_name": getattr(receivable, "customer_name", None),
+                "partner_id": receivable.customer_id,
+                "partner_name": getattr(receivable, "customer_name", None),
             },
         )
 
@@ -2255,6 +2279,10 @@ class AccountSettlementService(AppBaseService[SettlementRecord]):
                 "payment_id": payment_id,
                 "writeoff_applied": payable_writeoff_applied or payment_writeoff_applied,
                 "fx": fx_snapshot,
+                "supplier_id": payable.supplier_id,
+                "supplier_name": getattr(payable, "supplier_name", None),
+                "partner_id": payable.supplier_id,
+                "partner_name": getattr(payable, "supplier_name", None),
             },
         )
 

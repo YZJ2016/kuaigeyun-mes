@@ -251,11 +251,49 @@ class CoaService:
         return list_coa_templates()
 
     async def _has_activity(self, tenant_id: int, account_id: int) -> bool:
-        if await VoucherLine.filter(tenant_id=tenant_id, account_id=account_id).exists():
+        """是否仍有有效发生额/余额。已作废或已软删凭证的分录、以及金额全零的余额行不计入。"""
+        from decimal import Decimal
+
+        from apps.kuaicaiwu.models.voucher import Voucher
+
+        voucher_ids = await VoucherLine.filter(
+            tenant_id=tenant_id, account_id=account_id
+        ).values_list("voucher_id", flat=True)
+        live_ids = list({int(vid) for vid in voucher_ids if vid})
+        if live_ids and await Voucher.filter(
+            tenant_id=tenant_id,
+            id__in=live_ids,
+            deleted_at__isnull=True,
+        ).exclude(status="cancelled").exists():
             return True
-        return await AccountBalance.filter(
+
+        zero = Decimal("0")
+        balances = await AccountBalance.filter(
             tenant_id=tenant_id, account_id=account_id, deleted_at__isnull=True
-        ).exists()
+        ).only(
+            "opening_debit",
+            "opening_credit",
+            "period_debit",
+            "period_credit",
+            "year_debit",
+            "year_credit",
+            "ending_debit",
+            "ending_credit",
+        )
+        for row in balances:
+            for field in (
+                "opening_debit",
+                "opening_credit",
+                "period_debit",
+                "period_credit",
+                "year_debit",
+                "year_credit",
+                "ending_debit",
+                "ending_credit",
+            ):
+                if Decimal(str(getattr(row, field, 0) or 0)) != zero:
+                    return True
+        return False
 
     def to_dict(self, row: ChartOfAccount) -> Dict[str, Any]:
         return {

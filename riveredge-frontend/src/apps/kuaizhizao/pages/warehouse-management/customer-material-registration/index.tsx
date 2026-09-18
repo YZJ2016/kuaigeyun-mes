@@ -55,7 +55,7 @@ import {
   normalizeWarehouseListResponse,
   resolveCustomerMaterialRegistrationListParams,
 } from '../../../utils/warehouseListCore';
-import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
+import { materialApi, materialBatchApi, materialSerialApi, MATERIAL_SERIAL_GENERATE_MAX_COUNT } from '../../../../master-data/services/material';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
 import {
   filterWarehouseTrackingColumns,
@@ -304,8 +304,12 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       return [];
     }
     const count = Math.max(1, Math.floor(Number(row.quantity) || 1));
-    if (count > 100) {
-      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.serialMax100'));
+    if (count > MATERIAL_SERIAL_GENERATE_MAX_COUNT) {
+      messageApi.warning(
+        t('app.kuaizhizao.customerMaterialRegistration.serialMax100', {
+          max: MATERIAL_SERIAL_GENERATE_MAX_COUNT,
+        }),
+      );
       return [];
     }
     setGeneratingSerialIdx(idx);
@@ -348,8 +352,12 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       return [];
     }
     const count = Math.max(1, Math.floor(Number(formRef.current?.getFieldValue('quantity') || 1)));
-    if (count > 100) {
-      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.serialMax100'));
+    if (count > MATERIAL_SERIAL_GENERATE_MAX_COUNT) {
+      messageApi.warning(
+        t('app.kuaizhizao.customerMaterialRegistration.serialMax100', {
+          max: MATERIAL_SERIAL_GENERATE_MAX_COUNT,
+        }),
+      );
       return [];
     }
     setGeneratingScanSerial(true);

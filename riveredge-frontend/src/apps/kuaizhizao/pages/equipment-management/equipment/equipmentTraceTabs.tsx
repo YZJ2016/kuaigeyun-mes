@@ -8,6 +8,7 @@ import {
   equipmentOpsStatusTagColor,
 } from '../../../utils/equipmentListCore';
 import type { EquipmentDetailTabKey } from './equipmentPaths';
+import { filterTableColumnsByDetailTime } from '../../../constants/detailDrawerTimeFields';
 
 function renderOpsStatusTag(status: string) {
   return <Tag color={equipmentOpsStatusTagColor(status)}>{status || '-'}</Tag>;
@@ -26,23 +27,47 @@ export interface EquipmentTraceData {
   scrap_applications?: Record<string, unknown>[];
 }
 
-export function useEquipmentTraceColumns(t: TFunction) {
+type TraceColumn = { title: string; dataIndex?: string; width?: number; ellipsis?: boolean; render?: (...args: unknown[]) => unknown };
+
+function withTraceCreatedAtFilter(
+  documentType: string,
+  columns: TraceColumn[],
+  timeFieldHidden: Record<string, boolean>,
+  showUpdatedAt: boolean,
+): TraceColumn[] {
+  return filterTableColumnsByDetailTime(columns, documentType, timeFieldHidden, showUpdatedAt);
+}
+
+export function useEquipmentTraceColumns(
+  t: TFunction,
+  timeFieldHidden: Record<string, boolean> = {},
+  showUpdatedAt = true,
+) {
   const traceMaintenancePlanColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.equipment.traceColPlanNo'), dataIndex: 'plan_no', width: 140 },
-      { title: t('app.kuaizhizao.equipment.traceColPlanName'), dataIndex: 'plan_name', width: 200 },
-      { title: t('app.kuaizhizao.equipment.traceColPlanType'), dataIndex: 'plan_type', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColMaintenanceType'), dataIndex: 'maintenance_type', width: 120 },
-      { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
-      { title: t('app.kuaizhizao.equipment.traceColPlannedStartDate'), dataIndex: 'planned_start_date', width: 120 },
-      { title: t('app.kuaizhizao.equipment.traceColPlannedEndDate'), dataIndex: 'planned_end_date', width: 120 },
-      { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
+    () =>
+      withTraceCreatedAtFilter(
+        'maintenance_plan',
+        [
+          { title: t('app.kuaizhizao.equipment.traceColPlanNo'), dataIndex: 'plan_no', width: 140 },
+          { title: t('app.kuaizhizao.equipment.traceColPlanName'), dataIndex: 'plan_name', width: 200 },
+          { title: t('app.kuaizhizao.equipment.traceColPlanType'), dataIndex: 'plan_type', width: 120 },
+          { title: t('app.kuaizhizao.equipment.traceColMaintenanceType'), dataIndex: 'maintenance_type', width: 120 },
+          { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
+          { title: t('app.kuaizhizao.equipment.traceColPlannedStartDate'), dataIndex: 'planned_start_date', width: 120 },
+          { title: t('app.kuaizhizao.equipment.traceColPlannedEndDate'), dataIndex: 'planned_end_date', width: 120 },
+          { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
+        ],
+        timeFieldHidden,
+        showUpdatedAt,
+      ),
+    [showUpdatedAt, t, timeFieldHidden],
   );
 
   const traceMaintenanceExecutionColumns = useMemo(
-    () => [
+    () =>
+      withTraceCreatedAtFilter(
+        'maintenance_execution',
+        [
       { title: t('app.kuaizhizao.equipment.traceColExecutionNo'), dataIndex: 'execution_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColExecutionDate'), dataIndex: 'execution_date', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColExecutor'), dataIndex: 'executor_name', width: 100 },
@@ -60,12 +85,18 @@ export function useEquipmentTraceColumns(t: TFunction) {
         render: (cost: number) => (cost ? `¥${cost}` : '-'),
       },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
+        ],
+        timeFieldHidden,
+        showUpdatedAt,
+      ),
+    [showUpdatedAt, t, timeFieldHidden],
   );
 
   const traceFaultColumns = useMemo(
-    () => [
+    () =>
+      withTraceCreatedAtFilter(
+        'equipment_fault',
+        [
       { title: t('app.kuaizhizao.equipment.traceColFaultNo'), dataIndex: 'fault_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColFaultDate'), dataIndex: 'fault_date', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColFaultType'), dataIndex: 'fault_type', width: 120 },
@@ -87,12 +118,18 @@ export function useEquipmentTraceColumns(t: TFunction) {
         ),
       },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
+        ],
+        timeFieldHidden,
+        showUpdatedAt,
+      ),
+    [showUpdatedAt, t, timeFieldHidden],
   );
 
   const traceRepairColumns = useMemo(
-    () => [
+    () =>
+      withTraceCreatedAtFilter(
+        'equipment_repair',
+        [
       { title: t('app.kuaizhizao.equipment.traceColRepairNo'), dataIndex: 'repair_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColRepairDate'), dataIndex: 'repair_date', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColRepairType'), dataIndex: 'repair_type', width: 120 },
@@ -122,8 +159,11 @@ export function useEquipmentTraceColumns(t: TFunction) {
         render: renderOpsStatusTag,
       },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
+        ],
+        timeFieldHidden,
+        showUpdatedAt,
+      ),
+    [showUpdatedAt, t, timeFieldHidden],
   );
 
   const traceCalibrationColumns = useMemo(
@@ -139,7 +179,10 @@ export function useEquipmentTraceColumns(t: TFunction) {
   );
 
   const traceSpotCheckColumns = useMemo(
-    () => [
+    () =>
+      withTraceCreatedAtFilter(
+        'equipment_spot_check',
+        [
       { title: t('app.kuaizhizao.equipment.traceColDocumentNo'), dataIndex: 'document_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColCheckDate'), dataIndex: 'check_date', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColInspector'), dataIndex: 'inspector_name', width: 100 },
@@ -156,12 +199,18 @@ export function useEquipmentTraceColumns(t: TFunction) {
       },
       { title: t('app.kuaizhizao.equipment.traceColAbnormalityDesc'), dataIndex: 'abnormality_description', ellipsis: true },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
+        ],
+        timeFieldHidden,
+        showUpdatedAt,
+      ),
+    [showUpdatedAt, t, timeFieldHidden],
   );
 
   const traceRoutePatrolColumns = useMemo(
-    () => [
+    () =>
+      withTraceCreatedAtFilter(
+        'equipment_route_patrol',
+        [
       { title: t('app.kuaizhizao.equipment.traceColDocumentNo'), dataIndex: 'document_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColRouteCode'), dataIndex: 'route_code', width: 120 },
       { title: t('app.kuaizhizao.equipment.traceColRouteName'), dataIndex: 'route_name', width: 160 },
@@ -179,24 +228,36 @@ export function useEquipmentTraceColumns(t: TFunction) {
         ),
       },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
+        ],
+        timeFieldHidden,
+        showUpdatedAt,
+      ),
+    [showUpdatedAt, t, timeFieldHidden],
   );
 
   const traceSparePartColumns = useMemo(
-    () => [
+    () =>
+      withTraceCreatedAtFilter(
+        'spare_part_requisition',
+        [
       { title: t('app.kuaizhizao.equipment.traceColRequisitionNo'), dataIndex: 'requisition_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColPurpose'), dataIndex: 'purpose', width: 160, ellipsis: true },
       { title: t('app.kuaizhizao.equipment.traceColApplicant'), dataIndex: 'applicant_name', width: 100 },
       { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
       { title: t('app.kuaizhizao.equipment.traceColApprovedAt'), dataIndex: 'approved_at', width: 160 },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
+        ],
+        timeFieldHidden,
+        showUpdatedAt,
+      ),
+    [showUpdatedAt, t, timeFieldHidden],
   );
 
   const traceScrapColumns = useMemo(
-    () => [
+    () =>
+      withTraceCreatedAtFilter(
+        'equipment_scrap',
+        [
       { title: t('app.kuaizhizao.equipment.traceColApplicationNo'), dataIndex: 'application_no', width: 140 },
       { title: t('app.kuaizhizao.equipment.traceColScrapReason'), dataIndex: 'reason', ellipsis: true },
       { title: t('app.kuaizhizao.equipment.traceColScrapDate'), dataIndex: 'scrap_date', width: 120 },
@@ -204,8 +265,11 @@ export function useEquipmentTraceColumns(t: TFunction) {
       { title: t('common.status'), dataIndex: 'status', width: 100, render: renderOpsStatusTag },
       { title: t('app.kuaizhizao.equipment.traceColApprovedAt'), dataIndex: 'approved_at', width: 160 },
       { title: t('common.createdAt'), dataIndex: 'created_at', width: 160 },
-    ],
-    [t],
+        ],
+        timeFieldHidden,
+        showUpdatedAt,
+      ),
+    [showUpdatedAt, t, timeFieldHidden],
   );
 
   return {

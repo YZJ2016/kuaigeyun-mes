@@ -85,6 +85,30 @@ export const equipmentApi = {
     return apiRequest('/apps/kuaizhizao/equipment/calibrations', { method: 'POST', data });
   },
 
+  updateCalibrationRecord: async (
+    calibUuid: string,
+    data: {
+      calibration_date?: string;
+      result?: string;
+      plan_type?: string;
+      certificate_no?: string;
+      expiry_date?: string | null;
+      remark?: string;
+      attachments?: Array<{ uid?: string; name?: string; url?: string }>;
+    },
+  ) => {
+    return apiRequest(`/apps/kuaizhizao/equipment/calibrations/${calibUuid}`, {
+      method: 'PUT',
+      data,
+    });
+  },
+
+  deleteCalibrationRecord: async (calibUuid: string) => {
+    return apiRequest(`/apps/kuaizhizao/equipment/calibrations/${calibUuid}`, {
+      method: 'DELETE',
+    });
+  },
+
   // 获取设备检定到期提醒
   listCalibrationReminders: async (params?: {
     skip?: number;

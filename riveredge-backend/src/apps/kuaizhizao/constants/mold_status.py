@@ -37,7 +37,7 @@ LEGACY_STATUS_MAP: dict[str, str] = {
 
 OPEN_MAINTENANCE_STATUSES: frozenset[str] = frozenset({"已审核", "进行中"})
 OPEN_REPAIR_STATUSES: frozenset[str] = frozenset({"已审核", "进行中"})
-OPEN_TRIAL_STATUSES: frozenset[str] = frozenset({"进行中"})
+OPEN_TRIAL_STATUSES: frozenset[str] = frozenset({"草稿", "已提交", "进行中"})
 OUTSTANDING_BORROW_STATUS = "领用中"
 
 

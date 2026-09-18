@@ -98,6 +98,8 @@ class MaterialShortageExceptionResponse(MaterialShortageExceptionBase):
     picking_rank_band: Optional[str] = Field(None, description="备料等级带 A/B/C")
     scheduling_deep_link: Optional[str] = Field(None, description="可视排产页深链")
     scheduling_notice: Optional[str] = Field(None, description="排产操作提示")
+    purchase_requisition_deep_link: Optional[str] = Field(None, description="采购申请页深链")
+    purchase_notice: Optional[str] = Field(None, description="采购下推提示")
 
 
 class MaterialShortageExceptionListResponse(MaterialShortageExceptionResponse):

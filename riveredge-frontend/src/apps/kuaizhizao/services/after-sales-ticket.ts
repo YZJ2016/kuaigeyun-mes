@@ -18,6 +18,7 @@ export interface AfterSalesTicketCapabilities {
   close?: ActionCapability;
   push_sales_return?: ActionCapability;
   push_repair_order?: ActionCapability;
+  push_return_visit?: ActionCapability;
 }
 
 export interface AfterSalesTicketItem {
@@ -232,5 +233,12 @@ export const afterSalesTicketApi = {
     apiRequest(`/apps/kuaizhizao/after-sales-tickets/${id}/push-to-sales-return`, {
       method: 'POST',
       data,
+    }),
+
+  pushToReturnVisit: async (
+    id: number,
+  ): Promise<{ success: boolean; message: string; visit_id: number; visit_code: string }> =>
+    apiRequest(`/apps/kuaizhizao/after-sales-tickets/${id}/push-to-return-visit`, {
+      method: 'POST',
     }),
 };

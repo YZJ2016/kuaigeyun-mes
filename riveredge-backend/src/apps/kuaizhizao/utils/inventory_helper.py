@@ -881,6 +881,13 @@ async def get_material_detailed_locations(
                 wh_id, wh_name, wh_type = 0, "未配置仓库", "normal"
             row = _ensure_wh(wh_id, wh_name, warehouse_type=wh_type)
             row["quantity"] += _decimal_or_zero(b.quantity)
+            loc_code = str(getattr(b, "location_code", None) or "").strip()
+            if loc_code:
+                prev = str(row.get("storage_location_code") or "").strip()
+                if not prev:
+                    row["storage_location_code"] = loc_code
+                elif loc_code not in prev.split("、"):
+                    row["storage_location_code"] = f"{prev}、{loc_code}"
     except Exception as e:
         logger.warning(f"获取主仓明细失败: {e}")
 
@@ -918,6 +925,13 @@ async def get_material_detailed_locations(
                 continue
             row = _ensure_wh(wh_id, wh_name, warehouse_type=wh_type)
             row["quantity"] += avail
+            loc_code = str(getattr(item, "location_code", None) or "").strip()
+            if loc_code:
+                prev = str(row.get("storage_location_code") or "").strip()
+                if not prev:
+                    row["storage_location_code"] = loc_code
+                elif loc_code not in prev.split("、"):
+                    row["storage_location_code"] = f"{prev}、{loc_code}"
     except Exception as e:
         logger.warning(f"获取线边仓明细失败: {e}")
 

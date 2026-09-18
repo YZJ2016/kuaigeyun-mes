@@ -62,28 +62,29 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         created_by: int,
         items: Optional[List[SemiFinishedGoodsReceiptItemCreate]] = None,
     ) -> SemiFinishedGoodsReceiptResponse:
+        user_info = await self.get_user_info(created_by)
+        # 发号须在业务事务外：generate_code 自带 FOR UPDATE；嵌套外层事务易致 PostgreSQL 挂起（504）。
+        if receipt_data.receipt_code:
+            code = receipt_data.receipt_code
+        else:
+            today = today_site_str()
+            code = await self.generate_code(
+                tenant_id, "SEMI_FINISHED_GOODS_RECEIPT_CODE", prefix=f"SFR{today}"
+            )
+        if items is None:
+            items = getattr(receipt_data, "items", None) or []
+        total_quantity = sum(item.receipt_quantity for item in items) if items else 0
+
+        if receipt_data.work_order_id:
+            from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+
+            await FinishedGoodsReceiptService()._assert_work_order_inbound_quantity(
+                tenant_id,
+                int(receipt_data.work_order_id),
+                float(total_quantity or 0),
+            )
+
         async with in_transaction():
-            user_info = await self.get_user_info(created_by)
-            if receipt_data.receipt_code:
-                code = receipt_data.receipt_code
-            else:
-                today = today_site_str()
-                code = await self.generate_code(
-                    tenant_id, "SEMI_FINISHED_GOODS_RECEIPT_CODE", prefix=f"SFR{today}"
-                )
-            if items is None:
-                items = getattr(receipt_data, "items", None) or []
-            total_quantity = sum(item.receipt_quantity for item in items) if items else 0
-
-            if receipt_data.work_order_id:
-                from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
-
-                await FinishedGoodsReceiptService()._assert_work_order_inbound_quantity(
-                    tenant_id,
-                    int(receipt_data.work_order_id),
-                    float(total_quantity or 0),
-                )
-
             receipt = await SemiFinishedGoodsReceipt.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -161,42 +162,42 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         notes=getattr(item_data, "notes", None),
                     )
 
-            work_order_id = getattr(receipt, "work_order_id", None) or getattr(
-                receipt_data, "work_order_id", None
-            )
-            if work_order_id:
-                try:
-                    from apps.kuaizhizao.services.document_relation_new_service import (
-                        DocumentRelationNewService,
-                    )
-                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        work_order_id = getattr(receipt, "work_order_id", None) or getattr(
+            receipt_data, "work_order_id", None
+        )
+        if work_order_id:
+            try:
+                from apps.kuaizhizao.services.document_relation_new_service import (
+                    DocumentRelationNewService,
+                )
+                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
 
-                    wo = await WorkOrder.get_or_none(
-                        tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
+                wo = await WorkOrder.get_or_none(
+                    tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
+                )
+                if wo:
+                    rel_svc = DocumentRelationNewService()
+                    await rel_svc.create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="work_order",
+                            source_id=work_order_id,
+                            source_code=wo.code,
+                            source_name=wo.name,
+                            target_type="semi_finished_goods_receipt",
+                            target_id=receipt.id,
+                            target_code=receipt.receipt_code,
+                            target_name=None,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="工单创建半成品入库单",
+                        ),
+                        created_by=created_by,
                     )
-                    if wo:
-                        rel_svc = DocumentRelationNewService()
-                        await rel_svc.create_relation(
-                            tenant_id=tenant_id,
-                            relation_data=DocumentRelationCreate(
-                                source_type="work_order",
-                                source_id=work_order_id,
-                                source_code=wo.code,
-                                source_name=wo.name,
-                                target_type="semi_finished_goods_receipt",
-                                target_id=receipt.id,
-                                target_code=receipt.receipt_code,
-                                target_name=None,
-                                relation_type="source",
-                                relation_mode="push",
-                                relation_desc="工单创建半成品入库单",
-                            ),
-                            created_by=created_by,
-                        )
-                except Exception as e:
-                    logger.warning("建立工单→半成品入库 单据关联失败: %s", e)
+            except Exception as e:
+                logger.warning("建立工单→半成品入库 单据关联失败: %s", e)
 
-            return SemiFinishedGoodsReceiptResponse.model_validate(receipt)
+        return SemiFinishedGoodsReceiptResponse.model_validate(receipt)
 
     async def get_semi_finished_goods_receipt_by_id(
         self, tenant_id: int, receipt_id: int
@@ -441,6 +442,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        **InventoryService.location_kwargs_from_line_item(item),
                         source_type="semi_finished_goods_receipt",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,

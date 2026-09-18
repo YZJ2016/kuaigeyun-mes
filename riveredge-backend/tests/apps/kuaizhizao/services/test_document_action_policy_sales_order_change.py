@@ -8,6 +8,7 @@ from apps.kuaizhizao.services.document_action_policy.sales_order_change import (
     assert_sales_order_change_capability,
     derive_sales_order_change_capabilities,
 )
+from apps.kuaizhizao.services.order_change.helpers import item_has_change_content
 from infra.exceptions.exceptions import BusinessLogicError
 
 
@@ -34,6 +35,22 @@ def test_submit_requires_change_content():
     caps = derive_sales_order_change_capabilities(_doc(delta_amount=0), has_change_content=False)
     assert not caps.submit.allowed
     assert caps.submit.reason == "sales_order_change.submit.no_changes"
+
+
+def test_delivery_date_only_counts_as_change_content():
+    item = SimpleNamespace(
+        change_type="DELIVERY_DATE",
+        delta_amount=0,
+        before_quantity=10,
+        after_quantity=10,
+        before_unit_price=100,
+        after_unit_price=100,
+        before_delivery_date="2026-09-20",
+        after_delivery_date="2026-09-18",
+    )
+    assert item_has_change_content(item)
+    caps = derive_sales_order_change_capabilities(_doc(delta_amount=0), has_change_content=True)
+    assert caps.submit.allowed
 
 
 def test_pending_withdraw():

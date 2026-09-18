@@ -1,4 +1,4 @@
-"""委外收货 API（入库 Hub 权限：kuaizhizao:inbound，与仓库入库菜单一致）。"""
+"""委外收货 API（权限模块：kuaizhizao:outsource-receipt，与委外管理菜单一致）。"""
 
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ from apps.kuaizhizao.services.outsource_material_receipt_service import Outsourc
 outsource_material_receipt_service = OutsourceMaterialReceiptService()
 
 router = APIRouter(
-    tags=["App - Kuaige Zhizao - Warehouse Inbound - Outsource Receipt"],
-    dependencies=[Depends(require_kuaizhizao_module_access("inbound", resolve_print=False))],
+    tags=["App - Kuaige Zhizao - Outsource Receipt"],
+    dependencies=[Depends(require_kuaizhizao_module_access("outsource-receipt", resolve_print=False))],
 )
 
 

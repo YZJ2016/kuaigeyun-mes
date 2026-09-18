@@ -9,6 +9,7 @@ import { shouldFetchOutboundHubType } from '../../../utils/warehouseHubFetchGate
 import type { OutboundHubOrder } from './outboundHubTypes';
 import {
   mapOutsourceIssueToOutbound,
+  pickOutboundHubDateCandidate,
   resolveOutboundHubDateRaw,
   resolveOutboundHubOperator,
 } from './outboundHubTypes';
@@ -16,11 +17,23 @@ import {
 function withOutboundHubDisplayFields(row: OutboundHubOrder): OutboundHubOrder {
   const dateRaw = resolveOutboundHubDateRaw(row);
   const operator = resolveOutboundHubOperator(row);
+  const rowRec = row as Record<string, unknown>;
+  const updatedAt = rowRec.updated_at ?? rowRec.updatedAt;
+  const createdAt = rowRec.created_at ?? rowRec.createdAt;
+  let deliveryDate: string | undefined;
+  if (dateRaw != null && String(dateRaw).trim() !== '') {
+    const text = String(dateRaw).trim();
+    deliveryDate = /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : text;
+  }
   return {
     ...row,
-    ...(dateRaw != null && String(dateRaw).trim() !== ''
-      ? { delivery_date: String(dateRaw) }
+    ...(updatedAt != null && String(updatedAt).trim() !== ''
+      ? { updated_at: String(updatedAt) }
       : {}),
+    ...(createdAt != null && String(createdAt).trim() !== ''
+      ? { created_at: String(createdAt) }
+      : {}),
+    ...(deliveryDate ? { delivery_date: deliveryDate } : {}),
     ...(operator ? { delivered_by: operator } : {}),
   };
 }
@@ -165,7 +178,12 @@ export async function fetchOutboundHubList(
             ({
               ...(item as Record<string, unknown>),
               outbound_type: 'production_picking' as const,
-              delivery_date: (item as Record<string, unknown>).picking_time ?? (item as Record<string, unknown>).created_at,
+              delivery_date: pickOutboundHubDateCandidate(
+                (item as Record<string, unknown>).picking_time,
+                (item as Record<string, unknown>).pickingTime,
+                (item as Record<string, unknown>).created_at,
+                (item as Record<string, unknown>).createdAt,
+              ),
               delivered_by: (item as Record<string, unknown>).picker_name,
             }) as OutboundHubOrder,
         ),
@@ -178,10 +196,14 @@ export async function fetchOutboundHubList(
             ({
               ...(item as Record<string, unknown>),
               outbound_type: 'sales_delivery' as const,
-              delivery_date:
-                (item as Record<string, unknown>).delivery_time ??
-                (item as Record<string, unknown>).delivery_date ??
+              delivery_date: pickOutboundHubDateCandidate(
+                (item as Record<string, unknown>).delivery_time,
+                (item as Record<string, unknown>).deliveryTime,
+                (item as Record<string, unknown>).delivery_date,
+                (item as Record<string, unknown>).deliveryDate,
                 (item as Record<string, unknown>).created_at,
+                (item as Record<string, unknown>).createdAt,
+              ),
               delivered_by: (item as Record<string, unknown>).deliverer_name,
             }) as OutboundHubOrder,
         ),
@@ -197,7 +219,12 @@ export async function fetchOutboundHubList(
             ...(item as Record<string, unknown>),
             outbound_type: 'other_outbound' as const,
             delivery_code: (item as Record<string, unknown>).outbound_code,
-            delivery_date: (item as Record<string, unknown>).delivery_time ?? (item as Record<string, unknown>).created_at,
+            delivery_date: pickOutboundHubDateCandidate(
+              (item as Record<string, unknown>).delivery_time,
+              (item as Record<string, unknown>).deliveryTime,
+              (item as Record<string, unknown>).created_at,
+              (item as Record<string, unknown>).createdAt,
+            ),
             delivered_by: (item as Record<string, unknown>).deliverer_name,
           }) as OutboundHubOrder,
       )
@@ -209,7 +236,12 @@ export async function fetchOutboundHubList(
             ...(item as Record<string, unknown>),
             outbound_type: 'material_borrow' as const,
             delivery_code: (item as Record<string, unknown>).borrow_code,
-            delivery_date: (item as Record<string, unknown>).borrow_time ?? (item as Record<string, unknown>).created_at,
+            delivery_date: pickOutboundHubDateCandidate(
+              (item as Record<string, unknown>).borrow_time,
+              (item as Record<string, unknown>).borrowTime,
+              (item as Record<string, unknown>).created_at,
+              (item as Record<string, unknown>).createdAt,
+            ),
             delivered_by: (item as Record<string, unknown>).borrower_name,
           }) as OutboundHubOrder,
       )
@@ -222,8 +254,12 @@ export async function fetchOutboundHubList(
             outbound_type: 'purchase_return' as const,
             return_code: (item as Record<string, unknown>).return_code,
             delivery_code: (item as Record<string, unknown>).return_code,
-            delivery_date:
-              (item as Record<string, unknown>).return_time ?? (item as Record<string, unknown>).created_at,
+            delivery_date: pickOutboundHubDateCandidate(
+              (item as Record<string, unknown>).return_time,
+              (item as Record<string, unknown>).returnTime,
+              (item as Record<string, unknown>).created_at,
+              (item as Record<string, unknown>).createdAt,
+            ),
             delivered_by: (item as Record<string, unknown>).returner_name,
             total_quantity:
               (item as Record<string, unknown>).total_quantity ??

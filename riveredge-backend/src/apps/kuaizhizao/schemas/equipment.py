@@ -262,6 +262,22 @@ class EquipmentCalibrationCreateWithEquipment(BaseModel):
     remark: Optional[str] = Field(None, description="备注")
 
 
+class EquipmentCalibrationUpdate(BaseModel):
+    """设备校验记录更新 Schema"""
+    calibration_date: Optional[date] = Field(None, description="校验日期")
+    result: Optional[str] = Field(None, max_length=50, description="校验结果（合格、不合格、限制使用）")
+    plan_type: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="计划类型：internal 内校 / external 外校",
+    )
+    certificate_no: Optional[str] = Field(None, max_length=100, description="证书编号")
+    expiry_date: Optional[date] = Field(None, description="计量到期日（有效期至）")
+    attachment_uuid: Optional[str] = Field(None, max_length=36, description="报告附件ID")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    remark: Optional[str] = Field(None, description="备注")
+
+
 class EquipmentCalibrationResponse(BaseModel):
     """设备校验记录响应 Schema"""
     model_config = ConfigDict(from_attributes=True)

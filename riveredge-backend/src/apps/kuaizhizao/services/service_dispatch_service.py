@@ -130,6 +130,16 @@ class ServiceDispatchService:
         }
         apply_create_audit(payload, current_user)
         row = await ServiceDispatchOrder.create(**payload)
+        from apps.kuaizhizao.services.after_sales_upstream_status import (
+            sync_upstream_on_dispatch_created,
+        )
+
+        await sync_upstream_on_dispatch_created(
+            tenant_id,
+            source_type=source_type,
+            source_id=data.source_id,
+            current_user=current_user,
+        )
         return await cls._to_response(row)
 
     @classmethod
@@ -306,6 +316,16 @@ class ServiceDispatchService:
             row.attachments = data.attachments
             apply_update_audit(row, current_user)
             await row.save()
+            from apps.kuaizhizao.services.after_sales_upstream_status import (
+                sync_upstream_on_dispatch_completed,
+            )
+
+            await sync_upstream_on_dispatch_completed(
+                tenant_id,
+                source_type=str(row.source_type or ""),
+                source_id=int(row.source_id),
+                current_user=current_user,
+            )
         return await cls.get(tenant_id, dispatch_id)
 
     @classmethod

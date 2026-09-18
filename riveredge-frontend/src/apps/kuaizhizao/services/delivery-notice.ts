@@ -102,6 +102,20 @@ export const deliveryNoticeApi = {
   delete: async (id: string) => apiRequest(`/apps/kuaizhizao/delivery-notices/${id}`, { method: 'DELETE' }),
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/delivery-notices/${id}`, { method: 'GET' }),
   send: async (id: string) => apiRequest(`/apps/kuaizhizao/delivery-notices/${id}/send`, { method: 'POST' }),
+  pushToFreightOrders: async (noticeIds: number[]): Promise<{
+    success: boolean;
+    message: string;
+    items: Array<{
+      notice_id: number;
+      notice_code: string;
+      freight_order_id: number;
+      freight_order_code: string;
+    }>;
+  }> =>
+    apiRequest('/apps/kuaizhizao/delivery-notices/push-to-freight-orders', {
+      method: 'POST',
+      data: { notice_ids: noticeIds },
+    }),
   print: async (id: string, templateUuid?: string) =>
     apiRequest(`/apps/kuaizhizao/delivery-notices/${id}/print`, {
       method: 'GET',

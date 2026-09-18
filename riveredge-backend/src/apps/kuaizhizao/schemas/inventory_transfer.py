@@ -175,6 +175,10 @@ class InventoryTransferItemUpdate(BaseModel):
     """
     model_config = ConfigDict(from_attributes=True)
 
+    material_id: Optional[int] = Field(None, description="物料ID")
+    material_code: Optional[str] = Field(None, description="物料编码")
+    material_name: Optional[str] = Field(None, description="物料名称")
+    material_unit: Optional[str] = Field(None, description="物料单位")
     quantity: Optional[Decimal] = Field(None, description="调拨数量")
     unit_price: Optional[Decimal] = Field(None, description="单价")
     from_warehouse_id: Optional[int] = Field(None, description="调出仓库ID")

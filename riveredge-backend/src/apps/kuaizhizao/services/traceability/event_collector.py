@@ -173,10 +173,25 @@ class TraceEventCollector:
             )
         )
 
+    async def _link_work_orders_by_serial(self, tenant_id: int, serial_no: str) -> None:
+        """将工单跟踪字段上的序列号挂到采集上下文（与 identifier_resolver 真源一致）。"""
+        from tortoise.expressions import Q
+
+        rows = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).filter(Q(planned_serial_no=serial_no) | Q(confirmed_serial_no=serial_no)).all()
+        for wo in rows:
+            self._work_order_ids.add(int(wo.id))
+
     async def _collect_for_serial(self, anchor: ResolvedTraceAnchor) -> None:
         tenant_id = anchor.tenant_id
         serial_no = anchor.code
         material_id = anchor.material_id
+
+        if anchor.work_order_id:
+            self._work_order_ids.add(int(anchor.work_order_id))
+        await self._link_work_orders_by_serial(tenant_id, serial_no)
 
         await self._collect_purchase_receipts(tenant_id, material_id=material_id, serial_no=serial_no)
         await self._collect_customer_material(tenant_id, material_id=material_id, serial_no=serial_no)

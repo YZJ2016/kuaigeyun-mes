@@ -1,8 +1,19 @@
 /**
- * 委外发料表单：BOM 待发明细 + 可选手动添加物料
+ * 委外发料表单：BOM 待发明细 + 可选手动添加物料；行级出库仓库与可用库存
  */
-import React, { useMemo, useState } from 'react';
-import { Alert, Button, Divider, Form, InputNumber, Space, Spin, Table, Typography } from 'antd';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  Alert,
+  Button,
+  Divider,
+  Form,
+  InputNumber,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Typography,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +34,7 @@ export type OutsourceIssueLine = {
   pendingQuantity: number;
   availableQuantity: number;
   issueQuantity: number;
+  warehouseId?: number;
   isManual?: boolean;
 };
 
@@ -34,6 +46,12 @@ export type OutsourceIssueWorkOrderBrief = {
   quantity?: number;
 };
 
+export type OutsourceIssueWarehouseOption = {
+  label: string;
+  value: number;
+  name: string;
+};
+
 interface OutsourceIssueFormContentProps {
   workOrder: OutsourceIssueWorkOrderBrief;
   lines: OutsourceIssueLine[];
@@ -41,6 +59,12 @@ interface OutsourceIssueFormContentProps {
   loading?: boolean;
   previewMessage?: string | null;
   allowManualLines?: boolean;
+  /** 行级出库仓库选项；传入后隐藏头表选仓，改在明细选仓 */
+  warehouseOptions?: OutsourceIssueWarehouseOption[];
+  /** 物料 → 仓库 → 可用库存 */
+  stockByMaterialWh?: Record<number, Record<number, number>>;
+  stockByWhStatus?: 'idle' | 'loading' | 'ready';
+  onBatchSetWarehouse?: (warehouseId: number) => void;
 }
 
 const OutsourceIssueFormContent: React.FC<OutsourceIssueFormContentProps> = ({
@@ -50,15 +74,34 @@ const OutsourceIssueFormContent: React.FC<OutsourceIssueFormContentProps> = ({
   loading,
   previewMessage,
   allowManualLines = true,
+  warehouseOptions,
+  stockByMaterialWh,
+  stockByWhStatus = 'idle',
+  onBatchSetWarehouse,
 }) => {
   const { t } = useTranslation();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerForm] = Form.useForm();
+  const [batchWhId, setBatchWhId] = useState<number | undefined>();
+  const lineWarehouseEnabled = warehouseOptions !== undefined;
 
   const updateLineQty = (materialId: number, issueQuantity: number) => {
     onLinesChange(
       lines.map((l) => (l.materialId === materialId ? { ...l, issueQuantity } : l)),
+    );
+  };
+
+  const updateLineWarehouse = (materialId: number, warehouseId: number) => {
+    onLinesChange(
+      lines.map((l) => {
+        if (l.materialId !== materialId) return l;
+        const available =
+          stockByWhStatus === 'ready'
+            ? Number(stockByMaterialWh?.[materialId]?.[warehouseId] ?? 0)
+            : l.availableQuantity;
+        return { ...l, warehouseId, availableQuantity: available };
+      }),
     );
   };
 
@@ -90,6 +133,43 @@ const OutsourceIssueFormContent: React.FC<OutsourceIssueFormContentProps> = ({
     ]);
     pickerForm.resetFields();
     setPickerOpen(false);
+  };
+
+  const warehouseOptionsForMaterial = useCallback(
+    (materialId: number) => {
+      const opts = warehouseOptions ?? [];
+      const stockMap = stockByMaterialWh?.[materialId] ?? {};
+      const showStock = stockByWhStatus === 'ready';
+      const enriched = opts.map((o) => {
+        const qty = Number(stockMap[o.value] ?? 0);
+        const baseName = String(o.name || o.label || o.value).trim();
+        const label = showStock
+          ? t('app.kuaizhizao.warehouseOutbound.option.warehouseWithStock', {
+              warehouse: baseName,
+              qty: formatQuantity(qty),
+            })
+          : baseName;
+        return { ...o, label, stockQty: qty };
+      });
+      if (!showStock) return enriched;
+      return enriched.sort((a, b) => {
+        if (a.stockQty !== b.stockQty) return b.stockQty - a.stockQty;
+        return String(a.name || a.label).localeCompare(String(b.name || b.label), 'zh');
+      });
+    },
+    [stockByMaterialWh, stockByWhStatus, t, warehouseOptions],
+  );
+
+  const resolveAvailableQty = (r: OutsourceIssueLine): number | null => {
+    if (!lineWarehouseEnabled) {
+      return Number(r.availableQuantity ?? 0);
+    }
+    const whId = Number(r.warehouseId ?? 0);
+    if (!(whId > 0)) return null;
+    if (stockByWhStatus === 'ready') {
+      return Number(stockByMaterialWh?.[r.materialId]?.[whId] ?? 0);
+    }
+    return Number(r.availableQuantity ?? 0);
   };
 
   const columns: ColumnsType<OutsourceIssueLine> = useMemo(
@@ -140,12 +220,51 @@ const OutsourceIssueFormContent: React.FC<OutsourceIssueFormContentProps> = ({
             </Typography.Text>
           ),
       },
+      ...(lineWarehouseEnabled
+        ? [
+            {
+              title: (
+                <>
+                  {t('app.kuaizhizao.warehouseOutbound.col.warehouseName')}
+                  <Typography.Text type="danger"> *</Typography.Text>
+                </>
+              ),
+              key: 'warehouse',
+              width: 220,
+              render: (_: unknown, r: OutsourceIssueLine) => (
+                <Select
+                  style={{ width: '100%', minWidth: 160 }}
+                  placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
+                  showSearch
+                  optionFilterProp="label"
+                  options={warehouseOptionsForMaterial(r.materialId)}
+                  value={r.warehouseId}
+                  onChange={(nv) => {
+                    const wh = Number(nv);
+                    if (!(wh > 0)) return;
+                    updateLineWarehouse(r.materialId, wh);
+                  }}
+                />
+              ),
+            } as ColumnsType<OutsourceIssueLine>[number],
+          ]
+        : []),
       {
         title: t('app.kuaizhizao.outsourceWorkOrder.issueAvailableStock'),
         dataIndex: 'availableQuantity',
         width: 96,
         align: 'right',
-        render: (_, r) => (r.isManual ? '—' : formatQuantity(r.availableQuantity)),
+        render: (_, r) => {
+          const qty = resolveAvailableQty(r);
+          if (qty == null) {
+            return (
+              <Typography.Text type="secondary">
+                {t('app.kuaizhizao.outsourceWorkOrder.issueAvailableStockNeedWarehouse')}
+              </Typography.Text>
+            );
+          }
+          return formatQuantity(qty);
+        },
       },
       {
         title: t('app.kuaizhizao.warehouseOutbound.entry.thisIssue'),
@@ -186,7 +305,17 @@ const OutsourceIssueFormContent: React.FC<OutsourceIssueFormContentProps> = ({
           ]
         : []),
     ],
-    [allowManualLines, quantityDecimals, lines, onLinesChange, t],
+    [
+      allowManualLines,
+      lineWarehouseEnabled,
+      quantityDecimals,
+      lines,
+      onLinesChange,
+      stockByMaterialWh,
+      stockByWhStatus,
+      t,
+      warehouseOptionsForMaterial,
+    ],
   );
 
   const alertType = allowManualLines && previewMessage ? 'info' : 'warning';
@@ -213,29 +342,51 @@ const OutsourceIssueFormContent: React.FC<OutsourceIssueFormContentProps> = ({
       {previewMessage ? (
         <Alert type={alertType} showIcon title={previewMessage} style={{ marginBottom: 12 }} />
       ) : null}
-      {allowManualLines ? (
-        <Space style={{ marginBottom: 12 }} wrap>
-          {pickerOpen ? (
-            <Form form={pickerForm} style={{ minWidth: 320, flex: 1 }}>
-              <UniMaterialSelect
-                name="manual_material_id"
-                label=""
-                placeholder={t('app.kuaizhizao.outsourceWorkOrder.issuePickMaterial')}
-                onChange={addManualMaterial}
-                showQuickCreate
-                showAdvancedSearch
-              />
-            </Form>
+      <Space style={{ marginBottom: 12 }} wrap>
+        {allowManualLines ? (
+          pickerOpen ? (
+            <>
+              <Form form={pickerForm} style={{ minWidth: 320, flex: 1 }}>
+                <UniMaterialSelect
+                  name="manual_material_id"
+                  label=""
+                  placeholder={t('app.kuaizhizao.outsourceWorkOrder.issuePickMaterial')}
+                  onChange={addManualMaterial}
+                  showQuickCreate
+                  showAdvancedSearch
+                />
+              </Form>
+              <Button onClick={() => setPickerOpen(false)}>{t('common.cancel')}</Button>
+            </>
           ) : (
             <Button icon={<PlusOutlined />} onClick={() => setPickerOpen(true)}>
               {t('app.kuaizhizao.outsourceWorkOrder.issueAddManualLine')}
             </Button>
-          )}
-          {pickerOpen ? (
-            <Button onClick={() => setPickerOpen(false)}>{t('common.cancel')}</Button>
-          ) : null}
-        </Space>
-      ) : null}
+          )
+        ) : null}
+        {lineWarehouseEnabled && onBatchSetWarehouse ? (
+          <Space.Compact>
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t('app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse')}
+              style={{ width: 220 }}
+              options={warehouseOptions}
+              value={batchWhId}
+              onChange={(v) => setBatchWhId(v == null ? undefined : Number(v))}
+            />
+            <Button
+              disabled={!(batchWhId != null && batchWhId > 0) || !lines.length}
+              onClick={() => {
+                if (batchWhId != null && batchWhId > 0) onBatchSetWarehouse(batchWhId);
+              }}
+            >
+              {t('app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse')}
+            </Button>
+          </Space.Compact>
+        ) : null}
+      </Space>
       <Spin spinning={!!loading}>
         <Table<OutsourceIssueLine>
           size="small"
@@ -243,7 +394,7 @@ const OutsourceIssueFormContent: React.FC<OutsourceIssueFormContentProps> = ({
           columns={columns}
           dataSource={lines}
           pagination={false}
-          scroll={{ x: 980, y: 280 }}
+          scroll={{ x: lineWarehouseEnabled ? 1180 : 980, y: 280 }}
           locale={{
             emptyText: loading
               ? t('common.loading')

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable, Optional, Type
 
 from tortoise.models import Model
@@ -256,7 +257,31 @@ async def apply_approval_decision(
     await row.save()
 
 
-def parse_business_datetime(value: Optional[str]) -> Any:
-    if value is None or not str(value).strip():
+def parse_business_datetime(value: Optional[str | datetime]) -> Any:
+    """
+    轻办公表单墙钟字符串 / datetime → ORM 写入用 UTC aware。
+
+    真源：先解析为 datetime，再 ``coerce_business_datetime_to_utc``。
+    禁止把 str 直接交给 coerce（会触发 ``'str' object has no attribute 'tzinfo'``）。
+    """
+    if value is None:
         return None
-    return coerce_business_datetime_to_utc(str(value).strip())
+    if isinstance(value, datetime):
+        return coerce_business_datetime_to_utc(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    normalized = text.replace("Z", "+00:00")
+    parsed: Optional[datetime] = None
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+            try:
+                parsed = datetime.strptime(text, fmt)
+                break
+            except ValueError:
+                continue
+    if parsed is None:
+        raise BusinessLogicError(f"无效的业务时间: {text}")
+    return coerce_business_datetime_to_utc(parsed)

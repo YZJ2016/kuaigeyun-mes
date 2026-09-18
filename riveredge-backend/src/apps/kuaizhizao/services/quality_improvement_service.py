@@ -1066,10 +1066,14 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
 
         user_info = await self.get_user_info(user_id)
         conduct_data = payload.model_dump(exclude_unset=True)
+        from infra.services.business_config_service import BusinessConfigService
+
+        quantity_decimal_places = await BusinessConfigService().get_quantity_decimal_places(tenant_id)
         qualified_quantity, unqualified_quantity = assert_inspection_quantities_balanced(
             payload.qualified_quantity,
             payload.unqualified_quantity,
             row.inspection_quantity,
+            decimal_places=quantity_decimal_places,
         )
         _assert_unqualified_qty_when_steps_fail(
             row, "other_checks", conduct_data, unqualified_quantity

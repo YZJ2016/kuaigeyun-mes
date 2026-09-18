@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -9,8 +9,9 @@ import {
   ProFormSelect,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Row, Col } from 'antd';
+import { App, Button, Row, Col } from 'antd';
 import dayjs from 'dayjs';
+import { useSearchParams } from 'react-router-dom';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -22,6 +23,7 @@ import { borrowsApi, returnsApi } from '../../../services/moldOps';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
@@ -31,7 +33,6 @@ import {
   EquipmentMasterDetailDrawer,
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
-import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 
@@ -56,16 +57,26 @@ interface MoldReturn {
   updated_at?: string;
 }
 
+type BorrowOption = {
+  label: string;
+  value: number;
+  moldId: number;
+};
+
 const MoldReturnsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<MoldReturn | null>(null);
-  const [borrowOptions, setBorrowOptions] = useState<{ label: string; value: number }[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [borrowOptions, setBorrowOptions] = useState<BorrowOption[]>([]);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>();
+  const pushHandledRef = useRef<string | null>(null);
   const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
     useEquipmentDetailDrawer<MoldReturn>();
 
@@ -74,69 +85,149 @@ const MoldReturnsPage: React.FC = () => {
     void openDetail(() => returnsApi.get(record.id!), t(`${P}.listFailed`));
   };
 
-  const loadBorrowOptions = async () => {
+  const loadBorrowOptions = async (): Promise<BorrowOption[]> => {
     const res = await borrowsApi.listOutstanding({ limit: 500 });
-    setBorrowOptions(
-      (res.items ?? []).map(
-        (b: { id: number; document_no?: string; borrow_no?: string; mold_name?: string }) => ({
-          label: `${b.document_no ?? b.borrow_no ?? b.id} - ${b.mold_name ?? ''}`,
-          value: b.id,
-        }),
-      ),
+    const options = (res.items ?? []).map(
+      (b: {
+        id: number;
+        document_no?: string;
+        borrow_no?: string;
+        mold_name?: string;
+        mold_id?: number;
+      }) => ({
+        label: `${b.document_no ?? b.borrow_no ?? b.id} - ${b.mold_name ?? ''}`,
+        value: b.id,
+        moldId: Number(b.mold_id),
+      }),
     );
+    setBorrowOptions(options);
+    return options;
+  };
+
+  const applyUsagePreview = async (borrowId: number) => {
+    try {
+      const preview = await returnsApi.usagePreview(borrowId);
+      formRef.current?.setFieldsValue({
+        borrow_id: borrowId,
+        mold_id: preview.mold_id,
+        manufacture_qty: preview.manufacture_qty ?? undefined,
+        usage_count: preview.usage_count ?? 1,
+      });
+      setFormInitialValues((prev) => ({
+        ...(prev || {}),
+        borrow_id: borrowId,
+        mold_id: preview.mold_id,
+        manufacture_qty: preview.manufacture_qty ?? undefined,
+        usage_count: preview.usage_count ?? 1,
+      }));
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.usagePreviewFailed`)));
+    }
+  };
+
+  const openCreate = async (prefillBorrowId?: number) => {
+    setIsEdit(false);
+    setCurrent(null);
+    const options = await loadBorrowOptions();
+    const borrowId = prefillBorrowId;
+    const moldId = borrowId
+      ? options.find((o) => o.value === borrowId)?.moldId
+      : undefined;
+    setFormInitialValues({
+      return_date: dayjs(),
+      usage_count: 1,
+      borrow_id: borrowId,
+      mold_id: moldId,
+    });
+    setModalVisible(true);
+    if (borrowId) {
+      void applyUsagePreview(borrowId);
+    }
   };
 
   const handleCreate = () => {
-    setIsEdit(false);
-    setCurrent(null);
-    setModalVisible(true);
-    void loadBorrowOptions();
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ return_date: dayjs(), usage_count: 1 });
+    void openCreate();
   };
   useNewShortcut(handleCreate);
 
+  useEffect(() => {
+    const borrowIdRaw = searchParams.get('borrow_id');
+    if (!borrowIdRaw || !perms.canCreate) return;
+    if (pushHandledRef.current === borrowIdRaw) return;
+    pushHandledRef.current = borrowIdRaw;
+    const borrowId = Number(borrowIdRaw);
+    if (!Number.isFinite(borrowId)) return;
+    void openCreate(borrowId);
+    const next = new URLSearchParams(searchParams);
+    next.delete('borrow_id');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, perms.canCreate]);
+
   const handleEdit = async (record: MoldReturn) => {
     if (!record.id) return;
-    const detail = await returnsApi.get(record.id);
-    setIsEdit(true);
-    setCurrent(detail);
-    setModalVisible(true);
-    void loadBorrowOptions();
-    formRef.current?.setFieldsValue({
-      borrow_id: detail.borrow_id,
-      return_date: detail.return_date ? dayjs(detail.return_date) : dayjs(),
-      manufacture_qty: detail.manufacture_qty,
-      usage_count: detail.usage_count,
-      remark: detail.remark,
-    });
+    try {
+      const detail = await returnsApi.get(record.id);
+      setIsEdit(true);
+      setCurrent(detail);
+      await loadBorrowOptions();
+      setFormInitialValues({
+        borrow_id: detail.borrow_id,
+        mold_id: detail.mold_id,
+        return_date: detail.return_date ? dayjs(detail.return_date) : dayjs(),
+        manufacture_qty: detail.manufacture_qty,
+        usage_count: detail.usage_count,
+        remark: detail.remark,
+      });
+      setModalVisible(true);
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.listFailed`)));
+    }
   };
 
-  const handleDelete = async (keys: React.Key[]) => {
-    for (const id of keys) {
-          await returnsApi.delete(Number(id));
-        }
-    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-    actionRef.current?.reload();
+  const executeDelete = async (keys: React.Key[]) => {
+    try {
+      for (const id of keys) {
+        await returnsApi.delete(Number(id));
+      }
+      messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    }
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
+    const borrowId = Number(values.borrow_id);
+    const moldIdFromOption = borrowOptions.find((o) => o.value === borrowId)?.moldId;
+    const moldId = Number(values.mold_id ?? moldIdFromOption);
+    if (!Number.isFinite(moldId) || moldId <= 0) {
+      messageApi.error(t(`${P}.moldRequired`));
+      return;
+    }
     const payload = {
-      borrow_id: values.borrow_id,
+      mold_id: moldId,
+      borrow_id: Number.isFinite(borrowId) ? borrowId : undefined,
       return_date: (values.return_date as dayjs.Dayjs)?.format('YYYY-MM-DD'),
-      manufacture_qty: values.manufacture_qty,
-      usage_count: values.usage_count,
+      usage_count: Number(values.usage_count) || 1,
       remark: values.remark,
     };
-    if (isEdit && current?.id) {
-      await returnsApi.update(current.id, payload);
-      messageApi.success(t('common.updateSuccess'));
-    } else {
-      await returnsApi.create(payload);
-      messageApi.success(t('common.createSuccess'));
+    setSubmitting(true);
+    try {
+      if (isEdit && current?.id) {
+        await returnsApi.update(current.id, payload);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await returnsApi.create(payload);
+        messageApi.success(t('common.createSuccess'));
+      }
+      setModalVisible(false);
+      setFormInitialValues(undefined);
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    } finally {
+      setSubmitting(false);
     }
-    setModalVisible(false);
-    actionRef.current?.reload();
   };
 
   const detailColumns: ProDescriptionsItemProps<MoldReturn>[] = useMemo(
@@ -284,18 +375,21 @@ const MoldReturnsPage: React.FC = () => {
               </Button>
             )}
             {perms.canDelete && (
-              <ActionConfirmPopconfirm title={t('common.deleteTitle')} onConfirm={() => record.id && void executeDelete([record.id])}>
-              <Button
-                {...rowActionKind('delete')}
-                type="link"
-                size="small"
-                danger
-                onClick={(e) => e.stopPropagation()}
+              <ActionConfirmPopconfirm
+                title={t('common.deleteTitle')}
+                onConfirm={() => record.id && void executeDelete([record.id])}
               >
-                {t('common.delete')}
-              </Button>
-            </ActionConfirmPopconfirm>
-          )}
+                <Button
+                  {...rowActionKind('delete')}
+                  type="link"
+                  size="small"
+                  danger
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('common.delete')}
+                </Button>
+              </ActionConfirmPopconfirm>
+            )}
           </>
         ),
       },
@@ -307,10 +401,10 @@ const MoldReturnsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<MoldReturn>
-        viewTypes={['table', 'help']}
+          viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldReturns)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-returns-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-returns-width-v3"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -337,8 +431,7 @@ const MoldReturnsPage: React.FC = () => {
           showDeleteButton={perms.canDelete}
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
-          
-          onDelete={handleDelete}
+          onDelete={executeDelete}
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
@@ -346,11 +439,16 @@ const MoldReturnsPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
         onFinish={handleSubmit}
         isEdit={isEdit}
+        loading={submitting}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>
@@ -362,7 +460,15 @@ const MoldReturnsPage: React.FC = () => {
               rules={[{ required: true }]}
               showSearch
               disabled={isEdit}
+              fieldProps={{
+                onChange: (value: number) => {
+                  const moldId = borrowOptions.find((o) => o.value === value)?.moldId;
+                  formRef.current?.setFieldsValue({ mold_id: moldId });
+                  if (value) void applyUsagePreview(value);
+                },
+              }}
             />
+            <ProFormDigit name="mold_id" hidden />
           </Col>
           <Col span={12}>
             <ProFormDatePicker
@@ -373,10 +479,21 @@ const MoldReturnsPage: React.FC = () => {
             />
           </Col>
           <Col span={12}>
-            <ProFormDigit name="manufacture_qty" label={t(`${P}.col.manufactureQty`)} min={0} />
+            <ProFormDigit
+              name="manufacture_qty"
+              label={t(`${P}.col.manufactureQty`)}
+              min={0}
+              fieldProps={{ disabled: true }}
+              tooltip={t(`${P}.form.manufactureQtyHint`)}
+            />
           </Col>
           <Col span={12}>
-            <ProFormDigit name="usage_count" label={t(`${P}.col.usageCount`)} min={1} rules={[{ required: true }]} />
+            <ProFormDigit
+              name="usage_count"
+              label={t(`${P}.col.usageCount`)}
+              min={1}
+              rules={[{ required: true }]}
+            />
           </Col>
           <Col span={24}>
             <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />

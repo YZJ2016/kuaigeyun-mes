@@ -123,6 +123,23 @@ def test_push_sales_return_requires_delivered_qty():
     assert caps_ok.push_sales_return.allowed
 
 
+def test_push_invoice_blocked_when_fully_invoiced():
+    caps = derive_sales_order_capabilities(
+        _o(status="已审核", review_status="审核通过"),
+        has_items=True,
+        has_remaining_invoice_amount=False,
+    )
+    assert not caps.push_invoice.allowed
+    assert caps.push_invoice.reason == "sales_order.push_invoice.already_fully_invoiced"
+
+    caps_ok = derive_sales_order_capabilities(
+        _o(status="已审核", review_status="审核通过"),
+        has_items=True,
+        has_remaining_invoice_amount=True,
+    )
+    assert caps_ok.push_invoice.allowed
+
+
 def test_assert_raises_on_delete_audited():
     with pytest.raises(BusinessLogicError):
         assert_sales_order_capability(_o(status="已审核", review_status="审核通过"), "delete")

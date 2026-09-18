@@ -184,6 +184,108 @@ export function convertDocumentLineForPriceTypeChange(opts: {
   };
 }
 
+/**
+ * 表单专用：不含税→含税且当时税率为 0 时记下未税单价锚点。
+ * 用户随后在含税模式下填写税率时，按该锚点换算含税单价，避免把未税录入误当含税。
+ * 不落库；提交时须 omit。
+ */
+export const EXCLUSIVE_UNIT_ANCHOR_KEY = 'exclusive_unit_anchor' as const;
+
+export function stripExclusiveUnitAnchor<T extends Record<string, unknown>>(row: T): T {
+  if (!Object.prototype.hasOwnProperty.call(row, EXCLUSIVE_UNIT_ANCHOR_KEY)) return row;
+  const next = { ...row };
+  delete (next as Record<string, unknown>)[EXCLUSIVE_UNIT_ANCHOR_KEY];
+  return next;
+}
+
+/** 价类切换写回行时附带/清除未税单价锚点 */
+export function withExclusiveUnitAnchorOnPriceTypeSwitch<T extends Record<string, unknown>>(
+  row: T,
+  converted: { unit_price: number; item_amount: number },
+  fromPriceType: string,
+  toPriceType: string,
+  taxRate: unknown,
+): T & { unit_price: number; item_amount: number } {
+  const base = stripExclusiveUnitAnchor(row);
+  const fromType = fromPriceType || 'tax_exclusive';
+  const toType = toPriceType || 'tax_exclusive';
+  const tax = toSafeNumber(taxRate);
+  const unitBefore = toSafeNumber(row.unit_price);
+  if (
+    fromType === 'tax_exclusive' &&
+    toType === 'tax_inclusive' &&
+    tax === 0 &&
+    !row.is_gift &&
+    unitBefore > 0
+  ) {
+    return {
+      ...base,
+      unit_price: converted.unit_price,
+      item_amount: converted.item_amount,
+      [EXCLUSIVE_UNIT_ANCHOR_KEY]: unitBefore,
+    };
+  }
+  return {
+    ...base,
+    unit_price: converted.unit_price,
+    item_amount: converted.item_amount,
+  };
+}
+
+/**
+ * 税率变更：若存在未税锚点且当前为含税价类，按锚点未税单价正算含税单价；
+ * 否则保持单价不变、仅按价类重算行金额（默认含税录入填税率不抬价）。
+ */
+export function applyDocumentLineTaxRateChange(opts: {
+  row: Record<string, unknown>;
+  qty: unknown;
+  newTaxRate: unknown;
+  priceType: string | undefined;
+  priceDecimals?: number;
+}): Record<string, unknown> {
+  const tax_rate = toSafeNumber(opts.newTaxRate);
+  const pt = opts.priceType ?? 'tax_exclusive';
+  const anchorRaw = opts.row[EXCLUSIVE_UNIT_ANCHOR_KEY];
+  const base = stripExclusiveUnitAnchor(opts.row);
+
+  if (
+    pt === 'tax_inclusive' &&
+    anchorRaw != null &&
+    Number.isFinite(Number(anchorRaw)) &&
+    Number(anchorRaw) > 0 &&
+    tax_rate > 0
+  ) {
+    const exclUnit = Number(anchorRaw);
+    const amounts = calcDocumentLineAmounts(opts.qty, exclUnit, tax_rate, 'tax_exclusive');
+    const qty = toSafeNumber(opts.qty);
+    const rawUnit = qty > 0 ? amounts.incl / qty : 0;
+    const unit_price =
+      opts.priceDecimals != null ? roundToPlaces(rawUnit, opts.priceDecimals) : rawUnit;
+    return {
+      ...base,
+      unit_price,
+      tax_rate,
+      item_amount: amounts.incl,
+    };
+  }
+
+  const unit_price = toSafeNumber(opts.row.unit_price);
+  return {
+    ...base,
+    unit_price,
+    tax_rate,
+    item_amount: recalcDocumentStoredLineAmount(
+      {
+        qty: opts.qty,
+        unit_price,
+        tax_rate,
+        is_gift: opts.row.is_gift,
+      },
+      pt,
+    ),
+  };
+}
+
 /** 按 qty×单价重算落库行金额（数量/单价/税率变更时） */
 export function recalcDocumentStoredLineAmount(
   row: {

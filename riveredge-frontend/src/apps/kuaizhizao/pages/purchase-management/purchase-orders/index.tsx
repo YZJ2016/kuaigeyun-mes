@@ -142,6 +142,7 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   purchaseOrderCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
+import { qualityApi } from '../../../services/quality-execution';
 import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import {
@@ -372,6 +373,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const purchaseOrderAuditEnabled = useAuditRequired('purchase_order', false);
   const purchaseOrderPerms = useResourcePermissions(PURCHASE_ORDER_RESOURCE);
+  const purchaseOrderChangePerms = useResourcePermissions('kuaizhizao:purchase-order-change');
   const { token } = theme.useToken();
   const purchaseOrderDetailDrawerZIndex = token.zIndexPopupBase;
   const navigate = useNavigate();
@@ -389,6 +391,14 @@ const PurchaseOrdersPage: React.FC = () => {
   const pushToReceiptAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_purchase_order');
   const pushToInvoiceAction = resolveKuaizhizaoDocumentAction(t, 'purchase_invoice.pull_from_purchase_order');
   const pushToPurchaseReturnAction = resolveKuaizhizaoDocumentAction(t, 'purchase_return.pull_from_purchase_order');
+  const pushToPurchaseOrderChangeAction = resolveKuaizhizaoDocumentAction(
+    t,
+    'purchase_order_change.pull_from_purchase_order',
+  );
+  const pushToIncomingInspectionAction = resolveKuaizhizaoDocumentAction(
+    t,
+    'incoming_inspection.pull_from_purchase_order',
+  );
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   /** 列表当前页数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
@@ -1662,6 +1672,57 @@ const PurchaseOrdersPage: React.FC = () => {
     [loadPushPreview],
   );
 
+  const handlePushToIncomingInspection = useCallback(
+    (record: PurchaseOrder) => {
+      if (!record.id) return;
+      Modal.confirm({
+        title: pushToIncomingInspectionAction.label,
+        content: t('app.kuaizhizao.purchaseOrder.pushIncomingInspectionConfirm', {
+          code: record.order_code || record.id,
+        }),
+        okText: t('common.confirm', { defaultValue: '确定' }),
+        cancelText: t('common.cancel', { defaultValue: '取消' }),
+        onOk: async () => {
+          try {
+            const created = await qualityApi.incomingInspection.createFromPurchaseOrder(record.id!);
+            const list = Array.isArray(created) ? created : [];
+            messageApi.success(
+              t('app.kuaizhizao.purchaseOrder.pushIncomingInspectionSuccess', {
+                count: list.length,
+              }),
+            );
+            invalidateStatistics();
+            invalidateMenuBadgeCounts();
+            actionRef.current?.reload();
+            if (list.length === 1 && list[0]?.id) {
+              navigate(
+                `/apps/kuaizhizao/quality-management/incoming-inspection?incoming_inspection_id=${list[0].id}`,
+              );
+            } else if (list.length > 1) {
+              navigate('/apps/kuaizhizao/quality-management/incoming-inspection');
+            }
+          } catch (error: unknown) {
+            messageApi.error(
+              getApiErrorMessage(
+                error,
+                t('app.kuaizhizao.purchaseOrder.pushIncomingInspectionFailed'),
+              ),
+            );
+            throw error;
+          }
+        },
+      });
+    },
+    [
+      invalidateMenuBadgeCounts,
+      invalidateStatistics,
+      messageApi,
+      navigate,
+      pushToIncomingInspectionAction.label,
+      t,
+    ],
+  );
+
   const handlePushToReturnConfirm = async () => {
     if (!pushToReturnOrder?.id) return;
     if (!pushToReturnWarehouseId || pushToReturnWarehouseId <= 0) {
@@ -1718,9 +1779,24 @@ const PurchaseOrdersPage: React.FC = () => {
     return tableOrders.find((row) => String(row.id) === String(selectedRowKeys[0])) ?? null;
   }, [selectedRowKeys, tableOrders]);
 
+  const handlePushToPurchaseOrderChange = useCallback(
+    (orderId: number) => {
+      navigate(
+        `/apps/kuaizhizao/purchase-management/purchase-order-changes?source_order_id=${orderId}`,
+      );
+    },
+    [navigate],
+  );
+
   const buildToolbarPushMenuItems = useCallback((record: PurchaseOrder) => {
       const capReason = (cap?: { allowed?: boolean; reason?: string | null }) =>
         cap?.allowed === true ? undefined : purchaseOrderCapabilityReasonMessage(cap?.reason, t);
+      const canPushChange =
+        purchaseOrderChangePerms.canCreate &&
+        record.capabilities?.create_change_order?.allowed === true;
+      const changeDisabledReason = !purchaseOrderChangePerms.canCreate
+        ? t('app.kuaizhizao.purchaseOrder.push.changeNoPermission')
+        : capReason(record.capabilities?.create_change_order);
       return buildUniPushMenuItems([
         {
           key: 'receipt-notice',
@@ -1753,6 +1829,16 @@ const PurchaseOrdersPage: React.FC = () => {
           },
         },
         {
+          key: 'incoming-inspection',
+          label: pushToIncomingInspectionAction.label,
+          disabled: record.capabilities?.push_incoming_inspection?.allowed !== true,
+          title: capReason(record.capabilities?.push_incoming_inspection),
+          onClick: () => {
+            if (record.capabilities?.push_incoming_inspection?.allowed !== true) return;
+            handlePushToIncomingInspection(record);
+          },
+        },
+        {
           key: 'purchase-return',
           label: pushToPurchaseReturnAction.label,
           disabled: record.capabilities?.push_purchase_return?.allowed !== true,
@@ -1762,14 +1848,29 @@ const PurchaseOrdersPage: React.FC = () => {
             handlePushToReturn(record);
           },
         },
+        {
+          key: 'purchase-order-change',
+          label: pushToPurchaseOrderChangeAction.label,
+          disabled: !canPushChange,
+          title: changeDisabledReason,
+          onClick: () => {
+            if (!canPushChange || record.id == null) return;
+            handlePushToPurchaseOrderChange(Number(record.id));
+          },
+        },
       ]);
     },
     [
+      handlePushToIncomingInspection,
       handlePushToInvoice,
       handlePushToNotice,
+      handlePushToPurchaseOrderChange,
       handlePushToReceipt,
       handlePushToReturn,
+      purchaseOrderChangePerms.canCreate,
+      pushToIncomingInspectionAction.label,
       pushToInvoiceAction.label,
+      pushToPurchaseOrderChangeAction.label,
       pushToPurchaseReturnAction.label,
       pushToReceiptAction.label,
       pushToReceiptNoticeAction.label,
@@ -1793,20 +1894,24 @@ const PurchaseOrdersPage: React.FC = () => {
       caps?.push_receipt_notice?.allowed === true ||
       caps?.push_receipt?.allowed === true ||
       caps?.push_invoice?.allowed === true ||
-      caps?.push_purchase_return?.allowed === true;
+      caps?.push_incoming_inspection?.allowed === true ||
+      caps?.push_purchase_return?.allowed === true ||
+      (purchaseOrderChangePerms.canCreate && caps?.create_change_order?.allowed === true);
     if (!anyAllowed) {
       return (
         purchaseOrderCapabilityReasonMessage(
           caps?.push_receipt_notice?.reason ||
             caps?.push_receipt?.reason ||
             caps?.push_invoice?.reason ||
-            caps?.push_purchase_return?.reason,
+            caps?.push_incoming_inspection?.reason ||
+            caps?.push_purchase_return?.reason ||
+            caps?.create_change_order?.reason,
           t,
         ) || t('app.kuaizhizao.purchaseOrder.push.noActions')
       );
     }
     return undefined;
-  }, [selectedOrderForToolbar, selectedRowKeys.length, t]);
+  }, [purchaseOrderChangePerms.canCreate, selectedOrderForToolbar, selectedRowKeys.length, t]);
 
   // 处理删除
   const executeDelete = async (record: PurchaseOrder) => {
@@ -3501,7 +3606,9 @@ const PurchaseOrdersPage: React.FC = () => {
                 'receipt-notice': 'receipt_notice',
                 receipt: 'purchase_receipt',
                 invoice: 'purchase_invoice',
+                'incoming-inspection': 'incoming_inspection',
                 'purchase-return': 'purchase_return',
+                'purchase-order-change': 'purchase_order_change',
               }}
             />,
           ]}
@@ -4121,7 +4228,9 @@ const PurchaseOrdersPage: React.FC = () => {
               items={[
                 {
                   key: 'create-change',
-                  visible: orderDetail.capabilities?.create_change_order?.allowed === true,
+                  visible:
+                    orderDetail.capabilities?.create_change_order?.allowed === true &&
+                    purchaseOrderChangePerms.canCreate,
                   render: () => (
                     <Button
                       icon={<EditOutlined />}

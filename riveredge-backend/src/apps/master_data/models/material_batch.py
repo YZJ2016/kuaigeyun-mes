@@ -86,6 +86,8 @@ class MaterialBatch(BaseModel):
     # 主仓仓库（与线边仓 LineSideInventory.warehouse_id 对齐；0=历史未归属）
     warehouse_id = fields.IntField(default=0, description="主仓仓库ID（0=未归属）")
     warehouse_name = fields.CharField(max_length=200, null=True, description="主仓仓库名称（冗余）")
+    location_id = fields.IntField(null=True, description="库位ID（可选）")
+    location_code = fields.CharField(max_length=50, null=True, description="库位编码（可选）")
 
     ownership_type = fields.CharField(
         max_length=20,

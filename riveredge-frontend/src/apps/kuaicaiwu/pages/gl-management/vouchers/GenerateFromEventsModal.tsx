@@ -134,7 +134,8 @@ const GenerateFromEventsModal: React.FC<Props> = ({ open, onClose, onSuccess }) 
         title: t(`${NS}.events.col.summary`, { defaultValue: '摘要' }),
         dataIndex: 'notes',
         ellipsis: true,
-        render: (v: string | null, r) => v || r.event_type || '—',
+        render: (v: string | null, r) =>
+          v || r.event_type_label || r.event_type || '—',
       },
       {
         title: t(`${NS}.events.col.voucher`, { defaultValue: '凭证' }),

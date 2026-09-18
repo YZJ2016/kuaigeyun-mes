@@ -173,10 +173,33 @@ class RepairOrderService:
     ) -> RepairOrderResponse:
         if items is None:
             items = await cls._load_items(row.tenant_id, row.id)
+        from apps.kuaizhizao.services.after_sales_upstream_status import (
+            existing_active_dispatch_code,
+            existing_settlement_code_for_source,
+            existing_visit_code,
+        )
+        from apps.kuaizhizao.services.document_action_policy.repair_order import (
+            derive_repair_order_capabilities,
+        )
+
+        dispatch_code = await existing_active_dispatch_code(
+            row.tenant_id, "repair_order", int(row.id)
+        )
+        settlement_code = await existing_settlement_code_for_source(
+            row.tenant_id, "repair_order", int(row.id)
+        )
+        visit_code = await existing_visit_code(row.tenant_id, "repair_order", int(row.id))
+        caps = derive_repair_order_capabilities(
+            row,
+            existing_dispatch_code=dispatch_code,
+            existing_settlement_code=settlement_code,
+            existing_visit_code=visit_code,
+        )
         base = RepairOrderResponse.model_validate(row)
         return base.model_copy(
             update={
                 "items": [RepairOrderItemResponse.model_validate(i) for i in items],
+                "capabilities": caps.model_dump(),
             }
         )
 
@@ -252,6 +275,12 @@ class RepairOrderService:
                 )
                 row.spare_part_cost = spare_cost
                 row.total_cost = spare_cost
+            if ticket_id:
+                from apps.kuaizhizao.services.after_sales_upstream_status import (
+                    bump_ticket_to_processing,
+                )
+
+                await bump_ticket_to_processing(tenant_id, ticket_id, current_user)
         return await cls._to_response(row, items)
 
     @classmethod
@@ -408,3 +437,213 @@ class RepairOrderService:
         dump = {"deleted_at": resolve_business_datetime()}
         apply_update_audit(dump, current_user)
         await RepairOrder.filter(id=order_id, tenant_id=tenant_id).update(**dump)
+
+    @staticmethod
+    async def _create_document_relation(
+        *,
+        tenant_id: int,
+        created_by: int,
+        source_type: str,
+        source_id: int,
+        source_code: Optional[str],
+        target_type: str,
+        target_id: int,
+        target_code: Optional[str],
+        relation_desc: str,
+    ) -> None:
+        try:
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+
+            await DocumentRelationNewService().create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type=source_type,
+                    source_id=source_id,
+                    source_code=source_code,
+                    target_type=target_type,
+                    target_id=target_id,
+                    target_code=target_code,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc=relation_desc,
+                ),
+                created_by=created_by,
+            )
+        except Exception:
+            # 关联写入失败不阻断下推主流程
+            pass
+
+    @classmethod
+    async def push_to_dispatch(
+        cls,
+        tenant_id: int,
+        order_id: int,
+        current_user: User,
+    ) -> dict:
+        from apps.kuaizhizao.schemas.after_sales_service import ServiceDispatchCreate
+        from apps.kuaizhizao.services.after_sales_upstream_status import existing_active_dispatch_code
+        from apps.kuaizhizao.services.document_action_policy.repair_order import (
+            assert_repair_order_capability,
+        )
+        from apps.kuaizhizao.services.service_dispatch_service import ServiceDispatchService
+
+        row = await RepairOrder.filter(
+            id=order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not row:
+            raise NotFoundError(f"维修单不存在: {order_id}")
+        existing_code = await existing_active_dispatch_code(tenant_id, "repair_order", order_id)
+        assert_repair_order_capability(row, "push_dispatch", existing_dispatch_code=existing_code)
+        dispatch = await ServiceDispatchService.create(
+            tenant_id,
+            ServiceDispatchCreate(
+                customer_id=row.customer_id,
+                source_type="repair_order",
+                source_id=row.id,
+                site_address=row.site_address,
+            ),
+            current_user,
+        )
+        await cls._create_document_relation(
+            tenant_id=tenant_id,
+            created_by=current_user.id,
+            source_type="repair_order",
+            source_id=row.id,
+            source_code=row.order_code,
+            target_type="service_dispatch",
+            target_id=dispatch.id,
+            target_code=dispatch.dispatch_code,
+            relation_desc="维修单下推服务派工",
+        )
+        return {
+            "success": True,
+            "message": "已生成服务派工",
+            "repair_order_id": order_id,
+            "dispatch_id": dispatch.id,
+            "dispatch_code": dispatch.dispatch_code,
+        }
+
+    @classmethod
+    async def push_to_settlement(
+        cls,
+        tenant_id: int,
+        order_id: int,
+        current_user: User,
+    ) -> dict:
+        from apps.kuaizhizao.schemas.after_sales_service import (
+            ServiceSettlementCreate,
+            ServiceSettlementItemCreate,
+        )
+        from apps.kuaizhizao.services.after_sales_upstream_status import (
+            existing_settlement_code_for_source,
+        )
+        from apps.kuaizhizao.services.document_action_policy.repair_order import (
+            assert_repair_order_capability,
+        )
+        from apps.kuaizhizao.services.service_settlement_service import ServiceSettlementService
+
+        row = await RepairOrder.filter(
+            id=order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not row:
+            raise NotFoundError(f"维修单不存在: {order_id}")
+        existing_code = await existing_settlement_code_for_source(
+            tenant_id, "repair_order", order_id
+        )
+        assert_repair_order_capability(
+            row, "push_settlement", existing_settlement_code=existing_code
+        )
+        amount = Decimal(str(row.total_cost or 0))
+        settlement = await ServiceSettlementService.create(
+            tenant_id,
+            ServiceSettlementCreate(
+                customer_id=row.customer_id,
+                items=[
+                    ServiceSettlementItemCreate(
+                        source_type="repair_order",
+                        source_id=row.id,
+                        source_code=row.order_code,
+                        warranty_status=row.warranty_status,
+                        amount=amount,
+                    )
+                ],
+            ),
+            current_user,
+        )
+        await cls._create_document_relation(
+            tenant_id=tenant_id,
+            created_by=current_user.id,
+            source_type="repair_order",
+            source_id=row.id,
+            source_code=row.order_code,
+            target_type="service_settlement",
+            target_id=settlement.id,
+            target_code=settlement.settlement_code,
+            relation_desc="维修单下推服务结算",
+        )
+        return {
+            "success": True,
+            "message": "已生成服务结算",
+            "repair_order_id": order_id,
+            "settlement_id": settlement.id,
+            "settlement_code": settlement.settlement_code,
+        }
+
+    @classmethod
+    async def push_to_return_visit(
+        cls,
+        tenant_id: int,
+        order_id: int,
+        current_user: User,
+    ) -> dict:
+        from apps.kuaizhizao.schemas.after_sales_service import CustomerReturnVisitCreate
+        from apps.kuaizhizao.services.after_sales_upstream_status import existing_visit_code
+        from apps.kuaizhizao.services.customer_return_visit_service import CustomerReturnVisitService
+        from apps.kuaizhizao.services.document_action_policy.repair_order import (
+            assert_repair_order_capability,
+        )
+
+        row = await RepairOrder.filter(
+            id=order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not row:
+            raise NotFoundError(f"维修单不存在: {order_id}")
+        existing_code = await existing_visit_code(tenant_id, "repair_order", order_id)
+        assert_repair_order_capability(
+            row, "push_return_visit", existing_visit_code=existing_code
+        )
+        visit = await CustomerReturnVisitService.create(
+            tenant_id,
+            CustomerReturnVisitCreate(
+                customer_id=row.customer_id,
+                source_type="repair_order",
+                source_id=row.id,
+                visit_method="电话",
+            ),
+            current_user,
+        )
+        await cls._create_document_relation(
+            tenant_id=tenant_id,
+            created_by=current_user.id,
+            source_type="repair_order",
+            source_id=row.id,
+            source_code=row.order_code,
+            target_type="customer_return_visit",
+            target_id=visit.id,
+            target_code=visit.visit_code,
+            relation_desc="维修单下推客户回访",
+        )
+        return {
+            "success": True,
+            "message": "已生成客户回访",
+            "repair_order_id": order_id,
+            "visit_id": visit.id,
+            "visit_code": visit.visit_code,
+        }

@@ -403,7 +403,21 @@ class InstallExecutionService:
             costs = await cls._load_costs(row.tenant_id, row.id)
         if include_tasks and tasks is None:
             tasks = await cls._load_tasks(row.tenant_id, row.id)
-        caps = derive_install_execution_capabilities(row, stages=stages)
+        from apps.kuaizhizao.services.after_sales_upstream_status import (
+            existing_active_dispatch_code,
+            existing_settlement_code_for_source,
+        )
+
+        caps = derive_install_execution_capabilities(
+            row,
+            stages=stages,
+            existing_dispatch_code=await existing_active_dispatch_code(
+                row.tenant_id, "install_execution", int(row.id)
+            ),
+            existing_settlement_code=await existing_settlement_code_for_source(
+                row.tenant_id, "install_execution", int(row.id)
+            ),
+        )
         total = cls._sum_costs(costs)
         base = InstallExecutionResponse.model_validate(row)
         from apps.kuaizhizao.schemas.install_execution import (
@@ -936,3 +950,163 @@ class InstallExecutionService:
             packing_binding_id=data.packing_binding_id,
         )
         return await cls.create(tenant_id, create_data, current_user)
+
+    @staticmethod
+    async def _create_document_relation(
+        *,
+        tenant_id: int,
+        created_by: int,
+        source_type: str,
+        source_id: int,
+        source_code: Optional[str],
+        target_type: str,
+        target_id: int,
+        target_code: Optional[str],
+        relation_desc: str,
+    ) -> None:
+        try:
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+
+            await DocumentRelationNewService().create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type=source_type,
+                    source_id=source_id,
+                    source_code=source_code,
+                    target_type=target_type,
+                    target_id=target_id,
+                    target_code=target_code,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc=relation_desc,
+                ),
+                created_by=created_by,
+            )
+        except Exception:
+            pass
+
+    @classmethod
+    async def push_to_dispatch(
+        cls,
+        tenant_id: int,
+        job_id: int,
+        current_user: User,
+    ) -> dict:
+        from apps.kuaizhizao.schemas.after_sales_service import ServiceDispatchCreate
+        from apps.kuaizhizao.services.after_sales_upstream_status import existing_active_dispatch_code
+        from apps.kuaizhizao.services.document_action_policy.install_execution import (
+            assert_install_execution_capability,
+        )
+        from apps.kuaizhizao.services.service_dispatch_service import ServiceDispatchService
+
+        row = await InstallExecutionJob.filter(
+            id=job_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not row:
+            raise NotFoundError(f"安装执行单不存在: {job_id}")
+        existing_code = await existing_active_dispatch_code(
+            tenant_id, "install_execution", job_id
+        )
+        assert_install_execution_capability(
+            row, "push_dispatch", existing_dispatch_code=existing_code
+        )
+        dispatch = await ServiceDispatchService.create(
+            tenant_id,
+            ServiceDispatchCreate(
+                customer_id=row.customer_id,
+                source_type="install_execution",
+                source_id=row.id,
+                site_address=row.site_address,
+            ),
+            current_user,
+        )
+        await cls._create_document_relation(
+            tenant_id=tenant_id,
+            created_by=current_user.id,
+            source_type="install_execution",
+            source_id=row.id,
+            source_code=row.job_code,
+            target_type="service_dispatch",
+            target_id=dispatch.id,
+            target_code=dispatch.dispatch_code,
+            relation_desc="安装执行下推服务派工",
+        )
+        return {
+            "success": True,
+            "message": "已生成服务派工",
+            "install_execution_id": job_id,
+            "dispatch_id": dispatch.id,
+            "dispatch_code": dispatch.dispatch_code,
+        }
+
+    @classmethod
+    async def push_to_settlement(
+        cls,
+        tenant_id: int,
+        job_id: int,
+        current_user: User,
+    ) -> dict:
+        from decimal import Decimal
+
+        from apps.kuaizhizao.schemas.after_sales_service import (
+            ServiceSettlementCreate,
+            ServiceSettlementItemCreate,
+        )
+        from apps.kuaizhizao.services.after_sales_upstream_status import (
+            existing_settlement_code_for_source,
+        )
+        from apps.kuaizhizao.services.document_action_policy.install_execution import (
+            assert_install_execution_capability,
+        )
+        from apps.kuaizhizao.services.service_settlement_service import ServiceSettlementService
+
+        row = await InstallExecutionJob.filter(
+            id=job_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not row:
+            raise NotFoundError(f"安装执行单不存在: {job_id}")
+        existing_code = await existing_settlement_code_for_source(
+            tenant_id, "install_execution", job_id
+        )
+        assert_install_execution_capability(
+            row, "push_settlement", existing_settlement_code=existing_code
+        )
+        amount = Decimal(str(row.total_cost_amount or 0))
+        settlement = await ServiceSettlementService.create(
+            tenant_id,
+            ServiceSettlementCreate(
+                customer_id=row.customer_id,
+                items=[
+                    ServiceSettlementItemCreate(
+                        source_type="install_execution",
+                        source_id=row.id,
+                        source_code=row.job_code,
+                        amount=amount,
+                    )
+                ],
+            ),
+            current_user,
+        )
+        await cls._create_document_relation(
+            tenant_id=tenant_id,
+            created_by=current_user.id,
+            source_type="install_execution",
+            source_id=row.id,
+            source_code=row.job_code,
+            target_type="service_settlement",
+            target_id=settlement.id,
+            target_code=settlement.settlement_code,
+            relation_desc="安装执行下推服务结算",
+        )
+        return {
+            "success": True,
+            "message": "已生成服务结算",
+            "install_execution_id": job_id,
+            "settlement_id": settlement.id,
+            "settlement_code": settlement.settlement_code,
+        }

@@ -77,6 +77,11 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
       fallback: '下推工单',
     },
     {
+      value: 'due_soon',
+      labelKey: 'pages.system.configCenter.notification.action.sales_order.due_soon',
+      fallback: '交期提前提醒',
+    },
+    {
       value: 'delivery_delayed',
       labelKey: 'pages.system.configCenter.notification.action.sales_order.delivery_delayed',
       fallback: '交期延误',
@@ -149,6 +154,11 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
     { value: 'released', labelKey: 'pages.system.configCenter.notification.action.work_order.released', fallback: '下达' },
     { value: 'started', labelKey: 'pages.system.configCenter.notification.action.work_order.started', fallback: '开工' },
     {
+      value: 'assigned',
+      labelKey: 'pages.system.configCenter.notification.action.work_order.assigned',
+      fallback: '工序派工',
+    },
+    {
       value: 'operation_completed',
       labelKey: 'pages.system.configCenter.notification.action.work_order.operation_completed',
       fallback: '工序完成',
@@ -157,6 +167,11 @@ export const CORE_NOTIFICATION_ACTION_OPTIONS: Record<
     { value: 'reworked', labelKey: 'pages.system.configCenter.notification.action.work_order.reworked', fallback: '转返工' },
   ],
   quality_inspection: [
+    {
+      value: 'created',
+      labelKey: 'pages.system.configCenter.notification.action.quality_inspection.created',
+      fallback: '新建待检',
+    },
     { value: 'submitted', labelKey: 'common.submit', fallback: '提交' },
     { value: 'approved', labelKey: 'pages.system.configCenter.notification.action.quality_inspection.approved', fallback: '审核通过' },
     { value: 'rejected', labelKey: 'pages.system.configCenter.notification.action.quality_inspection.rejected', fallback: '驳回' },
@@ -252,11 +267,17 @@ export const CORE_NOTIFICATION_RECIPIENT_SCOPES = [
     labelKey: 'pages.system.configCenter.notification.scope.next_operation_assignees',
     fallback: '下一工序指派人',
   },
+  {
+    value: 'operation_assignees',
+    labelKey: 'pages.system.configCenter.notification.scope.operation_assignees',
+    fallback: '工序派工对象',
+  },
 ];
 
 /** 一期推荐节点（已接线）；其余动作可配但默认标为「更多」 */
 export const CORE_RECOMMENDED_NOTIFICATION_ACTIONS: ReadonlySet<string> = new Set([
   'sales_order:delivery_delayed',
+  'sales_order:due_soon',
   'sales_order:approved',
   'sales_order:pushed_to_work_order',
   'sales_review:issued',
@@ -267,9 +288,11 @@ export const CORE_RECOMMENDED_NOTIFICATION_ACTIONS: ReadonlySet<string> = new Se
   'purchase_order:arrival_overdue',
   'work_order:remind_batching',
   'work_order:released',
+  'work_order:assigned',
   'work_order:operation_completed',
   'work_order:completed',
   'work_order:reworked',
+  'quality_inspection:created',
   'quality_exception:created',
   'quality_exception:assigned',
   'equipment_fault:reported',

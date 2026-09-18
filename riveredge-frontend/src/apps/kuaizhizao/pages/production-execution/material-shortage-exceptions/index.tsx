@@ -10,6 +10,7 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
@@ -146,6 +147,22 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     setDetailDrawerVisible(true);
   };
 
+  const openDetailById = useCallback(
+    async (id: number) => {
+      try {
+        const detail = await apiRequest<MaterialShortageException>(
+          `/apps/kuaizhizao/exceptions/material-shortage/${id}`,
+        );
+        setCurrentRecord(detail);
+        setDetailDrawerVisible(true);
+      } catch {
+        messageApi.error(t(`${P}.message.fetchListFailed`));
+      }
+    },
+    [messageApi, t],
+  );
+  useDocumentHighlightDeepLink(openDetailById);
+
   const openHandleModal = (record: MaterialShortageException, action: string) => {
     setCurrentRecord(record);
     setCurrentAction(action);
@@ -173,11 +190,20 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       const handled = await apiRequest<{
         scheduling_deep_link?: string;
         scheduling_notice?: string;
+        purchase_requisition_deep_link?: string;
+        purchase_notice?: string;
       }>(`/apps/kuaizhizao/exceptions/material-shortage/${currentRecord.id}/handle`, {
         method: 'POST',
         params,
       });
-      if (handled?.scheduling_deep_link) {
+      if (handled?.purchase_requisition_deep_link) {
+        messageApi.success(
+          <span>
+            {handled.purchase_notice || t(`${P}.message.handleSuccess`)}，
+            <a href={handled.purchase_requisition_deep_link}>{t(`${P}.message.goToPurchaseRequisition`)}</a>
+          </span>
+        );
+      } else if (handled?.scheduling_deep_link) {
         messageApi.success(
           <span>
             {handled.scheduling_notice || t(`${P}.message.handleSuccess`)}，

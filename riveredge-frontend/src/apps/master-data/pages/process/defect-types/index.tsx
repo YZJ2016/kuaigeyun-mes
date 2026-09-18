@@ -628,6 +628,7 @@ const DefectTypesPage: React.FC = () => {
         }}
         detail={defectTypeDetail}
         detailColumns={defectTypeDetailColumns}
+        documentType="defect_type"
         customFields={customFields}
         customFieldValues={customFieldValues}
         extra={buildDetailDrawerEditExtra(t, Boolean(defectTypeDetail), () => {

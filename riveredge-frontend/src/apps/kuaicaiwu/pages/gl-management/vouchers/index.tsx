@@ -123,7 +123,7 @@ const GlVouchersPage: React.FC = () => {
             glService.listCashFlowItems(),
           ]);
         if (cancelled) return;
-        setAccounts(asList<GlAccount>(accRes).filter((a) => a.is_leaf));
+        setAccounts(asList<GlAccount>(accRes));
         setEnableVoucherWords(Boolean((settingsRes as any)?.enable_voucher_words ?? true));
         const mapPartner = (res: unknown) =>
           asList<Record<string, unknown>>(res).map((c) => ({
@@ -170,11 +170,24 @@ const GlVouchersPage: React.FC = () => {
 
   const accountOptions = useMemo(
     () =>
-      accounts.map((a) => ({
-        label: `${a.account_code} ${a.account_name}`,
-        value: a.id,
-      })),
-    [accounts],
+      [...accounts]
+        .sort((a, b) => String(a.account_code || '').localeCompare(String(b.account_code || ''), 'zh'))
+        .map((a) => {
+          const base = `${a.account_code} ${a.account_name}`;
+          const isLeaf = Boolean(a.is_leaf);
+          return {
+            label: isLeaf
+              ? base
+              : t(`${NS}.nonLeafAccountOption`, {
+                  account: base,
+                  defaultValue: '{{account}}（非末级）',
+                }),
+            value: a.id,
+            // 有下级后上级仍展示便于定位，但制单仅允许末级（与后端一致）
+            disabled: !isLeaf,
+          };
+        }),
+    [accounts, t],
   );
 
   const statusLabel = (status: string) => {

@@ -229,6 +229,21 @@ class MaterialBase(BaseModel):
     # 超报（相对工单计划数量）
     over_report_mode: str = Field("none", alias="overReportMode", max_length=20, description="超报模式：none/fixed/percent")
     over_report_value: Decimal = Field(Decimal("0"), alias="overReportValue", description="超报值：fixed 为额外数量，percent 为百分数")
+
+    over_receipt_tolerance_pct: Optional[Decimal] = Field(
+        None,
+        alias="overReceiptTolerancePct",
+        ge=0,
+        le=100,
+        description="超收容差百分数(0-100)，空则继承组织采购容差",
+    )
+    over_issue_tolerance_pct: Optional[Decimal] = Field(
+        None,
+        alias="overIssueTolerancePct",
+        ge=0,
+        le=100,
+        description="超发容差百分数(0-100)，空则继承组织仓储超发比例",
+    )
     
     model_config = ConfigDict(
         populate_by_name=True,  # 允许同时使用字段名和别名
@@ -342,6 +357,20 @@ class MaterialUpdate(BaseModel):
     )
     over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="超报模式：none/fixed/percent")
     over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="超报值")
+    over_receipt_tolerance_pct: Optional[Decimal] = Field(
+        None,
+        alias="overReceiptTolerancePct",
+        ge=0,
+        le=100,
+        description="超收容差百分数(0-100)，空则继承组织采购容差",
+    )
+    over_issue_tolerance_pct: Optional[Decimal] = Field(
+        None,
+        alias="overIssueTolerancePct",
+        ge=0,
+        le=100,
+        description="超发容差百分数(0-100)，空则继承组织仓储超发比例",
+    )
 
     model_config = ConfigDict(populate_by_name=True)
     

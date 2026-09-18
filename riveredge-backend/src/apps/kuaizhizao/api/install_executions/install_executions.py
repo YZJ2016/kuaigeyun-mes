@@ -246,3 +246,31 @@ async def pull_from_sales_delivery(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{job_id}/push-to-dispatch", summary="Push install execution to service dispatch")
+async def push_to_dispatch(
+    job_id: int = Path(..., description="安装执行单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.push_to_dispatch(tenant_id, job_id, current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValidationError, BusinessLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{job_id}/push-to-settlement", summary="Push install execution to service settlement")
+async def push_to_settlement(
+    job_id: int = Path(..., description="安装执行单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.push_to_settlement(tenant_id, job_id, current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValidationError, BusinessLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

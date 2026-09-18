@@ -156,12 +156,15 @@ import {
 import { DocumentAmountSummary } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import {
   applyDocumentLineInclAmountEdit,
+  applyDocumentLineTaxRateChange,
   computeSalesDocumentTotals,
+  EXCLUSIVE_UNIT_ANCHOR_KEY,
   recalcDocumentStoredLineAmount,
   resolveDocumentLineDisplayAmounts,
   resolveSalesDocumentStoredLineAmount,
   resolveSalesDocumentStoredTotalAmount,
   resolveSalesOrderDisplayTotalAmount,
+  stripExclusiveUnitAnchor,
 } from '../../../utils/documentLineAmounts';
 import { LineUnitPriceWithTrendTrigger } from '../../../components/partner-material-price-trend';
 import {
@@ -290,7 +293,12 @@ import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulk
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import {
+  exportSalesOrderItemsXlsx,
+  filterFlatRowsByExportKeys,
+  flattenSalesOrdersForExport,
+  isSalesOrderFlatExportRow,
+} from './salesOrderListExport';
 
 /** API 异常 detail 可能是字符串或 { message, trace_id }，不能直接交给 message.error 渲染 */
 function salesOrderCatchMessage(error: unknown, fallback: string): string {
@@ -982,18 +990,43 @@ const SalesOrdersPage: React.FC = () => {
             k === 'required_quantity' || k === 'unit_price' || k === 'tax_rate' || k === 'is_gift',
           );
           if (drivers.length === 0) return row;
+
+          if (drivers.includes('tax_rate')) {
+            const applied = applyDocumentLineTaxRateChange({
+              row,
+              qty: row.required_quantity,
+              newTaxRate: row.tax_rate,
+              priceType,
+              priceDecimals,
+            });
+            if (
+              Number(applied.unit_price) !== Number(row.unit_price) ||
+              Number(applied.item_amount) !== Number(row.item_amount) ||
+              (applied[EXCLUSIVE_UNIT_ANCHOR_KEY] != null) !== (row[EXCLUSIVE_UNIT_ANCHOR_KEY] != null)
+            ) {
+              dirty = true;
+              return applied;
+            }
+            return row;
+          }
+
+          let nextRow = row;
+          if (drivers.includes('unit_price') && row[EXCLUSIVE_UNIT_ANCHOR_KEY] != null) {
+            nextRow = stripExclusiveUnitAnchor(row);
+            dirty = true;
+          }
           const item_amount = recalcDocumentStoredLineAmount(
             {
-              qty: row.required_quantity,
-              unit_price: row.unit_price,
-              tax_rate: row.tax_rate,
-              is_gift: row.is_gift,
+              qty: nextRow.required_quantity,
+              unit_price: nextRow.unit_price,
+              tax_rate: nextRow.tax_rate,
+              is_gift: nextRow.is_gift,
             },
             priceType,
           );
-          if (Number(row.item_amount) === item_amount) return row;
+          if (Number(nextRow.item_amount) === item_amount) return nextRow;
           dirty = true;
-          return { ...row, item_amount };
+          return { ...nextRow, item_amount };
         });
         if (dirty) {
           formRef.current?.setFieldsValue({ items: nextItems });
@@ -1007,7 +1040,7 @@ const SalesOrdersPage: React.FC = () => {
       if (!affectsBindings) return;
       syncOrderTermsPreview(termTemplateTerms, termPlaceholderValues);
     },
-    [termTemplateTerms, termFieldBindingKeys, termPlaceholderValues, syncOrderTermsPreview],
+    [termTemplateTerms, termFieldBindingKeys, termPlaceholderValues, syncOrderTermsPreview, priceDecimals],
   );
 
   useEffect(() => {
@@ -1052,13 +1085,17 @@ const SalesOrdersPage: React.FC = () => {
         setTermTemplateTerms(templates);
         setTermPlaceholderValues({});
         syncOrderTermsPreview(templates, {});
-      } catch {
+      } catch (e: unknown) {
         setTermTemplateTerms([]);
         setTermPlaceholderValues({});
         setTermsPreview([]);
+        messageApi.error(
+          (e as { message?: string })?.message ||
+            t('app.kuaizhizao.salesContract.loadTermGroupFailed'),
+        );
       }
     },
-    [syncOrderTermsPreview],
+    [messageApi, syncOrderTermsPreview, t],
   );
 
   const handleOrderTermPlaceholderChange = useCallback(
@@ -4355,7 +4392,7 @@ const SalesOrdersPage: React.FC = () => {
           <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
             {({ getFieldValue: getFormValue }: any) => {
               const priceType = salesFormPriceType(getFormValue('price_type'));
-              const showTaxColumns = priceType === 'tax_inclusive';
+              const showTaxBreakdownColumns = priceType === 'tax_inclusive';
               const materialSourceType = productScope === 'make' ? 'Make' : undefined;
               const productColumnTitle = (
                 <Space size={8} align="center">
@@ -4597,7 +4634,7 @@ const SalesOrdersPage: React.FC = () => {
                         </AntForm.Item>
                       ),
                     },
-                    ...(showTaxColumns
+                    ...(showTaxBreakdownColumns
                       ? [
                           {
                             title: t('app.kuaizhizao.salesOrder.exclAmount'),
@@ -4632,43 +4669,40 @@ const SalesOrdersPage: React.FC = () => {
                           },
                         ]
                       : []),
-                    ...(showTaxColumns
+                    {
+                      title: (
+                        <TaxRateBatchColumnTitle
+                          onBatch={() => {
+                            const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                            if (items.length === 0) return;
+                            const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
+                            if (rate != null && rate !== '') {
+                              const num = Math.round(parseFloat(rate));
+                              if (!Number.isNaN(num) && num >= 0 && num <= 100) {
+                                const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
+                                const next = items.map((it: any) =>
+                                  applyDocumentLineTaxRateChange({
+                                    row: it,
+                                    qty: it.required_quantity,
+                                    newTaxRate: num,
+                                    priceType: pt,
+                                    priceDecimals,
+                                  }),
+                                );
+                                formRef.current?.setFieldsValue({ items: next });
+                              }
+                            }
+                          }}
+                        />
+                      ),
+                      dataIndex: 'tax_rate',
+                      width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
+                      ...DOCUMENT_DETAIL_NUM_COL,
+                      onCell: () => ({ className: 'quotation-tax-rate-col' }),
+                      render: (_: any, __: any, index: number) => <TaxRateDetailCell index={index} />,
+                    },
+                    ...(showTaxBreakdownColumns
                       ? [
-                          {
-                            title: (
-                              <TaxRateBatchColumnTitle
-                                onBatch={() => {
-                                  const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
-                                  if (items.length === 0) return;
-                                  const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
-                                  if (rate != null && rate !== '') {
-                                    const num = Math.round(parseFloat(rate));
-                                    if (!Number.isNaN(num) && num >= 0 && num <= 100) {
-                                      const next = items.map((it: any) => {
-                                        const tax_rate = num;
-                                        const item_amount = recalcDocumentStoredLineAmount(
-                                          {
-                                            qty: it.required_quantity,
-                                            unit_price: it.unit_price,
-                                            tax_rate,
-                                            is_gift: it.is_gift,
-                                          },
-                                          priceType,
-                                        );
-                                        return { ...it, tax_rate, item_amount };
-                                      });
-                                      formRef.current?.setFieldsValue({ items: next });
-                                    }
-                                  }
-                                }}
-                              />
-                            ),
-                            dataIndex: 'tax_rate',
-                            width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
-                            ...DOCUMENT_DETAIL_NUM_COL,
-                            onCell: () => ({ className: 'quotation-tax-rate-col' }),
-                            render: (_: any, __: any, index: number) => <TaxRateDetailCell index={index} />,
-                          },
                           {
                             title: t('app.kuaizhizao.salesOrder.taxAmount'),
                             width: DOCUMENT_DETAIL_COL_WIDTH.taxAmount,
@@ -4701,7 +4735,7 @@ const SalesOrdersPage: React.FC = () => {
                         ]
                       : []),
                     {
-                      title: showTaxColumns
+                      title: showTaxBreakdownColumns
                         ? t('app.kuaizhizao.salesOrder.inclAmount')
                         : t('app.kuaizhizao.salesOrder.exclAmount'),
                       width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
@@ -4722,7 +4756,7 @@ const SalesOrdersPage: React.FC = () => {
                               },
                               priceType,
                             );
-                            if (!showTaxColumns) {
+                            if (!showTaxBreakdownColumns) {
                               return (
                                 <AmountDisplay
                                   resource={SO}
@@ -4764,11 +4798,11 @@ const SalesOrdersPage: React.FC = () => {
                                       priceDecimals,
                                     });
                                     const next = [...items];
-                                    next[index] = {
+                                    next[index] = stripExclusiveUnitAnchor({
                                       ...row,
                                       unit_price: applied.unit_price,
                                       item_amount: applied.item_amount,
-                                    };
+                                    });
                                     skipLineAmountResyncRef.current = true;
                                     formRef.current?.setFieldsValue({ items: next });
                                     queueMicrotask(() => {
@@ -5386,58 +5420,47 @@ const SalesOrdersPage: React.FC = () => {
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {
-              const flattenOrders = (orders: SalesOrder[]): SalesOrderItemRow[] => {
-                const flatRows: SalesOrderItemRow[] = [];
-                for (const order of orders) {
-                  const items = order.items ?? [];
-                  if (items.length === 0) {
-                    flatRows.push({
-                      _rowKey: `order-${order.id}-empty`,
-                      sales_order_id: order.id ?? 0,
-                      order_code: order.order_code,
-                      customer_name: order.customer_name,
-                      material_code: '-',
-                      material_name: '-',
-                      required_quantity: 0,
-                      delivery_date: order.delivery_date ?? '',
-                    } as SalesOrderItemRow);
-                  } else {
-                    items.forEach((item: SalesOrderItem, idx: number) => {
-                      flatRows.push({
-                        ...item,
-                        _rowKey: item.id
-                          ? `order-${order.id}-item-${item.id}`
-                          : `order-${order.id}-idx-${idx}`,
-                        sales_order_id: order.id ?? 0,
-                        order_code: order.order_code,
-                        customer_name: order.customer_name,
-                      } as SalesOrderItemRow);
-                    });
-                  }
-                }
-                return flatRows;
+              const exportCtx = {
+                t,
+                auditEnabled,
+                dictionaryLabels: {
+                  CURRENCY: salesOrderImportDict.packs.CURRENCY?.labelByCode,
+                  PAYMENT_TERMS: Object.fromEntries(
+                    paymentTermsOptions.map((o) => [o.value, o.label]),
+                  ),
+                  SHIPPING_METHOD: Object.fromEntries(
+                    shippingMethodOptions.map((o) => [o.value, o.label]),
+                  ),
+                },
               };
-              const orders = (type === 'currentPage' ? (pageData ?? []) : await fetchAllListItems((p) =>
-                listSalesOrders({
-                  ...p,
-                  include_items: true,
-                  list_scope: listScopeFilter,
-                }),
-              ));
-              const flatRows = flattenOrders(orders);
-              let toExport = flatRows;
+              let flatRows: Array<Record<string, unknown>>;
               if (type === 'currentPage' && pageData?.length) {
-                toExport = pageData as SalesOrderItemRow[];
-              } else if (type === 'selected' && keys?.length) {
-                toExport = flatRows.filter((r) => keys.includes(r._rowKey));
+                const first = pageData[0] as Record<string, unknown>;
+                flatRows = isSalesOrderFlatExportRow(first)
+                  ? (pageData as Array<Record<string, unknown>>)
+                  : flattenSalesOrdersForExport(pageData as SalesOrder[]);
+              } else {
+                const orders = await fetchAllListItems((p) =>
+                  listSalesOrders({
+                    ...p,
+                    include_items: true,
+                    list_scope: listScopeFilter,
+                  }),
+                );
+                flatRows = flattenSalesOrdersForExport(orders);
               }
+              const toExport =
+                type === 'selected' && keys?.length
+                  ? filterFlatRowsByExportKeys(flatRows, keys)
+                  : flatRows;
               if (toExport.length === 0) {
                 messageApi.warning(t('common.exportNoData'));
                 return;
               }
-              await downloadRecordsAsXlsx(
-                toExport as Array<Record<string, unknown>>,
+              await exportSalesOrderItemsXlsx(
+                toExport,
                 `sales-order-items-${todaySiteDateString()}.xlsx`,
+                exportCtx,
               );
               messageApi.success(t('app.kuaizhizao.salesOrder.exportSuccess', { count: toExport.length }));
             } catch (error: any) {

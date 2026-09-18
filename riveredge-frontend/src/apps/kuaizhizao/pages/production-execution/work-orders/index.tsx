@@ -616,6 +616,37 @@ function formatOperationAssignedPersonnel(operation?: any): string {
   return '-'
 }
 
+/** 详情「编辑工序」弹窗回填：字段名与日期类型对齐 ProForm */
+function buildWorkOrderOperationFormValues(
+  operation: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | undefined {
+  if (!operation) return undefined
+  const toDayjsOrUndef = (value: unknown) => {
+    if (value == null || value === '') return undefined
+    const parsed = dayjs(value as string | number | Date)
+    return parsed.isValid() ? parsed : undefined
+  }
+  const toNumOrUndef = (value: unknown) => {
+    if (value == null || value === '') return undefined
+    const n = Number(value)
+    return Number.isFinite(n) ? n : undefined
+  }
+  return {
+    operation_id: toNumOrUndef(operation.operation_id ?? operation.operationId),
+    operation_code: operation.operation_code ?? operation.operationCode ?? '',
+    operation_name: operation.operation_name ?? operation.operationName ?? '',
+    workshop_id: toNumOrUndef(operation.workshop_id ?? operation.workshopId),
+    workshop_name: operation.workshop_name ?? operation.workshopName ?? '',
+    standard_time: toNumOrUndef(operation.standard_time ?? operation.standardTime) ?? 0,
+    setup_time: toNumOrUndef(operation.setup_time ?? operation.setupTime) ?? 0,
+    planned_start_date: toDayjsOrUndef(
+      operation.planned_start_date ?? operation.plannedStartDate,
+    ),
+    planned_end_date: toDayjsOrUndef(operation.planned_end_date ?? operation.plannedEndDate),
+    remarks: operation.remarks ?? '',
+  }
+}
+
 /** 解析工序已派工人员 ID（兼容旧单人员字段） */
 function getOperationAssignedWorkerIds(operation?: any): number[] {
   const raw = operation?.assigned_worker_ids
@@ -955,6 +986,16 @@ function isSplitParentWorkOrder(record: WorkOrder): boolean {
     (record.row_kind || 'work_order') === 'work_order' &&
     ['split', '已拆分'].includes(record.status || '')
   )
+}
+
+/** 工具栏下推：普通主工单与拆分子工单；排除组行、返工/委外、已拆分主工单 */
+function resolveWorkOrderForToolbarPush(row: WorkOrder | null | undefined): WorkOrder | null {
+  if (!row?.id) return null
+  const kind = row.row_kind || 'work_order'
+  if (kind === 'work_order_group' || kind === 'rework' || kind === 'outsource') return null
+  if (isSplitParentWorkOrder(row)) return null
+  if (kind === 'work_order' || kind === 'split') return row
+  return null
 }
 
 /** 是否允许点击工序列展开工序卡（数量为 0 时不展开） */
@@ -5967,12 +6008,15 @@ const WorkOrdersPage: React.FC = () => {
     })()
   }
 
-  const selectedWorkOrderForToolbarPush = useMemo(() => {
+  const selectedRowForToolbarPush = useMemo(() => {
     if (selectedRowKeys.length !== 1) return null
-    const row = workOrderRowByKeyRef.current.get(String(selectedRowKeys[0]))
-    if (!row || (row.row_kind ?? 'work_order') !== 'work_order') return null
-    return row
+    return workOrderRowByKeyRef.current.get(String(selectedRowKeys[0])) ?? null
   }, [selectedRowKeys, workOrderListRowIndexVersion])
+
+  const selectedWorkOrderForToolbarPush = useMemo(
+    () => resolveWorkOrderForToolbarPush(selectedRowForToolbarPush),
+    [selectedRowForToolbarPush],
+  )
 
   const canCreateFinishedGoodsInspection = useMemo(
     () =>
@@ -6047,14 +6091,19 @@ const WorkOrdersPage: React.FC = () => {
     [selectedWorkOrderForToolbarPush],
   )
 
-  const toolbarPushDisabledReason = useMemo(
-    () =>
-      buildUniPushToolbarDisabledReason(t, {
-        selectedCount: selectedRowKeys.length,
-        hasSelectedRecord: !!selectedWorkOrderForToolbarPush,
-      }),
-    [selectedRowKeys.length, selectedWorkOrderForToolbarPush, t],
-  )
+  const toolbarPushDisabledReason = useMemo(() => {
+    if (
+      selectedRowKeys.length === 1 &&
+      selectedRowForToolbarPush &&
+      isSplitParentWorkOrder(selectedRowForToolbarPush)
+    ) {
+      return t('app.kuaizhizao.workOrder.push.selectSplitChild')
+    }
+    return buildUniPushToolbarDisabledReason(t, {
+      selectedCount: selectedRowKeys.length,
+      hasSelectedRecord: !!selectedWorkOrderForToolbarPush,
+    })
+  }, [selectedRowKeys.length, selectedRowForToolbarPush, selectedWorkOrderForToolbarPush, t])
 
   /**
    * 处理提交工序委外表单
@@ -9971,7 +10020,6 @@ const WorkOrdersPage: React.FC = () => {
         onEditOperation={(operation) => {
           setCurrentOperation(operation)
           setOperationsModalVisible(true)
-          operationFormRef.current?.setFieldsValue(operation)
         }}
         extra={
           workOrderDetail ? (
@@ -10777,6 +10825,18 @@ const WorkOrdersPage: React.FC = () => {
           setCurrentOperation(null)
           operationFormRef.current?.resetFields()
         }}
+        afterOpenChange={(opened) => {
+          // destroyOnHidden：打开后表单才挂载，须在此回填；打开前 setFieldsValue 会落空
+          if (!opened) return
+          const values = buildWorkOrderOperationFormValues(currentOperation)
+          if (values) {
+            operationFormRef.current?.setFieldsValue(values)
+          } else {
+            operationFormRef.current?.resetFields()
+          }
+        }}
+        initialValues={buildWorkOrderOperationFormValues(currentOperation)}
+        isEdit={Boolean(currentOperation)}
         onFinish={async (values: any) => {
           try {
             if (!workOrderDetail?.id) {
@@ -10874,14 +10934,41 @@ const WorkOrdersPage: React.FC = () => {
           label="工序"
           placeholder="请选择工序"
           rules={[{ required: true, message: '请选择工序' }]}
-          request={async () => {
+          params={{
+            ensureOperationId: currentOperation?.operation_id ?? currentOperation?.operationId,
+            ensureOperationCode:
+              currentOperation?.operation_code ?? currentOperation?.operationCode,
+            ensureOperationName:
+              currentOperation?.operation_name ?? currentOperation?.operationName,
+          }}
+          request={async (params) => {
             try {
               const operations = unwrapProcessPagedList(await operationApi.list({ isActive: true, limit: 1000 }))
-              return operations.map((op: any) => ({
+              const options = operations.map((op: any) => ({
                 label: `${op.code} - ${op.name}`,
                 value: op.id,
                 operation: op,
               }))
+              // 编辑时若主数据未启用/不在列表，仍展示当前工序选项，避免下拉空白
+              const ensureId = Number(params?.ensureOperationId)
+              if (
+                Number.isFinite(ensureId) &&
+                ensureId > 0 &&
+                !options.some((opt) => Number(opt.value) === ensureId)
+              ) {
+                const code = String(params?.ensureOperationCode ?? '').trim()
+                const name = String(params?.ensureOperationName ?? '').trim()
+                options.unshift({
+                  label: code && name ? `${code} - ${name}` : name || code || String(ensureId),
+                  value: ensureId,
+                  operation: {
+                    id: ensureId,
+                    code,
+                    name,
+                  },
+                })
+              }
+              return options
             } catch (error) {
               return []
             }
@@ -10904,14 +10991,33 @@ const WorkOrdersPage: React.FC = () => {
           name="workshop_id"
           label="车间"
           placeholder="请选择车间"
-          request={async () => {
+          params={{
+            ensureWorkshopId: currentOperation?.workshop_id ?? currentOperation?.workshopId,
+            ensureWorkshopName:
+              currentOperation?.workshop_name ?? currentOperation?.workshopName,
+          }}
+          request={async (params) => {
             try {
               const workshops = factoryListItems(await workshopApi.list({ limit: 1000 }))
-              return workshops.map((ws: any) => ({
+              const options = workshops.map((ws: any) => ({
                 label: ws.name,
                 value: ws.id,
                 workshop: ws,
               }))
+              const ensureId = Number(params?.ensureWorkshopId)
+              if (
+                Number.isFinite(ensureId) &&
+                ensureId > 0 &&
+                !options.some((opt) => Number(opt.value) === ensureId)
+              ) {
+                const name = String(params?.ensureWorkshopName ?? '').trim()
+                options.unshift({
+                  label: name || String(ensureId),
+                  value: ensureId,
+                  workshop: { id: ensureId, name },
+                })
+              }
+              return options
             } catch (error) {
               return []
             }

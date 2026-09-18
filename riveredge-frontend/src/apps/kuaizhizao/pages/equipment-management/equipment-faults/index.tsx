@@ -60,6 +60,8 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ROUTES } from '../../../constants/routes';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
@@ -121,6 +123,7 @@ const EquipmentFaultsPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
+  const currentUser = useCurrentUser();
   const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const faultDetailDrawerZIndex = token.zIndexPopupBase;
@@ -433,6 +436,9 @@ const EquipmentFaultsPage: React.FC = () => {
     }
     setMaintFault(record);
     setMaintFormInitialValues({
+      executor_uuid: currentUser?.uuid,
+      executor_id: currentUser?.id,
+      executor_name: currentUser?.full_name || currentUser?.username,
       execution_date: dayjs(),
       execution_content: t(`${P}.repairDescriptionTemplate`, {
         faultNo: record.fault_no,
@@ -453,6 +459,8 @@ const EquipmentFaultsPage: React.FC = () => {
           toApiDateTimeString(values.execution_date) ??
           formatDateTimeBySiteSetting(new Date()),
         execution_content: values.execution_content ?? '',
+        executor_id: values.executor_id,
+        executor_name: values.executor_name,
         status: values.status ?? '草稿',
         source_type: 'equipment_fault',
         source_uuid: maintFault.uuid,
@@ -1097,13 +1105,21 @@ const EquipmentFaultsPage: React.FC = () => {
       >
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormDatePicker
-              name="execution_date"
-              label={t('app.kuaizhizao.maintenanceExecution.col.executionDate')}
-              fieldProps={{ showTime: true, style: { width: '100%' } }}
-              formItemProps={formDateFormItemProps}
-              rules={[{ required: true }]}
+            <UniUserSelect
+              name="executor_uuid"
+              label={t('app.kuaizhizao.maintenancePlan.form.executor')}
+              placeholder={t('app.kuaizhizao.maintenancePlan.form.selectExecutor')}
+              required
+              onChange={(_value, user) => {
+                const picked = Array.isArray(user) ? user[0] : user;
+                maintFormRef.current?.setFieldsValue({
+                  executor_id: picked?.id ?? undefined,
+                  executor_name: picked?.full_name || picked?.username || undefined,
+                });
+              }}
             />
+            <ProFormText name="executor_id" hidden />
+            <ProFormText name="executor_name" hidden />
           </Col>
           <Col span={12}>
             <ProFormText
@@ -1111,6 +1127,17 @@ const EquipmentFaultsPage: React.FC = () => {
               label={t(`${P}.col.equipmentName`)}
               disabled
               initialValue={maintFault?.equipment_name}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="execution_date"
+              label={t('app.kuaizhizao.maintenanceExecution.col.executionDate')}
+              fieldProps={{ showTime: true, style: { width: '100%' } }}
+              formItemProps={formDateFormItemProps}
+              rules={[{ required: true }]}
             />
           </Col>
         </Row>

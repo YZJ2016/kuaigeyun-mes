@@ -233,6 +233,23 @@ async def push_to_sales_return(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.post(
+    "/{ticket_id}/push-to-return-visit",
+    summary="Push after-sales ticket to customer return visit",
+)
+async def push_to_return_visit(
+    ticket_id: int = Path(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.push_to_return_visit(tenant_id, ticket_id, current_user)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (ValidationError, BusinessLogicError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.post("/{ticket_id}/close", response_model=AfterSalesTicketResponse, summary="Close after-sales ticket")
 async def close_ticket(
     body: AfterSalesTicketClose,

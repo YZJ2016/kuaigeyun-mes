@@ -17,10 +17,15 @@ import {
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
 import {
-  isValidOutboundBatchSelection,
   loadBatchOptionsByMaterialId,
   type InventoryPickOption,
 } from '../outbound/outboundConfirmInventoryOptions';
+import OutboundBatchAllocationField from '../outbound/OutboundBatchAllocationField';
+import {
+  coerceBatchAllocationsDraft,
+  isValidOutboundBatchAllocations,
+  type OutboundBatchAllocation,
+} from '../outbound/outboundBatchAllocation';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
@@ -158,6 +163,8 @@ const InventoryTransferPage: React.FC = () => {
   const formRef = useRef<any>(null);
   const itemFormRef = useRef<any>(null);
   const [rowBatchOptions, setRowBatchOptions] = useState<Record<number, InventoryPickOption[]>>({});
+  const [rowBatchAllocs, setRowBatchAllocs] = useState<Record<number, OutboundBatchAllocation[]>>({});
+  const [itemModalBatchAllocs, setItemModalBatchAllocs] = useState<OutboundBatchAllocation[]>([]);
   const [rowBatchManaged, setRowBatchManaged] = useState<Record<number, boolean>>({});
   const [itemModalBatchOptions, setItemModalBatchOptions] = useState<InventoryPickOption[]>([]);
   const [itemModalBatchManaged, setItemModalBatchManaged] = useState(false);
@@ -216,22 +223,26 @@ const InventoryTransferPage: React.FC = () => {
     formRef.current?.setFieldValue(['items', rowIndex, 'batch_managed'], managed);
     if (!managed || !materialId || !warehouseId) {
       setRowBatchOptions((prev) => ({ ...prev, [rowIndex]: [] }));
+      setRowBatchAllocs((prev) => {
+        const next = { ...prev };
+        delete next[rowIndex];
+        return next;
+      });
       formRef.current?.setFieldValue(['items', rowIndex, 'batch_no'], undefined);
       return;
     }
     const map = await loadBatchOptionsByMaterialId([materialId], warehouseId);
     const options = map[materialId] ?? [];
     setRowBatchOptions((prev) => ({ ...prev, [rowIndex]: options }));
+    const qty = Number(formRef.current?.getFieldValue(['items', rowIndex, 'quantity']) ?? 0);
     const preferred = String(preferBatch ?? formRef.current?.getFieldValue(['items', rowIndex, 'batch_no']) ?? '').trim();
-    let next: string | undefined;
-    if (preferred && isValidOutboundBatchSelection(preferred, options)) {
-      next = preferred;
-    } else if (options.length === 1) {
-      next = options[0].value;
+    const seeded = coerceBatchAllocationsDraft(preferred, qty);
+    if (seeded?.length && isValidOutboundBatchAllocations(seeded, options, qty)) {
+      setRowBatchAllocs((prev) => ({ ...prev, [rowIndex]: seeded }));
+      formRef.current?.setFieldValue(['items', rowIndex, 'batch_no'], seeded[0]?.batchNo);
     } else {
-      next = undefined;
+      setRowBatchAllocs((prev) => ({ ...prev, [rowIndex]: prev[rowIndex] ?? [] }));
     }
-    formRef.current?.setFieldValue(['items', rowIndex, 'batch_no'], next);
   };
 
   const syncItemModalBatchOptions = async (
@@ -244,6 +255,7 @@ const InventoryTransferPage: React.FC = () => {
     setItemModalBatchManaged(managed);
     if (!managed || !materialId || !warehouseId) {
       setItemModalBatchOptions([]);
+      setItemModalBatchAllocs([]);
       itemFormRef.current?.setFieldsValue({ batch_no: undefined });
       return;
     }
@@ -252,16 +264,15 @@ const InventoryTransferPage: React.FC = () => {
       const map = await loadBatchOptionsByMaterialId([materialId], warehouseId);
       const options = map[materialId] ?? [];
       setItemModalBatchOptions(options);
+      const qty = Number(itemFormRef.current?.getFieldValue('quantity') ?? 0);
       const preferred = String(preferBatch ?? itemFormRef.current?.getFieldValue('batch_no') ?? '').trim();
-      let next: string | undefined;
-      if (preferred && isValidOutboundBatchSelection(preferred, options)) {
-        next = preferred;
-      } else if (options.length === 1) {
-        next = options[0].value;
+      const seeded = coerceBatchAllocationsDraft(preferred, qty);
+      if (seeded?.length && isValidOutboundBatchAllocations(seeded, options, qty)) {
+        setItemModalBatchAllocs(seeded);
+        itemFormRef.current?.setFieldsValue({ batch_no: seeded[0]?.batchNo });
       } else {
-        next = undefined;
+        setItemModalBatchAllocs([]);
       }
-      itemFormRef.current?.setFieldsValue({ batch_no: next });
     } finally {
       setItemModalBatchLoading(false);
     }
@@ -280,6 +291,7 @@ const InventoryTransferPage: React.FC = () => {
       })),
     });
     setRowBatchOptions({});
+    setRowBatchAllocs({});
     setRowBatchManaged({});
   };
 
@@ -293,6 +305,7 @@ const InventoryTransferPage: React.FC = () => {
     createFromWarehouseRef.current = undefined;
     setSelectedCreateWarehouseId(undefined);
     setRowBatchOptions({});
+    setRowBatchAllocs({});
     setRowBatchManaged({});
     formRef.current?.resetFields();
   };
@@ -302,6 +315,7 @@ const InventoryTransferPage: React.FC = () => {
   ) => {
     suppressWarehouseItemClearRef.current = true;
     setRowBatchOptions({});
+    setRowBatchAllocs({});
     setRowBatchManaged({});
 
     if (payload.kind === 'create') {
@@ -397,11 +411,34 @@ const InventoryTransferPage: React.FC = () => {
     };
   };
 
+  const expandTransferItemsWithBatchAllocs = (
+    items: Record<string, unknown>[],
+    batchManagedByRow: Record<number, boolean>,
+    batchAllocsByRow: Record<number, OutboundBatchAllocation[]>,
+  ): Record<string, unknown>[] =>
+    items.flatMap((it, index) => {
+      if (!it.material_id || !(Number(it.quantity) || 0) > 0) return [];
+      const managed = batchManagedByRow[index] ?? !!it.batch_managed;
+      const allocs = (batchAllocsByRow[index] ?? []).filter(
+        (a) => String(a.batchNo).trim() && Number(a.quantity) > 0,
+      );
+      if (managed && allocs.length > 0) {
+        return allocs.map((a, allocIdx) => ({
+          ...it,
+          id: allocs.length > 1 ? (allocIdx === 0 ? it.id : undefined) : it.id,
+          batch_no: a.batchNo,
+          quantity: a.quantity,
+        }));
+      }
+      return [it];
+    });
+
   const validateTransferItems = (
     items: Record<string, unknown>[],
     mode: 'transfer' | 'bin_relocation',
     batchManagedByRow: Record<number, boolean>,
     batchOptionsByRow: Record<number, InventoryPickOption[]>,
+    batchAllocsByRow: Record<number, OutboundBatchAllocation[]>,
   ) => {
     const valid = items.filter((it) => it.material_id && (Number(it.quantity) || 0) > 0);
     if (!valid.length) {
@@ -413,9 +450,10 @@ const InventoryTransferPage: React.FC = () => {
       if (!it.material_id || !(Number(it.quantity) || 0) > 0) continue;
       const managed = batchManagedByRow[index] ?? !!it.batch_managed;
       if (managed) {
-        const batch = String(it.batch_no ?? '').trim();
+        const qty = Number(it.quantity ?? 0);
         const options = batchOptionsByRow[index] ?? [];
-        if (!batch || !isValidOutboundBatchSelection(batch, options)) {
+        const allocs = batchAllocsByRow[index] ?? [];
+        if (!isValidOutboundBatchAllocations(allocs, options, qty)) {
           const label = String(it.material_code || it.material_name || '').trim() || `#${index + 1}`;
           messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgBatchRequired', { material: label }));
           throw new Error('batch required');
@@ -502,11 +540,17 @@ const InventoryTransferPage: React.FC = () => {
         throw new Error('库内移位时，调出仓库和调入仓库必须相同');
       }
 
-      const validItems = validateTransferItems(
+      validateTransferItems(
         values.items || [],
         mode,
         rowBatchManaged,
         rowBatchOptions,
+        rowBatchAllocs,
+      );
+      const validItems = expandTransferItemsWithBatchAllocs(
+        (values.items || []).filter((it: Record<string, unknown>) => it.material_id && (Number(it.quantity) || 0) > 0),
+        rowBatchManaged,
+        rowBatchAllocs,
       );
       const header = {
         from_warehouse_id: values.from_warehouse_id,
@@ -692,6 +736,7 @@ const InventoryTransferPage: React.FC = () => {
     );
     setItemModalFromWarehouseId(record.from_warehouse_id);
     setItemModalBatchOptions([]);
+    setItemModalBatchAllocs([]);
     setItemModalBatchManaged(false);
     itemFormRef.current?.resetFields();
     itemFormRef.current?.setFieldsValue({
@@ -728,9 +773,10 @@ const InventoryTransferPage: React.FC = () => {
         }
       }
 
+      const itemQty = Number(values.quantity ?? 0);
       if (
         itemModalBatchManaged &&
-        (!values.batch_no || !isValidOutboundBatchSelection(values.batch_no, itemModalBatchOptions))
+        !isValidOutboundBatchAllocations(itemModalBatchAllocs, itemModalBatchOptions, itemQty)
       ) {
         messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgBatchRequired', { material: materialCode || materialName }));
         return;
@@ -741,26 +787,32 @@ const InventoryTransferPage: React.FC = () => {
       const fromLocation = resolveLocationMeta(values.from_location_id);
       const toLocation = resolveLocationMeta(values.to_location_id);
 
-      await inventoryTransferApi.createItem(currentTransferId.toString(), {
-        transfer_id: currentTransferId,
-        material_id: values.material_id,
-        material_code: materialCode,
-        material_name: materialName,
-        from_warehouse_id: values.from_warehouse_id,
-        from_storage_area_id: fromArea.id,
-        from_storage_area_code: fromArea.code,
-        from_location_id: fromLocation.id,
-        from_location_code: fromLocation.code,
-        to_warehouse_id: values.to_warehouse_id,
-        to_storage_area_id: toArea.id,
-        to_storage_area_code: toArea.code,
-        to_location_id: toLocation.id,
-        to_location_code: toLocation.code,
-        batch_no: values.batch_no,
-        quantity: values.quantity,
-        unit_price: values.unit_price || 0,
-        remarks: values.remarks,
-      });
+      const batchLines =
+        itemModalBatchManaged && itemModalBatchAllocs.length
+          ? itemModalBatchAllocs.filter((a) => String(a.batchNo).trim() && Number(a.quantity) > 0)
+          : [{ batchNo: String(values.batch_no ?? ''), quantity: itemQty }];
+      for (const line of batchLines) {
+        await inventoryTransferApi.createItem(currentTransferId.toString(), {
+          transfer_id: currentTransferId,
+          material_id: values.material_id,
+          material_code: materialCode,
+          material_name: materialName,
+          from_warehouse_id: values.from_warehouse_id,
+          from_storage_area_id: fromArea.id,
+          from_storage_area_code: fromArea.code,
+          from_location_id: fromLocation.id,
+          from_location_code: fromLocation.code,
+          to_warehouse_id: values.to_warehouse_id,
+          to_storage_area_id: toArea.id,
+          to_storage_area_code: toArea.code,
+          to_location_id: toLocation.id,
+          to_location_code: toLocation.code,
+          batch_no: line.batchNo || undefined,
+          quantity: line.quantity,
+          unit_price: values.unit_price || 0,
+          remarks: values.remarks,
+        });
+      }
       messageApi.success(t('app.kuaizhizao.inventoryTransfer.msgAddItemSuccess'));
       setItemModalVisible(false);
       setCurrentTransferId(null);
@@ -1451,12 +1503,13 @@ const InventoryTransferPage: React.FC = () => {
                   {
                     title: t('app.kuaizhizao.warehouseReports.colBatchNo'),
                     dataIndex: 'batch_no',
-                    width: 160,
+                    width: 260,
                     render: (_: unknown, __: unknown, index: number) => (
                       <AntForm.Item noStyle shouldUpdate>
                         {() => {
                           const managed = rowBatchManaged[index];
                           const options = rowBatchOptions[index] ?? [];
+                          const qty = Number(formRef.current?.getFieldValue(['items', index, 'quantity']) ?? 0);
                           if (!managed) {
                             return (
                               <AntForm.Item name={[index, 'batch_no']} style={{ margin: 0 }}>
@@ -1465,20 +1518,18 @@ const InventoryTransferPage: React.FC = () => {
                             );
                           }
                           return (
-                            <AntForm.Item
-                              name={[index, 'batch_no']}
-                              rules={[{ required: true, message: t('app.kuaizhizao.inventoryTransfer.formBatchNoRequired') }]}
-                              style={{ margin: 0 }}
-                            >
-                              <Select
-                                options={options}
-                                placeholder={t('app.kuaizhizao.inventoryTransfer.formBatchNoSelectPlaceholder')}
-                                size="small"
-                                showSearch
-                                optionFilterProp="label"
-                                notFoundContent={t('app.kuaizhizao.inventoryTransfer.msgNoBatchInWarehouse')}
-                              />
-                            </AntForm.Item>
+                            <OutboundBatchAllocationField
+                              value={rowBatchAllocs[index] ?? []}
+                              onChange={(next) => {
+                                setRowBatchAllocs((prev) => ({ ...prev, [index]: next }));
+                                formRef.current?.setFieldValue(
+                                  ['items', index, 'batch_no'],
+                                  next[0]?.batchNo,
+                                );
+                              }}
+                              options={options}
+                              totalQuantity={qty}
+                            />
                           );
                         }}
                       </AntForm.Item>
@@ -1497,6 +1548,7 @@ const InventoryTransferPage: React.FC = () => {
                           remove(index);
                           setTimeout(() => {
                             setRowBatchOptions({});
+                            setRowBatchAllocs({});
                             setRowBatchManaged({});
                             const items = formRef.current?.getFieldValue('items') || [];
                             items.forEach((row: Record<string, unknown>, rowIndex: number) => {
@@ -1709,18 +1761,21 @@ const InventoryTransferPage: React.FC = () => {
         <ProFormText name="from_location_code" hidden />
         <ProFormText name="to_location_code" hidden />
         {itemModalBatchManaged ? (
-          <ProFormSelect
-            name="batch_no"
-            label={t('app.kuaizhizao.warehouseReports.colBatchNo')}
-            placeholder={t('app.kuaizhizao.inventoryTransfer.formBatchNoSelectPlaceholder')}
-            rules={[{ required: true, message: t('app.kuaizhizao.inventoryTransfer.formBatchNoRequired') }]}
-            options={itemModalBatchOptions}
-            fieldProps={{
-              showSearch: true,
-              loading: itemModalBatchLoading,
-              notFoundContent: t('app.kuaizhizao.inventoryTransfer.msgNoBatchInWarehouse'),
-            }}
-          />
+          <>
+            <AntForm.Item label={t('app.kuaizhizao.warehouseReports.colBatchNo')} required>
+              <OutboundBatchAllocationField
+                value={itemModalBatchAllocs}
+                onChange={(next) => {
+                  setItemModalBatchAllocs(next);
+                  itemFormRef.current?.setFieldsValue({ batch_no: next[0]?.batchNo });
+                }}
+                options={itemModalBatchOptions}
+                totalQuantity={Number(itemFormRef.current?.getFieldValue('quantity') ?? 0)}
+                loading={itemModalBatchLoading}
+              />
+            </AntForm.Item>
+            <ProFormText name="batch_no" hidden />
+          </>
         ) : (
           <ProFormText
             name="batch_no"

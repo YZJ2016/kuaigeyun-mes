@@ -26,6 +26,10 @@ from core.utils.timezone_utils import resolve_business_datetime, site_day_bounds
 from infra.models.user import User
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.menu_badge_counts_service import fetch_menu_badge_counts
+from apps.kuaizhizao.services.dashboard_todo_link import (
+    build_dashboard_todo_link,
+    dashboard_todo_handle_message,
+)
 from apps.kuaizhizao.services.exception_service import (
     ACTIVE_EXCEPTION_STATUSES,
     ACTIVE_QUALITY_EXCEPTION_STATUSES,
@@ -260,7 +264,7 @@ async def get_todos(
                     priority="medium",
                     due_date=wo.planned_end_date,
                     status="pending",
-                    link=f"/apps/kuaizhizao/production-execution/work-orders/{wo.id}",
+                    link=build_dashboard_todo_link(f"work_order_{wo.id}"),
                     created_at=wo.created_at,
                 ))
             return out
@@ -294,7 +298,7 @@ async def get_todos(
                     priority=exc.alert_level or "medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/production-execution/material-shortage-exceptions",
+                    link=build_dashboard_todo_link(f"exception_material_{exc.id}"),
                     created_at=exc.created_at,
                 ))
             return out
@@ -326,7 +330,7 @@ async def get_todos(
                     priority="high",
                     due_date=exc.planned_end_date,
                     status="pending",
-                    link="/apps/kuaizhizao/production-execution/delivery-delay-exceptions",
+                    link=build_dashboard_todo_link(f"exception_delay_{exc.id}"),
                     created_at=exc.created_at,
                 ))
             return out
@@ -361,7 +365,7 @@ async def get_todos(
                     priority=exc.severity or "medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/production-execution/quality-exceptions",
+                    link=build_dashboard_todo_link(f"exception_quality_{exc.id}"),
                     created_at=exc.created_at,
                 ))
             return out
@@ -399,7 +403,7 @@ async def get_todos(
                     priority=prio,
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/inventory-alert",
+                    link=build_dashboard_todo_link(f"inventory_alert_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -435,7 +439,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/inbound",
+                    link=build_dashboard_todo_link(f"purchase_receipt_{pr.id}"),
                     created_at=pr.created_at,
                 ))
             return out
@@ -471,7 +475,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/inbound",
+                    link=build_dashboard_todo_link(f"finished_goods_receipt_{fg.id}"),
                     created_at=fg.created_at,
                 ))
             return out
@@ -500,7 +504,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/inbound",
+                    link=build_dashboard_todo_link(f"production_return_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -536,7 +540,7 @@ async def get_todos(
                     priority="low",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/other-inbound",
+                    link=build_dashboard_todo_link(f"other_inbound_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -565,7 +569,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/material-borrows",
+                    link=build_dashboard_todo_link(f"material_borrow_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -594,7 +598,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/material-returns",
+                    link=build_dashboard_todo_link(f"material_return_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -639,7 +643,7 @@ async def get_todos(
                     priority=prio,
                     due_date=row.needed_at,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/batching-center",
+                    link=build_dashboard_todo_link(f"material_call_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -675,7 +679,7 @@ async def get_todos(
                     priority="medium",
                     due_date=_date_to_due(row.planned_receipt_date),
                     status="pending",
-                    link="/apps/kuaizhizao/purchase-management/receipt-notices",
+                    link=build_dashboard_todo_link(f"receipt_notice_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -709,7 +713,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/outbound",
+                    link=build_dashboard_todo_link(f"production_picking_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -744,7 +748,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/outbound",
+                    link=build_dashboard_todo_link(f"sales_delivery_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -779,7 +783,7 @@ async def get_todos(
                     priority="low",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/warehouse-management/other-outbound",
+                    link=build_dashboard_todo_link(f"other_outbound_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -813,7 +817,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/purchase-management/purchase-requisitions",
+                    link=build_dashboard_todo_link(f"purchase_requisition_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -848,7 +852,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/purchase-management/purchase-returns",
+                    link=build_dashboard_todo_link(f"purchase_return_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -888,7 +892,7 @@ async def get_todos(
                     priority="medium",
                     due_date=_date_to_due(row.planned_ship_date),
                     status="pending",
-                    link="/apps/kuaizhizao/sales-management/shipment-notices",
+                    link=build_dashboard_todo_link(f"shipment_notice_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -923,7 +927,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/sales-management/sales-returns",
+                    link=build_dashboard_todo_link(f"sales_return_{row.id}"),
                     created_at=row.created_at,
                 ))
             return out
@@ -960,7 +964,10 @@ async def get_todos(
                     priority=prio,
                     due_date=None,
                     status="pending",
-                    link=f"/apps/kuaizhizao/equipment-management/equipment-faults?uuid={row.uuid}",
+                    link=build_dashboard_todo_link(
+                        f"equipment_fault_{row.id}",
+                        entity_uuid=str(row.uuid) if row.uuid else None,
+                    ),
                     created_at=row.created_at,
                 ))
             return out
@@ -995,7 +1002,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/quality-management/incoming-inspection",
+                    link=build_dashboard_todo_link(f"inspection_incoming_{ins.id}"),
                     created_at=ins.created_at,
                 ))
             return out
@@ -1030,7 +1037,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/quality-management/process-inspection",
+                    link=build_dashboard_todo_link(f"inspection_process_{ins.id}"),
                     created_at=ins.created_at,
                 ))
             return out
@@ -1065,7 +1072,7 @@ async def get_todos(
                     priority="medium",
                     due_date=None,
                     status="pending",
-                    link="/apps/kuaizhizao/quality-management/finished-goods-inspection",
+                    link=build_dashboard_todo_link(f"inspection_finished_{ins.id}"),
                     created_at=ins.created_at,
                 ))
             return out
@@ -1145,178 +1152,7 @@ async def handle_todo(
     - **todo_id**: 待办事项ID（格式：work_order_{id} 或 exception_material_{id} 等）
     - **action**: 处理动作（handle: 处理/跳转, ignore: 忽略）
     """
-    # 解析待办事项ID
-    if todo_id.startswith("work_order_"):
-        # 工单待办事项：返回跳转链接
-        work_order_id = int(todo_id.replace("work_order_", ""))
-        return {
-            "success": True,
-            "message": "请前往工单详情页进行处理",
-            "todo_id": todo_id,
-            "redirect": f"/apps/kuaizhizao/production-execution/work-orders/{work_order_id}",
-        }
-    elif todo_id.startswith("exception_material_"):
-        return {
-            "success": True,
-            "message": "请前往缺料异常列表处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/production-execution/material-shortage-exceptions",
-        }
-    elif todo_id.startswith("exception_delay_"):
-        return {
-            "success": True,
-            "message": "请前往延期异常列表处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/production-execution/delivery-delay-exceptions",
-        }
-    elif todo_id.startswith("exception_quality_"):
-        return {
-            "success": True,
-            "message": "请前往质量异常详情页进行处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/production-execution/quality-exceptions",
-        }
-    elif todo_id.startswith("inventory_alert_"):
-        return {
-            "success": True,
-            "message": "请前往库存预警处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/inventory-alert",
-        }
-    elif todo_id.startswith("purchase_receipt_"):
-        return {
-            "success": True,
-            "message": "请前往采购入库处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/inbound",
-        }
-    elif todo_id.startswith("finished_goods_receipt_"):
-        return {
-            "success": True,
-            "message": "请前往入库管理处理成品入库",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/inbound",
-        }
-    elif todo_id.startswith("production_return_"):
-        return {
-            "success": True,
-            "message": "请前往入库管理处理生产退料",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/inbound",
-        }
-    elif todo_id.startswith("other_inbound_"):
-        return {
-            "success": True,
-            "message": "请前往其他入库处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/other-inbound",
-        }
-    elif todo_id.startswith("material_borrow_"):
-        return {
-            "success": True,
-            "message": "请前往借料单处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/material-borrows",
-        }
-    elif todo_id.startswith("material_return_"):
-        return {
-            "success": True,
-            "message": "请前往还料单处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/material-returns",
-        }
-    elif todo_id.startswith("material_call_"):
-        return {
-            "success": True,
-            "message": "请前往叫料处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/batching-center",
-        }
-    elif todo_id.startswith("receipt_notice_"):
-        return {
-            "success": True,
-            "message": "请前往收货通知处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/purchase-management/receipt-notices",
-        }
-    elif todo_id.startswith("production_picking_"):
-        return {
-            "success": True,
-            "message": "请前往出库管理处理生产领料",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/outbound",
-        }
-    elif todo_id.startswith("sales_delivery_"):
-        return {
-            "success": True,
-            "message": "请前往出库管理处理销售出库",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/outbound",
-        }
-    elif todo_id.startswith("other_outbound_"):
-        return {
-            "success": True,
-            "message": "请前往其他出库处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/warehouse-management/other-outbound",
-        }
-    elif todo_id.startswith("purchase_requisition_"):
-        return {
-            "success": True,
-            "message": "请前往采购申请审核",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/purchase-management/purchase-requisitions",
-        }
-    elif todo_id.startswith("purchase_return_"):
-        return {
-            "success": True,
-            "message": "请前往采购退货处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/purchase-management/purchase-returns",
-        }
-    elif todo_id.startswith("shipment_notice_"):
-        return {
-            "success": True,
-            "message": "请前往发货通知处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/sales-management/shipment-notices",
-        }
-    elif todo_id.startswith("sales_return_"):
-        return {
-            "success": True,
-            "message": "请前往销售退货处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/sales-management/sales-returns",
-        }
-    elif todo_id.startswith("equipment_fault_"):
-        return {
-            "success": True,
-            "message": "请前往设备故障处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/equipment-management/equipment-faults",
-        }
-    elif todo_id.startswith("inspection_incoming_"):
-        return {
-            "success": True,
-            "message": "请前往来料检验处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/quality-management/incoming-inspection",
-        }
-    elif todo_id.startswith("inspection_process_"):
-        return {
-            "success": True,
-            "message": "请前往过程检验处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/quality-management/process-inspection",
-        }
-    elif todo_id.startswith("inspection_finished_"):
-        return {
-            "success": True,
-            "message": "请前往成品检验处理",
-            "todo_id": todo_id,
-            "redirect": "/apps/kuaizhizao/quality-management/finished-goods-inspection",
-        }
-    elif todo_id.startswith("approval_task_"):
+    if todo_id.startswith("approval_task_"):
         # 工作流审批待办：按任务解析单据深链
         from core.models.approval_task import ApprovalTask
         from core.services.user.approval_todo_mapper import build_approval_entity_link
@@ -1362,11 +1198,36 @@ async def handle_todo(
             "todo_id": todo_id,
             "redirect": redirect,
         }
-    else:
+
+    entity_uuid: Optional[str] = None
+    if todo_id.startswith("equipment_fault_"):
+        from apps.kuaizhizao.models.equipment_fault import EquipmentFault
+
+        try:
+            fault_id = int(todo_id.replace("equipment_fault_", "", 1))
+        except ValueError:
+            fault_id = 0
+        if fault_id > 0:
+            fault = await EquipmentFault.get_or_none(
+                tenant_id=tenant_id,
+                id=fault_id,
+                deleted_at__isnull=True,
+            )
+            if fault and fault.uuid:
+                entity_uuid = str(fault.uuid)
+
+    redirect = build_dashboard_todo_link(todo_id, entity_uuid=entity_uuid)
+    if not redirect:
         raise HTTPException(
             status_code=400,
             detail=f"未知的待办事项类型: {todo_id}",
         )
+    return {
+        "success": True,
+        "message": dashboard_todo_handle_message(todo_id),
+        "todo_id": todo_id,
+        "redirect": redirect,
+    }
 
 
 @router.get("/statistics", response_model=StatisticsResponse, summary="Statistics overview")

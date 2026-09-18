@@ -1,9 +1,9 @@
-"""销售/采购交期延误日检 → 配置中心消息规则（站内信，同日去重）。"""
+"""销售/采购交期延误与销售交期提前提醒日检 → 配置中心消息规则（站内信，同日去重）。"""
 
 from __future__ import annotations
 
-from datetime import date, datetime, time
-from typing import Any, Dict, Set
+from datetime import date, datetime, time, timedelta
+from typing import Any, Dict, Optional, Set
 
 from loguru import logger
 
@@ -12,6 +12,7 @@ from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.services.kuaizhizao_business_notification import (
     ACTION_ARRIVAL_OVERDUE,
     ACTION_DELIVERY_DELAYED,
+    ACTION_DUE_SOON,
     DOC_PURCHASE_ORDER,
     DOC_SALES_ORDER,
     dispatch_kuaizhizao_notification,
@@ -23,10 +24,47 @@ from apps.kuaizhizao.utils.purchase_arrival_warning import (
     line_has_open_receipt,
 )
 from core.models.message_log import MessageLog
+from core.services.business.business_notification_service import _normalize_rules
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+from infra.services.business_config_service import BusinessConfigService
 
 _CLOSED_STATUSES = ("COMPLETED", "已完成", "CANCELLED", "已取消", "cancelled", "closed", "CLOSED")
 _MAX_PER_DOC = 40
+_DEFAULT_SALES_DUE_SOON_ADVANCE_DAYS = 3
+_MIN_SALES_DUE_SOON_ADVANCE_DAYS = 1
+_MAX_SALES_DUE_SOON_ADVANCE_DAYS = 90
+
+
+def _clamp_advance_days(raw: Any) -> int:
+    try:
+        days = int(raw)
+    except (TypeError, ValueError):
+        days = _DEFAULT_SALES_DUE_SOON_ADVANCE_DAYS
+    return max(
+        _MIN_SALES_DUE_SOON_ADVANCE_DAYS,
+        min(_MAX_SALES_DUE_SOON_ADVANCE_DAYS, days),
+    )
+
+
+async def _sales_delivery_due_soon_advance_days(tenant_id: int) -> Optional[int]:
+    """读取已启用的「销售订单交期提前提醒」规则中的最大提前天数；无启用规则则返回 None。"""
+    cfg = await BusinessConfigService().get_business_config(tenant_id)
+    rules = _normalize_rules((cfg.get("parameters") or {}).get("notifications"))
+    days_list: list[int] = []
+    for rule in rules:
+        if rule.get("enabled") is False:
+            continue
+        if str(rule.get("trigger_document") or "").strip() != DOC_SALES_ORDER:
+            continue
+        if str(rule.get("trigger_action") or "").strip() != ACTION_DUE_SOON:
+            continue
+        if rule.get("advance_days") is None:
+            days_list.append(_DEFAULT_SALES_DUE_SOON_ADVANCE_DAYS)
+        else:
+            days_list.append(_clamp_advance_days(rule.get("advance_days")))
+    if not days_list:
+        return None
+    return max(days_list)
 
 
 async def _notified_entity_ids_today(
@@ -101,6 +139,8 @@ async def check_and_notify_delivery_delays(tenant_id: int) -> Dict[str, Any]:
         if n:
             sales_done.add(oid)
 
+    sales_due_soon_sent = await _notify_sales_delivery_due_soon(tenant_id)
+
     po_done = await _notified_entity_ids_today(
         tenant_id,
         trigger_document=DOC_PURCHASE_ORDER,
@@ -145,12 +185,71 @@ async def check_and_notify_delivery_delays(tenant_id: int) -> Dict[str, Any]:
     result = {
         "sales_checked": len(sales_orders),
         "sales_notified": sales_sent,
+        "sales_due_soon_notified": sales_due_soon_sent,
         "purchase_checked": len(purchase_orders),
         "purchase_notified": purchase_sent,
         "purchase_arrival_overdue_notified": arrival_sent,
     }
     logger.info("交期延误提醒完成 tenant={} {}", tenant_id, result)
     return result
+
+
+async def _notify_sales_delivery_due_soon(tenant_id: int) -> int:
+    """销售订单交期提前提醒：交货日落在 [today, today+advance_days] 且尚未延误。"""
+    advance_days = await _sales_delivery_due_soon_advance_days(tenant_id)
+    if advance_days is None:
+        return 0
+
+    site_today = to_site_date(resolve_business_datetime())
+    window_end = site_today + timedelta(days=advance_days)
+    done = await _notified_entity_ids_today(
+        tenant_id,
+        trigger_document=DOC_SALES_ORDER,
+        trigger_action=ACTION_DUE_SOON,
+        id_key="sales_order_id",
+    )
+    orders = (
+        await SalesOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            delivery_date__gte=site_today,
+            delivery_date__lte=window_end,
+        )
+        .exclude(status__in=list(_CLOSED_STATUSES))
+        .order_by("delivery_date")
+        .limit(_MAX_PER_DOC)
+    )
+    sent = 0
+    for order in orders:
+        oid = str(order.id)
+        if oid in done:
+            continue
+        delivery = order.delivery_date
+        if delivery is None:
+            continue
+        days_left = (delivery - site_today).days
+        n = await dispatch_kuaizhizao_notification(
+            tenant_id,
+            trigger_document=DOC_SALES_ORDER,
+            trigger_action=ACTION_DUE_SOON,
+            variables={
+                "order_code": order.order_code or oid,
+                "delivery_date": str(delivery),
+                "customer_name": order.customer_name or "—",
+                "days_left": str(max(0, days_left)),
+                "advance_days": str(advance_days),
+                "detail_path": f"/apps/kuaizhizao/sales-management/sales-orders?highlight={order.id}",
+                "sales_order_id": oid,
+            },
+            context={
+                "creator_user_id": order.created_by,
+                "salesman_user_id": order.salesman_id,
+            },
+        )
+        sent += n
+        if n:
+            done.add(oid)
+    return sent
 
 
 async def _notify_purchase_arrival_overdue(tenant_id: int) -> int:

@@ -74,33 +74,40 @@
         "sort_order": 2,
         "children": [
           {
-            "title": "app.kuaioa.menu.employees",
-            "path": "/apps/kuaioa/hr/employees",
-            "permission": "kuaioa:employee:read",
-            "sort_order": 0
-          },
-          {
-            "title": "app.kuaioa.menu.employee-movements",
-            "path": "/apps/kuaioa/hr/employee-movements",
-            "permission": "kuaioa:employee:read",
-            "sort_order": 1
-          },
-          {
-            "title": "app.kuaioa.menu.leave",
-            "path": "/apps/kuaioa/hr/leave",
-            "permission": "kuaioa:leave:read",
-            "sort_order": 2
-          },
-          {
-            "title": "app.kuaioa.menu.attendance",
-            "path": "/apps/kuaioa/hr/attendance",
-            "permission": "kuaioa:attendance:read",
-            "sort_order": 3
+            "title": "app.kuaioa.menu.group.hr-basics",
+            "icon": "clipboardList",
+            "sort_order": 0,
+            "children": [
+              {
+                "title": "app.kuaioa.menu.employees",
+                "path": "/apps/kuaioa/hr/employees",
+                "permission": "kuaioa:employee:read",
+                "sort_order": 0
+              },
+              {
+                "title": "app.kuaioa.menu.employee-movements",
+                "path": "/apps/kuaioa/hr/employee-movements",
+                "permission": "kuaioa:employee:read",
+                "sort_order": 1
+              },
+              {
+                "title": "app.kuaioa.menu.leave",
+                "path": "/apps/kuaioa/hr/leave",
+                "permission": "kuaioa:leave:read",
+                "sort_order": 2
+              },
+              {
+                "title": "app.kuaioa.menu.attendance",
+                "path": "/apps/kuaioa/hr/attendance",
+                "permission": "kuaioa:attendance:read",
+                "sort_order": 3
+              }
+            ]
           },
           {
             "title": "app.kuaioa.menu.group.payroll",
             "icon": "wallet",
-            "sort_order": 4,
+            "sort_order": 1,
             "children": [
               {
                 "title": "app.kuaioa.menu.living-advances",
@@ -161,7 +168,7 @@
           {
             "title": "app.kuaioa.menu.group.training",
             "icon": "bookOpen",
-            "sort_order": 5,
+            "sort_order": 2,
             "children": [
               {
                 "title": "app.kuaioa.menu.dept-training-applications",
@@ -192,7 +199,7 @@
           {
             "title": "app.kuaioa.menu.group.shopfloor-pay",
             "icon": "activity",
-            "sort_order": 6,
+            "sort_order": 3,
             "children": [
               {
                 "title": "app.kuaioa.menu.skills",
@@ -248,7 +255,7 @@
           {
             "title": "app.kuaioa.menu.group.compliance",
             "icon": "shield",
-            "sort_order": 7,
+            "sort_order": 4,
             "children": [
               {
                 "title": "app.kuaioa.menu.licenses",

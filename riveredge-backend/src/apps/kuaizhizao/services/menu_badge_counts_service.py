@@ -508,6 +508,11 @@ async def _section_sales_docs(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
     from apps.kuaizhizao.models.sales_return import SalesReturn
 
     tid = ctx.tenant_id
+    from apps.kuaizhizao.services.receipt_notice_service import (
+        repair_stale_receipt_notice_received_statuses,
+    )
+
+    await repair_stale_receipt_notice_received_statuses(tid)
     qb = Quotation.filter(tenant_id=tid, deleted_at__isnull=True)
     rn = ReceiptNotice.filter(tenant_id=tid, deleted_at__isnull=True, is_active=True)
     prt = PurchaseReturn.filter(tenant_id=tid, deleted_at__isnull=True)

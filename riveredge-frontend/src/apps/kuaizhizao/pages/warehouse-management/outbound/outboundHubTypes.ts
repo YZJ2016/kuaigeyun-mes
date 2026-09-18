@@ -22,6 +22,8 @@ export type OutboundHubPageProps = {
   scopedOutboundTypes?: readonly OutboundIssueType[];
   headerTitle?: string;
   columnPersistenceId?: string;
+  /** 功能权限资源；缺省为仓储出库。委外发料等独立菜单须传对应 manifest 模块。 */
+  permissionResource?: string;
 };
 
 export interface OutboundHubOrder {
@@ -79,6 +81,8 @@ export interface OutboundHubOrder {
     print?: { allowed?: boolean; reason?: string };
     delete?: { allowed?: boolean; reason?: string };
     update?: { allowed?: boolean; reason?: string };
+    /** 销售出库 → 送货单 */
+    push_delivery_notice?: { allowed?: boolean; reason?: string };
   };
   [key: string]: unknown;
 }
@@ -242,16 +246,34 @@ export function outboundDocumentTrackingType(
   return undefined;
 }
 
+/** 取首个非空业务时刻（跳过空串，避免 ?? 被 '' 挡住） */
+export function pickOutboundHubDateCandidate(...values: unknown[]): unknown {
+  for (const value of values) {
+    if (value == null) continue;
+    if (typeof value === 'string' && value.trim() === '') continue;
+    return value;
+  }
+  return null;
+}
+
 /** Hub 统一「出库日期」原始值 */
 export function resolveOutboundHubDateRaw(record: OutboundHubOrder): unknown {
-  return (
-    record.delivery_date ||
-    record.picking_time ||
-    record.delivery_time ||
-    record.borrow_time ||
-    record.return_time ||
-    record.issued_at ||
-    null
+  const row = record as Record<string, unknown>;
+  return pickOutboundHubDateCandidate(
+    row.delivery_date,
+    row.deliveryDate,
+    row.picking_time,
+    row.pickingTime,
+    row.delivery_time,
+    row.deliveryTime,
+    row.borrow_time,
+    row.borrowTime,
+    row.return_time,
+    row.returnTime,
+    row.issued_at,
+    row.issuedAt,
+    row.created_at,
+    row.createdAt,
   );
 }
 
@@ -296,7 +318,14 @@ export function mapOutsourceIssueToOutbound(item: Record<string, unknown>): Outb
     delivered_by: String(
       item.issued_by_name ?? item.issuedByName ?? item.created_by_name ?? item.createdByName ?? '',
     ),
-    delivery_date: String(item.issued_at ?? item.issuedAt ?? item.created_at ?? item.createdAt ?? ''),
+    delivery_date: String(
+      pickOutboundHubDateCandidate(
+        item.issued_at,
+        item.issuedAt,
+        item.created_at,
+        item.createdAt,
+      ) ?? '',
+    ),
     status,
     updated_at: String(item.updated_at ?? item.updatedAt ?? ''),
     created_at: String(item.created_at ?? item.createdAt ?? ''),

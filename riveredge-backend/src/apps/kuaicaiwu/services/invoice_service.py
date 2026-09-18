@@ -59,6 +59,20 @@ class InvoiceService(AppBaseService[Invoice]):
                     invoice=invoice,
                     **item_data.model_dump()
                 )
+            partner_payload: dict = {
+                "category": invoice.category,
+                "status": invoice.status,
+                "item_count": len(data.items),
+                "partner_id": invoice.partner_id,
+                "partner_name": invoice.partner_name,
+            }
+            category = str(invoice.category or "").upper()
+            if category == "OUT":
+                partner_payload["customer_id"] = invoice.partner_id
+                partner_payload["customer_name"] = invoice.partner_name
+            elif category == "IN":
+                partner_payload["supplier_id"] = invoice.partner_id
+                partner_payload["supplier_name"] = invoice.partner_name
             await self.accounting_event_service.record_event(
                 tenant_id=tenant_id,
                 event_type="INVOICE_CREATED",
@@ -69,11 +83,7 @@ class InvoiceService(AppBaseService[Invoice]):
                 amount=invoice.total_amount,
                 currency="CNY",
                 operator_id=created_by,
-                payload={
-                    "category": invoice.category,
-                    "status": invoice.status,
-                    "item_count": len(data.items),
-                },
+                payload=partner_payload,
             )
             return await self.get_invoice_by_uuid(tenant_id, code)
 

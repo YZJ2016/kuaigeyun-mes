@@ -419,8 +419,8 @@ class ShiftSchedulingService:
                 deleted_at__isnull=True,
                 period_start__lte=a.work_date,
                 period_end__gte=a.work_date,
-            ).exclude(id=roster.id)
-            other_ids = [r.id for r in await other_rosters]
+            ).exclude(id=roster.id).all()
+            other_ids = [r.id for r in other_rosters]
             if not other_ids:
                 continue
             conflict = await ShiftAssignment.filter(

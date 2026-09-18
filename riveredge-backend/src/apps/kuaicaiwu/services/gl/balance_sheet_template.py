@@ -332,23 +332,35 @@ def build_balance_amount_index(
     return index
 
 
+def _code_under_prefix(account_code: str, prefix: str) -> bool:
+    """科目本身或其下级（编码以前缀开头）计入该报表行。"""
+    if not account_code or not prefix:
+        return False
+    return account_code == prefix or account_code.startswith(prefix)
+
+
+def _codes_under_any(account_code: str, prefixes: Iterable[str]) -> bool:
+    return any(_code_under_prefix(account_code, p) for p in prefixes)
+
+
 def _sum_codes(
     amounts: Dict[str, Dict[str, Decimal]],
     codes: Iterable[str],
     *,
     subtract_codes: Iterable[str] = (),
 ) -> Dict[str, Decimal]:
+    """按科目编码汇总；含下级明细（如 2221 → 22210101），避免仅精确匹配漏行。"""
+    prefixes = tuple(str(c).strip() for c in codes if str(c).strip())
+    subtract_prefixes = tuple(str(c).strip() for c in subtract_codes if str(c).strip())
     ending = Decimal("0")
     opening = Decimal("0")
-    for code in codes:
-        bucket = amounts.get(code)
-        if not bucket:
+    for code, bucket in amounts.items():
+        if not _codes_under_any(code, prefixes):
             continue
         ending += bucket.get("ending", Decimal("0"))
         opening += bucket.get("opening", Decimal("0"))
-    for code in subtract_codes:
-        bucket = amounts.get(code)
-        if not bucket:
+    for code, bucket in amounts.items():
+        if not _codes_under_any(code, subtract_prefixes):
             continue
         ending -= bucket.get("ending", Decimal("0"))
         opening -= bucket.get("opening", Decimal("0"))
@@ -365,13 +377,13 @@ def _pair_sub(a: Dict[str, Decimal], b: Dict[str, Decimal]) -> Dict[str, Decimal
 
 def _compute_unclosed(
     balance_rows: List[Dict[str, Any]],
-    mapped_codes: set[str],
+    mapped_prefixes: set[str],
 ) -> Dict[str, Decimal]:
     ending = Decimal("0")
     opening = Decimal("0")
     for row in balance_rows:
         code = str(row.get("account_code") or "").strip()
-        if code in mapped_codes:
+        if _codes_under_any(code, mapped_prefixes):
             continue
         account_type = str(row.get("account_type") or "")
         if account_type not in ("profit_loss", "cost"):

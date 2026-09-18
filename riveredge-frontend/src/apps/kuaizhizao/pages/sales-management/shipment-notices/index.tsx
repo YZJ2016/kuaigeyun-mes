@@ -16,6 +16,7 @@ import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
+import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Form as AntForm, Select, InputNumber, Input, Row, Col, Typography, Dropdown, Spin, Empty, Descriptions, Alert } from 'antd';
@@ -742,6 +743,10 @@ const ShipmentNoticesPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.shipmentNotice.detailFailed'));
     }
   };
+
+  useDocumentHighlightDeepLink(
+    useCallback((id: number) => handleDetail({ id }), [messageApi, t]),
+  );
 
   const handleEdit = async (record: ShipmentNotice) => {
     try {

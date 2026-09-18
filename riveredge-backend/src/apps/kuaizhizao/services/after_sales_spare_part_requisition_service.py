@@ -15,6 +15,7 @@ from apps.kuaizhizao.models.after_sales_service import (
     AfterSalesSparePartRequisitionItem,
     RepairOrder,
 )
+from apps.kuaizhizao.models.other_outbound import OtherOutbound
 from apps.kuaizhizao.models.install_execution_job import InstallExecutionJob
 from apps.kuaizhizao.schemas.after_sales_service import (
     REQUISITION_SOURCE_TYPES,
@@ -27,7 +28,11 @@ from apps.kuaizhizao.schemas.after_sales_service import (
     AfterSalesSparePartRequisitionResponse,
     AfterSalesSparePartRequisitionUpdate,
 )
-from apps.kuaizhizao.schemas.warehouse import OtherOutboundCreate, OtherOutboundItemCreate
+from apps.kuaizhizao.schemas.warehouse import (
+    OtherOutboundCreate,
+    OtherOutboundItemCreate,
+    OtherOutboundResponse,
+)
 from apps.kuaizhizao.services.warehouse_service import OtherOutboundService
 from apps.master_data.models.material import Material
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str
@@ -183,6 +188,18 @@ class AfterSalesSparePartRequisitionService:
             apply_create_audit(payload, current_user)
             row = await AfterSalesSparePartRequisition.create(**payload)
             items = await cls._replace_items(tenant_id, row.id, data.items, current_user)
+            if source_type == "repair_order":
+                from apps.kuaizhizao.services.after_sales_upstream_status import (
+                    bump_repair_on_dispatch_created,
+                )
+
+                await bump_repair_on_dispatch_created(tenant_id, data.source_id, current_user)
+            elif source_type == "install_execution":
+                from apps.kuaizhizao.services.after_sales_upstream_status import (
+                    bump_install_on_dispatch_created,
+                )
+
+                await bump_install_on_dispatch_created(tenant_id, data.source_id, current_user)
         return await cls._to_response(row, items)
 
     @classmethod
@@ -312,50 +329,70 @@ class AfterSalesSparePartRequisitionService:
         if row.status != "待审核":
             raise BusinessLogicError("仅待审核状态可审核通过")
 
+        if not row.warehouse_id:
+            raise ValidationError("请选择出库仓库")
+
         items = await cls._load_items(tenant_id, requisition_id)
         if not items:
             raise ValidationError("申领单无明细，无法审核")
 
-        outbound_items = [
-            OtherOutboundItemCreate(
-                material_id=int(item.material_id),
-                material_code=str(item.material_code or ""),
-                material_name=str(item.material_name or ""),
-                material_spec=item.material_spec,
-                material_unit=str(item.material_unit or ""),
-                outbound_quantity=float(item.quantity or 0),
-                unit_price=0,
-                total_amount=0,
+        outbound_items: List[OtherOutboundItemCreate] = []
+        for item in items:
+            if item.material_id is None:
+                raise ValidationError(f"第 {item.line_no} 行缺少物料，无法审核")
+            outbound_items.append(
+                OtherOutboundItemCreate(
+                    material_id=int(item.material_id),
+                    material_code=str(item.material_code or ""),
+                    material_name=str(item.material_name or ""),
+                    material_spec=item.material_spec,
+                    material_unit=str(item.material_unit or ""),
+                    outbound_quantity=float(item.quantity or 0),
+                    unit_price=0,
+                    total_amount=0,
+                )
             )
-            for item in items
-            if item.material_id is not None
-        ]
 
-        async with in_transaction():
-            outbound = await OtherOutboundService().create_other_outbound(
+        outbound: OtherOutboundResponse
+        if row.other_outbound_id:
+            existing = await OtherOutbound.get_or_none(
                 tenant_id=tenant_id,
-                outbound_data=OtherOutboundCreate(
-                    reason_type="其他",
-                    reason_desc=f"售后备件申领 {row.requisition_code}",
-                    warehouse_id=int(row.warehouse_id),
-                    warehouse_name=str(row.warehouse_name or ""),
-                    items=outbound_items,
-                ),
-                created_by=current_user.id,
+                id=row.other_outbound_id,
             )
-            dump = {
-                "status": "已审核",
-                "reviewer_id": current_user.id,
-                "reviewer_name": current_user.full_name or current_user.username,
-                "reviewed_at": resolve_business_datetime(),
-                "review_remarks": (data.review_remarks or "").strip() or None,
-                "other_outbound_id": outbound.id,
-                "other_outbound_code": outbound.outbound_code,
-            }
-            apply_update_audit(dump, current_user)
-            await AfterSalesSparePartRequisition.filter(
-                id=requisition_id, tenant_id=tenant_id
-            ).update(**dump)
+            if existing is None:
+                raise BusinessLogicError("关联出库单不存在，请驳回后重新提交")
+            outbound = OtherOutboundResponse.model_validate(existing)
+        else:
+            try:
+                outbound = await OtherOutboundService().create_other_outbound(
+                    tenant_id=tenant_id,
+                    outbound_data=OtherOutboundCreate(
+                        reason_type="其他",
+                        reason_desc=f"售后备件申领 {row.requisition_code}",
+                        warehouse_id=int(row.warehouse_id),
+                        warehouse_name=str(row.warehouse_name or ""),
+                        items=outbound_items,
+                    ),
+                    created_by=current_user.id,
+                )
+            except (ValidationError, BusinessLogicError):
+                raise
+            except Exception as exc:
+                raise BusinessLogicError(f"生成出库单失败: {exc}") from exc
+
+        dump = {
+            "status": "已审核",
+            "reviewer_id": current_user.id,
+            "reviewer_name": current_user.full_name or current_user.username,
+            "reviewed_at": resolve_business_datetime(),
+            "review_remarks": (data.review_remarks or "").strip() or None,
+            "other_outbound_id": outbound.id,
+            "other_outbound_code": outbound.outbound_code,
+        }
+        apply_update_audit(dump, current_user)
+        await AfterSalesSparePartRequisition.filter(
+            id=requisition_id, tenant_id=tenant_id
+        ).update(**dump)
 
         row = await AfterSalesSparePartRequisition.get(id=requisition_id, tenant_id=tenant_id)
         return await cls._to_response(row, items)
@@ -378,12 +415,16 @@ class AfterSalesSparePartRequisitionService:
         if row.status != "待审核":
             raise BusinessLogicError("仅待审核状态可驳回")
 
+        review_remarks = (data.review_remarks or "").strip()
+        if not review_remarks:
+            raise ValidationError("请输入驳回原因")
+
         dump = {
             "status": "已驳回",
             "reviewer_id": current_user.id,
             "reviewer_name": current_user.full_name or current_user.username,
             "reviewed_at": resolve_business_datetime(),
-            "review_remarks": data.review_remarks.strip(),
+            "review_remarks": review_remarks,
         }
         apply_update_audit(dump, current_user)
         await AfterSalesSparePartRequisition.filter(id=requisition_id, tenant_id=tenant_id).update(**dump)

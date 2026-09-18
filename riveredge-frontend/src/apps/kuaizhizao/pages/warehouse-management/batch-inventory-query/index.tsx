@@ -50,6 +50,7 @@ interface BatchInventoryItem {
   status: string;
   warehouse_id: number | null;
   warehouse_name: string | null;
+  location_code?: string | null;
 }
 
 interface WarehouseOption {
@@ -425,6 +426,21 @@ const BatchInventoryQuery: React.FC = () => {
         },
       },
       {
+        title: t('app.kuaizhizao.warehouseInventory.colLocation'),
+        dataIndex: 'location_code',
+        key: 'location_code',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, record) => {
+          const text = String(record.location_code ?? '').trim();
+          return text || '—';
+        },
+      },
+      {
         title: t('app.kuaizhizao.warehouseInventory.colInTransit'),
         dataIndex: 'in_transit_quantity',
         width: 100,
@@ -573,6 +589,7 @@ const BatchInventoryQuery: React.FC = () => {
         t('app.kuaizhizao.batchInventoryQuery.colProductionDate'),
         t('app.kuaizhizao.batchInventoryQuery.colExpiryDate'),
         t('app.kuaizhizao.warehouseReports.colStockQty'),
+        t('app.kuaizhizao.warehouseInventory.colLocation'),
         t('app.kuaizhizao.warehouseInventory.colInTransit'),
         t('app.kuaizhizao.warehouseInventory.colAlert'),
         t('app.kuaizhizao.batchInventoryQuery.colSupplierBatchNo'),
@@ -592,6 +609,7 @@ const BatchInventoryQuery: React.FC = () => {
           r.production_date,
           r.expiry_date,
           r.quantity,
+          r.location_code,
           r.in_transit_quantity ?? 0,
           r.alert_label,
           r.supplier_batch_no,
@@ -642,7 +660,7 @@ const BatchInventoryQuery: React.FC = () => {
         headerActions={tableHeaderActions}
         actionRef={actionRef}
         columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.batch-inventory-query-width-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.batch-inventory-query-width-v3"
         request={fetchBatchInventory}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter

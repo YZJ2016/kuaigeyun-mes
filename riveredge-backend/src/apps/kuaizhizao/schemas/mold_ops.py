@@ -268,6 +268,10 @@ class MoldTrialUpdate(BaseModel):
     remark: Optional[str] = None
 
 
+class MoldTrialReject(BaseModel):
+    reject_reason: str = Field(..., min_length=1)
+
+
 class MoldTrialResponse(AuditActorFields):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -364,6 +368,20 @@ class MoldReturnCreate(BaseModel):
     source_no: Optional[str] = Field(None, max_length=100)
     reporting_record_id: Optional[int] = None
     remark: Optional[str] = None
+
+
+class MoldReturnUsagePreviewResponse(BaseModel):
+    borrow_id: int
+    mold_id: int
+    mold_code: Optional[str] = None
+    mold_name: Optional[str] = None
+    borrow_document_no: Optional[str] = None
+    source_type: Optional[str] = None
+    source_id: Optional[int] = None
+    source_no: Optional[str] = None
+    manufacture_qty: Optional[float] = None
+    usage_count: int
+    cavity_count: Optional[int] = None
 
 
 class MoldReturnUpdate(BaseModel):

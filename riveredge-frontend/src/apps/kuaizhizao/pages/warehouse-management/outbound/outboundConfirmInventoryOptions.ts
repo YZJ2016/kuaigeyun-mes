@@ -226,6 +226,31 @@ export async function loadAvailableQtyByMaterialId(
   return out;
 }
 
+/**
+ * 按物料 × 仓库汇总可出库库存（自购在库，与 loadAvailableQtyByMaterialId 同口径）。
+ * 用于领料/出库选仓下拉展示「仓名（库存 n）」，不改变扣减规则。
+ */
+export async function loadAvailableQtyByMaterialWarehouse(
+  materialIds: number[],
+): Promise<Record<number, Record<number, number>>> {
+  if (!materialIds.length) return {};
+  const rows = await fetchBatchQueryRows(materialIds, undefined, { companyOwnedOnly: true });
+  const out: Record<number, Record<number, number>> = {};
+  for (const mid of materialIds) {
+    out[mid] = {};
+  }
+  for (const row of rows) {
+    if (!isOutboundDeductibleInventoryRow(row)) continue;
+    const mid = Number(row.material_id);
+    const wid = Number(row.warehouse_id);
+    if (!Number.isFinite(mid) || mid <= 0) continue;
+    if (!Number.isFinite(wid) || wid <= 0) continue;
+    if (!out[mid]) out[mid] = {};
+    out[mid][wid] = (out[mid][wid] ?? 0) + (Number(row.quantity) || 0);
+  }
+  return out;
+}
+
 /** 拉取物料全部在库序列号（分页合并，供出库确认多选） */
 export async function loadInStockSerialOptions(materialUuid: string): Promise<InventoryPickOption[]> {
   const pageSize = 100;

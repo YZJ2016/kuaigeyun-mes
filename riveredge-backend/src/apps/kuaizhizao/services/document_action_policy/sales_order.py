@@ -140,6 +140,7 @@ def derive_sales_order_capabilities(
     has_remaining_work_order_qty: bool = True,
     has_existing_delivery_project: bool = False,
     has_downstream_documents: bool = False,
+    has_remaining_invoice_amount: bool = True,
     require_audit_before_print: bool = False,
 ) -> SalesOrderCapabilities:
     status = getattr(order, "status", None)
@@ -318,6 +319,8 @@ def derive_sales_order_capabilities(
     if push_ok:
         if not has_items:
             push_invoice_reason = "sales_order.push.no_items"
+        elif not has_remaining_invoice_amount:
+            push_invoice_reason = "sales_order.push_invoice.already_fully_invoiced"
         else:
             push_invoice_allowed = True
             push_invoice_reason = None
@@ -421,6 +424,7 @@ def assert_sales_order_capability(
     has_remaining_work_order_qty: bool = True,
     has_existing_delivery_project: bool = False,
     has_downstream_documents: bool = False,
+    has_remaining_invoice_amount: bool = True,
     require_audit_before_print: bool = False,
 ) -> None:
     caps = derive_sales_order_capabilities(
@@ -434,6 +438,7 @@ def assert_sales_order_capability(
         has_remaining_work_order_qty=has_remaining_work_order_qty,
         has_existing_delivery_project=has_existing_delivery_project,
         has_downstream_documents=has_downstream_documents,
+        has_remaining_invoice_amount=has_remaining_invoice_amount,
         require_audit_before_print=require_audit_before_print,
     )
     cap_map = {

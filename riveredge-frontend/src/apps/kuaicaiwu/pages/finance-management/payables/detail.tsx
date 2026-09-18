@@ -50,6 +50,8 @@ import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useDetailDrawerFeatures } from '../../../../../hooks/useDetailDrawerFeatures';
+import { isDetailOperationLogEnabledForDocument } from '../../../../kuaizhizao/constants/detailDrawerTimeFields';
 
 
 
@@ -65,6 +67,12 @@ const PayableDetail: React.FC = () => {
   const amountDecimals = useNumericPrecisionPlaces('amount');
 
   const linked = useLinkedDocumentDetail();
+  const { operationLogEnabled, timeFieldHidden } = useDetailDrawerFeatures();
+  const showPayableOperationLog = isDetailOperationLogEnabledForDocument(
+    'payable',
+    timeFieldHidden,
+    operationLogEnabled,
+  );
 
   const paymentPerms = useResourcePermissions(PAYMENT_RESOURCE);
 
@@ -304,7 +312,7 @@ const PayableDetail: React.FC = () => {
 
     <Row gutter={PAGE_SPACING.BLOCK_GAP} wrap={false} align="stretch">
 
-      <Col flex="70%" style={{ minWidth: 0 }}>
+      <Col flex={showPayableOperationLog ? '70%' : '100%'} style={{ minWidth: 0 }}>
 
         {isOffsetPayable ? (
           <Alert
@@ -541,41 +549,26 @@ const PayableDetail: React.FC = () => {
 
 
 
-      <Col flex="30%" style={{ minWidth: 0 }}>
-
-        <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')} marginBottom={0} style={{ height: '100%' }}>
-
-          {documentTracking.loading && (
-
-            <div style={{ textAlign: 'center', padding: 24 }}>
-
-              <Spin />
-
-            </div>
-
-          )}
-
-          {documentTracking.error && !documentTracking.loading && (
-
-            <Typography.Text type="danger">{documentTracking.error}</Typography.Text>
-
-          )}
-
-          {documentTracking.data && !documentTracking.loading && (
-
-            <DocumentTrackingTimelineBody data={documentTracking.data} />
-
-          )}
-
-          {!documentTracking.loading && !documentTracking.data && !documentTracking.error && (
-
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaicaiwu.common.noActivityLog')} />
-
-          )}
-
-        </DetailDrawerSection>
-
-      </Col>
+      {showPayableOperationLog ? (
+        <Col flex="30%" style={{ minWidth: 0 }}>
+          <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')} marginBottom={0} style={{ height: '100%' }}>
+            {documentTracking.loading && (
+              <div style={{ textAlign: 'center', padding: 24 }}>
+                <Spin />
+              </div>
+            )}
+            {documentTracking.error && !documentTracking.loading && (
+              <Typography.Text type="danger">{documentTracking.error}</Typography.Text>
+            )}
+            {documentTracking.data && !documentTracking.loading && (
+              <DocumentTrackingTimelineBody data={documentTracking.data} />
+            )}
+            {!documentTracking.loading && !documentTracking.data && !documentTracking.error && (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaicaiwu.common.noActivityLog')} />
+            )}
+          </DetailDrawerSection>
+        </Col>
+      ) : null}
 
     </Row>,
 

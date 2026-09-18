@@ -7,6 +7,7 @@ const OutsourceIssuePage: React.FC = () => {
   return (
     <OutboundHub
       fixedOutboundType="outsource_issue"
+      permissionResource="kuaizhizao:outsource-issue"
       headerTitle={t('app.kuaizhizao.menu.outsource-management.outsource-issue')}
       columnPersistenceId="apps.kuaizhizao.pages.outsource-management.outsource-issue-width-v1"
     />

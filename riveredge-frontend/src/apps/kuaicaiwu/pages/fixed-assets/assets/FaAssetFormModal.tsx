@@ -304,14 +304,27 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
             ) : null
           }
         </ProFormDependency>
-        <Col span={12}>
-          <ProFormDigit
-            name="useful_life_months"
-            label={t(`${NS}.form.usefulLifePeriods`)}
-            min={1}
-            rules={[{ required: true }]}
-          />
-        </Col>
+        <ProFormDependency name={['depreciation_method']}>
+          {({ depreciation_method }) => (
+            <Col span={12}>
+              <ProFormDigit
+                name="useful_life_months"
+                label={t(`${NS}.form.usefulLifePeriods`)}
+                min={1}
+                rules={
+                  depreciation_method === 'units_of_production'
+                    ? []
+                    : [{ required: true }]
+                }
+                tooltip={
+                  depreciation_method === 'units_of_production'
+                    ? t(`${NS}.form.usefulLifeOptionalForWorkload`)
+                    : undefined
+                }
+              />
+            </Col>
+          )}
+        </ProFormDependency>
         <Col span={12}>
           <ProFormMoney
             name="original_value"
@@ -415,7 +428,18 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
             total_workload,
           }) => (
             <Col span={12}>
-              <Form.Item label={t(`${NS}.form.monthlyDepreciation`)}>
+              <Form.Item
+                label={
+                  depreciation_method === 'units_of_production'
+                    ? t(`${NS}.form.unitDepreciation`)
+                    : t(`${NS}.form.monthlyDepreciation`)
+                }
+                tooltip={
+                  depreciation_method === 'units_of_production'
+                    ? t(`${NS}.form.unitDepreciationHint`)
+                    : undefined
+                }
+              >
                 <Input
                   readOnly
                   value={formatMoneyDisplay(
@@ -439,10 +463,13 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
 
       <Divider orientation="left">{t(`${NS}.form.sectionAccounts`)}</Divider>
       <Row gutter={16}>
+        <Col span={24}>
+          <Alert type="info" title={t(`${NS}.form.voucherEntryHint`)} />
+        </Col>
         <Col span={12}>
           <ProFormSelect
-            name="accumulated_depreciation_account_code"
-            label={t(`${NS}.form.accumDeprAccount`)}
+            name="expense_account_code"
+            label={t(`${NS}.form.expenseAccount`)}
             rules={[{ required: true }]}
             options={accountOptions}
             showSearch
@@ -450,8 +477,8 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
         </Col>
         <Col span={12}>
           <ProFormSelect
-            name="expense_account_code"
-            label={t(`${NS}.form.expenseAccount`)}
+            name="accumulated_depreciation_account_code"
+            label={t(`${NS}.form.accumDeprAccount`)}
             rules={[{ required: true }]}
             options={accountOptions}
             showSearch

@@ -7,6 +7,7 @@ const OutsourceProductReturnPage: React.FC = () => {
   return (
     <InboundHub
       fixedReceiptType="outsource_product_return"
+      permissionResource="kuaizhizao:outsource-product-return"
       headerTitle={t('app.kuaizhizao.menu.outsource-management.outsource-product-return')}
       columnPersistenceId="apps.kuaizhizao.pages.outsource-management.outsource-product-return-width-v1"
     />

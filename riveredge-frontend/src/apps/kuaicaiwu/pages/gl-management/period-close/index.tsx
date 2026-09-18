@@ -1,7 +1,7 @@
 /**
  * 总账期末结账
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   App,
   Alert,
@@ -9,6 +9,7 @@ import {
   Card,
   Descriptions,
   InputNumber,
+  Popconfirm,
   Space,
   Table,
   Typography,
@@ -20,6 +21,7 @@ import {
   ListPageTemplate,
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { formatAmount } from '../../../../../utils/format';
 import { glService } from '../../../services/gl';
@@ -54,16 +56,67 @@ type CheckResult = {
   message?: string;
 };
 
+type TransferTemplateLine = {
+  side?: string;
+  account_code?: string;
+  amount_mode?: string;
+  amount?: number;
+  ratio?: number;
+  summary?: string;
+};
+
 type TransferTemplate = {
   id: number;
   template_code: string;
   template_name: string;
   template_type: string;
-  lines?: Array<Record<string, unknown>>;
+  lines?: TransferTemplateLine[];
   is_active?: boolean;
 };
 
 type AccrualRow = Record<string, unknown>;
+
+function buildCustomTemplateLines(values: Record<string, unknown>): TransferTemplateLine[] {
+  const amountMode = String(values.amount_mode || 'period_balance');
+  const amount = values.amount;
+  const ratio = values.ratio || 1;
+  const summary = String(values.template_name || '');
+  return [
+    {
+      side: 'debit',
+      account_code: String(values.debit_account_code || ''),
+      amount_mode: amountMode,
+      amount: amount as number | undefined,
+      ratio: ratio as number,
+      summary,
+    },
+    {
+      side: 'credit',
+      account_code: String(values.credit_account_code || ''),
+      amount_mode: amountMode,
+      amount: amount as number | undefined,
+      ratio: ratio as number,
+      summary,
+    },
+  ];
+}
+
+function templateFormInitialValues(tpl: TransferTemplate | null): Record<string, unknown> {
+  if (!tpl) {
+    return { amount_mode: 'period_balance', ratio: 1 };
+  }
+  const debit = (tpl.lines || []).find((l) => l.side === 'debit');
+  const credit = (tpl.lines || []).find((l) => l.side === 'credit');
+  return {
+    template_code: tpl.template_code,
+    template_name: tpl.template_name,
+    debit_account_code: debit?.account_code,
+    credit_account_code: credit?.account_code,
+    amount_mode: debit?.amount_mode || credit?.amount_mode || 'period_balance',
+    amount: debit?.amount ?? credit?.amount,
+    ratio: debit?.ratio ?? credit?.ratio ?? 1,
+  };
+}
 
 const PeriodClosePage: React.FC = () => {
   const { t } = useTranslation();
@@ -79,6 +132,7 @@ const PeriodClosePage: React.FC = () => {
   const [templates, setTemplates] = useState<TransferTemplate[]>([]);
   const [accruals, setAccruals] = useState<AccrualRow[]>([]);
   const [tplOpen, setTplOpen] = useState(false);
+  const [editingTpl, setEditingTpl] = useState<TransferTemplate | null>(null);
   const [accrualOpen, setAccrualOpen] = useState(false);
 
   const loadStatus = useCallback(async () => {
@@ -164,6 +218,30 @@ const PeriodClosePage: React.FC = () => {
       );
     });
 
+  const openCreateTemplate = () => {
+    setEditingTpl(null);
+    setTplOpen(true);
+  };
+
+  const openEditTemplate = (tpl: TransferTemplate) => {
+    setEditingTpl(tpl);
+    setTplOpen(true);
+  };
+
+  const closeTemplateModal = () => {
+    setTplOpen(false);
+    setEditingTpl(null);
+  };
+
+  const handleDeleteTemplate = (tpl: TransferTemplate) =>
+    void withAction(`tpl-del-${tpl.id}`, async () => {
+      await glService.deleteTransferTemplate(tpl.id);
+      messageApi.success(t('common.deleteSuccess', { defaultValue: '删除成功' }));
+    });
+
+  const tplInitialValues = useMemo(() => templateFormInitialValues(editingTpl), [editingTpl]);
+  const editingProfitLoss = editingTpl?.template_type === 'profit_loss';
+
   const periodColumns = [
     {
       title: t(`${NS}.col.period`, { defaultValue: '期间' }),
@@ -237,17 +315,29 @@ const PeriodClosePage: React.FC = () => {
     {
       title: t('common.action', { defaultValue: '操作' }),
       key: 'action',
-      width: 120,
+      width: 220,
       render: (_: unknown, r: TransferTemplate) => (
-        <Button
-          type="link"
-          size="small"
-          disabled={r.is_active === false}
-          loading={actionLoading === `tpl-${r.id}`}
-          onClick={() => handleRunTemplate(r)}
-        >
-          {t(`${NS}.runTemplate`, { defaultValue: '执行' })}
-        </Button>
+        <Space size="small">
+          <Button
+            type="link"
+            size="small"
+            disabled={r.is_active === false}
+            loading={actionLoading === `tpl-${r.id}`}
+            onClick={() => handleRunTemplate(r)}
+          >
+            {t(`${NS}.runTemplate`, { defaultValue: '执行' })}
+          </Button>
+          <Button key="edit" {...rowActionKind('update')} onClick={() => openEditTemplate(r)} />
+          <Popconfirm
+            title={t(`${NS}.deleteTemplateConfirm`, {
+              defaultValue: '确认删除转账模板「{{name}}」？',
+              name: r.template_name,
+            })}
+            onConfirm={() => handleDeleteTemplate(r)}
+          >
+            <Button {...rowActionKind('delete')} loading={actionLoading === `tpl-del-${r.id}`} />
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
@@ -391,7 +481,7 @@ const PeriodClosePage: React.FC = () => {
           title={t(`${NS}.transferTemplates`, { defaultValue: '自定义转账' })}
           style={{ width: '100%' }}
           extra={
-            <Button onClick={() => setTplOpen(true)}>
+            <Button onClick={openCreateTemplate}>
               {t(`${NS}.newTemplate`, { defaultValue: '新建转账模板' })}
             </Button>
           }
@@ -442,38 +532,45 @@ const PeriodClosePage: React.FC = () => {
       </Space>
 
       <FormModalTemplate
-        title={t(`${NS}.newTemplate`, { defaultValue: '新建转账模板' })}
+        key={editingTpl ? `edit-tpl-${editingTpl.id}` : 'create-tpl'}
+        title={
+          editingTpl
+            ? t(`${NS}.editTemplate`, { defaultValue: '编辑转账模板' })
+            : t(`${NS}.newTemplate`, { defaultValue: '新建转账模板' })
+        }
         open={tplOpen}
-        onClose={() => setTplOpen(false)}
+        onClose={closeTemplateModal}
         width={MODAL_CONFIG.LARGE_WIDTH}
+        initialValues={tplInitialValues}
         onFinish={async (values) => {
           try {
-            await glService.upsertTransferTemplate({
-              template_code: values.template_code,
-              template_name: values.template_name,
-              template_type: 'custom',
-              lines: [
-                {
-                  side: 'debit',
-                  account_code: values.debit_account_code,
-                  amount_mode: values.amount_mode || 'period_balance',
-                  amount: values.amount,
-                  ratio: values.ratio || 1,
-                  summary: values.template_name,
-                },
-                {
-                  side: 'credit',
-                  account_code: values.credit_account_code,
-                  amount_mode: values.amount_mode || 'period_balance',
-                  amount: values.amount,
-                  ratio: values.ratio || 1,
-                  summary: values.template_name,
-                },
-              ],
-              is_active: true,
-            });
+            if (editingTpl) {
+              if (editingProfitLoss) {
+                await glService.updateTransferTemplate(editingTpl.id, {
+                  template_code: editingTpl.template_code,
+                  template_name: values.template_name,
+                  is_active: editingTpl.is_active !== false,
+                });
+              } else {
+                await glService.updateTransferTemplate(editingTpl.id, {
+                  template_code: editingTpl.template_code,
+                  template_name: values.template_name,
+                  template_type: 'custom',
+                  lines: buildCustomTemplateLines(values),
+                  is_active: true,
+                });
+              }
+            } else {
+              await glService.upsertTransferTemplate({
+                template_code: values.template_code,
+                template_name: values.template_name,
+                template_type: 'custom',
+                lines: buildCustomTemplateLines(values),
+                is_active: true,
+              });
+            }
             messageApi.success(t('common.saveSuccess', { defaultValue: '保存成功' }));
-            setTplOpen(false);
+            closeTemplateModal();
             await loadStatus();
           } catch (error) {
             messageApi.error(
@@ -486,36 +583,65 @@ const PeriodClosePage: React.FC = () => {
           name="template_code"
           label={t(`${NS}.col.templateCode`, { defaultValue: '模板编码' })}
           rules={[{ required: true }]}
+          disabled={Boolean(editingTpl)}
         />
         <ProFormText
           name="template_name"
           label={t(`${NS}.col.templateName`, { defaultValue: '模板名称' })}
           rules={[{ required: true }]}
         />
-        <ProFormText
-          name="debit_account_code"
-          label={t(`${NS}.debitAccount`, { defaultValue: '借方科目编码' })}
-          rules={[{ required: true }]}
-        />
-        <ProFormText
-          name="credit_account_code"
-          label={t(`${NS}.creditAccount`, { defaultValue: '贷方科目编码' })}
-          rules={[{ required: true }]}
-        />
-        <ProFormSelect
-          name="amount_mode"
-          label={t(`${NS}.amountMode`, { defaultValue: '取数方式' })}
-          initialValue="period_balance"
-          options={[
-            { label: '本期净发生', value: 'period_balance' },
-            { label: '本期借方', value: 'period_debit' },
-            { label: '本期贷方', value: 'period_credit' },
-            { label: '期末余额', value: 'ending_balance' },
-            { label: '固定金额', value: 'fixed' },
-          ]}
-        />
-        <ProFormDigit name="amount" label={t(`${NS}.fixedAmount`, { defaultValue: '固定金额' })} min={0} />
-        <ProFormDigit name="ratio" label={t(`${NS}.ratio`, { defaultValue: '比例' })} min={0} initialValue={1} />
+        {editingProfitLoss ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={t(`${NS}.profitLossEditHint`, {
+              defaultValue: '结转损益模板由系统按全部损益科目生成分录，此处仅可修改名称。',
+            })}
+          />
+        ) : (
+          <>
+            <ProFormText
+              name="debit_account_code"
+              label={t(`${NS}.debitAccount`, { defaultValue: '借方科目编码' })}
+              rules={[{ required: true }]}
+            />
+            <ProFormText
+              name="credit_account_code"
+              label={t(`${NS}.creditAccount`, { defaultValue: '贷方科目编码' })}
+              rules={[{ required: true }]}
+            />
+            <ProFormSelect
+              name="amount_mode"
+              label={t(`${NS}.amountMode`, { defaultValue: '取数方式' })}
+              initialValue="period_balance"
+              options={[
+                {
+                  label: t(`${NS}.amountMode.periodBalance`, { defaultValue: '本期净发生' }),
+                  value: 'period_balance',
+                },
+                {
+                  label: t(`${NS}.amountMode.periodDebit`, { defaultValue: '本期借方' }),
+                  value: 'period_debit',
+                },
+                {
+                  label: t(`${NS}.amountMode.periodCredit`, { defaultValue: '本期贷方' }),
+                  value: 'period_credit',
+                },
+                {
+                  label: t(`${NS}.amountMode.endingBalance`, { defaultValue: '期末余额' }),
+                  value: 'ending_balance',
+                },
+                {
+                  label: t(`${NS}.amountMode.fixed`, { defaultValue: '固定金额' }),
+                  value: 'fixed',
+                },
+              ]}
+            />
+            <ProFormDigit name="amount" label={t(`${NS}.fixedAmount`, { defaultValue: '固定金额' })} min={0} />
+            <ProFormDigit name="ratio" label={t(`${NS}.ratio`, { defaultValue: '比例' })} min={0} initialValue={1} />
+          </>
+        )}
       </FormModalTemplate>
 
       <FormModalTemplate

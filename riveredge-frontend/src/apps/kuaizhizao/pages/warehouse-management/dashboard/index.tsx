@@ -38,6 +38,26 @@ import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module
 import { inventoryAlertLevelLabel, inventoryAlertLevelTagColor } from '../../../utils/warehouseListCore';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 
+const WAREHOUSE_INBOUND_PATH = '/apps/kuaizhizao/warehouse-management/inbound';
+const WAREHOUSE_OUTBOUND_PATH = '/apps/kuaizhizao/warehouse-management/outbound';
+
+/** 待办出入库 KPI：仅有待出库时进出库 Hub，否则进数量更多的一侧（持平时优先出库）。 */
+function resolveWarehousePendingInOutPath(pendingInbound: number, pendingOutbound: number): string {
+  if (pendingOutbound > 0 && pendingInbound === 0) {
+    return WAREHOUSE_OUTBOUND_PATH;
+  }
+  if (pendingInbound > 0 && pendingOutbound === 0) {
+    return WAREHOUSE_INBOUND_PATH;
+  }
+  if (pendingOutbound > pendingInbound) {
+    return WAREHOUSE_OUTBOUND_PATH;
+  }
+  if (pendingInbound > pendingOutbound) {
+    return WAREHOUSE_INBOUND_PATH;
+  }
+  return WAREHOUSE_OUTBOUND_PATH;
+}
+
 const WarehouseDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -153,7 +173,13 @@ const WarehouseDashboard: React.FC = () => {
             }),
         icon: <SwapOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
-        onClick: () => navigate('/apps/kuaizhizao/warehouse-management/inbound'),
+        onClick: () =>
+          navigate(
+            resolveWarehousePendingInOutPath(
+              s?.pending_inbound ?? 0,
+              s?.pending_outbound ?? 0,
+            ),
+          ),
         sideMetrics: [
           {
             label: t('app.kuaizhizao.warehouseDashboard.kpi.pendingOutbound'),

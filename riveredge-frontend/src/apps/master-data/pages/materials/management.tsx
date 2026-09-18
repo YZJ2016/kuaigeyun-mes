@@ -594,6 +594,14 @@ function buildMaterialEditFormValues(material: Material): Record<string, unknown
       Number(
         (material as any).overReportValue ?? (material as any).over_report_value ?? 0,
       ) || 0,
+    overReceiptTolerancePct:
+      (material as any).overReceiptTolerancePct ??
+      (material as any).over_receipt_tolerance_pct ??
+      undefined,
+    overIssueTolerancePct:
+      (material as any).overIssueTolerancePct ??
+      (material as any).over_issue_tolerance_pct ??
+      undefined,
   }
 }
 

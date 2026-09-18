@@ -24,6 +24,11 @@ import {
 } from '../../../constants/documentActionRegistry';
 import { rowActionLabelKeep } from '../../../../../components/uni-action/actionCatalog';
 import { UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import {
+  buildUniPushMenuItems,
+  buildUniPushToolbarDisabledReason,
+  UniPushToolbarButton,
+} from '../../../../../components/uni-push';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
@@ -95,6 +100,8 @@ const InstallExecutionPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>();
   const perms = useResourcePermissions(RESOURCE);
+  const dispatchPerms = useResourcePermissions('kuaizhizao:service-dispatch');
+  const settlementPerms = useResourcePermissions('kuaizhizao:service-settlement');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<InstallExecution | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -117,6 +124,115 @@ const InstallExecutionPage: React.FC = () => {
   );
 
   const canBatchClose = perms.canAction?.('close') ?? perms.canUpdate;
+
+  const selectedInstallForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    return selectedRecordsForBatch[0] ?? null;
+  }, [selectedRecordsForBatch, selectedRowKeys.length]);
+
+  const pushInstallDispatch = useCallback(
+    async (record: InstallExecution) => {
+      try {
+        const res = await installExecutionApi.pushToDispatch(record.id);
+        messageApi.success(
+          res.message ||
+            t('app.kuaizhizao.installExecution.pushDispatchSuccess', { code: res.dispatch_code }),
+        );
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+      } catch (error) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.installExecution.pushFailed')),
+        );
+      }
+    },
+    [messageApi, t],
+  );
+
+  const pushInstallSettlement = useCallback(
+    async (record: InstallExecution) => {
+      try {
+        const res = await installExecutionApi.pushToSettlement(record.id);
+        messageApi.success(
+          res.message ||
+            t('app.kuaizhizao.installExecution.pushSettlementSuccess', {
+              code: res.settlement_code,
+            }),
+        );
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+      } catch (error) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.installExecution.pushFailed')),
+        );
+      }
+    },
+    [messageApi, t],
+  );
+
+  const installToolbarPushMenuItems = useMemo(() => {
+    const record = selectedInstallForToolbar;
+    const dispatchBlocked =
+      !dispatchPerms.canCreate
+        ? t('app.kuaizhizao.installExecution.push.dispatchNoPermission')
+        : record && record.capabilities?.push_dispatch?.allowed !== true
+          ? record.capabilities?.push_dispatch?.reason ||
+            t('app.kuaizhizao.installExecution.push.dispatchBlocked')
+          : undefined;
+    const settlementBlocked =
+      !settlementPerms.canCreate
+        ? t('app.kuaizhizao.installExecution.push.settlementNoPermission')
+        : record && record.capabilities?.push_settlement?.allowed !== true
+          ? record.capabilities?.push_settlement?.reason ||
+            t('app.kuaizhizao.installExecution.push.settlementBlocked')
+          : undefined;
+    return buildUniPushMenuItems([
+      {
+        key: 'push-dispatch',
+        label: t('app.kuaizhizao.installExecution.actionPushDispatch'),
+        disabled: !!dispatchBlocked || !record,
+        title: dispatchBlocked,
+        onClick: () => {
+          if (!record || dispatchBlocked) return;
+          getAntdModal().confirm({
+            title: t('app.kuaizhizao.installExecution.actionPushDispatch'),
+            onOk: () => pushInstallDispatch(record),
+          });
+        },
+        targetDocumentType: 'service_dispatch',
+      },
+      {
+        key: 'push-settlement',
+        label: t('app.kuaizhizao.installExecution.actionPushSettlement'),
+        disabled: !!settlementBlocked || !record,
+        title: settlementBlocked,
+        onClick: () => {
+          if (!record || settlementBlocked) return;
+          getAntdModal().confirm({
+            title: t('app.kuaizhizao.installExecution.actionPushSettlement'),
+            onOk: () => pushInstallSettlement(record),
+          });
+        },
+        targetDocumentType: 'service_settlement',
+      },
+    ]);
+  }, [
+    dispatchPerms.canCreate,
+    pushInstallDispatch,
+    pushInstallSettlement,
+    selectedInstallForToolbar,
+    settlementPerms.canCreate,
+    t,
+  ]);
+
+  const installToolbarPushDisabledReason = useMemo(
+    () =>
+      buildUniPushToolbarDisabledReason(t, {
+        selectedCount: selectedRowKeys.length,
+        hasSelectedRecord: !!selectedInstallForToolbar,
+      }),
+    [selectedInstallForToolbar, selectedRowKeys.length, t],
+  );
 
   const openCreate = useCallback(() => {
     setEditing(null);
@@ -647,7 +763,9 @@ const InstallExecutionPage: React.FC = () => {
           columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.install-execution.v3"
           headerTitle={t('app.kuaizhizao.menu.after-sales-service.install-execution')}
           columns={columns}
-          enableRowSelection={perms.canDelete || canBatchClose}
+          enableRowSelection={
+            perms.canDelete || canBatchClose || dispatchPerms.canCreate || settlementPerms.canCreate
+          }
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           onTableDataChange={(rows) => {
@@ -676,8 +794,39 @@ const InstallExecutionPage: React.FC = () => {
                       },
                     ])}
                   />,
+                  <UniPushToolbarButton
+                    key={`install-push-${selectedInstallForToolbar?.id ?? 'none'}`}
+                    menuItems={installToolbarPushMenuItems}
+                    disabled={selectedRowKeys.length !== 1 || !selectedInstallForToolbar}
+                    disabledReason={installToolbarPushDisabledReason}
+                    sourceDocument={
+                      selectedInstallForToolbar?.id
+                        ? { type: 'install_execution', id: Number(selectedInstallForToolbar.id) }
+                        : null
+                    }
+                    pushTargets={{
+                      'push-dispatch': 'service_dispatch',
+                      'push-settlement': 'service_settlement',
+                    }}
+                  />,
                 ]
-              : []
+              : [
+                  <UniPushToolbarButton
+                    key={`install-push-${selectedInstallForToolbar?.id ?? 'none'}`}
+                    menuItems={installToolbarPushMenuItems}
+                    disabled={selectedRowKeys.length !== 1 || !selectedInstallForToolbar}
+                    disabledReason={installToolbarPushDisabledReason}
+                    sourceDocument={
+                      selectedInstallForToolbar?.id
+                        ? { type: 'install_execution', id: Number(selectedInstallForToolbar.id) }
+                        : null
+                    }
+                    pushTargets={{
+                      'push-dispatch': 'service_dispatch',
+                      'push-settlement': 'service_settlement',
+                    }}
+                  />,
+                ]
           }
           showDeleteButton={perms.canDelete}
           onDelete={handleBatchDelete}

@@ -190,6 +190,46 @@ async def notify_work_order_next_operation(
     )
 
 
+async def notify_work_order_operation_assigned(
+    tenant_id: int,
+    *,
+    work_order_id: int,
+    work_order_code: str,
+    product_name: str,
+    operation_name: str,
+    assignee_user_ids: List[int],
+    assigned_by_name: str,
+    assigned_worker_name: Optional[str] = None,
+    creator_user_id: Optional[int] = None,
+) -> int:
+    """工序派工后通知被指派人员。"""
+    assignee_ids = [
+        int(uid)
+        for uid in (assignee_user_ids or [])
+        if uid is not None and int(uid) > 0
+    ]
+    if not assignee_ids:
+        return 0
+    return await dispatch_kuaizhizao_notification(
+        tenant_id,
+        trigger_document=DOC_WORK_ORDER,
+        trigger_action=ACTION_ASSIGNED,
+        variables={
+            "work_order_code": work_order_code or str(work_order_id),
+            "product_name": product_name or "—",
+            "operation_name": operation_name or "—",
+            "assigned_by_name": assigned_by_name or "—",
+            "assigned_worker_name": assigned_worker_name or "—",
+            "detail_path": f"/apps/kuaizhizao/production-execution/work-orders?highlight={work_order_id}",
+            "work_order_id": str(work_order_id),
+        },
+        context={
+            "creator_user_id": creator_user_id,
+            "operation_assignee_user_ids": assignee_ids,
+        },
+    )
+
+
 DOC_DELIVERY_PROJECT = "delivery_project"
 ACTION_NODE_DUE_SOON = "node_due_soon"
 ACTION_NODE_OVERDUE = "node_overdue"
@@ -383,6 +423,183 @@ async def notify_delivery_node_milestone_overdue(
         content=content,
         detail_path=_delivery_workbench_path(project_id),
     )
+
+
+FQC_EXECUTE_PERMISSION = "kuaizhizao:quality-management-finished-goods-inspection:execute"
+
+
+async def list_tenant_user_ids_with_permission_code(
+    tenant_id: int,
+    permission_code: str,
+) -> List[int]:
+    """按角色权限矩阵解析持有某权限码的激活用户（不含管理员旁路全量展开）。"""
+    from core.models.permission import Permission
+    from core.models.role import Role
+    from core.models.role_permission import RolePermission
+    from core.models.user_role import UserRole
+    from infra.models.user import User
+
+    code = (permission_code or "").strip()
+    if not code or tenant_id < 1:
+        return []
+    perm = await Permission.get_or_none(
+        tenant_id=tenant_id,
+        code=code,
+        deleted_at__isnull=True,
+    )
+    if perm is None:
+        perm = await Permission.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            code__iexact=code,
+        ).first()
+    if perm is None:
+        return []
+
+    role_ids = await RolePermission.filter(permission_id=perm.id).values_list(
+        "role_id", flat=True
+    )
+    if not role_ids:
+        return []
+    active_role_ids = await Role.filter(
+        id__in=list(role_ids),
+        tenant_id=tenant_id,
+        is_active=True,
+        deleted_at__isnull=True,
+    ).values_list("id", flat=True)
+    if not active_role_ids:
+        return []
+    user_ids = await UserRole.filter(role_id__in=list(active_role_ids)).values_list(
+        "user_id", flat=True
+    )
+    if not user_ids:
+        return []
+    active_user_ids = await User.filter(
+        id__in=list(user_ids),
+        tenant_id=tenant_id,
+        is_active=True,
+        deleted_at__isnull=True,
+    ).values_list("id", flat=True)
+    return sorted({int(uid) for uid in active_user_ids if int(uid) > 0})
+
+
+async def notify_finished_goods_inspection_created(
+    tenant_id: int,
+    *,
+    inspection_id: int,
+    inspection_code: str,
+    work_order_id: int,
+    work_order_code: str,
+    material_name: str,
+    inspection_quantity: str,
+    created_by: Optional[int] = None,
+) -> int:
+    """
+    成品检验单新建（含工单下推）后通知质检人员。
+
+    默认站内信发给持有「成品检验执行」权限的激活用户（排除下推人）；
+    同时派发配置中心「质检单 / 新建」规则，便于管理员追加固定接收人。
+    """
+    from core.schemas.message_template import SendMessageRequest
+    from core.services.messaging.message_service import MessageService
+
+    detail_path = (
+        f"/apps/kuaizhizao/quality-management/finished-goods-inspection"
+        f"?highlight={inspection_id}"
+    )
+    code = (inspection_code or "").strip() or str(inspection_id)
+    wo_code = (work_order_code or "").strip() or str(work_order_id)
+    material = (material_name or "").strip() or "—"
+    qty = (inspection_quantity or "").strip() or "0"
+    variables: Dict[str, Any] = {
+        "inspection_code": code,
+        "inspection_type": "成品检验",
+        "work_order_code": wo_code,
+        "material_name": material,
+        "inspection_quantity": qty,
+        "detail_path": detail_path,
+        "finished_goods_inspection_id": str(inspection_id),
+        "work_order_id": str(work_order_id),
+        "message_category": "process",
+    }
+    subject = f"【成品检验待办】{code}"
+    content = (
+        f"工单 {wo_code} 已下推成品检验单 {code}。\n"
+        f"物料：{material}\n"
+        f"检验数量：{qty}\n"
+        f"请尽快在成品检验中完成检验。"
+    )
+
+    holder_ids = await list_tenant_user_ids_with_permission_code(
+        tenant_id, FQC_EXECUTE_PERMISSION
+    )
+    exclude_id: Optional[int] = None
+    try:
+        if created_by is not None:
+            exclude_id = int(created_by)
+    except (TypeError, ValueError):
+        exclude_id = None
+    recipients = [
+        uid for uid in holder_ids if exclude_id is None or uid != exclude_id
+    ]
+
+    sent = 0
+    seen: set[int] = set()
+    for uid in recipients:
+        if uid in seen:
+            continue
+        seen.add(uid)
+        try:
+            result = await MessageService.send_message(
+                tenant_id,
+                SendMessageRequest(
+                    type="internal",
+                    recipient=str(uid),
+                    subject=subject,
+                    content=content,
+                    variables=variables,
+                    business_document=DOC_QUALITY_INSPECTION,
+                    business_action=ACTION_CREATED,
+                    entity_type="finished_goods_inspection",
+                    entity_id=inspection_id,
+                ),
+            )
+            if result.success:
+                sent += 1
+        except Exception as exc:
+            logger.error(
+                "成品检验新建站内信失败 tenant={} user={} inspection={}: {}",
+                tenant_id,
+                uid,
+                inspection_id,
+                exc,
+            )
+
+    await dispatch_kuaizhizao_notification(
+        tenant_id,
+        trigger_document=DOC_QUALITY_INSPECTION,
+        trigger_action=ACTION_CREATED,
+        variables=variables,
+        context={
+            "creator_user_id": created_by,
+            "entity_type": "finished_goods_inspection",
+            "entity_id": inspection_id,
+        },
+    )
+    if sent:
+        logger.info(
+            "成品检验新建已通知质检人员 tenant={} inspection={} count={}",
+            tenant_id,
+            inspection_id,
+            sent,
+        )
+    elif not recipients:
+        logger.info(
+            "成品检验新建无执行权限接收人 tenant={} inspection={}（可在配置中心消息提醒补充固定人员）",
+            tenant_id,
+            inspection_id,
+        )
+    return sent
 
 
 async def _scope_pending_approvers(_tenant_id: int, context: Dict[str, Any]) -> List[int]:

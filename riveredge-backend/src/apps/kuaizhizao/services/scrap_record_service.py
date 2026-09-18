@@ -44,7 +44,9 @@ class ScrapRecordService(AppBaseService[ScrapRecord]):
         scrap_id: int,
         approved: bool,
         approved_by: int,
-        rejection_reason: Optional[str] = None
+        rejection_reason: Optional[str] = None,
+        *,
+        post_inventory: bool = True,
     ) -> ScrapRecordResponse:
         """
         审批报废记录
@@ -112,7 +114,13 @@ class ScrapRecordService(AppBaseService[ScrapRecord]):
                     await work_order.save()
 
                 # 报废审批通过：从指定仓库扣减产品库存并写物料移动流水
-                if scrap_record.warehouse_id and scrap_record.product_id and scrap_record.scrap_quantity:
+                # 不合格品台账报废闭环已在处置侧先入报废仓，此处仅确认单据与工单数量
+                if (
+                    post_inventory
+                    and scrap_record.warehouse_id
+                    and scrap_record.product_id
+                    and scrap_record.scrap_quantity
+                ):
                     from apps.kuaizhizao.services.inventory_service import InventoryService
 
                     await InventoryService._decrease_stock_no_atomic(

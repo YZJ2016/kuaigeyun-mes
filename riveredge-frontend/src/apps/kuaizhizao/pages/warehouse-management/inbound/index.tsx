@@ -54,7 +54,12 @@ import {
   storageAreaApi,
   storageLocationApi,
 } from '../../../../master-data/services/warehouse';
-import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
+import {
+  materialApi,
+  materialBatchApi,
+  materialSerialApi,
+  MATERIAL_SERIAL_GENERATE_MAX_COUNT,
+} from '../../../../master-data/services/material';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
 import {
@@ -69,7 +74,7 @@ import {
 } from '../shared/warehouseTrackingFlags';
 import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
-import {formatQuantity} from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatQuantity } from '../../../../../utils/format';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { renderWarehouseLineQuantity, renderWarehouseHeaderQuantity } from '../shared/warehouseListQuantity';
 import { formatApiErrorDetail } from '../../../../../services/api';
@@ -331,7 +336,7 @@ async function prefetchPurchasePreviewSerialNumbers(
       const meta = materialMeta[id];
       if (!meta?.materialUuid) return;
       const count = Math.max(1, Math.floor(Number(qtyMap[id] ?? 0)));
-      if (count > 100) return;
+      if (count > MATERIAL_SERIAL_GENERATE_MAX_COUNT) return;
       try {
         const res = await materialSerialApi.generate(meta.materialUuid, count, {
           ruleId: meta.defaultSerialRuleId ?? undefined,
@@ -476,6 +481,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
   scopedReceiptTypes,
   headerTitle,
   columnPersistenceId,
+  permissionResource = 'kuaizhizao:inbound',
 }) => {
   const hubScopedReceiptTypes = useMemo(
     () => (fixedReceiptType ? [fixedReceiptType] : scopedReceiptTypes),
@@ -532,6 +538,14 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
             actionKey: 'inbound.pull_from_outsource_work_order',
             onClick: () => quickPullRef.current?.open('outsource'),
           },
+          {
+            actionKey: 'inbound.pull_from_incoming_inspection',
+            onClick: () => quickPullRef.current?.open('incoming_inspection'),
+          },
+          {
+            actionKey: 'inbound.pull_from_finished_goods_inspection',
+            onClick: () => quickPullRef.current?.open('finished_goods_inspection'),
+          },
         ],
         hubScopedReceiptTypes,
       ),
@@ -570,7 +584,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     () => withSingleNewShortcutHint(t('components.uniPull.loadFromDocument')),
     [t],
   );
-  const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
+  const inboundPerms = useResourcePermissions(permissionResource);
   const currentUser = useCurrentUser();
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -611,11 +625,13 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           { docTypes: ['finished_goods'], customFields: finishedGoodsReceiptListCustomFields },
         ],
         'receipt_type',
+        [t('app.kuaizhizao.warehouseInbound.field.documentDate')],
       ),
     [
       purchaseReceiptListCustomFields,
       productionReturnListCustomFields,
       finishedGoodsReceiptListCustomFields,
+      t,
     ],
   );
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -795,8 +811,12 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     const meta = purchaseConfirmMaterialMeta[rowId];
     if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged) || !meta?.materialUuid) return;
     const count = Math.max(1, Math.floor(Number(qty) || 1));
-    if (count > 100) {
-      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.serialMax100'));
+    if (count > MATERIAL_SERIAL_GENERATE_MAX_COUNT) {
+      messageApi.warning(
+        t('app.kuaizhizao.warehouseInbound.msg.serialMax100', {
+          max: MATERIAL_SERIAL_GENERATE_MAX_COUNT,
+        }),
+      );
       return;
     }
     setPurchaseConfirmGeneratingSerialId(rowId);
@@ -1820,6 +1840,24 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
     },
     {
+      title: t('app.kuaizhizao.warehouseInbound.field.documentDate'),
+      key: 'receipt_date',
+      dataIndex: 'receipt_date',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+      render: (_, record) => {
+        const raw = resolveInboundHubDateRaw(record);
+        return raw != null && String(raw).trim() !== ''
+          ? formatBusinessDateOnly(String(raw))
+          : '-';
+      },
+    },
+    {
       title: t('app.kuaizhizao.warehouseInbound.col.receiver'),
       key: 'biz_time_operator',
       dataIndex: 'biz_time_operator',
@@ -2266,7 +2304,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.purchaseReceipt)}
         columnPersistenceId={
-          columnPersistenceId ?? 'apps.kuaizhizao.pages.warehouse-management.inbound-width-v5'
+          columnPersistenceId ?? 'apps.kuaizhizao.pages.warehouse-management.inbound-width-v8'
         }
         actionRef={actionRef}
         formRef={searchFormRef}

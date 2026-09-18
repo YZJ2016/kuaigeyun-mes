@@ -190,6 +190,7 @@ class RepairOrderResponse(BaseSchema):
     created_by_name: Optional[str] = Field(None, description="创建人显示名")
     updated_by_name: Optional[str] = Field(None, description="更新人显示名")
     items: List[RepairOrderItemResponse] = Field(default_factory=list, description="备件明细")
+    capabilities: Optional[Dict[str, Any]] = Field(None, description="业务态动作能力")
 
 
 class RepairOrderListEnvelope(BaseSchema):

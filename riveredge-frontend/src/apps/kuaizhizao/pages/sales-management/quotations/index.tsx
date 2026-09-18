@@ -180,7 +180,7 @@ import {
   mapGiftFieldsForSubmit,
   resolveMaterialGiftable,
 } from '../../../utils/giftLineUi';
-import { resolveDocumentLineDisplayAmounts } from '../../../utils/documentLineAmounts';
+import { applyDocumentLineTaxRateChange, resolveDocumentLineDisplayAmounts, stripExclusiveUnitAnchor, EXCLUSIVE_UNIT_ANCHOR_KEY } from '../../../utils/documentLineAmounts';
 import {
   DOCUMENT_DETAIL_CONTROL_SIZE,
   DOCUMENT_DETAIL_TABLE_PROPS,
@@ -3066,8 +3066,45 @@ const QuotationsPage: React.FC = () => {
           }
         }
       }
+      const changedItems = changed.items;
+      if (Array.isArray(changedItems)) {
+        const priceType = salesFormPriceType(all.price_type);
+        const currentItems = normalizeFormListItems<any>(all.items);
+        let dirty = false;
+        const nextItems = currentItems.map((row, index) => {
+          const patch = changedItems[index];
+          if (patch == null || typeof patch !== 'object') return row;
+          const keys = Object.keys(patch as object);
+          if (keys.includes('tax_rate')) {
+            const applied = applyDocumentLineTaxRateChange({
+              row,
+              qty: row.quote_quantity,
+              newTaxRate: row.tax_rate,
+              priceType,
+              priceDecimals,
+            });
+            if (
+              Number(applied.unit_price) !== Number(row.unit_price) ||
+              Number(applied.item_amount) !== Number(row.item_amount) ||
+              (applied[EXCLUSIVE_UNIT_ANCHOR_KEY] != null) !== (row[EXCLUSIVE_UNIT_ANCHOR_KEY] != null)
+            ) {
+              dirty = true;
+              return applied;
+            }
+            return row;
+          }
+          if (keys.includes('unit_price') && row[EXCLUSIVE_UNIT_ANCHOR_KEY] != null) {
+            dirty = true;
+            return stripExclusiveUnitAnchor(row);
+          }
+          return row;
+        });
+        if (dirty) {
+          formRef.current?.setFieldsValue({ items: nextItems });
+        }
+      }
     },
-    [customerList, userList, paymentTermsOptions],
+    [customerList, userList, paymentTermsOptions, priceDecimals],
   );
 
   const triggerQuotationFormSubmit = useCallback(() => {
@@ -3252,7 +3289,7 @@ const QuotationsPage: React.FC = () => {
       <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
         {({ getFieldValue }: any) => {
           const priceType = salesFormPriceType(getFieldValue('price_type'));
-          const showTaxColumns = priceType === 'tax_inclusive';
+          const showTaxBreakdownColumns = priceType === 'tax_inclusive';
           const quotationDetailColumns = [
                       {
                         title: productColumnTitle,
@@ -3433,7 +3470,7 @@ const QuotationsPage: React.FC = () => {
                           </Form.Item>
                         ),
                       },
-                      ...(showTaxColumns
+                      ...(showTaxBreakdownColumns
                         ? [
                             {
                               title: t('app.kuaizhizao.salesOrder.exclAmount'),
@@ -3466,29 +3503,42 @@ const QuotationsPage: React.FC = () => {
                             },
                           ]
                         : []),
-                      ...(showTaxColumns
-                        ? [
-                            {
-                              title: <TaxRateBatchColumnTitle onBatch={() => {
-                                const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
-                                if (itemsVal.length === 0) return;
-                                const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
-                                if (rate != null && rate !== '') {
-                                  const num = Math.round(parseFloat(rate));
-                                  if (!Number.isNaN(num) && num >= 0 && num <= 100) {
-                                    const next = itemsVal.map((it: any) => ({ ...it, tax_rate: num }));
-                                    formRef.current?.setFieldsValue({ items: next });
-                                  }
+                      {
+                        title: (
+                          <TaxRateBatchColumnTitle
+                            onBatch={() => {
+                              const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                              if (itemsVal.length === 0) return;
+                              const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
+                              if (rate != null && rate !== '') {
+                                const num = Math.round(parseFloat(rate));
+                                if (!Number.isNaN(num) && num >= 0 && num <= 100) {
+                                  const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
+                                  const next = itemsVal.map((it: any) =>
+                                    applyDocumentLineTaxRateChange({
+                                      row: it,
+                                      qty: it.quote_quantity,
+                                      newTaxRate: num,
+                                      priceType: pt,
+                                      priceDecimals,
+                                    }),
+                                  );
+                                  formRef.current?.setFieldsValue({ items: next });
                                 }
-                              }} />,
-                              dataIndex: 'tax_rate',
-                              width: 108,
-                              ...QUOTATION_DETAIL_NUM_COL,
-                              onCell: () => ({ className: 'quotation-tax-rate-col' }),
-                              render: (_: unknown, __: unknown, index: number) => (
-                                <TaxRateDetailCell index={index} />
-                              ),
-                            },
+                              }
+                            }}
+                          />
+                        ),
+                        dataIndex: 'tax_rate',
+                        width: 108,
+                        ...QUOTATION_DETAIL_NUM_COL,
+                        onCell: () => ({ className: 'quotation-tax-rate-col' }),
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <TaxRateDetailCell index={index} />
+                        ),
+                      },
+                      ...(showTaxBreakdownColumns
+                        ? [
                             {
                               title: t('app.kuaizhizao.salesOrder.taxAmount'),
                               width: 112,
@@ -3521,13 +3571,13 @@ const QuotationsPage: React.FC = () => {
                           ]
                         : []),
                       {
-                        title: showTaxColumns
+                        title: showTaxBreakdownColumns
                           ? t('app.kuaizhizao.salesOrder.inclAmount')
                           : t('app.kuaizhizao.salesOrder.exclAmount'),
                         width: 132,
                         ...QUOTATION_DETAIL_NUM_COL,
                         render: (_: unknown, __: unknown, index: number) =>
-                          showTaxColumns ? (
+                          showTaxBreakdownColumns ? (
                             <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                               {({ getFieldValue: gf2 }: any) => {
                                 const itemsVal = gf2('items') ?? [];

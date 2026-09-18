@@ -107,6 +107,10 @@ class SalesDeliveryPullCapabilities(BaseModel):
     push_delivery_notice: ActionCapability
 
 
+class DeliveryNoticeCapabilities(BaseModel):
+    push_freight_order: ActionCapability
+
+
 class SalesReturnCapabilities(BaseModel):
     update: ActionCapability
     delete: ActionCapability
@@ -125,6 +129,7 @@ class AfterSalesTicketCapabilities(BaseModel):
     close: ActionCapability
     push_sales_return: ActionCapability
     push_repair_order: ActionCapability
+    push_return_visit: ActionCapability
 
 
 class InstallExecutionCapabilities(BaseModel):
@@ -134,6 +139,17 @@ class InstallExecutionCapabilities(BaseModel):
     assign_task: ActionCapability
     advance_stage: ActionCapability
     register_cost: ActionCapability
+    push_dispatch: ActionCapability
+    push_settlement: ActionCapability
+
+
+class RepairOrderCapabilities(BaseModel):
+    update: ActionCapability
+    delete: ActionCapability
+    close: ActionCapability
+    push_dispatch: ActionCapability
+    push_settlement: ActionCapability
+    push_return_visit: ActionCapability
 
 
 class DemandComputationCapabilities(BaseModel):
@@ -180,6 +196,7 @@ class PurchaseOrderCapabilities(BaseModel):
     push_receipt: ActionCapability
     push_invoice: ActionCapability
     push_purchase_return: ActionCapability
+    push_incoming_inspection: ActionCapability
     create_change_order: ActionCapability
     print: ActionCapability
 
@@ -295,6 +312,8 @@ class OutboundHubCapabilities(BaseModel):
     print: ActionCapability
     delete: ActionCapability
     update: ActionCapability
+    # 仅销售出库列表/详情附带；其它出库类型为 None
+    push_delivery_notice: Optional[ActionCapability] = None
 
 
 class CustomerMaterialRegistrationCapabilities(BaseModel):
@@ -430,6 +449,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_order.push_delivery.not_allowed": "当前状态不可下推销售出库",
     "sales_order.push_delivery.no_backorder": "销售订单无欠发数量，无法下推销售出库",
     "sales_order.push_invoice.not_allowed": "当前状态不可下推销售发票",
+    "sales_order.push_invoice.already_fully_invoiced": "销售订单可开票金额已全部开票，删除未审核发票后可再次下推",
     "sales_order.push_return.not_allowed": "当前状态不可下推销售退货单",
     "sales_order.push_return.no_delivered": "销售订单暂无可退货数量（已交货数量为 0）",
     "sales_order.push_delivery_project.not_allowed": "当前状态不可下推交付项目",
@@ -556,12 +576,18 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_delivery.push_delivery_notice.no_customer": "销售出库单缺少客户，不可下推送货单",
     "sales_delivery.push_delivery_notice.already_created": "该销售出库单已创建送货单",
     "sales_delivery.push_delivery_notice.no_lines": "销售出库单无可通知明细",
+    "delivery_notice.push_freight_order.not_sent": "送货单未发送，不可下推发货管理单",
+    "delivery_notice.push_freight_order.already_linked": "已关联未取消的发货管理单",
+    "delivery_notice.push_freight_order.not_allowed": "当前送货单不可下推发货管理单",
     "purchase_order.push_invoice.not_audited": "只有已审核或已确认的采购单才能下推采购发票",
     "purchase_order.push_invoice.no_items": "采购单没有明细，无法下推采购发票",
     "purchase_order.push_invoice.already_exists": "该采购单已存在采购发票，不能重复下推",
     "purchase_order.push_purchase_return.not_audited": "只有已审核或已确认的采购单才能下推采购退货",
     "purchase_order.push_purchase_return.no_received": "采购单尚无已入库数量，无法下推采购退货",
     "purchase_order.push_purchase_return.no_lines": "没有可退货的采购单明细",
+    "purchase_order.push_incoming_inspection.not_audited": "只有已审核、已确认或执行中的采购单才能下推来料检验",
+    "purchase_order.push_incoming_inspection.no_items": "采购单没有明细，无法下推来料检验",
+    "purchase_order.push_incoming_inspection.no_iqc_lines": "采购单无可检明细（物料未配置来料检验，或均已创建检验单）",
     "purchase_order.create_change.not_allowed": "当前状态不可新建采购变更单",
     "purchase_order.create_change.not_audited": "只有已审核或已确认的采购单可创建变更单",
     "purchase_order.create_change.no_items": "采购单没有明细，无法创建变更单",
@@ -744,6 +770,12 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "finished_goods_inspection.push_inbound.no_qualified": "合格数量为 0，无需下推入库",
     "finished_goods_inspection.push_inbound.no_work_order": "成品检验单未关联工单，无法下推入库",
     "finished_goods_inspection.push_inbound.no_remaining": "工单成品检验合格可入余量已用尽",
+    "incoming_inspection.push_inbound.not_allowed": "当前来料检验单不可下推采购入库",
+    "incoming_inspection.push_inbound.not_passed": "来料检验尚未合格或未通过审核，无法下推采购入库",
+    "incoming_inspection.push_inbound.already_pushed": "合格数量已全部下推采购入库",
+    "incoming_inspection.push_inbound.no_qualified": "合格数量为 0，无需下推采购入库",
+    "incoming_inspection.push_inbound.no_purchase_order": "仅采购订单来源的来料检验可下推采购入库",
+    "incoming_inspection.push_inbound.no_remaining": "采购订单可入余量已用尽",
     "warehouse.inbound.no_default_warehouse": "未解析到默认入库仓库，请指定仓库或维护物料/工单关联仓库",
     "finished_goods_inspection.pull_from_work_order.not_allowed": "当前状态的工单不可加载成品检验",
     "finished_goods_inspection.pull_from_work_order.no_product": "工单未关联产品物料，无法加载成品检验",
@@ -796,6 +828,20 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "after_sales_ticket.push_repair_order.closed": "已关闭的售后服务工单不可下推维修单",
     "after_sales_ticket.push_repair_order.request_type": "仅维修类型工单可下推维修单",
     "after_sales_ticket.push_repair_order.already_exists": "该售后服务工单已存在维修单",
+    "after_sales_ticket.push_return_visit.not_allowed": "当前售后服务工单不可下推客户回访",
+    "after_sales_ticket.push_return_visit.closed": "已关闭的售后服务工单不可下推客户回访",
+    "after_sales_ticket.push_return_visit.already_exists": "该售后服务工单已存在客户回访",
+    "repair_order.update.closed": "已关闭的维修单不可编辑",
+    "repair_order.delete.closed": "已关闭的维修单不可删除",
+    "repair_order.close.already_closed": "维修单已关闭",
+    "repair_order.push.closed": "已关闭的维修单不可下推",
+    "repair_order.push_dispatch.not_allowed": "当前维修单状态不可下推服务派工",
+    "repair_order.push_dispatch.already_exists": "该维修单已存在未取消的服务派工",
+    "repair_order.push_settlement.not_allowed": "当前维修单状态不可下推服务结算",
+    "repair_order.push_settlement.not_ready": "请先完成派工后再下推服务结算",
+    "repair_order.push_settlement.already_exists": "该维修单已存在服务结算",
+    "repair_order.push_return_visit.not_allowed": "当前维修单状态不可下推客户回访",
+    "repair_order.push_return_visit.already_exists": "该维修单已存在客户回访",
     "install_execution.update.closed": "已关闭的安装执行单不可编辑",
     "install_execution.delete.closed": "已关闭的安装执行单不可删除",
     "install_execution.close.already_closed": "安装执行单已关闭",
@@ -804,4 +850,10 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "install_execution.advance_stage.no_pending": "所有安装阶段均已完成，无需推进",
     "install_execution.advance_stage.no_stages": "未配置安装阶段，无法推进",
     "install_execution.register_cost.closed": "已关闭的安装执行单不可登记费用",
+    "install_execution.push.closed": "已关闭的安装执行单不可下推",
+    "install_execution.push_dispatch.not_allowed": "当前安装执行单状态不可下推服务派工",
+    "install_execution.push_dispatch.already_exists": "该安装执行单已存在未取消的服务派工",
+    "install_execution.push_settlement.not_allowed": "当前安装执行单状态不可下推服务结算",
+    "install_execution.push_settlement.not_ready": "请先派工或推进安装后再下推服务结算",
+    "install_execution.push_settlement.already_exists": "该安装执行单已存在服务结算",
 }

@@ -76,6 +76,12 @@ async def _scope_next_operation_assignees(tenant_id: int, context: Dict[str, Any
     return _normalize_context_user_ids(context.get("next_operation_assignee_user_ids"))
 
 
+async def _scope_operation_assignees(tenant_id: int, context: Dict[str, Any]) -> List[int]:
+    """工序派工被指派人（由派发方写入 operation_assignee_user_ids）。"""
+    del tenant_id
+    return _normalize_context_user_ids(context.get("operation_assignee_user_ids"))
+
+
 def _rule_has_user_specified(rule: dict) -> bool:
     scopes = rule.get("recipient_scopes") or []
     if isinstance(scopes, str):
@@ -121,6 +127,7 @@ def ensure_core_notification_scope_resolvers() -> None:
     register_notification_scope_resolver(
         "next_operation_assignees", _scope_next_operation_assignees
     )
+    register_notification_scope_resolver("operation_assignees", _scope_operation_assignees)
 
 
 ensure_core_notification_scope_resolvers()

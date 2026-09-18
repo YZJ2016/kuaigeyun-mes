@@ -69,6 +69,7 @@ import {
   type ConfirmPreviewMaterialMeta,
 } from './outboundItemTracking';
 import {
+  loadAvailableQtyByMaterialWarehouse,
   loadBatchOptionsByMaterialId,
   loadInStockSerialOptions,
   resolveOutboundConfirmBatchValue,
@@ -128,6 +129,10 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const [workOrder, setWorkOrder] = useState<Record<string, unknown> | null>(null);
   const [previewSummary, setPreviewSummary] = useState<string | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
+  /** 物料 → 仓库 → 可出库库存（与确认扣减同口径；仅用于选仓提示） */
+  const [stockByMaterialWh, setStockByMaterialWh] = useState<Record<number, Record<number, number>>>({});
+  /** null=未拉取/失败（仅仓名）；loading|ready 控制是否展示库存后缀 */
+  const [stockByWhStatus, setStockByWhStatus] = useState<'idle' | 'loading' | 'ready'>('idle');
   const [lineWh, setLineWh] = useState<Record<number, number>>({});
   const [batchAllocations, setBatchAllocations] = useState<Record<number, OutboundBatchAllocation[]>>(
     {},
@@ -157,6 +162,45 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const totalIssueQty = useMemo(
     () => pickLines.reduce((sum, line) => sum + Number(line.issueQuantity || 0), 0),
     [pickLines],
+  );
+
+  const pickMaterialIdsKey = useMemo(
+    () =>
+      [
+        ...new Set(
+          pickLines
+            .map((line) => line.materialId)
+            .filter((id) => Number.isFinite(id) && id > 0),
+        ),
+      ]
+        .sort((a, b) => a - b)
+        .join(','),
+    [pickLines],
+  );
+
+  /** 行级仓库下拉：展示各仓可出库库存，有库存的仓排前；不隐藏无库存仓 */
+  const warehouseOptionsForMaterial = useCallback(
+    (materialId: number) => {
+      const stockMap = stockByMaterialWh[materialId] ?? {};
+      const showStock = stockByWhStatus === 'ready';
+      const enriched = warehouseOptions.map((o) => {
+        const qty = Number(stockMap[o.value] ?? 0);
+        const baseName = String(o.name || o.label || o.value).trim();
+        const label = showStock
+          ? t('app.kuaizhizao.warehouseOutbound.option.warehouseWithStock', {
+              warehouse: baseName,
+              qty: formatQuantity(qty),
+            })
+          : baseName;
+        return { ...o, label, stockQty: qty };
+      });
+      if (!showStock) return enriched;
+      return enriched.sort((a, b) => {
+        if (a.stockQty !== b.stockQty) return b.stockQty - a.stockQty;
+        return String(a.name || a.label).localeCompare(String(b.name || b.label), 'zh');
+      });
+    },
+    [stockByMaterialWh, stockByWhStatus, t, warehouseOptions],
   );
 
   const applyLineWarehouse = useCallback((lineIds: number[], warehouseId: number) => {
@@ -216,6 +260,36 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       setBatchWhApplying(false);
     }
   };
+
+  useEffect(() => {
+    const mids = pickMaterialIdsKey
+      .split(',')
+      .map((s) => Number(s))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (!mids.length) {
+      setStockByMaterialWh({});
+      setStockByWhStatus('idle');
+      return;
+    }
+    let cancelled = false;
+    setStockByWhStatus('loading');
+    void loadAvailableQtyByMaterialWarehouse(mids)
+      .then((map) => {
+        if (!cancelled) {
+          setStockByMaterialWh(map);
+          setStockByWhStatus('ready');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStockByMaterialWh({});
+          setStockByWhStatus('idle');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pickMaterialIdsKey]);
 
   useEffect(() => {
     const pairs = pickLines
@@ -434,14 +508,14 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           </>
         ),
         key: 'warehouse',
-        width: 160,
+        width: 220,
         render: (_: unknown, line: PickLine) => (
           <Select
-            style={{ width: '100%', minWidth: 140 }}
+            style={{ width: '100%', minWidth: 160 }}
             placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
             showSearch
             optionFilterProp="label"
-            options={warehouseOptions}
+            options={warehouseOptionsForMaterial(line.materialId)}
             value={lineWh[line.materialId]}
             onChange={(nv) => {
               const wh = Number(nv);
@@ -539,7 +613,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       serials,
       t,
       trackingFlags,
-      warehouseOptions,
+      warehouseOptionsForMaterial,
     ],
   );
 

@@ -44,7 +44,13 @@ export const schemeBindingsApi = {
     apiRequest(`${BASE}/mold-scheme-bindings/bulk-replace`, { method: 'PUT', data }),
 };
 
-export const trialsApi = crudApi('mold-trials');
+export const trialsApi = {
+  ...crudApi('mold-trials'),
+  submit: (id: number) => apiRequest(`${BASE}/mold-trials/${id}/submit`, { method: 'POST' }),
+  approve: (id: number) => apiRequest(`${BASE}/mold-trials/${id}/approve`, { method: 'POST' }),
+  reject: (id: number, data: { reject_reason: string }) =>
+    apiRequest(`${BASE}/mold-trials/${id}/reject`, { method: 'POST', data }),
+};
 
 export const borrowsApi = {
   ...crudApi('mold-borrows'),
@@ -52,7 +58,14 @@ export const borrowsApi = {
     apiRequest(`${BASE}/mold-borrows/outstanding`, { method: 'GET', params }),
 };
 
-export const returnsApi = crudApi('mold-returns');
+export const returnsApi = {
+  ...crudApi('mold-returns'),
+  usagePreview: (borrowId: number) =>
+    apiRequest(`${BASE}/mold-returns/usage-preview`, {
+      method: 'GET',
+      params: { borrow_id: borrowId },
+    }),
+};
 
 export const maintenancesApi = workflowDocApi('mold-maintenances');
 export const repairsApi = workflowDocApi('mold-repairs');

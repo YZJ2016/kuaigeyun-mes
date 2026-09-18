@@ -22,6 +22,7 @@ import {
   type SalesReturnOrderPullLine,
   type WorkOrderFinishedGoodsPullLine,
 } from '../../../services/warehouse-execution';
+import { qualityApi } from '../../../services/quality-execution';
 import {
   workOrderApi,
   outsourceWorkOrderApi,
@@ -30,6 +31,7 @@ import { warehouseApi as masterWarehouseApi } from '../../../../master-data/serv
 import { type InboundOutsourcePullType } from './inboundCreateConfig';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { qualityInspectionCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 
 export type {
   InboundPullDirectConfirmTarget,
@@ -42,7 +44,9 @@ export type InboundQuickPullKey =
   | 'work_order'
   | 'production_return'
   | 'sales_return'
-  | 'outsource';
+  | 'outsource'
+  | 'finished_goods_inspection'
+  | 'incoming_inspection';
 
 export type InboundQuickPullModalsRef = {
   open: (key: InboundQuickPullKey) => void;
@@ -55,6 +59,39 @@ type PullPurchaseOrderCandidate = PurchaseReceiptOrderPullLine;
 type PullWorkOrderCandidate = WorkOrderFinishedGoodsPullLine;
 type PullProductionReturnCandidate = ProductionReturnPullLine;
 type PullOutsourceWoCandidate = OutsourceInboundPullLine;
+
+type PullFinishedGoodsInspectionCandidate = {
+  id: number;
+  inspection_code?: string;
+  work_order_code?: string;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string;
+  qualified_quantity?: number;
+  status?: string;
+  quality_status?: string;
+  capabilities?: {
+    push_inbound?: { allowed?: boolean; reason?: string | null };
+  };
+};
+
+type PullIncomingInspectionCandidate = {
+  id: number;
+  inspection_code?: string;
+  purchase_order_code?: string;
+  purchase_receipt_code?: string;
+  supplier_name?: string;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string;
+  qualified_quantity?: number;
+  source_type?: string;
+  status?: string;
+  quality_status?: string;
+  capabilities?: {
+    push_inbound?: { allowed?: boolean; reason?: string | null };
+  };
+};
 
 type InboundQuickPullModalsProps = {
   onSuccess: () => void;
@@ -70,6 +107,14 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
     const pullFromProductionReturnAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_work_order_for_production_return');
     const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_sales_order');
     const pullFromOutsourceWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_outsource_work_order');
+    const pullFromFinishedGoodsInspectionAction = resolveKuaizhizaoDocumentAction(
+      t,
+      'inbound.pull_from_finished_goods_inspection',
+    );
+    const pullFromIncomingInspectionAction = resolveKuaizhizaoDocumentAction(
+      t,
+      'inbound.pull_from_incoming_inspection',
+    );
 
     const [outsourcePullType, setOutsourcePullType] = useState<InboundOutsourcePullType>('outsource_receipt');
     const [poPullWarehouseOptions, setPoPullWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
@@ -649,6 +694,154 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
     });
     outsourcePullTypeRef.current = outsourcePullType;
 
+    const isPullFqcInboundSelectable = useCallback(
+      (record: PullFinishedGoodsInspectionCandidate) =>
+        record.capabilities?.push_inbound?.allowed === true,
+      [],
+    );
+
+    const pullFromFinishedGoodsInspectionQuery = useUniPullQuery<PullFinishedGoodsInspectionCandidate>({
+      rowKey: 'id',
+      selectionType: 'checkbox',
+      scopeOptions: pullDocumentScopeOptions,
+      defaultScope: 'pullable',
+      loadData: async ({ keyword, page, pageSize, scope }) => {
+        try {
+          const response = await qualityApi.finishedGoodsInspection.list({
+            skip: (page - 1) * pageSize,
+            limit: pageSize,
+            keyword: keyword.trim() || undefined,
+          });
+          const list = Array.isArray(response)
+            ? response
+            : (response as { data?: unknown[]; items?: unknown[] })?.data
+              ?? (response as { items?: unknown[] })?.items
+              ?? [];
+          const rows = (Array.isArray(list) ? list : []) as PullFinishedGoodsInspectionCandidate[];
+          const filtered = isPullableScope(scope)
+            ? rows.filter((row) => isPullFqcInboundSelectable(row))
+            : rows;
+          return {
+            data: filtered,
+            total: Number((response as { total?: number })?.total ?? filtered.length),
+          };
+        } catch (error: unknown) {
+          messageApi.error(
+            getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.fqc.loadFailed')),
+          );
+          return { data: [], total: 0 };
+        }
+      },
+      isRowDisabled: (record) => !isPullFqcInboundSelectable(record),
+      onConfirm: async (_keys, rows) => {
+        const selectedIds = rows
+          .filter((row) => isPullFqcInboundSelectable(row))
+          .map((row) => Number(row.id))
+          .filter((id) => id > 0);
+        if (!selectedIds.length) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.fqc.selectFirst'));
+          return;
+        }
+        try {
+          for (const inspectionId of selectedIds) {
+            await qualityApi.finishedGoodsInspection.pushToInbound(String(inspectionId));
+          }
+          messageApi.success(
+            t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+              source: pullFromFinishedGoodsInspectionAction.sourceLabel,
+              target: pullFromFinishedGoodsInspectionAction.targetLabel,
+            }),
+          );
+          pullFromFinishedGoodsInspectionQuery.closeModal();
+          onSuccess();
+        } catch (error: unknown) {
+          messageApi.error(
+            getApiErrorMessage(
+              error,
+              t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+                source: pullFromFinishedGoodsInspectionAction.sourceLabel,
+                target: pullFromFinishedGoodsInspectionAction.targetLabel,
+              }),
+            ),
+          );
+        }
+      },
+    });
+
+    const isPullIqcInboundSelectable = useCallback(
+      (record: PullIncomingInspectionCandidate) =>
+        record.capabilities?.push_inbound?.allowed === true,
+      [],
+    );
+
+    const pullFromIncomingInspectionQuery = useUniPullQuery<PullIncomingInspectionCandidate>({
+      rowKey: 'id',
+      selectionType: 'checkbox',
+      scopeOptions: pullDocumentScopeOptions,
+      defaultScope: 'pullable',
+      loadData: async ({ keyword, page, pageSize, scope }) => {
+        try {
+          const response = await qualityApi.incomingInspection.list({
+            skip: (page - 1) * pageSize,
+            limit: pageSize,
+            keyword: keyword.trim() || undefined,
+          });
+          const list = Array.isArray(response)
+            ? response
+            : (response as { data?: unknown[]; items?: unknown[] })?.data
+              ?? (response as { items?: unknown[] })?.items
+              ?? [];
+          const rows = (Array.isArray(list) ? list : []) as PullIncomingInspectionCandidate[];
+          const filtered = isPullableScope(scope)
+            ? rows.filter((row) => isPullIqcInboundSelectable(row))
+            : rows;
+          return {
+            data: filtered,
+            total: Number((response as { total?: number })?.total ?? filtered.length),
+          };
+        } catch (error: unknown) {
+          messageApi.error(
+            getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.iqc.loadFailed')),
+          );
+          return { data: [], total: 0 };
+        }
+      },
+      isRowDisabled: (record) => !isPullIqcInboundSelectable(record),
+      onConfirm: async (_keys, rows) => {
+        const selectedIds = rows
+          .filter((row) => isPullIqcInboundSelectable(row))
+          .map((row) => Number(row.id))
+          .filter((id) => id > 0);
+        if (!selectedIds.length) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.iqc.selectFirst'));
+          return;
+        }
+        try {
+          for (const inspectionId of selectedIds) {
+            await qualityApi.incomingInspection.pushToPurchaseReceipt(String(inspectionId));
+          }
+          messageApi.success(
+            t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+              source: pullFromIncomingInspectionAction.sourceLabel,
+              target: pullFromIncomingInspectionAction.targetLabel,
+            }),
+          );
+          pullFromIncomingInspectionQuery.closeModal();
+          onSuccess();
+        } catch (error: unknown) {
+          messageApi.error(
+            getApiErrorMessage(
+              error,
+              t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+                source: pullFromIncomingInspectionAction.sourceLabel,
+                target: pullFromIncomingInspectionAction.targetLabel,
+              }),
+            ),
+          );
+        }
+      },
+    });
+
     const outsourcePullTypeOptions = useMemo(
       (): { label: string; value: InboundOutsourcePullType }[] => [
         { label: t('app.kuaizhizao.warehouseInbound.pull.outsourceType.receipt'), value: 'outsource_receipt' },
@@ -678,6 +871,19 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
         }
         if (key === 'sales_return') {
           pullFromSalesOrderQuery.openModal();
+          return;
+        }
+        if (key === 'finished_goods_inspection') {
+          pullFromFinishedGoodsInspectionQuery.openModal();
+          return;
+        }
+        if (key === 'incoming_inspection') {
+          pullFromIncomingInspectionQuery.openModal();
+          return;
+        }
+        if (key === 'outsource') {
+          setOutsourcePullType('outsource_receipt');
+          pullFromOutsourceWorkOrderQuery.openModal();
           return;
         }
         setOutsourcePullType('outsource_receipt');
@@ -1018,6 +1224,120 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
               t('app.kuaizhizao.warehouseInbound.pull.canCreate'),
               t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
             ),
+        },
+      ],
+      [t],
+    );
+
+    const fqcPullColumns = useMemo(
+      () => [
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.fqc.colCode'),
+          dataIndex: 'inspection_code',
+          width: 150,
+          ellipsis: true,
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.fqc.colWorkOrder'),
+          dataIndex: 'work_order_code',
+          width: 140,
+          ellipsis: true,
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.materialName'),
+          dataIndex: 'material_name',
+          ellipsis: true,
+          render: (_: unknown, record: PullFinishedGoodsInspectionCandidate) => (
+            <MaterialStackedCell
+              material_name={record.material_name}
+              material_code={record.material_code}
+              material_spec={record.material_spec}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.fqc.colQualifiedQty'),
+          dataIndex: 'qualified_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.gateStatus'),
+          key: 'convert_status',
+          width: 120,
+          align: 'center' as const,
+          render: (_: unknown, record: PullFinishedGoodsInspectionCandidate) => {
+            const allowed = record.capabilities?.push_inbound?.allowed === true;
+            return renderPullCapabilityTag(
+              allowed,
+              t('app.kuaizhizao.warehouseInbound.pull.canCreate'),
+              qualityInspectionCapabilityReasonMessage(
+                t,
+                record.capabilities?.push_inbound?.reason,
+              ) || t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+            );
+          },
+        },
+      ],
+      [t],
+    );
+
+    const iqcPullColumns = useMemo(
+      () => [
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.iqc.colCode'),
+          dataIndex: 'inspection_code',
+          width: 150,
+          ellipsis: true,
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.iqc.colPurchaseOrder'),
+          dataIndex: 'purchase_order_code',
+          width: 140,
+          ellipsis: true,
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.materialName'),
+          dataIndex: 'material_name',
+          ellipsis: true,
+          render: (_: unknown, record: PullIncomingInspectionCandidate) => (
+            <MaterialStackedCell
+              material_name={record.material_name}
+              material_code={record.material_code}
+              material_spec={record.material_spec}
+            />
+          ),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.supplier'),
+          dataIndex: 'supplier_name',
+          width: 120,
+          ellipsis: true,
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.iqc.colQualifiedQty'),
+          dataIndex: 'qualified_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatQuantity(v),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.pull.gateStatus'),
+          key: 'convert_status',
+          width: 120,
+          align: 'center' as const,
+          render: (_: unknown, record: PullIncomingInspectionCandidate) => {
+            const allowed = record.capabilities?.push_inbound?.allowed === true;
+            return renderPullCapabilityTag(
+              allowed,
+              t('app.kuaizhizao.warehouseInbound.pull.canCreate'),
+              qualityInspectionCapabilityReasonMessage(
+                t,
+                record.capabilities?.push_inbound?.reason,
+              ) || t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+            );
+          },
         },
       ],
       [t],
@@ -1368,6 +1688,70 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           scope={pullFromOutsourceWorkOrderQuery.scope}
           onScopeChange={pullFromOutsourceWorkOrderQuery.handleScopeChange}
           okText={t('app.kuaizhizao.warehouseInbound.pull.outsource.ok')}
+        />
+
+        <UniPullQueryModal<PullFinishedGoodsInspectionCandidate>
+          title={pullFromFinishedGoodsInspectionAction.label}
+          open={pullFromFinishedGoodsInspectionQuery.open}
+          onCancel={pullFromFinishedGoodsInspectionQuery.closeModal}
+          onOk={pullFromFinishedGoodsInspectionQuery.handleConfirm}
+          rowKey="id"
+          columns={fqcPullColumns}
+          dataSource={pullFromFinishedGoodsInspectionQuery.dataSource}
+          loading={pullFromFinishedGoodsInspectionQuery.loading}
+          confirmLoading={pullFromFinishedGoodsInspectionQuery.confirmLoading}
+          selectionType={pullFromFinishedGoodsInspectionQuery.selectionType}
+          selectedRowKeys={pullFromFinishedGoodsInspectionQuery.selectedRowKeys}
+          selectedRows={pullFromFinishedGoodsInspectionQuery.selectedRows}
+          onSelectedRowKeysChange={pullFromFinishedGoodsInspectionQuery.handleSelectedRowKeysChange}
+          isRowDisabled={pullFromFinishedGoodsInspectionQuery.isRowDisabled}
+          searchDraft={pullFromFinishedGoodsInspectionQuery.searchDraft}
+          onSearchDraftChange={pullFromFinishedGoodsInspectionQuery.setSearchDraft}
+          onSearchApply={pullFromFinishedGoodsInspectionQuery.handleSearchApply}
+          onSearchClear={pullFromFinishedGoodsInspectionQuery.handleSearchClear}
+          appliedKeyword={pullFromFinishedGoodsInspectionQuery.appliedKeyword}
+          searchPlaceholder={t('app.kuaizhizao.warehouseInbound.pull.fqc.searchPlaceholder')}
+          getRowLabel={(row) => [row.inspection_code, row.material_code].filter(Boolean).join(' ')}
+          page={pullFromFinishedGoodsInspectionQuery.page}
+          pageSize={pullFromFinishedGoodsInspectionQuery.pageSize}
+          total={pullFromFinishedGoodsInspectionQuery.total}
+          onPageChange={pullFromFinishedGoodsInspectionQuery.handlePageChange}
+          scopeOptions={pullFromFinishedGoodsInspectionQuery.scopeOptions}
+          scope={pullFromFinishedGoodsInspectionQuery.scope}
+          onScopeChange={pullFromFinishedGoodsInspectionQuery.handleScopeChange}
+          okText={t('app.kuaizhizao.warehouseInbound.pull.fqc.ok')}
+        />
+
+        <UniPullQueryModal<PullIncomingInspectionCandidate>
+          title={pullFromIncomingInspectionAction.label}
+          open={pullFromIncomingInspectionQuery.open}
+          onCancel={pullFromIncomingInspectionQuery.closeModal}
+          onOk={pullFromIncomingInspectionQuery.handleConfirm}
+          rowKey="id"
+          columns={iqcPullColumns}
+          dataSource={pullFromIncomingInspectionQuery.dataSource}
+          loading={pullFromIncomingInspectionQuery.loading}
+          confirmLoading={pullFromIncomingInspectionQuery.confirmLoading}
+          selectionType={pullFromIncomingInspectionQuery.selectionType}
+          selectedRowKeys={pullFromIncomingInspectionQuery.selectedRowKeys}
+          selectedRows={pullFromIncomingInspectionQuery.selectedRows}
+          onSelectedRowKeysChange={pullFromIncomingInspectionQuery.handleSelectedRowKeysChange}
+          isRowDisabled={pullFromIncomingInspectionQuery.isRowDisabled}
+          searchDraft={pullFromIncomingInspectionQuery.searchDraft}
+          onSearchDraftChange={pullFromIncomingInspectionQuery.setSearchDraft}
+          onSearchApply={pullFromIncomingInspectionQuery.handleSearchApply}
+          onSearchClear={pullFromIncomingInspectionQuery.handleSearchClear}
+          appliedKeyword={pullFromIncomingInspectionQuery.appliedKeyword}
+          searchPlaceholder={t('app.kuaizhizao.warehouseInbound.pull.iqc.searchPlaceholder')}
+          getRowLabel={(row) => [row.inspection_code, row.material_code].filter(Boolean).join(' ')}
+          page={pullFromIncomingInspectionQuery.page}
+          pageSize={pullFromIncomingInspectionQuery.pageSize}
+          total={pullFromIncomingInspectionQuery.total}
+          onPageChange={pullFromIncomingInspectionQuery.handlePageChange}
+          scopeOptions={pullFromIncomingInspectionQuery.scopeOptions}
+          scope={pullFromIncomingInspectionQuery.scope}
+          onScopeChange={pullFromIncomingInspectionQuery.handleScopeChange}
+          okText={t('app.kuaizhizao.warehouseInbound.pull.iqc.ok')}
         />
       </>
     );

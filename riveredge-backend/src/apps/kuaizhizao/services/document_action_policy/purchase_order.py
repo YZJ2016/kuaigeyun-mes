@@ -239,6 +239,16 @@ def derive_purchase_order_capabilities(
             return_reason = None
     push_return_cap = _require_supplier_for_push(_cap(return_allowed, return_reason), order)
 
+    iqc_allowed = False
+    iqc_reason = "purchase_order.push_incoming_inspection.not_audited"
+    if _is_order_pushable_status(status):
+        if not has_items:
+            iqc_reason = "purchase_order.push_incoming_inspection.no_items"
+        else:
+            iqc_allowed = True
+            iqc_reason = None
+    push_incoming_inspection_cap = _require_supplier_for_push(_cap(iqc_allowed, iqc_reason), order)
+
     create_change_allowed = False
     create_change_reason = "purchase_order.create_change.not_allowed"
     if update_allowed:
@@ -279,6 +289,7 @@ def derive_purchase_order_capabilities(
         push_receipt=push_receipt_cap,
         push_invoice=push_invoice_cap,
         push_purchase_return=push_return_cap,
+        push_incoming_inspection=push_incoming_inspection_cap,
         create_change_order=create_change_cap,
         print=print_cap,
     )
@@ -323,6 +334,7 @@ def assert_purchase_order_capability(
         "push_receipt": caps.push_receipt,
         "push_invoice": caps.push_invoice,
         "push_purchase_return": caps.push_purchase_return,
+        "push_incoming_inspection": caps.push_incoming_inspection,
         "create_change_order": caps.create_change_order,
     }
     cap = cap_map.get(action)

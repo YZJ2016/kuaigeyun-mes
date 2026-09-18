@@ -28,6 +28,11 @@ from apps.kuaizhizao.models.material_stock_movement import (
 from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
 from apps.master_data.constants.batch_quality_status import QUALIFIED
 from infra.services.business_config_service import BusinessConfigService
+
+# 按原单批号追溯的逆向扣减：不适用 FIFO/LIFO「须先领更早/更新批次」防呆
+_BATCH_ORDER_ENFORCEMENT_EXEMPT_SOURCE_TYPES = frozenset({
+    "purchase_return",
+})
 from infra.exceptions.exceptions import BusinessLogicError
 
 
@@ -47,6 +52,39 @@ class InventoryService:
         cfg = await BusinessConfigService().get_business_config(tenant_id)
         wh = cfg.get("parameters", {}).get("warehouse", {})
         return bool(wh.get("batch_management", False)), bool(wh.get("serial_management", False))
+
+    @staticmethod
+    def _normalize_location_kwargs(
+        location_id: Optional[int] = None,
+        location_code: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+        if location_id is not None:
+            try:
+                payload["location_id"] = int(location_id)
+            except (TypeError, ValueError):
+                pass
+        code = str(location_code or "").strip()
+        if code:
+            payload["location_code"] = code
+        return payload
+
+    @staticmethod
+    def location_kwargs_from_line_item(item: Any) -> Dict[str, Any]:
+        return InventoryService._normalize_location_kwargs(
+            getattr(item, "location_id", None),
+            getattr(item, "location_code", None),
+        )
+
+    @staticmethod
+    def _apply_location_fields(target: Any, location_id: Optional[int], location_code: Optional[str]) -> None:
+        loc = InventoryService._normalize_location_kwargs(location_id, location_code)
+        if not loc:
+            return
+        if "location_id" in loc:
+            target.location_id = loc["location_id"]
+        if "location_code" in loc:
+            target.location_code = loc["location_code"]
 
     @staticmethod
     async def _get_allow_negative_inventory(tenant_id: int) -> bool:
@@ -372,6 +410,8 @@ class InventoryService:
         material=None,
         warehouse_id: Optional[int] = None,
         warehouse_name: Optional[str] = None,
+        location_id: Optional[int] = None,
+        location_code: Optional[str] = None,
         quality_status: str = QUALIFIED,
     ) -> None:
         """
@@ -427,6 +467,7 @@ class InventoryService:
                 batch.source_doc_id = source_doc_id
             if source_doc_code:
                 batch.source_doc_code = source_doc_code
+            InventoryService._apply_location_fields(batch, location_id, location_code)
             await InventoryService._apply_batch_ledger_dates(
                 batch,
                 material=material,
@@ -448,6 +489,7 @@ class InventoryService:
             production_date=create_production_date,
             explicit_expiry=explicit_create_expiry,
         )
+        loc_kwargs = InventoryService._normalize_location_kwargs(location_id, location_code)
         try:
             await MaterialBatch.create(
                 tenant_id=tenant_id,
@@ -465,6 +507,7 @@ class InventoryService:
                 source_doc_code=source_doc_code,
                 warehouse_id=wh_id,
                 warehouse_name=wh_name,
+                **loc_kwargs,
             )
         except IntegrityError:
             batch = await MaterialBatch.filter(
@@ -504,6 +547,7 @@ class InventoryService:
             batch.status = "in_stock"
             if wh_name and not str(batch.warehouse_name or "").strip():
                 batch.warehouse_name = wh_name
+            InventoryService._apply_location_fields(batch, location_id, location_code)
             await InventoryService._apply_batch_ledger_dates(
                 batch,
                 material=material,
@@ -600,6 +644,8 @@ class InventoryService:
         operator_name: Optional[str] = None,
         remark: Optional[str] = None,
         idempotency_key: Optional[str] = None,
+        location_id: Optional[int] = None,
+        location_code: Optional[str] = None,
         quality_status: str = QUALIFIED,
     ) -> bool:
         """
@@ -717,6 +763,8 @@ class InventoryService:
                     material=material,
                     warehouse_id=main_wh_id,
                     warehouse_name=main_wh_name,
+                    location_id=location_id,
+                    location_code=location_code,
                     quality_status=quality_status,
                 )
                 qty_after = qty_before + quantity
@@ -801,6 +849,7 @@ class InventoryService:
                     inv_filter["batch_no"] = batch_no
                 inv = await LineSideInventory.filter(**inv_filter).select_for_update().first()
                 qty_before = Decimal(str(inv.quantity or 0)) if inv else Decimal(0)
+                loc_kwargs = InventoryService._normalize_location_kwargs(location_id, location_code)
                 if inv:
                     inv.quantity = qty_before + quantity
                     if work_order_id and not inv.work_order_id:
@@ -808,6 +857,7 @@ class InventoryService:
                         inv.work_order_code = work_order_code
                     if wh_name and not str(inv.warehouse_name or "").strip():
                         inv.warehouse_name = wh_name
+                    InventoryService._apply_location_fields(inv, location_id, location_code)
                     await inv.save()
                 else:
                     mat = material or await Material.get_or_none(id=material_id)
@@ -827,6 +877,7 @@ class InventoryService:
                         source_doc_code=source_doc_code or "",
                         work_order_id=work_order_id,
                         work_order_code=work_order_code,
+                        **loc_kwargs,
                     )
                 await InventoryService._record_stock_movement(
                     tenant_id=tenant_id,
@@ -887,6 +938,8 @@ class InventoryService:
         operator_name: Optional[str] = None,
         remark: Optional[str] = None,
         idempotency_key: Optional[str] = None,
+        location_id: Optional[int] = None,
+        location_code: Optional[str] = None,
         quality_status: str = QUALIFIED,
     ) -> bool:
         """
@@ -918,6 +971,8 @@ class InventoryService:
             operator_name=operator_name,
             remark=remark,
             idempotency_key=idempotency_key,
+            location_id=location_id,
+            location_code=location_code,
             quality_status=quality_status,
         )
 
@@ -1038,6 +1093,9 @@ class InventoryService:
                 )
 
                 fifo_mode = normalize_fifo_mode(wh_cfg.get("fifo_mode"))
+                skip_batch_order_enforcement = (
+                    str(source_type or "").strip() in _BATCH_ORDER_ENFORCEMENT_EXEMPT_SOURCE_TYPES
+                )
                 material = await Material.get_or_none(
                     tenant_id=tenant_id,
                     id=material_id,
@@ -1167,7 +1225,8 @@ class InventoryService:
                     else:
                         
                         # 阶段2：强制先进先出 (FIFO Strict Enforcement) 拦截网
-                        if enforce_fifo:
+                        # 采购退货等按原入库批号追溯的逆向出库不套用领用顺序防呆
+                        if enforce_fifo and not skip_batch_order_enforcement:
                             siblings = await MaterialBatch.filter(
                                 tenant_id=tenant_id,
                                 material_id=material_id,
@@ -1187,7 +1246,7 @@ class InventoryService:
                                     f"请优先领用该批次以防产品滞留过期。"
                                 )
                         # 开启 LIFO 且未开启 FIFO 时，强制优先使用最新批次
-                        if lifo_enabled and not enforce_fifo:
+                        if lifo_enabled and not enforce_fifo and not skip_batch_order_enforcement:
                             newer_batch = await MaterialBatch.filter(
                                 tenant_id=tenant_id,
                                 material_id=material_id,

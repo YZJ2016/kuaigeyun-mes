@@ -864,6 +864,7 @@ const OperationsPage: React.FC = () => {
         }}
         detail={operationDetail}
         detailColumns={operationDetailColumns}
+        documentType="operation"
         customFields={customFields}
         customFieldValues={customFieldValues}
         basicExtra={

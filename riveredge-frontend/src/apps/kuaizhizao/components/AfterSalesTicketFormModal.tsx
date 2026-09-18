@@ -177,6 +177,11 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
       return;
     }
     if (editing) {
+      const soId =
+        editing.sales_order_id != null && Number(editing.sales_order_id) > 0
+          ? Number(editing.sales_order_id)
+          : null;
+      prevSalesOrderIdRef.current = soId;
       form.setFieldsValue({
         customer_id: editing.customer_id,
         request_type: editing.request_type,
@@ -201,6 +206,11 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
       });
       return;
     }
+    const presetSoId =
+      preset?.sales_order_id != null && Number(preset.sales_order_id) > 0
+        ? Number(preset.sales_order_id)
+        : null;
+    prevSalesOrderIdRef.current = presetSoId;
     form.setFieldsValue({
       customer_id: preset?.customer_id,
       request_type: '退货',
@@ -253,19 +263,13 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
     };
   }, [open, salesOrderDropdownOpen, modalCustomerId]);
 
-  useEffect(() => {
-    if (!open) return;
-    const soId =
-      modalSalesOrderId != null && Number(modalSalesOrderId) > 0 ? Number(modalSalesOrderId) : null;
-    if (prevSalesOrderIdRef.current === undefined) {
-      prevSalesOrderIdRef.current = soId;
-      return;
-    }
-    if (prevSalesOrderIdRef.current !== soId) {
+  const handleSalesOrderChange = (value: number | null | undefined) => {
+    const next = value != null && Number(value) > 0 ? Number(value) : null;
+    if (prevSalesOrderIdRef.current !== next) {
       form.setFieldsValue({ items: [] });
-      prevSalesOrderIdRef.current = soId;
+      prevSalesOrderIdRef.current = next;
     }
-  }, [open, modalSalesOrderId, form]);
+  };
 
   const salesOrderOptions = useMemo(() => {
     const options = salesOrderList
@@ -620,6 +624,7 @@ export const AfterSalesTicketFormModal: React.FC<AfterSalesTicketFormModalProps>
                 }
                 options={salesOrderOptions}
                 onOpenChange={setSalesOrderDropdownOpen}
+                onChange={handleSalesOrderChange}
               />
             </Form.Item>
           </Col>

@@ -1,10 +1,16 @@
 """
 追溯标识解析：序列号 / 批号 / 工单号（tenant 内精确匹配，找不到则 404）
+
+序列号真源（按优先级）：
+1. 物料序列号台账 MaterialSerial（入库过账后写入）
+2. 工单跟踪字段 planned_serial_no / confirmed_serial_no（开单/下达占号，入库前即存在）
 """
 
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
+
+from tortoise.expressions import Q
 
 from apps.master_data.models.material_batch import MaterialBatch
 from apps.master_data.models.material_serial import MaterialSerial
@@ -32,6 +38,21 @@ class ResolvedTraceAnchor:
 
 class TraceIdentifierResolver:
     @staticmethod
+    async def _resolve_work_order_by_serial(
+        tenant_id: int, serial_no: str
+    ) -> Optional[WorkOrder]:
+        """工单跟踪序列号精确匹配（计划号或确认号）。"""
+        return (
+            await WorkOrder.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            .filter(Q(planned_serial_no=serial_no) | Q(confirmed_serial_no=serial_no))
+            .order_by("id")
+            .first()
+        )
+
+    @staticmethod
     async def resolve(tenant_id: int, code: str) -> ResolvedTraceAnchor:
         text = (code or "").strip()
         if not text:
@@ -44,6 +65,7 @@ class TraceIdentifierResolver:
         ).prefetch_related("material").first()
         if serial:
             material = serial.material
+            wo = await TraceIdentifierResolver._resolve_work_order_by_serial(tenant_id, text)
             return ResolvedTraceAnchor(
                 identifier_type=TraceIdentifierType.serial,
                 code=text,
@@ -55,6 +77,23 @@ class TraceIdentifierResolver:
                 status=serial.status,
                 inbound_date=serial.production_date,
                 serial_uuid=str(serial.uuid),
+                work_order_id=wo.id if wo else None,
+            )
+
+        # 工单已占号但尚未入库过账时，台账可能尚无 MaterialSerial
+        wo_by_serial = await TraceIdentifierResolver._resolve_work_order_by_serial(
+            tenant_id, text
+        )
+        if wo_by_serial:
+            return ResolvedTraceAnchor(
+                identifier_type=TraceIdentifierType.serial,
+                code=text,
+                tenant_id=tenant_id,
+                material_id=getattr(wo_by_serial, "product_id", None),
+                material_code=getattr(wo_by_serial, "product_code", None),
+                material_name=getattr(wo_by_serial, "product_name", None),
+                status=getattr(wo_by_serial, "status", None),
+                work_order_id=wo_by_serial.id,
             )
 
         batches = await MaterialBatch.filter(
@@ -108,6 +147,9 @@ class TraceIdentifierResolver:
         if not serial:
             raise NotFoundError("物料序列号", serial_uuid)
         material = serial.material
+        wo = await TraceIdentifierResolver._resolve_work_order_by_serial(
+            tenant_id, serial.serial_no
+        )
         return ResolvedTraceAnchor(
             identifier_type=TraceIdentifierType.serial,
             code=serial.serial_no,
@@ -119,6 +161,7 @@ class TraceIdentifierResolver:
             status=serial.status,
             inbound_date=serial.production_date,
             serial_uuid=str(serial.uuid),
+            work_order_id=wo.id if wo else None,
         )
 
     @staticmethod

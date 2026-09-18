@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { Empty, Spin, Timeline, Typography, Button, Tag, List, theme } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { workOrderApi } from '../../../../services/production'
-import { formatDateTimeBySiteSetting, formatQuantity } from '../../../../../../utils/format'
+import { formatQuantity } from '../../../../../../utils/format'
 import { getDocumentLifecycleStageTagProps } from '../../../../../../utils/documentLifecycleStatusTag'
 
 /** 履历里后端写入 remark 的单据状态码 → documentStatus.* */
@@ -253,17 +253,11 @@ export const WorkOrderMaterialMovementsPanel: React.FC<WorkOrderMaterialMovement
                     </Tag>
                   ) : null}
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
-                  {r.operator_name ? (
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {r.operator_name}
-                    </Typography.Text>
-                  ) : null}
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {/* 后端 BaseSchema 已输出站点墙钟；无 tz 字符串按站点解释，禁止再手工切片 */}
-                    {formatDateTimeBySiteSetting(r.occurred_at, '—')}
+                {r.operator_name ? (
+                  <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 'auto' }}>
+                    {r.operator_name}
                   </Typography.Text>
-                </div>
+                ) : null}
               </div>
               {(r.material_name || r.material_spec || (r.quantity != null && String(r.quantity) !== '')) ? (
                 <div style={{ marginTop: 2 }}>

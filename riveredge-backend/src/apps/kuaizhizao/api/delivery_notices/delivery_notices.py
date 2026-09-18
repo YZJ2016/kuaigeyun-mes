@@ -27,6 +27,8 @@ from apps.kuaizhizao.schemas.delivery_notice import (
     DeliveryNoticeWithItemsResponse,
     DeliveryNoticePullCandidateListResponse,
     DeliveryNoticePullPreviewResponse,
+    DeliveryNoticePushFreightRequest,
+    DeliveryNoticePushFreightResponse,
 )
 
 delivery_notice_service = DeliveryNoticeService()
@@ -140,6 +142,31 @@ async def pull_from_sales_delivery_items(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="从销售出库开口行创建送货单失败",
         )
+
+
+@router.post(
+    "/push-to-freight-orders",
+    response_model=DeliveryNoticePushFreightResponse,
+    summary="Push delivery notices to freight orders",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:freight-order:create"))],
+)
+async def push_delivery_notices_to_freight_orders(
+    body: DeliveryNoticePushFreightRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已发送/已签收的送货单下推生成发货管理单（草稿）。"""
+    try:
+        result = await delivery_notice_service.push_to_freight_orders(
+            tenant_id=tenant_id,
+            notice_ids=body.notice_ids,
+            created_by=current_user.id,
+        )
+        return DeliveryNoticePushFreightResponse.model_validate(result)
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("", response_model=DeliveryNoticeResponse, summary="Create delivery notice")

@@ -93,11 +93,13 @@ import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { useDetailDrawerFeatures } from '../../../../../hooks/useDetailDrawerFeatures';
 /**
  * 供应商管理列表页面组件
  */
 const SuppliersPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { basicUpdatedAtEnabled, timeFieldHidden } = useDetailDrawerFeatures();
   const { message: messageApi } = App.useApp();
   const location = useLocation();
   const pagePermissionResource = usePagePermissionResource(location.pathname);
@@ -1146,6 +1148,11 @@ const SuppliersPage: React.FC = () => {
                 items={detailDrawerDescriptionItems(
                   alignDescriptionColumns(detailColumnsExtended, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
                   supplierDetail,
+                  {
+                    documentType: 'supplier',
+                    showUpdatedAt: basicUpdatedAtEnabled,
+                    timeFieldHidden,
+                  },
                 )}
               />
             </DetailDrawerSection>

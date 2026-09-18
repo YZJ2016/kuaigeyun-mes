@@ -29,6 +29,8 @@ export interface InstallExecutionCapabilities {
   assign_task?: ActionCapability;
   advance_stage?: ActionCapability;
   register_cost?: ActionCapability;
+  push_dispatch?: ActionCapability;
+  push_settlement?: ActionCapability;
 }
 
 export interface InstallExecutionStage {
@@ -237,4 +239,20 @@ export const installExecutionApi = {
       method: 'POST',
       data,
     }),
+
+  pushToDispatch: (id: number) =>
+    apiRequest<{
+      success: boolean;
+      message: string;
+      dispatch_id: number;
+      dispatch_code: string;
+    }>(`/apps/kuaizhizao/install-executions/${id}/push-to-dispatch`, { method: 'POST' }),
+
+  pushToSettlement: (id: number) =>
+    apiRequest<{
+      success: boolean;
+      message: string;
+      settlement_id: number;
+      settlement_code: string;
+    }>(`/apps/kuaizhizao/install-executions/${id}/push-to-settlement`, { method: 'POST' }),
 };

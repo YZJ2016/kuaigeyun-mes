@@ -288,11 +288,15 @@ class AfterSalesTicketService:
             existing_repair_order_code = await cls._existing_repair_order_code(
                 row.tenant_id, row.id
             )
+        from apps.kuaizhizao.services.after_sales_upstream_status import existing_visit_code
+
+        visit_code = await existing_visit_code(row.tenant_id, "after_sales_ticket", int(row.id))
         caps = derive_after_sales_ticket_capabilities(
             row,
             has_items=bool(items),
             has_returnable_qty=bool(has_returnable_qty),
             existing_repair_order_code=existing_repair_order_code,
+            existing_visit_code=visit_code,
         )
         base = AfterSalesTicketResponse.model_validate(row)
         return base.model_copy(
@@ -1019,25 +1023,27 @@ class AfterSalesTicketService:
 
         from apps.kuaizhizao.services.warehouse_service import SalesReturnService
 
-        async with in_transaction():
-            sales_return = await SalesReturnService().pull_from_sales_order(
-                tenant_id=tenant_id,
-                sales_order_id=int(row.sales_order_id),
-                created_by=current_user.id,
-                warehouse_id=data.warehouse_id,
-                warehouse_name=data.warehouse_name,
-                return_quantities=return_quantities or None,
-                batch_numbers=batch_numbers or None,
-                return_code=data.return_code,
-            )
-            dump = {
-                "sales_return_id": sales_return.id,
-                "sales_return_code": sales_return.return_code,
-            }
-            if str(row.status or "").strip() == "待处理":
-                dump["status"] = "处理中"
-            apply_update_audit(dump, current_user)
-            await AfterSalesTicket.filter(id=ticket_id, tenant_id=tenant_id).update(**dump)
+        # 禁止再包一层 in_transaction：pull_from_sales_order → create_sales_return
+        # 内部已有事务，且 generate_code / 单据关联还会嵌套 in_transaction；
+        # Tortoise NestedTransactionPooledContext 的 _trxlock 不可重入，三层嵌套会永久死锁。
+        sales_return = await SalesReturnService().pull_from_sales_order(
+            tenant_id=tenant_id,
+            sales_order_id=int(row.sales_order_id),
+            created_by=current_user.id,
+            warehouse_id=data.warehouse_id,
+            warehouse_name=data.warehouse_name,
+            return_quantities=return_quantities or None,
+            batch_numbers=batch_numbers or None,
+            return_code=data.return_code,
+        )
+        dump = {
+            "sales_return_id": sales_return.id,
+            "sales_return_code": sales_return.return_code,
+        }
+        if str(row.status or "").strip() == "待处理":
+            dump["status"] = "处理中"
+        apply_update_audit(dump, current_user)
+        await AfterSalesTicket.filter(id=ticket_id, tenant_id=tenant_id).update(**dump)
 
         await cls._create_document_relation(
             tenant_id=tenant_id,
@@ -1057,4 +1063,58 @@ class AfterSalesTicketService:
             "ticket_id": ticket_id,
             "return_id": sales_return.id,
             "return_code": sales_return.return_code,
+        }
+
+    @classmethod
+    async def push_to_return_visit(
+        cls,
+        tenant_id: int,
+        ticket_id: int,
+        current_user: User,
+    ) -> dict:
+        from apps.kuaizhizao.schemas.after_sales_service import CustomerReturnVisitCreate
+        from apps.kuaizhizao.services.after_sales_upstream_status import existing_visit_code
+        from apps.kuaizhizao.services.customer_return_visit_service import CustomerReturnVisitService
+
+        row = await AfterSalesTicket.filter(
+            id=ticket_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not row:
+            raise NotFoundError(f"售后服务工单不存在: {ticket_id}")
+        visit_code = await existing_visit_code(tenant_id, "after_sales_ticket", ticket_id)
+        assert_after_sales_ticket_capability(
+            row,
+            "push_return_visit",
+            existing_visit_code=visit_code,
+        )
+        visit = await CustomerReturnVisitService.create(
+            tenant_id,
+            CustomerReturnVisitCreate(
+                customer_id=row.customer_id,
+                source_type="after_sales_ticket",
+                source_id=row.id,
+                visit_method="电话",
+            ),
+            current_user,
+        )
+        await cls._create_document_relation(
+            tenant_id=tenant_id,
+            created_by=current_user.id,
+            source_type="after_sales_ticket",
+            source_id=row.id,
+            source_code=row.ticket_code,
+            target_type="customer_return_visit",
+            target_id=visit.id,
+            target_code=visit.visit_code,
+            relation_mode="push",
+            relation_desc="售后服务工单下推客户回访",
+        )
+        return {
+            "success": True,
+            "message": "已生成客户回访",
+            "ticket_id": ticket_id,
+            "visit_id": visit.id,
+            "visit_code": visit.visit_code,
         }

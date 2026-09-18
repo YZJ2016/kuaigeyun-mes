@@ -30,6 +30,7 @@ from apps.kuaizhizao.schemas.equipment import (
     EquipmentListResponse,
     EquipmentCalibrationCreate,
     EquipmentCalibrationCreateWithEquipment,
+    EquipmentCalibrationUpdate,
     EquipmentCalibrationResponse,
     EquipmentCalibrationListResponse,
     EquipmentCalibrationReminderResponse,
@@ -274,6 +275,73 @@ async def create_equipment_calibration_record(
         resp.equipment_code = equipment.code
         resp.equipment_name = equipment.name
         return resp
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.put(
+    "/calibrations/{calib_uuid}",
+    response_model=EquipmentCalibrationResponse,
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:equipment-calibration:update",
+                "kuaizhizao:measuring-instrument-calibration:update",
+            )
+        )
+    ],
+)
+async def update_equipment_calibration_record(
+    calib_uuid: str,
+    data: EquipmentCalibrationUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新设备校验记录"""
+    try:
+        calib = await EquipmentService.update_equipment_calibration(
+            tenant_id=tenant_id,
+            calib_uuid=calib_uuid,
+            data=data,
+            current_user=current_user,
+        )
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, calib.equipment_uuid)
+        resp = EquipmentCalibrationResponse.model_validate(calib)
+        resp.equipment_code = equipment.code
+        resp.equipment_name = equipment.name
+        return resp
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete(
+    "/calibrations/{calib_uuid}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:equipment-calibration:delete",
+                "kuaizhizao:measuring-instrument-calibration:delete",
+            )
+        )
+    ],
+)
+async def delete_equipment_calibration_record(
+    calib_uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除设备校验记录"""
+    try:
+        await EquipmentService.delete_equipment_calibration(
+            tenant_id=tenant_id,
+            calib_uuid=calib_uuid,
+            current_user=current_user,
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

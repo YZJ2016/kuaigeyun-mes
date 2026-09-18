@@ -34,6 +34,8 @@ import {
   MODAL_CONFIG,
 } from '../../../../../../components/layout-templates';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
+import { ActionConfirmPopconfirm } from '../../../../../../components/action-confirm';
+import { rowActionKind } from '../../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import { MarkerTag } from '../../../../../../constants/statusBadges';
 import { formatDateBySiteSetting, formatDateTime } from '../../../../../../utils/format';
@@ -76,12 +78,13 @@ interface MeasuringInstrumentDetail {
 
 interface CalibrationRecord {
   uuid?: string;
+  plan_type?: string;
   calibration_date?: string;
   result?: string;
   certificate_no?: string;
   expiry_date?: string;
   remark?: string;
-  attachments?: Array<{ name?: string }>;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_by_name?: string;
 }
 
@@ -93,6 +96,7 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions('kuaizhizao:equipment-management-equipment');
+  const calibPerms = useResourcePermissions('kuaizhizao:measuring-instrument-calibration');
 
   const activeTab = resolveMeasuringInstrumentDetailTabKey(searchParams.get('tab'));
   const [loading, setLoading] = useState(true);
@@ -100,8 +104,13 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
   const [calibrations, setCalibrations] = useState<CalibrationRecord[]>([]);
   const [calibLoading, setCalibLoading] = useState(false);
   const [calibModalVisible, setCalibModalVisible] = useState(false);
+  const [editingCalib, setEditingCalib] = useState<CalibrationRecord | null>(null);
   const [calibForm] = Form.useForm();
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
+
+  const canCreateCalib = calibPerms.canCreate || perms.canUpdate;
+  const canUpdateCalib = calibPerms.canUpdate;
+  const canDeleteCalib = calibPerms.canDelete;
 
   const tracking = useDocumentTracking(detail?.id ? 'equipment' : undefined, detail?.id, trackingRefreshKey);
 
@@ -198,25 +207,63 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
   );
 
   const handleOpenCalibrationModal = useCallback(() => {
+    setEditingCalib(null);
     calibForm.resetFields();
     calibForm.setFieldsValue({ calibration_date: dayjs(), result: '合格' });
     setCalibModalVisible(true);
   }, [calibForm]);
 
+  const handleEditCalibration = useCallback(
+    (record: CalibrationRecord) => {
+      setEditingCalib(record);
+      calibForm.setFieldsValue({
+        calibration_date: record.calibration_date ? dayjs(record.calibration_date) : undefined,
+        expiry_date: record.expiry_date ? dayjs(record.expiry_date) : undefined,
+        result: record.result,
+        certificate_no: record.certificate_no,
+        remark: record.remark,
+        attachments: record.attachments || [],
+      });
+      setCalibModalVisible(true);
+    },
+    [calibForm],
+  );
+
+  const handleDeleteCalibration = useCallback(
+    async (record: CalibrationRecord) => {
+      if (!record.uuid) return;
+      try {
+        await equipmentApi.deleteCalibrationRecord(record.uuid);
+        messageApi.success(t('common.deleteSuccess'));
+        await loadPage();
+      } catch (e: unknown) {
+        const err = e as { message?: string };
+        messageApi.error(err?.message || t('common.deleteFailed'));
+      }
+    },
+    [loadPage, messageApi, t],
+  );
+
   const handleSubmitCalibration = async () => {
     try {
       const values = await calibForm.validateFields();
       if (!uuid) return;
-      await equipmentApi.createCalibration(uuid, {
+      const payload = {
         calibration_date: values.calibration_date?.format?.('YYYY-MM-DD') || values.calibration_date,
         result: values.result,
         certificate_no: values.certificate_no,
         expiry_date: values.expiry_date?.format?.('YYYY-MM-DD') || values.expiry_date,
         remark: values.remark,
         attachments: normalizeDocumentAttachments(values.attachments),
-      });
+      };
+      if (editingCalib?.uuid) {
+        await equipmentApi.updateCalibrationRecord(editingCalib.uuid, payload);
+      } else {
+        await equipmentApi.createCalibration(uuid, payload);
+      }
       messageApi.success(t('app.kuaizhizao.equipment.calibrationSaved'));
       setCalibModalVisible(false);
+      setEditingCalib(null);
       await loadPage();
     } catch (e: any) {
       if (e?.errorFields) return;
@@ -264,7 +311,7 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
             size="small"
             title={t(`${P}.detailTabCalibrationsTitle`)}
             extra={
-              perms.canUpdate ? (
+              canCreateCalib ? (
                 <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleOpenCalibrationModal}>
                   {t(`${P}.addCalibration`)}
                 </Button>
@@ -298,6 +345,33 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
                 },
                 { title: t('common.remark'), dataIndex: 'remark', ellipsis: true },
                 { title: t('common.createdBy'), dataIndex: 'created_by_name' },
+                {
+                  title: t('common.actions'),
+                  key: 'option',
+                  width: 160,
+                  render: (_, record) => (
+                    <Space size={4}>
+                      {canUpdateCalib ? (
+                        <Button
+                          {...rowActionKind('update')}
+                          onClick={() => handleEditCalibration(record)}
+                        >
+                          {t('common.edit')}
+                        </Button>
+                      ) : null}
+                      {canDeleteCalib ? (
+                        <ActionConfirmPopconfirm
+                          title={t('common.deleteTitle')}
+                          onConfirm={() => void handleDeleteCalibration(record)}
+                        >
+                          <Button {...rowActionKind('delete')} danger>
+                            {t('common.delete')}
+                          </Button>
+                        </ActionConfirmPopconfirm>
+                      ) : null}
+                    </Space>
+                  ),
+                },
               ]}
             />
           </Card>
@@ -308,9 +382,13 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
     basicColumns,
     calibLoading,
     calibrations,
+    canCreateCalib,
+    canDeleteCalib,
+    canUpdateCalib,
     detail,
+    handleDeleteCalibration,
+    handleEditCalibration,
     handleOpenCalibrationModal,
-    perms.canUpdate,
     t,
     tracking.data,
     tracking.error,
@@ -375,11 +453,18 @@ const MeasuringInstrumentDetailPage: React.FC = () => {
       />
 
       <Modal
-        title={t(`${P}.addCalibration`)}
+        title={
+          editingCalib
+            ? t('app.kuaizhizao.measuringInstrumentCalibration.editModal')
+            : t(`${P}.addCalibration`)
+        }
         open={calibModalVisible}
         destroyOnHidden
         width={MODAL_CONFIG.MEDIUM_WIDTH}
-        onCancel={() => setCalibModalVisible(false)}
+        onCancel={() => {
+          setCalibModalVisible(false);
+          setEditingCalib(null);
+        }}
         onOk={() => void handleSubmitCalibration()}
         okText={t('common.save')}
       >

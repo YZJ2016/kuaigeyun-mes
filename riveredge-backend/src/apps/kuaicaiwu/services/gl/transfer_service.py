@@ -43,6 +43,66 @@ class GlTransferService:
             is_active=bool(data.get("is_active", True)),
         )
 
+    async def update_template(
+        self,
+        tenant_id: int,
+        template_id: int,
+        data: Dict[str, Any],
+    ) -> GlTransferTemplate:
+        row = await GlTransferTemplate.get_or_none(
+            tenant_id=tenant_id, id=template_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("转账模板不存在")
+
+        new_code = str(data.get("template_code") or row.template_code).strip()
+        if not new_code:
+            raise ValidationError("模板编码必填")
+        if new_code != row.template_code:
+            dup = await GlTransferTemplate.get_or_none(
+                tenant_id=tenant_id, template_code=new_code, deleted_at__isnull=True
+            )
+            if dup and int(dup.id) != int(row.id):
+                raise ValidationError(f"模板编码已存在: {new_code}")
+            row.template_code = new_code
+
+        if data.get("template_name") is not None:
+            name = str(data.get("template_name") or "").strip()
+            if not name:
+                raise ValidationError("模板名称必填")
+            row.template_name = name
+
+        # 结转损益模板由系统按科目余额生成分录，不允许改类型为 custom 以外的乱改逻辑
+        if row.template_type == "profit_loss":
+            if "is_active" in data:
+                row.is_active = bool(data.get("is_active"))
+            await row.save()
+            return row
+
+        if data.get("template_type") is not None:
+            row.template_type = str(data.get("template_type") or row.template_type)
+        if data.get("lines") is not None:
+            lines = data.get("lines")
+            if not isinstance(lines, list) or len(lines) < 2:
+                raise ValidationError("自定义转账模板至少两行分录")
+            row.lines = lines
+        if "is_active" in data:
+            row.is_active = bool(data.get("is_active"))
+        await row.save()
+        return row
+
+    async def delete_template(self, tenant_id: int, template_id: int) -> None:
+        from core.utils.timezone_utils import resolve_business_datetime
+
+        row = await GlTransferTemplate.get_or_none(
+            tenant_id=tenant_id, id=template_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("转账模板不存在")
+        row.deleted_at = resolve_business_datetime()
+        row.is_active = False
+        await row.save()
+
     async def run_template(
         self,
         tenant_id: int,
@@ -214,7 +274,13 @@ class GlTransferService:
         month: int,
         operator_id: int,
     ) -> Dict[str, Any]:
-        """将损益类科目本期余额结转到本年利润，生成已审核凭证草稿供记账。"""
+        """将各损益类科目本期净额分别结转到本年利润，生成凭证草稿供记账。
+
+        规范分录（不得收入与成本直接对冲）：
+        - 贷方净额（收入类）：借 损益科目 / 贷 本年利润
+        - 借方净额（费用成本类）：借 本年利润 / 贷 损益科目
+        本年利润借、贷分录分别列示，即使金额相等也不互相抵消省略。
+        """
         await self.ensure_profit_loss_template(tenant_id)
         target = await ChartOfAccount.filter(
             tenant_id=tenant_id,
@@ -231,8 +297,17 @@ class GlTransferService:
             deleted_at__isnull=True,
             is_active=True,
         ).all()
+        # 本年利润及利润分配不得作为损益来源结转
+        pl_accounts = [
+            acc
+            for acc in pl_accounts
+            if not str(acc.account_code or "").startswith(("4103", "4104"))
+        ]
+
         lines: List[Dict[str, Any]] = []
-        net = Decimal("0")
+        income_to_profit = Decimal("0")  # 贷方净额合计 → 贷记本年利润
+        expense_to_profit = Decimal("0")  # 借方净额合计 → 借记本年利润
+
         for acc in pl_accounts:
             bals = await AccountBalance.filter(
                 tenant_id=tenant_id,
@@ -243,12 +318,11 @@ class GlTransferService:
             ).all()
             period_debit = sum(Decimal(str(b.period_debit or 0)) for b in bals)
             period_credit = sum(Decimal(str(b.period_credit or 0)) for b in bals)
-            # 结转：贷方余额科目借方冲减；借方余额科目贷方冲减
+            # 贷方净额为正（收入），借方净额为负（成本费用）
             balance = period_credit - period_debit
             if balance == 0:
                 continue
             if balance > 0:
-                # 收入类贷方余额 → 借记损益科目
                 lines.append(
                     {
                         "account_id": acc.id,
@@ -257,7 +331,7 @@ class GlTransferService:
                         "credit_amount": 0,
                     }
                 )
-                net += balance
+                income_to_profit += balance
             else:
                 amt = -balance
                 lines.append(
@@ -268,28 +342,35 @@ class GlTransferService:
                         "credit_amount": amt,
                     }
                 )
-                net -= amt
+                expense_to_profit += amt
 
         if not lines:
             return {"created": False, "message": "本期无损益发生额可结转"}
 
-        if net > 0:
+        if income_to_profit > 0:
             lines.append(
                 {
                     "account_id": target.id,
-                    "summary": "结转本年利润",
+                    "summary": "结转本年利润（收入）",
                     "debit_amount": 0,
-                    "credit_amount": net,
+                    "credit_amount": income_to_profit,
                 }
             )
-        elif net < 0:
+        if expense_to_profit > 0:
             lines.append(
                 {
                     "account_id": target.id,
-                    "summary": "结转本年利润",
-                    "debit_amount": -net,
+                    "summary": "结转本年利润（成本费用）",
+                    "debit_amount": expense_to_profit,
                     "credit_amount": 0,
                 }
+            )
+
+        total_debit = sum(Decimal(str(x["debit_amount"] or 0)) for x in lines)
+        total_credit = sum(Decimal(str(x["credit_amount"] or 0)) for x in lines)
+        if total_debit != total_credit:
+            raise ValidationError(
+                f"结转损益借贷不平衡: 借 {total_debit} 贷 {total_credit}"
             )
 
         posting = PostingService()

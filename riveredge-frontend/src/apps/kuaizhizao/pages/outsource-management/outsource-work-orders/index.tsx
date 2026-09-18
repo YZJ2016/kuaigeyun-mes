@@ -77,7 +77,7 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import { searchReferenceDisplayAll, resolveReferenceDisplay, formatReferenceDisplayLabel } from '../../../../../utils/referenceDisplay';
 import dayjs from 'dayjs';
 import { AmountDisplay } from '../../../../../components/permission';
-import { KUAIZHIZAO_OUTSOURCE_ORDER_FIELD_RESOURCE as OO } from '../../../constants/fieldPermissionResources';
+import { KUAIZHIZAO_OUTSOURCE_WORK_ORDER_FIELD_RESOURCE as OO } from '../../../constants/fieldPermissionResources';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
@@ -108,7 +108,7 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_work_orders';
-const OUTSOURCE_ORDER_HOST_RESOURCE = 'kuaizhizao:outsource-order';
+const OUTSOURCE_WORK_ORDER_HOST_RESOURCE = 'kuaizhizao:outsource-work-order';
 
 interface OutsourceWorkOrder {
   id?: number;
@@ -202,7 +202,7 @@ async function resolveOutsourceOperationName(value?: string | null): Promise<str
     const items = await resolveReferenceDisplay({
       resource: 'master-data:process:operation',
       recordUuids: [raw],
-      hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+      hostResource: OUTSOURCE_WORK_ORDER_HOST_RESOURCE,
     });
     const op = items[0];
     if (!op) return raw;
@@ -286,7 +286,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     resetFieldValues: resetOwoFormFieldValues,
   } = useCustomFields({
     tableName: OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE,
-    hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+    hostResource: OUTSOURCE_WORK_ORDER_HOST_RESOURCE,
     loadWhenOpen: true,
     open: modalVisible,
   });
@@ -300,7 +300,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     resetDetailFieldValues: resetOwoDetailFieldValues,
   } = useCustomFieldsForList<OutsourceWorkOrder>({
     tableName: OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE,
-    hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+    hostResource: OUTSOURCE_WORK_ORDER_HOST_RESOURCE,
   });
   // 详情 Drawer 相关状态
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -365,12 +365,12 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     const [productsResult, suppliersResult] = await Promise.allSettled([
       searchReferenceDisplayAll({
         resource: 'master-data:material',
-        hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+        hostResource: OUTSOURCE_WORK_ORDER_HOST_RESOURCE,
         sourceType: 'Outsource',
       }),
       searchReferenceDisplayAll({
         resource: 'master-data:supply-chain:supplier',
-        hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+        hostResource: OUTSOURCE_WORK_ORDER_HOST_RESOURCE,
       }),
     ]);
     let loaded = false;
@@ -649,7 +649,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           const items = await resolveReferenceDisplay({
             resource: 'master-data:material',
             recordIds: [Number(selectedMaterial.id)],
-            hostResource: OUTSOURCE_ORDER_HOST_RESOURCE,
+            hostResource: OUTSOURCE_WORK_ORDER_HOST_RESOURCE,
           });
           const materialDetail = items[0];
           if (!materialDetail) {

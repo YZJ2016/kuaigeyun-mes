@@ -86,7 +86,11 @@ class FaDepreciationService:
         total = Decimal("0")
         lines: list[FaDepreciationRunLine] = []
         for asset in assets:
-            if normalize_depreciation_method(asset.depreciation_method) == "none":
+            method = normalize_depreciation_method(asset.depreciation_method)
+            if method == "none":
+                continue
+            # 工作量法须按当期实际工作量计提，预览不把「单位折旧」误当成月折旧自动入账
+            if method == "units_of_production":
                 continue
             if int(asset.depreciated_periods or 0) >= int(asset.useful_life_months or 0):
                 continue

@@ -16,6 +16,7 @@ from apps.kuaizhizao.models.mold_ops import MoldBorrow
 from apps.kuaizhizao.schemas.mold_ops import (
     MoldTrialCreate,
     MoldTrialUpdate,
+    MoldTrialReject,
     MoldTrialResponse,
     MoldTrialListResponse,
     MoldBorrowCreate,
@@ -26,6 +27,7 @@ from apps.kuaizhizao.schemas.mold_ops import (
     MoldReturnUpdate,
     MoldReturnResponse,
     MoldReturnListResponse,
+    MoldReturnUsagePreviewResponse,
     MoldMaintenanceCreate,
     MoldMaintenanceUpdate,
     MoldMaintenanceResponse,
@@ -205,7 +207,64 @@ async def update_mold_trial(
 async def delete_mold_trial(row_id: int, tenant_id: int = Depends(get_current_tenant)):
     try:
         await svc.trial_service.delete(tenant_id, row_id)
-    except NotFoundError as e:
+    except (ValidationError, NotFoundError) as e:
+        raise _http_from_exc(e)
+
+
+@router.post(
+    "/mold-trials/{row_id}/submit",
+    response_model=MoldTrialResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:mold-trial:submit"))],
+)
+async def submit_mold_trial(
+    row_id: int,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        row = await svc.trial_service.submit(tenant_id, row_id, current_user=current_user)
+        return MoldTrialResponse.model_validate(row)
+    except (ValidationError, NotFoundError) as e:
+        raise _http_from_exc(e)
+
+
+@router.post(
+    "/mold-trials/{row_id}/approve",
+    response_model=MoldTrialResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:mold-trial:approve"))],
+)
+async def approve_mold_trial(
+    row_id: int,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        row = await svc.trial_service.approve(tenant_id, row_id, current_user=current_user)
+        return MoldTrialResponse.model_validate(row)
+    except (ValidationError, NotFoundError) as e:
+        raise _http_from_exc(e)
+
+
+@router.post(
+    "/mold-trials/{row_id}/reject",
+    response_model=MoldTrialResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:mold-trial:reject"))],
+)
+async def reject_mold_trial(
+    row_id: int,
+    body: MoldTrialReject,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        row = await svc.trial_service.reject(
+            tenant_id,
+            row_id,
+            body.reject_reason,
+            current_user=current_user,
+        )
+        return MoldTrialResponse.model_validate(row)
+    except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
 
 
@@ -350,6 +409,22 @@ async def delete_mold_borrow(row_id: int, tenant_id: int = Depends(get_current_t
 
 
 # ---------- 归还 ----------
+
+@router.get(
+    "/mold-returns/usage-preview",
+    response_model=MoldReturnUsagePreviewResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:mold-return:read"))],
+)
+async def preview_mold_return_usage(
+    borrow_id: int = Query(..., ge=1, description="领用单ID"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        data = await svc.return_service.preview_usage_from_borrow(tenant_id, borrow_id)
+        return MoldReturnUsagePreviewResponse.model_validate(data)
+    except (ValidationError, NotFoundError) as e:
+        raise _http_from_exc(e)
+
 
 @router.post(
     "/mold-returns",

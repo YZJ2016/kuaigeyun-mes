@@ -94,6 +94,14 @@ export type RepairOrder = {
   items?: RepairOrderItem[];
   created_at?: string;
   updated_at?: string;
+  capabilities?: {
+    update?: { allowed?: boolean; reason?: string | null };
+    delete?: { allowed?: boolean; reason?: string | null };
+    close?: { allowed?: boolean; reason?: string | null };
+    push_dispatch?: { allowed?: boolean; reason?: string | null };
+    push_settlement?: { allowed?: boolean; reason?: string | null };
+    push_return_visit?: { allowed?: boolean; reason?: string | null };
+  };
 };
 
 export type RepairOrderPayload = Partial<
@@ -292,6 +300,27 @@ export const repairOrderApi = {
     apiRequest<RepairOrder>(`${BASE}/repair-orders/${id}/close`, { method: 'POST' }),
   delete: (id: number) =>
     apiRequest<void>(`${BASE}/repair-orders/${id}`, { method: 'DELETE' }),
+  pushToDispatch: (id: number) =>
+    apiRequest<{
+      success: boolean;
+      message: string;
+      dispatch_id: number;
+      dispatch_code: string;
+    }>(`${BASE}/repair-orders/${id}/push-to-dispatch`, { method: 'POST' }),
+  pushToSettlement: (id: number) =>
+    apiRequest<{
+      success: boolean;
+      message: string;
+      settlement_id: number;
+      settlement_code: string;
+    }>(`${BASE}/repair-orders/${id}/push-to-settlement`, { method: 'POST' }),
+  pushToReturnVisit: (id: number) =>
+    apiRequest<{
+      success: boolean;
+      message: string;
+      visit_id: number;
+      visit_code: string;
+    }>(`${BASE}/repair-orders/${id}/push-to-return-visit`, { method: 'POST' }),
 };
 
 export const serviceDispatchApi = {

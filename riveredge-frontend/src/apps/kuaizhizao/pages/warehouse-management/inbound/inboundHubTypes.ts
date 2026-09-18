@@ -29,6 +29,8 @@ export type InboundHubPageProps = {
   scopedReceiptTypes?: readonly InboundReceiptType[];
   headerTitle?: string;
   columnPersistenceId?: string;
+  /** 功能权限资源；缺省为仓储入库。委外收货/退料/退货等独立菜单须传对应 manifest 模块。 */
+  permissionResource?: string;
 };
 
 export interface InboundHubOrder {
@@ -233,15 +235,27 @@ export function inboundSourceDocNo(record: InboundHubOrder): string {
 
 /** Hub 统一「日期」原始值：各入库类型字段名不一致（receipt_date / receipt_time / received_at / return_time 等） */
 export function resolveInboundHubDateRaw(record: InboundHubOrder): unknown {
-  return (
-    record.receipt_date ??
-    record.receipt_time ??
-    record.received_at ??
-    record.return_time ??
-    record.returned_at ??
-    record.registration_date ??
-    null
-  );
+  const row = record as Record<string, unknown>;
+  // 勿用 ?? 直接链：空字符串会挡住后面的 receipt_time（制单日期列变「-」）
+  const candidates = [
+    row.receipt_date,
+    row.receipt_time,
+    row.receiptTime,
+    row.received_at,
+    row.receivedAt,
+    row.return_time,
+    row.returnTime,
+    row.returned_at,
+    row.returnedAt,
+    row.registration_date,
+    row.registrationDate,
+  ];
+  for (const value of candidates) {
+    if (value == null) continue;
+    if (typeof value === 'string' && value.trim() === '') continue;
+    return value;
+  }
+  return null;
 }
 
 /** Hub 统一「操作员」：姓名字段优先；received_by 在委外收货上是用户 ID，不可当姓名 */
@@ -296,7 +310,9 @@ export type InboundHubQuickPullKey =
   | 'work_order'
   | 'production_return'
   | 'sales_return'
-  | 'outsource';
+  | 'outsource'
+  | 'finished_goods_inspection'
+  | 'incoming_inspection';
 
 const INBOUND_PULL_ACTION_RECEIPT_TYPES: Partial<
   Record<KuaizhizaoDocumentActionKey, readonly InboundReceiptType[]>
@@ -311,6 +327,8 @@ const INBOUND_PULL_ACTION_RECEIPT_TYPES: Partial<
     'outsource_material_return',
     'outsource_product_return',
   ],
+  'inbound.pull_from_finished_goods_inspection': ['finished_goods', 'semi_finished_goods'],
+  'inbound.pull_from_incoming_inspection': ['purchase'],
 };
 
 const INBOUND_QUICK_PULL_KEY_RECEIPT_TYPES: Record<
@@ -323,6 +341,8 @@ const INBOUND_QUICK_PULL_KEY_RECEIPT_TYPES: Record<
   production_return: ['production_return'],
   sales_return: ['sales_return'],
   outsource: ['outsource_receipt', 'outsource_material_return', 'outsource_product_return'],
+  finished_goods_inspection: ['finished_goods', 'semi_finished_goods'],
+  incoming_inspection: ['purchase'],
 };
 
 function inboundPullTargetsOverlapScope(
@@ -357,7 +377,9 @@ export function resolveDefaultInboundQuickPullKey(
   const order: InboundHubQuickPullKey[] = [
     'purchase_order',
     'receipt_notice',
+    'incoming_inspection',
     'work_order',
+    'finished_goods_inspection',
     'production_return',
     'sales_return',
     'outsource',

@@ -39,6 +39,15 @@ const asList = <T,>(res: unknown): T[] => {
   return obj?.data ?? obj?.items ?? obj?.entries ?? [];
 };
 
+const extractDetailLedgerEntries = (res: unknown): Row[] => {
+  if (Array.isArray(res)) return res as Row[];
+  if (!res || typeof res !== 'object') return [];
+  const payload = res as { entries?: unknown; data?: { entries?: unknown } };
+  if (Array.isArray(payload.entries)) return payload.entries as Row[];
+  if (payload.data && Array.isArray(payload.data.entries)) return payload.data.entries as Row[];
+  return asList<Row>(res);
+};
+
 type Row = Record<string, unknown>;
 
 const GlCashierPage: React.FC = () => {
@@ -49,7 +58,7 @@ const GlCashierPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('journal');
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [kind, setKind] = useState<'cash' | 'bank'>('cash');
+  const [kind, setKind] = useState<'cash' | 'bank'>('bank');
   const [accounts, setAccounts] = useState<GlAccount[]>([]);
   const [glAccountId, setGlAccountId] = useState<number | undefined>();
   const [loading, setLoading] = useState(false);
@@ -70,8 +79,13 @@ const GlCashierPage: React.FC = () => {
         if (!cancelled) {
           const list = asList<GlAccount>(res);
           setAccounts(list);
-          const bankOrCash = list.find((a) => a.is_bank_journal || a.is_cash_journal);
-          if (bankOrCash) setGlAccountId(bankOrCash.id);
+          const bankAcc = list.find((a) => a.is_bank_journal);
+          const cashAcc = list.find((a) => a.is_cash_journal);
+          const bankOrCash = bankAcc || cashAcc;
+          if (bankOrCash) {
+            setGlAccountId(bankOrCash.id);
+            setKind(bankAcc ? 'bank' : 'cash');
+          }
         }
       } catch {
         if (!cancelled) setAccounts([]);
@@ -93,13 +107,13 @@ const GlCashierPage: React.FC = () => {
   const loadJournal = useCallback(async () => {
     setLoading(true);
     try {
-      const res = (await glService.cashierJournal({
+      const res = await glService.cashierJournal({
         year,
         month,
         kind,
         account_id: glAccountId,
-      })) as { entries?: Row[] };
-      setJournalRows(asList<Row>(res?.entries ?? res));
+      });
+      setJournalRows(extractDetailLedgerEntries(res));
     } catch (error) {
       messageApi.error(getApiErrorMessage(error, t('common.loadFailed', { defaultValue: '加载失败' })));
       setJournalRows([]);
@@ -119,6 +133,7 @@ const GlCashierPage: React.FC = () => {
         gl_account_id: glAccountId,
         year,
         month,
+        sync_enterprise: true,
       });
       setReconcileRows(asList<Row>(res));
       setSelectedKeys([]);
@@ -211,6 +226,28 @@ const GlCashierPage: React.FC = () => {
     } catch (error) {
       messageApi.error(getApiErrorMessage(error, t('common.saveFailed', { defaultValue: '保存失败' })));
     }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'journal') {
+      void loadJournal();
+      return;
+    }
+    if (!glAccountId) return;
+    if (activeTab === 'reconcile') {
+      void loadReconcile();
+    } else if (activeTab === 'adjustment') {
+      void loadAdjustment();
+    } else if (activeTab === 'cheques') {
+      void loadCheques();
+    }
+  }, [activeTab, year, month, kind, glAccountId, loadJournal, loadReconcile, loadAdjustment, loadCheques]);
+
+  const handleAccountChange = (accountId?: number) => {
+    setGlAccountId(accountId);
+    const acc = accounts.find((a) => a.id === accountId);
+    if (acc?.is_bank_journal) setKind('bank');
+    else if (acc?.is_cash_journal) setKind('cash');
   };
 
   const money = (v: unknown) => formatAmount(v ?? 0);
@@ -336,7 +373,7 @@ const GlCashierPage: React.FC = () => {
           style={{ minWidth: 260 }}
           options={accountOptions}
           value={glAccountId}
-          onChange={setGlAccountId}
+          onChange={handleAccountChange}
           placeholder={t(`${NS}.selectAccount`, { defaultValue: '请选择总账科目' })}
         />
       )}
@@ -382,7 +419,7 @@ const GlCashierPage: React.FC = () => {
                 style={{ minWidth: 260 }}
                 options={accountOptions}
                 value={glAccountId}
-                onChange={setGlAccountId}
+                onChange={handleAccountChange}
                 placeholder={t(`${NS}.optionalAccount`, { defaultValue: '科目（可选）' })}
               />
               <Button type="primary" loading={loading} onClick={() => void loadJournal()}>

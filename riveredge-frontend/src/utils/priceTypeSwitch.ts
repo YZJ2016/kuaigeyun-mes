@@ -1,5 +1,8 @@
 import type { PriceTypeValue } from '../components/price-type-switch/PriceTypeSwitch';
-import { convertDocumentLineForPriceTypeChange } from '../apps/kuaizhizao/utils/documentLineAmounts';
+import {
+  convertDocumentLineForPriceTypeChange,
+  withExclusiveUnitAnchorOnPriceTypeSwitch,
+} from '../apps/kuaizhizao/utils/documentLineAmounts';
 
 type FormLike = {
   getFieldValue: (name: string | string[]) => unknown;
@@ -63,11 +66,13 @@ export function deferConvertLineItemsByPriceType(
           toPriceType: toType,
           priceDecimals,
         });
-        return {
-          ...row,
-          unit_price: converted.unit_price,
-          item_amount: converted.item_amount,
-        };
+        return withExclusiveUnitAnchorOnPriceTypeSwitch(
+          row,
+          converted,
+          fromType,
+          toType,
+          row?.tax_rate,
+        );
       });
       form.setFieldsValue({
         price_type: toType,

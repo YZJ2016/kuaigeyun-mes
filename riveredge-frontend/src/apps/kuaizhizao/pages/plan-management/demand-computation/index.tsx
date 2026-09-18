@@ -138,6 +138,11 @@ import { MrpParametersCustomerGuideTrigger } from './MrpParametersCustomerGuide'
 import { readinessFieldHelpI18nKey } from './readinessFieldHelp'
 import { buildDemandPushPreviewSummary } from './pushPreviewSummary'
 import { renderPushPreviewTargetBadge } from './pushPreviewTargetBadge'
+import {
+  EMPTY_DEMAND_PUSH_PREVIEW_FILTERS,
+  filterDemandPushPreviewItems,
+  type DemandPushPreviewFilters,
+} from './demandPushPreviewFilter'
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns'
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar'
 import { resolveDownstreamPushPercent } from '../../sales-management/shared/pushProgress'
@@ -871,7 +876,14 @@ const DemandComputationPage: React.FC = () => {
   const [pushPreviewLoadError, setPushPreviewLoadError] = useState<string | null>(null)
   const [pushMode, setPushMode] = useState<'draft' | 'confirm'>('draft')
   const [pushSelectedItemIds, setPushSelectedItemIds] = useState<number[]>([])
+  const [pushPreviewFilters, setPushPreviewFilters] = useState<DemandPushPreviewFilters>(
+    EMPTY_DEMAND_PUSH_PREVIEW_FILTERS,
+  )
   const [includeSalesOrderAttachments, setIncludeSalesOrderAttachments] = useState(false)
+  const pushPreviewFilteredItems = useMemo(
+    () => filterDemandPushPreviewItems(pushPreviewData?.items ?? [], pushPreviewFilters),
+    [pushPreviewData?.items, pushPreviewFilters],
+  )
   const pushPreviewMergedSummary = useMemo(
     () => (pushPreviewData ? buildDemandPushPreviewSummary(pushPreviewData, t) : null),
     [pushPreviewData, t],
@@ -1968,6 +1980,8 @@ const DemandComputationPage: React.FC = () => {
     setPushPreviewData(null)
     setPushPreviewLoadError(null)
     setPushMode('draft')
+    setPushSelectedItemIds([])
+    setPushPreviewFilters(EMPTY_DEMAND_PUSH_PREVIEW_FILTERS)
   }, [])
 
   const handleOpenComputationFromInbox = useCallback(
@@ -2028,6 +2042,8 @@ const DemandComputationPage: React.FC = () => {
           setPushPreviewData(null)
           setPushPreviewLoadError(null)
           setPushMode('draft')
+          setPushSelectedItemIds([])
+          setPushPreviewFilters(EMPTY_DEMAND_PUSH_PREVIEW_FILTERS)
           return
         }
 
@@ -3132,6 +3148,7 @@ const DemandComputationPage: React.FC = () => {
           setPushMode('draft')
           setPushConfig({})
           setPushSelectedItemIds([])
+          setPushPreviewFilters(EMPTY_DEMAND_PUSH_PREVIEW_FILTERS)
           setIncludeSalesOrderAttachments(false)
         }}
       >
@@ -3240,28 +3257,82 @@ const DemandComputationPage: React.FC = () => {
                   />
                 ) : null}
                 {(pushPreviewData.items?.length ?? 0) > 0 ? (
-                  <Table
+                  <>
+                    <Row gutter={[12, 8]} align="middle">
+                      <Col xs={24} sm={8}>
+                        <Input
+                          allowClear
+                          placeholder={t(
+                            'app.kuaizhizao.demandComputation.pushPreviewFilterMaterialName',
+                          )}
+                          value={pushPreviewFilters.materialName}
+                          onChange={(event) =>
+                            setPushPreviewFilters((current) => ({
+                              ...current,
+                              materialName: event.target.value,
+                            }))
+                          }
+                        />
+                      </Col>
+                      <Col xs={24} sm={8}>
+                        <Input
+                          allowClear
+                          placeholder={t(
+                            'app.kuaizhizao.demandComputation.pushPreviewFilterMaterialGroup',
+                          )}
+                          value={pushPreviewFilters.materialGroupName}
+                          onChange={(event) =>
+                            setPushPreviewFilters((current) => ({
+                              ...current,
+                              materialGroupName: event.target.value,
+                            }))
+                          }
+                        />
+                      </Col>
+                      <Col xs={24} sm={8}>
+                        <Input
+                          allowClear
+                          placeholder={t(
+                            'app.kuaizhizao.demandComputation.pushPreviewFilterMaterialSpec',
+                          )}
+                          value={pushPreviewFilters.materialSpec}
+                          onChange={(event) =>
+                            setPushPreviewFilters((current) => ({
+                              ...current,
+                              materialSpec: event.target.value,
+                            }))
+                          }
+                        />
+                      </Col>
+                    </Row>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {t('app.kuaizhizao.demandComputation.pushPreviewFilterHint')}
+                    </Typography.Text>
+                    <Table
                     size="small"
-                    dataSource={pushPreviewData.items}
+                    dataSource={pushPreviewFilteredItems}
                     rowKey={demandPushPreviewRowKey}
                     pagination={false}
-                    scroll={{ x: 1000 }}
+                    scroll={{ x: 1180 }}
                     rowSelection={
                       demandPushPreviewNeedsLineSelection(pushConfig)
                         ? {
-                            selectedRowKeys: (pushPreviewData.items || [])
+                            selectedRowKeys: pushPreviewFilteredItems
                               .filter((row) =>
                                 pushSelectedItemIds.includes(Number(row.item_id)),
                               )
                               .map(demandPushPreviewRowKey),
                             onChange: (_keys, selectedRows) => {
-                              setPushSelectedItemIds(
-                                Array.from(
-                                  new Set(
-                                    selectedRows.map((row) => Number(row.item_id)),
-                                  ),
-                                ),
+                              const visibleItemIds = new Set(
+                                pushPreviewFilteredItems.map((row) => Number(row.item_id)),
                               )
+                              const selectedVisibleIds = selectedRows.map((row) =>
+                                Number(row.item_id),
+                              )
+                              setPushSelectedItemIds((prev) => {
+                                const kept = prev.filter((id) => !visibleItemIds.has(id))
+                                return Array.from(new Set([...kept, ...selectedVisibleIds]))
+                              })
                             },
                             getCheckboxProps: (row) => ({
                               disabled: !isDemandPushPreviewLineSelectable(row, pushConfig),
@@ -3281,6 +3352,20 @@ const DemandComputationPage: React.FC = () => {
                         dataIndex: 'material_name',
                         width: 160,
                         ellipsis: true,
+                      },
+                      {
+                        title: t('app.master-data.materials.materialGroup'),
+                        dataIndex: 'material_group_name',
+                        width: 120,
+                        ellipsis: true,
+                        render: (value: string | null | undefined) => value || '-',
+                      },
+                      {
+                        title: t('app.kuaizhizao.salesOrder.materialSpec'),
+                        dataIndex: 'material_spec',
+                        width: 120,
+                        ellipsis: true,
+                        render: (value: string | null | undefined) => value || '-',
                       },
                       {
                         title: t('app.kuaizhizao.demandComputation.pushPreviewColTarget'),
@@ -3315,6 +3400,7 @@ const DemandComputationPage: React.FC = () => {
                       },
                     ]}
                   />
+                  </>
                 ) : (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}

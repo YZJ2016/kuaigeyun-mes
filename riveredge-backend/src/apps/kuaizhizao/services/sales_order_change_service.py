@@ -35,6 +35,7 @@ from apps.kuaizhizao.services.document_action_policy.sales_order_change import (
 from apps.kuaizhizao.services.order_change.helpers import (
     infer_change_category,
     is_source_order_locked_for_direct_edit,
+    item_has_change_content,
     line_amount,
     resolve_sales_line_change,
 )
@@ -93,12 +94,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             return True
         if doc.header_changes:
             return True
-        for i in items:
-            if i.change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value):
-                return True
-            if Decimal(str(i.delta_amount or 0)) != 0:
-                return True
-        return False
+        return any(item_has_change_content(i) for i in items)
 
     async def _next_version(self, tenant_id: int, source_order_id: int) -> int:
         count = await SalesOrderChangeOrder.filter(
@@ -491,19 +487,11 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             if lifecycle_stage and lifecycle.get("current_stage_key") != lifecycle_stage:
                 continue
             doc_items = items_by_change.get(doc.id, [])
-            has_content = False
-            if Decimal(str(doc.delta_amount or 0)) != 0:
-                has_content = True
-            elif doc.header_changes:
-                has_content = True
-            else:
-                for i in doc_items:
-                    if i.change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value):
-                        has_content = True
-                        break
-                    if Decimal(str(i.delta_amount or 0)) != 0:
-                        has_content = True
-                        break
+            has_content = (
+                Decimal(str(doc.delta_amount or 0)) != 0
+                or bool(doc.header_changes)
+                or any(item_has_change_content(i) for i in doc_items)
+            )
             row = SalesOrderChangeListResponse(
                 id=doc.id,
                 change_code=doc.change_code,

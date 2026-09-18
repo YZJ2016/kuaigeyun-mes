@@ -21,8 +21,9 @@ from apps.kuaizhizao.schemas.equipment import (
     EquipmentUpdate,
     EquipmentCalibrationCreate,
     EquipmentCalibrationCreateWithEquipment,
+    EquipmentCalibrationUpdate,
 )
-from apps.common.audit_actor import apply_create_audit
+from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -402,6 +403,124 @@ class EquipmentService:
             tenant_id, equipment, calib
         )
         return calib
+
+    @staticmethod
+    async def get_equipment_calibration_by_uuid(
+        tenant_id: int,
+        calib_uuid: str,
+    ) -> EquipmentCalibration:
+        calib = await EquipmentCalibration.filter(
+            tenant_id=tenant_id,
+            uuid=calib_uuid,
+            deleted_at__isnull=True,
+        ).first()
+        if not calib:
+            raise NotFoundError(f"校准记录不存在: {calib_uuid}")
+        return calib
+
+    @staticmethod
+    async def _resync_equipment_from_calibrations(
+        equipment: Equipment,
+    ) -> Optional[EquipmentCalibration]:
+        """按最新未删除校准记录回写设备上次/下次校验日期。"""
+        latest = (
+            await EquipmentCalibration.filter(
+                tenant_id=equipment.tenant_id,
+                equipment_id=equipment.id,
+                deleted_at__isnull=True,
+            )
+            .order_by("-calibration_date", "-id")
+            .first()
+        )
+        if not latest:
+            equipment.last_calibration_date = None
+            equipment.next_calibration_date = None
+            await equipment.save()
+            return None
+        await EquipmentService._apply_calibration_to_equipment(
+            equipment, latest.calibration_date, latest.expiry_date
+        )
+        return latest
+
+    @staticmethod
+    async def update_equipment_calibration(
+        tenant_id: int,
+        calib_uuid: str,
+        data: EquipmentCalibrationUpdate,
+        current_user: Optional[User] = None,
+    ) -> EquipmentCalibration:
+        """更新设备校验记录"""
+        from apps.kuaizhizao.constants.calibration_plan_types import (
+            CALIBRATION_PLAN_EXTERNAL,
+            CALIBRATION_PLAN_TYPES,
+        )
+
+        calib = await EquipmentService.get_equipment_calibration_by_uuid(tenant_id, calib_uuid)
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, calib.equipment_uuid)
+
+        if "plan_type" in data.model_fields_set and data.plan_type is not None:
+            plan_type = data.plan_type.strip().lower()
+            if plan_type not in CALIBRATION_PLAN_TYPES:
+                raise ValidationError(f"非法校准计划类型: {plan_type}")
+            calib.plan_type = plan_type
+        if "calibration_date" in data.model_fields_set and data.calibration_date is not None:
+            calib.calibration_date = data.calibration_date
+        if "result" in data.model_fields_set and data.result is not None:
+            calib.result = data.result
+        if "certificate_no" in data.model_fields_set:
+            calib.certificate_no = data.certificate_no
+        if "expiry_date" in data.model_fields_set:
+            calib.expiry_date = data.expiry_date
+        if "attachment_uuid" in data.model_fields_set:
+            calib.attachment_uuid = data.attachment_uuid
+        if "attachments" in data.model_fields_set:
+            calib.attachments = data.attachments
+        if "remark" in data.model_fields_set:
+            calib.remark = data.remark
+
+        plan_type = (calib.plan_type or "").strip().lower()
+        if plan_type == CALIBRATION_PLAN_EXTERNAL and not calib.expiry_date:
+            raise ValidationError("外校记录须填写计量到期日")
+
+        apply_update_audit(calib, current_user)
+        await calib.save()
+        latest = await EquipmentService._resync_equipment_from_calibrations(equipment)
+        from apps.kuaizhizao.services.equipment_calibration_reminder_service import (
+            EquipmentCalibrationReminderService,
+        )
+
+        sync_calib = latest or calib
+        await EquipmentCalibrationReminderService.sync_after_calibration_saved(
+            tenant_id, equipment, sync_calib
+        )
+        return calib
+
+    @staticmethod
+    async def delete_equipment_calibration(
+        tenant_id: int,
+        calib_uuid: str,
+        current_user: Optional[User] = None,
+    ) -> None:
+        """软删除设备校验记录，并回写设备校准日期与提醒。"""
+        calib = await EquipmentService.get_equipment_calibration_by_uuid(tenant_id, calib_uuid)
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, calib.equipment_uuid)
+        calib.deleted_at = resolve_business_datetime()
+        apply_update_audit(calib, current_user)
+        await calib.save()
+        latest = await EquipmentService._resync_equipment_from_calibrations(equipment)
+        from apps.kuaizhizao.services.equipment_calibration_reminder_service import (
+            EquipmentCalibrationReminderService,
+        )
+
+        await EquipmentCalibrationReminderService.stop_for_equipment(
+            tenant_id,
+            equipment.id,
+            reason="校准记录删除",
+        )
+        if latest:
+            await EquipmentCalibrationReminderService.schedule_external_due(
+                tenant_id, equipment, latest
+            )
 
     @staticmethod
     async def _resolve_equipment_ids_by_nature(

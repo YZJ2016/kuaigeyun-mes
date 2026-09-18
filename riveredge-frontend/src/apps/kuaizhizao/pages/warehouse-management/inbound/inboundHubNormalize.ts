@@ -203,9 +203,14 @@ export function normalizeInboundHubDetail(
 
   const dateRaw = resolveInboundHubDateRaw(row as InboundHubOrder);
   const operator = resolveInboundHubOperator(row as InboundHubOrder);
+  let receiptDate: string | undefined;
+  if (dateRaw != null && String(dateRaw).trim() !== '') {
+    const text = String(dateRaw).trim();
+    receiptDate = /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : text;
+  }
   return {
     ...(row as InboundHubOrder),
-    ...(dateRaw != null && String(dateRaw).trim() !== '' ? { receipt_date: String(dateRaw) } : {}),
+    ...(receiptDate ? { receipt_date: receiptDate } : {}),
     ...(operator ? { received_by: operator, received_by_name: operator } : {}),
   };
 }

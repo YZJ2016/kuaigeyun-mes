@@ -2456,6 +2456,8 @@ class ReportService:
                     "status": status,
                     "warehouse_id": resolved_wh_id,
                     "warehouse_name": resolved_wh_name,
+                    "location_id": getattr(b, "location_id", None),
+                    "location_code": getattr(b, "location_code", None),
                 })
         for l in lines:
             qty = float((l.quantity or 0) - (l.reserved_quantity or 0))
@@ -2483,6 +2485,8 @@ class ReportService:
                 "status": status,
                 "warehouse_id": wh_id,
                 "warehouse_name": self._normalize_warehouse_display_name(wh_name),
+                "location_id": getattr(l, "location_id", None),
+                "location_code": getattr(l, "location_code", None),
             })
         return rows
 
@@ -2816,11 +2820,17 @@ class ReportService:
                     "status": "无库存",
                     "warehouse_id": warehouse_id_key if warehouse_id_key > 0 else None,
                     "warehouse_name": warehouse_name,
+                    "_location_codes": set(),
                 }
             grouped[key]["quantity"] += float(it.get("quantity") or 0)
+            loc_code = str(it.get("location_code") or "").strip()
+            if loc_code:
+                grouped[key]["_location_codes"].add(loc_code)
         balances = list(grouped.values())
         for b in balances:
             b["status"] = "在库" if float(b.get("quantity") or 0) > 0 else "无库存"
+            loc_codes = b.pop("_location_codes", set())
+            b["location_code"] = "、".join(sorted(loc_codes)) if loc_codes else None
         await self._enrich_inventory_balance_material_fields(tenant_id, balances)
         balances = self._apply_inventory_filters(
             balances,

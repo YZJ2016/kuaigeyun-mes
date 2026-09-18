@@ -11,6 +11,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspens
 import type { TFunction } from 'i18next';
 import { rowActionKind, rowActionCreateRefund } from '../../../../../components/uni-action';
 import { useNavigate } from 'react-router-dom';
+import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
 import {
   receiptRefundService,
   RECEIPT_REFUND_RESOURCE,
@@ -865,6 +866,10 @@ const SalesReturnsPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.salesReturn.detailFailed'));
     }
   };
+
+  useDocumentHighlightDeepLink(
+    useCallback((id: number) => handleDetail({ id }), [messageApi, t]),
+  );
 
   const buildSalesReturnItemsPayload = (items: any[]) =>
     (items || []).map((it) => {

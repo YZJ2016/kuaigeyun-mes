@@ -273,6 +273,27 @@ const BatchingCenterPage: React.FC = () => {
       .finally(() => setDetailLoading(false));
   }, [messageApi, t]);
 
+  const batchingDeepLinkOpenedRef = useRef(false);
+  useEffect(() => {
+    const highlightRaw = searchParams.get('highlight')?.trim();
+    const tab = searchParams.get('tab')?.trim();
+    if (tab === 'material_call') {
+      setActiveTabKey('material_call');
+    }
+    if (!highlightRaw) {
+      batchingDeepLinkOpenedRef.current = false;
+      return;
+    }
+    if (batchingDeepLinkOpenedRef.current) {
+      return;
+    }
+    batchingDeepLinkOpenedRef.current = true;
+    const id = Number(highlightRaw);
+    if (Number.isFinite(id) && id > 0) {
+      openMaterialCenterDetail({ kind: 'material_call', id });
+    }
+  }, [openMaterialCenterDetail, searchParams]);
+
   const closeMaterialCenterDetail = useCallback(() => {
     setDetailOpen(false);
     setDetailRequest(null);

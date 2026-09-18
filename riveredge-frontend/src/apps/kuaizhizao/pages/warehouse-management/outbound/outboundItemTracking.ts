@@ -101,12 +101,17 @@ export function buildOutboundConfirmPayloadFromForm(
   if (header?.deliverer_name) headerFields.deliverer_name = header.deliverer_name;
 
   if (outboundType === 'sales_delivery') {
+    const hasMultiBatch = items.some((it) => (it.batch_allocations?.length ?? 0) > 1);
     return {
       ...headerFields,
-      item_batches: items.map((it) => ({
-        item_id: it.item_id,
-        batch_no: String(it.batch_no ?? it.batch_number ?? ''),
-      })),
+      ...(hasMultiBatch
+        ? {}
+        : {
+            item_batches: items.map((it) => ({
+              item_id: it.item_id,
+              batch_no: String(it.batch_no ?? it.batch_number ?? ''),
+            })),
+          }),
       items,
     };
   }

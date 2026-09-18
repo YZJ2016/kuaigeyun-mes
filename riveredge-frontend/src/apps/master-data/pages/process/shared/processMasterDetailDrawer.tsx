@@ -12,6 +12,7 @@ import {
   DRAWER_CONFIG,
   detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
+import { useDetailDrawerFeatures } from '../../../../../hooks/useDetailDrawerFeatures';
 import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
@@ -42,6 +43,8 @@ export type ProcessMasterDetailDrawerProps<T extends Record<string, any>> = {
   lines?: React.ReactNode;
   /** 基本信息 Descriptions 列数，默认 2 */
   basicColumn?: 1 | 2;
+  /** timeconfig 单据类型（与 detailDrawerTimeFields 目录一致） */
+  documentType?: string;
 };
 
 export function ProcessMasterDetailDrawer<T extends Record<string, any>>({
@@ -63,8 +66,10 @@ export function ProcessMasterDetailDrawer<T extends Record<string, any>>({
   linesTitle,
   lines,
   basicColumn = 2,
+  documentType,
 }: ProcessMasterDetailDrawerProps<T>) {
   const { t } = useTranslation();
+  const { basicUpdatedAtEnabled, timeFieldHidden } = useDetailDrawerFeatures();
 
   const contentReady = Boolean(detail);
   const showError = Boolean(error) && !contentReady && !loading;
@@ -121,7 +126,11 @@ export function ProcessMasterDetailDrawer<T extends Record<string, any>>({
           <Descriptions
             column={basicColumn}
             size="small"
-            items={detailDrawerDescriptionItems(aligned, detail)}
+            items={detailDrawerDescriptionItems(aligned, detail, {
+              showUpdatedAt: basicUpdatedAtEnabled,
+              documentType,
+              timeFieldHidden,
+            })}
           />
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />

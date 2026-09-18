@@ -950,6 +950,7 @@ const WarehousesPage: React.FC = () => {
         onClose={handleCloseDetail}
         detail={warehouseDetail}
         detailColumns={detailColumns}
+        documentType="warehouse"
         loading={detailLoading}
         error={detailError}
         onRetry={() => {

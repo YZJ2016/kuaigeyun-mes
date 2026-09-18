@@ -61,6 +61,12 @@ import {
   loadBatchOptionsByMaterialId,
   type InventoryPickOption,
 } from '../outbound/outboundConfirmInventoryOptions';
+import OutboundBatchAllocationField from '../outbound/OutboundBatchAllocationField';
+import {
+  coerceBatchAllocationsDraft,
+  isValidOutboundBatchAllocations,
+  type OutboundBatchAllocation,
+} from '../outbound/outboundBatchAllocation';
 import {
   isMaterialBatchEntryEnabled,
   useWarehouseTrackingFlags,
@@ -186,6 +192,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const [productBatchLoading, setProductBatchLoading] = useState(false);
   const [itemBatchManaged, setItemBatchManaged] = useState(false);
   const [itemBatchOptions, setItemBatchOptions] = useState<InventoryPickOption[]>([]);
+  const [itemBatchAllocs, setItemBatchAllocs] = useState<OutboundBatchAllocation[]>([]);
   const [itemBatchLoading, setItemBatchLoading] = useState(false);
   const trackingFlags = useWarehouseTrackingFlags();
 
@@ -308,22 +315,23 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     setItemBatchManaged(enabled);
     if (!enabled) {
       setItemBatchOptions([]);
+      setItemBatchAllocs([]);
       itemFormRef.current?.setFieldsValue({ batch_number: undefined });
       return;
     }
     const mid = Number(materialId ?? material?.id ?? itemFormRef.current?.getFieldValue('material_id'));
     const wid = Number(currentOrder?.warehouse_id ?? 0);
     const options = await loadItemBatchOptions(mid, wid);
+    const qty = Number(itemFormRef.current?.getFieldValue('quantity') ?? 0);
     const preferred = String(preferBatch ?? itemFormRef.current?.getFieldValue('batch_number') ?? '').trim();
-    let next: string | undefined;
-    if (preferred && options.some((o) => o.value === preferred)) {
-      next = preferred;
-    } else if (options.length === 1) {
-      next = options[0].value;
+    const seeded = coerceBatchAllocationsDraft(preferred, qty);
+    if (seeded?.length && isValidOutboundBatchAllocations(seeded, options, qty)) {
+      setItemBatchAllocs(seeded);
+      itemFormRef.current?.setFieldsValue({ batch_number: seeded[0]?.batchNo });
     } else {
-      next = undefined;
+      setItemBatchAllocs([]);
+      itemFormRef.current?.setFieldsValue({ batch_number: undefined });
     }
-    itemFormRef.current?.setFieldsValue({ batch_number: next });
   };
 
   const resetProductBatchUi = () => {
@@ -334,6 +342,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const resetItemBatchUi = () => {
     setItemBatchManaged(false);
     setItemBatchOptions([]);
+    setItemBatchAllocs([]);
   };
 
   const loadTemplateOptions = async (productMaterialId?: number) => {
@@ -569,24 +578,46 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         messageApi.error(t('app.kuaizhizao.warehouseCommon.orderIdMissing', { noun: config.actionNoun }));
         return;
       }
+      const itemQty = Number(values.quantity || 0);
+      if (
+        config.stockConsumeKind === 'items' &&
+        itemBatchManaged &&
+        !editingItem?.id &&
+        !isValidOutboundBatchAllocations(itemBatchAllocs, itemBatchOptions, itemQty)
+      ) {
+        messageApi.error(
+          t('app.kuaizhizao.warehouseCommon.batchRequiredOutbound', {
+            defaultValue: '请按批号分摊出库数量',
+          }),
+        );
+        return;
+      }
       if (editingItem?.id) {
         await api.updateItem(String(currentOrderId), String(editingItem.id), {
-          quantity: Number(values.quantity || 0),
+          quantity: itemQty,
           unit_price: Number(values.unit_price || 0),
           batch_number: values.batch_number || undefined,
           remarks: values.remarks,
         });
         messageApi.success(config.updateItemSuccessText || t('app.kuaizhizao.warehouseCommon.updateItemSuccess', { noun: config.actionNoun }));
       } else {
-        await api.createItem(String(currentOrderId), {
-          material_id: values.material_id,
-          material_code: values.material_code || '',
-          material_name: values.material_name || '',
-          quantity: Number(values.quantity || 0),
-          unit_price: Number(values.unit_price || 0),
-          batch_number: values.batch_number || undefined,
-          remarks: values.remarks,
-        });
+        const batchLines =
+          config.stockConsumeKind === 'items' &&
+          itemBatchManaged &&
+          itemBatchAllocs.length
+            ? itemBatchAllocs.filter((a) => String(a.batchNo).trim() && Number(a.quantity) > 0)
+            : [{ batchNo: String(values.batch_number ?? ''), quantity: itemQty }];
+        for (const line of batchLines) {
+          await api.createItem(String(currentOrderId), {
+            material_id: values.material_id,
+            material_code: values.material_code || '',
+            material_name: values.material_name || '',
+            quantity: line.quantity,
+            unit_price: Number(values.unit_price || 0),
+            batch_number: line.batchNo || undefined,
+            remarks: values.remarks,
+          });
+        }
         messageApi.success(config.addItemSuccessText);
       }
       setItemModalVisible(false);
@@ -1143,7 +1174,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
             void syncItemOutboundBatch(mat, typeof mid === 'number' ? mid : undefined);
           }}
         />
-        {config.stockConsumeKind === 'items' && itemBatchManaged && (
+        {config.stockConsumeKind === 'items' && itemBatchManaged && editingItem ? (
           <AntForm.Item
             name="batch_number"
             label={t('app.kuaizhizao.warehouseCommon.colBatchNo')}
@@ -1168,7 +1199,21 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
               }
             />
           </AntForm.Item>
-        )}
+        ) : null}
+        {config.stockConsumeKind === 'items' && itemBatchManaged && !editingItem ? (
+          <AntForm.Item label={t('app.kuaizhizao.warehouseCommon.colBatchNo')} required>
+            <OutboundBatchAllocationField
+              value={itemBatchAllocs}
+              onChange={(next) => {
+                setItemBatchAllocs(next);
+                itemFormRef.current?.setFieldsValue({ batch_number: next[0]?.batchNo });
+              }}
+              options={itemBatchOptions}
+              totalQuantity={Number(itemFormRef.current?.getFieldValue('quantity') ?? 0)}
+              loading={itemBatchLoading}
+            />
+          </AntForm.Item>
+        ) : null}
         <ProFormDigit
           name="quantity"
           label={t('common.quantity')}

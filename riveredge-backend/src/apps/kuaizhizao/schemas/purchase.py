@@ -172,6 +172,12 @@ class PurchaseOrderItemBase(BaseSchema):
     provisional_unit_price: Optional[Decimal] = Field(None, ge=0, description="暂估参考单价")
     received_quantity: Decimal = Field(default=Decimal(0), ge=0, description="已到货数量")
     outstanding_quantity: Decimal = Field(default=Decimal(0), ge=0, description="未到货数量")
+    max_receivable_quantity: Optional[Decimal] = Field(
+        None, ge=0, description="容差后剩余可收数量（含超收）"
+    )
+    over_receipt_tolerance_pct: Optional[Decimal] = Field(
+        None, ge=0, le=100, description="解析后的超收容差百分数"
+    )
     required_date: date = Field(..., description="要求到货日期")
     actual_delivery_date: Optional[date] = Field(None, description="实际到货日期")
     quality_requirements: Optional[str] = Field(None, description="质量要求")

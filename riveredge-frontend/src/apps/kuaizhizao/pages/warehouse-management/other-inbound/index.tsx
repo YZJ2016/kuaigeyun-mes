@@ -42,7 +42,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
-import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
+import { materialApi, materialBatchApi, materialSerialApi, MATERIAL_SERIAL_GENERATE_MAX_COUNT } from '../../../../master-data/services/material';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
@@ -700,8 +700,12 @@ const OtherInboundPage: React.FC = () => {
       return [];
     }
     const count = Math.max(1, Math.floor(Number(row.inbound_quantity) || 1));
-    if (count > 100) {
-      messageApi.warning(t('app.kuaizhizao.warehouseOtherInbound.msg.serialMax100'));
+    if (count > MATERIAL_SERIAL_GENERATE_MAX_COUNT) {
+      messageApi.warning(
+        t('app.kuaizhizao.warehouseOtherInbound.msg.serialMax100', {
+          max: MATERIAL_SERIAL_GENERATE_MAX_COUNT,
+        }),
+      );
       return [];
     }
     setGeneratingSerialIdx(idx);

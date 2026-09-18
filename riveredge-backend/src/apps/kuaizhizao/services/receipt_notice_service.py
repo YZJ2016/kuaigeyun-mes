@@ -76,6 +76,69 @@ RECEIPT_NOTICE_SORTABLE_FIELDS = frozenset({
     "updated_at",
 })
 
+_PURCHASE_RECEIPT_RECEIVED_STATUSES = frozenset(
+    {"已入库", "已完成", "completed", "COMPLETED"},
+)
+_PURCHASE_RECEIPT_OPEN_STATUSES = frozenset(
+    {"草稿", "draft", "DRAFT", "待入库"},
+)
+
+
+async def sync_receipt_notice_status_from_purchase_receipt(
+    tenant_id: int,
+    purchase_receipt_id: int,
+    *,
+    updated_by: int | None = None,
+) -> int:
+    """采购入库过账/撤回后，同步关联收货通知单 status（已通知 ↔ 已入库）。"""
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+    receipt = await PurchaseReceipt.get_or_none(
+        tenant_id=tenant_id, id=purchase_receipt_id, deleted_at__isnull=True
+    )
+    if not receipt:
+        return 0
+
+    pr_status = str(receipt.status or "").strip()
+    if pr_status in _PURCHASE_RECEIPT_RECEIVED_STATUSES:
+        new_status = "已入库"
+        from_statuses = ("已通知",)
+    elif pr_status in _PURCHASE_RECEIPT_OPEN_STATUSES:
+        new_status = "已通知"
+        from_statuses = ("已入库",)
+    else:
+        return 0
+
+    update_fields: Dict[str, Any] = {"status": new_status}
+    if updated_by is not None:
+        update_fields["updated_by"] = updated_by
+
+    return await ReceiptNotice.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        purchase_receipt_id=purchase_receipt_id,
+        status__in=list(from_statuses),
+    ).update(**update_fields)
+
+
+async def repair_stale_receipt_notice_received_statuses(tenant_id: int) -> int:
+    """回填仍为已通知但关联采购入库已完成的收货通知单（幂等）。"""
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+    completed_ids = await PurchaseReceipt.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        status__in=list(_PURCHASE_RECEIPT_RECEIVED_STATUSES),
+    ).values_list("id", flat=True)
+    if not completed_ids:
+        return 0
+    return await ReceiptNotice.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        status="已通知",
+        purchase_receipt_id__in=list(completed_ids),
+    ).update(status="已入库")
+
 
 class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
     """收货通知单服务"""
@@ -294,6 +357,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         **filters
     ) -> Dict[str, Any]:
         """获取收货通知单列表（含 capabilities 与分页 total）。"""
+        await repair_stale_receipt_notice_received_statuses(tenant_id)
         query = ReceiptNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if filters.get("status"):
             query = query.filter(status=filters["status"])
@@ -396,6 +460,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         """按 status GROUP BY COUNT，供列表 KPI。"""
         from tortoise.functions import Count
 
+        await repair_stale_receipt_notice_received_statuses(tenant_id)
         rows = await (
             ReceiptNotice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
             .group_by("status")
@@ -490,6 +555,17 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             ).all()
             po_items_by_id = {int(it.id): it for it in po_items}
 
+        from apps.kuaizhizao.utils.over_qty_tolerance import (
+            OverQtyToleranceResolver,
+            max_remaining_after_tolerance,
+        )
+
+        tolerance_resolver = OverQtyToleranceResolver(tenant_id)
+        material_ids = [
+            int(ni.material_id) for ni in notice_items if int(getattr(ni, "material_id", 0) or 0) > 0
+        ]
+        await tolerance_resolver.preload_materials(material_ids)
+
         preview_items: List[Dict[str, Any]] = []
         line_blocking_issues: List[str] = []
         for ni in notice_items:
@@ -502,10 +578,23 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             ordered = float(po_item.ordered_quantity or 0) if po_item else notice_qty
             received = float(po_item.received_quantity or 0) if po_item else 0.0
             outstanding = float(po_item.outstanding_quantity or 0) if po_item else notice_qty
-            if po_item is not None and notice_qty > outstanding:
+            max_receivable = outstanding
+            receipt_pct = Decimal("0")
+            if po_item is not None:
+                from decimal import Decimal as D
+
+                receipt_pct = await tolerance_resolver.resolve_over_receipt_pct(int(po_item.material_id))
+                max_receivable = float(
+                    max_remaining_after_tolerance(
+                        D(str(ordered)),
+                        D(str(received)),
+                        receipt_pct,
+                    )
+                )
+            if po_item is not None and notice_qty > max_receivable:
                 line_blocking_issues.append(
                     f"物料 {ni.material_code or ni.material_name} 的通知数量 {notice_qty} "
-                    f"超过未入库数量 {outstanding}"
+                    f"超过容差后剩余可收 {max_receivable}"
                 )
             preview_items.append(
                 {
@@ -517,8 +606,9 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
                     "material_name": str(ni.material_name or ""),
                     "quantity": ordered,
                     "pushed_quantity": received,
-                    "max_push_quantity": outstanding,
+                    "max_push_quantity": max_receivable,
                     "notice_quantity": notice_qty,
+                    "over_receipt_tolerance_pct": float(receipt_pct),
                 }
             )
 
@@ -624,10 +714,23 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
                 po_item = await PurchaseOrderItem.get_or_none(
                     tenant_id=tenant_id, id=ni.purchase_order_item_id
                 )
-            if po_item is not None and qty > po_item.outstanding_quantity:
-                raise ValidationError(
-                    f"物料 {ni.material_code} 的通知数量 {qty} 超过采购订单未入库数量 {po_item.outstanding_quantity}"
+            if po_item is not None:
+                from apps.kuaizhizao.utils.over_qty_tolerance import (
+                    OverQtyToleranceResolver,
+                    max_remaining_after_tolerance,
                 )
+
+                resolver = OverQtyToleranceResolver(tenant_id)
+                pct = await resolver.resolve_over_receipt_pct(int(po_item.material_id))
+                max_recv = max_remaining_after_tolerance(
+                    Decimal(str(po_item.ordered_quantity or 0)),
+                    Decimal(str(po_item.received_quantity or 0)),
+                    pct,
+                )
+                if qty > max_recv:
+                    raise ValidationError(
+                        f"物料 {ni.material_code} 的通知数量 {qty} 超过容差后剩余可收 {max_recv}"
+                    )
 
             line_wh_id = int(ni.warehouse_id) if getattr(ni, "warehouse_id", None) else int(wh_id)
             line_wh_name = getattr(ni, "warehouse_name", None)

@@ -200,18 +200,36 @@ def derive_quality_inspection_capabilities(
         max_push_inbound = max(0.0, qualified_qty - pushed_inbound_qty)
         inbound_ready = _fqc_inbound_push_ready(inspection, audit_required=fqc_audit_required)
         has_work_order = bool(getattr(inspection, "work_order_id", None))
-        if inbound_ready and has_work_order and max_push_inbound > 0:
-            push_inbound_cap = _cap(True)
-        elif inbound_ready and has_work_order and max_push_inbound <= 0:
-            push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.already_pushed")
-        elif not has_work_order:
-            push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.no_work_order")
-        elif qualified_qty <= 0:
-            push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.no_qualified")
-        elif not inbound_ready:
-            push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.not_passed")
+        source_type = _norm(getattr(inspection, "source_type", None))
+        has_po_source = source_type == "purchase_order" and bool(
+            getattr(inspection, "purchase_order_id", None)
+        )
+        if has_work_order:
+            if inbound_ready and max_push_inbound > 0:
+                push_inbound_cap = _cap(True)
+            elif inbound_ready and max_push_inbound <= 0:
+                push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.already_pushed")
+            elif qualified_qty <= 0:
+                push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.no_qualified")
+            elif not inbound_ready:
+                push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.not_passed")
+            else:
+                push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.not_allowed")
+        elif has_po_source:
+            if inbound_ready and max_push_inbound > 0:
+                push_inbound_cap = _cap(True)
+            elif inbound_ready and max_push_inbound <= 0:
+                push_inbound_cap = _cap(False, "incoming_inspection.push_inbound.already_pushed")
+            elif qualified_qty <= 0:
+                push_inbound_cap = _cap(False, "incoming_inspection.push_inbound.no_qualified")
+            elif not inbound_ready:
+                push_inbound_cap = _cap(False, "incoming_inspection.push_inbound.not_passed")
+            else:
+                push_inbound_cap = _cap(False, "incoming_inspection.push_inbound.not_allowed")
+        elif source_type in ("purchase_receipt", "customer_material_inbound", "purchase_order"):
+            push_inbound_cap = _cap(False, "incoming_inspection.push_inbound.no_purchase_order")
         else:
-            push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.not_allowed")
+            push_inbound_cap = _cap(False, "finished_goods_inspection.push_inbound.no_work_order")
 
     return QualityInspectionCapabilities(
         conduct=conduct_cap,

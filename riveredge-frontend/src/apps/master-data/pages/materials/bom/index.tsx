@@ -3941,6 +3941,7 @@ const BOMPage: React.FC = () => {
         }}
         detail={bomDetail}
         detailColumns={orderBomDetailBasicColumns(detailColumns)}
+        documentType="bom"
         customFields={bomListCustomFields}
         customFieldValues={bomDetailCustomFieldValues}
         extra={

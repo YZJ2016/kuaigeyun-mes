@@ -26,6 +26,7 @@ import {
   useDetailDrawerDescriptionItems,
 } from '../../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../../components/action-confirm';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import DocumentAttachmentsField from '../../../../components/DocumentAttachmentsField';
 import LineAttachmentsUpload from '../../../../components/LineAttachmentsUpload';
@@ -73,6 +74,7 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
   const { open: drawerVisible, loading: detailLoading, detail, openDetail, closeDetail } =
     useEquipmentDetailDrawer<CalibrationRecord>();
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<CalibrationRecord | null>(null);
   const formRef = useRef<any>(null);
   const [instrumentOptions, setInstrumentOptions] = useState<{ label: string; value: string }[]>([]);
 
@@ -91,6 +93,7 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
   }, []);
 
   const handleCreate = () => {
+    setEditingRecord(null);
     setModalVisible(true);
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ calibration_date: dayjs(), result: '合格', plan_type: 'external' });
@@ -106,10 +109,39 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
     [openDetail],
   );
 
+  const handleEdit = useCallback((record: CalibrationRecord) => {
+    setEditingRecord(record);
+    setModalVisible(true);
+    formRef.current?.setFieldsValue({
+      equipment_uuid: record.equipment_uuid,
+      plan_type: record.plan_type || 'external',
+      calibration_date: record.calibration_date ? dayjs(record.calibration_date) : undefined,
+      expiry_date: record.expiry_date ? dayjs(record.expiry_date) : undefined,
+      result: record.result,
+      certificate_no: record.certificate_no,
+      remark: record.remark,
+      attachments: record.attachments || [],
+    });
+  }, []);
+
+  const handleDelete = useCallback(
+    async (record: CalibrationRecord) => {
+      if (!record.uuid) return;
+      try {
+        await equipmentApi.deleteCalibrationRecord(record.uuid);
+        messageApi.success(t('common.deleteSuccess'));
+        actionRef.current?.reload();
+      } catch (e: unknown) {
+        const err = e as { message?: string };
+        messageApi.error(err?.message || t('common.deleteFailed'));
+      }
+    },
+    [messageApi, t],
+  );
+
   const handleSubmit = async (values: Record<string, unknown>) => {
     try {
-      await equipmentApi.createCalibrationRecord({
-        equipment_uuid: String(values.equipment_uuid ?? ''),
+      const payload = {
         plan_type: (values.plan_type as string) || 'external',
         calibration_date:
           (values.calibration_date as { format?: (f: string) => string })?.format?.('YYYY-MM-DD') ||
@@ -121,9 +153,18 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
           (values.expiry_date as string | undefined),
         remark: values.remark as string | undefined,
         attachments: normalizeDocumentAttachments(values.attachments),
-      });
+      };
+      if (editingRecord?.uuid) {
+        await equipmentApi.updateCalibrationRecord(editingRecord.uuid, payload);
+      } else {
+        await equipmentApi.createCalibrationRecord({
+          equipment_uuid: String(values.equipment_uuid ?? ''),
+          ...payload,
+        });
+      }
       messageApi.success(t(`${P}.saveSuccess`));
       setModalVisible(false);
+      setEditingRecord(null);
       actionRef.current?.reload();
     } catch (e: unknown) {
       const err = e as { message?: string };
@@ -270,17 +311,54 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
             key: 'option',
             fixed: 'right',
             hideInSearch: true,
-            render: (_, record) =>
-              perms.canRead ? (
-                <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
-                  {t('common.detail')}
-                </Button>
-              ) : null,
+            render: (_, record) => (
+              <>
+                {perms.canRead ? (
+                  <Button
+                    key="detail"
+                    {...rowActionKind('read')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDetail(record);
+                    }}
+                  >
+                    {t('common.detail')}
+                  </Button>
+                ) : null}
+                {perms.canUpdate ? (
+                  <Button
+                    key="edit"
+                    {...rowActionKind('update')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(record);
+                    }}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                ) : null}
+                {perms.canDelete ? (
+                  <ActionConfirmPopconfirm
+                    key="delete"
+                    title={t('common.deleteTitle')}
+                    onConfirm={() => void handleDelete(record)}
+                  >
+                    <Button
+                      {...rowActionKind('delete')}
+                      danger
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('common.delete')}
+                    </Button>
+                  </ActionConfirmPopconfirm>
+                ) : null}
+              </>
+            ),
           },
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [handleDetail, perms.canRead, t],
+    [handleDelete, handleDetail, handleEdit, perms.canDelete, perms.canRead, perms.canUpdate, t],
   );
 
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
@@ -296,7 +374,7 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<CalibrationRecord>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.measuring-instruments.calibrations-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.measuring-instruments.calibrations-v4"
           actionRef={actionRef}
           permissionResource={RESOURCE}
           enableRowSelection={perms.canExport}
@@ -350,10 +428,6 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
               messageApi.error(err?.message || t('common.exportFailed'));
             }
           }}
-          onRow={(record) => ({
-            onClick: () => perms.canRead && handleDetail(record),
-            style: { cursor: perms.canRead ? 'pointer' : undefined },
-          })}
           request={async (params, sort, _filter, searchFormValues) => {
             const listParams = resolveAssetWorkflowListParams(searchFormValues, sort, {
               docDateRangeKeys: ['calibration_date_range', 'calibrationDateRange'],
@@ -374,11 +448,14 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={t(`${P}.createModal`)}
+        title={editingRecord ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setEditingRecord(null);
+        }}
         onFinish={handleSubmit}
-        isEdit={false}
+        isEdit={Boolean(editingRecord)}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
         grid={false}
@@ -390,6 +467,7 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
               label={t(`${P}.formInstrument`)}
               options={instrumentOptions}
               showSearch
+              disabled={Boolean(editingRecord)}
               rules={[{ required: true, message: t(`${P}.formInstrumentRequired`) }]}
             />
           </Col>

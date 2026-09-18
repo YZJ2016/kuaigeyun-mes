@@ -100,6 +100,36 @@ def _attach_visual_scheduling_guidance(handled: Any, *, action: str, plan_adjust
     return handled
 
 
+def _purchase_requisition_deep_link(requisition_id: int) -> str:
+    return f"/apps/kuaizhizao/purchase-management/purchase-requisitions?highlight={requisition_id}"
+
+
+async def _attach_purchase_requisition_guidance(
+    handled: MaterialShortageExceptionResponse,
+    *,
+    tenant_id: int,
+    user_id: int,
+) -> MaterialShortageExceptionResponse:
+    from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+    result = await WorkOrderService().push_purchase_requisition_from_shortage(
+        tenant_id=tenant_id,
+        work_order_id=int(handled.work_order_id),
+        created_by=user_id,
+        material_ids=[int(handled.material_id)],
+    )
+    target = result.get("target_document") or {}
+    pr_id = target.get("id")
+    link = _purchase_requisition_deep_link(int(pr_id)) if pr_id else None
+    notice = str(result.get("message") or "已生成采购申请")
+    return handled.model_copy(
+        update={
+            "purchase_requisition_deep_link": link,
+            "purchase_notice": notice,
+        }
+    )
+
+
 def _require_perm(permission_code: str):
     return Depends(require_permission_codes(permission_code, check_abac=False))
 
@@ -263,11 +293,13 @@ async def handle_material_shortage_exception(
         alternative_material_id=alternative_material_id,
         remarks=remarks,
     )
-    return _attach_visual_scheduling_guidance(
-        handled,
-        action=action,
-        plan_adjust_actions={"purchase", "substitute", "adjust_plan", "expedite", "increase_resources"},
-    )
+    if action == "purchase":
+        return await _attach_purchase_requisition_guidance(
+            handled,
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+        )
+    return handled
 
 
 @router.post(

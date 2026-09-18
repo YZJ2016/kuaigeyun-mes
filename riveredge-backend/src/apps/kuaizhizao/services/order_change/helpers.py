@@ -55,6 +55,34 @@ def line_amount(qty: Optional[Decimal], price: Optional[Decimal]) -> Decimal:
     return (q * p).quantize(Decimal("0.01"))
 
 
+def norm_change_date(value: Any) -> Optional[str]:
+    if value is None or value == "":
+        return None
+    return str(value)[:10]
+
+
+def item_has_change_content(item: Any) -> bool:
+    """变更行是否含实质变更（数量/单价/交货日期/增删行/行差额）。"""
+    change_type = getattr(item, "change_type", None)
+    if change_type in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value):
+        return True
+    if Decimal(str(getattr(item, "delta_amount", 0) or 0)) != 0:
+        return True
+    if Decimal(str(getattr(item, "after_quantity", 0) or 0)) != Decimal(
+        str(getattr(item, "before_quantity", 0) or 0)
+    ):
+        return True
+    if Decimal(str(getattr(item, "after_unit_price", 0) or 0)) != Decimal(
+        str(getattr(item, "before_unit_price", 0) or 0)
+    ):
+        return True
+    if norm_change_date(getattr(item, "after_delivery_date", None)) != norm_change_date(
+        getattr(item, "before_delivery_date", None)
+    ):
+        return True
+    return False
+
+
 def diff_sales_item(
     source_item: Any,
     after_quantity: Optional[Decimal],

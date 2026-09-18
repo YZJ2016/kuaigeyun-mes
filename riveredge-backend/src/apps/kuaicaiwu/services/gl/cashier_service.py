@@ -43,12 +43,12 @@ class GlCashierService:
                 ).all()
                 ids = [a.id for a in accounts]
         if account_id:
-            ids = [account_id] if account_id in ids or True else [account_id]
+            ids = [int(account_id)]
 
         if not ids:
             return {"entries": [], "account_ids": []}
 
-        target_id = account_id or ids[0]
+        target_id = int(account_id or ids[0])
         detail = await BalanceService().detail_ledger(
             tenant_id,
             year,
@@ -67,7 +67,12 @@ class GlCashierService:
         *,
         side: Optional[str] = None,
         unmatched_only: bool = False,
+        sync_enterprise: bool = True,
     ) -> List[Dict[str, Any]]:
+        if sync_enterprise:
+            await self.sync_enterprise_from_journal(
+                tenant_id, gl_account_id, year, month
+            )
         q = BankReconcileItem.filter(
             tenant_id=tenant_id,
             gl_account_id=gl_account_id,

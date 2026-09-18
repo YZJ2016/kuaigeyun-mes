@@ -10,9 +10,9 @@ const INBOUND_SOURCE_READ_PERMISSION: Record<InboundReceiptType, string> = {
   production_return: 'kuaizhizao:inbound:read',
   customer_material: 'kuaizhizao:warehouse-management-customer-material-registration:read',
   sales_return: 'kuaizhizao:sales-return:read',
-  outsource_receipt: 'kuaizhizao:outsource-order:read',
-  outsource_material_return: 'kuaizhizao:outsource-order:read',
-  outsource_product_return: 'kuaizhizao:outsource-order:read',
+  outsource_receipt: 'kuaizhizao:outsource-receipt:read',
+  outsource_material_return: 'kuaizhizao:outsource-material-return:read',
+  outsource_product_return: 'kuaizhizao:outsource-product-return:read',
   other_inbound: 'kuaizhizao:other-inbound:read',
   material_return: 'kuaizhizao:material-return:read',
 };
@@ -21,7 +21,7 @@ const INBOUND_SOURCE_READ_PERMISSION: Record<InboundReceiptType, string> = {
 export const OUTBOUND_SOURCE_READ_PERMISSION = {
   production_picking: 'kuaizhizao:inbound:read',
   sales_delivery: 'kuaizhizao:outbound:read',
-  outsource_issue: 'kuaizhizao:outsource-order:read',
+  outsource_issue: 'kuaizhizao:outsource-issue:read',
   other_outbound: 'kuaizhizao:other-outbound:read',
   material_borrow: 'kuaizhizao:material-borrow:read',
   purchase_return: 'kuaizhizao:purchase-return:read',

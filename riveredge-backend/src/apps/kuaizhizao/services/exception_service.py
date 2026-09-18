@@ -622,6 +622,7 @@ class ExceptionService:
             raise ValidationError("替代料处理须指定 alternative_material_id")
         elif action == "purchase":
             exception.suggested_action = "purchase"
+            exception.status = "processing"
         elif action == "resolve":
             exception.status = "resolved"
         elif action == "cancel":

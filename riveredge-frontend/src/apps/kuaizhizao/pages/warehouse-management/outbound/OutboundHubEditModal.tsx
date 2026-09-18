@@ -25,10 +25,14 @@ import {
 import {
   loadBatchOptionsByMaterialId,
   loadInStockSerialOptions,
-  isValidOutboundBatchSelection,
-  resolveOutboundConfirmBatchValue,
   type InventoryPickOption,
 } from './outboundConfirmInventoryOptions';
+import OutboundBatchAllocationField from './OutboundBatchAllocationField';
+import {
+  coerceBatchAllocationsDraft,
+  isValidOutboundBatchAllocations,
+  type OutboundBatchAllocation,
+} from './outboundBatchAllocation';
 import { formatQuantity } from '../../../../../utils/format';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { appendWarehouseLineAmountColumns } from '../shared/warehouseAmountDisplay';
@@ -99,11 +103,15 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
   const [editablePickingWarehouses, setEditablePickingWarehouses] = useState<
     Record<number, { id: number; name: string }>
   >({});
-  const [editablePickingBatches, setEditablePickingBatches] = useState<Record<number, string>>({});
+  const [editablePickingBatchAllocs, setEditablePickingBatchAllocs] = useState<
+    Record<number, OutboundBatchAllocation[]>
+  >({});
   const [editablePickingNotes, setEditablePickingNotes] = useState('');
 
   const [editableDeliveryQuantities, setEditableDeliveryQuantities] = useState<Record<number, number>>({});
-  const [editableDeliveryBatches, setEditableDeliveryBatches] = useState<Record<number, string>>({});
+  const [editableDeliveryBatchAllocs, setEditableDeliveryBatchAllocs] = useState<
+    Record<number, OutboundBatchAllocation[]>
+  >({});
   const [editableDeliverySerials, setEditableDeliverySerials] = useState<Record<number, string[]>>({});
   const [editableDeliveryNotes, setEditableDeliveryNotes] = useState('');
   const [editableDeliveryWarehouse, setEditableDeliveryWarehouse] = useState<{ id: number; name: string }>({
@@ -142,10 +150,10 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     setDetail(null);
     setEditablePickingQuantities({});
     setEditablePickingWarehouses({});
-    setEditablePickingBatches({});
+    setEditablePickingBatchAllocs({});
     setEditablePickingNotes('');
     setEditableDeliveryQuantities({});
-    setEditableDeliveryBatches({});
+    setEditableDeliveryBatchAllocs({});
     setEditableDeliverySerials({});
     setEditableDeliveryNotes('');
     setEditableDeliveryWarehouse({ id: 0, name: '' });
@@ -170,18 +178,6 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
           })
         : t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailable', { batch, qty }),
     [t],
-  );
-
-  const mergeBatchSelectOptions = useCallback(
-    (options: InventoryPickOption[], current?: string) => {
-      const merged = [...options];
-      const raw = String(current ?? '').trim();
-      if (raw && !merged.some((o) => o.value === raw)) {
-        merged.unshift({ value: raw, label: raw });
-      }
-      return merged;
-    },
-    [],
   );
 
   const loadPickingBatchOptions = useCallback(
@@ -276,36 +272,40 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
   const initPickingEditState = useCallback((detailData: OutboundEditDetail) => {
     const quantities: Record<number, number> = {};
     const warehouses: Record<number, { id: number; name: string }> = {};
-    const batches: Record<number, string> = {};
+    const batchAllocs: Record<number, OutboundBatchAllocation[]> = {};
     (detailData.items || []).forEach((it) => {
       if (it?.id == null) return;
       const rid = Number(it.id);
-      quantities[rid] = Number(it.required_quantity ?? 0);
+      const qty = Number(it.required_quantity ?? 0);
+      quantities[rid] = qty;
       warehouses[rid] = {
         id: Number(it.warehouse_id ?? 0),
         name: String(it.warehouse_name ?? ''),
       };
-      batches[rid] = String(it.batch_number ?? '');
+      const coerced = coerceBatchAllocationsDraft(it.batch_number, qty);
+      if (coerced?.length) batchAllocs[rid] = coerced;
     });
     setEditablePickingQuantities(quantities);
     setEditablePickingWarehouses(warehouses);
-    setEditablePickingBatches(batches);
+    setEditablePickingBatchAllocs(batchAllocs);
     setEditablePickingNotes(String(detailData.notes ?? ''));
   }, []);
 
   const initDeliveryEditState = useCallback((detailData: OutboundEditDetail) => {
     const quantities: Record<number, number> = {};
-    const batches: Record<number, string> = {};
+    const batchAllocs: Record<number, OutboundBatchAllocation[]> = {};
     const serials: Record<number, string[]> = {};
     (detailData.items || []).forEach((it) => {
       if (it?.id == null) return;
       const rid = Number(it.id);
-      quantities[rid] = Number(it.delivery_quantity ?? 0);
-      batches[rid] = String(it.batch_number ?? '');
+      const qty = Number(it.delivery_quantity ?? 0);
+      quantities[rid] = qty;
+      const coerced = coerceBatchAllocationsDraft(it.batch_number, qty);
+      if (coerced?.length) batchAllocs[rid] = coerced;
       serials[rid] = parseOutboundLineSerialNumbers(it.serial_numbers);
     });
     setEditableDeliveryQuantities(quantities);
-    setEditableDeliveryBatches(batches);
+    setEditableDeliveryBatchAllocs(batchAllocs);
     setEditableDeliverySerials(serials);
     setEditableDeliveryNotes(String(detailData.notes ?? ''));
     setEditableDeliveryWarehouse({
@@ -500,67 +500,6 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     loadPickingBatchOptions,
   ]);
 
-  useEffect(() => {
-    if (!open || batchOptionsLoading || !isDelivery || !detail?.items?.length) return;
-    setEditableDeliveryBatches((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      for (const it of detail.items || []) {
-        if (it.id == null) continue;
-        const rid = Number(it.id);
-        const mid = Number(it.material_id);
-        const meta = deliveryMaterialMeta[rid];
-        if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) continue;
-        const opts = deliveryBatchOptionsByMaterialId[mid] ?? [];
-        if (!opts.length) continue;
-        const resolved = resolveOutboundConfirmBatchValue(prev[rid] ?? it.batch_number, opts);
-        if (resolved && resolved !== prev[rid]) {
-          next[rid] = resolved;
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [
-    open,
-    batchOptionsLoading,
-    isDelivery,
-    detail,
-    deliveryMaterialMeta,
-    deliveryBatchOptionsByMaterialId,
-    trackingFlags,
-  ]);
-
-  useEffect(() => {
-    if (!open || batchOptionsLoading || !isPicking || !detail?.items?.length) return;
-    setEditablePickingBatches((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      for (const it of detail.items || []) {
-        if (it.id == null) continue;
-        const rid = Number(it.id);
-        const meta = deliveryMaterialMeta[rid];
-        if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) continue;
-        const opts = pickingBatchOptionsByLineId[rid] ?? [];
-        if (!opts.length) continue;
-        const resolved = resolveOutboundConfirmBatchValue(prev[rid] ?? it.batch_number, opts);
-        if (resolved && resolved !== prev[rid]) {
-          next[rid] = resolved;
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [
-    open,
-    batchOptionsLoading,
-    isPicking,
-    detail,
-    deliveryMaterialMeta,
-    pickingBatchOptionsByLineId,
-    trackingFlags,
-  ]);
-
   const handleClose = () => {
     resetState();
     onClose();
@@ -594,14 +533,32 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
             }),
           );
         }
-        const batchRaw = editablePickingBatches[rid] ?? it.batch_number ?? '';
-        return {
+        const allocs = editablePickingBatchAllocs[rid] ?? [];
+        const payload: {
+          id: number;
+          required_quantity: number;
+          warehouse_id: number;
+          warehouse_name: string;
+          batch_number?: string;
+          batch_allocations?: { batch_number: string; quantity: number }[];
+        } = {
           id: rid,
           required_quantity: qty,
           warehouse_id: warehouseId,
           warehouse_name: String(wh?.name ?? it.warehouse_name ?? ''),
-          batch_number: batchRaw,
         };
+        if (allocs.length) {
+          payload.batch_allocations = allocs.map((a) => ({
+            batch_number: a.batchNo,
+            quantity: a.quantity,
+          }));
+          if (allocs.length === 1) {
+            payload.batch_number = allocs[0].batchNo;
+          }
+        } else {
+          payload.batch_number = String(it.batch_number ?? '');
+        }
+        return payload;
       });
 
     for (const it of mappedItems) {
@@ -609,7 +566,9 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
       const meta = deliveryMaterialMeta[it.id];
       if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) continue;
       const opts = pickingBatchOptionsByLineId[it.id] ?? [];
-      if (!isValidOutboundBatchSelection(it.batch_number, opts)) {
+      const qty = Number(it.required_quantity ?? 0);
+      const allocs = editablePickingBatchAllocs[it.id] ?? [];
+      if (!isValidOutboundBatchAllocations(allocs, opts, qty)) {
         const code = String(row?.material_code ?? row?.material_name ?? '-');
         if (!opts.length) {
           messageApi.error(
@@ -623,9 +582,10 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
           );
         } else {
           messageApi.error(
-            t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchAllocationRequired', {
               material: code,
-              batches: opts.map((o) => o.value).join('、'),
+              qty,
+              batches: opts.map((o) => o.value).join('、') || '—',
             }),
           );
         }
@@ -676,12 +636,30 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
             }),
           );
         }
-        return {
+        const allocs = editableDeliveryBatchAllocs[rid] ?? [];
+        const payload: {
+          id: number;
+          delivery_quantity: number;
+          batch_number?: string;
+          batch_allocations?: { batch_number: string; quantity: number }[];
+          serial_numbers: string[];
+        } = {
           id: rid,
           delivery_quantity: qty,
-          batch_number: editableDeliveryBatches[rid] ?? it.batch_number ?? '',
           serial_numbers: editableDeliverySerials[rid] ?? parseOutboundLineSerialNumbers(it.serial_numbers),
         };
+        if (allocs.length) {
+          payload.batch_allocations = allocs.map((a) => ({
+            batch_number: a.batchNo,
+            quantity: a.quantity,
+          }));
+          if (allocs.length === 1) {
+            payload.batch_number = allocs[0].batchNo;
+          }
+        } else {
+          payload.batch_number = String(it.batch_number ?? '');
+        }
+        return payload;
       });
 
     for (const it of mappedItems) {
@@ -690,8 +668,9 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
       if (isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) {
         const mid = Number(row?.material_id ?? 0);
         const opts = deliveryBatchOptionsByMaterialId[mid] ?? [];
-        const batchRaw = it.batch_number;
-        if (!isValidOutboundBatchSelection(batchRaw, opts)) {
+        const qty = Number(it.delivery_quantity ?? 0);
+        const allocs = editableDeliveryBatchAllocs[it.id] ?? [];
+        if (!isValidOutboundBatchAllocations(allocs, opts, qty)) {
           const code = String(row?.material_code ?? row?.material_name ?? '-');
           if (!opts.length) {
             messageApi.error(
@@ -704,12 +683,21 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
             );
           } else {
             messageApi.error(
-              t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+              t('app.kuaizhizao.warehouseOutbound.confirm.batchAllocationRequired', {
                 material: code,
-                batches: opts.map((o) => o.value).join('、'),
+                qty,
+                batches: opts.map((o) => o.value).join('、') || '—',
               }),
             );
           }
+          return;
+        }
+        if (meta?.serialManaged && allocs.filter((a) => Number(a.quantity) > 0).length > 1) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchSerialMultiNotSupported', {
+              material: String(row?.material_code ?? ''),
+            }),
+          );
           return;
         }
       }
@@ -849,34 +837,25 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
       {
         title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
         dataIndex: 'batch_number',
-        width: 160,
+        width: 260,
         render: (_: unknown, row: OutboundLineItem) => {
           if (row.id == null) return row.batch_number || '-';
           const rid = Number(row.id);
           const meta = deliveryMaterialMeta[rid];
           if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) return '—';
           const opts = pickingBatchOptionsByLineId[rid] ?? [];
-          const current = editablePickingBatches[rid] ?? '';
+          const qty = Number(editablePickingQuantities[rid] ?? row.required_quantity ?? 0);
+          const materialLabel = [row.material_code, row.material_name].filter(Boolean).join(' - ');
           return (
-            <Select
-              size="small"
-              style={{ width: 150 }}
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              getPopupContainer={getPopupContainerInModal}
-              options={mergeBatchSelectOptions(opts, current)}
-              value={current || undefined}
-              placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectBatch')}
+            <OutboundBatchAllocationField
+              value={editablePickingBatchAllocs[rid] ?? []}
+              onChange={(next) =>
+                setEditablePickingBatchAllocs((prev) => ({ ...prev, [rid]: next }))
+              }
+              options={opts}
+              totalQuantity={qty}
               loading={batchOptionsLoading}
-              notFoundContent={
-                batchOptionsLoading
-                  ? t('app.kuaizhizao.warehouseOutbound.confirm.loadingBatches')
-                  : t('app.kuaizhizao.warehouseOutbound.confirm.noBatchAvailable')
-              }
-              onChange={(v) =>
-                setEditablePickingBatches((prev) => ({ ...prev, [rid]: String(v ?? '') }))
-              }
+              materialLabel={materialLabel}
             />
           );
         },
@@ -890,12 +869,11 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
       quantityDecimals,
       editablePickingQuantities,
       editablePickingWarehouses,
-      editablePickingBatches,
+      editablePickingBatchAllocs,
       pickingWarehouseOptions,
       deliveryMaterialMeta,
       pickingBatchOptionsByLineId,
       batchOptionsLoading,
-      mergeBatchSelectOptions,
     ],
   );
 
@@ -932,7 +910,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
           {
             title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
             dataIndex: 'batch_number',
-            width: 160,
+            width: 260,
             render: (_: unknown, row: OutboundLineItem) => {
               if (row.id == null) return row.batch_number || '-';
               const rid = Number(row.id);
@@ -940,27 +918,18 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
               if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) return '—';
               const mid = Number(row.material_id ?? 0);
               const opts = deliveryBatchOptionsByMaterialId[mid] ?? [];
-              const current = editableDeliveryBatches[rid] ?? '';
+              const qty = Number(editableDeliveryQuantities[rid] ?? row.delivery_quantity ?? 0);
+              const materialLabel = [row.material_code, row.material_name].filter(Boolean).join(' - ');
               return (
-                <Select
-                  size="small"
-                  style={{ width: 150 }}
-                  allowClear
-                  showSearch
-                  optionFilterProp="label"
-                  getPopupContainer={getPopupContainerInModal}
-                  options={mergeBatchSelectOptions(opts, current)}
-                  value={current || undefined}
-                  placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectBatch')}
+                <OutboundBatchAllocationField
+                  value={editableDeliveryBatchAllocs[rid] ?? []}
+                  onChange={(next) =>
+                    setEditableDeliveryBatchAllocs((prev) => ({ ...prev, [rid]: next }))
+                  }
+                  options={opts}
+                  totalQuantity={qty}
                   loading={batchOptionsLoading}
-                  notFoundContent={
-                    batchOptionsLoading
-                      ? t('app.kuaizhizao.warehouseOutbound.confirm.loadingBatches')
-                      : t('app.kuaizhizao.warehouseOutbound.confirm.noBatchAvailable')
-                  }
-                  onChange={(v) =>
-                    setEditableDeliveryBatches((prev) => ({ ...prev, [rid]: String(v ?? '') }))
-                  }
+                  materialLabel={materialLabel}
                 />
               );
             },
@@ -1011,12 +980,11 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
       trackingFlags,
       quantityDecimals,
       editableDeliveryQuantities,
-      editableDeliveryBatches,
+      editableDeliveryBatchAllocs,
       editableDeliverySerials,
       deliveryMaterialMeta,
       deliveryBatchOptionsByMaterialId,
       batchOptionsLoading,
-      mergeBatchSelectOptions,
       deliverySerialOptionsByLineId,
       deliverySerialOptionsLoadingByLineId,
       ensureDeliverySerialOptions,

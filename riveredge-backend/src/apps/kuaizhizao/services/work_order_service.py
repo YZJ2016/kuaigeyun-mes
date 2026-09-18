@@ -3411,6 +3411,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         user_info = await self.get_user_info(updated_by)
         now = resolve_business_datetime()
+        notify_queue: list = []
 
         async with in_transaction():
             for item in updates[:50]:
@@ -3510,6 +3511,42 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 wo.updated_by = updated_by
                 await wo.save(update_fields=["updated_by", "updated_at"])
                 result["updated"].append(int(op_id))
+                if "assigned_worker_id" in patch_fields and patch_fields.get("assigned_worker_id"):
+                    notify_queue.append(
+                        {
+                            "work_order_id": int(wo.id),
+                            "work_order_code": wo.code or str(wo.id),
+                            "product_name": wo.product_name or "—",
+                            "operation_name": op.operation_name or "—",
+                            "assignee_user_ids": [int(patch_fields["assigned_worker_id"])],
+                            "assigned_worker_name": patch_fields.get("assigned_worker_name"),
+                            "creator_user_id": wo.created_by,
+                        }
+                    )
+        for item in notify_queue:
+            try:
+                from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+                    notify_work_order_operation_assigned,
+                )
+
+                await notify_work_order_operation_assigned(
+                    tenant_id,
+                    work_order_id=item["work_order_id"],
+                    work_order_code=item["work_order_code"],
+                    product_name=item["product_name"],
+                    operation_name=item["operation_name"],
+                    assignee_user_ids=item["assignee_user_ids"],
+                    assigned_by_name=user_info["name"],
+                    assigned_worker_name=item.get("assigned_worker_name"),
+                    creator_user_id=item.get("creator_user_id"),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "工序派工消息提醒失败 tenant={} wo={}: {}",
+                    tenant_id,
+                    item.get("work_order_id"),
+                    exc,
+                )
         return result
 
     async def _upsert_delivery_delay_exception(
@@ -6118,6 +6155,11 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             # 更新派工信息（车间/工作中心仅当请求体显式包含对应字段时更新，兼容旧客户端）
             dispatch_patch = dispatch_data.model_dump(exclude_unset=True)
+            worker_assignment_changed = (
+                "assigned_worker_ids" in dispatch_patch
+                or "assigned_worker_id" in dispatch_patch
+                or "assigned_worker_name" in dispatch_patch
+            )
             if "workshop_id" in dispatch_patch or "workshop_name" in dispatch_patch:
                 work_order_operation.workshop_id = dispatch_data.workshop_id
                 work_order_operation.workshop_name = dispatch_data.workshop_name
@@ -6200,7 +6242,34 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 tenant_id, [work_order_operation.operation_id]
             )
             op_payload["default_operators"] = dmap.get(work_order_operation.operation_id, [])
-            return WorkOrderOperationResponse.model_validate(op_payload)
+            response = WorkOrderOperationResponse.model_validate(op_payload)
+
+        if worker_assignment_changed and worker_ids:
+            try:
+                from apps.kuaizhizao.services.kuaizhizao_business_notification import (
+                    notify_work_order_operation_assigned,
+                )
+
+                await notify_work_order_operation_assigned(
+                    tenant_id,
+                    work_order_id=int(wo.id),
+                    work_order_code=wo.code or str(wo.id),
+                    product_name=wo.product_name or "—",
+                    operation_name=work_order_operation.operation_name or "—",
+                    assignee_user_ids=worker_ids,
+                    assigned_by_name=user_info["name"],
+                    assigned_worker_name=work_order_operation.assigned_worker_name,
+                    creator_user_id=wo.created_by,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "工序派工消息提醒失败 tenant={} wo={} op={}: {}",
+                    tenant_id,
+                    work_order_id,
+                    operation_id,
+                    exc,
+                )
+        return response
 
     async def start_work_order_operation(
         self,

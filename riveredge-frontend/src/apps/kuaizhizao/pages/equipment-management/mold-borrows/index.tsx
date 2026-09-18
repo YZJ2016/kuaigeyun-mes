@@ -18,10 +18,12 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { moldApi } from '../../../services/equipment';
 import { borrowsApi } from '../../../services/moldOps';
+import { workOrderApi } from '../../../services/work-order';
+import { useNavigate } from 'react-router-dom';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -53,6 +55,8 @@ interface MoldBorrow {
   mold_name?: string;
   work_order_no?: string;
   source_no?: string;
+  source_id?: number;
+  source_type?: string;
   department?: string;
   department_name?: string;
   borrower_id?: number;
@@ -65,6 +69,12 @@ interface MoldBorrow {
 }
 
 function buildMoldBorrowSubmitPayload(values: Record<string, unknown>) {
+  const workOrderId =
+    typeof values.work_order_id === 'number'
+      ? values.work_order_id
+      : values.work_order_id != null && values.work_order_id !== ''
+        ? Number(values.work_order_id)
+        : undefined;
   const workOrderNo =
     typeof values.work_order_no === 'string' ? values.work_order_no.trim() : undefined;
   return {
@@ -74,16 +84,30 @@ function buildMoldBorrowSubmitPayload(values: Record<string, unknown>) {
     borrower_name: values.borrower_name,
     department_name: values.department,
     expected_return_date: toApiDateString(values.expected_return_date),
-    source_type: workOrderNo ? 'work_order' : undefined,
+    source_type: workOrderId || workOrderNo ? 'work_order' : undefined,
+    source_id: Number.isFinite(workOrderId) ? workOrderId : undefined,
     source_no: workOrderNo || undefined,
     remark: values.remark,
   };
 }
 
+const IN_PROGRESS_WO_STATUSES = new Set([
+  'released',
+  '已下达',
+  'in_progress',
+  '执行中',
+  '进行中',
+  '生产中',
+  'IN_PROGRESS',
+  'RELEASED',
+]);
+
 const MoldBorrowsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const perms = useResourcePermissions(RESOURCE);
+  const returnPerms = useResourcePermissions('kuaizhizao:mold-return');
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -130,6 +154,7 @@ const MoldBorrowsPage: React.FC = () => {
       setCurrent(detail);
       setFormInitialValues({
         mold_id: detail.mold_id,
+        work_order_id: detail.source_id,
         work_order_no: detail.source_no ?? detail.work_order_no,
         department: detail.department_name ?? detail.department,
         borrower_uuid: borrowerUuid,
@@ -148,12 +173,23 @@ const MoldBorrowsPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (keys: React.Key[]) => {
-    for (const id of keys) {
-          await borrowsApi.delete(Number(id));
-        }
-    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
-    actionRef.current?.reload();
+  const executeDelete = async (keys: React.Key[]) => {
+    try {
+      for (const id of keys) {
+        await borrowsApi.delete(Number(id));
+      }
+      messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    }
+  };
+
+  const handlePushReturn = (record: MoldBorrow) => {
+    if (!record.id) return;
+    navigate(
+      `/apps/kuaizhizao/equipment-management/mold-returns?borrow_id=${record.id}`,
+    );
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
@@ -362,24 +398,41 @@ const MoldBorrowsPage: React.FC = () => {
                 {t('common.edit')}
               </Button>
             )}
-            {perms.canDelete && (
-              <ActionConfirmPopconfirm title={t('common.deleteTitle')} onConfirm={() => record.id && void executeDelete([record.id])}>
+            {returnPerms.canCreate && record.status === '领用中' && (
               <Button
-                {...rowActionKind('delete')}
+                {...rowActionKind('create')}
+                {...rowActionLabelKeep()}
                 type="link"
                 size="small"
-                danger
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePushReturn(record);
+                }}
               >
-                {t('common.delete')}
+                {t(`${P}.action.pushReturn`)}
               </Button>
-            </ActionConfirmPopconfirm>
-          )}
+            )}
+            {perms.canDelete && (
+              <ActionConfirmPopconfirm
+                title={t('common.deleteTitle')}
+                onConfirm={() => record.id && void executeDelete([record.id])}
+              >
+                <Button
+                  {...rowActionKind('delete')}
+                  type="link"
+                  size="small"
+                  danger
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('common.delete')}
+                </Button>
+              </ActionConfirmPopconfirm>
+            )}
           </>
         ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, borrowStatusValueEnum],
+    [t, perms, returnPerms, borrowStatusValueEnum],
   );
 
   return (
@@ -418,7 +471,7 @@ const MoldBorrowsPage: React.FC = () => {
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
           
-          onDelete={handleDelete}
+          onDelete={executeDelete}
           enableRowSelection={perms.canDelete}
         />
       </ListPageTemplate>
@@ -450,7 +503,37 @@ const MoldBorrowsPage: React.FC = () => {
             />
           </Col>
           <Col span={12}>
-            <ProFormText name="work_order_no" label={t(`${P}.col.workOrderNo`)} />
+            <ProFormSelect
+              name="work_order_id"
+              label={t(`${P}.col.workOrderNo`)}
+              showSearch
+              fieldProps={{
+                allowClear: true,
+                filterOption: false,
+                onChange: (_value, option) => {
+                  const opt = Array.isArray(option) ? option[0] : option;
+                  const code =
+                    opt && typeof opt === 'object' && 'workOrderCode' in opt
+                      ? String((opt as { workOrderCode?: string }).workOrderCode || '')
+                      : '';
+                  formRef.current?.setFieldsValue({ work_order_no: code || undefined });
+                },
+              }}
+              request={async () => {
+                const res = await workOrderApi.list({ limit: 300 });
+                const items = res?.items ?? res?.data ?? (Array.isArray(res) ? res : []);
+                return items
+                  .filter((wo: { status?: string }) =>
+                    IN_PROGRESS_WO_STATUSES.has(String(wo.status || '')),
+                  )
+                  .map((wo: { id: number; code?: string; name?: string; product_name?: string }) => ({
+                    label: `${wo.code || ''} - ${wo.name || wo.product_name || ''}`.trim(),
+                    value: wo.id,
+                    workOrderCode: wo.code,
+                  }));
+              }}
+            />
+            <ProFormText name="work_order_no" hidden />
           </Col>
           <Col span={12}>
             <ProFormText name="department" label={t(`${P}.col.department`)} />

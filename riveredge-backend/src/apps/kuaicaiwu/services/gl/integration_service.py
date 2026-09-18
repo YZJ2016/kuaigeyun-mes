@@ -32,18 +32,61 @@ _SOURCE_DOC_TYPE_LABELS: Dict[str, str] = {
     "purchase_order": "采购订单",
     "sales_order": "销售订单",
     "Receivable": "应收单",
+    "receivable": "应收单",
     "Payable": "应付单",
+    "payable": "应付单",
     "receipt": "收款单",
     "payment": "付款单",
     "purchase_invoice": "采购发票",
+    "PurchaseInvoice": "采购发票",
     "sales_invoice": "销售发票",
+    "SalesInvoice": "销售发票",
     "sales_return": "销售退货单",
+    "purchase_return": "采购退货单",
     "fa_depr_run_line": "折旧计提行",
     "fa_depr_adjustment": "折旧调整",
     "fa_disposal": "资产处置",
+    "fa_asset": "固定资产",
     "fixed_asset": "固定资产",
     "manual_import": "手工导入",
+    # 历史写入 PascalCase（采购发票等事件曾用 PurchaseOrder）
+    "PurchaseOrder": "采购订单",
+    "SalesOrder": "销售订单",
+    "PurchaseReceipt": "采购入库单",
+    "SalesDelivery": "销售出库单",
 }
+
+_EVENT_TYPE_LABELS: Dict[str, str] = {
+    "PURCHASE_INVOICE_CREATED": "采购发票创建",
+    "INVOICE_CREATED": "销售发票创建",
+    "PAYABLE_CREATED": "应付单创建",
+    "RECEIVABLE_CREATED": "应收单创建",
+    "SETTLEMENT_RECEIVABLE_COMPLETED": "应收核销完成",
+    "SETTLEMENT_PAYABLE_COMPLETED": "应付核销完成",
+    "PURCHASE_ORDER_TO_PREPAYMENT": "采购订单转预付",
+    "SALES_ORDER_TO_PREPAYMENT": "销售订单转预收",
+    "PAYMENT_REFUND_CONFIRMED": "付款退款确认",
+    "RECEIPT_REFUND_CONFIRMED": "收款退款确认",
+    "FA_DEPRECIATION": "固定资产折旧",
+    "FA_IMPAIRMENT": "固定资产减值",
+    "FA_DISPOSAL": "固定资产处置",
+    "FX_REVALUATION_PERIOD_END": "期末汇兑损益",
+}
+
+
+def _pascal_to_snake(value: str) -> str:
+    """PurchaseOrder → purchase_order；已是 snake/小写则原样小写。"""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if "_" in text or text.islower():
+        return text.lower()
+    out: list[str] = []
+    for i, ch in enumerate(text):
+        if ch.isupper() and i > 0:
+            out.append("_")
+        out.append(ch.lower())
+    return "".join(out)
 
 
 class GlIntegrationReconcileService:
@@ -146,7 +189,17 @@ class GlIntegrationReconcileService:
         lowered = key.lower()
         if lowered in _SOURCE_DOC_TYPE_LABELS:
             return _SOURCE_DOC_TYPE_LABELS[lowered]
+        snake = _pascal_to_snake(key)
+        if snake and snake in _SOURCE_DOC_TYPE_LABELS:
+            return _SOURCE_DOC_TYPE_LABELS[snake]
         return key
+
+    @staticmethod
+    def event_type_label(event_type: Optional[str]) -> str:
+        key = str(event_type or "").strip()
+        if not key:
+            return ""
+        return _EVENT_TYPE_LABELS.get(key, key)
 
     async def _list_source_doc_type_options(
         self,
@@ -253,6 +306,7 @@ class GlIntegrationReconcileService:
                     "id": ev.id,
                     "event_code": ev.event_code,
                     "event_type": ev.event_type,
+                    "event_type_label": self.event_type_label(ev.event_type),
                     "business_type": ev.business_type,
                     "business_type_label": self.business_type_label(ev.business_type),
                     "source_doc_type": ev.source_doc_type,
@@ -265,7 +319,9 @@ class GlIntegrationReconcileService:
                     "amount": float(ev.amount or 0),
                     "currency": ev.currency,
                     "event_date": ev.event_date.isoformat() if ev.event_date else None,
-                    "notes": ev.notes,
+                    "notes": ev.notes
+                    or self.event_type_label(ev.event_type)
+                    or None,
                     "has_voucher": has_voucher,
                     "voucher_id": voucher.id if voucher else None,
                     "voucher_code": voucher.voucher_code if voucher else None,

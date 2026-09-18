@@ -9,6 +9,8 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Button, Dropdown, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Timeline, Tooltip, theme } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import {
+  CheckOutlined,
+  EditOutlined,
   ExpandOutlined,
   FilterOutlined,
   FolderOutlined,
@@ -17,6 +19,8 @@ import {
   PartitionOutlined,
   PlusOutlined,
   EyeOutlined,
+  SendOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
@@ -32,6 +36,8 @@ import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { DetailDrawerActions } from '../../../../../components/layout-templates/DetailDrawerActions';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { DrawingFormModal } from '../../../components/DrawingFormModal';
+import { DrawingBatchUploadModal } from '../../../components/DrawingBatchUploadModal';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { StepBomImportWizard } from '../../../components/StepBomImportWizard';
 import FilePreviewModal from '../../../../../components/file-preview';
 import { CadPreviewLoading } from '../../../../../components/cad-preview/CadPreviewLoading';
@@ -59,6 +65,7 @@ import {
   DRAWING_NAV_MODES,
   buildDrawingNavTree,
   buildDrawingVaultTree,
+  findDrawingFolderByUuid,
   folderUuidFromTreeKey,
   inferNavModeFromTreeKey,
   isVaultTreeKey,
@@ -325,7 +332,9 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   const detailRetryUuidRef = useRef<string | null>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [batchUploadOpen, setBatchUploadOpen] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const {
     customFields,
@@ -495,14 +504,73 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     setFolderForm({ open: true, mode: 'create', parentUuid: parentUuid ?? null });
   }, []);
 
+  const selectedVaultFolderUuid = useMemo(() => {
+    if (paneMode !== 'vault') return null;
+    return folderUuidFromTreeKey(String(selectedTreeKeys[0] ?? ''));
+  }, [paneMode, selectedTreeKeys]);
+
+  const selectedVaultFolder = useMemo(() => {
+    if (!selectedVaultFolderUuid) return null;
+    return findDrawingFolderByUuid(folders, selectedVaultFolderUuid);
+  }, [folders, selectedVaultFolderUuid]);
+
+  const openRenameFolder = useCallback(() => {
+    if (!selectedVaultFolder) return;
+    setFolderForm({
+      open: true,
+      mode: 'rename',
+      folderUuid: selectedVaultFolder.uuid,
+      initialName: selectedVaultFolder.name,
+    });
+  }, [selectedVaultFolder]);
+
   const folderTreeActions = useMemo(() => {
-    if (paneMode !== 'vault' || !canCreate) return null;
+    if (paneMode !== 'vault') return null;
+    if (!canCreate && !(canUpdate && selectedVaultFolderUuid)) return null;
     return (
-      <Button type="primary" block icon={<PlusOutlined />} onClick={() => openCreateFolder(folderUuidFromTreeKey(String(selectedTreeKeys[0] ?? '')))}>
-        {t('app.master-data.drawings.folder.create')}
-      </Button>
+      <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+        {canCreate ? (
+          <Button
+            type="primary"
+            block
+            icon={<PlusOutlined />}
+            onClick={() => openCreateFolder(selectedVaultFolderUuid)}
+          >
+            {t('app.master-data.drawings.folder.create')}
+          </Button>
+        ) : null}
+        {canUpdate ? (
+          <Tooltip
+            title={
+              selectedVaultFolder
+                ? t('app.master-data.drawings.folder.renameHint')
+                : t('app.master-data.drawings.folder.renameSelectHint')
+            }
+          >
+            <span style={{ display: 'block', width: '100%' }}>
+              <Button
+                block
+                icon={<EditOutlined />}
+                disabled={!selectedVaultFolder}
+                onClick={openRenameFolder}
+              >
+                {t('app.master-data.drawings.folder.rename')}
+              </Button>
+            </span>
+          </Tooltip>
+        ) : null}
+      </Space>
     );
-  }, [paneMode, canCreate, openCreateFolder, selectedTreeKeys, t]);
+  }, [
+    canCreate,
+    canUpdate,
+    openCreateFolder,
+    openRenameFolder,
+    paneMode,
+    selectedVaultFolder,
+    selectedVaultFolderUuid,
+    t,
+  ]);
 
   const handleTreeSelect = useCallback(
     (keys: React.Key[]) => {
@@ -741,10 +809,114 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         }
       }
       messageApi.success(t('common.batchDeleteSuccess', { count: rows.length }));
+      setSelectedRowKeys([]);
       actionRef.current?.reload();
     },
     [messageApi, t, selectedRowUuid, detail?.uuid],
   );
+
+  const handleBatchSubmit = useCallback(
+    async (keys: React.Key[]) => {
+      const rows = drawingRowsRef.current.filter((r) => keys.includes(r.uuid));
+      const eligible = rows.filter((r) => r.status === 'Draft');
+      if (!eligible.length) {
+        messageApi.warning(t('app.master-data.drawings.batchSubmitNotAllowed'));
+        return;
+      }
+      let success = 0;
+      let failed = 0;
+      let lastError: unknown = null;
+      for (const row of eligible) {
+        try {
+          await drawingApi.submit(row.uuid);
+          success += 1;
+        } catch (error) {
+          failed += 1;
+          lastError = error;
+        }
+      }
+      if (success > 0) {
+        messageApi.success(t('app.master-data.drawings.batchSubmitSuccess', { count: success }));
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+      }
+      if (failed > 0) {
+        messageApi.warning(
+          getApiErrorMessage(
+            lastError,
+            t('app.master-data.drawings.batchSubmitPartial', { count: failed }),
+          ),
+        );
+      }
+    },
+    [messageApi, t],
+  );
+
+  const handleBatchApprove = useCallback(
+    async (keys: React.Key[]) => {
+      const rows = drawingRowsRef.current.filter((r) => keys.includes(r.uuid));
+      const eligible = rows.filter((r) => r.status === 'Pending');
+      if (!eligible.length) {
+        messageApi.warning(t('app.master-data.drawings.batchApproveNotAllowed'));
+        return;
+      }
+      let success = 0;
+      let failed = 0;
+      let lastError: unknown = null;
+      for (const row of eligible) {
+        try {
+          await drawingApi.approve(row.uuid);
+          success += 1;
+        } catch (error) {
+          failed += 1;
+          lastError = error;
+        }
+      }
+      if (success > 0) {
+        messageApi.success(t('app.master-data.drawings.batchApproveSuccess', { count: success }));
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+      }
+      if (failed > 0) {
+        messageApi.warning(
+          getApiErrorMessage(
+            lastError,
+            t('app.master-data.drawings.batchApprovePartial', { count: failed }),
+          ),
+        );
+      }
+    },
+    [messageApi, t],
+  );
+
+  const drawingBatchMenuItems = useMemo(() => {
+    const items = [];
+    if (canSubmit) {
+      items.push({
+        key: 'batchSubmit',
+        label: t('app.master-data.drawings.batchSubmit'),
+        icon: <SendOutlined />,
+        requireConfirm: true,
+        confirmTitle: t('common.submit'),
+        confirmDescription: (count: number) =>
+          t('app.master-data.drawings.batchSubmitConfirm', { count }),
+        onClick: handleBatchSubmit,
+      });
+    }
+    if (canApprove) {
+      items.push({
+        key: 'batchApprove',
+        label: t('app.master-data.drawings.batchApprove'),
+        icon: <CheckOutlined />,
+        requireConfirm: true,
+        confirmTitle: t('app.master-data.drawings.approve'),
+        confirmDescription: (count: number) =>
+          t('app.master-data.drawings.batchApproveConfirm', { count }),
+        onClick: handleBatchApprove,
+      });
+    }
+    return items;
+  }, [canApprove, canSubmit, handleBatchApprove, handleBatchSubmit, t]);
 
   useEffect(() => {
     const deepLinkUuid = searchParams.get('uuid');
@@ -1357,11 +1529,38 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           showCreateButton
           createButtonText={t('app.master-data.drawings.createTitle')}
           onCreate={handleCreate}
-          enableRowSelection={canDelete}
+          toolBarActionsAfterCreate={
+            canCreate
+              ? [
+                  <Button
+                    key="batch-upload"
+                    icon={<UploadOutlined />}
+                    onClick={() => setBatchUploadOpen(true)}
+                  >
+                    {t('app.master-data.drawings.batchUpload')}
+                  </Button>,
+                ]
+              : []
+          }
+          enableRowSelection={canDelete || canSubmit || canApprove}
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={canDelete}
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count })}
           onDelete={handleBatchDeleteDrawings}
+          toolBarActionsAfterDelete={
+            drawingBatchMenuItems.length > 0
+              ? [
+                  <UniBatchMenuButton
+                    key="drawing-batch-menu"
+                    selectedRowKeys={selectedRowKeys}
+                    menuItems={drawingBatchMenuItems}
+                    buttonText={t('app.master-data.drawings.batchActions')}
+                  />,
+                ]
+              : []
+          }
           onTableDataChange={(rows) => {
             drawingRowsRef.current = rows;
           }}
@@ -1406,8 +1605,14 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       t,
       leftPanelCollapsed,
       handleCreate,
+      canCreate,
+      canDelete,
+      canSubmit,
+      canApprove,
+      drawingBatchMenuItems,
       messageApi,
       selectedRowUuid,
+      selectedRowKeys,
       selectRowForPreview,
       listView,
     ],
@@ -1687,6 +1892,16 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         }}
         onSuccess={() => {
     actionRef.current?.reload();
+        }}
+      />
+
+      <DrawingBatchUploadModal
+        open={batchUploadOpen}
+        defaultFolderUuid={defaultCreateFolderUuid}
+        folders={folders}
+        onClose={() => setBatchUploadOpen(false)}
+        onSuccess={() => {
+          actionRef.current?.reload();
         }}
       />
 

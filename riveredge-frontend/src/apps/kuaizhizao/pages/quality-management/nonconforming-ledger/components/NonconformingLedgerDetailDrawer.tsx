@@ -190,6 +190,8 @@ export const NonconformingLedgerDetailDrawer: React.FC<NonconformingLedgerDetail
             render: (_, row) => renderNcLedgerStatusTag(t, row.status),
           },
           { title: t('common.remark'), dataIndex: 'remarks' },
+          { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+          { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
         ],
         GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK,
       ),
@@ -197,7 +199,9 @@ export const NonconformingLedgerDetailDrawer: React.FC<NonconformingLedgerDetail
   );
 
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
-    basicColumns, record
+    basicColumns,
+    record,
+    'nonconforming_ledger',
   );
 
   if (!open) return null;

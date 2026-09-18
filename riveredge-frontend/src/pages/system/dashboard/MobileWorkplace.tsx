@@ -324,7 +324,13 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
                   borderRadius: cardRadius,
                   background: isDark ? '#111' : '#fff',
                 }}
-                onClick={() => onTodoHandle(todo.id)}
+                onClick={() => {
+                  if (todo.link) {
+                    navigate(todo.link);
+                    return;
+                  }
+                  onTodoHandle(todo.id);
+                }}
               >
                 <div style={{ display: 'flex', gap: 12 }}>
                   <div style={{ 

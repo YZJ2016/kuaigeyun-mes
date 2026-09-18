@@ -20,6 +20,7 @@ import {
 } from '../utils/partner-static-labels';
 import { renderMasterActiveTag } from '../utils/masterListPresentation';
 import { PartnerMasterDetailDrawer } from '../pages/shared/PartnerMasterDetailDrawer';
+import { useDetailDrawerFeatures } from '../../../hooks/useDetailDrawerFeatures';
 import {
   alignDescriptionColumns,
   MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
@@ -47,6 +48,7 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
   footer,
 }) => {
   const { t } = useTranslation();
+  const { basicUpdatedAtEnabled, timeFieldHidden } = useDetailDrawerFeatures();
   const [customerDetail, setCustomerDetail] = useState<Customer | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -302,6 +304,11 @@ export const CustomerDetailDrawer: React.FC<CustomerDetailDrawerProps> = ({
               items={detailDrawerDescriptionItems(
                 alignDescriptionColumns(detailColumnsExtended, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
                 customerDetail,
+                {
+                  documentType: 'customer',
+                  showUpdatedAt: basicUpdatedAtEnabled,
+                  timeFieldHidden,
+                },
               )}
             />
           </DetailDrawerSection>

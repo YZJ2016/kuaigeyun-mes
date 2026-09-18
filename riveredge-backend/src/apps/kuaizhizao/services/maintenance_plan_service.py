@@ -467,9 +467,13 @@ class MaintenanceExecutionService:
                 source_type=source_type,
                 source_uuid=source_uuid,
             )
+            actor = None
             if created_by is not None:
                 actor = await User.filter(id=created_by).first()
                 apply_create_audit(execution, actor)
+            if not execution.executor_id and actor is not None:
+                execution.executor_id = actor.id
+                execution.executor_name = (actor.full_name or actor.username or "").strip() or None
             await execution.save()
 
             # 故障转保养：故障置处理中，并同步设备状态

@@ -72,6 +72,8 @@ MATERIAL_SYNC_EXTRA_SCALAR_FIELDS = frozenset(
         "customs_code",
         "over_report_mode",
         "over_report_value",
+        "over_receipt_tolerance_pct",
+        "over_issue_tolerance_pct",
         "inspection_mode",
     }
 )
@@ -87,7 +89,16 @@ MATERIAL_SYNC_BOOL_FIELDS = frozenset(
     }
 )
 
-MATERIAL_SYNC_DECIMAL_FIELDS = frozenset({"weight", "volume", "reference_cost", "over_report_value"})
+MATERIAL_SYNC_DECIMAL_FIELDS = frozenset(
+    {
+        "weight",
+        "volume",
+        "reference_cost",
+        "over_report_value",
+        "over_receipt_tolerance_pct",
+        "over_issue_tolerance_pct",
+    }
+)
 MATERIAL_SYNC_INT_FIELDS = frozenset({"shelf_life_days"})
 
 

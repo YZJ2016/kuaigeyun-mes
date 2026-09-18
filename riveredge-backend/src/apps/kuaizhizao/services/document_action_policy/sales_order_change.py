@@ -8,7 +8,8 @@ from typing import Any, Optional
 from infra.exceptions.exceptions import BusinessLogicError
 
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_draft_status, normalize_status
-from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus, OrderChangeLineType
+from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus
+from apps.kuaizhizao.services.order_change.helpers import item_has_change_content
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
     CAPABILITY_REASON_MESSAGES,
@@ -59,12 +60,7 @@ def _compute_has_change_content(doc: Any, items: Optional[list[Any]] = None) -> 
     if header:
         return True
     if items:
-        for i in items:
-            ct = _norm_status(getattr(i, "change_type", None))
-            if ct in (OrderChangeLineType.LINE_ADD.value, OrderChangeLineType.LINE_CANCEL.value):
-                return True
-            if Decimal(str(getattr(i, "delta_amount", 0) or 0)) != 0:
-                return True
+        return any(item_has_change_content(i) for i in items)
     return False
 
 

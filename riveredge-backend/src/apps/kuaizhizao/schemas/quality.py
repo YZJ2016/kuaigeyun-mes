@@ -22,11 +22,13 @@ class IncomingInspectionBase(BaseSchema):
     source_type: Optional[str] = Field(
         "purchase_receipt",
         max_length=30,
-        description="来源类型（purchase_receipt/customer_material_inbound）",
+        description="来源类型（purchase_receipt/customer_material_inbound/purchase_order）",
     )
-    # 与模型一致：采购入库 / 代工来料二选一，允许为空
+    # 与模型一致：采购入库 / 代工来料 / 采购订单，允许为空
     purchase_receipt_id: Optional[int] = Field(None, description="采购入库单ID")
     purchase_receipt_code: Optional[str] = Field(None, max_length=50, description="采购入库单编码")
+    purchase_order_id: Optional[int] = Field(None, description="采购订单ID")
+    purchase_order_code: Optional[str] = Field(None, max_length=50, description="采购订单编码")
     customer_material_registration_id: Optional[int] = Field(None, description="代工来料单ID")
     customer_material_registration_code: Optional[str] = Field(
         None, max_length=50, description="代工来料单编码"

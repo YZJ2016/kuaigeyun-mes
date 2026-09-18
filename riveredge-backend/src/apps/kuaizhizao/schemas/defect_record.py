@@ -106,6 +106,26 @@ class DefectRecordCreateFromInspection(BaseModel):
     remarks: Optional[str] = Field(None, description="备注")
 
 
+class DefectRecordCreateFromInspectionBatch(BaseModel):
+    """从检验单批量创建不合格品记录（按类型/原因/处置拆分行）。"""
+
+    lines: List[DefectRecordCreateFromInspection] = Field(
+        ...,
+        min_length=1,
+        description="不合格明细行，各行数量之和不得超过检验单待登记不合格数量",
+    )
+
+
+class DefectRecordCreateFromReportingBatch(BaseModel):
+    """从报工记录批量创建不良品记录。"""
+
+    lines: List[DefectRecordCreateFromReporting] = Field(
+        ...,
+        min_length=1,
+        description="不良明细行，各行数量之和不得超过报工待登记不合格数量",
+    )
+
+
 class DefectRecordUpdate(BaseModel):
     """
     不良品记录更新Schema

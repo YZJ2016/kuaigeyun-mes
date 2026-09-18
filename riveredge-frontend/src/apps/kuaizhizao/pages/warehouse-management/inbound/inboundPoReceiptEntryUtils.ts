@@ -54,8 +54,22 @@ export function normalizePurchaseOrderItem(raw: Record<string, unknown>): Purcha
     ordered_quantity: Number(raw.ordered_quantity ?? raw.orderedQuantity ?? 0),
     received_quantity: Number(raw.received_quantity ?? raw.receivedQuantity ?? 0),
     outstanding_quantity: Number(raw.outstanding_quantity ?? raw.outstandingQuantity ?? 0),
+    max_receivable_quantity: Number(
+      raw.max_receivable_quantity ?? raw.maxReceivableQuantity ?? NaN,
+    ),
+    over_receipt_tolerance_pct: Number(
+      raw.over_receipt_tolerance_pct ?? raw.overReceiptTolerancePct ?? NaN,
+    ),
     unit: String(raw.unit ?? raw.material_unit ?? raw.materialUnit ?? '').trim() || undefined,
   };
+}
+
+export function getPoItemReceivableMax(it: PurchaseOrderItem): number {
+  const toleranced = Number(it.max_receivable_quantity);
+  if (Number.isFinite(toleranced) && toleranced >= 0) {
+    return toleranced;
+  }
+  return Number(it.outstanding_quantity ?? 0);
 }
 
 export function normalizePurchaseOrderDetail(detail: PurchaseOrder): PurchaseOrder {
@@ -92,5 +106,5 @@ export function enrichPurchaseOrderItemsMaterial(
 }
 
 export function getOutstandingPoItems(order: PurchaseOrder | null): PurchaseOrderItem[] {
-  return (order?.items || []).filter((it) => Number(it.outstanding_quantity ?? 0) > 0);
+  return (order?.items || []).filter((it) => getPoItemReceivableMax(it) > 0);
 }

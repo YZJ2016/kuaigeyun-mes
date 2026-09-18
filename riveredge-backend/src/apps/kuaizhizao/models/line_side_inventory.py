@@ -46,6 +46,8 @@ class LineSideInventory(BaseModel):
     # 仓库信息
     warehouse_id = fields.IntField(description="线边仓ID")
     warehouse_name = fields.CharField(max_length=200, null=True, description="线边仓名称")
+    location_id = fields.IntField(null=True, description="库位ID（可选）")
+    location_code = fields.CharField(max_length=50, null=True, description="库位编码（可选）")
     
     # 物料信息
     material_id = fields.IntField(description="物料ID")

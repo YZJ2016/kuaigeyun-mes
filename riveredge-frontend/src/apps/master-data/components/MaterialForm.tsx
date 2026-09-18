@@ -1246,6 +1246,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         })(),
         over_report_mode: values.overReportMode || 'none',
         over_report_value: values.overReportValue ?? 0,
+        over_receipt_tolerance_pct:
+          values.overReceiptTolerancePct === undefined || values.overReceiptTolerancePct === ''
+            ? null
+            : values.overReceiptTolerancePct,
+        over_issue_tolerance_pct:
+          values.overIssueTolerancePct === undefined || values.overIssueTolerancePct === ''
+            ? null
+            : values.overIssueTolerancePct,
       };
       
       // 移除 undefined 值
@@ -3706,6 +3714,28 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                 label={t('app.master-data.defaults.maxStock')}
                 placeholder={t('app.master-data.defaults.maxStockPlaceholder')}
                 min={0}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="overReceiptTolerancePct"
+                label={t('app.master-data.materialForm.overReceiptTolerancePct')}
+                placeholder={t('app.master-data.materialForm.overQtyTolerancePlaceholder')}
+                min={0}
+                max={100}
+                fieldProps={{ precision: 2 }}
+                extra={t('app.master-data.materialForm.overReceiptTolerancePctExtra')}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="overIssueTolerancePct"
+                label={t('app.master-data.materialForm.overIssueTolerancePct')}
+                placeholder={t('app.master-data.materialForm.overQtyTolerancePlaceholder')}
+                min={0}
+                max={100}
+                fieldProps={{ precision: 2 }}
+                extra={t('app.master-data.materialForm.overIssueTolerancePctExtra')}
               />
             </Col>
           </Row>

@@ -142,7 +142,7 @@ function buildKpiItems(t: TFunction): KpiItemConfig[] {
       titleKey: 'pages.dashboard.statQualitySummary',
       subtitleKey: 'pages.dashboard.kpiSubQualityInRange',
       mainSemantic: 'quality_rate',
-      path: '/apps/kuaizhizao/quality-management',
+      path: '/apps/kuaizhizao/quality-management/inspection-center',
       getMainValue: (s) => formatDashboardRate(s?.quality?.quality_rate),
       getMainNumeric: (s) => s?.quality?.quality_rate ?? null,
       getRightTop: (s, tr) => ({

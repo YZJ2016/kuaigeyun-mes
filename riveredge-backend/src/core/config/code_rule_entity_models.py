@@ -47,6 +47,50 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
         "apps.kuaizhizao.models.equipment_line_rebind",
         "EquipmentLineRebind",
     ),
+    "equipment_spot_check_code": (
+        "apps.kuaizhizao.models.equipment_ops",
+        "EquipmentSpotCheck",
+    ),
+    "equipment_route_patrol_code": (
+        "apps.kuaizhizao.models.equipment_ops",
+        "EquipmentRoutePatrol",
+    ),
+    "equipment_fault_code": ("apps.kuaizhizao.models.equipment_fault", "EquipmentFault"),
+    "equipment_repair_code": ("apps.kuaizhizao.models.equipment_fault", "EquipmentRepair"),
+    "maintenance_plan_code": (
+        "apps.kuaizhizao.models.maintenance_plan",
+        "MaintenancePlan",
+    ),
+    "maintenance_execution_code": (
+        "apps.kuaizhizao.models.maintenance_plan",
+        "MaintenanceExecution",
+    ),
+    "equipment_scrap_application_code": (
+        "apps.kuaizhizao.models.equipment_ops",
+        "EquipmentScrapApplication",
+    ),
+    "equipment_transfer_application_code": (
+        "apps.kuaizhizao.models.equipment_ops",
+        "EquipmentTransferApplication",
+    ),
+    "mold_trial_code": ("apps.kuaizhizao.models.mold_ops", "MoldTrial"),
+    "mold_borrow_code": ("apps.kuaizhizao.models.mold_ops", "MoldBorrow"),
+    "mold_return_code": ("apps.kuaizhizao.models.mold_ops", "MoldReturn"),
+    "mold_maintenance_code": ("apps.kuaizhizao.models.mold_ops", "MoldMaintenance"),
+    "mold_repair_code": ("apps.kuaizhizao.models.mold_ops", "MoldRepair"),
+    "mold_scrap_application_code": (
+        "apps.kuaizhizao.models.mold_ops",
+        "MoldScrapApplication",
+    ),
+    "tool_borrow_code": ("apps.kuaizhizao.models.tool_ops", "ToolBorrow"),
+    "tool_return_code": ("apps.kuaizhizao.models.tool_ops", "ToolReturn"),
+    "tool_maintenance_code": ("apps.kuaizhizao.models.tool_ops", "ToolMaintenance"),
+    "tool_repair_code": ("apps.kuaizhizao.models.tool_ops", "ToolRepair"),
+    "tool_calibration_code": ("apps.kuaizhizao.models.tool_ops", "ToolOpsCalibration"),
+    "tool_scrap_application_code": (
+        "apps.kuaizhizao.models.tool_ops",
+        "ToolScrapApplication",
+    ),
     "FINISHED_GOODS_INSPECTION_CODE": (
         "apps.kuaizhizao.models.finished_goods_inspection",
         "FinishedGoodsInspection",

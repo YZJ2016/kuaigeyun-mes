@@ -47,6 +47,38 @@ function isTenantDefaultHomePath(p: string): boolean {
   return (LEGACY_TENANT_DEFAULT_HOME_PATHS as readonly string[]).includes(p);
 }
 
+/** 有效首页就绪后：剔除冲突占位首页，并把真实首页固定到第一位 */
+function normalizeTabsForTenantHome(
+  tabs: TabItem[],
+  tenantHomePath: string,
+  getTabTitle: (path: string) => string,
+): TabItem[] {
+  let next = tabs;
+  if (!isTenantDefaultHomePath(tenantHomePath)) {
+    next = next.filter((t) => !isTenantDefaultHomePath(t.key));
+  } else {
+    next = next.filter((t) => !isTenantDefaultHomePath(t.key) || t.key === tenantHomePath);
+  }
+
+  const existingHome = next.find((t) => t.key === tenantHomePath);
+  const homeTab: TabItem =
+    existingHome != null
+      ? { ...existingHome, closable: false, pinned: false }
+      : {
+          key: tenantHomePath,
+          path: tenantHomePath,
+          label: getTabTitle(tenantHomePath),
+          closable: false,
+          pinned: false,
+        };
+  const rest = next.filter((t) => t.key !== tenantHomePath);
+  return [homeTab, ...rest];
+}
+
+function tabsSameKeys(a: TabItem[], b: TabItem[]): boolean {
+  return a.length === b.length && a.every((tab, idx) => tab.key === b[idx]?.key);
+}
+
 function isAppGroupPlaceholderMenuItem(item: {
   key?: Key;
   className?: string;
@@ -224,18 +256,8 @@ function loadPersistedTabs(
     });
 
     if (validTabs.length === 0) return null;
-    const hasDefault = validTabs.some((tab) => tab.key === tenantHomePath);
-    if (!hasDefault) {
-      const title = findMenuTitleWithTranslation(tenantHomePath, menuConfig, t);
-      validTabs.unshift({
-        key: tenantHomePath,
-        path: tenantHomePath,
-        label: title,
-        closable: false,
-        pinned: false,
-      });
-    }
-    return dedupeTabsByPathname(validTabs);
+    const titleFor = (path: string) => findMenuTitleWithTranslation(path, menuConfig, t);
+    return dedupeTabsByPathname(normalizeTabsForTenantHome(validTabs, tenantHomePath, titleFor));
   } catch {
     return null;
   }
@@ -434,6 +456,15 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       if (shouldSkipTabPath(path)) {
         return;
       }
+      // 有效首页已解析为自定义页时，不再为登录中转的占位首页（Default-home 等）新开标签
+      if (
+        homePathReady &&
+        tenantHomePath &&
+        isTenantDefaultHomePath(path) &&
+        path !== tenantHomePath
+      ) {
+        return;
+      }
 
       setTabs((prevTabs) => {
         // 检查标签是否已存在
@@ -523,7 +554,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         return newTabs;
       });
     },
-    [getTabTitle, tenantHomePath]
+    [getTabTitle, homePathReady, tenantHomePath]
   );
 
   /** 始终指向最新 addTab，供「路由同步标签」effect 使用，避免因 getTabTitle/menuConfig 变化导致 addTab 引用变、effect 在无导航时反复执行引发 #185 */
@@ -549,45 +580,39 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 与 BasicLayout 中 effectiveSystemHomePath 数据源一致（React Query 同 key 缓存共享）。
    */
   const prevTenantHomePathRef = useRef<string | null>(null);
+  const didInitialHomeTabNormalizeRef = useRef(false);
   useEffect(() => {
+    if (!homePathReady || !tenantHomePath) return;
+
     const prev = prevTenantHomePathRef.current;
-    if (prev === null) {
-      prevTenantHomePathRef.current = tenantHomePath;
-      return;
-    }
-    if (prev === tenantHomePath) return;
+    const homePathChanged = prev !== null && prev !== tenantHomePath;
+    const needsInitialNormalize = !didInitialHomeTabNormalizeRef.current;
+    if (!needsInitialNormalize && !homePathChanged) return;
+
+    didInitialHomeTabNormalizeRef.current = true;
     prevTenantHomePathRef.current = tenantHomePath;
 
     setTabs((prevTabs) => {
-      let next = prevTabs.filter((t) => t.key !== prev);
-      if (!isTenantDefaultHomePath(tenantHomePath)) {
-        next = next.filter((t) => !isTenantDefaultHomePath(t.key));
-      } else {
-        next = next.filter((t) => !isTenantDefaultHomePath(t.key) || t.key === tenantHomePath);
+      let working = prevTabs;
+      if (homePathChanged && prev) {
+        working = working.filter((t) => t.key !== prev);
       }
-      const existingHome = next.find((t) => t.key === tenantHomePath);
-      const homeTab: TabItem =
-        existingHome != null
-          ? { ...existingHome, closable: false, pinned: false }
-          : {
-              key: tenantHomePath,
-              path: tenantHomePath,
-              label: getTabTitle(tenantHomePath),
-              closable: false,
-              pinned: false,
-            };
-      const rest = next.filter((t) => t.key !== tenantHomePath);
-      return [homeTab, ...rest];
+      const normalized = normalizeTabsForTenantHome(working, tenantHomePath, getTabTitle);
+      return tabsSameKeys(normalized, prevTabs) ? prevTabs : normalized;
     });
 
     setActiveKey((ak) => {
-      if (ak === prev) {
+      if (isTenantDefaultHomePath(ak) && ak !== tenantHomePath) {
+        navigateRef.current(tenantHomePath, { replace: true });
+        return tenantHomePath;
+      }
+      if (homePathChanged && prev && ak === prev) {
         navigateRef.current(tenantHomePath, { replace: true });
         return tenantHomePath;
       }
       return ak;
     });
-  }, [tenantHomePath, getTabTitle]);
+  }, [homePathReady, tenantHomePath, getTabTitle]);
 
   /**
    * 移除标签
@@ -681,6 +706,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (prev === tenantIdStrForTabs) return;
     prevTenantIdStrRef.current = tenantIdStrForTabs;
     didRestoreFromSyncRef.current = false;
+    didInitialHomeTabNormalizeRef.current = false;
+    prevTenantHomePathRef.current = null;
 
     const tenantId = getTenantId();
     if (tenantId == null) {

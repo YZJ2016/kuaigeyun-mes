@@ -23,12 +23,16 @@ class IncomingInspection(BaseModel):
     source_type = fields.CharField(
         max_length=30,
         default="purchase_receipt",
-        description="来源类型（purchase_receipt/customer_material_inbound）",
+        description="来源类型（purchase_receipt/customer_material_inbound/purchase_order）",
     )
 
     # 关联采购入库单
     purchase_receipt_id = fields.IntField(null=True, description="采购入库单ID")
     purchase_receipt_code = fields.CharField(max_length=50, null=True, description="采购入库单编码")
+
+    # 关联采购订单（到货前从来料检验下推）
+    purchase_order_id = fields.IntField(null=True, description="采购订单ID")
+    purchase_order_code = fields.CharField(max_length=50, null=True, description="采购订单编码")
 
     # 关联代工来料单
     customer_material_registration_id = fields.IntField(null=True, description="代工来料单ID")
@@ -97,6 +101,7 @@ class IncomingInspection(BaseModel):
         table_description = "快格轻制造 - 来料检验单"
         indexes = [
             ("tenant_id", "purchase_receipt_id"),
+            ("tenant_id", "purchase_order_id"),
             ("supplier_id",),
             ("material_id",),
             ("inspection_result",),

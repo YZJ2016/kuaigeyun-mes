@@ -24,13 +24,10 @@ import {
 import type { OutboundHubOrder, OutboundIssueType } from './outboundHubTypes';
 import { getOutboundIssueTypeLabel, outboundDocumentCode } from './outboundHubTypes';
 import {
-  isValidOutboundBatchSelection,
   loadAvailableQtyByMaterialId,
   loadBatchOptionsByMaterialId,
   loadInStockSerialOptions,
-  normalizeOutboundBatchNo,
   resolveAllowNegativeInventory,
-  resolveOutboundConfirmBatchValue,
   type InventoryPickOption,
 } from './outboundConfirmInventoryOptions';
 import {
@@ -482,35 +479,26 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       if (!opts.length) continue;
       const qty = lineOutboundQty(it);
 
-      if (outboundType === 'production_picking') {
-        const currentAlloc = form.getFieldValue(`batch_alloc_${lineId}`) as
-          | OutboundBatchAllocation[]
-          | undefined;
-        if (isValidOutboundBatchAllocations(currentAlloc, opts, qty)) continue;
-        const seeded = coerceBatchAllocationsDraft(
-          form.getFieldValue(`batch_${lineId}`) ?? it.batch_number,
-          qty,
-        );
-        if (seeded && isValidOutboundBatchAllocations(seeded, opts, qty)) {
-          patches[`batch_alloc_${lineId}`] = seeded;
-          patches[`batch_${lineId}`] = seeded[0]?.batchNo;
-          continue;
-        }
-        const allNos = opts.map((o) => String(o.value ?? '').trim()).filter(Boolean);
-        const fifo = allocateBatchQuantitiesFifo(qty, allNos, opts).filter(
-          (a) => Number(a.quantity) > 0,
-        );
-        if (isValidOutboundBatchAllocations(fifo, opts, qty)) {
-          patches[`batch_alloc_${lineId}`] = fifo;
-          patches[`batch_${lineId}`] = fifo[0]?.batchNo;
-        }
+      const currentAlloc = form.getFieldValue(`batch_alloc_${lineId}`) as
+        | OutboundBatchAllocation[]
+        | undefined;
+      if (isValidOutboundBatchAllocations(currentAlloc, opts, qty)) continue;
+      const seeded = coerceBatchAllocationsDraft(
+        form.getFieldValue(`batch_${lineId}`) ?? it.batch_number,
+        qty,
+      );
+      if (seeded && isValidOutboundBatchAllocations(seeded, opts, qty)) {
+        patches[`batch_alloc_${lineId}`] = seeded;
+        patches[`batch_${lineId}`] = seeded[0]?.batchNo;
         continue;
       }
-
-      const current = form.getFieldValue(`batch_${lineId}`);
-      const resolved = resolveOutboundConfirmBatchValue(current ?? it.batch_number, opts);
-      if (resolved !== current) {
-        patches[`batch_${lineId}`] = resolved;
+      const allNos = opts.map((o) => String(o.value ?? '').trim()).filter(Boolean);
+      const fifo = allocateBatchQuantitiesFifo(qty, allNos, opts).filter(
+        (a) => Number(a.quantity) > 0,
+      );
+      if (isValidOutboundBatchAllocations(fifo, opts, qty)) {
+        patches[`batch_alloc_${lineId}`] = fifo;
+        patches[`batch_${lineId}`] = fifo[0]?.batchNo;
       }
     }
     if (Object.keys(patches).length) {
@@ -659,46 +647,26 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       {
         title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
         key: 'batch',
-        width: outboundType === 'production_picking' ? 260 : 220,
+        width: 260,
         render: (_: unknown, it) => {
           const lineId = Number(it.id);
           const meta = materialMeta[lineId];
           if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) return '—';
           const opts = batchOptionsByMaterialId[inventoryLookupKey(outboundType, it)] ?? [];
-          if (outboundType === 'production_picking') {
-            const qty = lineOutboundQty(it);
-            const materialLabel = [it.material_code, it.material_name].filter(Boolean).join(' - ');
-            return (
-              <Form.Item
-                name={`batch_alloc_${lineId}`}
-                style={{ marginBottom: 0 }}
-                trigger="onChange"
-                getValueFromEvent={(next: OutboundBatchAllocation[]) => next}
-              >
-                <OutboundBatchAllocationField
-                  options={opts}
-                  totalQuantity={qty}
-                  loading={batchOptionsLoading}
-                  materialLabel={materialLabel}
-                />
-              </Form.Item>
-            );
-          }
+          const qty = lineOutboundQty(it);
+          const materialLabel = [it.material_code, it.material_name].filter(Boolean).join(' - ');
           return (
-            <Form.Item name={`batch_${lineId}`} style={{ marginBottom: 0 }}>
-              <Select
-                size="small"
-                allowClear
-                showSearch
-                optionFilterProp="label"
+            <Form.Item
+              name={`batch_alloc_${lineId}`}
+              style={{ marginBottom: 0 }}
+              trigger="onChange"
+              getValueFromEvent={(next: OutboundBatchAllocation[]) => next}
+            >
+              <OutboundBatchAllocationField
                 options={opts}
-                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectBatch')}
+                totalQuantity={qty}
                 loading={batchOptionsLoading}
-                notFoundContent={
-                  batchOptionsLoading
-                    ? t('app.kuaizhizao.warehouseOutbound.confirm.loadingBatches')
-                    : t('app.kuaizhizao.warehouseOutbound.confirm.noBatchAvailable')
-                }
+                materialLabel={materialLabel}
               />
             </Form.Item>
           );
@@ -856,74 +824,8 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         continue;
       }
 
-      if (outboundType === 'production_picking') {
-        const allocs = (vals[`batch_alloc_${lineId}`] as OutboundBatchAllocation[] | undefined) ?? [];
-        if (!isValidOutboundBatchAllocations(allocs, opts, qty)) {
-          const code = String(it.material_code ?? '');
-          if (!opts.length) {
-            messageApi.error(
-              t('app.kuaizhizao.warehouseOutbound.confirm.batchNotInStock', {
-                material: code,
-                warehouse:
-                  String(it.warehouse_name ?? '').trim() ||
-                  whName ||
-                  t('app.kuaizhizao.warehouseOutbound.field.selectWarehouse'),
-              }),
-            );
-          } else {
-            messageApi.error(
-              t('app.kuaizhizao.warehouseOutbound.confirm.batchAllocationRequired', {
-                material: code,
-                qty,
-                batches: opts.map((o) => o.value).join('、') || '—',
-              }),
-            );
-          }
-          return;
-        }
-        if (
-          isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged) &&
-          allocs.filter((a) => Number(a.quantity) > 0).length > 1
-        ) {
-          messageApi.error(
-            t('app.kuaizhizao.warehouseOutbound.confirm.batchSerialMultiNotSupported', {
-              material: String(it.material_code ?? ''),
-            }),
-          );
-          return;
-        }
-        const availableSum = sumBatchAllocationQty(
-          opts.map((o) => ({
-            batchNo: String(o.value ?? ''),
-            quantity: Number(o.quantity) || 0,
-          })),
-        );
-        if (qty > 0 && !stockQtyLoading && availableSum + 1e-6 < qty) {
-          if (allowNegativeInventory) {
-            negativeStockWarnings.push(
-              t('app.kuaizhizao.warehouseOutbound.confirm.negativeStockLineHint', {
-                material: String(it.material_code ?? ''),
-                available: availableSum,
-                required: qty,
-              }),
-            );
-          } else {
-            messageApi.error(
-              t('app.kuaizhizao.warehouseOutbound.confirm.batchQtyInsufficient', {
-                material: String(it.material_code ?? ''),
-                batch: opts.map((o) => o.value).join('、'),
-                available: availableSum,
-                required: qty,
-              }),
-            );
-            return;
-          }
-        }
-        continue;
-      }
-
-      const batchRaw = vals[`batch_${lineId}`];
-      if (!isValidOutboundBatchSelection(batchRaw, opts)) {
+      const allocs = (vals[`batch_alloc_${lineId}`] as OutboundBatchAllocation[] | undefined) ?? [];
+      if (!isValidOutboundBatchAllocations(allocs, opts, qty)) {
         const code = String(it.material_code ?? '');
         if (!opts.length) {
           messageApi.error(
@@ -937,23 +839,38 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           );
         } else {
           messageApi.error(
-            t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchAllocationRequired', {
               material: code,
-              batches: opts.map((o) => o.value).join('、'),
+              qty,
+              batches: opts.map((o) => o.value).join('、') || '—',
             }),
           );
         }
         return;
       }
-      const picked = opts.find(
-        (o) => o.value === String(batchRaw ?? '').trim() || o.value === normalizeOutboundBatchNo(batchRaw),
+      if (
+        isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged) &&
+        allocs.filter((a) => Number(a.quantity) > 0).length > 1
+      ) {
+        messageApi.error(
+          t('app.kuaizhizao.warehouseOutbound.confirm.batchSerialMultiNotSupported', {
+            material: String(it.material_code ?? ''),
+          }),
+        );
+        return;
+      }
+      const availableSum = sumBatchAllocationQty(
+        opts.map((o) => ({
+          batchNo: String(o.value ?? ''),
+          quantity: Number(o.quantity) || 0,
+        })),
       );
-      if (picked?.quantity != null && qty > 0 && picked.quantity < qty) {
+      if (qty > 0 && !stockQtyLoading && availableSum + 1e-6 < qty) {
         if (allowNegativeInventory) {
           negativeStockWarnings.push(
             t('app.kuaizhizao.warehouseOutbound.confirm.negativeStockLineHint', {
               material: String(it.material_code ?? ''),
-              available: picked.quantity,
+              available: availableSum,
               required: qty,
             }),
           );
@@ -961,8 +878,8 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           messageApi.error(
             t('app.kuaizhizao.warehouseOutbound.confirm.batchQtyInsufficient', {
               material: String(it.material_code ?? ''),
-              batch: picked.value,
-              available: picked.quantity,
+              batch: opts.map((o) => o.value).join('、'),
+              available: availableSum,
               required: qty,
             }),
           );
@@ -1096,8 +1013,11 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       }
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-        {outboundType === 'production_picking'
-          ? t('app.kuaizhizao.warehouseOutbound.confirm.hintPickingMultiBatch')
+        {outboundType === 'production_picking' ||
+        outboundType === 'sales_delivery' ||
+        outboundType === 'other_outbound' ||
+        outboundType === 'material_borrow'
+          ? t('app.kuaizhizao.warehouseOutbound.confirm.hintMultiBatch')
           : t('app.kuaizhizao.warehouseOutbound.confirm.hint')}
       </Typography.Paragraph>
       {outboundType === 'sales_delivery' ? (

@@ -8,7 +8,7 @@ const ProductionOutboundPage: React.FC = () => {
     <OutboundHub
       fixedOutboundType="production_picking"
       headerTitle={t('app.kuaizhizao.menu.production-execution.outbound')}
-      columnPersistenceId="apps.kuaizhizao.pages.production-execution.outbound-width-v1"
+      columnPersistenceId="apps.kuaizhizao.pages.production-execution.outbound-width-v2"
     />
   );
 };

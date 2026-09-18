@@ -554,7 +554,7 @@ class MoldTrialService:
                 operator_id=data.operator_id or operator_id,
                 operator_name=data.operator_name or operator_name,
                 remark=data.remark,
-                status="进行中",
+                status="草稿",
             )
             apply_create_audit(payload, current_user)
             trial = await MoldTrial.create(**payload)
@@ -627,17 +627,82 @@ class MoldTrialService:
     ) -> MoldTrial:
         async with in_transaction():
             row = await self.get(tenant_id, row_id)
+            if row.status not in ("草稿", "已驳回"):
+                raise ValidationError("仅草稿或已驳回状态可编辑")
             for k, v in data.model_dump(exclude_unset=True).items():
+                if k == "status":
+                    continue
                 setattr(row, k, v)
             apply_update_audit(row, current_user)
             await row.save()
-            if row.status != "进行中":
-                await MoldStatusService.resolve(tenant_id, row.mold_id)
+            await MoldStatusService.resolve(tenant_id, row.mold_id)
+            return row
+
+    async def submit(
+        self,
+        tenant_id: int,
+        row_id: int,
+        current_user: Optional[User] = None,
+    ) -> MoldTrial:
+        async with in_transaction():
+            row = await self.get(tenant_id, row_id)
+            if row.status not in ("草稿", "已驳回"):
+                raise ValidationError("仅草稿或已驳回状态可提交")
+            if not (row.trial_result or "").strip():
+                raise ValidationError("提交前请填写试模结果")
+            row.status = "已提交"
+            apply_update_audit(row, current_user)
+            await row.save()
+            await MoldStatusService.resolve(tenant_id, row.mold_id)
+            return row
+
+    async def approve(
+        self,
+        tenant_id: int,
+        row_id: int,
+        current_user: Optional[User] = None,
+    ) -> MoldTrial:
+        async with in_transaction():
+            row = await self.get(tenant_id, row_id)
+            # 历史数据创建时直接落「进行中」，与「已提交」一并允许审核结案
+            if row.status not in ("已提交", "进行中"):
+                raise ValidationError("仅已提交或进行中状态可审核通过")
+            if not (row.trial_result or "").strip():
+                raise ValidationError("审核前请填写试模结果")
+            row.status = "已完成"
+            apply_update_audit(row, current_user)
+            await row.save()
+            await MoldStatusService.resolve(tenant_id, row.mold_id)
+            return row
+
+    async def reject(
+        self,
+        tenant_id: int,
+        row_id: int,
+        reject_reason: str,
+        current_user: Optional[User] = None,
+    ) -> MoldTrial:
+        reason = (reject_reason or "").strip()
+        if not reason:
+            raise ValidationError("驳回原因不能为空")
+        async with in_transaction():
+            row = await self.get(tenant_id, row_id)
+            if row.status not in ("已提交", "进行中"):
+                raise ValidationError("仅已提交或进行中状态可驳回")
+            row.status = "已驳回"
+            remark = (row.remark or "").strip()
+            reject_line = f"驳回原因: {reason}"
+            row.remark = f"{remark}\n{reject_line}".strip() if remark else reject_line
+            apply_update_audit(row, current_user)
+            await row.save()
+            await MoldStatusService.resolve(tenant_id, row.mold_id)
             return row
 
     async def delete(self, tenant_id: int, row_id: int) -> None:
         async with in_transaction():
             row = await self.get(tenant_id, row_id)
+            if row.status not in ("草稿", "已驳回", "进行中"):
+                raise ValidationError("仅草稿、已驳回或历史进行中状态可删除")
             mold_id = row.mold_id
             row.deleted_at = resolve_business_datetime()
             await row.save()
@@ -793,6 +858,68 @@ class MoldBorrowService:
 
 
 class MoldReturnService:
+    @staticmethod
+    def _usage_count_from_quantity(qualified_quantity: float, cavity_count: Optional[int]) -> int:
+        qty = float(qualified_quantity or 0)
+        if qty <= 0:
+            return 1
+        if cavity_count and cavity_count > 0:
+            return max(1, math.ceil(qty / cavity_count))
+        return max(1, int(qty))
+
+    async def preview_usage_from_borrow(
+        self,
+        tenant_id: int,
+        borrow_id: int,
+    ) -> dict:
+        borrow = await MoldBorrow.filter(
+            tenant_id=tenant_id,
+            id=borrow_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not borrow:
+            raise NotFoundError(f"领用单不存在: {borrow_id}")
+        if borrow.status != OUTSTANDING_BORROW_STATUS:
+            raise ValidationError("关联领用单已归还")
+
+        mold = await _get_mold_or_raise(tenant_id, borrow.mold_id)
+        manufacture_qty: Optional[float] = None
+        source_id = borrow.source_id
+        source_no = borrow.source_no
+        if borrow.source_type == "work_order" and borrow.source_id:
+            from apps.kuaizhizao.models.work_order import WorkOrder
+
+            wo = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                id=borrow.source_id,
+                deleted_at__isnull=True,
+            ).first()
+            if wo:
+                source_no = wo.code or source_no
+                qty = wo.qualified_quantity
+                if qty is None:
+                    qty = wo.completed_quantity
+                if qty is not None:
+                    manufacture_qty = float(qty)
+
+        usage_count = self._usage_count_from_quantity(
+            manufacture_qty or 0,
+            mold.cavity_count,
+        )
+        return {
+            "borrow_id": borrow.id,
+            "mold_id": mold.id,
+            "mold_code": mold.code,
+            "mold_name": mold.name,
+            "borrow_document_no": borrow.document_no,
+            "source_type": borrow.source_type,
+            "source_id": source_id,
+            "source_no": source_no,
+            "manufacture_qty": manufacture_qty,
+            "usage_count": usage_count,
+            "cavity_count": mold.cavity_count,
+        }
+
     async def create(
         self,
         tenant_id: int,

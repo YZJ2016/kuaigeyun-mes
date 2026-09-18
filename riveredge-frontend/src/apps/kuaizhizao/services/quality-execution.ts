@@ -160,6 +160,21 @@ export const qualityApi = {
       }),
     previewPushToPurchaseReturn: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-return/preview`, { method: 'GET' }),
+    pushToPurchaseReceipt: async (
+      id: string,
+      data?: { quantity?: number; warehouse_id?: number },
+    ) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-receipt`, {
+        method: 'POST',
+        data:
+          data?.quantity != null || data?.warehouse_id != null
+            ? { quantity: data?.quantity, warehouse_id: data?.warehouse_id }
+            : undefined,
+      }),
+    previewPushToPurchaseReceipt: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-receipt/preview`, {
+        method: 'GET',
+      }),
     listPurchaseReceiptPullCandidates: async (params?: {
       skip?: number;
       limit?: number;
@@ -215,6 +230,11 @@ export const qualityApi = {
         data: Object.keys(payload).length ? payload : undefined,
       });
     },
+    createFromPurchaseOrder: async (purchaseOrderId: number | string, selectedItemIds?: number[]) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-order/${purchaseOrderId}`, {
+        method: 'POST',
+        data: selectedItemIds?.length ? { selected_item_ids: selectedItemIds } : undefined,
+      }),
     ensureForPurchaseReceipt: async (purchaseReceiptId: string) =>
       apiRequest<EnsureIqcForPurchaseReceiptResult>(
         `/apps/kuaizhizao/incoming-inspections/ensure-for-purchase-receipt/${purchaseReceiptId}`,
@@ -232,6 +252,11 @@ export const qualityApi = {
       }),
     createDefect: async (inspectionId: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${inspectionId}/create-defect`, { method: 'POST', data }),
+    createDefectBatch: async (inspectionId: string, data: { lines: any[] }) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/${inspectionId}/create-defect-batch`, {
+        method: 'POST',
+        data,
+      }),
     import: async (data: any[][]) =>
       apiRequest('/apps/kuaizhizao/incoming-inspections/import', { method: 'POST', data: { data } }),
     export: async (params?: any) =>
@@ -271,6 +296,11 @@ export const qualityApi = {
       }),
     createDefect: async (inspectionId: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/process-inspections/${inspectionId}/create-defect`, { method: 'POST', data }),
+    createDefectBatch: async (inspectionId: string, data: { lines: any[] }) =>
+      apiRequest(`/apps/kuaizhizao/process-inspections/${inspectionId}/create-defect-batch`, {
+        method: 'POST',
+        data,
+      }),
     import: async (data: any[][]) =>
       apiRequest('/apps/kuaizhizao/process-inspections/import', { method: 'POST', data: { data } }),
     export: async (params?: any) =>
@@ -345,6 +375,11 @@ export const qualityApi = {
       ),
     createDefect: async (inspectionId: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${inspectionId}/create-defect`, { method: 'POST', data }),
+    createDefectBatch: async (inspectionId: string, data: { lines: any[] }) =>
+      apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${inspectionId}/create-defect-batch`, {
+        method: 'POST',
+        data,
+      }),
     import: async (data: any[][]) =>
       apiRequest('/apps/kuaizhizao/finished-goods-inspections/import', { method: 'POST', data: { data } }),
     export: async (params?: any) =>

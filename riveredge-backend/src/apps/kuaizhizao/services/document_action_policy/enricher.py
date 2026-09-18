@@ -174,8 +174,15 @@ async def batch_document_item_material_previews(
     """
     if not parent_ids:
         return {}
+    filter_kwargs: Dict[str, Any] = {
+        "tenant_id": tenant_id,
+        f"{parent_field}__in": parent_ids,
+    }
+    # 软删明细不参与列表预览（有 deleted_at 字段的单据行表）
+    if hasattr(item_model, "deleted_at"):
+        filter_kwargs["deleted_at__isnull"] = True
     rows = await (
-        item_model.filter(tenant_id=tenant_id, **{f"{parent_field}__in": parent_ids})
+        item_model.filter(**filter_kwargs)
         .order_by(parent_field, "id")
         .values(parent_field, material_name_field)
     )
@@ -371,6 +378,7 @@ def enrich_sales_order_capabilities_on_response(
     has_remaining_work_order_qty: bool = True,
     has_existing_delivery_project: bool = False,
     has_downstream_documents: bool = False,
+    has_remaining_invoice_amount: bool = True,
     require_audit_before_print: bool = False,
 ) -> T:
     caps = derive_sales_order_capabilities(
@@ -384,6 +392,7 @@ def enrich_sales_order_capabilities_on_response(
         has_remaining_work_order_qty=has_remaining_work_order_qty,
         has_existing_delivery_project=has_existing_delivery_project,
         has_downstream_documents=has_downstream_documents,
+        has_remaining_invoice_amount=has_remaining_invoice_amount,
         require_audit_before_print=require_audit_before_print,
     )
     if hasattr(response, "model_copy"):
@@ -404,6 +413,7 @@ def enrich_sales_order_list_capabilities(
     has_remaining_work_order_qty_by_id: Optional[dict[int, bool]] = None,
     has_existing_delivery_project_by_id: Optional[dict[int, bool]] = None,
     has_downstream_documents_by_id: Optional[dict[int, bool]] = None,
+    has_remaining_invoice_amount_by_id: Optional[dict[int, bool]] = None,
     require_audit_before_print: bool = False,
 ) -> List[T]:
     pushed_map = pushed_to_computation_by_id or {}
@@ -415,6 +425,7 @@ def enrich_sales_order_list_capabilities(
     remaining_wo_map = has_remaining_work_order_qty_by_id or {}
     delivery_project_map = has_existing_delivery_project_by_id or {}
     downstream_map = has_downstream_documents_by_id or {}
+    invoice_remainder_map = has_remaining_invoice_amount_by_id or {}
     out: List[T] = []
     for order_model, resp in zip(orders, responses):
         oid = int(getattr(order_model, "id", 0) or 0)
@@ -429,6 +440,7 @@ def enrich_sales_order_list_capabilities(
             has_remaining_work_order_qty=remaining_wo_map.get(oid, True),
             has_existing_delivery_project=delivery_project_map.get(oid, False),
             has_downstream_documents=downstream_map.get(oid, False),
+            has_remaining_invoice_amount=invoice_remainder_map.get(oid, True),
             require_audit_before_print=require_audit_before_print,
         )
         if hasattr(resp, "model_copy"):
@@ -450,6 +462,7 @@ def get_sales_order_capabilities_from_record(
     has_remaining_work_order_qty: bool = True,
     has_existing_delivery_project: bool = False,
     has_downstream_documents: bool = False,
+    has_remaining_invoice_amount: bool = True,
     require_audit_before_print: bool = False,
 ) -> SalesOrderCapabilities:
     return derive_sales_order_capabilities(
@@ -463,6 +476,7 @@ def get_sales_order_capabilities_from_record(
         has_remaining_work_order_qty=has_remaining_work_order_qty,
         has_existing_delivery_project=has_existing_delivery_project,
         has_downstream_documents=has_downstream_documents,
+        has_remaining_invoice_amount=has_remaining_invoice_amount,
         require_audit_before_print=require_audit_before_print,
     )
 
