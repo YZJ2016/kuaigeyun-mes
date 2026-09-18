@@ -964,6 +964,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not work_order_operation:
                 raise NotFoundError(f"工单工序不存在: 工单ID={reporting_data.work_order_id}, 工序ID={reporting_data.operation_id}")
 
+            if (work_order_operation.status or "") == "paused":
+                raise BusinessLogicError("工序已暂停，请先恢复后再报工")
+
             from apps.kuaizhizao.models.outsource_order import OutsourceOrder
             from apps.kuaizhizao.utils.outsource_operation import is_outsourced_flag
 

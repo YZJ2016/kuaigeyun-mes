@@ -5521,6 +5521,31 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 deleted_at__isnull=True
             ).order_by('sequence').all()
 
+        # 历史脏数据：停机开着但 status 未写成 paused（旧 pause 只建停机记录）
+        # 读工序时自愈，避免 PC 仍显示「进行中」而 H5/工位已按停机态操作
+        pause_reason_by_op_id: Dict[int, Any] = {}
+        if operations:
+            from apps.kuaizhizao.models.station_operation_downtime import StationOperationDowntime
+
+            op_row_ids = [op.id for op in operations]
+            open_downtimes = await StationOperationDowntime.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                operation_id__in=op_row_ids,
+                ended_at__isnull=True,
+                deleted_at__isnull=True,
+            ).all()
+            for downtime in open_downtimes:
+                if downtime.operation_id is None:
+                    continue
+                pause_reason_by_op_id[int(downtime.operation_id)] = downtime
+            paused_ids = set(pause_reason_by_op_id)
+            if paused_ids:
+                for op in operations:
+                    if op.id in paused_ids and op.status != "paused":
+                        op.status = "paused"
+                        await op.save(update_fields=["status", "updated_at"])
+
         master_op_ids = [op.operation_id for op in operations if op.operation_id is not None]
         op_ids = [op.operation_id for op in operations]
 
@@ -5595,6 +5620,35 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 else:
                     default_process_plan_label = "检验方案"
 
+        _pause_reason_labels = {
+            "material_shortage": "缺料",
+            "material_wait": "待料",
+            "equipment_fault": "设备故障",
+            "tool_change": "换刀/换模",
+            "quality_issue": "质量异常",
+            "break": "休息",
+            "other": "其他",
+        }
+        team_member_names: Dict[int, List[str]] = {}
+        team_ids = list({
+            int(op.assigned_team_id)
+            for op in operations
+            if getattr(op, "assigned_team_id", None)
+        })
+        if team_ids:
+            from apps.master_data.models.factory import WorkGroupMember
+
+            member_rows = await WorkGroupMember.filter(
+                tenant_id=tenant_id,
+                work_group_id__in=team_ids,
+                deleted_at__isnull=True,
+            ).order_by("sort_order", "id")
+            for row in member_rows:
+                name = str(row.employee_name or "").strip()
+                if not name:
+                    continue
+                team_member_names.setdefault(int(row.work_group_id), []).append(name)
+
         prev_transfer = Decimal(str(plan_qty))
         result = []
         for idx, op in enumerate(operations):
@@ -5609,6 +5663,26 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             op_data["assigned_worker_ids"] = worker_ids
             if worker_ids and not op_data.get("assigned_worker_id"):
                 op_data["assigned_worker_id"] = worker_ids[0]
+            team_id = op_data.get("assigned_team_id")
+            op_data["assigned_team_member_names"] = (
+                team_member_names.get(int(team_id), []) if team_id else []
+            )
+            downtime = pause_reason_by_op_id.get(int(op.id)) if op.id is not None else None
+            if downtime is not None:
+                code = str(getattr(downtime, "reason_code", None) or "").strip()
+                stored_label = str(getattr(downtime, "reason_label", None) or "").strip()
+                # 以暂停时选择的预设原因码为准；历史数据 reason_label 可能被写成原因码本身
+                label = _pause_reason_labels.get(code) or ""
+                if not label and stored_label and stored_label != code:
+                    label = stored_label
+                elif not label:
+                    label = stored_label
+                remarks = str(getattr(downtime, "remarks", None) or "").strip()
+                # 终端未填补充说明时会把预设文案写入 remarks，不能把它当成另一条原因
+                if remarks and (remarks == label or remarks == stored_label or remarks == _pause_reason_labels.get(code, "")):
+                    remarks = ""
+                op_data["pause_reason_label"] = label or None
+                op_data["pause_reason_remarks"] = remarks or None
 
             qualified = op.qualified_quantity or Decimal("0")
             master_op_id = int(op.operation_id) if op.operation_id is not None else 0

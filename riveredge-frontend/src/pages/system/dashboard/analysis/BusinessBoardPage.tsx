@@ -1811,8 +1811,10 @@ const BusinessBoardPage: React.FC = () => {
                     })().map(({ key, step, placeholder }) => {
                       const isDone = step?.status === 'done';
                       const isActive = step?.status === 'active';
+                      const isPaused = step?.status === 'paused';
                       const isPending = step?.status === 'pending';
                       const COMPLETED_GREEN = '#34d399';
+                      const PAUSED_YELLOW = '#faad14';
                       const PENDING_COLOR = 'rgba(255,255,255,0.1)';
 
                       return (
@@ -1832,7 +1834,15 @@ const BusinessBoardPage: React.FC = () => {
                               height: 24,
                               borderRadius: '50%',
                               background: isDone ? COMPLETED_GREEN : getBoardHud().bgDeep,
-                              border: `2px solid ${isPending ? PENDING_COLOR : (isDone ? COMPLETED_GREEN : getBoardHud().cyan)}`,
+                              border: `2px solid ${
+                                isPending
+                                  ? PENDING_COLOR
+                                  : isDone
+                                    ? COMPLETED_GREEN
+                                    : isPaused
+                                      ? PAUSED_YELLOW
+                                      : getBoardHud().cyan
+                              }`,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -1840,8 +1850,8 @@ const BusinessBoardPage: React.FC = () => {
                             }}>
                               {isDone ? (
                                 <Check size={13} strokeWidth={2.5} color={getBoardHud().bgDeep} aria-hidden />
-                              ) : isActive ? (
-                                <span style={{ color: getBoardHud().cyan, fontSize: 8, fontWeight: 'bold', fontFamily: clockFont }}>{step!.progress}%</span>
+                              ) : isActive || isPaused ? (
+                                <span style={{ color: isPaused ? PAUSED_YELLOW : getBoardHud().cyan, fontSize: 8, fontWeight: 'bold', fontFamily: clockFont }}>{step!.progress}%</span>
                               ) : null}
                             </div>
                           )}
@@ -1851,7 +1861,9 @@ const BusinessBoardPage: React.FC = () => {
                               ? 'transparent'
                               : isPending
                                 ? getBoardHud().textDim
-                                : isActive
+                                : isPaused
+                                  ? PAUSED_YELLOW
+                                  : isActive
                                   ? getBoardHud().cyan
                                   : (isDone ? COMPLETED_GREEN : getBoardHud().textSoft),
                             textAlign: 'center',

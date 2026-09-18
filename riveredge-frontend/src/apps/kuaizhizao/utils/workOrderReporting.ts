@@ -215,7 +215,7 @@ export function isOperationEffectivelyCompleted(
   return String(operation?.status ?? '') === 'completed';
 }
 
-export type OperationCardPhase = 'completed' | 'in_progress' | 'pending';
+export type OperationCardPhase = 'completed' | 'in_progress' | 'paused' | 'pending';
 
 function hasActualStart(operation: any): boolean {
   const raw = operation?.actual_start_date ?? operation?.actualStartDate;
@@ -234,6 +234,10 @@ export function getOperationCardPhase(
   const st = String(operation?.status ?? '')
     .trim()
     .toLowerCase();
+  // 暂停优先：有报工进度时也不能盖成「进行中」
+  if (st === 'paused' || st === '暂停' || st === '已暂停') {
+    return 'paused';
+  }
   const progress = getOperationProgressPercent(operation, workOrderQuantity);
   if (st === 'in_progress' || st === 'processing' || progress > 0) {
     return 'in_progress';
@@ -253,8 +257,8 @@ export function getOperationCardPhase(
   if (st === 'pending' || st === '' || st === '待开始') {
     return 'pending';
   }
-  // 已开工类中文态 / 暂停等：仍按进行中展示，避免误显示待开始
-  if (st === '进行中' || st === 'paused' || st === '暂停') {
+  // 已开工类中文态：仍按进行中展示，避免误显示待开始
+  if (st === '进行中') {
     return 'in_progress';
   }
   return 'pending';

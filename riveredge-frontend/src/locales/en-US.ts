@@ -8731,6 +8731,7 @@ export default {
   'app.kuaizhizao.workOrder.opStatusCancelled': 'Cancelled',
   'app.kuaizhizao.workOrder.opStatusCompleted': 'Completed',
   'app.kuaizhizao.workOrder.opStatusInProgress': 'In Progress',
+  'app.kuaizhizao.workOrder.opStatusPaused': 'Paused',
   'app.kuaizhizao.workOrder.opStatusPending': 'Pending',
   'app.kuaizhizao.workOrder.pageTitle': 'Work Orders',
   'app.kuaizhizao.workOrder.detailTitle': 'Work Order Details - {{code}}',

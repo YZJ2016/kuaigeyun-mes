@@ -281,6 +281,11 @@ import { commitListPageSearchParams } from '../../../../../utils/listLifecycleSt
 import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
 import { WorkOrderEsopSidebar } from './components/WorkOrderEsopSidebar';
 import { OperationInspectionOverviewTooltip } from './components/OperationInspectionOverviewTooltip';
+import {
+  isOperationAssignedWorkGroup,
+  OperationPauseOverviewTooltip,
+  OperationTeamMembersTooltip,
+} from './components/OperationCardHoverTooltips';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import {
@@ -3639,6 +3644,11 @@ const WorkOrdersPage: React.FC = () => {
       messageApi.warning('请先开工后再报工')
       return
     }
+    const opStatus = String(operation.status || '').trim().toLowerCase()
+    if (opStatus === 'paused' || opStatus === '已暂停' || opStatus === '暂停') {
+      messageApi.warning('工序已暂停，请先恢复后再报工')
+      return
+    }
     if (operation.reporting_type === 'quantity') {
       const woQty = Number(workOrder.quantity) || 0
       const rem = getRemainingReportableQuantity(operation, woQty)
@@ -3949,7 +3959,10 @@ const WorkOrdersPage: React.FC = () => {
     const plannedQty = Number(workOrder.quantity || 0)
     const phase = getOperationCardPhase(operation, plannedQty)
     const isCompleted = phase === 'completed'
+    const isPaused = phase === 'paused'
     const isInProgress = phase === 'in_progress'
+    /** 已开工（含暂停）：卡片样式与进行中一致；暂停态不可报工 */
+    const isStarted = isInProgress || isPaused
     const outsourceKind = String(
       operation.outsource_kind || operation.outsourceKind || 'none',
     ).toLowerCase()
@@ -3978,7 +3991,9 @@ const WorkOrdersPage: React.FC = () => {
     /** 待开始与进行中标题栏区分，避免徽章看起来「全是一种颜色」 */
     const themeAccent = isCompleted
       ? token.colorSuccess
-      : isInProgress
+      : isPaused
+        ? token.colorWarning
+        : isStarted
         ? isOutsourced
           ? outsourceTheme.accent
           : token.colorPrimary
@@ -3986,29 +4001,41 @@ const WorkOrdersPage: React.FC = () => {
           ? outsourceTheme.accent
           : token.colorTextSecondary
     const headerBg = themeAccent
-    const statusLabel = isCompleted ? '已完成' : isInProgress ? '进行中' : '待开始'
+    const statusLabel = isCompleted
+      ? '已完成'
+      : isPaused
+        ? '已暂停'
+        : isInProgress
+          ? '进行中'
+          : '待开始'
     const personnelText = formatOperationAssignedPersonnel(operation)
-    /** 标题栏已有底色，徽章需对比色：完成=浅绿底、进行中=金、待开始=灰 */
-    const statusTagColor = isCompleted ? 'success' : isInProgress ? 'gold' : 'default'
+    /** 标题栏已有底色，徽章需对比色：完成=浅绿底、进行中=金、暂停=橙、待开始=灰 */
+    const statusTagColor = isCompleted
+      ? 'success'
+      : isPaused
+        ? 'warning'
+        : isInProgress
+          ? 'gold'
+          : 'default'
     const footerBg = isCompleted
       ? token.colorSuccessBg
       : isOutsourced
         ? outsourceTheme.bg
-        : isInProgress
+        : isStarted
           ? token.colorPrimaryBg
           : token.colorFillQuaternary
     const footerAccent = isCompleted
       ? token.colorSuccess
       : isOutsourced
         ? outsourceTheme.footerText
-        : isInProgress
+        : isStarted
           ? token.colorPrimary
           : token.colorTextSecondary
     const footerHoverBg = isCompleted
       ? token.colorSuccessBgHover
       : isOutsourced
         ? outsourceTheme.bgHover
-        : isInProgress
+        : isStarted
           ? token.colorPrimaryBgHover
           : token.colorFillTertiary
 
@@ -4025,7 +4052,7 @@ const WorkOrdersPage: React.FC = () => {
             overflow: 'hidden',
             border: isCompleted
               ? `2px solid ${token.colorSuccess}`
-              : isOutsourced || isInProgress
+              : isOutsourced || isStarted
                 ? `2px solid ${isOutsourced ? outsourceTheme.border : themeAccent}`
                 : `1px solid ${token.colorBorder}`,
             backgroundColor: isOutsourced && !isCompleted ? outsourceTheme.bg : token.colorBgContainer,
@@ -4071,9 +4098,19 @@ const WorkOrdersPage: React.FC = () => {
                 </Tag>
               ) : null}
             </div>
-            <Tag color={statusTagColor} variant="solid" style={{ margin: 0, flexShrink: 0 }}>
-              {statusLabel}
-            </Tag>
+            {isPaused ? (
+              <Tooltip title={<OperationPauseOverviewTooltip operation={operation} />}>
+                <span style={{ display: 'inline-flex', flexShrink: 0, cursor: 'help' }}>
+                  <Tag color={statusTagColor} variant="solid" style={{ margin: 0 }}>
+                    {statusLabel}
+                  </Tag>
+                </span>
+              </Tooltip>
+            ) : (
+              <Tag color={statusTagColor} variant="solid" style={{ margin: 0, flexShrink: 0 }}>
+                {statusLabel}
+              </Tag>
+            )}
           </div>
           {/* 中部：进度与信息（参考图：环形图左、文字右） */}
           <div style={{ flex: 1, padding: '8px 10px', overflow: 'hidden', minHeight: 0 }}>
@@ -4082,7 +4119,7 @@ const WorkOrdersPage: React.FC = () => {
               <div
                 role="button"
                 tabIndex={0}
-                title="点击报工"
+                title={isPaused ? '工序已暂停' : '点击报工'}
                 onClick={e => {
                   e.stopPropagation()
                   openQuickReportingFromOperationCard(operation, workOrder)
@@ -4286,13 +4323,30 @@ const WorkOrdersPage: React.FC = () => {
                 </div>
                 {!isOutsourced ? (
                   <>
-                    <div
-                      style={{ marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      title={personnelText}
-                    >
-                      <strong>人员: </strong>
-                      {personnelText}
-                    </div>
+                    {isOperationAssignedWorkGroup(operation) ? (
+                      <Tooltip title={<OperationTeamMembersTooltip operation={operation} />}>
+                        <div
+                          style={{
+                            marginBottom: 2,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            cursor: 'help',
+                          }}
+                        >
+                          <strong>人员: </strong>
+                          {personnelText}
+                        </div>
+                      </Tooltip>
+                    ) : (
+                      <div
+                        style={{ marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={personnelText}
+                      >
+                        <strong>人员: </strong>
+                        {personnelText}
+                      </div>
+                    )}
                     <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       <strong>车间: </strong>
                       {operation.workshop_name || '-'}
@@ -4378,7 +4432,7 @@ const WorkOrdersPage: React.FC = () => {
                 operation.status === 'pending' && !isSplitParentWorkOrder(workOrder)
               const canReport = isInProgress && !isCompleted
               const canWithdrawStart =
-                isInProgress &&
+                isStarted &&
                 !isCompleted &&
                 !isSplitParentWorkOrder(workOrder) &&
                 Number(operation.completed_quantity || 0) <= 0 &&
@@ -4492,13 +4546,15 @@ const WorkOrdersPage: React.FC = () => {
                     {canReport ? <FileTextOutlined style={{ marginRight: 4, fontSize: 13 }} /> : null}
                     {isCompleted
                       ? '已完成'
-                      : canReport
-                        ? t('app.kuaizhizao.workOrder.actionReport')
-                        : canStart
-                          ? t('app.kuaizhizao.workOrder.actionStart')
-                          : footerActionClickable
-                            ? t('app.kuaizhizao.workOrder.actionReport')
-                            : '待开始'}
+                      : isPaused
+                        ? '工序已暂停'
+                        : canReport
+                          ? t('app.kuaizhizao.workOrder.actionReport')
+                          : canStart
+                            ? t('app.kuaizhizao.workOrder.actionStart')
+                            : footerActionClickable
+                              ? t('app.kuaizhizao.workOrder.actionReport')
+                              : '待开始'}
                   </div>
                 </>
               )
