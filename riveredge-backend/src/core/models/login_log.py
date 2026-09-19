@@ -29,6 +29,12 @@ class LoginLog(LogBaseModel):
     username = fields.CharField(max_length=100, null=True, description="登录账号（冗余字段，用于查询）")
     login_ip = fields.CharField(max_length=50, description="登录IP地址")
     login_location = fields.CharField(max_length=200, null=True, description="登录地点（根据IP解析，可选）")
+    login_latitude = fields.DecimalField(
+        max_digits=10, decimal_places=6, null=True, description="登录 IP 纬度（登录时解析写入）"
+    )
+    login_longitude = fields.DecimalField(
+        max_digits=10, decimal_places=6, null=True, description="登录 IP 经度（登录时解析写入）"
+    )
     login_device = fields.CharField(max_length=50, null=True, description="登录设备（PC、Mobile等，可选）")
     login_browser = fields.CharField(max_length=200, null=True, description="登录浏览器（可选）")
     

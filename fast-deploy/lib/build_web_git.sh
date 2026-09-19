@@ -6,6 +6,28 @@ set -euo pipefail
 
 BUILD_WEB_REMOTES_FILE=""
 
+# filter-repo 会重写 checkout，未 commit 的源码（含已 git add 未 commit）会被冲掉。
+build_web_assert_source_tree_committed() {
+  local dirty=""
+  dirty="$(
+    git status --porcelain --untracked-files=all |
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        path="${line:3}"
+        case "$path" in
+          riveredge-frontend/dist/*) continue ;;
+        esac
+        printf '%s\n' "$line"
+      done
+  )"
+  if [ -n "$dirty" ]; then
+    echo "错误: 工作区存在未 commit 的源码改动；filter-repo 会将其冲掉（含已暂存的新文件）。" >&2
+    echo "请先 git add 并 git commit 全部源码，再执行 build.web.sh。" >&2
+    echo "$dirty" >&2
+    exit 1
+  fi
+}
+
 build_web_require_filter_repo() {
   if ! command -v git-filter-repo >/dev/null 2>&1; then
     echo "错误: build.web.sh 需要 git-filter-repo。" >&2
@@ -43,6 +65,8 @@ build_web_strip_dist_from_history() {
     echo "跳过历史 dist 剥离（BUILD_WEB_SKIP_HISTORY_REWRITE=1）"
     return 0
   fi
+
+  build_web_assert_source_tree_committed
 
   build_web_require_filter_repo
   build_web_save_remotes

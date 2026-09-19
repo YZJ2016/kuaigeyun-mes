@@ -38,6 +38,34 @@ export interface LoginLogStats {
   trend_data?: { date: string; value: number }[];
 }
 
+export interface LoginLogMapPoint {
+  login_ip: string;
+  latitude: number;
+  longitude: number;
+  login_location?: string;
+  login_count: number;
+  success_count: number;
+  failed_count: number;
+  last_login_at: string;
+  usernames: string[];
+  ip_count?: number;
+}
+
+export interface LoginLogMapPointsResponse {
+  items: LoginLogMapPoint[];
+  unresolved_ips: string[];
+  scanned_logs: number;
+  unique_ips: number;
+}
+
+export type LoginLogMapQuery = {
+  login_status?: string;
+  username?: string;
+  login_ip?: string;
+  start_time?: string;
+  end_time?: string;
+};
+
 /**
  * 获取登录日志列表
  */
@@ -68,4 +96,15 @@ export async function getLoginLog(uuid: string): Promise<LoginLog> {
  */
 export async function getLoginLogStats(): Promise<LoginLogStats> {
   return apiRequest<LoginLogStats>('/core/login-logs/statistics');
+}
+
+/**
+ * 登录日志地图散点（与列表相同筛选条件）
+ */
+export async function getLoginLogMapPoints(
+  params?: LoginLogMapQuery,
+): Promise<LoginLogMapPointsResponse> {
+  return apiRequest<LoginLogMapPointsResponse>('/core/login-logs/map-points', {
+    params,
+  });
 }

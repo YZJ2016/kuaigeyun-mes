@@ -4375,7 +4375,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               viewTypes.includes(cv.key) &&
               !(tableViewTypes && tableViewTypes.includes(cv.key)) &&
               (showAltViewBorderedShell ? (
-                <div key={cv.key} style={{ minHeight: '200px' }}>
+                <div
+                  key={cv.key}
+                  style={
+                    fillViewportBody
+                      ? {
+                          flex: 1,
+                          minHeight: 0,
+                          display: 'flex',
+                          flexDirection: 'column',
+                        }
+                      : { minHeight: '200px' }
+                  }
+                >
                   {cv.render(tableData)}
                 </div>
               ) : (

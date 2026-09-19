@@ -22438,6 +22438,20 @@ export default {
   'pages.system.loginLogs.refreshStats': '刷新统计',
   'pages.system.loginLogs.headerTitle': '登录日志',
   'pages.system.loginLogs.detailTitle': '登录日志详情',
+  'pages.system.loginLogs.viewMap': '地图',
+  'pages.system.loginLogs.mapLoading': '加载地图数据…',
+  'pages.system.loginLogs.mapEmpty': '当前筛选条件下没有可定位的登录 IP',
+  'pages.system.loginLogs.mapSummary':
+    '已定位 {{points}} 个 IP（共 {{ips}} 个去重 IP，扫描 {{logs}} 条日志；{{unresolved}} 个 IP 无法解析坐标）',
+  'pages.system.loginLogs.mapSeriesName': '登录 IP',
+  'pages.system.loginLogs.mapLoginCount': '登录次数',
+  'pages.system.loginLogs.mapSuccessFailed': '成功/失败',
+  'pages.system.loginLogs.mapUsers': '涉及用户',
+  'pages.system.loginLogs.mapIpCount': '涉及 IP 数',
+  'pages.system.loginLogs.mapNoUsername': '无',
+  'pages.system.loginLogs.mapLastLogin': '最近登录',
+  'pages.system.loginLogs.mapHeatHigh': '多',
+  'pages.system.loginLogs.mapHeatLow': '少',
 
   // 在线用户
   'pages.system.onlineUsers.loadStatsFailed': '加载统计信息失败',
@@ -30557,6 +30571,42 @@ export default {
     '委外发料取单可填写制单日期与发料人',
   'pages.dashboard.updateLog.entries.outsource-issue-document-date-r01.description':
     '从委外工单取单开委外发料时补制单日期与发料人，写入 issued_at 与 issued_by，出库 Hub 列表制单日期与操作人列正确展示。',
+  'pages.dashboard.updateLog.entries.login-logs-world-map-r01.title':
+    '登录日志新增全球地图视图',
+  'pages.dashboard.updateLog.entries.login-logs-world-map-r01.description':
+    '登录日志工具栏可切换地图视图，按当前筛选将登录 IP 聚合散点展示在世界地图上，悬停可查看地点、次数与最近登录时间。',
+  'pages.dashboard.updateLog.entries.login-logs-map-initial-load-r01.title':
+    '修复登录日志地图刷新后空白',
+  'pages.dashboard.updateLog.entries.login-logs-map-initial-load-r01.description':
+    '修复直接打开或刷新停留在地图视图时不请求数据的问题，进入地图视图即可加载散点，无需先切换其它视图。',
+  'pages.dashboard.updateLog.entries.login-logs-map-auto-center-r01.title':
+    '登录日志地图加载自动聚焦主集群',
+  'pages.dashboard.updateLog.entries.login-logs-map-auto-center-r01.description':
+    '地图视图按登录量加权计算中心与缩放，忽略少量海外散点，加载时直接定位到数据密集区域而非全球全貌。',
+  'pages.dashboard.updateLog.entries.login-logs-map-geo-accuracy-r01.title':
+    '登录日志地图定位与地点文案对齐',
+  'pages.dashboard.updateLog.entries.login-logs-map-geo-accuracy-r01.description':
+    '地图散点改为按经纬度网格聚合，登录写入与历史回填同步坐标与地点文案，避免南京等城市被画到错误经度。',
+  'pages.dashboard.updateLog.entries.login-logs-map-city-cluster-r01.title':
+    '登录日志地图按城市聚合展示',
+  'pages.dashboard.updateLog.entries.login-logs-map-city-cluster-r01.description':
+    '地图散点改为按登录地点合并统计，取消 300 个 IP 上限；无锡等高频城市显示为更大散点，并自动聚焦中国区。',
+  'pages.dashboard.updateLog.entries.login-logs-ip-geo-fallback-apis-r01.title':
+    '登录 IP 解析增加备用地理 API',
+  'pages.dashboard.updateLog.entries.login-logs-ip-geo-fallback-apis-r01.description':
+    '主 IP 地理 API 限流时依次尝试 ipwho.is、ip.sb、geojs.io、freeipapi 等备用源，提高历史坐标回填与地图散点命中率。',
+  'pages.dashboard.updateLog.entries.login-logs-world-map-viewport-r01.title':
+    '登录日志地图高度贴合视口',
+  'pages.dashboard.updateLog.entries.login-logs-world-map-viewport-r01.description':
+    '地图视图改用视口填充布局，切换后地图区域随窗口高度自适应，不再固定 520px 留白或裁切。',
+  'pages.dashboard.updateLog.entries.login-logs-ip-coords-write-r01.title':
+    '登录 IP 坐标登录时写入不再重复解析',
+  'pages.dashboard.updateLog.entries.login-logs-ip-coords-write-r01.description':
+    '登录日志落库时同步写入 IP 经纬度，地图视图直读库内坐标；历史记录可运行回填脚本一次性补全。',
+  'pages.dashboard.updateLog.entries.login-logs-world-map-geo-r01.title':
+    '修复登录日志地图底图不显示',
+  'pages.dashboard.updateLog.entries.login-logs-world-map-geo-r01.description':
+    '修复世界地图 GeoJSON 损坏导致底图空白：改为打包完整 world.json（217 国轮廓），地图与 IP 散点正常叠加。',
   'pages.dashboard.updateLog.entries.warehouse-doc-header-edit-r01.title':
     '出入库草稿编辑与委外退料补齐制单信息',
   'pages.dashboard.updateLog.entries.warehouse-doc-header-edit-r01.description':

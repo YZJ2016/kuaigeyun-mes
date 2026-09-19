@@ -14,7 +14,7 @@ import { ActionType, ProColumns, type ProDescriptionsItemProps } from '@ant-desi
 import { App, Button } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemStatusTag } from '../utils/systemListPresentation';
-import { EyeOutlined, BarChartOutlined } from '@ant-design/icons';
+import { EyeOutlined, BarChartOutlined, GlobalOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
 import { ListPageTemplate } from '../../../components/layout-templates';
@@ -25,10 +25,10 @@ import {
   getLoginLogs,
   getLoginLogStats,
   LoginLog,
-  LoginLogListResponse,
   LoginLogStats,
 } from '../../../services/loginLog';
-import { useGlobalStore } from '../../../stores';
+import type { LoginLogMapQuery } from '../../../services/loginLog';
+import { LoginLogsWorldMap } from './LoginLogsWorldMap';
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
@@ -47,6 +47,8 @@ const LoginLogsPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentLog, setCurrentLog] = useState<LoginLog | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const mapQueryRef = useRef<LoginLogMapQuery>({});
+  const [mapQueryVersion, setMapQueryVersion] = useState(0);
 
   /**
    * 加载统计信息
@@ -300,13 +302,30 @@ const LoginLogsPage: React.FC = () => {
     },
   ], GLOBAL_DOC_LIST_FIELD_RANK), [t]);
 
+  const loginLogMapView = useMemo(
+    () => ({
+      key: 'map',
+      label: t('pages.system.loginLogs.viewMap'),
+      icon: GlobalOutlined,
+      render: () => (
+        <LoginLogsWorldMap
+          query={mapQueryRef.current}
+          refreshToken={mapQueryVersion}
+        />
+      ),
+    }),
+    [mapQueryVersion, t],
+  );
+
   return (
     <>
-      <ListPageTemplate statCards={statCards}>
+      <ListPageTemplate statCards={statCards} fillMain>
         <UniTable<LoginLog>
-        viewTypes={['table', 'help']}
+        viewTypes={['table', 'map', 'help']}
+        customViews={[loginLogMapView]}
+        fillViewportBody
           helpViewConfig={buildListPageHelpViewConfig('system.loginLogs')}
-          columnPersistenceId="pages.system.login-logs.list-v6"
+          columnPersistenceId="pages.system.login-logs.list-v7"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -330,6 +349,15 @@ const LoginLogsPage: React.FC = () => {
               start_time = dayjs(searchParams.created_at[0]).toISOString();
               end_time = dayjs(searchParams.created_at[1]).toISOString();
             }
+
+            mapQueryRef.current = {
+              login_status: searchParams.login_status as string | undefined,
+              username: searchParams.username as string | undefined,
+              login_ip: searchParams.login_ip as string | undefined,
+              start_time,
+              end_time,
+            };
+            setMapQueryVersion((v) => v + 1);
             
             try {
               const response = await getLoginLogs({

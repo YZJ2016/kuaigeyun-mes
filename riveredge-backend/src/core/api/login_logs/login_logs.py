@@ -12,6 +12,7 @@ from core.schemas.login_log import (
     LoginLogResponse,
     LoginLogListResponse,
     LoginLogStatsResponse,
+    LoginLogMapPointsResponse,
 )
 from core.services.logging.login_log_service import LoginLogService
 from core.api.deps.deps import get_current_tenant
@@ -57,6 +58,29 @@ async def get_login_logs(
         tenant_id=tenant_id,
         page=page,
         page_size=page_size,
+        user_id=user_id,
+        username=username,
+        login_status=login_status,
+        login_ip=login_ip,
+        start_time=start_time,
+        end_time=end_time,
+    )
+
+
+@router.get("/map-points", response_model=LoginLogMapPointsResponse)
+async def get_login_log_map_points(
+    user_id: Optional[int] = Query(None, description="用户ID过滤"),
+    username: Optional[str] = Query(None, description="用户名过滤"),
+    login_status: Optional[str] = Query(None, description="登录状态过滤（success、failed）"),
+    login_ip: Optional[str] = Query(None, description="登录IP过滤"),
+    start_time: Optional[datetime] = Query(None, description="开始时间过滤"),
+    end_time: Optional[datetime] = Query(None, description="结束时间过滤"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """登录日志地图视图：按 IP 聚合并解析经纬度散点。"""
+    return await LoginLogService.get_login_log_map_points(
+        tenant_id=tenant_id,
         user_id=user_id,
         username=username,
         login_status=login_status,

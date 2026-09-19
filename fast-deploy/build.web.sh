@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # 构建 riveredge-frontend，历史仅保留 tip 一份 dist，并推送供生产机 git pull 部署。
 #
-# 流程：剥离历史 dist → npm run build → 提交最新 dist + 已跟踪改动 → force-with-lease 推送。
+# 流程：校验源码已全部 commit → 剥离历史 dist → npm run build → 仅提交 dist → force-with-lease 推送。
 # 生产机 update 直接消费 Git 中的 dist，无需在服务器构建（见 cmd_ensure_frontend_dist）。
 #
 # 依赖：git-filter-repo（pip install git-filter-repo）
 # 前置：当前分支已设置上游（git push -u origin <branch>），且能访问 origin。
-# 未跟踪的新文件需自行 git add；Usage: ./fast-deploy/build.web.sh [commit 说明]
+# 硬性要求：除 riveredge-frontend/dist 外工作区必须干净（已 commit）；否则 filter-repo 会冲掉本地源码。
+# Usage: ./fast-deploy/build.web.sh [dist 提交说明]
 #
 # 环境变量：
 #   BUILD_WEB_SKIP_HISTORY_REWRITE=1  跳过历史剥离与普通 push（调试/应急）
@@ -55,12 +56,10 @@ test -f "$WEB_DIST/login.html"
 
 cd "$PROJECT_ROOT"
 git add -A riveredge-frontend/dist
-# 已跟踪文件中的其它修改（后端、fast-deploy、文档等）一并纳入本次发布
-git add -u
 
 git diff --staged --quiet && {
-  echo "错误: 暂存区为空。dist 无变化，且仓库内没有其它已跟踪文件的修改可提交。"
-  echo "（若有新文件，请先 git add 后再运行本脚本。）"
+  echo "错误: dist 无变化，无需提交。"
+  echo "（源码改动须先单独 commit；本脚本只提交 riveredge-frontend/dist。）"
   exit 1
 }
 

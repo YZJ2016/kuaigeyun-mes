@@ -351,6 +351,61 @@ def _cache_set_location(ip: str, label: str) -> None:
     _LOCATION_CACHE[ip] = (time.monotonic() + _LOCATION_CACHE_TTL_SEC, label)
 
 
+async def _lookup_geo_from_login_logs(
+    ip: str,
+    *,
+    tenant_id: int | None = None,
+) -> tuple[Optional[float], Optional[float]]:
+    """同 IP 历史登录日志已写入的经纬度（避免重复外网解析）。"""
+    try:
+        from core.models.login_log import LoginLog
+
+        query = LoginLog.filter(login_ip=ip).exclude(login_latitude__isnull=True).exclude(
+            login_longitude__isnull=True
+        )
+        if tenant_id is not None:
+            query = query.filter(tenant_id=tenant_id)
+        row = await query.order_by("-created_at").only("login_latitude", "login_longitude").first()
+        if row and row.login_latitude is not None and row.login_longitude is not None:
+            return float(row.login_latitude), float(row.login_longitude)
+    except Exception as e:
+        logger.debug(f"从登录日志回查坐标失败: {ip}, {e}")
+    return None, None
+
+
+async def _lookup_paired_geo_location_from_login_logs(
+    ip: str,
+    *,
+    tenant_id: int | None = None,
+) -> tuple[Optional[str], Optional[float], Optional[float]]:
+    """同一条历史登录日志上的地点与坐标（成对回查，禁止混源）。"""
+    try:
+        from core.models.login_log import LoginLog
+
+        query = (
+            LoginLog.filter(login_ip=ip)
+            .exclude(login_latitude__isnull=True)
+            .exclude(login_longitude__isnull=True)
+        )
+        if tenant_id is not None:
+            query = query.filter(tenant_id=tenant_id)
+        row = (
+            await query.order_by("-created_at")
+            .only("login_location", "login_latitude", "login_longitude")
+            .first()
+        )
+        if row and row.login_latitude is not None and row.login_longitude is not None:
+            location: Optional[str] = None
+            if row.login_location:
+                label = str(row.login_location).strip()
+                if label and not label.startswith("中国-"):
+                    location = normalize_login_location_label(label)
+            return location, float(row.login_latitude), float(row.login_longitude)
+    except Exception as e:
+        logger.debug(f"从登录日志成对回查地理信息失败: {ip}, {e}")
+    return None, None, None
+
+
 async def _lookup_location_from_login_logs(ip: str) -> Optional[str]:
     """同 IP 曾成功解析过的地点（填补 API 瞬时失败，不造假）。"""
     try:
@@ -379,7 +434,7 @@ async def get_ip_location_detail(ip: str, timeout: float = 3.0) -> Optional[Dict
     获取IP地址的详细地理位置信息（含经纬度，供前端天气组件使用）
 
     当客户端 IP 为内网时，先获取本机公网 IP 再解析位置。
-    依次尝试：ip-api.com、ipapi.co、ipinfo.io。
+    依次尝试：ip-api.com、ipapi.co、ipinfo.io、ipwho.is、ip.sb、geojs.io、freeipapi.com。
 
     Args:
         ip: IP地址字符串
@@ -455,6 +510,88 @@ async def get_ip_location_detail(ip: str, timeout: float = 3.0) -> Optional[Dict
                     return parsed
     except Exception as e:
         logger.debug(f"ipinfo.io 请求失败: ip={resolve_ip}, {e}")
+
+    # 4. ipwho.is（HTTPS，免费，含 lat/lon）
+    try:
+        r = await client.get(
+            f"https://ipwho.is/{resolve_ip}",
+            headers=headers,
+            timeout=timeout,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("success"):
+                result = _parse_location_from_provider(
+                    data,
+                    lat_key="latitude",
+                    lon_key="longitude",
+                )
+                if result and result.get("lat") is not None and result.get("lon") is not None:
+                    return result
+    except Exception as e:
+        logger.debug(f"ipwho.is 请求失败: ip={resolve_ip}, {e}")
+
+    # 5. ip.sb（HTTPS，免费）
+    try:
+        r = await client.get(
+            f"https://api.ip.sb/geoip/{resolve_ip}",
+            headers=headers,
+            timeout=timeout,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            result = _parse_location_from_provider(
+                data,
+                lat_key="latitude",
+                lon_key="longitude",
+            )
+            if result and result.get("lat") is not None and result.get("lon") is not None:
+                return result
+    except Exception as e:
+        logger.debug(f"ip.sb 请求失败: ip={resolve_ip}, {e}")
+
+    # 6. geojs.io（HTTPS，免费）
+    try:
+        r = await client.get(
+            f"https://get.geojs.io/v1/ip/geo/{resolve_ip}.json",
+            headers=headers,
+            timeout=timeout,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            result = _parse_location_from_provider(
+                data,
+                lat_key="latitude",
+                lon_key="longitude",
+            )
+            if result and result.get("lat") is not None and result.get("lon") is not None:
+                return result
+    except Exception as e:
+        logger.debug(f"geojs.io 请求失败: ip={resolve_ip}, {e}")
+
+    # 7. freeipapi.com（HTTPS，免费；须走 www 域名）
+    try:
+        r = await client.get(
+            f"https://www.freeipapi.com/api/json/{resolve_ip}",
+            headers=headers,
+            timeout=timeout,
+            follow_redirects=True,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            result = _parse_location_from_provider(
+                data,
+                city_key="cityName",
+                region_key="regionName",
+                country_key="countryName",
+                lat_key="latitude",
+                lon_key="longitude",
+            )
+            if result and result.get("lat") is not None and result.get("lon") is not None:
+                return result
+    except Exception as e:
+        logger.debug(f"freeipapi.com 请求失败: ip={resolve_ip}, {e}")
+
     return None
 
 
@@ -530,7 +667,7 @@ async def get_ip_location(ip: str, timeout: float = 2.5) -> Optional[str]:
     return None
 
 
-async def parse_ip_info(ip: str, user_agent: str = "") -> Dict[str, Optional[str]]:
+async def parse_ip_info(ip: str, user_agent: str = "") -> Dict[str, Any]:
     """
     解析IP地址和User-Agent的完整信息
 
@@ -539,16 +676,38 @@ async def parse_ip_info(ip: str, user_agent: str = "") -> Dict[str, Optional[str
         user_agent: User-Agent字符串（可选）
 
     Returns:
-        Dict[str, Optional[str]]: 包含以下字段的字典
-            - location: 地理位置信息
-            - browser: 浏览器信息
-            - device: 设备类型
+        Dict: location / latitude / longitude / browser / device
     """
-    location = await get_ip_location(ip)
     ua_info = parse_user_agent(user_agent)
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+    if ip and not is_private_ip(ip):
+        detail = await get_ip_location_detail(ip, timeout=2.5)
+        if detail:
+            label = _format_location_from_detail(detail)
+            if label:
+                location = normalize_login_location_label(label)
+                _cache_set_location(ip, label)
+            lat_val = detail.get("lat")
+            lon_val = detail.get("lon")
+            if lat_val is not None and lon_val is not None:
+                latitude = float(lat_val)
+                longitude = float(lon_val)
+        else:
+            loc2, lat2, lon2 = await _lookup_paired_geo_location_from_login_logs(ip)
+            if lat2 is not None and lon2 is not None:
+                latitude = lat2
+                longitude = lon2
+                if loc2:
+                    location = loc2
+                    _cache_set_location(ip, loc2)
 
     return {
         "location": location,
+        "latitude": latitude,
+        "longitude": longitude,
         "browser": ua_info.get("browser"),
         "device": ua_info.get("device"),
     }

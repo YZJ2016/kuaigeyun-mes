@@ -44,6 +44,8 @@ class AuditLogServiceImpl(AuditLogServiceInterface):
         login_ip: Optional[str] = None,
         user_agent: Optional[str] = None,
         login_location: Optional[str] = None,
+        login_latitude: Optional[float] = None,
+        login_longitude: Optional[float] = None,
         login_device: Optional[str] = None,
         login_browser: Optional[str] = None,
         success: bool = True,
@@ -59,6 +61,8 @@ class AuditLogServiceImpl(AuditLogServiceInterface):
             login_ip: 登录IP
             user_agent: 用户代理
             login_location: 登录地点（IP地理位置，可选）
+            login_latitude: 登录 IP 纬度（可选）
+            login_longitude: 登录 IP 经度（可选）
             login_device: 登录设备（PC、Mobile等，可选）
             login_browser: 登录浏览器（可选）
             success: 是否成功
@@ -73,6 +77,8 @@ class AuditLogServiceImpl(AuditLogServiceInterface):
             username=username,
             login_ip=login_ip or "0.0.0.0",  # 确保有默认值
             login_location=login_location,  # IP地理位置
+            login_latitude=login_latitude,
+            login_longitude=login_longitude,
             login_device=login_device,  # 设备类型
             login_browser=login_browser,  # 浏览器信息
             login_status=login_status,

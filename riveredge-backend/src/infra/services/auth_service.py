@@ -1469,6 +1469,8 @@ class AuthService:
                     login_ip=login_ip,
                     user_agent=user_agent,
                     login_location=login_location,
+                    login_latitude=ip_info.get("latitude"),
+                    login_longitude=ip_info.get("longitude"),
                     login_device=login_device,  # 优先 X-Client-Channel，否则 UA
                     login_browser=ip_info.get("browser"),  # 浏览器信息
                     success=(login_status == "success"),

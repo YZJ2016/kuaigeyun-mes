@@ -128,6 +128,8 @@ class AuditLogServiceInterface(ServiceInterface):
         login_ip: Optional[str] = None,
         user_agent: Optional[str] = None,
         login_location: Optional[str] = None,
+        login_latitude: Optional[float] = None,
+        login_longitude: Optional[float] = None,
         login_device: Optional[str] = None,
         login_browser: Optional[str] = None,
         success: bool = True,
