@@ -46,6 +46,7 @@ function WorkOrderOperationStepsStripInner({
 
   const doneColor = token.colorSuccess;
   const activeColor = token.colorPrimary;
+  const pausedColor = token.colorWarning;
   const pendingBorder = token.colorBorderSecondary;
   const labelDim = token.colorTextSecondary;
   const labelActive = token.colorPrimary;
@@ -96,12 +97,20 @@ function WorkOrderOperationStepsStripInner({
           if (!step) return null;
           const isDone = step.status === 'done';
           const isActive = step.status === 'active';
+          const isPaused = step.status === 'paused';
           const isPending = step.status === 'pending';
-          const borderColor = isPending ? pendingBorder : isDone ? doneColor : activeColor;
-          const title =
-            isActive && typeof step.progress === 'number'
-              ? `${step.name} - ${step.progress}%`
-              : step.name;
+          const borderColor = isPending
+            ? pendingBorder
+            : isDone
+              ? doneColor
+              : isPaused
+                ? pausedColor
+                : activeColor;
+          /** 暂停与进行中同结构：白底 + 描边变色；仅完成态实心填充 */
+          const accentColor = isPaused ? pausedColor : activeColor;
+          const showProgress =
+            (isActive || isPaused) && typeof step.progress === 'number';
+          const title = showProgress ? `${step.name} - ${step.progress}%` : step.name;
           return (
             <div
               key={key}
@@ -133,10 +142,10 @@ function WorkOrderOperationStepsStripInner({
               >
                 {isDone ? (
                   <CheckOutlined style={{ color: '#fff', fontSize: compact ? 12 : 14 }} />
-                ) : isActive && typeof step.progress === 'number' ? (
+                ) : showProgress ? (
                   <span
                     style={{
-                      color: activeColor,
+                      color: accentColor,
                       fontSize: progressFontSize,
                       fontWeight: 700,
                       lineHeight: 1,
@@ -156,8 +165,17 @@ function WorkOrderOperationStepsStripInner({
           if (!step) return null;
           const isDone = step.status === 'done';
           const isActive = step.status === 'active';
+          const isPaused = step.status === 'paused';
           const isPending = step.status === 'pending';
-          const labelColor = isPending ? labelDim : isActive ? labelActive : isDone ? labelDone : labelDim;
+          const labelColor = isPending
+            ? labelDim
+            : isPaused
+              ? pausedColor
+              : isActive
+                ? labelActive
+                : isDone
+                  ? labelDone
+                  : labelDim;
           return (
             <span
               key={key}

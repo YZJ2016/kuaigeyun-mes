@@ -8,10 +8,12 @@ from typing import Any, Iterable, List, Optional
 
 
 def map_work_order_operation_step_status(raw_status: Optional[str]) -> str:
-    """completed → done，in_progress → active，其它 → pending。"""
+    """completed → done，paused → paused，in_progress → active，其它 → pending。"""
     s = raw_status or ""
     if s in ("completed", "completed_force", "已完成"):
         return "done"
+    if s in ("paused", "暂停", "已暂停"):
+        return "paused"
     if s in ("in_progress", "进行中"):
         return "active"
     return "pending"
@@ -24,7 +26,7 @@ def build_work_order_operation_steps(
     """
     将工单工序行转为步骤轴数据。
 
-    progress（仅 active）：min(100, 有效合格 / plan * 100)。
+    progress（active / paused）：min(100, 有效合格 / plan * 100)。
     有效合格优先 transfer_qualified_quantity（方案质检放行数），否则报工合格数。
     不以进度 100% 强制 done：未检验放行时工序 status 仍为 in_progress。
     """
@@ -35,7 +37,7 @@ def build_work_order_operation_steps(
         progress = 0
         if status == "done":
             progress = 100
-        elif status == "active" and plan > 0:
+        elif status in ("active", "paused") and plan > 0:
             if op.get("transfer_qualified_quantity") is not None:
                 qty = float(op.get("transfer_qualified_quantity") or 0)
             else:

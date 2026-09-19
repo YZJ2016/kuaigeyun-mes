@@ -158,6 +158,8 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
     () => ({
       pending: { text: t('app.kuaizhizao.workOrder.opStatusPending'), color: 'default' },
       in_progress: { text: t('app.kuaizhizao.workOrder.opStatusInProgress'), color: 'processing' },
+      processing: { text: t('app.kuaizhizao.workOrder.opStatusInProgress'), color: 'processing' },
+      paused: { text: t('app.kuaizhizao.workOrder.opStatusPaused'), color: 'warning' },
       completed: { text: t('app.kuaizhizao.workOrder.opStatusCompleted'), color: 'success' },
       cancelled: { text: t('app.kuaizhizao.workOrder.opStatusCancelled'), color: 'error' },
     }),

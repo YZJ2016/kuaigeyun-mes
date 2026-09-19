@@ -674,9 +674,16 @@ const WorkOrdersKioskPage: React.FC = () => {
                                             const woQty = Number(selectedWorkOrder?.quantity || 0);
                                             const phase = getOperationCardPhase(op, woQty);
                                             const isCompleted = phase === 'completed';
-                                            const isProcessing = phase === 'in_progress';
+                                            const isPaused = phase === 'paused';
+                                            const isProcessing = phase === 'in_progress' || isPaused;
                                             const progress = getOperationProgressPercent(op, woQty);
-                                            const strokeColor = isCompleted ? HMI_DESIGN_TOKENS.STATUS_OK : isProcessing ? HMI_DESIGN_TOKENS.STATUS_WARNING : HMI_DESIGN_TOKENS.STATUS_INFO;
+                                            const strokeColor = isCompleted
+                                              ? HMI_DESIGN_TOKENS.STATUS_OK
+                                              : isPaused
+                                                ? HMI_DESIGN_TOKENS.STATUS_WARNING
+                                                : isProcessing
+                                                  ? HMI_DESIGN_TOKENS.STATUS_WARNING
+                                                  : HMI_DESIGN_TOKENS.STATUS_INFO;
                                             const opName = op.name || op.operation_name || `工序${idx + 1}`;
                                             return (
                                                 <Tooltip title={opName} key={op.id}>
@@ -741,6 +748,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                                 Number(selectedWorkOrder?.quantity || 0),
                                                             );
                                                             if (phase === 'completed') return '已完成';
+                                                            if (phase === 'paused') return '已暂停';
                                                             if (phase === 'in_progress') return '执行中';
                                                             return '待执行';
                                                         })()}

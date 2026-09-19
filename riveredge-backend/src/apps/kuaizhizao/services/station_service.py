@@ -39,6 +39,7 @@ from core.utils.timezone_utils import resolve_business_datetime
 
 DOWNTIME_REASON_LABELS = {
     "material_shortage": "缺料",
+    "material_wait": "待料",
     "equipment_fault": "设备故障",
     "tool_change": "换刀/换模",
     "quality_issue": "质量异常",
@@ -1340,7 +1341,8 @@ class StationService(WorkOrderService):
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
             op = await self._get_operation_or_404(tenant_id, work_order_id, operation_id)
-            if op.status != "in_progress":
+            # in_progress / processing 均可暂停；paused 须先恢复
+            if op.status not in ("in_progress", "processing"):
                 raise BusinessLogicError(f"只能暂停进行中的工序，当前状态：{op.status}")
 
             open_dt = await StationOperationDowntime.filter(
@@ -1366,6 +1368,9 @@ class StationService(WorkOrderService):
                 operator_name=user_info["name"],
                 remarks=data.remarks,
             )
+            # 停机记录 + 工序状态一并落库，否则 PC/H5 刷新后仍显示「进行中」
+            op.status = "paused"
+            await op.save(update_fields=["status", "updated_at"])
             return {"downtime_id": record.id, "paused": True, "reason_code": data.reason_code}
 
     async def resume_work_order_operation(
@@ -1376,7 +1381,7 @@ class StationService(WorkOrderService):
         operator_id: int,
     ) -> dict:
         async with in_transaction():
-            await self._get_operation_or_404(tenant_id, work_order_id, operation_id)
+            op = await self._get_operation_or_404(tenant_id, work_order_id, operation_id)
             open_dt = await StationOperationDowntime.filter(
                 tenant_id=tenant_id,
                 work_order_id=work_order_id,
@@ -1388,6 +1393,8 @@ class StationService(WorkOrderService):
                 raise BusinessLogicError("工序未处于暂停状态")
             open_dt.ended_at = resolve_business_datetime()
             await open_dt.save()
+            op.status = "in_progress"
+            await op.save(update_fields=["status", "updated_at"])
             return {"downtime_id": open_dt.id, "paused": False}
 
     async def complete_work_order_operation(
@@ -1401,7 +1408,8 @@ class StationService(WorkOrderService):
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
             op = await self._get_operation_or_404(tenant_id, work_order_id, operation_id)
-            if op.status not in ("in_progress", "pending"):
+            # 暂停态允许直接结束（会先关闭未结停机）
+            if op.status not in ("in_progress", "processing", "pending", "paused"):
                 raise BusinessLogicError(f"不能结束当前状态的工序：{op.status}")
 
             open_dt = await StationOperationDowntime.filter(

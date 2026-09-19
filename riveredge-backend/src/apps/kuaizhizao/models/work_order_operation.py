@@ -40,7 +40,8 @@ class WorkOrderOperation(BaseModel):
         completed_quantity: 已完成数量
         qualified_quantity: 合格数量
         unqualified_quantity: 不合格数量
-        status: 工序状态（pending/in_progress/completed/cancelled）
+        status: 工序状态（pending/in_progress/processing/paused/completed/cancelled）
+        machine_session_state: 上下机状态（none/on_machine/off_machine）
         assigned_worker_id: 分配的员工ID
         assigned_worker_name: 分配的员工姓名
         assigned_equipment_id: 分配的设备ID
@@ -107,7 +108,11 @@ class WorkOrderOperation(BaseModel):
     unqualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="不合格数量")
 
     # 状态信息
-    status = fields.CharField(max_length=20, default="pending", description="工序状态（pending/in_progress/completed/cancelled）")
+    status = fields.CharField(
+        max_length=20,
+        default="pending",
+        description="工序状态（pending/in_progress/processing/paused/completed/cancelled）",
+    )
     machine_session_state = fields.CharField(
         max_length=20,
         default="none",

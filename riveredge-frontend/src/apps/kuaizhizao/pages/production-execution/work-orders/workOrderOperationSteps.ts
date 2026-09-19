@@ -5,7 +5,7 @@
  * 运营看板仍可用固定槽位窗口算法。
  */
 
-export type WorkOrderOperationStepStatus = 'done' | 'active' | 'pending';
+export type WorkOrderOperationStepStatus = 'done' | 'active' | 'pending' | 'paused';
 
 export interface WorkOrderOperationStep {
   name: string;

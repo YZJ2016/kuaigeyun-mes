@@ -344,7 +344,7 @@ class WorkOrderOperationStepSummary(BaseModel):
     """工序步骤摘要（运营看板 / 列表工序列）"""
     name: str = Field(..., description="工序名称")
     sequence: int = Field(default=0, description="工序序号")
-    status: str = Field(..., description="done | active | pending")
+    status: str = Field(..., description="done | active | pending | paused")
     progress: int = Field(default=0, description="进行中工序进度 0-100")
 
 
@@ -849,7 +849,22 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
         alias="inspectionUnqualifiedQuantity",
         description="方案质检：已执行过程检验单不合格数量合计（卡片合格率口径）",
     )
-    
+    assigned_team_member_names: List[str] = Field(
+        default_factory=list,
+        alias="assignedTeamMemberNames",
+        description="派工工作小组成员姓名（工序接口一并返回，卡片浮窗不再另拉接口）",
+    )
+    pause_reason_label: Optional[str] = Field(
+        None,
+        alias="pauseReasonLabel",
+        description="当前未结束停机的暂停原因",
+    )
+    pause_reason_remarks: Optional[str] = Field(
+        None,
+        alias="pauseReasonRemarks",
+        description="暂停备注",
+    )
+
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 
@@ -866,6 +881,7 @@ class WorkOrderOperationResponse(WorkOrderOperationBase):
         "inspection_plan_ids",
         "inspection_plan_labels",
         "process_inspection_pending_codes",
+        "assigned_team_member_names",
         "defect_types",
         mode="before",
     )
