@@ -138,7 +138,15 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
                 if existing:
                     raise ValidationError(f"委外发料单编码 {code} 已存在")
 
-            now = resolve_business_datetime()
+            now = resolve_business_datetime(issue_data.issued_at)
+            resolved_issued_by = (
+                int(issue_data.issued_by)
+                if getattr(issue_data, "issued_by", None) and int(issue_data.issued_by) > 0
+                else created_by
+            )
+            resolved_issued_by_name = (
+                str(getattr(issue_data, "issued_by_name", None) or "").strip() or user_info["name"]
+            )
             material_issue = await OutsourceMaterialIssue.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -157,8 +165,8 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
                 batch_number=issue_data.batch_number,
                 status="completed",
                 issued_at=now,
-                issued_by=created_by,
-                issued_by_name=user_info["name"],
+                issued_by=resolved_issued_by,
+                issued_by_name=resolved_issued_by_name,
                 remarks=issue_data.remarks,
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -335,6 +343,9 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
                 warehouse_id=wh_id,
                 warehouse_name=wh_name,
                 batch_number=line.batch_number,
+                issued_at=batch_data.issued_at,
+                issued_by=batch_data.issued_by,
+                issued_by_name=batch_data.issued_by_name,
                 remarks=batch_data.remarks,
             )
             resp = await self.create_material_issue(

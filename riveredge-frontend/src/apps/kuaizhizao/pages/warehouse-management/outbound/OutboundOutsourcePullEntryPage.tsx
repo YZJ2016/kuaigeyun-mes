@@ -11,6 +11,7 @@ import {
   Button,
   Card,
   Col,
+  DatePicker,
   Form,
   Row,
   Space,
@@ -18,6 +19,7 @@ import {
   Typography,
 } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
+import dayjs, { type Dayjs } from 'dayjs';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   DocumentFormPageLayout,
@@ -27,18 +29,22 @@ import { warehouseApi as masterWarehouseApi } from '../../../../master-data/serv
 import { outsourceMaterialIssueApi, outsourceWorkOrderApi } from '../../../services/production';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
+import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import OutsourceIssueFormContent, {
   type OutsourceIssueLine,
 } from '../../../components/OutsourceIssueFormContent';
 import {
+  OutboundEntryOperatorField,
   OutboundEntryRemarksSection,
   ReadOnlyFormValue,
   mapWarehouseSelectOptions,
+  useOutboundOperatorSelect,
 } from './outboundEntryShared';
 import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundOutsourceEntryPath } from './outboundPaths';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import {
+  draftDayjs,
   draftOptionalNumber,
   mergeMaterialIssueQuantities,
   usePullEntryFormDraft,
@@ -54,6 +60,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { message: messageApi } = App.useApp();
+  const operatorHook = useOutboundOperatorSelect();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const initRef = useRef(false);
 
@@ -64,6 +71,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
   const [stockByMaterialWh, setStockByMaterialWh] = useState<Record<number, Record<number, number>>>({});
   const [stockByWhStatus, setStockByWhStatus] = useState<'idle' | 'loading' | 'ready'>('idle');
   const [notes, setNotes] = useState('');
+  const [issueTime, setIssueTime] = useState<Dayjs>(() => dayjs().startOf('day'));
   const [issueLines, setIssueLines] = useState<OutsourceIssueLine[]>([]);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
   const [allowManualLines, setAllowManualLines] = useState(true);
@@ -108,6 +116,9 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
   useEffect(() => {
     bindSnapshot(() => ({
       notes,
+      issueTime: issueTime?.isValid() ? issueTime.toISOString() : undefined,
+      receiverUuid: operatorHook.receiverUuid,
+      receiverName: operatorHook.receiverName,
       issueQuantities: Object.fromEntries(issueLines.map((line) => [line.materialId, line.issueQuantity])),
       lineWarehouses: Object.fromEntries(
         issueLines
@@ -116,7 +127,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
       ),
     }));
     persistNow();
-  }, [notes, issueLines, bindSnapshot, persistNow]);
+  }, [notes, issueTime, issueLines, operatorHook.receiverUuid, operatorHook.receiverName, bindSnapshot, persistNow]);
 
   useEffect(() => {
     if (!(Number.isFinite(woId) && woId > 0)) {
@@ -219,6 +230,14 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
         );
         applyDraftOnce((draft) => {
           if (typeof draft.notes === 'string') setNotes(draft.notes);
+          if (draft.issueTime) {
+            const parsed = draftDayjs(draft.issueTime);
+            setIssueTime(parsed?.isValid() ? parsed.startOf('day') : dayjs().startOf('day'));
+          }
+          operatorHook.restoreReceiver(
+            typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+            typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+          );
           if (draft.issueQuantities) {
             setIssueLines((prev) =>
               mergeMaterialIssueQuantities(prev, draft.issueQuantities as Record<number, number>),
@@ -241,7 +260,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [woId, leavePage, messageApi, t, applyDraftOnce]);
+  }, [woId, leavePage, messageApi, t, applyDraftOnce, operatorHook.restoreReceiver]);
 
   const handleBatchSetWarehouse = useCallback(
     (warehouseId: number) => {
@@ -295,6 +314,9 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
       await outsourceMaterialIssueApi.createBatch({
         outsource_work_order_id: woId,
         outsource_work_order_code: woCode,
+        ...(issueTime?.isValid() ? { issued_at: toApiBusinessDocumentDateTime(issueTime) } : {}),
+        issued_by: operatorHook.receiverId,
+        issued_by_name: operatorHook.receiverName.trim() || undefined,
         remarks: notes.trim() || undefined,
         lines: activeLines.map((line) => {
           const whId = Number(line.warehouseId);
@@ -367,6 +389,18 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
                   <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.outsourceSupplier')}>
                     <ReadOnlyFormValue value={String(workOrder.supplier_name ?? workOrder.supplierName ?? '')} />
                   </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.documentDate')}>
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      value={issueTime}
+                      onChange={(v) => setIssueTime(v ? v.startOf('day') : dayjs().startOf('day'))}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <OutboundEntryOperatorField hook={operatorHook} />
                 </Col>
               </Row>
               <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>

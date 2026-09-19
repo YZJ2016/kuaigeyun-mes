@@ -702,7 +702,9 @@ async def create_production_picking_from_work_order_pull(
             work_order_id=body.work_order_id,
             warehouse_id=body.warehouse_id,
             warehouse_name=body.warehouse_name,
+            picker_id=body.picker_id,
             picker_name=body.picker_name,
+            picking_time=body.picking_time,
             notes=body.notes,
             lines=body.lines,
         )

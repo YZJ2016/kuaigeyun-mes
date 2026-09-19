@@ -280,7 +280,9 @@ export const warehouseApi = {
       work_order_id: number;
       warehouse_id?: number;
       warehouse_name?: string;
+      picker_id?: number;
       picker_name?: string;
+      picking_time?: string;
       notes?: string;
       lines: Array<{
         material_id: number;
@@ -356,7 +358,9 @@ export const warehouseApi = {
         material_call_id: number;
         warehouse_id?: number;
         warehouse_name?: string;
+        picker_id?: number;
         picker_name?: string;
+        picking_time?: string;
         notes?: string;
         lines: Array<{
           material_id: number;

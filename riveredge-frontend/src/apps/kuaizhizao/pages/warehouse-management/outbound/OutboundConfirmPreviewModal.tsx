@@ -277,6 +277,22 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
             id: delivererId,
             name: delivererName || undefined,
           });
+        } else if (outboundType === 'production_picking') {
+          const rawDate = detailData.picking_time;
+          if (rawDate != null) {
+            const parsed = dayjs(String(rawDate));
+            setDocumentDate(parsed.isValid() ? parsed.startOf('day') : dayjs().startOf('day'));
+          } else {
+            setDocumentDate(dayjs().startOf('day'));
+          }
+          const rawPickerId = detailData.picker_id;
+          const pickerId =
+            rawPickerId != null && Number(rawPickerId) > 0 ? Number(rawPickerId) : undefined;
+          const pickerName = String(detailData.picker_name ?? '').trim();
+          operatorHook.restoreReceiver({
+            id: pickerId,
+            name: pickerName || undefined,
+          });
         }
         const items = Array.isArray(detailData.items) ? detailData.items as Record<string, unknown>[] : [];
         const meta = await loadConfirmPreviewMaterialMeta(
@@ -890,11 +906,11 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     const executeConfirm = async () => {
       const payloadWhName = String(detail.warehouse_name ?? record.warehouse_name ?? whName);
       const operatorPayload =
-        record.outbound_type === 'sales_delivery'
+        record.outbound_type === 'sales_delivery' || record.outbound_type === 'production_picking'
           ? buildInboundConfirmReceiverPayload(operatorHook)
           : {};
       const header =
-        record.outbound_type === 'sales_delivery'
+        record.outbound_type === 'sales_delivery' || record.outbound_type === 'production_picking'
           ? {
               ...(documentDate?.isValid()
                 ? { delivery_time: toApiBusinessDocumentDateTime(documentDate) }
@@ -1059,7 +1075,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           </Typography.Text>
         </Typography.Text>
       ) : null}
-      {outboundType === 'sales_delivery' ? (
+      {outboundType === 'sales_delivery' || outboundType === 'production_picking' ? (
         <Form layout="vertical" style={{ marginBottom: 12 }} requiredMark={false}>
           <Row gutter={16}>
             <Col xs={24} sm={12} md={8}>

@@ -139,7 +139,8 @@ class OutsourceMaterialIssueBase(BaseModel):
 
 class OutsourceMaterialIssueCreate(OutsourceMaterialIssueBase):
     """创建委外发料 Schema"""
-    pass
+    issued_by: Optional[int] = Field(None, description="发料人ID")
+    issued_by_name: Optional[str] = Field(None, max_length=100, description="发料人姓名")
 
 
 class OutsourceMaterialIssueUpdate(BaseModel):
@@ -230,6 +231,9 @@ class OutsourceMaterialIssueBatchCreate(BaseModel):
     outsource_work_order_code: str = Field(..., description="委外工单编码")
     warehouse_id: Optional[int] = Field(None, description="默认仓库ID")
     warehouse_name: Optional[str] = Field(None, description="默认仓库名称")
+    issued_at: Optional[datetime] = Field(None, description="发料时间/制单日期")
+    issued_by: Optional[int] = Field(None, description="发料人ID")
+    issued_by_name: Optional[str] = Field(None, max_length=100, description="发料人姓名")
     remarks: Optional[str] = Field(None, description="备注")
     lines: List[OutsourceMaterialIssueLineCreate] = Field(..., min_length=1)
 
@@ -272,7 +276,8 @@ class OutsourceMaterialReceiptBase(BaseModel):
 
 class OutsourceMaterialReceiptCreate(OutsourceMaterialReceiptBase):
     """创建委外收货 Schema"""
-    pass
+    received_by: Optional[int] = Field(None, description="收货人ID")
+    received_by_name: Optional[str] = Field(None, max_length=100, description="收货人姓名")
 
 
 class OutsourceMaterialReceiptPreviewLine(BaseModel):
@@ -457,7 +462,9 @@ class OutsourceMaterialReturnBase(BaseModel):
 
 class OutsourceMaterialReturnCreate(OutsourceMaterialReturnBase):
     """创建委外退料 Schema"""
-    pass
+    returned_at: Optional[datetime] = Field(None, description="退料时间")
+    returned_by: Optional[int] = Field(None, description="退料人ID")
+    returned_by_name: Optional[str] = Field(None, max_length=100, description="退料人姓名")
 
 
 class OutsourceMaterialReturnResponse(OutsourceMaterialReturnBase):
@@ -534,7 +541,9 @@ class OutsourceProductReturnBase(BaseModel):
 
 class OutsourceProductReturnCreate(OutsourceProductReturnBase):
     """创建委外退货 Schema"""
-    pass
+    returned_at: Optional[datetime] = Field(None, description="退货时间")
+    returned_by: Optional[int] = Field(None, description="退货人ID")
+    returned_by_name: Optional[str] = Field(None, max_length=100, description="退货人姓名")
 
 
 class OutsourceProductReturnResponse(OutsourceProductReturnBase):

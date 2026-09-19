@@ -216,7 +216,15 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
                     raise ValidationError(f"委外退货单编码 {code} 已存在")
 
             user_info = await self.get_user_info(created_by)
-            now = resolve_business_datetime()
+            resolved_returned_at = resolve_business_datetime(getattr(return_data, "returned_at", None))
+            resolved_returned_by = (
+                int(return_data.returned_by)
+                if getattr(return_data, "returned_by", None) and int(return_data.returned_by) > 0
+                else created_by
+            )
+            resolved_returned_by_name = (
+                str(getattr(return_data, "returned_by_name", None) or "").strip() or user_info["name"]
+            )
             product_return = await OutsourceProductReturn.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -228,9 +236,9 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
                 unit=return_data.unit,
                 return_reason=return_data.return_reason,
                 status="completed",
-                returned_at=now,
-                returned_by=created_by,
-                returned_by_name=user_info["name"],
+                returned_at=resolved_returned_at,
+                returned_by=resolved_returned_by,
+                returned_by_name=resolved_returned_by_name,
                 remarks=return_data.remarks,
                 created_by=created_by,
                 created_by_name=user_info["name"],

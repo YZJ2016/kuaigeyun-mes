@@ -30544,6 +30544,18 @@ export default {
     '修复可视排产人员视角姓名重复显示',
   'pages.dashboard.updateLog.entries.visual-scheduling-worker-label-r01.description':
     '人员资源行仅展示姓名，无姓名时展示用户名，不再把用户名与姓名各显示一遍。',
+  'pages.dashboard.updateLog.entries.outsource-issue-document-date-r01.title':
+    '委外发料取单可填写制单日期与发料人',
+  'pages.dashboard.updateLog.entries.outsource-issue-document-date-r01.description':
+    '从委外工单取单开委外发料时补制单日期与发料人，写入 issued_at 与 issued_by，出库 Hub 列表制单日期与操作人列正确展示。',
+  'pages.dashboard.updateLog.entries.warehouse-doc-header-edit-r01.title':
+    '出入库草稿编辑与委外退料补齐制单信息',
+  'pages.dashboard.updateLog.entries.warehouse-doc-header-edit-r01.description':
+    '出库 Hub 编辑弹窗可改生产领料与销售出库的制单日期和操作人；委外退料、委外退货取单提交制单日期与退料人，入库 Hub 列表正确展示。',
+  'pages.dashboard.updateLog.entries.production-picking-document-date-r01.title':
+    '生产领料单可取单填写制单日期',
+  'pages.dashboard.updateLog.entries.production-picking-document-date-r01.description':
+    '从工单取单开生产领料时补制单日期与领料人，写入 picking_time 并在出库 Hub 列表展示；确认出库弹窗同步可改；委外收货取单同步提交制单日期与收货人。',
   'pages.dashboard.updateLog.entries.work-order-planned-window-r01.title':
     '修复创建工单计划开始时间与填写不一致',
   'pages.dashboard.updateLog.entries.work-order-planned-window-r01.description':

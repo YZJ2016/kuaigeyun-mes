@@ -123,7 +123,9 @@ async def push_material_call_to_production_picking(
         material_call_id=call_id,
         warehouse_id=body.warehouse_id,
         warehouse_name=body.warehouse_name,
+        picker_id=body.picker_id,
         picker_name=body.picker_name,
+        picking_time=body.picking_time,
         notes=body.notes,
         lines=body.lines,
     )

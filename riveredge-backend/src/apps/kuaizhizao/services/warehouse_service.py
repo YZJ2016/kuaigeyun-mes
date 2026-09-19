@@ -2597,7 +2597,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
             confirmer_name = await self.get_user_name(confirmed_by)
             picking_time = resolve_business_datetime(
-                confirmation_data.delivery_time if confirmation_data and confirmation_data.delivery_time else None
+                confirmation_data.delivery_time
+                if confirmation_data and confirmation_data.delivery_time
+                else getattr(picking, "picking_time", None)
             )
 
             # 更新库存（正式发料扣减）及其前置的【防超发拦截】；成功后再回写表头/明细
@@ -3259,7 +3261,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         work_order_id: int,
         warehouse_id: Optional[int] = None,
         warehouse_name: Optional[str] = None,
+        picker_id: Optional[int] = None,
         picker_name: Optional[str] = None,
+        picking_time: Optional[Any] = None,
         notes: Optional[str] = None,
         lines: List[Any],
     ) -> ProductionPickingWithItemsResponse:
@@ -3341,6 +3345,11 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
             user_info = await self.get_user_info(created_by)
             initial_status, initial_review = await self._resolve_picking_create_status(tenant_id)
+            resolved_picker_id = int(picker_id) if picker_id and int(picker_id) > 0 else None
+            resolved_picker_name = str(picker_name or "").strip() or None
+            if resolved_picker_id and not resolved_picker_name:
+                resolved_picker_name = await self.get_user_name(resolved_picker_id)
+            resolved_picking_time = resolve_business_datetime(picking_time)
             picking = await ProductionPicking.create(
                 tenant_id=tenant_id,
                 picking_code=picking_code,
@@ -3350,7 +3359,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 workshop_name=work_order.workshop_name,
                 status=initial_status,
                 review_status=initial_review,
-                picker_name=picker_name,
+                picker_id=resolved_picker_id,
+                picker_name=resolved_picker_name,
+                picking_time=resolved_picking_time,
                 notes=notes,
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -3625,7 +3636,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         material_call_id: int,
         warehouse_id: Optional[int] = None,
         warehouse_name: Optional[str] = None,
+        picker_id: Optional[int] = None,
         picker_name: Optional[str] = None,
+        picking_time: Optional[Any] = None,
         notes: Optional[str] = None,
         lines: list[Any],
     ) -> ProductionPickingWithItemsResponse:
@@ -3656,6 +3669,11 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             picking_code = await self.generate_code(tenant_id, "PRODUCTION_PICKING_CODE", prefix=f"PP{today}")
             user_info = await self.get_user_info(created_by)
             initial_status, initial_review = await self._resolve_picking_create_status(tenant_id)
+            resolved_picker_id = int(picker_id) if picker_id and int(picker_id) > 0 else None
+            resolved_picker_name = str(picker_name or "").strip() or None
+            if resolved_picker_id and not resolved_picker_name:
+                resolved_picker_name = await self.get_user_name(resolved_picker_id)
+            resolved_picking_time = resolve_business_datetime(picking_time)
             picking = await ProductionPicking.create(
                 tenant_id=tenant_id,
                 picking_code=picking_code,
@@ -3665,7 +3683,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 workshop_name=work_order.workshop_name,
                 status=initial_status,
                 review_status=initial_review,
-                picker_name=picker_name,
+                picker_id=resolved_picker_id,
+                picker_name=resolved_picker_name,
+                picking_time=resolved_picking_time,
                 notes=notes,
                 created_by=created_by,
                 created_by_name=user_info["name"],

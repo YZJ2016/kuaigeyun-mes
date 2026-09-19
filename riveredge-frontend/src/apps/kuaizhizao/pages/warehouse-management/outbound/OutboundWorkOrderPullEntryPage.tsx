@@ -10,6 +10,7 @@ import {
   Button,
   Card,
   Col,
+  DatePicker,
   Form,
   InputNumber,
   Modal,
@@ -21,6 +22,7 @@ import {
   Typography,
 } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
+import dayjs, { type Dayjs } from 'dayjs';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   DocumentFormPageLayout,
@@ -57,6 +59,7 @@ import {
   pullEntryTabKey,
 } from '../shared/pullEntryCloseTab';
 import {
+  draftDayjs,
   draftOptionalNumber,
   mergeMaterialIssueQuantities,
   mergeRecordMaps,
@@ -64,6 +67,7 @@ import {
 } from '../shared/pullEntryFormDraft';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import type { PushPreviewResponse } from '../../../services/sales-order';
+import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import {
   loadConfirmPreviewMaterialMeta,
   type ConfirmPreviewMaterialMeta,
@@ -147,6 +151,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const [batchWhSelectedId, setBatchWhSelectedId] = useState<number | undefined>();
   const [batchWhApplying, setBatchWhApplying] = useState(false);
   const [notes, setNotes] = useState('');
+  const [pickingTime, setPickingTime] = useState<Dayjs>(() => dayjs().startOf('day'));
   const [pickLines, setPickLines] = useState<PickLine[]>([]);
   const [maxQuantities, setMaxQuantities] = useState<Record<number, number>>({});
   const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
@@ -632,6 +637,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       batchAllocations,
       serials,
       notes,
+      pickingTime: pickingTime?.isValid() ? pickingTime.toISOString() : undefined,
       receiverUuid: operatorHook.receiverUuid,
       receiverName: operatorHook.receiverName,
       issueQuantities: Object.fromEntries(pickLines.map((line) => [line.materialId, line.issueQuantity])),
@@ -643,6 +649,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
     batchAllocations,
     serials,
     notes,
+    pickingTime,
     pickLines,
     maxQuantities,
     operatorHook.receiverUuid,
@@ -728,6 +735,10 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           // 兼容历史草稿：曾把表头「默认仓」写成 defaultWarehouseId / warehouseId
           const legacyHeaderWhId = draftOptionalNumber(draft.defaultWarehouseId ?? draft.warehouseId);
           if (typeof draft.notes === 'string') setNotes(draft.notes);
+          if (draft.pickingTime) {
+            const parsed = draftDayjs(draft.pickingTime);
+            setPickingTime(parsed?.isValid() ? parsed.startOf('day') : dayjs().startOf('day'));
+          }
           if (draft.maxQuantities) {
             setMaxQuantities((prev) => mergeRecordMaps(prev, draft.maxQuantities as Record<number, number>));
           }
@@ -877,16 +888,21 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           },
         ];
       });
+      const pickingHeader = {
+        ...(pickingTime?.isValid() ? { picking_time: toApiBusinessDocumentDateTime(pickingTime) } : {}),
+        picker_id: operatorHook.receiverId,
+        picker_name: operatorHook.receiverName.trim() || undefined,
+      };
       const created = fromMaterialCall
         ? await warehouseApi.materialCall.pushProductionPicking(materialCallId, {
             material_call_id: materialCallId,
-            picker_name: operatorHook.receiverName.trim() || undefined,
+            ...pickingHeader,
             notes: notes.trim() || undefined,
             lines: submitLines,
           })
         : await warehouseApi.productionPicking.pullFromWorkOrder({
             work_order_id: woId,
-            picker_name: operatorHook.receiverName.trim() || undefined,
+            ...pickingHeader,
             notes: notes.trim() || undefined,
             lines: submitLines,
           });
@@ -995,6 +1011,15 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                           ? formatDateBySiteSetting(String(workOrder.planned_start_date))
                           : undefined
                       }
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.documentDate')}>
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      value={pickingTime}
+                      onChange={(v) => setPickingTime(v ? v.startOf('day') : dayjs().startOf('day'))}
                     />
                   </Form.Item>
                 </Col>

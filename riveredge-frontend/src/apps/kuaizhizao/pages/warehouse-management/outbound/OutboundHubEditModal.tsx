@@ -4,13 +4,20 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Input, InputNumber, Row, Col, Select, Table, Typography } from 'antd';
+import { App, DatePicker, Input, InputNumber, Row, Col, Select, Table, Typography } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG, WAREHOUSE_FORM_DETAIL_TABLE_FRAME_STYLES } from '../../../../../components/layout-templates';
 import { getPopupContainerInModal } from '../../../../../utils/modalEventIsolation';
+import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import { warehouseApi } from '../../../services/production';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
-import { mapWarehouseSelectOptions, type WarehouseSelectOption } from './outboundEntryShared';
+import {
+  mapWarehouseSelectOptions,
+  OutboundEntryOperatorField,
+  type WarehouseSelectOption,
+  useOutboundOperatorSelect,
+} from './outboundEntryShared';
 import OutboundSerialPickerField from './OutboundSerialPickerField';
 import {
   filterWarehouseTrackingColumns,
@@ -95,6 +102,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
   const trackingFlags = useWarehouseTrackingFlags();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const { message: messageApi } = App.useApp();
+  const operatorHook = useOutboundOperatorSelect();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<OutboundEditDetail | null>(null);
@@ -107,6 +115,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     Record<number, OutboundBatchAllocation[]>
   >({});
   const [editablePickingNotes, setEditablePickingNotes] = useState('');
+  const [editablePickingTime, setEditablePickingTime] = useState<Dayjs | null>(() => dayjs().startOf('day'));
 
   const [editableDeliveryQuantities, setEditableDeliveryQuantities] = useState<Record<number, number>>({});
   const [editableDeliveryBatchAllocs, setEditableDeliveryBatchAllocs] = useState<
@@ -114,6 +123,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
   >({});
   const [editableDeliverySerials, setEditableDeliverySerials] = useState<Record<number, string[]>>({});
   const [editableDeliveryNotes, setEditableDeliveryNotes] = useState('');
+  const [editableDeliveryTime, setEditableDeliveryTime] = useState<Dayjs | null>(null);
   const [editableDeliveryWarehouse, setEditableDeliveryWarehouse] = useState<{ id: number; name: string }>({
     id: 0,
     name: '',
@@ -152,10 +162,12 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     setEditablePickingWarehouses({});
     setEditablePickingBatchAllocs({});
     setEditablePickingNotes('');
+    setEditablePickingTime(dayjs().startOf('day'));
     setEditableDeliveryQuantities({});
     setEditableDeliveryBatchAllocs({});
     setEditableDeliverySerials({});
     setEditableDeliveryNotes('');
+    setEditableDeliveryTime(null);
     setEditableDeliveryWarehouse({ id: 0, name: '' });
     setPickingWarehouseOptions([]);
     setDeliveryWarehouseOptions([]);
@@ -422,12 +434,37 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
         if (cancelled) return;
         if (picking) {
           initPickingEditState(merged);
+          const rawPickingDate = merged.picking_time;
+          if (rawPickingDate != null) {
+            const parsed = dayjs(String(rawPickingDate));
+            setEditablePickingTime(parsed.isValid() ? parsed.startOf('day') : dayjs().startOf('day'));
+          } else {
+            setEditablePickingTime(dayjs().startOf('day'));
+          }
+          const rawPickerId = merged.picker_id;
+          operatorHook.restoreReceiver({
+            id: rawPickerId != null && Number(rawPickerId) > 0 ? Number(rawPickerId) : undefined,
+            name: String(merged.picker_name ?? '').trim() || undefined,
+          });
           setPickingWarehouseOptions(whOptions);
           const meta = await loadConfirmPreviewMaterialMeta(mapLinesForMaterialMeta(merged.items || []));
           if (cancelled) return;
           setDeliveryMaterialMeta(meta);
         } else {
           initDeliveryEditState(merged);
+          const rawDeliveryDate = merged.delivery_time ?? merged.delivery_date;
+          if (rawDeliveryDate != null) {
+            const parsed = dayjs(String(rawDeliveryDate));
+            setEditableDeliveryTime(parsed.isValid() ? parsed.startOf('day') : null);
+          } else {
+            setEditableDeliveryTime(null);
+          }
+          const rawDelivererId = merged.deliverer_id;
+          operatorHook.restoreReceiver({
+            id:
+              rawDelivererId != null && Number(rawDelivererId) > 0 ? Number(rawDelivererId) : undefined,
+            name: String(merged.deliverer_name ?? '').trim() || undefined,
+          });
           setDeliveryWarehouseOptions(whOptions);
           await loadDeliveryEditMaterialMeta(merged);
           if (cancelled) return;
@@ -453,6 +490,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     mapLinesForMaterialMeta,
     messageApi,
     t,
+    operatorHook.restoreReceiver,
   ]);
 
   useEffect(() => {
@@ -597,6 +635,11 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     try {
       await warehouseApi.productionPicking.update(String(detail.id), {
         notes: editablePickingNotes,
+        ...(editablePickingTime?.isValid()
+          ? { picking_time: toApiBusinessDocumentDateTime(editablePickingTime) }
+          : {}),
+        picker_id: operatorHook.receiverId,
+        picker_name: operatorHook.receiverName.trim() || undefined,
         items: mappedItems,
       });
       messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.pickingEditSaved'));
@@ -725,6 +768,11 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
         notes: editableDeliveryNotes,
         warehouse_id: warehouseId,
         warehouse_name: String(editableDeliveryWarehouse.name || detail.warehouse_name || ''),
+        ...(editableDeliveryTime?.isValid()
+          ? { delivery_time: toApiBusinessDocumentDateTime(editableDeliveryTime) }
+          : {}),
+        deliverer_id: operatorHook.receiverId,
+        deliverer_name: operatorHook.receiverName.trim() || undefined,
         items: mappedItems,
       });
       messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.pickingEditSaved'));
@@ -1006,8 +1054,42 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
       width={MODAL_CONFIG.LARGE_WIDTH}
       grid={false}
     >
+      {isPicking ? (
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col span={8}>
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+              {t('app.kuaizhizao.warehouseOutbound.field.documentDate')}
+            </Typography.Text>
+            <DatePicker
+              style={{ width: '100%' }}
+              value={editablePickingTime}
+              onChange={(v) => setEditablePickingTime(v ? v.startOf('day') : dayjs().startOf('day'))}
+              getPopupContainer={getPopupContainerInModal}
+              disabled={loading || saving}
+            />
+          </Col>
+          <Col span={8}>
+            <OutboundEntryOperatorField hook={operatorHook} />
+          </Col>
+        </Row>
+      ) : null}
       {isDelivery ? (
         <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col span={8}>
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+              {t('app.kuaizhizao.warehouseOutbound.field.documentDate')}
+            </Typography.Text>
+            <DatePicker
+              style={{ width: '100%' }}
+              value={editableDeliveryTime}
+              onChange={(v) => setEditableDeliveryTime(v ? v.startOf('day') : null)}
+              getPopupContainer={getPopupContainerInModal}
+              disabled={loading || saving}
+            />
+          </Col>
+          <Col span={8}>
+            <OutboundEntryOperatorField hook={operatorHook} />
+          </Col>
           <Col span={8}>
             <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
               {t('app.kuaizhizao.warehouseOutbound.field.warehouse')}

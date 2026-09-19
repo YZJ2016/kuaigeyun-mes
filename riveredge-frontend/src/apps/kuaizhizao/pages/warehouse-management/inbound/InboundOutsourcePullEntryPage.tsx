@@ -25,6 +25,7 @@ import {
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { formatQuantity } from '../../../../../utils/format';
+import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
 import type { OutsourceReceiptLine } from '../../../components/OutsourceReceiptFormContent';
@@ -562,6 +563,9 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           unit: receiptLine.unit || '件',
           warehouse_id: warehouseId,
           warehouse_name: whOpt?.name,
+          received_at: toApiBusinessDocumentDateTime(receiptTime),
+          received_by: receiverHook.receiverId,
+          received_by_name: receiverHook.receiverName.trim() || undefined,
           remarks: notes.trim() || undefined,
         })) as { id?: number; code?: string; receipt_code?: string };
         if (created?.id != null) createdIds.push(Number(created.id));
@@ -597,6 +601,9 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             unit: line.unit || '个',
             warehouse_id: warehouseId,
             warehouse_name: whOpt?.name,
+            returned_at: toApiBusinessDocumentDateTime(receiptTime),
+            returned_by: receiverHook.receiverId,
+            returned_by_name: receiverHook.receiverName.trim() || undefined,
             notes: notes.trim() || undefined,
           })) as { id?: number };
           if (created?.id != null) createdIds.push(Number(created.id));
@@ -621,6 +628,9 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             outsource_material_receipt_id: line.receipt_id,
             quantity: line.return_quantity,
             unit: line.unit || '件',
+            returned_at: toApiBusinessDocumentDateTime(receiptTime),
+            returned_by: receiverHook.receiverId,
+            returned_by_name: receiverHook.receiverName.trim() || undefined,
             notes: notes.trim() || undefined,
           })) as { id?: number };
           if (created?.id != null) createdIds.push(Number(created.id));

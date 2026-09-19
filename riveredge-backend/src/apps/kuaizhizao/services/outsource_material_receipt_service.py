@@ -325,7 +325,15 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     )
 
                 code = receipt_data.code or await self._generate_outsource_receipt_code(tenant_id)
-                now = resolve_business_datetime()
+                resolved_received_at = resolve_business_datetime(receipt_data.received_at)
+                resolved_received_by = (
+                    int(receipt_data.received_by)
+                    if getattr(receipt_data, "received_by", None) and int(receipt_data.received_by) > 0
+                    else created_by
+                )
+                resolved_received_by_name = (
+                    str(getattr(receipt_data, "received_by_name", None) or "").strip() or receiver_name
+                )
                 unit_price, total_amount = resolve_outsource_material_receipt_amount(
                     unit_price=locked_work_order.unit_price,
                     qualified_quantity=receipt_data.qualified_quantity,
@@ -352,9 +360,9 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     location_name=receipt_data.location_name,
                     batch_number=receipt_data.batch_number,
                     status="completed",
-                    received_at=now,
-                    received_by=created_by,
-                    received_by_name=receiver_name,
+                    received_at=resolved_received_at,
+                    received_by=resolved_received_by,
+                    received_by_name=resolved_received_by_name,
                     remarks=receipt_data.remarks,
                     created_by=created_by,
                     created_by_name=receiver_name,

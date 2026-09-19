@@ -36,6 +36,27 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'outsource-issue-document-date-r01',
+    date: '2026-09-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.outsource-issue-document-date-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.outsource-issue-document-date-r01.description',
+  },
+  {
+    id: 'warehouse-doc-header-edit-r01',
+    date: '2026-09-19',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-doc-header-edit-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.warehouse-doc-header-edit-r01.description',
+  },
+  {
+    id: 'production-picking-document-date-r01',
+    date: '2026-09-19',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.production-picking-document-date-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.production-picking-document-date-r01.description',
+  },
+  {
     id: 'work-order-planned-window-r01',
     date: '2026-09-19',
     type: 'fix',
