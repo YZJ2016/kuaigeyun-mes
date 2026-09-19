@@ -11,6 +11,7 @@ class UserDisplayRoleItem(BaseModel):
     uuid: str
     name: str
     code: Optional[str] = None
+    functional_domain: Optional[str] = None
 
 
 class UserDisplayItem(BaseModel):

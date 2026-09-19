@@ -1397,6 +1397,16 @@ class VisualSchedulingService(BaseService):
 
                     )
 
+                conflicts.extend(
+                    await self._overlap_conflicts_for_workers(
+                        tenant_id=tenant_id,
+                        op=op,
+                        start_dt=start_dt,
+                        end_dt=end_dt,
+                        update_by_id=update_by_id,
+                    )
+                )
+
 
 
             if check_equipment:
@@ -1495,6 +1505,73 @@ class VisualSchedulingService(BaseService):
 
                     )
 
+        return conflicts
+
+
+
+    async def _overlap_conflicts_for_workers(
+        self,
+        *,
+        tenant_id: int,
+        op: WorkOrderOperation,
+        start_dt: datetime,
+        end_dt: datetime,
+        update_by_id: Dict[int, Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        from apps.kuaizhizao.services.work_order_service import _parse_assigned_worker_ids
+
+        worker_ids = _parse_assigned_worker_ids(op.assigned_worker_ids, op.assigned_worker_id)
+        if not worker_ids:
+            return []
+
+        others = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            planned_start_date__isnull=False,
+            planned_end_date__isnull=False,
+        ).exclude(id=op.id).all()
+
+        conflicts: List[Dict[str, Any]] = []
+        for worker_id in worker_ids:
+            overlapping: List[WorkOrderOperation] = []
+            for other in others:
+                other_workers = _parse_assigned_worker_ids(
+                    other.assigned_worker_ids, other.assigned_worker_id
+                )
+                if worker_id not in other_workers:
+                    continue
+                if other.id in update_by_id:
+                    o_patch = update_by_id[other.id]
+                    o_start_dt = _parse_dt(o_patch.get("planned_start_date"))
+                    o_end_dt = _parse_dt(o_patch.get("planned_end_date"))
+                    if (
+                        o_start_dt
+                        and o_end_dt
+                        and _intervals_overlap(start_dt, end_dt, o_start_dt, o_end_dt)
+                    ):
+                        overlapping.append(other)
+                elif other.planned_start_date and other.planned_end_date:
+                    if _intervals_overlap(
+                        start_dt, end_dt, other.planned_start_date, other.planned_end_date
+                    ):
+                        overlapping.append(other)
+            if not overlapping:
+                continue
+            worker_label = f"人员{worker_id}"
+            for other in overlapping[:1]:
+                conflicts.append(
+                    _conflict_item(
+                        conflict_type="worker_overlap",
+                        work_order_id=int(op.work_order_id),
+                        work_order_code=op.work_order_code or str(op.work_order_id),
+                        operation_id=int(op.id),
+                        resource_id=worker_id,
+                        message=(
+                            f"与工单 {other.work_order_code or other.work_order_id} "
+                            f"在{worker_label} 时间重叠"
+                        ),
+                    )
+                )
         return conflicts
 
 

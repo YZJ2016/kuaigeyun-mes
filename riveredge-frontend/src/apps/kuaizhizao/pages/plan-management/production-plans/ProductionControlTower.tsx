@@ -22,6 +22,7 @@ import { apiRequest } from '../../../../../services/api';
 import { getMrpExceptionInbox } from '../../../services/demand-computation';
 import dayjs from 'dayjs';
 import CoordinationPipelinePanel from './CoordinationPipelinePanel';
+import HumanMachineEfficiencyPanel from './HumanMachineEfficiencyPanel';
 import { ModuleCenterLayout, ModuleKpiRow, ModuleShortcutGrid } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 import { toApiDateTimeString } from '../../../../../utils/formDate';
@@ -219,6 +220,7 @@ const ProductionControlTower: React.FC = () => {
               }
             />
           ) : null}
+          <HumanMachineEfficiencyPanel />
           <Card
             style={{ borderRadius: token.borderRadiusLG, border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
             styles={{ body: { padding: '16px 24px' } }}

@@ -149,7 +149,7 @@ def build_operation_time_slots_in_planned_window(
     durations = [max(float(h), 0.0) for h in durations_hours]
     start = normalize_schedule_anchor(planned_start, end_of_day=False)
     end = normalize_schedule_anchor(planned_end, end_of_day=True)
-    if end <= start or all(h <= 0 for h in durations):
+    if end <= start:
         return build_operation_time_slots(
             durations,
             planned_start=start,
@@ -158,6 +158,12 @@ def build_operation_time_slots_in_planned_window(
             work_hours=work_hours if work_hours is not None else WorkHoursConfig.defaults(),
             overtime=overtime,
         )
+    if all(h <= 0 for h in durations):
+        cfg = work_hours if work_hours is not None else WorkHoursConfig.defaults()
+        snapped = snap_to_working_start(
+            start, holidays=holidays, config=cfg, overtime=overtime
+        )
+        return [(snapped, snapped) for _ in durations]
 
     total_hours = sum(durations)
     window_hours = max((end - start).total_seconds() / 3600.0, 0.01)

@@ -10,7 +10,10 @@ from typing import Any, Dict, List, Optional
 from tortoise.queryset import Q
 
 from apps.common.base_service import AppBaseService
-from apps.kuaicaiwu.constants.finance_source_types import is_purchase_return_offset_payable
+from apps.kuaicaiwu.constants.finance_source_types import (
+    is_outsource_return_offset_payable,
+    is_purchase_return_offset_payable,
+)
 from apps.kuaicaiwu.services.finance_service import derive_invoice_amount_status
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaizhizao.models.document_relation import DocumentRelation
@@ -581,9 +584,11 @@ class PayablePullService(AppBaseService[Payable]):
                 "reason": reason,
             }
             payload["capabilities"] = existing_caps
-            if is_purchase_return_offset_payable(getattr(row, "source_type", None)) or str(
-                getattr(row, "status", "") or ""
-            ).strip() == "已冲减":
+            if (
+                is_purchase_return_offset_payable(getattr(row, "source_type", None))
+                or is_outsource_return_offset_payable(getattr(row, "source_type", None))
+                or str(getattr(row, "status", "") or "").strip() == "已冲减"
+            ):
                 payload["invoiced_amount"] = Decimal("0")
                 payload["remaining_invoice_amount"] = Decimal("0")
                 payload["invoice_status"] = "未收票"

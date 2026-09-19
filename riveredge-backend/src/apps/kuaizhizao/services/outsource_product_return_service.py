@@ -27,6 +27,7 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
 
+from apps.kuaizhizao.utils.outsource_settlement_helpers import receipt_base_qty
 from apps.kuaizhizao.utils.outsource_work_order_state import resolve_outsource_work_order_product_unit
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str
 
@@ -89,7 +90,7 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
         lines: List[OutsourceProductReturnPreviewLine] = []
         product_unit = await resolve_outsource_work_order_product_unit(tenant_id, owo)
         for receipt in receipts:
-            received = Decimal(str(receipt.quantity or 0))
+            received = receipt_base_qty(receipt)
             returned = returned_by_receipt.get(int(receipt.id), Decimal("0"))
             returnable = max(Decimal("0"), received - returned)
             if returnable <= 0:
@@ -157,7 +158,7 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
         receipt: OutsourceMaterialReceipt,
     ) -> None:
         returned_map = await self._sum_returns_by_receipt(tenant_id, [int(receipt.id)])
-        returnable = Decimal(str(receipt.quantity or 0)) - returned_map.get(int(receipt.id), Decimal("0"))
+        returnable = receipt_base_qty(receipt) - returned_map.get(int(receipt.id), Decimal("0"))
         if returnable <= 0:
             raise ValidationError("该收货单已无可退数量")
         if return_data.quantity > returnable:
@@ -268,6 +269,18 @@ class OutsourceProductReturnService(AppBaseService[OutsourceProductReturn]):
 
             logger.info(f"创建委外退货单成功: {code}")
             await product_return.refresh_from_db()
+
+            from apps.kuaizhizao.services.outsource_settlement_credit_service import (
+                OutsourceSettlementCreditService,
+            )
+
+            try:
+                await OutsourceSettlementCreditService.create_credit_draft_for_return(
+                    tenant_id, product_return, created_by
+                )
+            except Exception as exc:
+                logger.warning("委外退货自动生成红字结算失败 return={}: {}", code, exc)
+
             return OutsourceProductReturnResponse.model_validate(product_return)
 
     async def list_product_returns(

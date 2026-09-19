@@ -224,6 +224,9 @@ class OutsourceMaterialIssue(BaseModel):
 
     # 发料信息
     quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="发料数量")
+    issue_unit_cost = fields.DecimalField(
+        max_digits=14, decimal_places=4, null=True, description="发料确认时快照的单位成本"
+    )
     unit = fields.CharField(max_length=20, description="单位")
 
     # 仓库信息
@@ -331,6 +334,16 @@ class OutsourceMaterialReceipt(BaseModel):
     total_amount = fields.DecimalField(
         max_digits=14, decimal_places=4, default=0, description="收货金额（合格数量×单价）"
     )
+    settled_quantity = fields.DecimalField(
+        max_digits=14, decimal_places=4, default=0, description="已审核委外结算数量"
+    )
+    inventory_unit_cost = fields.DecimalField(
+        max_digits=14, decimal_places=4, null=True, description="收货确认时成品单位成本快照"
+    )
+    processing_unit_cost = fields.DecimalField(
+        max_digits=14, decimal_places=4, null=True, description="收货确认时加工费单位成本快照"
+    )
+    cost_posted_at = fields.DatetimeField(null=True, description="成本结转时间")
 
     # 仓库信息
     warehouse_id = fields.IntField(null=True, description="仓库ID")
@@ -452,6 +465,8 @@ class OutsourceProductReturn(BaseModel):
     returned_at = fields.DatetimeField(null=True, description="退货时间")
     returned_by = fields.IntField(null=True, description="退货人ID")
     returned_by_name = fields.CharField(max_length=100, null=True, description="退货人姓名")
+    credit_settlement_id = fields.IntField(null=True, description="自动生成的红字委外结算单ID")
+    finance_offset_applied = fields.BooleanField(default=False, description="是否已触发应付冲减")
     remarks = fields.TextField(null=True, description="备注")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

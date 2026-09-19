@@ -29,6 +29,7 @@ from .outsource_work_order import (
     OutsourceMaterialReturn,
     OutsourceProductReturn,
 )
+from .outsource_settlement import OutsourceSettlement, OutsourceSettlementItem
 from .work_order_operation import WorkOrderOperation
 from .scrap_record import ScrapRecord
 from .defect_record import DefectRecord
@@ -313,6 +314,8 @@ __all__ = [
     'OutsourceWorkOrder',
     'OutsourceMaterialIssue',
     'OutsourceMaterialReceipt',
+    'OutsourceSettlement',
+    'OutsourceSettlementItem',
     'WorkOrderOperation',
     'ScrapRecord',
     'DefectRecord',

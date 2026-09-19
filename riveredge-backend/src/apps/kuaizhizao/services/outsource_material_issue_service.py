@@ -492,11 +492,18 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
         # 获取完成人信息
         user_info = await self.get_user_info(completed_by)
 
+        from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+
+        unit_cost = await InventoryCostService().get_material_unit_cost_or_zero(
+            tenant_id, int(issue.material_id)
+        )
+
         # 更新状态
         issue.status = "completed"
         issue.issued_at = resolve_business_datetime()
         issue.issued_by = completed_by
         issue.issued_by_name = user_info["name"]
+        issue.issue_unit_cost = unit_cost
         issue.updated_by = completed_by
         issue.updated_by_name = user_info["name"]
         await issue.save()

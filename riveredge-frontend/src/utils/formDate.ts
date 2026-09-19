@@ -168,7 +168,9 @@ export function toApiBusinessDocumentDateTime(value: unknown): string | undefine
 export function toApiDateTimeString(value: unknown): string | undefined {
   if (value == null || value === '') return undefined;
   if (dayjs.isDayjs(value)) {
-    return value.isValid() ? value.format('YYYY-MM-DD HH:mm:ss') : undefined;
+    return value.isValid()
+      ? value.tz(getTimezoneFromSiteSetting()).format('YYYY-MM-DD HH:mm:ss')
+      : undefined;
   }
   const d = coerceFormDate(value);
   if (!d) return undefined;

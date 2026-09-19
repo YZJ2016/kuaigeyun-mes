@@ -35,6 +35,7 @@ from .productions.production_daily import (
 )
 from .productions.label_station import router as label_station_router
 from .productions.outsource_receipt_api import router as outsource_receipt_router
+from .productions.outsource_settlement_api import router as outsource_settlement_router
 from .productions.document_relations_legacy import router as document_relations_legacy_router
 from .productions.production_control_api import router as production_control_router
 from .productions.coordination_board_api import router as coordination_board_router
@@ -159,6 +160,7 @@ router.include_router(sales_opportunity_router)  # 销售商机
 router.include_router(customer_pool_router)  # 客户池（公海管理）
 router.include_router(exceptions_router)
 router.include_router(outsource_receipt_router)
+router.include_router(outsource_settlement_router)
 router.include_router(quality_execution_router)
 router.include_router(quality_improvement_router)
 router.include_router(quality_qms_router)

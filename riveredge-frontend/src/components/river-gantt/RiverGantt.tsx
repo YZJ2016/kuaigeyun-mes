@@ -477,6 +477,7 @@ const RiverGantt: React.FC<RiverGanttProps> = ({
     if (d.dropTargetRowId != null && d.operationId != null) {
       emitMoveTask({
         id: `op-${d.operationId}`,
+        source: d.rowId,
         target: d.dropTargetRowId,
         mode: 'child',
         inProgress: false,
@@ -507,7 +508,7 @@ const RiverGantt: React.FC<RiverGanttProps> = ({
         origStart = seg.start;
         origEnd = seg.end;
         operationId = seg.operation_id;
-        isStationSegment = String(info.rowId).startsWith('st-');
+        isStationSegment = /^(st-|eq-|wk-)/.test(String(info.rowId));
       } else {
         origStart = resolved.start;
         origEnd = resolved.end;

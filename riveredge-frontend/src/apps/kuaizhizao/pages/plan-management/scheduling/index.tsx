@@ -8,6 +8,7 @@
 import React, { useRef, useState, useCallback, lazy, Suspense, useMemo, useEffect } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Typography, Alert, InputNumber, Divider, Tour, ConfigProvider, Tooltip, Table, Select } from 'antd';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import type { ThemeConfig } from 'antd/es/theme/interface';
 import { useRequest } from 'ahooks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -24,8 +25,15 @@ import {
 } from '../../../services/production';
 import { mesDashboardService } from '../../../services/dashboard';
 import { rollingSchedulingApi } from '../../../services/rolling-scheduling';
-import type { ViewMode, WorkOrderForGantt, WorkstationResource } from '../../../components/GanttSchedulingChart/types';
+import type {
+  ViewMode,
+  WorkOrderForGantt,
+  WorkstationResource,
+  GanttTaskLevel,
+} from '../../../components/GanttSchedulingChart/types';
+import type { GanttOperationAssignmentUpdate } from '../../../components/GanttSchedulingChart';
 import { stationResourceId } from '../../../components/GanttSchedulingChart/stationResourceUtils';
+import { resolveWorkerIdsForOperation } from '../../../components/GanttSchedulingChart/workerResourceUtils';
 import { factoryListItems, workstationApi, workCenterApi } from '../../../../master-data/services/factory';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ROUTES } from '../../../constants/routes';
@@ -43,7 +51,20 @@ import SchedulingOperationEditDrawer, {
 } from './components/SchedulingOperationEditDrawer';
 import { convertEngineProposalToAiProposal } from './convertEngineProposal';
 import { applySchedulingAiProposal } from './applySchedulingAiProposal';
-import buildSchedulingGanttToolbar from './components/SchedulingGanttToolbar';
+import buildSchedulingGanttToolbar, { type SchedulingBoardMainView } from './components/SchedulingGanttToolbar';
+import SchedulingLoadTable from './components/SchedulingLoadTable';
+import SchedulingCardBoard from './components/SchedulingCardBoard';
+import SchedulingPoolCardGrid from './components/SchedulingPoolCardGrid';
+import SchedulingPinManagerModal from './components/SchedulingPinManagerModal';
+import { buildSchedulingPoolCardItems, type SchedulingCardResourceMove } from './schedulingCardViewUtils';
+import {
+  filterSchedulingEquipments,
+  filterSchedulingWorkers,
+  resolveUserRoles,
+  type SchedulingEquipmentResource,
+  type SchedulingResourceFilterValue,
+  type SchedulingWorkerResource,
+} from './schedulingResourceFilters';
 import {
   SchedulingAiAssistantDrawer,
   SchedulingAiAssistantTrigger,
@@ -65,6 +86,22 @@ import {
   type WorkOrderSchedulingMissingField,
 } from './schedulingDropUtils';
 import {
+  buildMaterialGateConfirmDescription,
+  filterWorkOrderIdsByMaterialGate,
+  getMaterialIssueForWorkOrder,
+  resolveMaterialGateDecision,
+} from './schedulingMaterialGate';
+import {
+  loadSchedulingPinnedResources,
+  pinnedIdsForLevel,
+  saveSchedulingPinnedResources,
+  type SchedulingPinnedResources,
+} from './schedulingPinnedResources';
+import {
+  loadSchedulingBoardPreferences,
+  saveSchedulingBoardPreferences,
+} from './schedulingBoardPreferences';
+import {
   buildFreezeAnchor,
   canShiftWorkOrder,
   isWorkOrderSchedulingLocked,
@@ -78,13 +115,10 @@ import {
 import './delfoi-style.less';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { searchUserDisplay } from '../../../../../services/user';
-import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import { getEquipmentList } from '../../../../../services/equipment';
 import { getMoldList } from '../../../../../services/mold';
 import { toApiDateTimeString } from '../../../../../utils/formDate';
 const GANTT_WORK_ORDER_LIMIT = 500;
-
-const GANTT_TASK_LEVEL = 'station' as const;
 
 /** 待排表格统一字号；行高沿用改字体前的 Table token（与甘特图 32px 行对齐） */
 const SCHEDULING_POOL_FONT_SIZE = 13;
@@ -227,6 +261,12 @@ const SchedulingPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [ganttViewMode, setGanttViewMode] = useState<ViewMode>('week');
+  const [boardMainView, setBoardMainView] = useState<SchedulingBoardMainView>(
+    () => loadSchedulingBoardPreferences().boardMainView
+  );
+  const [ganttTaskLevel, setGanttTaskLevel] = useState<GanttTaskLevel>(
+    () => loadSchedulingBoardPreferences().taskLevel
+  );
   const [fullscreenTourOpen, setFullscreenTourOpen] = useState(false);
   const [configDrawerOpen, setConfigDrawerOpen] = useState(false);
   const [schedulingConstraints, setSchedulingConstraints] = useState(DEFAULT_SCHEDULING_CONSTRAINTS);
@@ -274,8 +314,16 @@ const SchedulingPage: React.FC = () => {
   const [pendingAutoRescheduleIds, setPendingAutoRescheduleIds] = useState<number[] | null>(null);
   const [operationEditContext, setOperationEditContext] = useState<SchedulingOperationEditContext | null>(null);
   const [operationEditOpen, setOperationEditOpen] = useState(false);
-  const [schedulingWorkers, setSchedulingWorkers] = useState<Array<{ id: number; name: string; code?: string }>>([]);
-  const [schedulingEquipments, setSchedulingEquipments] = useState<Array<{ id: number; name: string; code?: string }>>([]);
+  const [schedulingWorkers, setSchedulingWorkers] = useState<SchedulingWorkerResource[]>([]);
+  const [schedulingEquipments, setSchedulingEquipments] = useState<SchedulingEquipmentResource[]>([]);
+  const [equipmentTypeFilter, setEquipmentTypeFilter] = useState<SchedulingResourceFilterValue>('all');
+  const [workerRoleFilter, setWorkerRoleFilter] = useState<SchedulingResourceFilterValue>('all');
+  const [pinnedResources, setPinnedResources] = useState<SchedulingPinnedResources>(() =>
+    loadSchedulingPinnedResources()
+  );
+  const [showPinnedOnly, setShowPinnedOnly] = useState(false);
+  const [pinManagerOpen, setPinManagerOpen] = useState(false);
+  const [poolViewMode, setPoolViewMode] = useState<'table' | 'card'>('table');
   const [schedulingMolds, setSchedulingMolds] = useState<Array<{ id: number; name: string; code?: string }>>([]);
   const draftWoUpdatesRef = useRef(
     new Map<number, { work_order_id: number; planned_start_date: string; planned_end_date: string }>()
@@ -289,6 +337,10 @@ const SchedulingPage: React.FC = () => {
   const undoStackRef = useRef<WorkOrderForGantt[][]>([]);
   const schedulingPerms = useResourcePermissions('kuaizhizao:plan-management-scheduling');
   const canScheduleUpdate = schedulingPerms.canUpdate;
+
+  useEffect(() => {
+    saveSchedulingBoardPreferences({ boardMainView, taskLevel: ganttTaskLevel });
+  }, [boardMainView, ganttTaskLevel]);
 
   const syncDraftPendingCount = useCallback(() => {
     setDraftPendingCount(
@@ -328,19 +380,25 @@ const SchedulingPage: React.FC = () => {
           getMoldList({ is_active: true, limit: 200 }).catch(() => ({ items: [] })),
         ]);
         if (cancelled) return;
-        const users = displayItemsToUsers(usersRes?.items || []);
+        const userItems = usersRes?.items || [];
         setSchedulingWorkers(
-          users.map((u) => ({
-            id: Number(u.id),
-            name: String(u.full_name || u.username || u.id),
-            code: u.username,
-          }))
+          userItems.map((u) => {
+            const roles = resolveUserRoles(u.roles);
+            return {
+              id: Number(u.id),
+              name: String((u.full_name || '').trim() || u.username || u.id),
+              code: u.username,
+              roles,
+              roleUuids: roles.map((role) => role.uuid),
+            };
+          })
         );
         setSchedulingEquipments(
-          (equipmentRes?.items || []).map((item: any) => ({
+          (equipmentRes?.items || []).map((item: { id?: number; name?: string; code?: string; type?: string }) => ({
             id: Number(item.id),
             name: String(item.name || item.id),
             code: item.code,
+            type: item.type ? String(item.type) : undefined,
           }))
         );
         setSchedulingMolds(
@@ -429,11 +487,13 @@ const SchedulingPage: React.FC = () => {
   const workOrderDiagnosticsById = useMemo(() => {
     const map = new Map<number, ReturnType<typeof collectWorkOrderDiagnosticIssues>>();
     for (const wo of ganttWorkOrders) {
-      const issues = collectWorkOrderDiagnosticIssues(wo, boardScan, t);
+      const issues = collectWorkOrderDiagnosticIssues(wo, boardScan, t, {
+        materialHardConstraint: Boolean(schedulingConstraints.material_hard_constraint),
+      });
       if (issues.length > 0) map.set(wo.id, issues);
     }
     return map;
-  }, [boardScan, ganttWorkOrders, t]);
+  }, [boardScan, ganttWorkOrders, schedulingConstraints.material_hard_constraint, t]);
 
   const poolWorkOrderIds = useMemo(
     () => poolWorkOrders.map((wo) => wo.id),
@@ -445,6 +505,40 @@ const SchedulingPage: React.FC = () => {
     aiSuggestedPoolOrderIds.forEach((id, index) => map.set(id, index + 1));
     return map;
   }, [aiSuggestedPoolOrderIds]);
+
+  const materialIssueWorkOrderIds = useMemo(
+    () => (boardScan?.material_issues ?? []).map((item) => item.work_order_id),
+    [boardScan?.material_issues]
+  );
+
+  const poolDiagnosticLabelsById = useMemo(() => {
+    const map = new Map<number, string[]>();
+    for (const wo of ganttWorkOrders) {
+      const issues = workOrderDiagnosticsById.get(wo.id);
+      if (issues?.length) {
+        map.set(
+          wo.id,
+          issues.map((issue) => issue.label)
+        );
+      }
+    }
+    return map;
+  }, [ganttWorkOrders, workOrderDiagnosticsById]);
+
+  const poolCardItems = useMemo(
+    () =>
+      buildSchedulingPoolCardItems(
+        poolWorkOrders,
+        new Set(materialIssueWorkOrderIds),
+        poolDiagnosticLabelsById,
+        aiSuggestedPoolRankById
+      ),
+    [aiSuggestedPoolRankById, materialIssueWorkOrderIds, poolDiagnosticLabelsById, poolWorkOrders]
+  );
+
+  const handleCardBoardSelectWorkOrder = useCallback((workOrderId: number) => {
+    setSelectedRowKeys([workOrderId]);
+  }, []);
 
   const handleAiSelectSuggested = useCallback((order: number[]) => {
     setSelectedRowKeys(order);
@@ -707,16 +801,63 @@ const SchedulingPage: React.FC = () => {
     [buildMissingSettingsRows],
   );
 
+  const filteredSchedulingEquipments = useMemo(
+    () => filterSchedulingEquipments(schedulingEquipments, equipmentTypeFilter),
+    [equipmentTypeFilter, schedulingEquipments]
+  );
+
+  const filteredSchedulingWorkers = useMemo(
+    () => filterSchedulingWorkers(schedulingWorkers, workerRoleFilter),
+    [schedulingWorkers, workerRoleFilter]
+  );
+
+  const pinnedResourceIds = useMemo(
+    () => pinnedIdsForLevel(pinnedResources, ganttTaskLevel),
+    [ganttTaskLevel, pinnedResources]
+  );
+
+  const visibleWorkstationResources = useMemo(() => {
+    if (!showPinnedOnly || pinnedResourceIds.length === 0) return workstationResources;
+    const pinned = new Set(pinnedResourceIds);
+    return workstationResources.filter((station) => pinned.has(station.id));
+  }, [pinnedResourceIds, showPinnedOnly, workstationResources]);
+
+  const visibleSchedulingEquipments = useMemo(() => {
+    if (!showPinnedOnly || pinnedResourceIds.length === 0) return filteredSchedulingEquipments;
+    const pinned = new Set(pinnedResourceIds);
+    return filteredSchedulingEquipments.filter((equipment) => pinned.has(equipment.id));
+  }, [filteredSchedulingEquipments, pinnedResourceIds, showPinnedOnly]);
+
+  const visibleSchedulingWorkers = useMemo(() => {
+    if (!showPinnedOnly || pinnedResourceIds.length === 0) return filteredSchedulingWorkers;
+    const pinned = new Set(pinnedResourceIds);
+    return filteredSchedulingWorkers.filter((worker) => pinned.has(worker.id));
+  }, [filteredSchedulingWorkers, pinnedResourceIds, showPinnedOnly]);
+
+  const handlePinnedResourcesChange = useCallback((next: SchedulingPinnedResources) => {
+    setPinnedResources(next);
+    saveSchedulingPinnedResources(next);
+  }, []);
+
   const resourceViewStats = useMemo(() => {
     let scheduledOpCount = 0;
     (ganttBoardWorkOrders ?? []).forEach((wo) => {
       scheduledOpCount += (wo.operations || []).filter((o) => o.id != null).length;
     });
     return {
-      stationCount: workstationResources.length,
+      taskLevel: ganttTaskLevel,
+      stationCount: visibleWorkstationResources.length,
+      equipmentCount: visibleSchedulingEquipments.length,
+      workerCount: visibleSchedulingWorkers.length,
       taskCount: scheduledOpCount,
     };
-  }, [ganttBoardWorkOrders, workstationResources.length]);
+  }, [
+    ganttBoardWorkOrders,
+    ganttTaskLevel,
+    visibleSchedulingEquipments.length,
+    visibleSchedulingWorkers.length,
+    visibleWorkstationResources.length,
+  ]);
 
   const confirmAndPersist = useCallback(
     async (
@@ -1003,6 +1144,13 @@ const SchedulingPage: React.FC = () => {
     ]
   );
 
+  const handleCardBoardOperationUpdate = useCallback(
+    async (updates: Array<{ operation_id: number; planned_start_date: string; planned_end_date: string }>) => {
+      await handleGanttBatchUpdateOperations(updates);
+    },
+    [handleGanttBatchUpdateOperations]
+  );
+
   const handleBatchShift = useCallback(
     async (days: number) => {
       if (selectedWorkOrderIds.length === 0 || days === 0) return;
@@ -1077,6 +1225,78 @@ const SchedulingPage: React.FC = () => {
       }
     },
     [canScheduleUpdate, messageApi, refreshBoardScan, refreshGantt, t]
+  );
+
+  const handleBatchUpdateOperationAssignments = useCallback(
+    async (updates: GanttOperationAssignmentUpdate[]) => {
+      if (!canScheduleUpdate || updates.length === 0) return;
+      try {
+        const result = await workOrderApi.batchUpdateOperationAssignments(updates);
+        const assignmentLabel = t('app.kuaizhizao.scheduling.batch.label.operationAssignments');
+        reportBatchUpdateResult(
+          messageApi,
+          assignmentLabel,
+          {
+            updated: result.updated,
+            skipped_frozen: result.skipped_frozen,
+            skipped_freeze_window: [],
+            failed: result.failed,
+          },
+          t
+        );
+        refreshGantt();
+        refreshBoardScan();
+      } catch (e: any) {
+        messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.assignmentReassignFailed'));
+        refreshGantt();
+      }
+    },
+    [canScheduleUpdate, messageApi, refreshBoardScan, refreshGantt, t]
+  );
+
+  const handleCardBoardResourceMove = useCallback(
+    async (move: SchedulingCardResourceMove) => {
+      const { operationId, fromResourceId, toResourceId } = move;
+      if (fromResourceId === toResourceId || toResourceId <= 0) return;
+
+      let op: NonNullable<WorkOrderForGantt['operations']>[number] | undefined;
+      for (const wo of ganttBoardWorkOrders) {
+        op = (wo.operations ?? []).find((item) => item.id === operationId);
+        if (op) break;
+      }
+      if (!op) return;
+
+      if (ganttTaskLevel === 'station') {
+        await handleBatchUpdateOperationStations([
+          { operation_id: operationId, assigned_station_id: toResourceId },
+        ]);
+        return;
+      }
+
+      if (ganttTaskLevel === 'equipment') {
+        await handleBatchUpdateOperationAssignments([
+          { operation_id: operationId, assigned_equipment_id: toResourceId },
+        ]);
+        return;
+      }
+
+      if (ganttTaskLevel === 'worker') {
+        let nextIds = resolveWorkerIdsForOperation(op);
+        nextIds = nextIds.filter((id) => id !== fromResourceId);
+        if (!nextIds.includes(toResourceId)) {
+          nextIds = [...nextIds, toResourceId];
+        }
+        await handleBatchUpdateOperationAssignments([
+          { operation_id: operationId, assigned_worker_ids: nextIds },
+        ]);
+      }
+    },
+    [
+      ganttBoardWorkOrders,
+      ganttTaskLevel,
+      handleBatchUpdateOperationAssignments,
+      handleBatchUpdateOperationStations,
+    ]
   );
 
   const handleSchedulingQuickAction = useCallback(
@@ -1213,8 +1433,52 @@ const SchedulingPage: React.FC = () => {
       openMissingSettingsModal(relatedGaps, ids);
       return;
     }
-    await applyEngineProposalToDraft('selected', ids);
-  }, [applyEngineProposalToDraft, boardScan?.missing_settings, openMissingSettingsModal, selectedWorkOrderIds]);
+
+    const { allowedIds, blockedIds, warnIds } = filterWorkOrderIdsByMaterialGate(
+      ids,
+      schedulingConstraints,
+      boardScan
+    );
+    if (blockedIds.length > 0 && allowedIds.length === 0 && warnIds.length === 0) {
+      messageApi.error(
+        t('app.kuaizhizao.scheduling.materialGate.blockAutoReschedule', { count: blockedIds.length })
+      );
+      return;
+    }
+
+    const targetIds = [...allowedIds, ...warnIds];
+    if (targetIds.length === 0) return;
+
+    const materialDescription = buildMaterialGateConfirmDescription(
+      warnIds.length,
+      blockedIds.length,
+      t
+    );
+    if (materialDescription) {
+      modal.confirm({
+        title: t('app.kuaizhizao.scheduling.msg.autoRescheduleTitle'),
+        content: materialDescription,
+        okText: t('app.kuaizhizao.scheduling.common.confirm'),
+        cancelText: t('common.cancel'),
+        onOk: async () => {
+          await applyEngineProposalToDraft('selected', targetIds);
+        },
+      });
+      return;
+    }
+
+    await applyEngineProposalToDraft('selected', targetIds);
+  }, [
+    applyEngineProposalToDraft,
+    boardScan?.missing_settings,
+    boardScan,
+    messageApi,
+    openMissingSettingsModal,
+    schedulingConstraints,
+    selectedWorkOrderIds,
+    modal,
+    t,
+  ]);
 
   const handleMissingSettingsBackfill = useCallback(async () => {
     if (!canScheduleUpdate) return;
@@ -1485,24 +1749,52 @@ const SchedulingPage: React.FC = () => {
         messageApi.info(t('app.kuaizhizao.scheduling.msg.alreadyOnBoard'));
         return;
       }
-      if (workOrderNeedsSchedulingPrep(wo)) {
-        await openSchedulingPrepModal(wo);
+
+      const proceedDrop = async () => {
+        if (workOrderNeedsSchedulingPrep(wo)) {
+          await openSchedulingPrepModal(wo);
+          return;
+        }
+        try {
+          await completeDropWorkOrderToBoard(wo);
+        } catch (e: any) {
+          messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.dropFailed'));
+          refreshGantt();
+        }
+      };
+
+      const materialGate = resolveMaterialGateDecision(wo.id, schedulingConstraints, boardScan);
+      if (materialGate === 'block') {
+        const issue = getMaterialIssueForWorkOrder(wo.id, boardScan);
+        messageApi.error(
+          issue?.message || t('app.kuaizhizao.scheduling.materialGate.blockDrop')
+        );
         return;
       }
-      try {
-        await completeDropWorkOrderToBoard(wo);
-      } catch (e: any) {
-        messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.dropFailed'));
-        refreshGantt();
+      if (materialGate === 'warn') {
+        const issue = getMaterialIssueForWorkOrder(wo.id, boardScan);
+        modal.confirm({
+          title: t('app.kuaizhizao.scheduling.materialGate.warnDropTitle'),
+          content: issue?.message || t('app.kuaizhizao.scheduling.materialGate.warnDropContent'),
+          okText: t('app.kuaizhizao.scheduling.materialGate.warnDropOk'),
+          cancelText: t('common.cancel'),
+          onOk: () => void proceedDrop(),
+        });
+        return;
       }
+
+      await proceedDrop();
     },
     [
+      boardScan,
       canScheduleUpdate,
       completeDropWorkOrderToBoard,
       ganttWorkOrders,
       messageApi,
+      modal,
       openSchedulingPrepModal,
       refreshGantt,
+      schedulingConstraints,
       t,
     ]
   );
@@ -1859,9 +2151,77 @@ const SchedulingPage: React.FC = () => {
   );
   const schedulingConfirmOkText = t('app.kuaizhizao.scheduling.common.confirm');
 
+  const lockedOperationIds = useMemo(() => {
+    const ids: number[] = [];
+    ganttBoardWorkOrders.forEach((wo) => {
+      if (!isWorkOrderSchedulingLocked(wo, schedulingConstraints.freeze_horizon_days || 0, freezeAnchor)) {
+        return;
+      }
+      (wo.operations ?? []).forEach((op) => {
+        if (op.id != null) ids.push(op.id);
+      });
+    });
+    return ids;
+  }, [freezeAnchor, ganttBoardWorkOrders, schedulingConstraints.freeze_horizon_days]);
+
+  const poolToolbarNode = (
+    <SchedulingPoolToolbar
+      keyword={poolKeyword}
+      statusFilter={poolStatusFilter}
+      selectedCount={selectedWorkOrderIds.length}
+      canUpdate={canScheduleUpdate}
+      actionLoading={quickActionLoading}
+      onKeywordChange={setPoolKeyword}
+      onStatusFilterChange={setPoolStatusFilter}
+      onSearch={handlePoolSearch}
+      onReset={handlePoolReset}
+      onConfirmDelay={handleConfirmDelay}
+      onToException={handleToException}
+      onApplyUnfreeze={handleApplyUnfreeze}
+      onRescheduleForward={handleRescheduleForward}
+      confirmDelayConfirm={{
+        title: t('app.kuaizhizao.scheduling.msg.confirmDelayTitle'),
+        description: poolQuickActionDescription,
+        okText: schedulingConfirmOkText,
+      }}
+      toExceptionConfirm={{
+        title: t('app.kuaizhizao.scheduling.msg.toExceptionTitle'),
+        description: poolQuickActionDescription,
+        okText: schedulingConfirmOkText,
+      }}
+      applyUnfreezeConfirm={{
+        title: t('app.kuaizhizao.scheduling.msg.applyUnfreezeTitle'),
+        description: poolQuickActionDescription,
+        okText: schedulingConfirmOkText,
+      }}
+      rescheduleForwardConfirm={{
+        title: t('app.kuaizhizao.scheduling.msg.rescheduleForwardTitle'),
+        description: t('app.kuaizhizao.scheduling.msg.rescheduleForwardConfirm', {
+          count: schedulingActionCount,
+        }),
+        okText: schedulingConfirmOkText,
+      }}
+      overdueOnly={poolOverdueOnly}
+      onOverdueOnlyChange={setPoolOverdueOnly}
+    />
+  );
+
   const ganttToolbarNodes = buildSchedulingGanttToolbar({
     t,
+    boardMainView,
+    onBoardMainViewChange: setBoardMainView,
     ganttViewMode,
+    ganttTaskLevel,
+    onGanttTaskLevelChange: setGanttTaskLevel,
+    pinnedResourceCount: pinnedResourceIds.length,
+    showPinnedOnly,
+    onShowPinnedOnlyChange: setShowPinnedOnly,
+    onOpenPinManager: () => setPinManagerOpen(true),
+    equipmentTypeFilter,
+    onEquipmentTypeFilterChange: setEquipmentTypeFilter,
+    workerRoleFilter,
+    onWorkerRoleFilterChange: setWorkerRoleFilter,
+    schedulingWorkers,
     shiftDays,
     selectedWorkOrderCount: selectedWorkOrderIds.length,
     batchActionLoading,
@@ -1888,7 +2248,6 @@ const SchedulingPage: React.FC = () => {
       setScrollToTodayToken((n) => n + 1);
     },
     onScrollToToday: () => setScrollToTodayToken((n) => n + 1),
-    aiTrigger: <SchedulingAiAssistantTrigger onOpen={() => setAiDrawerOpen(true)} />,
     onAutoReschedule: handleAutoReschedule,
     autoRescheduleConfirm: {
       title: t('app.kuaizhizao.scheduling.msg.autoRescheduleTitle'),
@@ -1928,6 +2287,7 @@ const SchedulingPage: React.FC = () => {
         constraints={schedulingConstraints}
         selectedWorkOrderCount={selectedWorkOrderIds.length}
         selectedOperationCount={selectedOperationCount}
+        ganttTaskLevel={ganttTaskLevel}
         resourceViewStats={resourceViewStats}
         legendMetrics={topLegendMetrics}
         planReliabilityLoading={planReliabilityLoading}
@@ -1937,6 +2297,7 @@ const SchedulingPage: React.FC = () => {
         }
         missingSettingsActionDisabled={!canScheduleUpdate}
         onMissingSettingsClick={() => openMissingSettingsModal(boardScan?.missing_settings ?? [])}
+        extra={<SchedulingAiAssistantTrigger onOpen={() => setAiDrawerOpen(true)} />}
       />
       {filterWorkOrderIds?.length ? (
         <Alert
@@ -1979,8 +2340,38 @@ const SchedulingPage: React.FC = () => {
       ) : null}
       <div className="aps-main-layout">
         <div className="aps-block aps-block-gantt">
-          <Card className="aps-gantt-card-compact" style={{ marginTop: 8 }} title={ganttToolbarNodes.title} extra={ganttToolbarNodes.extra}>
+          <Card className="aps-gantt-card-compact scheduling-gantt-card" style={{ marginTop: 8 }} title={ganttToolbarNodes.toolbar}>
             <SchedulingBoardDropZone canUpdate={canScheduleUpdate} onDropWorkOrder={handleDropWorkOrderToBoard}>
+              {boardMainView === 'loadTable' ? (
+                <SchedulingLoadTable
+                  t={t}
+                  boardScan={boardScan}
+                  taskLevel={ganttTaskLevel}
+                  horizonDays={schedulingConstraints.rolling_horizon_days || 14}
+                  workOrders={ganttBoardWorkOrders}
+                  pinnedResourceIds={pinnedResourceIds}
+                  showPinnedOnly={showPinnedOnly}
+                  loading={ganttLoading}
+                />
+              ) : boardMainView === 'cardView' ? (
+                <SchedulingCardBoard
+                  t={t}
+                  loading={ganttLoading}
+                  workOrders={ganttBoardWorkOrders}
+                  taskLevel={ganttTaskLevel}
+                  stations={visibleWorkstationResources}
+                  equipments={visibleSchedulingEquipments}
+                  workers={visibleSchedulingWorkers}
+                  boardScan={boardScan}
+                  horizonDays={schedulingConstraints.rolling_horizon_days || 14}
+                  materialIssueWorkOrderIds={materialIssueWorkOrderIds}
+                  selectedWorkOrderIds={selectedWorkOrderIds}
+                  canUpdate={canScheduleUpdate}
+                  onSelectWorkOrder={handleCardBoardSelectWorkOrder}
+                  onOperationUpdate={canScheduleUpdate ? handleCardBoardOperationUpdate : undefined}
+                  onOperationResourceMove={canScheduleUpdate ? handleCardBoardResourceMove : undefined}
+                />
+              ) : (
               <Suspense
                 fallback={
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 48, gap: 16 }}>
@@ -1991,10 +2382,14 @@ const SchedulingPage: React.FC = () => {
               >
                 <GanttSchedulingChart
                   workOrders={ganttBoardWorkOrders}
-                  workstations={workstationResources}
+                  workstations={visibleWorkstationResources}
+                  equipments={visibleSchedulingEquipments}
+                  workers={visibleSchedulingWorkers}
                   loading={ganttLoading}
                   viewMode={ganttViewMode}
-                  taskLevel={GANTT_TASK_LEVEL}
+                  taskLevel={ganttTaskLevel}
+                  equipmentTypeFilter={equipmentTypeFilter}
+                  workerRoleFilter={workerRoleFilter}
                   freezeHorizonDays={schedulingConstraints.freeze_horizon_days}
                   focusTaskId={focusTaskId}
                   onFocusTaskConsumed={handleFocusTaskConsumed}
@@ -2007,6 +2402,9 @@ const SchedulingPage: React.FC = () => {
                   onBatchUpdateOperations={canScheduleUpdate ? handleGanttBatchUpdateOperations : undefined}
                   onBatchUpdateOperationStations={
                     canScheduleUpdate ? handleBatchUpdateOperationStations : undefined
+                  }
+                  onBatchUpdateOperationAssignments={
+                    canScheduleUpdate ? handleBatchUpdateOperationAssignments : undefined
                   }
                   onWorkOrderSelect={handleGanttWorkOrderSelect}
                   onOperationSelect={handleGanttOperationSelect}
@@ -2022,6 +2420,7 @@ const SchedulingPage: React.FC = () => {
                   }}
                 />
               </Suspense>
+              )}
             </SchedulingBoardDropZone>
             <div className="scheduling-pending-pool aps-pool-card-compact">
               <div className="scheduling-pending-pool__main">
@@ -2047,6 +2446,33 @@ const SchedulingPage: React.FC = () => {
                   </>
                 ) : null}
               </div>
+              <div className="scheduling-pending-pool__view-toggle">
+                <ThemedSegmented
+                  size="small"
+                  surfaceBackground
+                  value={poolViewMode}
+                  options={[
+                    { label: t('app.kuaizhizao.scheduling.poolView.table'), value: 'table' },
+                    { label: t('app.kuaizhizao.scheduling.poolView.card'), value: 'card' },
+                  ]}
+                  onChange={(value) => setPoolViewMode(value as 'table' | 'card')}
+                />
+              </div>
+              {poolViewMode === 'card' ? (
+                <>
+                  <div className="scheduling-pending-pool__card-toolbar">{poolToolbarNode}</div>
+                  <SchedulingPoolCardGrid
+                    t={t}
+                    items={poolCardItems}
+                    selectedRowKeys={selectedRowKeys}
+                    canUpdate={canScheduleUpdate}
+                    onSelectionChange={(keys) => {
+                      setSelectedRowKeys(keys);
+                      setFocusTaskId(null);
+                    }}
+                  />
+                </>
+              ) : (
               <ConfigProvider theme={SCHEDULING_POOL_TABLE_THEME}>
                 <UniTable
                   columnPersistenceId="apps.kuaizhizao.pages.plan-management.scheduling.pool"
@@ -2059,47 +2485,7 @@ const SchedulingPage: React.FC = () => {
                   showAdvancedSearch={false}
                   viewTypes={['table']}
                   pagination={{ size: 'small' }}
-                  headerActions={
-                    <SchedulingPoolToolbar
-                      keyword={poolKeyword}
-                      statusFilter={poolStatusFilter}
-                      selectedCount={selectedWorkOrderIds.length}
-                      canUpdate={canScheduleUpdate}
-                      actionLoading={quickActionLoading}
-                      onKeywordChange={setPoolKeyword}
-                      onStatusFilterChange={setPoolStatusFilter}
-                      onSearch={handlePoolSearch}
-                      onReset={handlePoolReset}
-                      onConfirmDelay={handleConfirmDelay}
-                      onToException={handleToException}
-                      onApplyUnfreeze={handleApplyUnfreeze}
-                      onRescheduleForward={handleRescheduleForward}
-                      confirmDelayConfirm={{
-                        title: t('app.kuaizhizao.scheduling.msg.confirmDelayTitle'),
-                        description: poolQuickActionDescription,
-                        okText: schedulingConfirmOkText,
-                      }}
-                      toExceptionConfirm={{
-                        title: t('app.kuaizhizao.scheduling.msg.toExceptionTitle'),
-                        description: poolQuickActionDescription,
-                        okText: schedulingConfirmOkText,
-                      }}
-                      applyUnfreezeConfirm={{
-                        title: t('app.kuaizhizao.scheduling.msg.applyUnfreezeTitle'),
-                        description: poolQuickActionDescription,
-                        okText: schedulingConfirmOkText,
-                      }}
-                      rescheduleForwardConfirm={{
-                        title: t('app.kuaizhizao.scheduling.msg.rescheduleForwardTitle'),
-                        description: t('app.kuaizhizao.scheduling.msg.rescheduleForwardConfirm', {
-                          count: schedulingActionCount,
-                        }),
-                        okText: schedulingConfirmOkText,
-                      }}
-                      overdueOnly={poolOverdueOnly}
-                      onOverdueOnlyChange={setPoolOverdueOnly}
-                    />
-                  }
+                  headerActions={poolToolbarNode}
                   request={async (params: any) => {
                     const list = poolWorkOrdersRef.current;
                     const pageSize = params.pageSize ?? 20;
@@ -2142,6 +2528,7 @@ const SchedulingPage: React.FC = () => {
                   }}
                 />
               </ConfigProvider>
+              )}
             </div>
           </Card>
         </div>
@@ -2475,6 +2862,24 @@ const SchedulingPage: React.FC = () => {
           </Space>
         </div>
       </Modal>
+
+      <SchedulingPinManagerModal
+        open={pinManagerOpen}
+        t={t}
+        taskLevel={ganttTaskLevel}
+        pinned={pinnedResources}
+        stationOptions={workstationResources.map((station) => ({
+          value: station.id,
+          label: station.name,
+        }))}
+        equipmentOptions={schedulingEquipments.map((equipment) => ({
+          value: equipment.id,
+          label: equipment.name,
+        }))}
+        workerOptions={schedulingWorkers}
+        onClose={() => setPinManagerOpen(false)}
+        onChange={handlePinnedResourcesChange}
+      />
 
       <SchedulingAiAssistantDrawer
         open={aiDrawerOpen}

@@ -39,6 +39,7 @@ export interface WorkOrderForGantt {
     assigned_station_id?: number | null;
     assigned_station_name?: string | null;
     assigned_worker_id?: number | null;
+    assigned_worker_ids?: number[] | null;
     assigned_equipment_id?: number | null;
     assigned_equipment_name?: string | null;
     assigned_mold_id?: number | null;
@@ -49,11 +50,12 @@ export interface WorkOrderForGantt {
     default_outsource_supplier_id?: number | null;
     default_outsource_supplier_name?: string | null;
     is_outsourced?: boolean;
+    machine_session_state?: 'none' | 'on_machine' | 'off_machine' | null;
   }>;
 }
 
 /** 任务层级：工单级 | 工位资源 | 设备资源 | 工序平铺 */
-export type GanttTaskLevel = 'work_order' | 'station' | 'equipment' | 'operation';
+export type GanttTaskLevel = 'work_order' | 'station' | 'equipment' | 'worker' | 'operation';
 
 /** 甘特图工位资源行（来自主数据工位） */
 export interface WorkstationResource {

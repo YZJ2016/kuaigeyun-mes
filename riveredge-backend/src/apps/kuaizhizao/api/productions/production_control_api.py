@@ -14,6 +14,7 @@ from apps.kuaizhizao.schemas.production_control import (
     DeliveryRiskItem,
     MaterialReadinessItem,
     ResourceLoadItem,
+    HumanMachineEfficiencySummary,
     SimulationResult,
     UrgentOrderSimulationRequest,
 )
@@ -107,6 +108,17 @@ async def get_control_tower_summary(
         total_risk_count=len(risks),
         stats=stats,
     )
+
+
+@router.get("/human-machine-efficiency", response_model=HumanMachineEfficiencySummary)
+async def get_human_machine_efficiency(
+    days: int = Query(7, ge=7, le=30, description="统计天数，支持 7 或 30"),
+    _user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """人机效同屏：设备稼动趋势与人员报工工时。"""
+    span_days = 30 if days >= 30 else 7
+    return await service.get_human_machine_efficiency(tenant_id, span_days)
 
 
 @router.post("/release-kitted")

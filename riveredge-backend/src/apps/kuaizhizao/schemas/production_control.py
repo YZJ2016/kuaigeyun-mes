@@ -114,3 +114,23 @@ class SimulationResult(BaseModel):
     scheduling_score_preview: Optional[SchedulingScorePreview] = Field(
         None, description="APS-Lite 排程综合分 What-if 预览（不写库）"
     )
+
+
+class HumanMachineTrendPoint(BaseModel):
+    period: str
+    equipment_utilization_rate: float = Field(..., description="设备稼动率（0-100）")
+    worker_report_hours: float = Field(..., description="人员报工工时合计")
+
+
+class HumanMachineWorkerRankingItem(BaseModel):
+    worker_id: int
+    worker_name: str
+    report_hours: float
+
+
+class HumanMachineEfficiencySummary(BaseModel):
+    days: int
+    equipment_utilization_rate: float = Field(..., description="期间平均设备稼动率")
+    worker_report_hours: float = Field(..., description="期间人员报工工时合计")
+    trend: List[HumanMachineTrendPoint]
+    worker_ranking: List[HumanMachineWorkerRankingItem]

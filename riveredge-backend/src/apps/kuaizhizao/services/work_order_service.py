@@ -540,6 +540,13 @@ def _operation_planned_times_outside_work_order_window(
     return False
 
 
+def _work_order_has_user_planned_window(work_order: Any) -> bool:
+    """用户已在工单头指定计划起止窗口（手工建单必填）。"""
+    wo_start = getattr(work_order, "planned_start_date", None)
+    wo_end = getattr(work_order, "planned_end_date", None)
+    return bool(wo_start and wo_end and wo_start != wo_end)
+
+
 def _is_schedulable_work_order_status(status: Optional[str]) -> bool:
     from apps.kuaizhizao.constants import normalize_status
 
@@ -1066,10 +1073,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         route_def_t = tuple_from_model(process_route)
         wo_head_t = tuple_from_model(work_order)
         
-        from apps.kuaizhizao.utils.work_order_operation_scheduling import (
-            build_operation_time_slots,
-            operation_total_hours,
-        )
+        from apps.kuaizhizao.utils.work_order_operation_scheduling import operation_total_hours
 
         prepared_ops: List[Dict[str, Any]] = []
         for op_data in operation_list:
@@ -1196,38 +1200,43 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 ),
             })
 
-        from apps.kuaizhizao.utils.work_order_operation_scheduling import (
-            build_operation_time_slots,
-            build_operation_time_slots_in_planned_window,
-        )
-        from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
-
-        _anchor = work_order.planned_start_date or work_order.planned_end_date
-        _around = to_site_date(_anchor) if _anchor else None
-        _holidays, _work_hours, _overtime = await load_scheduling_work_context(
-            tenant_id, around=_around
-        )
-        durations = [row["total_hours"] for row in prepared_ops]
         wo_start = work_order.planned_start_date
         wo_end = work_order.planned_end_date
-        if wo_start and wo_end and wo_start != wo_end:
-            time_slots = build_operation_time_slots_in_planned_window(
-                durations,
-                planned_start=wo_start,
-                planned_end=wo_end,
-                holidays=_holidays,
-                work_hours=_work_hours,
-                overtime=_overtime,
-            )
+        durations = [row["total_hours"] for row in prepared_ops]
+
+        if _work_order_has_user_planned_window(work_order):
+            # 手工建单：工序继承工单头计划窗口，创建阶段不做排程重算
+            time_slots = [(wo_start, wo_end) for _ in prepared_ops]
         else:
-            time_slots = build_operation_time_slots(
-                durations,
-                planned_start=wo_start,
-                planned_end=wo_end,
-                holidays=_holidays,
-                work_hours=_work_hours,
-                overtime=_overtime,
+            from apps.kuaizhizao.utils.work_order_operation_scheduling import (
+                build_operation_time_slots,
+                build_operation_time_slots_in_planned_window,
             )
+            from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
+
+            _anchor = wo_start or wo_end
+            _around = to_site_date(_anchor) if _anchor else None
+            _holidays, _work_hours, _overtime = await load_scheduling_work_context(
+                tenant_id, around=_around
+            )
+            if wo_start and wo_end and wo_start != wo_end:
+                time_slots = build_operation_time_slots_in_planned_window(
+                    durations,
+                    planned_start=wo_start,
+                    planned_end=wo_end,
+                    holidays=_holidays,
+                    work_hours=_work_hours,
+                    overtime=_overtime,
+                )
+            else:
+                time_slots = build_operation_time_slots(
+                    durations,
+                    planned_start=wo_start,
+                    planned_end=wo_end,
+                    holidays=_holidays,
+                    work_hours=_work_hours,
+                    overtime=_overtime,
+                )
 
         work_order_operations = []
         for idx, row in enumerate(prepared_ops):
@@ -1282,12 +1291,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             work_order_operations.append(work_order_op)
         
-        # 工单头：开工对齐首道工序；计划结束保留交期锚点（不因零工时工序槽被压成与开始同刻）
+        # 工单头：仅在没有用户指定窗口时，才用推算结果回写
         if work_order_operations and time_slots:
-            work_order.planned_start_date = resolve_business_datetime(time_slots[0][0])
-            if work_order.planned_end_date is None:
-                work_order.planned_end_date = resolve_business_datetime(time_slots[-1][1])
-            await work_order.save()
+            if not _work_order_has_user_planned_window(work_order):
+                work_order.planned_start_date = resolve_business_datetime(time_slots[0][0])
+                if work_order.planned_end_date is None:
+                    work_order.planned_end_date = resolve_business_datetime(time_slots[-1][1])
+                await work_order.save()
         
         logger.info(f"为工单 {work_order.code} 自动生成了 {len(work_order_operations)} 个工序单")
         return work_order_operations
@@ -1361,15 +1371,41 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
 
         if time_slots:
-            wo_updates: Dict[str, Any] = {
-                "updated_by": updated_by,
-                "planned_start_date": resolve_business_datetime(time_slots[0][0]),
-            }
-            if work_order.planned_end_date is not None:
-                wo_updates["planned_end_date"] = work_order.planned_end_date
-            else:
-                wo_updates["planned_end_date"] = resolve_business_datetime(time_slots[-1][1])
-            await WorkOrder.filter(tenant_id=tenant_id, id=work_order.id).update(**wo_updates)
+            if not _work_order_has_user_planned_window(work_order):
+                wo_updates: Dict[str, Any] = {
+                    "updated_by": updated_by,
+                    "planned_start_date": resolve_business_datetime(time_slots[0][0]),
+                }
+                if work_order.planned_end_date is not None:
+                    wo_updates["planned_end_date"] = work_order.planned_end_date
+                else:
+                    wo_updates["planned_end_date"] = resolve_business_datetime(time_slots[-1][1])
+                await WorkOrder.filter(tenant_id=tenant_id, id=work_order.id).update(**wo_updates)
+
+    async def _inherit_work_order_planned_window_to_operations(
+        self,
+        tenant_id: int,
+        work_order: WorkOrder,
+        operations: Sequence[Any],
+        *,
+        updated_by: Optional[int] = None,
+    ) -> None:
+        """工序计划时间继承工单头窗口（手工建单/改期），不按工时重算。"""
+        if not operations or not _work_order_has_user_planned_window(work_order):
+            return
+        wo_start = resolve_business_datetime(work_order.planned_start_date)
+        wo_end = resolve_business_datetime(work_order.planned_end_date)
+        op_ids = [int(op.id) for op in operations if getattr(op, "id", None) is not None]
+        if not op_ids:
+            return
+        await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            id__in=op_ids,
+        ).update(
+            planned_start_date=wo_start,
+            planned_end_date=wo_end,
+            updated_by=updated_by,
+        )
 
     async def resync_operations_to_work_order_planned_window(
         self,
@@ -1382,8 +1418,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         """
         将工序计划时间对齐到工单头计划起止窗口。
 
-        force=True：头表计划刚被用户改写，必须重算。
-        force=False：仅当工序时刻缺省或落在窗口外时重算（修复编辑保存带回旧工序时间）。
+        force=True：头表计划刚被用户改写，工序继承新窗口。
+        force=False：仅当工序时刻缺省或落在窗口外时同步。
+        用户已指定计划窗口时只做继承，不按工时倒排/正排。
         """
         if not (work_order.planned_start_date and work_order.planned_end_date):
             return False
@@ -1400,6 +1437,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             work_order.planned_end_date,
         ):
             return False
+        if _work_order_has_user_planned_window(work_order):
+            await self._inherit_work_order_planned_window_to_operations(
+                tenant_id,
+                work_order,
+                operations,
+                updated_by=updated_by,
+            )
+            return True
         await self.compute_and_apply_operation_planned_times(
             tenant_id,
             work_order,
@@ -1916,8 +1961,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         work_order_operations.append(work_order_op)
                         current_time = planned_end_date
                     
-                    # 更新工单计划时间：有交期锚点时不后移交期
-                    if work_order_operations:
+                    # 手工建单已填计划起止时不重算；缺省交期时才按工序推算
+                    if work_order_operations and not _work_order_has_user_planned_window(work_order):
                         if work_order.planned_end_date:
                             await self.compute_and_apply_operation_planned_times(
                                 tenant_id,
@@ -2728,6 +2773,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                                 "planned_start_date": op.planned_start_date,
                                 "planned_end_date": op.planned_end_date,
                                 "assigned_worker_id": op.assigned_worker_id,
+                                "assigned_worker_ids": _parse_assigned_worker_ids(
+                                    op.assigned_worker_ids,
+                                    op.assigned_worker_id,
+                                ),
                                 "assigned_worker_name": op.assigned_worker_name,
                                 "assigned_team_id": op.assigned_team_id,
                                 "assigned_team_name": op.assigned_team_name,
@@ -2737,6 +2786,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                                 "assigned_equipment_name": op.assigned_equipment_name,
                                 "assigned_mold_name": op.assigned_mold_name,
                                 "assigned_tool_name": op.assigned_tool_name,
+                                "machine_session_state": op.machine_session_state or "none",
                             }
                             for op in ops
                         ]
@@ -3114,7 +3164,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 **update_data
             )
 
-            # 头表计划起止变更，或工序仍停在旧系统排程时刻时：按窗口重算报工卡片计划时间
+            if any(field in update_data for field in ("planned_start_date", "planned_end_date")):
+                work_order = await self.get_by_id(
+                    tenant_id, work_order_id, raise_if_not_found=True
+                )
+
+            # 头表计划起止变更，或工序仍停在旧系统排程时刻时：对齐到工单窗口（手工窗口仅继承，不重算）
             await self.resync_operations_to_work_order_planned_window(
                 tenant_id,
                 work_order,
@@ -3441,17 +3496,29 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 else:
                     raw = dict(item)
 
-                worker_id = raw.get("assigned_worker_id")
-                if worker_id is not None:
-                    if int(worker_id) > 0:
-                        user = await User.get_or_none(id=int(worker_id), tenant_id=tenant_id)
-                        patch_fields["assigned_worker_id"] = int(worker_id)
-                        patch_fields["assigned_worker_name"] = (
-                            (user.full_name or user.username) if user else f"员工{worker_id}"
-                        )
-                    else:
-                        patch_fields["assigned_worker_id"] = None
-                        patch_fields["assigned_worker_name"] = None
+                worker_ids_raw = raw.get("assigned_worker_ids")
+                if worker_ids_raw is not None:
+                    resolved_ids = _parse_assigned_worker_ids(worker_ids_raw, None)
+                    resolved_ids, primary_id, joined_names = await _resolve_assigned_worker_fields(
+                        tenant_id, resolved_ids
+                    )
+                    patch_fields["assigned_worker_ids"] = resolved_ids
+                    patch_fields["assigned_worker_id"] = primary_id
+                    patch_fields["assigned_worker_name"] = joined_names
+                else:
+                    worker_id = raw.get("assigned_worker_id")
+                    if worker_id is not None:
+                        if int(worker_id) > 0:
+                            resolved_ids, primary_id, joined_names = await _resolve_assigned_worker_fields(
+                                tenant_id, [int(worker_id)]
+                            )
+                            patch_fields["assigned_worker_ids"] = resolved_ids
+                            patch_fields["assigned_worker_id"] = primary_id
+                            patch_fields["assigned_worker_name"] = joined_names
+                        else:
+                            patch_fields["assigned_worker_ids"] = []
+                            patch_fields["assigned_worker_id"] = None
+                            patch_fields["assigned_worker_name"] = None
 
                 team_id = raw.get("assigned_team_id")
                 if team_id is not None:
@@ -3518,7 +3585,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             "work_order_code": wo.code or str(wo.id),
                             "product_name": wo.product_name or "—",
                             "operation_name": op.operation_name or "—",
-                            "assignee_user_ids": [int(patch_fields["assigned_worker_id"])],
+                            "assignee_user_ids": list(
+                                patch_fields.get("assigned_worker_ids")
+                                or [int(patch_fields["assigned_worker_id"])]
+                            ),
                             "assigned_worker_name": patch_fields.get("assigned_worker_name"),
                             "creator_user_id": wo.created_by,
                         }
@@ -6417,6 +6487,77 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 work_order.status = 'in_progress'
                 work_order.actual_start_date = work_order.actual_start_date or resolve_business_datetime()
                 work_order.updated_by = started_by
+                work_order.updated_by_name = user_info["name"]
+                await work_order.save()
+
+            op_payload = {
+                f: getattr(work_order_operation, f, None)
+                for f in WorkOrderOperationResponse.model_fields
+                if hasattr(work_order_operation, f)
+            }
+            worker_ids = _parse_assigned_worker_ids(
+                op_payload.get("assigned_worker_ids"),
+                op_payload.get("assigned_worker_id"),
+            )
+            op_payload["assigned_worker_ids"] = worker_ids
+            if worker_ids and not op_payload.get("assigned_worker_id"):
+                op_payload["assigned_worker_id"] = worker_ids[0]
+            op_payload["max_reportable_quantity"] = _max_reportable_quantity_for_op(work_order, work_order_operation)
+            dmap = await _batch_default_operators_snapshots_by_master_operation_id(
+                tenant_id, [work_order_operation.operation_id]
+            )
+            op_payload["default_operators"] = dmap.get(work_order_operation.operation_id, [])
+            return WorkOrderOperationResponse.model_validate(op_payload)
+
+    async def set_work_order_operation_machine_session(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        operation_id: int,
+        action: str,
+        operator_id: int,
+    ) -> WorkOrderOperationResponse:
+        """扫码上下机：写入工序 machine_session_state 真源。"""
+        normalized = str(action or "").strip().lower()
+        if normalized not in {"on", "off"}:
+            raise BusinessLogicError("action 须为 on 或 off")
+
+        async with in_transaction():
+            work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+            work_order_operation = await WorkOrderOperation.get_or_none(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                id=operation_id,
+                deleted_at__isnull=True,
+            )
+            if not work_order_operation:
+                raise NotFoundError(f"工单工序不存在: 工单ID={work_order_id}, 工序ID={operation_id}")
+            if work_order_operation.status in {"completed", "cancelled"}:
+                raise BusinessLogicError("已完成或已取消的工序不能上下机")
+
+            user_info = await self.get_user_info(operator_id)
+            now = resolve_business_datetime()
+            if normalized == "on":
+                if work_order_operation.machine_session_state == "on_machine":
+                    raise BusinessLogicError("当前工序已在上机状态")
+                work_order_operation.machine_session_state = "on_machine"
+                if not work_order_operation.actual_start_date:
+                    work_order_operation.actual_start_date = now
+                if work_order_operation.status == "pending":
+                    work_order_operation.status = "in_progress"
+            else:
+                if work_order_operation.machine_session_state != "on_machine":
+                    raise BusinessLogicError("当前工序未在上机状态，不能下机")
+                work_order_operation.machine_session_state = "off_machine"
+
+            work_order_operation.updated_by = operator_id
+            work_order_operation.updated_by_name = user_info["name"]
+            await work_order_operation.save()
+
+            if work_order.status == "released" and normalized == "on":
+                work_order.status = "in_progress"
+                work_order.actual_start_date = work_order.actual_start_date or now
+                work_order.updated_by = operator_id
                 work_order.updated_by_name = user_info["name"]
                 await work_order.save()
 

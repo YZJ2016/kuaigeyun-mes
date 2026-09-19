@@ -73,8 +73,8 @@ export function resolveWorkOrderIdFromTask(
   return null;
 }
 
-/** 工位分段行内工序 id → 工位行 task id（st-*） */
-export function resolveStationRowIdForOperation(
+/** 分段行内工序 id → 资源行 task id（st-* / eq-* / wk-*） */
+export function resolveResourceRowIdForOperation(
   operationId: number,
   tasks: GanttTask[]
 ): string | null {
@@ -83,4 +83,12 @@ export function resolveStationRowIdForOperation(
     return String(t.id);
   }
   return null;
+}
+
+/** @deprecated 使用 resolveResourceRowIdForOperation */
+export function resolveStationRowIdForOperation(
+  operationId: number,
+  tasks: GanttTask[]
+): string | null {
+  return resolveResourceRowIdForOperation(operationId, tasks);
 }

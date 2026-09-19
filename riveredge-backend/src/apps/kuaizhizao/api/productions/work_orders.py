@@ -66,6 +66,7 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderSplitRequest,
     WorkOrderSplitResponse,
     WorkOrderOperationResponse,
+    WorkOrderOperationMachineSessionRequest,
     WorkOrderOperationsUpdateRequest,
     WorkOrderOperationDispatch,
     WorkOrderKittingAnalysisResponse,
@@ -981,6 +982,27 @@ async def start_work_order_operation(
         work_order_id=work_order_id,
         operation_id=operation_id,
         started_by=current_user.id
+    )
+
+
+@router.post(
+    "/work-orders/{work_order_id}/operations/{operation_id}/machine-session",
+    response_model=WorkOrderOperationResponse,
+    summary="Set work order operation machine on/off session",
+)
+async def set_work_order_operation_machine_session(
+    work_order_id: int,
+    operation_id: int,
+    body: WorkOrderOperationMachineSessionRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderOperationResponse:
+    return await WorkOrderService().set_work_order_operation_machine_session(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        operation_id=operation_id,
+        action=body.action,
+        operator_id=current_user.id,
     )
 
 

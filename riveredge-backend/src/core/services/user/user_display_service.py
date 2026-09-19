@@ -53,6 +53,7 @@ class UserDisplayService:
                     uuid=str(role.uuid),
                     name=name,
                     code=getattr(role, "code", None),
+                    functional_domain=getattr(role, "functional_domain", None),
                 )
             )
         return out

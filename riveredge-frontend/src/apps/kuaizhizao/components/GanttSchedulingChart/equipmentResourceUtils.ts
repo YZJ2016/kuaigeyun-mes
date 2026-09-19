@@ -1,10 +1,10 @@
 /**
- * 设备资源型甘特：设备为资源行，工序为子任务。
+ * 设备资源型甘特：每个设备一行，同设备多道工序在同一行按时间轴分段展示。
  */
 
 import dayjs from 'dayjs';
 import type { WorkOrderForGantt, GanttTask } from './types';
-import { operationToGanttTask, sortWorkOrdersForGantt } from './utils';
+import { buildGanttNodeTooltip, operationToGanttTask, sortWorkOrdersForGantt } from './utils';
 import { findOverlappingTaskIds } from './stationResourceUtils';
 
 const DEFAULT_START_HOUR = 8;
@@ -13,18 +13,26 @@ const DEFAULT_END_HOUR = 17;
 export interface EquipmentResource {
   id: number;
   name: string;
+  code?: string;
+  type?: string;
 }
 
-export const UNASSIGNED_EQUIPMENT_ID = 0;
-export const UNASSIGNED_EQUIPMENT_LABEL = '未分配设备';
-
 export function equipmentResourceId(equipmentId: number): string {
-  return equipmentId === UNASSIGNED_EQUIPMENT_ID ? 'eq-0' : `eq-${equipmentId}`;
+  return `eq-${equipmentId}`;
 }
 
 export function isEquipmentResourceTaskId(id: number | string): boolean {
   return String(id).startsWith('eq-');
 }
+
+function parseEquipmentIdFromResourceRow(id: number | string): number | null {
+  const m = String(id).match(/^eq-(\d+)$/i);
+  if (!m) return null;
+  const parsed = Number(m[1]);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+export { parseEquipmentIdFromResourceRow };
 
 function defaultDayRange(): { start: Date; end: Date } {
   const today = dayjs().startOf('day');
@@ -49,16 +57,27 @@ function durationDays(start: Date, end: Date): number {
   return Math.max(1, Math.ceil(ms / (24 * 60 * 60 * 1000)));
 }
 
-function buildEmptyEquipmentRow(equipmentId: number, name: string): GanttTask {
+function parseOperationIdFromTaskId(id: number | string): number | null {
+  const m = String(id).match(/^op-(\d+)$/i);
+  if (!m) return null;
+  const opId = Number(m[1]);
+  return Number.isInteger(opId) && opId > 0 ? opId : null;
+}
+
+function buildEmptyEquipmentResourceRow(equipmentId: number, name: string, code?: string): GanttTask {
   const { start, end } = defaultDayRange();
-  const label = name.trim();
+  const codePrefix = code ? `${code} ` : '';
+  const label = `${codePrefix}${name}`.trim();
   return {
     id: equipmentResourceId(equipmentId),
     type: 'task',
     parent: 0,
     text: label,
     gantt_primary_label: label,
+    gantt_station_label: label,
     gantt_work_order_code: '空闲',
+    gantt_station_badge_count: 0,
+    gantt_station_badge_tone: 'idle',
     start,
     end,
     duration: durationDays(start, end),
@@ -70,43 +89,90 @@ function buildEmptyEquipmentRow(equipmentId: number, name: string): GanttTask {
   };
 }
 
-function buildSummaryTask(
+function buildEquipmentMergedTask(
   equipmentId: number,
   name: string,
+  code: string | undefined,
   childTasks: GanttTask[],
   conflictCount: number
 ): GanttTask {
   const { start, end } = rangeFromTasks(childTasks);
-  const loadHint =
-    childTasks.length === 0
-      ? '空闲'
-      : conflictCount > 0
-        ? `${childTasks.length} 道工序 - 冲突 ${conflictCount}`
-        : `${childTasks.length} 道工序`;
-  const label = name.trim();
+  const codePrefix = code ? `${code} ` : '';
+  const label = `${codePrefix}${name}`.trim();
+  const tone = conflictCount > 0 ? 'conflict' : 'busy';
+
   return {
     id: equipmentResourceId(equipmentId),
-    type: 'summary',
+    type: 'task',
     parent: 0,
-    open: true,
     text: label,
     gantt_primary_label: label,
-    gantt_work_order_code: loadHint,
+    gantt_station_label: label,
+    gantt_station_badge_count: childTasks.length,
+    gantt_station_badge_tone: tone,
     start,
     end,
     duration: durationDays(start, end),
     progress: 0,
     lazy: false,
-    css: conflictCount > 0 ? 'gantt-equipment-resource gantt-equipment-overloaded' : 'gantt-equipment-resource',
-    class: conflictCount > 0 ? 'gantt-equipment-resource gantt-equipment-overloaded' : 'gantt-equipment-resource',
+    segments: childTasks.map((t) => {
+      const operationId = parseOperationIdFromTaskId(t.id);
+      return {
+        start: t.start,
+        end: t.end,
+        duration: t.duration,
+        text: [t.gantt_primary_label, t.gantt_work_order_code].filter(Boolean).join('\n'),
+        title:
+          t.title ||
+          buildGanttNodeTooltip({
+            workOrderCode: t.gantt_work_order_code,
+            operationName: t.gantt_primary_label,
+            equipmentName: t.assigned_equipment_name,
+            start: t.start,
+            end: t.end,
+          }),
+        gantt_primary_label: t.gantt_primary_label,
+        gantt_work_order_code: t.gantt_work_order_code,
+        operation_id: operationId ?? undefined,
+        work_order_id: t.work_order_id,
+        css: t.css,
+        class: t.class,
+        color: t.color,
+        textColor: t.textColor,
+      };
+    }),
+    css: [
+      'gantt-equipment-merged',
+      conflictCount > 0 ? 'gantt-equipment-overloaded' : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+    class: [
+      'gantt-equipment-merged',
+      conflictCount > 0 ? 'gantt-equipment-overloaded' : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
   };
 }
 
 export function workOrdersToEquipmentResourceGanttTasks(
-  workOrders: WorkOrderForGantt[] | null | undefined
+  workOrders: WorkOrderForGantt[] | null | undefined,
+  equipments: EquipmentResource[] | null | undefined,
+  equipmentTypeFilter: string | 'all' = 'all'
 ): GanttTask[] {
+  const matchesTypeFilter = (meta: EquipmentResource): boolean => {
+    if (equipmentTypeFilter === 'all') return true;
+    return String(meta.type || '').trim() === equipmentTypeFilter;
+  };
+
   const safeWorkOrders = workOrders ?? [];
+  const safeEquipments = equipments ?? [];
   const equipmentMeta = new Map<number, EquipmentResource>();
+  for (const eq of safeEquipments) {
+    if (eq.id > 0) equipmentMeta.set(eq.id, eq);
+  }
+
   const opsByEquipment = new Map<
     number,
     Array<{ op: NonNullable<WorkOrderForGantt['operations']>[number]; wo: WorkOrderForGantt }>
@@ -114,16 +180,18 @@ export function workOrdersToEquipmentResourceGanttTasks(
 
   for (const wo of sortWorkOrdersForGantt(safeWorkOrders)) {
     for (const op of (wo.operations || []).filter((o) => o.id != null)) {
-      const rawName = (op.assigned_equipment_name || '').trim();
       const eid =
         op.assigned_equipment_id != null && Number(op.assigned_equipment_id) > 0
           ? Number(op.assigned_equipment_id)
-          : rawName
-            ? -Math.abs(rawName.split('').reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0))
-            : UNASSIGNED_EQUIPMENT_ID;
-      const ename = rawName || (eid > 0 ? `设备${eid}` : UNASSIGNED_EQUIPMENT_LABEL);
-      if (!equipmentMeta.has(eid) && eid > 0) {
-        equipmentMeta.set(eid, { id: eid, name: ename });
+          : null;
+      if (eid == null) continue;
+
+      if (!equipmentMeta.has(eid)) {
+        equipmentMeta.set(eid, {
+          id: eid,
+          name: (op.assigned_equipment_name || '').trim() || `设备${eid}`,
+          code: String(eid),
+        });
       }
       if (!opsByEquipment.has(eid)) opsByEquipment.set(eid, []);
       opsByEquipment.get(eid)!.push({ op, wo });
@@ -131,33 +199,34 @@ export function workOrdersToEquipmentResourceGanttTasks(
   }
 
   const orderedIds: number[] = [];
-  const sortedIds = [...equipmentMeta.keys()].sort((a, b) =>
-    String(equipmentMeta.get(a)?.name).localeCompare(String(equipmentMeta.get(b)?.name), 'zh-CN')
-  );
-  for (const id of sortedIds) orderedIds.push(id);
+  const sortedMaster = [...safeEquipments]
+    .filter((eq) => eq.id > 0)
+    .sort((a, b) => String(a.code || a.name).localeCompare(String(b.code || b.name), 'zh-CN'));
+  for (const eq of sortedMaster) {
+    if (!orderedIds.includes(eq.id)) orderedIds.push(eq.id);
+  }
   for (const eid of opsByEquipment.keys()) {
     if (eid > 0 && !orderedIds.includes(eid)) orderedIds.push(eid);
-  }
-  if (opsByEquipment.has(UNASSIGNED_EQUIPMENT_ID) && !orderedIds.includes(UNASSIGNED_EQUIPMENT_ID)) {
-    orderedIds.push(UNASSIGNED_EQUIPMENT_ID);
   }
 
   const tasks: GanttTask[] = [];
   for (const eid of orderedIds) {
-    const meta =
-      eid === UNASSIGNED_EQUIPMENT_ID
-        ? { id: UNASSIGNED_EQUIPMENT_ID, name: UNASSIGNED_EQUIPMENT_LABEL }
-        : equipmentMeta.get(eid) ?? { id: eid, name: `设备${eid}` };
+    const meta = equipmentMeta.get(eid) ?? { id: eid, name: `设备${eid}`, code: String(eid) };
+    if (!matchesTypeFilter(meta)) continue;
+    const childrenInput = opsByEquipment.get(eid) ?? [];
 
-    let childTasks = (opsByEquipment.get(eid) ?? []).map(({ op, wo }) => {
+    let childTasks = childrenInput.map(({ op, wo }) => {
       const task = operationToGanttTask(op, wo, 'station_child');
       return {
         ...task,
         type: 'task' as const,
         parent: equipmentResourceId(eid),
+        assigned_equipment_name: meta.name,
       };
     });
+
     childTasks.sort((a, b) => a.start.getTime() - b.start.getTime() || String(a.id).localeCompare(String(b.id)));
+
     const overlapIds = findOverlappingTaskIds(childTasks);
     if (overlapIds.size > 0) {
       childTasks = childTasks.map((t) => {
@@ -171,12 +240,13 @@ export function workOrdersToEquipmentResourceGanttTasks(
         };
       });
     }
+
     if (childTasks.length === 0) {
-      tasks.push(buildEmptyEquipmentRow(eid, meta.name));
+      tasks.push(buildEmptyEquipmentResourceRow(eid, meta.name, meta.code));
       continue;
     }
-    tasks.push(buildSummaryTask(eid, meta.name, childTasks, overlapIds.size));
-    tasks.push(...childTasks);
+    tasks.push(buildEquipmentMergedTask(eid, meta.name, meta.code, childTasks, overlapIds.size));
   }
+
   return tasks;
 }

@@ -113,7 +113,11 @@ export function SchedulingAiAssistantTrigger({
   if (!kuaiaiAvailable) {
     return null;
   }
-  return <UniAiButton onClick={onOpen}>{t(`${I18N}.trigger`)}</UniAiButton>;
+  return (
+    <UniAiButton size="small" iconSize={18} onClick={onOpen}>
+      {t(`${I18N}.trigger`)}
+    </UniAiButton>
+  );
 }
 
 export function SchedulingAiAssistantDrawer({

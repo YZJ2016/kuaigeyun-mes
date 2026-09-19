@@ -21,14 +21,42 @@
     padding: 8px;
   }
 
-  .aps-top-inline {
+  .aps-header-band__row {
     padding: 0;
-    gap: 8px;
+    gap: 10px;
     line-height: 20px;
   }
 
-  .aps-header-band-resource-stats {
+  .aps-header-band__tags,
+  .aps-header-band__metrics {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .aps-header-band__metrics {
+    gap: 10px;
+    padding-inline: 2px 8px;
+    border-inline: 1px solid var(--ant-color-split, #f0f0f0);
+  }
+
+  .aps-header-band__trail {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
     margin-inline-start: auto;
+    flex-shrink: 0;
+  }
+
+  .aps-header-band-resource-stats {
+    flex-shrink: 0;
+  }
+
+  .aps-header-band__extra {
+    display: inline-flex;
+    align-items: center;
     flex-shrink: 0;
   }
 
@@ -52,6 +80,67 @@
   .ant-typography {
     font-size: 12px;
     margin-bottom: 0;
+  }
+}
+
+.aps-gantt-card-compact.scheduling-gantt-card {
+  .ant-card-head {
+    overflow: hidden;
+  }
+
+  .ant-card-head-title {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .ant-card-extra {
+    display: none;
+  }
+}
+
+.scheduling-gantt-toolbar__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.scheduling-gantt-toolbar__main,
+.scheduling-gantt-toolbar__filters {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.scheduling-gantt-toolbar__filters {
+  margin-inline-start: auto;
+}
+
+.scheduling-gantt-toolbar__label {
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.scheduling-gantt-toolbar__hint {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.scheduling-gantt-toolbar__title,
+.scheduling-gantt-toolbar__extra {
+  flex-wrap: nowrap !important;
+  white-space: nowrap;
+
+  .ant-space-item {
+    flex-shrink: 0;
   }
 }
 
@@ -293,10 +382,16 @@
     font-size: 12px;
   }
 
-  /* 空闲工位占位条（unscheduledTasks 已跳过渲染，此处兜底） */
+  /* 空闲工位/设备/人员占位条（unscheduledTasks 已跳过渲染，此处兜底） */
   .wx-bar.gantt-station-idle,
+  .wx-bar.gantt-equipment-idle,
+  .wx-bar.gantt-worker-idle,
   .wx-task.gantt-station-resource .wx-task-bar,
   .gantt-station-resource .wx-task-bar,
+  .wx-task.gantt-equipment-resource .wx-task-bar,
+  .gantt-equipment-resource .wx-task-bar,
+  .wx-task.gantt-worker-resource .wx-task-bar,
+  .gantt-worker-resource .wx-task-bar,
   .wx-summary .wx-task-bar {
     display: none !important;
   }
@@ -627,6 +722,452 @@
   cursor: grab;
 }
 
+.scheduling-card-board {
+  padding: 4px 0 8px;
+}
+
+.scheduling-card-board--loading {
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scheduling-card-board__hscroll,
+.scheduling-card-board__scroll {
+  max-height: calc(100vh - 320px);
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+@scheduling-card-board-lane-width: 184px;
+
+.scheduling-card-board__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 4px 8px;
+  min-width: min(100%, 720px);
+}
+
+.scheduling-card-board__header-row,
+.scheduling-card-board__row {
+  display: grid;
+  grid-template-columns: @scheduling-card-board-lane-width minmax(0, 1fr);
+  gap: 0;
+  align-items: stretch;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: none;
+
+  &:first-of-type {
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 8px 8px 0 0;
+  }
+
+  &:last-of-type {
+    border-radius: 0 0 8px 8px;
+  }
+}
+
+.scheduling-card-board__header-row {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--ant-color-bg-container, #fff);
+  min-height: 32px;
+}
+
+.scheduling-card-board__row {
+  background: #fafafa;
+  min-height: 88px;
+}
+
+.scheduling-card-board__row--idle {
+  min-height: 64px;
+}
+
+.scheduling-card-board__row--overloaded {
+  background: rgba(255, 77, 79, 0.04);
+  border-color: rgba(255, 77, 79, 0.25);
+}
+
+.scheduling-card-board__lane-head {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-inline-end: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--ant-color-bg-container, #fff);
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+
+.scheduling-card-board__lane-head--corner {
+  justify-content: center;
+  font-size: 12px;
+  z-index: 5;
+}
+
+.scheduling-card-board__lane-body {
+  min-width: 0;
+  padding: 8px;
+  background: #fff;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  pointer-events: auto;
+}
+
+.scheduling-card-board__lane-body--header {
+  display: flex;
+  align-items: center;
+  padding-block: 6px;
+  overflow: hidden;
+  font-size: 12px;
+  background: var(--ant-color-bg-container, #fff);
+}
+
+.scheduling-card-board__resource-name {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.scheduling-card-board__summary-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.scheduling-card-board__load-rate {
+  color: rgba(0, 0, 0, 0.65);
+  font-variant-numeric: tabular-nums;
+}
+
+.scheduling-card-board__load-rate--overloaded {
+  color: #cf1322;
+  font-weight: 500;
+}
+
+.scheduling-card-board__lane-body--empty {
+  display: flex;
+  align-items: center;
+  padding-inline: 12px;
+}
+
+.scheduling-card-board__cards {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: stretch;
+  width: max-content;
+  min-width: 100%;
+}
+
+.scheduling-card-board__cards--empty {
+  min-height: 36px;
+  align-items: center;
+  padding-inline: 4px;
+}
+
+.scheduling-card-board__cards--drop-target,
+.scheduling-card-board__lane-body--drop-target {
+  background: rgba(22, 119, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(22, 119, 255, 0.28);
+}
+
+.scheduling-card-board__task-wrap--overlay {
+  cursor: grabbing;
+  box-shadow: 0 8px 24px rgba(22, 119, 255, 0.18);
+}
+
+.scheduling-card-board__task-wrap {
+  flex-shrink: 0;
+}
+
+.scheduling-card-board__task-wrap--dragging {
+  z-index: 2;
+}
+
+.scheduling-card-board__empty-label {
+  font-size: 12px;
+}
+
+.scheduling-card-board__task {
+  width: 208px;
+  min-height: 112px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  background: #fff;
+  text-align: left;
+  overflow: hidden;
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.scheduling-card-board__task-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  min-height: 112px;
+  padding: 8px 10px;
+  cursor: pointer;
+  box-sizing: border-box;
+
+  .ant-popover {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+.scheduling-card-board__task:hover {
+  border-color: rgba(22, 119, 255, 0.45);
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.08);
+}
+
+.scheduling-card-board__task-body:focus-visible {
+  outline: 2px solid rgba(22, 119, 255, 0.35);
+  outline-offset: -2px;
+}
+
+.scheduling-card-board__task--selected {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 1px rgba(22, 119, 255, 0.2);
+}
+
+.scheduling-card-board__task--overdue {
+  border-color: rgba(255, 77, 79, 0.35);
+}
+
+.scheduling-card-board__task--on-machine {
+  border-color: rgba(19, 194, 194, 0.55);
+  background: rgba(19, 194, 194, 0.06);
+}
+
+.scheduling-card-board__task--off-machine {
+  border-color: rgba(82, 196, 26, 0.45);
+}
+
+.scheduling-card-board__task--locked {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.scheduling-card-board__task-wrap--dragging .scheduling-card-board__task {
+  box-shadow: 0 4px 16px rgba(22, 119, 255, 0.18);
+}
+
+.scheduling-card-board__task-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 0;
+}
+
+.scheduling-card-board__task-drag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: rgba(0, 0, 0, 0.35);
+  cursor: grab;
+  flex-shrink: 0;
+  touch-action: none;
+
+  &:hover {
+    color: rgba(0, 0, 0, 0.65);
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.scheduling-card-board__task-tags {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  margin-inline-start: auto;
+
+  .ant-tag {
+    margin-inline-end: 0;
+    font-size: 11px;
+    line-height: 16px;
+    padding-inline: 4px;
+  }
+}
+
+.scheduling-card-board__task-code,
+.scheduling-card-board__task-product,
+.scheduling-card-board__task-operation {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.scheduling-card-board__task-time-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+
+  &--disabled {
+    cursor: default;
+  }
+}
+
+.scheduling-card-board__task-time-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.scheduling-card-board__task-time-edit {
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.scheduling-card-board__task-code {
+  font-size: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.scheduling-card-board__task-product,
+.scheduling-card-board__task-operation {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.scheduling-card-board__task-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 2px;
+}
+
+.scheduling-card-board__task-progress-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+
+  > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: #1677ff;
+  }
+}
+
+.scheduling-card-board__task-progress-text {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.scheduling-pending-pool__view-toggle {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.scheduling-pending-pool__card-toolbar {
+  padding: 8px 12px 0;
+}
+
+.scheduling-pool-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 4px 2px 8px;
+}
+
+.scheduling-pool-card {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.scheduling-pool-card:hover {
+  border-color: rgba(22, 119, 255, 0.35);
+}
+
+.scheduling-pool-card--selected {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 1px rgba(22, 119, 255, 0.18);
+}
+
+.scheduling-pool-card--overdue {
+  border-color: rgba(255, 77, 79, 0.35);
+}
+
+.scheduling-pool-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.scheduling-pool-card__code {
+  flex: 1;
+  min-width: 0;
+}
+
+.scheduling-pool-card__product,
+.scheduling-pool-card__time,
+.scheduling-pool-card__diagnostics {
+  display: block;
+  width: 100%;
+}
+
+.scheduling-pool-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.scheduling-pool-card__diagnostics {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
 /* —— 暗黑模式：背景/边框/标签跟随 Ant Design token —— */
 [data-theme='dark'] {
   .aps-delfoi-workspace {
@@ -683,5 +1224,43 @@
 
   .scheduling-pool-row--has-issues > td {
     background: rgba(250, 173, 20, 0.08);
+  }
+
+  .scheduling-load-table__rate {
+    min-width: 120px;
+  }
+
+  .gantt-task-on-machine,
+  .gantt-task-on-machine .gantt_task_line,
+  .gantt-task-on-machine .gantt_task_content {
+    border-color: #08979c !important;
+  }
+
+  .gantt-task-off-machine,
+  .gantt-task-off-machine .gantt_task_line,
+  .gantt-task-off-machine .gantt_task_content {
+    border-color: #389e0d !important;
+  }
+
+  .scheduling-card-board__header-row,
+  .scheduling-card-board__lane-head,
+  .scheduling-card-board__lane-body--header {
+    background: var(--ant-color-bg-container, #141414);
+  }
+
+  .scheduling-card-board__row {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .scheduling-card-board__lane-body {
+    background: var(--ant-color-bg-container, #141414);
+  }
+
+  .scheduling-card-board__task {
+    background: var(--ant-color-bg-container, #141414);
+  }
+
+  .scheduling-pool-card {
+    background: var(--ant-color-bg-container, #141414);
   }
 }

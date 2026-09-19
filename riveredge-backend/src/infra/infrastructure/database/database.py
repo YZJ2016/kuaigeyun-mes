@@ -387,6 +387,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.mrp_result",  # MRP结果模型
                 "apps.kuaizhizao.models.lrp_result",  # LRP结果模型
                 "apps.kuaizhizao.models.outsource_work_order",  # 委外工单模型（OutsourceWorkOrder、OutsourceMaterialIssue、OutsourceMaterialReceipt）
+                "apps.kuaizhizao.models.outsource_settlement",  # 委外结算单（OutsourceSettlement、OutsourceSettlementItem）
                 "apps.kuaizhizao.models.document_relation",  # 单据关联模型
                 "apps.kuaizhizao.models.assembly_order",  # 装配单模型
                 "apps.kuaizhizao.models.assembly_material_binding",  # 装配物料绑定模型

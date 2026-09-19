@@ -42,7 +42,8 @@ function missingFieldLabel(
 export function collectWorkOrderDiagnosticIssues(
   wo: WorkOrderForGantt,
   boardScan: VisualSchedulingBoardScan | null | undefined,
-  t: TFunction
+  t: TFunction,
+  options?: { materialHardConstraint?: boolean }
 ): WorkOrderDiagnosticIssue[] {
   const issues: WorkOrderDiagnosticIssue[] = [];
   const seen = new Set<string>();
@@ -95,7 +96,7 @@ export function collectWorkOrderDiagnosticIssues(
     if (material.work_order_id !== wo.id) continue;
     push({
       key: 'material',
-      severity: 'warning',
+      severity: options?.materialHardConstraint ? 'error' : 'warning',
       label: material.message || t('app.kuaizhizao.scheduling.diagnostics.materialShortageFallback'),
     });
   }

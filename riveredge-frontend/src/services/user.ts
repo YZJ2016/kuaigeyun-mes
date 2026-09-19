@@ -430,6 +430,7 @@ export interface UserDisplayRoleItem {
   uuid: string;
   name: string;
   code?: string;
+  functional_domain?: string | null;
 }
 
 export interface UserDisplayItem {

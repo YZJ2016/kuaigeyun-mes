@@ -322,12 +322,22 @@ class WorkOrderOperationMinimalForGantt(BaseSchema):
     assigned_mold_name: Optional[str] = None
     assigned_tool_name: Optional[str] = None
     assigned_worker_id: Optional[int] = None
+    assigned_worker_ids: Optional[List[int]] = Field(
+        None, description="分配的员工ID列表（派工多人时使用）"
+    )
     assigned_mold_id: Optional[int] = None
     outsource_kind: Optional[str] = Field("none", description="委外类型 none/planned/ad_hoc")
     outsource_lead_time_days: Optional[int] = None
     default_outsource_supplier_id: Optional[int] = None
     default_outsource_supplier_name: Optional[str] = None
     is_outsourced: Optional[bool] = False
+    machine_session_state: Optional[str] = Field(
+        "none", description="上下机状态 none/on_machine/off_machine"
+    )
+
+
+class WorkOrderOperationMachineSessionRequest(BaseModel):
+    action: str = Field(..., description="on/off")
 
 
 class WorkOrderOperationStepSummary(BaseModel):
@@ -662,6 +672,7 @@ class WorkOrderOperationBase(BaseSchema):
     outsource_lead_time_days: Optional[int] = Field(None, description="委外提前期（天）")
     default_outsource_supplier_id: Optional[int] = Field(None, description="默认委外供应商ID")
     default_outsource_supplier_name: Optional[str] = Field(None, description="默认委外供应商名称")
+    machine_session_state: str = Field("none", description="上下机状态 none/on_machine/off_machine")
     
     remarks: Optional[str] = Field(None, description="备注")
 

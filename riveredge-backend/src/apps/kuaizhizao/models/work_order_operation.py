@@ -108,6 +108,11 @@ class WorkOrderOperation(BaseModel):
 
     # 状态信息
     status = fields.CharField(max_length=20, default="pending", description="工序状态（pending/in_progress/completed/cancelled）")
+    machine_session_state = fields.CharField(
+        max_length=20,
+        default="none",
+        description="上下机状态（none/on_machine/off_machine）",
+    )
     
     # 派工信息
     assigned_worker_id = fields.IntField(null=True, description="分配的员工ID（主责/兼容，取 assigned_worker_ids 首项）")

@@ -476,6 +476,120 @@ class InventoryCostService:
                     exc,
                 )
 
+    async def on_outsource_receipt_confirmed(self, tenant_id: int, receipt_id: int) -> Optional[Decimal]:
+        """委外收货确认：材料+加工暂估写入成品移动平均。"""
+        from apps.kuaizhizao.models.outsource_work_order import (
+            OutsourceMaterialIssue,
+            OutsourceMaterialReceipt,
+            OutsourceMaterialReturn,
+            OutsourceWorkOrder,
+        )
+        from core.utils.timezone_utils import resolve_business_datetime
+
+        receipt = await OutsourceMaterialReceipt.filter(
+            tenant_id=tenant_id,
+            id=receipt_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not receipt:
+            return None
+
+        work_order = await OutsourceWorkOrder.filter(
+            tenant_id=tenant_id,
+            id=receipt.outsource_work_order_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not work_order or not work_order.product_id:
+            return None
+
+        qualified = self._decimal(receipt.qualified_quantity or receipt.quantity)
+        if qualified <= 0:
+            return None
+
+        issues = await OutsourceMaterialIssue.filter(
+            tenant_id=tenant_id,
+            outsource_work_order_id=work_order.id,
+            status="completed",
+            deleted_at__isnull=True,
+        ).all()
+        returns = await OutsourceMaterialReturn.filter(
+            tenant_id=tenant_id,
+            outsource_work_order_id=work_order.id,
+            status="completed",
+            deleted_at__isnull=True,
+        ).all()
+
+        material_cost = Decimal("0")
+        for issue in issues:
+            qty = self._decimal(issue.quantity)
+            unit_cost = issue.issue_unit_cost
+            if unit_cost is None:
+                unit_cost = await self.get_material_unit_cost_or_zero(tenant_id, int(issue.material_id))
+            material_cost += qty * self._decimal(unit_cost)
+        for ret in returns:
+            qty = self._decimal(ret.quantity)
+            material_cost -= qty * await self.get_material_unit_cost_or_zero(tenant_id, int(ret.material_id))
+        material_cost = max(Decimal("0"), material_cost)
+
+        processing_unit = self._decimal(receipt.unit_price or work_order.unit_price)
+        processing_cost = qualified * processing_unit
+        total_cost = material_cost + processing_cost
+        unit_cost = (total_cost / qualified).quantize(Decimal("0.0001"))
+
+        try:
+            await self.update_moving_average_cost(
+                tenant_id=tenant_id,
+                material_id=int(work_order.product_id),
+                inbound_qty=qualified,
+                inbound_unit_price=unit_cost,
+            )
+        except Exception as exc:
+            logger.warning(
+                "委外收货成本结转失败 receipt={} product={}: {}",
+                receipt_id,
+                work_order.product_id,
+                exc,
+            )
+            return None
+
+        now = resolve_business_datetime()
+        await OutsourceMaterialReceipt.filter(id=receipt.id, tenant_id=tenant_id).update(
+            inventory_unit_cost=unit_cost,
+            processing_unit_cost=processing_unit,
+            cost_posted_at=now,
+        )
+        return unit_cost
+
+    async def adjust_material_cost_for_outsource_settlement(
+        self,
+        tenant_id: int,
+        *,
+        material_id: int,
+        adjustment_amount: Decimal,
+        settlement_id: int,
+        receipt_id: int,
+        reverse: bool = False,
+    ) -> None:
+        """结算审核加工费调差：按调整总额分摊至当前库存量，更新移动平均。"""
+        amount = self._decimal(adjustment_amount)
+        if amount == 0:
+            return
+        if reverse:
+            amount = -amount
+
+        info = await get_material_inventory_info(tenant_id=tenant_id, material_id=material_id)
+        total_qty = self._decimal(info.get("on_hand") or info.get("total_quantity"))
+        if total_qty <= 0:
+            raise ValidationError("成品库存不足，无法执行委外结算成本调差")
+
+        delta_per_unit = (amount / total_qty).quantize(Decimal("0.0001"))
+        current = await self.get_material_unit_cost_or_zero(tenant_id, material_id)
+        new_unit = (current + delta_per_unit).quantize(Decimal("0.0001"))
+        if new_unit < 0:
+            raise ValidationError("委外结算成本调差将导致负单位成本")
+
+        await self._persist_moving_average_cost(tenant_id, material_id, new_unit)
+
     async def on_stocktaking_difference_adjusted(
         self,
         tenant_id: int,

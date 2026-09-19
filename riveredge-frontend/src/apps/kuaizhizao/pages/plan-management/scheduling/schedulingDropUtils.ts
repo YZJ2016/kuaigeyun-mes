@@ -228,6 +228,12 @@ export function mapOperationForGantt(
     assigned_equipment_name: (op.assigned_equipment_name as string | null | undefined) ?? null,
     assigned_mold_name: (op.assigned_mold_name as string | null | undefined) ?? null,
     assigned_tool_name: (op.assigned_tool_name as string | null | undefined) ?? null,
+    machine_session_state:
+      op.machine_session_state === 'on_machine' ||
+      op.machine_session_state === 'off_machine' ||
+      op.machine_session_state === 'none'
+        ? op.machine_session_state
+        : null,
   };
 }
 

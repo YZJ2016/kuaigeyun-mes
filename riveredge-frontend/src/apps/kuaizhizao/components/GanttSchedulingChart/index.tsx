@@ -21,13 +21,23 @@ import type { WorkOrderForGantt, WorkstationResource } from './types';
 import { workOrdersToGanttTasks } from './utils';
 import type { ViewMode, GanttTaskLevel, GanttTask } from './types';
 import { isStationResourceTaskId, stationResourceId, findOverlappingTaskIds } from './stationResourceUtils';
-import { isEquipmentResourceTaskId } from './equipmentResourceUtils';
+import {
+  isEquipmentResourceTaskId,
+  parseEquipmentIdFromResourceRow,
+  type EquipmentResource,
+} from './equipmentResourceUtils';
+import {
+  isWorkerResourceTaskId,
+  parseWorkerIdFromResourceRow,
+  resolveWorkerIdsForOperation,
+  type WorkerResource,
+} from './workerResourceUtils';
 import {
   buildWorkOrderOperationLinks,
   getWorkOrderOperationTaskIds,
   isOperationTaskId,
   resolveWorkOrderIdFromTask,
-  resolveStationRowIdForOperation,
+  resolveResourceRowIdForOperation,
 } from './workOrderOperationLinks';
 import dayjs from 'dayjs';
 import { stationUnavailableApi, workCalendarApi } from '../../services/performance';
@@ -40,10 +50,16 @@ import { scrollGanttToToday } from './scrollGanttToToday';
 import { toApiDateTimeString } from '../../../../utils/formDate';
 
 const GANTT_ROW_HEIGHT = 36;
-const RESOURCE_LEVELS: GanttTaskLevel[] = ['station', 'equipment', 'operation'];
+const RESOURCE_LEVELS: GanttTaskLevel[] = ['station', 'equipment', 'worker'];
+
+function isSplitResourceLevel(taskLevel: GanttTaskLevel): boolean {
+  return taskLevel === 'station' || taskLevel === 'equipment' || taskLevel === 'worker';
+}
 
 function isResourceRowTaskId(id: number | string): boolean {
-  return isStationResourceTaskId(id) || isEquipmentResourceTaskId(id);
+  return (
+    isStationResourceTaskId(id) || isEquipmentResourceTaskId(id) || isWorkerResourceTaskId(id)
+  );
 }
 
 function parseStationIdFromResourceRow(id: number | string): number | null {
@@ -53,8 +69,12 @@ function parseStationIdFromResourceRow(id: number | string): number | null {
   return Number(m[1]);
 }
 
+function isResourceMergedTask(row: Pick<GanttTask, 'id' | 'segments'>): boolean {
+  return isResourceRowTaskId(row.id) && Array.isArray(row.segments) && row.segments.length > 0;
+}
+
 function isStationMergedTask(row: Pick<GanttTask, 'id' | 'segments'>): boolean {
-  return isStationResourceTaskId(row.id) && Array.isArray(row.segments) && row.segments.length > 0;
+  return isResourceMergedTask(row);
 }
 
 function operationTaskIdFromSegment(segment: { operation_id?: number }, index: number): string {
@@ -89,6 +109,14 @@ function resolveStationConflictGroupKey(
     if (task.assigned_station_id != null) return stationResourceId(task.assigned_station_id);
     return (task.assigned_station_name || '').trim();
   }
+  if (taskLevel === 'equipment') {
+    if (isEquipmentResourceTaskId(task.id)) return String(task.id);
+    return String(task.parent ?? '');
+  }
+  if (taskLevel === 'worker') {
+    if (isWorkerResourceTaskId(task.id)) return String(task.id);
+    return String(task.parent ?? '');
+  }
   return task.parent == null ? '' : String(task.parent);
 }
 
@@ -96,11 +124,14 @@ function isStationTimelineBar(
   row: Pick<GanttTask, 'id' | 'type' | 'css' | 'segments' | 'unscheduled'>
 ): boolean {
   if (row.type === 'summary') return true;
-  if (isStationResourceTaskId(row.id)) {
-    return !isStationMergedTask(row) && Boolean(row.unscheduled);
+  if (isResourceRowTaskId(row.id)) {
+    return !isResourceMergedTask(row) && Boolean(row.unscheduled);
   }
-  if (isEquipmentResourceTaskId(row.id)) return true;
-  return String(row.css || '').includes('gantt-station-resource') || String(row.css || '').includes('gantt-equipment-resource');
+  return (
+    String(row.css || '').includes('gantt-station-resource') ||
+    String(row.css || '').includes('gantt-equipment-resource') ||
+    String(row.css || '').includes('gantt-worker-resource')
+  );
 }
 
 function renderStationResourceRowLabel(
@@ -148,6 +179,12 @@ function renderGanttGridLabel(
     }
     return null;
   }
+  if (taskLevel === 'equipment' || taskLevel === 'worker') {
+    if (isResourceRowTaskId(row.id) || row.gantt_station_label) {
+      return renderStationResourceRowLabel(row);
+    }
+    return null;
+  }
   if (isStationTimelineBar(row)) {
     return renderStationResourceRowLabel(row);
   }
@@ -179,6 +216,19 @@ function renderGanttTimelineLabel(
   if (taskLevel === 'station') {
     if (!isOperationTaskId(row.id)) return null;
     const tooltip = [row.gantt_primary_label, row.gantt_work_order_code, row.assigned_station_name, row.assigned_equipment_name]
+      .filter(Boolean)
+      .join(' - ');
+    return (
+      <GanttTaskLabel
+        productName={row.gantt_primary_label}
+        workOrderCode={row.gantt_work_order_code}
+        title={tooltip}
+      />
+    );
+  }
+  if (taskLevel === 'equipment' || taskLevel === 'worker') {
+    if (!isOperationTaskId(row.id)) return null;
+    const tooltip = [row.gantt_primary_label, row.gantt_work_order_code, row.assigned_equipment_name]
       .filter(Boolean)
       .join(' - ');
     return (
@@ -234,8 +284,9 @@ function buildSchedulingGanttScales(t: TFunction, viewMode: ViewMode): RiverGant
 
 function resolveGanttColumnHeader(t: TFunction, taskLevel: GanttTaskLevel): string {
   if (taskLevel === 'station') return t(`${GANTT_I18N}.col.station`);
-  if (taskLevel === 'operation') return t(`${GANTT_I18N}.col.operation`);
   if (taskLevel === 'equipment') return t(`${GANTT_I18N}.col.equipment`);
+  if (taskLevel === 'worker') return t(`${GANTT_I18N}.col.worker`);
+  if (taskLevel === 'operation') return t(`${GANTT_I18N}.col.operation`);
   return t(`${GANTT_I18N}.col.workOrder`);
 }
 
@@ -287,12 +338,22 @@ export interface GanttOperationStationUpdate {
   assigned_station_id: number;
 }
 
+export interface GanttOperationAssignmentUpdate {
+  operation_id: number;
+  assigned_equipment_id?: number | null;
+  assigned_worker_ids?: number[] | null;
+}
+
 export interface GanttSchedulingChartProps {
   workOrders: WorkOrderForGantt[];
   workstations?: WorkstationResource[];
+  equipments?: EquipmentResource[];
+  workers?: WorkerResource[];
   loading?: boolean;
   viewMode?: ViewMode;
   taskLevel?: GanttTaskLevel;
+  equipmentTypeFilter?: string | 'all';
+  workerRoleFilter?: string | 'all';
   freezeHorizonDays?: number;
   focusTaskId?: string | null;
   scrollToTodayToken?: number;
@@ -302,6 +363,9 @@ export interface GanttSchedulingChartProps {
   onBatchUpdate?: (updates: GanttDateUpdate[]) => void | Promise<void>;
   onBatchUpdateOperations?: (updates: GanttOperationDateUpdate[]) => void | Promise<void>;
   onBatchUpdateOperationStations?: (updates: GanttOperationStationUpdate[]) => void | Promise<void>;
+  onBatchUpdateOperationAssignments?: (
+    updates: GanttOperationAssignmentUpdate[]
+  ) => void | Promise<void>;
   onWorkOrderSelect?: (workOrderId: number | null) => void;
   onOperationSelect?: (operationId: number, workOrderId: number | null) => void;
   /** 双击工序节点：打开整单设置 */
@@ -315,9 +379,13 @@ export interface GanttSchedulingChartProps {
 const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   workOrders,
   workstations = [],
+  equipments = [],
+  workers = [],
   loading = false,
   viewMode = 'week',
   taskLevel = 'station',
+  equipmentTypeFilter = 'all',
+  workerRoleFilter = 'all',
   freezeHorizonDays = 0,
   focusTaskId = null,
   scrollToTodayToken = 0,
@@ -326,6 +394,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   onBatchUpdate,
   onBatchUpdateOperations,
   onBatchUpdateOperationStations,
+  onBatchUpdateOperationAssignments,
   onWorkOrderSelect,
   onOperationSelect,
   onOperationDoubleClick,
@@ -359,7 +428,17 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   const bottleneckSet = useMemo(() => new Set(bottleneckWorkCenterIds), [bottleneckWorkCenterIds]);
 
   const tasks = useMemo(() => {
-    const base = workOrdersToGanttTasks(safeWorkOrders, taskLevel, workstations ?? []);
+    const base = workOrdersToGanttTasks(
+      safeWorkOrders,
+      taskLevel,
+      workstations ?? [],
+      equipments ?? [],
+      workers ?? [],
+      {
+        equipmentType: equipmentTypeFilter,
+        workerRole: workerRoleFilter,
+      }
+    );
     if (bottleneckSet.size === 0) return base;
     return base.map((t) => {
       const wcId = safeWorkOrders.find((w) => w.id === t.work_order_id)?.work_center_id;
@@ -371,7 +450,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
         class: [t.class, tag].filter(Boolean).join(' '),
       };
     });
-  }, [safeWorkOrders, taskLevel, workstations, bottleneckSet]);
+  }, [safeWorkOrders, taskLevel, workstations, equipments, workers, equipmentTypeFilter, workerRoleFilter, bottleneckSet]);
 
   tasksRef.current = tasks;
   safeWorkOrdersRef.current = safeWorkOrders;
@@ -496,7 +575,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   }, [safeWorkOrders, selectedWorkOrderId, onWorkOrderSelect]);
 
   useEffect(() => {
-    if (taskLevel === 'station') return;
+    if (!isSplitResourceLevel(taskLevel)) return;
     if (!focusTaskId) {
       appliedFocusTaskRef.current = null;
       return;
@@ -513,8 +592,8 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
       const parsed = parseTaskId(targetFocusId);
       let ganttSelectId: number | string = targetFocusId;
       if (parsed?.kind === 'operation') {
-        const stationRowId = resolveStationRowIdForOperation(parsed.id, tasksRef.current);
-        if (stationRowId) ganttSelectId = stationRowId;
+        const resourceRowId = resolveResourceRowIdForOperation(parsed.id, tasksRef.current);
+        if (resourceRowId) ganttSelectId = resourceRowId;
       }
       api.exec('select-task', { id: ganttSelectId, show: true });
       const woId = resolveWorkOrderIdFromTask(
@@ -559,7 +638,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
 
   const schedulingTaskTemplate = useMemo(
     () =>
-      taskLevel === 'station'
+      isSplitResourceLevel(taskLevel)
         ? undefined
         : function SchedulingTaskTemplate({ data }: { data: RiverGanttTask }) {
             return renderGanttTimelineLabel(data as unknown as GanttTask, taskLevel);
@@ -697,18 +776,18 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
         selectWorkOrderGroup(woId, ev.toggle, String(ev.id));
         return;
       }
-      if (isStationResourceTaskId(ev.id)) {
-        const stationTask = tasks.find((t) => String(t.id) === String(ev.id));
-        if (stationTask?.segments?.length === 1 && stationTask.segments[0].work_order_id != null) {
-          const opId = stationTask.segments[0].operation_id;
+      if (isResourceRowTaskId(ev.id)) {
+        const resourceTask = tasks.find((t) => String(t.id) === String(ev.id));
+        if (resourceTask?.segments?.length === 1 && resourceTask.segments[0].work_order_id != null) {
+          const opId = resourceTask.segments[0].operation_id;
           selectWorkOrderGroup(
-            stationTask.segments[0].work_order_id,
+            resourceTask.segments[0].work_order_id,
             ev.toggle,
             opId != null ? `op-${opId}` : null
           );
           return;
         }
-        if (stationTask?.segments && stationTask.segments.length > 1) {
+        if (resourceTask?.segments && resourceTask.segments.length > 1) {
           return;
         }
       }
@@ -726,9 +805,9 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
         const opMatch = String(ev.id).match(/^op-(\d+)$/i);
         opId = opMatch ? Number(opMatch[1]) : null;
         woId = resolveWorkOrderIdFromTask(ev.id, tasks, safeWorkOrders);
-      } else if (isStationResourceTaskId(ev.id) && ev.segmentIndex != null) {
-        const stationTask = tasks.find((t) => String(t.id) === String(ev.id));
-        const seg = stationTask?.segments?.[ev.segmentIndex];
+      } else if (isResourceRowTaskId(ev.id) && ev.segmentIndex != null) {
+        const resourceTask = tasks.find((t) => String(t.id) === String(ev.id));
+        const seg = resourceTask?.segments?.[ev.segmentIndex];
         opId = seg?.operation_id != null ? Number(seg.operation_id) : null;
         woId = seg?.work_order_id != null ? Number(seg.work_order_id) : null;
       }
@@ -744,16 +823,63 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   const handleGanttInit = useCallback(
     (api: RiverGanttApi) => {
       ganttApiRef.current = api;
-      if (taskLevel !== 'station' || !onBatchUpdateOperationStations) return;
-      api.on('move-task', (ev: { id: number | string; target?: number | string; mode: string; inProgress?: boolean }) => {
-        if (ev.inProgress || ev.mode !== 'child' || !ev.target) return;
-        const stationId = parseStationIdFromResourceRow(ev.target);
-        const parsed = parseTaskId(ev.id);
-        if (stationId == null || !parsed || parsed.kind !== 'operation') return;
-        onBatchUpdateOperationStations([{ operation_id: parsed.id, assigned_station_id: stationId }]);
-      });
+      if (!isSplitResourceLevel(taskLevel)) return;
+      api.on(
+        'move-task',
+        (ev: {
+          id: number | string;
+          target?: number | string;
+          source?: number | string;
+          mode: string;
+          inProgress?: boolean;
+        }) => {
+          if (ev.inProgress || ev.mode !== 'child' || !ev.target) return;
+          const parsed = parseTaskId(ev.id);
+          if (!parsed || parsed.kind !== 'operation') return;
+
+          if (taskLevel === 'station' && onBatchUpdateOperationStations) {
+            const stationId = parseStationIdFromResourceRow(ev.target);
+            if (stationId == null) return;
+            onBatchUpdateOperationStations([
+              { operation_id: parsed.id, assigned_station_id: stationId },
+            ]);
+            return;
+          }
+
+          if (taskLevel === 'equipment' && onBatchUpdateOperationAssignments) {
+            const equipmentId = parseEquipmentIdFromResourceRow(ev.target);
+            if (equipmentId == null) return;
+            onBatchUpdateOperationAssignments([
+              { operation_id: parsed.id, assigned_equipment_id: equipmentId },
+            ]);
+            return;
+          }
+
+          if (taskLevel === 'worker' && onBatchUpdateOperationAssignments) {
+            const targetWorkerId = parseWorkerIdFromResourceRow(ev.target);
+            if (targetWorkerId == null) return;
+            const sourceWorkerId = ev.source ? parseWorkerIdFromResourceRow(ev.source) : null;
+            let op: NonNullable<WorkOrderForGantt['operations']>[number] | undefined;
+            for (const wo of safeWorkOrdersRef.current) {
+              op = (wo.operations || []).find((item) => item.id === parsed.id);
+              if (op) break;
+            }
+            if (!op) return;
+            let nextIds = resolveWorkerIdsForOperation(op);
+            if (sourceWorkerId != null) {
+              nextIds = nextIds.filter((id) => id !== sourceWorkerId);
+            }
+            if (!nextIds.includes(targetWorkerId)) {
+              nextIds = [...nextIds, targetWorkerId];
+            }
+            onBatchUpdateOperationAssignments([
+              { operation_id: parsed.id, assigned_worker_ids: nextIds },
+            ]);
+          }
+        }
+      );
     },
-    [taskLevel, onBatchUpdateOperationStations]
+    [taskLevel, onBatchUpdateOperationAssignments, onBatchUpdateOperationStations]
   );
 
   const handleUpdateTask = useCallback(
@@ -885,7 +1011,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
         end={end}
         zoom
         cellWidth={cellWidth}
-        splitTasks={taskLevel === 'station'}
+        splitTasks={isSplitResourceLevel(taskLevel)}
         cellHeight={GANTT_ROW_HEIGHT}
         taskTemplate={schedulingTaskTemplate}
         todayMarker={showTodayMarker}
@@ -907,3 +1033,5 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
 
 export default GanttSchedulingChart;
 export type { WorkOrderForGantt, GanttTask, ViewMode, GanttTaskLevel, WorkstationResource } from './types';
+export type { EquipmentResource } from './equipmentResourceUtils';
+export type { WorkerResource } from './workerResourceUtils';

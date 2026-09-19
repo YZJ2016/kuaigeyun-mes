@@ -485,3 +485,125 @@ class ProductionControlService:
             "recommendation": recommendation,
             "scheduling_score_preview": scheduling_score_preview,
         }
+
+    async def get_human_machine_efficiency(self, tenant_id: int, days: int = 7) -> Dict[str, Any]:
+        """人机效同屏：设备稼动趋势 + 人员报工工时排行。"""
+        from apps.kuaizhizao.models.equipment import Equipment
+        from apps.kuaizhizao.services.equipment_oee_service import EquipmentOEEService
+        from apps.kuaizhizao.utils.scheduling_work_hours import load_scheduling_work_context
+
+        span_days = max(1, min(int(days or 7), 30))
+        now = resolve_business_datetime()
+        start = (now - timedelta(days=span_days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end = now.replace(hour=23, minute=59, second=59, microsecond=0)
+
+        _, work_hours, _ = await load_scheduling_work_context(
+            tenant_id, around=start.date(), span_days=span_days + 2
+        )
+        daily_capacity = max(1.0, work_hours.daily_net_hours())
+
+        equipment_rows = await Equipment.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, is_active=True
+        ).only("id")
+        equipment_ids = [int(row.id) for row in equipment_rows if row.id is not None]
+        oee_service = EquipmentOEEService()
+
+        trend: List[Dict[str, Any]] = []
+        utilization_samples: List[float] = []
+        for offset in range(span_days):
+            day_start = (start + timedelta(days=offset)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            day_end = day_start.replace(hour=23, minute=59, second=59, microsecond=999999)
+            planned_runtime = 0.0
+            actual_runtime = 0.0
+            for equipment_id in equipment_ids[:50]:
+                try:
+                    oee_data = await oee_service.calculate_equipment_oee(
+                        tenant_id=tenant_id,
+                        equipment_id=equipment_id,
+                        date_start=day_start,
+                        date_end=day_end,
+                    )
+                    metrics = oee_data.get("metrics") or {}
+                    planned_runtime += float(metrics.get("planned_runtime") or 0)
+                    actual_runtime += float(metrics.get("actual_runtime") or 0)
+                except Exception as exc:
+                    logger.warning(
+                        "human_machine_efficiency equipment {} day {} failed: {}",
+                        equipment_id,
+                        day_start.date(),
+                        exc,
+                    )
+            if planned_runtime <= 0:
+                equipment_utilization_rate = round(
+                    min(100.0, actual_runtime / daily_capacity * 100), 2
+                )
+            else:
+                equipment_utilization_rate = round(
+                    min(100.0, actual_runtime / planned_runtime * 100), 2
+                )
+            utilization_samples.append(equipment_utilization_rate)
+
+            worker_hours_rows = await ReportingRecord.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                reported_at__gte=day_start,
+                reported_at__lte=day_end,
+            ).values("work_hours")
+            worker_report_hours = round(
+                sum(float(row.get("work_hours") or 0) for row in worker_hours_rows), 2
+            )
+            trend.append(
+                {
+                    "period": day_start.strftime("%Y-%m-%d"),
+                    "equipment_utilization_rate": equipment_utilization_rate,
+                    "worker_report_hours": worker_report_hours,
+                }
+            )
+
+        ranking_rows = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            reported_at__gte=start,
+            reported_at__lte=end,
+        ).values("worker_id", "worker_name", "work_hours")
+        ranking_map: Dict[int, Dict[str, Any]] = {}
+        for row in ranking_rows:
+            worker_id = int(row.get("worker_id") or 0)
+            if worker_id <= 0:
+                continue
+            bucket = ranking_map.setdefault(
+                worker_id,
+                {
+                    "worker_id": worker_id,
+                    "worker_name": row.get("worker_name") or f"员工{worker_id}",
+                    "report_hours": 0.0,
+                },
+            )
+            bucket["report_hours"] += float(row.get("work_hours") or 0)
+        worker_ranking = sorted(
+            [
+                {
+                    **item,
+                    "report_hours": round(float(item["report_hours"]), 2),
+                }
+                for item in ranking_map.values()
+            ],
+            key=lambda item: (-item["report_hours"], item["worker_name"]),
+        )[:10]
+
+        equipment_utilization_rate = round(
+            sum(utilization_samples) / len(utilization_samples), 2
+        ) if utilization_samples else 0.0
+        worker_report_hours = round(
+            sum(point["worker_report_hours"] for point in trend), 2
+        )
+
+        return {
+            "days": span_days,
+            "equipment_utilization_rate": equipment_utilization_rate,
+            "worker_report_hours": worker_report_hours,
+            "trend": trend,
+            "worker_ranking": worker_ranking,
+        }

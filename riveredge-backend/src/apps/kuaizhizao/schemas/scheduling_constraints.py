@@ -15,7 +15,7 @@ from core.schemas.base import BaseSchema
 class SchedulingConstraints(BaseSchema):
     """可视排产规则（非自动求解参数）。"""
 
-    consider_human: bool = Field(True, description="冲突检测是否考虑工位时间重叠")
+    consider_human: bool = Field(True, description="冲突检测是否考虑工位与人员时间重叠")
     consider_equipment: bool = Field(True, description="冲突检测是否考虑设备")
     consider_material: bool = Field(True, description="是否提示物料齐套")
     consider_mold_tool: bool = Field(True, description="冲突检测是否考虑模具/工装")

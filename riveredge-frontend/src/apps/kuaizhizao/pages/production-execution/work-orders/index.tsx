@@ -5087,7 +5087,7 @@ const WorkOrdersPage: React.FC = () => {
           workshop_name: op.workshop_name,
           work_center_id: op.work_center_id,
           work_center_name: op.work_center_name,
-          // 工序计划时刻由后端按工单头计划起止窗口重算；勿回写打开表单时的旧系统排程时间
+          // 工序计划时刻由后端按工单头计划起止窗口继承；勿回写打开表单时的旧系统排程时间
           standard_time: op.standard_time,
           setup_time: op.setup_time,
           remarks: op.remarks,

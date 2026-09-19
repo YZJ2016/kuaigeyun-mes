@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
-import { Button, InputNumber, Popconfirm, Space, Switch, Tooltip, Typography } from 'antd';
+import React, { useMemo, useState } from 'react';
+import { Button, InputNumber, Popconfirm, Select, Space, Switch, Tooltip, Typography } from 'antd';
+import { ThemedSegmented } from '../../../../../../components/themed-segmented';
 import {
   LockOutlined,
+  PushpinFilled,
+  PushpinOutlined,
   QuestionCircleOutlined,
   ReloadOutlined,
   RollbackOutlined,
@@ -10,7 +13,12 @@ import {
   UnlockOutlined,
 } from '@ant-design/icons';
 import type { TFunction } from 'i18next';
-import type { ViewMode } from '../../../../components/GanttSchedulingChart/types';
+import type { ViewMode, GanttTaskLevel } from '../../../../components/GanttSchedulingChart/types';
+import type { SchedulingResourceFilterValue, SchedulingWorkerResource } from '../schedulingResourceFilters';
+import {
+  buildSchedulingEquipmentTypeFilterOptions,
+  buildSchedulingWorkerRoleFilterOptions,
+} from '../schedulingResourceFilters';
 import { ActionConfirmPopconfirm } from '../../../../../../components/action-confirm';
 
 export interface SchedulingActionConfirm {
@@ -19,9 +27,24 @@ export interface SchedulingActionConfirm {
   okText?: string;
 }
 
+export type SchedulingBoardMainView = 'gantt' | 'loadTable' | 'cardView';
+
 interface SchedulingGanttToolbarProps {
   t: TFunction;
+  boardMainView: SchedulingBoardMainView;
+  onBoardMainViewChange: (view: SchedulingBoardMainView) => void;
   ganttViewMode: ViewMode;
+  ganttTaskLevel: GanttTaskLevel;
+  onGanttTaskLevelChange: (level: GanttTaskLevel) => void;
+  pinnedResourceCount?: number;
+  showPinnedOnly?: boolean;
+  onShowPinnedOnlyChange?: (value: boolean) => void;
+  onOpenPinManager?: () => void;
+  equipmentTypeFilter: SchedulingResourceFilterValue;
+  onEquipmentTypeFilterChange: (value: SchedulingResourceFilterValue) => void;
+  workerRoleFilter: SchedulingResourceFilterValue;
+  onWorkerRoleFilterChange: (value: SchedulingResourceFilterValue) => void;
+  schedulingWorkers: SchedulingWorkerResource[];
   shiftDays: number;
   selectedWorkOrderCount: number;
   batchActionLoading: boolean;
@@ -40,7 +63,6 @@ interface SchedulingGanttToolbarProps {
   onShiftDaysChange: (days: number) => void;
   onViewModeChange: (mode: ViewMode) => void;
   onScrollToToday: () => void;
-  aiTrigger?: React.ReactNode;
   onAutoReschedule?: () => void;
   autoRescheduleConfirm?: SchedulingActionConfirm;
   autoRescheduleLoading?: boolean;
@@ -49,8 +71,7 @@ interface SchedulingGanttToolbarProps {
 }
 
 export interface SchedulingGanttToolbarNodes {
-  title: React.ReactNode;
-  extra: React.ReactNode;
+  toolbar: React.ReactNode;
 }
 
 function DraftModeSwitch({
@@ -99,7 +120,20 @@ function DraftModeSwitch({
 
 function buildSchedulingGanttToolbar({
   t,
+  boardMainView,
+  onBoardMainViewChange,
   ganttViewMode,
+  ganttTaskLevel,
+  onGanttTaskLevelChange,
+  pinnedResourceCount = 0,
+  showPinnedOnly = false,
+  onShowPinnedOnlyChange,
+  onOpenPinManager,
+  equipmentTypeFilter,
+  onEquipmentTypeFilterChange,
+  workerRoleFilter,
+  onWorkerRoleFilterChange,
+  schedulingWorkers,
   shiftDays,
   selectedWorkOrderCount,
   batchActionLoading,
@@ -118,15 +152,20 @@ function buildSchedulingGanttToolbar({
   onShiftDaysChange,
   onViewModeChange,
   onScrollToToday,
-  aiTrigger,
   onAutoReschedule,
   autoRescheduleConfirm,
   autoRescheduleLoading = false,
   onEditOperation,
   canEditOperation = false,
 }: SchedulingGanttToolbarProps): SchedulingGanttToolbarNodes {
-  const title = (
-    <Space wrap align="center" size={[8, 8]} className="scheduling-gantt-toolbar__title">
+  const equipmentTypeOptions = useMemo(() => buildSchedulingEquipmentTypeFilterOptions(t), [t]);
+  const workerRoleOptions = useMemo(
+    () => buildSchedulingWorkerRoleFilterOptions(schedulingWorkers, t),
+    [schedulingWorkers, t]
+  );
+
+  const mainControls = (
+    <Space align="center" size={[6, 0]} className="scheduling-gantt-toolbar__title">
       <ReloadOutlined onClick={onRefresh} className="scheduling-gantt-toolbar__icon-btn" />
       <Typography.Text strong>{t('app.kuaizhizao.scheduling.ganttToolbar.title')}</Typography.Text>
       <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.fullscreenTip')}>
@@ -199,9 +238,9 @@ function buildSchedulingGanttToolbar({
               {t('app.kuaizhizao.scheduling.ganttToolbar.editOperation')}
             </Button>
           ) : null}
-          <Button size="small" icon={<SettingOutlined />} onClick={onOpenConfig}>
-            {t('app.kuaizhizao.scheduling.ganttToolbar.settings')}
-          </Button>
+          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.settings')}>
+            <Button size="small" icon={<SettingOutlined />} aria-label={t('app.kuaizhizao.scheduling.ganttToolbar.settings')} onClick={onOpenConfig} />
+          </Tooltip>
           <Button
             size="small"
             icon={<LockOutlined />}
@@ -240,16 +279,89 @@ function buildSchedulingGanttToolbar({
           </Space.Compact>
         </>
       ) : null}
-      {aiTrigger}
     </Space>
   );
 
-  const extra = (
-    <Space align="center" className="scheduling-gantt-toolbar__extra">
-      <Button size="small" onClick={onScrollToToday}>
-        {t('app.kuaizhizao.scheduling.ganttToolbar.today')}
-      </Button>
-      <span>{t('app.kuaizhizao.scheduling.ganttToolbar.viewLabel')}</span>
+  const filterControls = (
+    <Space align="center" size={[6, 0]} className="scheduling-gantt-toolbar__extra">
+      <span className="scheduling-gantt-toolbar__label">{t('app.kuaizhizao.scheduling.ganttToolbar.boardViewLabel')}</span>
+      <ThemedSegmented
+        size="small"
+        surfaceBackground
+        value={boardMainView}
+        options={[
+          { label: t('app.kuaizhizao.scheduling.ganttToolbar.boardViewGantt'), value: 'gantt' },
+          { label: t('app.kuaizhizao.scheduling.ganttToolbar.boardViewCard'), value: 'cardView' },
+          { label: t('app.kuaizhizao.scheduling.ganttToolbar.boardViewLoadTable'), value: 'loadTable' },
+        ]}
+        onChange={(value) => onBoardMainViewChange(value as SchedulingBoardMainView)}
+      />
+      <span className="scheduling-gantt-toolbar__label">{t('app.kuaizhizao.scheduling.ganttToolbar.resourceViewLabel')}</span>
+      <ThemedSegmented
+        size="small"
+        surfaceBackground
+        value={ganttTaskLevel}
+        options={[
+          { label: t('app.kuaizhizao.scheduling.ganttToolbar.resourceStation'), value: 'station' },
+          { label: t('app.kuaizhizao.scheduling.ganttToolbar.resourceEquipment'), value: 'equipment' },
+          { label: t('app.kuaizhizao.scheduling.ganttToolbar.resourceWorker'), value: 'worker' },
+        ]}
+        onChange={(value) => onGanttTaskLevelChange(value as GanttTaskLevel)}
+      />
+      {ganttTaskLevel === 'equipment' ? (
+        <>
+          <span className="scheduling-gantt-toolbar__label">{t('app.kuaizhizao.scheduling.ganttToolbar.equipmentTypeFilterLabel')}</span>
+          <Select
+            size="small"
+            value={equipmentTypeFilter}
+            options={equipmentTypeOptions}
+            style={{ minWidth: 120 }}
+            popupMatchSelectWidth={false}
+            onChange={onEquipmentTypeFilterChange}
+          />
+        </>
+      ) : null}
+      {ganttTaskLevel === 'worker' ? (
+        <>
+          <span className="scheduling-gantt-toolbar__label">{t('app.kuaizhizao.scheduling.ganttToolbar.workerRoleFilterLabel')}</span>
+          <Select
+            size="small"
+            value={workerRoleFilter}
+            options={workerRoleOptions}
+            style={{ minWidth: 120 }}
+            popupMatchSelectWidth={false}
+            onChange={onWorkerRoleFilterChange}
+          />
+        </>
+      ) : null}
+      {ganttTaskLevel === 'station' || ganttTaskLevel === 'equipment' || ganttTaskLevel === 'worker' ? (
+        <>
+          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.pinManagerTip')}>
+            <Button
+              size="small"
+              icon={pinnedResourceCount > 0 ? <PushpinFilled /> : <PushpinOutlined />}
+              onClick={onOpenPinManager}
+            >
+              {t('app.kuaizhizao.scheduling.ganttToolbar.pinManager')}
+              {pinnedResourceCount > 0 ? ` (${pinnedResourceCount})` : ''}
+            </Button>
+          </Tooltip>
+          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.showPinnedOnlyTip')}>
+            <Switch
+              size="small"
+              checked={showPinnedOnly}
+              disabled={pinnedResourceCount === 0}
+              onChange={(checked) => onShowPinnedOnlyChange?.(checked)}
+            />
+          </Tooltip>
+          <Typography.Text type="secondary">
+            {t('app.kuaizhizao.scheduling.ganttToolbar.showPinnedOnly')}
+          </Typography.Text>
+        </>
+      ) : null}
+      {boardMainView === 'gantt' ? (
+        <>
+          <span className="scheduling-gantt-toolbar__label">{t('app.kuaizhizao.scheduling.ganttToolbar.viewLabel')}</span>
       <Space.Compact>
         <Button type={ganttViewMode === 'day' ? 'primary' : 'default'} size="small" onClick={() => onViewModeChange('day')}>
           {t('app.kuaizhizao.scheduling.ganttToolbar.viewDay')}
@@ -261,10 +373,26 @@ function buildSchedulingGanttToolbar({
           {t('app.kuaizhizao.scheduling.ganttToolbar.viewMonth')}
         </Button>
       </Space.Compact>
+          <Button size="small" onClick={onScrollToToday}>
+            {t('app.kuaizhizao.scheduling.ganttToolbar.today')}
+          </Button>
+        </>
+      ) : boardMainView === 'loadTable' ? (
+        <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.loadTableHint')}>
+          <QuestionCircleOutlined className="scheduling-gantt-toolbar__help-icon" aria-label={t('app.kuaizhizao.scheduling.ganttToolbar.loadTableHint')} />
+        </Tooltip>
+      ) : null}
     </Space>
   );
 
-  return { title, extra };
+  const toolbar = (
+    <div className="scheduling-gantt-toolbar__bar">
+      <div className="scheduling-gantt-toolbar__main">{mainControls}</div>
+      <div className="scheduling-gantt-toolbar__filters">{filterControls}</div>
+    </div>
+  );
+
+  return { toolbar };
 }
 
 export default buildSchedulingGanttToolbar;

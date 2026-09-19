@@ -10,6 +10,7 @@ import type { ThemeConfig } from 'antd/es/config-provider/context';
 import {
   computeSegmentedInsetBorderRadius,
   getUniToolbarControlShellStyle,
+  UNI_TOOLBAR_CONTROL_HEIGHT,
   UNI_TOOLBAR_SEGMENTED_CLASS,
   UNI_TOOLBAR_SEGMENTED_TRACK_PADDING,
 } from '../uni-search/toolbarChrome';
@@ -69,14 +70,17 @@ export function useSegmentedComponentTheme(options?: {
 }
 
 export const ThemedSegmented = React.forwardRef<HTMLDivElement, ThemedSegmentedProps>(
-  ({ surfaceBackground, block, style, className, ...props }, ref) => {
+  ({ surfaceBackground, block, style, className, size, ...props }, ref) => {
     const { token } = theme.useToken();
     const segmentedTheme = useSegmentedComponentTheme({ surfaceBackground });
+    const shellHeight =
+      size === 'small' ? token.controlHeightSM : UNI_TOOLBAR_CONTROL_HEIGHT;
     return (
       <ConfigProvider theme={segmentedTheme}>
         <Segmented
           ref={ref}
           block={block}
+          size={size}
           className={
             [THEMED_SEGMENTED_CLASS, surfaceBackground ? UNI_TOOLBAR_SEGMENTED_CLASS : '', className]
               .filter(Boolean)
@@ -86,6 +90,7 @@ export const ThemedSegmented = React.forwardRef<HTMLDivElement, ThemedSegmentedP
             surfaceBackground
               ? {
                   ...getUniToolbarControlShellStyle(token),
+                  height: shellHeight,
                   display: block ? 'flex' : 'inline-flex',
                   alignItems: 'center',
                   width: block ? '100%' : undefined,

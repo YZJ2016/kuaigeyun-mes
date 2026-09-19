@@ -261,7 +261,7 @@ def test_build_operation_time_slots_in_planned_window_stays_in_range():
     assert slots[-1][1].date() == date(2026, 7, 31)
 
 
-def test_build_operation_time_slots_zero_hours_anchors_to_delivery_end():
+def test_build_operation_time_slots_zero_hours_in_window_aligns_to_planned_start():
     start = planning_date_to_work_order_start(date(2026, 9, 10))
     end = planning_date_to_work_order_end(date(2026, 9, 25))
     slots = build_operation_time_slots_in_planned_window(
@@ -270,5 +270,5 @@ def test_build_operation_time_slots_zero_hours_anchors_to_delivery_end():
         planned_end=end,
     )
     assert len(slots) == 2
-    assert slots[-1][1].date() == date(2026, 9, 25)
-    assert slots[-1][1].date() != date(2026, 9, 10)
+    assert slots[0][0].date() == date(2026, 9, 10)
+    assert slots[0][0].date() != date(2026, 9, 25)

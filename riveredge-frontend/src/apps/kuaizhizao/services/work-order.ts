@@ -304,6 +304,7 @@ export const workOrderApi = {
     updates: Array<{
       operation_id: number;
       assigned_worker_id?: number | null;
+      assigned_worker_ids?: number[] | null;
       assigned_team_id?: number | null;
       assigned_equipment_id?: number | null;
       assigned_mold_id?: number | null;

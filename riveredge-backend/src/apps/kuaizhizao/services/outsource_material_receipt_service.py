@@ -407,6 +407,11 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             raise
 
         self._schedule_stock_for_outsource_receipt(stock_payload)
+        if stock_payload:
+            self._schedule_cost_for_outsource_receipt(
+                tenant_id=int(stock_payload["tenant_id"]),
+                receipt_id=int(stock_payload["source_doc_id"]),
+            )
         if payable_payload:
             self._schedule_auto_payable_for_outsource_receipt(**payable_payload)
         if response is None:
@@ -456,6 +461,27 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             _run(),
             name=f"outsource-receipt-stock-{payload.get('source_doc_id')}",
         )
+
+    def _schedule_cost_for_outsource_receipt(self, *, tenant_id: int, receipt_id: int) -> None:
+        """委外收货成本暂估异步执行，不阻塞 HTTP 响应。"""
+
+        async def _run() -> None:
+            from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+
+            try:
+                await InventoryCostService().on_outsource_receipt_confirmed(tenant_id, receipt_id)
+            except Exception as exc:
+                logger.warning(
+                    "委外收货异步成本结转失败 receipt_id=%s: %s",
+                    receipt_id,
+                    exc,
+                )
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop.create_task(_run(), name=f"outsource-receipt-cost-{receipt_id}")
 
     def _schedule_auto_payable_for_outsource_receipt(
         self,

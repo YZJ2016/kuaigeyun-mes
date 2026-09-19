@@ -3,8 +3,15 @@
  */
 
 import type { WorkOrderForGantt, GanttTask, GanttTaskLevel, WorkstationResource } from './types';
-import { workOrdersToEquipmentResourceGanttTasks } from './equipmentResourceUtils';
+import {
+  workOrdersToEquipmentResourceGanttTasks,
+  type EquipmentResource,
+} from './equipmentResourceUtils';
 import { workOrdersToStationResourceGanttTasks } from './stationResourceUtils';
+import {
+  workOrdersToWorkerResourceGanttTasks,
+  type WorkerResource,
+} from './workerResourceUtils';
 import dayjs from 'dayjs';
 
 const DEFAULT_START = 8; // 08:00
@@ -21,7 +28,17 @@ function buildGanttLabel(wo: WorkOrderForGantt, fallbackName?: string) {
   };
 }
 
-function resolveTaskVisual(wo: WorkOrderForGantt, end: Date): { css: string; color: string; textColor: string } {
+function resolveTaskVisual(
+  wo: WorkOrderForGantt,
+  end: Date,
+  machineSessionState?: 'none' | 'on_machine' | 'off_machine' | null
+): { css: string; color: string; textColor: string } {
+  if (machineSessionState === 'on_machine') {
+    return { css: 'gantt-task-on-machine', color: '#13c2c2', textColor: '#ffffff' };
+  }
+  if (machineSessionState === 'off_machine') {
+    return { css: 'gantt-task-off-machine', color: '#52c41a', textColor: '#ffffff' };
+  }
   if (wo.is_frozen) {
     return { css: 'gantt-task-gray', color: '#bfbfbf', textColor: '#1f1f1f' };
   }
@@ -200,7 +217,7 @@ export function operationToGanttTask(
           text: `${frozenPrefix}${opName}\n${workOrderCode} - ${productName}`,
         }
       : buildGanttLabel(wo, opName);
-  const visual = resolveTaskVisual(wo, end);
+  const visual = resolveTaskVisual(wo, end, op.machine_session_state);
 
   return {
     id: `op-${op.id}`,
@@ -289,10 +306,18 @@ export function workOrdersToOperationGanttTasks(workOrders: WorkOrderForGantt[] 
 export function workOrdersToGanttTasks(
   workOrders: WorkOrderForGantt[] | null | undefined,
   level: GanttTaskLevel = 'work_order',
-  stations: WorkstationResource[] | null | undefined = []
+  stations: WorkstationResource[] | null | undefined = [],
+  equipments: EquipmentResource[] | null | undefined = [],
+  workers: WorkerResource[] | null | undefined = [],
+  resourceFilters?: {
+    equipmentType?: string | 'all';
+    workerRole?: string | 'all';
+  }
 ): GanttTask[] {
   const sorted = sortWorkOrdersForGantt(workOrders);
   const safeStations = stations ?? [];
+  const equipmentTypeFilter = resourceFilters?.equipmentType ?? 'all';
+  const workerRoleFilter = resourceFilters?.workerRole ?? 'all';
   if (level === 'operation') {
     return workOrdersToOperationGanttTasks(sorted);
   }
@@ -300,7 +325,10 @@ export function workOrdersToGanttTasks(
     return workOrdersToStationResourceGanttTasks(sorted, safeStations);
   }
   if (level === 'equipment') {
-    return workOrdersToEquipmentResourceGanttTasks(sorted);
+    return workOrdersToEquipmentResourceGanttTasks(sorted, equipments ?? [], equipmentTypeFilter);
+  }
+  if (level === 'worker') {
+    return workOrdersToWorkerResourceGanttTasks(sorted, workers ?? [], workerRoleFilter);
   }
   return sortTasksByWorkCenter(sorted.map(workOrderToGanttTask));
 }

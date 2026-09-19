@@ -104,6 +104,7 @@ export interface RiverDoubleClickTaskEvent {
 export interface RiverMoveTaskEvent {
   id: number | string;
   target?: number | string;
+  source?: number | string;
   mode: string;
   inProgress?: boolean;
 }
