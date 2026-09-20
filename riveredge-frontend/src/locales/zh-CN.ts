@@ -30706,6 +30706,10 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.dedicated-shell-menu-sync-r01.title':
+    '定制壳一键同步后侧边栏不再空白',
+  'pages.dashboard.updateLog.entries.dedicated-shell-menu-sync-r01.description':
+    '声明 hide_required_app_menus 的专用应用在扫描/同步后会重新启用自身菜单并同步权限，宿主应用菜单仍按定制壳规则隐藏。',
   'pages.dashboard.updateLog.entries.ind-prefix-migration-perm-dedupe-r02.title':
     '行业应用改编码迁移不再撞权限唯一约束',
   'pages.dashboard.updateLog.entries.ind-prefix-migration-perm-dedupe-r02.description':

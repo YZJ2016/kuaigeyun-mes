@@ -211,6 +211,58 @@ class MenuTakeoverService:
         return updated
 
     @staticmethod
+    async def ensure_consumer_menus_active(tenant_id: int, consumer_app_code: str) -> int:
+        """定制壳自身菜单须保持可见；批量 sync 后强制启用 application_uuid 归属的菜单树。"""
+        consumer_uuid = await MenuTakeoverService._get_app_uuid(tenant_id, consumer_app_code)
+        if not consumer_uuid:
+            return 0
+        menus = await Menu.filter(
+            tenant_id=tenant_id,
+            application_uuid=consumer_uuid,
+            deleted_at__isnull=True,
+        ).all()
+        restored = 0
+        for menu in menus:
+            meta: Dict[str, Any] = dict(menu.meta or {})
+            changed = False
+            if meta.get(META_SUPPRESSED_BY_DEDICATED_SHELL) == consumer_app_code:
+                meta.pop(META_SUPPRESSED_BY_DEDICATED_SHELL, None)
+                menu.meta = meta or None
+                changed = True
+            if not menu.is_active:
+                menu.is_active = True
+                changed = True
+            if changed:
+                await menu.save(update_fields=["meta", "is_active", "updated_at"])
+                restored += 1
+        if restored:
+            logger.info(
+                "dedicated_shell_consumer_menus_active tenant={} consumer={} restored={}",
+                tenant_id,
+                consumer_app_code,
+                restored,
+            )
+        return restored
+
+    @staticmethod
+    async def finalize_dedicated_shell_menus_after_batch_sync(tenant_id: int) -> None:
+        """全量菜单同步收尾：先抑制宿主/其它业务应用，再确保定制壳菜单树启用。"""
+        from core.services.application.enabled_apps import manifest_hides_required_app_menus
+
+        consumers = await Application.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_installed=True,
+            is_active=True,
+        ).all()
+        for app in consumers:
+            consumer_code = str(app.code or "")
+            if not consumer_code or not manifest_hides_required_app_menus(consumer_code):
+                continue
+            await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, consumer_code)
+            await MenuTakeoverService.ensure_consumer_menus_active(tenant_id, consumer_code)
+
+    @staticmethod
     async def revert_dedicated_shell_hide(tenant_id: int, consumer_app_code: str) -> int:
         """恢复由该定制壳抑制的菜单；仍被 1:1 接管或行业包聚合的保持隐藏。"""
         menus = await Menu.filter(

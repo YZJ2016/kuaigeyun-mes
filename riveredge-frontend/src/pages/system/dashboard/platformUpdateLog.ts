@@ -36,6 +36,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'dedicated-shell-menu-sync-r01',
+    date: '2026-09-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.dedicated-shell-menu-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.dedicated-shell-menu-sync-r01.description',
+  },
+  {
     id: 'ind-prefix-migration-perm-dedupe-r02',
     date: '2026-09-21',
     type: 'fix',

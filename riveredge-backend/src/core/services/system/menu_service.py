@@ -1974,11 +1974,17 @@ class MenuService:
                 continue
             if menu_config and app_uuid:
                 try:
+                    from core.services.application.enabled_apps import (
+                        manifest_hides_required_app_menus,
+                    )
+
+                    is_dedicated_shell = manifest_hides_required_app_menus(app_code)
                     count = await MenuService.sync_menus_from_application_config(
                         tenant_id=tenant_id,
                         application_uuid=str(app_uuid),
                         menu_config=menu_config,
                         is_active=app.get("is_active", True),
+                        preserve_existing_is_active=not is_dedicated_shell,
                         skip_permission_sync=True,
                         defer_cache_clear=True,
                         defer_menu_takeover=True,
@@ -2010,6 +2016,9 @@ class MenuService:
                 await MenuTakeoverService.reapply_industry_pack_after_host_menu_sync(
                     tenant_id, app_code
                 )
+            await MenuTakeoverService.finalize_dedicated_shell_menus_after_batch_sync(
+                tenant_id
+            )
         if total > 0 or synced_app_codes:
             await MenuService._clear_menu_cache(tenant_id)
             logger.info(f"租户 {tenant_id} 菜单同步完成，共 {total} 个菜单")

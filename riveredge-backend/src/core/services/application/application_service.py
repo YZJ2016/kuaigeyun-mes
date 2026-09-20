@@ -1688,7 +1688,7 @@ class ApplicationService:
 
         menu_count = await MenuService.sync_all_menus_from_applications(
             tenant_id,
-            skip_permission_sync=True,
+            skip_permission_sync=False,
         )
         manifest_total = len([a for a in apps if a.get("code")])
 
