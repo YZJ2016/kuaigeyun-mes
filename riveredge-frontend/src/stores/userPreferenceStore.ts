@@ -269,7 +269,7 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
         fetchPreferencesInFlight = null;
         set({ preferences: {}, loading: false, initialized: false });
         // 偏好缓存按 key 多存一份，不删；riveredge_theme_config 由 themeStore.clearForLogout 清除
-        // 注意：不清除 riveredge_saved_tabs，以便同一用户再次登录时能恢复标签
+        // 注意：不清除 riveredge_saved_tabs* 本机镜像；标签真源为 preferences.uni_tabs_state（云端）
         try {
           if (typeof window !== 'undefined') {
             localStorage.removeItem('riveredge_tabs_persistence');

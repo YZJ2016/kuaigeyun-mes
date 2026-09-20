@@ -36,6 +36,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'uni-tabs-cloud-preference-r01',
+    date: '2026-09-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-tabs-cloud-preference-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-tabs-cloud-preference-r01.description',
+  },
+  {
     id: 'dedicated-shell-binding-scope-r01',
     date: '2026-09-21',
     type: 'fix',

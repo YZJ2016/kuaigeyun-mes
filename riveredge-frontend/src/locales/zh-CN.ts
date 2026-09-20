@@ -361,7 +361,7 @@ export default {
   'components.themeEditor.config.title': '主题配置',
   'components.themeEditor.config.hint': '调整主题相关的配置选项',
   'components.themeEditor.tabsPersistence.label': '标签栏持久化',
-  'components.themeEditor.tabsPersistence.desc': '登录后恢复上次未关闭的标签',
+  'components.themeEditor.tabsPersistence.desc': '登录后从云端恢复上次未关闭的标签（含钉住状态），可跨设备同步',
   'components.themeEditor.sidebarSearchBgFollow.label': '搜索栏背景跟随',
   'components.themeEditor.sidebarSearchBgFollow.desc': '搜索背景跟标签栏或菜单栏',
   'components.themeEditor.sidebarSearchBgFollow.tabs': '标签栏',
@@ -30706,6 +30706,10 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.uni-tabs-cloud-preference-r01.title':
+    '标签栏持久化改为云端同步',
+  'pages.dashboard.updateLog.entries.uni-tabs-cloud-preference-r01.description':
+    '开启标签栏持久化后，打开的标签与钉住状态写入用户偏好 uni_tabs_state，与收藏快捷入口一样跨设备恢复；本机 localStorage 仅作首帧镜像。',
   'pages.dashboard.updateLog.entries.dedicated-shell-binding-scope-r01.title':
     '定制壳菜单接管仅限已绑定租户',
   'pages.dashboard.updateLog.entries.dedicated-shell-binding-scope-r01.description':
