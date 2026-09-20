@@ -2596,7 +2596,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     )
 
             confirmer_name = await self.get_user_name(confirmed_by)
-            picking_time = resolve_business_datetime(
+            picking_time = coerce_business_datetime_to_utc(
                 confirmation_data.delivery_time
                 if confirmation_data and confirmation_data.delivery_time
                 else getattr(picking, "picking_time", None)
@@ -4608,7 +4608,7 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         source_doc_code=ret.return_code,
                         work_order_id=ret.work_order_id,
                         work_order_code=ret.work_order_code,
-                        ledger_production_date=to_site_date(receipt_time),
+                        ledger_production_date=to_site_date(receipt_time) if receipt_time else None,
                         movement_type="production_return",
                         to_warehouse_id=wh_id,
                         idempotency_key=f"production_return:{return_id}:inc:{item.id}",
@@ -5188,7 +5188,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 await MaterialBatchService.enrich_receipt_items_expiry_dates(
                     items,
                     material_by_id,
-                    to_site_date(receipt_time),
+                    to_site_date(receipt_time) if receipt_time else None,
                 )
                 
                 for item in items:
@@ -5218,7 +5218,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         source_doc_code=receipt.receipt_code,
                         work_order_id=receipt.work_order_id,
                         work_order_code=receipt.work_order_code,
-                        ledger_production_date=to_site_date(receipt_time),
+                        ledger_production_date=to_site_date(receipt_time) if receipt_time else None,
                         ledger_expiry_date=getattr(item, "expiry_date", None),
                         movement_type="fg_receipt",
                         to_warehouse_id=wh_id,
@@ -10384,7 +10384,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 confirmation_data,
                 existing_time=getattr(receipt, "receipt_time", None),
             )
-            ledger_production_date = to_site_date(receipt_time)
+            ledger_production_date = to_site_date(receipt_time) if receipt_time else None
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
 
@@ -12898,7 +12898,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         source_type="sales_return",
                         source_doc_id=return_id,
                         source_doc_code=return_obj.return_code,
-                        ledger_production_date=to_site_date(receipt_time),
+                        ledger_production_date=to_site_date(receipt_time) if receipt_time else None,
                         movement_type="other_inbound",
                         operator_id=returner_id,
                         operator_name=returner_name,
@@ -15377,7 +15377,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         source_type="other_inbound",
                         source_doc_id=inbound_id,
                         source_doc_code=inbound.inbound_code,
-                        ledger_production_date=to_site_date(receipt_time),
+                        ledger_production_date=to_site_date(receipt_time) if receipt_time else None,
                         ledger_expiry_date=getattr(item, "expiry_date", None),
                     movement_type="other_inbound",
                     operator_id=receiver_id,
@@ -15877,8 +15877,10 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     )
 
             deliverer_name = await self.get_user_name(confirmed_by)
-            delivery_time = resolve_business_datetime(
-                confirmation_data.delivery_time if confirmation_data and confirmation_data.delivery_time else None
+            delivery_time = coerce_business_datetime_to_utc(
+                confirmation_data.delivery_time
+                if confirmation_data and confirmation_data.delivery_time
+                else getattr(outbound, "delivery_time", None)
             )
             await OtherOutbound.filter(tenant_id=tenant_id, id=outbound_id).update(
                 status="已出库",
@@ -16400,8 +16402,10 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                     )
 
             borrower_name = await self.get_user_name(confirmed_by)
-            borrow_time = resolve_business_datetime(
-                confirmation_data.delivery_time if confirmation_data and confirmation_data.delivery_time else None
+            borrow_time = coerce_business_datetime_to_utc(
+                confirmation_data.delivery_time
+                if confirmation_data and confirmation_data.delivery_time
+                else getattr(borrow, "borrow_time", None)
             )
             await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow_id).update(
                 status="已借出",
@@ -16825,7 +16829,7 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                         source_type="material_return",
                         source_doc_id=return_id,
                         source_doc_code=return_entity.return_code,
-                        ledger_production_date=to_site_date(return_time),
+                        ledger_production_date=to_site_date(return_time) if return_time else None,
                     movement_type="other_inbound",
                     operator_id=returner_id,
                     operator_name=returner_name,

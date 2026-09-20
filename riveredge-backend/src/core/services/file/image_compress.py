@@ -31,9 +31,6 @@ def compress_image_content(
     ext = (file_extension or "").lower().lstrip(".")
     if ext in _SKIP_EXTENSIONS or ext not in _COMPRESSIBLE_EXTENSIONS:
         return file_content, ext
-    if len(file_content) < MIN_COMPRESS_BYTES:
-        return file_content, ext
-
     try:
         from PIL import Image, ImageOps
 
@@ -42,23 +39,36 @@ def compress_image_content(
 
         w, h = img.size
         max_dim = max(w, h)
+        resized = False
         if max_dim > MAX_IMAGE_DIMENSION:
             scale = MAX_IMAGE_DIMENSION / max_dim
             img = img.resize(
                 (max(1, int(w * scale)), max(1, int(h * scale))),
                 Image.Resampling.LANCZOS,
             )
+            resized = True
 
         has_alpha = img.mode in ("RGBA", "LA") or (
             img.mode == "P" and "transparency" in img.info
         )
 
         buf = BytesIO()
-        if has_alpha and ext in ("png", "webp"):
+        # 以像素是否带透明通道为准，不看文件名。圆形剪裁导出的是 PNG，
+        # 调用方常沿用原图 .jpg 文件名；按扩展名转 JPEG 会把透明区合成到黑色底上。
+        if has_alpha:
             if img.mode != "RGBA":
                 img = img.convert("RGBA")
+            if (
+                not resized
+                and len(file_content) < MIN_COMPRESS_BYTES
+                and img.format == "PNG"
+            ):
+                return file_content, "png"
             img.save(buf, format="PNG", optimize=True)
             return buf.getvalue(), "png"
+
+        if not resized and len(file_content) < MIN_COMPRESS_BYTES:
+            return file_content, ext
 
         if img.mode == "P":
             img = img.convert("RGB")

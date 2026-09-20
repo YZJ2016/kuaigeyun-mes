@@ -145,7 +145,7 @@ import {
   filterInboundPullCreateMenuSpecs,
   resolveDefaultInboundQuickPullKey,
 } from './inboundHubTypes';
-import { toApiDateTimeString } from '../../../../../utils/formDate';
+import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 import { inboundReceiptTypeMarkerValueEnum, renderInboundReceiptTypeMarkerTag } from '../shared/warehouseMarkerTags';
 import {
   normalizeInboundHubDetail,
@@ -698,8 +698,8 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
 
   const purchaseConfirmReceiverHook = useInboundReceiverSelect();
   const simpleConfirmReceiverHook = useInboundReceiverSelect();
-  const [purchaseConfirmDocumentDate, setPurchaseConfirmDocumentDate] = useState<Dayjs>(() => dayjs());
-  const [simpleConfirmDocumentDate, setSimpleConfirmDocumentDate] = useState<Dayjs>(() => dayjs());
+  const [purchaseConfirmDocumentDate, setPurchaseConfirmDocumentDate] = useState<Dayjs | null>(null);
+  const [simpleConfirmDocumentDate, setSimpleConfirmDocumentDate] = useState<Dayjs | null>(null);
 
   const inboundDocTrackingType = currentOrder
     ? inboundDocumentTrackingType(currentOrder)
@@ -800,7 +800,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     setPurchaseConfirmLineLoc({});
     setPurchaseConfirmLineLocCode({});
     setLocOptionsByWarehouse({});
-    setPurchaseConfirmDocumentDate(dayjs());
+    setPurchaseConfirmDocumentDate(null);
     productionReturnConfirmFormRef.current?.resetFields();
     resetProductionReturnFormFieldValues();
     purchaseConfirmReceiverHook.restoreReceiver({});
@@ -936,8 +936,12 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           ...(detailData as Record<string, unknown>),
           receipt_type: record.receipt_type,
         } as InboundOrder);
-        const parsed = rawDate != null ? dayjs(String(rawDate)) : dayjs();
-        setPurchaseConfirmDocumentDate(parsed.isValid() ? parsed : dayjs());
+        if (rawDate != null && String(rawDate).trim() !== '') {
+          const parsed = dayjs(String(rawDate));
+          setPurchaseConfirmDocumentDate(parsed.isValid() ? parsed.startOf('day') : null);
+        } else {
+          setPurchaseConfirmDocumentDate(null);
+        }
       }
       setPurchaseConfirmLineWh(lineWh);
       setPurchaseConfirmLineLoc(lineLoc);
@@ -1286,13 +1290,10 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.selectReceiverRequired'));
       return;
     }
-    if (!purchaseConfirmDocumentDate?.isValid()) {
-      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.selectDocumentDateRequired'));
-      return;
-    }
-    const receiptTimePayload = {
-      receipt_time: toApiDateTimeString(purchaseConfirmDocumentDate),
-    };
+    const receiptTimePayload =
+      purchaseConfirmDocumentDate?.isValid()
+        ? { receipt_time: toApiBusinessDocumentDateTime(purchaseConfirmDocumentDate) }
+        : {};
 
     setPurchaseConfirmPreviewSubmitting(true);
     try {
@@ -1412,7 +1413,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     setSimpleConfirmPreviewDetail(null);
     setSimpleConfirmPreviewLoading(false);
     setSimpleConfirmPreviewSubmitting(false);
-    setSimpleConfirmDocumentDate(dayjs());
+    setSimpleConfirmDocumentDate(null);
     simpleConfirmReceiverHook.restoreReceiver({});
   }, [simpleConfirmReceiverHook]);
 
@@ -1435,8 +1436,12 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           ...detail,
           receipt_type: record.receipt_type,
         } as InboundOrder);
-        const parsed = rawDate != null ? dayjs(String(rawDate)) : dayjs();
-        setSimpleConfirmDocumentDate(parsed.isValid() ? parsed : dayjs());
+        if (rawDate != null && String(rawDate).trim() !== '') {
+          const parsed = dayjs(String(rawDate));
+          setSimpleConfirmDocumentDate(parsed.isValid() ? parsed.startOf('day') : null);
+        } else {
+          setSimpleConfirmDocumentDate(null);
+        }
       } catch (error: unknown) {
         const err = error as { message?: string };
         messageApi.error(err?.message || t('app.kuaizhizao.warehouseInbound.msg.loadConfirmPreviewFailed'));
@@ -1456,13 +1461,11 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.selectReceiverRequired'));
       return;
     }
-    if (!simpleConfirmDocumentDate?.isValid()) {
-      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.selectDocumentDateRequired'));
-      return;
-    }
     const confirmPayload = {
       ...receiverPayload,
-      receipt_time: toApiDateTimeString(simpleConfirmDocumentDate),
+      ...(simpleConfirmDocumentDate?.isValid()
+        ? { receipt_time: toApiBusinessDocumentDateTime(simpleConfirmDocumentDate) }
+        : {}),
     };
     setSimpleConfirmPreviewSubmitting(true);
     try {
@@ -2634,11 +2637,11 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           <Form layout="vertical" style={{ marginTop: 16, marginBottom: 0 }} requiredMark={false}>
             <Row gutter={16}>
               <Col xs={24} sm={12} md={8}>
-                <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.documentDate')} required>
+                <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.documentDate')}>
                   <DatePicker
                     style={{ width: '100%' }}
                     value={purchaseConfirmDocumentDate}
-                    onChange={(v) => setPurchaseConfirmDocumentDate(v ?? dayjs())}
+                    onChange={(v) => setPurchaseConfirmDocumentDate(v ? v.startOf('day') : null)}
                     disabled={purchaseConfirmPreviewLoading || purchaseConfirmPreviewSubmitting}
                   />
                 </Form.Item>
@@ -2775,11 +2778,11 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
           <Form layout="vertical" style={{ marginTop: 16, marginBottom: 0 }} requiredMark={false}>
             <Row gutter={16}>
               <Col xs={24} sm={12} md={8}>
-                <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.documentDate')} required>
+                <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.documentDate')}>
                   <DatePicker
                     style={{ width: '100%' }}
                     value={simpleConfirmDocumentDate}
-                    onChange={(v) => setSimpleConfirmDocumentDate(v ?? dayjs())}
+                    onChange={(v) => setSimpleConfirmDocumentDate(v ? v.startOf('day') : null)}
                     disabled={simpleConfirmPreviewLoading || simpleConfirmPreviewSubmitting}
                   />
                 </Form.Item>

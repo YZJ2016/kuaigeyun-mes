@@ -84,10 +84,14 @@ riveredge-backend/src/apps/kuaiai/
 riveredge-backend/src/apps/kuaireport/
 riveredge-backend/src/apps/kuaiiot/
 riveredge-backend/src/apps/haoligo/
+riveredge-backend/src/apps/haolisales/
+riveredge-backend/src/apps/funide_oa/
 riveredge-frontend/src/apps/kuaiai/
 riveredge-frontend/src/apps/kuaireport/
 riveredge-frontend/src/apps/kuaiiot/
 riveredge-frontend/src/apps/haoligo/
+riveredge-frontend/src/apps/haolisales/
+riveredge-frontend/src/apps/funide-oa/
 
 # 本地构建发布脚本（各人自选保留，不提交）
 build-web.sh

@@ -78,6 +78,7 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
   const [searchValue, setSearchValue] = useState('');
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORY_KEY);
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
+  const [officialHost, setOfficialHost] = useState<string | null>(null);
 
   const selectedPack = useMemo(
     () => packs.find((pack) => pack.pack_id === selectedPackId) ?? null,
@@ -128,6 +129,11 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
         getBusinessSystemConnectionsForApi(),
       ]);
       setPacks(libraryResult.items);
+      setOfficialHost(
+        librarySource === 'official'
+          ? libraryResult.official_host || libraryResult.official_base_url || null
+          : null,
+      );
       setConnections(connectionsResult.items);
       setSelectedPackId(libraryResult.items[0]?.pack_id ?? null);
       setSearchValue('');
@@ -141,6 +147,7 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
             : t('pages.system.apis.libraryLoadFailed')),
       );
       setPacks([]);
+      setOfficialHost(null);
       setSelectedPackId(null);
     } finally {
       setLoading(false);
@@ -245,9 +252,11 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
   const someItemsSelected =
     selectedItemKeys.length > 0 && selectedItemKeys.length < allItemKeys.length;
 
+  const officialHostLabel = officialHost || t('pages.system.apis.libraryOfficialHostFallback');
+
   const hintText =
     librarySource === 'official'
-      ? t('pages.system.apis.libraryOfficialHint')
+      ? t('pages.system.apis.libraryOfficialHint', { host: officialHostLabel })
       : t('pages.system.apis.libraryHint');
 
   return (
@@ -294,7 +303,7 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
           />
           {librarySource === 'official' ? (
             <Text type="secondary" className="api-library-official-host">
-              {t('pages.system.apis.libraryOfficialHost')}
+              {t('pages.system.apis.libraryOfficialHost', { host: officialHostLabel })}
             </Text>
           ) : null}
         </div>

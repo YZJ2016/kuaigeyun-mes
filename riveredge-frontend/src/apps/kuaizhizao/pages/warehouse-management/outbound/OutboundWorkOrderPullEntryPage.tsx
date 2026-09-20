@@ -22,7 +22,7 @@ import {
   Typography,
 } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import dayjs, { type Dayjs } from 'dayjs';
+import { type Dayjs } from 'dayjs';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   DocumentFormPageLayout,
@@ -151,7 +151,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const [batchWhSelectedId, setBatchWhSelectedId] = useState<number | undefined>();
   const [batchWhApplying, setBatchWhApplying] = useState(false);
   const [notes, setNotes] = useState('');
-  const [pickingTime, setPickingTime] = useState<Dayjs>(() => dayjs().startOf('day'));
+  const [pickingTime, setPickingTime] = useState<Dayjs | null>(null);
   const [pickLines, setPickLines] = useState<PickLine[]>([]);
   const [maxQuantities, setMaxQuantities] = useState<Record<number, number>>({});
   const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
@@ -737,7 +737,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           if (typeof draft.notes === 'string') setNotes(draft.notes);
           if (draft.pickingTime) {
             const parsed = draftDayjs(draft.pickingTime);
-            setPickingTime(parsed?.isValid() ? parsed.startOf('day') : dayjs().startOf('day'));
+            setPickingTime(parsed?.isValid() ? parsed.startOf('day') : null);
           }
           if (draft.maxQuantities) {
             setMaxQuantities((prev) => mergeRecordMaps(prev, draft.maxQuantities as Record<number, number>));
@@ -1019,7 +1019,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                     <DatePicker
                       style={{ width: '100%' }}
                       value={pickingTime}
-                      onChange={(v) => setPickingTime(v ? v.startOf('day') : dayjs().startOf('day'))}
+                      onChange={(v) => setPickingTime(v ? v.startOf('day') : null)}
                     />
                   </Form.Item>
                 </Col>

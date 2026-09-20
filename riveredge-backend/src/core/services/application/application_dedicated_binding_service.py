@@ -1,7 +1,8 @@
 """
 专用应用与组织的绑定（平台管理员维护）。
 
-仅绑定组织可在应用中心列表中看到对应 is_dedicated 应用（平台管理员不受限）。
+可见性：某定制应用若尚未绑定任何组织，则所有组织均可在应用中心看到；
+一旦存在至少一条绑定，则仅已绑定的组织可见（平台管理员在绑定维护界面不受限）。
 """
 
 from __future__ import annotations
@@ -15,6 +16,41 @@ from infra.infrastructure.database.database import get_db_connection
 
 
 class ApplicationDedicatedBindingService:
+    @staticmethod
+    async def fetch_globally_bound_app_codes() -> Set[str]:
+        """至少绑定过一个组织的定制应用 code 集合。"""
+        conn = await get_db_connection()
+        try:
+            rows = await conn.fetch(
+                """
+                SELECT DISTINCT app_code FROM core_application_dedicated_bindings
+                WHERE app_code IS NOT NULL AND TRIM(app_code) <> ''
+                """
+            )
+            return {str(r["app_code"]).strip() for r in rows if r.get("app_code")}
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "读取全局定制应用绑定失败（迁移 214 / 表 core_application_dedicated_bindings）: {}",
+                e,
+            )
+            return set()
+        finally:
+            await conn.close()
+
+    @staticmethod
+    def is_dedicated_visible_to_tenant(
+        app_code: str,
+        *,
+        tenant_bound_codes: Set[str],
+        globally_bound_codes: Set[str],
+    ) -> bool:
+        code = (app_code or "").strip()
+        if not code:
+            return False
+        if code not in globally_bound_codes:
+            return True
+        return code in tenant_bound_codes
+
     @staticmethod
     async def fetch_bound_codes_for_tenant(tenant_id: int) -> Set[str]:
         """读取失败时返回空集合，避免未跑迁移 214 时拖垮整个应用列表接口。"""

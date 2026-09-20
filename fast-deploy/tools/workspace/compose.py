@@ -16,6 +16,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from typing import Iterator, Tuple
 
 try:
     import yaml
@@ -32,6 +33,9 @@ BACKEND_APPS = ROOT / "riveredge-backend" / "src" / "apps"
 FRONTEND_APPS = ROOT / "riveredge-frontend" / "src" / "apps"
 CONFIG_HINT = "fast-deploy/tools/workspace/workspace.yaml"
 EXAMPLE_HINT = "fast-deploy/tools/workspace/workspace.example.yaml"
+
+# (mode, repo, label, backend_dir_name, frontend_dir_name)
+BindingTuple = Tuple[str, Path, str, str, str]
 
 
 def _load_config(path: Path) -> dict:
@@ -57,7 +61,6 @@ def _is_link_or_junction(path: Path) -> bool:
         return True
     if not path.exists():
         return False
-    # Windows junction：解析后的路径与自身不同，且位于仓库外常见
     if os.name == "nt" and path.is_dir():
         try:
             resolved = path.resolve()
@@ -88,9 +91,7 @@ def _link_or_copy(src: Path, dst: Path, mode: str) -> None:
         shutil.copytree(src, dst)
         print(f"  copy  {src} -> {dst}")
         return
-    # link
     if os.name == "nt":
-        # junction 不需要管理员权限（目录）
         import subprocess
 
         r = subprocess.run(
@@ -110,27 +111,39 @@ def _link_or_copy(src: Path, dst: Path, mode: str) -> None:
     print(f"  symlink  {src} -> {dst}")
 
 
-def _iter_app_bindings(cfg: dict):
+def _iter_app_bindings(cfg: dict) -> Iterator[BindingTuple]:
     mode = (cfg.get("mode") or "link").strip().lower()
     if mode not in {"link", "copy"}:
         raise SystemExit("mode 只能是 link 或 copy")
     for plugin in cfg.get("plugins") or []:
         repo = _resolve_repo(str(plugin.get("repo") or ""))
+        bindings = plugin.get("app_bindings")
+        if isinstance(bindings, list) and bindings:
+            for item in bindings:
+                if not isinstance(item, dict):
+                    continue
+                label = str(item.get("project") or item.get("code") or "").strip()
+                backend = str(item.get("backend") or label).strip()
+                frontend = str(item.get("frontend") or backend).strip()
+                if not backend:
+                    continue
+                yield mode, repo, label or backend, backend, frontend
+            continue
         for app in plugin.get("apps") or []:
             code = str(app).strip()
             if not code:
                 continue
-            yield mode, repo, code
+            yield mode, repo, code, code, code
 
 
 def compose(cfg: dict) -> None:
     print(f"组装根目录: {ROOT}")
-    for mode, repo, code in _iter_app_bindings(cfg):
-        print(f"\n[{code}] from {repo}")
-        be_src = repo / "backend" / "apps" / code
-        fe_src = repo / "frontend" / "apps" / code
-        be_dst = BACKEND_APPS / code
-        fe_dst = FRONTEND_APPS / code
+    for mode, repo, label, be_name, fe_name in _iter_app_bindings(cfg):
+        print(f"\n[{label}] from {repo}")
+        be_src = repo / "backend" / "apps" / be_name
+        fe_src = repo / "frontend" / "apps" / fe_name
+        be_dst = BACKEND_APPS / be_name
+        fe_dst = FRONTEND_APPS / fe_name
         if be_src.is_dir():
             _link_or_copy(be_src, be_dst, mode)
         else:
@@ -144,26 +157,29 @@ def compose(cfg: dict) -> None:
 
 def status(cfg: dict) -> None:
     print(f"状态（根: {ROOT}）")
-    for _, repo, code in _iter_app_bindings(cfg):
-        for label, dst in (
-            ("backend", BACKEND_APPS / code),
-            ("frontend", FRONTEND_APPS / code),
-        ):
+    for _, repo, label, be_name, fe_name in _iter_app_bindings(cfg):
+        for side, name in (("backend", be_name), ("frontend", fe_name)):
+            dst = (BACKEND_APPS if side == "backend" else FRONTEND_APPS) / name
             if dst.is_symlink():
-                print(f"  {code}/{label}: symlink -> {dst.resolve()}")
+                print(f"  {label}/{side}: symlink -> {dst.resolve()}")
             elif dst.is_dir():
-                print(f"  {code}/{label}: local dir ({dst})")
+                print(f"  {label}/{side}: local dir ({dst})")
             else:
-                print(f"  {code}/{label}: MISSING（需 compose；源仓 {repo}）")
+                print(f"  {label}/{side}: MISSING（需 compose；源仓 {repo}）")
 
 
 def remove_composed(cfg: dict) -> None:
     print("移除已组装的可选应用链接/副本…")
-    for _, _, code in _iter_app_bindings(cfg):
-        for dst in (BACKEND_APPS / code, FRONTEND_APPS / code):
-            if dst.exists() or dst.is_symlink():
-                _remove_target(dst)
-                print(f"  removed {dst}")
+    seen: set[str] = set()
+    for _, _, _, be_name, fe_name in _iter_app_bindings(cfg):
+        for name in (be_name, fe_name):
+            if name in seen:
+                continue
+            seen.add(name)
+            for dst in (BACKEND_APPS / name, FRONTEND_APPS / name):
+                if dst.exists() or dst.is_symlink():
+                    _remove_target(dst)
+                    print(f"  removed {dst}")
     print("完成。")
 
 

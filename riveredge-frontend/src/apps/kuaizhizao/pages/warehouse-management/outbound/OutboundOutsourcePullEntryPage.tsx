@@ -19,7 +19,7 @@ import {
   Typography,
 } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import dayjs, { type Dayjs } from 'dayjs';
+import { type Dayjs } from 'dayjs';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   DocumentFormPageLayout,
@@ -71,7 +71,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
   const [stockByMaterialWh, setStockByMaterialWh] = useState<Record<number, Record<number, number>>>({});
   const [stockByWhStatus, setStockByWhStatus] = useState<'idle' | 'loading' | 'ready'>('idle');
   const [notes, setNotes] = useState('');
-  const [issueTime, setIssueTime] = useState<Dayjs>(() => dayjs().startOf('day'));
+  const [issueTime, setIssueTime] = useState<Dayjs | null>(null);
   const [issueLines, setIssueLines] = useState<OutsourceIssueLine[]>([]);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
   const [allowManualLines, setAllowManualLines] = useState(true);
@@ -232,7 +232,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
           if (typeof draft.notes === 'string') setNotes(draft.notes);
           if (draft.issueTime) {
             const parsed = draftDayjs(draft.issueTime);
-            setIssueTime(parsed?.isValid() ? parsed.startOf('day') : dayjs().startOf('day'));
+            setIssueTime(parsed?.isValid() ? parsed.startOf('day') : null);
           }
           operatorHook.restoreReceiver(
             typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
@@ -395,7 +395,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
                     <DatePicker
                       style={{ width: '100%' }}
                       value={issueTime}
-                      onChange={(v) => setIssueTime(v ? v.startOf('day') : dayjs().startOf('day'))}
+                      onChange={(v) => setIssueTime(v ? v.startOf('day') : null)}
                     />
                   </Form.Item>
                 </Col>

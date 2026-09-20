@@ -73,6 +73,10 @@ class ApplicationResponse(ApplicationBase):
     is_installed: bool = Field(..., description="是否已安装")
     is_dedicated: bool = Field(default=False, description="是否专用应用（平台绑定组织后租户可见）")
     is_pro: bool = Field(default=False, description="是否 PRO 应用（需升级套餐使用）")
+    market_category: Optional[str] = Field(
+        default=None,
+        description="应用中心分类真源：base / industry / dedicated（来自 manifest）",
+    )
     can_access: bool = Field(default=True, description="当前租户是否有权访问（PRO 应用且套餐不允许时为 False）")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

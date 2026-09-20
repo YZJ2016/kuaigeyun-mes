@@ -115,7 +115,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     Record<number, OutboundBatchAllocation[]>
   >({});
   const [editablePickingNotes, setEditablePickingNotes] = useState('');
-  const [editablePickingTime, setEditablePickingTime] = useState<Dayjs | null>(() => dayjs().startOf('day'));
+  const [editablePickingTime, setEditablePickingTime] = useState<Dayjs | null>(null);
 
   const [editableDeliveryQuantities, setEditableDeliveryQuantities] = useState<Record<number, number>>({});
   const [editableDeliveryBatchAllocs, setEditableDeliveryBatchAllocs] = useState<
@@ -162,7 +162,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
     setEditablePickingWarehouses({});
     setEditablePickingBatchAllocs({});
     setEditablePickingNotes('');
-    setEditablePickingTime(dayjs().startOf('day'));
+    setEditablePickingTime(null);
     setEditableDeliveryQuantities({});
     setEditableDeliveryBatchAllocs({});
     setEditableDeliverySerials({});
@@ -437,9 +437,9 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
           const rawPickingDate = merged.picking_time;
           if (rawPickingDate != null) {
             const parsed = dayjs(String(rawPickingDate));
-            setEditablePickingTime(parsed.isValid() ? parsed.startOf('day') : dayjs().startOf('day'));
+            setEditablePickingTime(parsed.isValid() ? parsed.startOf('day') : null);
           } else {
-            setEditablePickingTime(dayjs().startOf('day'));
+            setEditablePickingTime(null);
           }
           const rawPickerId = merged.picker_id;
           operatorHook.restoreReceiver({
@@ -1063,7 +1063,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
             <DatePicker
               style={{ width: '100%' }}
               value={editablePickingTime}
-              onChange={(v) => setEditablePickingTime(v ? v.startOf('day') : dayjs().startOf('day'))}
+              onChange={(v) => setEditablePickingTime(v ? v.startOf('day') : null)}
               getPopupContainer={getPopupContainerInModal}
               disabled={loading || saving}
             />

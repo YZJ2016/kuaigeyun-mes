@@ -1,8 +1,6 @@
-# 复制为同目录 workspace.yaml 后执行:
-#   cp fast-deploy/tools/workspace/workspace.example.yaml fast-deploy/tools/workspace/workspace.yaml
-#   python fast-deploy/tools/workspace/compose.py
+# 手工调试时可复制为 workspace.yaml；生产环境由 deploy.env + generate_workspace.py 生成。
 #
-# plugins[].repo 路径相对主仓根目录（不是相对本文件）。
+# 定制仓须按 CUSTOM_PROJECTS 选择项目，禁止写死全量 apps: [haoligo, funide-oa, ...]。
 #
 # mode:
 #   link  — Windows junction / Unix symlink（开发推荐）
@@ -17,5 +15,7 @@ plugins:
       - kuaireport
       - kuaiiot
   - repo: ../kuaigeyun-custom
-    apps:
-      - haoligo
+    app_bindings:
+      - project: funide-oa
+        backend: funide_oa
+        frontend: funide-oa

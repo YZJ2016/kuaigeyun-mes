@@ -27,6 +27,8 @@ export interface Application {
   is_active: boolean;
   is_installed: boolean;
   is_pro?: boolean;
+  /** 应用中心分类：base / industry / dedicated（来自 manifest） */
+  market_category?: string | null;
   can_access?: boolean;
   is_custom_name: boolean;
   is_custom_sort: boolean;

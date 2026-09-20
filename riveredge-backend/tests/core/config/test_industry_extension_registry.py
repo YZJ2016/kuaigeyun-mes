@@ -21,7 +21,7 @@ def test_parse_electronics_style_extensions():
             {"id": "electronics.esd", "kind": "standalone"},
         ]
     }
-    decls = parse_industry_extensions("kuaielectronics", manifest)
+    decls = parse_industry_extensions("ind-electronics", manifest)
     assert len(decls) == 2
     assert decls[0].strategy == "profile"
     assert decls[1].kind == "standalone"
@@ -48,7 +48,7 @@ def test_standalone_rejects_host_fields():
 
 def test_parse_document_replacement_extension():
     decls = parse_industry_extensions(
-        "kuaielectronics",
+        "ind-electronics",
         {
             "industry_extensions": [
                 {
@@ -58,22 +58,22 @@ def test_parse_document_replacement_extension():
                     "host_app": "kuaizhizao",
                     "menu_path": "/apps/kuaizhizao/production-execution/label-station",
                     "resource": "kuaizhizao:label-station",
-                    "replacement_app": "kuaielectronics",
-                    "replacement_path": "/apps/kuaielectronics/label-oem",
+                    "replacement_app": "ind-electronics",
+                    "replacement_path": "/apps/ind-electronics/label-oem",
                 }
             ]
         },
     )
     assert len(decls) == 1
     assert decls[0].strategy == "document"
-    assert decls[0].replacement_path == "/apps/kuaielectronics/label-oem"
+    assert decls[0].replacement_path == "/apps/ind-electronics/label-oem"
 
 
 def test_document_replacement_payload():
     from core.config.industry_extension_registry import document_replacement_payload
 
     decls = parse_industry_extensions(
-        "kuaielectronics",
+        "ind-electronics",
         {
             "industry_extensions": [
                 {
@@ -83,8 +83,8 @@ def test_document_replacement_payload():
                     "host_app": "kuaizhizao",
                     "menu_path": "/apps/kuaizhizao/production-execution/label-station",
                     "resource": "kuaizhizao:label-station",
-                    "replacement_app": "kuaielectronics",
-                    "replacement_path": "/apps/kuaielectronics/label-oem",
+                    "replacement_app": "ind-electronics",
+                    "replacement_path": "/apps/ind-electronics/label-oem",
                 }
             ]
         },

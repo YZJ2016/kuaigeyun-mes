@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
+import { type Dayjs } from 'dayjs';
 import { prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
 import {
@@ -65,7 +65,7 @@ import {
 } from '../shared/pullEntryFormDraft';
 import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { toApiDateTimeString } from '../../../../../utils/formDate';
+import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 
 const InboundPoPullEntryPage: React.FC = () => {
   const { poId: poIdParam } = useParams<{ poId: string }>();
@@ -99,7 +99,7 @@ const InboundPoPullEntryPage: React.FC = () => {
   const [batchWhModalOpen, setBatchWhModalOpen] = useState(false);
   const [batchWhSelectedId, setBatchWhSelectedId] = useState<number | undefined>();
   const [batchWhApplying, setBatchWhApplying] = useState(false);
-  const [receiptTime, setReceiptTime] = useState(() => dayjs());
+  const [receiptTime, setReceiptTime] = useState<Dayjs | null>(null);
   const [deliveryNote, setDeliveryNote] = useState('');
   const [defaultWarehouseId, setDefaultWarehouseId] = useState<number | undefined>();
   const [receiptNotes, setReceiptNotes] = useState('');
@@ -343,7 +343,10 @@ const InboundPoPullEntryPage: React.FC = () => {
           }
           const whId = draftOptionalNumber(draft.defaultWarehouseId);
           if (whId != null) setDefaultWarehouseId(whId);
-          if (draft.receiptTime) setReceiptTime(draftDayjs(draft.receiptTime));
+          if (draft.receiptTime) {
+            const parsed = draftDayjs(draft.receiptTime);
+            setReceiptTime(parsed?.isValid() ? parsed.startOf('day') : null);
+          }
           if (typeof draft.deliveryNote === 'string') setDeliveryNote(draft.deliveryNote);
           if (typeof draft.receiptNotes === 'string') setReceiptNotes(draft.receiptNotes);
           receiverHook.restoreReceiver({
@@ -421,7 +424,7 @@ const InboundPoPullEntryPage: React.FC = () => {
       supplier_name: order.supplier_name || '',
       warehouse_id: headerWhId,
       warehouse_name: whOpt.name,
-      receipt_time: toApiDateTimeString(receiptTime),
+      receipt_time: receiptTime?.isValid() ? toApiBusinessDocumentDateTime(receiptTime) : undefined,
       receiver_id: receiverHook.receiverId,
       receiver_name: receiverHook.receiverName.trim() || undefined,
       delivery_note: deliveryNote.trim() || undefined,
@@ -791,7 +794,7 @@ const InboundPoPullEntryPage: React.FC = () => {
                       <DatePicker
                         style={{ width: '100%' }}
                         value={receiptTime}
-                        onChange={(v) => setReceiptTime(v ?? dayjs())}
+                        onChange={(v) => setReceiptTime(v ? v.startOf('day') : null)}
                       />
                     </Form.Item>
                   </Col>

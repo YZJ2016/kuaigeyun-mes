@@ -11,11 +11,18 @@ from __future__ import annotations
 
 from typing import FrozenSet
 
+from core.config.app_code_renames import LEGACY_INDUSTRY_RENAME_SOURCE_CODES
+
 FREE_INDUSTRY_APP_CODES: FrozenSet[str] = frozenset(
     {
         "spoke-wheel",
+        "ind-electronics",
+        "ind-mold",
     }
 )
+
+# 重命名迁移/扫描合并完成前，旧 code 仍须归行业分类
+LEGACY_INDUSTRY_APP_CODES: FrozenSet[str] = LEGACY_INDUSTRY_RENAME_SOURCE_CODES
 
 # 行业免费版原作者 GitHub（与 manifest author / author_github 一致）
 FREE_INDUSTRY_AUTHOR_GITHUB: dict[str, str] = {
@@ -26,7 +33,6 @@ PRO_INDUSTRY_APP_CODES: FrozenSet[str] = frozenset(
     {
         "kuaimachinery",
         "kuaimolding",
-        "kuaielectronics",
         "kuaiautoparts",
         "kuaimedical",
         "kuaifood",
@@ -43,7 +49,9 @@ PRO_INDUSTRY_APP_CODES: FrozenSet[str] = frozenset(
     }
 )
 
-ALL_INDUSTRY_APP_CODES: FrozenSet[str] = FREE_INDUSTRY_APP_CODES | PRO_INDUSTRY_APP_CODES
+ALL_INDUSTRY_APP_CODES: FrozenSet[str] = (
+    FREE_INDUSTRY_APP_CODES | PRO_INDUSTRY_APP_CODES | LEGACY_INDUSTRY_APP_CODES
+)
 
 
 def is_free_industry_app_code(app_code: str | None) -> bool:

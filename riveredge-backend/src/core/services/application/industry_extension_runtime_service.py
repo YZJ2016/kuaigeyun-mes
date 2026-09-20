@@ -16,7 +16,13 @@ from core.config.industry_extension_registry import (
     parse_industry_extensions,
     tenant_config_key_for_profile,
 )
-from core.config.industry_pack import is_industry_module_app_code
+from core.config.extension_hooks_loader import (
+    apply_standalone_via_hooks,
+    host_capabilities_from_hooks,
+    resolve_profile_seed_from_hooks,
+    revert_standalone_via_hooks,
+)
+from core.config.extension_provider import is_extension_provider_app_code
 from infra.exceptions.exceptions import ValidationError
 from infra.services.tenant_service import TenantService
 
@@ -28,7 +34,33 @@ def _active_items(items: List[Dict[str, Any]] | None) -> List[Dict[str, Any]]:
 
 
 class IndustryExtensionRuntimeService:
-    """租户级行业扩展 profile 生命周期。"""
+    """租户级扩展 profile 生命周期（行业插件与声明 extensions 的定制应用共用）。"""
+
+    @staticmethod
+    def _is_extension_provider(app_code: str) -> bool:
+        return is_extension_provider_app_code(app_code)
+
+    @staticmethod
+    async def _active_extension_provider_codes(
+        tenant_id: int, *, exclude_app_code: Optional[str] = None
+    ) -> List[str]:
+        from core.services.application.application_service import ApplicationService
+
+        apps = await ApplicationService.list_applications(
+            tenant_id=tenant_id,
+            skip=0,
+            limit=500,
+            is_installed=True,
+            is_active=True,
+        )
+        codes: List[str] = []
+        for app in apps:
+            code = str(app.get("code") or "")
+            if exclude_app_code and code == exclude_app_code:
+                continue
+            if IndustryExtensionRuntimeService._is_extension_provider(code):
+                codes.append(code)
+        return codes
 
     @staticmethod
     def _load_module_manifest(app_code: str) -> Dict[str, Any]:
@@ -65,7 +97,7 @@ class IndustryExtensionRuntimeService:
         out: List[IndustryExtensionDecl] = []
         for app in apps:
             code = str(app.get("code") or "")
-            if not is_industry_module_app_code(code):
+            if not IndustryExtensionRuntimeService._is_extension_provider(code):
                 continue
             if exclude_app_code and code == exclude_app_code:
                 continue
@@ -78,7 +110,7 @@ class IndustryExtensionRuntimeService:
 
     @staticmethod
     async def on_module_activated(tenant_id: int, app_code: str) -> None:
-        if not is_industry_module_app_code(app_code):
+        if not IndustryExtensionRuntimeService._is_extension_provider(app_code):
             return
         decls = IndustryExtensionRuntimeService.declarations_for_module(app_code)
         replace_decls = [d for d in decls if d.kind == "replace"]
@@ -222,7 +254,7 @@ class IndustryExtensionRuntimeService:
 
         用于包内后增扩展（如先启样品再补 ECN）后，菜单同步即可补齐，无需停用再启用。
         """
-        if not is_industry_module_app_code(app_code):
+        if not IndustryExtensionRuntimeService._is_extension_provider(app_code):
             return 0
         from infra.models.tenant_config import TenantConfig
 
@@ -276,7 +308,7 @@ class IndustryExtensionRuntimeService:
         total = 0
         for app in apps:
             code = str(app.get("code") or "")
-            if not is_industry_module_app_code(code):
+            if not IndustryExtensionRuntimeService._is_extension_provider(code):
                 continue
             total += await IndustryExtensionRuntimeService.ensure_missing_profiles_for_module(
                 tenant_id, code
@@ -296,7 +328,7 @@ class IndustryExtensionRuntimeService:
 
     @staticmethod
     async def on_module_deactivated(tenant_id: int, app_code: str) -> None:
-        if not is_industry_module_app_code(app_code):
+        if not IndustryExtensionRuntimeService._is_extension_provider(app_code):
             return
         decls = IndustryExtensionRuntimeService.declarations_for_module(app_code)
         for decl in decls:
@@ -328,81 +360,13 @@ class IndustryExtensionRuntimeService:
         for decl in decls:
             if decl.kind != "standalone":
                 continue
-            if app_code == "kuaielectronics" and decl.id == "electronics.esd":
-                from apps.kuaielectronics.services.esd_seed_service import ensure_esd_catalog
-
-                await ensure_esd_catalog(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_applied tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.production_daily":
-                from apps.kuaielectronics.services.production_daily_seed_service import (
-                    ensure_electronics_production_daily_templates,
-                )
-
-                await ensure_electronics_production_daily_templates(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_applied tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.supplier_eval":
-                from apps.kuaielectronics.services.supplier_eval_seed_service import (
-                    ensure_electronics_supplier_eval_templates,
-                )
-
-                await ensure_electronics_supplier_eval_templates(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_applied tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.training_templates":
-                from apps.kuaielectronics.services.training_template_seed_service import (
-                    ensure_electronics_training_templates,
-                )
-
-                await ensure_electronics_training_templates(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_applied tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.license_catalog":
-                from apps.kuaielectronics.services.license_catalog_seed_service import (
-                    ensure_electronics_license_catalog,
-                )
-
-                await ensure_electronics_license_catalog(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_applied tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.calibration_notify":
-                from apps.kuaielectronics.services.calibration_notify_seed_service import (
-                    ensure_electronics_calibration_notify,
-                )
-
-                await ensure_electronics_calibration_notify(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_applied tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.production_file_checklist":
-                from apps.kuaielectronics.services.production_file_checklist_seed_service import (
-                    ensure_electronics_production_file_checklist,
-                )
-
-                await ensure_electronics_production_file_checklist(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_applied tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
+            await apply_standalone_via_hooks(tenant_id, app_code, decl.id)
+            logger.info(
+                "industry_ext_standalone_applied tenant={} module={} extension={}",
+                tenant_id,
+                app_code,
+                decl.id,
+            )
 
     @staticmethod
     async def _revert_standalone_seeds(
@@ -411,90 +375,74 @@ class IndustryExtensionRuntimeService:
         for decl in decls:
             if decl.kind != "standalone":
                 continue
-            if app_code == "kuaielectronics" and decl.id == "electronics.esd":
-                from apps.kuaielectronics.services.esd_seed_service import deactivate_esd_scheme
-
-                await deactivate_esd_scheme(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_reverted tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.production_daily":
-                from apps.kuaielectronics.services.production_daily_seed_service import (
-                    deactivate_electronics_production_daily_templates,
-                )
-
-                await deactivate_electronics_production_daily_templates(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_reverted tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.supplier_eval":
-                from apps.kuaielectronics.services.supplier_eval_seed_service import (
-                    deactivate_electronics_supplier_eval_templates,
-                )
-
-                await deactivate_electronics_supplier_eval_templates(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_reverted tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.training_templates":
-                from apps.kuaielectronics.services.training_template_seed_service import (
-                    deactivate_electronics_training_templates,
-                )
-
-                await deactivate_electronics_training_templates(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_reverted tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.license_catalog":
-                from apps.kuaielectronics.services.license_catalog_seed_service import (
-                    deactivate_electronics_license_catalog,
-                )
-
-                await deactivate_electronics_license_catalog(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_reverted tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.calibration_notify":
-                from apps.kuaielectronics.services.calibration_notify_seed_service import (
-                    deactivate_electronics_calibration_notify,
-                )
-
-                await deactivate_electronics_calibration_notify(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_reverted tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
-            elif app_code == "kuaielectronics" and decl.id == "electronics.production_file_checklist":
-                from apps.kuaielectronics.services.production_file_checklist_seed_service import (
-                    deactivate_electronics_production_file_checklist,
-                )
-
-                await deactivate_electronics_production_file_checklist(tenant_id)
-                logger.info(
-                    "industry_ext_standalone_reverted tenant={} extension={}",
-                    tenant_id,
-                    decl.id,
-                )
+            await revert_standalone_via_hooks(tenant_id, app_code, decl.id)
+            logger.info(
+                "industry_ext_standalone_reverted tenant={} module={} extension={}",
+                tenant_id,
+                app_code,
+                decl.id,
+            )
 
     @staticmethod
     def _builtin_seed(app_code: str, profile_key: str) -> Optional[Dict[str, Any]]:
-        if app_code != "kuaielectronics":
-            return None
-        from apps.kuaielectronics.profiles import resolve_electronics_profile_seed
-
-        seed = resolve_electronics_profile_seed(profile_key)
+        seed = resolve_profile_seed_from_hooks(app_code, profile_key)
         return copy.deepcopy(seed) if seed else None
+
+    @staticmethod
+    async def list_host_capabilities(tenant_id: int) -> List[Dict[str, Any]]:
+        """已启用扩展模块向基础宿主页暴露的 capability（路径不含行业包硬编码）。"""
+        active_ext_ids: set[str] = set()
+        for module_code in await IndustryExtensionRuntimeService._active_extension_provider_codes(
+            tenant_id
+        ):
+            for decl in IndustryExtensionRuntimeService.declarations_for_module(module_code):
+                active_ext_ids.add(decl.id)
+
+        items: List[Dict[str, Any]] = []
+        for module_code in await IndustryExtensionRuntimeService._active_extension_provider_codes(
+            tenant_id
+        ):
+            declared_ids = {
+                d.id for d in IndustryExtensionRuntimeService.declarations_for_module(module_code)
+            }
+            for cap_key, spec in host_capabilities_from_hooks(module_code).items():
+                if not isinstance(spec, dict):
+                    continue
+                ext_id = str(spec.get("extension_id") or "")
+                if not ext_id or ext_id not in declared_ids or ext_id not in active_ext_ids:
+                    continue
+                base = f"/apps/{module_code}"
+                entry: Dict[str, Any] = {
+                    "capability": cap_key,
+                    "module_app_code": module_code,
+                    "extension_id": ext_id,
+                }
+                fetch_path = str(spec.get("fetch_path") or "").strip()
+                if fetch_path:
+                    entry["fetch_path"] = f"{base}{fetch_path}"
+                nav_path = str(spec.get("navigation_path") or "").strip()
+                if nav_path:
+                    entry["navigation_path"] = f"{base}{nav_path}"
+                post_paths = spec.get("post_paths")
+                if isinstance(post_paths, dict):
+                    entry["post_paths"] = {
+                        k: f"{base}{str(v)}"
+                        for k, v in post_paths.items()
+                        if str(v).strip()
+                    }
+                items.append(entry)
+        return items
+
+    @staticmethod
+    async def resolve_navigation_path_for_capability(
+        tenant_id: int, capability: str, *, fallback: Optional[str] = None
+    ) -> Optional[str]:
+        for item in await IndustryExtensionRuntimeService.list_host_capabilities(tenant_id):
+            if item.get("capability") == capability:
+                path = item.get("navigation_path")
+                if isinstance(path, str) and path.strip():
+                    return path.strip()
+        return fallback
 
     @staticmethod
     async def _write_profile(

@@ -363,6 +363,12 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "kuaicaiwu:gl:create",
         "kuaicaiwu:gl:update",
     ),
+    "haolisales-attachment": (
+        "haoligo:order-tracking:create",
+        "haoligo:order-tracking:update",
+        "haoligo:monthly-factory-ledger:create",
+        "haoligo:monthly-factory-ledger:update",
+    ),
 }
 
 

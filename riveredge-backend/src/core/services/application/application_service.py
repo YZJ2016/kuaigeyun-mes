@@ -16,6 +16,7 @@ import asyncpg
 
 from core.schemas.application import ApplicationCreate, ApplicationUpdate
 from core.config.industry_app_catalog import requires_pro_license_for_app
+from core.config.extension_provider import is_extension_provider_app_code
 from core.config.industry_pack import is_industry_module_app_code, is_industry_pack_shell_code
 from core.config.pro_app_catalog import resolve_application_sort_order
 from core.services.application.application_dedicated_binding_service import ApplicationDedicatedBindingService
@@ -158,12 +159,17 @@ class ApplicationService:
         apps: List[Dict[str, Any]],
         *,
         bound_codes: set,
+        globally_bound_codes: set,
     ) -> List[Dict[str, Any]]:
-        """专用应用仅出现在已绑定当前租户的应用清单中（与 viewer 角色无关，避免平台账号误入其它租户仍能看到）。"""
+        """定制应用：全局未绑定则全员可见；已有绑定则仅绑定租户可见。"""
         out: List[Dict[str, Any]] = []
         for a in apps:
             if ApplicationService.effective_is_dedicated(a):
-                if str(a.get("code") or "") in bound_codes:
+                if ApplicationDedicatedBindingService.is_dedicated_visible_to_tenant(
+                    str(a.get("code") or ""),
+                    tenant_bound_codes=bound_codes,
+                    globally_bound_codes=globally_bound_codes,
+                ):
                     out.append(a)
             else:
                 out.append(a)
@@ -250,6 +256,102 @@ class ApplicationService:
         await ApplicationService._persist_is_dedicated(tenant_id, code, ded)
         return await ApplicationService.get_application_by_code(tenant_id, code)
     
+    @staticmethod
+    async def _reconcile_renamed_application_codes(tenant_id: int) -> int:
+        """合并 manifest 改编码产生的双份应用：旧 code 行并入新 code 或原地改码。"""
+        from core.config.app_code_renames import APPLICATION_CODE_RENAMES
+
+        if not APPLICATION_CODE_RENAMES:
+            return 0
+
+        conn = await get_db_connection()
+        affected = 0
+        try:
+            for old_code, new_code in APPLICATION_CODE_RENAMES.items():
+                old_row = await conn.fetchrow(
+                    """
+                    SELECT * FROM core_applications
+                    WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL
+                    ORDER BY id ASC
+                    LIMIT 1
+                    """,
+                    tenant_id,
+                    old_code,
+                )
+                if not old_row:
+                    continue
+
+                new_row = await conn.fetchrow(
+                    """
+                    SELECT * FROM core_applications
+                    WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL
+                    ORDER BY id ASC
+                    LIMIT 1
+                    """,
+                    tenant_id,
+                    new_code,
+                )
+
+                if new_row:
+                    old_installed = bool(old_row.get("is_installed"))
+                    new_installed = bool(new_row.get("is_installed"))
+                    merged_installed = old_installed or new_installed
+                    if old_installed and not new_installed:
+                        merged_active = bool(old_row.get("is_active"))
+                    elif new_installed:
+                        merged_active = bool(new_row.get("is_active"))
+                    else:
+                        merged_active = bool(new_row.get("is_active"))
+
+                    await conn.execute(
+                        """
+                        UPDATE core_applications
+                        SET
+                            is_installed = $3,
+                            is_active = $4,
+                            entry_point = COALESCE(NULLIF(entry_point, ''), $5),
+                            route_path = COALESCE(NULLIF(route_path, ''), $6),
+                            updated_at = NOW()
+                        WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+                        """,
+                        new_row["id"],
+                        tenant_id,
+                        merged_installed,
+                        merged_active,
+                        old_row.get("entry_point"),
+                        old_row.get("route_path"),
+                    )
+                    await conn.execute(
+                        """
+                        UPDATE core_applications
+                        SET deleted_at = NOW(), updated_at = NOW()
+                        WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+                        """,
+                        old_row["id"],
+                        tenant_id,
+                    )
+                else:
+                    await conn.execute(
+                        """
+                        UPDATE core_applications
+                        SET
+                            code = $3,
+                            entry_point = COALESCE($4, entry_point),
+                            route_path = COALESCE($5, route_path),
+                            updated_at = NOW()
+                        WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+                        """,
+                        old_row["id"],
+                        tenant_id,
+                        new_code,
+                        f"../apps/{new_code}/index.tsx",
+                        f"/apps/{new_code}",
+                    )
+                affected += 1
+        finally:
+            await conn.close()
+        return affected
+
     @staticmethod
     async def _reconcile_duplicate_application_rows(tenant_id: int) -> int:
         """软删除同租户下同 code 的重复应用行（保留 id 最小者）。"""
@@ -493,10 +595,22 @@ class ApplicationService:
                 applications.append(ApplicationService._normalize_application_row(dict(row)))
 
             bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
-            # 未绑定租户不会有 bound；已绑定但尚未在该租户注册 core_applications 行时，从 manifest 补齐（与应用中心默认未筛选一致）
-            if bound and is_installed is None and is_active is None:
+            globally_bound = await ApplicationDedicatedBindingService.fetch_globally_bound_app_codes()
+            # 已绑定或全局未绑定的定制应用，若尚未注册 core_applications 行则从 manifest 补齐
+            if is_installed is None and is_active is None:
                 present_codes = {str(a.get("code") or "") for a in applications}
-                for app_code in bound:
+                manifest_codes_to_ensure: set[str] = set(bound)
+                for manifest in ApplicationService._scan_plugin_manifests():
+                    code = str(manifest.get("code") or "").strip()
+                    if not code or not ApplicationService._manifest_is_dedicated(manifest):
+                        continue
+                    if ApplicationDedicatedBindingService.is_dedicated_visible_to_tenant(
+                        code,
+                        tenant_bound_codes=bound,
+                        globally_bound_codes=globally_bound,
+                    ):
+                        manifest_codes_to_ensure.add(code)
+                for app_code in manifest_codes_to_ensure:
                     if app_code not in present_codes:
                         ensured = await ApplicationService.ensure_application_registered_from_manifest(
                             tenant_id, app_code
@@ -512,6 +626,7 @@ class ApplicationService:
             return ApplicationService._filter_dedicated_for_viewer(
                 applications,
                 bound_codes=bound,
+                globally_bound_codes=globally_bound,
             )
 
         finally:
@@ -805,6 +920,53 @@ class ApplicationService:
         return application
     
     @staticmethod
+    async def _ensure_required_apps_active(
+        tenant_id: int,
+        app_code: str,
+        *,
+        _visiting: Optional[Set[str]] = None,
+    ) -> None:
+        """按 manifest requires_apps 递归安装并启用依赖应用（启用定制包前拉起基础应用）。"""
+        from core.services.application.enabled_apps import read_requires_apps_from_manifest
+
+        visiting = _visiting or set()
+        code = str(app_code or "").strip()
+        if not code or code in visiting:
+            return
+        visiting.add(code)
+
+        for req_code in read_requires_apps_from_manifest(code):
+            req_code = str(req_code or "").strip()
+            if not req_code or req_code in visiting:
+                continue
+            apps = await ApplicationService.list_applications(
+                tenant_id=tenant_id,
+                skip=0,
+                limit=500,
+            )
+            req_app = next((a for a in apps if str(a.get("code") or "") == req_code), None)
+            if not req_app:
+                logger.warning(
+                    "requires_apps 依赖 {} 未在租户 {} 应用清单中找到，跳过自动启用",
+                    req_code,
+                    tenant_id,
+                )
+                continue
+            req_uuid = str(req_app.get("uuid") or "")
+            if not req_app.get("is_installed"):
+                await ApplicationService.install_application(
+                    tenant_id,
+                    req_uuid,
+                    sync_menus_after_install=False,
+                )
+                req_app = await ApplicationService.get_application_by_uuid(tenant_id, req_uuid)
+            if not req_app.get("is_active"):
+                await ApplicationService._ensure_required_apps_active(
+                    tenant_id, req_code, _visiting=visiting
+                )
+                await ApplicationService.enable_application(tenant_id, req_uuid)
+
+    @staticmethod
     async def enable_application(
         tenant_id: int,
         uuid: str
@@ -835,6 +997,10 @@ class ApplicationService:
             ):
                 raise ValidationError("当前套餐不支持 PRO 应用，无法启用该应用。")
             raise ValidationError("PRO 应用未激活 License Key，不允许启用。")
+
+        app_code = str(application.get("code") or "")
+        if app_code:
+            await ApplicationService._ensure_required_apps_active(tenant_id, app_code)
         
         # 更新数据库
         conn = await get_db_connection()
@@ -855,7 +1021,6 @@ class ApplicationService:
 
         clear_enabled_apps_cache()
         
-        app_code = str(application.get("code") or "")
         if is_industry_module_app_code(app_code):
             from core.services.application.industry_pack_menu_service import IndustryPackMenuService
             from core.services.application.industry_extension_runtime_service import (
@@ -867,6 +1032,12 @@ class ApplicationService:
                 activate_shell=True,
                 grant_module_code=app_code,
             )
+            await IndustryExtensionRuntimeService.on_module_activated(tenant_id, app_code)
+        elif is_extension_provider_app_code(app_code):
+            from core.services.application.industry_extension_runtime_service import (
+                IndustryExtensionRuntimeService,
+            )
+
             await IndustryExtensionRuntimeService.on_module_activated(tenant_id, app_code)
         elif is_industry_pack_shell_code(app_code):
             from core.services.application.industry_pack_menu_service import IndustryPackMenuService
@@ -1008,6 +1179,12 @@ class ApplicationService:
             await IndustryPackMenuService.sync_after_industry_module_lifecycle(
                 tenant_id, activate_shell=False
             )
+        elif is_extension_provider_app_code(app_code):
+            from core.services.application.industry_extension_runtime_service import (
+                IndustryExtensionRuntimeService,
+            )
+
+            await IndustryExtensionRuntimeService.on_module_deactivated(tenant_id, app_code)
         elif is_industry_pack_shell_code(app_code):
             from core.services.application.industry_pack_menu_service import IndustryPackMenuService
 
@@ -1028,7 +1205,7 @@ class ApplicationService:
             tenant_id, app_code, enabled=False
         )
         # 导航树缓存命中直出；禁用后必须失效，否则侧栏仍展示已禁用应用菜单。
-        # 接管同步仅对 MENU_TAKEOVER_RULES 内应用清缓存，快报表/快数采/KU-AI 等不会走到。
+        # 接管同步仅对 MENU_TAKEOVER_RULES 或 hide_required_app_menus 应用清缓存，快报表/快数采/KU-AI 等不会走到。
         await MenuService._clear_menu_cache(tenant_id)
 
         return application
@@ -1104,11 +1281,13 @@ class ApplicationService:
                 result.append(dict(row))
 
             bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
+            globally_bound = await ApplicationDedicatedBindingService.fetch_globally_bound_app_codes()
             await ApplicationService.reconcile_is_dedicated_with_manifest(tenant_id, result)
             result = await ApplicationService._filter_apps_by_package_whitelist(tenant_id, result)
             return ApplicationService._filter_dedicated_for_viewer(
                 result,
                 bound_codes=bound,
+                globally_bound_codes=globally_bound,
             )
         finally:
             await conn.close()
@@ -1231,6 +1410,20 @@ class ApplicationService:
                     return data
             except (json.JSONDecodeError, IOError):
                 continue
+        return None
+
+    @staticmethod
+    def resolve_market_category_for_code(code: str) -> Optional[str]:
+        """应用中心分类：优先 manifest market_category，行业目录 code 兜底为 industry。"""
+        manifest = ApplicationService._get_manifest_by_code(code)
+        if manifest:
+            category = str(manifest.get("market_category") or "").strip().lower()
+            if category:
+                return category
+        from core.config.industry_app_catalog import is_industry_app_code
+
+        if is_industry_app_code(code):
+            return "industry"
         return None
 
     @staticmethod
@@ -1533,6 +1726,14 @@ class ApplicationService:
         plugins = ApplicationService._scan_plugin_manifests()
         logger.info(f"扫描到 {len(plugins)} 个插件清单")
 
+        renamed = await ApplicationService._reconcile_renamed_application_codes(tenant_id)
+        if renamed:
+            logger.info(
+                "组织 {} 已合并改编码应用 {} 组（旧 code 并入新 code，不产生双份）",
+                tenant_id,
+                renamed,
+            )
+
         removed_dupes = await ApplicationService._reconcile_duplicate_application_rows(tenant_id)
         if removed_dupes:
             logger.warning(
@@ -1581,6 +1782,7 @@ class ApplicationService:
 
         registered_apps = []
         bound_for_scan = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
+        globally_bound_for_scan = await ApplicationDedicatedBindingService.fetch_globally_bound_app_codes()
 
         for manifest in plugins:
             logger.debug(f"处理插件: {manifest.get('name', 'unknown')} (code: {manifest.get('code', 'unknown')})")
@@ -1599,8 +1801,18 @@ class ApplicationService:
                 manifest_menu_config = manifest.get("menu_config")
                 if is_industry_module_app_code(code):
                     manifest_menu_config = None
-                if ApplicationService._manifest_is_dedicated(manifest) and str(code) not in bound_for_scan:
-                    logger.info(f"⏭️ 跳过未绑定当前租户的专用应用: {code} (tenant_id={tenant_id})")
+                if ApplicationService._manifest_is_dedicated(manifest) and not (
+                    ApplicationDedicatedBindingService.is_dedicated_visible_to_tenant(
+                        str(code),
+                        tenant_bound_codes=bound_for_scan,
+                        globally_bound_codes=globally_bound_for_scan,
+                    )
+                ):
+                    logger.info(
+                        "⏭️ 跳过当前租户不可见的专用应用: {} (tenant_id={})",
+                        code,
+                        tenant_id,
+                    )
                     continue
                 
                 # 优先用预取结果；预取失败时回退到单次查询

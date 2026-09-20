@@ -3,7 +3,10 @@ import { App, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useRequest } from 'ahooks';
 import KuaioaCrudListPage from '../../../components/KuaioaCrudListPage';
-import { licenseCatalogApi } from '../../../../kuaielectronics/services/license-catalog';
+import {
+  fetchHostCapabilityData,
+  postHostCapabilityAction,
+} from '../../../../../services/extensionHostCapabilities';
 import {
   createComplianceLicense,
   deleteComplianceLicense,
@@ -28,9 +31,15 @@ const LicensesPage: React.FC = () => {
   const [listKey, setListKey] = useState(0);
   const [applying, setApplying] = useState(false);
 
-  const { data: catalog } = useRequest(() => licenseCatalogApi.getSummary(), {
-    ready: perms.canRead,
-  });
+  type LicenseCatalogSummary = {
+    enabled?: boolean;
+    default_reminder_days?: number;
+  };
+
+  const { data: catalog } = useRequest(
+    () => fetchHostCapabilityData<LicenseCatalogSummary>('host.license.catalog'),
+    { ready: perms.canRead },
+  );
 
   const showApplyFromCatalog = Boolean(catalog?.enabled && perms.canCreate);
 
@@ -45,9 +54,16 @@ const LicensesPage: React.FC = () => {
         onClick={async () => {
           setApplying(true);
           try {
-            const res = await licenseCatalogApi.applyStubs();
+            const res = await postHostCapabilityAction<{
+              created?: number;
+              skipped?: number;
+            }>('host.license.catalog', 'apply_stubs');
+            if (!res) {
+              message.error(t('common.failed'));
+              return;
+            }
             message.success(
-              t('app.kuaielectronics.licenseCatalog.applySuccess', {
+              t('core.extensionHost.licenseCatalog.applySuccess', {
                 created: res.created ?? 0,
                 skipped: res.skipped ?? 0,
               }),
@@ -60,7 +76,7 @@ const LicensesPage: React.FC = () => {
           }
         }}
       >
-        {t('app.kuaielectronics.licenseCatalog.applyStubs')}
+        {t('core.extensionHost.licenseCatalog.applyStubs')}
       </Button>,
     ];
   }, [applying, message, showApplyFromCatalog, t]);

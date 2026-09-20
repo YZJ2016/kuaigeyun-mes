@@ -176,30 +176,17 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
   ): Promise<Blob> => {
     const image = await createImage(imageSrc);
     const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+    const width = Math.max(1, Math.round(pixelCrop.width));
+    const height = Math.max(1, Math.round(pixelCrop.height));
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { alpha: true });
 
     if (!ctx) {
       throw new Error('无法创建Canvas上下文');
     }
+    ctx.clearRect(0, 0, width, height);
 
-    // 设置canvas尺寸
-    canvas.width = pixelCrop.width;
-    canvas.height = pixelCrop.height;
-
-    // 如果是圆形，需要创建圆形遮罩
-    if (shape === 'round') {
-      ctx.beginPath();
-      ctx.arc(
-        pixelCrop.width / 2,
-        pixelCrop.height / 2,
-        Math.min(pixelCrop.width, pixelCrop.height) / 2,
-        0,
-        2 * Math.PI
-      );
-      ctx.clip();
-    }
-
-    // 绘制剪裁后的图片
     ctx.drawImage(
       image,
       pixelCrop.x,
@@ -208,9 +195,18 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
       pixelCrop.height,
       0,
       0,
-      pixelCrop.width,
-      pixelCrop.height
+      width,
+      height
     );
+
+    // 圆形：先画满再 destination-in 抠圆，圆外保持透明。clip 后未绘制区在部分浏览器会落成不透明黑。
+    if (shape === 'round') {
+      ctx.globalCompositeOperation = 'destination-in';
+      ctx.beginPath();
+      ctx.arc(width / 2, height / 2, Math.min(width, height) / 2, 0, 2 * Math.PI);
+      ctx.closePath();
+      ctx.fill();
+    }
 
     // 转换为Blob
     return new Promise((resolve, reject) => {

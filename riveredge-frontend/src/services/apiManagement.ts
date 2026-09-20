@@ -115,6 +115,8 @@ export interface ApiLibraryPack {
 
 export interface ApiLibraryListResponse {
   items: ApiLibraryPack[];
+  official_host?: string | null;
+  official_base_url?: string | null;
 }
 
 export interface InstallApiLibraryPackResult {
@@ -303,9 +305,7 @@ export async function installApiLibraryPack(
   });
 }
 
-/**
- * 获取官方接口库目录（固定地址 kuaigeyun.com）
- */
+/** 获取官方接口库目录（域名见 platform_settings.official_api_library_host） */
 export async function listOfficialApiLibrary(): Promise<ApiLibraryListResponse> {
   return apiRequest<ApiLibraryListResponse>('/core/apis/library/official');
 }

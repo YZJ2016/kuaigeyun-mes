@@ -36,6 +36,128 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
   {
+    id: 'app-code-rename-dedupe-r01',
+    date: '2026-09-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.app-code-rename-dedupe-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.app-code-rename-dedupe-r01.description',
+  },
+  {
+    id: 'app-center-industry-not-in-basic-r01',
+    date: '2026-09-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.app-center-industry-not-in-basic-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-center-industry-not-in-basic-r01.description',
+  },
+  {
+    id: 'official-api-library-configured-host-r01',
+    date: '2026-09-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.official-api-library-configured-host-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.official-api-library-configured-host-r01.description',
+  },
+  {
+    id: 'app-center-tab-order-application-layer-skill-r01',
+    date: '2026-09-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.app-center-tab-order-application-layer-skill-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-center-tab-order-application-layer-skill-r01.description',
+  },
+  {
+    id: 'ind-prefix-industry-app-codes-r01',
+    date: '2026-09-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-prefix-industry-app-codes-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ind-prefix-industry-app-codes-r01.description',
+  },
+  {
+    id: 'ind-mold-app-center-category-r01',
+    date: '2026-09-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-mold-app-center-category-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ind-mold-app-center-category-r01.description',
+  },
+  {
+    id: 'work-order-op-plan-time-expand-sync-r01',
+    date: '2026-09-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-op-plan-time-expand-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-op-plan-time-expand-sync-r01.description',
+  },
+  {
+    id: 'warehouse-hub-document-date-business-r01',
+    date: '2026-09-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-hub-document-date-business-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-hub-document-date-business-r01.description',
+  },
+  {
+    id: 'repo-layer-deploy-custom-projects-r01',
+    date: '2026-09-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.repo-layer-deploy-custom-projects-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.repo-layer-deploy-custom-projects-r01.description',
+  },
+  {
+    id: 'dedicated-app-unbound-visible-r01',
+    date: '2026-09-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.dedicated-app-unbound-visible-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.dedicated-app-unbound-visible-r01.description',
+  },
+  {
+    id: 'dedicated-oa-bundle-menu-r01',
+    date: '2026-09-20',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.dedicated-oa-bundle-menu-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.dedicated-oa-bundle-menu-r01.description',
+  },
+  {
+    id: 'haolisales-requirement-gap-r03',
+    date: '2026-09-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.haolisales-requirement-gap-r03.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.haolisales-requirement-gap-r03.description',
+  },
+  {
+    id: 'application-layer-host-capabilities',
+    date: '2026-09-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.application-layer-host-capabilities.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description',
+  },
+  {
+    id: 'haolisales-order-tracking-complete-r02',
+    date: '2026-09-20',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.haolisales-order-tracking-complete-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haolisales-order-tracking-complete-r02.description',
+  },
+  {
+    id: 'haolisales-dedicated-app-r01',
+    date: '2026-09-20',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.haolisales-dedicated-app-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.haolisales-dedicated-app-r01.description',
+  },
+  {
+    id: 'site-logo-round-crop-alpha-r01',
+    date: '2026-09-20',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.site-logo-round-crop-alpha-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.site-logo-round-crop-alpha-r01.description',
+  },
+  {
     id: 'login-logs-map-auto-center-r01',
     date: '2026-09-19',
     type: 'improvement',
@@ -2235,12 +2357,12 @@ export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.ecn-form-profile-dynamic-columns.description',
   },
   {
-    id: 'kuaielectronics-ecn-trial-rework-profiles',
+    id: 'ind-electronics-ecn-trial-rework-profiles',
     date: '2026-09-14',
     type: 'feature',
-    titleKey: 'pages.dashboard.updateLog.entries.kuaielectronics-ecn-trial-rework-profiles.title',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-electronics-ecn-trial-rework-profiles.title',
     descriptionKey:
-      'pages.dashboard.updateLog.entries.kuaielectronics-ecn-trial-rework-profiles.description',
+      'pages.dashboard.updateLog.entries.ind-electronics-ecn-trial-rework-profiles.description',
   },
   {
     id: 'inbound-hub-lifecycle-received-harden',
@@ -4570,11 +4692,11 @@ export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
     descriptionKey: 'pages.dashboard.updateLog.entries.gl-voucher-edit-await-queryset.description',
   },
   {
-    id: 'kuaielectronics-menu-leaf-no-icon',
+    id: 'ind-electronics-menu-leaf-no-icon',
     date: '2026-09-07',
     type: 'improvement',
-    titleKey: 'pages.dashboard.updateLog.entries.kuaielectronics-menu-leaf-no-icon.title',
-    descriptionKey: 'pages.dashboard.updateLog.entries.kuaielectronics-menu-leaf-no-icon.description',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-electronics-menu-leaf-no-icon.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.ind-electronics-menu-leaf-no-icon.description',
   },
   {
     id: 'kuaiai-menu-leaf-no-icon',
@@ -4815,11 +4937,11 @@ export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
     descriptionKey: 'pages.dashboard.updateLog.entries.kuaiplm-firmware-inf05.description',
   },
   {
-    id: 'kuaielectronics-label-oem-pack',
+    id: 'ind-electronics-label-oem-pack',
     date: '2026-09-06',
     type: 'feature',
-    titleKey: 'pages.dashboard.updateLog.entries.kuaielectronics-label-oem-pack.title',
-    descriptionKey: 'pages.dashboard.updateLog.entries.kuaielectronics-label-oem-pack.description',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-electronics-label-oem-pack.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.ind-electronics-label-oem-pack.description',
   },
   {
     id: 'kuaizhizao-label-station-r16',
@@ -4857,11 +4979,11 @@ export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
     descriptionKey: 'pages.dashboard.updateLog.entries.kuaizhizao-equipment-board-visit-r10.description',
   },
   {
-    id: 'kuaielectronics-esd-pack-r10',
+    id: 'ind-electronics-esd-pack-r10',
     date: '2026-09-06',
     type: 'feature',
-    titleKey: 'pages.dashboard.updateLog.entries.kuaielectronics-esd-pack-r10.title',
-    descriptionKey: 'pages.dashboard.updateLog.entries.kuaielectronics-esd-pack-r10.description',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-electronics-esd-pack-r10.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.ind-electronics-esd-pack-r10.description',
   },
   {
     id: 'kuaizhizao-equipment-board-plant-r10',
@@ -5231,11 +5353,11 @@ export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
     descriptionKey: 'pages.dashboard.updateLog.entries.kuaiplm-wave1-reject-export-pilot.description',
   },
   {
-    id: 'kuaielectronics-esd-document-shell',
+    id: 'ind-electronics-esd-document-shell',
     date: '2026-09-05',
     type: 'feature',
-    titleKey: 'pages.dashboard.updateLog.entries.kuaielectronics-esd-document-shell.title',
-    descriptionKey: 'pages.dashboard.updateLog.entries.kuaielectronics-esd-document-shell.description',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-electronics-esd-document-shell.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.ind-electronics-esd-document-shell.description',
   },
   {
     id: 'menu-hideinmenu-leaf-restore',
@@ -5259,11 +5381,11 @@ export const PLATFORM_UPDATE_LOG: PlatformUpdateLogEntry[] = [
     descriptionKey: 'pages.dashboard.updateLog.entries.kuaiplm-bom-section-profile.description',
   },
   {
-    id: 'kuaielectronics-sample-profile',
+    id: 'ind-electronics-sample-profile',
     date: '2026-09-05',
     type: 'feature',
-    titleKey: 'pages.dashboard.updateLog.entries.kuaielectronics-sample-profile.title',
-    descriptionKey: 'pages.dashboard.updateLog.entries.kuaielectronics-sample-profile.description',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-electronics-sample-profile.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.ind-electronics-sample-profile.description',
   },
   {
     id: 'kuaiplm-wave1-menu-names',

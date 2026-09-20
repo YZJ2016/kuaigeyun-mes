@@ -149,7 +149,7 @@ import {
   type SupplierEvaluationStatus,
 } from '../../../services/supplier-evaluation';
 
-import { supplierAuditPlanApi } from '../../../../kuaielectronics/services/supplier-audit-plan';
+import { fetchHostCapabilityData } from '../../../../../services/extensionHostCapabilities';
 
 
 
@@ -256,9 +256,19 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   const perms = useResourcePermissions(RESOURCE);
 
-  const { data: auditPlanGuide } = useRequest(() => supplierAuditPlanApi.getGuide(), {
-    ready: perms.canRead,
-  });
+  type SupplierAuditPlanGuide = {
+    enabled?: boolean;
+    line_fields?: Array<{ key: string; label: string; type?: string }>;
+    month_tracking?: {
+      months?: number[];
+      row_kinds?: Array<{ key: string; label: string }>;
+    };
+  };
+
+  const { data: auditPlanGuide } = useRequest(
+    () => fetchHostCapabilityData<SupplierAuditPlanGuide>('host.supplier.audit_plan_guide'),
+    { ready: perms.canRead },
+  );
   const showAuditPlanGuide = Boolean(auditPlanGuide?.enabled);
 
   const evalActionRef = useRef<ActionType>();
@@ -727,7 +737,7 @@ const SupplierEvaluationsPage: React.FC = () => {
     }
     return [
       <Button key="audit-plan-guide" onClick={() => setAuditPlanGuideOpen(true)}>
-        {t('app.kuaielectronics.supplierAuditPlan.viewGuide')}
+        {t('core.extensionHost.supplierAuditPlan.viewGuide')}
       </Button>,
     ];
   }, [showAuditPlanGuide, t]);
@@ -3833,7 +3843,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
 
       <Modal
-        title={t('app.kuaielectronics.supplierAuditPlan.modalTitle')}
+        title={t('core.extensionHost.supplierAuditPlan.modalTitle')}
         open={auditPlanGuideOpen}
         destroyOnHidden
         width={920}
@@ -3848,11 +3858,11 @@ const SupplierEvaluationsPage: React.FC = () => {
           dataSource={auditPlanGuide?.line_fields || []}
           columns={[
             {
-              title: t('app.kuaielectronics.supplierAuditPlan.colField'),
+              title: t('core.extensionHost.supplierAuditPlan.colField'),
               dataIndex: 'label',
             },
             {
-              title: t('app.kuaielectronics.supplierAuditPlan.colType'),
+              title: t('core.extensionHost.supplierAuditPlan.colType'),
               dataIndex: 'type',
               width: 120,
             },
@@ -3866,11 +3876,11 @@ const SupplierEvaluationsPage: React.FC = () => {
             dataSource={auditPlanGuide.month_tracking.row_kinds || []}
             columns={[
               {
-                title: t('app.kuaielectronics.supplierAuditPlan.monthTracking'),
+                title: t('core.extensionHost.supplierAuditPlan.monthTracking'),
                 dataIndex: 'label',
               },
               {
-                title: t('app.kuaielectronics.supplierAuditPlan.months'),
+                title: t('core.extensionHost.supplierAuditPlan.months'),
                 render: () => (auditPlanGuide.month_tracking?.months || []).join('、'),
               },
             ]}

@@ -509,9 +509,8 @@ class OutsourceMaterialIssueService(AppBaseService[OutsourceMaterialIssue]):
             tenant_id, int(issue.material_id)
         )
 
-        # 更新状态
+        # 更新状态；保留建单手填的 issued_at，未填保持空（禁止用此刻冒充制单日）
         issue.status = "completed"
-        issue.issued_at = resolve_business_datetime()
         issue.issued_by = completed_by
         issue.issued_by_name = user_info["name"]
         issue.issue_unit_cost = unit_cost

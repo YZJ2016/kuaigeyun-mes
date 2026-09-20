@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Awaitable, Callable, Optional, Protocol, Tuple, Union
 
-from core.utils.timezone_utils import resolve_business_datetime
+from core.utils.timezone_utils import coerce_business_datetime_to_utc
 
 
 class InboundConfirmReceiverPayload(Protocol):
@@ -85,13 +85,26 @@ def resolve_inbound_confirm_business_time(
     confirmation_data: Optional[object],
     *,
     existing_time: Optional[Union[datetime, str]] = None,
-) -> datetime:
+) -> Optional[datetime]:
     """
-    确认入库业务时刻。
+    确认入库业务时刻（制单/业务日）。
 
-    优先级：请求体 receipt_time → 单据已有业务时刻 → 当前业务时刻。
+    优先级：请求体 receipt_time → 单据已有业务时刻。
+    二者皆空则返回 None，禁止用「此刻」冒充未填的制单日。
     """
     request_time = None
     if confirmation_data is not None:
         request_time = getattr(confirmation_data, "receipt_time", None)
-    return resolve_business_datetime(request_time or existing_time)
+    raw = request_time if request_time is not None else existing_time
+    if raw is None or (isinstance(raw, str) and not str(raw).strip()):
+        return None
+    if isinstance(raw, str):
+        from datetime import datetime as _dt
+
+        normalized = raw.strip().replace("Z", "+00:00").replace("z", "+00:00")
+        try:
+            parsed = _dt.fromisoformat(normalized)
+        except ValueError:
+            return None
+        return coerce_business_datetime_to_utc(parsed)
+    return coerce_business_datetime_to_utc(raw)

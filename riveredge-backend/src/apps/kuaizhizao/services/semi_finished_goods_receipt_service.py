@@ -424,7 +424,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                 await MaterialBatchService.enrich_receipt_items_expiry_dates(
                     items,
                     material_by_id,
-                    to_site_date(receipt_time),
+                    to_site_date(receipt_time) if receipt_time else None,
                 )
                 for item in items:
                     qty = item.receipt_quantity or item.qualified_quantity or Decimal(0)
@@ -448,7 +448,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         source_doc_code=receipt.receipt_code,
                         work_order_id=receipt.work_order_id,
                         work_order_code=receipt.work_order_code,
-                        ledger_production_date=to_site_date(receipt_time),
+                        ledger_production_date=to_site_date(receipt_time) if receipt_time else None,
                         ledger_expiry_date=getattr(item, "expiry_date", None),
                         movement_type="semi_fg_receipt",
                         to_warehouse_id=wh_id,

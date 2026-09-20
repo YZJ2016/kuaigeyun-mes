@@ -116,3 +116,25 @@ async def can_manage_official_api_library(*, request_host: str = "") -> bool:
         return True
     configured = await resolve_official_api_library_host()
     return is_request_on_official_api_library_host(request_host, configured)
+
+
+async def is_serving_configured_official_api_library(request_host: str) -> bool:
+    """当前请求是否命中本部署配置的官方库域名（读写本地真源表）。"""
+    current = normalize_registry_host(request_host)
+    if not current:
+        return False
+    configured = await resolve_official_api_library_host()
+    return is_request_on_official_api_library_host(current, configured)
+
+
+async def is_official_api_library_public_host(request_host: str) -> bool:
+    """公开目录 API 允许的 Host（缺省 kuaigeyun.com + 平台配置的官方库域名）。"""
+    if is_local_official_api_library_host():
+        return True
+    current = normalize_registry_host(request_host)
+    if not current:
+        return False
+    if is_official_registry_host(current):
+        return True
+    configured = await resolve_official_api_library_host()
+    return is_request_on_official_api_library_host(current, configured)

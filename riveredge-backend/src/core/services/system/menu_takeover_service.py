@@ -13,6 +13,7 @@ from loguru import logger
 from core.config.industry_extension_registry import IndustryExtensionDecl
 from core.config.menu_takeover import (
     META_DOCUMENT_REPLACED_BY,
+    META_SUPPRESSED_BY_DEDICATED_SHELL,
     META_SUPPRESSED_BY_INDUSTRY_PACK,
     META_SUPPRESSED_BY_TAKEOVER,
     MENU_TAKEOVER_RULES,
@@ -114,8 +115,13 @@ class MenuTakeoverService:
             if not tagged and not orphaned_suppression:
                 continue
             meta.pop(META_SUPPRESSED_BY_TAKEOVER, None)
+            still_suppressed = bool(
+                meta.get(META_SUPPRESSED_BY_INDUSTRY_PACK)
+                or meta.get(META_SUPPRESSED_BY_DEDICATED_SHELL)
+            )
             menu.meta = meta or None
-            menu.is_active = True
+            if not still_suppressed:
+                menu.is_active = True
             await menu.save(update_fields=["meta", "is_active", "updated_at"])
             restored += 1
         if restored:
@@ -135,6 +141,126 @@ class MenuTakeoverService:
                 continue
             if await MenuTakeoverService.is_consumer_active(tenant_id, rule.consumer_app_code):
                 await MenuTakeoverService.apply_takeover(tenant_id, rule.consumer_app_code)
+        await MenuTakeoverService.reapply_dedicated_shell_hides_for_source(
+            tenant_id, source_app_code
+        )
+        from core.services.application.enabled_apps import manifest_hides_required_app_menus
+
+        if manifest_hides_required_app_menus(source_app_code) and await MenuTakeoverService.is_consumer_active(
+            tenant_id, source_app_code
+        ):
+            await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, source_app_code)
+
+    @staticmethod
+    async def apply_dedicated_shell_hide(tenant_id: int, consumer_app_code: str) -> int:
+        """按 application_uuid 抑制依赖应用、行业包壳，以及同租户其它已安装业务应用整棵侧栏。"""
+        from core.services.application.enabled_apps import (
+            dedicated_shell_hidden_app_codes,
+            manifest_hides_required_app_menus,
+            union_dedicated_shell_hide_codes,
+        )
+
+        if not manifest_hides_required_app_menus(consumer_app_code):
+            return 0
+        installed = await Application.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_installed=True,
+        ).all()
+        hide_codes = union_dedicated_shell_hide_codes(
+            required_hidden=dedicated_shell_hidden_app_codes(consumer_app_code),
+            installed_codes=[str(app.code or "") for app in installed if not app.is_system],
+            consumer_code=consumer_app_code,
+            system_codes={str(app.code or "") for app in installed if app.is_system},
+        )
+        updated = 0
+        for source_code in hide_codes:
+            source_uuid = await MenuTakeoverService._get_app_uuid(tenant_id, source_code)
+            if not source_uuid:
+                logger.warning(
+                    "dedicated_shell_hide_skip source_app_missing tenant={} consumer={} source={}",
+                    tenant_id,
+                    consumer_app_code,
+                    source_code,
+                )
+                continue
+            menus = await Menu.filter(
+                tenant_id=tenant_id,
+                application_uuid=source_uuid,
+                deleted_at__isnull=True,
+            ).all()
+            for menu in menus:
+                meta: Dict[str, Any] = dict(menu.meta or {})
+                if (
+                    not menu.is_active
+                    and meta.get(META_SUPPRESSED_BY_DEDICATED_SHELL) == consumer_app_code
+                ):
+                    continue
+                meta[META_SUPPRESSED_BY_DEDICATED_SHELL] = consumer_app_code
+                menu.meta = meta
+                menu.is_active = False
+                await menu.save(update_fields=["meta", "is_active", "updated_at"])
+                updated += 1
+        if updated:
+            logger.info(
+                "dedicated_shell_hide_applied tenant={} consumer={} suppressed={}",
+                tenant_id,
+                consumer_app_code,
+                updated,
+            )
+        return updated
+
+    @staticmethod
+    async def revert_dedicated_shell_hide(tenant_id: int, consumer_app_code: str) -> int:
+        """恢复由该定制壳抑制的菜单；仍被 1:1 接管或行业包聚合的保持隐藏。"""
+        menus = await Menu.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).all()
+        restored = 0
+        for menu in menus:
+            meta: Dict[str, Any] = dict(menu.meta or {})
+            if meta.get(META_SUPPRESSED_BY_DEDICATED_SHELL) != consumer_app_code:
+                continue
+            meta.pop(META_SUPPRESSED_BY_DEDICATED_SHELL, None)
+            still_suppressed = bool(
+                meta.get(META_SUPPRESSED_BY_TAKEOVER)
+                or meta.get(META_SUPPRESSED_BY_INDUSTRY_PACK)
+            )
+            menu.meta = meta or None
+            if not still_suppressed:
+                menu.is_active = True
+            await menu.save(update_fields=["meta", "is_active", "updated_at"])
+            restored += 1
+        if restored:
+            logger.info(
+                "dedicated_shell_hide_reverted tenant={} consumer={} restored={}",
+                tenant_id,
+                consumer_app_code,
+                restored,
+            )
+        return restored
+
+    @staticmethod
+    async def reapply_dedicated_shell_hides_for_source(
+        tenant_id: int, source_app_code: str
+    ) -> None:
+        """某应用菜单同步后，对仍启用且声明隐藏该应用的定制壳重新抑制。"""
+        from core.services.application.enabled_apps import manifest_hides_required_app_menus
+
+        consumers = await Application.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_installed=True,
+            is_active=True,
+        ).all()
+        for app in consumers:
+            consumer_code = str(app.code or "")
+            if consumer_code == source_app_code:
+                continue
+            if not manifest_hides_required_app_menus(consumer_code):
+                continue
+            await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, consumer_code)
 
     @staticmethod
     async def sync_for_application_lifecycle(
@@ -143,14 +269,24 @@ class MenuTakeoverService:
         *,
         enabled: bool,
     ) -> None:
-        if app_code not in MENU_TAKEOVER_RULES:
-            return
+        from core.services.application.enabled_apps import manifest_hides_required_app_menus
         from core.services.system.menu_service import MenuService
 
+        has_rule = app_code in MENU_TAKEOVER_RULES
+        hides_required = manifest_hides_required_app_menus(app_code)
+        if not has_rule and not hides_required:
+            return
+
         if enabled:
-            await MenuTakeoverService.apply_takeover(tenant_id, app_code)
+            if has_rule:
+                await MenuTakeoverService.apply_takeover(tenant_id, app_code)
+            if hides_required:
+                await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, app_code)
         else:
-            await MenuTakeoverService.revert_takeover(tenant_id, app_code)
+            if hides_required:
+                await MenuTakeoverService.revert_dedicated_shell_hide(tenant_id, app_code)
+            if has_rule:
+                await MenuTakeoverService.revert_takeover(tenant_id, app_code)
         await MenuService._clear_menu_cache(tenant_id)
 
     @staticmethod
@@ -214,8 +350,13 @@ class MenuTakeoverService:
                         updated += 1
                 elif tagged:
                     meta.pop(META_SUPPRESSED_BY_INDUSTRY_PACK, None)
+                    still_suppressed = bool(
+                        meta.get(META_SUPPRESSED_BY_TAKEOVER)
+                        or meta.get(META_SUPPRESSED_BY_DEDICATED_SHELL)
+                    )
                     menu.meta = meta or None
-                    menu.is_active = True
+                    if not still_suppressed:
+                        menu.is_active = True
                     await menu.save(update_fields=["meta", "is_active", "updated_at"])
                     restored += 1
         if updated or restored:
@@ -256,8 +397,13 @@ class MenuTakeoverService:
                 if not tagged:
                     continue
                 meta.pop(META_SUPPRESSED_BY_INDUSTRY_PACK, None)
+                still_suppressed = bool(
+                    meta.get(META_SUPPRESSED_BY_TAKEOVER)
+                    or meta.get(META_SUPPRESSED_BY_DEDICATED_SHELL)
+                )
                 menu.meta = meta or None
-                menu.is_active = True
+                if not still_suppressed:
+                    menu.is_active = True
                 await menu.save(update_fields=["meta", "is_active", "updated_at"])
                 restored += 1
         if restored:

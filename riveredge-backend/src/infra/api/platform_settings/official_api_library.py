@@ -28,7 +28,7 @@ from infra.constants.official_registry import (
     base_url_for_official_api_library_host,
     can_manage_official_api_library,
     is_local_official_api_library_host,
-    is_official_registry_host,
+    is_official_api_library_public_host,
     normalize_official_api_library_host_input,
     resolve_official_api_library_host,
 )
@@ -42,12 +42,10 @@ from core.utils.timezone_utils import now_utc
 router = APIRouter(prefix="/official-api-library", tags=["Platform - Official API Library"])
 
 
-def _assert_official_host(request: Request) -> None:
-    """仅官方 SaaS 主机接受写入与本地目录服务。"""
-    if is_local_official_api_library_host():
-        return
+async def _assert_official_host(request: Request) -> None:
+    """官方库公开 API：允许缺省 kuaigeyun.com 与平台配置的官方库域名。"""
     host = request.headers.get("host", "")
-    if is_official_registry_host(host):
+    if await is_official_api_library_public_host(host):
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -115,7 +113,7 @@ class OfficialApiLibraryAdminMetaUpdateRequest(BaseModel):
 @router.get("/packs")
 async def list_official_api_library_packs(request: Request):
     """公开：已发布官方接口库目录。"""
-    _assert_official_host(request)
+    await _assert_official_host(request)
     try:
         return await OfficialApiLibraryService().list_published()
     except Exception as e:
@@ -128,7 +126,7 @@ async def list_official_api_library_packs(request: Request):
 @router.get("/packs/{pack_id}")
 async def get_official_api_library_pack(pack_id: str, request: Request):
     """公开：官方接口包详情（含完整定义）。"""
-    _assert_official_host(request)
+    await _assert_official_host(request)
     try:
         return await OfficialApiLibraryService().get_published_pack(pack_id, full=True)
     except NotFoundError as e:
@@ -148,7 +146,7 @@ async def submit_official_api_library_pack(
     request: Request,
 ):
     """公开：向官方接口库提交接口包（写入仅发生在官方 SaaS）。"""
-    _assert_official_host(request)
+    await _assert_official_host(request)
     try:
         result = await OfficialApiLibraryService().submit_pack(
             name=data.name,

@@ -10068,10 +10068,20 @@ const WorkOrdersPage: React.FC = () => {
         customFields={workOrderListCustomFields}
         customFieldValues={workOrderDetailCustomFieldValues}
         onOperationsUpdate={async () => {
-          if (workOrderDetail?.id) {
-            const ops = await workOrderApi.getOperations(workOrderDetail.id.toString())
-            setWorkOrderOperations(ops)
-          }
+          if (!workOrderDetail?.id) return
+          const panelWorkOrderId = Number(workOrderDetail.id)
+          const operationSourceId =
+            getWorkOrderOperationSourceId(workOrderDetail) ?? panelWorkOrderId
+          const bundle = await syncWorkOrderRowExpand(
+            queryClient,
+            panelWorkOrderId,
+            operationSourceId,
+            expandedWorkOrderDetailMapRef.current[panelWorkOrderId]?.manufacturing_mode ||
+              (workOrderDetail as WorkOrder).manufacturing_mode ||
+              'fabrication',
+          )
+          applyWorkOrderExpandBundle(panelWorkOrderId, bundle, workOrderDetail)
+          setWorkOrderOperations(bundle.operations || [])
         }}
         onEditOperation={(operation) => {
           setCurrentOperation(operation)
@@ -10923,6 +10933,8 @@ const WorkOrdersPage: React.FC = () => {
               ...mergedValues,
               operation_code: operationCode,
               operation_name: operationName,
+              planned_start_date: toApiDateTimeString(mergedValues.planned_start_date),
+              planned_end_date: toApiDateTimeString(mergedValues.planned_end_date),
             }
 
             // 获取当前工序列表
@@ -10974,9 +10986,20 @@ const WorkOrdersPage: React.FC = () => {
             setCurrentOperation(null)
             operationFormRef.current?.resetFields()
 
-            // 刷新工序列表
-            const operations = await workOrderApi.getOperations(workOrderDetail.id.toString())
-            setWorkOrderOperations(operations)
+            // 刷新详情抽屉工序列表，并写穿列表展开工序卡缓存（计划时间等）
+            const panelWorkOrderId = Number(workOrderDetail.id)
+            const operationSourceId =
+              getWorkOrderOperationSourceId(workOrderDetail) ?? panelWorkOrderId
+            const bundle = await syncWorkOrderRowExpand(
+              queryClient,
+              panelWorkOrderId,
+              operationSourceId,
+              expandedWorkOrderDetailMapRef.current[panelWorkOrderId]?.manufacturing_mode ||
+                (workOrderDetail as WorkOrder).manufacturing_mode ||
+                'fabrication',
+            )
+            applyWorkOrderExpandBundle(panelWorkOrderId, bundle, workOrderDetail)
+            setWorkOrderOperations(bundle.operations || [])
           } catch (error: any) {
             messageApi.error(error.message || '操作失败')
             throw error

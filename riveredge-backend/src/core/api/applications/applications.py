@@ -83,11 +83,16 @@ async def _assert_application_visible_to_viewer(
     application: Dict[str, Any],
     _auth: AuthContext,
 ) -> None:
-    """专用应用可见性仅取决于当前租户绑定（平台管理员在租户上下文中也不绕过）。"""
+    """定制应用：全局未绑定则全员可见；已有绑定则仅绑定租户可见。"""
     if not ApplicationService.effective_is_dedicated(application):
         return
     bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
-    if str(application.get("code") or "") not in bound:
+    globally_bound = await ApplicationDedicatedBindingService.fetch_globally_bound_app_codes()
+    if not ApplicationDedicatedBindingService.is_dedicated_visible_to_tenant(
+        str(application.get("code") or ""),
+        tenant_bound_codes=bound,
+        globally_bound_codes=globally_bound,
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="应用不存在")
 
 
@@ -196,6 +201,8 @@ def _application_response_dict(application: Dict[str, Any], pro_info: Optional[D
     """合并 PRO 字段，并以 manifest 校准 is_dedicated（与列表接口一致）。"""
     payload = {**application, **(pro_info or {})}
     payload["is_dedicated"] = ApplicationService.effective_is_dedicated(application)
+    code = str(application.get("code") or "")
+    payload["market_category"] = ApplicationService.resolve_market_category_for_code(code)
     return payload
 
 
@@ -303,6 +310,9 @@ async def list_applications(
                 'sort_order': app.get('sort_order', 0),
                 'created_at': app.get('created_at'),
                 'updated_at': app.get('updated_at'),
+                'market_category': ApplicationService.resolve_market_category_for_code(
+                    str(app.get('code') or '')
+                ),
                 **pro_info,
             }
 
@@ -375,6 +385,9 @@ async def list_installed_applications(
                 'sort_order': app.get('sort_order', 0),
                 'created_at': app.get('created_at'),
                 'updated_at': app.get('updated_at'),
+                'market_category': ApplicationService.resolve_market_category_for_code(
+                    str(app.get('code') or '')
+                ),
                 **pro_info,
             }
 
@@ -849,11 +862,16 @@ async def scan_and_register_plugins(
         )
 
         bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
+        globally_bound = await ApplicationDedicatedBindingService.fetch_globally_bound_app_codes()
         applications = [
             a
             for a in applications
             if not ApplicationService.effective_is_dedicated(a)
-            or str(a.get("code") or "") in bound
+            or ApplicationDedicatedBindingService.is_dedicated_visible_to_tenant(
+                str(a.get("code") or ""),
+                tenant_bound_codes=bound,
+                globally_bound_codes=globally_bound,
+            )
         ]
 
         # 安全构造响应对象，避免传递多余字段
@@ -1065,4 +1083,21 @@ async def list_industry_document_replacements(
     )
 
     items = await IndustryExtensionRuntimeService.list_active_document_replacements(tenant_id)
+    return {"items": items, "total": len(items)}
+
+
+@router.get(
+    "/industry-extensions/host-capabilities",
+    summary="List host capabilities from active extension modules",
+)
+async def list_extension_host_capabilities(
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: AuthContext = Depends(get_auth_context),
+):
+    """基础宿主页读取扩展对照/清单入口，禁止 compile-time 依赖行业或定制应用。"""
+    from core.services.application.industry_extension_runtime_service import (
+        IndustryExtensionRuntimeService,
+    )
+
+    items = await IndustryExtensionRuntimeService.list_host_capabilities(tenant_id)
     return {"items": items, "total": len(items)}

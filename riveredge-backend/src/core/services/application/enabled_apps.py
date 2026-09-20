@@ -26,13 +26,23 @@ def app_code_for_package_name(package_name: str) -> str:
     return package_name.replace("_", "-")
 
 
-def read_requires_apps_from_manifest(app_code: str) -> list[str]:
-    """读取 manifest.json 的 requires_apps（应用间运行时依赖）。"""
+def read_manifest_data(app_code: str) -> dict | None:
+    """读取应用 manifest.json；文件不存在则返回 None。"""
     module = package_name_for_app_code(app_code)
     manifest_path = _APPS_ROOT / module / "manifest.json"
     if not manifest_path.is_file():
-        return []
+        return None
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def read_requires_apps_from_manifest(app_code: str) -> list[str]:
+    """读取 manifest.json 的 requires_apps（应用间运行时依赖）。"""
+    data = read_manifest_data(app_code)
+    if not data:
+        return []
     raw = data.get("requires_apps")
     if not isinstance(raw, list):
         return []
@@ -41,6 +51,55 @@ def read_requires_apps_from_manifest(app_code: str) -> list[str]:
         if isinstance(item, str) and item.strip():
             out.append(item.strip())
     return out
+
+
+def manifest_hides_required_app_menus(app_code: str) -> bool:
+    """定制壳声明 hide_required_app_menus 时，启用后抑制依赖应用整棵侧栏。"""
+    data = read_manifest_data(app_code)
+    return bool(data and data.get("hide_required_app_menus") is True)
+
+
+def hidden_app_codes_for_dedicated_shell(
+    *,
+    hide: bool,
+    requires: list[str],
+    consumer_code: str,
+) -> list[str]:
+    """计算定制壳应隐藏的应用编码（含依赖闭包；行业模块时含 industry-pack）。"""
+    if not hide:
+        return []
+    hidden = expand_requires_apps(set(requires))
+    hidden.discard(consumer_code)
+    from core.config.industry_pack import INDUSTRY_PACK_APP_CODE, is_industry_module_app_code
+
+    if any(is_industry_module_app_code(code) for code in hidden):
+        hidden.add(INDUSTRY_PACK_APP_CODE)
+    return sorted(hidden)
+
+
+def dedicated_shell_hidden_app_codes(consumer_code: str) -> list[str]:
+    """读取 consumer manifest，得到应整棵隐藏的应用编码。"""
+    return hidden_app_codes_for_dedicated_shell(
+        hide=manifest_hides_required_app_menus(consumer_code),
+        requires=read_requires_apps_from_manifest(consumer_code),
+        consumer_code=consumer_code,
+    )
+
+
+def union_dedicated_shell_hide_codes(
+    *,
+    required_hidden: list[str],
+    installed_codes: list[str],
+    consumer_code: str,
+    system_codes: set[str] | None = None,
+) -> list[str]:
+    """依赖闭包 ∪ 已安装非系统业务应用，不含定制壳自身。"""
+    hidden = set(required_hidden)
+    skip = {consumer_code, *(system_codes or set())}
+    for code in installed_codes:
+        if code and code not in skip:
+            hidden.add(code)
+    return sorted(hidden)
 
 
 def expand_requires_apps(codes: set[str]) -> set[str]:

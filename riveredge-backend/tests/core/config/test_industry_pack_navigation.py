@@ -26,16 +26,16 @@ def test_resolve_industry_pack_navigation_visible_requires_active_modules() -> N
 def test_manifest_module_group_has_no_path_when_children_exist() -> None:
     item = manifest_to_industry_pack_menu_item(
         {
-            "code": "kuaielectronics",
-            "route_path": "/apps/kuaielectronics",
+            "code": "ind-electronics",
+            "route_path": "/apps/ind-electronics",
             "icon": "cpu",
             "sort_order": 310,
             "industry_pack_menu": {
                 "children": [
                     {
-                        "title": "app.kuaielectronics.menu.esdDashboard",
-                        "path": "/apps/kuaielectronics/esd/dashboard",
-                        "permission": "kuaielectronics:esd:read",
+                        "title": "app.ind-electronics.menu.esdDashboard",
+                        "path": "/apps/ind-electronics/esd/dashboard",
+                        "permission": "ind-electronics:esd:read",
                         "sort_order": 1,
                     }
                 ]
@@ -45,13 +45,13 @@ def test_manifest_module_group_has_no_path_when_children_exist() -> None:
     assert item is not None
     assert item["path"] is None
     assert item["icon"] == "cpu"
-    assert item["title"] == "app.kuaielectronics.name"
-    assert item["children"][0]["path"] == "/apps/kuaielectronics/esd/dashboard"
+    assert item["title"] == "app.ind-electronics.name"
+    assert item["children"][0]["path"] == "/apps/ind-electronics/esd/dashboard"
 
 
 def test_extension_pack_menu_children_from_replace_declarations():
     manifest = {
-        "code": "kuaielectronics",
+        "code": "ind-electronics",
         "industry_extensions": [
             {
                 "id": "electronics.sample_process",
@@ -71,9 +71,9 @@ def test_extension_pack_menu_children_from_replace_declarations():
                 "host_app": "kuaizhizao",
                 "menu_path": "/apps/kuaizhizao/production-execution/label-station",
                 "resource": "kuaizhizao:label-station",
-                "replacement_app": "kuaielectronics",
-                "replacement_path": "/apps/kuaielectronics/label-oem",
-                "menu_title": "app.kuaielectronics.menu.labelOem",
+                "replacement_app": "ind-electronics",
+                "replacement_path": "/apps/ind-electronics/label-oem",
+                "menu_title": "app.ind-electronics.menu.labelOem",
                 "menu_sort_order": 60,
             },
             {"id": "electronics.esd", "kind": "standalone"},
@@ -81,23 +81,23 @@ def test_extension_pack_menu_children_from_replace_declarations():
     }
     children = _collect_extension_pack_menu_children(manifest)
     assert len(children) == 1
-    assert children[0]["path"] == "/apps/kuaielectronics/label-oem"
-    assert children[0]["title"] == "app.kuaielectronics.menu.labelOem"
+    assert children[0]["path"] == "/apps/ind-electronics/label-oem"
+    assert children[0]["title"] == "app.ind-electronics.menu.labelOem"
 
 
 def test_manifest_merges_extension_and_manual_pack_menu():
     item = manifest_to_industry_pack_menu_item(
         {
-            "code": "kuaielectronics",
-            "route_path": "/apps/kuaielectronics",
+            "code": "ind-electronics",
+            "route_path": "/apps/ind-electronics",
             "icon": "cpu",
             "sort_order": 310,
             "industry_pack_menu": {
                 "children": [
                     {
-                        "title": "app.kuaielectronics.menu.esdDashboard",
-                        "path": "/apps/kuaielectronics/esd/dashboard",
-                        "permission": "kuaielectronics:esd:read",
+                        "title": "app.ind-electronics.menu.esdDashboard",
+                        "path": "/apps/ind-electronics/esd/dashboard",
+                        "permission": "ind-electronics:esd:read",
                         "sort_order": 70,
                     }
                 ]
@@ -121,9 +121,9 @@ def test_manifest_merges_extension_and_manual_pack_menu():
                     "host_app": "kuaizhizao",
                     "menu_path": "/apps/kuaizhizao/production-execution/label-station",
                     "resource": "kuaizhizao:label-station",
-                    "replacement_app": "kuaielectronics",
-                    "replacement_path": "/apps/kuaielectronics/label-oem",
-                    "menu_title": "app.kuaielectronics.menu.labelOem",
+                    "replacement_app": "ind-electronics",
+                    "replacement_path": "/apps/ind-electronics/label-oem",
+                    "menu_title": "app.ind-electronics.menu.labelOem",
                     "menu_sort_order": 60,
                 },
             ],
@@ -132,8 +132,8 @@ def test_manifest_merges_extension_and_manual_pack_menu():
     assert item is not None
     paths = [child["path"] for child in item["children"]]
     assert "/apps/kuaiplm/trial-flows" not in paths
-    assert "/apps/kuaielectronics/esd/dashboard" in paths
-    assert "/apps/kuaielectronics/label-oem" in paths
-    assert paths.index("/apps/kuaielectronics/label-oem") < paths.index(
-        "/apps/kuaielectronics/esd/dashboard"
+    assert "/apps/ind-electronics/esd/dashboard" in paths
+    assert "/apps/ind-electronics/label-oem" in paths
+    assert paths.index("/apps/ind-electronics/label-oem") < paths.index(
+        "/apps/ind-electronics/esd/dashboard"
     )

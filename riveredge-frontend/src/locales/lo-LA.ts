@@ -18791,8 +18791,8 @@ export default {
   'pages.system.applications.mock.kuaimolding.name': 'ໂມດູນຂึ้นรูปພລາສຕິກ',
   'pages.system.applications.mock.kuaimolding.desc':
     'ຊຸດຄວາມສາມາດສະເພາະສໍາລັບອຸດສາຫະກໍາແມ່ພິມສີດໂດຍອີງໃສ່ Kuai Manufacturing. ຍິນດີຕ້ອນຮັບເພື່ອຮ່ວມສ້າງກັບພວກເຮົາ',
-  'pages.system.applications.mock.kuaielectronics.name': 'ແອດອອນເອເລັກໂທຣນິກ',
-  'pages.system.applications.mock.kuaielectronics.desc':
+  'pages.system.applications.mock.ind-electronics.name': 'ແອດອອນເອເລັກໂທຣນິກ',
+  'pages.system.applications.mock.ind-electronics.desc':
     'ຊຸດຄວາມສາມາດສະເພາະສໍາລັບອຸດສາຫະກໍາເອເລັກໂຕຣນິກໂດຍອີງໃສ່ Kuai Manufacturing. ຍິນດີຕ້ອນຮັບເພື່ອຮ່ວມສ້າງກັບພວກເຮົາ',
   'pages.system.applications.mock.kuaiautoparts.name': 'ສ່ວນເສີມ Auto Parts',
   'pages.system.applications.mock.kuaiautoparts.desc':

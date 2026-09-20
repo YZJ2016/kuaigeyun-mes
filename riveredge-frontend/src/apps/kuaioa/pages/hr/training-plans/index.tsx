@@ -3,7 +3,7 @@ import { Button, Descriptions, Modal, Table } from 'antd';
 import { useRequest } from 'ahooks';
 import { useTranslation } from 'react-i18next';
 import KuaioaCrudListPage from '../../../components/KuaioaCrudListPage';
-import { annualTrainingPlanApi } from '../../../../kuaielectronics/services/annual-training-plan';
+import { fetchHostCapabilityData } from '../../../../../services/extensionHostCapabilities';
 import {
   createTrainingPlan,
   deleteTrainingPlan,
@@ -21,9 +21,17 @@ const TrainingPlansPage: React.FC = () => {
   const statusEnum = useMemo(() => buildOaApprovalStatusEnum(t), [t]);
   const [schemaOpen, setSchemaOpen] = useState(false);
 
-  const { data: schema } = useRequest(() => annualTrainingPlanApi.getSchema(), {
-    ready: perms.canRead,
-  });
+  type AnnualPlanSchema = {
+    enabled?: boolean;
+    document_code?: string;
+    retention_years?: number;
+    line_field_schema?: Array<{ key: string; label: string; type?: string; required?: boolean }>;
+  };
+
+  const { data: schema } = useRequest(
+    () => fetchHostCapabilityData<AnnualPlanSchema>('host.training.annual_plan_schema'),
+    { ready: perms.canRead },
+  );
   const showIndustrySchema = Boolean(schema?.enabled);
 
   const toolbarButtons = useMemo(() => {
@@ -32,7 +40,7 @@ const TrainingPlansPage: React.FC = () => {
     }
     return [
       <Button key="annual-plan-schema" onClick={() => setSchemaOpen(true)}>
-        {t('app.kuaielectronics.annualTrainingPlan.viewSchema')}
+        {t('core.extensionHost.trainingAnnualPlanSchema.viewButton')}
       </Button>,
     ];
   }, [showIndustrySchema, t]);
@@ -101,7 +109,7 @@ const TrainingPlansPage: React.FC = () => {
       />
 
       <Modal
-        title={t('app.kuaielectronics.annualTrainingPlan.modalTitle')}
+        title={t('core.extensionHost.trainingAnnualPlanSchema.modalTitle')}
         open={schemaOpen}
         destroyOnHidden
         width={760}
@@ -109,10 +117,10 @@ const TrainingPlansPage: React.FC = () => {
         onCancel={() => setSchemaOpen(false)}
       >
         <Descriptions column={2} size="small" style={{ marginBottom: 16 }}>
-          <Descriptions.Item label={t('app.kuaielectronics.annualTrainingPlan.documentCode')}>
+          <Descriptions.Item label={t('core.extensionHost.trainingAnnualPlanSchema.documentCode')}>
             {schema?.document_code || '—'}
           </Descriptions.Item>
-          <Descriptions.Item label={t('app.kuaielectronics.annualTrainingPlan.retentionYears')}>
+          <Descriptions.Item label={t('core.extensionHost.trainingAnnualPlanSchema.retentionYears')}>
             {schema?.retention_years ?? '—'}
           </Descriptions.Item>
         </Descriptions>
@@ -123,16 +131,16 @@ const TrainingPlansPage: React.FC = () => {
           dataSource={schema?.line_field_schema || []}
           columns={[
             {
-              title: t('app.kuaielectronics.annualTrainingPlan.colField'),
+              title: t('core.extensionHost.trainingAnnualPlanSchema.colField'),
               dataIndex: 'label',
             },
             {
-              title: t('app.kuaielectronics.annualTrainingPlan.colType'),
+              title: t('core.extensionHost.trainingAnnualPlanSchema.colType'),
               dataIndex: 'type',
               width: 120,
             },
             {
-              title: t('app.kuaielectronics.annualTrainingPlan.colRequired'),
+              title: t('core.extensionHost.trainingAnnualPlanSchema.colRequired'),
               dataIndex: 'required',
               width: 80,
               render: (value: boolean) => (value ? t('common.yes') : '—'),

@@ -127,6 +127,27 @@ def test_resolve_inbound_confirm_business_time_keeps_existing():
 
     existing = datetime(2026, 7, 1, 10, 0, 0)
     got = resolve_inbound_confirm_business_time(None, existing_time=existing)
+    assert got is not None
     assert got.year == 2026
     assert got.month == 7
     assert got.day == 1
+
+
+def test_resolve_inbound_confirm_business_time_empty_stays_none():
+    from apps.kuaizhizao.utils.inbound_confirm_helper import resolve_inbound_confirm_business_time
+
+    assert resolve_inbound_confirm_business_time(None, existing_time=None) is None
+    assert (
+        resolve_inbound_confirm_business_time(
+            SimpleNamespace(receipt_time=None),
+            existing_time=None,
+        )
+        is None
+    )
+    assert (
+        resolve_inbound_confirm_business_time(
+            SimpleNamespace(receipt_time=""),
+            existing_time=None,
+        )
+        is None
+    )

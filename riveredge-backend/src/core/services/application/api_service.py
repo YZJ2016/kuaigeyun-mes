@@ -397,15 +397,19 @@ class APIService:
             **preset_result,
         }
 
-    async def list_official_api_library(self) -> Dict[str, Any]:
-        """获取官方接口库目录（固定地址 kuaigeyun.com）。"""
+    async def list_official_api_library(self, *, request_host: str = "") -> Dict[str, Any]:
+        """获取官方接口库目录（域名见 platform_settings.official_api_library_host）。"""
         from infra.services.official_api_library_service import list_official_api_library
 
-        result = await list_official_api_library()
+        result = await list_official_api_library(request_host=request_host)
         items = result.get("items") or []
         for item in items:
             item["source"] = "official"
-        return {"items": items}
+        return {
+            "items": items,
+            "official_host": result.get("official_host"),
+            "official_base_url": result.get("official_base_url"),
+        }
 
     async def install_official_api_library_pack(
         self,
@@ -413,6 +417,8 @@ class APIService:
         pack_id: str,
         connection_uuid: UUID,
         item_keys: List[str],
+        *,
+        request_host: str = "",
     ) -> Dict[str, Any]:
         """从官方接口库安装接口包到当前租户。"""
         from infra.services.official_api_library_service import (
@@ -421,7 +427,7 @@ class APIService:
         )
         from core.services.integration.kingdee_galaxy_api_presets import resolve_preset_api_code
 
-        pack = await get_official_api_library_pack(pack_id)
+        pack = await get_official_api_library_pack(pack_id, request_host=request_host)
         connector_type = str(pack.get("connector_type") or "").strip()
         if not connector_type:
             raise ValidationError("官方接口包缺少连接器类型")
@@ -522,6 +528,7 @@ class APIService:
         category_description: Optional[str],
         api_uuids: List[UUID],
         submitter_hint: Optional[str] = None,
+        request_host: str = "",
     ) -> Dict[str, Any]:
         """将本组织接口打包提交到官方接口库。"""
         from infra.services.official_api_library_service import submit_official_api_library_pack
@@ -571,7 +578,8 @@ class APIService:
                 "category_description": category_description,
                 "items": items,
                 "submitter_hint": submitter_hint,
-            }
+            },
+            request_host=request_host,
         )
     
     async def get_api_by_uuid(

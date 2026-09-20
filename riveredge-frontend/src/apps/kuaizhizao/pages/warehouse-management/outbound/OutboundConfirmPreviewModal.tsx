@@ -281,9 +281,9 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           const rawDate = detailData.picking_time;
           if (rawDate != null) {
             const parsed = dayjs(String(rawDate));
-            setDocumentDate(parsed.isValid() ? parsed.startOf('day') : dayjs().startOf('day'));
+            setDocumentDate(parsed.isValid() ? parsed.startOf('day') : null);
           } else {
-            setDocumentDate(dayjs().startOf('day'));
+            setDocumentDate(null);
           }
           const rawPickerId = detailData.picker_id;
           const pickerId =

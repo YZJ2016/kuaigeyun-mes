@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
+import { type Dayjs } from 'dayjs';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   DocumentFormPageLayout,
@@ -43,7 +43,7 @@ import {
 } from '../../../../../components/material-unit-select';
 import { recalculateQuantityOnUnitChange } from '../../../../../components/quantity-with-unit/formHelpers';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
-import { toApiDateTimeString } from '../../../../../utils/formDate';
+import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
 
 type PreviewPicking = {
   picking_id: number;
@@ -95,7 +95,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
   const [lines, setLines] = useState<ReturnLine[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
-  const [returnTime, setReturnTime] = useState(() => dayjs());
+  const [returnTime, setReturnTime] = useState<Dayjs | null>(null);
   const [returnNotes, setReturnNotes] = useState('');
   const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
     'kuaizhizao:inbound-production-return-pull',
@@ -233,7 +233,10 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
         applyDraftOnce((draft) => {
           const whId = draftOptionalNumber(draft.warehouseId);
           if (whId != null) setWarehouseId(whId);
-          if (draft.returnTime) setReturnTime(draftDayjs(draft.returnTime));
+          if (draft.returnTime) {
+            const parsed = draftDayjs(draft.returnTime);
+            setReturnTime(parsed?.isValid() ? parsed.startOf('day') : null);
+          }
           if (typeof draft.returnNotes === 'string') setReturnNotes(draft.returnNotes);
           receiverHook.restoreReceiver({
             uuid: typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
@@ -305,7 +308,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
         picking_code: pickingCode || undefined,
         warehouse_id: warehouseId,
         warehouse_name: whOpt.name,
-        return_time: toApiDateTimeString(returnTime),
+        return_time: returnTime?.isValid() ? toApiBusinessDocumentDateTime(returnTime) : undefined,
         returner_id: receiverHook.receiverId,
         returner_name: receiverHook.receiverName.trim() || undefined,
         notes: returnNotes.trim() || undefined,
@@ -514,7 +517,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
                       <DatePicker
                         style={{ width: '100%' }}
                         value={returnTime}
-                        onChange={(v) => setReturnTime(v ?? dayjs())}
+                        onChange={(v) => setReturnTime(v ? v.startOf('day') : null)}
                       />
                     </Form.Item>
                   </Col>

@@ -1,6 +1,6 @@
 /**
  * 工单列表行展开工序卡：TanStack 缓存键与写穿刷新。
- * 派工 / 开工 / 报工后必须 sync，避免 staleTime 内复开仍显示旧人名等字段。
+ * 派工 / 开工 / 报工 / 详情编辑工序后必须 sync，避免 staleTime 内复开仍显示旧人名、旧计划时间等字段。
  */
 import type { QueryClient } from '@tanstack/react-query'
 import { workOrderApi } from '../../../services/production'

@@ -311,11 +311,18 @@ async def _build_alerts(
     domain: str = "equipment",
 ) -> List[Dict[str, Any]]:
     alerts: List[Dict[str, Any]] = []
-    spot_link = (
-        "/apps/kuaielectronics/esd/inspection"
-        if domain == "esd"
-        else "/apps/kuaizhizao/equipment-management/spot-checks"
-    )
+    if domain == "esd":
+        from core.services.application.industry_extension_runtime_service import (
+            IndustryExtensionRuntimeService,
+        )
+
+        spot_link = await IndustryExtensionRuntimeService.resolve_navigation_path_for_capability(
+            tenant_id,
+            "host.esd.inspection",
+            fallback="/apps/kuaizhizao/equipment-management/spot-checks",
+        )
+    else:
+        spot_link = "/apps/kuaizhizao/equipment-management/spot-checks"
     label_prefix = "ESD" if domain == "esd" else "点检"
 
     def _scheme_filter(qs):

@@ -49,6 +49,18 @@ kuaigeyun-pro/
   frontend/apps/{kuaiai,kuaireport,kuaiiot}/
 
 kuaigeyun-custom/
-  backend/apps/haoligo/
-  frontend/apps/haoligo/
+  projects/registry.yaml          # 定制项目注册（部署 CUSTOM_PROJECTS 真源）
+  backend/apps/{haoligo,funide_oa}/
+  frontend/apps/{haoligo,funide-oa}/
 ```
+
+## 定制项目（必配）
+
+启用定制仓时**必须**在 `fast-deploy/config/deploy.env` 设置：
+
+```env
+CUSTOM_ENABLED=1
+CUSTOM_PROJECTS=funide-oa
+```
+
+仅组装 registry 中声明的项目，避免把其它客户定制包装进本机。向导「配置定制仓」或 `deploy.sh pro-apps custom` 会读取该变量并生成 `workspace.yaml`。

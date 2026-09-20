@@ -65,10 +65,12 @@ class ApplicationCenterPermissionService:
         manifest = ApplicationService._get_manifest_by_code(code) if code else None
         manifest_is_pro = bool(manifest.get("is_pro", False)) if manifest else False
         is_dedicated = ApplicationService.effective_is_dedicated(application)
+        market_category = ApplicationService.resolve_market_category_for_code(code)
         return resolve_app_center_category(
             code,
             is_dedicated=is_dedicated,
             manifest_is_pro=manifest_is_pro,
+            market_category=market_category,
         )
 
     @staticmethod

@@ -119,11 +119,13 @@ const APP_ACTION_ICON = {
 } as const;
 
 /**
- * 应用中心分类：
- * - 基础：主仓开源
- * - 专业：私仓 kuaigeyun-pro（通用高级插件）
- * - 行业：含主仓免费行业包与私仓付费行业包（见 industryAppCatalog）
- * - 定制：定制私有仓（is_dedicated）
+ * 应用中心分类顺序与真源：.cursor/skills/application-layer/SKILL.md
+ * （docs/core/application-layer-contract.md）
+ *
+ * 展示顺序：基础 → 专业 → 行业 → 定制
+ * - 基础 / 专业：官方通用 APP，差异仅为免费 vs License 收费（kuaigeyun-pro）
+ * - 行业：按行业特性启用的小场景插件（industry_extensions）
+ * - 定制：按客户需求组织菜单 / 插件 / 完全自定义页面（is_dedicated）
  */
 const BASIC_APP_CODES = ['kuaizhizao', 'kuaiplm', 'kuaicaiwu', 'kuaioa', 'master-data'];
 
@@ -142,14 +144,24 @@ const needsLicenseKey = (app: { code?: string; is_pro?: boolean }): boolean =>
   requiresProLicense(app);
 
 const resolveAppEdition = (
-  app: { code?: string; is_pro?: boolean; is_dedicated?: boolean; isDedicated?: boolean },
+  app: {
+    code?: string;
+    is_pro?: boolean;
+    is_dedicated?: boolean;
+    isDedicated?: boolean;
+    market_category?: string | null;
+  },
 ): AppCategoryFilter => {
   if (Boolean(app?.is_dedicated ?? app?.isDedicated)) return 'dedicated';
+  const marketCategory = String(app?.market_category || '').toLowerCase();
+  if (marketCategory === 'industry') return 'industry';
+  if (marketCategory === 'dedicated') return 'dedicated';
   const code = String(app?.code || '');
   if (isIndustryAppCode(code)) return 'industry';
-  if ((PRO_APP_CODES as readonly string[]).includes(code)) return 'pro';
-  if (BASIC_APP_CODES.includes(code)) return 'basic';
-  // 未列入清单的非定制应用默认归入基础（主仓）
+  if ((PRO_APP_CODES as readonly string[]).includes(code) || app?.is_pro || marketCategory === 'pro') {
+    return 'pro';
+  }
+  if (BASIC_APP_CODES.includes(code) || marketCategory === 'base') return 'basic';
   return 'basic';
 };
 
@@ -1651,8 +1663,8 @@ const ApplicationListPage: React.FC = () => {
                 value={appCategoryFilter}
                 options={[
                   { label: t('pages.system.applications.categoryBasic'), value: 'basic' },
-                  { label: t('pages.system.applications.categoryIndustry'), value: 'industry' },
                   { label: t('pages.system.applications.categoryPro'), value: 'pro' },
+                  { label: t('pages.system.applications.categoryIndustry'), value: 'industry' },
                   { label: t('pages.system.applications.categoryDedicated'), value: 'dedicated' },
                 ]}
                 onChange={(value) => {

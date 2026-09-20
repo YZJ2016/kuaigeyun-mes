@@ -60,14 +60,20 @@ def resolve_app_center_category(
     *,
     is_dedicated: bool = False,
     manifest_is_pro: bool = False,
+    market_category: Optional[str] = None,
 ) -> AppCenterCategory:
     if is_dedicated:
         return "dedicated"
     code = str(app_code or "")
+    category = str(market_category or "").strip().lower()
+    if category == "industry":
+        return "industry"
+    if category == "dedicated":
+        return "dedicated"
     if is_industry_pack_shell_code(code) or is_industry_app_code(code):
         return "industry"
-    if code in PRO_APP_CODES or manifest_is_pro:
+    if code in PRO_APP_CODES or manifest_is_pro or category == "pro":
         return "pro"
-    if code in BASE_APP_CODES:
+    if code in BASE_APP_CODES or category == "base":
         return "basic"
     return "basic"

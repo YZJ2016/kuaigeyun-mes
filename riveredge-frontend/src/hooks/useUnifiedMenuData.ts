@@ -488,7 +488,7 @@ export function useUnifiedMenuData(
         };
         const firstPath = findFirst(appMenu.children || []);
         const codeFromChild = firstPath ? extractAppCodeFromPath(firstPath) : null;
-        // 与侧栏分组一致：行业包容器勿用首个子模块 code（如 kuaielectronics）顶替
+        // 与侧栏分组一致：行业包容器勿用首个子模块 code（如 ind-electronics）顶替
         const isIndustryPackRoot =
           String(appMenu.path || '') === '/apps/industry-pack' ||
           extractAppCodeFromPath(String(appMenu.path || '')) === 'industry-pack';

@@ -54,6 +54,30 @@ def test_is_registry_summary_admin_enabled(monkeypatch):
     assert is_local_official_api_library_host() is True
 
 
+def test_is_official_api_library_public_host_allows_configured_domain(monkeypatch):
+    import asyncio
+
+    from infra.constants import official_registry
+    from infra.constants.official_registry import is_official_api_library_public_host
+
+    async def fake_resolve() -> str:
+        return "kg.example.com"
+
+    monkeypatch.setattr(official_registry, "resolve_official_api_library_host", fake_resolve)
+    monkeypatch.setattr(
+        official_registry,
+        "is_local_official_api_library_host",
+        lambda: False,
+    )
+
+    async def _run() -> None:
+        assert await is_official_api_library_public_host("kg.example.com")
+        assert await is_official_api_library_public_host("www.kg.example.com")
+        assert not await is_official_api_library_public_host("other.example.com")
+
+    asyncio.run(_run())
+
+
 def test_local_official_api_library_host_in_development(monkeypatch):
     from infra.config import infra_config
 

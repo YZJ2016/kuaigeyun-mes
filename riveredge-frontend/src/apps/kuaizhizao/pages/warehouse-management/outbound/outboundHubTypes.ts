@@ -320,8 +320,6 @@ export function mapOutsourceIssueToOutbound(item: Record<string, unknown>): Outb
       pickOutboundHubDateCandidate(
         item.issued_at,
         item.issuedAt,
-        item.created_at,
-        item.createdAt,
       ) ?? '',
     ),
     status,

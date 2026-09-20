@@ -29,7 +29,7 @@ from infra.models.user import User
 
 ALLOWED_FIELD_TYPES = frozenset({"text", "number", "textarea", "select"})
 
-# 通用默认：仅中性班组日报；产线/DADP/异常三类字段 schema 由 kuaielectronics 行业包预置。
+# 通用默认：仅中性班组日报；产线/DADP/异常三类字段 schema 由 ind-electronics 行业包预置。
 DEFAULT_TEMPLATES: list[dict[str, Any]] = [
     {
         "template_code": "general_shift",

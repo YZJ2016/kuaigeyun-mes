@@ -7,7 +7,10 @@
  * 与 core/config/industry_app_catalog.py 保持一致。
  */
 
-export const FREE_INDUSTRY_APP_CODES = ['spoke-wheel'] as const;
+export const FREE_INDUSTRY_APP_CODES = ['spoke-wheel', 'ind-electronics', 'ind-mold'] as const;
+
+/** 改编码合并完成前 DB 可能暂留旧 code（见 app_code_renames）；分类仍须归行业 */
+export const LEGACY_INDUSTRY_APP_CODES = ['kuaielectronics', 'industry-mold'] as const;
 
 export type FreeIndustryAppCode = (typeof FREE_INDUSTRY_APP_CODES)[number];
 
@@ -15,7 +18,6 @@ export type FreeIndustryAppCode = (typeof FREE_INDUSTRY_APP_CODES)[number];
 export const PRO_INDUSTRY_APP_CODES = [
   'kuaimachinery',
   'kuaimolding',
-  'kuaielectronics',
   'kuaiautoparts',
   'kuaimedical',
   'kuaifood',
@@ -40,6 +42,8 @@ export const ALL_INDUSTRY_APP_CODES = [
 
 export const FREE_INDUSTRY_SORT_ORDER: Record<FreeIndustryAppCode, number> = {
   'spoke-wheel': 300,
+  'ind-electronics': 310,
+  'ind-mold': 320,
 };
 
 /** 侧栏行业包容器（不在应用中心展示） */
@@ -67,7 +71,12 @@ export function isProIndustryAppCode(code: string | undefined | null): boolean {
 }
 
 export function isIndustryAppCode(code: string | undefined | null): boolean {
-  return isFreeIndustryAppCode(code) || isProIndustryAppCode(code);
+  const normalized = String(code || '');
+  return (
+    isFreeIndustryAppCode(normalized) ||
+    isProIndustryAppCode(normalized) ||
+    (LEGACY_INDUSTRY_APP_CODES as readonly string[]).includes(normalized)
+  );
 }
 
 /** 启用前是否需要 License Key（专业版或付费行业） */

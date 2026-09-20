@@ -280,7 +280,7 @@ def manifest_to_industry_pack_menu_item(manifest: Dict[str, Any]) -> Optional[Di
     结构：行业包 → 应用名（一级）→ 原应用菜单（二级及以下）
 
     有子菜单时，应用名节点不设 path（纯分组）。否则会与子项「概览」等同 path
-   （如 /apps/kuaielectronics）在按 path 同步时互相覆盖，产生 parent_id 自引用，侧栏看不到子菜单。
+   （如 /apps/ind-electronics）在按 path 同步时互相覆盖，产生 parent_id 自引用，侧栏看不到子菜单。
     """
     code = str(manifest.get("code") or "").strip()
     if not code:

@@ -999,7 +999,18 @@ wizard_configure_custom_repo() {
     set_deploy_env_value CUSTOM_GIT_TOKEN "$cur_token"
     [ -n "$(read_deploy_env_value WORKSPACE_COMPOSE_MODE || true)" ] \
         || set_deploy_env_value WORKSPACE_COMPOSE_MODE "copy"
-    wizard_say_ok "定制仓配置已保存（安装时再标记 CUSTOM_ENABLED=1）"
+
+    local cur_projects
+    cur_projects="$(read_deploy_env_value CUSTOM_PROJECTS || true)"
+    echo ""
+    wizard_say "定制项目（CUSTOM_PROJECTS，逗号分隔；见定制仓 projects/registry.yaml）"
+    read -rp "$(echo -e "${WIZARD_DIM}项目 id [${cur_projects:-未设置}]${WIZARD_RESET} › ")" input || true
+    [ -n "${input:-}" ] && cur_projects="$input"
+    if [ -n "$cur_projects" ]; then
+        set_deploy_env_value CUSTOM_PROJECTS "$cur_projects"
+    fi
+
+    wizard_say_ok "定制仓配置已保存（安装时再标记 CUSTOM_ENABLED=1；须已设置 CUSTOM_PROJECTS）"
 }
 
 wizard_configure_client_repo() {

@@ -5,7 +5,7 @@
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from uuid import UUID
 
 from core.schemas.api import (
@@ -305,12 +305,15 @@ async def list_api_library(
 
 @router.get("/library/official", response_model=ApiLibraryListResponse)
 async def list_official_api_library(
+    request: Request,
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """获取官方接口库目录（固定地址 kuaigeyun.com）。"""
+    """获取官方接口库目录（域名见 platform_settings.official_api_library_host）。"""
     try:
-        result = await APIService().list_official_api_library()
+        result = await APIService().list_official_api_library(
+            request_host=request.headers.get("host", "")
+        )
         return ApiLibraryListResponse(**result)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -328,10 +331,11 @@ async def list_official_api_library(
 )
 async def submit_official_api_library(
     data: SubmitOfficialApiLibraryRequest,
+    request: Request,
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """将本组织接口提交到官方接口库（kuaigeyun.com）。"""
+    """将本组织接口提交到官方接口库（域名可配置）。"""
     try:
         result = await APIService().submit_official_api_library(
             tenant_id=tenant_id,
@@ -343,6 +347,7 @@ async def submit_official_api_library(
             category_description=data.category_description,
             api_uuids=data.api_uuids,
             submitter_hint=data.submitter_hint,
+            request_host=request.headers.get("host", ""),
         )
         return SubmitOfficialApiLibraryResponse(**result)
     except ValidationError as e:
@@ -362,6 +367,7 @@ async def submit_official_api_library(
 async def install_official_api_library_pack(
     pack_id: str,
     data: InstallApiLibraryPackRequest,
+    request: Request,
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -372,6 +378,7 @@ async def install_official_api_library_pack(
             pack_id=pack_id,
             connection_uuid=data.connection_uuid,
             item_keys=data.item_keys,
+            request_host=request.headers.get("host", ""),
         )
         return InstallApiLibraryPackResponse(**result)
     except NotFoundError as e:

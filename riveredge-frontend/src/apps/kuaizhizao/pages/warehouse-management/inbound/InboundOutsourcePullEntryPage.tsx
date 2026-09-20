@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, Input, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
+import { type Dayjs } from 'dayjs';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   DocumentFormPageLayout,
@@ -98,7 +98,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   const [previewLines, setPreviewLines] = useState<PreviewLine[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
-  const [receiptTime, setReceiptTime] = useState(() => dayjs());
+  const [receiptTime, setReceiptTime] = useState<Dayjs | null>(null);
   const [notes, setNotes] = useState('');
   const { bindSnapshot, persistNow, clearDraft, applyDraftOnce, resetDraftRestore } = usePullEntryFormDraft(
     'kuaizhizao:inbound-outsource-pull',
@@ -295,7 +295,10 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
         applyDraftOnce((draft) => {
           const whId = draftOptionalNumber(draft.warehouseId);
           if (whId != null) setWarehouseId(whId);
-          if (draft.receiptTime) setReceiptTime(draftDayjs(draft.receiptTime));
+          if (draft.receiptTime) {
+            const parsed = draftDayjs(draft.receiptTime);
+            setReceiptTime(parsed?.isValid() ? parsed.startOf('day') : null);
+          }
           if (typeof draft.notes === 'string') setNotes(draft.notes);
           receiverHook.restoreReceiver({
             uuid: typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
@@ -563,7 +566,9 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           unit: receiptLine.unit || '件',
           warehouse_id: warehouseId,
           warehouse_name: whOpt?.name,
-          received_at: toApiBusinessDocumentDateTime(receiptTime),
+          received_at: receiptTime?.isValid()
+            ? toApiBusinessDocumentDateTime(receiptTime)
+            : undefined,
           received_by: receiverHook.receiverId,
           received_by_name: receiverHook.receiverName.trim() || undefined,
           remarks: notes.trim() || undefined,
@@ -601,7 +606,9 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             unit: line.unit || '个',
             warehouse_id: warehouseId,
             warehouse_name: whOpt?.name,
-            returned_at: toApiBusinessDocumentDateTime(receiptTime),
+            returned_at: receiptTime?.isValid()
+              ? toApiBusinessDocumentDateTime(receiptTime)
+              : undefined,
             returned_by: receiverHook.receiverId,
             returned_by_name: receiverHook.receiverName.trim() || undefined,
             notes: notes.trim() || undefined,
@@ -628,7 +635,9 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             outsource_material_receipt_id: line.receipt_id,
             quantity: line.return_quantity,
             unit: line.unit || '件',
-            returned_at: toApiBusinessDocumentDateTime(receiptTime),
+            returned_at: receiptTime?.isValid()
+              ? toApiBusinessDocumentDateTime(receiptTime)
+              : undefined,
             returned_by: receiverHook.receiverId,
             returned_by_name: receiverHook.receiverName.trim() || undefined,
             notes: notes.trim() || undefined,
@@ -774,7 +783,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                       <DatePicker
                         style={{ width: '100%' }}
                         value={receiptTime}
-                        onChange={(v) => setReceiptTime(v ?? dayjs())}
+                        onChange={(v) => setReceiptTime(v ? v.startOf('day') : null)}
                       />
                     </Form.Item>
                   </Col>

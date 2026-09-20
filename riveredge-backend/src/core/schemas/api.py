@@ -131,6 +131,12 @@ class ApiLibraryListResponse(BaseModel):
     """接口库目录"""
 
     items: List[ApiLibraryPackResponse] = Field(default_factory=list, description="接口包列表")
+    official_host: Optional[str] = Field(
+        default=None, description="官方接口库域名（仅官方库目录返回）"
+    )
+    official_base_url: Optional[str] = Field(
+        default=None, description="官方接口库 base URL（仅官方库目录返回）"
+    )
 
 
 class InstallApiLibraryPackRequest(BaseModel):

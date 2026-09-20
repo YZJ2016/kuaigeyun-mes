@@ -2,7 +2,7 @@
 官方接口库服务
 
 - 官方 SaaS（INSTALL_REPO_SUMMARY_ADMIN_ENABLED）：直接读写本地表
-- 其它部署：经固定地址 https://kuaigeyun.com 拉取/提交
+- 其它部署：经 platform_settings.official_api_library_host 拉取/提交（默认 kuaigeyun.com）
 """
 
 from __future__ import annotations
@@ -16,8 +16,11 @@ from loguru import logger
 
 from infra.constants.official_registry import (
     OFFICIAL_API_LIBRARY_API_PREFIX,
+    base_url_for_official_api_library_host,
     is_local_official_api_library_host,
+    is_serving_configured_official_api_library,
     resolve_official_api_library_base_url,
+    resolve_official_api_library_host,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.http import get_http_client
@@ -381,20 +384,40 @@ class OfficialApiLibraryClient:
         return payload
 
 
-async def list_official_api_library() -> Dict[str, Any]:
-    if is_local_official_api_library_host():
-        return await OfficialApiLibraryService().list_published()
-    return await OfficialApiLibraryClient().list_catalog()
+async def _official_api_library_meta() -> Dict[str, str]:
+    host = await resolve_official_api_library_host()
+    return {
+        "official_host": host,
+        "official_base_url": base_url_for_official_api_library_host(host),
+    }
 
 
-async def get_official_api_library_pack(pack_id: str) -> Dict[str, Any]:
+async def _use_local_official_api_library(*, request_host: str = "") -> bool:
     if is_local_official_api_library_host():
+        return True
+    if request_host:
+        return await is_serving_configured_official_api_library(request_host)
+    return False
+
+
+async def list_official_api_library(*, request_host: str = "") -> Dict[str, Any]:
+    if await _use_local_official_api_library(request_host=request_host):
+        result = await OfficialApiLibraryService().list_published()
+    else:
+        result = await OfficialApiLibraryClient().list_catalog()
+    return {**result, **(await _official_api_library_meta())}
+
+
+async def get_official_api_library_pack(pack_id: str, *, request_host: str = "") -> Dict[str, Any]:
+    if await _use_local_official_api_library(request_host=request_host):
         return await OfficialApiLibraryService().get_published_pack(pack_id, full=True)
     return await OfficialApiLibraryClient().get_pack(pack_id)
 
 
-async def submit_official_api_library_pack(payload: Dict[str, Any]) -> Dict[str, Any]:
-    if is_local_official_api_library_host():
+async def submit_official_api_library_pack(
+    payload: Dict[str, Any], *, request_host: str = ""
+) -> Dict[str, Any]:
+    if await _use_local_official_api_library(request_host=request_host):
         return await OfficialApiLibraryService().submit_pack(
             name=payload.get("name") or "",
             description=payload.get("description") or "",
