@@ -52,6 +52,15 @@ class ApplicationDedicatedBindingService:
         return code in tenant_bound_codes
 
     @staticmethod
+    async def is_dedicated_shell_bound_for_tenant(tenant_id: int, app_code: str) -> bool:
+        """定制壳菜单接管（hide_required_app_menus）仅对已写入绑定的租户生效。"""
+        code = (app_code or "").strip()
+        if not code:
+            return False
+        bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
+        return code in bound
+
+    @staticmethod
     async def fetch_bound_codes_for_tenant(tenant_id: int) -> Set[str]:
         """读取失败时返回空集合，避免未跑迁移 214 时拖垮整个应用列表接口。"""
         conn = await get_db_connection()
@@ -154,7 +163,9 @@ class ApplicationDedicatedBindingService:
         finally:
             await conn.close()
 
-        # 解绑后该专用应用对本租户不再可见，失效菜单缓存以移除其菜单（菜单树命中直出依赖此处失效）
+        # 解绑后恢复宿主侧栏，并失效菜单缓存
+        from core.services.system.menu_takeover_service import MenuTakeoverService
         from core.services.system.menu_service import MenuService
 
+        await MenuTakeoverService.revert_dedicated_shell_hide(tenant_id, code)
         await MenuService._clear_menu_cache(tenant_id)

@@ -1974,11 +1974,19 @@ class MenuService:
                 continue
             if menu_config and app_uuid:
                 try:
+                    from core.services.application.application_dedicated_binding_service import (
+                        ApplicationDedicatedBindingService,
+                    )
                     from core.services.application.enabled_apps import (
                         manifest_hides_required_app_menus,
                     )
 
-                    is_dedicated_shell = manifest_hides_required_app_menus(app_code)
+                    is_dedicated_shell = (
+                        manifest_hides_required_app_menus(app_code)
+                        and await ApplicationDedicatedBindingService.is_dedicated_shell_bound_for_tenant(
+                            tenant_id, app_code
+                        )
+                    )
                     count = await MenuService.sync_menus_from_application_config(
                         tenant_id=tenant_id,
                         application_uuid=str(app_uuid),

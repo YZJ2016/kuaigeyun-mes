@@ -49,6 +49,23 @@ class MenuTakeoverService:
         return app is not None
 
     @staticmethod
+    async def _dedicated_shell_may_apply(tenant_id: int, consumer_app_code: str) -> bool:
+        """定制壳侧栏抑制：租户须已绑定该专用应用且应用已启用。"""
+        from core.services.application.application_dedicated_binding_service import (
+            ApplicationDedicatedBindingService,
+        )
+        from core.services.application.enabled_apps import manifest_hides_required_app_menus
+
+        code = str(consumer_app_code or "").strip()
+        if not code or not manifest_hides_required_app_menus(code):
+            return False
+        if not await ApplicationDedicatedBindingService.is_dedicated_shell_bound_for_tenant(
+            tenant_id, code
+        ):
+            return False
+        return await MenuTakeoverService.is_consumer_active(tenant_id, code)
+
+    @staticmethod
     async def apply_takeover(tenant_id: int, consumer_app_code: str) -> int:
         rule = MenuTakeoverService._rule_for_consumer(consumer_app_code)
         if not rule:
@@ -146,9 +163,7 @@ class MenuTakeoverService:
         )
         from core.services.application.enabled_apps import manifest_hides_required_app_menus
 
-        if manifest_hides_required_app_menus(source_app_code) and await MenuTakeoverService.is_consumer_active(
-            tenant_id, source_app_code
-        ):
+        if await MenuTakeoverService._dedicated_shell_may_apply(tenant_id, source_app_code):
             await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, source_app_code)
 
     @staticmethod
@@ -156,11 +171,10 @@ class MenuTakeoverService:
         """按 application_uuid 抑制依赖应用、行业包壳，以及同租户其它已安装业务应用整棵侧栏。"""
         from core.services.application.enabled_apps import (
             dedicated_shell_hidden_app_codes,
-            manifest_hides_required_app_menus,
             union_dedicated_shell_hide_codes,
         )
 
-        if not manifest_hides_required_app_menus(consumer_app_code):
+        if not await MenuTakeoverService._dedicated_shell_may_apply(tenant_id, consumer_app_code):
             return 0
         installed = await Application.filter(
             tenant_id=tenant_id,
@@ -246,21 +260,26 @@ class MenuTakeoverService:
 
     @staticmethod
     async def finalize_dedicated_shell_menus_after_batch_sync(tenant_id: int) -> None:
-        """全量菜单同步收尾：先抑制宿主/其它业务应用，再确保定制壳菜单树启用。"""
+        """全量菜单同步收尾：已绑定且启用的定制壳抑制宿主；未绑定租户恢复误隐藏的侧栏。"""
+        from core.services.application.application_dedicated_binding_service import (
+            ApplicationDedicatedBindingService,
+        )
         from core.services.application.enabled_apps import manifest_hides_required_app_menus
 
         consumers = await Application.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             is_installed=True,
-            is_active=True,
         ).all()
         for app in consumers:
             consumer_code = str(app.code or "")
             if not consumer_code or not manifest_hides_required_app_menus(consumer_code):
                 continue
-            await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, consumer_code)
-            await MenuTakeoverService.ensure_consumer_menus_active(tenant_id, consumer_code)
+            if await MenuTakeoverService._dedicated_shell_may_apply(tenant_id, consumer_code):
+                await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, consumer_code)
+                await MenuTakeoverService.ensure_consumer_menus_active(tenant_id, consumer_code)
+            else:
+                await MenuTakeoverService.revert_dedicated_shell_hide(tenant_id, consumer_code)
 
     @staticmethod
     async def revert_dedicated_shell_hide(tenant_id: int, consumer_app_code: str) -> int:
@@ -312,7 +331,8 @@ class MenuTakeoverService:
                 continue
             if not manifest_hides_required_app_menus(consumer_code):
                 continue
-            await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, consumer_code)
+            if await MenuTakeoverService._dedicated_shell_may_apply(tenant_id, consumer_code):
+                await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, consumer_code)
 
     @staticmethod
     async def sync_for_application_lifecycle(
@@ -333,7 +353,10 @@ class MenuTakeoverService:
             if has_rule:
                 await MenuTakeoverService.apply_takeover(tenant_id, app_code)
             if hides_required:
-                await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, app_code)
+                if await MenuTakeoverService._dedicated_shell_may_apply(tenant_id, app_code):
+                    await MenuTakeoverService.apply_dedicated_shell_hide(tenant_id, app_code)
+                else:
+                    await MenuTakeoverService.revert_dedicated_shell_hide(tenant_id, app_code)
         else:
             if hides_required:
                 await MenuTakeoverService.revert_dedicated_shell_hide(tenant_id, app_code)

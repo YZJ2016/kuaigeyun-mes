@@ -1,4 +1,4 @@
-"""定制应用可见性：全局未绑定则全员可见。"""
+"""定制应用可见性：全局未绑定则全员可见；侧栏壳抑制仅对已绑定租户（见 MenuTakeoverService._dedicated_shell_may_apply）。"""
 
 from core.services.application.application_dedicated_binding_service import (
     ApplicationDedicatedBindingService,
