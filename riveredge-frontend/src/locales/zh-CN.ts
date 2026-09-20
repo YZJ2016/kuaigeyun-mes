@@ -30706,6 +30706,10 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.ind-prefix-migration-perm-dedupe-r02.title':
+    '行业应用改编码迁移不再撞权限唯一约束',
+  'pages.dashboard.updateLog.entries.ind-prefix-migration-perm-dedupe-r02.description':
+    '升级时若新旧权限码并存（如 kuaielectronics 与 ind-electronics），迁移会合并角色授权并下线旧码，避免数据库迁移失败。',
   'pages.dashboard.updateLog.entries.app-code-rename-dedupe-r01.title':
     '应用改编码不再产生双份卡片',
   'pages.dashboard.updateLog.entries.app-code-rename-dedupe-r01.description':
