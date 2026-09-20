@@ -64,3 +64,7 @@ CUSTOM_PROJECTS=funide-oa
 ```
 
 仅组装 registry 中声明的项目，避免把其它客户定制包装进本机。向导「配置定制仓」或 `deploy.sh pro-apps custom` 会读取该变量并生成 `workspace.yaml`。
+
+**仅更新专业包**（菜单 [4]→专业包）时：若 `CUSTOM_ENABLED=1` 但未写 `CUSTOM_PROJECTS`，脚本会优先从已有 `workspace.yaml` 回填到 `deploy.env`，并保留定制包链接，不再阻断专业包组装。
+
+**移动端 H5**（`kuaigeyun-client`）不走 `workspace.yaml`，只需 `CLIENT_*` / `CLIENT_GIT_TOKEN`（可共用 `PRO_GIT_TOKEN`），与 `CUSTOM_PROJECTS` 无关。

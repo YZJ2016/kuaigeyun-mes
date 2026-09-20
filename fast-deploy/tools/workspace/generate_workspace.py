@@ -36,6 +36,32 @@ def _load_registry(custom_repo: Path) -> dict:
     return projects
 
 
+def _find_custom_plugin(doc: dict) -> dict | None:
+    for plugin in doc.get("plugins") or []:
+        if isinstance(plugin, dict) and isinstance(plugin.get("app_bindings"), list):
+            if plugin["app_bindings"]:
+                return plugin
+    return None
+
+
+def custom_projects_csv_from_yaml(path: Path) -> str:
+    """从已有 workspace.yaml 的 app_bindings 提取 project id 列表。"""
+    if not path.is_file():
+        return ""
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    plugin = _find_custom_plugin(data)
+    if not plugin:
+        return ""
+    names: list[str] = []
+    for item in plugin["app_bindings"]:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("project") or item.get("code") or "").strip()
+        if name and name not in names:
+            names.append(name)
+    return ",".join(names)
+
+
 def _resolve_custom_bindings(custom_repo: Path, projects_csv: str) -> list[dict]:
     registry = _load_registry(custom_repo)
     names = [p.strip() for p in (projects_csv or "").split(",") if p.strip()]
@@ -69,8 +95,25 @@ def build_workspace(
     pro_repo: Path,
     custom_repo: Path,
     custom_projects: str,
+    compose_scope: str = "all",
+    merge_from: Path | None = None,
 ) -> dict:
+    scope = (compose_scope or "all").strip().lower()
+    if scope not in {"pro", "custom", "all"}:
+        raise SystemExit(f"compose_scope 无效: {compose_scope}")
+
+    existing_doc: dict | None = None
+    existing_custom: dict | None = None
+    if merge_from and merge_from.is_file():
+        existing_doc = yaml.safe_load(merge_from.read_text(encoding="utf-8")) or {}
+        existing_custom = _find_custom_plugin(existing_doc)
+
+    projects_csv = (custom_projects or "").strip()
+    if custom_enabled and not projects_csv and existing_custom:
+        projects_csv = custom_projects_csv_from_yaml(merge_from)  # type: ignore[arg-type]
+
     plugins: list[dict] = []
+
     if pro_enabled:
         plugins.append(
             {
@@ -78,10 +121,35 @@ def build_workspace(
                 "apps": list(PRO_APPS),
             }
         )
+
     if custom_enabled:
-        bindings = _resolve_custom_bindings(custom_repo, custom_projects)
-        plugin: dict = {"repo": _relpath(ROOT, custom_repo), "app_bindings": bindings}
-        plugins.append(plugin)
+        if not projects_csv:
+            if scope == "pro":
+                if existing_custom:
+                    plugins.append(existing_custom)
+                    print(
+                        "WARN: CUSTOM_ENABLED=1 但未配置 CUSTOM_PROJECTS；"
+                        "本次仅刷新专业包，定制包沿用现有 workspace.yaml",
+                        file=sys.stderr,
+                    )
+                else:
+                    print(
+                        "WARN: CUSTOM_ENABLED=1 但未配置 CUSTOM_PROJECTS，且无既有 workspace；"
+                        "本次仅组装专业包",
+                        file=sys.stderr,
+                    )
+            elif scope == "custom":
+                raise SystemExit(
+                    "安装/更新定制包时必须设置 CUSTOM_PROJECTS（逗号分隔，见定制仓 projects/registry.yaml）"
+                )
+            else:
+                raise SystemExit(
+                    "CUSTOM_ENABLED=1 时必须设置 CUSTOM_PROJECTS（逗号分隔，见定制仓 projects/registry.yaml）"
+                )
+        else:
+            bindings = _resolve_custom_bindings(custom_repo, projects_csv)
+            plugins.append({"repo": _relpath(ROOT, custom_repo), "app_bindings": bindings})
+
     if not plugins:
         raise SystemExit("PRO_ENABLED / CUSTOM_ENABLED 均为未启用，无法生成 workspace.yaml")
     return {"mode": mode, "plugins": plugins}
@@ -89,19 +157,43 @@ def build_workspace(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", required=True, help="workspace.yaml 输出路径")
+    parser.add_argument("--output", help="workspace.yaml 输出路径")
     parser.add_argument("--mode", default=os.environ.get("WORKSPACE_COMPOSE_MODE", "copy"))
     parser.add_argument("--pro-enabled", default=os.environ.get("PRO_ENABLED", "0"))
     parser.add_argument("--custom-enabled", default=os.environ.get("CUSTOM_ENABLED", "0"))
     parser.add_argument("--pro-repo", default=os.environ.get("PRO_REPO_PATH", ""))
     parser.add_argument("--custom-repo", default=os.environ.get("CUSTOM_REPO_PATH", ""))
     parser.add_argument("--custom-projects", default=os.environ.get("CUSTOM_PROJECTS", ""))
+    parser.add_argument(
+        "--compose-scope",
+        default=os.environ.get("COMPOSE_SCOPE", "all"),
+        choices=["pro", "custom", "all"],
+    )
+    parser.add_argument(
+        "--merge-from",
+        default=os.environ.get("WORKSPACE_MERGE_FROM", ""),
+        help="合并已有 workspace.yaml 中的定制 app_bindings",
+    )
+    parser.add_argument(
+        "--print-custom-projects",
+        metavar="WORKSPACE_YAML",
+        help="从已有 workspace.yaml 打印 CUSTOM_PROJECTS 并退出",
+    )
     args = parser.parse_args()
+
+    if args.print_custom_projects:
+        csv = custom_projects_csv_from_yaml(Path(args.print_custom_projects))
+        print(csv, end="")
+        return
+
+    if not args.output:
+        raise SystemExit("缺少 --output")
 
     pro_en = str(args.pro_enabled).strip() == "1"
     custom_en = str(args.custom_enabled).strip() == "1"
     pro_repo = Path(args.pro_repo) if args.pro_repo else (ROOT.parent / "kuaigeyun-pro")
     custom_repo = Path(args.custom_repo) if args.custom_repo else (ROOT.parent / "kuaigeyun-custom")
+    merge_from = Path(args.merge_from) if args.merge_from else None
 
     doc = build_workspace(
         mode=str(args.mode or "copy"),
@@ -110,6 +202,8 @@ def main() -> None:
         pro_repo=pro_repo,
         custom_repo=custom_repo,
         custom_projects=str(args.custom_projects or ""),
+        compose_scope=str(args.compose_scope or "all"),
+        merge_from=merge_from,
     )
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)

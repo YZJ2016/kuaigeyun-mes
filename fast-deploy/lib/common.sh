@@ -5462,8 +5462,8 @@ recompose_extension_apps_if_enabled() {
         log_warn "扩展仓同步失败，主仓更新继续。请用菜单 [4] 单独安装/更新专业包或定制包。"
         return 0
     fi
-    run_workspace_compose || {
-        log_warn "扩展应用组装失败，主仓更新继续。请检查私仓路径与 PyYAML，或菜单 [4] 重试。"
+    run_workspace_compose all || {
+        log_warn "扩展应用组装失败，主仓更新继续。请检查 CUSTOM_PROJECTS、私仓路径与 PyYAML，或菜单 [4] 重试。"
         return 0
     }
 }
@@ -5715,13 +5715,71 @@ sync_sibling_git_repo() {
     log_ok "${name} @ $(_git_cmd -C "$git_path" rev-parse --short HEAD 2>/dev/null || echo '?') [${branch}]"
 }
 
+_workspace_python_bin() {
+    if [ -x "$PROJECT_ROOT/riveredge-backend/.venv/bin/python" ]; then
+        echo "$PROJECT_ROOT/riveredge-backend/.venv/bin/python"
+    elif [ -x "$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe" ]; then
+        echo "$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe"
+    elif command -v python3 >/dev/null 2>&1; then
+        echo "python3"
+    elif command -v python >/dev/null 2>&1; then
+        echo "python"
+    else
+        return 1
+    fi
+}
+
+_read_custom_projects_from_workspace_yaml() {
+    local yaml="$1" py gen csv
+    [ -f "$yaml" ] || return 0
+    py="$(_workspace_python_bin)" || return 1
+    gen="$PROJECT_ROOT/fast-deploy/tools/workspace/generate_workspace.py"
+    [ -f "$gen" ] || return 1
+    csv="$("$py" "$gen" --print-custom-projects "$yaml" 2>/dev/null || true)"
+    printf '%s' "$csv"
+}
+
+_resolve_custom_projects_for_compose() {
+    # 回填 deploy.env 缺失的 CUSTOM_PROJECTS（从既有 workspace.yaml）
+    local scope="${1:-all}" yaml projects from_yaml custom_en
+    custom_en="$(read_deploy_env_value CUSTOM_ENABLED || echo 0)"
+    projects="$(read_deploy_env_value CUSTOM_PROJECTS || true)"
+    [ -n "$projects" ] && { printf '%s' "$projects"; return 0; }
+    [ "$custom_en" != "1" ] && { printf '%s' ""; return 0; }
+
+    yaml="$PROJECT_ROOT/fast-deploy/tools/workspace/workspace.yaml"
+    from_yaml="$(_read_custom_projects_from_workspace_yaml "$yaml")"
+    if [ -n "$from_yaml" ]; then
+        set_deploy_env_value CUSTOM_PROJECTS "$from_yaml"
+        printf '%s' "$from_yaml"
+        return 0
+    fi
+
+    if [ "$scope" = "pro" ]; then
+        printf '%s' ""
+        return 0
+    fi
+    return 1
+}
+
 write_workspace_yaml_from_deploy_env() {
+    local compose_scope="${1:-all}"
     load_deploy_env
-    local mode pro_path custom_path yaml pro_en custom_en custom_projects py gen
+    local mode pro_path custom_path yaml pro_en custom_en custom_projects py gen merge_from
     mode="$(read_deploy_env_value WORKSPACE_COMPOSE_MODE || echo copy)"
     pro_en="$(read_deploy_env_value PRO_ENABLED || echo 0)"
     custom_en="$(read_deploy_env_value CUSTOM_ENABLED || echo 0)"
-    custom_projects="$(read_deploy_env_value CUSTOM_PROJECTS || true)"
+    local projects_before
+    projects_before="$(read_deploy_env_value CUSTOM_PROJECTS || true)"
+    custom_projects="$(_resolve_custom_projects_for_compose "$compose_scope")" || {
+        log_error "CUSTOM_ENABLED=1 时必须设置 CUSTOM_PROJECTS（逗号分隔，见定制仓 projects/registry.yaml）"
+        log_error "示例: CUSTOM_PROJECTS=funide-oa  或  CUSTOM_PROJECTS=haoligo"
+        log_error "也可在菜单 [4]→配置 定制仓 时填写项目 id"
+        return 1
+    }
+    if [ -z "$projects_before" ] && [ -n "$custom_projects" ] && [ "$custom_en" = "1" ]; then
+        log_info "已从 workspace.yaml 回填 CUSTOM_PROJECTS=${custom_projects} 到 deploy.env"
+    fi
     pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
     [ -n "$pro_path" ] || pro_path="$(_pro_default_repo_path)"
     custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
@@ -5731,51 +5789,38 @@ write_workspace_yaml_from_deploy_env() {
         log_error "PRO_ENABLED / CUSTOM_ENABLED 均为未启用，无法生成 workspace.yaml"
         return 1
     fi
-    if [ "$custom_en" = "1" ] && [ -z "$custom_projects" ]; then
-        log_error "CUSTOM_ENABLED=1 时必须设置 CUSTOM_PROJECTS（逗号分隔，见定制仓 projects/registry.yaml）"
-        log_error "示例: CUSTOM_PROJECTS=funide-oa  或  CUSTOM_PROJECTS=haoligo"
-        return 1
-    fi
 
-    py="python3"
-    if [ -x "$PROJECT_ROOT/riveredge-backend/.venv/bin/python" ]; then
-        py="$PROJECT_ROOT/riveredge-backend/.venv/bin/python"
-    elif [ -x "$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe" ]; then
-        py="$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe"
-    elif command -v python3 >/dev/null 2>&1; then
-        py="python3"
-    elif command -v python >/dev/null 2>&1; then
-        py="python"
-    fi
+    py="$(_workspace_python_bin)" || {
+        log_error "未找到 Python，无法生成 workspace.yaml"
+        return 1
+    }
     gen="$PROJECT_ROOT/fast-deploy/tools/workspace/generate_workspace.py"
     yaml="$PROJECT_ROOT/fast-deploy/tools/workspace/workspace.yaml"
+    merge_from=""
+    [ -f "$yaml" ] && merge_from="$yaml"
     [ -f "$gen" ] || { log_error "缺少 ${gen}"; return 1; }
-    PRO_ENABLED="$pro_en" CUSTOM_ENABLED="$custom_en" \
+    PRO_ENABLED="$pro_en" CUSTOM_ENABLED="$custom_en" COMPOSE_SCOPE="$compose_scope" \
         WORKSPACE_COMPOSE_MODE="$mode" \
         PRO_REPO_PATH="$pro_path" CUSTOM_REPO_PATH="$custom_path" \
         CUSTOM_PROJECTS="$custom_projects" \
+        WORKSPACE_MERGE_FROM="$merge_from" \
         "$py" "$gen" --output "$yaml" --mode "$mode" \
         --pro-enabled "$pro_en" --custom-enabled "$custom_en" \
         --pro-repo "$pro_path" --custom-repo "$custom_path" \
-        --custom-projects "$custom_projects" || return 1
-    log_ok "已写入 ${yaml}（定制项目: ${custom_projects:-—}）"
+        --custom-projects "$custom_projects" \
+        --compose-scope "$compose_scope" \
+        ${merge_from:+--merge-from "$merge_from"} || return 1
+    log_ok "已写入 ${yaml}（定制项目: ${custom_projects:-沿用既有}）"
 }
 
 run_workspace_compose() {
+    local compose_scope="${1:-all}"
     local py="$PROJECT_ROOT/fast-deploy/tools/workspace/compose.py" python_bin=""
     [ -f "$py" ] || { log_error "缺少 ${py}"; return 1; }
-    if [ -x "$PROJECT_ROOT/riveredge-backend/.venv/bin/python" ]; then
-        python_bin="$PROJECT_ROOT/riveredge-backend/.venv/bin/python"
-    elif [ -x "$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe" ]; then
-        python_bin="$PROJECT_ROOT/riveredge-backend/.venv/Scripts/python.exe"
-    elif command -v python3 >/dev/null 2>&1; then
-        python_bin="python3"
-    elif command -v python >/dev/null 2>&1; then
-        python_bin="python"
-    else
+    python_bin="$(_workspace_python_bin)" || {
         log_error "未找到 Python，无法执行 compose"
         return 1
-    fi
+    }
     if ! "$python_bin" -c "import yaml" 2>/dev/null; then
         log_info "安装 PyYAML..."
         "$python_bin" -m pip install -q pyyaml || {
@@ -5783,7 +5828,7 @@ run_workspace_compose() {
             return 1
         }
     fi
-    write_workspace_yaml_from_deploy_env || return 1
+    write_workspace_yaml_from_deploy_env "$compose_scope" || return 1
     log_info "执行 workspace compose..."
     (cd "$PROJECT_ROOT" && "$python_bin" "$py") || return 1
 }
@@ -5891,8 +5936,8 @@ cmd_install_extension_apps() {
         set_deploy_env_value CUSTOM_ENABLED "1"
     fi
 
-    # compose 时保留「先前已启用、本次未改」的另一侧
-    run_workspace_compose || return 1
+    # compose 时保留「先前已启用、本次未改」的另一侧（scope=pro 时不因缺 CUSTOM_PROJECTS 阻断）
+    run_workspace_compose "$scope" || return 1
     log_ok "扩展应用已组装（scope=${scope}）。请重启后端/前端。"
 }
 

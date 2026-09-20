@@ -1006,7 +1006,9 @@ wizard_configure_custom_repo() {
     wizard_say "定制项目（CUSTOM_PROJECTS，逗号分隔；见定制仓 projects/registry.yaml）"
     read -rp "$(echo -e "${WIZARD_DIM}项目 id [${cur_projects:-未设置}]${WIZARD_RESET} › ")" input || true
     [ -n "${input:-}" ] && cur_projects="$input"
-    if [ -n "$cur_projects" ]; then
+    if [ -z "$cur_projects" ]; then
+        wizard_say_warn "未设置 CUSTOM_PROJECTS；启用定制包后安装/更新会失败（可选: haoligo / funide-oa）"
+    else
         set_deploy_env_value CUSTOM_PROJECTS "$cur_projects"
     fi
 
