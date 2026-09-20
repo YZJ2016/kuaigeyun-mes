@@ -764,7 +764,7 @@ export default function App() {
   const { i18n } = useTranslation();
   const touchScreen = useTouchScreen();
 
-  // 移除 index.html 静态首屏占位（旧 #app-loading / data-app-first-paint），避免与内层 Spin 叠显或长期不卸
+  // 首屏占位已在 main.tsx signalAppBootStarted 同步卸掉；此处仅兜底
   useEffect(() => {
     document.getElementById('app-loading')?.remove();
     document.querySelector('[data-app-first-paint]')?.remove();

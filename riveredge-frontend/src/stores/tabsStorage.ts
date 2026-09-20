@@ -5,11 +5,12 @@
  * 按租户+用户隔离；读取时兼容旧版仅按租户命名的 key。
  */
 
-import { getTenantId, getUserInfo } from '../utils/auth';
+import { getTenantId } from '../utils/auth';
+import { getSessionCurrentUser } from '../utils/sessionCurrentUser';
 
 function getStorageScopeSuffix(): string {
   const tenantId = getTenantId();
-  const user = getUserInfo();
+  const user = getSessionCurrentUser();
   const userId = user?.id ?? user?.user_id ?? user?.uuid;
   if (tenantId != null && userId != null) {
     return `_t${tenantId}_u${userId}`;

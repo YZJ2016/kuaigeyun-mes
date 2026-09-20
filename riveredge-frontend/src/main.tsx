@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { signalAppBootStarted } from './utils/bootSignal'
 import App from './app'
 import './global.less'
 import './styles/theme-plain.less'
@@ -17,6 +18,9 @@ import './initSpinIndicator'
 import './config/dayjs'
 
 installStaleChunkReloadHandlers()
+
+// 同步卸首屏占位并标记 boot 已开始（须在 mountApp 内 await 之前，避免 15s 看门狗误 reload/白罩）
+signalAppBootStarted()
 
 // ⚠️ 抑制 Three.js / R3F 已知的不兼容警告 (THREE.Clock 弃用)
 if (typeof console !== 'undefined') {

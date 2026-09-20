@@ -686,10 +686,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return loadPersistedTabs(menuConfig, t, tenantHomePath, cloudState?.tabs);
   }, [menuConfig, t, tenantHomePath]);
 
-  /** 是否已从异步恢复中加载过标签（避免重复覆盖用户操作） */
+  /** 是否已完成持久化恢复（避免重复覆盖用户操作） */
   const didRestoreFromSyncRef = useRef(false);
   /** 正在从存储恢复，避免保存 effect 在同周期用错误数据覆盖 */
   const isRestoringRef = useRef(false);
+  const tabsForCloudSaveRef = useRef(tabs);
+  const activeKeyForCloudSaveRef = useRef(activeKey);
+  tabsForCloudSaveRef.current = tabs;
+  activeKeyForCloudSaveRef.current = activeKey;
 
   const prevTenantIdStrRef = useRef<string | null>(tenantIdStrForTabs);
 
@@ -745,8 +749,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     // 未开启持久化时不从 localStorage 恢复，避免开关关闭仍带回历史标签
     if (!tabsPersistence) {
       setTabs([]);
-      didRestoreFromSyncRef.current = true;
       seedTabsAfterTenantSwitch();
+      // 偏好尚未从服务端就绪时勿标记「已恢复」，否则 tabs_persistence 变为 true 后无法再读库/本机镜像
+      if (preferencesInitialized) {
+        didRestoreFromSyncRef.current = true;
+      }
       return;
     }
 
@@ -770,7 +777,15 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       seedTabsAfterTenantSwitch();
     }
     didRestoreFromSyncRef.current = true;
-  }, [tenantIdStrForTabs, menuConfig, t, tenantHomePath, tabsPersistence, seedTabsAfterTenantSwitch]);
+  }, [
+    tenantIdStrForTabs,
+    menuConfig,
+    t,
+    tenantHomePath,
+    tabsPersistence,
+    preferencesInitialized,
+    seedTabsAfterTenantSwitch,
+  ]);
 
   /** 会话内实时缓存标签，跨 APP / 组件 remount 不丢 */
   useLayoutEffect(() => {
@@ -785,25 +800,27 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    */
   useEffect(() => {
     if (!tabsPersistence || didRestoreFromSyncRef.current) return;
-    const tenantId = getTenantId();
-    if (tenantId != null && getSessionTabs(tenantId)?.length) {
-      didRestoreFromSyncRef.current = true;
-      return;
-    }
     const restored = loadTabsFromStorage();
     if (restored && restored.length > 0) {
       didRestoreFromSyncRef.current = true;
       isRestoringRef.current = true;
       setTabs((prev) => mergeTabLists(prev, restored));
-      const savedActive = getSavedActiveKey();
+      const cloudActive = readUniTabsStateFromPreferences(
+        useUserPreferenceStore.getState().preferences,
+      )?.activeKey;
+      const savedActive = cloudActive || getSavedActiveKey();
       if (savedActive && restored.some((tab) => tab.key === savedActive)) {
         setActiveKey(savedActive);
       }
       queueMicrotask(() => {
         isRestoringRef.current = false;
       });
+      return;
     }
-  }, [tabsPersistence, loadTabsFromStorage]);
+    if (preferencesInitialized) {
+      didRestoreFromSyncRef.current = true;
+    }
+  }, [tabsPersistence, preferencesInitialized, loadTabsFromStorage]);
 
   const cloudTabsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const legacyTabsMigratedRef = useRef(false);
@@ -812,12 +829,6 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   /** 云端偏好就绪后恢复标签（跨设备真源；每租户会话仅一次） */
   useEffect(() => {
     if (!tabsPersistence || !preferencesInitialized || didRestoreFromSyncRef.current) return;
-
-    const tenantId = getTenantId();
-    if (tenantId != null && getSessionTabs(tenantId)?.length) {
-      didRestoreFromSyncRef.current = true;
-      return;
-    }
 
     const cloudState = readUniTabsStateFromPreferences(
       useUserPreferenceStore.getState().preferences,
@@ -893,6 +904,28 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       }
     };
   }, [tabs, activeKey, tabsPersistence, updatePreferences]);
+
+  /** 关页/刷新前立即落库，避免 600ms 防抖未触发就丢失标签 */
+  useEffect(() => {
+    if (!tabsPersistence) return;
+    const flushCloudTabs = () => {
+      if (isRestoringRef.current) return;
+      const snapshotTabs = tabsForCloudSaveRef.current;
+      if (!snapshotTabs.length) return;
+      const patch = buildUniTabsPreferencePatch(
+        snapshotTabs,
+        activeKeyForCloudSaveRef.current,
+      );
+      const serialized = JSON.stringify(patch[UNI_TABS_STATE_PREF_KEY]);
+      if (serialized === lastCloudTabsPatchRef.current) return;
+      lastCloudTabsPatchRef.current = serialized;
+      void updatePreferences(patch).catch(() => {
+        lastCloudTabsPatchRef.current = '';
+      });
+    };
+    window.addEventListener('pagehide', flushCloudTabs);
+    return () => window.removeEventListener('pagehide', flushCloudTabs);
+  }, [tabsPersistence, updatePreferences]);
 
   /**
    * 监听路由变化，自动添加标签

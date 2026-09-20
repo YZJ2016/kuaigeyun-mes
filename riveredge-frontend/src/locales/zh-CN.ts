@@ -30706,6 +30706,14 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.boot-watchdog-no-flicker-r01.title':
+    '修复首屏 15 秒看门狗引发整页闪烁',
+  'pages.dashboard.updateLog.entries.boot-watchdog-no-flicker-r01.description':
+    'main 入口同步卸首屏占位并标记 boot 已开始；看门狗在主程序执行后不再整页 reload 或盖全屏白罩，等待态由 App 内 Spin 承担。',
+  'pages.dashboard.updateLog.entries.uni-tabs-persistence-restore-r01.title':
+    '修复标签栏持久化恢复失效',
+  'pages.dashboard.updateLog.entries.uni-tabs-persistence-restore-r01.description':
+    '修正偏好未就绪时过早跳过恢复、路由同步误挡读库的问题；刷新或换设备后开启持久化即可恢复上次标签与钉住状态。',
   'pages.dashboard.updateLog.entries.uni-tabs-cloud-preference-r01.title':
     '标签栏持久化改为云端同步',
   'pages.dashboard.updateLog.entries.uni-tabs-cloud-preference-r01.description':
