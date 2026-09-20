@@ -5778,23 +5778,28 @@ prompt_custom_projects_selection() {
     {
         echo ""
         log_info "请选择本机要组装的定制项目（写入 deploy.env CUSTOM_PROJECTS）"
+        printf '  A) 全装（组装 %s）\n' "$(IFS=,; echo "${ids[*]}")"
         i=0
         while [ "$i" -lt "$n" ]; do
             printf '  %d) %s — %s\n' "$((i + 1))" "${ids[$i]}" "${labels[$i]}"
             i=$((i + 1))
         done
-        printf '  %d) 全部（开发机，组装 %s）\n' "$((n + 1))" "$(IFS=,; echo "${ids[*]}")"
     } >&2
-    read -rp "请选择 [1-${n}/$((n + 1))]（默认 1）: " choice || true
+    read -rp "请选择 [A/1-${n}]（默认 1）: " choice || true
     choice="${choice:-1}"
-    if [ "$choice" = "$((n + 1))" ]; then
-        picked="$(IFS=,; echo "${ids[*]}")"
-    elif [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$n" ]; then
-        picked="${ids[$((choice - 1))]}"
-    else
-        log_error "无效选择: ${choice}"
-        return 1
-    fi
+    case "${choice^^}" in
+        A)
+            picked="$(IFS=,; echo "${ids[*]}")"
+            ;;
+        *)
+            if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$n" ]; then
+                picked="${ids[$((choice - 1))]}"
+            else
+                log_error "无效选择: ${choice}（可选 A 全装，或 1-${n} 选装单项）"
+                return 1
+            fi
+            ;;
+    esac
     set_deploy_env_value CUSTOM_PROJECTS "$picked"
     { log_ok "已选择 CUSTOM_PROJECTS=${picked}"; } >&2
     REPLY="$picked"
