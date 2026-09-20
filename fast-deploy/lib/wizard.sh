@@ -1003,16 +1003,24 @@ wizard_configure_custom_repo() {
     local cur_projects
     cur_projects="$(read_deploy_env_value CUSTOM_PROJECTS || true)"
     echo ""
-    wizard_say "定制项目（CUSTOM_PROJECTS，逗号分隔；见定制仓 projects/registry.yaml）"
-    read -rp "$(echo -e "${WIZARD_DIM}项目 id [${cur_projects:-未设置}]${WIZARD_RESET} › ")" input || true
-    [ -n "${input:-}" ] && cur_projects="$input"
+    if [ -n "$cur_projects" ]; then
+        wizard_say "当前 CUSTOM_PROJECTS=${cur_projects}"
+        wizard_say "重新选择定制项目？"
+        wizard_panel_prefix
+        read -rp "$(echo -e "${WIZARD_DIM}[y/N]${WIZARD_RESET} › ")" input || true
+        case "${input:-n}" in
+            y|Y|yes|YES) cur_projects="" ;;
+        esac
+    fi
     if [ -z "$cur_projects" ]; then
-        wizard_say_warn "未设置 CUSTOM_PROJECTS；启用定制包后安装/更新会失败（可选: haoligo / funide-oa）"
-    else
-        set_deploy_env_value CUSTOM_PROJECTS "$cur_projects"
+        if prompt_custom_projects_selection "$cur_path"; then
+            cur_projects="$REPLY"
+        else
+            wizard_say_warn "未选择定制项目；启用定制包后安装/更新会失败"
+        fi
     fi
 
-    wizard_say_ok "定制仓配置已保存（安装时再标记 CUSTOM_ENABLED=1；须已设置 CUSTOM_PROJECTS）"
+    wizard_say_ok "定制仓配置已保存（安装时再标记 CUSTOM_ENABLED=1；CUSTOM_PROJECTS=${cur_projects:-未设置}）"
 }
 
 wizard_configure_client_repo() {

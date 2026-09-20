@@ -44,6 +44,18 @@ def _find_custom_plugin(doc: dict) -> dict | None:
     return None
 
 
+def list_custom_project_rows(custom_repo: Path) -> list[tuple[str, str]]:
+    registry = _load_registry(custom_repo)
+    rows: list[tuple[str, str]] = []
+    for project_id in registry.keys():
+        entry = registry[project_id]
+        if not isinstance(entry, dict):
+            continue
+        desc = str(entry.get("description") or project_id).strip()
+        rows.append((project_id, desc))
+    return rows
+
+
 def custom_projects_csv_from_yaml(path: Path) -> str:
     """从已有 workspace.yaml 的 app_bindings 提取 project id 列表。"""
     if not path.is_file():
@@ -179,11 +191,22 @@ def main() -> None:
         metavar="WORKSPACE_YAML",
         help="从已有 workspace.yaml 打印 CUSTOM_PROJECTS 并退出",
     )
+    parser.add_argument(
+        "--list-custom-projects",
+        metavar="CUSTOM_REPO",
+        help="列出 registry 中可选定制项目（id<TAB>description，每行一个）",
+    )
     args = parser.parse_args()
 
     if args.print_custom_projects:
         csv = custom_projects_csv_from_yaml(Path(args.print_custom_projects))
         print(csv, end="")
+        return
+
+    if args.list_custom_projects:
+        repo = Path(args.list_custom_projects)
+        for project_id, desc in list_custom_project_rows(repo):
+            print(f"{project_id}\t{desc}")
         return
 
     if not args.output:

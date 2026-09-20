@@ -5739,9 +5739,69 @@ _read_custom_projects_from_workspace_yaml() {
     printf '%s' "$csv"
 }
 
+prompt_custom_projects_selection() {
+    # 交互选择 registry 中的定制项目 → 写入 deploy.env；结果写入 REPLY
+    local custom_path="${1:-}" py gen pid desc choice picked n i
+    REPLY=""
+    custom_path="${custom_path:-$(read_deploy_env_value CUSTOM_REPO_PATH || true)}"
+    [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
+    py="$(_workspace_python_bin)" || return 1
+    gen="$PROJECT_ROOT/fast-deploy/tools/workspace/generate_workspace.py"
+    [ -f "$gen" ] || { log_error "缺少 ${gen}"; return 1; }
+    if [ ! -f "$custom_path/projects/registry.yaml" ]; then
+        log_error "定制仓未就绪或缺少 projects/registry.yaml: ${custom_path}"
+        log_error "请先完成定制仓 sync，或菜单 [4]→配置 指定 CUSTOM_REPO_PATH"
+        return 1
+    fi
+
+    local -a ids=() labels=()
+    while IFS=$'\t' read -r pid desc; do
+        [ -n "$pid" ] || continue
+        ids+=("$pid")
+        labels+=("$desc")
+    done < <("$py" "$gen" --list-custom-projects "$custom_path")
+
+    n="${#ids[@]}"
+    if [ "$n" -eq 0 ]; then
+        log_error "registry 中无可选定制项目: ${custom_path}/projects/registry.yaml"
+        return 1
+    fi
+
+    if [ "$n" -eq 1 ]; then
+        picked="${ids[0]}"
+        set_deploy_env_value CUSTOM_PROJECTS "$picked"
+        log_ok "仅有一个定制项目，已选择 CUSTOM_PROJECTS=${picked}（${labels[0]}）"
+        REPLY="$picked"
+        return 0
+    fi
+
+    echo ""
+    log_info "请选择本机要组装的定制项目（写入 deploy.env CUSTOM_PROJECTS）"
+    i=0
+    while [ "$i" -lt "$n" ]; do
+        printf '  %d) %s — %s\n' "$((i + 1))" "${ids[$i]}" "${labels[$i]}"
+        i=$((i + 1))
+    done
+    printf '  %d) 全部（开发机，组装 %s）\n' "$((n + 1))" "$(IFS=,; echo "${ids[*]}")"
+    read -rp "请选择 [1-${n}/$((n + 1))]（默认 1）: " choice || true
+    choice="${choice:-1}"
+    if [ "$choice" = "$((n + 1))" ]; then
+        picked="$(IFS=,; echo "${ids[*]}")"
+    elif [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$n" ]; then
+        picked="${ids[$((choice - 1))]}"
+    else
+        log_error "无效选择: ${choice}"
+        return 1
+    fi
+    set_deploy_env_value CUSTOM_PROJECTS "$picked"
+    log_ok "已选择 CUSTOM_PROJECTS=${picked}"
+    REPLY="$picked"
+    return 0
+}
+
 _resolve_custom_projects_for_compose() {
-    # 回填 deploy.env 缺失的 CUSTOM_PROJECTS（从既有 workspace.yaml）
-    local scope="${1:-all}" yaml projects from_yaml custom_en
+    # 回填 deploy.env 缺失的 CUSTOM_PROJECTS（workspace.yaml → 交互选 registry）
+    local scope="${1:-all}" yaml projects from_yaml custom_en custom_path
     custom_en="$(read_deploy_env_value CUSTOM_ENABLED || echo 0)"
     projects="$(read_deploy_env_value CUSTOM_PROJECTS || true)"
     [ -n "$projects" ] && { printf '%s' "$projects"; return 0; }
@@ -5759,6 +5819,16 @@ _resolve_custom_projects_for_compose() {
         printf '%s' ""
         return 0
     fi
+
+    custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+    [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
+    if [ -t 0 ]; then
+        if prompt_custom_projects_selection "$custom_path"; then
+            printf '%s' "$REPLY"
+            return 0
+        fi
+        return 1
+    fi
     return 1
 }
 
@@ -5772,9 +5842,9 @@ write_workspace_yaml_from_deploy_env() {
     local projects_before
     projects_before="$(read_deploy_env_value CUSTOM_PROJECTS || true)"
     custom_projects="$(_resolve_custom_projects_for_compose "$compose_scope")" || {
-        log_error "CUSTOM_ENABLED=1 时必须设置 CUSTOM_PROJECTS（逗号分隔，见定制仓 projects/registry.yaml）"
-        log_error "示例: CUSTOM_PROJECTS=funide-oa  或  CUSTOM_PROJECTS=haoligo"
-        log_error "也可在菜单 [4]→配置 定制仓 时填写项目 id"
+        log_error "CUSTOM_ENABLED=1 但未设置 CUSTOM_PROJECTS，且无法交互选择"
+        log_error "请在交互终端运行菜单 [4]→定制包，或于 deploy.env 写入 CUSTOM_PROJECTS"
+        log_error "可选值见定制仓 projects/registry.yaml（如 haoligo / funide-oa）"
         return 1
     }
     if [ -z "$projects_before" ] && [ -n "$custom_projects" ] && [ "$custom_en" = "1" ]; then
