@@ -1,0 +1,37 @@
+import{C as K,r as n,j as t,D as M,a7 as O,N as w,Z as H,av as R,O as _,aX as v,ak as V,aj as q,aB as G,cc as W}from"./vendor-Bnfb8ITt.js";import{T as X}from"./PremiumTerminalTemplate-DPLkYBv0.js";import{fq as Y}from"./main-CWIdjct8.js";import{U as L}from"./clientRelease-CPg1nsev.js";import"./design-B_8Sx7jg.js";import"./touch-CzJ4Jti_.js";import"./index.es-lBJYtGfn.js";import"./sessionCurrentUser-DAx8WAEJ.js";import"./globalStore-Dg4n8gN8.js";import"./restoredUser-5M4Txo4E.js";import"./tokenRefresh-CccgYnzw.js";import"./building-2-p3gxxht-.js";import"./index-BXfKITmB.js";import"./vendor-libredwg-BXR9218A.js";import"./vendor-three-BPXNOO5B.js";import"./clearSessionQueries-Db_KN_8V.js";const{Search:Z}=_,fe=()=>{const{message:l}=K.useApp(),j=Y(),[I,k]=n.useState(!1),[i,u]=n.useState(""),[f,x]=n.useState(""),[b,E]=n.useState(""),[o,C]=n.useState([]),[c,m]=n.useState(-1),y=n.useRef(null),S=n.useRef(null);n.useEffect(()=>{const e=new URLSearchParams(window.location.search),r=e.get("code"),s=e.get("programCode"),d=e.get("programUrl"),h=e.get("name")||e.get("programName");r?(u(r),x(h||"加工程序")):s?(u(s),x(h||"加工程序")):d?U(d):l.warning("请提供程序代码或程序URL")},[]);const U=async e=>{k(!0);try{const r=await fetch(e);if(!r.ok)throw new Error("加载程序失败");const s=await r.text();u(s),x("加工程序")}catch(r){l.error(r.message||"加载程序失败")}finally{k(!1)}},T=n.useCallback(e=>{if(!e||!i){C([]),m(-1);return}const r=i.split(`
+`),s=[],d=e.toLowerCase();r.forEach((h,p)=>{h.toLowerCase().includes(d)&&s.push(p)}),C(s),m(s.length>0?0:-1),s.length>0?(g(s[0]),l.success(`找到 ${s.length} 个匹配项`)):l.warning("未找到匹配项")},[i,l]),g=n.useCallback(e=>{if(y.current){const r=y.current.querySelector(`[data-line="${e}"]`);r&&(r.scrollIntoView({behavior:"smooth",block:"center"}),r.classList.add("highlighted-line"),setTimeout(()=>{r.classList.remove("highlighted-line")},2e3))}},[]),B=n.useCallback(()=>{if(o.length===0)return;const e=(c+1)%o.length;m(e),g(o[e])},[o,c,g]),z=n.useCallback(()=>{if(o.length===0)return;const e=(c-1+o.length)%o.length;m(e),g(o[e])},[o,c,g]),F=n.useCallback((e,r="")=>{if(!e)return"";const s=e.split(`
+`),d=r.toLowerCase();return s.map((h,p)=>{let a=h;if(r&&d){const A=new RegExp(`(${r.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")})`,"gi");a=a.replace(A,"<mark>$1</mark>")}a=a.replace(/\b(G\d{1,2})\b/gi,'<span class="g-code">$1</span>'),a=a.replace(/\b(M\d{1,2})\b/gi,'<span class="m-code">$1</span>'),a=a.replace(/\b([XYZUVW])(-?\d+\.?\d*)\b/gi,'<span class="coordinate">$1$2</span>'),a=a.replace(/(;.*$|\(.*?\))/g,'<span class="comment">$1</span>'),a=a.replace(/\b(\d+\.?\d*)\b/g,'<span class="number">$1</span>');const N=r&&h.toLowerCase().includes(d),$=o.length>0&&c>=0&&o[c]===p;return t.jsxs("div",{"data-line":p,style:{display:"flex",minHeight:"40px",lineHeight:"40px",fontSize:"24px",fontFamily:L,backgroundColor:$?"#fff3cd":N?"#f0f0f0":"transparent",padding:"4px 8px",borderLeft:$?"4px solid #ffc107":"4px solid transparent"},children:[t.jsx("span",{style:{display:"inline-block",minWidth:"60px",textAlign:"right",color:"#999",marginRight:"16px",userSelect:"none"},children:p+1}),t.jsx("span",{style:{flex:1,whiteSpace:"pre-wrap",wordBreak:"break-all"},dangerouslySetInnerHTML:{__html:a||" "}})]},p)})},[b,o,c]),P=n.useCallback(()=>{if(!i){l.warning("没有程序可下载");return}try{const e=new Blob([i],{type:"text/plain"}),r=URL.createObjectURL(e),s=document.createElement("a");s.href=r,s.download=`${f||"program"}-${Date.now()}.txt`,document.body.appendChild(s),s.click(),document.body.removeChild(s),URL.revokeObjectURL(r),l.success("程序下载成功")}catch(e){l.error(`下载程序失败: ${e.message||"未知错误"}`)}},[i,f,l]),D=n.useCallback(async()=>{try{await j.enterFullscreen(),l.success("已进入全屏模式")}catch(e){l.error(`进入全屏失败: ${e.message||"未知错误"}`)}},[j,l]);return t.jsxs(X,{title:f||"加工程序查看",fullscreen:!0,footerButtons:[{title:"上一个",type:"default",icon:t.jsx(V,{}),onClick:z,disabled:o.length===0||c<0,block:!1},{title:`搜索 (${o.length>0?`${c+1}/${o.length}`:"0"})`,type:"default",icon:t.jsx(v,{}),onClick:()=>S.current?.focus(),block:!1},{title:"下一个",type:"default",icon:t.jsx(q,{}),onClick:B,disabled:o.length===0||c<0,block:!1},{title:"下载",type:"default",icon:t.jsx(G,{}),onClick:P,block:!1},{title:"全屏",type:"primary",icon:t.jsx(W,{}),onClick:D,block:!1}],children:[t.jsx(M,{spinning:I,children:i?t.jsxs("div",{style:{width:"100%",height:"100%",display:"flex",flexDirection:"column"},children:[t.jsx(w,{size:"small",style:{marginBottom:24,backgroundColor:"#f5f5f5"},children:t.jsxs(H,{orientation:"vertical",size:"small",style:{width:"100%"},children:[t.jsxs("div",{children:[t.jsx("strong",{children:"程序名称："}),t.jsx("span",{children:f||"加工程序"})]}),t.jsxs("div",{children:[t.jsx("strong",{children:"总行数："}),t.jsx(R,{color:"blue",children:i.split(`
+`).length})]}),o.length>0&&t.jsxs("div",{children:[t.jsx("strong",{children:"搜索结果："}),t.jsxs(R,{color:"green",children:[o.length," 个匹配项"]})]})]})}),t.jsx(w,{size:"small",style:{marginBottom:24},children:t.jsx(Z,{ref:S,placeholder:"搜索程序内容（支持G代码、M代码、坐标等）",size:"large",value:b,onChange:e=>E(e.target.value),onSearch:T,enterButton:t.jsx(v,{}),style:{fontSize:24},allowClear:!0})}),t.jsx(w,{title:"程序代码",style:{flex:1,display:"flex",flexDirection:"column",marginBottom:24},styles:{body:{flex:1,overflow:"auto",padding:0}},children:t.jsx("div",{ref:y,style:{width:"100%",height:"100%",overflow:"auto",backgroundColor:"#fafafa",fontFamily:L,fontSize:"24px",lineHeight:"40px"},children:F(i,b)})})]}):t.jsx(O,{description:"未找到程序数据"})}),t.jsx("style",{children:`
+        .g-code {
+          color: #1890ff;
+          font-weight: 600;
+        }
+        .m-code {
+          color: #52c41a;
+          font-weight: 600;
+        }
+        .coordinate {
+          color: #fa8c16;
+          font-weight: 500;
+        }
+        .comment {
+          color: #8c8c8c;
+          font-style: italic;
+        }
+        .number {
+          color: #722ed1;
+        }
+        mark {
+          background-color: #fff3cd;
+          color: #856404;
+          padding: 2px 4px;
+          border-radius: 2px;
+        }
+        .highlighted-line {
+          animation: highlight 0.5s ease;
+        }
+        @keyframes highlight {
+          0% { background-color: #fff3cd; }
+          100% { background-color: transparent; }
+        }
+      `})]})};export{fe as default};
