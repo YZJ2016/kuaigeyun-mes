@@ -1,30 +1,22 @@
-import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from 'react';
+import { Navigate } from 'react-router-dom';
 import PageSkeleton from '../page-skeleton';
 import { TENANT_HOME_FALLBACK } from '../../stores/configStore';
 import { useTenantEffectiveHomePath } from '../../hooks/useTenantEffectiveHomePath';
 
 /**
- * 仅当有效首页确为兜底页时才展示 Default-home；
- * 已配置菜单/角色首页时自动跳转到真实首页，避免误报「未配置首页」。
+ * /system/default-home 路由门控：仅当有效首页确为兜底页时才渲染内容。
+ * 已配置角色/菜单首页时一次性 replace，不先展示「未配置首页」卡片。
  */
 export const DefaultHomeRouteGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const navigate = useNavigate();
   const { path, ready } = useTenantEffectiveHomePath();
-
-  useEffect(() => {
-    if (!ready) return;
-    if (path !== TENANT_HOME_FALLBACK) {
-      navigate(path, { replace: true });
-    }
-  }, [ready, path, navigate]);
 
   if (!ready) {
     return <PageSkeleton variant="content" />;
   }
 
   if (path !== TENANT_HOME_FALLBACK) {
-    return null;
+    return <Navigate to={path} replace />;
   }
 
   return <>{children}</>;

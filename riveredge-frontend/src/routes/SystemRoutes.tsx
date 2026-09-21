@@ -77,13 +77,15 @@ const withPermission = (
   return <RoutePermissionGuard permissionCodes={permissionCodes}>{element}</RoutePermissionGuard>;
 };
 
-/** 系统级仪表盘关闭时拦截工作台 / 运营看板路由 */
+/** 系统级仪表盘关闭时拦截工作台 / 运营看板路由（等 effective-home 后一次 Navigate，勿先渲染再 effect 跳） */
 const SystemDashboardRouteGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { initialized, enabled } = useRedirectIfSystemDashboardOff();
+  const { initialized, enabled, redirectPath, homeReady } = useRedirectIfSystemDashboardOff();
   if (!initialized) {
     return <PageSkeleton />;
   }
-  if (!enabled) return null;
+  if (!enabled) {
+    return homeReady ? <Navigate to={redirectPath} replace /> : <PageSkeleton />;
+  }
   return <>{children}</>;
 };
 

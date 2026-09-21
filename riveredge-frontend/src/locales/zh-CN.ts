@@ -30706,6 +30706,14 @@ export default {
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
     '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+  'pages.dashboard.updateLog.entries.post-login-effective-home-no-flash-r01.title':
+    '登录落地不再闪工作台或 Default-home',
+  'pages.dashboard.updateLog.entries.post-login-effective-home-no-flash-r01.description':
+    '登录与切租户先解析 effective-home 再一次跳转；Default-home 仅在没有角色/菜单首页且关闭工作台时展示，已配置自定义首页时不再先出现再关掉。',
+  'pages.dashboard.updateLog.entries.uni-tabs-active-route-source-r01.title':
+    '标签栏激活项改为跟当前路由',
+  'pages.dashboard.updateLog.entries.uni-tabs-active-route-source-r01.description':
+    '持久化仅恢复标签列表；登录落地首页时激活工作台，刷新仍跟 URL，不再恢复上次 activeKey 导致标签高亮与页面不一致。',
   'pages.dashboard.updateLog.entries.boot-watchdog-no-flicker-r01.title':
     '修复首屏 15 秒看门狗引发整页闪烁',
   'pages.dashboard.updateLog.entries.boot-watchdog-no-flicker-r01.description':

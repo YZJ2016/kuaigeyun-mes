@@ -10,10 +10,7 @@ import { useUserPreferenceStore } from '../stores/userPreferenceStore';
 import { clearAllSessionTabs } from '../stores/sessionTabsCache';
 import { clearTabsData } from '../stores/tabsStorage';
 import { applyAppShellFromLocalCache, abandonAppShellRefreshInFlight, refreshAppShellFromApi } from './appShellSessionInit';
-import {
-  getImmediatePostLoginHomePath,
-  refinePostLoginHomeInBackground,
-} from './tenantHomePath';
+import { resolvePostLoginHomePath } from './tenantHomePath';
 import { isRequestCancellation } from './requestCancellation';
 
 let tenantSwitchGeneration = 0;
@@ -54,9 +51,13 @@ export async function applyTenantSwitchSideEffects(
   useUserPreferenceStore.getState().rehydrateFromStorage();
   applyAppShellFromLocalCache();
 
-  const homePath = getImmediatePostLoginHomePath();
+  let homePath: string;
+  try {
+    homePath = await resolvePostLoginHomePath();
+  } catch {
+    homePath = '/';
+  }
   navigate(homePath, { replace: true });
-  refinePostLoginHomeInBackground(navigate, homePath);
 
   try {
     await refreshAppShellFromApi({ force: true });

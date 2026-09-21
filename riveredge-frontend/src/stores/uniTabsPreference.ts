@@ -6,13 +6,14 @@
  */
 
 import type { TabItem } from './tabsStorage';
-import { getSavedActiveKey, getSavedTabs } from './tabsStorage';
+import { getSavedTabs } from './tabsStorage';
 import { readCachedPreferencesForCurrentUser } from './userPreferenceStore';
 
 export const UNI_TABS_STATE_PREF_KEY = 'uni_tabs_state';
 
 export interface UniTabsPreferenceState {
   tabs: TabItem[];
+  /** 历史字段；激活标签以当前路由为真源，恢复时不读此字段 */
   activeKey?: string | null;
 }
 
@@ -41,9 +42,7 @@ export function parseUniTabsPreferenceState(raw: unknown): UniTabsPreferenceStat
     pinned: Boolean(tab.pinned),
   }));
   if (tabs.length === 0) return null;
-  const activeKey =
-    typeof state.activeKey === 'string' && state.activeKey.trim() ? state.activeKey : null;
-  return { tabs, activeKey };
+  return { tabs };
 }
 
 export function serializeTabsForPreference(tabs: TabItem[]): TabItem[] {
@@ -56,14 +55,13 @@ export function serializeTabsForPreference(tabs: TabItem[]): TabItem[] {
   }));
 }
 
+/** 仅持久化标签列表；激活项由当前路由决定（登录落地首页、刷新跟 URL） */
 export function buildUniTabsPreferencePatch(
   tabs: TabItem[],
-  activeKey: string | null | undefined,
 ): Record<string, UniTabsPreferenceState> {
   return {
     [UNI_TABS_STATE_PREF_KEY]: {
       tabs: serializeTabsForPreference(tabs),
-      activeKey: activeKey || null,
     },
   };
 }
@@ -84,5 +82,5 @@ export function readUniTabsStateFromPreferenceCache(): UniTabsPreferenceState | 
 export function buildLegacyLocalTabsMigrationPatch(): Record<string, UniTabsPreferenceState> | null {
   const legacyTabs = getSavedTabs();
   if (!legacyTabs.length) return null;
-  return buildUniTabsPreferencePatch(legacyTabs, getSavedActiveKey());
+  return buildUniTabsPreferencePatch(legacyTabs);
 }

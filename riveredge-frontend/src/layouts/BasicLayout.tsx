@@ -151,7 +151,8 @@ import { hasPermission, resolveUserForMenuPermission } from '../utils/permission
 import { AiAssistantHeaderButton } from './AiAssistantHeaderButton';
 import OnboardingGuide from '../components/onboarding-guide';
 import { HeaderQuickEntryPopover } from '../components/quick-entry';
-import { useConfigStore, resolveEffectiveHomePath, getDefaultTenantHomePath } from '../stores/configStore';
+import { useConfigStore, resolveEffectiveHomePath } from '../stores/configStore';
+import TenantHomeRedirect from '../components/tenant-home-redirect';
 import { getMenuBadgeCounts, type MenuBadgeEntry } from '../services/dashboard';
 import { MENU_BADGE_COUNTS_QUERY_KEY } from '../hooks/useInvalidateMenuBadgeCounts';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
@@ -488,9 +489,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (isInfraLoginPage && currentUser.is_infra_admin) {
       return <Navigate to="/infra/operation" replace />;
     }
-    // 普通用户登录后，如果访问的是登录页，立刻跳到本地默认首页
+    // 普通用户已登录访问 /login：等 effective-home 就绪后一次跳转（勿先落工作台/兜底页）
     if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-      return <Navigate to={getDefaultTenantHomePath()} replace />;
+      return <TenantHomeRedirect />;
     }
   }
 

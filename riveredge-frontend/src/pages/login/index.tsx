@@ -45,7 +45,7 @@ import {
 import { switchTenant } from '../../services/auth';
 import { setToken, setTenantId, setUserInfo, getTenantId, getToken } from '../../utils/auth';
 import { LANGUAGE_TOOLBAR_SHORT, SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../../utils/localeBootstrap';
-import { getImmediatePostLoginHomePath, refinePostLoginHomeInBackground } from '../../utils/tenantHomePath';
+import { resolvePostLoginNavigatePath } from '../../utils/tenantHomePath';
 import { buildTenantLoginPathForHistoryReplace, resolvePlatformAdminLoginPathFromUrl, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
 import { captureLoginEntryFromCurrentUrl } from '../../utils/loginEntry';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
@@ -186,17 +186,24 @@ export default function LoginPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  /** 登录成功后立刻跳转本地首页；自定义首页与 init 向导在后台处理，不阻塞 navigate */
-  const navigateToHomeAfterLogin = useCallback((options?: {
+  /** 登录成功：先解析 effective-home 再 navigate，避免先闪工作台/Default-home 再跳转 */
+  const navigateToHomeAfterLogin = useCallback(async (options?: {
     redirect?: string | null;
     immediatePath?: string;
     tenantId?: number;
   }) => {
-    const targetPath = options?.immediatePath ?? getImmediatePostLoginHomePath(options?.redirect);
-    navigate(targetPath, { replace: true });
-    if (!options?.immediatePath && !options?.redirect?.trim()) {
-      refinePostLoginHomeInBackground(navigate, targetPath);
+    let targetPath: string;
+    if (options?.immediatePath) {
+      targetPath = options.immediatePath;
+    } else {
+      try {
+        targetPath = await resolvePostLoginNavigatePath(options?.redirect);
+      } catch {
+        // 勿落本地猜的 default-home/工作台；走 / 由 TenantHomeRedirect 等 API 后再跳
+        targetPath = options?.redirect?.trim() || '/';
+      }
     }
+    navigate(targetPath, { replace: true });
     const tenantId = options?.tenantId;
     if (tenantId != null) {
       void (async () => {

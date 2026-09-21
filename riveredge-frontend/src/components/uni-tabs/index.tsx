@@ -22,7 +22,7 @@ import {
 } from '../../stores/configStore';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { getSavedTabs, setSavedTabs, getSavedActiveKey, setSavedActiveKey } from '../../stores/tabsStorage';
+import { getSavedTabs, setSavedTabs } from '../../stores/tabsStorage';
 import {
   buildLegacyLocalTabsMigrationPatch,
   buildUniTabsPreferencePatch,
@@ -32,7 +32,6 @@ import {
 } from '../../stores/uniTabsPreference';
 import {
   getSessionTabs,
-  getSessionActiveKey,
   setSessionTabs,
 } from '../../stores/sessionTabsCache';
 import { getTenantId, getToken } from '../../utils/auth';
@@ -186,6 +185,14 @@ function isDashboardLikePage(pathname: string): boolean {
 
 function tabPathname(tabKey: string): string {
   return (tabKey.split('?')[0] || '/').replace(/\/$/, '') || '/';
+}
+
+/** 当前路由对应的标签 key（activeKey 唯一真源） */
+function resolveRouteTabKey(pathname: string, search: string): string {
+  const searchParams = new URLSearchParams(search || '');
+  searchParams.delete('_refresh');
+  const cleanSearch = searchParams.toString();
+  return pathname + (cleanSearch ? `?${cleanSearch}` : '');
 }
 
 /**
@@ -397,19 +404,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return [];
   });
 
-  // 3. 同步初始化 activeKey
-  const [activeKey, setActiveKey] = useState<string>(() => {
-    const initTenantId = getTenantId();
-    if (initTenantId != null) {
-      const sessionActive = getSessionActiveKey(initTenantId);
-      if (sessionActive) return sessionActive;
-    }
-    const cloudActive = readUniTabsStateFromPreferenceCache()?.activeKey;
-    if (cloudActive) return cloudActive;
-    const savedActive = getSavedActiveKey();
-    if (savedActive) return savedActive;
-    return location.pathname + location.search;
-  });
+  // 3. activeKey 唯一真源：当前路由（登录落地首页、F5 跟 URL；不读云端/本机 activeKey）
+  const [activeKey, setActiveKey] = useState<string>(() =>
+    resolveRouteTabKey(location.pathname, location.search),
+  );
 
   // 不再需要 isInitialized，因为初始状态就是 initialized
   // const [isInitialized, setIsInitialized] = useState<boolean>(true);
@@ -691,19 +689,15 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   /** 正在从存储恢复，避免保存 effect 在同周期用错误数据覆盖 */
   const isRestoringRef = useRef(false);
   const tabsForCloudSaveRef = useRef(tabs);
-  const activeKeyForCloudSaveRef = useRef(activeKey);
   tabsForCloudSaveRef.current = tabs;
-  activeKeyForCloudSaveRef.current = activeKey;
 
   const prevTenantIdStrRef = useRef<string | null>(tenantIdStrForTabs);
 
   /** 当前路由对应的标签 key（与路由同步 effect 一致） */
-  const getCurrentRouteTabKey = useCallback(() => {
-    const searchParams = new URLSearchParams(location.search || '');
-    searchParams.delete('_refresh');
-    const cleanSearch = searchParams.toString();
-    return location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
-  }, [location.pathname, location.search]);
+  const getCurrentRouteTabKey = useCallback(
+    () => resolveRouteTabKey(location.pathname, location.search),
+    [location.pathname, location.search],
+  );
 
   /**
    * 切换租户清空会话后：若首页 path 未变，路由 effect 不会重跑，须主动补回当前页标签，
@@ -740,8 +734,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     const sessionTabs = getSessionTabs(tenantId);
     if (sessionTabs?.length) {
       setTabs(dedupeTabsByPathname(sessionTabs));
-      const sessionActive = getSessionActiveKey(tenantId);
-      if (sessionActive) setActiveKey(sessionActive);
+      setActiveKey(getCurrentRouteTabKey());
       didRestoreFromSyncRef.current = true;
       return;
     }
@@ -768,10 +761,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     );
     if (restored?.length) {
       setTabs(restored);
-      const savedActive = cloudState?.activeKey || getSavedActiveKey();
-      if (savedActive && restored.some((tab) => tab.key === savedActive)) {
-        setActiveKey(savedActive);
-      }
+      setActiveKey(getCurrentRouteTabKey());
     } else {
       setTabs([]);
       seedTabsAfterTenantSwitch();
@@ -785,6 +775,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     tabsPersistence,
     preferencesInitialized,
     seedTabsAfterTenantSwitch,
+    getCurrentRouteTabKey,
   ]);
 
   /** 会话内实时缓存标签，跨 APP / 组件 remount 不丢 */
@@ -805,13 +796,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       didRestoreFromSyncRef.current = true;
       isRestoringRef.current = true;
       setTabs((prev) => mergeTabLists(prev, restored));
-      const cloudActive = readUniTabsStateFromPreferences(
-        useUserPreferenceStore.getState().preferences,
-      )?.activeKey;
-      const savedActive = cloudActive || getSavedActiveKey();
-      if (savedActive && restored.some((tab) => tab.key === savedActive)) {
-        setActiveKey(savedActive);
-      }
+      setActiveKey(getCurrentRouteTabKey());
       queueMicrotask(() => {
         isRestoringRef.current = false;
       });
@@ -820,7 +805,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (preferencesInitialized) {
       didRestoreFromSyncRef.current = true;
     }
-  }, [tabsPersistence, preferencesInitialized, loadTabsFromStorage]);
+  }, [tabsPersistence, preferencesInitialized, loadTabsFromStorage, getCurrentRouteTabKey]);
 
   const cloudTabsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const legacyTabsMigratedRef = useRef(false);
@@ -838,10 +823,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       didRestoreFromSyncRef.current = true;
       isRestoringRef.current = true;
       setTabs((prev) => mergeTabLists(prev, restored));
-      const savedActive = cloudState?.activeKey || getSavedActiveKey();
-      if (savedActive && restored.some((tab) => tab.key === savedActive)) {
-        setActiveKey(savedActive);
-      }
+      setActiveKey(getCurrentRouteTabKey());
       queueMicrotask(() => {
         isRestoringRef.current = false;
       });
@@ -866,6 +848,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     t,
     tenantHomePath,
     updatePreferences,
+    getCurrentRouteTabKey,
   ]);
 
   /**
@@ -877,9 +860,6 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
     try {
       setSavedTabs(tabs);
-      const persistActiveKey =
-        activeKey && !activeKey.startsWith('/apps/') ? activeKey : null;
-      setSavedActiveKey(persistActiveKey);
     } catch {
       // ignore
     }
@@ -888,7 +868,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       clearTimeout(cloudTabsSaveTimerRef.current);
     }
     cloudTabsSaveTimerRef.current = setTimeout(() => {
-      const patch = buildUniTabsPreferencePatch(tabs, activeKey);
+      const patch = buildUniTabsPreferencePatch(tabs);
       const serialized = JSON.stringify(patch[UNI_TABS_STATE_PREF_KEY]);
       if (serialized === lastCloudTabsPatchRef.current) return;
       lastCloudTabsPatchRef.current = serialized;
@@ -912,10 +892,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       if (isRestoringRef.current) return;
       const snapshotTabs = tabsForCloudSaveRef.current;
       if (!snapshotTabs.length) return;
-      const patch = buildUniTabsPreferencePatch(
-        snapshotTabs,
-        activeKeyForCloudSaveRef.current,
-      );
+      const patch = buildUniTabsPreferencePatch(snapshotTabs);
       const serialized = JSON.stringify(patch[UNI_TABS_STATE_PREF_KEY]);
       if (serialized === lastCloudTabsPatchRef.current) return;
       lastCloudTabsPatchRef.current = serialized;
@@ -932,22 +909,17 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 注意：如果启用了持久化且正在恢复标签，不要立即添加标签，避免覆盖恢复的标签
    */
   useEffect(() => {
-    if (location.pathname) {
-      const add = addTabRef.current;
-      const searchParams = new URLSearchParams(location.search || '');
-      searchParams.delete('_refresh');
-      const cleanSearch = searchParams.toString();
-      const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
-      add(tabKey);
-      setActiveKey((prev) => (prev === tabKey ? prev : tabKey));
-    }
-  }, [location.pathname, location.search]);
+    if (!location.pathname) return;
+    const tabKey = getCurrentRouteTabKey();
+    addTabRef.current(tabKey);
+    setActiveKey((prev) => (prev === tabKey ? prev : tabKey));
+  }, [location.pathname, location.search, getCurrentRouteTabKey]);
 
-  /** 首页标签仅在 tenantHomePath 变化时注入，避免每次跨 APP 导航重复跑首页合并逻辑 */
+  /** 有效首页 API 就绪后再注入首页标签，避免自定义首页租户先闪工作台/兜底占位 */
   useEffect(() => {
-    if (!tenantHomePath) return;
+    if (!homePathReady || !tenantHomePath) return;
     addTabRef.current(tenantHomePath);
-  }, [tenantHomePath]);
+  }, [homePathReady, tenantHomePath]);
 
   /**
    * 监听自定义事件更新标签标题
