@@ -1,0 +1,101 @@
+import { describe, expect, it } from 'vitest';
+import { buildDataPolicySavePayload, defaultCustomPayloadForResource } from './dataPolicySave';
+import type { DataPermissionPolicy } from '../../../../services/role';
+
+const granted = new Set(['app:a', 'app:b', 'app:c']);
+
+function policy(resource: string, scope: DataPermissionPolicy['scope_type']): DataPermissionPolicy {
+  return {
+    uuid: `u-${resource}`,
+    role_uuid: 'role-1',
+    resource,
+    scope_type: scope,
+  };
+}
+
+describe('buildDataPolicySavePayload', () => {
+  it('applies batch scope to selected resources', () => {
+    const payload = buildDataPolicySavePayload({
+      dataPolicies: [policy('app:a', 'scope_self')],
+      selectedResources: ['app:a', 'app:b'],
+      visibleResources: ['app:a', 'app:b', 'app:c'],
+      batchScope: 'scope_all',
+      grantedKeys: granted,
+    });
+    expect(payload).toEqual([
+      { resource: 'app:a', scope_type: 'scope_all', scope_payload: undefined },
+      { resource: 'app:b', scope_type: 'scope_all', scope_payload: undefined },
+    ]);
+  });
+
+  it('applies batch scope to all visible when none selected and batch is not self', () => {
+    const payload = buildDataPolicySavePayload({
+      dataPolicies: [policy('app:a', 'scope_self')],
+      selectedResources: [],
+      visibleResources: ['app:a', 'app:b'],
+      batchScope: 'scope_all',
+      grantedKeys: granted,
+    });
+    expect(payload).toEqual([
+      { resource: 'app:a', scope_type: 'scope_all', scope_payload: undefined },
+      { resource: 'app:b', scope_type: 'scope_all', scope_payload: undefined },
+    ]);
+  });
+
+  it('applies batch scope to all visible when none selected and batch is self', () => {
+    const payload = buildDataPolicySavePayload({
+      dataPolicies: [],
+      selectedResources: [],
+      visibleResources: ['app:a', 'app:b'],
+      batchScope: 'scope_self',
+      grantedKeys: granted,
+    });
+    expect(payload).toEqual([
+      { resource: 'app:a', scope_type: 'scope_self', scope_payload: undefined },
+      { resource: 'app:b', scope_type: 'scope_self', scope_payload: undefined },
+    ]);
+  });
+
+  it('merges existing policies with visible batch self when nothing selected', () => {
+    const payload = buildDataPolicySavePayload({
+      dataPolicies: [policy('app:a', 'scope_self')],
+      selectedResources: [],
+      visibleResources: ['app:a', 'app:b'],
+      batchScope: 'scope_self',
+      grantedKeys: granted,
+    });
+    expect(payload).toEqual([
+      { resource: 'app:a', scope_type: 'scope_self', scope_payload: undefined },
+      { resource: 'app:b', scope_type: 'scope_self', scope_payload: undefined },
+    ]);
+  });
+
+  it('defaults acceptance custom payload to manufacturer partner scope', () => {
+    expect(defaultCustomPayloadForResource('haoligo:equipment-documents-acceptance')).toEqual({
+      resolver: 'partner',
+      dimension: 'manufacturer',
+      code_field: 'manufacturer_code',
+    });
+    expect(defaultCustomPayloadForResource('haoligo:injection-documents-acceptance')).toEqual({
+      resolver: 'partner',
+      dimension: 'manufacturer',
+      code_field: 'manufacturer_code',
+    });
+    expect(defaultCustomPayloadForResource('haoligo:finance-equipment-contracts')).toEqual({
+      resolver: 'partner',
+      dimension: 'manufacturer',
+      code_field: 'manufacturer_code',
+    });
+  });
+
+  it('keeps scope_all resources in payload when visible list is empty', () => {
+    const payload = buildDataPolicySavePayload({
+      dataPolicies: [policy('app:a', 'scope_all')],
+      selectedResources: [],
+      visibleResources: [],
+      batchScope: 'scope_self',
+      grantedKeys: granted,
+    });
+    expect(payload).toEqual([{ resource: 'app:a', scope_type: 'scope_all', scope_payload: undefined }]);
+  });
+});

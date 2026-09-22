@@ -1,0 +1,65 @@
+/**
+ * API 类型定义
+ * 
+ * 定义 API 相关的 TypeScript 类型
+ */
+
+/**
+ * 通用 API 响应接口
+ */
+export interface ApiResponse<T = any> {
+  code: number;
+  message: string;
+  data: T;
+}
+
+/**
+ * 分页响应接口
+ */
+export interface PageResponse<T = any> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+/**
+ * 分页请求参数接口
+ */
+export interface PageParams {
+  page?: number;
+  page_size?: number;
+}
+
+/**
+ * 当前用户接口
+ */
+export interface CurrentUser {
+  id: number;
+  uuid?: string;
+  username: string;
+  email?: string;
+  full_name?: string;
+  avatar?: string;
+  is_infra_admin?: boolean;
+  is_tenant_admin?: boolean;
+  tenant_id?: number;
+  tenant_name?: string; // ⚠️ 关键修复：添加租户名称字段
+  tenant_plan?: string;
+  tenant_expires_at?: string;
+  is_active?: boolean;
+  permissions?: string[];
+  permission_version?: number;
+  department?: { uuid: string; name: string };
+  position?: { uuid: string; name: string };
+  roles?: Array<{
+    uuid: string;
+    name: string;
+    code: string;
+    role_type?: 'internal' | 'external' | 'station' | string;
+    external_partner_type?: string | null;
+  }>;
+  /** 登录身份：infra_superadmin 为平台超级管理员 */
+  user_type?: 'infra_superadmin' | 'user' | 'guest' | string;
+}
+

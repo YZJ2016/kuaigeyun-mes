@@ -1,0 +1,417 @@
+/**
+ * 主题状态 Store（派生层）
+ *
+ * 从 userPreferenceStore 读取主题，合并站点默认，计算 resolved 供 ConfigProvider 使用。
+ * 主题数据源：userPreferenceStore.preferences（theme / theme_config）
+ * 解析顺序：用户 preferences.theme_config（云端）> 站点 settings.theme_config / theme_color（云端）> DEFAULT_CONFIG
+ * 首帧：localStorage 缓存（rehydrateFromStorage）仅作占位，登录后以 API 为准覆盖
+ */
+
+import { create } from 'zustand';
+import { theme } from 'antd';
+import { getSiteSetting } from '../services/siteSetting';
+import { getToken } from '../utils/auth';
+import { isKuaireportSharedBrowsePath } from '../utils/kuaireportSharedPath';
+import { useUserPreferenceStore } from './userPreferenceStore';
+import { getThemeFromPreferenceCache } from './userPreferenceStore';
+import { clampBorderRadius, DEFAULT_THEME_BORDER_RADIUS } from '../utils/themeBorderRadius';
+import { useConfigStore } from './configStore';
+
+const DEFAULT_CONFIG = {
+  colorPrimary: '#1890ff',
+  borderRadius: DEFAULT_THEME_BORDER_RADIUS,
+  fontSize: 14,
+  compact: false,
+  siderBgColor: '',
+  headerBgColor: '',
+  tabsBgColor: '',
+  tabBgColor: '',
+  themeStyle: 'vivid' as ThemeStyle,
+};
+
+export type ThemeMode = 'light' | 'dark' | 'auto';
+
+/** 主题风格：多彩（全量配色）/ 简约（主色 + 灰阶） */
+export type ThemeStyle = 'vivid' | 'plain';
+
+export interface ThemeConfig {
+  colorPrimary?: string;
+  borderRadius?: number;
+  fontSize?: number;
+  compact?: boolean;
+  siderBgColor?: string;
+  headerBgColor?: string;
+  tabsBgColor?: string;
+  /** 激活标签与标签内容区背景 */
+  tabBgColor?: string;
+  themeStyle?: ThemeStyle;
+}
+
+export interface ResolvedTheme {
+  algorithm: typeof theme.defaultAlgorithm | typeof theme.darkAlgorithm;
+  token: {
+    colorPrimary?: string;
+    borderRadius?: number;
+    fontSize?: number;
+    colorBorder?: string;
+    colorBorderSecondary?: string;
+    colorSplit?: string;
+  };
+  isDark: boolean;
+  themeStyle: ThemeStyle;
+  siderBgColor: string;
+  headerBgColor: string;
+  tabsBgColor: string;
+  tabBgColor: string;
+}
+
+export function normalizeThemeStyle(value: unknown): ThemeStyle {
+  return value === 'plain' ? 'plain' : 'vivid';
+}
+
+export function normalizeThemeMode(value: unknown): ThemeMode {
+  if (value === 'dark' || value === 'auto' || value === 'light') return value;
+  return 'light';
+}
+
+/** 接口/缓存可能返回字符串数字，Ant Design token 需要 number */
+function clampFinite(n: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+/** 只保留 ThemeConfig 已知字段，剔除误写入的 theme/layoutMode 等污染键 */
+export function normalizeThemeConfig(c: Partial<ThemeConfig> | Record<string, unknown> | null | undefined): ThemeConfig {
+  const src = c && typeof c === 'object' ? c : {};
+  const fs = typeof src.fontSize === 'number' ? src.fontSize : Number(src.fontSize);
+  const br = typeof src.borderRadius === 'number' ? src.borderRadius : Number(src.borderRadius);
+  return {
+    colorPrimary:
+      typeof src.colorPrimary === 'string' && src.colorPrimary.trim()
+        ? src.colorPrimary.trim()
+        : DEFAULT_CONFIG.colorPrimary,
+    borderRadius: clampBorderRadius(br, DEFAULT_CONFIG.borderRadius),
+    fontSize: clampFinite(fs, 10, 22, DEFAULT_CONFIG.fontSize),
+    compact: false,
+    themeStyle: normalizeThemeStyle(src.themeStyle),
+    siderBgColor: typeof src.siderBgColor === 'string' ? src.siderBgColor : '',
+    headerBgColor: typeof src.headerBgColor === 'string' ? src.headerBgColor : '',
+    tabsBgColor: typeof src.tabsBgColor === 'string' ? src.tabsBgColor : '',
+    tabBgColor: typeof src.tabBgColor === 'string' ? src.tabBgColor : '',
+  };
+}
+
+/** 用户是否已在云端保存过主题配置（仅计 ThemeConfig 字段） */
+export function hasCloudThemeConfig(cfg: Partial<ThemeConfig> | null | undefined): boolean {
+  if (!cfg || typeof cfg !== 'object') return false;
+  const keys: (keyof ThemeConfig)[] = [
+    'colorPrimary',
+    'borderRadius',
+    'fontSize',
+    'siderBgColor',
+    'headerBgColor',
+    'tabsBgColor',
+    'tabBgColor',
+    'themeStyle',
+  ];
+  return keys.some((k) => {
+    const v = cfg[k];
+    return v !== undefined && v !== null && v !== '';
+  });
+}
+
+export function buildSiteThemeConfig(site: Record<string, unknown>): Partial<ThemeConfig> {
+  const raw = (site.theme_config || {}) as Record<string, unknown>;
+  // 站点 theme_config 可能含历史误写入的 theme（颜色模式），不得进入配色合并
+  const { theme: _ignoredMode, layoutMode: _ignoredLayout, ...siteThemeConfig } = raw;
+  const legacyThemeColor = site.theme_color;
+  if (
+    typeof legacyThemeColor === 'string' &&
+    legacyThemeColor.trim() &&
+    !siteThemeConfig.colorPrimary
+  ) {
+    return { ...siteThemeConfig, colorPrimary: legacyThemeColor.trim() };
+  }
+  return siteThemeConfig;
+}
+
+/** 站点品牌主题色（通常来自站点设置 / Logo 生成），无有效值时返回 null */
+export function resolveSiteBrandColorPrimary(
+  site?: Record<string, unknown> | null,
+): string | null {
+  if (!site || typeof site !== 'object') return null;
+  const cfg = buildSiteThemeConfig(site);
+  const primary = typeof cfg.colorPrimary === 'string' ? cfg.colorPrimary.trim() : '';
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(primary)) {
+    return primary.length === 4
+      ? `#${primary[1]}${primary[1]}${primary[2]}${primary[2]}${primary[3]}${primary[3]}`
+      : primary.slice(0, 7);
+  }
+  return null;
+}
+
+/** 从云端解析主题：颜色模式仅 preferences.theme；配色 theme_config 用户优先于站点 */
+export function resolveThemeFromCloud(
+  userPreferences: Record<string, unknown> | null | undefined,
+  siteSettings?: Record<string, unknown> | null | undefined,
+): { theme: ThemeMode; config: ThemeConfig } {
+  const prefs = userPreferences && typeof userPreferences === 'object' ? userPreferences : {};
+  const userTheme = normalizeThemeMode(prefs.theme);
+  const userConfig = (prefs.theme_config || {}) as Partial<ThemeConfig>;
+  const site = siteSettings && typeof siteSettings === 'object' ? siteSettings : {};
+  const siteConfig = buildSiteThemeConfig(site);
+
+  if (hasCloudThemeConfig(userConfig)) {
+    const config = mergeConfig({}, userConfig);
+    // 旧偏好无 themeStyle 时继承站点级简约/多彩，避免永选回 vivid
+    if (userConfig.themeStyle == null || userConfig.themeStyle === '') {
+      config.themeStyle = normalizeThemeStyle(siteConfig.themeStyle);
+    }
+    return { theme: userTheme, config };
+  }
+
+  if (hasCloudThemeConfig(siteConfig)) {
+    return { theme: userTheme, config: mergeConfig({}, siteConfig) };
+  }
+
+  return { theme: userTheme, config: normalizeThemeConfig({ ...DEFAULT_CONFIG }) };
+}
+
+/** @deprecated 请使用 resolveThemeFromCloud；保留别名供既有调用方使用 */
+export function resolveThemeFromPreferences(
+  preferences: Record<string, unknown> | null | undefined,
+  siteSettings?: Record<string, unknown> | null | undefined,
+): { theme: ThemeMode; config: ThemeConfig } {
+  return resolveThemeFromCloud(preferences, siteSettings);
+}
+
+function mergeConfig(base: ThemeConfig, override: Partial<ThemeConfig> | null): ThemeConfig {
+  let merged: ThemeConfig;
+  if (!override || typeof override !== 'object') {
+    merged = { ...DEFAULT_CONFIG, ...base };
+  } else {
+    merged = {
+      ...DEFAULT_CONFIG,
+      ...base,
+      ...override,
+    };
+  }
+  return normalizeThemeConfig(merged);
+}
+
+function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
+  if (mode === 'dark') return 'dark';
+  if (mode === 'auto' && typeof window !== 'undefined' && window.matchMedia) {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  return 'light';
+}
+
+function computeResolved(themeMode: ThemeMode, config: ThemeConfig): ResolvedTheme {
+  const effectiveMode = resolveTheme(themeMode);
+  const baseAlgorithm = effectiveMode === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm;
+  const algorithm = baseAlgorithm;
+  const isDark = effectiveMode === 'dark';
+  const themeStyle = normalizeThemeStyle(config.themeStyle);
+  const isPlain = themeStyle === 'plain';
+
+  return {
+    algorithm,
+    token: {
+      colorPrimary: config.colorPrimary || DEFAULT_CONFIG.colorPrimary,
+      borderRadius: config.borderRadius ?? DEFAULT_CONFIG.borderRadius,
+      fontSize: config.fontSize ?? DEFAULT_CONFIG.fontSize,
+      colorBorder: isDark ? '#303030' : '#d9d9d9',
+      /** Card / 次级容器边框：比 Ant Design 默认 (#f0f0f0 / #303030) 深/亮一级，全局统一 */
+      colorBorderSecondary: isDark ? '#424242' : '#d9d9d9',
+      colorSplit: isDark ? '#262626' : '#f0f0f0',
+    },
+    isDark,
+    themeStyle,
+    siderBgColor: isPlain ? '' : isDark ? '' : (config.siderBgColor || '').trim(),
+    headerBgColor: isPlain ? '' : (config.headerBgColor || '').trim(),
+    tabsBgColor: isPlain ? '' : (config.tabsBgColor || '').trim(),
+    tabBgColor: isPlain ? '' : (config.tabBgColor || '').trim(),
+  };
+}
+
+interface ThemeState {
+  theme: ThemeMode;
+  config: ThemeConfig;
+  resolved: ResolvedTheme;
+  initialized: boolean;
+  loading: boolean;
+  /** 最近一次从站点设置 API 拉取的 settings，供偏好无 theme_config 时回退 */
+  siteThemeSettings: Record<string, unknown> | null;
+  initFromApi: () => Promise<void>;
+  /** 登录/切换账户首帧：本地偏好缓存占位，不阻塞进入工作台 */
+  applyFromLocalCache: () => void;
+  applyTheme: (themeMode: ThemeMode, config?: Partial<ThemeConfig>) => void;
+  /** 偏好变更时按云端 theme_config 应用；无个人配置时回退站点云端主题 */
+  syncFromPreferences: (preferences: Record<string, any>) => void;
+  subscribeToSystemTheme: () => () => void;
+  clearForLogout: () => void;
+}
+
+export const useThemeStore = create<ThemeState>((set, get) => {
+  const applyDocumentThemeAttrs = (resolved: ResolvedTheme) => {
+    document.documentElement.style.colorScheme = resolved.isDark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', resolved.isDark ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme-style', resolved.themeStyle);
+  };
+
+  const applyResolvedTheme = (themeMode: ThemeMode, config: ThemeConfig) => {
+    const resolved = computeResolved(themeMode, config);
+    set({ theme: themeMode, config, resolved });
+    applyDocumentThemeAttrs(resolved);
+  };
+
+  const doApplyTheme = (themeMode: ThemeMode, configOverride?: Partial<ThemeConfig>) => {
+    const { config } = get();
+    const mergedConfig = mergeConfig(config, configOverride ?? null);
+    const resolved = computeResolved(themeMode, mergedConfig);
+
+    set({ theme: themeMode, config: mergedConfig, resolved });
+
+    applyDocumentThemeAttrs(resolved);
+  };
+
+  const syncFromPreferences = (preferences: Record<string, any>) => {
+    if (!preferences || typeof preferences !== 'object') return;
+    const { siteThemeSettings, config: liveConfig } = get();
+    const { theme, config } = resolveThemeFromCloud(preferences, siteThemeSettings);
+    const userCfg = (preferences.theme_config || {}) as Partial<ThemeConfig>;
+    const mergedConfig =
+      (userCfg.themeStyle == null || userCfg.themeStyle === '') &&
+      liveConfig.themeStyle === 'plain' &&
+      config.themeStyle !== 'plain'
+        ? mergeConfig(config, { themeStyle: 'plain' })
+        : config;
+    applyResolvedTheme(theme, mergedConfig);
+  };
+
+  // 初始值：优先从 userPreferenceStore 缓存读取，否则用默认
+  const cached = getThemeFromPreferenceCache();
+  const initialTheme = (cached?.theme as ThemeMode) || 'light';
+  const initialConfig = cached?.theme_config
+    ? mergeConfig({}, cached.theme_config as Partial<ThemeConfig>)
+    : normalizeThemeConfig({ ...DEFAULT_CONFIG });
+  const initialResolved = computeResolved(initialTheme, initialConfig);
+
+  // 初始化时同步设置 document 属性，确保首屏渲染时 data-theme 已正确
+  if (typeof document !== 'undefined') {
+    document.documentElement.style.colorScheme = initialResolved.isDark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', initialResolved.isDark ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme-style', initialResolved.themeStyle);
+  }
+
+  return {
+    theme: initialTheme,
+    config: initialConfig,
+    resolved: initialResolved,
+    initialized: false,
+    loading: false,
+    siteThemeSettings: null,
+
+    initFromApi: async () => {
+      const { initialized, loading } = get();
+      if (initialized || loading) return;
+
+      if (!getToken() || isKuaireportSharedBrowsePath()) {
+        get().applyFromLocalCache();
+        return;
+      }
+
+      set({ loading: true });
+      try {
+        const siteSetting = await getSiteSetting().catch(() => null);
+        const siteSettings =
+          siteSetting?.settings && typeof siteSetting.settings === 'object'
+            ? siteSetting.settings
+            : null;
+
+        if (siteSettings) {
+          set({ siteThemeSettings: siteSettings });
+          try {
+            useConfigStore.getState().hydrateFromSettings(siteSettings);
+          } catch {
+            // 不阻塞主题流程
+          }
+        }
+
+        // 先写入 siteThemeSettings，再拉偏好，避免 subscribe 用空站点配置覆盖主题
+        await useUserPreferenceStore.getState().fetchPreferences();
+
+        const prefs = useUserPreferenceStore.getState().preferences || {};
+        const { theme, config } = resolveThemeFromCloud(prefs, siteSettings);
+        applyResolvedTheme(theme, config);
+
+        set({ initialized: true, loading: false, siteThemeSettings: siteSettings });
+      } catch (e) {
+        console.warn('Theme init failed:', e);
+        get().applyFromLocalCache();
+        set({ loading: false });
+      }
+    },
+
+    applyFromLocalCache: () => {
+      const cachedTheme = getThemeFromPreferenceCache();
+      if (cachedTheme) {
+        const { theme, config } = resolveThemeFromCloud({
+          theme: cachedTheme.theme,
+          theme_config: cachedTheme.theme_config,
+        });
+        applyResolvedTheme(theme, config);
+      } else {
+        applyResolvedTheme('light', normalizeThemeConfig({ ...DEFAULT_CONFIG }));
+      }
+      set({ initialized: true, loading: false });
+    },
+
+    applyTheme: (themeMode: ThemeMode, configOverride?: Partial<ThemeConfig>) => {
+      doApplyTheme(themeMode, configOverride);
+    },
+
+    syncFromPreferences,
+
+    subscribeToSystemTheme: () => {
+      const { theme: mode } = get();
+      if (mode !== 'auto') return () => {};
+
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handler = () => {
+        doApplyTheme('auto', get().config);
+      };
+      
+      // ⚠️ 兼容性修复：Safari < 14 不支持 addEventListener，需使用 addListener
+      if (mediaQuery.addEventListener) {
+        mediaQuery.addEventListener('change', handler);
+      } else {
+        (mediaQuery as any).addListener(handler);
+      }
+
+      return () => {
+        if (mediaQuery.removeEventListener) {
+          mediaQuery.removeEventListener('change', handler);
+        } else {
+          (mediaQuery as any).removeListener(handler);
+        }
+      };
+    },
+
+    clearForLogout: () => {
+      try {
+        localStorage.removeItem('riveredge_theme_config');
+      } catch (_) {}
+      set({
+        theme: 'light',
+        config: { ...DEFAULT_CONFIG },
+        resolved: computeResolved('light', DEFAULT_CONFIG),
+        // 保持 initialized，避免登出时 App 壳层全屏 Spin 阻塞跳转登录页
+        initialized: true,
+        siteThemeSettings: null,
+      });
+      doApplyTheme('light', DEFAULT_CONFIG);
+    },
+  };
+});

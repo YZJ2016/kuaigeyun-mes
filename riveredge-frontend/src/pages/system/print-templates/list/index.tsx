@@ -1,0 +1,941 @@
+/**
+ * 打印模板管理列表页面
+ * 
+ * 用于系统管理员查看和管理组织内的打印模板。
+ * 支持打印模板的 CRUD 操作和模板渲染功能。
+ */
+
+import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
+import SafeProFormSelect from '../../../../components/safe-pro-form-select';
+import { App, Popconfirm, Button, Tag, Modal, Form, Space, Typography, Tooltip, Card, theme } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
+import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, HighlightOutlined } from '@ant-design/icons';
+import { UniTable } from '../../../../components/uni-table';
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import {
+  getPrintTemplateList,
+  getPrintTemplateByUuid,
+  createPrintTemplate,
+  getNextPrintTemplateCode,
+  loadPresetPrintTemplates,
+  updatePrintTemplate,
+  deletePrintTemplate,
+  renderPrintTemplate,
+  PrintTemplate,
+  CreatePrintTemplateData,
+  UpdatePrintTemplateData,
+  RenderPrintTemplateData,
+  PrintTemplateRenderResponse,
+} from '../../../../services/printTemplate';
+import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../../config/printTemplateSchemas';
+import { EMPTY_HTML_TEMPLATE, EMPTY_VISUAL_PRINT_CONFIG } from '../../../../utils/printTemplateDefaults';
+import {
+  resolvePresetPrintTemplateDescription,
+  resolvePresetPrintTemplateName,
+} from '../../../../utils/presetEntityI18n';
+import { countWithPagedRequests } from '../../../../utils/pagedCount';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+
+dayjs.extend(relativeTime);
+
+const { Text, Paragraph } = Typography;
+const { useToken } = theme;
+
+const getTypeInfo = (t: any, type: string): { color: string; text: string; icon: React.ReactNode } => {
+  const typeMap: Record<string, { color: string; text: string; icon: React.ReactNode }> = {
+    pdf: { color: 'red', text: t('pages.system.printTemplates.typePdf'), icon: <FileTextOutlined /> },
+    html: { color: 'blue', text: t('pages.system.printTemplates.typeHtml'), icon: <FileTextOutlined /> },
+    word: { color: 'green', text: t('pages.system.printTemplates.typeWord'), icon: <FileTextOutlined /> },
+    excel: { color: 'purple', text: t('pages.system.printTemplates.typeExcel'), icon: <FileTextOutlined /> },
+    other: { color: 'default', text: t('pages.system.printTemplates.typeOther'), icon: <FileTextOutlined /> },
+  };
+  return typeMap[type] || { color: 'default', text: type, icon: <FileTextOutlined /> };
+};
+
+/**
+ * 提取模板变量（支持结构化 JSON 与纯文本 {{key}}）
+ */
+const extractVariables = (content: string): string[] => {
+  if (!content) return [];
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed?.schemas && Array.isArray(parsed.schemas)) {
+      const names = new Set<string>();
+      for (const page of parsed.schemas) {
+        if (Array.isArray(page)) {
+          for (const s of page) {
+            if (s?.name) names.add(s.name);
+          }
+        }
+      }
+      return Array.from(names).sort();
+    }
+  } catch {
+    // 非结构化 JSON，尝试 {{key}} 提取
+  }
+  const regex = /\{\{([^}]+)\}\}/g;
+  const matches = content.matchAll(regex);
+  const variables = new Set<string>();
+  for (const match of matches) {
+    variables.add(match[1].trim());
+  }
+  return Array.from(variables).sort();
+};
+
+/**
+ * 打印模板管理列表页面组件
+ */
+const PrintTemplateListPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const { token } = useToken();
+  const navigate = useNavigate();
+  const actionRef = useRef<ActionType>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [allTemplates, setAllTemplates] = useState<PrintTemplate[]>([]); // 用于统计
+  
+  // Modal 相关状态（创建/编辑打印模板）
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentPrintTemplateUuid, setCurrentPrintTemplateUuid] = useState<string | null>(null);
+  const [currentEditDetail, setCurrentEditDetail] = useState<PrintTemplate | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
+  const formRef = useRef<ProFormInstance>(null);
+  
+  // Modal 相关状态（渲染模板）
+  const [renderModalVisible, setRenderModalVisible] = useState(false);
+  const [renderFormLoading, setRenderFormLoading] = useState(false);
+  const [currentRenderTemplateUuid, setCurrentRenderTemplateUuid] = useState<string | null>(null);
+  const [renderFormRef] = Form.useForm();
+  const [renderResult, setRenderResult] = useState<PrintTemplateRenderResponse | null>(null);
+  
+  // Drawer 相关状态（详情查看）
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailData, setDetailData] = useState<PrintTemplate | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  // 加载预设（点击后全部加载）
+  const [presetLoading, setPresetLoading] = useState(false);
+
+  /**
+   * 翻译关联业务单据选项
+   */
+  const translatedDocumentTypeOptions = useMemo(() => {
+    return DOCUMENT_TYPE_OPTIONS.map(opt => ({
+      ...opt,
+      label: t(`pages.system.printTemplates.schema.${opt.value}`, { defaultValue: opt.label })
+    }));
+  }, [t]);
+
+  /**
+   * 处理新建打印模板
+   */
+  const handleCreate = () => {
+    setIsEdit(false);
+    setCurrentPrintTemplateUuid(null);
+    setCurrentEditDetail(null);
+    setFormInitialValues({
+      type: 'pdf',
+        document_type: undefined,
+        code: '',
+      is_active: true,
+      is_default: false,
+    });
+    setModalVisible(true);
+  };
+
+  /**
+   * 处理编辑打印模板
+   */
+  const handleEdit = async (record: PrintTemplate) => {
+    try {
+      setIsEdit(true);
+      setCurrentPrintTemplateUuid(record.uuid);
+      
+      // 获取打印模板详情
+      const detail = await getPrintTemplateByUuid(record.uuid);
+      setCurrentEditDetail(detail);
+      setFormInitialValues({
+        name: detail.name,
+        code: detail.code,
+        type: detail.type,
+        document_type: detail.config?.document_type,
+        description: detail.description,
+        is_active: detail.is_active,
+        is_default: detail.is_default,
+      });
+      setModalVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.printTemplates.getDetailFailed'));
+    }
+  };
+
+  /**
+   * 处理查看详情
+   */
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await getPrintTemplateByUuid(uuid);
+      setDetailData(detail);
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.printTemplates.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleView = (record: PrintTemplate) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
+  /**
+   * 处理渲染模板
+   */
+  const handleRender = (record: PrintTemplate) => {
+    setCurrentRenderTemplateUuid(record.uuid);
+    setRenderModalVisible(true);
+    setRenderResult(null);
+    renderFormRef.resetFields();
+    renderFormRef.setFieldsValue({
+      output_format: 'pdf',
+      async_execution: false,
+    });
+  };
+
+  /**
+   * 处理渲染模板表单提交
+   */
+  const handleRenderSubmit = async (values: any) => {
+    if (!currentRenderTemplateUuid) return;
+    
+    try {
+      setRenderFormLoading(true);
+      setRenderResult(null);
+      
+      const data: RenderPrintTemplateData = {
+        data: values.data ? JSON.parse(values.data) : {},
+        output_format: values.output_format || 'pdf',
+        async_execution: values.async_execution || false,
+      };
+      
+      const result = await renderPrintTemplate(currentRenderTemplateUuid, data);
+      setRenderResult(result);
+      
+      if (result.success) {
+        messageApi.success(t('pages.system.printTemplates.renderSuccess'));
+      } else {
+        messageApi.error(result.error || t('pages.system.printTemplates.renderFailed'));
+      }
+    actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.printTemplates.renderFailed'));
+    } finally {
+      setRenderFormLoading(false);
+    }
+  };
+
+  /**
+   * 处理删除打印模板
+   */
+  const handleDelete = async (record: PrintTemplate) => {
+    try {
+      await deletePrintTemplate(record.uuid);
+      messageApi.success(t('common.deleteSuccess'));
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
+  };
+
+  /**
+   * 处理批量删除
+   */
+  const handleBatchDelete = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('pages.system.printTemplates.selectToDelete'));
+      return;
+    }
+    
+    try {
+      await Promise.all(selectedRowKeys.map((key) => deletePrintTemplate(key as string)));
+      messageApi.success(t('pages.system.printTemplates.batchDeleteSuccess'));
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch {
+      messageApi.error(t('pages.system.printTemplates.batchDeleteFailed'));
+    }
+  };
+
+  /**
+   * 打开设计器 (新标签页)
+   */
+  const handleOpenDesigner = (record: PrintTemplate) => {
+    // 在当前标签页打开
+    navigate(`/system/print-templates/design/${record.uuid}`);
+  };
+
+  /**
+   * 加载系统预设：按后端已安装功能范围创建缺失模板
+   */
+  const handleLoadPreset = async () => {
+    try {
+      setPresetLoading(true);
+      const res = await loadPresetPrintTemplates();
+      messageApi.success(res.message || t('pages.system.printTemplates.presetAllLoaded', { count: res.created ?? 0 }));
+      actionRef.current?.reload();
+    } catch (_error: any) {
+      messageApi.error(_error.message || t('pages.system.printTemplates.createWorkOrderFailed'));
+    } finally {
+      setPresetLoading(false);
+    }
+  };
+
+  /**
+   * 处理表单提交
+   */
+  const handleSubmit = async (values: any): Promise<void> => {
+    try {
+      setFormLoading(true);
+      
+      if (isEdit && currentPrintTemplateUuid) {
+        const updateData: UpdatePrintTemplateData = {
+          name: values.name,
+          description: values.description,
+          is_active: values.is_active,
+          is_default: values.is_default,
+          config: { ...(currentEditDetail?.config || {}), document_type: values.document_type },
+        };
+        await updatePrintTemplate(currentPrintTemplateUuid, updateData);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        const data: CreatePrintTemplateData = {
+          name: values.name,
+          code: DOCUMENT_TYPE_TO_CODE[values.document_type] || values.code,
+          type: values.type,
+          description: values.description,
+          content: EMPTY_HTML_TEMPLATE,
+          config: EMPTY_VISUAL_PRINT_CONFIG(values.document_type),
+          is_active: values.is_active !== false,
+        };
+        await createPrintTemplate(data);
+        messageApi.success(t('common.createSuccess'));
+      }
+      
+      setModalVisible(false);
+      setFormInitialValues(undefined);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.operationFailed'));
+      throw error;
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  /**
+   * 计算统计信息
+   */
+  const statCards = useMemo(() => {
+    // 始终返回包含 4 个元素的指标卡配置，避免数据加载前后产生的布局抖动（即指标卡出现导致页面元素下移）
+    const stats = {
+      total: allTemplates.length,
+      active: allTemplates.filter((t) => t.is_active).length,
+      inactive: allTemplates.filter((t) => !t.is_active).length,
+      default: allTemplates.filter((t) => t.is_default).length,
+      totalUsage: allTemplates.reduce((sum, t) => sum + (t.usage_count || 0), 0),
+    };
+
+    return [
+      { title: t('pages.system.printTemplates.statTotal'), value: stats.total, valueStyle: { color: '#1890ff' } },
+      { title: t('pages.system.printTemplates.statActive'), value: stats.active, valueStyle: { color: '#52c41a' } },
+      { title: t('pages.system.printTemplates.statDefault'), value: stats.default, valueStyle: { color: '#faad14' } },
+      { title: t('pages.system.printTemplates.statUsage'), value: stats.totalUsage, valueStyle: { color: '#722ed1' } },
+    ];
+  }, [allTemplates, t]);
+
+  /**
+   * 卡片渲染函数
+   */
+  const renderCard = (template: PrintTemplate) => {
+    const typeInfo = getTypeInfo(t, template.type);
+    const variables = extractVariables(template.content);
+    
+    return (
+      <Card
+        key={template.uuid}
+        hoverable
+        style={{ height: '100%' }}
+        actions={[
+          <Tooltip {...rowActionKind('read')} key="view" title={t('pages.system.printTemplates.viewDetail')}>
+            <EyeOutlined
+              onClick={() => handleView(template)}
+              style={{ fontSize: 16 }}
+            />
+          </Tooltip>,
+          <Tooltip {...rowActionKind('print')} key="render" title={t('pages.system.printTemplates.renderTemplate')}>
+            <PrinterOutlined
+              onClick={() => handleRender(template)}
+              disabled={!template.is_active}
+              style={{ fontSize: 16, color: template.is_active ? '#722ed1' : '#d9d9d9' }}
+            />
+          </Tooltip>,
+          <Popconfirm {...rowActionKind('delete')}
+            key="delete"
+            title={t('pages.system.printTemplates.deleteConfirmTitle')}
+            onConfirm={() => handleDelete(template)}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
+          >
+            <Tooltip title={t('common.delete')}>
+              <DeleteOutlined
+                style={{ fontSize: 16, color: '#ff4d4f' }}
+              />
+            </Tooltip>
+          </Popconfirm>,
+        ]}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text strong style={{ fontSize: 16 }}>
+                {resolvePresetPrintTemplateName(template, t)}
+              </Text>
+              <Tag color={typeInfo.color} icon={typeInfo.icon}>
+                {typeInfo.text}
+              </Tag>
+            </div>
+            
+            {template.code && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t('pages.system.printTemplates.codePrefix')}{template.code}
+              </Text>
+            )}
+            
+            {template.description && (
+              <Paragraph
+                ellipsis={{ rows: 2, expandable: false }}
+                style={{ marginBottom: 0, fontSize: 12 }}
+              >
+                {resolvePresetPrintTemplateDescription(template, t)}
+              </Paragraph>
+            )}
+          </Space>
+        </div>
+        
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.statusLabel')}</Text>
+              <Tag color={template.is_active ? 'success' : 'default'}>
+                {template.is_active ? t('common.enabled') : t('common.disabled')}
+              </Tag>
+            </div>
+            
+            {template.is_default && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.defaultLabel')}</Text>
+                <Tag color="processing">{t('common.yes')}</Tag>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.usageLabel')}</Text>
+              <Text style={{ fontSize: 12 }}>{template.usage_count || 0}</Text>
+            </div>
+            
+            {variables.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>{t('pages.system.printTemplates.variablesLabel')}</Text>
+                <Space wrap size={[4, 4]} style={{ marginTop: 4 }}>
+                  {variables.slice(0, 3).map((v) => (
+                    <Tag key={v} style={{ fontSize: 10, margin: 0 }}>{v}</Tag>
+                  ))}
+                  {variables.length > 3 && (
+                    <Tag style={{ fontSize: 10, margin: 0 }}>+{variables.length - 3}</Tag>
+                  )}
+                </Space>
+              </div>
+            )}
+            
+            {template.last_used_at && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printTemplates.lastUsedLabel')}</Text>
+                <Text style={{ fontSize: 12 }}>
+                  {dayjs(template.last_used_at).fromNow()}
+                </Text>
+              </div>
+            )}
+          </Space>
+        </div>
+      </Card>
+    );
+  };
+
+  /**
+   * 表格列定义
+   */
+  const columns = useMemo<ProColumns<PrintTemplate>[]>(() => alignProColumns([
+    {
+      title: t('pages.system.printTemplates.columnCode'),
+      dataIndex: 'code',
+      width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+    },
+    {
+      // 名称长短不一：唯一 RemainderFlex
+      title: t('pages.system.printTemplates.columnName'),
+      dataIndex: 'name',
+      minWidth: 180,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
+      render: (_, record) => resolvePresetPrintTemplateName(record, t),
+    },
+    {
+      title: t('pages.system.printTemplates.columnType'),
+      dataIndex: 'type',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      valueEnum: {
+        pdf: { text: t('pages.system.printTemplates.typePdf') },
+        html: { text: t('pages.system.printTemplates.typeHtml') },
+        word: { text: t('pages.system.printTemplates.typeWord') },
+        excel: { text: t('pages.system.printTemplates.typeExcel') },
+        other: { text: t('pages.system.printTemplates.typeOther') },
+      },
+      render: (_, record) => {
+        const typeInfo = getTypeInfo(t, record.type);
+        return renderSystemTypeMarker(typeInfo.text, typeInfo.color);
+      },
+    },
+    {
+      title: t('common.enabled'),
+      dataIndex: 'is_active',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
+      },
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
+    },
+    {
+      title: t('pages.system.printTemplates.columnDefault'),
+      dataIndex: 'is_default',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.is_default
+          ? renderSystemTypeMarker(t('pages.system.printTemplates.defaultTag'), 'processing')
+          : '-',
+    },
+    {
+      title: t('pages.system.printTemplates.columnUsage'),
+      dataIndex: 'usage_count',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+    },
+    {
+      title: t('pages.system.printTemplates.columnLastUsed'),
+      dataIndex: 'last_used_at',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'dateTime',
+      hideInSearch: true,
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'dateTime',
+      hideInSearch: true,
+    },
+    {
+      title: t('common.actions'),
+      key: 'action',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) =>
+        [
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)} />,
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+            <Button
+              key="design"
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
+              onClick={() => handleOpenDesigner(record)}
+            >
+              {t('pages.system.printTemplates.design')}
+            </Button>,
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.printTemplates.deleteConfirmTitle')}
+              onConfirm={() => handleDelete(record)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+            >
+              <Button {...rowActionKind('delete')} />
+            </Popconfirm>,
+          ],
+    },
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleOpenDesigner, handleDelete]);
+
+
+  /**
+   * 详情列定义
+   */
+  const detailColumns = [
+    {
+      title: t('pages.system.printTemplates.columnName'),
+      dataIndex: 'name',
+      render: (_: unknown, record: PrintTemplate) => resolvePresetPrintTemplateName(record, t),
+    },
+    { title: t('pages.system.printTemplates.columnCode'), dataIndex: 'code' },
+    { title: t('pages.system.printTemplates.columnType'), dataIndex: 'type' },
+    {
+      title: t('common.remark'),
+      dataIndex: 'description',
+      render: (_: unknown, record: PrintTemplate) => resolvePresetPrintTemplateDescription(record, t),
+    },
+    {
+      title: t('common.enabled'),
+      dataIndex: 'is_active',
+      render: (_: unknown, record: PrintTemplate) =>
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
+    },
+    {
+      title: t('pages.system.printTemplates.columnDefault'),
+      dataIndex: 'is_default',
+      render: (value: boolean) => (
+        <Tag color={value ? 'processing' : 'default'}>
+          {value ? t('pages.system.printTemplates.defaultTag') : '-'}
+        </Tag>
+      ),
+    },
+    {
+      title: t('pages.system.printTemplates.columnContent'),
+      dataIndex: 'content',
+      render: (value: string) => (
+        <pre style={{ maxHeight: '300px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+          {value}
+        </pre>
+      ),
+    },
+    {
+      title: t('pages.system.printTemplates.columnConfig'),
+      dataIndex: 'config',
+      render: (value: Record<string, any>) => (
+        value ? (
+          <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+            {JSON.stringify(value, null, 2)}
+          </pre>
+        ) : '-'
+      ),
+    },
+    { title: t('pages.system.printTemplates.columnUsage'), dataIndex: 'usage_count' },
+    { title: t('pages.system.printTemplates.columnLastUsed'), dataIndex: 'last_used_at', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
+
+  return (
+    <>
+      <ListPageTemplate statCards={statCards}>
+        <UniTable<PrintTemplate>
+          columnPersistenceId="pages.system.print-templates.list-v2"
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, _sort, _filter, searchFormValues) => {
+            const { current = 1, pageSize = 20 } = params;
+            const skip = (current - 1) * pageSize;
+            const limit = pageSize;
+            
+            const listParams: any = {
+              skip,
+              limit,
+              ...searchFormValues,
+            };
+            
+            try {
+              const [data, total] = await Promise.all([
+                getPrintTemplateList(listParams),
+                countWithPagedRequests(getPrintTemplateList, searchFormValues || {}, { chunkSize: 100 }),
+              ]);
+              
+              // 同时获取所有数据用于统计（如果当前页是第一页）
+              if (current === 1) {
+                try {
+                  const allData = await getPrintTemplateList({ skip: 0, limit: 1000 });
+                  setAllTemplates(allData);
+                } catch {
+                  // 忽略统计数据的错误
+                }
+              }
+              
+              return {
+                data,
+                success: true,
+                total,
+              };
+            } catch (error: any) {
+              window.console.error(t('pages.system.printTemplates.loadListFailed'), error);
+              messageApi.error(error?.message || t('pages.system.printTemplates.loadListFailed'));
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          showCreateButton
+          createButtonText={t('pages.system.printTemplates.createButton')}
+          onCreate={handleCreate}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText={t('common.batchDelete')}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          toolBarRender={() => [
+            <Button {...rowActionKind('import')} key="loadPreset" onClick={handleLoadPreset} loading={presetLoading}>
+              {t('pages.system.printTemplates.loadPresetButton')}
+            </Button>
+          ]}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            let items: PrintTemplate[] = [];
+            if (type === 'selected' && keys?.length) {
+              items = await Promise.all(keys.map((k) => getPrintTemplateByUuid(String(k))));
+            } else if (type === 'currentPage' && pageData?.length) {
+              items = pageData;
+            } else {
+              items = await fetchAllListItems((p) => getPrintTemplateList(p));
+            }
+            if (items.length === 0) {
+              messageApi.warning(t('common.exportNoData'));
+              return;
+            }
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `print-templates-${todaySiteDateString()}.xlsx`,
+            );
+            messageApi.success(t('pages.system.printTemplates.exportSuccess'));
+          }}
+          viewTypes={['table', 'card', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.printTemplates')}
+          defaultViewType="table"
+          cardViewConfig={{
+            renderCard,
+          }}
+        />
+      </ListPageTemplate>
+
+      {/* 创建/编辑 Modal */}
+      <FormModalTemplate
+        title={isEdit ? t('pages.system.printTemplates.modalEdit') : t('pages.system.printTemplates.modalCreate')}
+        open={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+          setCurrentEditDetail(null);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={formRef}
+        onValuesChange={(changed, all) => {
+          if ('document_type' in changed) {
+            const baseCode = all.document_type ? DOCUMENT_TYPE_TO_CODE[all.document_type] : '';
+            if (!baseCode) {
+              formRef.current?.setFieldValue('code', '');
+              return;
+            }
+            getNextPrintTemplateCode(baseCode)
+              .then((resp) => {
+                formRef.current?.setFieldValue('code', resp.code || baseCode);
+              })
+              .catch(() => {
+                formRef.current?.setFieldValue('code', baseCode);
+              });
+          }
+        }}
+      >
+        <ProFormText
+          name="name"
+          label={t('pages.system.printTemplates.labelName')}
+          rules={[{ required: true, message: t('pages.system.printTemplates.nameRequired') }]}
+        />
+        <SafeProFormSelect
+          name="document_type"
+          label={t('pages.system.printTemplates.labelDocumentType')}
+          rules={[{ required: true, message: t('pages.system.printTemplates.documentTypeRequired') }]}
+          options={translatedDocumentTypeOptions}
+          tooltip={t('pages.system.printTemplates.documentTypeTooltip')}
+        />
+        <ProFormText
+          name="code"
+          label={t('pages.system.printTemplates.labelCode')}
+          rules={[{ required: true, message: t('pages.system.printTemplates.codeRequired') }]}
+          disabled
+          tooltip={t('pages.system.printTemplates.codeTooltip')}
+        />
+        <SafeProFormSelect
+          name="type"
+          label={t('pages.system.printTemplates.labelOutputFormat')}
+          rules={[{ required: true, message: t('pages.system.printTemplates.outputFormatRequired') }]}
+          options={[
+            { label: t('pages.system.printTemplates.typePdf'), value: 'pdf' },
+            { label: t('pages.system.printTemplates.typeHtml'), value: 'html' },
+            { label: t('pages.system.printTemplates.typeWord'), value: 'word' },
+            { label: t('pages.system.printTemplates.typeExcel'), value: 'excel' },
+            { label: t('pages.system.printTemplates.typeOther'), value: 'other' },
+          ]}
+          disabled={isEdit}
+        />
+        <ProFormTextArea
+          name="description"
+          label={t('common.remark')}
+          fieldProps={{ rows: 3 }}
+        />
+        {isEdit && (
+          <ProFormSwitch name="is_default" label={t('pages.system.printTemplates.labelDefault')} />
+        )}
+        <ProFormSwitch name="is_active" label={t('common.enabled')} />
+      </FormModalTemplate>
+
+      {/* 渲染模板 Modal */}
+      <Modal
+        title={t('pages.system.printTemplates.renderModalTitle')}
+        open={renderModalVisible}
+        onCancel={() => setRenderModalVisible(false)}
+        footer={null}
+        width={700}
+      >
+        <ProForm
+          form={renderFormRef}
+          loading={renderFormLoading}
+          onFinish={handleRenderSubmit}
+          submitter={{
+            searchConfig: {
+              submitText: t('pages.system.printTemplates.submitRender'),
+            },
+          }}
+        >
+          <ProFormTextArea
+            name="data"
+            label={t('pages.system.printTemplates.labelTemplateData')}
+            rules={[{ required: true, message: t('pages.system.printTemplates.templateDataRequired') }]}
+            fieldProps={{
+              rows: 6,
+              style: { fontFamily: CODE_FONT_FAMILY },
+              placeholder: t('pages.system.printTemplates.templateDataPlaceholder'),
+            }}
+            tooltip={t('pages.system.printTemplates.templateDataTooltip')}
+          />
+          <SafeProFormSelect
+            name="output_format"
+            label={t('pages.system.printTemplates.labelOutputFormat')}
+            options={[
+              { label: 'PDF', value: 'pdf' },
+              { label: 'HTML', value: 'html' },
+            ]}
+          />
+          <ProFormSwitch
+            name="async_execution"
+            label={t('pages.system.printTemplates.labelAsync')}
+            tooltip={t('pages.system.printTemplates.asyncTooltip')}
+          />
+        </ProForm>
+        
+        {renderResult && (
+          <div style={{ marginTop: 24, padding: 16, background: '#f5f5f5', borderRadius: 4 }}>
+            <div style={{ marginBottom: 8, fontWeight: 'bold' }}>{t('pages.system.printTemplates.resultTitle')}</div>
+            {renderResult.success ? (
+              <div style={{ color: '#52c41a' }}>{t('pages.system.printTemplates.resultSuccess')}</div>
+            ) : (
+              <div style={{ color: '#ff4d4f' }}>{t('pages.system.printTemplates.resultFailed')}</div>
+            )}
+            {renderResult.error && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontWeight: 'bold', marginBottom: 4 }}>{t('pages.system.printTemplates.errorLabel')}</div>
+                <pre style={{ background: '#fff', padding: 8, borderRadius: 4, maxHeight: 200, overflow: 'auto', color: '#ff4d4f' }}>
+                  {renderResult.error}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* 详情 Drawer */}
+      <SystemMasterDetailDrawer
+        title={t('pages.system.printTemplates.detailTitle')}
+        open={drawerVisible}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={detailColumns as any}
+      />
+    </>
+  );
+};
+
+export default PrintTemplateListPage;

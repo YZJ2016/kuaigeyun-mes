@@ -1,0 +1,1425 @@
+"""统一审核动作 → 各业务 Service 的分发实现。
+
+与 ``manifest.audit`` 声明的 entity_type 一一对应；未实现的动作用 ``ValidationError`` 显式报错。
+"""
+
+from __future__ import annotations
+
+from typing import Any, Awaitable, Callable, Dict, Optional
+
+from infra.exceptions.exceptions import ValidationError
+
+DispatchFn = Callable[..., Awaitable[Any]]
+
+
+def _unsupported(entity_type: str, action: str) -> None:
+    raise ValidationError(f"实体 {entity_type} 不支持审核动作: {action}")
+
+
+async def _dispatch_sales_order(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+
+    svc = SalesOrderService()
+    if action == "submit":
+        return await svc.submit_sales_order(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_sales_order(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_sales_order(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.unapprove_sales_order(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_sales_order(tenant_id, entity_id, user_id)
+    _unsupported("sales_order", action)
+
+
+async def _dispatch_sales_order_change(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.order_change import ApproveChangeRequest
+    from apps.kuaizhizao.services.sales_order_change_service import SalesOrderChangeService
+
+    svc = SalesOrderChangeService()
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve(
+            tenant_id, entity_id, ApproveChangeRequest(approved=True, review_remarks=reason), user_id
+        )
+    if action == "reject":
+        return await svc.approve(
+            tenant_id,
+            entity_id,
+            ApproveChangeRequest(approved=False, review_remarks=reason or "审批驳回"),
+            user_id,
+        )
+    if action == "withdraw":
+        return await svc.withdraw(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_sales_order_change_approval(tenant_id, entity_id, user_id)
+    _unsupported("sales_order_change", action)
+
+
+async def _dispatch_sales_forecast(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.sales_service import SalesForecastService
+
+    svc = SalesForecastService()
+    if action == "submit":
+        return await svc.submit_forecast(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_forecast(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_forecast(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.withdraw_forecast_approval(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_forecast(tenant_id, entity_id, user_id)
+    _unsupported("sales_forecast", action)
+
+
+async def _dispatch_sales_contract(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.sales_contract_service import SalesContractService
+
+    svc = SalesContractService()
+    reviewer_name = await svc.get_user_name(user_id) or str(user_id)
+    if action == "submit":
+        return await svc.submit_contract(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_contract(
+            tenant_id, entity_id, user_id, reviewer_name, review_remarks=reason
+        )
+    if action == "reject":
+        return await svc.reject_contract(
+            tenant_id, entity_id, user_id, reviewer_name, review_remarks=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_contract(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_contract_approval(tenant_id, entity_id, user_id)
+    _unsupported("sales_contract", action)
+
+
+async def _dispatch_quotation(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.quotation_service import QuotationService
+
+    svc = QuotationService()
+    if action == "submit":
+        return await svc.submit_quotation(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_quotation(tenant_id, entity_id, user_id, review_remarks=reason)
+    if action == "reject":
+        return await svc.reject_quotation(
+            tenant_id, entity_id, user_id, review_remarks=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_quotation(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_review_quotation(tenant_id, entity_id, user_id)
+    _unsupported("quotation", action)
+
+
+async def _dispatch_shipment_notice(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.shipment_notice_service import ShipmentNoticeService
+
+    svc = ShipmentNoticeService()
+    if action == "submit":
+        return await svc.submit_shipment_notice(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_shipment_notice(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_shipment_notice(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_shipment_notice_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_shipment_notice_approval(tenant_id, entity_id, user_id)
+    _unsupported("shipment_notice", action)
+
+
+async def _dispatch_sales_delivery(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.warehouse_service import SalesDeliveryService
+
+    svc = SalesDeliveryService()
+    if action == "submit":
+        return await svc.submit_sales_delivery(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_sales_delivery(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_sales_delivery(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_sales_delivery_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_sales_delivery_approval(tenant_id, entity_id, user_id)
+    _unsupported("sales_delivery", action)
+
+
+async def _dispatch_production_picking(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.warehouse_service import ProductionPickingService
+
+    svc = ProductionPickingService()
+    if action == "submit":
+        return await svc.submit_production_picking(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_production_picking(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_production_picking(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_production_picking_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_production_picking_approval(tenant_id, entity_id, user_id)
+    _unsupported("production_picking", action)
+
+
+async def _dispatch_work_order(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+    svc = WorkOrderService()
+    if action == "submit":
+        return await svc.submit_work_order(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_work_order(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_work_order(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_work_order_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_work_order_approval(tenant_id, entity_id, user_id)
+    _unsupported("work_order", action)
+
+
+async def _dispatch_sales_return(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.warehouse_service import SalesReturnService
+
+    svc = SalesReturnService()
+    if action == "submit":
+        return await svc.submit_sales_return(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_sales_return(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_sales_return(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_sales_return_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_sales_return_approval(tenant_id, entity_id, user_id)
+    _unsupported("sales_return", action)
+
+
+async def _dispatch_purchase_return(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.warehouse_service import PurchaseReturnService
+
+    svc = PurchaseReturnService()
+    if action == "submit":
+        return await svc.submit_purchase_return(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_purchase_return(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_purchase_return(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_purchase_return_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_purchase_return_approval(tenant_id, entity_id, user_id)
+    _unsupported("purchase_return", action)
+
+
+async def _dispatch_sales_contract_change(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.sales_contract_service import SalesContractService
+
+    svc = SalesContractService()
+    if action == "submit":
+        return await svc.submit_contract_change(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_contract_change(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_contract_change(
+            tenant_id, entity_id, user_id, review_remarks=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_contract_change(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_contract_change_approval(tenant_id, entity_id, user_id)
+    _unsupported("sales_contract_change", action)
+
+
+async def _dispatch_demand(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.demand_service import DemandService
+
+    svc = DemandService()
+    if action == "submit":
+        return await svc.submit_demand(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_demand(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_demand(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_demand(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.unapprove_demand(tenant_id, entity_id, user_id)
+    _unsupported("demand", action)
+
+
+async def _dispatch_purchase_order(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.purchase import PurchaseOrderApprove
+    from apps.kuaizhizao.services.purchase_service import PurchaseService
+
+    svc = PurchaseService()
+    if action == "submit":
+        return await svc.submit_purchase_order(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_purchase_order(
+            tenant_id,
+            entity_id,
+            PurchaseOrderApprove(approved=True, review_remarks=reason),
+            user_id,
+        )
+    if action == "reject":
+        return await svc.approve_purchase_order(
+            tenant_id,
+            entity_id,
+            PurchaseOrderApprove(approved=False, review_remarks=reason or "审批驳回"),
+            user_id,
+        )
+    if action == "withdraw":
+        return await svc.withdraw_purchase_order(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_purchase_order_approval(tenant_id, entity_id, user_id)
+    _unsupported("purchase_order", action)
+
+
+async def _dispatch_purchase_order_change(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.order_change import ApproveChangeRequest
+    from apps.kuaizhizao.services.purchase_order_change_service import PurchaseOrderChangeService
+
+    svc = PurchaseOrderChangeService()
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve(
+            tenant_id, entity_id, ApproveChangeRequest(approved=True, review_remarks=reason), user_id
+        )
+    if action == "reject":
+        return await svc.approve(
+            tenant_id,
+            entity_id,
+            ApproveChangeRequest(approved=False, review_remarks=reason or "审批驳回"),
+            user_id,
+        )
+    if action == "withdraw":
+        return await svc.withdraw(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_purchase_order_change_approval(tenant_id, entity_id, user_id)
+    _unsupported("purchase_order_change", action)
+
+
+async def _dispatch_purchase_request(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+
+    svc = PurchaseRequisitionService()
+    if action == "submit":
+        return await svc.submit_requisition(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_requisition(
+            tenant_id, entity_id, True, review_remarks=reason, approved_by=user_id
+        )
+    if action == "reject":
+        return await svc.approve_requisition(
+            tenant_id, entity_id, False, review_remarks=reason or "审批驳回", approved_by=user_id
+        )
+    if action == "revoke":
+        return await svc.withdraw_approval(tenant_id, entity_id, operator_id=user_id)
+    if action == "withdraw":
+        return await svc.withdraw_requisition(tenant_id, entity_id, user_id)
+    _unsupported("purchase_request", action)
+
+
+async def _dispatch_purchase_arrival_delay(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.purchase_arrival import ApproveDelayReportRequest
+    from apps.kuaizhizao.services.purchase_arrival_delay_service import PurchaseArrivalDelayService
+
+    svc = PurchaseArrivalDelayService()
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve(
+            tenant_id,
+            entity_id,
+            ApproveDelayReportRequest(approved=True, review_remarks=reason),
+            user_id,
+        )
+    if action == "reject":
+        return await svc.approve(
+            tenant_id,
+            entity_id,
+            ApproveDelayReportRequest(approved=False, review_remarks=reason or "审批驳回"),
+            user_id,
+        )
+    _unsupported("purchase_arrival_delay", action)
+
+
+async def _dispatch_purchase_inquiry(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
+
+    svc = PurchaseInquiryService()
+    if action == "submit":
+        return await svc.submit_inquiry(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_inquiry(tenant_id, entity_id, True, user_id, remarks=reason)
+    if action == "reject":
+        return await svc.approve_inquiry(
+            tenant_id, entity_id, False, user_id, remarks=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.withdraw_approval(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_inquiry(tenant_id, entity_id, user_id)
+    _unsupported("purchase_inquiry", action)
+
+
+async def _dispatch_reporting_record(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.reporting_service import ReportingService
+
+    svc = ReportingService()
+    if action == "approve":
+        return await svc.approve_reporting_record(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_reporting_record(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_reporting_approval(tenant_id, entity_id, user_id)
+    if action == "submit":
+        return await svc.submit_reporting_record(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        _unsupported("reporting_record", action)
+    _unsupported("reporting_record", action)
+
+
+async def _dispatch_incoming_inspection(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.quality_service import IncomingInspectionService
+
+    svc = IncomingInspectionService()
+    if action == "approve":
+        return await svc.approve_inspection(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_inspection(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_approval(tenant_id, entity_id, user_id)
+    if action in ("submit", "withdraw"):
+        _unsupported("incoming_inspection", action)
+    _unsupported("incoming_inspection", action)
+
+
+async def _dispatch_process_inspection(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.quality_service import ProcessInspectionService
+
+    svc = ProcessInspectionService()
+    if action == "approve":
+        return await svc.approve_inspection(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_inspection(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_approval(tenant_id, entity_id, user_id)
+    if action in ("submit", "withdraw"):
+        _unsupported("process_inspection", action)
+    _unsupported("process_inspection", action)
+
+
+async def _dispatch_finished_goods_inspection(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.quality_service import FinishedGoodsInspectionService
+
+    svc = FinishedGoodsInspectionService()
+    if action == "approve":
+        return await svc.approve_inspection(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_inspection(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_approval(tenant_id, entity_id, user_id)
+    if action in ("submit", "withdraw"):
+        _unsupported("finished_goods_inspection", action)
+    _unsupported("finished_goods_inspection", action)
+
+
+async def _dispatch_oqc_inspection(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.quality_improvement_service import OQCInspectionService
+
+    svc = OQCInspectionService()
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user_id, approve=True)
+    if action == "reject":
+        return await svc.approve(tenant_id, entity_id, user_id, approve=False)
+    if action == "revoke":
+        return await svc.revoke_approval(tenant_id, entity_id, user_id)
+    if action in ("submit", "withdraw"):
+        _unsupported("oqc_inspection", action)
+    _unsupported("oqc_inspection", action)
+
+
+async def _dispatch_receivable(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaicaiwu.services.finance_service import ReceivableService
+
+    svc = ReceivableService()
+    if action == "submit":
+        return await svc.submit_receivable(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_receivable(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_receivable(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_receivable(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_receivable(tenant_id, entity_id, user_id)
+    _unsupported("receivable", action)
+
+
+async def _dispatch_payable(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaicaiwu.services.finance_service import PayableService
+
+    svc = PayableService()
+    if action == "submit":
+        return await svc.submit_payable(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_payable(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_payable(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_payable(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_payable(tenant_id, entity_id, user_id)
+    _unsupported("payable", action)
+
+
+async def _dispatch_purchase_invoice(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
+
+    svc = PurchaseInvoiceService()
+    if action == "submit":
+        return await svc.submit_invoice(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_invoice(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_invoice(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_invoice(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_invoice(tenant_id, entity_id, user_id)
+    _unsupported("purchase_invoice", action)
+
+
+async def _dispatch_bom_change(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.master_data.services.bom_change_service import BOMChangeService
+
+    if action == "submit":
+        return await BOMChangeService.submit_change(tenant_id, entity_id, user_id)
+    if action == "approve":
+        change = await BOMChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await BOMChangeService.approve_change(
+            tenant_id, change.uuid, user_id, True, reason
+        )
+    if action == "reject":
+        change = await BOMChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await BOMChangeService.approve_change(
+            tenant_id, change.uuid, user_id, False, reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await BOMChangeService.withdraw_change(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await BOMChangeService.revoke_change(tenant_id, entity_id, user_id)
+    _unsupported("bom_change", action)
+
+
+async def _dispatch_process_route_change(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.master_data.services.process_route_change_service import ProcessRouteChangeService
+
+    if action == "submit":
+        return await ProcessRouteChangeService.submit_change(tenant_id, entity_id, user_id)
+    if action == "approve":
+        change = await ProcessRouteChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await ProcessRouteChangeService.approve_change(
+            tenant_id, change.uuid, user_id, True, reason
+        )
+    if action == "reject":
+        change = await ProcessRouteChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await ProcessRouteChangeService.approve_change(
+            tenant_id, change.uuid, user_id, False, reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await ProcessRouteChangeService.withdraw_change(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await ProcessRouteChangeService.revoke_change(tenant_id, entity_id, user_id)
+    _unsupported("process_route_change", action)
+
+
+async def _dispatch_drawing_change(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.master_data.services.drawing_change_service import DrawingChangeService
+
+    if action == "submit":
+        change = await DrawingChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await DrawingChangeService.submit_change(tenant_id, change.uuid, user_id)
+    if action == "approve":
+        change = await DrawingChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await DrawingChangeService.approve_change(
+            tenant_id, change.uuid, user_id, True, reason
+        )
+    if action == "reject":
+        change = await DrawingChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await DrawingChangeService.approve_change(
+            tenant_id, change.uuid, user_id, False, reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await DrawingChangeService.withdraw_change(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await DrawingChangeService.revoke_change(tenant_id, entity_id, user_id)
+    _unsupported("drawing_change", action)
+
+
+async def _resolve_user_or_raise(user_id: int):
+    from infra.models.user import User
+
+    user = await User.get_or_none(id=user_id)
+    if user is None:
+        raise ValidationError(f"用户不存在: {user_id}")
+    return user
+
+
+async def _dispatch_product_firmware(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.services.product_firmware_service import ProductFirmwareService
+
+    svc = ProductFirmwareService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("product_firmware", action)
+    _unsupported("product_firmware", action)
+
+
+async def _dispatch_production_file(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.services.production_file_service import ProductionFileService
+
+    svc = ProductionFileService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("production_file", action)
+    _unsupported("production_file", action)
+
+
+async def _dispatch_trial_flow(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.services.trial_flow_service import TrialFlowService
+
+    svc = TrialFlowService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("trial_flow", action)
+    _unsupported("trial_flow", action)
+
+
+async def _dispatch_rework_order(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
+
+    svc = ReworkOrderService()
+    if action == "submit":
+        return await svc.submit_rework_order(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_rework_order(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_rework_order(tenant_id, entity_id, user_id)
+    if action in ("withdraw", "revoke"):
+        _unsupported("rework_order", action)
+    _unsupported("rework_order", action)
+
+
+async def _dispatch_quality_complaint(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.quality_complaint_service import QualityComplaintService
+    from infra.models.user import User
+
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        raise ValueError(f"用户不存在: {user_id}")
+    svc = QualityComplaintService()
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("quality_complaint", action)
+    _unsupported("quality_complaint", action)
+
+
+async def _dispatch_supplier_evaluation(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.supplier_evaluation_service import SupplierEvaluationService
+    from infra.models.user import User
+
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        raise ValueError(f"用户不存在: {user_id}")
+    svc = SupplierEvaluationService()
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("supplier_evaluation", action)
+    _unsupported("supplier_evaluation", action)
+
+
+async def _dispatch_engineering_change(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.services.engineering_change_service import EngineeringChangeService
+
+    svc = EngineeringChangeService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("engineering_change", action)
+    _unsupported("engineering_change", action)
+
+
+async def _dispatch_sample_process(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.services.sample_process_service import SampleProcessService
+
+    svc = SampleProcessService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("sample_process", action)
+    _unsupported("sample_process", action)
+
+
+async def _dispatch_prototype_build_sheet(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.services.prototype_build_sheet_service import PrototypeBuildSheetService
+
+    svc = PrototypeBuildSheetService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("prototype_build_sheet", action)
+    _unsupported("prototype_build_sheet", action)
+
+
+async def _dispatch_rd_deliverable(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.models.rd_project import RdProjectDeliverable
+    from apps.kuaiplm.services.rd_project_service import RdProjectService
+
+    svc = RdProjectService()
+    user = await _resolve_user_or_raise(user_id)
+    row = await RdProjectDeliverable.get_or_none(
+        tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+    )
+    if row is None:
+        raise ValidationError(f"研发交付物不存在: {entity_id}")
+    if action == "submit":
+        return await svc.submit_deliverable(tenant_id, row.project_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve_deliverable(tenant_id, row.project_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject_deliverable_by_id(
+            tenant_id, entity_id, user, reason=reason
+        )
+    if action in ("withdraw", "revoke"):
+        _unsupported("rd_deliverable", action)
+    _unsupported("rd_deliverable", action)
+
+
+async def _dispatch_material_review(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.services.material_review_service import MaterialReviewService
+
+    svc = MaterialReviewService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("material_review", action)
+    _unsupported("material_review", action)
+
+
+async def _dispatch_bom_collaboration(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.services.bom_collaboration_service import BomCollaborationService
+
+    svc = BomCollaborationService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("bom_collaboration", action)
+    _unsupported("bom_collaboration", action)
+
+
+async def _dispatch_project_proposal(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.services.project_proposal_service import ProjectProposalService
+
+    svc = ProjectProposalService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("project_proposal", action)
+    _unsupported("project_proposal", action)
+
+
+async def _dispatch_mold_sample(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaiplm.services.mold_sample_order_service import MoldSampleOrderService
+
+    svc = MoldSampleOrderService()
+    user = await _resolve_user_or_raise(user_id)
+    if action == "submit":
+        return await svc.submit(tenant_id, entity_id, user)
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user)
+    if action == "reject":
+        return await svc.reject(tenant_id, entity_id, user)
+    if action in ("withdraw", "revoke"):
+        _unsupported("mold_sample", action)
+    _unsupported("mold_sample", action)
+
+
+async def _dispatch_freight_bill(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.freight_bill_service import FreightBillService
+
+    svc = FreightBillService()
+    if action == "submit":
+        return await svc.submit_freight_bill(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_freight_bill(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_freight_bill(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_freight_bill_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_freight_bill_approval(tenant_id, entity_id, user_id)
+    _unsupported("freight_bill", action)
+
+
+async def _dispatch_kuaioa_form_request(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaioa.services.form_service import FormRequestService, apply_form_request_decision
+
+    svc = FormRequestService()
+    if action == "submit":
+        return await svc.submit_request(tenant_id, entity_id, user_id)
+    if action == "approve":
+        await apply_form_request_decision(tenant_id, entity_id, True, user_id)
+        return await svc.get_request(tenant_id, entity_id)
+    if action == "reject":
+        await apply_form_request_decision(tenant_id, entity_id, False, user_id)
+        return await svc.get_request(tenant_id, entity_id)
+    if action == "revoke":
+        return await svc.revoke_request(tenant_id, entity_id, user_id)
+    _unsupported("kuaioa_form_request", action)
+
+
+async def _dispatch_kuaioa_asset_purchase(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaioa.services.asset_service import AssetPurchaseService, apply_asset_purchase_decision
+
+    svc = AssetPurchaseService()
+    if action == "submit":
+        return await svc.submit_purchase(tenant_id, entity_id, user_id)
+    if action == "approve":
+        await apply_asset_purchase_decision(tenant_id, entity_id, True, user_id)
+        return await svc.get_purchase(tenant_id, entity_id)
+    if action == "reject":
+        await apply_asset_purchase_decision(tenant_id, entity_id, False, user_id)
+        return await svc.get_purchase(tenant_id, entity_id)
+    if action == "revoke":
+        return await svc.revoke_purchase(tenant_id, entity_id, user_id)
+    _unsupported("kuaioa_asset_purchase", action)
+
+
+def _make_kuaioa_dispatch(
+    *,
+    entity_key: str,
+    service_import: str,
+    service_cls: str,
+    get_method: str,
+    submit_method: str,
+    revoke_method: str,
+    decision_import: str,
+    decision_fn: str,
+):
+    async def dispatch(
+        action: str,
+        *,
+        tenant_id: int,
+        entity_id: int,
+        user_id: int,
+        reason: Optional[str],
+    ) -> Any:
+        mod = __import__(service_import, fromlist=[service_cls, decision_fn])
+        svc = getattr(mod, service_cls)()
+        get_fn = getattr(svc, get_method)
+        if action == "submit":
+            return await getattr(svc, submit_method)(tenant_id, entity_id, user_id)
+        if action == "approve":
+            from core.services.approval.uni_audit_service import UniAuditService
+
+            async def flow_approve() -> Any:
+                await getattr(mod, decision_fn)(tenant_id, entity_id, True, user_id)
+                return await get_fn(tenant_id, entity_id)
+
+            result = await UniAuditService.approve_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type=entity_key,
+                entity_id=entity_id,
+                approver_id=user_id,
+                flow_approve=flow_approve,
+            )
+            if result is not None:
+                return result
+            return await get_fn(tenant_id, entity_id)
+        if action == "reject":
+            from core.services.approval.uni_audit_service import UniAuditService
+
+            async def flow_reject() -> Any:
+                await getattr(mod, decision_fn)(tenant_id, entity_id, False, user_id)
+                return await get_fn(tenant_id, entity_id)
+
+            result = await UniAuditService.reject_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type=entity_key,
+                entity_id=entity_id,
+                approver_id=user_id,
+                reason=reason,
+                flow_reject=flow_reject,
+            )
+            if result is not None:
+                return result
+            return await get_fn(tenant_id, entity_id)
+        if action == "revoke":
+            return await getattr(svc, revoke_method)(tenant_id, entity_id, user_id)
+        _unsupported(entity_key, action)
+
+    return dispatch
+
+
+_dispatch_kuaioa_leave = _make_kuaioa_dispatch(
+    entity_key="kuaioa_leave",
+    service_import="apps.kuaioa.services.leave_service",
+    service_cls="LeaveRequestService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.leave_service",
+    decision_fn="apply_leave_request_decision",
+)
+_dispatch_kuaioa_seal = _make_kuaioa_dispatch(
+    entity_key="kuaioa_seal",
+    service_import="apps.kuaioa.services.seal_service",
+    service_cls="SealRequestService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.seal_service",
+    decision_fn="apply_seal_request_decision",
+)
+_dispatch_kuaioa_special_price = _make_kuaioa_dispatch(
+    entity_key="kuaioa_special_price",
+    service_import="apps.kuaioa.services.collaboration_service",
+    service_cls="SpecialPriceRequestService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.collaboration_service",
+    decision_fn="apply_special_price_decision",
+)
+_dispatch_kuaioa_concession = _make_kuaioa_dispatch(
+    entity_key="kuaioa_concession",
+    service_import="apps.kuaioa.services.collaboration_service",
+    service_cls="ConcessionRequestService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.collaboration_service",
+    decision_fn="apply_concession_decision",
+)
+_dispatch_kuaioa_process_deviation = _make_kuaioa_dispatch(
+    entity_key="kuaioa_process_deviation",
+    service_import="apps.kuaioa.services.collaboration_service",
+    service_cls="ProcessDeviationService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.collaboration_service",
+    decision_fn="apply_process_deviation_decision",
+)
+_dispatch_kuaioa_dept_training_application = _make_kuaioa_dispatch(
+    entity_key="kuaioa_dept_training_application",
+    service_import="apps.kuaioa.services.training_workflow_service",
+    service_cls="DeptTrainingApplicationService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.training_workflow_service",
+    decision_fn="apply_dept_training_application_decision",
+)
+_dispatch_kuaioa_special_work_qualification = _make_kuaioa_dispatch(
+    entity_key="kuaioa_special_work_qualification",
+    service_import="apps.kuaioa.services.training_workflow_service",
+    service_cls="SpecialWorkQualificationService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.training_workflow_service",
+    decision_fn="apply_special_work_qualification_decision",
+)
+_dispatch_kuaioa_training_plan = _make_kuaioa_dispatch(
+    entity_key="kuaioa_training_plan",
+    service_import="apps.kuaioa.services.training_workflow_service",
+    service_cls="AnnualTrainingPlanService",
+    get_method="get_plan",
+    submit_method="submit_plan",
+    revoke_method="revoke_plan",
+    decision_import="apps.kuaioa.services.training_workflow_service",
+    decision_fn="apply_training_plan_decision",
+)
+
+
+HANDLERS: Dict[str, DispatchFn] = {
+    "sales_order": _dispatch_sales_order,
+    "sales_order_change": _dispatch_sales_order_change,
+    "sales_forecast": _dispatch_sales_forecast,
+    "sales_contract": _dispatch_sales_contract,
+    "quotation": _dispatch_quotation,
+    "shipment_notice": _dispatch_shipment_notice,
+    "sales_delivery": _dispatch_sales_delivery,
+    "production_picking": _dispatch_production_picking,
+    "work_order": _dispatch_work_order,
+    "sales_return": _dispatch_sales_return,
+    "purchase_return": _dispatch_purchase_return,
+    "sales_contract_change": _dispatch_sales_contract_change,
+    "demand": _dispatch_demand,
+    "purchase_order": _dispatch_purchase_order,
+    "purchase_order_change": _dispatch_purchase_order_change,
+    "purchase_arrival_delay": _dispatch_purchase_arrival_delay,
+    "purchase_request": _dispatch_purchase_request,
+    "purchase_inquiry": _dispatch_purchase_inquiry,
+    "reporting_record": _dispatch_reporting_record,
+    "incoming_inspection": _dispatch_incoming_inspection,
+    "process_inspection": _dispatch_process_inspection,
+    "finished_goods_inspection": _dispatch_finished_goods_inspection,
+    "oqc_inspection": _dispatch_oqc_inspection,
+    "receivable": _dispatch_receivable,
+    "payable": _dispatch_payable,
+    "purchase_invoice": _dispatch_purchase_invoice,
+    "bom_change": _dispatch_bom_change,
+    "process_route_change": _dispatch_process_route_change,
+    "drawing_change": _dispatch_drawing_change,
+    "product_firmware": _dispatch_product_firmware,
+    "production_file": _dispatch_production_file,
+    "trial_flow": _dispatch_trial_flow,
+    "rework_order": _dispatch_rework_order,
+    "quality_complaint": _dispatch_quality_complaint,
+    "supplier_evaluation": _dispatch_supplier_evaluation,
+    "engineering_change": _dispatch_engineering_change,
+    "sample_process": _dispatch_sample_process,
+    "prototype_build_sheet": _dispatch_prototype_build_sheet,
+    "rd_deliverable": _dispatch_rd_deliverable,
+    "material_review": _dispatch_material_review,
+    "bom_collaboration": _dispatch_bom_collaboration,
+    "project_proposal": _dispatch_project_proposal,
+    "mold_sample": _dispatch_mold_sample,
+    "freight_bill": _dispatch_freight_bill,
+    "kuaioa_form_request": _dispatch_kuaioa_form_request,
+    "kuaioa_asset_purchase": _dispatch_kuaioa_asset_purchase,
+    "kuaioa_leave": _dispatch_kuaioa_leave,
+    "kuaioa_seal": _dispatch_kuaioa_seal,
+    "kuaioa_special_price": _dispatch_kuaioa_special_price,
+    "kuaioa_concession": _dispatch_kuaioa_concession,
+    "kuaioa_process_deviation": _dispatch_kuaioa_process_deviation,
+    "kuaioa_dept_training_application": _dispatch_kuaioa_dept_training_application,
+    "kuaioa_special_work_qualification": _dispatch_kuaioa_special_work_qualification,
+    "kuaioa_training_plan": _dispatch_kuaioa_training_plan,
+}

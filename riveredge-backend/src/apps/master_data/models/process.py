@@ -1,0 +1,634 @@
+"""
+工艺数据模型模块
+
+定义工艺数据模型（不良品、工序、工艺路线、作业程序），支持多组织隔离。
+"""
+
+from tortoise import fields
+from tortoise.models import Model
+from core.models.base import BaseModel
+
+
+class DefectType(BaseModel):
+    """
+    不良品模型
+    
+    不良品类型信息，用于管理生产过程中的不良品分类。
+    
+    Attributes:
+        id: 主键ID（自增ID，内部使用）
+        uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
+        tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
+        code: 不良品编码（组织内唯一）
+        name: 不良品名称
+        category: 分类
+        description: 描述
+        is_active: 是否启用
+        created_at: 创建时间（继承自BaseModel）
+        updated_at: 更新时间（继承自BaseModel）
+        deleted_at: 删除时间（软删除）
+    """
+    
+    class Meta:
+        """
+        模型元数据
+        """
+        table = "apps_master_data_defect_types"
+        table_description = "基础数据管理 - 不良类型"
+        indexes = [
+            ("tenant_id",),
+            ("code",),
+            ("uuid",),
+            ("category",),
+        ]
+        unique_together = [("tenant_id", "code")]
+    
+    # 主键（BaseModel 不包含 id 字段，需要自己定义）
+    id = fields.IntField(pk=True, description="主键ID")
+    
+    # 基本信息
+    code = fields.CharField(max_length=50, description="不良品编码（组织内唯一）")
+    name = fields.CharField(max_length=200, description="不良品名称")
+    category = fields.CharField(max_length=50, null=True, description="分类")
+    description = fields.TextField(null=True, description="描述")
+    
+    # 状态信息
+    is_active = fields.BooleanField(default=True, description="是否启用")
+    
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+    
+    def __str__(self):
+        """字符串表示"""
+        return f"{self.code} - {self.name}"
+
+
+class SOPExecution(BaseModel):
+    """
+    SOP 执行实例模型
+    
+    用于定义和管理组织内的 SOP 执行实例，每个实例对应一个 SOP 的执行。
+    支持多组织隔离，每个组织的执行实例相互独立。
+    
+    注意：继承自 BaseModel，自动包含 uuid、tenant_id、created_at、updated_at 字段。
+    """
+    
+    class Meta:
+        """
+        模型元数据
+        """
+        table = "apps_master_data_sop_executions"
+        table_description = "基础数据管理 - SOP执行记录"
+        indexes = [
+            ("tenant_id",),
+            ("uuid",),
+            ("sop_id",),
+            ("status",),
+            ("executor_id",),
+            ("current_node_id",),
+            ("created_at",),
+            # 复合索引：优化常用组合查询
+            ("tenant_id", "status"),  # 按组织+状态查询
+            ("tenant_id", "executor_id", "status"),  # 按组织+执行人+状态查询（我的任务）
+            ("tenant_id", "created_at"),  # 按组织+创建时间查询（时间范围查询）
+        ]
+    
+    # 主键
+    id = fields.IntField(pk=True, description="执行实例ID（主键，自增ID，内部使用）")
+    # uuid 字段由 BaseModel 提供
+    # tenant_id 字段由 BaseModel 提供
+    
+    # 关联 SOP
+    sop = fields.ForeignKeyField(
+        "models.SOP",
+        related_name="executions",
+        description="关联SOP（外键）"
+    )
+    
+    # 执行基本信息
+    title = fields.CharField(max_length=200, description="执行标题")
+    description = fields.TextField(null=True, description="执行描述")
+    
+    # 执行状态
+    status = fields.CharField(
+        max_length=20,
+        default="pending",
+        description="执行状态（pending、running、completed、paused、cancelled）"
+    )
+    
+    # 当前节点
+    current_node_id = fields.CharField(max_length=100, null=True, description="当前节点ID")
+    
+    # 节点执行数据（存储每个节点的表单填写数据）
+    node_data = fields.JSONField(
+        null=True,
+        description="节点执行数据（JSON格式，格式：{nodeId: {formData: {...}, completedAt: '...'}}）"
+    )
+    
+    # 执行信息
+    executor_id = fields.IntField(description="执行人ID")
+    started_at = fields.DatetimeField(description="开始时间")
+    completed_at = fields.DatetimeField(null=True, description="完成时间")
+    
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+    
+    def __str__(self):
+        """字符串表示"""
+        return f"{self.title} ({self.status})"
+
+
+class Operation(BaseModel):
+    """
+    工序模型
+    
+    生产工序信息，用于管理生产过程中的各个工序。
+    
+    Attributes:
+        id: 主键ID（自增ID，内部使用）
+        uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
+        tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
+        code: 工序编码（组织内唯一）
+        name: 工序名称
+        description: 描述
+        is_active: 是否启用
+        created_at: 创建时间（继承自BaseModel）
+        updated_at: 更新时间（继承自BaseModel）
+        deleted_at: 删除时间（软删除）
+    """
+    
+    class Meta:
+        """
+        模型元数据
+        """
+        table = "apps_master_data_operations"
+        table_description = "基础数据管理 - 工序"
+        indexes = [
+            ("tenant_id",),
+            ("code",),
+            ("uuid",),
+        ]
+        # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
+        # 支持软删除后重用编码，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
+        # unique_together = [("tenant_id", "code")]
+    
+    # 主键（BaseModel 不包含 id 字段，需要自己定义）
+    id = fields.IntField(pk=True, description="主键ID")
+    
+    # 基本信息
+    code = fields.CharField(max_length=50, description="工序编码（组织内唯一）")
+    name = fields.CharField(max_length=200, description="工序名称")
+    description = fields.TextField(null=True, description="描述")
+    
+    # 工序类型和跳转规则（核心功能，新增）
+    reporting_type = fields.CharField(
+        max_length=20,
+        default="quantity",
+        description="报工类型（quantity:按数量报工, status:按状态报工）"
+    )
+    allow_jump = fields.BooleanField(
+        default=False,
+        description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）"
+    )
+    is_node_operation = fields.BooleanField(
+        default=False,
+        description="是否节点工序（允许跳转时前序节点工序仍不可跳过）"
+    )
+    over_report_mode = fields.CharField(
+        max_length=20,
+        default="none",
+        description="超报模式（none/fixed/percent）",
+    )
+    over_report_value = fields.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=0,
+        description="超报值：fixed 为额外数量，percent 为计划数量的百分数",
+    )
+    
+    # 状态信息
+    is_active = fields.BooleanField(default=True, description="是否启用")
+    
+    # 默认生产人员（用户ID列表，JSON格式存储，同组织）
+    default_operator_ids = fields.JSONField(null=True, description="默认生产人员（用户ID列表）")
+    default_team_ids = fields.JSONField(null=True, description="默认工作小组（小组ID列表）")
+    default_workshop_ids = fields.JSONField(null=True, description="默认车间（车间ID列表）")
+    default_work_center_ids = fields.JSONField(null=True, description="默认工作中心（工作中心ID列表）")
+    default_station_ids = fields.JSONField(null=True, description="默认工位（工位ID列表）")
+    default_equipment_ids = fields.JSONField(null=True, description="默认设备（设备ID列表）")
+    
+    # 绑定不良品项（M2M，通过 OperationDefectType）
+    defect_types = fields.ManyToManyField(
+        "models.DefectType",
+        through="models.OperationDefectType",
+        related_name="operations",
+        description="允许绑定的不良品项",
+    )
+    
+    # 质检选项（简易质检与不良品类型联动，方案质检与快制造质检模块联动）
+    inspection_mode = fields.CharField(
+        max_length=20,
+        default="none",
+        description="质检模式（none:无质检, simple:简易质检, plan:方案质检）"
+    )
+    default_inspection_plan_id = fields.IntField(
+        null=True,
+        description="默认质检方案ID（方案质检时使用，关联 kuaizhizao.InspectionPlan）"
+    )
+    inspection_stages = fields.JSONField(
+        null=True,
+        description="过程检验策略 JSON：ipqc 含 mode、plan_id",
+    )
+
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+    
+    def __str__(self):
+        """字符串表示"""
+        return f"{self.code} - {self.name}"
+
+
+class OperationDefectType(Model):
+    """
+    工序-不良品项关联（M2M 中间表）
+    工序允许绑定的不良品项。表仅含 id、operation_id、defect_type_id。
+    """
+    class Meta:
+        table = "apps_master_data_operation_defect_types"
+        table_description = "基础数据管理 - 工序不良类型关联"
+        unique_together = [("operation_id", "defect_type_id")]
+
+    id = fields.IntField(pk=True)
+    operation = fields.ForeignKeyField("models.Operation", on_delete=fields.CASCADE, related_name="operation_defect_type_links")
+    defect_type = fields.ForeignKeyField("models.DefectType", on_delete=fields.CASCADE, related_name="operation_defect_type_links")
+
+
+class ProcessRoute(BaseModel):
+    """
+    工艺路线模型
+    
+    工序序列组合，用于定义生产过程中的工序顺序。
+    
+    Attributes:
+        id: 主键ID（自增ID，内部使用）
+        uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
+        tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
+        code: 工艺路线编码（组织内唯一）
+        name: 工艺路线名称
+        description: 描述
+        operation_sequence: 工序序列（JSON格式存储）
+        is_active: 是否启用
+        created_at: 创建时间（继承自BaseModel）
+        updated_at: 更新时间（继承自BaseModel）
+        deleted_at: 删除时间（软删除）
+    """
+    
+    class Meta:
+        """
+        模型元数据
+        """
+        table = "apps_master_data_process_routes"
+        table_description = "基础数据管理 - 工艺路线"
+        indexes = [
+            ("tenant_id",),
+            ("code",),
+            ("uuid",),
+            ("version",),  # 版本索引
+            ("code", "version"),  # 编码+版本复合索引，用于查询特定编码的所有版本
+            ("parent_route_id",),  # 父工艺路线索引
+            ("parent_operation_uuid",),  # 父工序UUID索引
+            ("level",),  # 嵌套层级索引
+        ]
+        # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
+        # 支持软删除后重用编码+版本组合，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
+        # unique_together = [("tenant_id", "code", "version")]  # 同一租户下，编码+版本唯一
+    
+    # 主键（BaseModel 不包含 id 字段，需要自己定义）
+    id = fields.IntField(pk=True, description="主键ID")
+    
+    # 基本信息
+    code = fields.CharField(max_length=50, description="工艺路线编码（组织内唯一）")
+    name = fields.CharField(max_length=200, description="工艺路线名称")
+    description = fields.TextField(null=True, description="描述")
+    
+    # 版本管理（核心功能，新增）
+    version = fields.CharField(max_length=20, default="1.0", description="版本号（如：v1.0、v1.1）")
+    version_description = fields.TextField(null=True, description="版本说明")
+    base_version = fields.CharField(max_length=20, null=True, description="基于版本（从哪个版本创建）")
+    effective_date = fields.DatetimeField(null=True, description="生效日期")
+    
+    # 工序序列（JSON格式存储）
+    operation_sequence = fields.JSONField(null=True, description="工序序列（JSON格式，存储工序ID及顺序，支持子工艺路线）")
+
+    # 路线级默认超报（序列项未单独配置时可继承）
+    over_report_mode = fields.CharField(
+        max_length=20,
+        default="none",
+        description="路线默认超报模式（none/fixed/percent）",
+    )
+    over_report_value = fields.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=0,
+        description="路线默认超报值",
+    )
+
+    # 路线级工序跳转（为真时启用节点工序等跳转控制；为假时仅允许按序报工）
+    allow_operation_jump = fields.BooleanField(
+        default=False,
+        description="路线级是否允许工序跳转",
+    )
+    
+    # 子工艺路线支持（核心功能，新增）
+    parent_route = fields.ForeignKeyField(
+        "models.ProcessRoute",
+        related_name="sub_routes",
+        null=True,
+        description="父工艺路线（如果此工艺路线是子工艺路线，则指向父工艺路线）"
+    )
+    parent_operation_uuid = fields.CharField(max_length=100, null=True, description="父工序UUID（此子工艺路线所属的父工序）")
+    level = fields.IntField(default=0, description="嵌套层级（0为主工艺路线，1为第一层子工艺路线，最多3层）")
+    
+    # 状态信息
+    is_active = fields.BooleanField(default=True, description="是否启用")
+    
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+    
+    def __str__(self):
+        """字符串表示"""
+        return f"{self.code} - {self.name} (v{self.version})"
+
+
+class ProcessRouteTemplate(BaseModel):
+    """
+    工艺路线模板模型
+    
+    用于保存常用工艺路线作为模板，支持快速创建和复用。
+    
+    Attributes:
+        id: 主键ID（自增ID，内部使用）
+        uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
+        tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
+        code: 模板编码（组织内唯一）
+        name: 模板名称
+        category: 模板分类（如：注塑类、组装类、包装类等）
+        description: 模板描述
+        scope: 适用范围（all_materials:所有物料, all_groups:所有物料分组, specific_groups:特定物料分组）
+        scope_groups: 适用范围物料分组列表（JSON格式，当scope为specific_groups时使用）
+        process_route_config: 工艺路线配置（JSON格式，包含工序顺序、标准工时、SOP关联、跳转规则等）
+        version: 模板版本号
+        is_active: 是否启用
+        created_at: 创建时间（继承自BaseModel）
+        updated_at: 更新时间（继承自BaseModel）
+        deleted_at: 删除时间（软删除）
+    """
+    
+    class Meta:
+        """
+        模型元数据
+        """
+        table = "apps_master_data_process_route_templates"
+        table_description = "基础数据管理 - 工艺路线模板"
+        indexes = [
+            ("tenant_id",),
+            ("code",),
+            ("uuid",),
+            ("category",),
+            ("version",),
+            ("is_active",),
+        ]
+        # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
+        # 支持软删除后重用编码+版本组合，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
+        # unique_together = [("tenant_id", "code", "version")]
+    
+    # 主键
+    id = fields.IntField(pk=True, description="主键ID")
+    
+    # 基本信息
+    code = fields.CharField(max_length=50, description="模板编码（组织内唯一）")
+    name = fields.CharField(max_length=200, description="模板名称")
+    category = fields.CharField(max_length=50, null=True, description="模板分类（如：注塑类、组装类、包装类等）")
+    description = fields.TextField(null=True, description="模板描述")
+    
+    # 适用范围
+    scope = fields.CharField(
+        max_length=20,
+        default="all_materials",
+        description="适用范围（all_materials:所有物料, all_groups:所有物料分组, specific_groups:特定物料分组）"
+    )
+    scope_groups = fields.JSONField(
+        null=True,
+        description="适用范围物料分组列表（JSON格式，当scope为specific_groups时使用）"
+    )
+    
+    # 工艺路线配置（完整复制工艺路线的所有配置）
+    process_route_config = fields.JSONField(
+        null=True,
+        description="工艺路线配置（JSON格式，包含工序顺序、标准工时、SOP关联、跳转规则等）"
+    )
+    
+    # 版本管理
+    version = fields.CharField(max_length=20, default="1.0", description="模板版本号")
+    version_description = fields.TextField(null=True, description="版本说明")
+    base_version = fields.CharField(max_length=20, null=True, description="基于版本（从哪个版本创建）")
+    
+    # 状态信息
+    is_active = fields.BooleanField(default=True, description="是否启用")
+    
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+    
+    def __str__(self):
+        """字符串表示"""
+        return f"{self.code} - {self.name} (v{self.version})"
+
+
+class SOP(BaseModel):
+    """
+    标准作业程序（SOP）模型
+    
+    标准作业程序，用于管理生产过程中的作业指导书。
+    
+    Attributes:
+        id: 主键ID（自增ID，内部使用）
+        uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
+        tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
+        code: SOP编码（组织内唯一）
+        name: SOP名称
+        operation_id: 关联工序ID（外键，可选）
+        version: 版本号
+        content: SOP内容（支持富文本）
+        attachments: 附件列表（JSON格式存储）
+        is_active: 是否启用
+        created_at: 创建时间（继承自BaseModel）
+        updated_at: 更新时间（继承自BaseModel）
+        deleted_at: 删除时间（软删除）
+    """
+    
+    class Meta:
+        """
+        模型元数据
+        """
+        table = "apps_master_data_sop"
+        table_description = "基础数据管理 - SOP"
+        indexes = [
+            ("tenant_id",),
+            ("code",),
+            ("uuid",),
+            ("operation_id",),
+        ]
+        # 注意：唯一约束已通过数据库部分唯一索引实现（WHERE deleted_at IS NULL）
+        # 支持软删除后重用编码，详见迁移文件：63_20260122182517_add_partial_unique_indexes_for_soft_delete.py
+        # unique_together = [("tenant_id", "code")]
+    
+    # 主键（BaseModel 不包含 id 字段，需要自己定义）
+    id = fields.IntField(pk=True, description="主键ID")
+    
+    # 基本信息
+    code = fields.CharField(max_length=100, description="SOP编码（组织内唯一，可含路线-工序-物料/组后缀）")
+    name = fields.CharField(max_length=200, description="SOP名称")
+    version = fields.CharField(max_length=20, null=True, description="版本号")
+    
+    # 内容信息
+    content = fields.TextField(null=True, description="SOP内容（支持富文本）")
+    attachments = fields.JSONField(null=True, description="附件列表（JSON格式，存储附件信息）")
+    
+    # eSOP 流程配置（ProFlow）
+    flow_config = fields.JSONField(null=True, description="流程配置（ProFlow JSON格式，包含 nodes 和 edges）")
+    
+    # eSOP 表单配置（Formily）— 业务含义为「报工数据采集项」
+    form_config = fields.JSONField(null=True, description="报工数据采集项（Formily Schema，类型：数字/选择/文本/日期时间，含必填与校验）")
+    
+    # 关联关系（ForeignKeyField 会自动创建 operation_id 字段）
+    operation = fields.ForeignKeyField(
+        "models.Operation",
+        related_name="sops",
+        null=True,
+        description="关联工序"
+    )
+    
+    # 标准操作SOP 阶段一：绑定与融合（工艺路线+BOM 融合，不改造工艺路线表）
+    material_group_uuids = fields.JSONField(null=True, description="绑定的物料组 UUID 列表（JSON 数组）")
+    material_uuids = fields.JSONField(null=True, description="绑定的具体物料 UUID 列表（JSON 数组），匹配时优先于物料组")
+    route_uuids = fields.JSONField(null=True, description="载入的工艺路线 UUID 列表（JSON 数组），作为融合输入")
+    bom_load_mode = fields.CharField(
+        max_length=32,
+        default="by_material",
+        description="BOM 载入方式：by_material=按关联物料, by_material_group=按关联物料组, specific_bom=指定BOM"
+    )
+    specific_bom_uuid = fields.CharField(max_length=36, null=True, description="指定 BOM 的 UUID（当 bom_load_mode 为 specific_bom 时使用）")
+    
+    # 状态信息
+    is_active = fields.BooleanField(default=True, description="是否启用")
+
+    sop_domain = fields.CharField(
+        max_length=10,
+        default="pe",
+        description="业务域 pe=PE制造工段SOP qc=QC材料SOP",
+    )
+
+    # 文控：载体与受控状态
+    carrier = fields.CharField(
+        max_length=20,
+        default="electronic",
+        description="载体 electronic=电子 paper=纸质 hybrid=混合",
+    )
+    control_status = fields.CharField(
+        max_length=20,
+        default="draft",
+        description="文控状态 draft/in_review/effective/obsolete",
+    )
+    current_revision = fields.CharField(max_length=20, null=True, description="当前修订号")
+    storage_plant_id = fields.IntField(null=True, description="纸质原件存放厂区ID")
+    storage_location = fields.CharField(max_length=200, null=True, description="纸质存放位置")
+    keeper_name = fields.CharField(max_length=100, null=True, description="纸质保管人")
+    page_count = fields.IntField(null=True, description="纸质页数")
+    paper_size = fields.CharField(max_length=30, null=True, description="纸张规格")
+    change_reason = fields.TextField(null=True, description="变更原因")
+    effective_at = fields.DatetimeField(null=True, description="生效时间")
+    obsolete_at = fields.DatetimeField(null=True, description="作废时间")
+    approved_at = fields.DatetimeField(null=True, description="审核通过时间")
+    approved_by_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
+    qms_document_uuid = fields.CharField(max_length=36, null=True, description="关联质量体系文件UUID")
+    
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+    
+    def __str__(self):
+        """字符串表示"""
+        return f"{self.code} - {self.name}"
+
+
+class SopRevision(BaseModel):
+    """SOP 修订履历（每次生效/升版快照）"""
+
+    class Meta:
+        table = "apps_master_data_sop_revisions"
+        table_description = "基础数据管理 - SOP修订履历"
+        indexes = [
+            ("tenant_id",),
+            ("sop_id",),
+            ("revision",),
+        ]
+        unique_together = [("tenant_id", "sop_id", "revision")]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    sop = fields.ForeignKeyField(
+        "models.SOP",
+        related_name="revisions",
+        description="所属SOP",
+    )
+    revision = fields.CharField(max_length=20, description="修订号")
+    carrier = fields.CharField(max_length=20, description="载体快照")
+    content = fields.TextField(null=True, description="内容快照")
+    attachments = fields.JSONField(null=True, description="受控原件快照")
+    flow_config = fields.JSONField(null=True, description="流程配置快照")
+    form_config = fields.JSONField(null=True, description="报工采集项快照")
+    storage_location = fields.CharField(max_length=200, null=True, description="存放位置快照")
+    change_reason = fields.TextField(null=True, description="变更说明")
+    effective_at = fields.DatetimeField(null=True, description="生效时间")
+    obsolete_at = fields.DatetimeField(null=True, description="作废时间")
+    published_by_name = fields.CharField(max_length=100, null=True, description="发布人")
+    deleted_at = fields.DatetimeField(null=True, description="软删除")
+
+
+class SopControlledCopy(BaseModel):
+    """SOP 受控份（纸质发放/回收台账）"""
+
+    class Meta:
+        table = "apps_master_data_sop_controlled_copies"
+        table_description = "基础数据管理 - SOP受控份"
+        indexes = [
+            ("tenant_id",),
+            ("sop_id",),
+            ("status",),
+        ]
+        unique_together = [("tenant_id", "sop_id", "copy_no")]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    sop = fields.ForeignKeyField(
+        "models.SOP",
+        related_name="controlled_copies",
+        description="所属SOP",
+    )
+    copy_no = fields.CharField(max_length=20, description="受控份号")
+    location_type = fields.CharField(
+        max_length=20,
+        description="位置类型 plant/workshop/station/person",
+    )
+    station_id = fields.IntField(null=True, description="工位ID")
+    holder_user_id = fields.IntField(null=True, description="持有人用户ID")
+    location_note = fields.CharField(max_length=200, null=True, description="位置说明")
+    revision = fields.CharField(max_length=20, description="发放时修订号")
+    status = fields.CharField(
+        max_length=20,
+        default="issued",
+        description="issued/pending_retrieve/retrieved/lost",
+    )
+    issued_at = fields.DatetimeField(null=True, description="发放时间")
+    issued_by_name = fields.CharField(max_length=100, null=True, description="发放人")
+    retrieved_at = fields.DatetimeField(null=True, description="回收时间")
+    retrieved_by_name = fields.CharField(max_length=100, null=True, description="回收人")
+    deleted_at = fields.DatetimeField(null=True, description="软删除")
+

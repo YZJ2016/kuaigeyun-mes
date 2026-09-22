@@ -1,0 +1,613 @@
+import { toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils/formDate';
+/**
+ * 物料中心页面
+ *
+ * 集中处理工单线边备料与产线补料。
+ *
+ * Author: Luigi Lu
+ * Date: 2026-02-28
+ */
+
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Table, Form as AntForm, InputNumber, Row, Col, Tooltip } from 'antd';
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  ShoppingOutlined,
+  PhoneOutlined,
+  CarryOutOutlined,
+  BulbOutlined,
+} from '@ant-design/icons';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { UniPullQueryModal, isPullableScope, renderPullCapabilityTag, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import {
+  MultiTabListPageTemplate,
+  FormModalTemplate,
+  MODAL_CONFIG,
+  WAREHOUSE_DETAIL_TABLE_STYLES,
+} from '../../../../../components/layout-templates';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { batchingOrderApi } from '../../../services/batching-order';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { batchingOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import BatchingTaskQueue from './BatchingTaskQueue';
+import LineSidePrepSplitView from './LineSidePrepSplitView';
+import {
+  MaterialCenterDetailDrawer,
+  loadMaterialCenterDetail,
+  type MaterialCenterDetailRequest,
+} from './materialCenterDetail';
+import {
+  getMaterialCenterTabs,
+  DEFAULT_MATERIAL_CENTER_TAB,
+  resolveMaterialCenterTabKey,
+  resolveLegacyOutsourceMaterialCenterPath,
+  type MaterialCenterTabKey,
+  type BatchingTaskTabKey,
+} from './materialCenterTabs';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
+import type { Material } from '../../../../master-data/types/material';
+import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
+
+const MATERIAL_CENTER_RESOURCE = 'kuaizhizao:warehouse-management-batching-center';
+
+interface PullWorkOrderCandidate {
+  id: number;
+  code: string;
+  name?: string;
+  status?: string;
+  planned_quantity?: number;
+  pullable?: boolean;
+  capabilities?: {
+    push_batching_order?: { allowed?: boolean; reason?: string | null };
+  };
+}
+
+const BatchingCenterPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'batching_order.pull_from_work_order');
+  const { message: messageApi } = App.useApp();
+  const perms = useResourcePermissions(MATERIAL_CENTER_RESOURCE);
+
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const [searchParams] = useSearchParams();
+  const materialCenterTabs = useMemo(() => getMaterialCenterTabs(t), [t]);
+  const workOrderStatusValueEnum = useMemo(() => buildWorkOrderLifecycleValueEnum(t), [t]);
+
+  const renderWorkOrderStatusTag = useCallback(
+    (status?: string | null) => {
+      const raw = String(status ?? '').trim();
+      if (!raw) return '-';
+      const item = workOrderStatusValueEnum[raw];
+      if (item) {
+        const colorByProStatus: Record<string, string> = {
+          Default: 'default',
+          Processing: 'processing',
+          Success: 'success',
+          Error: 'error',
+          Warning: 'warning',
+        };
+        return <Tag color={colorByProStatus[item.status ?? 'Default']} variant="solid">{item.text}</Tag>;
+      }
+      const label = translateWorkOrderLifecycleStatus(t, raw);
+      return <Tag variant="solid">{label}</Tag>;
+    },
+    [t, workOrderStatusValueEnum],
+  );
+  const initialTab = useMemo(() => {
+    const tab = searchParams.get('tab');
+    const aliased = resolveMaterialCenterTabKey(tab);
+    if (aliased) return aliased;
+    if (tab && materialCenterTabs.some((item) => item.key === tab)) {
+      return tab as MaterialCenterTabKey;
+    }
+    return DEFAULT_MATERIAL_CENTER_TAB;
+  }, [searchParams, materialCenterTabs]);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const legacyOutsourcePath = resolveLegacyOutsourceMaterialCenterPath(tab);
+    if (legacyOutsourcePath) {
+      navigate(legacyOutsourcePath, { replace: true });
+    }
+  }, [navigate, searchParams]);
+  const [activeTabKey, setActiveTabKey] = useState<MaterialCenterTabKey>(initialTab);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailRequest, setDetailRequest] = useState<MaterialCenterDetailRequest | null>(null);
+  const [detailData, setDetailData] = useState<Record<string, unknown> | null>(null);
+  const formRef = useRef<any>(null);
+  const defaultBatchingItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', required_quantity: 1 };
+
+  const appendBatchingItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const current = formRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        ...defaultBatchingItem,
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_unit: m.baseUnit ?? '',
+      }));
+      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [messageApi, t]
+  );
+
+  /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
+  const handleCreate = (workOrderId?: number) => {
+    setCreateModalVisible(true);
+    setTimeout(() => {
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({
+        create_mode: 'from_work_order',
+        batching_date: dayjs(),
+        work_order_id: workOrderId,
+        work_order_code: '',
+        items: [defaultBatchingItem],
+      });
+    }, 0);
+  };
+
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const isPullBatchingWorkOrderSelectable = useCallback(
+    (record: PullWorkOrderCandidate) => record.capabilities?.push_batching_order?.allowed !== false,
+    [],
+  );
+
+  const pullFromWorkOrderQuery = useUniPullQuery<PullWorkOrderCandidate>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      const res = await batchingOrderApi.listPullCandidates({
+        skip: (page - 1) * pageSize,
+        limit: pageSize,
+        keyword: keyword.trim() || undefined,
+      });
+      const data = Array.isArray(res?.data) ? res.data : [];
+      const filtered = isPullableScope(scope)
+        ? data.filter((row) => isPullBatchingWorkOrderSelectable(row))
+        : data;
+      return { data: filtered, total: Number(res?.total ?? filtered.length) };
+    },
+    isRowDisabled: (record) => !isPullBatchingWorkOrderSelectable(record),
+    onConfirm: async (_selectedKeys, selectedRows) => {
+      const selected = (selectedRows || []).filter((row) => isPullBatchingWorkOrderSelectable(row));
+      if (!selected.length) {
+        messageApi.warning(t('app.kuaizhizao.batchingCenter.pull.selectWorkOrdersFirst'));
+        return;
+      }
+      try {
+        for (const row of selected) {
+          await batchingOrderApi.pullFromWorkOrder({
+            work_order_id: row.id,
+            batching_date: nowSiteDateTimeString(),
+          });
+        }
+        messageApi.success(t('app.kuaizhizao.batchingCenter.pullFromWorkOrderSuccess'));
+        pullFromWorkOrderQuery.closeModal();
+        setCreateModalVisible(false);
+        formRef.current?.resetFields();
+        invalidateMenuBadgeCounts();
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.batchingCenter.createFailed')));
+      }
+    },
+  });
+
+  const handleCreateSubmit = async (values: any) => {
+    try {
+      if (values.create_mode === 'from_work_order') {
+        pullFromWorkOrderQuery.openModal();
+        return;
+      }
+      const items = values.items || [];
+      if (items.length === 0) {
+        messageApi.error(t('app.kuaizhizao.batchingCenter.manualNeedItems'));
+        throw new Error(t('app.kuaizhizao.batchingCenter.manualNeedItems'));
+      }
+      const orderData: any = {
+        warehouse_id: values.warehouse_id,
+        warehouse_name: values._warehouse_name || '',
+        batching_date: toApiDateTimeString(values.batching_date) ?? nowSiteDateTimeString(),
+        remarks: values.remarks,
+        attachments: normalizeDocumentAttachments(values.attachments),
+      };
+      const itemPayload = items.map((it: any) => ({
+        material_id: it.material_id,
+        material_code: it.material_code || '',
+        material_name: it.material_name || '',
+        unit: it.material_unit || '',
+        required_quantity: Number(it.required_quantity) || 0,
+        warehouse_id: values.warehouse_id,
+        warehouse_name: values._warehouse_name || '',
+      }));
+      await batchingOrderApi.create({ ...orderData, items: itemPayload });
+      messageApi.success(t('app.kuaizhizao.batchingCenter.createSuccess'));
+      setCreateModalVisible(false);
+      formRef.current?.resetFields();
+      invalidateMenuBadgeCounts();
+    } catch (error: any) {
+      if (error.message && !error.message.includes('请选择') && !error.message.includes('请添加')) {
+        messageApi.error(error.message || t('app.kuaizhizao.batchingCenter.createFailed'));
+      }
+      throw error;
+    }
+  };
+
+  const openMaterialCenterDetail = useCallback((request: MaterialCenterDetailRequest) => {
+    setDetailRequest(request);
+    setDetailOpen(true);
+    setDetailLoading(true);
+    setDetailData(null);
+    loadMaterialCenterDetail(request)
+      .then((data) => setDetailData(data))
+      .catch((error: unknown) => {
+        messageApi.error(getApiErrorMessage(error, t('common.loadFailed')));
+        setDetailOpen(false);
+        setDetailRequest(null);
+      })
+      .finally(() => setDetailLoading(false));
+  }, [messageApi, t]);
+
+  const batchingDeepLinkOpenedRef = useRef(false);
+  useEffect(() => {
+    const highlightRaw = searchParams.get('highlight')?.trim();
+    const tab = searchParams.get('tab')?.trim();
+    if (tab === 'material_call') {
+      setActiveTabKey('material_call');
+    }
+    if (!highlightRaw) {
+      batchingDeepLinkOpenedRef.current = false;
+      return;
+    }
+    if (batchingDeepLinkOpenedRef.current) {
+      return;
+    }
+    batchingDeepLinkOpenedRef.current = true;
+    const id = Number(highlightRaw);
+    if (Number.isFinite(id) && id > 0) {
+      openMaterialCenterDetail({ kind: 'material_call', id });
+    }
+  }, [openMaterialCenterDetail, searchParams]);
+
+  const closeMaterialCenterDetail = useCallback(() => {
+    setDetailOpen(false);
+    setDetailRequest(null);
+    setDetailData(null);
+  }, []);
+
+  const tabIcons: Record<MaterialCenterTabKey, React.ReactNode> = {
+    line_side_prep: <CarryOutOutlined />,
+    batching_draft: <CarryOutOutlined />,
+    material_call: <PhoneOutlined />,
+    proactive_prep: <BulbOutlined />,
+  };
+
+  const taskTabs = useMemo(
+    () =>
+      materialCenterTabs.map((tab) => ({
+        key: tab.key,
+        label: (
+          <Tooltip title={tab.hint}>
+            <Space size={4}>
+              {tabIcons[tab.key]}
+              <span>{tab.label}</span>
+            </Space>
+          </Tooltip>
+        ),
+        children:
+          tab.key === 'line_side_prep' ? (
+            <LineSidePrepSplitView
+              onCreate={() => handleCreate()}
+              onOpenDetail={openMaterialCenterDetail}
+              canRead={perms.canRead}
+              onRefreshBatchingList={invalidateMenuBadgeCounts}
+            />
+          ) : (
+            <BatchingTaskQueue
+              taskType={tab.key as BatchingTaskTabKey}
+              onOpenDetail={openMaterialCenterDetail}
+              canRead={perms.canRead}
+              onRefreshBatchingList={invalidateMenuBadgeCounts}
+            />
+          ),
+      })),
+    [materialCenterTabs, invalidateMenuBadgeCounts, openMaterialCenterDetail, perms.canRead, t],
+  );
+
+  return (
+    <>
+      <MultiTabListPageTemplate
+        activeTabKey={activeTabKey}
+        onTabChange={(key) => setActiveTabKey(key as MaterialCenterTabKey)}
+        tabs={taskTabs}
+      />
+
+      {/* 新建线边备料单 Modal */}
+      <FormModalTemplate
+        title={t('app.kuaizhizao.batchingCenter.createModalTitle')}
+        open={createModalVisible}
+        onClose={() => {
+          setCreateModalVisible(false);
+          formRef.current?.resetFields();
+        }}
+        onFinish={handleCreateSubmit}
+        formRef={formRef}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        grid={false}
+      >
+        <ProFormRadio.Group
+          name="create_mode"
+          label={t('app.kuaizhizao.batchingCenter.createMode')}
+          options={[
+            { label: pullFromWorkOrderAction.label, value: 'from_work_order' },
+            { label: t('app.kuaizhizao.batchingCenter.createManual'), value: 'manual' },
+          ]}
+          rules={[{ required: true }]}
+        />
+        <ProFormDependency name={['create_mode']}>
+          {({ create_mode }) =>
+            create_mode === 'from_work_order' ? (
+              <>
+                <ProFormItem label={t('app.kuaizhizao.warehouseCommon.colWorkOrder')} required>
+                  <Button onClick={() => pullFromWorkOrderQuery.openModal()}>
+                    {t('app.kuaizhizao.batchingCenter.selectWorkOrder')}
+                  </Button>
+                </ProFormItem>
+              </>
+            ) : null
+          }
+        </ProFormDependency>
+        <ProFormDependency name={['create_mode']}>
+          {({ create_mode }) =>
+            create_mode === 'manual' ? (
+              <div className="uni-table-detail" style={{ width: '100%' }}>
+                <UniTableDetailHeader title={t('app.kuaizhizao.batchingCenter.batchingItems')} required />
+                <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.batchingCenter.minOneItem') }]}>
+                  <AntForm.List name="items">
+                    {(fields, { add, remove }) => {
+                      const cols = [
+                        {
+                          title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
+                          dataIndex: 'material_id',
+                          width: 260,
+                          render: (_: any, __: any, index: number) => (
+                            <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                              {({ getFieldValue }: any) => {
+                                const row = getFieldValue('items')?.[index];
+                                const mid = row?.material_id ? Number(row.material_id) : null;
+                                const fallback = mid && (row?.material_code || row?.material_name)
+                                  ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                                  : undefined;
+                                return (
+                                  <div className="warehouse-detail-material-cell">
+                                    <UniMaterialSelect
+                                      name={[index, 'material_id']}
+                                      label=""
+                                      placeholder={t('app.kuaizhizao.warehouseCommon.selectMaterial')}
+                                      required
+                                      size="small"
+                                      listFieldKey={index}
+                                      listFieldName="items"
+                                      fillMapping={{
+                                        material_code: 'mainCode',
+                                        material_name: 'name',
+                                        material_unit: 'baseUnit',
+                                      }}
+                                      fallbackOption={fallback}
+                                      formItemProps={{ style: { margin: 0 } }}
+                                      showQuickCreate
+                                      showAdvancedSearch
+                                    />
+                                  </div>
+                                );
+                              }}
+                            </AntForm.Item>
+                          ),
+                        },
+                        {
+                          title: t('app.kuaizhizao.batchingCenter.requiredQty'),
+                          dataIndex: 'required_quantity',
+                          width: 120,
+                          align: 'right' as const,
+                          render: (_: any, __: any, index: number) => (
+                            <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.required') }, { type: 'number', min: 0.0001, message: t('app.kuaizhizao.batchingCenter.qtyGtZero') }]} style={{ margin: 0 }}>
+                              <InputNumber placeholder={t('common.quantity')} min={0} precision={4} style={{ width: '100%' }} size="small" />
+                            </AntForm.Item>
+                          ),
+                        },
+                        {
+                          title: t('common.actions'),
+                          width: 60,
+                          render: (_: any, __: any, index: number) => (
+                            <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                          ),
+                        },
+                      ];
+                      const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
+                      return (
+                        <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                          <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                          <div style={{ width: '100%', overflowX: 'auto' }}>
+                            <Table
+                              className="warehouse-detail-table"
+                              size="small"
+                              dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                              rowKey="key"
+                              pagination={false}
+                              columns={cols}
+                              scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                              style={{ width: '100%', margin: 0 }}
+                              footer={() => (
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                                  <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultBatchingItem)}>
+                                    {t('app.kuaizhizao.warehouseCommon.addItem')}
+                                  </Button>
+                                  <Button
+                                    type="default"
+                                    icon={<ShoppingOutlined />}
+                                    style={{ flex: 1, minWidth: 120 }}
+                                    onClick={() => setMaterialPickerOpen(true)}
+                                  >
+                                    {t('app.kuaizhizao.common.materialBatchSelect')}
+                                  </Button>
+                                </div>
+                              )}
+                            />
+                          </div>
+                        </div>
+                      );
+                    }}
+                  </AntForm.List>
+                </AntForm.Item>
+              </div>
+            ) : null
+          }
+        </ProFormDependency>
+        <ProFormDependency name={['create_mode']}>
+          {({ create_mode }) =>
+            create_mode === 'manual' ? (
+              <>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <UniWarehouseSelect
+                      name="warehouse_id"
+                      label={t('app.kuaizhizao.batchingCenter.pickingWarehouse')}
+                      placeholder={t('app.kuaizhizao.batchingCenter.selectPickingWarehouse')}
+                      required
+                      onChange={(val, wh) => formRef.current?.setFieldsValue({ _warehouse_name: wh?.name })}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <UniWarehouseSelect
+                      name="target_warehouse_id"
+                      label={t('app.kuaizhizao.batchingCenter.targetLineSideWarehouse')}
+                      placeholder={t('app.kuaizhizao.batchingCenter.selectTargetLineSideWarehouse')}
+                      onChange={(val, wh) => formRef.current?.setFieldsValue({ _target_warehouse_name: wh?.name })}
+                    />
+                  </Col>
+                </Row>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <ProFormDatePicker
+                      name="batching_date"
+                      label={t('app.kuaizhizao.batchingCenter.batchingDate')}
+                      rules={[{ required: true, message: t('app.kuaizhizao.batchingCenter.selectBatchingDate') }]}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                  </Col>
+                  <Col span={12} />
+                </Row>
+                <DocumentAttachmentsField category="batching_order_attachments" />
+                <ProFormTextArea
+                  name="remarks"
+                  label={t('common.remark')}
+                  placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
+                  fieldProps={{ rows: 3 }}
+                  colProps={{ span: 24 }}
+                />
+              </>
+            ) : null
+          }
+        </ProFormDependency>
+      </FormModalTemplate>
+
+      <UniMaterialBatchPicker
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendBatchingItemsFromMaterials}
+      />
+
+      <UniPullQueryModal<PullWorkOrderCandidate>
+        open={pullFromWorkOrderQuery.open}
+        title={pullFromWorkOrderAction.label}
+        onCancel={pullFromWorkOrderQuery.closeModal}
+        onOk={pullFromWorkOrderQuery.handleConfirm}
+        columns={[
+          { title: t('app.kuaizhizao.warehouseCommon.colWorkOrderCode'), dataIndex: 'code', width: 180 },
+          { title: t('app.kuaizhizao.warehouseCommon.colWorkOrderName'), dataIndex: 'name', width: 220 },
+          {
+            title: t('common.status'),
+            dataIndex: 'status',
+            width: 140,
+            align: 'center' as const,
+            render: (_: unknown, r: PullWorkOrderCandidate) => renderWorkOrderStatusTag(r.status),
+          },
+          { title: t('app.kuaizhizao.batchingCenter.requiredQty'), dataIndex: 'planned_quantity', width: 120 },
+          {
+            title: t('app.kuaizhizao.batchingCenter.pullGateStatus'),
+            key: 'gate_status',
+            width: 180,
+            align: 'center' as const,
+            render: (_: unknown, r: PullWorkOrderCandidate) =>
+              renderPullCapabilityTag(
+                r.capabilities?.push_batching_order?.allowed !== false,
+                t('app.kuaizhizao.batchingCenter.canPull'),
+                batchingOrderCapabilityReasonMessage(r.capabilities?.push_batching_order?.reason, t)
+                  || t('app.kuaizhizao.batchingCenter.cannotPull'),
+              ),
+          },
+        ]}
+        rowKey="id"
+        dataSource={pullFromWorkOrderQuery.dataSource}
+        loading={pullFromWorkOrderQuery.loading}
+        confirmLoading={pullFromWorkOrderQuery.confirmLoading}
+        selectionType={pullFromWorkOrderQuery.selectionType}
+        selectedRowKeys={pullFromWorkOrderQuery.selectedRowKeys}
+        selectedRows={pullFromWorkOrderQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromWorkOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromWorkOrderQuery.isRowDisabled}
+        searchDraft={pullFromWorkOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromWorkOrderQuery.setSearchDraft}
+        onSearchApply={pullFromWorkOrderQuery.handleSearchApply}
+        onSearchClear={pullFromWorkOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromWorkOrderQuery.appliedKeyword}
+        page={pullFromWorkOrderQuery.page}
+        pageSize={pullFromWorkOrderQuery.pageSize}
+        total={pullFromWorkOrderQuery.total}
+        onPageChange={pullFromWorkOrderQuery.handlePageChange}
+        scopeOptions={pullFromWorkOrderQuery.scopeOptions}
+        scope={pullFromWorkOrderQuery.scope}
+        onScopeChange={pullFromWorkOrderQuery.handleScopeChange}
+        searchPlaceholder={t('app.kuaizhizao.warehouseCommon.searchWorkOrderCodeOrName')}
+        getRowLabel={(row) => [row.code, row.name].filter(Boolean).join(' ')}
+        okText={t('app.kuaizhizao.batchingCenter.pull.ok')}
+        cancelText={t('common.cancel')}
+      />
+
+      <MaterialCenterDetailDrawer
+        kind={detailRequest?.kind ?? null}
+        open={detailOpen}
+        loading={detailLoading}
+        detail={detailData}
+        onClose={closeMaterialCenterDetail}
+      />
+    </>
+  );
+};
+
+export default BatchingCenterPage;

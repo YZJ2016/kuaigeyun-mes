@@ -1,0 +1,198 @@
+/**
+ * 认证 API 服务
+ *
+ * 提供登录、注册、Token 刷新等认证相关的 API 接口
+ */
+
+import { apiRequest } from './api';
+
+/**
+ * 登录请求数据接口
+ */
+export interface LoginRequest {
+  username: string;
+  password: string;
+  tenant_id?: number; // 可选，用于多组织登录选择
+}
+
+/**
+ * 登录响应数据接口
+ *
+ * 与后端返回的数据结构匹配：
+ * - access_token: JWT 访问令牌
+ * - token_type: 令牌类型（通常为 "bearer"）
+ * - expires_in: 令牌过期时间（秒）
+ * - user: 用户信息
+ * - tenants: 用户可访问的组织列表（可选）
+ * - default_tenant_id: 默认组织 ID（可选）
+ * - requires_tenant_selection: 是否需要选择组织（当用户有多个组织时）
+ */
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: {
+    id: number;
+    uuid: string;
+    username: string;
+    email?: string;
+    full_name?: string;
+    tenant_id?: number;
+    tenant_name?: string;  // ⚠️ 关键修复：包含租户名称
+    is_infra_admin?: boolean;
+    is_tenant_admin?: boolean;
+    permissions?: string[];
+    permission_version?: number;
+    department?: { uuid: string; name: string };
+    position?: { uuid: string; name: string };
+    roles?: Array<{ uuid: string; name: string; code: string }>;
+  };
+  tenants?: Array<{
+    id: number;
+    uuid: string;
+    name: string;
+    domain: string;
+    status: string;
+  }>;
+  default_tenant_id?: number;
+  requires_tenant_selection?: boolean;
+}
+
+export interface TenantSwitchOption {
+  id: number;
+  uuid: string;
+  name: string;
+  domain: string;
+  status: string;
+}
+
+/**
+ * 用户信息接口
+ */
+export interface CurrentUser {
+  id: number;
+  uuid: string;
+  username: string;
+  email?: string;
+  full_name?: string;
+  avatar?: string;
+  is_infra_admin?: boolean;
+  is_tenant_admin?: boolean;
+  tenant_id?: number;
+  tenant_name?: string;
+  permissions?: string[];
+  permission_version?: number;
+  department?: { uuid: string; name: string };
+  position?: { uuid: string; name: string };
+  roles?: Array<{ uuid: string; name: string; code: string }>;
+}
+
+// 导出类型别名，便于在其他地方使用
+export type { CurrentUser as UserInfo };
+
+/**
+ * 登录
+ *
+ * @param data - 登录数据
+ * @returns 登录响应数据
+ */
+export async function login(data: LoginRequest): Promise<LoginResponse> {
+  return apiRequest<LoginResponse>('/auth/login', {
+    method: 'POST',
+    data,
+  });
+}
+
+/**
+ * 获取当前用户信息
+ *
+ * @returns 当前用户信息
+ */
+export async function getCurrentUser(): Promise<CurrentUser> {
+  return apiRequest<CurrentUser>('/auth/me');
+}
+
+/**
+ * 获取当前账号可切换的组织列表
+ */
+export async function getMyTenants(): Promise<TenantSwitchOption[]> {
+  return apiRequest<TenantSwitchOption[]>('/auth/my-tenants');
+}
+
+/**
+ * 切换当前会话组织并返回新的登录上下文
+ */
+export async function switchTenant(tenant_id: number): Promise<LoginResponse> {
+  return apiRequest<LoginResponse>('/auth/switch-tenant', {
+    method: 'POST',
+    data: { tenant_id },
+  });
+}
+
+/** 登录响应中的组织名称（唯一来源：后端 user.tenant_name） */
+export function tenantNameFromLoginResponse(response: LoginResponse): string {
+  return response.user?.tenant_name?.trim() ?? '';
+}
+
+/**
+ * 从服务端拉取最新用户权限并写入 Query / Store（角色权限变更后需调用）
+ */
+export async function refreshCurrentUserInStore(): Promise<CurrentUser> {
+  const { refetchSessionCurrentUser } = await import('../utils/sessionCurrentUser');
+  return refetchSessionCurrentUser();
+}
+
+/**
+ * 刷新 Token
+ *
+ * @param refreshToken - 刷新令牌
+ * @returns 新的 Token
+ */
+export async function refreshToken(accessOrRefreshToken: string): Promise<{
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}> {
+  return apiRequest('/auth/refresh', {
+    method: 'POST',
+    data: { token: accessOrRefreshToken },
+  });
+}
+
+/**
+ * 免注册体验登录
+ *
+ * 获取或创建默认组织和预设的体验账户，直接返回登录响应。
+ * 体验账户只有浏览权限（只读权限），无新建、编辑、删除权限。
+ *
+ * @returns 登录响应数据
+ */
+export async function guestLogin(): Promise<LoginResponse> {
+  return apiRequest<LoginResponse>('/auth/guest-login', {
+    method: 'POST',
+  });
+}
+
+/**
+ * 登出
+ */
+export async function logout(): Promise<void> {
+  return apiRequest<void>('/auth/logout', {
+    method: 'POST',
+  });
+}
+
+/**
+ * 微信登录回调
+ * 
+ * 使用微信授权码换取 JWT Token
+ * 
+ * @param code - 微信授权码
+ * @returns 登录响应数据
+ */
+export async function wechatLoginCallback(code: string): Promise<LoginResponse> {
+  return apiRequest<LoginResponse>('/auth/wechat/callback', {
+    method: 'POST',
+    data: { code },
+  });
+}

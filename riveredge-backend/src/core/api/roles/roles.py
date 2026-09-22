@@ -1,0 +1,580 @@
+"""
+角色管理 API 路由
+
+提供角色的 CRUD 操作和权限分配功能。
+"""
+
+from typing import Optional, List
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
+from pydantic import BaseModel, Field
+
+from core.models.role import Role
+from core.schemas.role import (
+    RoleCreate,
+    RoleUpdate,
+    RoleResponse,
+    RoleListResponse,
+    RolePermissionAssign,
+    RoleListItem,
+    PermissionInfo,
+    RoleUserListResponse,
+    RoleUsersMutate,
+)
+from core.services.authorization.role_service import RoleService
+from core.services.authorization.role_permission_matrix_service import RolePermissionMatrixService
+from core.schemas.role_function_grants import (
+    RoleFunctionGrantsResponse,
+    RoleFunctionGrantsReplace,
+)
+from core.api.deps.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_access
+from infra.api.deps.deps import get_current_user as soil_get_current_user
+from infra.models.user import User
+from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
+
+# 导入角色场景路由
+from .role_scenarios import router as role_scenarios_router
+
+
+def model_to_response(model_obj, response_class, **extra_fields):
+    """
+    将模型对象转换为响应对象，自动排除id字段
+
+    Args:
+        model_obj: Tortoise模型实例
+        response_class: 响应Schema类
+        **extra_fields: 额外的字段
+
+    Returns:
+        响应对象实例
+    """
+    obj_dict = model_obj.__dict__.copy()
+    # 移除内部ID字段，只保留UUID
+    if 'id' in obj_dict:
+        del obj_dict['id']
+
+    # 创建响应对象
+    response = response_class(**obj_dict)
+
+    # 设置额外字段
+    for key, value in extra_fields.items():
+        setattr(response, key, value)
+
+    return response
+
+router = APIRouter(prefix="/roles", tags=["Core - Roles"])
+
+
+class LoadRolePresetRequest(BaseModel):
+    codes: Optional[List[str]] = Field(None, description="角色编码列表；不传则加载全部预设")
+
+
+@router.get("/preset-preview")
+async def get_role_preset_preview(
+    _auth: object = Depends(require_access("system.role", "create")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """返回预设角色清单（静态），供前端勾选后再创建。"""
+    return [{**item} for item in RoleService.PRESET_ROLES]
+
+
+@router.post("/load-preset")
+async def load_preset_roles(
+    _auth: object = Depends(require_access("system.role", "create")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    body: Optional[LoadRolePresetRequest] = Body(None),
+):
+    """
+    加载中国中小制造业极简角色预设数据。
+    仅创建不存在的角色（按 code 去重）。
+    请求体可传 codes，仅创建选中项；不传则创建全部预设。
+    """
+    codes = body.codes if body else None
+    count = await RoleService.load_preset_sme(
+        tenant_id=tenant_id,
+        current_user_id=current_user.id,
+        codes=codes,
+    )
+    return {"created": count, "message": f"已加载 {count} 个角色"}
+
+
+@router.post("/cleanup-legacy")
+async def cleanup_legacy_roles(
+    _auth: object = Depends(require_access("system.role", "update")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    手动清理旧预设角色数据（不会在加载预设时自动触发）：
+    - 迁移旧名称/旧编码到新编码
+    - 合并重复角色关系
+    - 软删除被合并的旧角色
+    """
+    result = await RoleService.cleanup_legacy_preset_roles(tenant_id=tenant_id)
+    return {
+        "success": True,
+        "message": "旧预设角色清理完成",
+        **result,
+    }
+
+
+@router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+async def create_role(
+    data: RoleCreate,
+    _auth: object = Depends(require_access("system.role", "create")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    创建角色
+    
+    创建新角色并保存到数据库。如果角色代码已存在，则抛出异常。
+    
+    Args:
+        data: 角色创建数据
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        RoleResponse: 创建的角色对象
+        
+    Raises:
+        HTTPException: 当角色代码已存在时抛出
+    """
+    try:
+        role = await RoleService.create_role(
+            tenant_id=tenant_id,
+            data=data,
+            current_user_id=current_user.id
+        )
+        
+        # 转换为响应格式
+        return RoleResponse.model_validate(role)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except AuthorizationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+
+
+@router.get("", response_model=RoleListResponse)
+async def get_role_list(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    name: Optional[str] = Query(None, description="角色名称筛选"),
+    code: Optional[str] = Query(None, description="角色代码筛选"),
+    is_active: Optional[bool] = Query(None, description="是否启用筛选"),
+    is_system: Optional[bool] = Query(None, description="是否系统角色筛选"),
+    _auth: object = Depends(require_access("system.role", "read")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取角色列表
+    
+    支持分页、关键词搜索和筛选。
+    
+    Args:
+        page: 页码
+        page_size: 每页数量
+        keyword: 关键词搜索（搜索角色名称、代码、描述）
+        is_active: 是否启用筛选
+        is_system: 是否系统角色筛选
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        RoleListResponse: 角色列表响应
+    """
+    result = await RoleService.get_role_list(
+        tenant_id=tenant_id,
+        page=page,
+        page_size=page_size,
+        keyword=keyword,
+        name=name,
+        code=code,
+        is_active=is_active,
+        is_system=is_system,
+    )
+    
+    # 转换为响应格式
+    items = [RoleListItem.model_validate(item) for item in result["items"]]
+    
+    return RoleListResponse(
+        items=items,
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+    )
+
+
+@router.get("/{role_uuid}", response_model=RoleResponse)
+async def get_role(
+    role_uuid: str,
+    _auth: object = Depends(require_access("system.role", "read")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取角色详情
+    
+    根据UUID获取角色详细信息，包括关联的权限列表。
+    
+    Args:
+        role_uuid: 角色UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        RoleResponse: 角色详情响应
+        
+    Raises:
+        HTTPException: 当角色不存在时抛出
+    """
+    try:
+        role = await RoleService.get_role_by_uuid(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid
+        )
+        
+        # 通过 RolePermission 关联表获取权限数量
+        from core.models.role_permission import RolePermission
+        permission_count = await RolePermission.filter(role_id=role.id).count()
+        permission_list = []  # 权限列表暂时为空，避免多对多关系查询问题
+        
+        # 获取关联的用户数量
+        from core.models.user_role import UserRole
+        user_count = await UserRole.filter(role_id=role.id).count()
+
+        # 转换为响应格式
+        return model_to_response(
+            role, RoleResponse,
+            permissions=permission_list,
+            permission_count=permission_count,
+            user_count=user_count
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        # 捕获其他可能的异常（如数据库操作错误）
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取角色详情失败: {str(e)}"
+        )
+
+
+@router.put("/{role_uuid}", response_model=RoleResponse)
+async def update_role(
+    role_uuid: str,
+    data: RoleUpdate,
+    _auth: object = Depends(require_access("system.role", "update")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    更新角色
+    
+    更新角色的基本信息。系统角色不可修改。
+    
+    Args:
+        role_uuid: 角色UUID
+        data: 角色更新数据
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        RoleResponse: 更新后的角色对象
+        
+    Raises:
+        HTTPException: 当角色不存在或不可修改时抛出
+    """
+    try:
+        role = await RoleService.update_role(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid,
+            data=data,
+            current_user_id=current_user.id
+        )
+        
+        return RoleResponse.model_validate(role)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except AuthorizationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+
+
+@router.delete("/{role_uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_role(
+    role_uuid: str,
+    _auth: object = Depends(require_access("system.role", "delete")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    删除角色
+    
+    软删除角色。系统角色不可删除，有关联用户的角色不可删除。
+    
+    Args:
+        role_uuid: 角色UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Raises:
+        HTTPException: 当角色不存在或不可删除时抛出
+    """
+    try:
+        await RoleService.delete_role(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid,
+            current_user_id=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except AuthorizationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+
+
+@router.post("/{role_uuid}/permissions")
+async def assign_permissions(
+    role_uuid: str,
+    data: RolePermissionAssign,
+    _auth: object = Depends(require_access("system.role", "assign")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    分配权限给角色
+    
+    为角色分配权限。系统角色不可修改权限。
+    
+    Args:
+        role_uuid: 角色UUID
+        data: 权限分配数据（包含 permission_uuids 列表）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 操作结果
+        
+    Raises:
+        HTTPException: 当角色不存在或权限无效时抛出
+    """
+    try:
+        result = await RoleService.assign_permissions(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid,
+            permission_uuids=data.permission_uuids,
+            current_user_id=current_user.id
+        )
+        
+        return result
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except AuthorizationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+    except Exception as e:
+        # 捕获其他可能的异常（如数据库操作错误）
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"分配角色权限失败: {str(e)}"
+        )
+
+
+@router.get("/{role_uuid}/function-grants", response_model=RoleFunctionGrantsResponse)
+async def get_role_function_grants(
+    role_uuid: str,
+    _auth: object = Depends(require_access("system.role", "read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """角色功能权限矩阵（菜单树 + 按 code 回显，配置页专用）。"""
+    try:
+        return await RolePermissionMatrixService.get_function_grants(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/{role_uuid}/users", response_model=RoleUserListResponse)
+async def list_role_users(
+    role_uuid: str,
+    _auth: object = Depends(require_access("system.role", "read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """列出拥有该角色的用户（角色权限配置页右侧展示）。"""
+    try:
+        return await RoleService.list_role_users(tenant_id=tenant_id, role_uuid=role_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/{role_uuid}/users", response_model=RoleUserListResponse)
+async def add_role_users(
+    role_uuid: str,
+    body: RoleUsersMutate,
+    _auth: object = Depends(require_access("system.role", "assign")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """为角色追加关联用户。"""
+    try:
+        return await RoleService.add_role_users(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid,
+            user_uuids=body.user_uuids,
+            current_user_id=current_user.id,
+            current_user=current_user,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.delete("/{role_uuid}/users/{user_uuid}", response_model=RoleUserListResponse)
+async def remove_role_user(
+    role_uuid: str,
+    user_uuid: str,
+    _auth: object = Depends(require_access("system.role", "assign")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从角色移除单个关联用户。"""
+    try:
+        return await RoleService.remove_role_users(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid,
+            user_uuids=[user_uuid],
+            current_user_id=current_user.id,
+            current_user=current_user,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.put("/{role_uuid}/function-grants", response_model=RoleFunctionGrantsResponse)
+async def replace_role_function_grants(
+    role_uuid: str,
+    body: RoleFunctionGrantsReplace,
+    _auth: object = Depends(require_access("system.role", "assign")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """全量替换角色的功能权限（按 code）；不删除 data/field 类型绑定。"""
+    try:
+        return await RolePermissionMatrixService.replace_function_grants(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid,
+            codes=body.codes,
+            current_user_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.get("/{role_uuid}/permissions", response_model=list[PermissionInfo])
+async def get_role_permissions(
+    role_uuid: str,
+    _auth: object = Depends(require_access("system.role", "read")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取角色关联的权限列表
+    
+    根据角色UUID获取该角色关联的所有权限。
+    
+    Args:
+        role_uuid: 角色UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        List[PermissionInfo]: 权限列表
+        
+    Raises:
+        HTTPException: 当角色不存在时抛出
+    """
+    try:
+        permissions = await RoleService.get_role_permissions(
+            tenant_id=tenant_id,
+            role_uuid=role_uuid
+        )
+        
+        return [PermissionInfo.model_validate(p) for p in permissions]
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        # 捕获其他可能的异常（如序列化错误）
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取角色权限失败: {str(e)}"
+        )
+
+# 包含角色场景路由
+router.include_router(role_scenarios_router)

@@ -1,0 +1,94 @@
+/**
+ * 个人资料管理服务
+ * 
+ * 提供个人资料的查询和更新功能。
+ * 注意：所有 API 自动获取当前用户的个人资料
+ */
+
+import { apiRequest } from './api';
+
+export interface UserProfile {
+  uuid: string;
+  username: string;
+  email?: string;
+  full_name?: string;
+  phone?: string;
+  avatar?: string;
+  bio?: string;
+  contact_info?: Record<string, any>;
+  gender?: string;
+}
+
+export interface UpdateUserProfileData {
+  avatar?: string | null;
+  bio?: string;
+  contact_info?: Record<string, any> | null;
+  gender?: string;
+  email?: string;
+  full_name?: string;
+  phone?: string;
+  username?: string;
+}
+
+/**
+ * 获取当前用户个人资料
+ */
+export async function getUserProfile(): Promise<UserProfile> {
+  return apiRequest<UserProfile>('/personal/user-profile');
+}
+
+/**
+ * 更新当前用户个人资料
+ */
+export async function updateUserProfile(data: UpdateUserProfileData): Promise<UserProfile> {
+  return apiRequest<UserProfile>('/personal/user-profile', {
+    method: 'PUT',
+    data,
+  });
+}
+
+export interface ChangePasswordData {
+  old_password: string;
+  new_password: string;
+}
+
+/**
+ * 修改当前用户密码
+ */
+export async function changePassword(data: ChangePasswordData): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/personal/user-profile/change-password', {
+    method: 'POST',
+    data,
+  });
+}
+
+export interface BindWecomAccountResponse {
+  wecom_userid: string;
+  message: string;
+}
+
+/**
+ * 已登录用户扫码绑定企业微信
+ */
+export async function bindWecomAccount(data: {
+  code: string;
+  state?: string;
+}): Promise<BindWecomAccountResponse> {
+  return apiRequest<BindWecomAccountResponse>('/auth/wecom/bind', {
+    method: 'POST',
+    data,
+  });
+}
+
+export interface UnbindWecomAccountResponse {
+  message: string;
+}
+
+/**
+ * 已登录用户解绑企业微信
+ */
+export async function unbindWecomAccount(): Promise<UnbindWecomAccountResponse> {
+  return apiRequest<UnbindWecomAccountResponse>('/auth/wecom/unbind', {
+    method: 'POST',
+  });
+}

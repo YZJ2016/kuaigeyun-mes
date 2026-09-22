@@ -1,0 +1,138 @@
+"""
+报工记录数据模型模块
+
+定义报工记录数据模型，支持工序级报工。
+"""
+
+from tortoise import fields
+from core.models.base import BaseModel
+
+
+class ReportingRecord(BaseModel):
+    """
+    报工记录模型
+
+    记录工人对工单工序的报工信息。
+
+    Attributes:
+        id: 主键ID（自增ID，内部使用）
+        uuid: 业务ID（UUID，对外暴露，安全且唯一，继承自BaseModel）
+        tenant_id: 组织ID（用于多组织数据隔离，继承自BaseModel）
+        work_order_id: 工单ID
+        work_order_code: 工单编码
+        work_order_name: 工单名称
+        operation_id: 工序ID
+        operation_code: 工序编码
+        operation_name: 工序名称
+        worker_id: 操作工ID
+        worker_name: 操作工姓名
+        reported_quantity: 报工数量
+        qualified_quantity: 合格数量
+        unqualified_quantity: 不合格数量
+        work_hours: 工时（小时）
+        work_start_time: 工序开始时间
+        work_end_time: 工序完成时间
+        status: 审核状态（pending/approved/rejected）
+        reported_at: 报工时间
+        approved_at: 审核时间
+        approved_by: 审核人ID
+        approved_by_name: 审核人姓名
+        rejection_reason: 驳回原因
+        remarks: 备注
+        device_info: 设备信息（JSON格式）
+        created_at: 创建时间（继承自BaseModel）
+        updated_at: 更新时间（继承自BaseModel）
+        deleted_at: 删除时间（软删除）
+    """
+
+    class Meta:
+        """
+        模型元数据
+        """
+        table = "apps_kuaizhizao_reporting_records"
+        table_description = "快格轻制造 - 报工记录"
+        indexes = [
+            ("tenant_id",),
+            ("work_order_id",),
+            ("rework_order_id",),
+            ("operation_id",),
+            ("worker_id",),
+            ("team_id",),
+            ("status",),
+            ("reported_at",),
+            ("approved_at",),
+            ("created_at",),
+            ("kingdee_push_status", "kingdee_push_next_at"),
+        ]
+
+    # 主键（BaseModel 不包含 id 字段，需要自己定义）
+    id = fields.IntField(pk=True, description="主键ID")
+
+    # 工单信息
+    work_order_id = fields.IntField(description="工单ID")
+    rework_order_id = fields.IntField(null=True, description="返工单 ID（返工报工时有值）")
+    rework_order_operation_id = fields.IntField(
+        null=True, description="返工工序行 ID（apps_kuaizhizao_rework_order_operations.id）"
+    )
+    work_order_code = fields.CharField(max_length=50, description="工单编码")
+    work_order_name = fields.CharField(max_length=200, description="工单名称")
+
+    # 工序信息
+    operation_id = fields.IntField(description="工序ID")
+    operation_code = fields.CharField(max_length=50, description="工序编码")
+    operation_name = fields.CharField(max_length=200, description="工序名称")
+
+    # 操作工信息（生产人员：实际完成工序的人员；按小组报工时可空）
+    worker_id = fields.IntField(null=True, description="操作工ID（生产人员；按小组报工时可空）")
+    worker_name = fields.CharField(max_length=100, null=True, description="操作工姓名（生产人员）")
+
+    # 工作小组（与生产人员二选一或同时存档；按小组报工时必填）
+    team_id = fields.IntField(null=True, description="工作小组ID")
+    team_name = fields.CharField(max_length=100, null=True, description="工作小组名称")
+
+    # 记录人员：提交报工的用户；自报工时通常与生产人员为同一人，代报工时为录入人
+    recorded_by = fields.IntField(null=True, description="记录人用户ID（提交报工者）")
+    recorded_by_name = fields.CharField(max_length=100, null=True, description="记录人姓名")
+
+    # 报工来源渠道（X-Client-Channel 归一化码：pc/station/android/ios/mobile_h5/miniprogram）
+    client_channel = fields.CharField(max_length=32, null=True, description="报工来源渠道码")
+    # 报工方式：self 自报 / proxy 代报 / team 小组报工
+    report_mode = fields.CharField(max_length=16, null=True, description="报工方式（self/proxy/team）")
+
+    # 报工数据
+    reported_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="报工数量")
+    qualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="合格数量")
+    unqualified_quantity = fields.DecimalField(max_digits=14, decimal_places=4, description="不合格数量")
+    work_hours = fields.DecimalField(max_digits=6, decimal_places=2, description="工时（小时）")
+    work_start_time = fields.DatetimeField(null=True, description="工序开始时间")
+    work_end_time = fields.DatetimeField(null=True, description="工序完成时间")
+
+    # 审核状态
+    status = fields.CharField(max_length=20, description="审核状态", default="pending")
+    reported_at = fields.DatetimeField(description="报工时间")
+    approved_at = fields.DatetimeField(null=True, description="审核时间")
+    approved_by = fields.IntField(null=True, description="审核人ID")
+    approved_by_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
+    rejection_reason = fields.TextField(null=True, description="驳回原因")
+
+    # 备注和设备信息
+    inbound_warehouse_id = fields.IntField(null=True, description="末道工序入库仓库 ID")
+    inbound_warehouse_name = fields.CharField(max_length=200, null=True, description="末道工序入库仓库名称")
+    remarks = fields.TextField(null=True, description="备注")
+    device_info = fields.JSONField(null=True, description="设备信息（JSON格式）")
+    
+    # SOP参数数据（核心功能，新增）
+    sop_parameters = fields.JSONField(null=True, description="SOP参数数据（JSON格式，存储报工时收集的SOP参数）")
+
+    # 金蝶生产汇报单推送重试状态（P0-3）
+    kingdee_push_status = fields.CharField(
+        max_length=20, null=True,
+        description="金蝶生产汇报单推送状态（null=未推送/success=成功/failed=需重试/dead=超限终止）",
+    )
+    kingdee_push_attempts = fields.IntField(default=0, description="金蝶生产汇报单已推送尝试次数")
+    kingdee_push_next_at = fields.DatetimeField(null=True, description="下次推送重试时间")
+    kingdee_push_last_error = fields.TextField(null=True, description="最近一次推送失败原因")
+    kingdee_push_last_at = fields.DatetimeField(null=True, description="最近一次推送尝试时间")
+    
+    # 软删除字段
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

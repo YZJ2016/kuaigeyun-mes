@@ -1,0 +1,82 @@
+{
+  "sortOrder": 107,
+  "industryId": "machining",
+  "primaryCategory": "standard_parts",
+  "id": "std_seal_cn_sme",
+  "name": "密封件-旋转与往复密封",
+  "description": "面向泵阀、气缸、减速机和液压场景的高频密封元件。",
+  "items": [
+    {
+      "preset_key": "cn_oring_gbt3452_1_20x2_4",
+      "name": "O形圈",
+      "specification": "20×2.4",
+      "gb_standard": "GB/T 3452.1",
+      "gb_code": "GB3452.1-20X2.4",
+      "base_unit": "件",
+      "texture": "NBR"
+    },
+    {
+      "preset_key": "cn_oring_gbt3452_1_30x3_1",
+      "name": "O形圈",
+      "specification": "30×3.1",
+      "gb_standard": "GB/T 3452.1",
+      "gb_code": "GB3452.1-30X3.1",
+      "base_unit": "件",
+      "texture": "NBR"
+    },
+    {
+      "preset_key": "cn_oil_seal_gbt9877_1_tc25_40_7",
+      "name": "旋转轴唇形密封圈",
+      "specification": "TC 25×40×7",
+      "gb_standard": "GB/T 9877.1",
+      "gb_code": "GB9877.1-TC25X40X7",
+      "base_unit": "件",
+      "texture": "NBR+钢骨架"
+    },
+    {
+      "preset_key": "cn_oil_seal_gbt9877_1_tc35_52_7",
+      "name": "旋转轴唇形密封圈",
+      "specification": "TC 35×52×7",
+      "gb_standard": "GB/T 9877.1",
+      "gb_code": "GB9877.1-TC35X52X7",
+      "base_unit": "件",
+      "texture": "NBR+钢骨架"
+    },
+    {
+      "preset_key": "cn_vring_hg4_338_va30",
+      "name": "V形密封圈",
+      "specification": "VA30",
+      "gb_standard": "HG/T 2811",
+      "gb_code": "HGT2811-VA30",
+      "base_unit": "件",
+      "texture": "橡胶"
+    },
+    {
+      "preset_key": "cn_gasket_nonmetal_gbt9126_dn25",
+      "name": "非金属平垫片",
+      "specification": "DN25 PN16",
+      "gb_standard": "GB/T 9126",
+      "gb_code": "GB9126-DN25-PN16",
+      "base_unit": "件",
+      "texture": "无石棉板"
+    },
+    {
+      "preset_key": "cn_ptfe_packing_hgt20606_8x8",
+      "name": "聚四氟乙烯盘根",
+      "specification": "8×8",
+      "gb_standard": "HG/T 20606",
+      "gb_code": "HGT20606-8X8",
+      "base_unit": "米",
+      "texture": "PTFE纤维"
+    },
+    {
+      "preset_key": "cn_mech_seal_jbt4127_25mm",
+      "name": "泵用机械密封",
+      "specification": "25mm",
+      "gb_standard": "JB/T 4127",
+      "gb_code": "JBT4127-25",
+      "base_unit": "套",
+      "texture": "碳化硅/石墨"
+    }
+  ]
+}

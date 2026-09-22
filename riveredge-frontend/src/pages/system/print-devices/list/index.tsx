@@ -1,0 +1,1002 @@
+/**
+ * 打印设备管理列表页面
+ * 
+ * 用于系统管理员查看和管理组织内的打印设备。
+ * 支持打印设备的 CRUD 操作和打印设备连接测试功能。
+ */
+
+import React, { useRef, useState, useMemo } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
+import { useTranslation } from 'react-i18next';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProForm } from '@ant-design/pro-components';
+import SafeProFormSelect from '../../../../components/safe-pro-form-select';
+import { App, Badge, Button, Card, Form, Modal, Popconfirm, Space, Tag, Tooltip, Typography, theme } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PrinterOutlined, CheckCircleOutlined, PrinterFilled } from '@ant-design/icons';
+import { CheckCircle2, XCircle } from 'lucide-react';
+import { UniTable } from '../../../../components/uni-table';
+import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import {
+  getPrintDeviceList,
+  getPrintDeviceByUuid,
+  createPrintDevice,
+  updatePrintDevice,
+  deletePrintDevice,
+  testPrintDevice,
+  printWithDevice,
+  PrintDevice,
+  CreatePrintDeviceData,
+  UpdatePrintDeviceData,
+  PrintDeviceTestResponse,
+  PrintDevicePrintData,
+  PrintDevicePrintResponse,
+} from '../../../../services/printDevice';
+import { getPrintTemplateList } from '../../../../services/printTemplate';
+import { formatDateTime, todaySiteDateString } from '../../../../utils/format';
+import { countWithPagedRequests } from '../../../../utils/pagedCount';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+
+dayjs.extend(relativeTime);
+
+const { Text, Paragraph } = Typography;
+const { useToken } = theme;
+
+type TFunction = (key: string) => string;
+
+/**
+ * 获取设备类型图标和颜色（需传入 t 以支持 i18n）
+ */
+const getTypeInfo = (type: string, t: TFunction): { color: string; text: string; icon: React.ReactNode } => {
+  const typeMap: Record<string, { color: string; textKey: string; icon: React.ReactNode }> = {
+    local: { color: 'blue', textKey: 'pages.system.printDevices.typeLocal', icon: <PrinterFilled /> },
+    network: { color: 'green', textKey: 'pages.system.printDevices.typeNetwork', icon: <PrinterFilled /> },
+    cloud: { color: 'purple', textKey: 'pages.system.printDevices.typeCloud', icon: <PrinterFilled /> },
+    other: { color: 'default', textKey: 'pages.system.printDevices.typeOther', icon: <PrinterFilled /> },
+  };
+  const info = typeMap[type] || { color: 'default', textKey: '', icon: <PrinterFilled /> };
+  return { ...info, text: info.textKey ? t(info.textKey) : type };
+};
+
+/**
+ * 获取设备状态显示（需传入 t 以支持 i18n）
+ */
+const getDeviceStatus = (device: PrintDevice, t: TFunction): {
+  status: 'success' | 'error' | 'warning' | 'default';
+  text: string;
+  onlineStatus: 'success' | 'error' | 'default';
+  onlineText: string;
+} => {
+  if (!device.is_active) {
+    const text = t('pages.system.printDevices.statusDisabled');
+    return { status: 'default', text, onlineStatus: 'default', onlineText: text };
+  }
+  if (device.is_online) {
+    const text = t('pages.system.printDevices.statusOnline');
+    return { status: 'success', text, onlineStatus: 'success', onlineText: text };
+  }
+  const text = t('pages.system.printDevices.statusOffline');
+  return { status: 'error', text, onlineStatus: 'error', onlineText: text };
+};
+
+/**
+ * 打印设备管理列表页面组件
+ */
+const PrintDeviceListPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const { token } = useToken();
+  const actionRef = useRef<ActionType>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  
+  // Modal 相关状态（创建/编辑打印设备）
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentPrintDeviceUuid, setCurrentPrintDeviceUuid] = useState<string | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
+  const [allDevices, setAllDevices] = useState<PrintDevice[]>([]); // 用于统计
+  
+  // Modal 相关状态（测试连接）
+  const [testModalVisible, setTestModalVisible] = useState(false);
+  const [testFormLoading, setTestFormLoading] = useState(false);
+  const [testResult, setTestResult] = useState<PrintDeviceTestResponse | null>(null);
+  
+  // Modal 相关状态（执行打印）
+  const [printModalVisible, setPrintModalVisible] = useState(false);
+  const [printFormLoading, setPrintFormLoading] = useState(false);
+  const [currentPrintDeviceUuidForPrint, setCurrentPrintDeviceUuidForPrint] = useState<string | null>(null);
+  const [printFormRef] = Form.useForm();
+  const [printResult, setPrintResult] = useState<PrintDevicePrintResponse | null>(null);
+  
+  // Drawer 相关状态（详情查看）
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailData, setDetailData] = useState<PrintDevice | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  /**
+   * 处理新建打印设备
+   */
+  const handleCreate = () => {
+    setIsEdit(false);
+    setCurrentPrintDeviceUuid(null);
+    setFormInitialValues({
+      type: 'network',
+      is_active: true,
+      is_default: false,
+      config_host: '',
+      config_port: '',
+    });
+    setModalVisible(true);
+  };
+
+  /**
+   * 处理编辑打印设备
+   */
+  const handleEdit = async (record: PrintDevice) => {
+    try {
+      setIsEdit(true);
+      setCurrentPrintDeviceUuid(record.uuid);
+      
+      // 获取打印设备详情
+      const detail = await getPrintDeviceByUuid(record.uuid);
+      const cfg = detail.config || {};
+      setFormInitialValues({
+        name: detail.name,
+        code: detail.code,
+        type: detail.type,
+        description: detail.description,
+        is_active: detail.is_active,
+        is_default: detail.is_default,
+        config_host: cfg.host ?? cfg.address ?? '',
+        config_port: cfg.port != null ? String(cfg.port) : '',
+      });
+      setModalVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.printDevices.getDetailFailed'));
+    }
+  };
+
+  /**
+   * 处理查看详情
+   */
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await getPrintDeviceByUuid(uuid);
+      setDetailData(detail);
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.printDevices.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleView = (record: PrintDevice) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
+  /**
+   * 处理测试连接
+   */
+  const handleTest = async (record: PrintDevice) => {
+    setTestModalVisible(true);
+    setTestResult(null);
+    
+    try {
+      setTestFormLoading(true);
+      const result = await testPrintDevice(record.uuid);
+      setTestResult(result);
+      
+      if (result.success) {
+        messageApi.success(result.message || t('pages.system.printDevices.testSuccess'));
+      } else {
+        messageApi.error(result.error || t('pages.system.printDevices.testFailed'));
+      }
+    actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.printDevices.testFailed'));
+    } finally {
+      setTestFormLoading(false);
+    }
+  };
+
+  /**
+   * 处理执行打印
+   */
+  const handlePrint = (record: PrintDevice) => {
+    setCurrentPrintDeviceUuidForPrint(record.uuid);
+    setPrintModalVisible(true);
+    setPrintResult(null);
+    printFormRef.resetFields();
+    printFormRef.setFieldsValue({
+      async_execution: false,
+    });
+  };
+
+  /**
+   * 处理执行打印表单提交
+   */
+  const handlePrintSubmit = async (values: any) => {
+    if (!currentPrintDeviceUuidForPrint) return;
+    
+    try {
+      setPrintFormLoading(true);
+      setPrintResult(null);
+      
+      const data: PrintDevicePrintData = {
+        template_uuid: values.template_uuid,
+        data: values.data ? JSON.parse(values.data) : {},
+        async_execution: values.async_execution || false,
+      };
+      
+      const result = await printWithDevice(currentPrintDeviceUuidForPrint, data);
+      setPrintResult(result);
+      
+      if (result.success) {
+        messageApi.success(result.message || t('pages.system.printDevices.printSubmitted'));
+      } else {
+        messageApi.error(result.error || t('pages.system.printDevices.printFailed'));
+      }
+    actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.printDevices.printFailed'));
+    } finally {
+      setPrintFormLoading(false);
+    }
+  };
+
+  /**
+   * 处理打印测试页
+   */
+  const handlePrintTestPage = async (record: PrintDevice) => {
+    try {
+      messageApi.loading({ content: t('pages.system.printDevices.testing'), key: 'test-print' });
+      
+      // 动态获取一个可用的模板作为测试页
+      const templates = await getPrintTemplateList({ is_active: true });
+      if (templates.length === 0) {
+        messageApi.error({ content: t('pages.system.printTemplates.noTemplateAvailable'), key: 'test-print' });
+        return;
+      }
+      
+      // 优先选择名字包含“测试”的模板
+      const testTemplate = templates.find(t => t.name.includes('测试') || t.name.toLowerCase().includes('test')) || templates[0];
+      
+      const data: PrintDevicePrintData = {
+        template_uuid: testTemplate.uuid,
+        data: {
+          title: 'RiverEdge System Test Print',
+          device_name: record.name,
+          device_code: record.code,
+          print_time: formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss'),
+          test_message: 'If you can see this, the printer is working correctly.',
+          organization: 'RiverEdge Industrial',
+        },
+        async_execution: false,
+      };
+      
+      const result = await printWithDevice(record.uuid, data);
+      
+      if (result.success) {
+        messageApi.success({ content: t('pages.system.printDevices.printSubmitted'), key: 'test-print' });
+      } else {
+        messageApi.error({ content: result.error || t('pages.system.printDevices.printFailed'), key: 'test-print' });
+      }
+    } catch (error: any) {
+      messageApi.error({ content: error.message || t('pages.system.printDevices.printFailed'), key: 'test-print' });
+    }
+  };
+
+  /**
+   * 处理删除打印设备
+   */
+  const handleDelete = async (record: PrintDevice) => {
+    try {
+      await deletePrintDevice(record.uuid);
+      messageApi.success(t('common.deleteSuccess'));
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
+  };
+
+  /**
+   * 处理批量删除
+   */
+  const handleBatchDelete = async () => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning(t('pages.system.printDevices.selectToDelete'));
+      return;
+    }
+    
+    try {
+      await Promise.all(selectedRowKeys.map((key) => deletePrintDevice(key as string)));
+      messageApi.success(t('pages.system.printDevices.batchDeleteSuccess'));
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(t('pages.system.printDevices.batchDeleteFailed'));
+    }
+  };
+
+  /**
+   * 处理表单提交
+   */
+  const handleSubmit = async (values: any): Promise<void> => {
+    try {
+      setFormLoading(true);
+      
+      // 从表单构建设备配置
+      const config: Record<string, any> = {};
+      if (values.config_host != null && String(values.config_host).trim() !== '') {
+        config.host = String(values.config_host).trim();
+      }
+      if (values.config_port != null && String(values.config_port).trim() !== '') {
+        const port = parseInt(String(values.config_port).trim(), 10);
+        if (!Number.isNaN(port)) config.port = port;
+      }
+      const { config_host, config_port, ...rest } = values;
+      const data: CreatePrintDeviceData | UpdatePrintDeviceData = {
+        ...rest,
+        config,
+      };
+      
+      if (isEdit && currentPrintDeviceUuid) {
+        await updatePrintDevice(currentPrintDeviceUuid, data as UpdatePrintDeviceData);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await createPrintDevice(data as CreatePrintDeviceData);
+        messageApi.success(t('common.createSuccess'));
+      }
+      
+      setModalVisible(false);
+      setFormInitialValues(undefined);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.operationFailed'));
+      throw error;
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  /**
+   * 计算统计信息
+   */
+  const statCards = useMemo(() => {
+    if (allDevices.length === 0) return undefined;
+    
+    const stats = {
+      total: allDevices.length,
+      active: allDevices.filter((d) => d.is_active).length,
+      inactive: allDevices.filter((d) => !d.is_active).length,
+      online: allDevices.filter((d) => d.is_online && d.is_active).length,
+      offline: allDevices.filter((d) => !d.is_online && d.is_active).length,
+      default: allDevices.filter((d) => d.is_default).length,
+      totalUsage: allDevices.reduce((sum, d) => sum + (d.usage_count || 0), 0),
+    };
+
+    return [
+      { title: t('pages.system.printDevices.statTotal'), value: stats.total, valueStyle: { color: '#1890ff' } },
+      { title: t('pages.system.printDevices.statOnline'), value: stats.online, valueStyle: { color: '#52c41a' } },
+      { title: t('pages.system.printDevices.statOffline'), value: stats.offline, valueStyle: { color: '#ff4d4f' } },
+      { title: t('pages.system.printDevices.statActive'), value: stats.active, valueStyle: { color: '#52c41a' } },
+    ];
+  }, [allDevices, t]);
+
+  /**
+   * 卡片渲染函数
+   */
+  const renderCard = (device: PrintDevice, index: number) => {
+    const typeInfo = getTypeInfo(device.type, t);
+    const deviceStatus = getDeviceStatus(device, t);
+    
+    return (
+      <Card
+        key={device.uuid}
+        hoverable
+        style={{ height: '100%' }}
+        actions={[
+          <Tooltip {...rowActionKind('read')} key="view" title={t('pages.system.printDevices.viewDetail')}>
+            <EyeOutlined
+              onClick={() => handleView(device)}
+              style={{ fontSize: 16 }}
+            />
+          </Tooltip>,
+          <Tooltip {...rowActionKind('read')} key="test" title={t('pages.system.printDevices.testConnection')}>
+            <CheckCircleOutlined
+              onClick={() => handleTest(device)}
+              disabled={!device.is_active}
+              style={{ 
+                fontSize: 16, 
+                color: device.is_active ? '#1890ff' : '#d9d9d9',
+              }}
+            />
+          </Tooltip>,
+          <Popconfirm {...rowActionKind('delete')}
+            key="delete"
+            title={t('pages.system.printDevices.deleteConfirmTitle')}
+            onConfirm={() => handleDelete(device)}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
+          >
+            <Tooltip title={t('common.delete')}>
+              <DeleteOutlined
+                style={{ fontSize: 16, color: '#ff4d4f' }}
+              />
+            </Tooltip>
+          </Popconfirm>,
+        ]}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text strong style={{ fontSize: 16 }}>
+                {device.name}
+              </Text>
+              <Tag color={typeInfo.color} icon={typeInfo.icon}>
+                {typeInfo.text}
+              </Tag>
+            </div>
+            
+            {device.code && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t('pages.system.printDevices.codePrefix')}{device.code}
+              </Text>
+            )}
+            
+            {device.description && (
+              <Paragraph
+                ellipsis={{ rows: 2, expandable: false }}
+                style={{ marginBottom: 0, fontSize: 12 }}
+              >
+                {device.description}
+              </Paragraph>
+            )}
+          </Space>
+        </div>
+        
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.onlineStatusLabel')}</Text>
+              <Badge
+                status={deviceStatus.onlineStatus}
+                text={deviceStatus.onlineText}
+              />
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.statusLabel')}</Text>
+              <Tag color={device.is_active ? 'success' : 'default'}>
+                {device.is_active ? t('common.enabled') : t('common.disabled')}
+              </Tag>
+            </div>
+            
+            {device.is_default && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.defaultLabel')}</Text>
+                <Tag color="processing">{t('common.yes')}</Tag>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.usageLabel')}</Text>
+              <Text style={{ fontSize: 12 }}>{device.usage_count || 0}</Text>
+            </div>
+            
+            {device.last_connected_at && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.lastConnectedLabel')}</Text>
+                <Text style={{ fontSize: 12 }}>
+                  {dayjs(device.last_connected_at).fromNow()}
+                </Text>
+              </div>
+            )}
+            
+            {device.last_used_at && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.printDevices.lastUsedLabel')}</Text>
+                <Text style={{ fontSize: 12 }}>
+                  {dayjs(device.last_used_at).fromNow()}
+                </Text>
+              </div>
+            )}
+          </Space>
+        </div>
+      </Card>
+    );
+  };
+
+  /**
+   * 表格列定义
+   */
+  const columns = useMemo<ProColumns<PrintDevice>[]>(() => alignProColumns([
+    {
+      title: t('pages.system.printDevices.columnCode'),
+      dataIndex: 'code',
+      width: 150,
+      minWidth: 150,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+    },
+    {
+      // 名称长短不一：唯一 RemainderFlex
+      title: t('pages.system.printDevices.columnName'),
+      dataIndex: 'name',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
+    },
+    {
+      title: t('pages.system.printDevices.columnType'),
+      dataIndex: 'type',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      valueEnum: {
+        local: { text: t('pages.system.printDevices.typeLocal') },
+        network: { text: t('pages.system.printDevices.typeNetwork') },
+        cloud: { text: t('pages.system.printDevices.typeCloud') },
+        other: { text: t('pages.system.printDevices.typeOther') },
+      },
+      render: (_, record) => {
+        const typeInfo = getTypeInfo(record.type, t);
+        return renderSystemTypeMarker(typeInfo.text, typeInfo.color);
+      },
+    },
+    {
+      title: t('common.enabled'),
+      dataIndex: 'is_active',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
+      },
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
+    },
+    {
+      title: t('pages.system.printDevices.columnOnline'),
+      dataIndex: 'is_online',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      hideInSearch: true,
+      render: (_, record) =>
+        renderSystemTypeMarker(
+          record.is_online ? t('pages.system.printDevices.statusOnline') : t('pages.system.printDevices.statusOffline'),
+          record.is_online ? 'success' : 'error',
+        ),
+    },
+    {
+      title: t('pages.system.printDevices.columnDefault'),
+      dataIndex: 'is_default',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      hideInSearch: true,
+      render: (_, record) =>
+        record.is_default
+          ? renderSystemTypeMarker(t('pages.system.printDevices.defaultTag'), 'processing')
+          : '-',
+    },
+    {
+      title: t('pages.system.printDevices.columnUsage'),
+      dataIndex: 'usage_count',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+    },
+    {
+      title: t('pages.system.printDevices.columnLastUsed'),
+      dataIndex: 'last_used_at',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'dateTime',
+      hideInSearch: true,
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'dateTime',
+      hideInSearch: true,
+    },
+    {
+      title: t('common.actions'),
+      key: 'action',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) =>
+        [
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)} />,
+            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)} />,
+            <Popconfirm
+              key="delete"
+              title={t('pages.system.printDevices.deleteConfirmTitle')}
+              onConfirm={() => handleDelete(record)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+            >
+              <Button {...rowActionKind('delete')} />
+            </Popconfirm>,
+          ],
+    },
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, handleView, handleEdit, handleDelete]);
+
+
+  /**
+   * 详情列定义
+   */
+  const detailColumns: any[] = [
+    { title: t('pages.system.printDevices.columnName'), dataIndex: 'name' },
+    { title: t('pages.system.printDevices.columnCode'), dataIndex: 'code' },
+    { title: t('pages.system.printDevices.columnType'), dataIndex: 'type' },
+    { title: t('common.remark'), dataIndex: 'description' },
+    {
+      title: t('common.enabled'),
+      dataIndex: 'is_active',
+      render: (_: unknown, record: PrintDevice) =>
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
+    },
+    {
+      title: t('pages.system.printDevices.columnOnline'),
+      dataIndex: 'is_online',
+      render: (value: boolean) => (
+        <Tag color={value ? 'success' : 'error'}>
+          {value ? t('pages.system.printDevices.statusOnline') : t('pages.system.printDevices.statusOffline')}
+        </Tag>
+      ),
+    },
+    {
+      title: t('pages.system.printDevices.columnDefault'),
+      dataIndex: 'is_default',
+      render: (value: boolean) => (
+        <Tag color={value ? 'processing' : 'default'}>
+          {value ? t('pages.system.printDevices.defaultTag') : '-'}
+        </Tag>
+      ),
+    },
+    {
+      title: t('pages.system.printDevices.columnConfig'),
+      dataIndex: 'config',
+      render: (value: Record<string, any>) => (
+        <pre style={{ maxHeight: '200px', overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      ),
+    },
+    { title: t('pages.system.printDevices.columnUsage'), dataIndex: 'usage_count' },
+    { title: t('pages.system.printDevices.columnLastConnected'), dataIndex: 'last_connected_at', valueType: 'dateTime' },
+    { title: t('pages.system.printDevices.columnLastUsed'), dataIndex: 'last_used_at', valueType: 'dateTime' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
+
+  return (
+    <>
+      <ListPageTemplate statCards={statCards}>
+        <UniTable<PrintDevice>
+          columnPersistenceId="pages.system.print-devices.list-v2"
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            const { current = 1, pageSize = 20 } = params;
+            const skip = (current - 1) * pageSize;
+            const limit = pageSize;
+
+            const listParams: any = {
+              skip,
+              limit,
+              ...searchFormValues,
+            };
+
+            try {
+              const [data, total] = await Promise.all([
+                getPrintDeviceList(listParams),
+                countWithPagedRequests(getPrintDeviceList, searchFormValues || {}, { chunkSize: 100 }),
+              ]);
+              
+              // 同时获取所有数据用于统计（如果当前页是第一页）
+              if (current === 1) {
+                try {
+                  const allData = await getPrintDeviceList({ skip: 0, limit: 1000 });
+                  setAllDevices(allData);
+                } catch (e) {
+                  // 忽略统计数据的错误
+                }
+              }
+              
+              return {
+                data,
+                success: true,
+                total,
+              };
+            } catch (error: any) {
+              console.error('获取打印设备列表失败:', error);
+              messageApi.error(error?.message || t('pages.system.printDevices.loadListFailed'));
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          showCreateButton
+          createButtonText={t('pages.system.printDevices.createButton')}
+          onCreate={handleCreate}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText={t('common.batchDelete')}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+          showExportButton
+          onExport={async (type, keys, pageData) => {
+            let items: PrintDevice[] = [];
+            if (type === 'selected' && keys?.length) {
+              items = await Promise.all(keys.map((k) => getPrintDeviceByUuid(String(k))));
+            } else if (type === 'currentPage' && pageData?.length) {
+              items = pageData;
+            } else {
+              items = await fetchAllListItems((p) => getPrintDeviceList(p));
+            }
+            if (items.length === 0) {
+              messageApi.warning(t('common.exportNoData'));
+              return;
+            }
+            await downloadRecordsAsXlsx(
+              items as Array<Record<string, unknown>>,
+              `print-devices-${todaySiteDateString()}.xlsx`,
+            );
+            messageApi.success(t('pages.system.printDevices.exportSuccess'));
+          }}
+          viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.printDevices')}
+          defaultViewType="table"
+          cardViewConfig={{
+            renderCard,
+          }}
+        />
+      </ListPageTemplate>
+
+      {/* 创建/编辑 Modal */}
+      <FormModalTemplate
+        title={isEdit ? t('pages.system.printDevices.modalEdit') : t('pages.system.printDevices.modalCreate')}
+        open={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+      >
+        <ProFormText
+          name="code"
+          label={t('pages.system.printDevices.labelCode')}
+          rules={[
+            { required: true, message: t('pages.system.printDevices.codeRequired') },
+            { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: t('pages.system.printDevices.codePattern') },
+          ]}
+          disabled={isEdit}
+          tooltip={t('pages.system.printDevices.codeTooltip')}
+        />
+        <ProFormText
+          name="name"
+          label={t('pages.system.printDevices.labelName')}
+          rules={[{ required: true, message: t('pages.system.printDevices.nameRequired') }]}
+        />
+        <SafeProFormSelect
+          name="type"
+          label={t('pages.system.printDevices.labelType')}
+          rules={[{ required: true, message: t('pages.system.printDevices.typeRequired') }]}
+          options={[
+            { label: t('pages.system.printDevices.typeLocal'), value: 'local' },
+            { label: t('pages.system.printDevices.typeNetwork'), value: 'network' },
+            { label: t('pages.system.printDevices.typeCloud'), value: 'cloud' },
+            { label: t('pages.system.printDevices.typeOther'), value: 'other' },
+          ]}
+          disabled={isEdit}
+        />
+        <ProFormText
+          name="config_host"
+          label={t('pages.system.printDevices.configHost')}
+          placeholder={t('pages.system.printDevices.configHostPlaceholder')}
+        />
+        <ProFormText
+          name="config_port"
+          label={t('pages.system.printDevices.configPort')}
+          placeholder={t('pages.system.printDevices.configPortPlaceholder')}
+        />
+        <ProFormTextArea
+          name="description"
+          label={t('common.remark')}
+          fieldProps={{
+            rows: 3,
+          }}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label={t('common.enabled')}
+        />
+        {isEdit && (
+          <ProFormSwitch
+            name="is_default"
+            label={t('pages.system.printDevices.labelDefault')}
+          />
+        )}
+      </FormModalTemplate>
+
+      {/* 测试连接 Modal */}
+      <Modal
+        title={t('pages.system.printDevices.testModalTitle')}
+        open={testModalVisible}
+        onCancel={() => setTestModalVisible(false)}
+        footer={null}
+        width={500}
+      >
+        {testFormLoading ? (
+          <div>{t('pages.system.printDevices.testing')}</div>
+        ) : testResult ? (
+          <div style={{ padding: 16 }}>
+            {testResult.success ? (
+              <div style={{ color: '#52c41a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <CheckCircle2 size={16} strokeWidth={1.75} aria-hidden />
+                {testResult.message || t('pages.system.printDevices.testSuccess')}
+              </div>
+            ) : (
+              <div>
+                <div style={{ color: '#ff4d4f', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <XCircle size={16} strokeWidth={1.75} aria-hidden />
+                  {t('pages.system.printDevices.testFailed')}
+                </div>
+                {testResult.error && (
+                  <div style={{ marginTop: 8, color: '#ff4d4f' }}>{testResult.error}</div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Modal>
+
+      {/* 执行打印 Modal */}
+      <Modal
+        title={t('pages.system.printDevices.printModalTitle')}
+        open={printModalVisible}
+        onCancel={() => setPrintModalVisible(false)}
+        footer={null}
+        width={700}
+      >
+        <ProForm
+          form={printFormRef}
+          loading={printFormLoading}
+          onFinish={handlePrintSubmit}
+          submitter={{
+            searchConfig: {
+              submitText: t('common.print'),
+            },
+          }}
+        >
+          <ProFormSelect
+            name="template_uuid"
+            label={t('pages.system.printDevices.labelTemplateUuid')}
+            rules={[{ required: true, message: t('pages.system.printDevices.templateUuidRequired') }]}
+            request={async () => {
+              try {
+                const templates = await getPrintTemplateList({ is_active: true });
+                return templates.map(t => ({
+                  label: `${t.name} (${t.code})`,
+                  value: t.uuid,
+                }));
+              } catch (e) {
+                console.error('Failed to load templates:', e);
+                return [];
+              }
+            }}
+            placeholder={t('pages.system.printDevices.templateUuidRequired')}
+            showSearch
+          />
+          <ProFormTextArea
+            name="data"
+            label={t('pages.system.printDevices.labelPrintData')}
+            rules={[{ required: true, message: t('pages.system.printDevices.printDataRequired') }]}
+            fieldProps={{
+              rows: 6,
+              style: { fontFamily: CODE_FONT_FAMILY },
+              placeholder: t('pages.system.printDevices.printDataPlaceholder'),
+            }}
+            tooltip={t('pages.system.printDevices.printDataTooltip')}
+          />
+          <ProFormSwitch
+            name="async_execution"
+            label={t('pages.system.printDevices.labelAsync')}
+            tooltip={t('pages.system.printDevices.asyncTooltip')}
+          />
+        </ProForm>
+        
+        {printResult && (
+          <div style={{ marginTop: 24, padding: 16, background: '#f5f5f5', borderRadius: 4 }}>
+            <div style={{ marginBottom: 8, fontWeight: 'bold' }}>{t('pages.system.printDevices.printResultTitle')}</div>
+            {printResult.success ? (
+              <div style={{ color: '#52c41a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <CheckCircle2 size={16} strokeWidth={1.75} aria-hidden />
+                {printResult.message || t('pages.system.printDevices.printSuccess')}
+              </div>
+            ) : (
+              <div>
+                <div style={{ color: '#ff4d4f', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <XCircle size={16} strokeWidth={1.75} aria-hidden />
+                  {t('pages.system.printDevices.printFailed')}
+                </div>
+                {printResult.error && (
+                  <div style={{ marginTop: 8, color: '#ff4d4f' }}>{printResult.error}</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* 详情 Drawer */}
+      <SystemMasterDetailDrawer
+        title={t('pages.system.printDevices.detailTitle')}
+        open={drawerVisible}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryUuidRef.current;
+          if (id) void loadDetail(id);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (!detailData) return;
+          void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={detailColumns}
+      />
+    </>
+  );
+};
+
+export default PrintDeviceListPage;

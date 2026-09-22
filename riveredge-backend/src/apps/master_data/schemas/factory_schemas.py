@@ -1,0 +1,529 @@
+"""
+工厂数据 Schema 模块
+
+定义工厂数据的 Pydantic Schema（厂区、车间、产线、工位），用于数据验证和序列化。
+"""
+
+from pydantic import BaseModel, Field, validator, ConfigDict
+from typing import Optional, List
+from datetime import datetime
+
+
+class PlantBase(BaseModel):
+    """厂区基础 Schema"""
+
+    code: str = Field(..., max_length=50, description="厂区编码")
+    name: str = Field(..., max_length=200, description="厂区名称")
+    description: Optional[str] = Field(None, description="描述")
+    address: Optional[str] = Field(None, max_length=500, description="地址")
+    is_active: bool = Field(True, description="是否启用", alias="isActive")
+
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if not v or not v.strip():
+            raise ValueError("厂区编码不能为空")
+        return v.strip().upper()
+    
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if not v or not v.strip():
+            raise ValueError("厂区名称不能为空")
+        return v.strip()
+
+
+class PlantCreate(PlantBase):
+    """创建厂区 Schema"""
+    pass
+
+
+class PlantUpdate(BaseModel):
+    """更新厂区 Schema"""
+
+    code: Optional[str] = Field(None, max_length=50, description="厂区编码")
+    name: Optional[str] = Field(None, max_length=200, description="厂区名称")
+    description: Optional[str] = Field(None, description="描述")
+    address: Optional[str] = Field(None, max_length=500, description="地址")
+    is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
+
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("厂区编码不能为空")
+        return v.strip().upper() if v else None
+    
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("厂区名称不能为空")
+        return v.strip() if v else None
+
+
+class PlantResponse(PlantBase):
+    """厂区响应 Schema"""
+    
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,  # 允许同时使用字段名和别名
+        by_alias=True  # 序列化时使用别名（camelCase）
+    )
+
+
+class WorkshopBase(BaseModel):
+    """车间基础 Schema"""
+
+    code: str = Field(..., max_length=50, description="车间编码")
+    name: str = Field(..., max_length=200, description="车间名称")
+    plant_id: Optional[int] = Field(None, description="所属厂区ID（可选）", alias="plantId")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: bool = Field(True, description="是否启用", alias="isActive")
+    
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if not v or not v.strip():
+            raise ValueError("车间编码不能为空")
+        return v.strip().upper()
+    
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if not v or not v.strip():
+            raise ValueError("车间名称不能为空")
+        return v.strip()
+
+
+class WorkshopCreate(WorkshopBase):
+    """创建车间 Schema"""
+    pass
+
+
+class WorkshopUpdate(BaseModel):
+    """更新车间 Schema"""
+
+    code: Optional[str] = Field(None, max_length=50, description="车间编码")
+    name: Optional[str] = Field(None, max_length=200, description="车间名称")
+    plant_id: Optional[int] = Field(None, description="所属厂区ID（可选）", alias="plantId")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
+    
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("车间编码不能为空")
+        return v.strip().upper() if v else None
+    
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("车间名称不能为空")
+        return v.strip() if v else None
+
+
+class WorkshopResponse(WorkshopBase):
+    """车间响应 Schema"""
+    
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
+    plant_code: Optional[str] = Field(
+        None, alias="plantCode", description="所属厂区编码（列表/详情展示，避免前端二次请求）"
+    )
+    plant_name: Optional[str] = Field(
+        None, alias="plantName", description="所属厂区名称（列表/详情展示）"
+    )
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,  # 允许同时使用字段名和别名
+        by_alias=True  # 序列化时使用别名（camelCase）
+    )
+
+
+class ProductionLineBase(BaseModel):
+    """产线基础 Schema"""
+
+    code: str = Field(..., max_length=50, description="产线编码")
+    name: str = Field(..., max_length=200, description="产线名称")
+    workshop_id: int = Field(..., description="所属车间ID", alias="workshopId")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: bool = Field(True, description="是否启用", alias="isActive")
+    
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if not v or not v.strip():
+            raise ValueError("产线编码不能为空")
+        return v.strip().upper()
+    
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if not v or not v.strip():
+            raise ValueError("产线名称不能为空")
+        return v.strip()
+
+
+class ProductionLineCreate(ProductionLineBase):
+    """创建产线 Schema"""
+    pass
+
+
+class ProductionLineUpdate(BaseModel):
+    """更新产线 Schema"""
+
+    code: Optional[str] = Field(None, max_length=50, description="产线编码")
+    name: Optional[str] = Field(None, max_length=200, description="产线名称")
+    workshop_id: Optional[int] = Field(None, description="所属车间ID", alias="workshopId")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
+    
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("产线编码不能为空")
+        return v.strip().upper() if v else None
+    
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("产线名称不能为空")
+        return v.strip() if v else None
+
+
+class ProductionLineResponse(ProductionLineBase):
+    """产线响应 Schema"""
+    
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    workshop_id: int = Field(..., alias="workshopId", description="所属车间ID")
+    workshop_code: Optional[str] = Field(
+        None, alias="workshopCode", description="所属车间编码（列表/详情展示，避免前端二次请求）"
+    )
+    workshop_name: Optional[str] = Field(
+        None, alias="workshopName", description="所属车间名称（列表/详情展示）"
+    )
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,  # 允许同时使用字段名和别名
+        by_alias=True  # 序列化时使用别名（camelCase）
+    )
+
+
+class WorkstationBase(BaseModel):
+    """工位基础 Schema"""
+
+    code: str = Field(..., max_length=50, description="工位编码")
+    name: str = Field(..., max_length=200, description="工位名称")
+    production_line_id: int = Field(..., description="所属产线ID", alias="productionLineId")
+    description: Optional[str] = Field(None, description="描述")
+    work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
+    work_center_name: Optional[str] = Field(None, description="关联工作中心名称", alias="workCenterName")
+    max_parallel: int = Field(1, ge=1, le=99, description="同刻最大并行工序数", alias="maxParallel")
+    is_active: bool = Field(True, description="是否启用", alias="isActive")
+    
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if not v or not v.strip():
+            raise ValueError("工位编码不能为空")
+        return v.strip().upper()
+    
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if not v or not v.strip():
+            raise ValueError("工位名称不能为空")
+        return v.strip()
+
+
+class WorkstationCreate(WorkstationBase):
+    """创建工位 Schema"""
+    pass
+
+
+class WorkstationUpdate(BaseModel):
+    """更新工位 Schema"""
+
+    code: Optional[str] = Field(None, max_length=50, description="工位编码")
+    name: Optional[str] = Field(None, max_length=200, description="工位名称")
+    production_line_id: Optional[int] = Field(None, description="所属产线ID", alias="productionLineId")
+    description: Optional[str] = Field(None, description="描述")
+    work_center_id: Optional[int] = Field(None, description="关联工作中心ID", alias="workCenterId")
+    work_center_name: Optional[str] = Field(None, description="关联工作中心名称", alias="workCenterName")
+    max_parallel: Optional[int] = Field(None, ge=1, le=99, description="同刻最大并行工序数", alias="maxParallel")
+    is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
+    
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("工位编码不能为空")
+        return v.strip().upper() if v else None
+    
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("工位名称不能为空")
+        return v.strip() if v else None
+
+
+class WorkstationResponse(WorkstationBase):
+    """工位响应 Schema"""
+    
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    production_line_id: int = Field(..., alias="productionLineId", description="所属产线ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
+    production_line_code: Optional[str] = Field(
+        None, alias="productionLineCode", description="所属产线编码（列表/详情展示，避免前端二次请求）"
+    )
+    production_line_name: Optional[str] = Field(
+        None, alias="productionLineName", description="所属产线名称（列表/详情展示）"
+    )
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,  # 允许同时使用字段名和别名
+        by_alias=True  # 序列化时使用别名（camelCase）
+    )
+
+
+# ==================== 工作中心 Schema ====================
+
+class WorkCenterBase(BaseModel):
+    """工作中心基础 Schema"""
+
+    code: str = Field(..., max_length=50, description="工作中心编码")
+    name: str = Field(..., max_length=200, description="工作中心名称")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: bool = Field(True, description="是否启用", alias="isActive")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if not v or not v.strip():
+            raise ValueError("工作中心编码不能为空")
+        return v.strip().upper()
+
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if not v or not v.strip():
+            raise ValueError("工作中心名称不能为空")
+        return v.strip()
+
+
+class WorkCenterCreate(WorkCenterBase):
+    """创建工作中心 Schema"""
+
+    workstation_ids: Optional[List[int]] = Field(None, alias="workstationIds", description="包含工位ID列表")
+
+
+class WorkCenterUpdate(BaseModel):
+    """更新工作中心 Schema"""
+
+    code: Optional[str] = Field(None, max_length=50, description="工作中心编码")
+    name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: Optional[bool] = Field(None, description="是否启用", alias="isActive")
+    workstation_ids: Optional[List[int]] = Field(None, alias="workstationIds", description="包含工位ID列表")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("工作中心编码不能为空")
+        return v.strip().upper() if v else None
+
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("工作中心名称不能为空")
+        return v.strip() if v else None
+
+
+class WorkCenterResponse(WorkCenterBase):
+    """工作中心响应 Schema"""
+
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
+    workstation_ids: List[int] = Field(default_factory=list, alias="workstationIds", description="包含工位ID列表")
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+# ==================== 级联查询响应 Schema ====================
+
+class WorkstationTreeResponse(WorkstationResponse):
+    """工位树形响应 Schema（用于级联查询）"""
+    pass
+
+
+class ProductionLineTreeResponse(ProductionLineResponse):
+    """产线树形响应 Schema（用于级联查询）"""
+    
+    workstations: List[WorkstationTreeResponse] = Field(default_factory=list, alias="workstations", description="工位列表")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+class WorkshopTreeResponse(WorkshopResponse):
+    """车间树形响应 Schema（用于级联查询）"""
+    
+    production_lines: List[ProductionLineTreeResponse] = Field(default_factory=list, alias="productionLines", description="产线列表")
+    
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True
+    )
+
+
+# ==================== 分页列表响应 ====================
+
+
+class PlantListResult(BaseModel):
+    """厂区分页列表"""
+
+    items: List[PlantResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
+
+
+class WorkshopListResult(BaseModel):
+    """车间分页列表"""
+
+    items: List[WorkshopResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
+
+
+class ProductionLineListResult(BaseModel):
+    """产线分页列表"""
+
+    items: List[ProductionLineResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
+
+
+class WorkstationListResult(BaseModel):
+    """工位分页列表"""
+
+    items: List[WorkstationResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
+
+
+class WorkCenterListResult(BaseModel):
+    """工作中心分页列表"""
+
+    items: List[WorkCenterResponse]
+    total: int
+
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
+
+
+# ==================== 批量操作 Schema ====================
+
+class BatchDeletePlantsRequest(BaseModel):
+    """批量删除厂区请求"""
+    uuids: List[str] = Field(..., description="要删除的厂区UUID列表", min_items=1, max_items=100)
+
+
+class BatchDeleteWorkshopsRequest(BaseModel):
+    """批量删除车间请求"""
+    uuids: List[str] = Field(..., description="要删除的车间UUID列表", min_items=1, max_items=100)
+
+
+class BatchDeleteProductionLinesRequest(BaseModel):
+    """批量删除产线请求"""
+    uuids: List[str] = Field(..., description="要删除的产线UUID列表", min_items=1, max_items=100)
+
+
+class BatchDeleteWorkstationsRequest(BaseModel):
+    """批量删除工位请求"""
+    uuids: List[str] = Field(..., description="要删除的工位UUID列表", min_items=1, max_items=100)
+
+
+class BatchDeleteWorkCentersRequest(BaseModel):
+    """批量删除工作中心请求"""
+    uuids: List[str] = Field(..., description="要删除的工作中心UUID列表", min_items=1, max_items=100)

@@ -1,0 +1,64 @@
+{
+  "sortOrder": 202,
+  "industryId": "machining",
+  "primaryCategory": "raw_materials",
+  "id": "raw_plate_cn_sme",
+  "name": "原材料-板材",
+  "description": "钣金、机加、焊接通用板材，优先采用国标牌号。",
+  "items": [
+    {
+      "preset_key": "cn_raw_plate_q235b_3t",
+      "name": "热轧钢板",
+      "specification": "t=3mm",
+      "gb_standard": "GB/T 3274",
+      "gb_code": "GB3274-Q235B-T3",
+      "base_unit": "千克",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_plate_q235b_6t",
+      "name": "热轧钢板",
+      "specification": "t=6mm",
+      "gb_standard": "GB/T 3274",
+      "gb_code": "GB3274-Q235B-T6",
+      "base_unit": "千克",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_plate_45_20t",
+      "name": "优质碳素结构钢板",
+      "specification": "t=20mm",
+      "gb_standard": "GB/T 711",
+      "gb_code": "GB711-45-T20",
+      "base_unit": "千克",
+      "texture": "45钢"
+    },
+    {
+      "preset_key": "cn_raw_plate_304_2t",
+      "name": "不锈钢板",
+      "specification": "t=2mm",
+      "gb_standard": "GB/T 3280",
+      "gb_code": "GB3280-06Cr19Ni10-T2",
+      "base_unit": "千克",
+      "texture": "304"
+    },
+    {
+      "preset_key": "cn_raw_plate_al1060_2t",
+      "name": "工业纯铝板",
+      "specification": "t=2mm",
+      "gb_standard": "GB/T 3880.1",
+      "gb_code": "GB3880.1-1060-T2",
+      "base_unit": "千克",
+      "texture": "1060"
+    },
+    {
+      "preset_key": "cn_raw_plate_al5052_3t",
+      "name": "铝镁合金板",
+      "specification": "t=3mm",
+      "gb_standard": "GB/T 3880.1",
+      "gb_code": "GB3880.1-5052-T3",
+      "base_unit": "千克",
+      "texture": "5052"
+    }
+  ]
+}

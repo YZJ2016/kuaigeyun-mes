@@ -1,0 +1,92 @@
+export interface Receivable {
+    id: number;
+    tenant_id: number;
+    receivable_code: string;
+    source_type: string;
+    source_id: number;
+    source_code: string;
+    customer_id: number;
+    customer_name: string;
+    total_amount: number;
+    received_amount: number;
+    remaining_amount: number;
+    due_date: string;
+    payment_terms?: string;
+    status: '未收款' | '部分收款' | '已结清';
+    refunded_amount?: number;
+    refund_execution_status?: string;
+    business_date: string;
+    invoice_issued: boolean;
+    invoice_number?: string;
+    invoiced_amount?: number;
+    remaining_invoice_amount?: number;
+    invoice_status?: string;
+    reviewer_id?: number;
+    reviewer_name?: string;
+    review_time?: string;
+    review_status: '待审核' | '已审核' | '已驳回';
+    review_remarks?: string;
+    notes?: string;
+  created_at: string;
+  updated_at: string;
+  created_by_name?: string;
+  updated_by_name?: string;
+  capabilities?: {
+    push_receipt?: { allowed?: boolean; reason?: string };
+    push_sales_invoice?: { allowed?: boolean; reason?: string };
+  };
+}
+
+export interface ReceivableListParams {
+    skip?: number;
+    limit?: number;
+    status?: string;
+    customer_id?: number;
+    pending_settlement?: boolean;
+    keyword?: string;
+    receivable_code?: string;
+    customer_name?: string;
+    review_status?: string;
+    business_date_start?: string;
+    business_date_end?: string;
+    due_date_start?: string;
+    due_date_end?: string;
+    created_start_date?: string;
+    created_end_date?: string;
+    updated_start_date?: string;
+    updated_end_date?: string;
+    sort_field?: string;
+    sort_order?: 'asc' | 'desc';
+    aging_bucket?: string;
+    overdue_only?: boolean;
+}
+
+export interface ReceivableCreateData {
+    source_type: string;
+    source_id: number;
+    source_code: string;
+    customer_id: number;
+    customer_name: string;
+    total_amount: number;
+    received_amount?: number;
+    remaining_amount: number;
+    due_date: string;
+    business_date: string;
+    status?: string;
+    review_status?: string;
+    payment_terms?: string;
+    invoice_issued?: boolean;
+    notes?: string;
+    pull_source_type?: 'sales_order' | 'sales_delivery';
+    pull_source_id?: number;
+}
+
+export interface ReceiptRecordCreate {
+    receivable_id?: number;
+    receipt_amount: number;
+    receipt_method?: string;
+    receipt_date?: string;
+    transaction_reference?: string;
+    reference_number?: string;
+    notes?: string;
+}

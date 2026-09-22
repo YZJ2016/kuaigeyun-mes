@@ -1,0 +1,176 @@
+/**
+ * 部门新建/编辑弹窗（Schema 驱动）
+ */
+
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import { ProFormInstance } from '@ant-design/pro-components';
+import { App } from 'antd';
+import { FormModalTemplate } from '../../../../components/layout-templates';
+import { MODAL_CONFIG } from '../../../../components/layout-templates/constants';
+import { SchemaFormRenderer } from '../../../../components/schema-form';
+import { UniUserSelect } from '../../../../components/uni-user-select';
+import { departmentFormSchema } from '../schemas/department';
+import {
+  getDepartmentByUuid,
+  createDepartment,
+  updateDepartment,
+  Department,
+  DepartmentTreeItem,
+  CreateDepartmentData,
+  UpdateDepartmentData,
+} from '../../../../services/department';
+import {
+  isPresetEntityCode,
+  localizedPresetFormFields,
+  omitPresetLocalizedPayloadFields,
+  resolvePresetDepartmentName,
+} from '../../../../utils/presetEntityI18n';
+
+function toTreeData(
+  items: DepartmentTreeItem[],
+  t: TFunction,
+): Array<{ title: string; value: string; key: string; children?: any[] }> {
+  return items.map((item) => ({
+    title: resolvePresetDepartmentName(item, t),
+    value: item.uuid,
+    key: item.uuid,
+    children: item.children?.length ? toTreeData(item.children, t) : undefined,
+  }));
+}
+
+export interface DepartmentFormModalProps {
+  open: boolean;
+  onClose: () => void;
+  editUuid: string | null;
+  /** 新建时指定父部门（添加子部门场景） */
+  initialParentUuid?: string | null;
+  onSuccess: () => void;
+  /** 部门树数据（由父组件传入，避免重复请求） */
+  deptTreeItems: DepartmentTreeItem[];
+}
+
+export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
+  open,
+  onClose,
+  editUuid,
+  initialParentUuid,
+  onSuccess,
+  deptTreeItems,
+}) => {
+  const { t, i18n } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const formRef = useRef<ProFormInstance>();
+  const [formLoading, setFormLoading] = useState(false);
+  const [editPresetCode, setEditPresetCode] = useState<string | null>(null);
+
+  const isEdit = Boolean(editUuid);
+  const deptTreeData = useMemo(() => toTreeData(deptTreeItems, t), [deptTreeItems, t]);
+  const presetDisabledFields = useMemo(
+    () => (isEdit && editPresetCode && isPresetEntityCode('department', editPresetCode) ? ['name'] : []),
+    [isEdit, editPresetCode],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      setEditPresetCode(null);
+      return;
+    }
+    formRef.current?.resetFields();
+    formRef.current?.setFieldsValue({
+      is_active: true,
+      sort_order: 0,
+      parent_uuid: initialParentUuid || undefined,
+    });
+    if (!editUuid) {
+      setEditPresetCode(null);
+      return;
+    }
+    getDepartmentByUuid(editUuid)
+      .then((detail: Department) => {
+        const localized = localizedPresetFormFields('department', detail, t);
+        setEditPresetCode(detail.code ?? null);
+        formRef.current?.setFieldsValue({
+          name: localized.name,
+          code: detail.code,
+          description: detail.description,
+          parent_uuid: detail.parent_uuid || undefined,
+          manager_uuid: detail.manager_uuid || undefined,
+          sort_order: detail.sort_order ?? 0,
+          is_active: detail.is_active ?? true,
+        });
+      })
+      .catch((err: any) => {
+        messageApi.error(err?.message || t('common.loadFailed'));
+      });
+  }, [open, editUuid, initialParentUuid, messageApi, t, i18n.language]);
+
+  const handleSubmit = async (values: any) => {
+    try {
+      setFormLoading(true);
+      let payload = { ...values };
+      if (payload.parent_uuid === undefined || payload.parent_uuid === null || payload.parent_uuid === '') {
+        payload.parent_uuid = undefined;
+      }
+      if (payload.manager_uuid === undefined || payload.manager_uuid === '') {
+        if (isEdit) {
+          payload.manager_uuid = null;
+        } else {
+          delete payload.manager_uuid;
+        }
+      }
+      if (isEdit && editUuid) {
+        payload = omitPresetLocalizedPayloadFields('department', editPresetCode, payload);
+        await updateDepartment(editUuid, payload as UpdateDepartmentData);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await createDepartment(payload as CreateDepartmentData);
+        messageApi.success(t('common.createSuccess'));
+      }
+      onClose();
+      formRef.current?.resetFields();
+      onSuccess();
+    } catch (error: any) {
+      messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.saveFailed')));
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    onClose();
+    formRef.current?.resetFields();
+  };
+
+  return (
+    <FormModalTemplate
+      title={isEdit ? t('field.department.editTitle') : t('field.department.createTitle')}
+      open={open}
+      onClose={handleClose}
+      onFinish={handleSubmit}
+      isEdit={isEdit}
+      loading={formLoading}
+      width={MODAL_CONFIG.SMALL_WIDTH}
+      formRef={formRef as React.RefObject<ProFormInstance>}
+      initialValues={{ is_active: true, sort_order: 0, parent_uuid: initialParentUuid || undefined }}
+      layout="vertical"
+    >
+      <SchemaFormRenderer
+        schema={departmentFormSchema}
+        isEdit={isEdit}
+        treeDataMap={{ parent_uuid: deptTreeData }}
+        disabledFields={presetDisabledFields}
+        slots={{
+          manager_uuid: (
+            <UniUserSelect
+              name="manager_uuid"
+              label={t('field.department.managerUuid')}
+              placeholder={t('field.department.managerPlaceholder')}
+            />
+          ),
+        }}
+      />
+    </FormModalTemplate>
+  );
+};

@@ -1,0 +1,6032 @@
+"""
+仓库执行 API 路由模块
+
+提供生产领料、成品入库、装箱绑定、库存预警、客户来料登记、
+销售出库/退货、采购入库/退货、补货建议等API接口。
+"""
+
+
+
+from datetime import datetime, date, time
+import uuid
+from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from loguru import logger
+
+from core.api.deps import get_current_user, get_current_tenant
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_warehouse_execution_access
+from core.api.deps.access import require_permission_codes
+from core.services.authorization.data_scope_service import DataScopeService
+from infra.models.user import User
+from tortoise.exceptions import IntegrityError
+from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
+
+from apps.kuaizhizao.services.warehouse_service import (
+    ProductionPickingService,
+    ProductionReturnService,
+    FinishedGoodsReceiptService,
+    SalesDeliveryService,
+    SalesReturnService,
+    SALES_RETURN_SORTABLE_FIELDS,
+    PurchaseReceiptService,
+    PurchaseReturnService,
+    PURCHASE_RETURN_SORTABLE_FIELDS,
+    OtherInboundService,
+    OtherOutboundService,
+    MaterialBorrowService,
+    MaterialReturnService,
+)
+from apps.kuaizhizao.services.semi_finished_goods_receipt_service import SemiFinishedGoodsReceiptService
+from apps.kuaizhizao.services.inventory_analysis_service import InventoryAnalysisService
+from apps.kuaizhizao.services.inventory_alert_service import InventoryAlertRuleService, InventoryAlertService
+from apps.kuaizhizao.services.packing_binding_service import PackingBindingService, PACKING_BINDING_SORTABLE_FIELDS
+from apps.kuaizhizao.services.customer_material_registration_service import (
+    BarcodeMappingRuleService,
+    CustomerMaterialRegistrationService,
+)
+from apps.kuaizhizao.services.replenishment_suggestion_service import ReplenishmentSuggestionService
+from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
+from apps.kuaizhizao.services.batching_center_service import BatchingCenterService
+from apps.kuaizhizao.services.warehouse_dashboard_service import WarehouseDashboardService
+from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
+from apps.kuaizhizao.services.warehouse_wo_outsource_pull_service import (
+    WarehouseWoOutsourcePullService,
+)
+
+# 初始化服务实例
+batching_order_service = BatchingOrderService()
+batching_center_service = BatchingCenterService()
+packing_binding_service = PackingBindingService()
+inventory_alert_rule_service = InventoryAlertRuleService()
+inventory_alert_service = InventoryAlertService()
+inventory_analysis_service = InventoryAnalysisService()
+barcode_mapping_rule_service = BarcodeMappingRuleService()
+customer_material_registration_service = CustomerMaterialRegistrationService()
+
+from apps.kuaizhizao.schemas.warehouse import (
+    ProductionPickingCreate,
+    ProductionPickingUpdate,
+    ProductionPickingResponse,
+    ProductionPickingListResponse,
+    ProductionPickingWithItemsResponse,
+    ProductionPickingPullFromWorkOrderRequest,
+    ProductionReturnCreate,
+    ProductionReturnUpdate,
+    ProductionReturnResponse,
+    ProductionReturnListResponse,
+    ProductionReturnWithItemsResponse,
+    ProductionReturnItemCreate,
+    ProductionReturnItemUpdate,
+    FinishedGoodsReceiptCreate,
+    FinishedGoodsReceiptResponse,
+    FinishedGoodsReceiptWithItemsResponse,
+    SemiFinishedGoodsReceiptCreate,
+    SemiFinishedGoodsReceiptResponse,
+    SemiFinishedGoodsReceiptWithItemsResponse,
+    SalesDeliveryCreate,
+    SalesDeliveryUpdate,
+    SalesDeliveryResponse,
+    SalesDeliveryWithItemsResponse,
+    SalesDeliveryConfirmRequest,
+    SalesReturnCreate,
+    SalesReturnUpdate,
+    SalesReturnResponse,
+    SalesReturnListPaginatedResponse,
+    WorkOrderInboundPreviewResponse,
+    ProductionReturnPreviewResponse,
+    SalesOrderReturnPreviewResponse,
+    SalesDeliveryReturnPreviewResponse,
+    CustomerOutboundBatchOption,
+    PurchaseReceiptCreate,
+    PurchaseReceiptUpdate,
+    PurchaseReceiptResponse,
+    PurchaseReceiptWithItemsResponse,
+    PurchaseReturnCreate,
+    PurchaseReturnUpdate,
+    PurchaseReturnResponse,
+    PurchaseReturnListPaginatedResponse,
+    OtherInboundCreate,
+    OtherInboundUpdate,
+    OtherInboundResponse,
+    OtherInboundListResponse,
+    OtherInboundWithItemsResponse,
+    OtherOutboundCreate,
+    OtherOutboundUpdate,
+    OtherOutboundResponse,
+    OtherOutboundListResponse,
+    OtherOutboundWithItemsResponse,
+    MaterialBorrowCreate,
+    MaterialBorrowUpdate,
+    MaterialBorrowResponse,
+    MaterialBorrowListResponse,
+    MaterialBorrowWithItemsResponse,
+    MaterialReturnCreate,
+    MaterialReturnUpdate,
+    MaterialReturnResponse,
+    MaterialReturnListResponse,
+    MaterialReturnWithItemsResponse,
+    MaterialPrepReminderResponse,
+    InboundConfirmationRequest,
+    OutboundConfirmationRequest,
+    OutboundConfirmationItem,
+)
+from apps.kuaizhizao.schemas.replenishment_suggestion import (
+    ReplenishmentSuggestionResponse,
+    ReplenishmentSuggestionListResponse,
+    ReplenishmentSuggestionProcessRequest,
+    ReplenishmentSuggestionGenerateResult,
+    ReplenishmentSuggestionPushRequest,
+)
+from apps.kuaizhizao.schemas.inventory_alert import (
+    InventoryAlertRuleCreate,
+    InventoryAlertRuleUpdate,
+    InventoryAlertRuleResponse,
+    InventoryAlertRuleListResponse,
+    InventoryAlertResponse,
+    InventoryAlertListResponse,
+    InventoryAlertHandleRequest,
+    InventoryAlertCheckRequest,
+    InventoryAlertCheckResponse,
+)
+from apps.kuaizhizao.schemas.packing_binding import (
+    PackingBindingCreateFromReceipt,
+    PackingBindingCreateFromDelivery,
+    PackingBindingUpdate,
+    PackingBindingResponse,
+    PackingBindingListResponse,
+    PackingBindingPageResponse,
+    PackingBindingStatisticsResponse,
+    PackingBindingTaskPoolResponse,
+)
+from apps.kuaizhizao.schemas.customer_material_registration import (
+    BarcodeMappingRuleCreate,
+    BarcodeMappingRuleResponse,
+    BarcodeMappingRuleListResponse,
+    CustomerMaterialRegistrationBatchActionRequest,
+    CustomerMaterialRegistrationBatchActionResponse,
+    CustomerMaterialRegistrationCreate,
+    CustomerMaterialRegistrationUpdate,
+    CustomerMaterialRegistrationResponse,
+    CustomerMaterialRegistrationListResponse,
+    CustomerMaterialStartProductionResponse,
+    ParseBarcodeRequest,
+    ParseBarcodeResponse,
+)
+from apps.kuaizhizao.schemas.batching_order import (
+    BatchingOrderCreate,
+    BatchingOrderCreateWithItems,
+    BatchingOrderUpdate,
+    BatchingOrderResponse,
+    BatchingOrderListResponse,
+    BatchingOrderWithItemsResponse,
+    PullFromWorkOrderRequest,
+    BatchingOrderConfirmRequest,
+    BatchingPullCandidateListResponse,
+    BatchingPullPreviewResponse,
+    BatchingCenterTaskListResponse,
+)
+from core.utils.timezone_utils import to_api_isoformat
+
+router = APIRouter(
+    tags=["App - Kuaige Zhizao - Warehouse Execution"],
+    dependencies=[Depends(require_kuaizhizao_warehouse_execution_access(resolve_print=False))],
+)
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "warehouse_execution_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+async def _scoped_sales_order_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+
+    scoped_query = await DataScopeService.apply(
+        SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:sales-order",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _scoped_purchase_order_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+    scoped_query = await DataScopeService.apply(
+        PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:purchase-order",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _scoped_other_inbound_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.other_inbound import OtherInbound
+
+    scoped_query = await DataScopeService.apply(
+        OtherInbound.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:other-inbound",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _scoped_other_outbound_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.other_outbound import OtherOutbound
+
+    scoped_query = await DataScopeService.apply(
+        OtherOutbound.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:other-outbound",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _scoped_material_borrow_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.material_borrow import MaterialBorrow
+
+    scoped_query = await DataScopeService.apply(
+        MaterialBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:material-borrow",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _scoped_material_return_ids(*, tenant_id: int, current_user: User) -> List[int]:
+    from apps.kuaizhizao.models.material_return import MaterialReturn
+
+    scoped_query = await DataScopeService.apply(
+        MaterialReturn.filter(tenant_id=tenant_id, deleted_at__isnull=True),
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:material-return",
+    )
+    ids = await scoped_query.values_list("id", flat=True)
+    return [int(x) for x in ids]
+
+
+async def _assert_sales_delivery_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    delivery_id: int,
+) -> None:
+    from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+    from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+        SALES_OUTBOUND_SCOPE_RESOURCE,
+        assert_sales_order_child_row_visible,
+    )
+
+    delivery = await SalesDelivery.get_or_none(
+        tenant_id=tenant_id,
+        id=delivery_id,
+        deleted_at__isnull=True,
+    )
+    if not delivery:
+        return
+    await assert_sales_order_child_row_visible(
+        delivery,
+        tenant_id=tenant_id,
+        user=current_user,
+        order_id_field="sales_order_id",
+        orphan_resource=SALES_OUTBOUND_SCOPE_RESOURCE,
+    )
+
+
+async def _assert_purchase_receipt_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    receipt_id: int,
+) -> None:
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+    receipt = await PurchaseReceipt.get_or_none(
+        tenant_id=tenant_id,
+        id=receipt_id,
+        deleted_at__isnull=True,
+    )
+    if not receipt:
+        return
+    # 引用单据（采购订单）仅用于追溯，不应阻塞采购入库单本身的查看/确认。
+    # 否则“采购订单下推入库”后会出现可见入库单无法进入详情/确认的阻塞问题。
+    await DataScopeService.assert_row_visible(
+        receipt,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:purchase-receipt",
+    )
+
+
+async def _assert_work_order_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    work_order_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.work_order import WorkOrder
+
+    if not work_order_id:
+        return
+    work_order = await WorkOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=work_order_id,
+        deleted_at__isnull=True,
+    )
+    if not work_order:
+        return
+    await DataScopeService.assert_row_visible(
+        work_order,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:work-order",
+    )
+
+
+async def _assert_sales_order_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    sales_order_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+
+    if not sales_order_id:
+        return
+    sales_order = await SalesOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=sales_order_id,
+        deleted_at__isnull=True,
+    )
+    if not sales_order:
+        return
+    await DataScopeService.assert_row_visible(
+        sales_order,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:sales-order",
+    )
+
+
+async def _assert_purchase_order_visible_by_id(
+    *,
+    tenant_id: int,
+    current_user: User,
+    purchase_order_id: Optional[int],
+) -> None:
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+    if not purchase_order_id:
+        return
+    purchase_order = await PurchaseOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=purchase_order_id,
+        deleted_at__isnull=True,
+    )
+    if not purchase_order:
+        return
+    await DataScopeService.assert_row_visible(
+        purchase_order,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:purchase-order",
+    )
+
+
+async def _assert_production_picking_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    picking_id: int,
+) -> None:
+    from apps.kuaizhizao.models.production_picking import ProductionPicking
+
+    picking = await ProductionPicking.get_or_none(
+        tenant_id=tenant_id,
+        id=picking_id,
+        deleted_at__isnull=True,
+    )
+    if not picking:
+        return
+    await _assert_work_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        work_order_id=getattr(picking, "work_order_id", None),
+    )
+
+
+async def _assert_production_return_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    return_id: int,
+) -> None:
+    from apps.kuaizhizao.models.production_return import ProductionReturn
+
+    production_return = await ProductionReturn.get_or_none(
+        tenant_id=tenant_id,
+        id=return_id,
+        deleted_at__isnull=True,
+    )
+    if not production_return:
+        return
+    await _assert_work_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        work_order_id=getattr(production_return, "work_order_id", None),
+    )
+
+
+async def _assert_sales_return_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    return_id: int,
+) -> None:
+    from apps.kuaizhizao.models.sales_return import SalesReturn
+    from apps.kuaizhizao.services.kuaizhizao_data_scope import (
+        SALES_RETURN_SCOPE_RESOURCE,
+        assert_sales_order_child_row_visible,
+    )
+
+    sales_return = await SalesReturn.get_or_none(
+        tenant_id=tenant_id,
+        id=return_id,
+        deleted_at__isnull=True,
+    )
+    if not sales_return:
+        return
+    await assert_sales_order_child_row_visible(
+        sales_return,
+        tenant_id=tenant_id,
+        user=current_user,
+        order_id_field="sales_order_id",
+        orphan_resource=SALES_RETURN_SCOPE_RESOURCE,
+    )
+
+
+async def _assert_purchase_return_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    return_id: int,
+) -> None:
+    from apps.kuaizhizao.models.purchase_return import PurchaseReturn
+
+    purchase_return = await PurchaseReturn.get_or_none(
+        tenant_id=tenant_id,
+        id=return_id,
+        deleted_at__isnull=True,
+    )
+    if not purchase_return:
+        return
+    purchase_order_id = getattr(purchase_return, "purchase_order_id", None)
+    if not purchase_order_id:
+        return
+    await _assert_purchase_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        purchase_order_id=purchase_order_id,
+    )
+
+
+async def _assert_other_inbound_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    inbound_id: int,
+) -> None:
+    from apps.kuaizhizao.models.other_inbound import OtherInbound
+
+    inbound = await OtherInbound.get_or_none(
+        tenant_id=tenant_id,
+        id=inbound_id,
+        deleted_at__isnull=True,
+    )
+    if not inbound:
+        return
+    await DataScopeService.assert_row_visible(
+        inbound,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:other-inbound",
+    )
+
+
+async def _assert_other_outbound_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    outbound_id: int,
+) -> None:
+    from apps.kuaizhizao.models.other_outbound import OtherOutbound
+
+    outbound = await OtherOutbound.get_or_none(
+        tenant_id=tenant_id,
+        id=outbound_id,
+        deleted_at__isnull=True,
+    )
+    if not outbound:
+        return
+    await DataScopeService.assert_row_visible(
+        outbound,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:other-outbound",
+    )
+
+
+async def _assert_material_borrow_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    borrow_id: int,
+) -> None:
+    from apps.kuaizhizao.models.material_borrow import MaterialBorrow
+
+    borrow = await MaterialBorrow.get_or_none(
+        tenant_id=tenant_id,
+        id=borrow_id,
+        deleted_at__isnull=True,
+    )
+    if not borrow:
+        return
+    await DataScopeService.assert_row_visible(
+        borrow,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:material-borrow",
+    )
+
+
+async def _assert_material_return_visible(
+    *,
+    tenant_id: int,
+    current_user: User,
+    return_id: int,
+) -> None:
+    from apps.kuaizhizao.models.material_return import MaterialReturn
+
+    material_return = await MaterialReturn.get_or_none(
+        tenant_id=tenant_id,
+        id=return_id,
+        deleted_at__isnull=True,
+    )
+    if not material_return:
+        return
+    await DataScopeService.assert_row_visible(
+        material_return,
+        tenant_id=tenant_id,
+        user=current_user,
+        resource="kuaizhizao:material-return",
+    )
+
+
+# ============ 仓储看板 ============
+
+
+@router.get("/warehouse-dashboard/summary", summary="Warehouse dashboard summary")
+async def warehouse_dashboard_summary(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    recent_limit: int = Query(8, ge=1, le=50, description="最近入/出库各返回条数上限"),
+) -> Dict[str, Any]:
+    return await WarehouseDashboardService.get_summary(tenant_id, recent_limit=recent_limit)
+
+
+# ============ 生产领料管理 API ============
+
+@router.post("/production-pickings/quick-pick", response_model=ProductionPickingResponse, summary="Quick picking from work order")
+async def quick_pick_from_work_order(
+    work_order_id: int = Query(..., description="工单ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID（与 warehouse_name 至少填一）"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（与 warehouse_id 至少填一）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingResponse:
+    """
+    一键领料：从工单下推，根据BOM自动生成领料需求
+
+    - **work_order_id**: 工单ID
+    - **warehouse_id** / **warehouse_name**: 出库仓库（至少指定其一）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    系统会自动：
+    1. 获取工单信息
+    2. 根据工单产品获取BOM
+    3. 根据BOM和工单数量计算物料需求
+    4. 创建生产领料单和明细（无仓库或无明细时直接失败，不落空头单）
+
+    返回创建的生产领料单信息。
+    """
+    return await ProductionPickingService().quick_pick_from_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        created_by=current_user.id,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name
+    )
+
+
+@router.post("/production-pickings/batch-pick", response_model=List[ProductionPickingResponse], summary="Batch picking (multiple work orders)", dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:create"))])
+async def batch_pick_from_work_orders(
+    work_order_ids: List[int] = Query(..., description="工单ID列表"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID（可选）"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（可选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[ProductionPickingResponse]:
+    """
+    批量领料：从多个工单下推，批量创建领料单
+
+    - **work_order_ids**: 工单ID列表
+    - **warehouse_id**: 仓库ID（可选）
+    - **warehouse_name**: 仓库名称（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的生产领料单列表。
+    """
+    return await ProductionPickingService().batch_pick_from_work_orders(
+        tenant_id=tenant_id,
+        work_order_ids=work_order_ids,
+        created_by=current_user.id,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name
+    )
+
+
+@router.post(
+    "/production-pickings/pull-from-work-order",
+    response_model=ProductionPickingWithItemsResponse,
+    summary="Create production picking from work order pull (single, with lines)",
+)
+async def create_production_picking_from_work_order_pull(
+    body: ProductionPickingPullFromWorkOrderRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingWithItemsResponse:
+    try:
+        return await ProductionPickingService().create_production_picking_from_work_order_pull(
+            tenant_id=tenant_id,
+            created_by=current_user.id,
+            work_order_id=body.work_order_id,
+            warehouse_id=body.warehouse_id,
+            warehouse_name=body.warehouse_name,
+            picker_id=body.picker_id,
+            picker_name=body.picker_name,
+            picking_time=body.picking_time,
+            notes=body.notes,
+            lines=body.lines,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+def _parse_selected_item_ids(request: Dict[str, Any], empty_detail: str) -> List[int]:
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=empty_detail)
+    try:
+        return [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+
+
+@router.get(
+    "/production-pickings/work-order-pull-lines",
+    summary="Open work order kitting lines for production picking pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+)
+async def list_production_picking_work_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    work_order_id: Optional[int] = Query(None, description="来源工单"),
+    pullable_only: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WarehouseWoOutsourcePullService().list_work_order_picking_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            work_order_id=work_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/production-pickings/pull-from-work-order-items",
+    summary="Create production pickings from work order kitting lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:create"))],
+)
+async def pull_production_pickings_from_work_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    selected_ids = _parse_selected_item_ids(request, "请至少选择一条可领料明细")
+    try:
+        return await WarehouseWoOutsourcePullService().create_production_pickings_from_lines(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/production-pickings", response_model=ProductionPickingResponse, summary="Create production picking")
+async def create_production_picking(
+    picking: ProductionPickingCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingResponse:
+    """
+    创建生产领料单
+
+    - **picking**: 领料单创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的生产领料单信息。
+    """
+    return await ProductionPickingService().create_production_picking(
+        tenant_id=tenant_id,
+        picking_data=picking,
+        created_by=current_user.id
+    )
+
+
+@router.get("/production-pickings", summary="List production pickings")
+async def list_production_pickings(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    status: Optional[str] = Query(None, description="领料状态"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（模糊）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（领料单号/工单号/领料人）"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日起"),
+    created_end_date: Optional[str] = Query(None, description="创建日止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取生产领料单列表
+
+    支持状态、工单、仓库与关键词筛选。
+    """
+    items, total = await ProductionPickingService().list_production_pickings(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        work_order_id=work_order_id,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get("/production-pickings/{picking_id}", response_model=ProductionPickingWithItemsResponse, summary="Get production picking")
+async def get_production_picking(
+    picking_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingWithItemsResponse:
+    """
+    根据ID获取生产领料单详情
+
+    - **picking_id**: 领料单ID
+    """
+    await _assert_production_picking_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        picking_id=picking_id,
+    )
+    return await ProductionPickingService().get_production_picking_by_id(
+        tenant_id=tenant_id,
+        picking_id=picking_id
+    )
+
+
+@router.put("/production-pickings/{picking_id}", response_model=ProductionPickingResponse, summary="Update production picking")
+async def update_production_picking(
+    picking_id: int,
+    picking: ProductionPickingUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingResponse:
+    await _assert_production_picking_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        picking_id=picking_id,
+    )
+    return await ProductionPickingService().update_production_picking(
+        tenant_id=tenant_id,
+        picking_id=picking_id,
+        picking_data=picking,
+        updated_by=current_user.id,
+    )
+
+
+@router.post("/production-pickings/{picking_id}/confirm", response_model=ProductionPickingResponse, summary="Confirm picking")
+async def confirm_production_picking(
+    picking_id: int,
+    confirmation_data: Optional[OutboundConfirmationRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingResponse:
+    """
+    确认生产领料
+
+    - **picking_id**: 领料单ID
+    """
+    await _assert_production_picking_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        picking_id=picking_id,
+    )
+    return await ProductionPickingService().confirm_picking(
+        tenant_id=tenant_id,
+        picking_id=picking_id,
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data,
+    )
+
+
+@router.post(
+    "/production-pickings/{picking_id}/withdraw",
+    response_model=ProductionPickingResponse,
+    summary="Withdraw production picking",
+)
+async def withdraw_production_picking(
+    picking_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingResponse:
+    """撤回生产领料确认"""
+    await _assert_production_picking_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        picking_id=picking_id,
+    )
+    return await ProductionPickingService().withdraw_picking_confirmation(
+        tenant_id=tenant_id,
+        picking_id=picking_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.delete("/production-pickings/{picking_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete production picking")
+async def delete_production_picking(
+    picking_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await _assert_production_picking_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        picking_id=picking_id,
+    )
+    await ProductionPickingService().delete_production_picking(
+        tenant_id=tenant_id,
+        picking_id=picking_id,
+    )
+
+
+@router.get("/production-pickings/material-prep-reminders", response_model=MaterialPrepReminderResponse, summary="List warehouse prep reminders")
+async def get_material_prep_reminders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialPrepReminderResponse:
+    """
+    获取推荐备料的工单列表（齐套且未领料）。
+    """
+    return await ProductionPickingService().get_material_prep_reminders(tenant_id, skip, limit)
+
+
+# ============ 生产退料管理 API ============
+
+@router.get(
+    "/production-returns/work-order-preview",
+    response_model=ProductionReturnPreviewResponse,
+    summary="Preview production return from work order",
+)
+async def preview_production_return_from_work_order(
+    work_order_id: int = Query(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnPreviewResponse:
+    return await ProductionReturnService().get_production_return_preview(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+    )
+
+
+@router.get(
+    "/production-returns/picking-item-pull-lines",
+    summary="Open picking lines for production return pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+)
+async def list_production_return_picking_item_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    work_order_id: Optional[int] = Query(None, description="来源工单"),
+    pullable_only: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WarehouseWoOutsourcePullService().list_production_return_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            work_order_id=work_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/production-returns/pull-from-picking-items",
+    summary="Create production returns from picking lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:create"))],
+)
+async def pull_production_returns_from_picking_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    selected_ids = _parse_selected_item_ids(request, "请至少选择一条可退料明细")
+    try:
+        return await WarehouseWoOutsourcePullService().create_production_returns_from_picking_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/production-returns", response_model=ProductionReturnResponse, summary="Create production return")
+async def create_production_return(
+    return_data: ProductionReturnCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnResponse:
+    """创建生产退料单"""
+    return await ProductionReturnService().create_production_return(
+        tenant_id=tenant_id,
+        return_data=return_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/production-returns", summary="List production returns")
+async def list_production_returns(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=1000),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    picking_id: Optional[int] = Query(None, description="领料单ID"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（退料单号/工单号/领料单号/仓库）"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取生产退料单列表"""
+    items, total = await ProductionReturnService().list_production_returns(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        work_order_id=work_order_id,
+        picking_id=picking_id,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get("/production-returns/{return_id}", response_model=ProductionReturnWithItemsResponse, summary="Get production return")
+async def get_production_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnWithItemsResponse:
+    """获取生产退料单详情（含明细）"""
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await ProductionReturnService().get_production_return_by_id(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+@router.put("/production-returns/{return_id}", response_model=ProductionReturnResponse, summary="Update production return")
+async def update_production_return(
+    return_id: int,
+    return_data: ProductionReturnUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnResponse:
+    """更新生产退料单"""
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await ProductionReturnService().update_production_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        return_data=return_data,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/production-returns/{return_id}", summary="Delete production return")
+async def delete_production_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除生产退料单"""
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    await ProductionReturnService().delete_production_return(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+    return {"success": True}
+
+
+@router.post("/production-returns/{return_id}/confirm", response_model=ProductionReturnResponse, summary="Confirm material return")
+async def confirm_production_return(
+    return_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnResponse:
+    """确认生产退料"""
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await ProductionReturnService().confirm_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data
+    )
+
+
+@router.post(
+    "/production-returns/{return_id}/withdraw",
+    response_model=ProductionReturnResponse,
+    summary="Withdraw production return (reverse stock)",
+)
+async def withdraw_production_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionReturnResponse:
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await ProductionReturnService().withdraw_return_confirmation(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.get(
+    "/production-returns/{return_id}/print",
+    summary="Print production return",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:print"))],
+)
+async def print_production_return(
+    return_id: int,
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印生产退料单"""
+    await _assert_production_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="production_return",
+        document_id=return_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ============ 其他入库单 API ============
+
+@router.get("/other-inbounds", summary="List misc inbounds")
+async def list_other_inbounds(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=1000),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    reason_type: Optional[str] = Query(None, description="原因类型筛选"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    receipt_start_date: Optional[str] = Query(None, description="入库时间起"),
+    receipt_end_date: Optional[str] = Query(None, description="入库时间止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取其他入库单列表"""
+    logger.info(f"FINAL-DEBUG: 执行 list_other_inbounds, tenant_id={tenant_id}")
+    scoped_ids = await _scoped_other_inbound_ids(
+        tenant_id=tenant_id,
+        current_user=current_user,
+    )
+    items, total = await OtherInboundService().list_other_inbounds(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        reason_type=reason_type,
+        warehouse_id=warehouse_id,
+        scoped_ids=scoped_ids,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        receipt_start_date=receipt_start_date,
+        receipt_end_date=receipt_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    logger.info(f"FINAL-DEBUG: 模块 {__file__} 返回了 {len(items)} 条数据")
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@router.post("/other-inbounds", response_model=OtherInboundResponse, summary="Create misc inbound")
+async def create_other_inbound(
+    inbound_data: OtherInboundCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建其他入库单"""
+    return await OtherInboundService().create_other_inbound(
+        tenant_id=tenant_id,
+        inbound_data=inbound_data,
+        created_by=current_user.id
+    )
+
+
+@router.post(
+    "/other-inbounds/{inbound_id}/repair-inventory",
+    response_model=OtherInboundResponse,
+    summary="Repair inventory for soft-deleted misc inbound",
+)
+async def repair_deleted_other_inbound_inventory(
+    inbound_id: int = Path(..., description="其他入库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OtherInboundResponse:
+    """
+    对已软删除且仍为「已入库」的单据，按明细冲减即时库存（与撤回确认一致）。
+    用于未先撤回即删除导致账实不一致的修复；成功后单据状态变为「已取消」，不可重复执行。
+    """
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
+    return await OtherInboundService().repair_deleted_other_inbound_inventory(
+        tenant_id=tenant_id,
+        inbound_id=inbound_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.post("/other-inbounds/{inbound_id}/withdraw", response_model=OtherInboundResponse, summary="Withdraw misc inbound posting")
+async def withdraw_other_inbound(
+    inbound_id: int = Path(..., description="其他入库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OtherInboundResponse:
+    """撤回确认"""
+    logger.info(f"🎯 捅到 withdraw 接口了！inbound_id={inbound_id}")
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
+    return await OtherInboundService().withdraw_confirmation(
+        tenant_id=tenant_id,
+        inbound_id=inbound_id,
+        updated_by=current_user.id
+    )
+
+
+@router.get("/other-inbounds/{inbound_id}", response_model=OtherInboundWithItemsResponse, summary="Get misc inbound")
+async def get_other_inbound(
+    inbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取其他入库单详情（含明细）"""
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
+    return await OtherInboundService().get_other_inbound_by_id(
+        tenant_id=tenant_id,
+        inbound_id=inbound_id
+    )
+
+
+@router.put("/other-inbounds/{inbound_id}", response_model=OtherInboundResponse, summary="Update misc inbound")
+async def update_other_inbound(
+    inbound_id: int,
+    inbound_data: OtherInboundUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新其他入库单"""
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
+    return await OtherInboundService().update_other_inbound(
+        tenant_id=tenant_id,
+        inbound_id=inbound_id,
+        inbound_data=inbound_data,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/other-inbounds/{inbound_id}", summary="Delete misc inbound")
+async def delete_other_inbound(
+    inbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除其他入库单"""
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
+    await OtherInboundService().delete_other_inbound(
+        tenant_id=tenant_id,
+        inbound_id=inbound_id
+    )
+
+
+@router.post("/other-inbounds/{inbound_id}/confirm", response_model=OtherInboundResponse, summary="Confirm inbound")
+async def confirm_other_inbound(
+    inbound_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """确认其他入库"""
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
+    return await OtherInboundService().confirm_inbound(
+        tenant_id=tenant_id,
+        inbound_id=inbound_id,
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data
+    )
+
+
+@router.get(
+    "/other-inbounds/{inbound_id}/print",
+    summary="Print misc inbound",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:other-inbound:print"))],
+)
+async def print_other_inbound(
+    inbound_id: int,
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印其他入库单"""
+    await _assert_other_inbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inbound_id=inbound_id,
+    )
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="other_inbound",
+        document_id=inbound_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ============ 其他出库单 API ============
+
+@router.post("/other-outbounds", response_model=OtherOutboundResponse, summary="Create misc outbound")
+async def create_other_outbound(
+    outbound_data: OtherOutboundCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建其他出库单"""
+    return await OtherOutboundService().create_other_outbound(
+        tenant_id=tenant_id,
+        outbound_data=outbound_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/other-outbounds", summary="List misc outbounds")
+async def list_other_outbounds(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    reason_type: Optional[str] = Query(None, description="原因类型筛选"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    delivery_start_date: Optional[str] = Query(None, description="出库时间起"),
+    delivery_end_date: Optional[str] = Query(None, description="出库时间止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取其他出库单列表"""
+    scoped_ids = await _scoped_other_outbound_ids(
+        tenant_id=tenant_id,
+        current_user=current_user,
+    )
+    items, total = await OtherOutboundService().list_other_outbounds(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        reason_type=reason_type,
+        warehouse_id=warehouse_id,
+        scoped_ids=scoped_ids,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        delivery_start_date=delivery_start_date,
+        delivery_end_date=delivery_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get("/other-outbounds/{outbound_id}", response_model=OtherOutboundWithItemsResponse, summary="Get misc outbound")
+async def get_other_outbound(
+    outbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取其他出库单详情（含明细）"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
+    return await OtherOutboundService().get_other_outbound_by_id(
+        tenant_id=tenant_id,
+        outbound_id=outbound_id
+    )
+
+
+@router.put("/other-outbounds/{outbound_id}", response_model=OtherOutboundResponse, summary="Update misc outbound")
+async def update_other_outbound(
+    outbound_id: int,
+    outbound_data: OtherOutboundUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新其他出库单"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
+    return await OtherOutboundService().update_other_outbound(
+        tenant_id=tenant_id,
+        outbound_id=outbound_id,
+        outbound_data=outbound_data,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/other-outbounds/{outbound_id}", summary="Delete misc outbound")
+async def delete_other_outbound(
+    outbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除其他出库单"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
+    await OtherOutboundService().delete_other_outbound(
+        tenant_id=tenant_id,
+        outbound_id=outbound_id
+    )
+
+
+@router.post("/other-outbounds/{outbound_id}/confirm", response_model=OtherOutboundResponse, summary="Confirm outbound")
+async def confirm_other_outbound(
+    outbound_id: int,
+    confirmation_data: Optional[OutboundConfirmationRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """确认其他出库"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
+    return await OtherOutboundService().confirm_outbound(
+        tenant_id=tenant_id,
+        outbound_id=outbound_id,
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data,
+    )
+
+
+@router.post("/other-outbounds/{outbound_id}/withdraw", response_model=OtherOutboundResponse, summary="Withdraw misc outbound")
+async def withdraw_other_outbound(
+    outbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OtherOutboundResponse:
+    """撤回其他出库确认"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
+    return await OtherOutboundService().withdraw_confirmation(
+        tenant_id=tenant_id,
+        outbound_id=outbound_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.get(
+    "/other-outbounds/{outbound_id}/print",
+    summary="Print misc outbound",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:other-outbound:print"))],
+)
+async def print_other_outbound(
+    outbound_id: int,
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印其他出库单"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="other_outbound",
+        document_id=outbound_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ============ 借料单 API ============
+
+@router.post("/material-borrows", response_model=MaterialBorrowResponse, summary="Create material borrow slip")
+async def create_material_borrow(
+    borrow_data: MaterialBorrowCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建借料单"""
+    return await MaterialBorrowService().create_material_borrow(
+        tenant_id=tenant_id,
+        borrow_data=borrow_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/material-borrows", summary="List material borrow slips")
+async def list_material_borrows(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None),
+    warehouse_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    borrow_start_date: Optional[str] = Query(None, description="借出时间起"),
+    borrow_end_date: Optional[str] = Query(None, description="借出时间止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取借料单列表"""
+    scoped_ids = await _scoped_material_borrow_ids(
+        tenant_id=tenant_id,
+        current_user=current_user,
+    )
+    items, total = await MaterialBorrowService().list_material_borrows(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        warehouse_id=warehouse_id,
+        scoped_ids=scoped_ids,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        borrow_start_date=borrow_start_date,
+        borrow_end_date=borrow_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get("/material-borrows/{borrow_id}", response_model=MaterialBorrowWithItemsResponse, summary="Get material borrow slip")
+async def get_material_borrow(
+    borrow_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取借料单详情（含明细）"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
+    return await MaterialBorrowService().get_material_borrow_by_id(
+        tenant_id=tenant_id,
+        borrow_id=borrow_id
+    )
+
+
+@router.put("/material-borrows/{borrow_id}", response_model=MaterialBorrowResponse, summary="Update material borrow slip")
+async def update_material_borrow(
+    borrow_id: int,
+    borrow_data: MaterialBorrowUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新借料单"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
+    return await MaterialBorrowService().update_material_borrow(
+        tenant_id=tenant_id,
+        borrow_id=borrow_id,
+        borrow_data=borrow_data,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/material-borrows/{borrow_id}", summary="Delete material borrow slip")
+async def delete_material_borrow(
+    borrow_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除借料单"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
+    await MaterialBorrowService().delete_material_borrow(
+        tenant_id=tenant_id,
+        borrow_id=borrow_id
+    )
+
+
+@router.post("/material-borrows/{borrow_id}/confirm", response_model=MaterialBorrowResponse, summary="Confirm borrow issue")
+async def confirm_material_borrow(
+    borrow_id: int,
+    confirmation_data: Optional[OutboundConfirmationRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """确认借出"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
+    return await MaterialBorrowService().confirm_borrow(
+        tenant_id=tenant_id,
+        borrow_id=borrow_id,
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data,
+    )
+
+
+@router.post("/material-borrows/{borrow_id}/withdraw", response_model=MaterialBorrowResponse, summary="Withdraw material borrow")
+async def withdraw_material_borrow(
+    borrow_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialBorrowResponse:
+    """撤回借料确认"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
+    return await MaterialBorrowService().withdraw_confirmation(
+        tenant_id=tenant_id,
+        borrow_id=borrow_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.get(
+    "/material-borrows/{borrow_id}/print",
+    summary="Print material borrow slip",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:material-borrow:print"))],
+)
+async def print_material_borrow(
+    borrow_id: int,
+    template_code: Optional[str] = Query(None),
+    template_uuid: Optional[str] = Query(None),
+    output_format: str = Query("html"),
+    response_format: str = Query("json"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印借料单"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="material_borrow",
+        document_id=borrow_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ============ 还料单 API ============
+
+@router.post("/material-returns", response_model=MaterialReturnResponse, summary="Create material return slip")
+async def create_material_return(
+    return_data: MaterialReturnCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建还料单"""
+    return await MaterialReturnService().create_material_return(
+        tenant_id=tenant_id,
+        return_data=return_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/material-returns", summary="List material return slips")
+async def list_material_returns(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=1000),
+    status: Optional[str] = Query(None),
+    borrow_id: Optional[int] = Query(None),
+    warehouse_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    return_start_date: Optional[str] = Query(None, description="归还时间起"),
+    return_end_date: Optional[str] = Query(None, description="归还时间止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取还料单列表"""
+    scoped_ids = await _scoped_material_return_ids(
+        tenant_id=tenant_id,
+        current_user=current_user,
+    )
+    items, total = await MaterialReturnService().list_material_returns(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        borrow_id=borrow_id,
+        warehouse_id=warehouse_id,
+        scoped_ids=scoped_ids,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        return_start_date=return_start_date,
+        return_end_date=return_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get("/material-returns/{return_id}", response_model=MaterialReturnWithItemsResponse, summary="Get material return slip")
+async def get_material_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取还料单详情（含明细）"""
+    await _assert_material_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await MaterialReturnService().get_material_return_by_id(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+@router.put("/material-returns/{return_id}", response_model=MaterialReturnResponse, summary="Update material return slip")
+async def update_material_return(
+    return_id: int,
+    return_data: MaterialReturnUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新还料单"""
+    await _assert_material_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await MaterialReturnService().update_material_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        return_data=return_data,
+        updated_by=current_user.id
+    )
+
+
+@router.delete("/material-returns/{return_id}", summary="Delete material return slip")
+async def delete_material_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除还料单"""
+    await _assert_material_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    await MaterialReturnService().delete_material_return(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+@router.post("/material-returns/{return_id}/confirm", response_model=MaterialReturnResponse, summary="Confirm borrow return")
+async def confirm_material_return(
+    return_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """确认归还"""
+    await _assert_material_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await MaterialReturnService().confirm_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data,
+    )
+
+
+@router.get(
+    "/material-returns/{return_id}/print",
+    summary="Print material return slip",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:material-return:print"))],
+)
+async def print_material_return(
+    return_id: int,
+    template_code: Optional[str] = Query(None),
+    template_uuid: Optional[str] = Query(None),
+    output_format: str = Query("html"),
+    response_format: str = Query("json"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印还料单"""
+    await _assert_material_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="material_return",
+        document_id=return_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ============ 成品入库管理 API ============
+
+@router.get(
+    "/finished-goods-receipts/work-order-preview",
+    response_model=WorkOrderInboundPreviewResponse,
+    summary="Preview inbound lines from work order",
+)
+async def preview_work_order_inbound(
+    work_order_id: int = Query(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderInboundPreviewResponse:
+    return await FinishedGoodsReceiptService().get_work_order_inbound_preview(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+    )
+
+
+@router.get(
+    "/finished-goods-receipts/work-order-pull-lines",
+    summary="Open work order product lines for finished goods receipt pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:read"))],
+)
+async def list_finished_goods_work_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    work_order_id: Optional[int] = Query(None, description="来源工单"),
+    pullable_only: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WarehouseWoOutsourcePullService().list_work_order_finished_goods_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            work_order_id=work_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/finished-goods-receipts/pull-from-work-orders",
+    summary="Create finished goods receipts from work order product lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:create"))],
+)
+async def pull_finished_goods_from_work_orders(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    selected_ids = _parse_selected_item_ids(request, "请至少选择一条可入库工单成品行")
+    try:
+        return await WarehouseWoOutsourcePullService().create_finished_goods_from_work_orders(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/finished-goods-receipts/quick-receipt", response_model=FinishedGoodsReceiptResponse, summary="Quick receipt from work order")
+async def quick_receipt_from_work_order(
+    work_order_id: int = Query(..., description="工单ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID（必填）"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（可选）"),
+    receipt_quantity: Optional[float] = Query(None, description="入库数量（可选；未传时优先质检合格数，否则末道工序合格数）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsReceiptResponse:
+    """
+    一键入库：从工单下推，根据报工记录自动生成入库单
+
+    - **work_order_id**: 工单ID
+    - **warehouse_id**: 仓库ID（必填）
+    - **warehouse_name**: 仓库名称（可选）
+    - **receipt_quantity**: 入库数量（可选；未传时优先质检合格数，否则末道工序合格数）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    系统会自动：
+    1. 获取工单信息
+    2. 若未指定入库数量：优先成品检验合格数；否则取末道工序累计合格数（不按全工序报工相加）
+    3. 创建成品入库单和明细
+
+    返回创建的成品入库单信息。
+    """
+    return await FinishedGoodsReceiptService().quick_receipt_from_work_order(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        created_by=current_user.id,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name,
+        receipt_quantity=receipt_quantity
+    )
+
+
+@router.post("/finished-goods-receipts/batch-receipt", response_model=List[FinishedGoodsReceiptResponse], summary="Batch receipt (multiple work orders)")
+async def batch_receipt_from_work_orders(
+    work_order_ids: List[int] = Query(..., description="工单ID列表"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID（可选）"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（可选）"),
+    receipt_code: Optional[str] = Query(None, description="入库单编码（仅单工单时可指定）"),
+    receipt_quantity: Optional[float] = Query(None, description="入库数量（仅单工单时可指定）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[FinishedGoodsReceiptResponse]:
+    """
+    批量入库：从多个工单下推，批量创建入库单
+
+    - **work_order_ids**: 工单ID列表
+    - **warehouse_id**: 仓库ID（可选）
+    - **warehouse_name**: 仓库名称（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的成品入库单列表。
+    """
+    return await FinishedGoodsReceiptService().batch_receipt_from_work_orders(
+        tenant_id=tenant_id,
+        work_order_ids=work_order_ids,
+        created_by=current_user.id,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name,
+        receipt_code=receipt_code,
+        receipt_quantity=receipt_quantity,
+    )
+
+
+@router.post("/finished-goods-receipts", response_model=FinishedGoodsReceiptResponse, summary="Create finished goods receipt")
+async def create_finished_goods_receipt(
+    receipt: FinishedGoodsReceiptCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsReceiptResponse:
+    """
+    创建成品入库单
+
+    - **receipt**: 入库单创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的成品入库单信息。
+    """
+    # 从receipt中提取items（如果存在）
+    items = getattr(receipt, 'items', None)
+    return await FinishedGoodsReceiptService().create_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_data=receipt,
+        created_by=current_user.id,
+        items=items
+    )
+
+
+@router.get("/finished-goods-receipts", summary="List finished goods receipts")
+async def list_finished_goods_receipts(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    status: Optional[str] = Query(None, description="入库状态"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（入库单号/工单号/订单号/仓库）"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取成品入库单列表
+
+    支持状态、工单与关键词筛选。
+    """
+    items, total = await FinishedGoodsReceiptService().list_finished_goods_receipts(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        work_order_id=work_order_id,
+        warehouse_id=warehouse_id,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get("/finished-goods-receipts/{receipt_id}", response_model=FinishedGoodsReceiptWithItemsResponse, summary="Get finished goods receipt")
+async def get_finished_goods_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsReceiptWithItemsResponse:
+    """
+    根据ID获取成品入库单详情
+
+    - **receipt_id**: 入库单ID
+    """
+    return await FinishedGoodsReceiptService().get_finished_goods_receipt_by_id(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id
+    )
+
+
+@router.post("/finished-goods-receipts/{receipt_id}/confirm", response_model=FinishedGoodsReceiptResponse, summary="Confirm finished goods receipt")
+async def confirm_finished_goods_receipt(
+    receipt_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsReceiptResponse:
+    """
+    确认成品入库
+
+    - **receipt_id**: 入库单ID
+    """
+    return await FinishedGoodsReceiptService().confirm_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data
+    )
+
+
+@router.post(
+    "/finished-goods-receipts/{receipt_id}/withdraw",
+    response_model=FinishedGoodsReceiptWithItemsResponse,
+    summary="Withdraw FG receipt (reverse stock)",
+)
+async def withdraw_finished_goods_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsReceiptWithItemsResponse:
+    return await FinishedGoodsReceiptService().withdraw_receipt_confirmation(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.delete(
+    "/finished-goods-receipts/{receipt_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="Delete finished goods receipt",
+)
+async def delete_finished_goods_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """软删除成品入库单（仅草稿/待入库可删；已入库不可删）"""
+    await FinishedGoodsReceiptService().delete_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+@router.post(
+    "/finished-goods-receipts/{receipt_id}/delete",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="Delete finished goods receipt",
+)
+async def delete_finished_goods_receipt_post(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """与 DELETE 同逻辑，供前端统一使用 POST，避免 405 Method Not Allowed。"""
+    await FinishedGoodsReceiptService().delete_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+# ============ 半成品入库管理 API（结构同成品入库，独立单据类型） ============
+
+@router.post("/semi-finished-goods-receipts", response_model=SemiFinishedGoodsReceiptResponse, summary="Create semi-finished goods receipt")
+async def create_semi_finished_goods_receipt(
+    receipt: SemiFinishedGoodsReceiptCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SemiFinishedGoodsReceiptResponse:
+    items = getattr(receipt, "items", None)
+    return await SemiFinishedGoodsReceiptService().create_semi_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_data=receipt,
+        created_by=current_user.id,
+        items=items,
+    )
+
+
+@router.get("/semi-finished-goods-receipts", summary="List semi-finished goods receipts")
+async def list_semi_finished_goods_receipts(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    status: Optional[str] = Query(None, description="入库状态"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（入库单号/工单号/订单号/仓库）"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    items, total = await SemiFinishedGoodsReceiptService().list_semi_finished_goods_receipts(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        work_order_id=work_order_id,
+        warehouse_id=warehouse_id,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get(
+    "/semi-finished-goods-receipts/{receipt_id}",
+    response_model=SemiFinishedGoodsReceiptWithItemsResponse,
+    summary="Get semi-finished goods receipt",
+)
+async def get_semi_finished_goods_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SemiFinishedGoodsReceiptWithItemsResponse:
+    return await SemiFinishedGoodsReceiptService().get_semi_finished_goods_receipt_by_id(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+@router.post(
+    "/semi-finished-goods-receipts/{receipt_id}/confirm",
+    response_model=SemiFinishedGoodsReceiptWithItemsResponse,
+    summary="Confirm semi-finished receipt",
+)
+async def confirm_semi_finished_goods_receipt(
+    receipt_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SemiFinishedGoodsReceiptWithItemsResponse:
+    return await SemiFinishedGoodsReceiptService().confirm_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data,
+    )
+
+
+@router.post(
+    "/semi-finished-goods-receipts/{receipt_id}/withdraw",
+    response_model=SemiFinishedGoodsReceiptWithItemsResponse,
+    summary="Withdraw semi-finished receipt (reverse stock)",
+)
+async def withdraw_semi_finished_goods_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SemiFinishedGoodsReceiptWithItemsResponse:
+    return await SemiFinishedGoodsReceiptService().withdraw_receipt_confirmation(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.delete(
+    "/semi-finished-goods-receipts/{receipt_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="Delete semi-finished goods receipt",
+)
+async def delete_semi_finished_goods_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await SemiFinishedGoodsReceiptService().delete_semi_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+@router.post(
+    "/semi-finished-goods-receipts/{receipt_id}/delete",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="Delete semi-finished goods receipt",
+)
+async def delete_semi_finished_goods_receipt_post(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await SemiFinishedGoodsReceiptService().delete_semi_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+@router.post("/finished-goods-receipts/{receipt_id}/packing-binding", response_model=PackingBindingResponse, summary="Create packing binding from FG receipt")
+async def create_packing_binding_from_receipt(
+    receipt_id: int,
+    binding_data: PackingBindingCreateFromReceipt,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    """
+    从成品入库单创建装箱绑定
+
+    在成品入库单中绑定装箱信息，包括产品序列号、包装物料等。
+
+    - **receipt_id**: 成品入库单ID
+    - **binding_data**: 装箱绑定创建数据（产品ID、装箱数量、包装物料、序列号等）
+    """
+    return await packing_binding_service.create_packing_binding_from_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        binding_data=binding_data,
+        bound_by=current_user.id
+    )
+
+
+@router.post("/sales-deliveries/{delivery_id}/packing-binding", response_model=PackingBindingResponse, summary="Create packing binding from sales delivery")
+async def create_packing_binding_from_delivery(
+    delivery_id: int,
+    binding_data: PackingBindingCreateFromDelivery,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    """
+    从销售出库单创建装箱绑定（发货时按箱登记，用于出货追溯）
+
+    - **delivery_id**: 销售出库单ID
+    - **binding_data**: 装箱绑定创建数据
+    """
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    return await packing_binding_service.create_packing_binding_from_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+        binding_data=binding_data,
+        bound_by=current_user.id
+    )
+
+
+@router.get("/sales-deliveries/{delivery_id}/packing-binding", response_model=List[PackingBindingListResponse], summary="List packing bindings for sales delivery")
+async def get_packing_bindings_by_delivery(
+    delivery_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[PackingBindingListResponse]:
+    """获取销售出库单的装箱绑定记录列表"""
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    return await packing_binding_service.get_packing_bindings_by_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id
+    )
+
+
+@router.get("/finished-goods-receipts/{receipt_id}/packing-binding", response_model=List[PackingBindingListResponse], summary="List packing bindings for FG receipt")
+async def get_packing_bindings_by_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[PackingBindingListResponse]:
+    """
+    获取成品入库单的装箱绑定记录列表
+
+    - **receipt_id**: 成品入库单ID
+    """
+    return await packing_binding_service.get_packing_bindings_by_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id
+    )
+
+
+# ============ 装箱绑定管理 API ============
+
+@router.get("/packing-bindings", response_model=List[PackingBindingListResponse], summary="List packing bindings")
+async def list_packing_bindings(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    receipt_id: Optional[int] = Query(None, description="成品入库单ID"),
+    sales_delivery_id: Optional[int] = Query(None, description="销售出库单ID"),
+    product_id: Optional[int] = Query(None, description="产品ID"),
+    box_no: Optional[str] = Query(None, description="箱号（模糊搜索）"),
+    uuid: Optional[str] = Query(None, description="业务UUID（精确匹配）"),
+    keyword: Optional[str] = Query(None, description="关键词（箱号、产品、条码等）"),
+    product_code: Optional[str] = Query(None, description="产品编码（模糊搜索）"),
+    product_name: Optional[str] = Query(None, description="产品名称（模糊搜索）"),
+    product_serial_no: Optional[str] = Query(None, description="产品序列号（模糊搜索）"),
+    packing_material_name: Optional[str] = Query(None, description="包装物料名称（模糊搜索）"),
+    binding_method: Optional[str] = Query(None, description="绑定方式（scan/manual）"),
+    source_type: Optional[str] = Query(None, description="来源类型（finished_goods_receipt/sales_delivery）"),
+    bound_at_start_date: Optional[date] = Query(None, description="绑定日期起"),
+    bound_at_end_date: Optional[date] = Query(None, description="绑定日期止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 box_no、-bound_at"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[PackingBindingListResponse]:
+    """
+    获取装箱绑定记录列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **receipt_id**: 成品入库单ID（可选）
+    - **product_id**: 产品ID（可选）
+    - **box_no**: 箱号（可选，模糊搜索）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回装箱绑定记录列表。
+    """
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in PACKING_BINDING_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    bound_at_from = datetime.combine(bound_at_start_date, time.min) if bound_at_start_date else None
+    bound_at_to = datetime.combine(bound_at_end_date, time.max) if bound_at_end_date else None
+    return await packing_binding_service.list_packing_bindings(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        receipt_id=receipt_id,
+        sales_delivery_id=sales_delivery_id,
+        product_id=product_id,
+        box_no=box_no,
+        uuid_value=uuid,
+        keyword=keyword,
+        product_code=product_code,
+        product_name=product_name,
+        product_serial_no=product_serial_no,
+        packing_material_name=packing_material_name,
+        binding_method=binding_method,
+        source_type=source_type,
+        bound_at_from=bound_at_from,
+        bound_at_to=bound_at_to,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
+    )
+
+
+@router.get("/packing-bindings/page", response_model=PackingBindingPageResponse, summary="List packing bindings page")
+async def list_packing_bindings_page(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(20, ge=1, le=1000, description="限制数量"),
+    receipt_id: Optional[int] = Query(None, description="成品入库单ID"),
+    sales_delivery_id: Optional[int] = Query(None, description="销售出库单ID"),
+    product_id: Optional[int] = Query(None, description="产品ID"),
+    box_no: Optional[str] = Query(None, description="箱号（模糊搜索）"),
+    uuid: Optional[str] = Query(None, description="业务UUID（精确匹配）"),
+    keyword: Optional[str] = Query(None, description="关键词（箱号、产品、条码等）"),
+    product_code: Optional[str] = Query(None, description="产品编码（模糊搜索）"),
+    product_name: Optional[str] = Query(None, description="产品名称（模糊搜索）"),
+    product_serial_no: Optional[str] = Query(None, description="产品序列号（模糊搜索）"),
+    packing_material_name: Optional[str] = Query(None, description="包装物料名称（模糊搜索）"),
+    binding_method: Optional[str] = Query(None, description="绑定方式（scan/manual）"),
+    source_type: Optional[str] = Query(None, description="来源类型（finished_goods_receipt/sales_delivery）"),
+    bound_at_start_date: Optional[date] = Query(None, description="绑定日期起"),
+    bound_at_end_date: Optional[date] = Query(None, description="绑定日期止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 box_no、-bound_at"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingPageResponse:
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in PACKING_BINDING_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    bound_at_from = datetime.combine(bound_at_start_date, time.min) if bound_at_start_date else None
+    bound_at_to = datetime.combine(bound_at_end_date, time.max) if bound_at_end_date else None
+    return await packing_binding_service.list_packing_bindings_page(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        receipt_id=receipt_id,
+        sales_delivery_id=sales_delivery_id,
+        product_id=product_id,
+        box_no=box_no,
+        uuid_value=uuid,
+        keyword=keyword,
+        product_code=product_code,
+        product_name=product_name,
+        product_serial_no=product_serial_no,
+        packing_material_name=packing_material_name,
+        binding_method=binding_method,
+        source_type=source_type,
+        bound_at_from=bound_at_from,
+        bound_at_to=bound_at_to,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        order_by=safe_order_by,
+    )
+
+
+@router.get("/packing-bindings/statistics", response_model=PackingBindingStatisticsResponse, summary="Get packing binding statistics")
+async def get_packing_binding_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingStatisticsResponse:
+    return await packing_binding_service.get_packing_binding_statistics(tenant_id=tenant_id)
+
+
+@router.get("/packing-bindings/task-pool", response_model=PackingBindingTaskPoolResponse, summary="Get packing task pool")
+async def get_packing_binding_task_pool(
+    limit: int = Query(20, ge=1, le=200, description="返回任务数"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingTaskPoolResponse:
+    return await packing_binding_service.get_task_pool_summary(
+        tenant_id=tenant_id,
+        limit=limit,
+    )
+
+
+@router.get("/packing-bindings/{binding_id}", response_model=PackingBindingResponse, summary="Get packing binding")
+async def get_packing_binding(
+    binding_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    """
+    获取装箱绑定记录详情
+
+    - **binding_id**: 装箱绑定记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回装箱绑定记录详情。
+    """
+    try:
+        return await packing_binding_service.get_packing_binding_by_id(
+            tenant_id=tenant_id,
+            binding_id=binding_id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/packing-bindings/{binding_id}", tenant_id)
+
+
+@router.put("/packing-bindings/{binding_id}", response_model=PackingBindingResponse, summary="Update packing binding")
+async def update_packing_binding(
+    binding_id: int,
+    binding: PackingBindingUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    """
+    更新装箱绑定记录
+
+    - **binding_id**: 装箱绑定记录ID
+    - **binding**: 装箱绑定更新数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的装箱绑定记录信息。
+    """
+    try:
+        return await packing_binding_service.update_packing_binding(
+            tenant_id=tenant_id,
+            binding_id=binding_id,
+            binding_data=binding,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/packing-bindings/{binding_id}", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/packing-bindings/{binding_id}", tenant_id)
+
+
+@router.delete("/packing-bindings/{binding_id}", summary="Delete packing binding")
+async def delete_packing_binding(
+    binding_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除装箱绑定记录（软删除）
+
+    - **binding_id**: 装箱绑定记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+    """
+    try:
+        await packing_binding_service.delete_packing_binding(
+            tenant_id=tenant_id,
+            binding_id=binding_id
+        )
+        return JSONResponse(content={"message": "删除成功"})
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/packing-bindings/{binding_id}", tenant_id)
+
+
+@router.delete("/packing-binding/{binding_id}", summary="Delete packing binding")
+async def delete_packing_binding_old(
+    binding_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除装箱绑定记录（软删除）
+
+    - **binding_id**: 装箱绑定记录ID
+    """
+    await packing_binding_service.delete_packing_binding(
+        tenant_id=tenant_id,
+        binding_id=binding_id
+    )
+
+    return JSONResponse(
+        content={"message": "装箱绑定记录删除成功"},
+        status_code=http_status.HTTP_200_OK
+    )
+
+
+# ============ 库存预警管理 API ============
+
+@router.post("/inventory-alert-rules", response_model=InventoryAlertRuleResponse, summary="Create inventory alert rule")
+async def create_inventory_alert_rule(
+    rule_data: InventoryAlertRuleCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertRuleResponse:
+    """
+    创建库存预警规则
+
+    - **rule_data**: 预警规则创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的预警规则信息。
+    """
+    try:
+        return await inventory_alert_rule_service.create_alert_rule(
+            tenant_id=tenant_id,
+            rule_data=rule_data,
+            created_by=current_user.id
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory-alert-rules", tenant_id)
+
+
+@router.get("/inventory-alert-rules", summary="List inventory alert rules")
+async def list_inventory_alert_rules(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    alert_type: Optional[str] = Query(None, description="预警类型"),
+    is_enabled: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    获取库存预警规则列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **alert_type**: 预警类型（可选）
+    - **is_enabled**: 是否启用（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存预警规则列表。
+    """
+    items, total = await inventory_alert_rule_service.list_alert_rules(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        alert_type=alert_type,
+        is_enabled=is_enabled,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total}
+
+
+@router.get("/inventory-alert-rules/{rule_id}", response_model=InventoryAlertRuleResponse, summary="Get inventory alert rule")
+async def get_inventory_alert_rule(
+    rule_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertRuleResponse:
+    """
+    获取库存预警规则详情
+
+    - **rule_id**: 预警规则ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存预警规则详情。
+    """
+    try:
+        return await inventory_alert_rule_service.get_alert_rule_by_id(
+            tenant_id=tenant_id,
+            rule_id=rule_id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory-alert-rules/{rule_id}", tenant_id)
+
+
+@router.put("/inventory-alert-rules/{rule_id}", response_model=InventoryAlertRuleResponse, summary="Update inventory alert rule")
+async def update_inventory_alert_rule(
+    rule_id: int,
+    rule_data: InventoryAlertRuleUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertRuleResponse:
+    """
+    更新库存预警规则
+
+    - **rule_id**: 预警规则ID
+    - **rule_data**: 预警规则更新数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的预警规则信息。
+    """
+    try:
+        return await inventory_alert_rule_service.update_alert_rule(
+            tenant_id=tenant_id,
+            rule_id=rule_id,
+            rule_data=rule_data,
+            updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory-alert-rules/{rule_id}", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory-alert-rules/{rule_id}", tenant_id)
+
+
+@router.delete("/inventory-alert-rules/{rule_id}", summary="Delete inventory alert rule")
+async def delete_inventory_alert_rule(
+    rule_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    删除库存预警规则（软删除）
+
+    - **rule_id**: 预警规则ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+    """
+    try:
+        await inventory_alert_rule_service.delete_alert_rule(
+            tenant_id=tenant_id,
+            rule_id=rule_id
+        )
+        return JSONResponse(content={"message": "删除成功"})
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory-alert-rules/{rule_id}", tenant_id)
+
+
+# ============ 库存预警记录 API ============
+# 注意：/statistics、/check 必须在 /{alert_id} 之前定义，避免路径冲突
+
+@router.post(
+    "/inventory-alerts/check",
+    response_model=InventoryAlertCheckResponse,
+    summary="Run inventory alert check",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-inventory-alert:execute"
+            )
+        )
+    ],
+)
+async def run_inventory_alert_check(
+    body: Optional[InventoryAlertCheckRequest] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertCheckResponse:
+    """
+    立即检查库存并触发/解除预警。
+    阈值链：匹配且启用的预警规则 → 物料最低/最高库存。
+    """
+    payload = body or InventoryAlertCheckRequest()
+    try:
+        return await inventory_alert_service.run_inventory_alert_check(
+            tenant_id=tenant_id,
+            material_id=payload.material_id,
+            warehouse_id=payload.warehouse_id,
+            operator_id=current_user.id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory-alerts/check", tenant_id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory-alerts/check", tenant_id)
+
+
+@router.get("/inventory-alerts/statistics", summary="Inventory alert statistics")
+async def get_inventory_alert_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    获取库存预警统计信息
+
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存预警统计信息（按类型、级别、状态统计）。
+    """
+    statistics = await inventory_alert_service.get_alert_statistics(tenant_id=tenant_id)
+    return JSONResponse(content=statistics)
+
+
+@router.get("/inventory-alerts", summary="List inventory alerts")
+async def list_inventory_alerts(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    alert_type: Optional[str] = Query(None, description="预警类型"),
+    status: Optional[str] = Query(None, description="状态"),
+    alert_level: Optional[str] = Query(None, description="预警级别"),
+    material_id: Optional[int] = Query(None, description="物料ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    triggered_start_date: Optional[str] = Query(None, description="触发开始日期"),
+    triggered_end_date: Optional[str] = Query(None, description="触发结束日期"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    获取库存预警记录列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **alert_type**: 预警类型（可选）
+    - **status**: 状态（可选）
+    - **alert_level**: 预警级别（可选）
+    - **material_id**: 物料ID（可选）
+    - **warehouse_id**: 仓库ID（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存预警记录列表。
+    """
+    items, total = await inventory_alert_service.get_alerts(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        alert_type=alert_type,
+        status=status,
+        alert_level=alert_level,
+        material_id=material_id,
+        warehouse_id=warehouse_id,
+        keyword=keyword,
+        order_by=order_by,
+        triggered_start_date=triggered_start_date,
+        triggered_end_date=triggered_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+    )
+    return {"items": items, "total": total}
+
+
+@router.get("/inventory-alerts/{alert_id}", response_model=InventoryAlertResponse, summary="Get inventory alert")
+async def get_inventory_alert(
+    alert_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertResponse:
+    """
+    获取库存预警记录详情
+
+    - **alert_id**: 预警记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存预警记录详情。
+    """
+    try:
+        return await inventory_alert_service.get_alert_by_id(
+            tenant_id=tenant_id,
+            alert_id=alert_id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory-alerts/{alert_id}", tenant_id)
+
+
+@router.post("/inventory-alerts/{alert_id}/handle", response_model=InventoryAlertResponse, summary="Handle inventory alert")
+async def handle_inventory_alert(
+    alert_id: int,
+    handle_data: InventoryAlertHandleRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> InventoryAlertResponse:
+    """
+    处理库存预警
+
+    - **alert_id**: 预警记录ID
+    - **handle_data**: 处理数据（状态、处理备注）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回更新后的预警记录信息。
+    """
+    try:
+        return await inventory_alert_service.handle_alert(
+            tenant_id=tenant_id,
+            alert_id=alert_id,
+            handle_data=handle_data,
+            handled_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory-alerts/{alert_id}/handle", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory-alerts/{alert_id}/handle", tenant_id)
+
+
+# ============ 库存报表分析 API ============
+
+@router.get("/inventory-analysis", summary="Inventory analytics")
+async def get_inventory_analysis(
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    获取库存分析数据
+
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    - **warehouse_id**: 仓库ID（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存分析数据（周转率、ABC分析、呆滞料分析）。
+    """
+    date_start_dt = None
+    date_end_dt = None
+
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise _http_exception_with_trace(400, "开始日期格式错误，应为YYYY-MM-DD", "/inventory-analysis", tenant_id)
+
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise _http_exception_with_trace(400, "结束日期格式错误，应为YYYY-MM-DD", "/inventory-analysis", tenant_id)
+
+    analysis_data = await inventory_analysis_service.get_inventory_analysis(
+        tenant_id=tenant_id,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+        warehouse_id=warehouse_id,
+    )
+
+    return JSONResponse(content=analysis_data)
+
+
+@router.get("/inventory-analysis/cost", summary="Inventory cost analysis")
+async def get_inventory_cost_analysis(
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> JSONResponse:
+    """
+    获取库存成本分析
+
+    - **date_start**: 开始日期（可选）
+    - **date_end**: 结束日期（可选）
+    - **warehouse_id**: 仓库ID（可选）
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回库存成本分析数据（总成本、平均成本、成本趋势、按类别/仓库分组）。
+    """
+    date_start_dt = None
+    date_end_dt = None
+
+    if date_start:
+        try:
+            date_start_dt = datetime.strptime(date_start, "%Y-%m-%d")
+        except ValueError:
+            raise _http_exception_with_trace(400, "开始日期格式错误，应为YYYY-MM-DD", "/inventory-analysis/cost", tenant_id)
+
+    if date_end:
+        try:
+            date_end_dt = datetime.strptime(date_end, "%Y-%m-%d")
+        except ValueError:
+            raise _http_exception_with_trace(400, "结束日期格式错误，应为YYYY-MM-DD", "/inventory-analysis/cost", tenant_id)
+
+    cost_analysis = await inventory_analysis_service.get_inventory_cost_analysis(
+        tenant_id=tenant_id,
+        date_start=date_start_dt,
+        date_end=date_end_dt,
+        warehouse_id=warehouse_id,
+    )
+
+    return JSONResponse(content=cost_analysis)
+
+
+# ============ 客户来料登记 API ============
+
+@router.post("/inventory/customer-material-registration/parse-barcode", response_model=ParseBarcodeResponse, summary="Parse customer material barcode")
+async def parse_customer_material_barcode(
+    parse_request: ParseBarcodeRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ParseBarcodeResponse:
+    """
+    解析客户来料条码
+
+    解析客户来料的一维码或二维码，并尝试映射到内部物料。
+
+    - **parse_request**: 解析条码请求（条码、条码类型、客户ID等）
+    """
+    return await customer_material_registration_service.parse_barcode(
+        tenant_id=tenant_id,
+        parse_request=parse_request
+    )
+
+
+@router.post("/inventory/customer-material-registration", response_model=CustomerMaterialRegistrationResponse, summary="Register customer material")
+async def create_customer_material_registration(
+    registration_data: CustomerMaterialRegistrationCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """
+    客户来料登记
+
+    登记客户来料信息，支持扫码识别和条码映射。
+
+    - **registration_data**: 登记创建数据（客户、条码、数量等）
+    """
+    return await customer_material_registration_service.create_registration(
+        tenant_id=tenant_id,
+        registration_data=registration_data,
+        registered_by=current_user.id
+    )
+
+
+@router.post(
+    "/inventory/customer-material-registration/create-and-start-production",
+    response_model=CustomerMaterialStartProductionResponse,
+    summary="Customer material inbound and start production",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:execute",
+            )
+        )
+    ],
+)
+async def create_and_start_production_from_customer_material(
+    registration_data: CustomerMaterialRegistrationCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialStartProductionResponse:
+    """客供料入库并直接发料开工：入库 → 生产工单（单张或平级组）→ 配料单 → 下达工单。"""
+    try:
+        return await customer_material_registration_service.create_and_start_production(
+            tenant_id=tenant_id,
+            registration_data=registration_data,
+            operator_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404,
+            str(e),
+            "/inventory/customer-material-registration/create-and-start-production",
+            tenant_id,
+        )
+    except (ValidationError, BusinessLogicError) as e:
+        raise _http_exception_with_trace(
+            400,
+            str(e),
+            "/inventory/customer-material-registration/create-and-start-production",
+            tenant_id,
+        )
+
+
+@router.get("/inventory/customer-material-registration", summary="List customer material registrations")
+async def list_customer_material_registrations(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    customer_id: Optional[int] = Query(None, description="客户ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    registration_date_start: Optional[str] = Query(None, description="登记开始日期"),
+    registration_date_end: Optional[str] = Query(None, description="登记结束日期"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取客户来料登记列表
+
+    支持多种筛选条件的高级搜索。
+    """
+    items, total = await customer_material_registration_service.list_registrations(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        customer_id=customer_id,
+        status=status,
+        registration_date_start=registration_date_start,
+        registration_date_end=registration_date_end,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+# ============ 条码映射规则管理 API ============
+# 注意：这些路由必须在 /{registration_id} 路由之前，避免路由冲突
+
+@router.post("/inventory/customer-material-registration/mapping-rules", response_model=BarcodeMappingRuleResponse, summary="Create barcode mapping rule")
+async def create_barcode_mapping_rule(
+    rule_data: BarcodeMappingRuleCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BarcodeMappingRuleResponse:
+    """
+    创建条码映射规则
+
+    - **rule_data**: 映射规则创建数据（条码模式、映射物料、解析规则等）
+    """
+    return await barcode_mapping_rule_service.create_mapping_rule(
+        tenant_id=tenant_id,
+        rule_data=rule_data,
+        created_by=current_user.id
+    )
+
+
+@router.get("/inventory/customer-material-registration/mapping-rules", summary="List barcode mapping rules")
+async def list_barcode_mapping_rules(
+    skip: int = Query(0, description="跳过数量"),
+    limit: int = Query(100, description="限制数量"),
+    customer_id: Optional[int] = Query(None, description="客户ID"),
+    is_enabled: Optional[bool] = Query(None, description="是否启用"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    获取条码映射规则列表
+
+    支持多种筛选条件的高级搜索。
+    """
+    items, total = await barcode_mapping_rule_service.list_mapping_rules(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        customer_id=customer_id,
+        is_enabled=is_enabled,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total}
+
+
+@router.get("/inventory/customer-material-registration/{registration_id}", response_model=CustomerMaterialRegistrationResponse, summary="Get customer material registration")
+async def get_customer_material_registration(
+    registration_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """
+    获取客户来料登记详情
+
+    - **registration_id**: 登记记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回客户来料登记详情。
+    """
+    try:
+        return await customer_material_registration_service.get_registration_by_id(
+            tenant_id=tenant_id,
+            registration_id=registration_id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory/customer-material-registration/{registration_id}", tenant_id)
+
+
+@router.delete(
+    "/inventory/customer-material-registration/{registration_id}",
+    summary="Delete customer material registration",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:delete"
+            )
+        )
+    ],
+)
+async def delete_customer_material_registration(
+    registration_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """删除代工来料单（仅待入库状态）"""
+    try:
+        await customer_material_registration_service.delete_registration(
+            tenant_id=tenant_id,
+            registration_id=registration_id,
+            deleted_by=current_user.id,
+        )
+        return {"message": "删除成功"}
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory/customer-material-registration/{registration_id}", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory/customer-material-registration/{registration_id}", tenant_id)
+
+
+@router.post(
+    "/inventory/customer-material-registration/batch-process",
+    response_model=CustomerMaterialRegistrationBatchActionResponse,
+    summary="Batch process customer material registrations",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:execute"
+            )
+        )
+    ],
+)
+async def batch_process_customer_material_registration(
+    body: CustomerMaterialRegistrationBatchActionRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationBatchActionResponse:
+    result = await customer_material_registration_service.batch_process_registrations(
+        tenant_id=tenant_id,
+        registration_ids=body.ids,
+        processed_by=current_user.id,
+    )
+    return CustomerMaterialRegistrationBatchActionResponse(**result)
+
+
+@router.post(
+    "/inventory/customer-material-registration/batch-withdraw",
+    response_model=CustomerMaterialRegistrationBatchActionResponse,
+    summary="Batch withdraw customer material registrations",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:revoke"
+            )
+        )
+    ],
+)
+async def batch_withdraw_customer_material_registration(
+    body: CustomerMaterialRegistrationBatchActionRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationBatchActionResponse:
+    result = await customer_material_registration_service.batch_withdraw_registrations(
+        tenant_id=tenant_id,
+        registration_ids=body.ids,
+        withdrawn_by=current_user.id,
+    )
+    return CustomerMaterialRegistrationBatchActionResponse(**result)
+
+
+@router.post(
+    "/inventory/customer-material-registration/batch-cancel",
+    response_model=CustomerMaterialRegistrationBatchActionResponse,
+    summary="Batch cancel customer material registrations",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:delete"
+            )
+        )
+    ],
+)
+async def batch_cancel_customer_material_registration(
+    body: CustomerMaterialRegistrationBatchActionRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationBatchActionResponse:
+    result = await customer_material_registration_service.batch_cancel_registrations(
+        tenant_id=tenant_id,
+        registration_ids=body.ids,
+        cancelled_by=current_user.id,
+    )
+    return CustomerMaterialRegistrationBatchActionResponse(**result)
+
+
+@router.post(
+    "/inventory/customer-material-registration/batch-delete",
+    response_model=CustomerMaterialRegistrationBatchActionResponse,
+    summary="Batch delete customer material registrations",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:delete"
+            )
+        )
+    ],
+)
+async def batch_delete_customer_material_registration(
+    body: CustomerMaterialRegistrationBatchActionRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationBatchActionResponse:
+    result = await customer_material_registration_service.batch_delete_registrations(
+        tenant_id=tenant_id,
+        registration_ids=body.ids,
+        deleted_by=current_user.id,
+    )
+    return CustomerMaterialRegistrationBatchActionResponse(**result)
+
+
+@router.post("/inventory/customer-material-registration/{registration_id}/process", response_model=CustomerMaterialRegistrationResponse, summary="Process customer material registration")
+async def process_customer_material_registration(
+    registration_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """
+    处理客户来料登记（入库）
+
+    - **registration_id**: 登记记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    将客户来料登记状态更新为已处理，并执行入库操作。
+    """
+    try:
+        return await customer_material_registration_service.process_registration(
+            tenant_id=tenant_id,
+            registration_id=registration_id,
+            processed_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory/customer-material-registration/{registration_id}/process", tenant_id)
+    except (ValidationError, BusinessLogicError) as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory/customer-material-registration/{registration_id}/process", tenant_id)
+    except IntegrityError as e:
+        raise _http_exception_with_trace(
+            409,
+            f"库存批次写入冲突：{e}。若客供入库失败，请填写不同批号或执行数据库迁移 371",
+            "/inventory/customer-material-registration/{registration_id}/process",
+            tenant_id,
+        )
+
+
+@router.put("/inventory/customer-material-registration/{registration_id}", response_model=CustomerMaterialRegistrationResponse, summary="Update customer material inbound")
+async def update_customer_material_registration(
+    registration_id: int,
+    update_data: CustomerMaterialRegistrationUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """更新代工来料单（仅待入库状态）"""
+    try:
+        return await customer_material_registration_service.update_registration(
+            tenant_id=tenant_id,
+            registration_id=registration_id,
+            update_data=update_data,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory/customer-material-registration/{registration_id}", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory/customer-material-registration/{registration_id}", tenant_id)
+
+
+@router.post("/inventory/customer-material-registration/{registration_id}/withdraw", response_model=CustomerMaterialRegistrationResponse, summary="Withdraw customer material inbound")
+async def withdraw_customer_material_registration(
+    registration_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """撤回代工来料确认入库"""
+    try:
+        return await customer_material_registration_service.withdraw_registration(
+            tenant_id=tenant_id,
+            registration_id=registration_id,
+            withdrawn_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory/customer-material-registration/{registration_id}/withdraw", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory/customer-material-registration/{registration_id}/withdraw", tenant_id)
+
+
+@router.post("/inventory/customer-material-registration/{registration_id}/cancel", response_model=CustomerMaterialRegistrationResponse, summary="Cancel customer material registration")
+async def cancel_customer_material_registration(
+    registration_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """
+    取消客户来料登记
+
+    - **registration_id**: 登记记录ID
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    将客户来料登记状态更新为已取消。
+    """
+    try:
+        return await customer_material_registration_service.cancel_registration(
+            tenant_id=tenant_id,
+            registration_id=registration_id,
+            cancelled_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory/customer-material-registration/{registration_id}/cancel", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory/customer-material-registration/{registration_id}/cancel", tenant_id)
+
+
+# ============ 销售出库管理 API ============
+
+@router.post("/sales-deliveries", response_model=SalesDeliveryResponse, summary="Create sales delivery")
+async def create_sales_delivery(
+    delivery: SalesDeliveryCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryResponse:
+    """
+    创建销售出库单
+
+    - **delivery**: 出库单创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的销售出库单信息。
+    """
+    return await SalesDeliveryService().create_sales_delivery(
+        tenant_id=tenant_id,
+        delivery_data=delivery,
+        created_by=current_user.id
+    )
+
+
+@router.get("/sales-deliveries", summary="List sales deliveries")
+async def list_sales_deliveries(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    status: Optional[str] = Query(None, description="出库状态"),
+    sales_order_id: Optional[int] = Query(None, description="销售订单ID"),
+    customer_id: Optional[int] = Query(None, description="客户ID"),
+    customer_name: Optional[str] = Query(None, description="客户名称（模糊）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    warehouse_name: Optional[str] = Query(None, description="仓库名称（模糊）"),
+    total_quantity: Optional[float] = Query(None, description="出库数量（精确）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（出库单号/客户/仓库/订单号）"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日起"),
+    created_end_date: Optional[str] = Query(None, description="创建日止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取销售出库单列表
+
+    支持状态、客户、仓库、数量与关键词筛选。
+    """
+    items, total = await SalesDeliveryService().list_sales_deliveries(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        current_user=current_user,
+        status=status,
+        sales_order_id=sales_order_id,
+        customer_id=customer_id,
+        customer_name=customer_name,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name,
+        total_quantity=total_quantity,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get(
+    "/sales-deliveries/sales-order-pull-lines",
+    summary="Open sales order lines for sales delivery pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-order:read"))],
+)
+async def list_sales_delivery_sales_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    sales_order_id: Optional[int] = Query(None, description="来源销售订单"),
+    pullable_only: bool = Query(True, description="仅剩余可出库量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await SalesDeliveryService().list_sales_order_delivery_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_order_id=sales_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/sales-deliveries/pull-from-sales-order-items",
+    summary="Create sales deliveries from sales order lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:create"))],
+)
+async def pull_sales_deliveries_from_sales_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可出库销售订单明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+    source_items = await SalesOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).only("sales_order_id")
+    for oid in {int(i.sales_order_id) for i in source_items}:
+        await _assert_sales_order_visible_by_id(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            sales_order_id=oid,
+        )
+    try:
+        return await SalesDeliveryService().create_sales_deliveries_from_sales_order_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/sales-deliveries/shipment-notice-pull-lines",
+    summary="Open shipment notice lines for sales delivery pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:shipment-notice:read"))],
+)
+async def list_sales_delivery_shipment_notice_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    notice_id: Optional[int] = Query(None, description="来源发货通知"),
+    pullable_only: bool = Query(True, description="仅剩余可出库量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await SalesDeliveryService().list_shipment_notice_delivery_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            notice_id=notice_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/sales-deliveries/pull-from-shipment-notice-items",
+    summary="Create sales deliveries from shipment notice lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:create"))],
+)
+async def pull_sales_deliveries_from_shipment_notice_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可出库发货通知明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    try:
+        return await SalesDeliveryService().create_sales_deliveries_from_notice_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/outsource-issues/work-order-pull-lines",
+    summary="Open outsource work order material lines for issue pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-order:read"))],
+)
+async def list_outsource_issue_work_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    outsource_work_order_id: Optional[int] = Query(None, description="来源委外工单"),
+    pullable_only: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WarehouseWoOutsourcePullService().list_outsource_issue_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            outsource_work_order_id=outsource_work_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/outsource-issues/pull-from-work-order-items",
+    summary="Create outsource issues from work order material lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:create"))],
+)
+async def pull_outsource_issues_from_work_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    selected_ids = _parse_selected_item_ids(request, "请至少选择一条可发料明细")
+    try:
+        return await WarehouseWoOutsourcePullService().create_outsource_issues_from_lines(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/outsource-inbound/pull-lines",
+    summary="Open outsource inbound lines for receipt or return pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-order:read"))],
+)
+async def list_outsource_inbound_pull_lines(
+    pull_type: str = Query(..., description="outsource_receipt / outsource_material_return / outsource_product_return"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    outsource_work_order_id: Optional[int] = Query(None, description="来源委外工单"),
+    pullable_only: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await WarehouseWoOutsourcePullService().list_outsource_inbound_pull_lines(
+            tenant_id=tenant_id,
+            pull_type=pull_type,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            outsource_work_order_id=outsource_work_order_id,
+            pullable_only=pullable_only,
+        )
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/outsource-inbound/pull-from-items",
+    summary="Create outsource inbound documents from selected lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:create"))],
+)
+async def pull_outsource_inbound_from_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    pull_type = str(request.get("pull_type") or "").strip()
+    selected_ids = _parse_selected_item_ids(request, "请至少选择一条可入库明细")
+    try:
+        return await WarehouseWoOutsourcePullService().create_outsource_inbound_from_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+            pull_type=pull_type,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/sales-deliveries/{delivery_id}", response_model=SalesDeliveryWithItemsResponse, summary="Get sales delivery")
+async def get_sales_delivery(
+    delivery_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryWithItemsResponse:
+    """
+    根据ID获取销售出库单详情
+
+    - **delivery_id**: 出库单ID
+    """
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    return await SalesDeliveryService().get_sales_delivery_by_id(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id
+    )
+
+
+@router.put("/sales-deliveries/{delivery_id}", response_model=SalesDeliveryResponse, summary="Update sales delivery")
+async def update_sales_delivery(
+    delivery_id: int,
+    delivery: SalesDeliveryUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryResponse:
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    return await SalesDeliveryService().update_sales_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+        delivery_data=delivery,
+        updated_by=current_user.id,
+    )
+
+
+@router.post(
+    "/sales-deliveries/{delivery_id}/ensure-oqc",
+    summary="Ensure OQC before sales delivery confirm",
+)
+async def ensure_oqc_for_sales_delivery(
+    delivery_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """确认出库前：按物料 OQC 策略补齐缺失出货检验单，并返回是否允许确认出库。"""
+    from apps.kuaizhizao.services.quality_improvement_service import OQCInspectionService
+
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    return await OQCInspectionService().ensure_oqc_for_sales_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+        created_by=current_user.id,
+    )
+
+
+@router.post("/sales-deliveries/{delivery_id}/confirm", response_model=SalesDeliveryResponse, summary="Confirm sales delivery")
+async def confirm_sales_delivery(
+    delivery_id: int,
+    body: Optional[SalesDeliveryConfirmRequest] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryResponse:
+    """
+    确认销售出库
+
+    - **delivery_id**: 出库单ID
+    - **body.item_batches**: 可选；提交时须覆盖所有出库数量大于 0 的明细行，用于写入批号后再过账
+    """
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    return await SalesDeliveryService().confirm_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+        confirmed_by=current_user.id,
+        confirm_request=body,
+    )
+
+
+@router.post("/sales-deliveries/{delivery_id}/withdraw", response_model=SalesDeliveryResponse, summary="Withdraw sales delivery")
+async def withdraw_sales_delivery(
+    delivery_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryResponse:
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    return await SalesDeliveryService().withdraw_delivery_confirmation(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.delete("/sales-deliveries/{delivery_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete sales delivery")
+async def delete_sales_delivery(
+    delivery_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    await SalesDeliveryService().delete_sales_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+    )
+
+
+@router.post("/sales-deliveries/pull-from-sales-order", response_model=SalesDeliveryResponse, summary="Build sales delivery from sales order")
+async def pull_sales_delivery_from_order(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryResponse:
+    """
+    从销售订单加载生成销售出库单
+    
+    - **sales_order_id**: 销售订单ID（必填）
+    - **delivery_quantities**: 出库数量字典 {item_id: quantity}（可选）
+    - **line_warehouses**: 行级出库仓库 {item_id: warehouse_id}（推荐）
+    - **warehouse_id**: 出库仓库ID（未传 line_warehouses 时必填）
+    - **warehouse_name**: 出库仓库名称（可选）
+    - **notes**: 出库备注（可选，仓库出库详情可见）
+    """
+    from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+
+    sales_order_id = request.get('sales_order_id')
+    if not sales_order_id:
+        raise ValidationError("必须提供销售订单ID")
+
+    delivery_quantities = request.get('delivery_quantities')
+    warehouse_id = request.get('warehouse_id')
+    warehouse_name = request.get('warehouse_name')
+    line_warehouses_raw = request.get('line_warehouses')
+    line_warehouses = None
+    if isinstance(line_warehouses_raw, dict):
+        line_warehouses = {}
+        for k, v in line_warehouses_raw.items():
+            try:
+                line_warehouses[int(k)] = int(v)
+            except (TypeError, ValueError):
+                continue
+        if not line_warehouses:
+            line_warehouses = None
+    notes_raw = request.get('notes')
+    notes = str(notes_raw).strip() if notes_raw is not None else None
+    if notes == "":
+        notes = None
+
+    if not line_warehouses and not warehouse_id:
+        raise ValidationError("必须提供出库仓库ID或行级出库仓库")
+
+    result = await SalesOrderService().push_sales_order_to_delivery(
+        tenant_id=tenant_id,
+        sales_order_id=int(sales_order_id),
+        created_by=current_user.id,
+        delivery_quantities=delivery_quantities,
+        warehouse_id=int(warehouse_id) if warehouse_id is not None else None,
+        warehouse_name=warehouse_name,
+        line_warehouses=line_warehouses,
+        notes=notes,
+    )
+    delivery_id = result.get("delivery_id")
+    if not delivery_id:
+        raise ValidationError("生成销售出库单失败")
+    return await SalesDeliveryService().get_sales_delivery_by_id(tenant_id=tenant_id, delivery_id=int(delivery_id))
+
+
+@router.post("/sales-deliveries/pull-from-sales-forecast", response_model=SalesDeliveryResponse, summary="Build sales delivery from forecast")
+async def pull_sales_delivery_from_forecast(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryResponse:
+    """
+    从销售预测加载生成销售出库单（MTS模式）
+    
+    - **sales_forecast_id**: 销售预测ID（必填）
+    - **delivery_quantities**: 出库数量字典 {item_id: quantity}（可选）
+    - **warehouse_id**: 出库仓库ID（必填）
+    - **warehouse_name**: 出库仓库名称（可选）
+    """
+    sales_forecast_id = request.get('sales_forecast_id')
+    if not sales_forecast_id:
+        raise ValidationError("必须提供销售预测ID")
+    
+    delivery_quantities = request.get('delivery_quantities')
+    warehouse_id = request.get('warehouse_id')
+    warehouse_name = request.get('warehouse_name')
+    
+    if not warehouse_id:
+        raise ValidationError("必须提供出库仓库ID")
+    
+    return await SalesDeliveryService().pull_from_sales_forecast(
+        tenant_id=tenant_id,
+        sales_forecast_id=sales_forecast_id,
+        created_by=current_user.id,
+        delivery_quantities=delivery_quantities,
+        warehouse_id=warehouse_id,
+        warehouse_name=warehouse_name
+    )
+
+
+@router.post("/sales-deliveries/import", summary="Batch import sales deliveries")
+async def import_sales_deliveries(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导入销售出库单
+    
+    接收前端 uni_import 组件传递的二维数组数据，批量创建销售出库单。
+    数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+    
+    **前端实现**：使用 `uni_import` 组件（基于 Univer Sheet）进行数据编辑，确认后通过 `onConfirm` 回调传递二维数组数据。
+    
+    Args:
+        request: 导入请求数据（包含二维数组，格式：{"data": [[...], [...], ...]}）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 导入结果（成功数、失败数、错误列表）
+    """
+    try:
+        # 获取二维数组数据
+        data = request.get("data", [])
+        if not data:
+            raise ValidationError("导入数据为空")
+        
+        service = SalesDeliveryService()
+        result = await service.import_from_data(
+            tenant_id=tenant_id,
+            data=data,
+            created_by=current_user.id
+        )
+        
+        return result
+                
+    except ValidationError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            str(e),
+            "/sales-deliveries/import",
+            tenant_id,
+        )
+    except Exception as e:
+        logger.error(f"导入销售出库单失败: {str(e)}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"导入失败: {str(e)}",
+            "/sales-deliveries/import",
+            tenant_id,
+        )
+
+
+@router.get("/sales-deliveries/export", response_class=FileResponse, summary="Batch export sales deliveries")
+async def export_sales_deliveries(
+    status: Optional[str] = Query(None, description="出库状态筛选"),
+    sales_order_id: Optional[int] = Query(None, description="销售订单ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导出销售出库单到Excel文件
+    
+    Args:
+        status: 出库状态筛选
+        sales_order_id: 销售订单ID筛选
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        FileResponse: Excel文件
+    """
+    import os
+    
+    try:
+        service = SalesDeliveryService()
+        scoped_sales_order_ids = await _scoped_sales_order_ids(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
+        file_path = await service.export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            sales_order_id=sales_order_id,
+            scoped_sales_order_ids=scoped_sales_order_ids,
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出销售出库单失败: {str(e)}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"导出失败: {str(e)}",
+            "/sales-deliveries/export",
+            tenant_id,
+        )
+
+
+@router.get(
+    "/sales-deliveries/{delivery_id}/print",
+    summary="Print sales delivery",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:print"))],
+)
+async def print_sales_delivery(
+    delivery_id: int,
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印销售出库单（与其它仓储单据一致，走 DocumentPrintService）"""
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="sales_delivery",
+            document_id=delivery_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ==================== 销售退货API ====================
+
+@router.post("/sales-returns", response_model=SalesReturnResponse, summary="Create sales return")
+async def create_sales_return(
+    return_data: SalesReturnCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    """
+    创建销售退货单
+
+    - **return_data**: 销售退货单数据
+    """
+    return await SalesReturnService().create_sales_return(
+        tenant_id=tenant_id,
+        return_data=return_data,
+        created_by=current_user.id
+    )
+
+
+@router.get(
+    "/sales-returns/sales-order-preview",
+    response_model=SalesOrderReturnPreviewResponse,
+    summary="Preview sales return lines from sales order",
+)
+async def preview_sales_order_return(
+    sales_order_id: int = Query(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesOrderReturnPreviewResponse:
+    return await SalesReturnService().get_sales_order_return_preview(
+        tenant_id=tenant_id,
+        sales_order_id=sales_order_id,
+    )
+
+
+@router.post("/sales-returns/pull-from-sales-order", response_model=SalesReturnResponse, summary="Push sales return from sales order")
+async def pull_sales_return_from_sales_order(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    sales_order_id = request.get("sales_order_id")
+    warehouse_id = request.get("warehouse_id")
+    warehouse_name = request.get("warehouse_name")
+    return_quantities = request.get("return_quantities")
+    batch_numbers = request.get("batch_numbers")
+    return_code = request.get("return_code")
+
+    if not sales_order_id:
+        raise ValidationError("必须提供销售订单ID")
+    if not warehouse_id:
+        raise ValidationError("必须提供退货仓库ID")
+    await _assert_sales_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        sales_order_id=int(sales_order_id),
+    )
+
+    return await SalesReturnService().pull_from_sales_order(
+        tenant_id=tenant_id,
+        sales_order_id=int(sales_order_id),
+        created_by=current_user.id,
+        warehouse_id=int(warehouse_id),
+        warehouse_name=warehouse_name,
+        return_quantities=return_quantities if isinstance(return_quantities, dict) else None,
+        batch_numbers=batch_numbers if isinstance(batch_numbers, dict) else None,
+        return_code=return_code if return_code else None,
+    )
+
+
+@router.get(
+    "/sales-returns/sales-delivery-preview",
+    response_model=SalesDeliveryReturnPreviewResponse,
+    summary="Preview sales return lines from sales delivery",
+)
+async def preview_sales_delivery_return(
+    sales_delivery_id: int = Query(..., description="销售出库单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesDeliveryReturnPreviewResponse:
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=int(sales_delivery_id),
+    )
+    return await SalesReturnService().get_sales_delivery_return_preview(
+        tenant_id=tenant_id,
+        sales_delivery_id=sales_delivery_id,
+    )
+
+
+@router.post(
+    "/sales-returns/pull-from-sales-delivery",
+    response_model=SalesReturnResponse,
+    summary="Push sales return from sales delivery",
+)
+async def pull_sales_return_from_sales_delivery(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    sales_delivery_id = request.get("sales_delivery_id")
+    warehouse_id = request.get("warehouse_id")
+    warehouse_name = request.get("warehouse_name")
+    return_quantities = request.get("return_quantities")
+    return_code = request.get("return_code")
+
+    if not sales_delivery_id:
+        raise ValidationError("必须提供销售出库单ID")
+    if not warehouse_id:
+        raise ValidationError("必须提供退货仓库ID")
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=int(sales_delivery_id),
+    )
+
+    return await SalesReturnService().pull_from_sales_delivery(
+        tenant_id=tenant_id,
+        sales_delivery_id=int(sales_delivery_id),
+        created_by=current_user.id,
+        warehouse_id=int(warehouse_id),
+        warehouse_name=warehouse_name,
+        return_quantities=return_quantities if isinstance(return_quantities, dict) else None,
+        return_code=return_code if return_code else None,
+    )
+
+
+@router.get(
+    "/sales-returns/sales-order-pull-lines",
+    summary="Open sales order lines for sales return pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-order:read"))],
+)
+async def list_sales_return_sales_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    sales_order_id: Optional[int] = Query(None, description="来源销售订单"),
+    pullable_only: bool = Query(True, description="仅剩余可退量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await SalesReturnService().list_sales_order_return_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_order_id=sales_order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/sales-returns/pull-from-sales-order-items",
+    summary="Create sales returns from sales order lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-return:create"))],
+)
+async def pull_sales_returns_from_sales_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可退货销售订单明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+    source_items = await SalesOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).only("sales_order_id")
+    for oid in {int(i.sales_order_id) for i in source_items}:
+        await _assert_sales_order_visible_by_id(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            sales_order_id=oid,
+        )
+    try:
+        return await SalesReturnService().create_sales_returns_from_sales_order_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/sales-returns/sales-delivery-pull-lines",
+    summary="Open sales delivery lines for sales return pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:read"))],
+)
+async def list_sales_return_sales_delivery_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    sales_delivery_id: Optional[int] = Query(None, description="来源销售出库单"),
+    pullable_only: bool = Query(True, description="仅剩余可退量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await SalesReturnService().list_sales_delivery_return_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_delivery_id=sales_delivery_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/sales-returns/pull-from-sales-delivery-items",
+    summary="Create sales returns from sales delivery lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-return:create"))],
+)
+async def pull_sales_returns_from_sales_delivery_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可退货销售出库明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+
+    source_items = await SalesDeliveryItem.filter(
+        tenant_id=tenant_id, id__in=selected_ids, deleted_at__isnull=True
+    ).only("delivery_id")
+    for did in {int(i.delivery_id) for i in source_items}:
+        await _assert_sales_delivery_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            delivery_id=did,
+        )
+    try:
+        return await SalesReturnService().create_sales_returns_from_sales_delivery_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/sales-returns/customer-outbound-batches",
+    response_model=List[CustomerOutboundBatchOption],
+    summary="List customer outbound batches available for sales return",
+)
+async def list_customer_outbound_batches_for_sales_return(
+    customer_id: int = Query(..., description="客户ID"),
+    material_id: Optional[int] = Query(None, description="物料ID（可选）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[CustomerOutboundBatchOption]:
+    rows = await SalesReturnService().list_customer_outbound_batches_for_return(
+        tenant_id=tenant_id,
+        customer_id=int(customer_id),
+        material_id=int(material_id) if material_id is not None else None,
+    )
+    return [CustomerOutboundBatchOption.model_validate(row) for row in rows]
+
+
+@router.get("/sales-returns", response_model=SalesReturnListPaginatedResponse, summary="List sales returns")
+async def list_sales_returns(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(20, ge=1, le=1000, description="限制数量"),
+    status: Optional[str] = Query(None, description="退货状态筛选"),
+    sales_delivery_id: Optional[int] = Query(None, description="销售出库单ID筛选"),
+    customer_id: Optional[int] = Query(None, description="客户ID筛选"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    keyword: Optional[str] = Query(None, description="关键词（退货单号、客户、出库单、订单、仓库、物料）"),
+    include_items: bool = Query(False, description="是否附带退货明细（明细表格视图）"),
+    return_code: Optional[str] = Query(None, description="退货单号（模糊）"),
+    sales_delivery_code: Optional[str] = Query(None, description="出库单号（模糊）"),
+    sales_order_code: Optional[str] = Query(None, description="销售订单号（模糊）"),
+    return_start_date: Optional[date] = Query(None, description="退货时间起"),
+    return_end_date: Optional[date] = Query(None, description="退货时间止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 return_time、-created_at（前缀-表示降序）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnListPaginatedResponse:
+    """
+    获取销售退货单列表
+    """
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in SALES_RETURN_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    filters: Dict[str, Any] = {
+        'status': status,
+        'sales_delivery_id': sales_delivery_id,
+        'customer_id': customer_id,
+        'warehouse_id': warehouse_id,
+        'keyword': keyword,
+        'return_code': return_code,
+        'sales_delivery_code': sales_delivery_code,
+        'sales_order_code': sales_order_code,
+        'return_start_date': return_start_date,
+        'return_end_date': return_end_date,
+        'created_start_date': created_start_date,
+        'created_end_date': created_end_date,
+        'order_by': safe_order_by,
+        'include_items': include_items,
+    }
+    result = await SalesReturnService().list_sales_returns(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        current_user=current_user,
+        **{k: v for k, v in filters.items() if v is not None},
+    )
+    return SalesReturnListPaginatedResponse(**result)
+
+
+@router.get("/sales-returns/{return_id}", response_model=SalesReturnResponse, summary="Get sales return")
+async def get_sales_return(
+    return_id: int = Path(..., description="退货单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    """
+    获取销售退货单详情
+
+    - **return_id**: 退货单ID
+    """
+    await _assert_sales_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await SalesReturnService().get_sales_return_by_id(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+@router.get(
+    "/sales-returns/{return_id}/print",
+    summary="Print sales return",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-return:print"))],
+)
+async def print_sales_return(
+    return_id: int = Path(..., description="退货单ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="sales_return",
+            document_id=return_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.put("/sales-returns/{return_id}", response_model=SalesReturnResponse, summary="Update sales return")
+async def update_sales_return(
+    return_id: int,
+    body: SalesReturnUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    """更新销售退货单（仅待退货/草稿）。"""
+    await _assert_sales_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await SalesReturnService().update_sales_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        return_data=body,
+        updated_by=current_user.id,
+    )
+
+
+@router.post("/sales-returns/{return_id}/confirm", response_model=SalesReturnResponse, summary="Confirm sales return")
+async def confirm_sales_return(
+    return_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    """
+    确认销售退货
+
+    - **return_id**: 退货单ID
+    """
+    await _assert_sales_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await SalesReturnService().confirm_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data
+    )
+
+
+@router.post("/sales-returns/{return_id}/withdraw", response_model=SalesReturnResponse, summary="Withdraw sales return posting")
+async def withdraw_sales_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesReturnResponse:
+    """撤回销售退货确认（已退货 -> 待退货）"""
+    await _assert_sales_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await SalesReturnService().withdraw_confirmation(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.delete("/sales-returns/{return_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete sales return")
+async def delete_sales_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除销售退货单（软删除，仅待退货状态可删）"""
+    await _assert_sales_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    await SalesReturnService().delete_sales_return(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+# ============ 采购入库管理 API ============
+
+@router.post("/purchase-receipts", response_model=PurchaseReceiptResponse, summary="Create purchase receipt")
+async def create_purchase_receipt(
+    receipt: PurchaseReceiptCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReceiptResponse:
+    """
+    创建采购入库单
+
+    - **receipt**: 入库单创建数据
+    - **current_user**: 当前用户
+    - **tenant_id**: 当前组织ID
+
+    返回创建的采购入库单信息。
+    """
+    return await PurchaseReceiptService().create_purchase_receipt(
+        tenant_id=tenant_id,
+        receipt_data=receipt,
+        created_by=current_user.id
+    )
+
+
+@router.post(
+    "/purchase-receipts/pull-from-receipt-notice",
+    response_model=PurchaseReceiptResponse,
+    summary="Build purchase receipt from receipt notice",
+)
+async def pull_purchase_receipt_from_receipt_notice(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReceiptResponse:
+    notice_id = request.get("receipt_notice_id") or request.get("notice_id")
+    if not notice_id:
+        raise ValidationError("必须提供收货通知单ID")
+    notice = await ReceiptNoticeService().notify_warehouse(
+        tenant_id=tenant_id,
+        notice_id=int(notice_id),
+        notified_by=current_user.id,
+    )
+    receipt_id = getattr(notice, "purchase_receipt_id", None)
+    if not receipt_id:
+        raise BusinessLogicError("收货通知单已处理，但未生成采购入库单")
+    return await PurchaseReceiptService().get_purchase_receipt_by_id(
+        tenant_id=tenant_id,
+        receipt_id=int(receipt_id),
+    )
+
+
+@router.get("/purchase-receipts", summary="List purchase receipts")
+async def list_purchase_receipts(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    status: Optional[str] = Query(None, description="入库状态"),
+    purchase_order_id: Optional[int] = Query(None, description="采购订单ID"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    supplier_name: Optional[str] = Query(None, description="供应商名称（模糊）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（入库单号/采购订单号/供应商/仓库）"),
+    search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取采购入库单列表
+
+    支持状态、采购订单与关键词筛选。
+    """
+    items, total = await PurchaseReceiptService().list_purchase_receipts(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        purchase_order_id=purchase_order_id,
+        warehouse_id=warehouse_id,
+        supplier_name=supplier_name,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get(
+    "/purchase-receipts/purchase-order-pull-lines",
+    summary="Open purchase order lines for purchase receipt pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:read"))],
+)
+async def list_purchase_receipt_purchase_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    order_id: Optional[int] = Query(None, description="来源采购订单"),
+    pullable_only: bool = Query(True, description="仅剩余可入库量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await PurchaseReceiptService().list_purchase_order_receipt_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            order_id=order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/purchase-receipts/pull-from-purchase-order-items",
+    summary="Create purchase receipts from purchase order lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:create"))],
+)
+async def pull_purchase_receipts_from_purchase_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可入库采购订单明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    line_warehouses: Dict[int, int] = {}
+    raw_line_wh = request.get("line_warehouses")
+    if isinstance(raw_line_wh, dict):
+        for k, v in raw_line_wh.items():
+            try:
+                item_key = int(k)
+                wh_val = int(v)
+            except (TypeError, ValueError):
+                continue
+            if item_key > 0 and wh_val > 0:
+                line_warehouses[item_key] = wh_val
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    source_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).only("order_id")
+    for oid in {int(i.order_id) for i in source_items}:
+        await _assert_purchase_order_visible_by_id(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            purchase_order_id=oid,
+        )
+    try:
+        return await PurchaseReceiptService().create_purchase_receipts_from_po_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+            line_warehouses=line_warehouses or None,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/purchase-receipts/receipt-notice-pull-lines",
+    summary="Open receipt notice lines for purchase receipt pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:receipt-notice:read"))],
+)
+async def list_purchase_receipt_receipt_notice_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    notice_id: Optional[int] = Query(None, description="来源收货通知"),
+    pullable_only: bool = Query(True, description="仅剩余可入库量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await PurchaseReceiptService().list_receipt_notice_receipt_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            notice_id=notice_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/purchase-receipts/pull-from-receipt-notice-items",
+    summary="Create purchase receipts from receipt notice lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:create"))],
+)
+async def pull_purchase_receipts_from_receipt_notice_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可入库收货通知明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    try:
+        return await PurchaseReceiptService().create_purchase_receipts_from_notice_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/purchase-receipts/{receipt_id}", response_model=PurchaseReceiptWithItemsResponse, summary="Get purchase receipt")
+async def get_purchase_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReceiptWithItemsResponse:
+    """
+    根据ID获取采购入库单详情
+
+    - **receipt_id**: 入库单ID
+    """
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
+    return await PurchaseReceiptService().get_purchase_receipt_by_id(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id
+    )
+
+
+@router.get(
+    "/purchase-receipts/{receipt_id}/print",
+    summary="Print purchase receipt",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:print"))],
+)
+async def print_purchase_receipt(
+    receipt_id: int = Path(..., description="采购入库单ID"),
+    template_code: Optional[str] = Query(None),
+    template_uuid: Optional[str] = Query(None),
+    output_format: str = Query("html"),
+    response_format: str = Query("json"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    from fastapi.responses import HTMLResponse, JSONResponse
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="purchase_receipt",
+            document_id=receipt_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.put("/purchase-receipts/{receipt_id}", response_model=PurchaseReceiptResponse, summary="Update purchase receipt")
+async def update_purchase_receipt(
+    receipt_id: int,
+    receipt: PurchaseReceiptUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReceiptResponse:
+    """
+    更新采购入库单（草稿/待入库阶段可调整实际入库数量等明细）。
+    """
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
+    return await PurchaseReceiptService().update_purchase_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        receipt_data=receipt,
+        updated_by=current_user.id,
+    )
+
+
+@router.post("/purchase-receipts/{receipt_id}/confirm", response_model=PurchaseReceiptResponse, summary="Confirm purchase receipt")
+async def confirm_purchase_receipt(
+    receipt_id: int,
+    confirmation_data: Optional[InboundConfirmationRequest] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReceiptResponse:
+    """
+    确认采购入库
+
+    - **receipt_id**: 入库单ID
+    """
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
+    return await PurchaseReceiptService().confirm_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data
+    )
+
+
+@router.post(
+    "/purchase-receipts/{receipt_id}/withdraw",
+    response_model=PurchaseReceiptWithItemsResponse,
+    summary="Withdraw purchase receipt (reverse stock)",
+)
+async def withdraw_purchase_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReceiptWithItemsResponse:
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
+    return await PurchaseReceiptService().withdraw_receipt_confirmation(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.delete(
+    "/purchase-receipts/{receipt_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="Delete purchase receipt",
+)
+async def delete_purchase_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """软删除采购入库单（仅草稿/待入库可删；已入库不可删）"""
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
+    await PurchaseReceiptService().delete_purchase_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+@router.post(
+    "/purchase-receipts/{receipt_id}/delete",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="Delete purchase receipt",
+)
+async def delete_purchase_receipt_post(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """与 DELETE 同逻辑，供前端统一使用 POST，避免 405 Method Not Allowed。"""
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
+    await PurchaseReceiptService().delete_purchase_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+    )
+
+
+@router.post("/purchase-receipts/import", summary="Batch import purchase receipts")
+async def import_purchase_receipts(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导入采购入库单
+    
+    接收前端 uni_import 组件传递的二维数组数据，批量创建采购入库单。
+    数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+    
+    **前端实现**：使用 `uni_import` 组件（基于 Univer Sheet）进行数据编辑，确认后通过 `onConfirm` 回调传递二维数组数据。
+    
+    Args:
+        request: 导入请求数据（包含二维数组，格式：{"data": [[...], [...], ...]}）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 导入结果（成功数、失败数、错误列表）
+    """
+    try:
+        # 获取二维数组数据
+        data = request.get("data", [])
+        if not data:
+            raise ValidationError("导入数据为空")
+        
+        service = PurchaseReceiptService()
+        result = await service.import_from_data(
+            tenant_id=tenant_id,
+            data=data,
+            created_by=current_user.id
+        )
+        
+        return result
+                
+    except ValidationError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_422_UNPROCESSABLE_ENTITY,
+            str(e),
+            "/purchase-receipts/import",
+            tenant_id,
+        )
+    except Exception as e:
+        logger.error(f"导入采购入库单失败: {str(e)}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"导入失败: {str(e)}",
+            "/purchase-receipts/import",
+            tenant_id,
+        )
+
+
+@router.get("/purchase-receipts/export", response_class=FileResponse, summary="Batch export purchase receipts")
+async def export_purchase_receipts(
+    status: Optional[str] = Query(None, description="入库状态筛选"),
+    purchase_order_id: Optional[int] = Query(None, description="采购订单ID筛选"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量导出采购入库单到Excel文件
+    
+    Args:
+        status: 入库状态筛选
+        purchase_order_id: 采购订单ID筛选
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        FileResponse: Excel文件
+    """
+    import os
+    
+    try:
+        service = PurchaseReceiptService()
+        scoped_purchase_order_ids = await _scoped_purchase_order_ids(
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
+        file_path = await service.export_to_excel(
+            tenant_id=tenant_id,
+            status=status,
+            purchase_order_id=purchase_order_id,
+            scoped_purchase_order_ids=scoped_purchase_order_ids,
+        )
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        logger.error(f"导出采购入库单失败: {str(e)}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"导出失败: {str(e)}",
+            "/purchase-receipts/export",
+            tenant_id,
+        )
+
+
+# ==================== 采购退货API ====================
+
+@router.post("/purchase-returns", response_model=PurchaseReturnResponse, summary="Create purchase return")
+async def create_purchase_return(
+    return_data: PurchaseReturnCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    """
+    创建采购退货单
+
+    - **return_data**: 采购退货单数据
+    """
+    return await PurchaseReturnService().create_purchase_return(
+        tenant_id=tenant_id,
+        return_data=return_data,
+        created_by=current_user.id
+    )
+
+
+@router.post("/purchase-returns/pull-from-purchase-order", response_model=PurchaseReturnResponse, summary="Push purchase return from PO")
+async def pull_purchase_return_from_purchase_order(
+    request: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    purchase_order_id = request.get("purchase_order_id")
+    warehouse_id = request.get("warehouse_id")
+    warehouse_name = request.get("warehouse_name")
+    return_quantities_raw = request.get("return_quantities")
+    return_quantities = None
+    if isinstance(return_quantities_raw, dict):
+        return_quantities = {}
+        for k, v in return_quantities_raw.items():
+            try:
+                return_quantities[int(k)] = float(v)
+            except (TypeError, ValueError):
+                continue
+
+    if not purchase_order_id:
+        raise ValidationError("必须提供采购订单ID")
+    if not warehouse_id:
+        raise ValidationError("必须提供退货仓库ID")
+    await _assert_purchase_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        purchase_order_id=int(purchase_order_id),
+    )
+
+    return await PurchaseReturnService().pull_from_purchase_order(
+        tenant_id=tenant_id,
+        purchase_order_id=int(purchase_order_id),
+        created_by=current_user.id,
+        warehouse_id=int(warehouse_id),
+        warehouse_name=warehouse_name,
+        return_quantities=return_quantities,
+    )
+
+
+@router.get("/purchase-returns", response_model=PurchaseReturnListPaginatedResponse, summary="List purchase returns")
+async def list_purchase_returns(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(20, ge=1, le=1000, description="限制数量"),
+    status: Optional[str] = Query(None, description="退货状态筛选"),
+    purchase_receipt_id: Optional[int] = Query(None, description="采购入库单ID筛选"),
+    supplier_id: Optional[int] = Query(None, description="供应商ID筛选"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    keyword: Optional[str] = Query(None, description="关键词（退货单号、供应商、入库单、订单、仓库、物料）"),
+    include_items: bool = Query(False, description="是否附带退货明细（明细表格视图）"),
+    return_code: Optional[str] = Query(None, description="退货单号（模糊）"),
+    purchase_receipt_code: Optional[str] = Query(None, description="采购入库单号（模糊）"),
+    purchase_order_code: Optional[str] = Query(None, description="采购订单号（模糊）"),
+    return_start_date: Optional[date] = Query(None, description="退货时间起"),
+    return_end_date: Optional[date] = Query(None, description="退货时间止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 return_time、-created_at"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnListPaginatedResponse:
+    """获取采购退货单列表"""
+    safe_order_by = None
+    if order_by:
+        field = order_by.lstrip("-")
+        if field in PURCHASE_RETURN_SORTABLE_FIELDS:
+            safe_order_by = order_by
+    filters: Dict[str, Any] = {
+        'status': status,
+        'purchase_receipt_id': purchase_receipt_id,
+        'supplier_id': supplier_id,
+        'warehouse_id': warehouse_id,
+        'keyword': keyword,
+        'return_code': return_code,
+        'purchase_receipt_code': purchase_receipt_code,
+        'purchase_order_code': purchase_order_code,
+        'return_start_date': return_start_date,
+        'return_end_date': return_end_date,
+        'created_start_date': created_start_date,
+        'created_end_date': created_end_date,
+        'order_by': safe_order_by,
+        'include_items': include_items,
+    }
+    result = await PurchaseReturnService().list_purchase_returns(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        **{k: v for k, v in filters.items() if v is not None},
+    )
+    return PurchaseReturnListPaginatedResponse(**result)
+
+
+@router.get(
+    "/purchase-returns/purchase-order-pull-lines",
+    summary="Open purchase order lines for purchase return pull",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:read"))],
+)
+async def list_purchase_return_purchase_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    order_id: Optional[int] = Query(None, description="来源采购订单"),
+    pullable_only: bool = Query(True, description="仅剩余可退量大于 0"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await PurchaseReturnService().list_purchase_return_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            order_id=order_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/purchase-returns/pull-from-purchase-order-items",
+    summary="Create purchase returns from purchase order lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-return:create"))],
+)
+async def pull_purchase_returns_from_purchase_order_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    raw_ids = request.get("selected_item_ids")
+    if not isinstance(raw_ids, list) or not raw_ids:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="请至少选择一条可退货采购订单明细")
+    try:
+        selected_ids = [int(v) for v in raw_ids]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    line_batches: Dict[int, str] = {}
+    raw_line_batches = request.get("line_batches")
+    if isinstance(raw_line_batches, dict):
+        for k, v in raw_line_batches.items():
+            try:
+                item_key = int(k)
+            except (TypeError, ValueError):
+                continue
+            batch_val = str(v or "").strip()
+            if item_key > 0 and batch_val:
+                line_batches[item_key] = batch_val
+    line_warehouses: Dict[int, int] = {}
+    raw_line_wh = request.get("line_warehouses")
+    if isinstance(raw_line_wh, dict):
+        for k, v in raw_line_wh.items():
+            try:
+                item_key = int(k)
+                wh_val = int(v)
+            except (TypeError, ValueError):
+                continue
+            if item_key > 0 and wh_val > 0:
+                line_warehouses[item_key] = wh_val
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    source_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).only("order_id")
+    for oid in {int(i.order_id) for i in source_items}:
+        await _assert_purchase_order_visible_by_id(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            purchase_order_id=oid,
+        )
+    try:
+        return await PurchaseReturnService().create_purchase_returns_from_po_items(
+            tenant_id=tenant_id,
+            item_ids=selected_ids,
+            created_by=current_user.id,
+            line_batches=line_batches or None,
+            line_warehouses=line_warehouses or None,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/purchase-returns/statistics", summary="Purchase return statistics (KPI cards)")
+async def get_purchase_return_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """必须在 `/purchase-returns/{return_id}` 之前注册，避免 `statistics` 被解析为 id。"""
+    return await PurchaseReturnService().get_purchase_return_statistics(tenant_id)
+
+
+@router.get("/purchase-returns/{return_id}", response_model=PurchaseReturnResponse, summary="Get purchase return")
+async def get_purchase_return(
+    return_id: int = Path(..., description="退货单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    """
+    获取采购退货单详情
+
+    - **return_id**: 退货单ID
+    """
+    await _assert_purchase_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await PurchaseReturnService().get_purchase_return_by_id(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+@router.put("/purchase-returns/{return_id}", response_model=PurchaseReturnResponse, summary="Update purchase return")
+async def update_purchase_return(
+    return_id: int,
+    body: PurchaseReturnUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    await _assert_purchase_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await PurchaseReturnService().update_purchase_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        return_data=body,
+        updated_by=current_user.id,
+    )
+
+
+@router.post("/purchase-returns/{return_id}/confirm", response_model=PurchaseReturnResponse, summary="Confirm purchase return")
+async def confirm_purchase_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    """
+    确认采购退货
+
+    - **return_id**: 退货单ID
+    """
+    await _assert_purchase_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await PurchaseReturnService().confirm_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        confirmed_by=current_user.id
+    )
+
+
+@router.post("/purchase-returns/{return_id}/withdraw", response_model=PurchaseReturnResponse, summary="Withdraw purchase return posting")
+async def withdraw_purchase_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    await _assert_purchase_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await PurchaseReturnService().withdraw_confirmation(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.delete("/purchase-returns/{return_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete purchase return")
+async def delete_purchase_return(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除采购退货单（软删除，仅待退货状态可删）"""
+    await _assert_purchase_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    await PurchaseReturnService().delete_purchase_return(
+        tenant_id=tenant_id,
+        return_id=return_id
+    )
+
+
+# ==================== 补货建议API ====================
+# 注意：/statistics 必须在 /{suggestion_id} 之前定义，避免路径冲突
+
+@router.get("/replenishment-suggestions/statistics", summary="Replenishment suggestion statistics")
+async def get_replenishment_suggestion_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """
+    获取补货建议统计信息
+
+    返回按状态、优先级统计的补货建议数量
+    """
+    return await ReplenishmentSuggestionService().get_suggestion_statistics(
+        tenant_id=tenant_id
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/generate-from-alerts",
+    response_model=ReplenishmentSuggestionGenerateResult,
+    summary="Generate replenishment from inventory alerts",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:create",
+            )
+        )
+    ],
+)
+async def generate_replenishment_suggestions_from_alerts(
+    request: Dict[str, Any] = Body(default={}),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReplenishmentSuggestionGenerateResult:
+    """
+    基于库存预警生成补货建议
+
+    - **alert_ids**: 预警ID列表（可选，如果不提供则处理所有待处理的低库存预警）
+    """
+    alert_ids = request.get('alert_ids')
+    return await ReplenishmentSuggestionService().generate_suggestions_from_alerts(
+        tenant_id=tenant_id,
+        alert_ids=alert_ids,
+        created_by=current_user.id,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/generate-from-demand-computation",
+    response_model=ReplenishmentSuggestionGenerateResult,
+    summary="Generate replenishment from demand computation",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:create",
+            )
+        )
+    ],
+)
+async def generate_replenishment_suggestions_from_demand_computation(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReplenishmentSuggestionGenerateResult:
+    """基于已完成需求计算生成补货建议。"""
+    demand_computation_id = request.get("demand_computation_id")
+    if not demand_computation_id:
+        raise ValidationError("demand_computation_id 必填")
+    return await ReplenishmentSuggestionService().generate_suggestions_from_demand_computation(
+        tenant_id=tenant_id,
+        demand_computation_id=int(demand_computation_id),
+        created_by=current_user.id,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/push-to-purchase-requisition/preview",
+    summary="Preview push replenishment to purchase requisition",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:update",
+                "kuaizhizao:purchase-requisition:create",
+                require_all=True,
+            )
+        )
+    ],
+)
+async def preview_push_replenishment_to_purchase_requisition(
+    body: ReplenishmentSuggestionPushRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await ReplenishmentSuggestionService().preview_push_to_purchase_requisition(
+        tenant_id=tenant_id,
+        suggestion_ids=body.suggestion_ids,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/push-to-purchase-requisition",
+    summary="Push replenishment to purchase requisition",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:update",
+                "kuaizhizao:purchase-requisition:create",
+                require_all=True,
+            )
+        )
+    ],
+)
+async def push_replenishment_to_purchase_requisition(
+    body: ReplenishmentSuggestionPushRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await ReplenishmentSuggestionService().push_to_purchase_requisition(
+        tenant_id=tenant_id,
+        suggestion_ids=body.suggestion_ids,
+        created_by=current_user.id,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/push-to-purchase-order/preview",
+    summary="Preview push replenishment to purchase order",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:update",
+                "kuaizhizao:purchase-order:create",
+                require_all=True,
+            )
+        )
+    ],
+)
+async def preview_push_replenishment_to_purchase_order(
+    body: ReplenishmentSuggestionPushRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await ReplenishmentSuggestionService().preview_push_to_purchase_order(
+        tenant_id=tenant_id,
+        suggestion_ids=body.suggestion_ids,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/push-to-purchase-order",
+    summary="Push replenishment to purchase order",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:update",
+                "kuaizhizao:purchase-order:create",
+                require_all=True,
+            )
+        )
+    ],
+)
+async def push_replenishment_to_purchase_order(
+    body: ReplenishmentSuggestionPushRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await ReplenishmentSuggestionService().push_to_purchase_order(
+        tenant_id=tenant_id,
+        suggestion_ids=body.suggestion_ids,
+        created_by=current_user.id,
+    )
+
+
+@router.get("/replenishment-suggestions", summary="List replenishment suggestions")
+async def list_replenishment_suggestions(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=200, description="限制数量"),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    priority: Optional[str] = Query(None, description="优先级筛选"),
+    suggestion_type: Optional[str] = Query(None, description="建议类型筛选"),
+    material_id: Optional[int] = Query(None, description="物料ID筛选"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID筛选"),
+    keyword: Optional[str] = Query(None, description="关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    suggested_order_start_date: Optional[str] = Query(None, description="建议下单开始日期"),
+    suggested_order_end_date: Optional[str] = Query(None, description="建议下单结束日期"),
+    created_start_date: Optional[str] = Query(None, description="创建开始日期"),
+    created_end_date: Optional[str] = Query(None, description="创建结束日期"),
+    updated_start_date: Optional[str] = Query(None, description="更新开始日期"),
+    updated_end_date: Optional[str] = Query(None, description="更新结束日期"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    """
+    获取补货建议列表
+
+    - **skip**: 跳过数量
+    - **limit**: 限制数量
+    - **status**: 状态筛选
+    - **priority**: 优先级筛选
+    - **suggestion_type**: 建议类型筛选
+    - **material_id**: 物料ID筛选
+    - **warehouse_id**: 仓库ID筛选
+    """
+    items, total = await ReplenishmentSuggestionService().get_suggestions(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        status=status,
+        priority=priority,
+        suggestion_type=suggestion_type,
+        material_id=material_id,
+        warehouse_id=warehouse_id,
+        keyword=keyword,
+        order_by=order_by,
+        suggested_order_start_date=suggested_order_start_date,
+        suggested_order_end_date=suggested_order_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    return {"items": items, "total": total}
+
+
+@router.get("/replenishment-suggestions/{suggestion_id}", response_model=ReplenishmentSuggestionResponse, summary="Get replenishment suggestion")
+async def get_replenishment_suggestion(
+    suggestion_id: int = Path(..., description="补货建议ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReplenishmentSuggestionResponse:
+    """
+    获取补货建议详情
+
+    - **suggestion_id**: 补货建议ID
+    """
+    return await ReplenishmentSuggestionService().get_suggestion_by_id(
+        tenant_id=tenant_id,
+        suggestion_id=suggestion_id
+    )
+
+
+@router.post("/replenishment-suggestions/{suggestion_id}/process", response_model=ReplenishmentSuggestionResponse, summary="Process replenishment suggestion")
+async def process_replenishment_suggestion(
+    suggestion_id: int,
+    process_data: ReplenishmentSuggestionProcessRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ReplenishmentSuggestionResponse:
+    """
+    处理补货建议
+
+    - **suggestion_id**: 补货建议ID
+    - **process_data**: 处理数据（状态、处理备注）
+    """
+    return await ReplenishmentSuggestionService().process_suggestion(
+        tenant_id=tenant_id,
+        suggestion_id=suggestion_id,
+        process_data=process_data,
+        processed_by=current_user.id
+    )
+
+
+# ============ 配料单 API ============
+
+@router.get(
+    "/batching-center/tasks",
+    response_model=BatchingCenterTaskListResponse,
+    summary="List batching center unified task queue",
+)
+async def list_batching_center_tasks(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    task_type: Optional[str] = Query(
+        None,
+        description="line_side_prep|proactive_prep|material_call|batching_draft|backflush_alert",
+    ),
+    status: Optional[str] = Query(None),
+    work_order_code: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None, description="关键词（工单/单据/物料）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    priority: Optional[str] = Query(None),
+    include_completed_batching: bool = Query(False),
+    include_proactive_prep: bool = Query(
+        False, description="未指定 task_type 时是否包含主动备料（默认否，较慢）"
+    ),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingCenterTaskListResponse:
+    return await batching_center_service.list_tasks(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        task_type=task_type,
+        status=status,
+        work_order_code=work_order_code,
+        keyword=keyword,
+        order_by=order_by,
+        priority=priority,
+        include_completed_batching=include_completed_batching,
+        include_proactive_prep=include_proactive_prep,
+    )
+
+
+@router.get("/batching-orders", response_model=BatchingOrderListResponse, summary="List batching orders")
+async def list_batching_orders(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    code: Optional[str] = Query(None, description="配料单号（模糊搜索）"),
+    warehouse_id: Optional[int] = Query(None, description="仓库ID"),
+    work_order_id: Optional[int] = Query(None, description="工单ID"),
+    status: Optional[str] = Query(None, description="状态"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderListResponse:
+    """获取配料单列表"""
+    return await batching_order_service.list_batching_orders(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        code=code,
+        warehouse_id=warehouse_id,
+        work_order_id=work_order_id,
+        status=status,
+    )
+
+
+@router.post("/batching-orders", response_model=BatchingOrderResponse, summary="Create batching order")
+async def create_batching_order(
+    data: BatchingOrderCreateWithItems,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderResponse:
+    """创建配料单（手工创建）"""
+    try:
+        items = data.items
+        order_data = BatchingOrderCreate(**data.model_dump(exclude={"items"}))
+        return await batching_order_service.create_batching_order(
+            tenant_id=tenant_id,
+            order_data=order_data,
+            created_by=current_user.id,
+            items=items,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/batching-orders", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/batching-orders", tenant_id)
+
+
+@router.get(
+    "/batching-orders/pull-candidates",
+    response_model=BatchingPullCandidateListResponse,
+    summary="List work order pull candidates for batching order",
+)
+async def list_batching_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    keyword: Optional[str] = Query(None, description="工单号/名称"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await batching_order_service.list_batching_pull_candidates(
+        tenant_id,
+        keyword=keyword,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/batching-orders/work-order-preview",
+    response_model=BatchingPullPreviewResponse,
+    summary="Preview batching order from work order",
+)
+async def preview_batching_order_from_work_order(
+    work_order_id: int = Query(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingPullPreviewResponse:
+    try:
+        return await batching_order_service.get_batching_pull_preview(tenant_id, work_order_id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/batching-orders/work-order-preview", tenant_id)
+
+
+@router.post("/batching-orders/pull-from-work-order", response_model=BatchingOrderWithItemsResponse, summary="Create batching order from work order")
+async def pull_batching_order_from_work_order(
+    request_data: PullFromWorkOrderRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderWithItemsResponse:
+    """从工单按 BOM 展开物料需求，生成配料单"""
+    try:
+        return await batching_order_service.pull_from_work_order(
+            tenant_id=tenant_id,
+            request_data=request_data,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/batching-orders/pull-from-work-order", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/batching-orders/pull-from-work-order", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/batching-orders/pull-from-work-order", tenant_id)
+
+
+@router.post(
+    "/batching-orders/{order_id}/sync-from-work-order",
+    response_model=BatchingOrderWithItemsResponse,
+    summary="Sync batching order lines from work order",
+)
+async def sync_batching_order_from_work_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderWithItemsResponse:
+    """按工单当前齐套缺料补全草稿配料单明细（含领料 + 倒冲）"""
+    try:
+        return await batching_order_service.sync_from_work_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/batching-orders/{order_id}/sync-from-work-order", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/batching-orders/{order_id}/sync-from-work-order", tenant_id)
+
+
+@router.get("/batching-orders/{order_id}", response_model=BatchingOrderWithItemsResponse, summary="Get batching order")
+async def get_batching_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderWithItemsResponse:
+    """获取配料单详情（含明细）"""
+    try:
+        return await batching_order_service.get_batching_order_by_id(
+            tenant_id=tenant_id,
+            order_id=order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/batching-orders/{order_id}", tenant_id)
+
+
+@router.put("/batching-orders/{order_id}", response_model=BatchingOrderResponse, summary="Update batching order")
+async def update_batching_order(
+    order_id: int,
+    data: BatchingOrderUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderResponse:
+    """更新配料单"""
+    try:
+        return await batching_order_service.update_batching_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            order_data=data,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/batching-orders/{order_id}", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/batching-orders/{order_id}", tenant_id)
+
+
+@router.delete("/batching-orders/{order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete batching order")
+async def delete_batching_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除配料单（软删除，仅草稿可删）"""
+    try:
+        await batching_order_service.delete_batching_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/batching-orders/{order_id}", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/batching-orders/{order_id}", tenant_id)
+
+
+@router.post("/batching-orders/{order_id}/confirm", response_model=BatchingOrderResponse, summary="Confirm batching")
+async def confirm_batching_order(
+    order_id: int,
+    confirm_data: Optional[BatchingOrderConfirmRequest] = None,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> BatchingOrderResponse:
+    """确认配料（主仓扣减 + 线边仓入库）"""
+    try:
+        return await batching_order_service.confirm_batching_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            executed_by=current_user.id,
+            confirm_data=confirm_data,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/batching-orders/{order_id}/confirm", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/batching-orders/{order_id}/confirm", tenant_id)

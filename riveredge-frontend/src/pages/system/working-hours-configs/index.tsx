@@ -1,0 +1,534 @@
+/**
+ * 工作时间段配置管理页面
+ *
+ * 提供工作时间段配置的CRUD功能，用于配置组织的工作时间段。
+ *
+ * @author Luigi Lu
+ * @date 2025-01-15
+ */
+
+import React, { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea, ProFormDatePicker, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Space, Popconfirm } from 'antd';
+import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
+import { UniTable } from '../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
+import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
+import { renderIsActiveTag } from '../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { apiRequest } from '../../../services/api';
+import { fetchAllListItems } from '../../../utils/fetchAllListPages';
+import { pickListSearchKeyword } from '../../../utils/tableQueryKey';
+import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
+
+/**
+ * 工作时间段配置接口定义
+ */
+interface WorkingHoursConfig {
+  id?: number;
+  name?: string;
+  scope_type?: string;
+  scope_id?: number;
+  scope_name?: string;
+  day_of_week?: number;
+  start_date?: string;
+  end_date?: string;
+  working_hours?: Array<{ start: string; end: string }>;
+  is_enabled?: boolean;
+  priority?: number;
+  remarks?: string;
+  created_at?: string;
+}
+
+/**
+ * 工作时间段配置管理页面组件
+ */
+const DAY_KEYS = ['dayMon', 'dayTue', 'dayWed', 'dayThu', 'dayFri', 'daySat', 'daySun'] as const;
+const SCOPE_TYPE_KEYS: Record<string, string> = {
+  all: 'scopeAll',
+  warehouse: 'scopeWarehouse',
+  work_center: 'scopeWorkCenter',
+  department: 'scopeDepartment',
+};
+
+const WorkingHoursConfigsPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const actionRef = useRef<ActionType>(null);
+  const formRef = useRef<any>(null);
+
+  // Modal 相关状态
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentId, setCurrentId] = useState<number | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+
+  // Drawer 相关状态
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [currentRecord, setCurrentRecord] = useState<WorkingHoursConfig | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
+
+  /**
+   * 处理新建
+   */
+  const handleCreate = () => {
+    setIsEdit(false);
+    setCurrentId(null);
+    setModalVisible(true);
+    formRef.current?.resetFields();
+  };
+
+  /**
+   * 处理编辑
+   */
+  const handleEdit = async (record: WorkingHoursConfig) => {
+    if (record.id) {
+      setIsEdit(true);
+      setCurrentId(record.id);
+      setModalVisible(true);
+      // 加载数据到表单
+      try {
+        const detailData = await apiRequest(`/core/working-hours-configs/${record.id}`, { method: 'GET' });
+        formRef.current?.setFieldsValue({
+          name: detailData.name,
+          scope_type: detailData.scope_type,
+          scope_id: detailData.scope_id,
+          day_of_week: detailData.day_of_week,
+          start_date: detailData.start_date,
+          end_date: detailData.end_date,
+          working_hours: detailData.working_hours,
+          is_enabled: detailData.is_enabled,
+          priority: detailData.priority,
+          remarks: detailData.remarks,
+        });
+      } catch (error) {
+        messageApi.error(t('pages.system.workingHoursConfigs.getDetailFailed'));
+      }
+    }
+  };
+
+  /**
+   * 处理删除
+   */
+  const handleDelete = async (record: WorkingHoursConfig) => {
+    if (record.id) {
+      try {
+        await apiRequest(`/core/working-hours-configs/${record.id}`, { method: 'DELETE' });
+        messageApi.success(t('common.deleteSuccess'));
+    actionRef.current?.reload();
+      } catch (error) {
+        messageApi.error(t('common.deleteFailed'));
+      }
+    }
+  };
+
+  /**
+   * 处理查看详情
+   */
+  const loadDetail = async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detailData = await apiRequest(`/core/working-hours-configs/${id}`, { method: 'GET' });
+      setCurrentRecord(detailData);
+    } catch (error) {
+      setCurrentRecord(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.workingHoursConfigs.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleDetail = async (record: WorkingHoursConfig) => {
+    if (!record.id) return;
+    detailRetryIdRef.current = record.id;
+    setDetailDrawerVisible(true);
+    setCurrentRecord(null);
+    setDetailError(null);
+    void loadDetail(record.id);
+  };
+
+  /**
+   * 表格列定义
+   */
+  const columns: ProColumns<WorkingHoursConfig>[] = [
+    {
+      title: t('pages.system.workingHoursConfigs.columnName'),
+      dataIndex: 'name',
+      width: 150,
+      fixed: 'left',
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnScopeType'),
+      dataIndex: 'scope_type',
+      width: 120,
+      valueEnum: {
+        all: { text: t('pages.system.workingHoursConfigs.scopeAll'), status: 'default' },
+        warehouse: { text: t('pages.system.workingHoursConfigs.scopeWarehouse'), status: 'processing' },
+        work_center: { text: t('pages.system.workingHoursConfigs.scopeWorkCenter'), status: 'success' },
+        department: { text: t('pages.system.workingHoursConfigs.scopeDepartment'), status: 'warning' },
+      },
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnScopeName'),
+      dataIndex: 'scope_name',
+      width: 150,
+      ellipsis: true,
+      render: (_, record) => record.scope_name || t('pages.system.workingHoursConfigs.scopeAll'),
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnDayOfWeek'),
+      dataIndex: 'day_of_week',
+      width: 100,
+      render: (_, record) => {
+        if (record.day_of_week === null || record.day_of_week === undefined) {
+          return t('pages.system.workingHoursConfigs.dayAll');
+        }
+        return t(`pages.system.workingHoursConfigs.${DAY_KEYS[record.day_of_week]}`) || '-';
+      },
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnWorkingHours'),
+      dataIndex: 'working_hours',
+      width: 200,
+      ellipsis: true,
+      render: (_, record) => {
+        if (!record.working_hours || record.working_hours.length === 0) {
+          return '-';
+        }
+        return record.working_hours.map((h: any) => `${h.start}-${h.end}`).join(', ');
+      },
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnEnabled'),
+      dataIndex: 'is_enabled',
+      width: 100,
+      render: (_, record) => renderIsActiveTag(t, record.is_enabled),
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnPriority'),
+      dataIndex: 'priority',
+      width: 80,
+      align: 'right',
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      valueType: 'dateTime',
+      width: 160,
+    },
+    {
+      title: t('common.actions'),
+      width: 180,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space>
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => handleDetail(record)}
+          >
+            {t('common.detail')}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            {t('common.edit')}
+          </Button>
+          <Popconfirm
+            title={t('pages.system.workingHoursConfigs.confirmDelete')}
+            onConfirm={() => handleDelete(record)}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
+          >
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+            >
+              {t('common.delete')}
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  /**
+   * 处理表单提交
+   */
+  const handleFormFinish = async (values: any) => {
+    try {
+      setFormLoading(true);
+      if (isEdit && currentId) {
+        await apiRequest(`/core/working-hours-configs/${currentId}`, {
+          method: 'PUT',
+          data: values,
+        });
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await apiRequest('/core/working-hours-configs', {
+          method: 'POST',
+          data: values,
+        });
+        messageApi.success(t('common.createSuccess'));
+      }
+      setModalVisible(false);
+      formRef.current?.resetFields();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.operationFailed'));
+      throw error;
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const detailColumns: ProDescriptionsItemProps<WorkingHoursConfig>[] = [
+    { title: t('pages.system.workingHoursConfigs.columnName'), dataIndex: 'name' },
+    {
+      title: t('pages.system.workingHoursConfigs.columnScopeType'),
+      dataIndex: 'scope_type',
+      render: (_, record) =>
+        record.scope_type && SCOPE_TYPE_KEYS[record.scope_type]
+          ? t(`pages.system.workingHoursConfigs.${SCOPE_TYPE_KEYS[record.scope_type]}`)
+          : record.scope_type || '-',
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnScopeName'),
+      dataIndex: 'scope_name',
+      render: (_, record) => record.scope_name || t('pages.system.workingHoursConfigs.scopeAll'),
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnDayOfWeek'),
+      dataIndex: 'day_of_week',
+      render: (_, record) =>
+        record.day_of_week === null || record.day_of_week === undefined
+          ? t('pages.system.workingHoursConfigs.dayAll')
+          : t(`pages.system.workingHoursConfigs.${DAY_KEYS[record.day_of_week]}`),
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnWorkingHours'),
+      dataIndex: 'working_hours',
+      render: (_, record) =>
+        record.working_hours && record.working_hours.length > 0
+          ? record.working_hours.map((h) => `${h.start}-${h.end}`).join(', ')
+          : '-',
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.columnEnabled'),
+      dataIndex: 'is_enabled',
+      render: (_, record) => renderIsActiveTag(t, record.is_enabled),
+    },
+    { title: t('pages.system.workingHoursConfigs.columnPriority'), dataIndex: 'priority' },
+    {
+      title: t('pages.system.workingHoursConfigs.labelStartDate'),
+      dataIndex: 'start_date',
+      valueType: 'date',
+    },
+    {
+      title: t('pages.system.workingHoursConfigs.labelEndDate'),
+      dataIndex: 'end_date',
+      valueType: 'date',
+    },
+    { title: t('common.remark'), dataIndex: 'remarks' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+  ];
+
+  return (
+    <ListPageTemplate>
+      <UniTable
+        columnPersistenceId="pages.system.working-hours-configs"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('system.workingHoursConfigs')}
+        headerTitle={t('pages.system.workingHoursConfigs.headerTitle')}
+        actionRef={actionRef}
+        rowKey="id"
+        columns={columns}
+        request={async (params, _sort, _filter, searchFormValues) => {
+          try {
+            const result = await apiRequest('/core/working-hours-configs', {
+              method: 'GET',
+              params: {
+                skip: (params.current! - 1) * params.pageSize!,
+                limit: params.pageSize,
+                keyword: pickListSearchKeyword(searchFormValues),
+              },
+            });
+            return {
+              data: result || [],
+              success: true,
+              total: result?.length || 0,
+            };
+          } catch (error) {
+            messageApi.error(t('pages.system.workingHoursConfigs.loadListFailed'));
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
+        }}
+        showCreateButton
+        createButtonText={t('pages.system.workingHoursConfigs.createButton')}
+        onCreate={handleCreate}
+        showDeleteButton
+        onDelete={async (keys) => {
+          await Promise.all(
+            keys.map((key) =>
+              apiRequest(`/core/working-hours-configs/${key}`, { method: 'DELETE' }),
+            ),
+          );
+          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+          actionRef.current?.reload();
+        }}
+        enableRowSelection
+        showAdvancedSearch={true}
+        showImportButton={false}
+        showExportButton={true}
+        onExport={async (type, _keys, pageData) => {
+          try {
+            const toExport =
+              type === 'currentPage' && pageData?.length
+                ? pageData
+                : await fetchAllListItems((p) => apiRequest('/core/working-hours-configs', { method: 'GET', params: { ...p } }));
+            if (toExport.length === 0) {
+              messageApi.warning(t('common.exportNoData'));
+              return;
+            }
+            await downloadRecordsAsXlsx(
+              toExport as Array<Record<string, unknown>>,
+              `working-hours-configs-${todaySiteDateString()}.xlsx`,
+            );
+            messageApi.success(t('pages.system.workingHoursConfigs.exportSuccess', { count: toExport.length }));
+          } catch (error: any) {
+            messageApi.error(t('common.exportFailed'));
+          }
+        }}
+      />
+
+      {/* 创建/编辑 Modal */}
+      <FormModalTemplate
+        title={isEdit ? t('pages.system.workingHoursConfigs.modalEdit') : t('pages.system.workingHoursConfigs.modalCreate')}
+        open={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          formRef.current?.resetFields();
+        }}
+        onFinish={handleFormFinish}
+        isEdit={isEdit}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        layout="vertical"
+        grid={true}
+        initialValues={{
+          scope_type: 'all',
+          is_enabled: true,
+          priority: 0,
+          working_hours: [{ start: '09:00', end: '18:00' }],
+        }}
+      >
+        <ProFormText
+          name="name"
+          label={t('pages.system.workingHoursConfigs.labelName')}
+          placeholder={t('pages.system.workingHoursConfigs.namePlaceholder')}
+          rules={[{ required: true, message: t('pages.system.workingHoursConfigs.nameRequired') }]}
+          colProps={{ span: 24 }}
+        />
+        <ProFormSelect
+          name="scope_type"
+          label={t('pages.system.workingHoursConfigs.labelScopeType')}
+          placeholder={t('pages.system.workingHoursConfigs.scopeTypePlaceholder')}
+          rules={[{ required: true, message: t('pages.system.workingHoursConfigs.scopeTypeRequired') }]}
+          options={[
+            { label: t('pages.system.workingHoursConfigs.scopeAll'), value: 'all' },
+            { label: t('pages.system.workingHoursConfigs.scopeWarehouse'), value: 'warehouse' },
+            { label: t('pages.system.workingHoursConfigs.scopeWorkCenter'), value: 'work_center' },
+            { label: t('pages.system.workingHoursConfigs.scopeDepartment'), value: 'department' },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSelect
+          name="day_of_week"
+          label={t('pages.system.workingHoursConfigs.labelDayOfWeek')}
+          placeholder={t('pages.system.workingHoursConfigs.dayOfWeekPlaceholder')}
+          options={[
+            { label: t('pages.system.workingHoursConfigs.dayAll'), value: null },
+            { label: t('pages.system.workingHoursConfigs.dayMon'), value: 0 },
+            { label: t('pages.system.workingHoursConfigs.dayTue'), value: 1 },
+            { label: t('pages.system.workingHoursConfigs.dayWed'), value: 2 },
+            { label: t('pages.system.workingHoursConfigs.dayThu'), value: 3 },
+            { label: t('pages.system.workingHoursConfigs.dayFri'), value: 4 },
+            { label: t('pages.system.workingHoursConfigs.daySat'), value: 5 },
+            { label: t('pages.system.workingHoursConfigs.daySun'), value: 6 },
+          ]}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDatePicker
+          name="start_date"
+          label={t('pages.system.workingHoursConfigs.labelStartDate')}
+          placeholder={t('pages.system.workingHoursConfigs.startDatePlaceholder')}
+          fieldProps={{ style: { width: '100%' } }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDatePicker
+          name="end_date"
+          label={t('pages.system.workingHoursConfigs.labelEndDate')}
+          placeholder={t('pages.system.workingHoursConfigs.endDatePlaceholder')}
+          fieldProps={{ style: { width: '100%' } }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormSwitch
+          name="is_enabled"
+          label={t('pages.system.workingHoursConfigs.labelEnabled')}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDigit
+          name="priority"
+          label={t('pages.system.workingHoursConfigs.labelPriority')}
+          placeholder={t('pages.system.workingHoursConfigs.priorityPlaceholder')}
+          fieldProps={{ min: 0 }}
+          colProps={{ span: 12 }}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label={t('common.remark')}
+          placeholder={t('pages.system.workingHoursConfigs.remarksPlaceholder')}
+          colProps={{ span: 24 }}
+        />
+      </FormModalTemplate>
+
+      <SystemMasterDetailDrawer
+        title={`${t('pages.system.workingHoursConfigs.detailTitle')} - ${currentRecord?.name || ''}`}
+        open={detailDrawerVisible}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setCurrentRecord(null);
+          setDetailError(null);
+        }}
+        detail={currentRecord}
+        detailColumns={detailColumns}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
+      />
+    </ListPageTemplate>
+  );
+};
+
+export default WorkingHoursConfigsPage;
+

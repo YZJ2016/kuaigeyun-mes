@@ -1,0 +1,1614 @@
+/**
+ * 送货单管理页面
+ *
+ * 在销售出库前/后向客户发送发货通知，记录物流信息。
+ * 归属仓储管理-出库组（与 manifest 一致）。
+ *
+ * @author RiverEdge Team
+ * @date 2026-02-19
+ */
+
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormItem,
+  ProFormTextArea,
+  ProFormSelect,
+  ProFormText,
+} from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col, Typography, Spin, Empty, Descriptions } from 'antd';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, MoreOutlined, ShoppingOutlined, DownOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import { UniTable } from '../../../../../components/uni-table';
+import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
+import {
+  UniTableStackedPrimaryCell,
+  MaterialStackedCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
+import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
+import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn } from '../../../../../components/layout-templates';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniPullQueryModal, isPullableScope, renderPullCapabilityTag, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
+import { deliveryNoticeApi, type DeliveryNoticePullLine } from '../../../services/delivery-notice';
+import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
+import { useTranslation } from 'react-i18next';
+import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
+import { useNavigate } from 'react-router-dom';
+import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
+import { warehouseApi } from '../../../services/production';
+import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadCustomerFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
+import type { Material } from '../../../../master-data/types/material';
+import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
+import { resolveDeliveryNoticeQualityCertificates } from '../../../services/print';
+import { SafetyCertificateOutlined } from '@ant-design/icons';
+import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatAmount, todaySiteDateString } from '../../../../../utils/format';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildDeliveryNoticeStatusValueEnum,
+  normalizeWarehouseListResponse,
+  resolveDeliveryNoticeListParams,
+} from '../../../utils/warehouseListCore';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { lookupFreightOrderBySource } from '../../../services/logistics';
+import { buildLogisticsTrackingUrl } from '../../logistics-management/tracking/logisticsTrackingDeepLink';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import {
+  buildUniPushMenuItems,
+  buildUniPushToolbarDisabledReason,
+  UniPushToolbarButton,
+} from '../../../../../components/uni-push';
+function deliveryNoticeCapabilityReasonMessage(
+  code: string | null | undefined,
+  t: (key: string) => string,
+): string {
+  if (!code) return '';
+  const key = `app.kuaizhizao.deliveryNote.capability.${code}`;
+  const translated = t(key);
+  return translated !== key ? translated : code;
+}
+
+interface DeliveryNotice {
+  id?: number;
+  notice_code?: string;
+  sales_delivery_id?: number;
+  sales_delivery_code?: string;
+  sales_order_id?: number;
+  sales_order_code?: string;
+  customer_id?: number;
+  customer_name?: string;
+  customer_contact?: string;
+  customer_phone?: string;
+  planned_delivery_date?: string;
+  carrier?: string;
+  tracking_number?: string;
+  shipping_address?: string;
+  status?: string;
+  sent_at?: string;
+  total_quantity?: number;
+  total_amount?: number;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  /** 列表明细物料名预览 */
+  items?: Array<{ material_name?: string | null }>;
+  capabilities?: {
+    push_freight_order?: { allowed?: boolean; reason?: string | null };
+  };
+}
+
+interface DeliveryNoticeDetail extends DeliveryNotice {
+  items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
+}
+
+const STATUS_MAP: Record<string, { text: string; color: string }> = {
+  待发送: { text: '待发送', color: 'default' },
+  已发送: { text: '已发送', color: 'processing' },
+  已签收: { text: '已签收', color: 'success' },
+};
+
+const deliveryNoticeStatusValueEnum = buildDeliveryNoticeStatusValueEnum();
+
+const DeliveryNotesPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { quantity: quantityDecimals, price: priceDecimals } = useNumericPrecision();
+  const navigate = useNavigate();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
+  const pullFromSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'delivery_note.pull_from_sales_delivery');
+  const { message: messageApi } = App.useApp();
+  const actionRef = useRef<ActionType>(null);
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [noticeDetail, setNoticeDetail] = useState<DeliveryNoticeDetail | null>(null);
+
+  const deliveryTracking = useDocumentTracking(
+    detailDrawerVisible && noticeDetail?.id ? 'delivery_notice' : undefined,
+    noticeDetail?.id
+  );
+
+  const openLinkedFreightTracking = useCallback(async () => {
+    if (!noticeDetail?.id) return;
+    try {
+      const order = await lookupFreightOrderBySource('delivery_notice', noticeDetail.id);
+      navigate(buildLogisticsTrackingUrl({ id: order.id, uuid: order.uuid }));
+    } catch (error) {
+      messageApi.warning(getApiErrorMessage(error, t('app.kuaizhizao.logistics.message.trackingNotFound')));
+    }
+  }, [messageApi, navigate, noticeDetail?.id, t]);
+
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const pullSourceDeliveryIdRef = useRef<number | undefined>(undefined);
+  const [pullSourceDeliveryId, setPullSourceDeliveryId] = useState<number | undefined>();
+  const [pullSourceDeliveryOptions, setPullSourceDeliveryOptions] = useState<Array<{ value: number; label: string }>>([]);
+  const { canPrint: canPrintQualityCertificate } = useResourcePermissions(
+    'kuaizhizao:quality-management-finished-goods-inspection',
+  );
+  const freightOrderPerms = useResourcePermissions('kuaizhizao:freight-order');
+  const createFormRef = useRef<any>(null);
+  const editFormRef = useRef<any>(null);
+  const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
+  const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [customerList, setCustomerList] = useState<any[]>([]);
+  const defaultDeliveryItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', notice_quantity: 1, unit_price: 0 };
+
+  useEffect(() => {
+    void loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.salesDelivery).then(setCustomerList);
+  }, []);
+
+  const getActiveFormRef = useCallback(
+    () => (editModalVisible ? editFormRef : createFormRef),
+    [editModalVisible],
+  );
+
+  const appendDeliveryNoteItemsFromMaterials = useCallback(
+    (selected: Material[]) => {
+      const activeFormRef = getActiveFormRef();
+      const current = activeFormRef.current?.getFieldValue('items') ?? [];
+      const newRows = selected.map((m) => ({
+        material_id: m.id,
+        material_code: m.mainCode ?? m.code ?? '',
+        material_name: m.name ?? '',
+        material_unit: m.baseUnit ?? '',
+        notice_quantity: 1,
+        unit_price: 0,
+      }));
+      activeFormRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
+    },
+    [getActiveFormRef, messageApi, t],
+  );
+
+  const columns: ProColumns<DeliveryNotice>[] = useMemo(() => alignProColumns<DeliveryNotice>([
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 10 } as ProColumns['search'],
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'status',
+      valueType: 'select',
+      valueEnum: deliveryNoticeStatusValueEnum,
+      hideInTable: true,
+      search: { order: 20 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.plannedDelivery'),
+      dataIndex: 'planned_delivery_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 30 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.sentAt'),
+      dataIndex: 'sent_date_range',
+      valueType: 'dateRange',
+      hideInTable: true,
+      formItemProps: formDateRangeFormItemProps,
+      search: { order: 40 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.customerNotice'),
+      key: 'notice_code',
+      dataIndex: 'notice_code',
+      width: 240,
+      minWidth: 240,
+      uniTableKeepWidth: true,
+      uniTablePrimaryFlex: false,
+      resizable: false,
+      fixed: 'left',
+      sorter: true,
+      search: { order: 50 } as ProColumns['search'],
+      render: (_, r) => (
+        <UniTableStackedPrimaryCell
+          primary={String(r.customer_name ?? '')}
+          secondary={String(r.notice_code ?? '')}
+        />
+      ),
+    },
+    { title: t('app.kuaizhizao.deliveryNote.col.noticeCode'), dataIndex: 'notice_code', hideInTable: true, hideInSearch: true },
+    { title: t('app.kuaizhizao.deliveryNote.field.customer'), dataIndex: 'customer_name', hideInTable: true, hideInSearch: true },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.salesDeliveryCode'),
+      dataIndex: 'sales_delivery_code',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) => (
+        <LinkedDocumentCode
+          documentType="sales_delivery"
+          documentId={r.sales_delivery_id}
+          code={r.sales_delivery_code}
+        />
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'),
+      dataIndex: 'total_quantity',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) => formatQuantity(r.total_quantity),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colAmount'),
+      dataIndex: 'total_amount',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+      align: 'right',
+      sorter: true,
+      hideInSearch: true,
+      render: (v: number | null | undefined) => formatAmount(v),
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.carrier'),
+      dataIndex: 'carrier',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) => (r.carrier != null && r.carrier !== '' ? String(r.carrier) : '-'),
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.trackingNumber'),
+      dataIndex: 'tracking_number',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) =>
+        r.tracking_number != null && r.tracking_number !== '' ? String(r.tracking_number) : '-',
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.plannedDelivery'),
+      dataIndex: 'planned_delivery_date',
+      width: 132,
+      minWidth: 132,
+      uniTableKeepWidth: true,
+      resizable: false,
+      sorter: true,
+      hideInSearch: true,
+      valueType: 'date',
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.sentAt'),
+      dataIndex: 'sent_at',
+      width: 132,
+      minWidth: 132,
+      uniTableKeepWidth: true,
+      resizable: false,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, r) => (r.sent_at ? formatDateTime(r.sent_at) : '-'),
+    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
+    {
+      title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
+      dataIndex: 'lifecycle_stage',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lc = getDeliveryNoticeLifecycle(record as Record<string, unknown>, t);
+        return (
+          <UniLifecycle
+            percent={lc.percent}
+            stageName={lc.stageName}
+            status={lc.status}
+            subStages={lc.subStages}
+            showLabel
+            showCircleTooltip={false}
+            size="small"
+          />
+        );
+      },
+    },
+    {
+      title: t('common.actions'),
+      key: 'option',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => {
+        const moreItems = [
+          ...(record.status === '待发送'
+            ? [{ key: 'send', label: t('app.kuaizhizao.deliveryNote.action.send'), icon: <SendOutlined />, onClick: () => handleSend(record) }]
+            : []),
+        ];
+        return (
+          <Space>
+            <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
+            {record.status === '待发送' && (
+              <>
+                <Button {...rowActionKind('update')} onClick={() => handleEdit(record)} />
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.deliveryNote.msg.deleteTitle')} description={t('app.kuaizhizao.deliveryNote.msg.deleteContent', { code: record.notice_code })} onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>
+              </>
+            )}
+            {moreItems.length > 0 && (
+              <Dropdown menu={{ items: moreItems }} trigger={['click']}>
+                <Button {...rowActionKind('display')} {...rowActionLabelKeep()} icon={<MoreOutlined />}>
+                  {t('common.more')}
+                </Button>
+              </Dropdown>
+            )}
+          </Space>
+        );
+      },
+    },
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t]);
+
+  const handleDetail = async (record: DeliveryNotice) => {
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setNoticeDetail(null);
+    try {
+      const detail = await deliveryNoticeApi.get(record.id!.toString());
+      setNoticeDetail(detail as DeliveryNoticeDetail);
+    } catch {
+      messageApi.error(t('app.kuaizhizao.deliveryNote.msg.loadDetailFailed'));
+      setDetailDrawerVisible(false);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleEdit = async (record: DeliveryNotice) => {
+    try {
+      const detail = await deliveryNoticeApi.get(record.id!.toString()) as DeliveryNoticeDetail;
+      const items = (detail.items || []).map((it: any) => ({
+        material_id: it.material_id,
+        material_code: it.material_code || '',
+        material_name: it.material_name || '',
+        material_unit: it.material_unit || '',
+        notice_quantity: Number(it.notice_quantity) || 0,
+        unit_price: Number(it.unit_price) || 0,
+      }));
+      setPendingEditFormValues({
+        sales_delivery_id: detail.sales_delivery_id,
+        sales_delivery_code: detail.sales_delivery_code,
+        sales_order_id: detail.sales_order_id,
+        sales_order_code: detail.sales_order_code,
+        customer_id: detail.customer_id,
+        customer_name: detail.customer_name,
+        customer_contact: detail.customer_contact,
+        customer_phone: detail.customer_phone,
+        planned_delivery_date: detail.planned_delivery_date ? dayjs(detail.planned_delivery_date) : undefined,
+        carrier: detail.carrier,
+        tracking_number: detail.tracking_number,
+        shipping_address: detail.shipping_address,
+        notes: detail.notes,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
+        items: items.length > 0 ? items : [defaultDeliveryItem],
+      });
+      setEditingId(record.id!);
+      setEditModalVisible(true);
+    } catch {
+      messageApi.error(t('app.kuaizhizao.deliveryNote.msg.loadEditFailed'));
+    }
+  };
+
+  const executeSend = async (record: DeliveryNotice) => {
+    try {
+      await deliveryNoticeApi.send(record.id!.toString());
+      messageApi.success(t('app.kuaizhizao.deliveryNote.msg.sendSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.deliveryNote.msg.sendFailed'));
+    }
+  };
+
+  const handleSend = (record: DeliveryNotice) => {
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.deliveryNote.msg.sendTitle'),
+      content: t('app.kuaizhizao.deliveryNote.msg.sendContent', { code: record.notice_code }),
+      onOk: () => executeSend(record),
+    });
+  };
+
+  const executeDelete = async (record: DeliveryNotice) => {
+    try {
+          await deliveryNoticeApi.delete(record.id!.toString());
+          messageApi.success(t('common.deleteSuccess'));
+          invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || t('common.deleteFailed'));
+        }
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) return;
+    try {
+      for (const k of keys) {
+        await deliveryNoticeApi.delete(String(k));
+      }
+      messageApi.success(t('app.kuaizhizao.deliveryNote.msg.batchDeleteSuccess', { count: keys.length }));
+      setSelectedRowKeys([]);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.deliveryNote.msg.batchDeleteFailed'));
+    }
+  };
+
+  const handleSyncConfirm = async (rows: Record<string, any>[]) => {
+    try {
+      let successCount = 0;
+      for (const row of rows) {
+        const payload = {
+          customer_id: row.customer_id ?? row.customerId,
+          customer_name: row.customer_name || row.customerName,
+          planned_delivery_date: row.planned_delivery_date || row.plannedDeliveryDate,
+          status: row.status || '待发送',
+          items: Array.isArray(row.items) ? row.items : [],
+        };
+        await deliveryNoticeApi.create(payload);
+        successCount += 1;
+      }
+      messageApi.success(t('app.kuaizhizao.deliveryNote.msg.syncSuccess', { count: successCount }));
+      invalidateMenuBadgeCounts();
+
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.deliveryNote.msg.syncFailed'));
+    }
+  };
+
+  const handlePrintCertificate = async (record: DeliveryNotice) => {
+    if (!record.id) return;
+    try {
+      const res = await resolveDeliveryNoticeQualityCertificates(record.id);
+      const certs = res?.certificates ?? [];
+      if (!certs.length) {
+        messageApi.warning(t('app.kuaizhizao.deliveryNote.msg.noCertificate'));
+        return;
+      }
+      const first = certs[0];
+      openPrint({
+        documentType: 'product_quality_certificate',
+        documentId: first.inspection_id,
+        title: t('app.kuaizhizao.deliveryNote.msg.printCertificateTitle'),
+      });
+      if (certs.length > 1) {
+        messageApi.info(
+          t('app.kuaizhizao.deliveryNote.msg.multipleCertificates', {
+            count: certs.length,
+            name: first.material_name || first.release_certificate || '',
+          }),
+        );
+      }
+    } catch (e: any) {
+      messageApi.error(e?.message || t('app.kuaizhizao.deliveryNote.msg.resolveCertificateFailed'));
+    }
+  };
+
+  const handlePrint = (record: DeliveryNotice) => {
+    if (!record.id) return;
+    openPrint({ documentType: 'delivery_notice', documentId: record.id });
+  };
+
+  const listRowsRef = useRef<Map<string, DeliveryNotice>>(new Map());
+  const isDeliveryNoticePrintable = (record: DeliveryNotice) => !!record.id;
+
+  const selectedDeliveryNoticeForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => listRowsRef.current.get(String(key)))
+        .filter((row): row is DeliveryNotice => row != null),
+    [selectedRowKeys],
+  );
+
+  const canToolbarPrint =
+    selectedRowKeys.length === 1 &&
+    !!selectedDeliveryNoticeForBatch[0] &&
+    isDeliveryNoticePrintable(selectedDeliveryNoticeForBatch[0]);
+
+  const canToolbarPrintCertificate =
+    canToolbarPrint && canPrintQualityCertificate;
+
+  const selectedDeliveryNoticeForPush = useMemo(
+    () => (selectedRowKeys.length === 1 ? selectedDeliveryNoticeForBatch[0] : undefined),
+    [selectedDeliveryNoticeForBatch, selectedRowKeys.length],
+  );
+
+  const canPushFreightOrderToolbar = useMemo(() => {
+    if (!selectedDeliveryNoticeForPush || !freightOrderPerms.canCreate) return false;
+    return selectedDeliveryNoticeForPush.capabilities?.push_freight_order?.allowed === true;
+  }, [freightOrderPerms.canCreate, selectedDeliveryNoticeForPush]);
+
+  const handlePushToFreightOrder = useCallback(
+    async (records: DeliveryNotice[]) => {
+      const ids = records
+        .map((row) => Number(row.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+      if (!ids.length) return;
+      try {
+        const res = await deliveryNoticeApi.pushToFreightOrders(ids);
+        messageApi.success(res.message || t('app.kuaizhizao.deliveryNote.msg.pushFreightSuccess'));
+        setSelectedRowKeys([]);
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.deliveryNote.msg.pushFreightFailed')),
+        );
+      }
+    },
+    [invalidateMenuBadgeCounts, messageApi, t],
+  );
+
+  const toolbarPushMenuItems = useMemo(
+    () =>
+      buildUniPushMenuItems([
+        {
+          key: 'push-freight-order',
+          label: t('app.kuaizhizao.deliveryNote.action.pushFreightOrder'),
+          disabled: !canPushFreightOrderToolbar,
+          title:
+            selectedDeliveryNoticeForPush && !canPushFreightOrderToolbar
+              ? !freightOrderPerms.canCreate
+                ? t('app.kuaizhizao.deliveryNote.msg.pushFreightNoPermission')
+                : deliveryNoticeCapabilityReasonMessage(
+                    selectedDeliveryNoticeForPush.capabilities?.push_freight_order?.reason,
+                    t,
+                  )
+              : undefined,
+          onClick: () => {
+            if (selectedDeliveryNoticeForPush && canPushFreightOrderToolbar) {
+              void handlePushToFreightOrder([selectedDeliveryNoticeForPush]);
+            }
+          },
+          targetDocumentType: 'freight_order',
+        },
+      ]),
+    [
+      canPushFreightOrderToolbar,
+      freightOrderPerms.canCreate,
+      handlePushToFreightOrder,
+      selectedDeliveryNoticeForPush,
+      t,
+    ],
+  );
+
+  const deliveryNoticeToolbarPushDisabledReason = useMemo(() => {
+    const base = buildUniPushToolbarDisabledReason(t, {
+      selectedCount: selectedRowKeys.length,
+      hasSelectedRecord: !!selectedDeliveryNoticeForPush,
+    });
+    if (base) return base;
+    if (!freightOrderPerms.canCreate) {
+      return t('app.kuaizhizao.deliveryNote.msg.pushFreightNoPermission');
+    }
+    if (
+      selectedDeliveryNoticeForPush &&
+      selectedDeliveryNoticeForPush.capabilities?.push_freight_order?.allowed !== true
+    ) {
+      return (
+        deliveryNoticeCapabilityReasonMessage(
+          selectedDeliveryNoticeForPush.capabilities?.push_freight_order?.reason,
+          t,
+        ) || t('app.kuaizhizao.deliveryNote.msg.pushFreightNotAllowed')
+      );
+    }
+    return undefined;
+  }, [
+    freightOrderPerms.canCreate,
+    selectedDeliveryNoticeForPush,
+    selectedRowKeys.length,
+    t,
+  ]);
+
+  /** 参考销售订单：先打开弹窗，再执行其他逻辑 */
+  const handleCreate = () => {
+    setCreateModalVisible(true);
+    setEditingId(null);
+    setTimeout(() => {
+      createFormRef.current?.resetFields();
+      createFormRef.current?.setFieldsValue({ items: [defaultDeliveryItem] });
+    }, 0);
+  };
+  useNewShortcut(handleCreate);
+  const createButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.deliveryNote.create')),
+    [t],
+  );
+
+  const isPullLineSelectable = useCallback(
+    (record: { remaining_quantity?: number }) => Number(record.remaining_quantity ?? 0) > 0,
+    [],
+  );
+
+  const pullDocumentScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const pullFromSalesDeliveryQuery = useUniPullQuery<DeliveryNoticePullLine>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    onOpen: () => {
+      pullSourceDeliveryIdRef.current = undefined;
+      setPullSourceDeliveryId(undefined);
+      void warehouseApi.salesDelivery.list({ skip: 0, limit: 100 })
+        .then((res: { items?: Array<{ id?: number; delivery_code?: string }>; data?: Array<{ id?: number; delivery_code?: string }> }) => {
+          const rows = res?.items ?? res?.data ?? [];
+          setPullSourceDeliveryOptions(
+            rows
+              .filter((row) => row.id != null && row.delivery_code)
+              .map((row) => ({ value: row.id!, label: String(row.delivery_code) })),
+          );
+        })
+        .catch((error: unknown) => {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.deliveryNote.pull.loadSourceFailed')));
+          setPullSourceDeliveryOptions([]);
+        });
+    },
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const listRes = await deliveryNoticeApi.listSalesDeliveryPullLines({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+          sales_delivery_id: pullSourceDeliveryIdRef.current,
+          pullable_only: isPullableScope(scope),
+        });
+        return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.deliveryNote.msg.loadListFailed')));
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (record) => !isPullLineSelectable(record),
+    onConfirm: async (_keys, rows) => {
+      const selectedIds = rows
+        .filter((row) => isPullLineSelectable(row))
+        .map((row) => Number(row.id))
+        .filter((id) => id > 0);
+      if (!selectedIds.length) {
+        messageApi.warning(t('app.kuaizhizao.deliveryNote.pull.selectLinesFirst'));
+        return;
+      }
+      try {
+        const res = await deliveryNoticeApi.pullFromSalesDeliveryItems(selectedIds);
+        messageApi.success(
+          res.message ||
+            t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+              source: pullFromSalesDeliveryAction.sourceLabel,
+              target: pullFromSalesDeliveryAction.targetLabel,
+            }),
+        );
+        pullFromSalesDeliveryQuery.closeModal();
+        invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(
+            error,
+            t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+              source: pullFromSalesDeliveryAction.sourceLabel,
+              target: pullFromSalesDeliveryAction.targetLabel,
+            }),
+          ),
+        );
+      }
+    },
+  });
+
+  const handleCreateSubmit = async (values: any) => {
+    const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.notice_quantity) || 0) > 0);
+    if (!validItems.length) {
+      messageApi.error(t('app.kuaizhizao.deliveryNote.msg.needValidLines'));
+      throw new Error(t('app.kuaizhizao.deliveryNote.msg.needValidLines'));
+    }
+    const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
+    if (!cust) {
+      messageApi.error(t('app.kuaizhizao.deliveryNote.msg.selectCustomer'));
+      throw new Error(t('app.kuaizhizao.deliveryNote.msg.selectCustomer'));
+    }
+    try {
+      await deliveryNoticeApi.create({
+        customer_id: values.customer_id,
+        customer_name: cust.name || cust.customer_name || cust.code,
+        customer_contact: values.customer_contact,
+        customer_phone: values.customer_phone,
+        sales_delivery_id: values.sales_delivery_id,
+        sales_delivery_code: values.sales_delivery_code,
+        sales_order_id: values.sales_order_id,
+        sales_order_code: values.sales_order_code,
+        planned_delivery_date: values.planned_delivery_date ? formatDateTime(values.planned_delivery_date, 'YYYY-MM-DD') : undefined,
+        carrier: values.carrier,
+        tracking_number: values.tracking_number,
+        shipping_address: values.shipping_address,
+        notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
+        items: validItems.map((it: any) => ({
+          material_id: it.material_id,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_unit: it.material_unit || '',
+          notice_quantity: Number(it.notice_quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
+        })),
+      });
+      messageApi.success(t('common.createSuccess'));
+      setCreateModalVisible(false);
+      invalidateMenuBadgeCounts();
+
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.createFailed'));
+      throw error;
+    }
+  };
+
+  const handleEditSubmit = async (values: any) => {
+    if (!editingId) return;
+    const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.notice_quantity) || 0) > 0);
+    if (!validItems.length) {
+      messageApi.error(t('app.kuaizhizao.deliveryNote.msg.needValidLines'));
+      throw new Error(t('app.kuaizhizao.deliveryNote.msg.needValidLines'));
+    }
+    const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
+    try {
+      await deliveryNoticeApi.update(editingId.toString(), {
+        customer_id: values.customer_id,
+        customer_name: cust?.name || cust?.customer_name || values.customer_name,
+        customer_contact: values.customer_contact,
+        customer_phone: values.customer_phone,
+        sales_delivery_id: values.sales_delivery_id,
+        sales_delivery_code: values.sales_delivery_code,
+        sales_order_id: values.sales_order_id,
+        sales_order_code: values.sales_order_code,
+        planned_delivery_date: values.planned_delivery_date ? formatDateTime(values.planned_delivery_date, 'YYYY-MM-DD') : undefined,
+        carrier: values.carrier,
+        tracking_number: values.tracking_number,
+        shipping_address: values.shipping_address,
+        notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
+        items: validItems.map((it: any) => ({
+          material_id: it.material_id,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_unit: it.material_unit || '',
+          notice_quantity: Number(it.notice_quantity) || 0,
+          unit_price: Number(it.unit_price) || 0,
+        })),
+      });
+      messageApi.success(t('common.updateSuccess'));
+      setEditModalVisible(false);
+      invalidateMenuBadgeCounts();
+
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.updateFailed'));
+      throw error;
+    }
+  };
+
+  const detailColumns = useMemo(() => alignDescriptionColumns([
+    { title: t('app.kuaizhizao.deliveryNote.col.noticeCode'), dataIndex: 'notice_code' },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.salesDeliveryCode'),
+      dataIndex: 'sales_delivery_code',
+    },
+    {
+      title: t('app.kuaizhizao.deliveryNote.col.salesOrderCode'),
+      dataIndex: 'sales_order_code',
+    },
+    { title: t('app.kuaizhizao.deliveryNote.field.customer'), dataIndex: 'customer_name' },
+    { title: t('app.kuaizhizao.deliveryNote.field.contact'), dataIndex: 'customer_contact' },
+    { title: t('app.kuaizhizao.deliveryNote.field.phone'), dataIndex: 'customer_phone' },
+    { title: t('app.kuaizhizao.deliveryNote.col.plannedDelivery'), dataIndex: 'planned_delivery_date', valueType: 'date' },
+    { title: t('app.kuaizhizao.deliveryNote.col.carrier'), dataIndex: 'carrier' },
+    { title: t('app.kuaizhizao.deliveryNote.col.trackingNumber'), dataIndex: 'tracking_number' },
+    { title: t('app.kuaizhizao.deliveryNote.field.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
+    {
+      title: t('common.status'),
+      dataIndex: 'status',
+      render: (s) => {
+        const c = STATUS_MAP[(s as string) || ''] || { text: (s as string) || '-', color: 'default' };
+        return <Tag color={c.color}>{c.text}</Tag>;
+      },
+    },
+    { title: t('app.kuaizhizao.deliveryNote.col.sentAt'), dataIndex: 'sent_at', valueType: 'dateTime' },
+    { title: t('common.remark'), dataIndex: 'notes', span: 3 },
+  ]), [t]);
+
+  const detailItemColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
+      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const , render: formatQuantity },
+      { title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseOutbound.field.amount'), dataIndex: 'total_amount', width: 100, align: 'right' as const },
+    ],
+    [t],
+  );
+
+  const detailCollaboration = useMemo(() => {
+    if (!noticeDetail) return undefined;
+    const lc = getDeliveryNoticeLifecycle(noticeDetail as Record<string, unknown>, t);
+    const mainStages = lc.mainStages ?? [];
+    if (mainStages.length === 0) return undefined;
+    return (
+      <UniLifecycleStepper
+        steps={mainStages}
+        showLabels
+        status={lc.status}
+        nextStepSuggestions={lc.nextStepSuggestions}
+      />
+    );
+  }, [noticeDetail, t]);
+
+  const pullModalColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.deliveryNote.col.salesDeliveryCode'),
+        dataIndex: 'delivery_code',
+        width: 168,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.materialName'),
+        dataIndex: 'material_name',
+        ellipsis: true,
+        render: (_: unknown, record: DeliveryNoticePullLine) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+            material_spec={record.material_spec}
+          />
+        ),
+      },
+      {
+        title: t('common.quantity'),
+        dataIndex: 'suggested_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.colShippedQty'),
+        dataIndex: 'pushed_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.colShippableQty'),
+        dataIndex: 'remaining_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.deliveryNote.field.customer'),
+        dataIndex: 'customer_name',
+        width: 140,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.pull.colOutboundDate'),
+        dataIndex: 'required_date',
+        width: 112,
+        render: (v: string) => (v ? formatBusinessDateOnly(v) : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.deliveryNote.pull.gateStatus'),
+        key: 'convert_status',
+        width: 100,
+        align: 'center' as const,
+        render: (_: unknown, record: DeliveryNoticePullLine) =>
+          renderPullCapabilityTag(
+            Number(record.remaining_quantity ?? 0) > 0,
+            t('app.kuaizhizao.deliveryNote.pull.canCreate'),
+            t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
+          ),
+      },
+    ],
+    [t],
+  );
+
+  const renderForm = (activeFormRef: React.RefObject<any>, onFinish: (values: any) => Promise<void>) => (
+    <>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormItem name="customer_id" label={t('app.kuaizhizao.deliveryNote.field.customer')} rules={[{ required: true }]}>
+            <Select
+              placeholder={t('app.kuaizhizao.deliveryNote.field.selectCustomer')}
+              options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
+              onChange={(v) => {
+                const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
+                if (cust) activeFormRef.current?.setFieldsValue({ customer_name: cust.name || cust.customer_name, customer_contact: cust.contact, customer_phone: cust.phone });
+              }}
+            />
+          </ProFormItem>
+        </Col>
+        <Col span={12}>
+          <ProFormItem name="customer_contact" label={t('app.kuaizhizao.deliveryNote.field.contact')}>
+            <Input placeholder={t('app.kuaizhizao.deliveryNote.field.contact')} />
+          </ProFormItem>
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormItem name="customer_phone" label={t('app.kuaizhizao.deliveryNote.field.phone')}>
+            <Input placeholder={t('app.kuaizhizao.deliveryNote.field.phone')} />
+          </ProFormItem>
+        </Col>
+        <Col span={12} />
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormSelect
+            name="sales_delivery_id"
+            label={t('app.kuaizhizao.deliveryNote.field.linkedSalesDelivery')}
+            placeholder={t('app.kuaizhizao.deliveryNote.field.linkedSalesDeliveryPlaceholder')}
+            allowClear
+            showSearch
+            debounceTime={300}
+            fieldProps={{ optionFilterProp: 'label' }}
+            request={async () => {
+              try {
+                const res = await warehouseApi.salesDelivery.list({ limit: 200, skip: 0 });
+                const list = (res as { items?: unknown[] })?.items ?? [];
+                return (list as any[]).map((d: any) => ({
+                  label: `${d.delivery_code || d.code || '#' + d.id}${d.customer_name ? ' - ' + d.customer_name : ''}`,
+                  value: d.id,
+                }));
+              } catch {
+                return [];
+              }
+            }}
+            onChange={async (val) => {
+              if (val == null || val === '') {
+                activeFormRef.current?.setFieldsValue({
+                  sales_delivery_code: undefined,
+                });
+                return;
+              }
+              try {
+                const d: any = await warehouseApi.salesDelivery.get(String(val));
+                activeFormRef.current?.setFieldsValue({
+                  sales_delivery_code: d.delivery_code ?? d.code,
+                  sales_order_id: d.sales_order_id,
+                  sales_order_code: d.sales_order_code,
+                });
+              } catch {
+                /* ignore */
+              }
+            }}
+          />
+        </Col>
+        <Col span={12}>
+          <ProFormSelect
+            name="sales_order_id"
+            label={t('app.kuaizhizao.deliveryNote.field.linkedSalesOrder')}
+            placeholder={t('app.kuaizhizao.deliveryNote.field.linkedSalesOrderPlaceholder')}
+            allowClear
+            showSearch
+            debounceTime={300}
+            fieldProps={{ optionFilterProp: 'label' }}
+            request={async ({ keyWords }) => {
+              try {
+                const r = await listSalesOrders({
+                  limit: 100,
+                  skip: 0,
+                  keyword: keyWords || undefined,
+                  view: 'options',
+                });
+                return (r.data || []).map((o: any) => ({
+                  label: `${o.order_code || o.id}${o.customer_name ? ' - ' + o.customer_name : ''}`,
+                  value: o.id,
+                }));
+              } catch {
+                return [];
+              }
+            }}
+            onChange={async (val) => {
+              if (val == null || val === '') {
+                activeFormRef.current?.setFieldsValue({ sales_order_code: undefined });
+                return;
+              }
+              try {
+                const o = await getSalesOrder(Number(val), false, false);
+                activeFormRef.current?.setFieldsValue({ sales_order_code: o.order_code });
+              } catch {
+                /* ignore */
+              }
+            }}
+          />
+        </Col>
+      </Row>
+      <ProFormText name="sales_delivery_code" hidden />
+      <ProFormText name="sales_order_code" hidden />
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormItem name="planned_delivery_date" label={t('app.kuaizhizao.deliveryNote.field.plannedDeliveryDate')}>
+            <FutureDatePicker getForm={() => activeFormRef.current} t={t} style={{ width: '100%' }} />
+          </ProFormItem>
+        </Col>
+        <Col span={12}>
+          <ProFormItem name="carrier" label={t('app.kuaizhizao.deliveryNote.field.carrier')}>
+            <Input placeholder={t('app.kuaizhizao.deliveryNote.field.carrierPlaceholder')} />
+          </ProFormItem>
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormItem name="tracking_number" label={t('app.kuaizhizao.deliveryNote.field.trackingNumber')}>
+            <Input placeholder={t('app.kuaizhizao.deliveryNote.field.trackingPlaceholder')} />
+          </ProFormItem>
+        </Col>
+        <Col span={12} />
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormItem name="shipping_address" label={t('app.kuaizhizao.deliveryNote.field.shippingAddress')}>
+            <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.deliveryNote.field.shippingAddress')} />
+          </ProFormItem>
+        </Col>
+        <Col span={12} />
+      </Row>
+      <div className="uni-table-detail" style={{ width: '100%' }}>
+        <UniTableDetailHeader title={t('app.kuaizhizao.warehouseOutbound.section.lines')} required />
+        <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.deliveryNote.msg.needValidLines') }]}>
+          <AntForm.List name="items">
+            {(fields, { add, remove }) => {
+              const cols = [
+                {
+                  title: t('app.kuaizhizao.warehouseOutbound.field.material'),
+                  dataIndex: 'material_id',
+                  width: 260,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
+                      {({ getFieldValue }: any) => {
+                        const row = getFieldValue('items')?.[index];
+                        const mid = row?.material_id ? Number(row.material_id) : null;
+                        const fallback = mid && (row?.material_code || row?.material_name)
+                          ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                          : undefined;
+                        return (
+                          <div className="warehouse-detail-material-cell">
+                            <UniMaterialSelect
+                              name={[index, 'material_id']}
+                              label=""
+                              placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectMaterial')}
+                              required
+                              size="small"
+                              listFieldKey={index}
+                              listFieldName="items"
+                              fillMapping={{
+                                material_code: 'mainCode',
+                                material_name: 'name',
+                              }}
+                              onChange={(_val, material) => {
+                                if (!material || !activeFormRef.current) return;
+                                activeFormRef.current.setFieldValue(
+                                  ['items', index, 'material_unit'],
+                                  resolveMaterialScenarioUnit(material, 'sale'),
+                                );
+                              }}
+                              fallbackOption={fallback}
+                              formItemProps={{ style: { margin: 0 } }}
+                              showQuickCreate
+                              showAdvancedSearch
+                            />
+                          </div>
+                        );
+                      }}
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: t('common.unit'),
+                  dataIndex: 'material_unit',
+                  width: 80,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
+                      {({ getFieldValue }: any) => {
+                        const materialId = getFieldValue(['items', index, 'material_id']);
+                        if (!activeFormRef.current) return null;
+                        return (
+                          <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                            <DocumentLineUnitSelect
+                              form={activeFormRef.current}
+                              listName="items"
+                              rowIndex={index}
+                              fields={{ quantity: 'notice_quantity', unit: 'material_unit' }}
+                              materialId={materialId}
+                              size="small"
+                              noStyle
+                            />
+                          </AntForm.Item>
+                        );
+                      }}
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: t('common.quantity'),
+                  dataIndex: 'notice_quantity',
+                  width: 100,
+                  align: 'right' as const,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'notice_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.field.required') }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                      <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'),
+                  dataIndex: 'unit_price',
+                  width: 100,
+                  align: 'right' as const,
+                  render: (_: any, __: any, index: number) => (
+                    <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                      <InputNumber placeholder="0" min={0} precision={priceDecimals} style={{ width: '100%' }} size="small" />
+                    </AntForm.Item>
+                  ),
+                },
+                {
+                  title: t('common.actions'),
+                  width: 60,
+                  render: (_: any, __: any, index: number) => (
+                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
+                  ),
+                },
+              ];
+              const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
+              return (
+                <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                  <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                  <div style={{ width: '100%', overflowX: 'auto' }}>
+                    <Table
+                      className="warehouse-detail-table"
+                      size="small"
+                      dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                      rowKey="key"
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.deliveryNote)}
+                      pagination={false}
+                      columns={cols}
+                      scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                      style={{ width: '100%', margin: 0 }}
+                      footer={() => (
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
+                          <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultDeliveryItem)}>
+                            {t('app.kuaizhizao.warehouseOutbound.action.addLine')}
+                          </Button>
+                          <Button
+                            type="default"
+                            icon={<ShoppingOutlined />}
+                            style={{ flex: 1, minWidth: 120 }}
+                            onClick={() => setMaterialPickerOpen(true)}
+                          >
+                            {t('app.kuaizhizao.common.materialBatchSelect')}
+                          </Button>
+                        </div>
+                      )}
+                    />
+                  </div>
+                </div>
+              );
+            }}
+          </AntForm.List>
+        </AntForm.Item>
+      </div>
+      <DocumentAttachmentsField category="delivery_notice_attachments" />
+      <ProFormTextArea name="notes" label={t('common.remark')} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} fieldProps={{ rows: 2 }} />
+    </>
+  );
+
+  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
+    detailColumns, noticeDetail,
+    'delivery_note',
+  );
+
+  return (
+    <>
+      <ListPageTemplate>
+        <UniTable
+          headerTitle={t('app.kuaizhizao.deliveryNote.title')}
+          columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.delivery-notes-width-v3"
+          actionRef={actionRef}
+          rowKey="id"
+          columns={columns}
+          showAdvancedSearch={true}
+          pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          showCreateButton={false}
+          createButtonText={createButtonLabel}
+          onCreate={handleCreate}
+          onTableDataChange={(rows) => {
+            const next = new Map<string, DeliveryNotice>();
+            for (const row of rows) {
+              if (row.id != null) next.set(String(row.id), row);
+            }
+            listRowsRef.current = next;
+          }}
+          toolBarRender={() => [
+            <UniPullCreateToolbar
+              compactKey="create-delivery-note-with-pull"
+              createIcon={<PlusOutlined />}
+              createLabel={createButtonLabel}
+              onCreate={handleCreate}
+              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
+                {
+                  key: 'pull-from-sales-delivery',
+                  actionKey: 'delivery_note.pull_from_sales_delivery',
+                  onClick: () => {
+                    pullFromSalesDeliveryQuery.openModal();
+                  },
+                },
+              ])}
+            />,
+          ]}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.deliveryNote.msg.deleteConfirm', { count })}
+          toolBarActionsAfterBatch={[
+            <UniPushToolbarButton
+              key={`delivery-note-push-freight-${selectedDeliveryNoticeForPush?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={selectedRowKeys.length !== 1 || !selectedDeliveryNoticeForPush}
+              disabledReason={deliveryNoticeToolbarPushDisabledReason}
+              sourceDocument={
+                selectedDeliveryNoticeForPush?.id
+                  ? { type: 'delivery_notice', id: Number(selectedDeliveryNoticeForPush.id) }
+                  : null
+              }
+              pushTargets={{ 'push-freight-order': 'freight_order' }}
+            />,
+          ]}
+          showImportButton={false}
+          showExportButton
+          rightToolBarActionsBeforeExport={
+            canPrintQualityCertificate
+              ? [
+                  <Button
+                    key="delivery-note-toolbar-print-certificate"
+                    icon={<SafetyCertificateOutlined />}
+                    disabled={!canToolbarPrintCertificate}
+                    onClick={() => {
+                      const row = selectedDeliveryNoticeForBatch[0];
+                      if (row) void handlePrintCertificate(row);
+                    }}
+                  >
+                    {t('app.kuaizhizao.deliveryNote.action.printCertificate')}
+                  </Button>,
+                ]
+              : undefined
+          }
+          showPrintButton
+          printButtonDisabled={!canToolbarPrint}
+          printButtonText={t('components.uniAction.print')}
+          onPrint={() => {
+            const row = selectedDeliveryNoticeForBatch[0];
+            if (row) handlePrint(row);
+          }}
+          onExport={async (type, keys, pageData) => {
+            try {
+              const chunkSize = 100;
+              const maxRows = 10000;
+              const rawData: DeliveryNotice[] = [];
+              let skip = 0;
+              while (rawData.length < maxRows) {
+                const response = await deliveryNoticeApi.list({ skip, limit: chunkSize });
+                const chunk = Array.isArray(response) ? response : response?.items || response?.data || [];
+                if (!Array.isArray(chunk) || chunk.length === 0) break;
+                rawData.push(...chunk);
+                if (chunk.length < chunkSize) break;
+                skip += chunkSize;
+              }
+              let items = rawData;
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = rawData.filter((d: DeliveryNotice) => d.id != null && keys.includes(d.id));
+              }
+              if (items.length === 0) {
+                messageApi.warning(t('common.exportNoData'));
+                return;
+              }
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `delivery-notes-${todaySiteDateString()}.xlsx`,
+              );
+              messageApi.success(t('app.kuaizhizao.deliveryNote.msg.exportSuccess', { count: items.length }));
+            } catch (error: any) {
+              messageApi.error(error?.message || t('common.exportFailed'));
+            }
+          }}
+          showSyncButton
+          onSync={() => setSyncModalVisible(true)}
+          request={async (params, sort, _filter, searchFormValues) => {
+            try {
+              const listParams = resolveDeliveryNoticeListParams(searchFormValues, sort);
+              const response = await deliveryNoticeApi.list({
+                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+                limit: params.pageSize || 20,
+                ...listParams,
+              });
+              const { data, total } = normalizeWarehouseListResponse(response);
+              return { data, success: true, total };
+            } catch {
+              messageApi.error(t('app.kuaizhizao.deliveryNote.msg.loadListFailed'));
+              return { data: [], success: false, total: 0 };
+            }
+          }}
+        />
+      </ListPageTemplate>
+
+      <UniPullQueryModal<DeliveryNoticePullLine>
+        open={pullFromSalesDeliveryQuery.open}
+        title={pullFromSalesDeliveryAction.label}
+        onCancel={pullFromSalesDeliveryQuery.closeModal}
+        onOk={pullFromSalesDeliveryQuery.handleConfirm}
+        rowKey="id"
+        columns={pullModalColumns}
+        dataSource={pullFromSalesDeliveryQuery.dataSource}
+        loading={pullFromSalesDeliveryQuery.loading}
+        confirmLoading={pullFromSalesDeliveryQuery.confirmLoading}
+        selectionType={pullFromSalesDeliveryQuery.selectionType}
+        selectedRowKeys={pullFromSalesDeliveryQuery.selectedRowKeys}
+        selectedRows={pullFromSalesDeliveryQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromSalesDeliveryQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesDeliveryQuery.isRowDisabled}
+        searchDraft={pullFromSalesDeliveryQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesDeliveryQuery.setSearchDraft}
+        onSearchApply={pullFromSalesDeliveryQuery.handleSearchApply}
+        onSearchClear={pullFromSalesDeliveryQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesDeliveryQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.deliveryNote.pull.searchPlaceholder')}
+        filterExtra={(
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('app.kuaizhizao.deliveryNote.pull.sourceDocPlaceholder')}
+            style={{ width: 220, flexShrink: 0 }}
+            value={pullSourceDeliveryId}
+            options={pullSourceDeliveryOptions}
+            onChange={(value) => {
+              const nextId = Number(value);
+              const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+              pullSourceDeliveryIdRef.current = next;
+              setPullSourceDeliveryId(next);
+              pullFromSalesDeliveryQuery.handleSelectedRowKeysChange([], []);
+              pullFromSalesDeliveryQuery.handleSearchApply(pullFromSalesDeliveryQuery.appliedKeyword);
+            }}
+          />
+        )}
+        getRowLabel={(row) =>
+          [row.delivery_code, row.material_code].filter(Boolean).join(' ')
+        }
+        page={pullFromSalesDeliveryQuery.page}
+        pageSize={pullFromSalesDeliveryQuery.pageSize}
+        total={pullFromSalesDeliveryQuery.total}
+        onPageChange={pullFromSalesDeliveryQuery.handlePageChange}
+        scopeOptions={pullFromSalesDeliveryQuery.scopeOptions}
+        scope={pullFromSalesDeliveryQuery.scope}
+        onScopeChange={pullFromSalesDeliveryQuery.handleScopeChange}
+        okText={t('app.kuaizhizao.deliveryNote.pull.ok')}
+      />
+
+      <DetailDrawerTemplate
+        title={`${t('app.kuaizhizao.deliveryNote.detailTitle')}${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
+        open={detailDrawerVisible}
+        loading={detailLoading}
+        onClose={() => { setDetailDrawerVisible(false); setNoticeDetail(null); }}
+        size={DRAWER_CONFIG.HALF_WIDTH}
+        extra={
+          noticeDetail?.id != null ? (
+            <Button onClick={() => void openLinkedFreightTracking()}>
+              {t('app.kuaizhizao.logistics.action.openTracking')}
+            </Button>
+          ) : null
+        }
+        basic={
+          noticeDetail ? (
+            <Descriptions
+              column={detailDrawerBasicColumn(false)}
+              size="small"
+              items={timeconfigBasicItems}
+            />
+          ) : undefined
+        }
+        collaboration={detailCollaboration}
+        linesTitle={t('app.kuaizhizao.deliveryNote.section.lineDetails')}
+        lines={
+          noticeDetail?.items && noticeDetail.items.length > 0 ? (
+            <>
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+              <Table
+                className="warehouse-detail-table"
+                size="small"
+                rowKey={(row: Record<string, unknown>, idx = 0) =>
+                  String((row as { id?: React.Key }).id ?? `${noticeDetail?.id ?? 'dn'}-${idx}`)
+                }
+                columns={detailItemColumns}
+                dataSource={noticeDetail.items}
+                pagination={false}
+              />
+            </>
+          ) : noticeDetail ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.deliveryNote.msg.noLineDetails')} />
+          ) : undefined
+        }
+        timeline={
+          noticeDetail?.id != null ? (
+            <>
+              {deliveryTracking.loading && (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <Spin />
+                </div>
+              )}
+              {deliveryTracking.error && !deliveryTracking.loading && (
+                <Typography.Text type="danger">{deliveryTracking.error}</Typography.Text>
+              )}
+              {deliveryTracking.data && !deliveryTracking.loading && (
+                <DocumentTrackingTimelineBody data={deliveryTracking.data} />
+              )}
+              {!deliveryTracking.loading && !deliveryTracking.data && !deliveryTracking.error && (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.deliveryNote.msg.noOperationLog')} />
+              )}
+            </>
+          ) : undefined
+        }
+        traceDocument={
+          noticeDetail?.id != null
+            ? {
+                documentType: 'delivery_notice',
+                documentId: noticeDetail.id,
+                selfDocumentId: noticeDetail.id,
+              }
+            : undefined
+        }
+      />
+
+      <FormModalTemplate
+        title={t('app.kuaizhizao.deliveryNote.create')}
+        open={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        formRef={createFormRef}
+        onFinish={handleCreateSubmit}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
+        initialValues={{ items: [defaultDeliveryItem] }}
+      >
+        {renderForm(createFormRef, handleCreateSubmit)}
+      </FormModalTemplate>
+
+      <FormModalTemplate
+        title={t('app.kuaizhizao.deliveryNote.edit')}
+        open={editModalVisible}
+        isEdit
+        onClose={() => setEditModalVisible(false)}
+        afterOpenChange={(open) => {
+          if (open && pendingEditFormValues) {
+            editFormRef.current?.setFieldsValue(pendingEditFormValues);
+            return;
+          }
+          if (!open) {
+            setPendingEditFormValues(null);
+            editFormRef.current?.resetFields?.();
+          }
+        }}
+        formRef={editFormRef}
+        onFinish={handleEditSubmit}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        grid={false}
+      >
+        {renderForm(editFormRef, handleEditSubmit)}
+      </FormModalTemplate>
+
+      <UniMaterialBatchPicker
+        open={materialPickerOpen}
+        onCancel={() => setMaterialPickerOpen(false)}
+        onConfirm={appendDeliveryNoteItemsFromMaterials}
+      />
+
+      <SyncFromDatasetModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onConfirm={handleSyncConfirm}
+        title={t('app.kuaizhizao.deliveryNote.syncTitle')}
+      />
+
+      {PrintModal}
+    </>
+  );
+};
+
+export default DeliveryNotesPage;

@@ -1,0 +1,605 @@
+"""
+委外工单数据验证Schema模块
+
+定义委外工单相关的Pydantic数据验证Schema。
+
+根据功能点2.1.10：委外工单管理（核心功能，新增）
+
+Author: Auto (AI Assistant)
+Date: 2026-01-16
+"""
+
+from datetime import datetime, date
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, ConfigDict
+from decimal import Decimal
+
+from apps.kuaizhizao.services.document_action_policy.types import InboundHubCapabilities, OutsourceWorkOrderCapabilities
+
+
+class OutsourceWorkOrderBase(BaseModel):
+    """
+    委外工单基础Schema
+
+    包含所有委外工单的基本字段。
+    """
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    code: Optional[str] = Field(None, description="委外工单编码（可选，创建时自动生成）")
+    name: Optional[str] = Field(None, description="委外工单名称（可选）")
+    product_id: int = Field(..., description="产品ID（关联物料，物料来源类型必须为Outsource）")
+    product_code: str = Field(..., description="产品编码")
+    product_name: str = Field(..., description="产品名称")
+    quantity: Decimal = Field(..., description="计划委外数量")
+    supplier_id: int = Field(..., description="委外供应商ID")
+    supplier_code: str = Field(..., description="委外供应商编码")
+    supplier_name: str = Field(..., description="委外供应商名称")
+    outsource_operation: Optional[str] = Field(None, description="委外工序")
+    outsource_operation_name: Optional[str] = Field(
+        None,
+        alias="outsourceOperationName",
+        description="委外工序名称（展示用；outsource_operation 为工序 UUID 时由后端解析）",
+    )
+    unit_price: Optional[Decimal] = Field(None, description="委外单价")
+    total_amount: Decimal = Field(Decimal("0"), description="委外总金额")
+    status: str = Field("draft", description="委外工单状态")
+    priority: str = Field("normal", description="优先级")
+    planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
+    planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
+    remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+
+class OutsourceWorkOrderCreate(OutsourceWorkOrderBase):
+    """创建委外工单 Schema"""
+    pass
+
+
+class OutsourceWorkOrderUpdate(BaseModel):
+    """更新委外工单 Schema"""
+    model_config = ConfigDict(from_attributes=True)
+
+    name: Optional[str] = Field(None, description="委外工单名称")
+    quantity: Optional[Decimal] = Field(None, description="计划委外数量")
+    unit_price: Optional[Decimal] = Field(None, description="委外单价")
+    total_amount: Optional[Decimal] = Field(None, description="委外总金额")
+    status: Optional[str] = Field(None, description="委外工单状态")
+    priority: Optional[str] = Field(None, description="优先级")
+    planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
+    planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
+    actual_start_date: Optional[datetime] = Field(None, description="实际开始时间")
+    actual_end_date: Optional[datetime] = Field(None, description="实际结束时间")
+    received_quantity: Optional[Decimal] = Field(None, description="已收货数量")
+    qualified_quantity: Optional[Decimal] = Field(None, description="合格数量")
+    unqualified_quantity: Optional[Decimal] = Field(None, description="不合格数量")
+    issued_quantity: Optional[Decimal] = Field(None, description="已发料数量")
+    remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+
+class OutsourceWorkOrderResponse(OutsourceWorkOrderBase):
+    """委外工单响应 Schema"""
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="组织ID")
+    actual_start_date: Optional[datetime] = Field(None, description="实际开始时间")
+    actual_end_date: Optional[datetime] = Field(None, description="实际结束时间")
+    received_quantity: Decimal = Field(Decimal("0"), description="已收货数量")
+    qualified_quantity: Decimal = Field(Decimal("0"), description="合格数量")
+    unqualified_quantity: Decimal = Field(Decimal("0"), description="不合格数量")
+    issued_quantity: Decimal = Field(Decimal("0"), description="已发料数量")
+    is_frozen: bool = Field(False, alias="isFrozen", description="是否冻结")
+    freeze_reason: Optional[str] = Field(None, alias="freezeReason", description="冻结原因")
+    frozen_at: Optional[datetime] = Field(None, alias="frozenAt", description="冻结时间")
+    frozen_by: Optional[int] = Field(None, alias="frozenBy", description="冻结人ID")
+    frozen_by_name: Optional[str] = Field(None, alias="frozenByName", description="冻结人姓名")
+    created_by: int = Field(..., alias="createdBy", description="创建人ID")
+    created_by_name: str = Field(..., alias="createdByName", description="创建人姓名")
+    updated_by: Optional[int] = Field(None, alias="updatedBy", description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    capabilities: Optional[OutsourceWorkOrderCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（与 outbound 委外发料加载门禁一致）",
+    )
+
+
+class OutsourceWorkOrderListResponse(BaseModel):
+    """委外工单列表响应 Schema"""
+    data: List[OutsourceWorkOrderResponse] = Field(..., description="委外工单列表")
+    total: int = Field(..., description="总数")
+    success: bool = Field(True, description="是否成功")
+
+
+# ==================== 委外发料 Schema ====================
+
+class OutsourceMaterialIssueBase(BaseModel):
+    """委外发料基础Schema"""
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    code: Optional[str] = Field(None, description="委外发料单编码（可选，创建时自动生成）")
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    material_id: int = Field(..., description="物料ID（原材料）")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    quantity: Decimal = Field(..., description="发料数量")
+    unit: str = Field(..., description="单位")
+    warehouse_id: Optional[int] = Field(None, description="仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID（可选）")
+    location_name: Optional[str] = Field(None, description="库位名称（可选）")
+    batch_number: Optional[str] = Field(None, description="批次号（可选）")
+    status: str = Field("draft", description="状态")
+    issued_at: Optional[datetime] = Field(None, description="发料时间")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class OutsourceMaterialIssueCreate(OutsourceMaterialIssueBase):
+    """创建委外发料 Schema"""
+    issued_by: Optional[int] = Field(None, description="发料人ID")
+    issued_by_name: Optional[str] = Field(None, max_length=100, description="发料人姓名")
+
+
+class OutsourceMaterialIssueUpdate(BaseModel):
+    """更新委外发料 Schema"""
+    model_config = ConfigDict(from_attributes=True)
+
+    quantity: Optional[Decimal] = Field(None, description="发料数量")
+    warehouse_id: Optional[int] = Field(None, description="仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_name: Optional[str] = Field(None, description="库位名称")
+    batch_number: Optional[str] = Field(None, description="批次号")
+    status: Optional[str] = Field(None, description="状态")
+    issued_at: Optional[datetime] = Field(None, description="发料时间")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class OutsourceMaterialIssueResponse(OutsourceMaterialIssueBase):
+    """委外发料响应 Schema"""
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="组织ID")
+    issued_by: Optional[int] = Field(None, alias="issuedBy", description="发料人ID")
+    issued_by_name: Optional[str] = Field(None, alias="issuedByName", description="发料人姓名")
+    created_by: int = Field(..., alias="createdBy", description="创建人ID")
+    created_by_name: str = Field(..., alias="createdByName", description="创建人姓名")
+    updated_by: Optional[int] = Field(None, alias="updatedBy", description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    total_quantity: Optional[float] = Field(None, description="总发料数量（与 quantity 对齐，供出库 Hub 列表）")
+    total_items: Optional[int] = Field(None, description="发料品种数（单行发料单为 1）")
+    quantity_unit: Optional[str] = Field(
+        None,
+        description="明细单位一致时的单位；不一致或无明细为 null（列表展示种类数）",
+    )
+    items: Optional[List[dict]] = Field(None, description="明细物料名预览（列表「明细」列）")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供出库 Hub UniLifecycle 展示）")
+
+
+class OutsourceMaterialIssuePreviewLine(BaseModel):
+    """委外发料预览明细（来自 BOM）"""
+    model_config = ConfigDict(from_attributes=True)
+
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    unit: str = Field(..., description="单位")
+    required_quantity: Decimal = Field(..., description="需求数量")
+    issued_quantity: Decimal = Field(..., description="已发数量")
+    pending_quantity: Decimal = Field(..., description="待发数量")
+    available_quantity: Decimal = Field(..., description="可用库存")
+    issue_method: str = Field(..., description="发料方式")
+
+
+class OutsourceMaterialIssuePreviewResponse(BaseModel):
+    """委外发料预览响应"""
+    model_config = ConfigDict(from_attributes=True)
+
+    outsource_work_order_id: int = Field(...)
+    outsource_work_order_code: str = Field(...)
+    product_name: str = Field(...)
+    quantity: Decimal = Field(..., description="委外数量")
+    lines: List[OutsourceMaterialIssuePreviewLine] = Field(default_factory=list)
+    message: Optional[str] = Field(None, description="提示信息")
+    allow_manual_lines: bool = Field(
+        True,
+        description="是否允许不依赖 BOM 在发料页手动添加物料",
+    )
+
+
+class OutsourceMaterialIssueLineCreate(BaseModel):
+    """委外发料批量创建明细"""
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    quantity: Decimal = Field(..., gt=0, description="发料数量")
+    unit: str = Field(..., description="单位")
+    warehouse_id: Optional[int] = Field(None, description="仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="仓库名称")
+    batch_number: Optional[str] = Field(None, description="批次号")
+
+
+class OutsourceMaterialIssueBatchCreate(BaseModel):
+    """委外发料批量创建"""
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    warehouse_id: Optional[int] = Field(None, description="默认仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="默认仓库名称")
+    issued_at: Optional[datetime] = Field(None, description="发料时间/制单日期")
+    issued_by: Optional[int] = Field(None, description="发料人ID")
+    issued_by_name: Optional[str] = Field(None, max_length=100, description="发料人姓名")
+    remarks: Optional[str] = Field(None, description="备注")
+    lines: List[OutsourceMaterialIssueLineCreate] = Field(..., min_length=1)
+
+
+class OutsourceMaterialIssueBatchResponse(BaseModel):
+    """委外发料批量创建响应"""
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    created_count: int = Field(..., alias="createdCount")
+    issues: List[OutsourceMaterialIssueResponse] = Field(default_factory=list)
+
+
+# ==================== 委外收货 Schema ====================
+
+class OutsourceMaterialReceiptBase(BaseModel):
+    """委外收货基础Schema"""
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    code: Optional[str] = Field(None, description="委外收货单编码（可选，创建时自动生成）")
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    quantity: Decimal = Field(..., description="收货数量")
+    qualified_quantity: Decimal = Field(Decimal("0"), description="合格数量")
+    unqualified_quantity: Decimal = Field(Decimal("0"), description="不合格数量")
+    process_waste_qty: Optional[Decimal] = Field(None, description="工废数量")
+    material_waste_qty: Optional[Decimal] = Field(None, description="料废数量")
+    nonconformance_reason: Optional[str] = Field(None, description="不合格原因")
+    unit: str = Field(..., description="单位")
+    unit_price: Decimal = Field(Decimal("0"), description="委外单价快照（来自委外工单）")
+    total_amount: Decimal = Field(Decimal("0"), description="收货金额（合格数量×单价）")
+    warehouse_id: Optional[int] = Field(None, description="仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID（可选）")
+    location_name: Optional[str] = Field(None, description="库位名称（可选）")
+    batch_number: Optional[str] = Field(None, description="批次号（可选）")
+    status: str = Field("draft", description="状态")
+    received_at: Optional[datetime] = Field(None, description="收货时间")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class OutsourceMaterialReceiptCreate(OutsourceMaterialReceiptBase):
+    """创建委外收货 Schema"""
+    received_by: Optional[int] = Field(None, description="收货人ID")
+    received_by_name: Optional[str] = Field(None, max_length=100, description="收货人姓名")
+
+
+class OutsourceMaterialReceiptPreviewLine(BaseModel):
+    """委外收货预览明细（产品行）"""
+    model_config = ConfigDict(from_attributes=True)
+
+    product_id: int = Field(..., description="产品物料ID")
+    product_code: str = Field(..., description="产品编码")
+    product_name: str = Field(..., description="产品名称")
+    unit: str = Field(..., description="单位")
+    ordered_quantity: Decimal = Field(..., description="委外数量")
+    received_quantity: Decimal = Field(..., description="已收数量")
+    pending_quantity: Decimal = Field(..., description="待收数量")
+
+
+class OutsourceMaterialReceiptPreviewResponse(BaseModel):
+    """委外收货预览响应"""
+    model_config = ConfigDict(from_attributes=True)
+
+    outsource_work_order_id: int = Field(...)
+    outsource_work_order_code: str = Field(...)
+    lines: List[OutsourceMaterialReceiptPreviewLine] = Field(default_factory=list)
+    message: Optional[str] = Field(None, description="提示信息")
+
+
+class OutsourceMaterialReceiptUpdate(BaseModel):
+    """更新委外收货 Schema"""
+    model_config = ConfigDict(from_attributes=True)
+
+    quantity: Optional[Decimal] = Field(None, description="收货数量")
+    qualified_quantity: Optional[Decimal] = Field(None, description="合格数量")
+    unqualified_quantity: Optional[Decimal] = Field(None, description="不合格数量")
+    process_waste_qty: Optional[Decimal] = Field(None, description="工废数量")
+    material_waste_qty: Optional[Decimal] = Field(None, description="料废数量")
+    nonconformance_reason: Optional[str] = Field(None, description="不合格原因")
+    warehouse_id: Optional[int] = Field(None, description="仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_name: Optional[str] = Field(None, description="库位名称")
+    batch_number: Optional[str] = Field(None, description="批次号")
+    status: Optional[str] = Field(None, description="状态")
+    received_at: Optional[datetime] = Field(None, description="收货时间")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class OutsourceMaterialReceiptResponse(OutsourceMaterialReceiptBase):
+    """委外收货响应 Schema"""
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="组织ID")
+    received_by: Optional[int] = Field(None, alias="receivedBy", description="收货人ID")
+    received_by_name: Optional[str] = Field(None, alias="receivedByName", description="收货人姓名")
+    created_by: int = Field(..., alias="createdBy", description="创建人ID")
+    created_by_name: str = Field(..., alias="createdByName", description="创建人姓名")
+    updated_by: Optional[int] = Field(None, alias="updatedBy", description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    supplier_id: Optional[int] = Field(None, description="委外供应商ID（由委外工单解析）")
+    supplier_code: Optional[str] = Field(None, description="委外供应商编码（由委外工单解析）")
+    supplier_name: Optional[str] = Field(None, description="委外供应商名称（由委外工单解析）")
+    product_code: Optional[str] = Field(None, description="委外产品编码（来自委外工单）")
+    product_name: Optional[str] = Field(None, description="委外产品名称（来自委外工单）")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="入库 Hub capabilities（document_action_policy）",
+    )
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
+    total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
+    quantity_unit: Optional[str] = Field(
+        None,
+        description="明细单位一致时的单位；不一致或无明细为 null（列表展示种类数）",
+    )
+    items: Optional[List[dict]] = Field(None, description="明细物料名预览（列表「明细」列）")
+
+
+# ==================== 委外协同 Schema ====================
+
+class OutsourceProgressUpdateRequest(BaseModel):
+    """更新委外进度请求"""
+    completed_quantity: Optional[Decimal] = Field(None, description="已完成数量")
+    progress_percentage: Optional[float] = Field(None, ge=0, le=100, description="完成百分比")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class OutsourceCompletionRequest(BaseModel):
+    """提交委外完工申请请求"""
+    completed_quantity: Decimal = Field(..., description="完成数量")
+    qualified_quantity: Decimal = Field(..., description="合格数量")
+    unqualified_quantity: Decimal = Field(..., description="不合格数量")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+# ==================== 委外结算 Schema ====================
+
+class OutsourceCostCalculationResponse(BaseModel):
+    """委外费用计算结果"""
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    qualified_quantity: float = Field(..., description="合格数量")
+    unit_price: float = Field(..., description="委外单价")
+    processing_cost: float = Field(..., description="委外加工费用")
+    material_cost: float = Field(..., description="材料成本")
+    total_cost: float = Field(..., description="总费用")
+    calculated_at: str = Field(..., description="计算时间")
+
+
+class SettlementStatementItem(BaseModel):
+    """结算单明细"""
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    product_code: str = Field(..., description="产品编码")
+    product_name: str = Field(..., description="产品名称")
+    qualified_quantity: float = Field(..., description="合格数量")
+    unit_price: float = Field(..., description="委外单价")
+    processing_cost: float = Field(..., description="委外加工费用")
+    material_cost: float = Field(..., description="材料成本")
+    total_cost: float = Field(..., description="总费用")
+
+
+class CreateSettlementStatementRequest(BaseModel):
+    """创建委外结算单请求"""
+    supplier_id: int = Field(..., description="供应商ID")
+    start_date: Optional[date] = Field(None, description="开始日期")
+    end_date: Optional[date] = Field(None, description="结束日期")
+    outsource_work_order_ids: Optional[List[int]] = Field(None, description="委外工单ID列表")
+
+
+class SettlementStatementResponse(BaseModel):
+    """委外结算单响应"""
+    settlement_code: str = Field(..., description="结算单编码")
+    supplier_id: int = Field(..., description="供应商ID")
+    supplier_code: str = Field(..., description="供应商编码")
+    supplier_name: str = Field(..., description="供应商名称")
+    start_date: Optional[str] = Field(None, description="开始日期")
+    end_date: Optional[str] = Field(None, description="结束日期")
+    total_amount: float = Field(..., description="总金额")
+    item_count: int = Field(..., description="明细数量")
+    items: List[SettlementStatementItem] = Field(..., description="结算明细")
+    created_at: str = Field(..., description="创建时间")
+
+
+class ReconciliationRequest(BaseModel):
+    """委外对账请求"""
+    supplier_id: int = Field(..., description="供应商ID")
+    outsource_work_order_ids: List[int] = Field(..., description="委外工单ID列表")
+    confirmed_amount: Decimal = Field(..., description="确认金额")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class ReconciliationResponse(BaseModel):
+    """委外对账响应"""
+    supplier_id: int = Field(..., description="供应商ID")
+    supplier_name: str = Field(..., description="供应商名称")
+    calculated_amount: float = Field(..., description="计算金额")
+    confirmed_amount: float = Field(..., description="确认金额")
+    amount_difference: float = Field(..., description="金额差异")
+    reconciled_at: str = Field(..., description="对账时间")
+
+
+# ==================== 委外退料 Schema ====================
+
+class OutsourceMaterialReturnBase(BaseModel):
+    """委外退料基础 Schema"""
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    code: Optional[str] = Field(None, description="委外退料单编码（可选，创建时自动生成）")
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    outsource_material_issue_id: Optional[int] = Field(None, description="委外发料单ID（可选）")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    quantity: Decimal = Field(..., gt=0, description="退料数量")
+    unit: str = Field(..., description="单位")
+    warehouse_id: int = Field(..., description="入库仓库ID")
+    warehouse_name: str = Field(..., description="入库仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    batch_number: Optional[str] = Field(None, description="批次号")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class OutsourceMaterialReturnCreate(OutsourceMaterialReturnBase):
+    """创建委外退料 Schema"""
+    returned_at: Optional[datetime] = Field(None, description="退料时间")
+    returned_by: Optional[int] = Field(None, description="退料人ID")
+    returned_by_name: Optional[str] = Field(None, max_length=100, description="退料人姓名")
+
+
+class OutsourceMaterialReturnResponse(OutsourceMaterialReturnBase):
+    """委外退料响应 Schema"""
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="组织ID")
+    status: str = Field(..., description="状态")
+    returned_at: Optional[datetime] = Field(None, alias="returnedAt", description="退料时间")
+    returned_by: Optional[int] = Field(None, alias="returnedBy", description="退料人ID")
+    returned_by_name: Optional[str] = Field(None, alias="returnedByName", description="退料人姓名")
+    created_by: int = Field(..., alias="createdBy", description="创建人ID")
+    created_by_name: str = Field(..., alias="createdByName", description="创建人姓名")
+    updated_by: Optional[int] = Field(None, alias="updatedBy", description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    supplier_id: Optional[int] = Field(None, description="委外供应商ID（由委外工单解析）")
+    supplier_code: Optional[str] = Field(None, description="委外供应商编码（由委外工单解析）")
+    supplier_name: Optional[str] = Field(None, description="委外供应商名称（由委外工单解析）")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="入库 Hub capabilities（document_action_policy）",
+    )
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
+    total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
+    quantity_unit: Optional[str] = Field(
+        None,
+        description="明细单位一致时的单位；不一致或无明细为 null（列表展示种类数）",
+    )
+    items: Optional[List[dict]] = Field(None, description="明细物料名预览（列表「明细」列）")
+
+
+class OutsourceMaterialReturnPreviewLine(BaseModel):
+    """委外退料预览明细（按发料单）"""
+    model_config = ConfigDict(from_attributes=True)
+
+    issue_id: int = Field(..., description="发料单ID")
+    issue_code: str = Field(..., description="发料单编码")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    unit: str = Field(..., description="单位")
+    issued_quantity: Decimal = Field(..., description="已发数量")
+    returned_quantity: Decimal = Field(..., description="已退数量")
+    returnable_quantity: Decimal = Field(..., description="可退数量")
+
+
+class OutsourceMaterialReturnPreviewResponse(BaseModel):
+    """委外退料预览响应"""
+    model_config = ConfigDict(from_attributes=True)
+
+    outsource_work_order_id: int = Field(...)
+    outsource_work_order_code: str = Field(...)
+    lines: List[OutsourceMaterialReturnPreviewLine] = Field(default_factory=list)
+    message: Optional[str] = Field(None, description="提示信息")
+
+
+# ==================== 委外退货 Schema ====================
+
+class OutsourceProductReturnBase(BaseModel):
+    """委外退货基础 Schema"""
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    code: Optional[str] = Field(None, description="委外退货单编码（可选，创建时自动生成）")
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    outsource_material_receipt_id: Optional[int] = Field(None, description="委外收货单ID（可选）")
+    quantity: Decimal = Field(..., gt=0, description="退货数量")
+    unit: str = Field(..., description="单位")
+    return_reason: Optional[str] = Field(None, description="退货原因")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class OutsourceProductReturnCreate(OutsourceProductReturnBase):
+    """创建委外退货 Schema"""
+    returned_at: Optional[datetime] = Field(None, description="退货时间")
+    returned_by: Optional[int] = Field(None, description="退货人ID")
+    returned_by_name: Optional[str] = Field(None, max_length=100, description="退货人姓名")
+
+
+class OutsourceProductReturnResponse(OutsourceProductReturnBase):
+    """委外退货响应 Schema"""
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="组织ID")
+    status: str = Field(..., description="状态")
+    returned_at: Optional[datetime] = Field(None, alias="returnedAt", description="退货时间")
+    returned_by: Optional[int] = Field(None, alias="returnedBy", description="退货人ID")
+    returned_by_name: Optional[str] = Field(None, alias="returnedByName", description="退货人姓名")
+    created_by: int = Field(..., alias="createdBy", description="创建人ID")
+    created_by_name: str = Field(..., alias="createdByName", description="创建人姓名")
+    updated_by: Optional[int] = Field(None, alias="updatedBy", description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    supplier_id: Optional[int] = Field(None, description="委外供应商ID（由委外工单解析）")
+    supplier_code: Optional[str] = Field(None, description="委外供应商编码（由委外工单解析）")
+    supplier_name: Optional[str] = Field(None, description="委外供应商名称（由委外工单解析）")
+    product_code: Optional[str] = Field(None, description="委外产品编码（来自委外工单）")
+    product_name: Optional[str] = Field(None, description="委外产品名称（来自委外工单）")
+    capabilities: Optional[InboundHubCapabilities] = Field(
+        None, description="入库 Hub capabilities（document_action_policy）",
+    )
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
+    total_items: Optional[int] = Field(None, description="入库品种数（明细行数）")
+    quantity_unit: Optional[str] = Field(
+        None,
+        description="明细单位一致时的单位；不一致或无明细为 null（列表展示种类数）",
+    )
+    items: Optional[List[dict]] = Field(None, description="明细物料名预览（列表「明细」列）")
+
+
+class OutsourceProductReturnPreviewLine(BaseModel):
+    """委外退货预览明细（按收货单）"""
+    model_config = ConfigDict(from_attributes=True)
+
+    receipt_id: int = Field(..., description="收货单ID")
+    receipt_code: str = Field(..., description="收货单编码")
+    product_code: str = Field(..., description="产品编码")
+    product_name: str = Field(..., description="产品名称")
+    unit: str = Field(..., description="单位")
+    received_quantity: Decimal = Field(..., description="已收数量")
+    returned_quantity: Decimal = Field(..., description="已退数量")
+    returnable_quantity: Decimal = Field(..., description="可退数量")
+    warehouse_id: Optional[int] = Field(None, description="收货仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="收货仓库名称")
+
+
+class OutsourceProductReturnPreviewResponse(BaseModel):
+    """委外退货预览响应"""
+    model_config = ConfigDict(from_attributes=True)
+
+    outsource_work_order_id: int = Field(...)
+    outsource_work_order_code: str = Field(...)
+    lines: List[OutsourceProductReturnPreviewLine] = Field(default_factory=list)
+    message: Optional[str] = Field(None, description="提示信息")

@@ -1,0 +1,317 @@
+/**
+ * 行业模板选择页面
+ *
+ * 用于新组织初始化时选择行业模板
+ *
+ * Author: Luigi Lu
+ * Date: 2025-01-15
+ */
+
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Card, Tag, Button, Space, Typography, Modal, Spin, Descriptions, Empty, App, theme } from 'antd';
+import { FileTextOutlined, CheckCircleOutlined, EyeOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import { getIndustryTemplateList, getIndustryTemplateById, applyIndustryTemplate, type IndustryTemplate } from '../../../services/industryTemplate';
+import { getTenantId } from '../../../utils/auth';
+import { getDefaultTenantHomePath } from '../../../stores/configStore';
+
+const { Text, Paragraph, Title } = Typography;
+const { useToken } = theme;
+
+/**
+ * 行业模板选择页面组件
+ */
+const TemplateSelectPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const { token } = useToken();
+  const navigate = useNavigate();
+  const tenantId = getTenantId();
+
+  const [templates, setTemplates] = useState<IndustryTemplate[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [applyVisible, setApplyVisible] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<IndustryTemplate | null>(null);
+  const [applying, setApplying] = useState(false);
+
+  /**
+   * 加载模板列表
+   */
+  const loadTemplates = async () => {
+    setLoading(true);
+    try {
+      const response = await getIndustryTemplateList(undefined, true);
+      setTemplates(response.items || []);
+    } catch (error: any) {
+      console.error('加载模板列表失败:', error);
+      messageApi.error(t('pages.init.templateSelect.loadListFailed'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  /**
+   * 处理预览模板
+   */
+  const handlePreview = async (template: IndustryTemplate) => {
+    try {
+      // 获取模板详情（如果需要更多信息）
+      const detail = await getIndustryTemplateById(template.id);
+      setSelectedTemplate(detail);
+      setPreviewVisible(true);
+    } catch (error: any) {
+      console.error('加载模板详情失败:', error);
+      messageApi.error(t('pages.init.templateSelect.loadDetailFailed'));
+    }
+  };
+
+  /**
+   * 处理应用模板
+   */
+  const handleApply = (template: IndustryTemplate) => {
+    setSelectedTemplate(template);
+    setApplyVisible(true);
+  };
+
+  /**
+   * 确认应用模板
+   */
+  const handleConfirmApply = async () => {
+    if (!selectedTemplate || !tenantId) {
+      messageApi.error(t('pages.init.templateSelect.missingParams'));
+      return;
+    }
+
+    setApplying(true);
+    try {
+      await applyIndustryTemplate(selectedTemplate.id, tenantId);
+      messageApi.success(t('pages.init.templateSelect.applySuccess'));
+      setApplyVisible(false);
+      // 跳转到工作台
+      navigate(getDefaultTenantHomePath(), { replace: true });
+    } catch (error: any) {
+      console.error('应用模板失败:', error);
+      messageApi.error(error.message || t('pages.init.templateSelect.applyFailed'));
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  /**
+   * 获取行业类型标签颜色
+   */
+  const getIndustryTagColor = (industry: string): string => {
+    const colorMap: Record<string, string> = {
+      manufacturing: 'blue',
+      retail: 'green',
+      service: 'orange',
+      logistics: 'purple',
+    };
+    return colorMap[industry] || 'default';
+  };
+
+  /**
+   * 渲染模板卡片
+   */
+  const renderTemplateCard = (template: IndustryTemplate) => {
+    return (
+      <Card
+        key={template.id}
+        hoverable
+        style={{ height: '100%' }}
+        actions={[
+          <Button
+            type="link"
+            icon={<EyeOutlined />}
+            onClick={() => handlePreview(template)}
+          >
+            {t('pages.init.templateSelect.preview')}
+          </Button>,
+          <Button
+            type="primary"
+            icon={<ThunderboltOutlined />}
+            onClick={() => handleApply(template)}
+          >
+            {t('pages.init.templateSelect.applyTemplate')}
+          </Button>,
+        ]}
+      >
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1 }}>
+              <Title level={5} style={{ margin: 0, marginBottom: 8 }}>
+                {template.name}
+              </Title>
+              {template.is_default && (
+                <Tag color="processing" icon={<CheckCircleOutlined />} style={{ marginLeft: 8 }}>
+                  {t('pages.init.templateSelect.recommended')}
+                </Tag>
+              )}
+            </div>
+            <Tag color={getIndustryTagColor(template.industry)}>
+              {template.industry}
+            </Tag>
+          </div>
+
+          {template.description && (
+            <Paragraph
+              ellipsis={{ rows: 2, expandable: false }}
+              style={{ marginBottom: 0, fontSize: 12, color: '#666' }}
+            >
+              {template.description}
+            </Paragraph>
+          )}
+
+          <div style={{ paddingTop: 12, borderTop: `1px solid ${token.colorBorder}` }}>
+            <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.init.templateSelect.usageCount')}：</Text>
+                <Text strong>{template.usage_count}</Text>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.init.templateSelect.enabledStatus')}：</Text>
+                <Tag color={template.is_active ? 'success' : 'default'}>
+                  {template.is_active ? t('common.enabled') : t('common.disabled')}
+                </Tag>
+              </div>
+            </Space>
+          </div>
+        </Space>
+      </Card>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '100px 0' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+      <div style={{ marginBottom: 24 }}>
+        <Title level={2}>
+          <FileTextOutlined style={{ marginRight: 8 }} />
+          {t('pages.init.templateSelect.title')}
+        </Title>
+        <Paragraph type="secondary">
+          {t('pages.init.templateSelect.subtitle')}
+        </Paragraph>
+      </div>
+
+      {templates.length === 0 ? (
+        <Empty description={t('pages.init.templateSelect.noTemplates')} />
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: '24px',
+          }}
+        >
+          {templates.map((template) => renderTemplateCard(template))}
+        </div>
+      )}
+
+      {/* 预览Modal */}
+      <Modal
+        title={t('pages.init.templateSelect.previewTitle')}
+        open={previewVisible}
+        onCancel={() => {
+          setPreviewVisible(false);
+          setSelectedTemplate(null);
+        }}
+        footer={[
+          <Button key="close" onClick={() => setPreviewVisible(false)}>
+            关闭
+          </Button>,
+          selectedTemplate && (
+            <Button
+              key="apply"
+              type="primary"
+              icon={<ThunderboltOutlined />}
+              onClick={() => {
+                setPreviewVisible(false);
+                handleApply(selectedTemplate);
+              }}
+            >
+              {t('pages.init.templateSelect.applyTemplate')}
+            </Button>
+          ),
+        ]}
+        width={800}
+      >
+        {selectedTemplate && (
+          <Descriptions bordered column={2}>
+            <Descriptions.Item label={t('pages.init.templateSelect.templateName')} span={2}>
+              {selectedTemplate.name}
+              {selectedTemplate.is_default && (
+                <Tag color="processing" style={{ marginLeft: 8 }}>
+                  {t('pages.init.templateSelect.recommended')}
+                </Tag>
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.init.templateSelect.templateCode')}>
+              {selectedTemplate.code}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.init.templateSelect.industryType')}>
+              <Tag color={getIndustryTagColor(selectedTemplate.industry)}>
+                {selectedTemplate.industry}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label={t('common.remark')} span={2}>
+              {selectedTemplate.description || t('pages.init.templateSelect.none')}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.init.templateSelect.usageCountLabel')}>
+              {selectedTemplate.usage_count}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.init.templateSelect.enabledStatusLabel')}>
+              <Tag color={selectedTemplate.is_active ? 'success' : 'default'}>
+                {selectedTemplate.is_active ? t('common.enabled') : t('common.disabled')}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.init.templateSelect.templateConfig')} span={2}>
+              <pre style={{ background: '#f5f5f5', padding: '12px', borderRadius: '4px', maxHeight: '300px', overflow: 'auto' }}>
+                {JSON.stringify(selectedTemplate.config, null, 2)}
+              </pre>
+            </Descriptions.Item>
+          </Descriptions>
+        )}
+      </Modal>
+
+      {/* 应用确认Modal */}
+      <Modal
+        title={t('pages.init.templateSelect.applyIndustryTemplate')}
+        open={applyVisible}
+        onCancel={() => {
+          setApplyVisible(false);
+          setSelectedTemplate(null);
+        }}
+        onOk={handleConfirmApply}
+        confirmLoading={applying}
+        okText={t('pages.init.templateSelect.confirmApply')}
+        cancelText={t('common.cancel')}
+      >
+        {selectedTemplate && (
+          <div>
+            <p>{t('pages.init.templateSelect.confirmApplyTitle', { name: selectedTemplate.name })}</p>
+            <p style={{ color: '#999', fontSize: '12px' }}>
+              {t('pages.init.templateSelect.confirmApplyDesc')}
+            </p>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+export default TemplateSelectPage;
+

@@ -1,0 +1,2079 @@
+/**
+ * 应用中心列表页面
+ * 
+ * 用于系统管理员查看和管理组织内的应用。
+ * 支持应用的 CRUD 操作、安装/卸载、启用/禁用功能。
+ */
+
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Card, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Select, Table } from 'antd';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import { ThemedSegmented } from '../../../../components/themed-segmented';
+import { useCurrentUser } from '../../../../hooks/useCurrentUser';
+const { Paragraph, Text } = Typography;
+import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
+import { ApplicationClientReleasesPanel } from './ApplicationClientReleasesPanel';
+import {
+  PRO_APP_CODES,
+  buildProPlaceholders,
+  isPlaceholderApplication,
+} from '../proAppCatalog';
+import {
+  ALL_INDUSTRY_APP_CODES,
+  isIndustryAppCode,
+  requiresProLicense,
+  resolveFreeIndustryAuthorUsername,
+  shouldHideFromApplicationCenter,
+} from '../industryAppCatalog';
+import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { UniTable } from '../../../../components/uni-table';
+import './application-card.less';
+import { ApplicationHelpView } from '../../../../components/page-help-wiki';
+import { theme } from 'antd';
+import type { GlobalToken } from 'antd/es/theme/interface';
+import { useThemeStore } from '../../../../stores/themeStore';
+import {
+  EyeOutlined,
+  DownloadOutlined,
+  StopOutlined,
+  DownOutlined,
+  SettingOutlined,
+  AppstoreOutlined,
+  UserOutlined,
+  ShopOutlined,
+  DatabaseOutlined,
+  FileTextOutlined,
+  TeamOutlined,
+  BarChartOutlined,
+  ApiOutlined,
+  LockOutlined,
+  SyncOutlined,
+  ReloadOutlined,
+  ShareAltOutlined,
+  PrinterOutlined,
+  LikeOutlined,
+  DislikeOutlined,
+  LeftOutlined,
+  RightOutlined,
+  ToolOutlined,
+} from '@ant-design/icons';
+import { Icon as IconifyIcon } from '@iconify/react/dist/offline';
+import { AlertTriangle } from 'lucide-react';
+import {
+  resolveAppSolarIcon,
+} from '../../../../utils/appSolarIcons';
+import { useGlobalStore } from '../../../../stores';
+import { getPlatformSettingsPublic } from '../../../../services/platformSettings';
+import {
+  getApplicationList,
+  getApplicationByUuid,
+  getInstalledApplicationList,
+  getApplicationCenterCapabilities,
+  type ApplicationCenterCapabilities,
+  installApplication,
+  uninstallApplication,
+  enableApplication,
+  disableApplication,
+  activateProApplication,
+  updateApplication,
+  syncApplicationManifest,
+  syncAllManifestsAndMenus,
+  MENU_SYNC_STATUS_QUERY_KEY,
+  scanApplications,
+  Application,
+} from '../../../../services/application';
+import {
+  bindDedicatedAppToTenant,
+  listDedicatedBindingsForApp,
+  searchTenantsForDedicatedBinding,
+  unbindDedicatedAppFromTenant,
+  type DedicatedBindingRow,
+} from '../../../../services/applicationDedicatedBindings';
+import { syncAllMenus } from '../../../../services/menu';
+import { apiRequest } from '../../../../services/api';
+import { rowActionKind, rowActionLabelKeep, rowActionToneDestructive } from '../../../../components/uni-action';
+import {
+  resolveApplicationDescription,
+  resolveApplicationDisplayName,
+} from '../../../../utils/menuTranslation';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { mergeListKeyword } from '../../../../utils/tableQueryKey';
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../utils/format';
+/** 应用中心行/卡片操作图标（表格与卡片共用，避免 uni-action 按 manifest action 覆盖） */
+const APP_ACTION_ICON = {
+  view: EyeOutlined,
+  settings: SettingOutlined,
+  syncMenu: SyncOutlined,
+  resetData: ReloadOutlined,
+  dedicatedBinding: TeamOutlined,
+  install: DownloadOutlined,
+  uninstall: StopOutlined,
+} as const;
+
+/**
+ * 应用中心分类顺序与真源：.cursor/skills/application-layer/SKILL.md
+ * （docs/core/application-layer-contract.md）
+ *
+ * 展示顺序：基础 → 专业 → 行业 → 定制
+ * - 基础 / 专业：官方通用 APP，差异仅为免费 vs License 收费（kuaigeyun-pro）
+ * - 行业：按行业特性启用的小场景插件（industry_extensions）
+ * - 定制：按客户需求组织菜单 / 插件 / 完全自定义页面（is_dedicated）
+ */
+const BASIC_APP_CODES = ['kuaizhizao', 'kuaiplm', 'kuaicaiwu', 'kuaioa', 'master-data'];
+
+const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
+  // 快财务当前聚焦管理会计，不包含总账
+  kuaicaiwu: '聚焦管理会计、总账核算与经营分析协同平台',
+};
+
+type AppCategoryFilter = 'basic' | 'pro' | 'industry' | 'dedicated';
+
+/** 应用中心需一次性拉齐清单再前端分类，否则 sort_order 靠后的应用（如定制应用）会落在分页之外 */
+const APPLICATION_CENTER_LIST_LIMIT = 500;
+
+/** 专业版或付费行业：启用时走 License Key */
+const needsLicenseKey = (app: { code?: string; is_pro?: boolean }): boolean =>
+  requiresProLicense(app);
+
+const resolveAppEdition = (
+  app: {
+    code?: string;
+    is_pro?: boolean;
+    is_dedicated?: boolean;
+    isDedicated?: boolean;
+    market_category?: string | null;
+  },
+): AppCategoryFilter => {
+  if (Boolean(app?.is_dedicated ?? app?.isDedicated)) return 'dedicated';
+  const marketCategory = String(app?.market_category || '').toLowerCase();
+  if (marketCategory === 'industry') return 'industry';
+  if (marketCategory === 'dedicated') return 'dedicated';
+  const code = String(app?.code || '');
+  if (isIndustryAppCode(code)) return 'industry';
+  if ((PRO_APP_CODES as readonly string[]).includes(code) || app?.is_pro || marketCategory === 'pro') {
+    return 'pro';
+  }
+  if (BASIC_APP_CODES.includes(code) || marketCategory === 'base') return 'basic';
+  return 'basic';
+};
+
+const matchAppCategory = (app: any, filter: AppCategoryFilter): boolean =>
+  resolveAppEdition(app) === filter;
+
+const isDedicatedApplication = (app: Application | Record<string, unknown>): boolean =>
+  Boolean((app as Application).is_dedicated ?? (app as any).isDedicated);
+
+/** 卡片内图标尺寸（缩小以显得更紧凑） */
+const CARD_ICON_SIZE = 40;
+/** 卡片封面区高度（含标题、类型徽章与描述） */
+const CARD_COVER_HEIGHT = 136;
+/** 封面区上下内边距（无角标时） */
+const CARD_COVER_PADDING_Y = 16;
+/** 角标（免费/专业版）占位，避免与「已安装」重叠，同时作为有角标时的上下内边距 */
+const CARD_TIER_BADGE_CLEARANCE = 22;
+
+/**
+ * 根据应用代码和图标配置获取图标（Solar Bold Duotone）
+ *
+ * @param code - 应用代码
+ * @param icon - 图标配置（图片 URL、solar:xxx，或旧 manifest 别名）
+ * @param size - 图标尺寸（默认 72，卡片内使用 CARD_ICON_SIZE）
+ * @param color - 前景色（Duotone 次色会随 currentColor）
+ */
+const getApplicationIcon = (
+  code: string,
+  icon?: string | null,
+  size: number = 72,
+  color?: string,
+) => {
+  if (icon && (icon.startsWith('/') || icon.startsWith('http'))) {
+    return <img src={icon} alt={code} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+  }
+  const solarIcon =
+    resolveAppSolarIcon(icon, code) ||
+    'solar:widget-5-bold-duotone';
+  return (
+    <IconifyIcon
+      icon={solarIcon}
+      width={size}
+      height={size}
+      style={color ? { color } : undefined}
+    />
+  );
+};
+
+/**
+ * 深色模式卡片头：用主色少量混入填充层，保留应用辨识度且贴近 antd 暗色表面。
+ * 浅色模式仍使用下方 `gradients` 高明度渐变。
+ */
+const CARD_HEADER_TINT: Record<string, string> = {
+  kuaizhizao: '#38bdf8',
+  kuaiqms: '#34d399',
+  kuaiems: '#94a3b8',
+  kuaipd: '#60a5fa',
+  kuaicaiwu: '#fbbf24',
+  kuaioa: '#6366f1',
+  kuaireport: '#4ade80',
+  'master-data': '#a78bfa',
+  kuaiai: '#fb7185',
+  kuaiiot: '#2dd4bf',
+  bi: '#4ade80',
+  kuaicrm: '#fb923c',
+  kuaiplm: '#a78bfa',
+  kuaitms: '#60a5fa',
+  kuaiasms: '#fb923c',
+  kuailtms: '#a78bfa',
+  kuaiip: '#94a3b8',
+};
+
+const getCardGradient = (code: string, isActive: boolean, token: GlobalToken, isDark: boolean): string => {
+  if (!isActive) {
+    if (isDark) {
+      return `linear-gradient(135deg, ${token.colorFillSecondary} 0%, ${token.colorFill} 100%)`;
+    }
+    return 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)';
+  }
+  if (isDark) {
+    const tint = CARD_HEADER_TINT[code];
+    if (tint) {
+      return `linear-gradient(135deg, color-mix(in srgb, ${tint} 28%, ${token.colorFillSecondary}) 0%, color-mix(in srgb, ${tint} 12%, ${token.colorFill}) 100%)`;
+    }
+    return `linear-gradient(135deg, ${token.colorFillTertiary} 0%, ${token.colorFill} 100%)`;
+  }
+  const gradients: Record<string, string> = {
+    // 采用更明快、高明度的渐变色，提升活力感
+    kuaizhizao: 'linear-gradient(135deg, #f0f9ff 0%, #bae6fd 100%)',  // 天蓝色
+    kuaiqms: 'linear-gradient(135deg, #ecfdf5 0%, #a7f3d0 100%)',     // 质检绿
+    kuaiems: 'linear-gradient(135deg, #f8fafc 0%, #cbd5e1 100%)',     // 设备灰
+    kuaipd: 'linear-gradient(135deg, #eff6ff 0%, #bfdbfe 100%)',      // 交付蓝
+    kuaicaiwu: 'linear-gradient(135deg, #fffbeb 0%, #fde68a 100%)',   // 琥珀金
+    kuaioa: 'linear-gradient(135deg, #eef2ff 0%, #c7d2fe 100%)',       // 靛蓝
+    kuaireport: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',  // 翡翠绿
+    'master-data': 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)', // 丁香紫
+    kuaiai: 'linear-gradient(135deg, #fff1f2 0%, #fecdd3 100%)',      // 玫瑰粉
+    kuaiiot: 'linear-gradient(135deg, #e6fffb 0%, #b5f5ec 100%)',     // 青绿色
+    bi: 'linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%)',          // 翡翠绿
+    kuaicrm: 'linear-gradient(135deg, #fff7ed 0%, #fdba74 100%)',     // 橙色
+    kuaiplm: 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)',     // 丁香紫
+    kuaitms: 'linear-gradient(135deg, #eff6ff 0%, #bfdbfe 100%)',     // 物流蓝
+    kuaiasms: 'linear-gradient(135deg, #fff7ed 0%, #fdba74 100%)',    // 服务橙
+    kuailtms: 'linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%)',    // 实验紫
+    kuaiip: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',      // 知产灰
+  };
+  return gradients[code] || 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)';
+};
+
+/**
+ * 应用中心列表页面组件
+ */
+const ApplicationListPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi, modal: modalApi } = App.useApp();
+  const { token: themeToken } = theme.useToken();
+  const isDark = useThemeStore((s) => s.resolved.isDark);
+  const queryClient = useQueryClient();
+  /** 后端写入菜单或清单后失效侧边栏与工作台菜单缓存（与 increment + invalidate 双通道，避免漏刷新） */
+  const refreshApplicationMenusAfterBackendMenuChange = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['navigationMenuTree'] });
+    queryClient.invalidateQueries({ queryKey: ['applicationMenus'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
+    useGlobalStore.getState().incrementApplicationMenuVersion();
+  }, [queryClient]);
+  /** 与「一键同步菜单」第二步一致：按库内清单把菜单写入 core_menus，再刷新前端缓存（避免仅更新了 core_applications 但菜单表滞后） */
+  const finalizeManifestSyncForSidebar = useCallback(async () => {
+    try {
+      await syncAllMenus();
+    } catch {
+      /* 仍刷新侧边栏：清单接口往往已写入菜单；全量入库失败时不阻断 UI */
+    }
+    refreshApplicationMenusAfterBackendMenuChange();
+  }, [refreshApplicationMenusAfterBackendMenuChange]);
+  const actionRef = useRef<ActionType>(null);
+  const editFormRef = useRef<ProFormInstance>(null);
+  const proKeyFormRef = useRef<ProFormInstance>(null);
+  // Drawer 相关状态（详情查看）
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailData, setDetailData] = useState<Application | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
+  // 编辑状态
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingApp, setEditingApp] = useState<Application | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [scanning, setScanning] = useState(false);
+  const [syncAllLoading, setSyncAllLoading] = useState(false);
+  const [proKeyModalVisible, setProKeyModalVisible] = useState(false);
+  const [proKeySubmitting, setProKeySubmitting] = useState(false);
+  const [proKeyTargetApp, setProKeyTargetApp] = useState<Application | null>(null);
+  const [pendingEnableAfterActivation, setPendingEnableAfterActivation] = useState(false);
+  const [resetModalVisible, setResetModalVisible] = useState(false);
+  const [resetTargetApp, setResetTargetApp] = useState<Application | null>(null);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetStage, setResetStage] = useState(1); // 1, 2, 3
+  const resetConfirmPhrase = t('pages.system.applications.resetConfirmPhrase');
+  const [dedicatedBindingModalOpen, setDedicatedBindingModalOpen] = useState(false);
+  const [dedicatedBindingApp, setDedicatedBindingApp] = useState<Application | null>(null);
+  const [dedicatedBindingRows, setDedicatedBindingRows] = useState<DedicatedBindingRow[]>([]);
+  const [dedicatedBindingLoading, setDedicatedBindingLoading] = useState(false);
+  const [tenantBindSearchLoading, setTenantBindSearchLoading] = useState(false);
+  const [tenantBindOptions, setTenantBindOptions] = useState<{ value: number; label: string }[]>([]);
+  const [tenantBindSelectValue, setTenantBindSelectValue] = useState<number | undefined>();
+  const tenantBindSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (tenantBindSearchTimerRef.current) clearTimeout(tenantBindSearchTimerRef.current);
+  }, []);
+  const [appCategoryFilter, setAppCategoryFilter] = useState<AppCategoryFilter>('basic');
+  /** 平台管理员默认看「全部」，否则「通用」分类会隐藏定制应用 */
+  const infraCategoryDefaultAppliedRef = useRef(false);
+  const currentUser = useCurrentUser();
+  const isInfraAdmin = Boolean(currentUser?.is_infra_admin);
+
+  const { data: centerCapabilities } = useQuery({
+    queryKey: ['application-center-capabilities'],
+    queryFn: getApplicationCenterCapabilities,
+    staleTime: 30_000,
+  });
+
+  const { data: platformSettingsPublic } = useQuery({
+    queryKey: ['platformSettingsPublic'],
+    queryFn: getPlatformSettingsPublic,
+    staleTime: 60_000,
+  });
+  const showCustomAppsContactQr = platformSettingsPublic?.custom_apps_contact_qr_enabled === true;
+
+  const canToggleAppLifecycle = useCallback(
+    (app: Application | Record<string, unknown>): boolean => {
+      if (isInfraAdmin) return true;
+      const caps = centerCapabilities as ApplicationCenterCapabilities | undefined;
+      if (!caps?.is_tenant_admin) return false;
+      const edition = resolveAppEdition(app as Application);
+      const effective = caps.effective?.[edition];
+      if (!effective?.can_self_service_toggle) return false;
+      if (requiresProLicense(app as Application) && !caps.package?.allow_pro_apps) return false;
+      return true;
+    },
+    [centerCapabilities, isInfraAdmin],
+  );
+
+  const lifecycleDisabledTooltip = useCallback(
+    (app?: Application | Record<string, unknown>) => {
+      if (isInfraAdmin) return undefined;
+      if (!centerCapabilities?.is_tenant_admin) {
+        return t('pages.system.applications.platformAdminOnlyLifecycle');
+      }
+      if (app && requiresProLicense(app as Application) && !centerCapabilities.package?.allow_pro_apps) {
+        return t('pages.system.applications.lifecycleBlockedByPackagePro');
+      }
+      return t('pages.system.applications.lifecyclePermissionDenied');
+    },
+    [centerCapabilities, isInfraAdmin, t],
+  );
+
+  /** static 目录通过 Vite publicDir 挂载到站点根路径，见 vite.config `publicDir` */
+  const customAppsContactQrSrc = `${import.meta.env.BASE_URL}img/qr_code.png`;
+
+  /** 「定制应用」分类无数据时的占位（引导定制服务与商务联系） */
+  const renderCustomAppsCategoryEmpty = () => (
+    <div
+      style={{
+        marginTop: 48,
+        padding: '0 24px 48px',
+        textAlign: 'center',
+        maxWidth: 560,
+        marginLeft: 'auto',
+        marginRight: 'auto',
+      }}
+    >
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
+        <div>
+          <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 8 }}>
+            {t('pages.system.applications.customAppsEmptyTitle')}
+          </Text>
+          <Paragraph type="secondary" style={{ marginBottom: 0, lineHeight: 1.7 }}>
+            {t('pages.system.applications.customAppsEmptyDescription')}
+          </Paragraph>
+        </div>
+        {showCustomAppsContactQr ? (
+          <div>
+            <img
+              src={customAppsContactQrSrc}
+              alt={t('pages.system.applications.customAppsEmptyQrAlt')}
+              width={200}
+              height={200}
+              style={{
+                width: 200,
+                height: 'auto',
+                maxWidth: 'min(240px, 85vw)',
+                borderRadius: themeToken.borderRadiusLG,
+                border: `1px solid ${themeToken.colorBorderSecondary}`,
+                boxShadow: themeToken.boxShadowTertiary,
+                display: 'block',
+                margin: '0 auto',
+                objectFit: 'contain',
+              }}
+            />
+            <Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 13 }}>
+              {t('pages.system.applications.customAppsEmptyQrHint')}
+            </Text>
+          </div>
+        ) : null}
+      </Space>
+    </div>
+  );
+
+  useEffect(() => {
+    if (infraCategoryDefaultAppliedRef.current || !currentUser?.is_infra_admin) return;
+    infraCategoryDefaultAppliedRef.current = true;
+    setAppCategoryFilter('dedicated');
+  }, [currentUser?.is_infra_admin]);
+
+  // 分类切换后再触发刷新，避免与 setState 同帧导致 request 读取旧值
+  useEffect(() => {
+    actionRef.current?.reload();
+  }, [appCategoryFilter]);
+
+
+  /**
+   * 处理扫描应用（从 src/apps 发现并注册）
+   */
+  const handleScanApplications = async () => {
+    try {
+      setScanning(true);
+      const apps = await scanApplications();
+      messageApi.success(t('pages.system.applications.scanSuccess', { count: apps?.length ?? 0, defaultValue: `已扫描并注册 ${apps?.length ?? 0} 个应用` }));
+      messageApi.info({
+        content: t('pages.system.applications.scanMenuHint', {
+          defaultValue: '扫描只更新应用清单。若菜单或权限未刷新，请点击「一键同步菜单」。',
+        }),
+        duration: 6,
+      });
+      actionRef.current?.reload();
+      refreshApplicationMenusAfterBackendMenuChange();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.scanFailed', { defaultValue: '扫描应用失败' }));
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  /**
+   * 一键同步所有已安装应用的菜单
+   */
+  const handleSyncAllMenus = async () => {
+    try {
+      setSyncAllLoading(true);
+      messageApi.loading({
+        content: t('pages.system.applications.syncAllLoading', {
+          defaultValue: '正在同步菜单，请稍候…',
+        }),
+        key: 'sync-all',
+      });
+      const unknown = () => t('pages.system.applications.syncAllErrUnknown', { defaultValue: '未知错误' });
+      const result = await syncAllManifestsAndMenus();
+      const manifestTotal = result.manifest_total ?? 0;
+      const menuCount = result.menu_count ?? 0;
+      if (manifestTotal === 0) {
+        messageApi.info({
+          content: t('pages.system.applications.syncAllNoApps', { defaultValue: '暂无已安装的应用' }),
+          key: 'sync-all',
+        });
+        return;
+      }
+      const errors = (result.manifest_errors ?? []).map((item) =>
+        t('pages.system.applications.syncAllErrManifest', {
+          code: item.code,
+          detail: (item.detail || '').trim() || unknown(),
+        }),
+      );
+      const successCount = result.manifest_synced ?? 0;
+      if (!result.success) {
+        messageApi.error({
+          content: result.message || t('pages.system.applications.syncAllFailed', { defaultValue: '菜单同步失败' }),
+          key: 'sync-all',
+          duration: 10,
+        });
+      } else if (errors.length > 0) {
+        messageApi.warning({
+          content: (
+            <span style={{ whiteSpace: 'pre-line' }}>
+              {t('pages.system.applications.syncAllPartial', {
+                success: successCount,
+                total: manifestTotal,
+                errors: errors.slice(0, 3).join('\n'),
+              })}
+              {'\n'}
+              {t('pages.system.applications.syncAllSuccess', {
+                count: menuCount,
+                defaultValue: `已写入 ${menuCount} 个菜单项，导航菜单已更新。`,
+              })}
+            </span>
+          ),
+          key: 'sync-all',
+          duration: 10,
+        });
+      } else {
+        messageApi.success({
+          content: t('pages.system.applications.syncAllSuccess', {
+            count: menuCount,
+            defaultValue: `已写入 ${menuCount} 个菜单项，导航菜单已更新。`,
+          }),
+          key: 'sync-all',
+        });
+      }
+      actionRef.current?.reload();
+      refreshApplicationMenusAfterBackendMenuChange();
+      queryClient.invalidateQueries({ queryKey: [...MENU_SYNC_STATUS_QUERY_KEY] });
+    } catch (error: any) {
+      messageApi.error({
+        content: error?.message || t('pages.system.applications.syncAllFailed', { defaultValue: '菜单同步失败' }),
+        key: 'sync-all',
+      });
+    } finally {
+      setSyncAllLoading(false);
+    }
+  };
+
+  /**
+   * 处理查看详情
+   */
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await getApplicationByUuid(uuid);
+      setDetailData(detail);
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('pages.system.applications.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleView = async (record: Application) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
+
+  /**
+   * 处理安装应用
+   */
+  const showProUpgradeRequired = useCallback(
+    (record?: Application) => {
+      getAntdModal().info({
+        title: t('pages.system.applications.proUpgradeRequiredTitle', {
+          defaultValue: '需升级专业版',
+        }),
+        content: t('pages.system.applications.proUpgradeRequiredDesc', {
+          name: record?.name || record?.code || '',
+          defaultValue:
+            '该应用属于专业版能力。请升级至专业版/企业版套餐，并完成专业包部署后安装使用。',
+        }),
+        okText: t('pages.system.applications.proUpgradeRequiredOk', {
+          defaultValue: '知道了',
+        }),
+      });
+    },
+    [t],
+  );
+
+  const handleInstall = async (record: Application) => {
+    if (!canToggleAppLifecycle(record)) {
+      messageApi.warning(lifecycleDisabledTooltip(record) ?? t('pages.system.applications.lifecyclePermissionDenied'));
+      return;
+    }
+    if (isPlaceholderApplication(record)) {
+      showProUpgradeRequired(record);
+      return;
+    }
+    try {
+      await installApplication(record.uuid);
+      messageApi.success(t('pages.system.applications.installSuccess'));
+      actionRef.current?.reload();
+      refreshApplicationMenusAfterBackendMenuChange();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.applications.installFailed'));
+    }
+  };
+
+  /**
+   * 处理卸载应用
+   */
+  const handleUninstall = async (record: Application) => {
+    if (!canToggleAppLifecycle(record)) {
+      messageApi.warning(lifecycleDisabledTooltip(record) ?? t('pages.system.applications.lifecyclePermissionDenied'));
+      return;
+    }
+    try {
+      await uninstallApplication(record.uuid);
+      messageApi.success(t('pages.system.applications.uninstallSuccess'));
+      actionRef.current?.reload();
+      refreshApplicationMenusAfterBackendMenuChange();
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.applications.uninstallFailed'));
+    }
+  };
+
+  /**
+   * 处理启用/禁用应用
+   */
+  const handleToggleActive = async (record: Application, checked: boolean) => {
+    if (!canToggleAppLifecycle(record)) {
+      messageApi.warning(lifecycleDisabledTooltip(record) ?? t('pages.system.applications.lifecyclePermissionDenied'));
+      return;
+    }
+    if (isPlaceholderApplication(record)) {
+      showProUpgradeRequired(record);
+      return;
+    }
+    try {
+      if (checked) {
+        const isProApp = requiresProLicense(record);
+        if (isProApp && !record.can_access) {
+          setProKeyTargetApp(record);
+          setPendingEnableAfterActivation(true);
+          setProKeyModalVisible(true);
+          setTimeout(() => {
+            proKeyFormRef.current?.setFieldsValue({ license_key: '' });
+          }, 0);
+          return;
+        }
+
+        await enableApplication(record.uuid);
+        messageApi.success(t('pages.system.applications.enableSuccess'));
+      } else {
+        await disableApplication(record.uuid);
+        messageApi.success(t('pages.system.applications.disableSuccess'));
+      }
+      actionRef.current?.reload();
+      refreshApplicationMenusAfterBackendMenuChange();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.operationFailed'));
+    }
+  };
+
+  const handleActivateProKey = async (values: { license_key: string }) => {
+    if (!proKeyTargetApp) return;
+    if (pendingEnableAfterActivation && !canToggleAppLifecycle(proKeyTargetApp)) {
+      messageApi.warning(lifecycleDisabledTooltip(proKeyTargetApp) ?? t('pages.system.applications.lifecyclePermissionDenied'));
+      return;
+    }
+    try {
+      setProKeySubmitting(true);
+      await activateProApplication(proKeyTargetApp.uuid, values.license_key);
+      if (pendingEnableAfterActivation) {
+        await enableApplication(proKeyTargetApp.uuid);
+      }
+      messageApi.success(
+        pendingEnableAfterActivation
+          ? t('pages.system.applications.proActivateAndEnableSuccess', { defaultValue: 'License Key 校验通过，应用已启用' })
+          : t('pages.system.applications.proActivateSuccess', { defaultValue: 'License Key 校验通过，已完成授权' })
+      );
+      setProKeyModalVisible(false);
+      setPendingEnableAfterActivation(false);
+      actionRef.current?.reload();
+      refreshApplicationMenusAfterBackendMenuChange();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.proActivateFailed', { defaultValue: 'License Key 校验失败' }));
+    } finally {
+      setProKeySubmitting(false);
+    }
+  };
+
+  /**
+   * 处理更新应用配置（名称、排序等）
+   */
+  const handleUpdateAppConfig = async (record: Application, updateData: Partial<Application>) => {
+    try {
+      setSubmitting(true);
+      await updateApplication(record.uuid, updateData);
+      messageApi.success(t('pages.system.applications.configUpdateSuccess'));
+      setEditModalVisible(false);
+      actionRef.current?.reload();
+      refreshApplicationMenusAfterBackendMenuChange();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.operationFailed'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openDedicatedBindingModal = useCallback((app: Application) => {
+    setDedicatedBindingApp(app);
+    setTenantBindSelectValue(undefined);
+    setTenantBindOptions([]);
+    setDedicatedBindingModalOpen(true);
+  }, []);
+
+  const loadDedicatedBindings = useCallback(async () => {
+    const code = dedicatedBindingApp?.code;
+    if (!code) return;
+    setDedicatedBindingLoading(true);
+    try {
+      const rows = await listDedicatedBindingsForApp(code);
+      setDedicatedBindingRows(rows);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.dedicatedBindingLoadFailed'));
+    } finally {
+      setDedicatedBindingLoading(false);
+    }
+  }, [dedicatedBindingApp?.code, messageApi, t]);
+
+  useEffect(() => {
+    if (dedicatedBindingModalOpen && dedicatedBindingApp?.code) {
+      void loadDedicatedBindings();
+    }
+  }, [dedicatedBindingModalOpen, dedicatedBindingApp?.code, loadDedicatedBindings]);
+
+  const handleTenantBindSearch = useCallback((q: string) => {
+    if (tenantBindSearchTimerRef.current) clearTimeout(tenantBindSearchTimerRef.current);
+    tenantBindSearchTimerRef.current = setTimeout(async () => {
+      setTenantBindSearchLoading(true);
+      try {
+        const res = await searchTenantsForDedicatedBinding({
+          name: q.trim() || undefined,
+          page: 1,
+          page_size: 50,
+        });
+        setTenantBindOptions(
+          res.items.map((it) => ({ value: it.id, label: `${it.name} (#${it.id})` })),
+        );
+      } catch {
+        setTenantBindOptions([]);
+      } finally {
+        setTenantBindSearchLoading(false);
+      }
+    }, 350);
+  }, []);
+
+  const handleBindDedicatedTenant = async () => {
+    if (!dedicatedBindingApp?.code || tenantBindSelectValue == null) {
+      messageApi.warning(t('pages.system.applications.dedicatedBindingPickTenant'));
+      return;
+    }
+    try {
+      await bindDedicatedAppToTenant(dedicatedBindingApp.code, tenantBindSelectValue);
+      messageApi.success(t('pages.system.applications.dedicatedBindingBindSuccess'));
+      await loadDedicatedBindings();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.dedicatedBindingBindFailed'));
+    }
+  };
+
+  const handleBindCurrentTenant = async () => {
+    const tid = currentUser?.tenant_id;
+    if (!dedicatedBindingApp?.code || tid == null) {
+      messageApi.warning(t('pages.system.applications.dedicatedBindingNoCurrentTenant'));
+      return;
+    }
+    try {
+      await bindDedicatedAppToTenant(dedicatedBindingApp.code, tid);
+      messageApi.success(t('pages.system.applications.dedicatedBindingBindSuccess'));
+      await loadDedicatedBindings();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.dedicatedBindingBindFailed'));
+    }
+  };
+
+  const handleUnbindDedicatedTenant = async (tenantId: number) => {
+    if (!dedicatedBindingApp?.code) return;
+    try {
+      await unbindDedicatedAppFromTenant(dedicatedBindingApp.code, tenantId);
+      messageApi.success(t('pages.system.applications.dedicatedBindingUnbindSuccess'));
+      await loadDedicatedBindings();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.applications.dedicatedBindingUnbindFailed'));
+    }
+  };
+
+  /**
+   * 表格列定义
+   */
+  const columns = useMemo<ProColumns<Application>[]>(() => alignProColumns([
+    {
+      title: t('pages.system.applications.name'),
+      dataIndex: 'name',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      render: (_val: any, record: Application) => (
+        <span>{resolveApplicationDisplayName(record, t)}</span>
+      ),
+    },
+    {
+      title: t('pages.system.applications.code'),
+      dataIndex: 'code',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+    },
+    {
+      // 描述长短不一：唯一 RemainderFlex
+      title: t('pages.system.applications.description'),
+      dataIndex: 'description',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_val: any, record: Application) => (
+        <span>{resolveApplicationDescription(record, t)}</span>
+      ),
+    },
+    {
+      title: t('pages.system.applications.sortOrder'),
+      dataIndex: 'sort_order',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      sorter: (a, b) => (a.sort_order || 0) - (b.sort_order || 0),
+    },
+    {
+      title: t('pages.system.applications.isSystem'),
+      dataIndex: 'is_system',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: t('common.yes'), status: 'Default' },
+        false: { text: t('common.no'), status: 'Processing' },
+      },
+      render: (_, record) => renderSystemYesNoTag(t, record.is_system),
+    },
+    {
+      title: t('pages.system.applications.installStatus'),
+      dataIndex: 'is_installed',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: t('pages.system.applications.installed'), status: 'Success' },
+        false: { text: t('pages.system.applications.notInstalled'), status: 'Default' },
+      },
+      render: (_, record) =>
+        renderSystemTypeMarker(
+          record.is_installed ? t('pages.system.applications.installed') : t('pages.system.applications.notInstalled'),
+          record.is_installed ? 'success' : 'default',
+        ),
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'is_active',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: t('common.enabled'), status: 'Success' },
+        false: { text: t('common.disabled'), status: 'Default' },
+      },
+      render: (_, record) =>
+        renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
+    },
+    {
+      title: t('pages.system.applications.version'),
+      dataIndex: 'version',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+    },
+    {
+      title: t('common.actions'),
+      key: 'action',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => {
+        const canSync = record.is_installed && record.is_active;
+        const actions: React.ReactNode[] = [
+          <Button
+            key="view"
+            type="link"
+            size="small"
+            {...rowActionKind('read')}
+            onClick={() => handleView(record)}
+          />,
+        ];
+
+        // 更多操作同步自 Card View 的 menuItems 逻辑
+        actions.push(
+          <Button
+            key="edit"
+            type="link"
+            size="small"
+            {...rowActionKind('skip')}
+            {...rowActionLabelKeep()}
+            onClick={() => {
+              setEditingApp(record);
+              setEditModalVisible(true);
+            }}
+          >
+            {t('pages.system.applications.appSettings')}
+          </Button>
+        );
+
+        if (canSync) {
+          actions.push(
+            <Popconfirm
+              key="sync"
+              {...rowActionKind('skip')}
+              title={t('pages.system.applications.syncMenu')}
+              description={t('pages.system.applications.syncMenuConfirm')}
+              onConfirm={async () => {
+                messageApi.loading({ content: t('pages.system.applications.syncMenuLoading'), key: 'sync-manifest' });
+                try {
+                  const result = await syncApplicationManifest(record.code);
+                  if (result.success) {
+                    messageApi.success({ content: result.message || t('pages.system.applications.syncMenuSuccess'), key: 'sync-manifest' });
+    actionRef.current?.reload();
+                    await finalizeManifestSyncForSidebar();
+                  } else {
+                    throw new Error(result.message || t('pages.system.applications.syncFailed'));
+                  }
+                } catch (error: any) {
+                  messageApi.error({ content: error.message || t('pages.system.applications.syncFailed'), key: 'sync-manifest' });
+                }
+              }}
+            >
+              <Button {...rowActionLabelKeep()} type="link" size="small">
+                {t('pages.system.applications.syncMenu')}
+              </Button>
+            </Popconfirm>
+          );
+        }
+
+        if (isDedicatedApplication(record) && currentUser?.is_infra_admin) {
+          actions.push(
+            <Button
+              key="dedicated-binding"
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
+              type="link"
+              size="small"
+              onClick={() => openDedicatedBindingModal(record)}
+            >
+              {t('pages.system.applications.dedicatedOrgBinding')}
+            </Button>,
+          );
+        }
+
+        if (record.is_installed) {
+          if (record.code === "kuaizhizao") {
+            actions.push(
+              <Button
+                key="reset"
+                {...rowActionKind('skip')}
+                {...rowActionLabelKeep()}
+                {...rowActionToneDestructive()}
+                type="link"
+                size="small"
+                onClick={() => {
+                  setResetTargetApp(record);
+                  setResetStage(1);
+                  setResetConfirmText('');
+                  setResetModalVisible(true);
+                }}
+              >
+                {t('pages.system.applications.resetData', { defaultValue: '重置数据' })}
+              </Button>
+            );
+          }
+
+          actions.push(
+            <Popconfirm
+              key="uninstall"
+              {...rowActionKind('skip')}
+              title={t('pages.system.applications.uninstallConfirm')}
+              onConfirm={() => handleUninstall(record)}
+              disabled={record.is_system || !canToggleAppLifecycle(record)}
+            >
+              <Button
+                {...rowActionLabelKeep()}
+                {...rowActionToneDestructive()}
+                type="link"
+                size="small"
+                disabled={record.is_system || !canToggleAppLifecycle(record)}
+              >
+                {t('pages.system.applications.uninstall')}
+              </Button>
+            </Popconfirm>
+          );
+        } else if (isPlaceholderApplication(record)) {
+          actions.push(
+            <Button
+              key="pro-upgrade"
+              {...rowActionLabelKeep()}
+              type="link"
+              size="small"
+              onClick={() => showProUpgradeRequired(record)}
+            >
+              {t('pages.system.applications.proLockedTag', { defaultValue: '需升级专业版' })}
+            </Button>,
+          );
+        } else {
+          actions.push(
+            <Popconfirm
+              key="install"
+              {...rowActionKind('skip')}
+              title={t('pages.system.applications.installConfirm')}
+              onConfirm={() => handleInstall(record)}
+              disabled={!canToggleAppLifecycle(record)}
+            >
+              <Button
+                {...rowActionLabelKeep()}
+                type="link"
+                size="small"
+                disabled={!canToggleAppLifecycle(record)}
+              >
+                {t('pages.system.applications.install')}
+              </Button>
+            </Popconfirm>
+          );
+        }
+
+        return actions;
+      },
+    },
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canToggleAppLifecycle, handleView, handleInstall, handleUninstall, showProUpgradeRequired, openDedicatedBindingModal, currentUser?.is_infra_admin]);
+
+  /**
+   * 渲染应用卡片
+   */
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  const renderApplicationCard = (
+    application: Application,
+    _index: number,
+  ) => {
+    const cardRadius = themeToken.borderRadiusLG;
+    const edition = resolveAppEdition(application);
+    const isDedicated = edition === 'dedicated';
+    const isIndustry = edition === 'industry';
+    const isPro = edition === 'pro';
+    const isBasic = edition === 'basic';
+    const hasTierBadge = isDedicated || isIndustry || isPro || isBasic;
+    const freeIndustryAuthor = resolveFreeIndustryAuthorUsername(application.code);
+    const coverPaddingY = hasTierBadge ? CARD_TIER_BADGE_CLEARANCE : CARD_COVER_PADDING_Y;
+    const menuItems = [
+      {
+        key: 'view',
+        label: t('pages.system.applications.viewDetail'),
+        icon: <APP_ACTION_ICON.view />,
+        onClick: () => handleView(application),
+      },
+      {
+        key: 'edit-app',
+        label: t('pages.system.applications.appSettings'),
+        icon: <APP_ACTION_ICON.settings />,
+        onClick: () => {
+          setEditingApp(application);
+          setEditModalVisible(true);
+        },
+      },
+      {
+        key: 'sync-manifest',
+        label: (
+          <Popconfirm
+            title={t('pages.system.applications.syncMenu')}
+            description={t('pages.system.applications.syncMenuConfirm')}
+            onConfirm={async () => {
+              messageApi.loading({ content: t('pages.system.applications.syncMenuLoading'), key: 'sync-manifest' });
+              try {
+                const result = await syncApplicationManifest(application.code);
+
+                if (result.success) {
+                  messageApi.success({
+                    content: result.message || t('pages.system.applications.syncMenuSuccess'),
+                    key: 'sync-manifest'
+                  });
+    actionRef.current?.reload();
+
+                  await finalizeManifestSyncForSidebar();
+                } else {
+                  throw new Error(result.message || t('pages.system.applications.syncFailed'));
+                }
+
+              } catch (error: any) {
+                messageApi.error({
+                  content: error.message || t('pages.system.applications.syncFailed'),
+                  key: 'sync-manifest'
+                });
+              }
+            }}
+          >
+            <div 
+              style={{ margin: '-5px -12px', padding: '5px 12px' }} 
+              onClick={(e) => e.stopPropagation()}
+            >
+              {t('pages.system.applications.syncMenu')}
+            </div>
+          </Popconfirm>
+        ),
+        icon: <APP_ACTION_ICON.syncMenu />,
+      },
+      ...(isDedicatedApplication(application) && currentUser?.is_infra_admin
+        ? [
+            {
+              key: 'dedicated-binding',
+              label: t('pages.system.applications.dedicatedOrgBinding'),
+              icon: <APP_ACTION_ICON.dedicatedBinding />,
+              onClick: () => openDedicatedBindingModal(application),
+            },
+          ]
+        : []),
+
+      application.code === "kuaizhizao" ? {
+        key: 'reset-data',
+        label: t('pages.system.applications.resetData', { defaultValue: '重置数据' }),
+        icon: <APP_ACTION_ICON.resetData />,
+        danger: true,
+        onClick: () => {
+          setResetTargetApp(application);
+          setResetStage(1);
+          setResetConfirmText('');
+          setResetModalVisible(true);
+        },
+      } : null,
+      {
+        type: 'divider' as const,
+      },
+      !application.is_installed
+        ? isPlaceholderApplication(application)
+          ? {
+              key: 'install',
+              label: t('pages.system.applications.proLockedTag', { defaultValue: '需升级专业版' }),
+              icon: <LockOutlined />,
+              onClick: () => showProUpgradeRequired(application),
+            }
+          : {
+          key: 'install',
+          label: (
+            <Popconfirm
+              title={t('pages.system.applications.installConfirm')}
+              onConfirm={() => handleInstall(application)}
+              disabled={!canToggleAppLifecycle(application)}
+            >
+              <div 
+                style={{ margin: '-5px -12px', padding: '5px 12px' }} 
+                onClick={(e) => e.stopPropagation()}
+              >
+                {t('pages.system.applications.install')}
+              </div>
+            </Popconfirm>
+          ),
+          icon: <APP_ACTION_ICON.install />,
+          disabled: !canToggleAppLifecycle(application),
+        }
+        : {
+          key: 'uninstall',
+          label: (
+            <Popconfirm
+              title={t('pages.system.applications.uninstallConfirm')}
+              onConfirm={() => handleUninstall(application)}
+              disabled={application.is_system || !canToggleAppLifecycle(application)}
+            >
+              <div 
+                style={{ margin: '-5px -12px', padding: '5px 12px' }} 
+                onClick={(e) => e.stopPropagation()}
+              >
+                {t('pages.system.applications.uninstall')}
+              </div>
+            </Popconfirm>
+          ),
+          icon: <APP_ACTION_ICON.uninstall />,
+          danger: true,
+          disabled: application.is_system || !canToggleAppLifecycle(application),
+        },
+    ];
+
+    return (
+      <div
+        key={application.uuid}
+        className="application-center-card"
+        style={{
+          borderRadius: cardRadius,
+          border: `1px solid ${themeToken.colorBorderSecondary}`,
+          overflow: 'hidden',
+          boxShadow: isDark ? themeToken.boxShadowSecondary : undefined,
+        }}
+      >
+        <div
+          className="application-center-card__cover"
+          style={{
+            position: 'relative',
+            height: CARD_COVER_HEIGHT,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'flex-start',
+            background: getCardGradient(
+              application.code,
+              !!(application.is_active && application.is_installed),
+              themeToken,
+              isDark,
+            ),
+            padding: `${coverPaddingY}px 20px`,
+            borderBottom: `1px solid ${themeToken.colorBorderSecondary}`,
+          }}
+        >
+            {(() => {
+              return (
+                <>
+                  {/* 角标 */}
+                  {hasTierBadge && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        right: 0,
+                        padding: '2px 12px',
+                        borderBottomLeftRadius: themeToken.borderRadiusLG,
+                        background: isDedicated
+                          ? '#722ed1'
+                          : isIndustry
+                            ? '#13c2c2'
+                            : isPro
+                              ? themeToken.colorWarning
+                              : themeToken.colorSuccess,
+                        color: themeToken.colorTextLightSolid,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        zIndex: 1,
+                        boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.35)' : '-2px 2px 5px rgba(0,0,0,0.05)',
+                      }}
+                    >
+                      {isDedicated
+                        ? t('pages.system.applications.tierDedicated')
+                        : isIndustry
+                          ? t('pages.system.applications.tierIndustry')
+                          : isPro
+                            ? t('pages.system.applications.tierPro')
+                            : t('pages.system.applications.tierBasic')}
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: 16,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background:
+                        application.is_active && application.is_installed
+                          ? themeToken.colorBgContainer
+                          : themeToken.colorFillTertiary,
+                      boxShadow: isDark
+                        ? '0 2px 12px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.25)'
+                        : '0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05)',
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                      marginRight: 16,
+                    }}
+                  >
+                    {getApplicationIcon(
+                      application.code,
+                      application.icon,
+                      CARD_ICON_SIZE,
+                      application.is_active && application.is_installed
+                        ? themeToken.colorPrimary
+                        : themeToken.colorTextQuaternary,
+                    )}
+                  </div>
+                  
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'flex-start',
+                    }}
+                  >
+                    {(() => {
+                      const badgeBaseStyle: React.CSSProperties = {
+                        height: 18,
+                        padding: '0 5px',
+                        fontSize: 10,
+                        borderRadius: 4,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        whiteSpace: 'nowrap',
+                        border: 'none',
+                        flexShrink: 0,
+                      };
+
+                      const renderBadge = (
+                        text: string,
+                        light: { bg: string; color: string },
+                        icon?: React.ReactNode,
+                        dark?: { bg: string; color: string },
+                      ) => {
+                        const col = isDark && dark ? dark : light;
+                        return (
+                          <span style={{ ...badgeBaseStyle, backgroundColor: col.bg, color: col.color }}>
+                            {icon && <span style={{ display: 'inline-flex', marginRight: 4 }}>{icon}</span>}
+                            {text}
+                          </span>
+                        );
+                      };
+
+                      const typeBadges = (
+                        <>
+                          {application.version &&
+                            renderBadge(
+                              `V${application.version}`,
+                              { bg: '#d48806', color: '#fff' },
+                              undefined,
+                              { bg: '#d4b106', color: '#1f1f1f' },
+                            )}
+                          {application.code === 'master-data' &&
+                            renderBadge(
+                              'BASE',
+                              { bg: '#f0f5ff', color: '#2f54eb' },
+                              undefined,
+                              { bg: themeToken.colorInfoBg, color: themeToken.colorInfoText },
+                            )}
+                          {[
+                              ...BASIC_APP_CODES,
+                              ...PRO_APP_CODES,
+                              ...ALL_INDUSTRY_APP_CODES,
+                            ].includes(application.code) &&
+                            renderBadge(
+                              'APP',
+                              { bg: '#f9f0ff', color: '#722ed1' },
+                              undefined,
+                              {
+                                bg: `color-mix(in srgb, #722ed1 22%, ${themeToken.colorFillTertiary})`,
+                                color: '#e9d5ff',
+                              },
+                            )}
+                          {application.code === 'kuaiai' &&
+                            renderBadge(
+                              'AI',
+                              { bg: '#fff7e6', color: '#fa8c16' },
+                              undefined,
+                              { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
+                            )}
+                          {(application.is_pro || needsLicenseKey(application)) &&
+                            !application.can_access && (
+                            <Tooltip
+                              title={t('pages.system.applications.proLockedTag', {
+                                defaultValue: '需升级专业版',
+                              })}
+                            >
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  showProUpgradeRequired(application);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    showProUpgradeRequired(application);
+                                  }
+                                }}
+                                style={{
+                                  height: 18,
+                                  width: 18,
+                                  borderRadius: 4,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                  backgroundColor: themeToken.colorFillTertiary,
+                                  color: themeToken.colorTextSecondary,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <LockOutlined style={{ fontSize: 11 }} />
+                              </span>
+                            </Tooltip>
+                          )}
+                        </>
+                      );
+
+                      return (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4, overflow: 'hidden' }}>
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                fontSize: 16,
+                                color: themeToken.colorTextHeading,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                flexShrink: 1,
+                                minWidth: 0,
+                              }}
+                            >
+                              {resolveApplicationDisplayName(application, t)}
+                            </span>
+                            {application.is_system && (
+                              <>
+                                <div style={{ flex: 1, minWidth: 8 }} />
+                                {renderBadge(
+                                  t('pages.system.applications.systemTag'),
+                                  { bg: '#fafafa', color: '#8c8c8c' },
+                                  undefined,
+                                  { bg: themeToken.colorFillTertiary, color: themeToken.colorTextTertiary },
+                                )}
+                              </>
+                            )}
+                          </div>
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              alignItems: 'center',
+                              gap: 4,
+                              marginBottom: 6,
+                            }}
+                          >
+                            {typeBadges}
+                          </div>
+                        </>
+                      );
+                    })()}
+
+                    <div
+                      style={{
+                        color: themeToken.colorTextSecondary,
+                        fontSize: 13,
+                        lineHeight: '18px',
+                        minHeight: 36,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {resolveApplicationDescription(application, t, t('pages.system.applications.noDescription'))}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+        </div>
+        <div className="application-center-card__grow" />
+        <div className="application-center-card__meta">
+          <span>
+            {t('common.code')}: {application.code}
+            {freeIndustryAuthor
+              ? t('pages.system.applications.freeIndustryContributor', { name: freeIndustryAuthor })
+              : null}
+          </span>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <Tag
+              color={application.is_installed ? 'success' : 'error'}
+              style={{ margin: 0, fontSize: 11 }}
+            >
+              {application.is_installed
+                ? t('pages.system.applications.installed')
+                : t('pages.system.applications.notInstalled')}
+            </Tag>
+            {isPlaceholderApplication(application) && (
+              <Tag color="warning" style={{ margin: 0, fontSize: 11 }}>
+                {t('pages.system.applications.proLockedTag', { defaultValue: '需升级专业版' })}
+              </Tag>
+            )}
+          </div>
+        </div>
+        <div className="application-center-card__tray">
+          <div className="application-center-card__tray-cell">
+            <span style={{ fontSize: 12, color: themeToken.colorTextSecondary }}>{t('common.status')}</span>
+            <Tooltip title={!canToggleAppLifecycle(application) ? lifecycleDisabledTooltip(application) : undefined}>
+              <span style={{ display: 'inline-flex' }}>
+                <Switch
+                  checked={application.is_active}
+                  onChange={(checked) => handleToggleActive(application, checked)}
+                  disabled={!application.is_installed || !canToggleAppLifecycle(application)}
+                  checkedChildren={t('common.enabled')}
+                  unCheckedChildren={t('common.disabled')}
+                />
+              </span>
+            </Tooltip>
+          </div>
+          <div className="application-center-card__tray-cell">
+            <Dropdown {...rowActionKind('skip')} menu={{ items: menuItems }} trigger={['click']}>
+              <Button type="text" icon={<DownOutlined />} style={{ width: '100%' }}>
+                {t('pages.system.applications.moreActions')}
+              </Button>
+            </Dropdown>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+
+  /**
+   * 详情列定义
+   */
+  const detailColumns: ProDescriptionsItemProps<Application>[] = [
+    { title: t('pages.system.applications.name'), dataIndex: 'name', render: (_val: any, record: Application) => <span>{resolveApplicationDisplayName(record, t)}</span> },
+    { title: t('pages.system.applications.code'), dataIndex: 'code' },
+    { title: t('pages.system.applications.description'), dataIndex: 'description', render: (_val: any, record: Application) => <span>{resolveApplicationDescription(record, t)}</span> },
+    { title: t('pages.system.applications.version'), dataIndex: 'version' },
+    { title: t('pages.system.applications.changelog'), dataIndex: 'changelog', render: (val: any) => <span>{val || '-'}</span> },
+    { title: t('pages.system.applications.routePath'), dataIndex: 'route_path' },
+    { title: t('pages.system.applications.entryPoint'), dataIndex: 'entry_point' },
+    { title: t('pages.system.applications.permissionCode'), dataIndex: 'permission_code' },
+    {
+      title: t('pages.system.applications.isSystem'),
+      dataIndex: 'is_system',
+      render: (dom: any) => renderSystemYesNoTag(t, Boolean(dom)),
+    },
+    {
+      title: t('pages.system.applications.isDedicatedLabel'),
+      dataIndex: 'is_dedicated',
+      render: (dom: any) => renderSystemYesNoTag(t, Boolean(dom)),
+    },
+    {
+      title: t('pages.system.applications.installStatus'),
+      dataIndex: 'is_installed',
+      render: (dom: any) =>
+        renderSystemTypeMarker(
+          dom ? t('pages.system.applications.installed') : t('pages.system.applications.notInstalled'),
+          dom ? 'success' : 'default',
+        ),
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'is_active',
+      render: (dom: any) =>
+        renderSystemActiveTag(t, Boolean(dom), 'common.enabled', 'common.disabled'),
+    },
+    { title: t('pages.system.applications.sortOrder'), dataIndex: 'sort_order' },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
+  ];
+
+  return (
+    <>
+      <ListPageTemplate>
+        <UniTable<Application>
+          columnPersistenceId="pages.system.applications.list-v2"
+          tanstackQuery={{ queryKeyPrefix: ['pages.system.applications.list', appCategoryFilter] }}
+          key={`application-list-${appCategoryFilter}`}
+          headerTitle={t('pages.system.applications.headerTitle')}
+          actionRef={actionRef}
+          columns={columns}
+          {...(appCategoryFilter === 'dedicated'
+            ? { locale: { emptyText: renderCustomAppsCategoryEmpty() } }
+            : {})}
+          request={async (params, _sort, _filter, searchFormValues) => {
+            try {
+              // 拉全量再筛选分类；勿按表格分页请求后端，否则靠后的应用永远不会进入前端
+              const apiParams: any = {
+                skip: 0,
+                limit: APPLICATION_CENTER_LIST_LIMIT,
+              };
+
+              // 添加筛选条件
+              if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
+                apiParams.is_active = searchFormValues.is_active === 'true' || searchFormValues.is_active === true;
+              }
+              if (searchFormValues?.is_installed !== undefined && searchFormValues.is_installed !== '' && searchFormValues.is_installed !== null) {
+                apiParams.is_installed = searchFormValues.is_installed === 'true' || searchFormValues.is_installed === true;
+              }
+
+              const allData = await getApplicationList(apiParams);
+
+              // 专业版占位：未 compose / 未入库时补齐 KU-AI、快报表、快数采
+              const existingCodes = new Set((allData || []).map((app) => app.code));
+              const mergedPlaceholders = buildProPlaceholders(t).filter(
+                (app) => !existingCodes.has(app.code as string),
+              );
+
+              let filteredData = [...(allData || []), ...mergedPlaceholders]
+                .filter((app) => !shouldHideFromApplicationCenter(app.code))
+                .map((app) => {
+                const overriddenDescription = APP_DESCRIPTION_OVERRIDES[app.code as string];
+                return overriddenDescription !== undefined
+                  ? { ...app, description: overriddenDescription }
+                  : app;
+              });
+
+              // 前端筛选（因为后端可能不支持某些筛选）
+              if (searchFormValues?.is_system !== undefined && searchFormValues.is_system !== '' && searchFormValues.is_system !== null) {
+                filteredData = filteredData.filter(item => item.is_system === (searchFormValues.is_system === 'true' || searchFormValues.is_system === true));
+              }
+
+              // 搜索关键词筛选（顶栏模糊词或高级搜索 name）
+              const keyword = mergeListKeyword(searchFormValues, 'name').toLowerCase();
+              if (keyword) {
+                filteredData = filteredData.filter(item =>
+                  item.name.toLowerCase().includes(keyword) ||
+                  item.code.toLowerCase().includes(keyword) ||
+                  (item.description && item.description.toLowerCase().includes(keyword))
+                );
+              }
+
+              filteredData = filteredData.filter(item => matchAppCategory(item, appCategoryFilter));
+
+              // 按 core_applications.sort_order 排序（唯一真源：manifest.json → 库内字段）
+              filteredData.sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
+
+              return {
+                data: filteredData,
+                success: true,
+                total: filteredData.length,
+              };
+            } catch (error: any) {
+              messageApi.error(error?.message || t('pages.system.applications.loadListFailed'));
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          beforeSearchButtons={
+            <Space size={12} wrap>
+              <ThemedSegmented
+                surfaceBackground
+                size="medium"
+                value={appCategoryFilter}
+                options={[
+                  { label: t('pages.system.applications.categoryBasic'), value: 'basic' },
+                  { label: t('pages.system.applications.categoryPro'), value: 'pro' },
+                  { label: t('pages.system.applications.categoryIndustry'), value: 'industry' },
+                  { label: t('pages.system.applications.categoryDedicated'), value: 'dedicated' },
+                ]}
+                onChange={(value) => {
+                  setAppCategoryFilter(value as AppCategoryFilter);
+                }}
+              />
+            </Space>
+          }
+          showImportButton={false}
+          showExportButton={true}
+          onExport={async (type, keys, pageData) => {
+            try {
+              const allData = (type === 'currentPage' ? (pageData ?? []) : await fetchAllListItems((p) => getApplicationList(p)));
+              let items = allData || [];
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d) => keys.includes(d.uuid));
+              }
+              if (items.length === 0) {
+                messageApi.warning(t('common.exportNoData'));
+                return;
+              }
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `applications-${todaySiteDateString()}.xlsx`,
+              );
+              messageApi.success(t('pages.system.applications.exportSuccessCount', { count: items.length }));
+            } catch (error: any) {
+              messageApi.error(error?.message || t('common.exportFailed'));
+            }
+          }}
+          pagination={{
+            defaultPageSize: 10,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
+          }}
+          toolBarRender={() => [
+            <Button {...rowActionKind('read')}
+              key="scan"
+              type="primary"
+              icon={<AppstoreOutlined />}
+              loading={scanning}
+              onClick={handleScanApplications}
+            >
+              {t('pages.system.applications.scanApplications', { defaultValue: '扫描应用' })}
+            </Button>,
+            <Button {...rowActionKind('update')}
+              key="sync-all"
+              icon={<SyncOutlined />}
+              loading={syncAllLoading}
+              onClick={handleSyncAllMenus}
+            >
+              {t('pages.system.applications.syncAllMenus', { defaultValue: '一键同步菜单' })}
+            </Button>,
+          ]}
+          viewTypes={['card', 'table', 'help']}
+          defaultViewType="card"
+          helpViewConfig={{ content: <ApplicationHelpView /> }}
+          cardViewConfig={{
+            renderCard: renderApplicationCard,
+            columns: { xs: 1, sm: 2, md: 3, lg: 4, xl: 4 },
+            emptyCard: appCategoryFilter === 'dedicated' ? renderCustomAppsCategoryEmpty() : undefined,
+          }}
+        />
+      </ListPageTemplate>
+
+      <Modal
+        title={t('pages.system.applications.resetData', { defaultValue: '重置数据' })}
+        open={resetModalVisible}
+        onCancel={() => setResetModalVisible(false)}
+        footer={null}
+        width={480}
+        destroyOnHidden
+      >
+        <div style={{ padding: '8px 0' }}>
+          {resetStage === 1 && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 500, color: '#ff4d4f', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <AlertTriangle size={20} strokeWidth={1.75} aria-hidden />
+                {t('pages.system.applications.resetWarnTitle', { defaultValue: '极大风险操作：数据重置' })}
+              </div>
+              <p style={{ color: '#666', marginBottom: 24, padding: '0 20px', lineHeight: '1.6' }}>
+                {t('pages.system.applications.resetWarn1', { defaultValue: '重置操作将物理抹除“快制造”应用下所有的销售订单、生产工单、库存流水、需求计划等业务数据。此操作不可撤销！' })}
+              </p>
+              <Button 
+                type="primary" 
+                danger 
+                size="large" 
+                block
+                onClick={() => setResetStage(2)}
+              >
+                {t('pages.system.applications.resetNext', { defaultValue: '我已了解风险，下一步' })}
+              </Button>
+            </div>
+          )}
+
+          {resetStage === 2 && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 600, color: '#f5222d' }}>
+                {t('pages.system.applications.resetWarnTitle2', { defaultValue: '再次确认：您确定要继续吗？' })}
+              </div>
+              <p style={{ color: '#333', marginBottom: 24, fontWeight: 500 }}>
+                {t('pages.system.applications.resetWarn2', { defaultValue: '一旦点击下一步，数据将无法通过常规手段恢复。建议您确保当前没有正在进行的业务，并告知相关团队成员。' })}
+              </p>
+              <Space orientation="vertical" style={{ width: '100%' }} size="medium">
+                <Button 
+                  type="primary" 
+                  danger 
+                  size="large" 
+                  block
+                  onClick={() => setResetStage(3)}
+                >
+                  {t('pages.system.applications.resetConfirmNext', { defaultValue: '我很确定，继续重置' })}
+                </Button>
+                <Button block onClick={() => setResetModalVisible(false)}>
+                  {t('pages.system.applications.resetCancel', { defaultValue: '我再想想，取消重置' })}
+                </Button>
+              </Space>
+            </div>
+          )}
+
+          {resetStage === 3 && (
+            <div>
+              <div style={{ marginBottom: 16, fontSize: 16, fontWeight: 500, color: '#262626' }}>
+                {t('pages.system.applications.resetFinalCheck', { defaultValue: '终极安全校验' })}
+              </div>
+              <p style={{ color: '#666', marginBottom: 12 }}>
+                {t('pages.system.applications.resetTypeConfirm', { defaultValue: '请在下方准确输入以下内容以确认操作：' })}
+              </p>
+              <div style={{ backgroundColor: '#fffbe6', border: '1px solid #ffe58f', padding: '8px 12px', borderRadius: 4, marginBottom: 16, fontWeight: 'bold', color: '#856404' }}>
+                {resetConfirmPhrase}
+              </div>
+              <ProFormText
+                placeholder={t('pages.system.applications.resetInputPlaceholder', { defaultValue: '请输入确认文本' })}
+                fieldProps={{
+                  value: resetConfirmText,
+                  onChange: (e) => setResetConfirmText(e.target.value),
+                }}
+              />
+              <div style={{ marginTop: 24 }}>
+                <Button 
+                  type="primary" 
+                  danger 
+                  size="large" 
+                  block
+                  loading={submitting}
+                  disabled={resetConfirmText !== resetConfirmPhrase}
+                  onClick={async () => {
+                    if (resetConfirmText !== resetConfirmPhrase) return;
+                    try {
+                      setSubmitting(true);
+                      const result = await apiRequest<{ success: boolean; message?: string }>(
+                        '/apps/kuaizhizao/management/reset-data',
+                        { method: 'POST' },
+                      );
+                      if (result?.success) {
+                        messageApi.success(result.message || '重置成功并已自动备份');
+                        setResetModalVisible(false);
+    actionRef.current?.reload();
+                      } else {
+                        messageApi.error(result?.message || '重置失败');
+                      }
+                    } catch (error: unknown) {
+                      messageApi.error((error as Error).message || '重置失败');
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                >
+                  {t('pages.system.applications.resetStart', { defaultValue: '启动全量物理重置（且自动备份）' })}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <Modal
+        title={t('pages.system.applications.dedicatedBindingModalTitle', {
+          name: dedicatedBindingApp
+            ? resolveApplicationDisplayName(dedicatedBindingApp, t)
+            : '',
+        })}
+        open={dedicatedBindingModalOpen}
+        onCancel={() => {
+          setDedicatedBindingModalOpen(false);
+          setDedicatedBindingApp(null);
+        }}
+        footer={null}
+        width={720}
+        destroyOnHidden
+      >
+        <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t('pages.system.applications.dedicatedBindingHint')} />
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('pages.system.applications.dedicatedBindingBoundList')}</div>
+        <Table<DedicatedBindingRow>
+          size="small"
+          rowKey={(r) => `${r.app_code}-${r.tenant_id}`}
+          loading={dedicatedBindingLoading}
+          pagination={false}
+          dataSource={dedicatedBindingRows}
+          columns={[
+            {
+              title: t('pages.system.applications.dedicatedBindingTenantIdCol'),
+              dataIndex: 'tenant_id',
+              width: 100,
+            },
+            {
+              title: t('pages.system.applications.dedicatedBindingTenantCol'),
+              dataIndex: 'tenant_name',
+              ellipsis: true,
+              render: (name: string | null | undefined, row) => name || `— (#${row.tenant_id})`,
+            },
+            {
+              title: t('pages.system.applications.dedicatedBindingCreatedAt'),
+              dataIndex: 'created_at',
+              width: 200,
+              render: (v: string) => {
+                try {
+                  return formatDateTimeBySiteSetting(v);
+                } catch {
+                  return v;
+                }
+              },
+            },
+            {
+              title: t('common.actions'),
+              key: 'actions',
+              width: 100,
+              render: (_, row) => (
+                <Popconfirm
+                  title={t('pages.system.applications.dedicatedBindingUnbindConfirm')}
+                  onConfirm={() => handleUnbindDedicatedTenant(row.tenant_id)}
+                >
+                  <Button type="link" size="small" danger>
+                    {t('pages.system.applications.dedicatedBindingUnbind')}
+                  </Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
+        <Divider />
+        <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('pages.system.applications.dedicatedBindingAddSection')}</div>
+        <Space orientation="vertical" style={{ width: '100%' }} size="medium">
+          <Select
+            showSearch
+            allowClear
+            filterOption={false}
+            placeholder={t('pages.system.applications.dedicatedBindingTenantPlaceholder')}
+            loading={tenantBindSearchLoading}
+            options={tenantBindOptions}
+            value={tenantBindSelectValue}
+            onChange={(v) => setTenantBindSelectValue(v ?? undefined)}
+            onSearch={handleTenantBindSearch}
+            onOpenChange={(open) => {
+              if (open && tenantBindOptions.length === 0) handleTenantBindSearch('');
+            }}
+            style={{ width: '100%' }}
+          />
+          <Space wrap>
+            <Button type="primary" onClick={() => void handleBindDedicatedTenant()}>
+              {t('pages.system.applications.dedicatedBindingBind')}
+            </Button>
+            <Button onClick={() => void handleBindCurrentTenant()} disabled={currentUser?.tenant_id == null}>
+              {t('pages.system.applications.dedicatedBindingBindCurrent')}
+            </Button>
+          </Space>
+        </Space>
+      </Modal>
+
+      {/* 查看详情 Drawer */}
+      <SystemMasterDetailDrawer
+        title={t('pages.system.applications.detailTitle')}
+        open={drawerVisible}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        detail={detailData}
+        detailColumns={detailColumns}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        lines={detailData?.code ? <ApplicationClientReleasesPanel appCode={detailData.code} /> : undefined}
+        linesTitle={t('pages.system.applications.clientReleasesSectionTitle')}
+      />
+
+      {/* 应用设置 Modal - 使用 FormModalTemplate */}
+      <FormModalTemplate
+        key={editingApp?.uuid ?? 'edit'}
+        title={t('pages.system.applications.editModalTitle', { name: editingApp?.name ?? '' })}
+        open={editModalVisible}
+        onClose={() => setEditModalVisible(false)}
+        onFinish={async (values: any) => {
+          if (editingApp) {
+            const isCustomSort = values.sort_order !== (editingApp.sort_order ?? 0) || editingApp.is_custom_sort;
+            await handleUpdateAppConfig(editingApp, {
+              sort_order: values.sort_order,
+              is_custom_sort: isCustomSort,
+            });
+          }
+        }}
+        isEdit={true}
+        loading={submitting}
+        formRef={editFormRef}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        initialValues={
+          editingApp
+            ? {
+                name: resolveApplicationDisplayName(editingApp, t),
+                description: resolveApplicationDescription(editingApp, t),
+                sort_order: editingApp.sort_order ?? 0,
+              }
+            : undefined
+        }
+        extraFooter={
+          editingApp ? (
+            <Button
+              danger
+              onClick={() => {
+                modalApi.confirm({
+                  title: t('pages.system.applications.restoreDefault'),
+                  content: t('pages.system.applications.restoreDefaultConfirm'),
+                  onOk: async () => {
+                    setSubmitting(true);
+                    try {
+                      await updateApplication(editingApp.uuid, {
+                        is_custom_sort: false,
+                      });
+                      await syncApplicationManifest(editingApp.code);
+                      await finalizeManifestSyncForSidebar();
+                      messageApi.success(t('pages.system.applications.restoreSuccess'));
+                      setEditModalVisible(false);
+    actionRef.current?.reload();
+                    } catch (error: any) {
+                      messageApi.error(error.message || t('pages.system.applications.restoreFailed'));
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  },
+                });
+              }}
+            >
+              {t('pages.system.applications.restoreDefault')}
+            </Button>
+          ) : null
+        }
+      >
+        <ProFormText
+          name="name"
+          label={t('pages.system.applications.nameLabel')}
+          fieldProps={{ disabled: true }}
+        />
+        <ProFormTextArea
+          name="description"
+          label={t('pages.system.applications.descriptionLabel')}
+          fieldProps={{ disabled: true, rows: 3 }}
+        />
+        <ProFormDigit
+          name="sort_order"
+          label={t('pages.system.applications.sortOrderHint')}
+          fieldProps={{ min: 0 }}
+        />
+        <div style={{ color: '#8c8c8c', fontSize: 12, marginTop: 8 }}>
+          {t('pages.system.applications.editHint')}
+        </div>
+      </FormModalTemplate>
+
+      {/* 应用升版 Modal - 使用 FormModalTemplate */}
+      <FormModalTemplate
+        key={proKeyTargetApp?.uuid ?? 'pro-key'}
+        title={t('pages.system.applications.proKeyModalTitle', { defaultValue: '输入 License Key（许可证密钥）' })}
+        open={proKeyModalVisible}
+        onClose={() => {
+          setProKeyModalVisible(false);
+          setPendingEnableAfterActivation(false);
+        }}
+        onFinish={handleActivateProKey}
+        isEdit={true}
+        loading={proKeySubmitting}
+        formRef={proKeyFormRef}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+      >
+        <ProFormText.Password
+          name="license_key"
+          label={t('pages.system.applications.proKeyLabel', { defaultValue: 'License Key（许可证密钥）' })}
+          placeholder={t('pages.system.applications.proKeyPlaceholder', { defaultValue: '请输入 License Key' })}
+          rules={[
+            { required: true, message: t('common.required', { defaultValue: '必填' }) },
+            { min: 8, message: t('pages.system.applications.proKeyMinLength', { defaultValue: 'License Key 长度至少 8 位' }) },
+          ]}
+          fieldProps={{
+            autoComplete: 'off',
+          }}
+        />
+        <div style={{ color: '#8c8c8c', fontSize: 12, marginTop: 8 }}>
+          {t('pages.system.applications.proKeyHint', { defaultValue: '系统仅保存 License Key 摘要（不可逆），用于后续授权校验。' })}
+        </div>
+      </FormModalTemplate>
+
+
+    </>
+  );
+};
+
+export default ApplicationListPage;
+

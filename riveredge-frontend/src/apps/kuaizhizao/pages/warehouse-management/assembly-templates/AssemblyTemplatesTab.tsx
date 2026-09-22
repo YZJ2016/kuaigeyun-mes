@@ -1,0 +1,758 @@
+import React, { useMemo, useRef, useState } from 'react';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormDigit,
+  ProFormSwitch,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
+import { App, Button, Form as AntForm, Modal, Select, Space, Table, Typography } from 'antd';
+import { DeleteOutlined, EditOutlined, EyeOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
+import { UniTable } from '../../../../../components/uni-table';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import {
+  FormModalTemplate,
+  ListPageTemplate,
+  MODAL_CONFIG,
+  WAREHOUSE_DETAIL_TABLE_STYLES,
+} from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
+import { MasterDataDetailDrawer } from '../../../../master-data/pages/shared/masterDataDetailDrawer';
+import { MarkerTag } from '../../../../../constants/statusBadges';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import { assemblyTemplateApi } from '../../../services/assembly-template';
+import { formatDateTimeBySiteSetting, formatQuantity, formatPrice } from '../../../../../utils/format';
+const ASSEMBLY_ORDERS_RESOURCE = 'kuaizhizao:warehouse-management-assembly-orders';
+
+type TemplateItem = {
+  id?: number;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  quantity_per_base?: number;
+  unit_price?: number;
+  sequence?: number;
+  remarks?: string;
+};
+
+type AssemblyTemplate = {
+  id?: number;
+  template_code?: string;
+  template_name?: string;
+  product_material_id?: number;
+  product_material_code?: string;
+  product_material_name?: string;
+  base_quantity?: number;
+  source_type?: string;
+  is_active?: boolean;
+  total_items?: number;
+  remarks?: string;
+  updated_at?: string;
+  items?: TemplateItem[];
+};
+
+export const AssemblyTemplatesTab: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const { canCreate, canUpdate, canDelete } = useResourcePermissions(ASSEMBLY_ORDERS_RESOURCE);
+  const actionRef = useRef<ActionType>(null);
+  const formRef = useRef<any>(null);
+  const itemFormRef = useRef<any>(null);
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [itemModalVisible, setItemModalVisible] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryIdRef = useRef<number | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<AssemblyTemplate | null>(null);
+  const [currentTemplate, setCurrentTemplate] = useState<AssemblyTemplate | null>(null);
+  const [editingItem, setEditingItem] = useState<TemplateItem | null>(null);
+  const [bomPreviewLines, setBomPreviewLines] = useState<TemplateItem[]>([]);
+  const [bomPreviewVisible, setBomPreviewVisible] = useState(false);
+
+  const sourceTypeMap = useMemo(
+    () => ({
+      manual: t('app.kuaizhizao.assemblyTemplate.sourceManual'),
+      bom: t('app.kuaizhizao.assemblyTemplate.sourceBom'),
+    }),
+    [t],
+  );
+
+  const reloadList = () => actionRef.current?.reload();
+
+  const loadDetail = async (templateId: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await assemblyTemplateApi.get(String(templateId));
+      setCurrentTemplate(detail as AssemblyTemplate);
+    } catch (error) {
+      setCurrentTemplate(null);
+      setDetailError(getApiErrorMessage(error, t('app.kuaizhizao.assemblyTemplate.loadDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const refreshCurrentTemplate = async (templateId?: number) => {
+    const targetId = templateId ?? currentTemplate?.id;
+    if (!targetId) return;
+    await loadDetail(targetId);
+  };
+
+  const openCreateModal = () => {
+    setEditingTemplate(null);
+    setModalVisible(true);
+    setTimeout(() => {
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({ base_quantity: 1, is_active: true });
+    }, 0);
+  };
+
+  const openEditModal = async (record: AssemblyTemplate) => {
+    try {
+      const detail = await assemblyTemplateApi.get(String(record.id));
+      setEditingTemplate(detail as AssemblyTemplate);
+      setModalVisible(true);
+      setTimeout(() => {
+        formRef.current?.setFieldsValue({
+          template_name: detail.template_name,
+          product_material_id: detail.product_material_id,
+          product_material_code: detail.product_material_code,
+          product_material_name: detail.product_material_name,
+          base_quantity: detail.base_quantity ?? 1,
+          is_active: detail.is_active ?? true,
+          remarks: detail.remarks,
+        });
+      }, 0);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.loadFailed'));
+    }
+  };
+
+  const openDetailDrawer = (record: AssemblyTemplate) => {
+    if (record.id == null) return;
+    detailRetryIdRef.current = record.id;
+    setDrawerVisible(true);
+    setCurrentTemplate(null);
+    setDetailError(null);
+    void loadDetail(record.id);
+  };
+
+  const submitTemplate = async (values: any) => {
+    try {
+      const payload = {
+        template_name: values.template_name,
+        product_material_id: values.product_material_id,
+        product_material_code: values.product_material_code || '',
+        product_material_name: values.product_material_name || '',
+        base_quantity: Number(values.base_quantity || 1),
+        is_active: values.is_active ?? true,
+        remarks: values.remarks,
+      };
+      if (editingTemplate?.id) {
+        await assemblyTemplateApi.update(String(editingTemplate.id), payload);
+        messageApi.success(t('app.kuaizhizao.assemblyTemplate.updateSuccess'));
+      } else {
+        await assemblyTemplateApi.create(payload);
+        messageApi.success(t('app.kuaizhizao.assemblyTemplate.createSuccess'));
+      }
+      setModalVisible(false);
+      setEditingTemplate(null);
+      formRef.current?.resetFields();
+      reloadList();
+      if (currentTemplate?.id && editingTemplate?.id === currentTemplate.id) {
+        await refreshCurrentTemplate(currentTemplate.id);
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.saveFailed'));
+      throw error;
+    }
+  };
+
+  const executeconfirmDeleteTemplate = async (record: AssemblyTemplate) => {
+    try {
+          await assemblyTemplateApi.delete(String(record.id));
+          messageApi.success(t('app.kuaizhizao.assemblyTemplate.deleteSuccess'));
+          if (currentTemplate?.id === record.id) {
+            setDrawerVisible(false);
+            setCurrentTemplate(null);
+          }
+          reloadList();
+        } catch (error: any) {
+          messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.deleteFailed'));
+        }
+  };
+
+  const openItemModal = (template: AssemblyTemplate, item?: TemplateItem) => {
+    setCurrentTemplate(template);
+    setEditingItem(item ?? null);
+    setItemModalVisible(true);
+    setTimeout(() => {
+      itemFormRef.current?.resetFields();
+      if (item) {
+        itemFormRef.current?.setFieldsValue({
+          material_id: item.material_id,
+          material_code: item.material_code,
+          material_name: item.material_name,
+          quantity_per_base: item.quantity_per_base,
+          unit_price: item.unit_price,
+          remarks: item.remarks,
+        });
+      }
+    }, 0);
+  };
+
+  const submitItem = async (values: any) => {
+    if (!currentTemplate?.id) return;
+    try {
+      if (editingItem?.id) {
+        await assemblyTemplateApi.updateItem(String(currentTemplate.id), String(editingItem.id), {
+          quantity_per_base: Number(values.quantity_per_base || 0),
+          unit_price: Number(values.unit_price || 0),
+          remarks: values.remarks,
+        });
+        messageApi.success(t('app.kuaizhizao.assemblyTemplate.updateItemSuccess'));
+      } else {
+        await assemblyTemplateApi.createItem(String(currentTemplate.id), {
+          material_id: values.material_id,
+          material_code: values.material_code || '',
+          material_name: values.material_name || '',
+          quantity_per_base: Number(values.quantity_per_base || 0),
+          unit_price: Number(values.unit_price || 0),
+          remarks: values.remarks,
+        });
+        messageApi.success(t('app.kuaizhizao.assemblyTemplate.addItemSuccess'));
+      }
+      setItemModalVisible(false);
+      setEditingItem(null);
+      itemFormRef.current?.resetFields();
+      reloadList();
+      await refreshCurrentTemplate(currentTemplate.id);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.saveItemFailed'));
+      throw error;
+    }
+  };
+
+  const executeconfirmDeleteItem = async (template: AssemblyTemplate, item: TemplateItem) => {
+    try {
+          if (!template.id || !item.id) return;
+          await assemblyTemplateApi.deleteItem(String(template.id), String(item.id));
+          messageApi.success(t('app.kuaizhizao.assemblyTemplate.deleteItemSuccess'));
+          reloadList();
+          await refreshCurrentTemplate(template.id);
+        } catch (error: any) {
+          messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.deleteItemFailed'));
+        }
+  };
+
+  const previewBom = async (template: AssemblyTemplate) => {
+    if (!template.product_material_id) {
+      messageApi.warning(t('app.kuaizhizao.assemblyTemplate.setProductFirst'));
+      return;
+    }
+    try {
+      const preview = await assemblyTemplateApi.bomPreview({
+        product_material_id: template.product_material_id,
+        base_quantity: template.base_quantity ?? 1,
+        product_material_code: template.product_material_code,
+        product_material_name: template.product_material_name,
+      });
+      setBomPreviewLines((preview.lines || []) as TemplateItem[]);
+      setCurrentTemplate(template);
+      setBomPreviewVisible(true);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.bomPreviewFailed'));
+    }
+  };
+
+  const executeconfirmImportFromBom = async (template: AssemblyTemplate) => {
+    try {
+          const updated = await assemblyTemplateApi.importFromBom(String(template.id));
+          messageApi.success(t('app.kuaizhizao.assemblyTemplate.importFromBomSuccess'));
+          setCurrentTemplate(updated as AssemblyTemplate);
+          reloadList();
+        } catch (error: any) {
+          messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.importFromBomFailed'));
+        }
+  };
+
+  const columns: ProColumns<AssemblyTemplate>[] = useMemo(
+    () => alignProColumns<AssemblyTemplate>([
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colTemplateCode'),
+        dataIndex: 'template_code',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        fixed: 'left',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.template_code ?? '') }} ellipsis>
+            {r.template_code ?? '-'}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colTemplateName'),
+        dataIndex: 'template_name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        render: (_, r) =>
+          r.template_name != null && r.template_name !== '' ? String(r.template_name) : '-',
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'),
+        dataIndex: 'product_material_name',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        render: (_, r) =>
+          r.product_material_name != null && r.product_material_name !== ''
+            ? String(r.product_material_name)
+            : '-',
+      },
+      {
+        title: t('app.kuaizhizao.common.colLineMaterials'),
+        ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+        render: (_, r) => renderDocumentLineMaterialsPreview(r.items, t),
+      },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colBaseQuantity'),
+        dataIndex: 'base_quantity',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        align: 'right',
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colSource'),
+        dataIndex: 'source_type',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => sourceTypeMap[String(r.source_type ?? 'manual') as keyof typeof sourceTypeMap] || r.source_type,
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'is_active',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        valueType: 'select',
+        valueEnum: {
+          true: { text: t('common.enabled'), status: 'Success' },
+          false: { text: t('common.disabled'), status: 'Default' },
+        },
+        render: (_, r) => (
+          <MarkerTag color={r.is_active ? 'success' : 'default'}>
+            {r.is_active ? t('common.enabled') : t('common.disabled')}
+          </MarkerTag>
+        ),
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 168,
+        minWidth: 168,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => (r.updated_at ? formatDateTimeBySiteSetting(r.updated_at) : '-'),
+      },
+      {
+        title: t('common.actions'),
+        key: 'option',
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) => (
+          <Space>
+            <Button {...rowActionKind('read')} onClick={() => openDetailDrawer(record)} />
+            {canUpdate && <Button {...rowActionKind('update')} onClick={() => openEditModal(record)} />}
+            {canUpdate && (
+              <Button {...rowActionKind('import')} {...rowActionLabelKeep()} onClick={() => previewBom(record)}>
+                {t('app.kuaizhizao.assemblyTemplate.previewBom')}
+              </Button>
+            )}
+            {canDelete && <ActionConfirmPopconfirm title={t('app.kuaizhizao.assemblyTemplate.deleteTitle')} description={t('app.kuaizhizao.assemblyTemplate.deleteConfirm', { code: record.template_code })} onConfirm={() => executeconfirmDeleteTemplate(record)}>
+              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>}
+          </Space>
+        ),
+      },
+    ], WAREHOUSE_DOC_LIST_FIELD_RANK),
+    [t, sourceTypeMap, canUpdate, canDelete],
+  );
+
+  const detailColumns: ProDescriptionsItemProps<AssemblyTemplate>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.assemblyTemplate.colTemplateCode'), dataIndex: 'template_code', key: 'code', copyable: true },
+      { title: t('app.kuaizhizao.assemblyTemplate.colTemplateName'), dataIndex: 'template_name', key: 'name' },
+      { title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'), dataIndex: 'product_material_name' },
+      { title: t('app.kuaizhizao.assemblyTemplate.colBaseQuantity'), dataIndex: 'base_quantity' },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colSource'),
+        dataIndex: 'source_type',
+        render: (value) =>
+          sourceTypeMap[String(value ?? 'manual') as keyof typeof sourceTypeMap] || String(value ?? '-'),
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'is_active',
+        render: (_, record) => (
+          <MarkerTag color={record.is_active ? 'success' : 'default'}>
+            {record.is_active
+              ? t('common.enabled')
+              : t('common.disabled')}
+          </MarkerTag>
+        ),
+      },
+      { title: t('app.kuaizhizao.assemblyTemplate.colLineCount'), dataIndex: 'total_items' },
+      { title: t('common.remark'), dataIndex: 'remarks', span: 2 },
+    ],
+    [t, sourceTypeMap],
+  );
+
+  const itemTableColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseCommon.colComponentCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.warehouseCommon.colComponentName'), dataIndex: 'material_name', width: 150 },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colQtyPerBase'),
+        dataIndex: 'quantity_per_base',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colDefaultUnitPrice'),
+        dataIndex: 'unit_price',
+        width: 90,
+        align: 'right' as const,
+        render: (v: number) => formatPrice(v),
+      },
+      { title: t('common.remark'), dataIndex: 'remarks' },
+      {
+        title: t('common.actions'),
+        width: 140,
+        render: (_: unknown, item: TemplateItem) =>
+          canUpdate || canDelete ? (
+            <Space size={0}>
+              {canUpdate && (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => openItemModal(currentTemplate!, item)}
+                >
+                  {t('common.edit')}
+                </Button>
+              )}
+              {canDelete && (
+                <ActionConfirmPopconfirm title={t('app.kuaizhizao.assemblyTemplate.deleteItemTitle')} description={t('app.kuaizhizao.assemblyTemplate.deleteItemConfirm', {
+        name: item.material_code || item.material_name,
+      })} onConfirm={() => executeconfirmDeleteItem(currentTemplate!, item)}>
+              <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('common.delete')}
+                </Button>
+            </ActionConfirmPopconfirm>
+              )}
+            </Space>
+          ) : null,
+      },
+    ],
+    [t, canUpdate, canDelete, currentTemplate],
+  );
+
+  const bomPreviewColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseCommon.colComponentCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.warehouseCommon.colComponentName'), dataIndex: 'material_name' },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colQtyPerBase'),
+        dataIndex: 'quantity_per_base',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+    ],
+    [t],
+  );
+
+  const draftActions = currentTemplate ? (
+    <Space>
+      {canCreate && (
+        <Button size="small" icon={<PlusOutlined />} onClick={() => openItemModal(currentTemplate)}>
+          {t('app.kuaizhizao.warehouseCommon.addItem')}
+        </Button>
+      )}
+      {canUpdate && (
+        <>
+          <Button size="small" icon={<ImportOutlined />} onClick={() => previewBom(currentTemplate)}>
+            {t('app.kuaizhizao.assemblyTemplate.previewBom')}
+          </Button>
+          <ActionConfirmPopconfirm title={t('app.kuaizhizao.assemblyTemplate.importFromBomTitle')} description={t('app.kuaizhizao.assemblyTemplate.importFromBomConfirm')} onConfirm={() => executeconfirmImportFromBom(currentTemplate)}>
+              <Button
+            size="small"
+            type="primary"
+            icon={<ImportOutlined />}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {t('app.kuaizhizao.assemblyTemplate.importFromBom')}
+          </Button>
+            </ActionConfirmPopconfirm>
+        </>
+      )}
+    </Space>
+  ) : undefined;
+
+  return (
+    <ListPageTemplate>
+      <UniTable<AssemblyTemplate>
+        headerTitle={t('app.kuaizhizao.assemblyTemplate.headerTitle')}
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.assembly-templates-width-v3"
+        actionRef={actionRef}
+        rowKey="id"
+        columns={columns}
+        showAdvancedSearch
+        showCreateButton={canCreate}
+        createButtonText={t('app.kuaizhizao.assemblyTemplate.createButton')}
+        onCreate={openCreateModal}
+        enableRowSelection={canDelete}
+        showDeleteButton={canDelete}
+        onDelete={async (keys) => {
+          await Promise.all(keys.map((key) => assemblyTemplateApi.delete(String(key))));
+          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+          actionRef.current?.reload();
+        }}
+        request={async (params) => {
+          const result = await assemblyTemplateApi.list({
+            skip: (params.current! - 1) * params.pageSize!,
+            limit: params.pageSize,
+            keyword: (params as any).keyword,
+            is_active:
+              params.is_active === 'true' ? true : params.is_active === 'false' ? false : undefined,
+          });
+          return {
+            data: result.items || [],
+            success: true,
+            total: result.total || 0,
+          };
+        }}
+        locale={{ emptyText: t('app.kuaizhizao.assemblyTemplate.listEmpty') }}
+      />
+
+      <FormModalTemplate
+        title={
+          editingTemplate
+            ? t('app.kuaizhizao.assemblyTemplate.editModalTitle')
+            : t('app.kuaizhizao.assemblyTemplate.createModalTitle')
+        }
+        open={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setEditingTemplate(null);
+          formRef.current?.resetFields();
+        }}
+        onFinish={submitTemplate}
+        formRef={formRef}
+        grid={false}
+        {...MODAL_CONFIG}
+      >
+        <ProFormText
+          name="template_name"
+          label={t('app.kuaizhizao.assemblyTemplate.colTemplateName')}
+          rules={[{ required: true, message: t('app.kuaizhizao.assemblyTemplate.enterTemplateName') }]}
+        />
+        <UniMaterialSelect
+          name="product_material_id"
+          label={t('app.kuaizhizao.assemblyTemplate.productMaterial')}
+          placeholder={t('app.kuaizhizao.assemblyTemplate.selectProductMaterial')}
+          required
+          showQuickCreate
+          showAdvancedSearch
+          fillMapping={{
+            product_material_code: 'mainCode',
+            product_material_name: 'name',
+          }}
+        />
+        <ProFormDigit
+          name="base_quantity"
+          label={t('app.kuaizhizao.assemblyTemplate.colBaseQuantity')}
+          rules={[{ required: true, message: t('app.kuaizhizao.assemblyTemplate.enterBaseQuantity') }]}
+          min={0.01}
+          fieldProps={{ precision: 2 }}
+        />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} />
+        <ProFormTextArea
+          name="remarks"
+          label={t('common.remark')}
+          fieldProps={{ rows: 3 }}
+        />
+        <AntForm.Item name="product_material_code" hidden />
+        <AntForm.Item name="product_material_name" hidden />
+      </FormModalTemplate>
+
+      <FormModalTemplate
+        title={
+          editingItem
+            ? t('app.kuaizhizao.assemblyTemplate.editItemModalTitle')
+            : t('app.kuaizhizao.assemblyTemplate.addItemModalTitle')
+        }
+        open={itemModalVisible}
+        onClose={() => {
+          setItemModalVisible(false);
+          setEditingItem(null);
+          itemFormRef.current?.resetFields();
+        }}
+        onFinish={submitItem}
+        formRef={itemFormRef}
+        {...MODAL_CONFIG}
+      >
+        <UniMaterialSelect
+          name="material_id"
+          label={t('app.kuaizhizao.warehouseCommon.componentMaterial')}
+          required
+          disabled={!!editingItem}
+          showQuickCreate
+          showAdvancedSearch
+          fillMapping={{
+            material_code: 'mainCode',
+            material_name: 'name',
+          }}
+        />
+        <ProFormDigit
+          name="quantity_per_base"
+          label={t('app.kuaizhizao.assemblyTemplate.colQtyPerBase')}
+          rules={[{ required: true, message: t('app.kuaizhizao.assemblyTemplate.enterQtyPerBase') }]}
+          min={0.0001}
+          fieldProps={{ precision: 4 }}
+        />
+        <ProFormDigit
+          name="unit_price"
+          label={t('app.kuaizhizao.assemblyTemplate.colDefaultUnitPrice')}
+          min={0}
+          fieldProps={{ precision: 2 }}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label={t('common.remark')}
+          fieldProps={{ rows: 2 }}
+        />
+      </FormModalTemplate>
+
+      <MasterDataDetailDrawer
+        title={t('app.kuaizhizao.assemblyTemplate.detailTitle')}
+        open={drawerVisible}
+        onClose={() => {
+          setDrawerVisible(false);
+          setCurrentTemplate(null);
+          setDetailError(null);
+        }}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const id = detailRetryIdRef.current;
+          if (id != null) void loadDetail(id);
+        }}
+        extra={
+          currentTemplate
+            ? buildDetailDrawerEditExtra(t, Boolean(canUpdate), () => {
+                void openEditModal(currentTemplate);
+              })
+            : null
+        }
+        detail={currentTemplate}
+        detailColumns={detailColumns}
+        linesTitle={t('app.kuaizhizao.assemblyTemplate.componentItems')}
+        lines={
+          currentTemplate ? (
+            <>
+              <div style={{ marginBottom: 12 }}>{draftActions}</div>
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+              {currentTemplate.items && currentTemplate.items.length > 0 ? (
+                <Table<TemplateItem>
+                  className="warehouse-detail-table"
+                  size="small"
+                  rowKey="id"
+                  pagination={false}
+                  dataSource={currentTemplate.items}
+                  columns={itemTableColumns}
+                />
+              ) : (
+                <Typography.Text type="secondary">{t('app.kuaizhizao.assemblyTemplate.noItemsHint')}</Typography.Text>
+              )}
+            </>
+          ) : undefined
+        }
+      />
+
+      <Modal
+        title={t('app.kuaizhizao.assemblyTemplate.bomPreviewTitle')}
+        open={bomPreviewVisible}
+        onCancel={() => setBomPreviewVisible(false)}
+        footer={
+          currentTemplate && canUpdate
+            ? [
+                <Button key="cancel" onClick={() => setBomPreviewVisible(false)}>
+                  {t('common.close')}
+                </Button>,
+                <Button
+                  key="import"
+                  type="primary"
+                  onClick={() => {
+                    setBomPreviewVisible(false);
+                    confirmImportFromBom(currentTemplate);
+                  }}
+                >
+                  {t('app.kuaizhizao.assemblyTemplate.confirmImport')}
+                </Button>,
+              ]
+            : [
+                <Button key="close" onClick={() => setBomPreviewVisible(false)}>
+                  {t('common.close')}
+                </Button>,
+              ]
+        }
+        width={720}
+      >
+        <Table<TemplateItem>
+          size="small"
+          rowKey={(row, idx) => `${row.material_id}-${idx}`}
+          pagination={false}
+          dataSource={bomPreviewLines}
+          columns={bomPreviewColumns}
+        />
+      </Modal>
+    </ListPageTemplate>
+  );
+};

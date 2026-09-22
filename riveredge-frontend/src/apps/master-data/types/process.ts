@@ -1,0 +1,521 @@
+/**
+ * 工艺数据类型定义
+ * 
+ * 定义不良品、工序、工艺路线、作业程序（SOP）的数据类型
+ */
+
+export interface DefectType {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  code: string;
+  name: string;
+  category?: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
+  deletedAt?: string;
+}
+
+export interface DefectTypeCreate {
+  code: string;
+  name: string;
+  category?: string;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface DefectTypeUpdate {
+  code?: string;
+  name?: string;
+  category?: string;
+  description?: string;
+  isActive?: boolean;
+}
+
+export interface DefectTypeListParams {
+  skip?: number;
+  limit?: number;
+  category?: string;
+  isActive?: boolean;
+  keyword?: string;
+  code?: string;
+  name?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+}
+
+/** 不良品列表分页响应 */
+export interface DefectTypeListResponse {
+  data: DefectType[];
+  total: number;
+}
+
+/** 不良品项简要（工序绑定用）；仅 UUID 占位时用于补齐下拉选项 */
+export interface DefectTypeMinimal {
+  uuid: string;
+  code?: string;
+  name?: string;
+}
+
+export interface Operation {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  code: string;
+  name: string;
+  description?: string;
+  reportingType: 'quantity' | 'status';
+  allowJump: boolean;
+  /** 节点工序：允许跳转时前序节点仍不可跳过 */
+  isNodeOperation?: boolean;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  over_report_mode?: string;
+  overReportValue?: number;
+  over_report_value?: number;
+  isActive: boolean;
+  /** 允许绑定的不良品项（API 可能返回 defect_types） */
+  defectTypes?: DefectTypeMinimal[];
+  defect_types?: DefectTypeMinimal[];
+  /** 质检模式（none:无质检, simple:简易质检, plan:方案质检） */
+  inspectionMode?: 'none' | 'simple' | 'plan';
+  inspection_mode?: string;
+  /** 默认质检方案ID（方案质检时使用） */
+  defaultInspectionPlanId?: number | null;
+  default_inspection_plan_id?: number | null;
+  defaultInspectionPlanIds?: number[];
+  default_inspection_plan_ids?: number[];
+  defaultInspectionPlanName?: string;
+  default_inspection_plan_name?: string;
+  defaultInspectionPlanNames?: string[];
+  default_inspection_plan_names?: string[];
+  /** 分场景质检（工序仅 ipqc） */
+  inspectionStages?: Record<string, { mode?: string; planId?: number | null; plan_id?: number | null; planIds?: number[]; plan_ids?: number[] }>;
+  inspection_stages?: Record<string, { mode?: string; planId?: number | null; plan_id?: number | null; planIds?: number[]; plan_ids?: number[] }>;
+  defaultOperatorId?: number;
+  default_operator_id?: number;
+  defaultOperatorUuids?: string[];
+  default_operator_uuids?: string[];
+  defaultOperatorNames?: string[];
+  default_operator_names?: string[];
+  defaultOperatorIds?: number[];
+  default_operator_ids?: number[];
+  defaultTeamIds?: number[];
+  default_team_ids?: number[];
+  defaultTeamNames?: string[];
+  default_team_names?: string[];
+  default_workshop_ids?: number[];
+  defaultWorkshopIds?: number[];
+  defaultWorkCenterIds?: number[];
+  defaultStationIds?: number[];
+  default_station_ids?: number[];
+  defaultEquipmentIds?: number[];
+  createdAt: string;
+  updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
+  deletedAt?: string;
+}
+
+export interface OperationCreate {
+  code: string;
+  name: string;
+  description?: string;
+  reportingType?: 'quantity' | 'status';
+  allowJump?: boolean;
+  isNodeOperation?: boolean;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  overReportValue?: number;
+  isActive?: boolean;
+  inspectionMode?: 'none' | 'simple' | 'plan';
+  defaultInspectionPlanId?: number | null;
+  defaultInspectionPlanIds?: number[];
+  inspectionStages?: Record<string, { mode?: string; planId?: number | null; planIds?: number[] }>;
+  defectTypeUuids?: string[];
+  defaultOperatorUuids?: string[];
+  defaultTeamIds?: number[];
+  defaultWorkshopIds?: number[];
+  defaultWorkCenterIds?: number[];
+  defaultStationIds?: number[];
+  defaultEquipmentIds?: number[];
+}
+
+export interface OperationUpdate {
+  code?: string;
+  name?: string;
+  description?: string;
+  reportingType?: 'quantity' | 'status';
+  allowJump?: boolean;
+  isNodeOperation?: boolean;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  overReportValue?: number;
+  isActive?: boolean;
+  inspectionMode?: 'none' | 'simple' | 'plan';
+  defaultInspectionPlanId?: number | null;
+  defaultInspectionPlanIds?: number[];
+  inspectionStages?: Record<string, { mode?: string; planId?: number | null; planIds?: number[] }>;
+  defectTypeUuids?: string[];
+  defaultOperatorUuids?: string[];
+  defaultTeamIds?: number[];
+  defaultWorkshopIds?: number[];
+  defaultWorkCenterIds?: number[];
+  defaultStationIds?: number[];
+  defaultEquipmentIds?: number[];
+}
+
+export interface OperationListParams {
+  skip?: number;
+  limit?: number;
+  isActive?: boolean;
+  keyword?: string;
+  code?: string;
+  name?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+}
+
+/** 工序列表分页响应 */
+export interface OperationListResponse {
+  data: Operation[];
+  total: number;
+}
+
+export interface ProcessRoute {
+  id: number;
+  uuid: string;
+  tenant_id: number;
+  code: string;
+  name: string;
+  description?: string;
+  version: string; // 版本号（如：v1.0、v1.1）
+  versionDescription?: string; // 版本说明
+  baseVersion?: string; // 基于版本（从哪个版本创建）
+  effectiveDate?: string; // 生效日期
+  operation_sequence?: Record<string, any>;
+  parentRouteUuid?: string; // 父工艺路线UUID（如果此工艺路线是子工艺路线）
+  parentOperationUuid?: string; // 父工序UUID（此子工艺路线所属的父工序）
+  level: number; // 嵌套层级（0为主工艺路线，1-3为子工艺路线）
+  is_active: boolean;
+  over_report_mode?: string;
+  overReportMode?: string;
+  over_report_value?: number;
+  overReportValue?: number;
+  /** 路线级是否允许工序跳转 */
+  allow_operation_jump?: boolean;
+  allowOperationJump?: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by_name?: string;
+  updated_by_name?: string;
+  createdByName?: string;
+  updatedByName?: string;
+  deleted_at?: string;
+}
+
+export interface ProcessRouteCreate {
+  code: string;
+  name: string;
+  description?: string;
+  operationSequence?: Record<string, any>;
+  isActive?: boolean;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  over_report_mode?: string;
+  overReportValue?: number;
+  over_report_value?: number;
+  allowOperationJump?: boolean;
+  allow_operation_jump?: boolean;
+}
+
+export interface ProcessRouteUpdate {
+  code?: string;
+  name?: string;
+  description?: string;
+  operationSequence?: Record<string, any>;
+  isActive?: boolean;
+  overReportMode?: 'none' | 'fixed' | 'percent';
+  over_report_mode?: string;
+  overReportValue?: number;
+  over_report_value?: number;
+  allowOperationJump?: boolean;
+  allow_operation_jump?: boolean;
+}
+
+export interface ProcessRouteListParams {
+  skip?: number;
+  limit?: number;
+  isActive?: boolean;
+  keyword?: string;
+  code?: string;
+  name?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+}
+
+export interface ProcessRouteListResponse {
+  data: ProcessRoute[];
+  total: number;
+}
+
+// ==================== 工艺路线版本管理相关类型 ====================
+
+export interface ProcessRouteVersionCreate {
+  version: string; // 版本号（如：v1.1）
+  versionDescription?: string; // 版本说明
+  effectiveDate?: string; // 生效日期（可选，默认为当前日期）
+  applyStrategy: 'new_only' | 'all'; // 版本应用策略：new_only（仅新工单使用新版本，推荐）或 all（所有工单使用新版本，谨慎使用）
+}
+
+export interface ProcessRouteVersionCompare {
+  version1: string; // 版本1
+  version2: string; // 版本2
+}
+
+export interface ProcessRouteVersionCompareResult {
+  version1: string;
+  version2: string;
+  added_operations: Array<{
+    operation: Record<string, any>;
+    position: number;
+  }>;
+  removed_operations: Array<{
+    operation: Record<string, any>;
+    old_position: number;
+  }>;
+  modified_operations: Array<{
+    operation: Record<string, any>;
+    changes: Record<string, { old: any; new: any }>;
+  }>;
+  sequence_changes: Array<{
+    operation: Record<string, any>;
+    old_position: number;
+    new_position: number;
+  }>;
+}
+
+export type SopDomain = 'pe' | 'qc';
+
+export interface SOP {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  sopDomain: SopDomain;
+  code: string;
+  name: string;
+  operationId?: number;
+  version?: string;
+  content?: string;
+  attachments?: Record<string, any>;
+  flowConfig?: Record<string, any>; // ProFlow 流程配置（作业指导步骤与顺序）
+  formConfig?: Record<string, any>; // 报工数据采集项（Formily Schema）
+  isActive: boolean;
+  /** 绑定的物料组 UUID 列表 */
+  materialGroupUuids?: string[];
+  /** 绑定的具体物料 UUID 列表，匹配时优先于物料组 */
+  materialUuids?: string[];
+  /** 载入的工艺路线 UUID 列表，作为融合输入 */
+  routeUuids?: string[];
+  /** BOM 载入方式：by_material / by_material_group / specific_bom */
+  bomLoadMode?: string;
+  /** 指定 BOM 的 UUID（bom_load_mode=specific_bom 时使用） */
+  specificBomUuid?: string | null;
+  carrier?: 'electronic' | 'paper' | 'hybrid';
+  controlStatus?: 'draft' | 'in_review' | 'effective' | 'obsolete';
+  currentRevision?: string;
+  storagePlantId?: number;
+  storageLocation?: string;
+  keeperName?: string;
+  pageCount?: number;
+  paperSize?: string;
+  changeReason?: string;
+  effectiveAt?: string;
+  obsoleteAt?: string;
+  approvedAt?: string;
+  approvedByName?: string;
+  qmsDocumentUuid?: string;
+  issuedCopyCount?: number;
+  pendingRetrieveCopyCount?: number;
+  createdAt: string;
+  updatedAt: string;
+  createdByName?: string;
+  updatedByName?: string;
+  deletedAt?: string;
+}
+
+export interface SOPCreate {
+  sopDomain: SopDomain;
+  code: string;
+  name: string;
+  operationId?: number;
+  version?: string;
+  content?: string;
+  attachments?: Record<string, any>;
+  flowConfig?: Record<string, any>;
+  formConfig?: Record<string, any>; // 报工数据采集项
+  isActive?: boolean;
+  materialGroupUuids?: string[];
+  materialUuids?: string[];
+  routeUuids?: string[];
+  bomLoadMode?: string;
+  specificBomUuid?: string | null;
+  carrier?: 'electronic' | 'paper' | 'hybrid';
+  storagePlantId?: number;
+  storageLocation?: string;
+  keeperName?: string;
+  pageCount?: number;
+  paperSize?: string;
+  changeReason?: string;
+  qmsDocumentUuid?: string;
+}
+
+export interface SOPUpdate {
+  code?: string;
+  name?: string;
+  operationId?: number;
+  version?: string;
+  content?: string;
+  attachments?: Record<string, any>;
+  flowConfig?: Record<string, any>;
+  formConfig?: Record<string, any>;
+  isActive?: boolean;
+  materialGroupUuids?: string[];
+  materialUuids?: string[];
+  routeUuids?: string[];
+  bomLoadMode?: string;
+  specificBomUuid?: string | null;
+  carrier?: 'electronic' | 'paper' | 'hybrid';
+  storagePlantId?: number;
+  storageLocation?: string;
+  keeperName?: string;
+  pageCount?: number;
+  paperSize?: string;
+  changeReason?: string;
+  qmsDocumentUuid?: string;
+}
+
+export interface SOPListParams {
+  skip?: number;
+  limit?: number;
+  sopDomain?: SopDomain;
+  operationId?: number;
+  isActive?: boolean;
+  carrier?: string;
+  controlStatus?: string;
+  material_uuid?: string;
+  material_group_uuid?: string;
+  route_uuid?: string;
+  keyword?: string;
+  code?: string;
+  name?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+}
+
+export interface SOPListResponse {
+  data: SOP[];
+  total: number;
+}
+
+export interface SopRevision {
+  id: number;
+  sopId: number;
+  revision: string;
+  carrier: string;
+  changeReason?: string;
+  effectiveAt?: string;
+  obsoleteAt?: string;
+  publishedByName?: string;
+}
+
+export interface SopControlledCopy {
+  id: number;
+  copyNo: string;
+  locationType: string;
+  stationId?: number;
+  locationNote?: string;
+  revision: string;
+  status: string;
+  issuedAt?: string;
+  issuedByName?: string;
+  retrievedAt?: string;
+}
+
+export interface SopPrintData {
+  sopUuid: string;
+  code: string;
+  name: string;
+  revision: string;
+  carrier: string;
+  controlled: boolean;
+  copyNo?: string;
+  watermark: string;
+  storageLocation?: string;
+  content?: string;
+  attachments?: Array<Record<string, unknown>>;
+  steps?: Array<Record<string, unknown>>;
+}
+
+export interface SOPExecution {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  sopUuid: string;
+  title: string;
+  description?: string;
+  status: 'pending' | 'running' | 'completed' | 'paused' | 'cancelled';
+  currentNodeId?: string;
+  nodeData?: Record<string, { formData: Record<string, any>; completedAt: string }>;
+  executorId: number;
+  startedAt: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface SOPExecutionCreate {
+  sopUuid: string;
+  title: string;
+  description?: string;
+  executorId: number;
+}
+
+export interface SOPExecutionUpdate {
+  title?: string;
+  description?: string;
+  status?: 'pending' | 'running' | 'completed' | 'paused' | 'cancelled';
+  currentNodeId?: string;
+  nodeData?: Record<string, any>;
+}
+
+export interface SOPExecutionListParams {
+  skip?: number;
+  limit?: number;
+  sopUuid?: string;
+  status?: string;
+  executorId?: number;
+}
+
+export interface SOPNodeCompleteRequest {
+  nodeId: string;
+  formData: Record<string, any>;
+}
+

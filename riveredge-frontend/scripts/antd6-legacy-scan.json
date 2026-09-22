@@ -1,0 +1,44 @@
+{
+  "antd": "^6.4.4",
+  "scanned_files": 2556,
+  "pattern_types": 1,
+  "total_hits": 2,
+  "by_severity": {
+    "low": {
+      "hits": 2,
+      "patterns": 1
+    }
+  },
+  "rows": [
+    {
+      "api": "DetailDrawer width= (prefer size)",
+      "component": "Drawer",
+      "severity": "low",
+      "hits": 2,
+      "files": 2,
+      "samples": [
+        {
+          "file": "src/apps/kuaizhizao/pages/quality-management/quality-complaints/index.tsx",
+          "line": 672,
+          "snippet": "<DetailDrawerTemplate"
+        },
+        {
+          "file": "src/apps/kuaizhizao/pages/quality-management/supplier-evaluations/index.tsx",
+          "line": 3736,
+          "snippet": "<DetailDrawerTemplate"
+        }
+      ]
+    }
+  ],
+  "top_files": [
+    {
+      "file": "src/apps/kuaizhizao/pages/quality-management/quality-complaints/index.tsx",
+      "approx_hits": 1
+    },
+    {
+      "file": "src/apps/kuaizhizao/pages/quality-management/supplier-evaluations/index.tsx",
+      "approx_hits": 1
+    }
+  ],
+  "migration_ref": "https://ant.design/docs/react/migration-v6"
+}

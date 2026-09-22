@@ -1,0 +1,566 @@
+/**
+ * 工单列表与 UniTable + TanStack 共用的请求与 queryKey（预取与表格缓存键一致）
+ */
+import type { QueryClient } from '@tanstack/react-query'
+import type { ReactText } from 'react'
+import dayjs from 'dayjs'
+import { formatDateTime } from '../../../../../utils/format'
+import { stableJsonForQueryKey, extractProTableSort } from '../../../../../utils/tableQueryKey'
+import { swallowRequestCancellation } from '../../../../../utils/requestCancellation'
+import { resolveWorkOrderListStatusFilter } from '../../../utils/workOrderLifecycle'
+import { workOrderApi } from '../../../services/production'
+import {
+  buildWorkOrderGroupForest,
+  flattenWorkOrderListRows,
+} from './workOrderListGroupTree'
+import type { WorkOrderListRow } from './workOrderListTreeTypes'
+
+export const WORK_ORDER_LIST_TANSTACK_PREFIX = ['kuaizhizao', 'work-orders', 'list'] as const
+
+/** UniTable TanStack 完整前缀（invalidate 须带 uniTable，否则打不中缓存） */
+export const WORK_ORDER_LIST_UNITABLE_QUERY_KEY = [
+  'uniTable',
+  ...WORK_ORDER_LIST_TANSTACK_PREFIX,
+] as const
+
+/** 列表缓存时效；齐套率/下推进度由业务操作后的主动 reload 或工具栏同步刷新 */
+export const WORK_ORDER_LIST_STALE_MS = 15_000
+
+/** 从列表 rowKey 解析工单组 ID（组父行：work_order_group-123 或负数 id） */
+export function parseWorkOrderGroupIdFromListRowKey(key: React.Key): number | null {
+  const keyStr = String(key)
+  const match = /^work_order_group-(\d+)$/.exec(keyStr)
+  if (match) {
+    const gid = Number(match[1])
+    return Number.isFinite(gid) && gid > 0 ? gid : null
+  }
+  if (typeof key === 'number' && Number.isFinite(key) && key < 0) {
+    return -key
+  }
+  const n = Number(keyStr)
+  if (Number.isFinite(n) && n < 0) return -n
+  return null
+}
+
+/** 从列表 rowKey 解析生产工单 ID（支持数字或 work_order-123） */
+export function resolveWorkOrderIdFromListRowKey(key: React.Key): number | null {
+  if (typeof key === 'number' && Number.isFinite(key) && key > 0) return key
+  const s = String(key)
+  const match = /^(?:work_order|split)-(\d+)$/.exec(s)
+  if (match) return Number(match[1])
+  const n = Number(s)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** 批量操作：从列表 rowKey 解析可调用工单 API 的 ID（排除组行、返工、委外） */
+export function resolveWorkOrderIdsFromListRowKeys(
+  keys: React.Key[],
+  rowByKey?: Map<string, WorkOrderListRow>
+): number[] {
+  const ids: number[] = []
+  const seen = new Set<number>()
+  for (const key of keys) {
+    if (parseWorkOrderGroupIdFromListRowKey(key) != null) continue
+    const rowKey = String(key)
+    const row = rowByKey?.get(rowKey)
+    const kind =
+      row?.row_kind ??
+      (rowKey.startsWith('split-')
+        ? 'split'
+        : rowKey.startsWith('work_order_group-')
+          ? 'work_order_group'
+          : 'work_order')
+    if (kind === 'work_order_group' || kind === 'rework' || kind === 'outsource') continue
+    if (kind !== 'work_order' && kind !== 'split') continue
+    const id = row?.id != null ? Number(row.id) : resolveWorkOrderIdFromListRowKey(key)
+    if (id == null || id < 1 || seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+  }
+  return ids
+}
+
+/** 批量操作：仅保留可编入组的主工单（排除组节点、拆分子行等） */
+export function resolveMergeableWorkOrderIdsFromRowKeys(
+  keys: React.Key[],
+  rowByKey?: Map<string, WorkOrderListRow>
+): number[] {
+  const ids: number[] = []
+  const seen = new Set<number>()
+  for (const key of keys) {
+    const rowKey = String(key)
+    if (parseWorkOrderGroupIdFromListRowKey(key) != null) continue
+    const row = rowByKey?.get(rowKey)
+    if (row?.row_kind === 'work_order_group') continue
+    const kind = row?.row_kind ?? (rowKey.startsWith('split-') ? 'split' : 'work_order')
+    if (kind !== 'work_order') continue
+    const id = row?.id != null ? Number(row.id) : resolveWorkOrderIdFromListRowKey(key)
+    if (id == null || id < 1 || seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+  }
+  return ids
+}
+
+/** 从列表行解析工单组 ID（组父行或组内成员行） */
+export function resolveWorkOrderGroupIdFromListRow(row: WorkOrderListRow): number | null {
+  if (row.row_kind === 'work_order_group') {
+    if (row.work_order_group_id != null) {
+      const gid = Number(row.work_order_group_id)
+      return Number.isFinite(gid) && gid > 0 ? gid : null
+    }
+    const id = row.id != null ? Number(row.id) : null
+    if (id != null && id < 0) return -id
+    return null
+  }
+  if (row.work_order_group_id != null) {
+    const gid = Number(row.work_order_group_id)
+    return Number.isFinite(gid) && gid > 0 ? gid : null
+  }
+  return null
+}
+
+/** 批量解除编组：仅从勾选的「工单组」父行收集组 ID（不含组内成员行） */
+export function resolveDissolvableWorkOrderGroupIdsFromRowKeys(
+  keys: React.Key[],
+  rowByKey?: Map<string, WorkOrderListRow>
+): number[] {
+  const ids: number[] = []
+  const seen = new Set<number>()
+  for (const key of keys) {
+    const rowKey = String(key)
+    const row = rowByKey?.get(rowKey)
+    const isGroupRow =
+      row?.row_kind === 'work_order_group' || parseWorkOrderGroupIdFromListRowKey(key) != null
+    if (!isGroupRow) continue
+    let gid = parseWorkOrderGroupIdFromListRowKey(key)
+    if (gid == null && row) gid = resolveWorkOrderGroupIdFromListRow(row)
+    if (gid == null || seen.has(gid)) continue
+    seen.add(gid)
+    ids.push(gid)
+  }
+  return ids
+}
+
+export type WorkOrderListTableResult = {
+  data: any[]
+  success: boolean
+  total: number
+}
+
+/** 与 UniTable handleRequest 中 tanstack 分支的 queryKey 完全一致 */
+export function buildWorkOrderListUniTableQueryKey(
+  current: number,
+  pageSize: number,
+  sort: Record<string, 'ascend' | 'descend' | null>,
+  filter: Record<string, ReactText[] | null>,
+  searchFormValues: Record<string, any> | undefined
+) {
+  return [
+    'uniTable',
+    ...WORK_ORDER_LIST_TANSTACK_PREFIX,
+    current,
+    pageSize,
+    stableJsonForQueryKey(sort),
+    stableJsonForQueryKey(filter),
+    stableJsonForQueryKey(searchFormValues ?? {}),
+  ] as const
+}
+
+/** 列表默认排序：创建时间倒序（新建在上；与整站 extractProTableSort 缺省一致） */
+export const WORK_ORDER_LIST_DEFAULT_SORT: Record<string, 'ascend' | 'descend' | null> = {
+  created_at: 'descend',
+}
+const emptyFilter: Record<string, ReactText[] | null> = {}
+
+function tenantIdForSnapshot(): string {
+  if (typeof window === 'undefined') return '0'
+  try {
+    return localStorage.getItem('tenant_id')?.trim() || '0'
+  } catch {
+    return '0'
+  }
+}
+
+const SPLIT_CHILD_CODE = /^(.+)-(\d{3})$/
+
+/**
+ * 拆分子行 / 返工单 / 委外单通常不带 work_order_group_id，需从父工单继承以便留在组树内展示。
+ */
+function propagateWorkOrderGroupIdFromParent(flat: WorkOrderListRow[]): WorkOrderListRow[] {
+  const groupIdByWorkOrderId = new Map<number, number>()
+  for (const row of flat) {
+    if (row.id != null && row.work_order_group_id != null) {
+      groupIdByWorkOrderId.set(Number(row.id), Number(row.work_order_group_id))
+    }
+  }
+  return flat.map((row) => {
+    if (row.work_order_group_id != null || row.parent_work_order_id == null) {
+      return row
+    }
+    const gid = groupIdByWorkOrderId.get(Number(row.parent_work_order_id))
+    if (gid == null) return row
+    return { ...row, work_order_group_id: gid }
+  })
+}
+
+/** 仅拆分子行在自身无工序摘要时继承主工单；BOM 子工单不得继承上级成品工序 */
+function inheritOperationStepsFromParent(rows: WorkOrderListRow[]): WorkOrderListRow[] {
+  return rows.map((row) => {
+    if (!Array.isArray(row.children) || row.children.length === 0) {
+      return row
+    }
+    const children = row.children.map((child: WorkOrderListRow) => {
+      const kind = child.row_kind || 'work_order'
+      const ownSteps =
+        Array.isArray(child.operation_steps) && child.operation_steps.length > 0
+          ? child.operation_steps
+          : undefined
+      if (ownSteps) {
+        return { ...child, operation_steps: ownSteps }
+      }
+      if (kind === 'split') {
+        return { ...child, operation_steps: row.operation_steps }
+      }
+      return child
+    })
+    return {
+      ...row,
+      children: inheritOperationStepsFromParent(children),
+    }
+  })
+}
+
+function normalizeUngroupedWorkOrderTree(rows: WorkOrderListRow[]): WorkOrderListRow[] {
+  if (!rows.length) return []
+
+  const rowById = new Map<number, WorkOrderListRow>()
+  const rowByCode = new Map<string, WorkOrderListRow>()
+  for (const row of rows) {
+    if (row.id == null) continue
+    const copy = { ...row, children: undefined as WorkOrderListRow[] | undefined }
+    rowById.set(Number(row.id), copy)
+    if (row.code) rowByCode.set(String(row.code), copy)
+  }
+
+  const childIds = new Set<number>()
+
+  const attachChild = (parent: WorkOrderListRow, child: WorkOrderListRow) => {
+    if (child.id == null || parent.id == null || child.id === parent.id) return
+    if (!parent.children) parent.children = []
+    const kind = child.row_kind || 'split'
+    const ownSteps =
+      Array.isArray(child.operation_steps) && child.operation_steps.length > 0
+        ? child.operation_steps
+        : undefined
+    parent.children.push({
+      ...child,
+      row_kind: kind,
+      parent_work_order_id: parent.id,
+      list_tree_depth: (parent.list_tree_depth ?? 0) + 1,
+      operation_steps:
+        ownSteps ?? (kind === 'split' ? parent.operation_steps : child.operation_steps),
+    })
+    childIds.add(Number(child.id))
+  }
+
+  for (const row of rowById.values()) {
+    let parent: WorkOrderListRow | undefined
+    const parentId = row.parent_work_order_id
+    if (parentId != null) {
+      parent = rowById.get(Number(parentId))
+    }
+    if (!parent && row.code) {
+      const match = SPLIT_CHILD_CODE.exec(String(row.code))
+      if (match) {
+        parent = rowByCode.get(match[1])
+      }
+    }
+    if (parent) {
+      attachChild(parent, row)
+    }
+  }
+
+  const roots = [...rowById.values()].filter((row) => row.id == null || !childIds.has(Number(row.id)))
+  for (const root of roots) {
+    root.list_tree_depth = 0
+    if (root.children?.length) {
+      root.children.sort((a, b) => {
+        const order = (row: WorkOrderListRow) => {
+          const kind = row.row_kind || 'split'
+          if (kind === 'split') return 0
+          if (kind === 'rework') return 1
+          if (kind === 'outsource') return 2
+          return 3
+        }
+        const kindDiff = order(a) - order(b)
+        return kindDiff !== 0 ? kindDiff : String(a.code ?? '').localeCompare(String(b.code ?? ''))
+      })
+    }
+  }
+  return roots
+}
+
+/**
+ * 将列表行组装为 ProTable 树形 dataSource：
+ * - 有 work_order_group_id 的按组建树（组 → BOM → 拆分子行）
+ * - 无组的按 parent_work_order_id / 编码 xxx-NNN 挂拆分子行
+ */
+export function normalizeWorkOrderListTreeData(rows: WorkOrderListRow[]): WorkOrderListRow[] {
+  if (!rows?.length) return []
+
+  const flat = propagateWorkOrderGroupIdFromParent(
+    flattenWorkOrderListRows(rows).map((row) => ({
+      ...row,
+      row_kind: row.row_kind || 'work_order',
+    }))
+  )
+
+  const groupedFlat = flat.filter((r) => r.work_order_group_id != null && r.id != null)
+  const ungroupedFlat = flat.filter((r) => r.work_order_group_id == null)
+
+  const groupForest = buildWorkOrderGroupForest(groupedFlat)
+  const ungroupedRoots = normalizeUngroupedWorkOrderTree(ungroupedFlat)
+
+  return inheritOperationStepsFromParent([...groupForest, ...ungroupedRoots])
+}
+
+function listSnapshotStoragePrefix(): string {
+  /* v14：拆分主工单不再继承 BOM 上级工序摘要 */
+  return `riveredge.woList.v14:${tenantIdForSnapshot()}:`
+}
+
+function listSnapshotStorageKey(queryKey: readonly unknown[]): string {
+  return `${listSnapshotStoragePrefix()}${stableJsonForQueryKey(queryKey)}`
+}
+
+/** 只保留当前默认首屏这一把快照；翻页/筛选产生的历史 key 会把 sessionStorage 和主线程 JSON 拖死 */
+function evictOtherWorkOrderListSnapshots(keepKey: string): void {
+  if (typeof window === 'undefined') return
+  const prefix = listSnapshotStoragePrefix()
+  const toRemove: string[] = []
+  try {
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const k = sessionStorage.key(i)
+      if (k && k.startsWith(prefix) && k !== keepKey) toRemove.push(k)
+    }
+    for (const k of toRemove) sessionStorage.removeItem(k)
+  } catch {
+    /* 隐私模式 */
+  }
+}
+
+function isDefaultWorkOrderListSnapshotQuery(
+  params: { current: number; pageSize: number },
+  sort: Record<string, 'ascend' | 'descend' | null>,
+  filter: Record<string, ReactText[] | null>,
+  searchFormValues: Record<string, any> | undefined,
+): boolean {
+  if (params.current !== 1) return false
+  if (stableJsonForQueryKey(sort) !== stableJsonForQueryKey(WORK_ORDER_LIST_DEFAULT_SORT)) return false
+  if (stableJsonForQueryKey(filter ?? {}) !== stableJsonForQueryKey(emptyFilter)) return false
+  if (stableJsonForQueryKey(searchFormValues ?? {}) !== stableJsonForQueryKey({})) return false
+  return true
+}
+
+/** 将默认首屏列表写入 sessionStorage，下次进页可瞬时 hydrate；禁止按筛选/翻页各写一把 */
+export function persistWorkOrderListSnapshot(
+  queryKey: readonly unknown[],
+  result: WorkOrderListTableResult
+): void {
+  if (typeof window === 'undefined' || !result?.success || !Array.isArray(result.data)) return
+  const key = listSnapshotStorageKey(queryKey)
+  try {
+    evictOtherWorkOrderListSnapshots(key)
+    sessionStorage.setItem(
+      key,
+      JSON.stringify({
+        data: result.data,
+        total: result.total,
+        success: result.success,
+        savedAt: Date.now(),
+      })
+    )
+  } catch {
+    /* 配额或隐私模式 */
+  }
+}
+
+/**
+ * 从 sessionStorage 灌入 QueryClient。updatedAt 标为过期，避免把昨日快照当 fresh 挡住首屏网络请求。
+ */
+export function hydrateWorkOrderListQueryFromSession(
+  queryClient: QueryClient,
+  queryKey: readonly unknown[],
+  staleTimeMs: number
+): void {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = sessionStorage.getItem(listSnapshotStorageKey(queryKey))
+    if (!raw) return
+    const parsed = JSON.parse(raw) as Partial<WorkOrderListTableResult> & { savedAt?: number }
+    if (!Array.isArray(parsed.data) || typeof parsed.total !== 'number') return
+    const maxAge = 24 * 60 * 60 * 1000
+    if (parsed.savedAt != null && Date.now() - parsed.savedAt > maxAge) return
+    queryClient.setQueryData(
+      [...queryKey],
+      {
+        data: parsed.data,
+        total: parsed.total,
+        success: parsed.success !== false,
+      },
+      { updatedAt: Date.now() - staleTimeMs - 1 }
+    )
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 首屏常用：第 1 页、无排序/筛选/搜索，与默认进入工单列表一致 */
+export function hydrateDefaultWorkOrderListPageFromSession(
+  queryClient: QueryClient,
+  pageSize: number,
+  staleTimeMs: number
+): void {
+  const key = buildWorkOrderListUniTableQueryKey(1, pageSize, WORK_ORDER_LIST_DEFAULT_SORT, emptyFilter, {})
+  evictOtherWorkOrderListSnapshots(listSnapshotStorageKey(key))
+  hydrateWorkOrderListQueryFromSession(queryClient, key, staleTimeMs)
+}
+
+function normalizeListResponse(response: unknown): WorkOrderListTableResult {
+  if (Array.isArray(response)) {
+    return {
+      data: response,
+      success: true,
+      total: response.length,
+    }
+  }
+  if (response && typeof response === 'object') {
+    const r = response as Record<string, any>
+    const rows = r.data || r.items || []
+    return {
+      data: rows,
+      success: r.success !== false,
+      total: r.total ?? rows.length,
+    }
+  }
+  return { data: [], success: false, total: 0 }
+}
+
+function buildWorkOrderListApiParams(
+  params: { current: number; pageSize: number },
+  sort: Record<string, 'ascend' | 'descend' | null>,
+  searchFormValues: Record<string, any> | undefined,
+  options: {
+    include_readiness: boolean
+    include_scores: boolean
+    include_operation_steps: boolean
+    include_downstream_push_progress: boolean
+  }
+): Record<string, any> {
+  const apiParams: Record<string, any> = {
+    skip: (params.current - 1) * params.pageSize,
+    limit: params.pageSize,
+    include_readiness: options.include_readiness,
+    include_scores: options.include_scores,
+    include_operation_steps: options.include_operation_steps,
+    include_downstream_push_progress: options.include_downstream_push_progress,
+  }
+  const s = searchFormValues || {}
+  if (s.code) apiParams.code = s.code
+  if (s.name) apiParams.name = s.name
+  if (s.product_name) apiParams.product_name = s.product_name
+  if (s.production_mode) apiParams.production_mode = s.production_mode
+  const statusFilter = resolveWorkOrderListStatusFilter(s)
+  if (statusFilter) apiParams.status = statusFilter
+  if (s.keyword) apiParams.keyword = s.keyword
+  if (s.sales_order_code) apiParams.sales_order_code = s.sales_order_code
+  if (s.customer_name) apiParams.customer_name = s.customer_name
+  if (s.planned_start_date && Array.isArray(s.planned_start_date) && s.planned_start_date.length === 2) {
+    const [start, end] = s.planned_start_date
+    if (start) apiParams.planned_start_from = formatDateTime(start, 'YYYY-MM-DD')
+    if (end) apiParams.planned_start_to = formatDateTime(end, 'YYYY-MM-DD')
+  }
+  if (s.planned_end_date && Array.isArray(s.planned_end_date) && s.planned_end_date.length === 2) {
+    const [start, end] = s.planned_end_date
+    if (start) apiParams.planned_end_from = formatDateTime(start, 'YYYY-MM-DD')
+    if (end) apiParams.planned_end_to = formatDateTime(end, 'YYYY-MM-DD')
+  }
+  if (sort && Object.keys(sort).length > 0) {
+    const { sortBy, sortOrder } = extractProTableSort(sort)
+    if (sortBy && sortOrder) {
+      apiParams.order_by = sortOrder === 'desc' ? `-${sortBy}` : sortBy
+    }
+  }
+  if (!apiParams.order_by) {
+    apiParams.order_by = '-code'
+  }
+  return apiParams
+}
+
+export type WorkOrderListFetchOptions = {
+  /** 强制重算齐套率（较重；定时刷新时开启） */
+  include_readiness?: boolean
+  /** 计算完工下推进度（较重；定时刷新时开启） */
+  include_downstream_push_progress?: boolean
+  /** 工序列步骤摘要；prefetch 下一页时应关闭 */
+  include_operation_steps?: boolean
+  /** 仅默认首屏展示请求可写 session 快照；prefetch / 翻页 / 筛选禁止 */
+  persistSnapshot?: boolean
+}
+
+/**
+ * 列表请求（无 UI 提示，供预取与表格共用；失败时 throw 避免写入坏缓存）
+ */
+export async function fetchWorkOrderListForTable(
+  params: { current: number; pageSize: number },
+  sort: Record<string, 'ascend' | 'descend' | null>,
+  filter: Record<string, ReactText[] | null>,
+  searchFormValues: Record<string, any> | undefined,
+  options?: WorkOrderListFetchOptions,
+): Promise<WorkOrderListTableResult> {
+  const apiParams = buildWorkOrderListApiParams(params, sort, searchFormValues, {
+    /** 首屏/翻页读库内持久化齐套率；仅定时刷新重算 */
+    include_readiness: options?.include_readiness ?? false,
+    /** 列表首屏关闭；避免 batch_ensure_scores 触发大量快照计算 */
+    include_scores: false,
+    /** 工序列：与运营看板同口径的步骤摘要（只读，不在列表内回写完成态） */
+    include_operation_steps: options?.include_operation_steps ?? true,
+    include_downstream_push_progress: options?.include_downstream_push_progress ?? true,
+  })
+  const response = await workOrderApi.list(apiParams)
+  const result = normalizeListResponse(response)
+  if (result.success && Array.isArray(result.data)) {
+    result.data = normalizeWorkOrderListTreeData(result.data)
+  }
+  if (
+    result.success &&
+    options?.persistSnapshot !== false &&
+    isDefaultWorkOrderListSnapshotQuery(params, sort, filter, searchFormValues)
+  ) {
+    const qk = buildWorkOrderListUniTableQueryKey(
+      params.current,
+      params.pageSize,
+      sort,
+      filter,
+      searchFormValues
+    )
+    persistWorkOrderListSnapshot(qk, result)
+  }
+  return result
+}
+
+/** 默认第一页 + 空条件，与刚进页时 ProTable 首次请求一致（pageSize 与偏好不一致时会再拉一次，仍暖一部分缓存） */
+export function prefetchDefaultWorkOrderList(queryClient: QueryClient, pageSize: number): void {
+  const key = buildWorkOrderListUniTableQueryKey(1, pageSize, WORK_ORDER_LIST_DEFAULT_SORT, emptyFilter, {})
+  void queryClient.prefetchQuery({
+    queryKey: [...key],
+    queryFn: () =>
+      fetchWorkOrderListForTable({ current: 1, pageSize }, WORK_ORDER_LIST_DEFAULT_SORT, emptyFilter, {}, {
+        include_readiness: false,
+        include_downstream_push_progress: false,
+        persistSnapshot: false,
+      }),
+    staleTime: WORK_ORDER_LIST_STALE_MS,
+  }).catch(swallowRequestCancellation)
+}

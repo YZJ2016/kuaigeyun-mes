@@ -1,0 +1,2970 @@
+/**
+ * 入库管理页面
+ *
+ * 提供入库单的管理功能，支持多种入库类型：采购入库、成品入库（产品入库）、生产退料等。
+ */
+
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
+import { ActionType, ProColumns, ProForm, ProFormItem, type ProFormInstance } from '@ant-design/pro-components';
+import { App, Button, Col, DatePicker, Form, Tag, Space, Modal, Row, Table, InputNumber, Input, Typography, Select, Spin, Descriptions, Empty, Upload, theme as AntdTheme } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
+import {
+  EyeOutlined,
+  CheckCircleOutlined,
+  DeleteOutlined,
+  RollbackOutlined,
+} from '@ant-design/icons';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
+import { useTranslation } from 'react-i18next';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+import { buildHubMergedCustomFieldColumns } from '../../../../../components/custom-fields/hubCustomFieldListColumns';
+import { ListPageTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { UniPullLoadButton } from '../../../../../components/uni-pull';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useGlobalStore } from '../../../../../stores';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
+import { InboundDetailDrawer } from './components/InboundDetailDrawer';
+import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
+import {
+  warehouseApi,
+  outsourceMaterialReceiptApi,
+  outsourceMaterialReturnApi,
+  outsourceProductReturnApi,
+} from '../../../services/production';
+import { LinkedIqcPanel, LinkedFqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
+import { getInboundLifecycle } from '../../../utils/inboundLifecycle';
+import {
+  warehouseApi as masterWarehouseApi,
+  storageAreaApi,
+  storageLocationApi,
+} from '../../../../master-data/services/warehouse';
+import {
+  materialApi,
+  materialBatchApi,
+  materialSerialApi,
+  MATERIAL_SERIAL_GENERATE_MAX_COUNT,
+} from '../../../../master-data/services/material';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
+import {
+  loadConfirmPreviewMaterialMeta,
+  type ConfirmPreviewMaterialMeta,
+} from './inboundItemTracking';
+import {
+  fetchWarehouseTrackingFlags,
+  filterWarehouseTrackingColumns,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
+import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
+import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
+import { formatBusinessDateOnly, formatQuantity } from '../../../../../utils/format';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { renderWarehouseLineQuantity, renderWarehouseHeaderQuantity } from '../shared/warehouseListQuantity';
+import { formatApiErrorDetail } from '../../../../../services/api';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import {
+  DocumentPushProgressBar,
+  DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
+  ratioToPushProgressPercent,
+} from '../../sales-management/shared/DocumentPushProgressBar';
+import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
+import {
+  WarehouseShowAmountSwitch,
+  appendWarehouseLineAmountColumns,
+  buildWarehouseTotalAmountListColumn,
+  useWarehouseShowAmount,
+} from '../shared/warehouseAmountDisplay';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
+import InboundQuickPullModals, {
+  type InboundQuickPullModalsRef,
+} from './InboundQuickPullModals';
+import type {
+  InboundPullEntryNavigationState,
+  PurchaseReceiptEntryHandoff,
+} from './inboundPullEntryTypes';
+import { fetchInboundHubList } from './inboundListAggregate';
+import { fetchInboundHubDetail } from './inboundHubDetail';
+import {
+  filterInboundHubRowsByDeepLink,
+  inboundHubDeepLinkStub,
+  parseInboundHubDeepLink,
+  resolveInboundDeepLinkId,
+  type InboundHubDeepLinkFilter,
+} from './inboundHubDeepLink';
+import { fetchPurchaseReceiptIqcEnsure } from './inboundPurchaseIqcGate';
+import { PurchaseReceiptIqcReviewModal } from './PurchaseReceiptIqcReviewModal';
+import PurchaseReceiptEditModal from './PurchaseReceiptEditModal';
+import { fetchCustomerMaterialIqcEnsure } from './inboundCustomerMaterialIqcGate';
+import { CustomerMaterialIqcReviewModal } from './CustomerMaterialIqcReviewModal';
+import {
+  fetchFinishedGoodsReceiptFqcEnsure,
+  fetchSemiFinishedGoodsReceiptFqcEnsure,
+} from './inboundFinishedGoodsFqcGate';
+import { FinishedGoodsReceiptFqcReviewModal } from './FinishedGoodsReceiptFqcReviewModal';
+import type {
+  EnsureIqcForPurchaseReceiptResult,
+  EnsureIqcForCustomerMaterialRegistrationResult,
+  EnsureFqcForFinishedGoodsReceiptResult,
+} from '../../../services/quality-execution';
+import {
+  type InboundHubOrder,
+  type InboundHubPageProps,
+  type InboundReceiptType,
+  inboundReceiptTypeLabel,
+  inboundReceiptTypeSegmentOptions,
+  inboundDocumentTrackingType,
+  isInboundConfirmable,
+  isInboundEditable,
+  isInboundWithdrawable,
+  inboundConfirmCapabilityReasonMessage,
+  inboundSourceDocNo,
+  resolveInboundHubOperator,
+  resolveInboundHubDateRaw,
+  filterInboundPullCreateMenuSpecs,
+  resolveDefaultInboundQuickPullKey,
+} from './inboundHubTypes';
+import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
+import { inboundReceiptTypeMarkerValueEnum, renderInboundReceiptTypeMarkerTag } from '../shared/warehouseMarkerTags';
+import {
+  normalizeInboundHubDetail,
+  resolveInboundHubDetailItems,
+  resolveInboundHubLineQuantity,
+  resolveInboundHubStatusLabel,
+  resolveInboundHubStatusTagColor,
+} from './inboundHubNormalize';
+import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
+import { inboundReceiptTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import {
+  WAREHOUSE_DOC_PINNED_STATUS_FIELD,
+  buildInboundHubStatusValueEnum,
+  resolveInboundHubListParams,
+} from '../../../utils/warehouseListCore';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import {
+  buildInboundConfirmReceiverPayload,
+  InboundEntryReceiverField,
+  resolveInboundConfirmReceiverFromDetail,
+  useInboundReceiverSelect,
+} from './inboundEntryShared';
+
+interface InboundOrder extends InboundHubOrder {
+  workshop_name?: string;
+  notes?: string;
+  attachments?: { uid?: string; name?: string; url?: string }[];
+  review_status?: string;
+  items?: InboundOrderItem[];
+}
+
+interface InboundOrderItem {
+  id?: number;
+  tenant_id?: number;
+  receipt_id?: number;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string;
+  material_unit?: string;
+  purchase_order_item_id?: number;
+  receipt_quantity?: number;
+  unit_price?: number;
+  total_amount?: number;
+  qualified_quantity?: number;
+  unqualified_quantity?: number;
+  process_waste_qty?: number;
+  material_waste_qty?: number;
+  batch_number?: string;
+  serial_numbers?: string[];
+  return_quantity?: number;
+  status?: string;
+  quantity?: number;
+  unit?: string;
+  notes?: string;
+  warehouse_id?: number;
+  warehouse_name?: string;
+  location_id?: number;
+  location_code?: string;
+}
+
+/** 单位列展示：直接显示物料单位码，避免 DictionaryLabel 请求 unit 字典（未配置时 404） */
+function formatInboundMaterialUnit(val: unknown): string {
+  if (val == null || val === '') return '-';
+  return String(val);
+}
+
+function renderInboundDetailUnitCell(row: InboundOrderItem): React.ReactNode {
+  if (row.material_id != null) {
+    return (
+      <MaterialUnitSelect
+        materialId={row.material_id}
+        value={row.material_unit ?? row.unit}
+        size="small"
+        disabled
+        noStyle
+      />
+    );
+  }
+  return formatInboundMaterialUnit(row.material_unit ?? row.unit);
+}
+
+/**
+ * 对「已启用批号管理且当前批号为空」的明细，按主数据物料默认批号规则生成批号（每行独立一条，便于多行同料多批次）。
+ */
+async function prefetchPurchasePreviewBatchNumbers(
+  items: any[] | undefined,
+  initialBatch: Record<number, string>
+): Promise<Record<number, string>> {
+  const out: Record<number, string> = { ...initialBatch };
+  const { batchManagement } = await fetchWarehouseTrackingFlags();
+  if (!batchManagement) return out;
+  const rowsNeed = (items || []).filter((it) => {
+    if (it?.id == null) return false;
+    const id = Number(it.id);
+    const existing = String(out[id] ?? it.batch_number ?? '').trim();
+    return !existing && String(it.material_code || '').trim() !== '';
+  });
+  if (rowsNeed.length === 0) return out;
+
+  const codes = [...new Set(rowsNeed.map((it) => String(it.material_code || '').trim()))];
+  const materialByCode = new Map<
+    string,
+    { uuid: string; batchManaged: boolean; defaultBatchRuleId: number | null }
+  >();
+
+  await Promise.all(
+    codes.map(async (code) => {
+      try {
+        const res = await materialApi.list({ code, limit: 1 });
+        const m = res.items?.[0] ?? null;
+        if (!m?.uuid) return;
+        const batchManaged = !!(m.batchManaged ?? (m as any).batch_managed);
+        const defaultBatchRuleId =
+          (m.defaultBatchRuleId ?? (m as any).default_batch_rule_id ?? null) as number | null;
+        materialByCode.set(code, {
+          uuid: m.uuid,
+          batchManaged,
+          defaultBatchRuleId:
+            defaultBatchRuleId != null && Number(defaultBatchRuleId) > 0 ? Number(defaultBatchRuleId) : null,
+        });
+      } catch {
+        /* 主数据不可用时跳过自动批号 */
+      }
+    })
+  );
+
+  /** 同物料多行：先同步算好每行 offset，避免 Promise.all 并发导致多行同取 offset=0 */
+  const previewOffsetByCode = new Map<string, number>();
+  const rowPreviewOffset = new Map<number, number>();
+  for (const it of rowsNeed) {
+    const code = String(it.material_code || '').trim();
+    const id = Number(it.id);
+    const n = previewOffsetByCode.get(code) ?? 0;
+    rowPreviewOffset.set(id, n);
+    previewOffsetByCode.set(code, n + 1);
+  }
+  await Promise.all(
+    rowsNeed.map(async (it) => {
+      const id = Number(it.id);
+      const code = String(it.material_code || '').trim();
+      const meta = materialByCode.get(code);
+      if (!meta?.batchManaged || !meta.uuid) return;
+      const off = rowPreviewOffset.get(id) ?? 0;
+      try {
+        const res = await materialBatchApi.generate(meta.uuid, {
+          ruleId: meta.defaultBatchRuleId != null ? meta.defaultBatchRuleId : undefined,
+          preview: true,
+          previewOffset: off,
+        });
+        if (res?.batch_no) out[id] = res.batch_no;
+      } catch {
+        /* 生成失败则保留空，由用户手工填写 */
+      }
+    })
+  );
+
+  return out;
+}
+
+/** 对「已启用序列号管理且当前无序列号」的明细，按主数据默认序列号规则自动生成 */
+async function prefetchPurchasePreviewSerialNumbers(
+  items: any[] | undefined,
+  initialSerial: Record<number, string[]>,
+  materialMeta: Record<number, ConfirmPreviewMaterialMeta>,
+  qtyMap: Record<number, number>,
+): Promise<Record<number, string[]>> {
+  const out: Record<number, string[]> = { ...initialSerial };
+  const { serialManagement } = await fetchWarehouseTrackingFlags();
+  if (!serialManagement) return out;
+  const rowsNeed = (items || []).filter((it) => {
+    if (it?.id == null) return false;
+    const id = Number(it.id);
+    if ((out[id]?.length ?? 0) > 0) return false;
+    const meta = materialMeta[id];
+    if (!meta?.serialManaged || !meta.materialUuid) return false;
+    return Number(qtyMap[id] ?? 0) > 0;
+  });
+  if (rowsNeed.length === 0) return out;
+
+  await Promise.all(
+    rowsNeed.map(async (it) => {
+      const id = Number(it.id);
+      const meta = materialMeta[id];
+      if (!meta?.materialUuid) return;
+      const count = Math.max(1, Math.floor(Number(qtyMap[id] ?? 0)));
+      if (count > MATERIAL_SERIAL_GENERATE_MAX_COUNT) return;
+      try {
+        const res = await materialSerialApi.generate(meta.materialUuid, count, {
+          ruleId: meta.defaultSerialRuleId ?? undefined,
+        });
+        if (res?.serial_nos?.length) out[id] = res.serial_nos;
+      } catch {
+        /* 生成失败则保留空，由用户手动录入 */
+      }
+    }),
+  );
+
+  return out;
+}
+
+/** 编码与名称相同时只显示其一，避免「ZB-01-01 ZB-01-01」重复 */
+function formatStorageAreaOrLocationLabel(code?: string, name?: string): string {
+  const c = (code || '').trim();
+  const n = (name || '').trim();
+  if (c && n && c === n) return c;
+  return [c, n].filter(Boolean).join(' ').trim();
+}
+
+/** 按仓库拉取库区下全部库位，供确认入库预览行内选择；展示为「库区 - 库位」 */
+async function fetchStorageLocationsForWarehouse(
+  warehouseId: number
+): Promise<{ value: number; label: string; code: string }[]> {
+  const saRes = await storageAreaApi.list({
+    warehouse_id: warehouseId,
+    limit: 500,
+    is_active: true,
+  } as any);
+  const areas = (saRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
+  const parts = await Promise.all(
+    areas.map(async (a) => {
+      const locRes = await storageLocationApi.list({
+        storage_area_id: a.id,
+        limit: 500,
+        is_active: true,
+      } as any);
+      const locs = (locRes as { items?: { id: number; code?: string; name?: string }[] })?.items ?? [];
+      const areaLabel = formatStorageAreaOrLocationLabel(a.code, a.name) || `库区${a.id}`;
+      return locs.map((l) => {
+        const locLabel = formatStorageAreaOrLocationLabel(l.code, l.name) || String(l.id);
+        return {
+          value: l.id,
+          label: `${areaLabel} - ${locLabel}`,
+          code: String(l.code || ''),
+        };
+      });
+    })
+  );
+  return parts.flat().sort((a, b) => a.label.localeCompare(b.label));
+}
+
+const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1280;
+
+function renderInboundDetailSerialCell(t: (key: string, options?: { count?: number }) => string, val: unknown): string {
+  if (!Array.isArray(val) || val.length === 0) return '—';
+  return t('app.kuaizhizao.warehouseInbound.detail.serialCount', { count: val.length });
+}
+
+const PURCHASE_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_receipts';
+const PRODUCTION_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_returns';
+const FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_finished_goods_receipts';
+
+/** 列表行状态（兼容大小写/空格） */
+function inboundRowStatus(record: InboundOrder): string {
+  const v = record?.status ?? (record as Record<string, unknown>)?.document_status;
+  return String(v ?? '').trim();
+}
+
+/** 已入账库存的入库类单据（可撤回冲减库存） */
+function isInboundStockPosted(record: InboundOrder): boolean {
+  const s = inboundRowStatus(record);
+  const sl = s.toLowerCase();
+  if (record.receipt_type === 'production_return') {
+    return s === '已退料';
+  }
+  if (record.receipt_type === 'customer_material') {
+    return s === 'processed' || s === '已入库';
+  }
+  if (record.receipt_type === 'sales_return') {
+    return s === '已退货' || sl === 'completed';
+  }
+  if (record.receipt_type === 'material_return') {
+    return s === '已归还' || sl === 'completed';
+  }
+  return (
+    s === '已入库' ||
+    s === '已退货' ||
+    s === '已退料' ||
+    s === '已归还' ||
+    s === '已完成' ||
+    s === '已确认' ||
+    sl === 'completed' ||
+    sl === 'posted'
+  );
+}
+
+const INBOUND_DELETABLE_TYPES = new Set([
+  'production_return',
+  'purchase',
+  'finished_goods',
+  'semi_finished_goods',
+  'sales_return',
+  'other_inbound',
+  'material_return',
+]);
+
+/** 与行内删除按钮一致：可确认态 + 类型支持删除 */
+function isInboundDeletable(record: InboundOrder): boolean {
+  if (!record.id || !isInboundConfirmable(record)) return false;
+  return INBOUND_DELETABLE_TYPES.has(String(record.receipt_type ?? ''));
+}
+
+async function deleteInboundDocument(record: InboundOrder): Promise<void> {
+  if (record.receipt_type === 'purchase') {
+    await warehouseApi.purchaseReceipt.delete(String(record.id));
+  } else if (record.receipt_type === 'finished_goods') {
+    await warehouseApi.finishedGoodsReceipt.delete(String(record.id));
+  } else if (record.receipt_type === 'semi_finished_goods') {
+    await warehouseApi.semiFinishedGoodsReceipt.delete(String(record.id));
+  } else if (record.receipt_type === 'production_return') {
+    await warehouseApi.productionReturn.delete(String(record.id));
+  } else if (record.receipt_type === 'sales_return') {
+    await warehouseApi.salesReturn.delete(String(record.id));
+  } else if (record.receipt_type === 'other_inbound') {
+    await warehouseApi.otherInbound.delete(String(record.id));
+  } else if (record.receipt_type === 'material_return') {
+    await warehouseApi.materialReturn.delete(String(record.id));
+  } else {
+    throw new Error('unsupported_inbound_delete_type');
+  }
+}
+
+function renderInboundRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
+  return nodes;
+}
+
+const InboundPage: React.FC<InboundHubPageProps> = ({
+  fixedReceiptType,
+  scopedReceiptTypes,
+  headerTitle,
+  columnPersistenceId,
+  permissionResource = 'kuaizhizao:inbound',
+}) => {
+  const hubScopedReceiptTypes = useMemo(
+    () => (fixedReceiptType ? [fixedReceiptType] : scopedReceiptTypes),
+    [fixedReceiptType, scopedReceiptTypes],
+  );
+  const initialReceiptTypeFilter = fixedReceiptType
+    ?? (scopedReceiptTypes?.length === 1 ? scopedReceiptTypes[0] : 'all');
+  const hideReceiptTypeFilter = Boolean(fixedReceiptType);
+  const { message: messageApi } = App.useApp();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const { t } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
+  const trackingFlags = useWarehouseTrackingFlags();
+  const { token } = AntdTheme.useToken();
+  const inboundDetailDrawerZIndex = token.zIndexPopupBase;
+  const actionRef = useRef<ActionType>(null);
+  const searchFormRef = useRef<ProFormInstance>();
+  const quickPullRef = useRef<InboundQuickPullModalsRef>(null);
+  const receiptTypeFilterRef = useRef<string>(initialReceiptTypeFilter);
+  const [receiptTypeFilter, setReceiptTypeFilter] = useState<string>(initialReceiptTypeFilter);
+  const [showAmount, setShowAmount] = useWarehouseShowAmount();
+  const defaultInboundQuickPullKey = useMemo(
+    () => resolveDefaultInboundQuickPullKey(hubScopedReceiptTypes),
+    [hubScopedReceiptTypes],
+  );
+  const inboundPullMenuSpecs = useMemo(
+    () =>
+      filterInboundPullCreateMenuSpecs(
+        [
+          {
+            actionKey: 'purchase_receipt.pull_from_purchase_order',
+            onClick: () => quickPullRef.current?.open('purchase_order'),
+          },
+          {
+            actionKey: 'purchase_receipt.pull_from_receipt_notice',
+            onClick: () => quickPullRef.current?.open('receipt_notice'),
+          },
+          {
+            actionKey: 'inbound.pull_from_work_order',
+            onClick: () => quickPullRef.current?.open('work_order'),
+          },
+          {
+            actionKey: 'inbound.pull_from_work_order_for_production_return',
+            onClick: () => quickPullRef.current?.open('production_return'),
+          },
+          {
+            actionKey: 'inbound.pull_from_sales_order',
+            onClick: () => quickPullRef.current?.open('sales_return'),
+          },
+          {
+            actionKey: 'inbound.pull_from_outsource_work_order',
+            onClick: () => quickPullRef.current?.open('outsource'),
+          },
+          {
+            actionKey: 'inbound.pull_from_incoming_inspection',
+            onClick: () => quickPullRef.current?.open('incoming_inspection'),
+          },
+          {
+            actionKey: 'inbound.pull_from_finished_goods_inspection',
+            onClick: () => quickPullRef.current?.open('finished_goods_inspection'),
+          },
+        ],
+        hubScopedReceiptTypes,
+      ),
+    [hubScopedReceiptTypes],
+  );
+  const handleCreate = useCallback(() => {
+    quickPullRef.current?.open(defaultInboundQuickPullKey);
+  }, [defaultInboundQuickPullKey]);
+  useNewShortcut(handleCreate);
+
+  const handleReceiptTypeFilterChange = useCallback((value: string) => {
+    const next = value || 'all';
+    // 同步写入 ref，避免 setState 后立刻 reload 仍读到旧筛选值
+    receiptTypeFilterRef.current = next;
+    setReceiptTypeFilter(next);
+    searchFormRef.current?.setFieldsValue({
+      receipt_type: next === 'all' ? undefined : next,
+    });
+    actionRef.current?.reload();
+  }, []);
+
+  const receiptTypeSelect = useMemo(
+    () =>
+      hideReceiptTypeFilter ? null : (
+        <Select
+          value={receiptTypeFilter}
+          options={inboundReceiptTypeSegmentOptions(t, hubScopedReceiptTypes)}
+          onChange={(v) => handleReceiptTypeFilterChange(String(v))}
+          popupMatchSelectWidth={false}
+          style={{ width: 160 }}
+        />
+      ),
+    [t, receiptTypeFilter, handleReceiptTypeFilterChange, hideReceiptTypeFilter, hubScopedReceiptTypes],
+  );
+  const pullLoadLabel = useMemo(
+    () => withSingleNewShortcutHint(t('components.uniPull.loadFromDocument')),
+    [t],
+  );
+  const inboundPerms = useResourcePermissions(permissionResource);
+  const currentUser = useCurrentUser();
+  const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const handledDirectConfirmKeyRef = useRef<string | null>(null);
+  const inboundDeepLinkRef = useRef<InboundHubDeepLinkFilter | null>(null);
+  const inboundDeepLinkOpenedRef = useRef(false);
+
+  const {
+    customFields: purchaseReceiptListCustomFields,
+    enrichRecordsWithCustomFields: enrichPurchaseReceiptRecordsWithCustomFields,
+    customFieldValues: purchaseReceiptDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadPurchaseReceiptFieldValuesForDetail,
+    resetDetailFieldValues: resetPurchaseReceiptDetailFieldValues,
+  } = useCustomFieldsForList<InboundOrder>({ tableName: PURCHASE_RECEIPT_CUSTOM_FIELD_TABLE });
+
+  const {
+    customFields: productionReturnListCustomFields,
+    enrichRecordsWithCustomFields: enrichProductionReturnRecordsWithCustomFields,
+    customFieldValues: productionReturnDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadProductionReturnFieldValuesForDetail,
+    resetDetailFieldValues: resetProductionReturnDetailFieldValues,
+  } = useCustomFieldsForList<InboundOrder>({ tableName: PRODUCTION_RETURN_CUSTOM_FIELD_TABLE });
+
+  const {
+    customFields: finishedGoodsReceiptListCustomFields,
+    enrichRecordsWithCustomFields: enrichFinishedGoodsReceiptRecordsWithCustomFields,
+    customFieldValues: finishedGoodsReceiptDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadFinishedGoodsReceiptFieldValuesForDetail,
+    resetDetailFieldValues: resetFinishedGoodsReceiptDetailFieldValues,
+  } = useCustomFieldsForList<InboundOrder>({ tableName: FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE });
+
+  const inboundHubCustomFieldColumns = useMemo(
+    () =>
+      buildHubMergedCustomFieldColumns<InboundOrder>(
+        [
+          { docTypes: ['purchase'], customFields: purchaseReceiptListCustomFields },
+          { docTypes: ['production_return'], customFields: productionReturnListCustomFields },
+          { docTypes: ['finished_goods'], customFields: finishedGoodsReceiptListCustomFields },
+        ],
+        'receipt_type',
+        [t('app.kuaizhizao.warehouseInbound.field.documentDate')],
+      ),
+    [
+      purchaseReceiptListCustomFields,
+      productionReturnListCustomFields,
+      finishedGoodsReceiptListCustomFields,
+      t,
+    ],
+  );
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [currentOrder, setCurrentOrder] = useState<InboundOrder | null>(null);
+  const [inboundTrackingRefreshKey, setInboundTrackingRefreshKey] = useState(0);
+  const detailRetryRecordRef = useRef<InboundOrder | null>(null);
+  const [editModalRecord, setEditModalRecord] = useState<InboundOrder | null>(null);
+  const [purchaseReceiptAttachments, setPurchaseReceiptAttachments] = useState<any[]>([]);
+
+  const [purchaseConfirmPreviewOpen, setPurchaseConfirmPreviewOpen] = useState(false);
+  const [purchaseConfirmPreviewLoading, setPurchaseConfirmPreviewLoading] = useState(false);
+  const [purchaseConfirmPreviewSubmitting, setPurchaseConfirmPreviewSubmitting] = useState(false);
+  const [purchaseConfirmPreviewDetail, setPurchaseConfirmPreviewDetail] = useState<InboundOrder | null>(null);
+  const [simpleConfirmPreviewOpen, setSimpleConfirmPreviewOpen] = useState(false);
+  const [simpleConfirmPreviewLoading, setSimpleConfirmPreviewLoading] = useState(false);
+  const [simpleConfirmPreviewSubmitting, setSimpleConfirmPreviewSubmitting] = useState(false);
+  const [simpleConfirmPreviewTarget, setSimpleConfirmPreviewTarget] = useState<InboundOrder | null>(null);
+  const [simpleConfirmPreviewDetail, setSimpleConfirmPreviewDetail] = useState<Record<string, unknown> | null>(null);
+  const [purchaseConfirmLineWh, setPurchaseConfirmLineWh] = useState<Record<number, number>>({});
+  const [purchaseConfirmLineLoc, setPurchaseConfirmLineLoc] = useState<Record<number, number | undefined>>({});
+  const [purchaseConfirmLineLocCode, setPurchaseConfirmLineLocCode] = useState<Record<number, string>>({});
+  const [locOptionsByWarehouse, setLocOptionsByWarehouse] = useState<
+    Record<number, { value: number; label: string; code: string }[]>
+  >({});
+  const [purchaseConfirmPreviewQty, setPurchaseConfirmPreviewQty] = useState<Record<number, number>>({});
+  const [purchaseConfirmPreviewBatch, setPurchaseConfirmPreviewBatch] = useState<Record<number, string>>({});
+  const [purchaseConfirmPreviewSerial, setPurchaseConfirmPreviewSerial] = useState<Record<number, string[]>>({});
+  const [purchaseConfirmMaterialMeta, setPurchaseConfirmMaterialMeta] = useState<Record<number, ConfirmPreviewMaterialMeta>>({});
+  const [purchaseConfirmGeneratingSerialId, setPurchaseConfirmGeneratingSerialId] = useState<number | null>(null);
+  const [purchaseConfirmWarehouseOptions, setPurchaseConfirmWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
+
+  const [iqcReviewOpen, setIqcReviewOpen] = useState(false);
+  const [iqcReviewLoading, setIqcReviewLoading] = useState(false);
+  const [iqcReviewEnsure, setIqcReviewEnsure] = useState<EnsureIqcForPurchaseReceiptResult | null>(null);
+  const [iqcReviewPurchaseReceiptId, setIqcReviewPurchaseReceiptId] = useState<number | string | undefined>();
+  const [cmIqcReviewOpen, setCmIqcReviewOpen] = useState(false);
+  const [cmIqcReviewLoading, setCmIqcReviewLoading] = useState(false);
+  const [cmIqcReviewEnsure, setCmIqcReviewEnsure] = useState<EnsureIqcForCustomerMaterialRegistrationResult | null>(null);
+  const [cmIqcReviewRegistrationId, setCmIqcReviewRegistrationId] = useState<number | string | undefined>();
+  const [fqcReviewOpen, setFqcReviewOpen] = useState(false);
+  const [fqcReviewLoading, setFqcReviewLoading] = useState(false);
+  const [fqcReviewEnsure, setFqcReviewEnsure] = useState<EnsureFqcForFinishedGoodsReceiptResult | null>(null);
+  const [fqcReviewFinishedGoodsReceiptId, setFqcReviewFinishedGoodsReceiptId] = useState<number | string | undefined>();
+  const pendingConfirmRecordRef = useRef<InboundOrder | null>(null);
+  const pendingConfirmHandoffRef = useRef<PurchaseReceiptEntryHandoff | undefined>(undefined);
+
+  const productionReturnConfirmFormRef = useRef<ProFormInstance>();
+  const {
+    customFields: productionReturnFormCustomFields,
+    customFieldValues: productionReturnFormCustomFieldValues,
+    extractFormValues: extractProductionReturnFormValues,
+    saveCustomFieldValues: saveProductionReturnCustomFieldValues,
+    loadFieldValues: loadProductionReturnFormFieldValues,
+    resetFieldValues: resetProductionReturnFormFieldValues,
+  } = useCustomFields({
+    tableName: PRODUCTION_RETURN_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open:
+      purchaseConfirmPreviewOpen &&
+      purchaseConfirmPreviewDetail?.receipt_type === 'production_return',
+  });
+
+  const purchaseConfirmReceiverHook = useInboundReceiverSelect();
+  const simpleConfirmReceiverHook = useInboundReceiverSelect();
+  const [purchaseConfirmDocumentDate, setPurchaseConfirmDocumentDate] = useState<Dayjs | null>(null);
+  const [simpleConfirmDocumentDate, setSimpleConfirmDocumentDate] = useState<Dayjs | null>(null);
+
+  const inboundDocTrackingType = currentOrder
+    ? inboundDocumentTrackingType(currentOrder)
+    : undefined;
+
+  const handleDetail = async (record: InboundOrder) => {
+    detailRetryRecordRef.current = record;
+    setDetailDrawerVisible(true);
+    setDetailLoading(true);
+    setDetailError(null);
+    setCurrentOrder(null);
+    setPurchaseReceiptAttachments([]);
+    try {
+      let detailData: any;
+      if (record.receipt_type === 'purchase') {
+        detailData = await warehouseApi.purchaseReceipt.get(record.id!.toString());
+      } else if (record.receipt_type === 'finished_goods') {
+        detailData = await warehouseApi.finishedGoodsReceipt.get(record.id!.toString());
+      } else if (record.receipt_type === 'semi_finished_goods') {
+        detailData = await warehouseApi.semiFinishedGoodsReceipt.get(record.id!.toString());
+      } else if (record.receipt_type === 'production_return') {
+        detailData = await warehouseApi.productionReturn.get(record.id!.toString());
+      } else if (record.receipt_type === 'customer_material') {
+        detailData = await customerMaterialRegistrationApi.get(record.id!.toString());
+      } else if (record.receipt_type === 'sales_return') {
+        detailData = await warehouseApi.salesReturn.get(record.id!.toString());
+      } else if (record.receipt_type === 'other_inbound') {
+        detailData = await warehouseApi.otherInbound.get(record.id!.toString());
+      } else if (record.receipt_type === 'material_return') {
+        detailData = await warehouseApi.materialReturn.get(record.id!.toString());
+      } else if (record.receipt_type === 'outsource_receipt') {
+        detailData = await outsourceMaterialReceiptApi.get(record.id!.toString());
+      } else if (record.receipt_type === 'outsource_material_return') {
+        detailData = await outsourceMaterialReturnApi.get(record.id!.toString());
+      } else if (record.receipt_type === 'outsource_product_return') {
+        detailData = await outsourceProductReturnApi.get(record.id!.toString());
+      }
+      if (detailData) {
+        await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
+        if (record.receipt_type === 'purchase') {
+          setPurchaseReceiptAttachments(mapAttachmentsToUploadList(detailData.attachments));
+        }
+        setCurrentOrder(
+          normalizeInboundHubDetail(record.receipt_type!, detailData as Record<string, unknown>, record),
+        );
+        setInboundTrackingRefreshKey((k) => k + 1);
+        if (record.receipt_type === 'purchase' && record.id != null) {
+          await loadPurchaseReceiptFieldValuesForDetail(record.id);
+        } else if (record.receipt_type === 'production_return' && record.id != null) {
+          await loadProductionReturnFieldValuesForDetail(record.id);
+        } else if (record.receipt_type === 'finished_goods' && record.id != null) {
+          await loadFinishedGoodsReceiptFieldValuesForDetail(record.id);
+        }
+      }
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.detail ??
+        error?.response?.data?.message ??
+        error?.message ??
+        t('app.kuaizhizao.warehouseInbound.msg.loadDetailFailed');
+      const text = typeof msg === 'string' ? msg : t('app.kuaizhizao.warehouseInbound.msg.loadDetailFailed');
+      setDetailError(text);
+      messageApi.error(text);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const isEditablePurchaseReceipt = (order?: InboundOrder | null) =>
+    order?.receipt_type === 'purchase' && isInboundEditable(order);
+
+  const handleEdit = useCallback((record: InboundOrder) => {
+    setEditModalRecord(record);
+  }, []);
+
+  const handleEditModalClose = useCallback(() => {
+    setEditModalRecord(null);
+  }, []);
+
+  const handleEditModalSuccess = useCallback(() => {
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    const editing = editModalRecord;
+    if (editing && currentOrder?.id === editing.id) {
+      void handleDetail(editing);
+    }
+  }, [currentOrder?.id, editModalRecord, invalidateMenuBadgeCounts]);
+
+  const resetPurchaseConfirmPreview = () => {
+    setPurchaseConfirmPreviewOpen(false);
+    setPurchaseConfirmPreviewDetail(null);
+    setPurchaseConfirmPreviewQty({});
+    setPurchaseConfirmPreviewBatch({});
+    setPurchaseConfirmPreviewSerial({});
+    setPurchaseConfirmMaterialMeta({});
+    setPurchaseConfirmGeneratingSerialId(null);
+    setPurchaseConfirmLineWh({});
+    setPurchaseConfirmLineLoc({});
+    setPurchaseConfirmLineLocCode({});
+    setLocOptionsByWarehouse({});
+    setPurchaseConfirmDocumentDate(null);
+    productionReturnConfirmFormRef.current?.resetFields();
+    resetProductionReturnFormFieldValues();
+    purchaseConfirmReceiverHook.restoreReceiver({});
+  };
+
+  /** 打开采购入库确认预览（加载最新详情，合并抽屉内未保存的实际数量） */
+  const handleConfirmPreviewGenerateSerial = async (rowId: number, qty: number): Promise<string[] | void> => {
+    const meta = purchaseConfirmMaterialMeta[rowId];
+    if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged) || !meta?.materialUuid) return;
+    const count = Math.max(1, Math.floor(Number(qty) || 1));
+    if (count > MATERIAL_SERIAL_GENERATE_MAX_COUNT) {
+      messageApi.warning(
+        t('app.kuaizhizao.warehouseInbound.msg.serialMax100', {
+          max: MATERIAL_SERIAL_GENERATE_MAX_COUNT,
+        }),
+      );
+      return;
+    }
+    setPurchaseConfirmGeneratingSerialId(rowId);
+    try {
+      const res = await materialSerialApi.generate(meta.materialUuid, count, {
+        ruleId: meta.defaultSerialRuleId ?? undefined,
+      });
+      setPurchaseConfirmPreviewSerial((prev) => ({ ...prev, [rowId]: res.serial_nos }));
+      messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.serialGenerated', { count: res.count }));
+      return res.serial_nos;
+    } catch (e: any) {
+      messageApi.error(e?.message || t('app.kuaizhizao.warehouseInbound.msg.serialGenerateFailed'));
+    } finally {
+      setPurchaseConfirmGeneratingSerialId(null);
+    }
+  };
+
+  const proceedOpenConfirmPreview = async (
+    record: InboundOrder,
+    purchaseReceiptHandoff?: PurchaseReceiptEntryHandoff,
+  ) => {
+    if (!record.id) return;
+
+    setPurchaseConfirmPreviewOpen(true);
+    setPurchaseConfirmPreviewLoading(true);
+    try {
+      const fetchDetail = async () => {
+        const idStr = String(record.id);
+        if (record.receipt_type === 'finished_goods') return warehouseApi.finishedGoodsReceipt.get(idStr);
+        if (record.receipt_type === 'semi_finished_goods')
+          return warehouseApi.semiFinishedGoodsReceipt.get(idStr);
+        if (record.receipt_type === 'production_return') return warehouseApi.productionReturn.get(idStr);
+        return warehouseApi.purchaseReceipt.get(idStr);
+      };
+
+      const [whRes, detailData] = await Promise.all([
+        masterWarehouseApi.list({ is_active: true, limit: 500 }),
+        fetchDetail(),
+      ]);
+      const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];
+      const materialById = await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
+      setPurchaseConfirmWarehouseOptions(
+        (Array.isArray(whList) ? whList : []).map((w: any) => ({
+          label: `${w.code || ''} ${w.name || ''}`.trim() || String(w.id),
+          value: w.id,
+          name: w.name || '',
+        }))
+      );
+      const qty: Record<number, number> = {};
+      const batch: Record<number, string> = {};
+      const serial: Record<number, string[]> = {};
+      const lineWh: Record<number, number> = {};
+      const lineLoc: Record<number, number | undefined> = {};
+      const lineLocLb: Record<number, string> = {};
+      const headerWh =
+        detailData.warehouse_id != null && Number(detailData.warehouse_id) > 0
+          ? Number(detailData.warehouse_id)
+          : undefined;
+      (detailData.items || []).forEach((it: any) => {
+        if (it?.id == null) return;
+        const id = Number(it.id);
+        qty[id] = Number(it.receipt_quantity ?? it.return_quantity ?? 0);
+        batch[id] = String(it.batch_number ?? '');
+        const poItemIdForBatch = Number(it.purchase_order_item_id ?? 0);
+        if (purchaseReceiptHandoff && poItemIdForBatch > 0) {
+          const handoffBatch = purchaseReceiptHandoff.lineBatchByPoItemId[poItemIdForBatch];
+          if (handoffBatch) batch[id] = handoffBatch;
+        }
+        const existingSerial = Array.isArray(it.serial_numbers)
+          ? it.serial_numbers.filter((s: unknown) => String(s ?? '').trim())
+          : [];
+        if (existingSerial.length) serial[id] = existingSerial.map(String);
+        if (purchaseReceiptHandoff && poItemIdForBatch > 0) {
+          const handoffSerial = purchaseReceiptHandoff.lineSerialByPoItemId[poItemIdForBatch];
+          if (handoffSerial?.length) serial[id] = handoffSerial;
+        }
+        let rowWh =
+          it.warehouse_id != null && Number(it.warehouse_id) > 0 ? Number(it.warehouse_id) : undefined;
+        
+        if (rowWh == null && it.material_id) {
+          const material = materialById.get(String(it.material_id));
+          const defWhs = material?.defaults?.defaultWarehouses;
+          if (defWhs && defWhs.length > 0) {
+            const sortedWhs = [...defWhs].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+            if (sortedWhs.length > 0 && sortedWhs[0].warehouseId > 0) {
+              rowWh = sortedWhs[0].warehouseId;
+            }
+          }
+        }
+
+        if (rowWh == null) {
+          rowWh = headerWh;
+        }
+
+        const poItemId = Number(it.purchase_order_item_id ?? 0);
+        if (purchaseReceiptHandoff && poItemId > 0) {
+          const handoffWh = purchaseReceiptHandoff.lineWhByPoItemId[poItemId];
+          if (handoffWh != null && handoffWh > 0) rowWh = handoffWh;
+        }
+
+        if (rowWh != null) lineWh[id] = rowWh;
+        if (it.location_id != null && Number(it.location_id) > 0) lineLoc[id] = Number(it.location_id);
+        if (it.location_code) lineLocLb[id] = String(it.location_code);
+        if (purchaseReceiptHandoff && poItemId > 0) {
+          const handoffLoc = purchaseReceiptHandoff.lineLocByPoItemId[poItemId];
+          if (handoffLoc != null && handoffLoc > 0) lineLoc[id] = handoffLoc;
+          const handoffLocCode = purchaseReceiptHandoff.lineLocCodeByPoItemId[poItemId];
+          if (handoffLocCode) lineLocLb[id] = handoffLocCode;
+        }
+      });
+      setPurchaseConfirmPreviewDetail({ ...detailData, receipt_type: record.receipt_type });
+      purchaseConfirmReceiverHook.restoreReceiver(
+        resolveInboundConfirmReceiverFromDetail(detailData as Record<string, unknown>),
+      );
+      {
+        const rawDate = resolveInboundHubDateRaw({
+          ...(detailData as Record<string, unknown>),
+          receipt_type: record.receipt_type,
+        } as InboundOrder);
+        if (rawDate != null && String(rawDate).trim() !== '') {
+          const parsed = dayjs(String(rawDate));
+          setPurchaseConfirmDocumentDate(parsed.isValid() ? parsed.startOf('day') : null);
+        } else {
+          setPurchaseConfirmDocumentDate(null);
+        }
+      }
+      setPurchaseConfirmLineWh(lineWh);
+      setPurchaseConfirmLineLoc(lineLoc);
+      setPurchaseConfirmLineLocCode(lineLocLb);
+      setLocOptionsByWarehouse({});
+      setPurchaseConfirmPreviewQty(qty);
+      const [batchPrefilled, materialMeta] = await Promise.all([
+        prefetchPurchasePreviewBatchNumbers(detailData.items, batch),
+        loadConfirmPreviewMaterialMeta(detailData.items || [], materialById),
+      ]);
+      const serialPrefilled = await prefetchPurchasePreviewSerialNumbers(
+        detailData.items,
+        serial,
+        materialMeta,
+        qty,
+      );
+      setPurchaseConfirmPreviewBatch(batchPrefilled);
+      setPurchaseConfirmPreviewSerial(serialPrefilled);
+      setPurchaseConfirmMaterialMeta(materialMeta);
+      const uniqueWh = [...new Set(Object.values(lineWh))];
+      await Promise.all(
+        uniqueWh.map(async (wid) => {
+          const opts = await fetchStorageLocationsForWarehouse(wid);
+          setLocOptionsByWarehouse((prev) => ({ ...prev, [wid]: opts }));
+        })
+      );
+      if (record.receipt_type === 'production_return' && record.id != null) {
+        const fieldFormValues = await loadProductionReturnFormFieldValues(record.id);
+        productionReturnConfirmFormRef.current?.setFieldsValue(fieldFormValues);
+      }
+    } catch {
+      messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadConfirmPreviewFailed'));
+      resetPurchaseConfirmPreview();
+    } finally {
+      setPurchaseConfirmPreviewLoading(false);
+    }
+  };
+
+  const openConfirmPreview = async (
+    record: InboundOrder,
+    purchaseReceiptHandoff?: PurchaseReceiptEntryHandoff,
+  ) => {
+    if (!record.id) return;
+    if (record.receipt_type === 'purchase') {
+      pendingConfirmRecordRef.current = record;
+      pendingConfirmHandoffRef.current = purchaseReceiptHandoff;
+      setIqcReviewPurchaseReceiptId(record.id);
+      setIqcReviewEnsure(null);
+      setIqcReviewOpen(true);
+      setIqcReviewLoading(true);
+      try {
+        const ensure = await fetchPurchaseReceiptIqcEnsure(record.id);
+        setIqcReviewEnsure(ensure);
+      } catch (e: any) {
+        setIqcReviewOpen(false);
+        pendingConfirmRecordRef.current = null;
+        pendingConfirmHandoffRef.current = undefined;
+        messageApi.error(
+          formatApiErrorDetail(e?.response?.data?.detail) ||
+            e?.message ||
+            t('app.kuaizhizao.warehouseInbound.iqc.ensureFailed'),
+        );
+      } finally {
+        setIqcReviewLoading(false);
+      }
+      return;
+    }
+    if (record.receipt_type === 'finished_goods') {
+      pendingConfirmRecordRef.current = record;
+      pendingConfirmHandoffRef.current = purchaseReceiptHandoff;
+      setFqcReviewFinishedGoodsReceiptId(record.id);
+      setFqcReviewEnsure(null);
+      setFqcReviewOpen(true);
+      setFqcReviewLoading(true);
+      try {
+        const ensure = await fetchFinishedGoodsReceiptFqcEnsure(record.id);
+        setFqcReviewEnsure(ensure);
+      } catch (e: any) {
+        setFqcReviewOpen(false);
+        pendingConfirmRecordRef.current = null;
+        pendingConfirmHandoffRef.current = undefined;
+        messageApi.error(
+          formatApiErrorDetail(e?.response?.data?.detail) ||
+            e?.message ||
+            t('app.kuaizhizao.warehouseInbound.fqc.ensureFailed'),
+        );
+      } finally {
+        setFqcReviewLoading(false);
+      }
+      return;
+    }
+    if (record.receipt_type === 'semi_finished_goods') {
+      pendingConfirmRecordRef.current = record;
+      pendingConfirmHandoffRef.current = purchaseReceiptHandoff;
+      setFqcReviewFinishedGoodsReceiptId(record.id);
+      setFqcReviewEnsure(null);
+      setFqcReviewOpen(true);
+      setFqcReviewLoading(true);
+      try {
+        const ensure = await fetchSemiFinishedGoodsReceiptFqcEnsure(record.id);
+        setFqcReviewEnsure(ensure);
+      } catch (e: any) {
+        setFqcReviewOpen(false);
+        pendingConfirmRecordRef.current = null;
+        pendingConfirmHandoffRef.current = undefined;
+        messageApi.error(
+          formatApiErrorDetail(e?.response?.data?.detail) ||
+            e?.message ||
+            t('app.kuaizhizao.warehouseInbound.fqc.ensureFailed'),
+        );
+      } finally {
+        setFqcReviewLoading(false);
+      }
+      return;
+    }
+    if (
+      record.receipt_type === 'outsource_receipt' ||
+      record.receipt_type === 'sales_return' ||
+      record.receipt_type === 'other_inbound' ||
+      record.receipt_type === 'material_return'
+    ) {
+      await openSimpleConfirmPreview(record);
+      return;
+    }
+    await proceedOpenConfirmPreview(record, purchaseReceiptHandoff);
+  };
+
+  const openCustomerMaterialIqcReview = async (record: InboundOrder) => {
+    if (!record.id) return;
+    pendingConfirmRecordRef.current = record;
+    setCmIqcReviewRegistrationId(record.id);
+    setCmIqcReviewEnsure(null);
+    setCmIqcReviewOpen(true);
+    setCmIqcReviewLoading(true);
+    try {
+      const ensure = await fetchCustomerMaterialIqcEnsure(record.id);
+      setCmIqcReviewEnsure(ensure);
+    } catch (e: any) {
+      setCmIqcReviewOpen(false);
+      pendingConfirmRecordRef.current = null;
+      messageApi.error(
+        e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.cmIqc.ensureFailed'),
+      );
+    } finally {
+      setCmIqcReviewLoading(false);
+    }
+  };
+
+  const handleCmIqcReviewContinue = async () => {
+    const record = pendingConfirmRecordRef.current;
+    setCmIqcReviewOpen(false);
+    setCmIqcReviewEnsure(null);
+    setCmIqcReviewRegistrationId(undefined);
+    pendingConfirmRecordRef.current = null;
+    if (!record?.id) return;
+    try {
+      await customerMaterialRegistrationApi.process(String(record.id));
+      messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.customerMaterialConfirmed'));
+      invalidateMenuBadgeCounts();
+      await actionRef.current?.reload?.();
+    } catch (e: any) {
+      messageApi.error(
+        e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'),
+      );
+    }
+  };
+
+  const handleCmIqcReviewCancel = () => {
+    setCmIqcReviewOpen(false);
+    setCmIqcReviewEnsure(null);
+    setCmIqcReviewRegistrationId(undefined);
+    pendingConfirmRecordRef.current = null;
+  };
+
+  const handleFqcReviewContinue = async () => {
+    const record = pendingConfirmRecordRef.current;
+    const handoff = pendingConfirmHandoffRef.current;
+    setFqcReviewOpen(false);
+    setFqcReviewEnsure(null);
+    pendingConfirmRecordRef.current = null;
+    pendingConfirmHandoffRef.current = undefined;
+    if (!record) return;
+    await proceedOpenConfirmPreview(record, handoff);
+  };
+
+  const handleFqcReviewCancel = () => {
+    setFqcReviewOpen(false);
+    setFqcReviewEnsure(null);
+    pendingConfirmRecordRef.current = null;
+    pendingConfirmHandoffRef.current = undefined;
+  };
+
+  const handleIqcReviewContinue = async () => {
+    const record = pendingConfirmRecordRef.current;
+    const handoff = pendingConfirmHandoffRef.current;
+    setIqcReviewOpen(false);
+    setIqcReviewEnsure(null);
+    pendingConfirmRecordRef.current = null;
+    pendingConfirmHandoffRef.current = undefined;
+    if (!record) return;
+    await proceedOpenConfirmPreview(record, handoff);
+  };
+
+  const handleIqcReviewCancel = () => {
+    setIqcReviewOpen(false);
+    setIqcReviewEnsure(null);
+    pendingConfirmRecordRef.current = null;
+    pendingConfirmHandoffRef.current = undefined;
+  };
+
+  useEffect(() => {
+    const dc = (location.state as InboundPullEntryNavigationState | null)?.inboundDirectConfirm;
+    if (!dc?.id) return;
+    const key = `${dc.receipt_type}:${dc.id}`;
+    if (handledDirectConfirmKeyRef.current === key) return;
+    handledDirectConfirmKeyRef.current = key;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    if (dc.receipt_type === 'outsource_receipt') {
+      messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.outsourceReceiptConfirmed'));
+      invalidateMenuBadgeCounts();
+      void actionRef.current?.reload?.();
+      return;
+    }
+    void openConfirmPreview(
+      { id: dc.id, receipt_type: dc.receipt_type } as InboundOrder,
+      dc.purchaseReceiptHandoff,
+    );
+  }, [location.state, location.pathname, location.search, navigate]);
+
+  useEffect(() => {
+    const filter = parseInboundHubDeepLink(searchParams);
+    inboundDeepLinkRef.current = filter;
+    if (!filter) {
+      inboundDeepLinkOpenedRef.current = false;
+      actionRef.current?.reload();
+      return;
+    }
+    if (filter.receiptType !== receiptTypeFilterRef.current) {
+      handleReceiptTypeFilterChange(filter.receiptType);
+    }
+    if (inboundDeepLinkOpenedRef.current) {
+      actionRef.current?.reload();
+      return;
+    }
+    inboundDeepLinkOpenedRef.current = true;
+    void (async () => {
+      try {
+        const id = await resolveInboundDeepLinkId(filter);
+        if (id) {
+          await handleDetail(inboundHubDeepLinkStub({ ...filter, id }));
+        }
+      } catch {
+        messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadListFailed'));
+      }
+      actionRef.current?.reload();
+    })();
+  }, [searchParams, handleReceiptTypeFilterChange, messageApi, t]);
+
+  const submitConfirmPreview = async () => {
+    const order = purchaseConfirmPreviewDetail;
+    if (!order?.id) return;
+    const items = (order.items || []) as InboundOrderItem[];
+    if (!items.length) {
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.noInboundLines'));
+      return;
+    }
+
+    let productionReturnCustomData: Record<string, any> = {};
+    if (order.receipt_type === 'production_return') {
+      const cfValues = await productionReturnConfirmFormRef.current?.validateFieldsReturnFormatValue?.();
+      if (!cfValues) {
+        await productionReturnConfirmFormRef.current?.validateFields();
+        return;
+      }
+      productionReturnCustomData = extractProductionReturnFormValues(cfValues).customData;
+    }
+
+    let mappedItems: any[];
+    try {
+      mappedItems = items
+        .filter((it) => it.material_id != null)
+        .map((it) => {
+          const rowId = Number(it.id);
+          const qty = Number(purchaseConfirmPreviewQty[rowId] ?? it.receipt_quantity ?? it.return_quantity ?? 0);
+          if (!(qty > 0)) {
+            throw new Error(t('app.kuaizhizao.warehouseInbound.msg.actualQtyMustBePositive', { material: it.material_code || it.material_name || '-' }));
+          }
+          const lineWh = purchaseConfirmLineWh[rowId];
+          if (lineWh == null || !(lineWh > 0)) {
+            throw new Error(t('app.kuaizhizao.warehouseInbound.msg.selectWarehouseForMaterial', { material: it.material_code || it.material_name || '-' }));
+          }
+          const unitPrice = Number(it.unit_price ?? 0);
+          const qualified = Number(it.qualified_quantity ?? it.receipt_quantity ?? qty);
+          const unqualified = Number(it.unqualified_quantity ?? 0);
+          const batchStr = (purchaseConfirmPreviewBatch[rowId] ?? it.batch_number ?? '').trim();
+          const serialList = purchaseConfirmPreviewSerial[rowId];
+          const lineMeta = purchaseConfirmMaterialMeta[rowId];
+          if (isMaterialSerialEntryEnabled(trackingFlags, lineMeta?.serialManaged)) {
+            const expected = Math.floor(qty);
+            const actual = serialList?.length ?? 0;
+            if (actual !== expected) {
+              throw new Error(
+                `物料 ${it.material_code || it.material_name || '-'} 需要 ${expected} 个序列号（当前 ${actual} 个）`,
+              );
+            }
+          }
+          const whOpt = purchaseConfirmWarehouseOptions.find((o) => o.value === lineWh);
+          const locId = purchaseConfirmLineLoc[rowId];
+          const locCode = purchaseConfirmLineLocCode[rowId];
+          const mapped: any = {
+            item_id: rowId,
+            material_id: Number(it.material_id),
+            material_code: it.material_code || '',
+            material_name: it.material_name || '',
+            material_spec: it.material_spec || undefined,
+            material_unit: it.material_unit || it.unit || '个',
+            receipt_quantity: qty,
+            unit_price: unitPrice,
+            total_amount: Number((qty * unitPrice).toFixed(2)),
+            qualified_quantity: Number((qualified + unqualified > qty ? qty : qualified).toFixed(2)),
+            unqualified_quantity: Number((qualified + unqualified > qty ? 0 : unqualified).toFixed(2)),
+            batch_number: batchStr || undefined,
+            serial_numbers: serialList?.length ? serialList : undefined,
+            warehouse_id: lineWh,
+            warehouse_name: whOpt?.name ?? '',
+            location_id: locId != null && locId > 0 ? locId : undefined,
+            location_code: locCode || undefined,
+            status: it.status || order.status || '草稿',
+            notes: it.notes || undefined,
+          };
+          if (order.receipt_type === 'purchase') {
+            mapped.purchase_order_item_id = Number(it.purchase_order_item_id ?? 0);
+          }
+          return mapped;
+        });
+    } catch (e: any) {
+      messageApi.error(e?.message || t('app.kuaizhizao.warehouseInbound.msg.checkLines'));
+      return;
+    }
+
+    const headerWh = Number(mappedItems[0]?.warehouse_id || order.warehouse_id || 0);
+    const headerWhName =
+      purchaseConfirmWarehouseOptions.find((o) => o.value === headerWh)?.name ?? order.warehouse_name ?? '';
+    const receiverPayload = buildInboundConfirmReceiverPayload(purchaseConfirmReceiverHook);
+    if (!receiverPayload.receiver_id && !receiverPayload.receiver_name) {
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.selectReceiverRequired'));
+      return;
+    }
+    const receiptTimePayload =
+      purchaseConfirmDocumentDate?.isValid()
+        ? { receipt_time: toApiBusinessDocumentDateTime(purchaseConfirmDocumentDate) }
+        : {};
+
+    setPurchaseConfirmPreviewSubmitting(true);
+    try {
+      if (order.receipt_type === 'purchase') {
+        // 确认入库仅需 inbound:execute；仓/库位/批号/序列号/实收数量均走 confirm，勿先 PUT update（需 update 权）
+        const confirmItems = items
+          .filter((it) => it.material_id != null && it.id != null && Number(it.id) > 0)
+          .map((src) => {
+            const rowId = Number(src.id);
+            const lineWh = purchaseConfirmLineWh[rowId];
+            const whOpt = purchaseConfirmWarehouseOptions.find((o) => o.value === lineWh);
+            const batchStr = (purchaseConfirmPreviewBatch[rowId] ?? '').trim();
+            const serialList = purchaseConfirmPreviewSerial[rowId];
+            const locId = purchaseConfirmLineLoc[rowId];
+            const locCode = purchaseConfirmLineLocCode[rowId];
+            const qty = Number(purchaseConfirmPreviewQty[rowId] ?? src.receipt_quantity ?? 0);
+            return {
+              item_id: rowId,
+              warehouse_id: lineWh,
+              warehouse_name: whOpt?.name ?? '',
+              location_id: locId != null && locId > 0 ? locId : undefined,
+              location_code: locCode || undefined,
+              batch_number: batchStr || undefined,
+              serial_numbers: serialList?.length ? serialList : undefined,
+              receipt_quantity: qty,
+            };
+          });
+        if (confirmItems.length !== mappedItems.length) {
+          messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.lineIdAbnormal'));
+          return;
+        }
+        await warehouseApi.purchaseReceipt.confirm(String(order.id), {
+          warehouse_id: headerWh,
+          warehouse_name: headerWhName,
+          items: confirmItems,
+          ...receiverPayload,
+          ...receiptTimePayload,
+        });
+      } else if (order.receipt_type === 'finished_goods') {
+        await warehouseApi.finishedGoodsReceipt.confirm(String(order.id), {
+           warehouse_id: headerWh,
+           warehouse_name: headerWhName,
+           items: mappedItems,
+           ...receiverPayload,
+           ...receiptTimePayload,
+        });
+      } else if (order.receipt_type === 'semi_finished_goods') {
+        await warehouseApi.semiFinishedGoodsReceipt.confirm(String(order.id), {
+          warehouse_id: headerWh,
+          warehouse_name: headerWhName,
+          items: mappedItems,
+          ...receiverPayload,
+          ...receiptTimePayload,
+        });
+      } else if (order.receipt_type === 'production_return') {
+        await warehouseApi.productionReturn.confirm(String(order.id), {
+           warehouse_id: headerWh,
+           warehouse_name: headerWhName,
+           items: mappedItems,
+           ...receiverPayload,
+           ...receiptTimePayload,
+        });
+        if (Object.keys(productionReturnCustomData).length > 0) {
+          await saveProductionReturnCustomFieldValues(order.id, productionReturnCustomData);
+        }
+      }
+      messageApi.success(
+        order.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.msg.returnConfirmSuccess') : t('app.kuaizhizao.warehouseInbound.msg.inboundConfirmSuccess'),
+      );
+      resetPurchaseConfirmPreview();
+      invalidateMenuBadgeCounts();
+
+      await actionRef.current?.reload?.();
+      if (currentOrder?.id === order.id && currentOrder?.receipt_type === order.receipt_type) {
+        try {
+          let detailData: any;
+          if (order.receipt_type === 'purchase') detailData = await warehouseApi.purchaseReceipt.get(String(order.id));
+          else if (order.receipt_type === 'finished_goods')
+            detailData = await warehouseApi.finishedGoodsReceipt.get(String(order.id));
+          else if (order.receipt_type === 'semi_finished_goods')
+            detailData = await warehouseApi.semiFinishedGoodsReceipt.get(String(order.id));
+          else detailData = await warehouseApi.productionReturn.get(String(order.id));
+
+          setCurrentOrder(
+            normalizeInboundHubDetail(order.receipt_type!, detailData as Record<string, unknown>, order),
+          );
+          if (order.receipt_type === 'purchase' && order.id != null) {
+            await loadPurchaseReceiptFieldValuesForDetail(order.id);
+          } else if (order.receipt_type === 'production_return' && order.id != null) {
+            await loadProductionReturnFieldValuesForDetail(order.id);
+          } else if (order.receipt_type === 'finished_goods' && order.id != null) {
+            await loadFinishedGoodsReceiptFieldValuesForDetail(order.id);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      setInboundTrackingRefreshKey((k) => k + 1);
+    } catch (error: any) {
+      messageApi.error(
+        formatApiErrorDetail(error?.response?.data?.detail) ||
+          error?.message ||
+          t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'),
+      );
+      throw error;
+    } finally {
+      setPurchaseConfirmPreviewSubmitting(false);
+    }
+  };
+
+  /**
+   * 处理确认入库/退料
+   */
+  const resetSimpleConfirmPreview = useCallback(() => {
+    setSimpleConfirmPreviewOpen(false);
+    setSimpleConfirmPreviewTarget(null);
+    setSimpleConfirmPreviewDetail(null);
+    setSimpleConfirmPreviewLoading(false);
+    setSimpleConfirmPreviewSubmitting(false);
+    setSimpleConfirmDocumentDate(null);
+    simpleConfirmReceiverHook.restoreReceiver({});
+  }, [simpleConfirmReceiverHook]);
+
+  const openSimpleConfirmPreview = useCallback(
+    async (record: InboundOrder) => {
+      if (!record.id) return;
+      setSimpleConfirmPreviewOpen(true);
+      setSimpleConfirmPreviewLoading(true);
+      setSimpleConfirmPreviewSubmitting(false);
+      setSimpleConfirmPreviewTarget(record);
+      setSimpleConfirmPreviewDetail(null);
+      try {
+        const detail = await fetchInboundHubDetail(record);
+        if (!detail) {
+          throw new Error(t('app.kuaizhizao.warehouseInbound.msg.loadConfirmPreviewFailed'));
+        }
+        setSimpleConfirmPreviewDetail(detail);
+        simpleConfirmReceiverHook.restoreReceiver(resolveInboundConfirmReceiverFromDetail(detail));
+        const rawDate = resolveInboundHubDateRaw({
+          ...detail,
+          receipt_type: record.receipt_type,
+        } as InboundOrder);
+        if (rawDate != null && String(rawDate).trim() !== '') {
+          const parsed = dayjs(String(rawDate));
+          setSimpleConfirmDocumentDate(parsed.isValid() ? parsed.startOf('day') : null);
+        } else {
+          setSimpleConfirmDocumentDate(null);
+        }
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        messageApi.error(err?.message || t('app.kuaizhizao.warehouseInbound.msg.loadConfirmPreviewFailed'));
+        resetSimpleConfirmPreview();
+      } finally {
+        setSimpleConfirmPreviewLoading(false);
+      }
+    },
+    [messageApi, resetSimpleConfirmPreview, simpleConfirmReceiverHook, t],
+  );
+
+  const submitSimpleConfirmPreview = useCallback(async () => {
+    const record = simpleConfirmPreviewTarget;
+    if (!record?.id || !simpleConfirmPreviewDetail) return;
+    const receiverPayload = buildInboundConfirmReceiverPayload(simpleConfirmReceiverHook);
+    if (!receiverPayload.receiver_id && !receiverPayload.receiver_name) {
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.selectReceiverRequired'));
+      return;
+    }
+    const confirmPayload = {
+      ...receiverPayload,
+      ...(simpleConfirmDocumentDate?.isValid()
+        ? { receipt_time: toApiBusinessDocumentDateTime(simpleConfirmDocumentDate) }
+        : {}),
+    };
+    setSimpleConfirmPreviewSubmitting(true);
+    try {
+      const id = String(record.id);
+      if (record.receipt_type === 'sales_return') {
+        await warehouseApi.salesReturn.confirm(id, confirmPayload);
+        messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.salesReturnConfirmed'));
+      } else if (record.receipt_type === 'other_inbound') {
+        await warehouseApi.otherInbound.confirm(id, confirmPayload);
+        messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.otherInboundConfirmed'));
+      } else if (record.receipt_type === 'material_return') {
+        await warehouseApi.materialReturn.confirm(id, confirmPayload);
+        messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.materialReturnConfirmed'));
+      } else if (record.receipt_type === 'outsource_receipt') {
+        await outsourceMaterialReceiptApi.complete(id, confirmPayload);
+        messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.outsourceReceiptConfirmed'));
+      } else {
+        throw new Error(t('app.kuaizhizao.warehouseInbound.msg.unsupportedReceiptType'));
+      }
+      resetSimpleConfirmPreview();
+      invalidateMenuBadgeCounts();
+      await actionRef.current?.reload?.();
+      if (currentOrder?.id === record.id && currentOrder?.receipt_type === record.receipt_type) {
+        setDetailDrawerVisible(false);
+        setCurrentOrder(null);
+      }
+      setInboundTrackingRefreshKey((k) => k + 1);
+    } catch (error: unknown) {
+      const err = error as { message?: string; response?: { data?: { detail?: unknown } } };
+      messageApi.error(
+        formatApiErrorDetail(err?.response?.data?.detail) ||
+          err?.message ||
+          t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'),
+      );
+    } finally {
+      setSimpleConfirmPreviewSubmitting(false);
+    }
+  }, [
+    currentOrder?.id,
+    currentOrder?.receipt_type,
+    invalidateMenuBadgeCounts,
+    messageApi,
+    resetSimpleConfirmPreview,
+    simpleConfirmDocumentDate,
+    simpleConfirmPreviewDetail,
+    simpleConfirmPreviewTarget,
+    simpleConfirmReceiverHook,
+    t,
+  ]);
+
+  const handleConfirm = async (record: InboundOrder) => {
+    if (!(inboundPerms.canAction?.('execute') ?? false)) {
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.noConfirmExecutePermission'));
+      return;
+    }
+    if (!isInboundConfirmable(record)) {
+      messageApi.warning(
+        inboundConfirmCapabilityReasonMessage(record, t) ||
+          t('app.kuaizhizao.warehouseInbound.msg.notConfirmable'),
+      );
+      return;
+    }
+    const code = record.receipt_code || record.return_code || '';
+    if (record.receipt_type === 'customer_material') {
+      await openCustomerMaterialIqcReview(record);
+      return;
+    }
+    if (
+      record.receipt_type === 'sales_return' ||
+      record.receipt_type === 'other_inbound' ||
+      record.receipt_type === 'material_return' ||
+      record.receipt_type === 'outsource_receipt'
+    ) {
+      await openSimpleConfirmPreview(record);
+      return;
+    }
+    if (
+      record.receipt_type === 'outsource_material_return' ||
+      record.receipt_type === 'outsource_product_return'
+    ) {
+      messageApi.warning(
+        inboundConfirmCapabilityReasonMessage(record, t) ||
+          t('app.kuaizhizao.warehouseInbound.msg.useConfirmPreviewForOutsource'),
+      );
+      return;
+    }
+    await openConfirmPreview(record);
+  };
+
+  /**
+   * 撤回已入库/已退料：后端按明细冲减即时库存
+   */
+  const executeWithdrawInbound = async (record: InboundOrder) => {
+    const isReturn = record.receipt_type === 'production_return';
+    try {
+          if (record.receipt_type === 'finished_goods') {
+            await warehouseApi.finishedGoodsReceipt.withdraw(String(record.id));
+          } else if (record.receipt_type === 'semi_finished_goods') {
+            await warehouseApi.semiFinishedGoodsReceipt.withdraw(String(record.id));
+          } else if (record.receipt_type === 'purchase') {
+            await warehouseApi.purchaseReceipt.withdraw(String(record.id));
+          } else if (record.receipt_type === 'customer_material') {
+            await customerMaterialRegistrationApi.withdraw(String(record.id));
+          } else {
+            await warehouseApi.productionReturn.withdraw(String(record.id));
+          }
+          messageApi.success(isReturn ? t('app.kuaizhizao.warehouseInbound.msg.withdrawReturnSuccess') : t('app.kuaizhizao.warehouseInbound.msg.withdrawInboundSuccess'));
+          invalidateMenuBadgeCounts();
+
+          await actionRef.current?.reload?.();
+          if (currentOrder?.id === record.id && currentOrder?.receipt_type === record.receipt_type) {
+            try {
+              let detailData: any;
+              if (record.receipt_type === 'finished_goods') {
+                detailData = await warehouseApi.finishedGoodsReceipt.get(String(record.id));
+              } else if (record.receipt_type === 'semi_finished_goods') {
+                detailData = await warehouseApi.semiFinishedGoodsReceipt.get(String(record.id));
+              } else if (record.receipt_type === 'purchase') {
+                detailData = await warehouseApi.purchaseReceipt.get(String(record.id));
+              } else {
+                detailData = await warehouseApi.productionReturn.get(String(record.id));
+              }
+              if (detailData) {
+                setCurrentOrder(
+                  normalizeInboundHubDetail(
+                    record.receipt_type!,
+                    detailData as Record<string, unknown>,
+                    record,
+                  ),
+                );
+                if (record.receipt_type === 'purchase' && record.id != null) {
+                  await loadPurchaseReceiptFieldValuesForDetail(record.id);
+                } else if (record.receipt_type === 'production_return' && record.id != null) {
+                  await loadProductionReturnFieldValuesForDetail(record.id);
+                } else if (record.receipt_type === 'finished_goods' && record.id != null) {
+                  await loadFinishedGoodsReceiptFieldValuesForDetail(record.id);
+                }
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+          setInboundTrackingRefreshKey((k) => k + 1);
+        } catch (error: any) {
+          messageApi.error(error?.message || error?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.withdrawFailed'));
+        }
+  };
+
+  const handleWithdrawInbound = async (record: InboundOrder) => {
+    const code = record.receipt_code || record.return_code || '';
+    const isReturn = record.receipt_type === 'production_return';
+    getAntdModal().confirm({
+      title: isReturn ? t('app.kuaizhizao.warehouseInbound.confirm.withdrawReturn.title') : t('app.kuaizhizao.warehouseInbound.confirm.withdrawInbound.title'),
+      content: t('app.kuaizhizao.warehouseInbound.confirm.withdraw.content', { code }),
+      okText: t('app.kuaizhizao.warehouseInbound.action.withdraw'),
+      okType: 'danger',
+      onOk: () => executeWithdrawInbound(record),
+    });
+  };
+
+  /**
+   * 处理删除：采购/成品仅草稿或待入库；生产退料为待退料（与行内按钮一致）
+   */
+  const listRowsRef = useRef<Map<string, InboundOrder>>(new Map());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const inboundRowKey = (record: InboundOrder) => `${record.receipt_type}::${record.id}`;
+
+  const isInboundPrintable = useCallback(
+    (record: InboundOrder) =>
+      !!record.id &&
+      !!inboundReceiptTypeToPrintDocumentType(record.receipt_type) &&
+      inboundPerms.canPrint &&
+      record.capabilities?.print?.allowed !== false,
+    [inboundPerms.canPrint],
+  );
+
+  const selectedInboundForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => listRowsRef.current.get(String(key)))
+        .filter((row): row is InboundOrder => row != null),
+    [selectedRowKeys],
+  );
+
+  const canToolbarPrint =
+    selectedRowKeys.length === 1 &&
+    !!selectedInboundForBatch[0] &&
+    isInboundPrintable(selectedInboundForBatch[0]);
+
+  const handlePrint = (record: InboundOrder) => {
+    if (!record.id) return;
+    const printDocType = inboundReceiptTypeToPrintDocumentType(record.receipt_type);
+    if (!printDocType) return;
+    openPrint({ documentType: printDocType, documentId: record.id });
+  };
+
+  const executeDelete = async (record: InboundOrder) => {
+    try {
+          await deleteInboundDocument(record);
+          messageApi.success(t('common.deleteSuccess'));
+          invalidateMenuBadgeCounts();
+
+          await actionRef.current?.reload?.();
+        } catch (error: any) {
+          const msg =
+            error?.response?.data?.detail ??
+            error?.response?.data?.message ??
+            error?.message ??
+            t('common.deleteFailed');
+          messageApi.error(typeof msg === 'string' ? msg : t('common.deleteFailed'));
+        }
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const rows = keys
+      .map((k) => listRowsRef.current.get(String(k)))
+      .filter((r): r is InboundOrder => !!r && isInboundDeletable(r));
+    if (rows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.warehouseCommon.batchDeleteNoneDeletable'));
+      return;
+    }
+    try {
+      for (const row of rows) {
+        await deleteInboundDocument(row);
+      }
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: rows.length }));
+      invalidateMenuBadgeCounts();
+      await actionRef.current?.reload?.();
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.detail ??
+        error?.response?.data?.message ??
+        error?.message ??
+        t('app.kuaizhizao.warehouseCommon.batchDeleteFailed');
+      messageApi.error(typeof msg === 'string' ? msg : t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
+    }
+  };
+
+  /**
+   * 表格列定义
+   */
+  const getInboundStackedPrimary = (record: InboundOrder): string => {
+    // 主体优先业务对方：客户 / 供应商（采购、委外）；再回落源单号，最后才是仓库
+    if (record.customer_name) {
+      return String(record.customer_name);
+    }
+    if (record.supplier_name) {
+      return String(record.supplier_name);
+    }
+    if (record.outsource_work_order_code) return String(record.outsource_work_order_code);
+    if (record.work_order_code) return String(record.work_order_code);
+    if (record.picking_code) return String(record.picking_code);
+    if (record.warehouse_name) return String(record.warehouse_name);
+    return t('app.kuaizhizao.warehouseInbound.fallbackDoc');
+  };
+
+  const columns: ProColumns<InboundOrder>[] = useMemo(
+  () => alignProColumns<InboundOrder>([
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.subjectDocNo'),
+      key: 'receipt_code',
+      dataIndex: ['receipt_code', 'return_code'],
+      width: 200,
+      minWidth: 200,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
+      fixed: 'left',
+      render: (_, record) => (
+        <UniTableStackedPrimaryCell
+          primary={getInboundStackedPrimary(record)}
+          secondary={String(record.receipt_code || record.return_code || '')}
+        />
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.docNo'),
+      dataIndex: ['receipt_code', 'return_code'],
+      hideInTable: true,
+      sorter: true,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.receiptType'),
+      dataIndex: 'receipt_type',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      hideInSearch: true,
+      valueEnum: inboundReceiptTypeMarkerValueEnum(t),
+      render: (_, record) => renderInboundReceiptTypeMarkerTag(t, record.receipt_type),
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'status',
+      hideInTable: true,
+      valueType: 'select',
+      valueEnum: buildInboundHubStatusValueEnum(t),
+      initialValue: 'pending',
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.sourceDocNo'),
+      key: 'sourceDocNo',
+      dataIndex: 'source_doc_no',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, record) => inboundSourceDocNo(record) || '-',
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.supplier'),
+      dataIndex: 'supplier_name',
+      hideInTable: true,
+      ellipsis: true,
+    },
+    {
+      title: t('app.kuaizhizao.common.colLineMaterials'),
+      ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+      render: (_, record) => renderDocumentLineMaterialsPreview(record.items, t),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.totalQuantity'),
+      dataIndex: 'total_quantity',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      sorter: true,
+      render: (_, record) => renderWarehouseHeaderQuantity(record, t),
+    },
+    ...buildWarehouseTotalAmountListColumn<InboundOrder>(t, showAmount).map((col) => ({
+      ...col,
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+    })),
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.receiptProgress'),
+      dataIndex: 'receipt_progress',
+      ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
+      render: (_, record) => {
+        let required = Number(record.total_quantity ?? 0);
+        const posted = isInboundStockPosted(record);
+        let done = posted ? required : 0;
+        if (!(required > 0) && posted) {
+          required = 1;
+          done = 1;
+        }
+        if (!(required > 0) && !(done > 0)) return '-';
+        const percent = ratioToPushProgressPercent(done, required);
+        return (
+          <DocumentPushProgressBar
+            percent={percent}
+            tooltip={t('app.kuaizhizao.warehouseInbound.col.receiptProgressTip', {
+              done: formatQuantity(done),
+              required: formatQuantity(required),
+              percent,
+            })}
+          />
+        );
+      },
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
+      dataIndex: 'warehouse_name',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      sorter: true,
+      render: (_, r) =>
+        r.warehouse_name != null && r.warehouse_name !== '' ? String(r.warehouse_name) : '-',
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.field.documentDate'),
+      key: 'receipt_date',
+      dataIndex: 'receipt_date',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+      render: (_, record) => {
+        const raw = resolveInboundHubDateRaw(record);
+        return raw != null && String(raw).trim() !== ''
+          ? formatBusinessDateOnly(String(raw))
+          : '-';
+      },
+    },
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.receiver'),
+      key: 'biz_time_operator',
+      dataIndex: 'biz_time_operator',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      sorter: true,
+      render: (_, record) => resolveInboundHubOperator(record) || '-',
+    },
+    ...buildDocumentAuditColumns<Record<string, unknown>>(t),
+    {
+      title: t('app.kuaizhizao.warehouseInbound.col.lifecycle'),
+      dataIndex: 'lifecycle_stage',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getInboundLifecycle(record as Record<string, unknown>, t);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
+    ...inboundHubCustomFieldColumns,
+    {
+      title: t('common.actions'),
+      key: 'option',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => {
+        const posted = isInboundStockPosted(record);
+        const confirmable = isInboundConfirmable(record);
+        const confirmReason = inboundConfirmCapabilityReasonMessage(record, t);
+        // 确认入库与后端 /confirm → execute、出库确认一致；勿用 approve（审核）
+        const hasConfirmPerm = inboundPerms.canAction?.('execute') ?? false;
+        const canConfirm = confirmable && hasConfirmPerm;
+        const code = record.receipt_code || record.return_code || record.inbound_code || record.registration_code || '';
+        const isReturn = record.receipt_type === 'production_return';
+        const typeLabel = record.receipt_type
+          ? inboundReceiptTypeLabel(t, record.receipt_type)
+          : t('app.kuaizhizao.warehouseInbound.title');
+        const nodes: React.ReactNode[] = [
+          <Button {...rowActionKind('read')} key="detail" onClick={() => void handleDetail(record)} />,
+        ];
+        if (
+          record.receipt_type === 'purchase' &&
+          isInboundEditable(record) &&
+          inboundPerms.canUpdate
+        ) {
+          nodes.push(
+            <Button
+              {...rowActionKind('update')}
+              key="edit"
+              onClick={() => handleEdit(record)}
+            />,
+          );
+        }
+        if (record.receipt_type === 'finished_goods' && record.id && packingBindingPerms.canRead) {
+          nodes.push(
+            <Button
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
+              key="packing-binding"
+              onClick={() =>
+                navigate(
+                  `/apps/kuaizhizao/production-execution/packing-binding?action=bind&source_type=finished_goods_receipt&source_id=${record.id}`,
+                )
+              }
+            >
+              {t('app.kuaizhizao.packingBinding.title')}
+            </Button>
+          );
+        }
+        if (canConfirm) {
+          nodes.push(
+            <Button
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
+              key="confirm"
+              onClick={() => void handleConfirm(record)}
+            >
+              {record.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn') : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
+            </Button>
+          );
+        } else if (!posted && confirmable && !hasConfirmPerm) {
+          nodes.push(
+            <Button
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
+              key="confirm-disabled-perm"
+              disabled
+              title={t('app.kuaizhizao.warehouseInbound.msg.noConfirmExecutePermission')}
+              data-row-action-visible-when-disabled
+            >
+              {record.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn') : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
+            </Button>
+          );
+        } else if (!posted && confirmReason) {
+          nodes.push(
+            <Button
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
+              key="confirm-disabled"
+              disabled
+              title={confirmReason}
+            >
+              {record.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn') : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
+            </Button>
+          );
+        }
+        if (inboundPerms.canDelete && isInboundDeletable(record)) {
+          nodes.push(
+            <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseInbound.confirm.delete.title', { type: typeLabel })} description={t('app.kuaizhizao.warehouseInbound.confirm.delete.content', { code: code || '-' })} okType="danger" onConfirm={() => executeDelete(record)}>
+              <Button {...rowActionKind('delete')} key="delete" onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>
+          );
+        }
+        if (isInboundWithdrawable(record) && (inboundPerms.canAction?.('revoke') ?? false)) {
+          nodes.push(
+            <ActionConfirmPopconfirm title={isReturn ? t('app.kuaizhizao.warehouseInbound.confirm.withdrawReturn.title') : t('app.kuaizhizao.warehouseInbound.confirm.withdrawInbound.title')} description={t('app.kuaizhizao.warehouseInbound.confirm.withdraw.content', { code })} okType="danger" onConfirm={() => executeWithdrawInbound(record)}>
+              <Button
+              {...rowActionKind('revoke')}
+              {...rowActionLabelKeep()}
+              key="withdraw"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {record.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.withdrawReturn') : t('app.kuaizhizao.warehouseInbound.action.withdrawInbound')}
+            </Button>
+            </ActionConfirmPopconfirm>
+          );
+        }
+        return nodes;
+      },
+    },
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK),
+  [
+    t,
+    navigate,
+    inboundHubCustomFieldColumns,
+    inboundPerms,
+    packingBindingPerms.canRead,
+    showAmount,
+  ],
+  );
+
+  const inboundTraceDocument = useMemo(() => {
+    if (!currentOrder || !inboundDocTrackingType || currentOrder.id == null) return undefined;
+    return {
+      documentType: inboundDocTrackingType,
+      documentId: currentOrder.id,
+      selfDocumentId: currentOrder.id,
+      renderBriefActions: (doc: Parameters<typeof WarehouseTraceBriefPrimaryActions>[0]['doc']) => (
+        <WarehouseTraceBriefPrimaryActions
+          doc={doc}
+          t={t}
+          navigate={navigate}
+          closeDrawer={() => {
+            setDetailDrawerVisible(false);
+            setCurrentOrder(null);
+          }}
+        />
+      ),
+    };
+  }, [currentOrder, inboundDocTrackingType, navigate, t]);
+
+  const inboundDetailSupplementary = useMemo(() => {
+    if (!currentOrder) return undefined;
+    const nodes: React.ReactNode[] = [];
+    if (
+      currentOrder.receipt_type === 'purchase' &&
+      hasCustomFieldsDetailContent(purchaseReceiptListCustomFields, purchaseReceiptDetailCustomFieldValues)
+    ) {
+      nodes.push(
+        <CustomFieldsDetailSection
+          key="purchase-custom-fields"
+          customFields={purchaseReceiptListCustomFields}
+          customFieldValues={purchaseReceiptDetailCustomFieldValues}
+        />,
+      );
+    }
+    if (
+      currentOrder.receipt_type === 'production_return' &&
+      hasCustomFieldsDetailContent(productionReturnListCustomFields, productionReturnDetailCustomFieldValues)
+    ) {
+      nodes.push(
+        <CustomFieldsDetailSection
+          key="production-return-custom-fields"
+          customFields={productionReturnListCustomFields}
+          customFieldValues={productionReturnDetailCustomFieldValues}
+        />,
+      );
+    }
+    if (
+      currentOrder.receipt_type === 'finished_goods' &&
+      hasCustomFieldsDetailContent(finishedGoodsReceiptListCustomFields, finishedGoodsReceiptDetailCustomFieldValues)
+    ) {
+      nodes.push(
+        <CustomFieldsDetailSection
+          key="finished-goods-custom-fields"
+          customFields={finishedGoodsReceiptListCustomFields}
+          customFieldValues={finishedGoodsReceiptDetailCustomFieldValues}
+        />,
+      );
+    }
+    if (currentOrder.receipt_type === 'purchase' && currentOrder.id) {
+      nodes.push(
+        <div key="iqc" style={{ marginTop: nodes.length > 0 ? 16 : undefined }}>
+          <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+            {t('app.kuaizhizao.warehouseInbound.section.iqc')}
+          </Typography.Text>
+          <LinkedIqcPanel
+            purchaseReceiptId={currentOrder.id}
+            active={detailDrawerVisible}
+            onNavigate={(path) => {
+              setDetailDrawerVisible(false);
+              navigate(path);
+            }}
+          />
+        </div>,
+      );
+    }
+    if (currentOrder.receipt_type === 'customer_material' && currentOrder.id) {
+      nodes.push(
+        <div key="iqc-cm" style={{ marginTop: nodes.length > 0 ? 16 : undefined }}>
+          <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+            {t('app.kuaizhizao.warehouseInbound.section.iqc')}
+          </Typography.Text>
+          <LinkedIqcPanel
+            customerMaterialRegistrationId={currentOrder.id}
+            active={detailDrawerVisible}
+            onNavigate={(path) => {
+              setDetailDrawerVisible(false);
+              navigate(path);
+            }}
+          />
+        </div>,
+      );
+    }
+    if (
+      (currentOrder.receipt_type === 'finished_goods' || currentOrder.receipt_type === 'semi_finished_goods') &&
+      currentOrder.work_order_id
+    ) {
+      nodes.push(
+        <div key="fqc" style={{ marginTop: nodes.length > 0 ? 16 : undefined }}>
+          <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+            {t('app.kuaizhizao.warehouseInbound.section.fqc')}
+          </Typography.Text>
+          <LinkedFqcPanel
+            workOrderId={currentOrder.work_order_id}
+            active={detailDrawerVisible}
+            onNavigate={(path) => {
+              setDetailDrawerVisible(false);
+              navigate(path);
+            }}
+          />
+        </div>,
+      );
+    }
+    if (nodes.length === 0) return undefined;
+    return <>{nodes}</>;
+  }, [
+    currentOrder,
+    detailDrawerVisible,
+    finishedGoodsReceiptDetailCustomFieldValues,
+    finishedGoodsReceiptListCustomFields,
+    navigate,
+    productionReturnDetailCustomFieldValues,
+    productionReturnListCustomFields,
+    purchaseReceiptDetailCustomFieldValues,
+    purchaseReceiptListCustomFields,
+    t,
+  ]);
+
+  const inboundDetailLinesTitle = useMemo(() => {
+    if (!currentOrder) return undefined;
+    return currentOrder.receipt_type === 'production_return'
+      ? t('app.kuaizhizao.warehouseInbound.section.returnDetails')
+      : t('app.kuaizhizao.warehouseInbound.section.detailInfo');
+  }, [currentOrder, t]);
+
+  const inboundDetailItems = useMemo(
+    () => (currentOrder ? resolveInboundHubDetailItems(currentOrder) : []),
+    [currentOrder],
+  );
+
+  const inboundDetailLineColumns = useMemo(() => {
+    if (!currentOrder) return [];
+    if (currentOrder.receipt_type === 'production_return') {
+      return appendWarehouseLineAmountColumns(
+        [
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          {
+            title: t('common.unit'),
+            dataIndex: 'material_unit',
+            width: 72,
+            render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.returnQty'),
+            dataIndex: 'return_quantity',
+            width: 120,
+            align: 'right' as const,
+            render: (_: unknown, row: InboundOrderItem) =>
+              renderWarehouseLineQuantity(row.return_quantity, row.material_unit ?? row.unit),
+          },
+          { title: t('app.kuaizhizao.warehouseInbound.col.warehouseName'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+          { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+          { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+        ],
+        t,
+        showAmount,
+      );
+    }
+    if (currentOrder.receipt_type === 'purchase') {
+      return appendWarehouseLineAmountColumns(
+        [
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.actualQty'),
+            dataIndex: 'receipt_quantity',
+            width: 140,
+            align: 'right' as const,
+            render: (_: unknown, row: InboundOrderItem) => formatQuantity(row.receipt_quantity),
+          },
+          {
+            title: t('common.unit'),
+            dataIndex: 'material_unit',
+            width: 72,
+            render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
+          },
+          { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+          { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+            dataIndex: 'serial_numbers',
+            width: 88,
+            render: (v: unknown) => renderInboundDetailSerialCell(t, v),
+          },
+        ],
+        t,
+        showAmount,
+        -3,
+      );
+    }
+    if (currentOrder.receipt_type === 'outsource_receipt') {
+      return appendWarehouseLineAmountColumns(
+        [
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+          { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.thisReceiptOutsource'),
+            dataIndex: 'receipt_quantity',
+            width: 100,
+            align: 'right' as const,
+            render: (_: unknown, row: InboundOrderItem) => formatQuantity(row.receipt_quantity),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.qualified'),
+            dataIndex: 'qualified_quantity',
+            width: 88,
+            align: 'right' as const,
+            render: (v: unknown) => formatQuantity(v),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.unqualified'),
+            dataIndex: 'unqualified_quantity',
+            width: 88,
+            align: 'right' as const,
+            render: (v: unknown) => formatQuantity(v),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.processWaste'),
+            dataIndex: 'process_waste_qty',
+            width: 72,
+            align: 'right' as const,
+            render: (v: unknown) => formatQuantity(v),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.materialWaste'),
+            dataIndex: 'material_waste_qty',
+            width: 72,
+            align: 'right' as const,
+            render: (v: unknown) => formatQuantity(v),
+          },
+          {
+            title: t('common.unit'),
+            dataIndex: 'material_unit',
+            width: 72,
+            render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
+          },
+          { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+          { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+        ],
+        t,
+        true,
+      );
+    }
+    return appendWarehouseLineAmountColumns(
+      [
+        { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+        {
+          title: t('common.quantity'),
+          dataIndex: 'receipt_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (_: unknown, row: InboundOrderItem) =>
+            formatQuantity(resolveInboundHubLineQuantity(row as Record<string, unknown>)),
+        },
+        {
+          title: t('common.unit'),
+          dataIndex: 'material_unit',
+          width: 72,
+          render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
+        },
+        { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+        { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+      ],
+      t,
+      showAmount,
+    );
+  }, [
+    currentOrder,
+    t,
+    showAmount,
+  ]);
+
+  return (
+    <ListPageTemplate>
+      <UniTable
+        headerTitle={headerTitle ?? t('app.kuaizhizao.warehouseInbound.title')}
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.purchaseReceipt)}
+        columnPersistenceId={
+          columnPersistenceId ?? 'apps.kuaizhizao.pages.warehouse-management.inbound-width-v8'
+        }
+        actionRef={actionRef}
+        formRef={searchFormRef}
+        rowKey={inboundRowKey}
+        columns={columns}
+        showAdvancedSearch={true}
+        beforeSearchButtons={receiptTypeSelect}
+        pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
+        skipFuzzyPinyinClientFilter
+        enableRowSelection={inboundPerms.canDelete || inboundPerms.canPrint}
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        showDeleteButton={inboundPerms.canDelete}
+        rowSelectionGetCheckboxProps={(record) => ({
+          disabled: !isInboundDeletable(record) && !isInboundPrintable(record),
+        })}
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) =>
+          t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', {
+            count,
+            noun: t('app.kuaizhizao.warehouseInbound.title'),
+          })
+        }
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
+          try {
+            const typeFilter = receiptTypeFilterRef.current;
+            const listParams = resolveInboundHubListParams(
+              {
+                ...(searchFormValues as Record<string, unknown>),
+                receipt_type: typeFilter === 'all' ? undefined : typeFilter,
+                hub_scoped_receipt_types: hubScopedReceiptTypes?.length
+                  ? [...hubScopedReceiptTypes]
+                  : undefined,
+              },
+              sort,
+            );
+            const skipEnrich = meta?.purpose === 'prefetch';
+            const passthrough = async <T,>(rows: T[]) => rows;
+            const result = await fetchInboundHubList(
+              {
+                ...(params as Record<string, unknown>),
+                ...listParams,
+              },
+              {
+                enrichPurchaseReceiptRecordsWithCustomFields: skipEnrich
+                  ? passthrough
+                  : enrichPurchaseReceiptRecordsWithCustomFields,
+                enrichFinishedGoodsReceiptRecordsWithCustomFields: skipEnrich
+                  ? passthrough
+                  : enrichFinishedGoodsReceiptRecordsWithCustomFields,
+                enrichProductionReturnRecordsWithCustomFields: skipEnrich
+                  ? passthrough
+                  : enrichProductionReturnRecordsWithCustomFields,
+              },
+              currentUser,
+            );
+            const filtered = filterInboundHubRowsByDeepLink(result.data, inboundDeepLinkRef.current);
+            // 预取失败不打扰用户；展示请求才提示部分来源失败
+            if (!result.success && meta?.purpose !== 'prefetch') {
+              messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.loadListPartialFailed'));
+            }
+            return {
+              ...result,
+              data: filtered,
+              total: inboundDeepLinkRef.current ? filtered.length : result.total,
+            };
+          } catch (error: unknown) {
+            const alreadyToasted =
+              Boolean((error as { response?: { status?: number } })?.response?.status) &&
+              Number((error as { response?: { status?: number } })?.response?.status) >= 500;
+            if (!alreadyToasted) {
+              messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadListFailed'));
+            }
+            return { data: [], success: false, total: 0 };
+          }
+        }}
+        onTableDataChange={(rows) => {
+          const next = new Map<string, InboundOrder>();
+          for (const row of rows) {
+            next.set(inboundRowKey(row), row);
+          }
+          listRowsRef.current = next;
+        }}
+        toolBarRender={() => {
+          if (!inboundPullMenuSpecs.length) return [];
+          const pullMenuItems = buildKuaizhizaoPullCreateMenuItems(t, inboundPullMenuSpecs);
+          return [
+            <UniPullLoadButton
+              key="inbound-pull-load"
+              compactKey="inbound-pull-load"
+              label={pullLoadLabel}
+              menuItems={pullMenuItems}
+              type="primary"
+              variant="solid"
+            />,
+          ];
+        }}
+        toolBarActionsAfterBatch={[
+          <WarehouseShowAmountSwitch
+            key="inbound-show-amount"
+            checked={showAmount}
+            onChange={setShowAmount}
+          />,
+        ]}
+        showPrintButton={inboundPerms.canPrint}
+        printButtonDisabled={!canToolbarPrint}
+        printButtonText={t('components.uniAction.print')}
+        onPrint={() => {
+          const row = selectedInboundForBatch[0];
+          if (row) handlePrint(row);
+        }}
+      />
+
+      <InboundQuickPullModals
+        ref={quickPullRef}
+        onSuccess={() => {
+          invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+        }}
+      />
+
+      <Modal
+        title={
+          purchaseConfirmPreviewDetail?.receipt_type === 'production_return'
+            ? t('app.kuaizhizao.warehouseInbound.confirmPreview.titleReturn')
+            : t('app.kuaizhizao.warehouseInbound.confirmPreview.titleInbound')
+        }
+        open={purchaseConfirmPreviewOpen}
+        onCancel={() => {
+          if (!purchaseConfirmPreviewSubmitting) resetPurchaseConfirmPreview();
+        }}
+        onOk={submitConfirmPreview}
+        confirmLoading={purchaseConfirmPreviewSubmitting}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        style={{ maxWidth: 'min(1400px, calc(100vw - 48px))' }}
+        okText={
+          purchaseConfirmPreviewDetail?.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn') : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')
+        }
+        destroyOnHidden
+      >
+        <Spin spinning={purchaseConfirmPreviewLoading}>
+          <p style={{ marginBottom: 12, color: '#666' }}>
+            {t('app.kuaizhizao.warehouseInbound.confirmPreview.description')}
+          </p>
+          <Table
+            size="small"
+            pagination={false}
+            scroll={{ x: 1000 }}
+            rowKey={(r) => (r.id != null ? String(r.id) : `m-${r.material_id}`)}
+            dataSource={(purchaseConfirmPreviewDetail?.items || []) as InboundOrderItem[]}
+            columns={filterWarehouseTrackingColumns(
+              [
+              { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 100, ellipsis: true },
+              { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+              {
+                title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
+                dataIndex: 'warehouse_id',
+                width: 150,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.id == null) return '-';
+                  const rid = Number(row.id);
+                  const v = purchaseConfirmLineWh[rid];
+                  return (
+                    <Select
+                      style={{ width: '100%', minWidth: 118 }}
+                      placeholder={t('app.kuaizhizao.warehouseInbound.field.select')}
+                      showSearch
+                      optionFilterProp="label"
+                      value={v}
+                      options={purchaseConfirmWarehouseOptions}
+                      onChange={async (nv) => {
+                        setPurchaseConfirmLineWh((prev) => ({ ...prev, [rid]: nv }));
+                        setPurchaseConfirmLineLoc((prev) => {
+                          const next = { ...prev };
+                          delete next[rid];
+                          return next;
+                        });
+                        setPurchaseConfirmLineLocCode((prev) => {
+                          const next = { ...prev };
+                          delete next[rid];
+                          return next;
+                        });
+                        const opts = await fetchStorageLocationsForWarehouse(nv);
+                        setLocOptionsByWarehouse((prev) => ({ ...prev, [nv]: opts }));
+                      }}
+                      disabled={purchaseConfirmPreviewLoading}
+                    />
+                  );
+                },
+              },
+              {
+                title: t('app.kuaizhizao.warehouseInbound.col.location'),
+                dataIndex: 'location_id',
+                width: 150,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.id == null) return '-';
+                  const rid = Number(row.id);
+                  const wh = purchaseConfirmLineWh[rid];
+                  const locOpts = wh != null ? locOptionsByWarehouse[wh] ?? [] : [];
+                  const locVal = purchaseConfirmLineLoc[rid];
+                  return (
+                    <Select
+                      style={{ width: '100%', minWidth: 118 }}
+                      placeholder={wh != null ? t('app.kuaizhizao.warehouseInbound.field.optional') : t('app.kuaizhizao.warehouseInbound.field.selectWarehouseFirst')}
+                      showSearch
+                      allowClear
+                      optionFilterProp="label"
+                      value={locVal}
+                      options={locOpts}
+                      onOpenChange={(open) => {
+                        if (open && wh != null && !locOptionsByWarehouse[wh]?.length) {
+                          void fetchStorageLocationsForWarehouse(wh).then((opts) =>
+                            setLocOptionsByWarehouse((p) => ({ ...p, [wh]: opts }))
+                          );
+                        }
+                      }}
+                      onChange={(v) => {
+                        setPurchaseConfirmLineLoc((prev) => ({ ...prev, [rid]: v ?? undefined }));
+                        const o = locOpts.find((x) => x.value === v);
+                        setPurchaseConfirmLineLocCode((prev) => {
+                          const next = { ...prev };
+                          if (v == null) delete next[rid];
+                          else next[rid] = o?.code ?? '';
+                          return next;
+                        });
+                      }}
+                      disabled={purchaseConfirmPreviewLoading || wh == null}
+                    />
+                  );
+                },
+              },
+              {
+                title: t('app.kuaizhizao.warehouseInbound.col.actualQty'),
+                dataIndex: 'receipt_quantity',
+                width: 100,
+                align: 'right' as const,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.id == null) return '-';
+                  const rid = Number(row.id);
+                  return (
+                    <InputNumber
+                      min={0.01}
+                      precision={quantityDecimals}
+                      value={purchaseConfirmPreviewQty[rid]}
+                      onChange={(v) =>
+                        setPurchaseConfirmPreviewQty((prev) => ({ ...prev, [rid]: Number(v) || 0 }))
+                      }
+                      style={{ width: 88 }}
+                      size="small"
+                    />
+                  );
+                },
+              },
+              {
+                title: t('common.unit'),
+                dataIndex: 'material_unit',
+                width: 72,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.material_id == null) return '-';
+                  return (
+                    <MaterialUnitSelect
+                      materialId={row.material_id}
+                      value={row.material_unit ?? row.unit}
+                      size="small"
+                      disabled
+                      noStyle
+                    />
+                  );
+                },
+              },
+              {
+                title: t('app.kuaizhizao.warehouseInbound.col.batchNo'),
+                key: 'batch_number',
+                dataIndex: 'batch_number',
+                width: 138,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.id == null) return '-';
+                  const rid = Number(row.id);
+                  return (
+                    <Input
+                      placeholder={t('app.kuaizhizao.warehouseInbound.field.optional')}
+                      value={purchaseConfirmPreviewBatch[rid] ?? ''}
+                      onChange={(e) =>
+                        setPurchaseConfirmPreviewBatch((prev) => ({ ...prev, [rid]: e.target.value }))
+                      }
+                      size="small"
+                    />
+                  );
+                },
+              },
+              {
+                title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+                key: 'serial_numbers',
+                dataIndex: 'serial_numbers',
+                width: 150,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.id == null) return '-';
+                  const rid = Number(row.id);
+                  const meta = purchaseConfirmMaterialMeta[rid];
+                  if (!isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged)) return '—';
+                  const qty = Number(
+                    purchaseConfirmPreviewQty[rid] ?? row.receipt_quantity ?? row.return_quantity ?? 0,
+                  );
+                  const serials = purchaseConfirmPreviewSerial[rid] ?? [];
+                  return (
+                    <SerialNumbersImportTrigger
+                      serials={serials}
+                      expectedCount={qty > 0 ? qty : undefined}
+                      materialLabel={row.material_code || row.material_name}
+                      generateLoading={purchaseConfirmGeneratingSerialId === rid}
+                      onSerialsChange={(next) =>
+                        setPurchaseConfirmPreviewSerial((prev) => ({ ...prev, [rid]: next }))
+                      }
+                      onGenerate={
+                        qty > 0 && !purchaseConfirmPreviewLoading
+                          ? () => handleConfirmPreviewGenerateSerial(rid, qty)
+                          : undefined
+                      }
+                    />
+                  );
+                },
+              },
+            ],
+              trackingFlags,
+            )}
+          />
+          <Form layout="vertical" style={{ marginTop: 16, marginBottom: 0 }} requiredMark={false}>
+            <Row gutter={16}>
+              <Col xs={24} sm={12} md={8}>
+                <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.documentDate')}>
+                  <DatePicker
+                    style={{ width: '100%' }}
+                    value={purchaseConfirmDocumentDate}
+                    onChange={(v) => setPurchaseConfirmDocumentDate(v ? v.startOf('day') : null)}
+                    disabled={purchaseConfirmPreviewLoading || purchaseConfirmPreviewSubmitting}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={8}>
+                <InboundEntryReceiverField
+                  hook={purchaseConfirmReceiverHook}
+                  label={
+                    purchaseConfirmPreviewDetail?.receipt_type === 'production_return'
+                      ? t('app.kuaizhizao.warehouseInbound.field.returner')
+                      : t('app.kuaizhizao.warehouseInbound.field.receiver')
+                  }
+                />
+              </Col>
+            </Row>
+          </Form>
+          {purchaseConfirmPreviewDetail?.receipt_type === 'production_return' ? (
+            <ProForm
+              formRef={productionReturnConfirmFormRef}
+              submitter={false}
+              layout="vertical"
+              style={{ marginTop: 16 }}
+            >
+              <CustomFieldsFormSection
+                customFields={productionReturnFormCustomFields}
+                customFieldValues={productionReturnFormCustomFieldValues}
+                gridColumns={1}
+              />
+            </ProForm>
+          ) : null}
+        </Spin>
+      </Modal>
+
+      <Modal
+        title={
+          simpleConfirmPreviewTarget?.receipt_type === 'sales_return'
+            ? t('app.kuaizhizao.warehouseInbound.confirm.salesReturn.title')
+            : simpleConfirmPreviewTarget?.receipt_type === 'other_inbound'
+              ? t('app.kuaizhizao.warehouseInbound.confirm.otherInbound.title')
+              : simpleConfirmPreviewTarget?.receipt_type === 'material_return'
+                ? t('app.kuaizhizao.warehouseInbound.confirm.materialReturn.title')
+                : t('app.kuaizhizao.warehouseInbound.confirm.outsourceReceipt.title')
+        }
+        open={simpleConfirmPreviewOpen}
+        onCancel={() => {
+          if (!simpleConfirmPreviewSubmitting) resetSimpleConfirmPreview();
+        }}
+        onOk={() => void submitSimpleConfirmPreview()}
+        confirmLoading={simpleConfirmPreviewSubmitting}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        style={{ maxWidth: 'min(1400px, calc(100vw - 48px))' }}
+        okText={
+          simpleConfirmPreviewTarget?.receipt_type === 'production_return'
+            ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn')
+            : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')
+        }
+        destroyOnHidden
+        okButtonProps={{
+          disabled: simpleConfirmPreviewLoading || !simpleConfirmPreviewDetail,
+        }}
+      >
+        <Spin spinning={simpleConfirmPreviewLoading}>
+          <p style={{ marginBottom: 12, color: '#666' }}>
+            {t('app.kuaizhizao.warehouseInbound.simpleConfirmPreview.description')}
+          </p>
+          {simpleConfirmPreviewTarget?.receipt_type === 'outsource_receipt' ? (
+            <Descriptions
+              size="small"
+              column={2}
+              items={[
+                {
+                  key: 'code',
+                  label: t('app.kuaizhizao.warehouseInbound.col.docNo'),
+                  children: String(simpleConfirmPreviewDetail?.code || simpleConfirmPreviewTarget.receipt_code || '—'),
+                },
+                {
+                  key: 'quantity',
+                  label: t('common.quantity'),
+                  children: String(simpleConfirmPreviewDetail?.quantity ?? simpleConfirmPreviewTarget.total_quantity ?? '—'),
+                },
+                {
+                  key: 'warehouse',
+                  label: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
+                  children: String(
+                    simpleConfirmPreviewDetail?.warehouse_name || simpleConfirmPreviewTarget.warehouse_name || '—',
+                  ),
+                },
+              ]}
+            />
+          ) : (
+            <Table
+              size="small"
+              pagination={false}
+              scroll={{ x: 720 }}
+              rowKey={(row, index) => String((row as { id?: number }).id ?? index)}
+              dataSource={
+                Array.isArray(simpleConfirmPreviewDetail?.items)
+                  ? (simpleConfirmPreviewDetail?.items as Record<string, unknown>[])
+                  : []
+              }
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+              columns={[
+                {
+                  title: t('app.kuaizhizao.warehouseInbound.col.materialCode'),
+                  dataIndex: 'material_code',
+                  width: 120,
+                  ellipsis: true,
+                },
+                {
+                  title: t('app.kuaizhizao.warehouseInbound.col.materialName'),
+                  dataIndex: 'material_name',
+                  width: 160,
+                  ellipsis: true,
+                },
+                {
+                  title: t('common.quantity'),
+                  key: 'qty',
+                  width: 100,
+                  align: 'right',
+                  render: (_: unknown, row: Record<string, unknown>) =>
+                    resolveInboundHubLineQuantity(row) ?? 0,
+                },
+                {
+                  title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
+                  dataIndex: 'warehouse_name',
+                  width: 140,
+                  ellipsis: true,
+                  render: (v: unknown, row: Record<string, unknown>) =>
+                    String(v || simpleConfirmPreviewDetail?.warehouse_name || simpleConfirmPreviewTarget?.warehouse_name || '—'),
+                },
+              ]}
+            />
+          )}
+          <Form layout="vertical" style={{ marginTop: 16, marginBottom: 0 }} requiredMark={false}>
+            <Row gutter={16}>
+              <Col xs={24} sm={12} md={8}>
+                <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.documentDate')}>
+                  <DatePicker
+                    style={{ width: '100%' }}
+                    value={simpleConfirmDocumentDate}
+                    onChange={(v) => setSimpleConfirmDocumentDate(v ? v.startOf('day') : null)}
+                    disabled={simpleConfirmPreviewLoading || simpleConfirmPreviewSubmitting}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={8}>
+                <InboundEntryReceiverField
+                  hook={simpleConfirmReceiverHook}
+                  label={
+                    simpleConfirmPreviewTarget?.receipt_type === 'sales_return' ||
+                    simpleConfirmPreviewTarget?.receipt_type === 'material_return'
+                      ? t('app.kuaizhizao.warehouseInbound.field.returner')
+                      : t('app.kuaizhizao.warehouseInbound.field.receiver')
+                  }
+                />
+              </Col>
+            </Row>
+          </Form>
+        </Spin>
+      </Modal>
+
+      <InboundDetailDrawer
+        open={detailDrawerVisible}
+        zIndex={inboundDetailDrawerZIndex}
+        order={currentOrder}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const record = detailRetryRecordRef.current;
+          if (record) void handleDetail(record);
+        }}
+        trackingRefreshKey={inboundTrackingRefreshKey}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setCurrentOrder(null);
+          setDetailError(null);
+          setPurchaseReceiptAttachments([]);
+          resetPurchaseReceiptDetailFieldValues();
+          resetProductionReturnDetailFieldValues();
+          resetFinishedGoodsReceiptDetailFieldValues();
+        }}
+        extra={
+          currentOrder ? (
+            <Space>
+              {isEditablePurchaseReceipt(currentOrder) && inboundPerms.canUpdate ? (
+                <Button
+                  {...rowActionKind('update')}
+                  onClick={() => {
+                    const order = currentOrder;
+                    setDetailDrawerVisible(false);
+                    handleEdit(order);
+                  }}
+                />
+              ) : null}
+              {isInboundConfirmable(currentOrder) &&
+              (inboundPerms.canAction?.('execute') ?? false) ? (
+                <>
+                  <Button
+                    type="primary"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => void handleConfirm(currentOrder)}
+                  >
+                    {currentOrder.receipt_type === 'production_return'
+                      ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn')
+                      : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
+                  </Button>
+                </>
+              ) : isInboundConfirmable(currentOrder) &&
+                !(inboundPerms.canAction?.('execute') ?? false) ? (
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  disabled
+                  title={t('app.kuaizhizao.warehouseInbound.msg.noConfirmExecutePermission')}
+                >
+                  {currentOrder.receipt_type === 'production_return'
+                    ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn')
+                    : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
+                </Button>
+              ) : !isInboundStockPosted(currentOrder) &&
+                inboundConfirmCapabilityReasonMessage(currentOrder, t) ? (
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  disabled
+                  title={inboundConfirmCapabilityReasonMessage(currentOrder, t)}
+                >
+                  {currentOrder.receipt_type === 'production_return'
+                    ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn')
+                    : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
+                </Button>
+              ) : null}
+              {isInboundWithdrawable(currentOrder) && (inboundPerms.canAction?.('revoke') ?? false) && (
+                <Button
+                  danger
+                  icon={<RollbackOutlined />}
+                  onClick={() => handleWithdrawInbound(currentOrder)}
+                >
+                  {currentOrder.receipt_type === 'production_return'
+                    ? t('app.kuaizhizao.warehouseInbound.action.withdrawReturn')
+                    : t('app.kuaizhizao.warehouseInbound.action.withdrawInbound')}
+                </Button>
+              )}
+            </Space>
+          ) : null
+        }
+        traceDocument={inboundTraceDocument}
+        supplementary={inboundDetailSupplementary}
+        linesTitle={inboundDetailLinesTitle}
+        lines={
+          currentOrder ? (
+            <>
+                <style>{`
+                  .inbound-detail-drawer-items .ant-table-wrapper .ant-table-body,
+                  .inbound-detail-drawer-items .ant-table-wrapper .ant-table-content {
+                    overflow: visible !important;
+                  }
+                `}</style>
+                <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                {inboundDetailItems.length > 0 ? (
+                  <div
+                    className="inbound-detail-drawer-items"
+                    style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden' }}
+                  >
+                    <Table
+                      className="warehouse-detail-table"
+                      size="small"
+                      tableLayout="fixed"
+                      style={{ minWidth: INBOUND_DETAIL_ITEMS_MIN_WIDTH }}
+                      rowKey={(r, idx) => (r.id != null ? String(r.id) : `m-${r.material_id ?? idx}`)}
+                      pagination={false}
+                      bordered
+                      columns={inboundDetailLineColumns}
+                      dataSource={inboundDetailItems}
+                    />
+                  </div>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.detail.noDetails')} />
+                )}
+
+            </>
+          ) : undefined
+        }
+      />
+      <PurchaseReceiptIqcReviewModal
+        open={iqcReviewOpen}
+        loading={iqcReviewLoading}
+        purchaseReceiptId={iqcReviewPurchaseReceiptId}
+        ensure={iqcReviewEnsure}
+        t={t}
+        navigate={navigate}
+        onCancel={handleIqcReviewCancel}
+        onContinue={() => void handleIqcReviewContinue()}
+      />
+      <CustomerMaterialIqcReviewModal
+        open={cmIqcReviewOpen}
+        loading={cmIqcReviewLoading}
+        registrationId={cmIqcReviewRegistrationId}
+        ensure={cmIqcReviewEnsure}
+        t={t}
+        navigate={navigate}
+        onCancel={handleCmIqcReviewCancel}
+        onContinue={() => void handleCmIqcReviewContinue()}
+      />
+      <FinishedGoodsReceiptFqcReviewModal
+        open={fqcReviewOpen}
+        loading={fqcReviewLoading}
+        finishedGoodsReceiptId={fqcReviewFinishedGoodsReceiptId}
+        ensure={fqcReviewEnsure}
+        t={t}
+        navigate={navigate}
+        onCancel={handleFqcReviewCancel}
+        onContinue={() => void handleFqcReviewContinue()}
+      />
+      <PurchaseReceiptEditModal
+        open={editModalRecord != null}
+        record={editModalRecord}
+        onClose={handleEditModalClose}
+        onSuccess={handleEditModalSuccess}
+      />
+      {PrintModal}
+    </ListPageTemplate>
+  );
+};
+
+export default InboundPage;

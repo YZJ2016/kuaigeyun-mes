@@ -1,0 +1,886 @@
+/**
+ * 平台级定时任务管理列表页面
+ * 
+ * 用于平台管理员查看和管理全局定时任务。
+ * 此功能已从租户级移至平台级，以降低注入攻击风险。
+ */
+
+import React, { useRef, useState } from 'react';
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
+import { useTranslation } from 'react-i18next';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
+import SafeProFormSelect from '../../../../components/safe-pro-form-select';
+import { App, Popconfirm, Button, Modal, Input, Row, Col, Select } from 'antd';
+import { UniTable } from '../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { SystemMasterDetailDrawer } from '../../../system/shared/systemMasterDetailDrawer';
+import { MarkerTag, StatusTag } from '../../../../constants/statusBadges';
+import {
+  getScheduledTaskList,
+  getScheduledTaskByUuid,
+  createScheduledTask,
+  updateScheduledTask,
+  deleteScheduledTask,
+  startScheduledTask,
+  stopScheduledTask,
+  ScheduledTask,
+  CreateScheduledTaskData,
+  UpdateScheduledTaskData,
+} from '../../../../services/scheduledTask';
+import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+
+/**
+ * 定时任务管理列表页面组件
+ */
+const ScheduledTaskListPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  
+  // Modal 相关状态（创建/编辑定时任务）
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentScheduledTaskUuid, setCurrentScheduledTaskUuid] = useState<string | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
+  const [triggerType, setTriggerType] = useState<'cron' | 'interval' | 'date'>('cron');
+  const [triggerCron, setTriggerCron] = useState<string>('0 0 * * *');
+  const [triggerIntervalSeconds, setTriggerIntervalSeconds] = useState<number>(300);
+  const [triggerDateAt, setTriggerDateAt] = useState<string>('');
+  const [taskType, setTaskType] = useState<string>('api_call');
+  const [taskUrl, setTaskUrl] = useState<string>('');
+  const [taskMethod, setTaskMethod] = useState<string>('POST');
+  const [taskScriptUuid, setTaskScriptUuid] = useState<string>('');
+  
+  // Drawer 相关状态（详情查看）
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailData, setDetailData] = useState<ScheduledTask | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
+
+  /**
+   * 处理新建定时任务
+   */
+  const handleCreate = () => {
+    setIsEdit(false);
+    setCurrentScheduledTaskUuid(null);
+    setTriggerType('cron');
+    setTriggerCron('0 0 * * *');
+    setTriggerIntervalSeconds(300);
+    setTriggerDateAt('');
+    setTaskType('api_call');
+    setTaskUrl('');
+    setTaskMethod('POST');
+    setTaskScriptUuid('');
+    setFormInitialValues({
+      type: 'api_call',
+      trigger_type: 'cron',
+      is_active: true,
+    });
+    setModalVisible(true);
+  };
+
+  /**
+   * 处理编辑定时任务
+   */
+  const handleEdit = async (record: ScheduledTask) => {
+    try {
+      setIsEdit(true);
+      setCurrentScheduledTaskUuid(record.uuid);
+      const detail = await getScheduledTaskByUuid(record.uuid);
+      setTriggerType(detail.trigger_type);
+      const tc = detail.trigger_config || {};
+      setTriggerCron(tc.cron ?? '0 0 * * *');
+      setTriggerIntervalSeconds(typeof tc.seconds === 'number' ? tc.seconds : 300);
+      setTriggerDateAt(tc.at ?? '');
+      setTaskType(detail.type);
+      const taskCfg = detail.task_config || {};
+      setTaskUrl(taskCfg.url ?? '');
+      setTaskMethod(taskCfg.method ?? 'POST');
+      setTaskScriptUuid(taskCfg.script_uuid ?? taskCfg.script_code ?? '');
+      setFormInitialValues({
+        name: detail.name,
+        code: detail.code,
+        description: detail.description,
+        type: detail.type,
+        trigger_type: detail.trigger_type,
+        is_active: detail.is_active,
+      });
+      setModalVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || t('field.scheduledTask.fetchDetailFailed'));
+    }
+  };
+
+  /**
+   * 处理查看详情
+   */
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await getScheduledTaskByUuid(uuid);
+      setDetailData(detail);
+    } catch (error) {
+      setDetailData(null);
+      setDetailError(getApiErrorMessage(error, t('field.scheduledTask.fetchDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleView = (record: ScheduledTask) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setDetailData(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
+  /**
+   * 处理删除定时任务
+   */
+  const handleDelete = async (record: ScheduledTask) => {
+    try {
+      await deleteScheduledTask(record.uuid);
+      messageApi.success(t('common.deleteSuccess'));
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
+  };
+
+  /**
+   * 处理批量删除定时任务
+   */
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
+
+      for (const key of keys) {
+        try {
+          await deleteScheduledTask(key.toString());
+          successCount++;
+        } catch (error: any) {
+          failCount++;
+          errors.push(error.message || t('common.deleteFailed'));
+        }
+      }
+
+      if (successCount > 0) {
+        messageApi.success(t('common.deleteSuccess'));
+      }
+      if (failCount > 0) {
+        messageApi.error(t('common.deleteFailed') + (errors.length > 0 ? '：' + errors.join('; ') : ''));
+      }
+
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
+  };
+
+  /**
+   * 处理启动定时任务
+   */
+  const handleStart = async (record: ScheduledTask) => {
+    try {
+      await startScheduledTask(record.uuid);
+      messageApi.success(t('field.scheduledTask.startSuccess'));
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('field.scheduledTask.startFailed'));
+    }
+  };
+
+  /**
+   * 处理停止定时任务
+   */
+  const handleStop = async (record: ScheduledTask) => {
+    try {
+      await stopScheduledTask(record.uuid);
+      messageApi.success(t('field.scheduledTask.stopSuccess'));
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('field.scheduledTask.stopFailed'));
+    }
+  };
+
+  /**
+   * 处理提交表单（创建/更新定时任务）- 从表单构建设置
+   */
+  const handleSubmit = async (values: any): Promise<void> => {
+    try {
+      setFormLoading(true);
+
+      const triggerTypeVal = values.trigger_type || triggerType;
+      let triggerConfig: Record<string, any> = {};
+      if (triggerTypeVal === 'cron') {
+        triggerConfig = { cron: triggerCron || '0 0 * * *' };
+      } else if (triggerTypeVal === 'interval') {
+        triggerConfig = { seconds: Number(triggerIntervalSeconds) || 300 };
+      } else if (triggerTypeVal === 'date') {
+        triggerConfig = { at: triggerDateAt || new Date().toISOString() };
+      }
+
+      const typeVal = values.type || taskType;
+      let taskConfig: Record<string, any> = {};
+      if (typeVal === 'api_call') {
+        taskConfig = { url: taskUrl, method: taskMethod || 'POST' };
+      } else if (typeVal === 'python_script') {
+        taskConfig = { script_code: taskScriptUuid || undefined, script_path: taskScriptUuid || undefined };
+      }
+
+      if (isEdit && currentScheduledTaskUuid) {
+        await updateScheduledTask(currentScheduledTaskUuid, {
+          name: values.name,
+          description: values.description,
+          trigger_type: values.trigger_type,
+          trigger_config: triggerConfig,
+          task_config: taskConfig,
+          is_active: values.is_active,
+        } as UpdateScheduledTaskData);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await createScheduledTask({
+          name: values.name,
+          code: values.code,
+          type: values.type,
+          description: values.description,
+          trigger_type: values.trigger_type,
+          trigger_config: triggerConfig,
+          task_config: taskConfig,
+          is_active: values.is_active,
+        } as CreateScheduledTaskData);
+        messageApi.success(t('common.createSuccess'));
+      }
+      
+      setModalVisible(false);
+      setFormInitialValues(undefined);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+      throw error;
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  /**
+   * 表格列定义
+   */
+  const columns: ProColumns<ScheduledTask>[] = [
+    {
+      title: t('field.scheduledTask.name'),
+      dataIndex: 'name',
+      key: 'name',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+    },
+    {
+      title: t('field.scheduledTask.code'),
+      dataIndex: 'code',
+      key: 'code',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+    },
+    {
+      title: t('field.scheduledTask.type'),
+      dataIndex: 'type',
+      key: 'type',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      valueEnum: {
+        python_script: { text: t('field.scheduledTask.typePython') },
+        api_call: { text: t('field.scheduledTask.typeApi') },
+      },
+      render: (_, record) => {
+        const typeMap: Record<string, { color: string; textKey: string }> = {
+          python_script: { color: 'blue', textKey: 'field.scheduledTask.typePython' },
+          api_call: { color: 'green', textKey: 'field.scheduledTask.typeApi' },
+        };
+        const typeInfo = typeMap[record.type] || { color: 'default', textKey: record.type };
+        return <MarkerTag color={typeInfo.color}>{t(typeInfo.textKey)}</MarkerTag>;
+      },
+    },
+    {
+      title: t('field.scheduledTask.triggerType'),
+      dataIndex: 'trigger_type',
+      key: 'trigger_type',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      valueEnum: {
+        cron: { text: t('field.scheduledTask.triggerCron') },
+        interval: { text: t('field.scheduledTask.triggerInterval') },
+        date: { text: t('field.scheduledTask.triggerDate') },
+      },
+      render: (_, record) => {
+        const triggerMap: Record<string, { color: string; textKey: string }> = {
+          cron: { color: 'blue', textKey: 'field.scheduledTask.triggerCron' },
+          interval: { color: 'orange', textKey: 'field.scheduledTask.triggerInterval' },
+          date: { color: 'green', textKey: 'field.scheduledTask.triggerDate' },
+        };
+        const triggerInfo = triggerMap[record.trigger_type] || { color: 'default', textKey: record.trigger_type };
+        return <MarkerTag color={triggerInfo.color}>{t(triggerInfo.textKey)}</MarkerTag>;
+      },
+    },
+    {
+      title: t('common.remark'),
+      dataIndex: 'description',
+      key: 'description',
+      minWidth: 140,
+      uniTableRemainderFlex: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('field.scheduledTask.runStatus'),
+      dataIndex: 'is_running',
+      key: 'is_running',
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      render: (_, record) => (
+        <MarkerTag color={record.is_running ? 'processing' : 'default'}>
+          {record.is_running ? t('field.scheduledTask.running') : t('field.scheduledTask.notRunning')}
+        </MarkerTag>
+      ),
+    },
+    {
+      title: t('field.scheduledTask.lastRunAt'),
+      dataIndex: 'last_run_at',
+      key: 'last_run_at',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'dateTime',
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t('field.scheduledTask.lastRunStatus'),
+      dataIndex: 'last_run_status',
+      key: 'last_run_status',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, record) => {
+        if (!record.last_run_status) {
+          return '-';
+        }
+        const statusMap: Record<string, { color: string; textKey: string }> = {
+          success: { color: 'success', textKey: 'field.scheduledTask.success' },
+          failed: { color: 'error', textKey: 'field.scheduledTask.failed' },
+        };
+        const statusInfo = statusMap[record.last_run_status] || { color: 'default', textKey: record.last_run_status };
+        return <MarkerTag color={statusInfo.color}>{t(statusInfo.textKey)}</MarkerTag>;
+      },
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'dateTime',
+      hideInSearch: true,
+      sorter: true,
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'is_active',
+      key: 'lifecycle',
+      width: 100,
+      minWidth: 100,
+      fixed: 'right',
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: t('common.enabled') },
+        false: { text: t('common.disabled') },
+      },
+      render: (_, record) => (
+        <StatusTag color={record.is_active ? 'success' : 'default'}>
+          {record.is_active ? t('common.enabled') : t('common.disabled')}
+        </StatusTag>
+      ),
+    },
+    {
+      title: t('common.actions'),
+      key: 'action',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)} />,
+        <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+        record.is_active ? (
+          <Button
+            key="stop"
+            {...rowActionKind('execute')}
+            {...rowActionLabelKeep()}
+            onClick={() => handleStop(record)}
+          >
+            {t('field.scheduledTask.stop')}
+          </Button>
+        ) : (
+          <Button
+            key="execute"
+            {...rowActionKind('execute')}
+            {...rowActionLabelKeep()}
+            onClick={() => handleStart(record)}
+          >
+            {t('field.scheduledTask.start')}
+          </Button>
+        ),
+        <Popconfirm
+          key="delete"
+          title={t('field.scheduledTask.deleteConfirm')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
+    },
+  ];
+
+  return (
+    <>
+      <ListPageTemplate>
+        <UniTable<ScheduledTask>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('infra.scheduledTasks')}
+          columnPersistenceId="pages.infra.scheduled-tasks.list-v3"
+          actionRef={actionRef}
+          columns={columns}
+          request={async (params, sort, _filter, searchFormValues) => {
+            // 处理搜索参数
+            const apiParams: any = {
+              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+              limit: params.pageSize || 20,
+            };
+            
+            // 任务类型筛选
+            if (searchFormValues?.type) {
+              apiParams.type = searchFormValues.type;
+            }
+            
+            // 触发器类型筛选
+            if (searchFormValues?.trigger_type) {
+              apiParams.trigger_type = searchFormValues.trigger_type;
+            }
+            
+            // 启用状态筛选
+            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
+              apiParams.is_active = searchFormValues.is_active;
+            }
+            
+            try {
+              const result = await getScheduledTaskList(apiParams);
+              return {
+                data: result,
+                success: true,
+                total: result.length,  // 简化实现，实际应该从后端返回总数
+              };
+            } catch (error: any) {
+              console.error('获取定时任务列表失败:', error);
+              messageApi.error(error?.message || t('field.scheduledTask.listFetchFailed'));
+              return {
+                data: [],
+                success: false,
+                total: 0,
+              };
+            }
+          }}
+          rowKey="uuid"
+          showAdvancedSearch={true}
+          showCreateButton
+          createButtonText={t('field.scheduledTask.createButton')}
+          onCreate={handleCreate}
+          enableRowSelection
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteButtonText={t('common.batchDelete')}
+          deleteConfirmTitle={t('field.scheduledTask.batchDeleteConfirmTitle')}
+          deleteConfirmDescription={(c) => t('field.scheduledTask.batchDeleteConfirmDescription', { count: c })}
+          showImportButton={false}
+          showExportButton={true}
+          onExport={async (type, keys, pageData) => {
+            try {
+              let items = (type === 'currentPage' ? (pageData ?? []) : await fetchAllListItems((p) => getScheduledTaskList(p)));
+              if (type === 'currentPage' && pageData?.length) {
+                items = pageData;
+              } else if (type === 'selected' && keys?.length) {
+                items = items.filter((d: any) => keys.includes(d.uuid));
+              }
+              if (items.length === 0) {
+                messageApi.warning(t('common.exportNoData'));
+                return;
+              }
+              await downloadRecordsAsXlsx(
+                items as Array<Record<string, unknown>>,
+                `scheduled-tasks-${todaySiteDateString()}.xlsx`,
+              );
+              messageApi.success(t('field.scheduledTask.exportSuccess', { count: items.length }));
+            } catch (error: any) {
+              messageApi.error(error?.message || t('common.deleteFailed'));
+            }
+          }}
+          pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true,
+          }}
+        />
+      </ListPageTemplate>
+
+      {/* 创建/编辑定时任务 Modal - 两栏布局，备注倒数第二，触发器/任务配置为表单 */}
+      <FormModalTemplate
+        title={isEdit ? t('field.scheduledTask.editTitle') : t('field.scheduledTask.createTitle')}
+        open={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+      >
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText
+              name="code"
+              label={t('field.scheduledTask.code')}
+              rules={[
+                { required: true, message: t('field.scheduledTask.codeRequired') },
+                { pattern: /^[a-z0-9_]+$/, message: t('field.scheduledTask.codePattern') },
+              ]}
+              placeholder={t('field.scheduledTask.codePlaceholder')}
+              disabled={isEdit}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormText
+              name="name"
+              label={t('field.scheduledTask.name')}
+              rules={[{ required: true, message: t('field.scheduledTask.nameRequired') }]}
+              placeholder={t('field.scheduledTask.namePlaceholder')}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <SafeProFormSelect
+              name="type"
+              label={t('field.scheduledTask.type')}
+              rules={[{ required: true, message: t('field.scheduledTask.typeRequired') }]}
+              options={[
+                { label: t('field.scheduledTask.typePython'), value: 'python_script' },
+                { label: t('field.scheduledTask.typeApi'), value: 'api_call' },
+              ]}
+              fieldProps={{ onChange: (v: string) => setTaskType(v || 'api_call') }}
+              disabled={isEdit}
+            />
+          </Col>
+          <Col span={12}>
+            <SafeProFormSelect
+              name="trigger_type"
+              label={t('field.scheduledTask.triggerType')}
+              rules={[{ required: true, message: t('field.scheduledTask.triggerTypeRequired') }]}
+              options={[
+                { label: t('field.scheduledTask.triggerCron'), value: 'cron' },
+                { label: t('field.scheduledTask.triggerInterval'), value: 'interval' },
+                { label: t('field.scheduledTask.triggerDate'), value: 'date' },
+              ]}
+              fieldProps={{
+                onChange: (value: string) => {
+                  setTriggerType(value as 'cron' | 'interval' | 'date');
+                  if (value === 'cron') setTriggerCron('0 0 * * *');
+                  if (value === 'interval') setTriggerIntervalSeconds(300);
+                  if (value === 'date') setTriggerDateAt(new Date().toISOString().slice(0, 16));
+                },
+              }}
+              disabled={isEdit}
+            />
+          </Col>
+        </Row>
+        {/* 触发器配置 - 表单模式 */}
+        {triggerType === 'cron' && (
+          <ProForm.Item label={t('field.scheduledTask.triggerCronLabel')} name="_triggerCron">
+            <Input
+              value={triggerCron}
+              onChange={(e) => setTriggerCron(e.target.value)}
+              placeholder={t('field.scheduledTask.triggerConfigPlaceholderCron')}
+            />
+          </ProForm.Item>
+        )}
+        {triggerType === 'interval' && (
+          <ProForm.Item label={t('field.scheduledTask.triggerIntervalLabel')} name="_triggerInterval">
+            <Input
+              type="number"
+              value={triggerIntervalSeconds}
+              onChange={(e) => setTriggerIntervalSeconds(Number(e.target.value) || 300)}
+              placeholder={t('field.scheduledTask.triggerConfigPlaceholderInterval')}
+            />
+          </ProForm.Item>
+        )}
+        {triggerType === 'date' && (
+          <ProForm.Item label={t('field.scheduledTask.triggerDateLabel')} name="_triggerDate">
+            <Input
+              type="datetime-local"
+              value={triggerDateAt}
+              onChange={(e) => setTriggerDateAt(e.target.value)}
+            />
+          </ProForm.Item>
+        )}
+        {/* 任务配置 - 表单模式 */}
+        {taskType === 'api_call' && (
+          <Row gutter={16}>
+            <Col span={16}>
+              <ProForm.Item label={t('field.scheduledTask.taskUrlLabel')} name="_taskUrl">
+                <Input
+                  value={taskUrl}
+                  onChange={(e) => setTaskUrl(e.target.value)}
+                  placeholder="https://api.example.com/endpoint"
+                />
+              </ProForm.Item>
+            </Col>
+            <Col span={8}>
+              <ProForm.Item label={t('field.scheduledTask.taskMethodLabel')} name="_taskMethod">
+                <Select
+                  value={taskMethod}
+                  onChange={setTaskMethod}
+                  options={[
+                    { value: 'GET', label: 'GET' },
+                    { value: 'POST', label: 'POST' },
+                    { value: 'PUT', label: 'PUT' },
+                    { value: 'DELETE', label: 'DELETE' },
+                  ]}
+                  style={{ width: '100%' }}
+                />
+              </ProForm.Item>
+            </Col>
+          </Row>
+        )}
+        {taskType === 'python_script' && (
+          <ProForm.Item label={t('field.scheduledTask.taskScriptUuidLabel')} name="_taskScriptUuid">
+            <Input
+              value={taskScriptUuid}
+              onChange={(e) => setTaskScriptUuid(e.target.value)}
+              placeholder={t('field.scheduledTask.taskConfigPlaceholder')}
+            />
+          </ProForm.Item>
+        )}
+        <ProFormTextArea
+          name="description"
+          label={t('common.remark')}
+          placeholder={t('field.scheduledTask.descriptionPlaceholder')}
+        />
+        <ProFormSwitch
+          name="is_active"
+          label={t('common.enabled')}
+        />
+      </FormModalTemplate>
+
+      {/* 查看详情 Drawer */}
+      <SystemMasterDetailDrawer
+        title={t('field.scheduledTask.detailTitle')}
+        open={drawerVisible}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetailData(null);
+          setDetailError(null);
+        }}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detailData), () => {
+          if (detailData) void handleEdit(detailData);
+        })}
+        detail={detailData}
+        detailColumns={[
+          {
+            title: t('field.scheduledTask.name'),
+            dataIndex: 'name',
+          },
+          {
+            title: t('field.scheduledTask.code'),
+            dataIndex: 'code',
+          },
+          {
+            title: t('field.scheduledTask.type'),
+            dataIndex: 'type',
+            render: (_, record) => {
+              const value = String(record.type ?? '');
+              const typeMap: Record<string, string> = {
+                python_script: t('field.scheduledTask.typePython'),
+                api_call: t('field.scheduledTask.typeApi'),
+              };
+              return typeMap[value] || value;
+            },
+          },
+          {
+            title: t('field.scheduledTask.triggerType'),
+            dataIndex: 'trigger_type',
+            render: (_, record) => {
+              const value = String(record.trigger_type ?? '');
+              const triggerMap: Record<string, string> = {
+                cron: t('field.scheduledTask.triggerCron'),
+                interval: t('field.scheduledTask.triggerInterval'),
+                date: t('field.scheduledTask.triggerDate'),
+              };
+              return triggerMap[value] || value;
+            },
+          },
+          {
+            title: t('common.remark'),
+            dataIndex: 'description',
+          },
+          {
+            title: t('field.scheduledTask.triggerConfig'),
+            dataIndex: 'trigger_config',
+            render: (_, record) => {
+              const value = record.trigger_config as Record<string, unknown> | undefined;
+              return (
+              <pre style={{
+                margin: 0,
+                padding: '8px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '4px',
+                overflow: 'auto',
+                maxHeight: '200px',
+                fontSize: 12,
+              }}>
+                {JSON.stringify(value ?? {}, null, 2)}
+              </pre>
+            );
+            },
+          },
+          {
+            title: t('field.scheduledTask.taskConfig'),
+            dataIndex: 'task_config',
+            render: (_, record) => {
+              const value = record.task_config as Record<string, unknown> | undefined;
+              return (
+              <pre style={{
+                margin: 0,
+                padding: '8px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '4px',
+                overflow: 'auto',
+                maxHeight: '200px',
+                fontSize: 12,
+              }}>
+                {JSON.stringify(value ?? {}, null, 2)}
+              </pre>
+            );
+            },
+          },
+          {
+            title: t('field.scheduledTask.inngestFunctionId'),
+            dataIndex: 'inngest_function_id',
+            render: (_, record) => String(record.inngest_function_id ?? '') || '-',
+          },
+          {
+            title: t('field.scheduledTask.runStatus'),
+            dataIndex: 'is_running',
+            render: (_, record) => {
+              const value = !!record.is_running;
+              return (
+              <Badge status={value ? 'processing' : 'default'} text={value ? t('field.scheduledTask.running') : t('field.scheduledTask.notRunning')} />
+            );
+            },
+          },
+          {
+            title: t('field.scheduledTask.activeStatus'),
+            dataIndex: 'is_active',
+            render: (_, record) => {
+              const value = !!record.is_active;
+              return (
+              <MarkerTag color={value ? 'success' : 'default'}>
+                {value ? t('common.enabled') : t('common.disabled')}
+              </MarkerTag>
+            );
+            },
+          },
+          {
+            title: t('field.scheduledTask.lastRunAt'),
+            dataIndex: 'last_run_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: t('field.scheduledTask.lastRunStatus'),
+            dataIndex: 'last_run_status',
+            render: (_: React.ReactNode, record: ScheduledTask) => {
+              const value = record.last_run_status;
+              if (!value) return '-';
+              const statusMap: Record<string, { color: string; textKey: string }> = {
+                success: { color: 'success', textKey: 'field.scheduledTask.success' },
+                failed: { color: 'error', textKey: 'field.scheduledTask.failed' },
+              };
+              const statusInfo = statusMap[value] || { color: 'default', textKey: value };
+              return <MarkerTag color={statusInfo.color}>{t(statusInfo.textKey)}</MarkerTag>;
+            },
+          },
+          {
+            title: t('field.scheduledTask.lastError'),
+            dataIndex: 'last_error',
+            render: (_: React.ReactNode, record: ScheduledTask) => {
+              const value = record.last_error;
+              return value ? (
+              <Tag color="error">{value}</Tag>
+            ) : '-';
+            },
+          },
+          {
+            title: t('common.createdAt'),
+            dataIndex: 'created_at',
+            valueType: 'dateTime',
+          },
+          {
+            title: t('common.updatedAt'),
+            dataIndex: 'updated_at',
+            valueType: 'dateTime',
+          },
+        ]}
+      />
+    </>
+  );
+};
+
+export default ScheduledTaskListPage;
+

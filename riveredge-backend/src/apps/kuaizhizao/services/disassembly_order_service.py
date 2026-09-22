@@ -1,0 +1,425 @@
+"""
+拆卸单业务服务模块
+
+提供拆卸单相关的业务逻辑处理，包括拆卸单创建、添加明细、执行拆卸等。
+拆卸：消耗成品库存，增加组件库存。
+
+Author: Luigi Lu
+Date: 2026-02-26
+"""
+
+import uuid
+from datetime import datetime
+from typing import List, Optional
+from decimal import Decimal
+
+from tortoise.transactions import in_transaction
+
+from apps.kuaizhizao.models.disassembly_order import DisassemblyOrder, DisassemblyOrderItem
+from apps.kuaizhizao.schemas.disassembly_order import (
+    DisassemblyOrderCreate,
+    DisassemblyOrderUpdate,
+    DisassemblyOrderResponse,
+    DisassemblyOrderListResponse,
+    DisassemblyOrderItemCreate,
+    DisassemblyOrderItemCreateInput,
+    DisassemblyOrderItemUpdate,
+    DisassemblyOrderItemResponse,
+    DisassemblyOrderWithItemsResponse,
+)
+
+from apps.common.base_service import AppBaseService
+from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.services.business_config_service import BusinessConfigService
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str
+
+
+class DisassemblyOrderService(AppBaseService[DisassemblyOrder]):
+    def __init__(self):
+        super().__init__(DisassemblyOrder)
+        self.business_config_service = BusinessConfigService()
+
+    async def create_disassembly_order(
+        self,
+        tenant_id: int,
+        order_data: DisassemblyOrderCreate,
+        created_by: int
+    ) -> DisassemblyOrderResponse:
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "disassembly_order")
+        if not is_enabled:
+            raise BusinessLogicError("拆卸单节点未启用，无法创建拆卸单")
+        async with in_transaction():
+            today = today_site_str()
+            code = await self.generate_code(
+                tenant_id=tenant_id,
+                code_type="DISASSEMBLY_ORDER_CODE",
+                prefix=f"CXD{today}"
+            )
+            user_info = await self.get_user_info(created_by)
+
+            order = await DisassemblyOrder.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                code=code,
+                warehouse_id=order_data.warehouse_id,
+                warehouse_name=order_data.warehouse_name,
+                disassembly_date=order_data.disassembly_date,
+                status="draft",
+                product_material_id=order_data.product_material_id,
+                product_material_code=order_data.product_material_code,
+                product_material_name=order_data.product_material_name,
+                product_batch_number=(str(order_data.product_batch_number).strip() or None)
+                if order_data.product_batch_number
+                else None,
+                total_quantity=order_data.total_quantity or Decimal("0"),
+                total_items=0,
+                remarks=order_data.remarks,
+                created_by=created_by,
+                created_by_name=user_info["name"],
+                updated_by=created_by,
+                updated_by_name=user_info["name"],
+            )
+            return DisassemblyOrderResponse.model_validate(order)
+
+    async def get_disassembly_order_by_id(
+        self,
+        tenant_id: int,
+        order_id: int
+    ) -> DisassemblyOrderWithItemsResponse:
+        order = await DisassemblyOrder.get_or_none(
+            id=order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"拆卸单不存在: {order_id}")
+
+        items = await DisassemblyOrderItem.filter(
+            disassembly_order_id=order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        ).order_by('id')
+
+        from apps.kuaizhizao.services.document_lifecycle_service import get_disassembly_order_lifecycle, get_document_milestones
+        milestones = await get_document_milestones(order.tenant_id, "disassembly_order", order.id)
+        
+        response = DisassemblyOrderWithItemsResponse.model_validate(order)
+        response.items = [DisassemblyOrderItemResponse.model_validate(item) for item in items]
+        response.lifecycle = get_disassembly_order_lifecycle(order, milestones=milestones)
+        return response
+
+    async def update_disassembly_order(
+        self,
+        tenant_id: int,
+        order_id: int,
+        order_data: DisassemblyOrderUpdate,
+        updated_by: int
+    ) -> DisassemblyOrderResponse:
+        async with in_transaction():
+            order = await DisassemblyOrder.get_or_none(
+                id=order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+            if not order:
+                raise NotFoundError(f"拆卸单不存在: {order_id}")
+            if order.status not in ['draft']:
+                raise ValidationError(f"拆卸单状态为{order.status}，不能修改")
+
+            user_info = await self.get_user_info(updated_by)
+
+            for field, value in order_data.model_dump(exclude_unset=True).items():
+                setattr(order, field, value)
+
+            order.updated_by = updated_by
+            order.updated_by_name = user_info["name"]
+            await order.save()
+            return DisassemblyOrderResponse.model_validate(order)
+
+    async def list_disassembly_orders(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        code: Optional[str] = None,
+        warehouse_id: Optional[int] = None,
+        status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        search: Optional[str] = None,
+        order_by: Optional[str] = None,
+        disassembly_date_start: Optional[str] = None,
+        disassembly_date_end: Optional[str] = None,
+        created_start_date: Optional[str] = None,
+        created_end_date: Optional[str] = None,
+        updated_start_date: Optional[str] = None,
+        updated_end_date: Optional[str] = None,
+    ) -> DisassemblyOrderListResponse:
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.services.warehouse_list_core import (
+            DISASSEMBLY_ORDER_KEYWORD_FIELDS,
+            DISASSEMBLY_ORDER_SORTABLE_FIELDS,
+            apply_warehouse_doc_list_filters,
+        )
+
+        query = DisassemblyOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if warehouse_id:
+            query = query.filter(warehouse_id=warehouse_id)
+        if status:
+            query = query.filter(status=status)
+
+        merged_keyword = pick_search_keyword(keyword, search) or (code.strip() if code and code.strip() else None)
+        query, order_clause = apply_warehouse_doc_list_filters(
+            query,
+            keyword=merged_keyword,
+            order_by=order_by,
+            allowed_fields=DISASSEMBLY_ORDER_SORTABLE_FIELDS,
+            default_order="-created_at",
+            keyword_fields=DISASSEMBLY_ORDER_KEYWORD_FIELDS,
+            doc_date_field="disassembly_date",
+            doc_start_date=disassembly_date_start,
+            doc_end_date=disassembly_date_end,
+            created_start_date=created_start_date,
+            created_end_date=created_end_date,
+            updated_start_date=updated_start_date,
+            updated_end_date=updated_end_date,
+        )
+
+        total = await query.count()
+        orders = await query.order_by(order_clause).offset(skip).limit(limit)
+        from apps.kuaizhizao.services.document_lifecycle_service import get_disassembly_order_lifecycle
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_document_item_material_previews,
+        )
+
+        order_ids = [int(o.id) for o in orders]
+        item_previews = await batch_document_item_material_previews(
+            tenant_id, DisassemblyOrderItem, "disassembly_order_id", order_ids
+        )
+        items: list[DisassemblyOrderResponse] = []
+        for order in orders:
+            resp = DisassemblyOrderResponse.model_validate(order)
+            resp.lifecycle = get_disassembly_order_lifecycle(order, milestones=[])
+            resp = resp.model_copy(update={"items": item_previews.get(int(order.id), [])})
+            items.append(resp)
+        return DisassemblyOrderListResponse(items=items, total=total)
+
+    async def create_disassembly_order_item(
+        self,
+        tenant_id: int,
+        order_id: int,
+        item_data: DisassemblyOrderItemCreateInput,
+        created_by: int
+    ) -> DisassemblyOrderItemResponse:
+        async with in_transaction():
+            order = await DisassemblyOrder.get_or_none(
+                id=order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+            if not order:
+                raise NotFoundError(f"拆卸单不存在: {order_id}")
+            if order.status not in ['draft']:
+                raise ValidationError(f"拆卸单状态为{order.status}，不能添加明细")
+
+            amount = item_data.quantity * item_data.unit_price
+
+            item = await DisassemblyOrderItem.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                disassembly_order_id=order_id,
+                material_id=item_data.material_id,
+                material_code=item_data.material_code,
+                material_name=item_data.material_name,
+                quantity=item_data.quantity,
+                unit_price=item_data.unit_price,
+                amount=amount,
+                batch_number=(str(item_data.batch_number).strip() or None)
+                if item_data.batch_number
+                else None,
+                status="pending",
+                remarks=item_data.remarks,
+            )
+
+            await self._update_order_statistics(tenant_id, order_id)
+            return DisassemblyOrderItemResponse.model_validate(item)
+
+    async def update_disassembly_order_item(
+        self,
+        tenant_id: int,
+        item_id: int,
+        item_data: DisassemblyOrderItemUpdate,
+        updated_by: int
+    ) -> DisassemblyOrderItemResponse:
+        async with in_transaction():
+            item = await DisassemblyOrderItem.get_or_none(
+                id=item_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+            if not item:
+                raise NotFoundError(f"拆卸明细不存在: {item_id}")
+            if item.status != 'pending':
+                raise ValidationError(f"拆卸明细状态为{item.status}，不能修改")
+
+            if item_data.quantity is not None:
+                item.quantity = item_data.quantity
+            if item_data.unit_price is not None:
+                item.unit_price = item_data.unit_price
+            if item_data.batch_number is not None:
+                item.batch_number = str(item_data.batch_number).strip() or None
+            if item_data.remarks is not None:
+                item.remarks = item_data.remarks
+
+            item.amount = item.quantity * item.unit_price
+            await item.save()
+
+            await self._update_order_statistics(tenant_id, item.disassembly_order_id)
+            return DisassemblyOrderItemResponse.model_validate(item)
+
+    async def delete_disassembly_order_item(
+        self,
+        tenant_id: int,
+        order_id: int,
+        item_id: int,
+        deleted_by: int,
+    ) -> bool:
+        """删除拆卸明细（软删除，仅草稿单且待处理明细可删）"""
+        _ = deleted_by
+        async with in_transaction():
+            item = await DisassemblyOrderItem.get_or_none(
+                id=item_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not item or int(item.disassembly_order_id) != int(order_id):
+                raise NotFoundError(f"拆卸明细不存在: {item_id}")
+
+            order = await DisassemblyOrder.get_or_none(
+                id=order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not order:
+                raise NotFoundError(f"拆卸单不存在: {order_id}")
+            if order.status != "draft":
+                raise ValidationError(f"拆卸单状态为{order.status}，不能删除明细")
+            if item.status != "pending":
+                raise ValidationError(f"拆卸明细状态为{item.status}，不能删除")
+
+            item.deleted_at = resolve_business_datetime()
+            await item.save(update_fields=["deleted_at"])
+            await self._update_order_statistics(tenant_id, order_id)
+            return True
+
+    async def execute_disassembly_order(
+        self,
+        tenant_id: int,
+        order_id: int,
+        executed_by: int
+    ) -> DisassemblyOrderResponse:
+        async with in_transaction():
+            order = await DisassemblyOrder.get_or_none(
+                id=order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True
+            )
+            if not order:
+                raise NotFoundError(f"拆卸单不存在: {order_id}")
+            if order.status != 'draft':
+                raise ValidationError(f"拆卸单状态为{order.status}，不能执行")
+
+            items = await DisassemblyOrderItem.filter(
+                disassembly_order_id=order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                status='pending'
+            )
+            if not items:
+                raise ValidationError("拆卸单没有待产出的明细")
+
+            # 调用统一库存服务：消耗成品、增加组件
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
+            user_info = await self.get_user_info(executed_by)
+            operator_name = user_info["name"]
+
+            await InventoryService.decrease_stock(
+                tenant_id=tenant_id,
+                material_id=order.product_material_id,
+                quantity=order.total_quantity,
+                warehouse_id=order.warehouse_id,
+                batch_no=(str(order.product_batch_number).strip() or None)
+                if order.product_batch_number
+                else None,
+                source_type="disassembly_order",
+                source_doc_id=order_id,
+                source_doc_code=order.code,
+                movement_type="disassembly_consume",
+                from_warehouse_id=order.warehouse_id,
+                operator_id=executed_by,
+                operator_name=operator_name,
+            )
+            ledger_date = (
+                order.disassembly_date.date()
+                if getattr(order.disassembly_date, "date", None)
+                else None
+            )
+            for item in items:
+                await InventoryService.increase_stock(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=item.quantity,
+                    warehouse_id=order.warehouse_id,
+                    batch_no=(str(item.batch_number).strip() or None)
+                    if item.batch_number
+                    else None,
+                    source_type="disassembly_order",
+                    source_doc_id=order_id,
+                    source_doc_code=order.code,
+                    movement_type="disassembly_receipt",
+                    to_warehouse_id=order.warehouse_id,
+                    ledger_production_date=ledger_date,
+                    operator_id=executed_by,
+                    operator_name=operator_name,
+                )
+                item.status = "produced"
+                await item.save()
+
+            order.status = "completed"
+            order.executed_by = executed_by
+            order.executed_by_name = operator_name
+            order.executed_at = resolve_business_datetime()
+            order.updated_by = executed_by
+            order.updated_by_name = operator_name
+            await order.save()
+
+            return DisassemblyOrderResponse.model_validate(order)
+
+    async def delete_disassembly_order(self, tenant_id: int, order_id: int) -> bool:
+        """删除拆卸单（软删除，仅草稿可删）"""
+        order = await DisassemblyOrder.get_or_none(
+            id=order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"拆卸单不存在: {order_id}")
+        if order.status not in ['draft']:
+            raise ValidationError(f"拆卸单状态为{order.status}，不能删除")
+        await DisassemblyOrder.filter(id=order_id, tenant_id=tenant_id).update(
+            deleted_at=resolve_business_datetime()
+        )
+        return True
+
+    async def _update_order_statistics(self, tenant_id: int, order_id: int) -> None:
+        items = await DisassemblyOrderItem.filter(
+            disassembly_order_id=order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True
+        )
+        order = await DisassemblyOrder.get(id=order_id)
+        order.total_items = len(items)
+        await order.save()

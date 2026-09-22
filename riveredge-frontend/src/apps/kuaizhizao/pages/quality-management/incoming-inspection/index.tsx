@@ -1,0 +1,2135 @@
+/**
+ * 来料检验页面
+ *
+ * 提供采购到货物料的检验功能，支持合格/不合格判定和处理
+ *
+ * @author RiverEdge Team
+ * @date 2025-12-29
+ */
+
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
+import {
+  ActionType,
+  ProColumns,
+  ProFormDigit,
+  ProFormTextArea,
+  ProFormSelect,
+  ProFormItem,
+  ProFormDependency,
+  ProDescriptionsItemProps,
+} from '@ant-design/pro-components';
+import {
+  App,
+  Button,
+  Space,
+  Card,
+  Row,
+  Col,
+  Modal,
+  Select,
+  theme as AntdTheme,
+  Alert,
+  Empty,
+  Spin,
+  Table,
+  Typography,
+  InputNumber,
+} from 'antd';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, RollbackOutlined } from '@ant-design/icons';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import {
+  UniPullQueryModal,
+  isPullableScope,
+  useUniPullQuery,
+} from '../../../../../components/uni-pull-query';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import {
+  buildInspectorNameColumn,
+  buildQualityInspectionListCodeColumn,
+  buildQualityInspectionListKindColumn,
+  buildQualityInspectionListMaterialColumn,
+  buildQualityInspectionListMaterialHiddenColumns,
+  buildQualityInspectionListNotesColumn,
+  buildQualityInspectionListQuantityResultColumns,
+  buildQualityInspectionListSearchColumns,
+  stackedPrimarySecondaryColumn,
+} from '../components/qualityTableColumns';
+import {
+  buildQualityInspectionDetailCodeColumn,
+  buildQualityInspectionDetailMaterialColumns,
+  buildQualityInspectionDetailNotesColumn,
+  buildQualityInspectionDetailPeopleColumns,
+  buildQualityInspectionDetailQuantityStatusColumns,
+} from '../components/qualityDetailColumns';
+import {
+  buildIncomingCustomerMaterialPullColumns,
+  buildIncomingPurchaseReceiptPullColumns,
+  type QualityPullCandidateBase,
+} from '../components/qualityPullQueryColumns';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
+import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectionLifecycle';
+import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
+import { qualityApi, inspectionPlanApi, unwrapInspectionPlanList } from '../../../services/production';
+import InspectionPlanFormModal from '../../../components/InspectionPlanFormModal';
+import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
+import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
+import {
+  InspectionUnqualifiedBanner,
+  buildInspectionQualityExtraButtons,
+} from '../components/InspectionDetailQualityActions';
+import {
+  getInspectionTemplateSource,
+  hasInspectionPlanSteps,
+  pickInspectionConductExtras,
+} from '../components/inspectionTemplateUtils';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { downloadFile } from '../../../services/common';
+import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
+import { incomingInspectionReturnPushPercent } from '../../sales-management/shared/pushProgress';
+import {
+  buildQualityInspectionDocStatusValueEnum,
+  buildQualityInspectionQualityStatusValueEnum,
+  normalizeQualityInspectionListResponse,
+  QUALITY_INSPECTION_PINNED_STATUS_FIELD,
+  resolveQualityInspectionListParams,
+} from '../../../utils/qualityInspectionListCore';
+import dayjs from 'dayjs';
+import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
+import { formatQuantity } from '../../../../../utils/format';
+import type { PushPreviewResponse } from '../../../services/sales-order';
+import {
+  InspectionConductQuantityFields,
+  InspectionNonconformanceReasonField,
+  normalizeInspectionConductPayload,
+} from '../../../../../components/quantity-with-unit/inspectionConductQuantities';
+import { CreateInspectionDefectModal } from '../components/CreateInspectionDefectModal';
+import { useTranslation } from 'react-i18next';
+import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues';
+import { useGlobalStore } from '../../../../../stores/globalStore';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { qualityInspectionRowGates, qualityInspectionCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
+import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+} from '../../../../../components/custom-fields';
+import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import {
+  getQualityIncomingDisposalFallback,
+  mergeQualityDisposalOptions,
+  renderQualityDocStatusTag,
+  renderQualityQualityStatusTag,
+  qualityInspectionUniAuditProps,
+} from '../components/qualityMeta';
+import {
+  filterDeletableQualityInspectionRecords,
+  filterRevokeConductQualityInspectionRecords,
+} from '../components/qualityRevokeConduct';
+import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
+import {
+  buildIncomingInspectionExportColumns,
+  mapIncomingInspectionExportRows,
+} from '../components/qualityInspectionExport';
+import { importExcelMatrixInChunks } from '../../../../../utils/chunkedBulkImport';
+import { todaySiteDateString } from '../../../../../utils/format';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+const INCOMING_RESOURCE = 'kuaizhizao:quality-management-incoming-inspection';
+const INCOMING_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_incoming_inspections';
+const INSPECTION_PLAN_RESOURCE = 'kuaizhizao:quality-management-inspection-plans';
+const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
+
+// 来料检验接口定义
+interface IncomingInspection {
+  id?: number;
+  tenant_id?: number;
+  inspection_code?: string;
+  purchase_receipt_id?: number;
+  purchase_receipt_code?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string;
+  material_unit?: string;
+  inspection_quantity?: number;
+  qualified_quantity?: number;
+  unqualified_quantity?: number;
+  pushed_purchase_return_quantity?: number;
+  inspection_result?: string;
+  quality_status?: string;
+  inspector_id?: number;
+  inspector_name?: string;
+  inspection_time?: string;
+  reviewer_id?: number;
+  reviewer_name?: string;
+  review_time?: string;
+  review_status?: string;
+  review_remarks?: string;
+  status?: string;
+  notes?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
+  created_at?: string;
+  updated_at?: string;
+  capabilities?: {
+    conduct?: { allowed?: boolean; reason?: string };
+    create_defect?: { allowed?: boolean; reason?: string };
+    push_purchase_return?: { allowed?: boolean; reason?: string };
+    push_inbound?: { allowed?: boolean; reason?: string };
+    update?: { allowed?: boolean; reason?: string };
+  };
+}
+
+const IncomingInspectionPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { t, i18n } = useTranslation();
+  const pushToPurchaseReturnAction = resolveKuaizhizaoDocumentAction(t, 'purchase_return.pull_from_incoming_inspection');
+  const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_incoming_inspection');
+  const pullFromPurchaseReceiptAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_purchase_receipt');
+  const pullFromCustomerMaterialAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_customer_material_registration');
+  const urlListFiltersRef = useRef<{ purchase_receipt_id?: number }>({});
+  const deepLinkOpenedRef = useRef(false);
+
+  const importDictOptions = useImportDictionaryOptions(['DISPOSAL_METHOD']);
+  const disposalImportOptions = importDictOptions.DISPOSAL_METHOD ?? [];
+
+  const incomingInspectionImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'purchaseReceiptCode',
+            labelKey: 'app.kuaizhizao.quality.incoming.import.purchaseReceiptCode',
+            aliases: ['采购入库单号'],
+          },
+          {
+            field: 'material',
+            labelKey: 'app.kuaizhizao.quality.incoming.import.materialCode',
+            aliases: ['物料编号'],
+          },
+          { field: 'inspectionQty', labelKey: 'app.kuaizhizao.quality.incoming.import.inspectionQty', aliases: ['检验数量'] },
+          { field: 'qualifiedQty', labelKey: 'app.kuaizhizao.quality.incoming.import.qualifiedQty', aliases: ['合格数量'] },
+          { field: 'unqualifiedQty', labelKey: 'app.kuaizhizao.quality.incoming.import.unqualifiedQty', aliases: ['不合格数量'] },
+          {
+            field: 'disposition',
+            labelKey: 'app.kuaizhizao.quality.common.form.disposition',
+            aliases: ['处置方式', 'disposition'],
+            options: disposalImportOptions,
+          },
+          { field: 'remark', labelKey: 'common.remark', aliases: ['备注'] },
+        ],
+        [
+          t('app.kuaizhizao.quality.incoming.importExample.purchaseReceiptCode'),
+          t('app.kuaizhizao.quality.incoming.importExample.materialCode'),
+          t('app.kuaizhizao.quality.incoming.importExample.inspectionQty'),
+          t('app.kuaizhizao.quality.incoming.importExample.qualifiedQty'),
+          t('app.kuaizhizao.quality.incoming.importExample.unqualifiedQty'),
+          pickImportExampleValue(disposalImportOptions, 'return'),
+          '',
+        ],
+      ),
+    [t, i18n.language, disposalImportOptions],
+  );
+  const queryClient = useQueryClient();
+  const { message: messageApi } = App.useApp();
+  const currentUser = useCurrentUser();
+  const { token } = AntdTheme.useToken();
+  const incomingInspectionDetailDrawerZIndex = token.zIndexPopupBase;
+  const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<IncomingInspection[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['incoming-inspection-statistics'] });
+  const incomingPerms = useResourcePermissions(INCOMING_RESOURCE);
+  const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
+  const inspectionPlanPerms = useResourcePermissions(INSPECTION_PLAN_RESOURCE);
+  const incomingAuditEnabled = useAuditRequired('incoming_inspection');
+  const incomingAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<IncomingInspection>({ t, auditEnabled: incomingAuditEnabled }),
+    [t, incomingAuditEnabled],
+  );
+  const selectedRecordsForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is IncomingInspection => row != null),
+    [selectedRowKeys],
+  );
+  const incomingAuditBatchHandlers = useMemo(
+    () => createUniAuditBatchHandlers('incoming_inspection'),
+    [],
+  );
+  const inspectionDocStatusValueEnum = useMemo(
+    () => buildQualityInspectionDocStatusValueEnum(t),
+    [t],
+  );
+  const inspectionQualityStatusValueEnum = useMemo(
+    () => buildQualityInspectionQualityStatusValueEnum(t),
+    [t],
+  );
+  const ncPerms = useResourcePermissions(NC_RESOURCE);
+  const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
+  const disposalFallback = useMemo(() => getQualityIncomingDisposalFallback(t), [t]);
+  const [disposalOptions, setDisposalOptions] = useState<Array<{ label: string; value: string }>>(disposalFallback);
+  const [disposalLoading, setDisposalLoading] = useState(false);
+
+  useEffect(() => {
+    setDisposalOptions(disposalFallback);
+  }, [disposalFallback]);
+
+  useEffect(() => {
+    const load = async () => {
+      setDisposalLoading(true);
+      try {
+        const dictList = await getDataDictionaryList({ code: 'DISPOSAL_METHOD', page: 1, page_size: 1 });
+        const dict = dictList.items?.[0];
+        if (!dict) {
+          setDisposalOptions(disposalFallback);
+          return;
+        }
+        const items = await getDictionaryItemList(dict.uuid, true);
+        setDisposalOptions(
+          mergeQualityDisposalOptions(
+            items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })),
+            disposalFallback,
+          ),
+        );
+      } catch {
+        setDisposalOptions(disposalFallback);
+      } finally {
+        setDisposalLoading(false);
+      }
+    };
+    load();
+  }, [disposalFallback]);
+  // 检验Modal状态
+  const [inspectionModalVisible, setInspectionModalVisible] = useState(false);
+  const [currentInspection, setCurrentInspection] = useState<IncomingInspection | null>(null);
+  const formRef = useRef<any>(null);
+
+  const {
+    customFields: inspectionFormCustomFields,
+    customFieldValues: inspectionFormCustomFieldValues,
+    extractFormValues: extractInspectionFormValues,
+    saveCustomFieldValues: saveInspectionCustomFieldValues,
+    loadFieldValues: loadInspectionFormFieldValues,
+    resetFieldValues: resetInspectionFormFieldValues,
+  } = useCustomFields({
+    tableName: INCOMING_INSPECTION_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: inspectionModalVisible,
+  });
+
+  const {
+    customFields: inspectionListCustomFields,
+    generateCustomFieldColumns: generateInspectionCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichInspectionRecordsWithCustomFields,
+    customFieldValues: inspectionDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadInspectionFieldValuesForDetail,
+    resetDetailFieldValues: resetInspectionDetailFieldValues,
+  } = useCustomFieldsForList<IncomingInspection>({ tableName: INCOMING_INSPECTION_CUSTOM_FIELD_TABLE });
+  // 详情Drawer状态
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [inspectionDetail, setInspectionDetail] = useState<IncomingInspection | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailInspectionId, setDetailInspectionId] = useState<number | null>(null);
+
+  const [iiTrackingRefreshKey, setIiTrackingRefreshKey] = useState(0);
+
+  const incomingTracking = useDocumentTracking(
+    detailVisible && inspectionDetail?.id ? 'incoming_inspection' : undefined,
+    inspectionDetail?.id,
+    iiTrackingRefreshKey,
+  );
+
+  // 创建不合格品记录Modal状态
+  const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
+  const [currentDefectInspection, setCurrentDefectInspection] = useState<IncomingInspection | null>(null);
+
+  const [pushReturnPreviewOpen, setPushReturnPreviewOpen] = useState(false);
+  const [pushReturnPreviewLoading, setPushReturnPreviewLoading] = useState(false);
+  const [pushReturnPreviewConfirming, setPushReturnPreviewConfirming] = useState(false);
+  const [pushReturnPreviewSourceId, setPushReturnPreviewSourceId] = useState<number | null>(null);
+  const [pushReturnPreviewData, setPushReturnPreviewData] = useState<PushPreviewResponse | null>(null);
+  const [pushReturnPreviewQuantity, setPushReturnPreviewQuantity] = useState(0);
+
+  const [pushInboundPreviewOpen, setPushInboundPreviewOpen] = useState(false);
+  const [pushInboundPreviewLoading, setPushInboundPreviewLoading] = useState(false);
+  const [pushInboundPreviewConfirming, setPushInboundPreviewConfirming] = useState(false);
+  const [pushInboundPreviewSourceId, setPushInboundPreviewSourceId] = useState<number | null>(null);
+  const [pushInboundPreviewData, setPushInboundPreviewData] = useState<PushPreviewResponse | null>(null);
+  const [pushInboundPreviewQuantity, setPushInboundPreviewQuantity] = useState(0);
+
+  /** 已入库补检：未配置 IQC 物料须临时选择检验方案 */
+  const [postedRecheckPlanModalOpen, setPostedRecheckPlanModalOpen] = useState(false);
+  const [postedRecheckReceiptIds, setPostedRecheckReceiptIds] = useState<number[]>([]);
+  const [postedRecheckPlanId, setPostedRecheckPlanId] = useState<number | null>(null);
+  const [postedRecheckPlanOptions, setPostedRecheckPlanOptions] = useState<
+    Array<{ label: string; value: number }>
+  >([]);
+  const [postedRecheckPlanLoading, setPostedRecheckPlanLoading] = useState(false);
+  const [postedRecheckCreating, setPostedRecheckCreating] = useState(false);
+  const [quickInspectionPlanModalOpen, setQuickInspectionPlanModalOpen] = useState(false);
+  const postedRecheckPlanModalZIndex = token.zIndexPopupBase + 50;
+  const quickInspectionPlanModalZIndex = token.zIndexPopupBase + 100;
+
+  const resetPushReturnPreview = () => {
+    setPushReturnPreviewOpen(false);
+    setPushReturnPreviewSourceId(null);
+    setPushReturnPreviewData(null);
+    setPushReturnPreviewQuantity(0);
+  };
+
+  const openPushReturnPreview = async (record: IncomingInspection) => {
+    if (!record.id) return;
+    setPushReturnPreviewOpen(true);
+    setPushReturnPreviewLoading(true);
+    setPushReturnPreviewConfirming(false);
+    setPushReturnPreviewSourceId(record.id);
+    setPushReturnPreviewData(null);
+    setPushReturnPreviewQuantity(0);
+    try {
+      const data = await qualityApi.incomingInspection.previewPushToPurchaseReturn(String(record.id));
+      setPushReturnPreviewData(data as PushPreviewResponse);
+      const line = data.items?.[0];
+      const defaultQty = Number(line?.max_push_quantity ?? 0);
+      setPushReturnPreviewQuantity(Number.isFinite(defaultQty) && defaultQty > 0 ? defaultQty : 0);
+    } catch (error: any) {
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnFailed'),
+      );
+      resetPushReturnPreview();
+    } finally {
+      setPushReturnPreviewLoading(false);
+    }
+  };
+
+  const handlePushReturnPreviewConfirm = async () => {
+    if (!pushReturnPreviewSourceId || !pushReturnPreviewData || pushReturnPreviewData.has_blocking_issues) return;
+    const maxQty = Number(pushReturnPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const qty = Number(pushReturnPreviewQuantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      messageApi.warning(
+        t('app.kuaizhizao.salesOrder.pushQtyInvalid', {
+          code: pushReturnPreviewData.items?.[0]?.material_code || pushReturnPreviewSourceId,
+        }),
+      );
+      return;
+    }
+    if (qty > maxQty) {
+      messageApi.warning(
+        t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', {
+          code: pushReturnPreviewData.items?.[0]?.material_code || pushReturnPreviewSourceId,
+        }),
+      );
+      return;
+    }
+    setPushReturnPreviewConfirming(true);
+    try {
+      const result = await qualityApi.incomingInspection.pushToPurchaseReturn(String(pushReturnPreviewSourceId), {
+        quantity: qty,
+      });
+      const returnCode = (result as { return_code?: string })?.return_code;
+      messageApi.success(
+        returnCode
+          ? t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnSuccess', { code: returnCode })
+          : t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnSuccess', { code: '-' }),
+      );
+      resetPushReturnPreview();
+      invalidateStats();
+      actionRef.current?.reload();
+      if (inspectionDetail?.id === pushReturnPreviewSourceId) {
+        const detail = await qualityApi.incomingInspection.get(String(pushReturnPreviewSourceId));
+        setInspectionDetail(detail as IncomingInspection);
+      }
+    } catch (error: any) {
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.pushPurchaseReturnFailed'),
+      );
+    } finally {
+      setPushReturnPreviewConfirming(false);
+    }
+  };
+
+  const resetPushInboundPreview = () => {
+    setPushInboundPreviewOpen(false);
+    setPushInboundPreviewSourceId(null);
+    setPushInboundPreviewData(null);
+    setPushInboundPreviewQuantity(0);
+  };
+
+  const openPushInboundPreview = async (record: IncomingInspection) => {
+    if (!record.id) return;
+    setPushInboundPreviewOpen(true);
+    setPushInboundPreviewLoading(true);
+    setPushInboundPreviewConfirming(false);
+    setPushInboundPreviewSourceId(record.id);
+    setPushInboundPreviewData(null);
+    setPushInboundPreviewQuantity(0);
+    try {
+      const data = await qualityApi.incomingInspection.previewPushToPurchaseReceipt(String(record.id));
+      setPushInboundPreviewData(data as PushPreviewResponse);
+      const line = data.items?.[0];
+      const defaultQty = Number(line?.max_push_quantity ?? 0);
+      setPushInboundPreviewQuantity(Number.isFinite(defaultQty) && defaultQty > 0 ? defaultQty : 0);
+    } catch (error: any) {
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.pushInboundFailed'),
+      );
+      resetPushInboundPreview();
+    } finally {
+      setPushInboundPreviewLoading(false);
+    }
+  };
+
+  const handlePushInboundPreviewConfirm = async () => {
+    if (!pushInboundPreviewSourceId || !pushInboundPreviewData || pushInboundPreviewData.has_blocking_issues) return;
+    const maxQty = Number(pushInboundPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const qty = Number(pushInboundPreviewQuantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      messageApi.warning(
+        t('app.kuaizhizao.salesOrder.pushQtyInvalid', {
+          code: pushInboundPreviewData.items?.[0]?.material_code || pushInboundPreviewSourceId,
+        }),
+      );
+      return;
+    }
+    if (qty > maxQty) {
+      messageApi.warning(
+        t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', {
+          code: pushInboundPreviewData.items?.[0]?.material_code || pushInboundPreviewSourceId,
+        }),
+      );
+      return;
+    }
+    setPushInboundPreviewConfirming(true);
+    try {
+      const warehouseId =
+        pushInboundPreviewData.warehouse_id ?? pushInboundPreviewData.items?.[0]?.warehouse_id;
+      const result = await qualityApi.incomingInspection.pushToPurchaseReceipt(
+        String(pushInboundPreviewSourceId),
+        {
+          quantity: qty,
+          warehouse_id: warehouseId != null ? Number(warehouseId) : undefined,
+        },
+      );
+      const receiptCode = (result as { receipt_code?: string })?.receipt_code;
+      messageApi.success(
+        receiptCode
+          ? t('app.kuaizhizao.quality.common.messages.pushInboundSuccess', { code: receiptCode })
+          : t('app.kuaizhizao.quality.common.messages.pushInboundSuccess', { code: '-' }),
+      );
+      resetPushInboundPreview();
+      invalidateStats();
+      actionRef.current?.reload();
+      if (inspectionDetail?.id === pushInboundPreviewSourceId) {
+        const detail = await qualityApi.incomingInspection.get(String(pushInboundPreviewSourceId));
+        setInspectionDetail(detail as IncomingInspection);
+      }
+    } catch (error: any) {
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.pushInboundFailed'),
+      );
+    } finally {
+      setPushInboundPreviewConfirming(false);
+    }
+  };
+
+  const { data: statsData } = useQuery({
+    queryKey: ['incoming-inspection-statistics'],
+    queryFn: () => qualityApi.incomingInspection.statistics(),
+    staleTime: 0,
+  });
+  const stats = {
+    pendingCount: statsData?.pending_count ?? 0,
+    qualifiedCount: statsData?.qualified_count ?? 0,
+    unqualifiedCount: statsData?.unqualified_count ?? 0,
+    totalInspected: statsData?.total_count ?? 0,
+  };
+
+  // 处理检验
+  const handleInspect = async (record: IncomingInspection) => {
+    setCurrentInspection(record);
+    setInspectionModalVisible(true);
+    const baseValues = {
+      qualified_quantity: record.inspection_quantity || 0,
+      unqualified_quantity: 0,
+      notes: '',
+      attachments: mapAttachmentsToUploadList(record.attachments),
+    };
+    if (record.id != null) {
+      const customFormValues = await loadInspectionFormFieldValues(record.id);
+      formRef.current?.setFieldsValue({ ...baseValues, ...customFormValues });
+    } else {
+      formRef.current?.setFieldsValue(baseValues);
+    }
+  };
+
+  // 处理检验提交
+  const handleInspectionSubmit = async (values: any) => {
+    try {
+      const normalized = await normalizeInspectionConductPayload(values, {
+        materialId: currentInspection?.material_id,
+        materialUnit: currentInspection?.material_unit,
+        scenario: 'purchase',
+      });
+      const { standardValues, customData } = extractInspectionFormValues(normalized);
+      if (currentInspection?.id) {
+        await qualityApi.incomingInspection.conduct(currentInspection.id.toString(), {
+          qualified_quantity: standardValues.qualified_quantity,
+          unqualified_quantity: standardValues.unqualified_quantity,
+          notes: standardValues.notes,
+          nonconformance_reason: standardValues.nonconformance_reason,
+          attachments: normalizeDocumentAttachments(standardValues.attachments),
+          ...pickInspectionConductExtras(standardValues),
+        });
+        if (Object.keys(customData).length > 0) {
+          try {
+            await saveInspectionCustomFieldValues(currentInspection.id, customData);
+          } catch (customError: any) {
+            // 检验主单已落库：暴露自定义字段失败原因，不回滚成功态、不伪装成「检验提交失败」
+            messageApi.warning(
+              formatApiErrorDetail(customError?.response?.data?.detail) ||
+                customError?.message ||
+                t('app.kuaizhizao.quality.common.messages.inspectCustomFieldsSaveFailed'),
+            );
+          }
+        }
+      }
+
+      messageApi.success(t('app.kuaizhizao.quality.common.messages.inspectSuccess'));
+      setInspectionModalVisible(false);
+      formRef.current?.resetFields();
+      resetInspectionFormFieldValues();
+      invalidateStats();
+      actionRef.current?.reload();
+      if (inspectionDetail?.id === currentInspection?.id && currentInspection?.id != null) {
+        await loadInspectionFieldValuesForDetail(currentInspection.id);
+      }
+    } catch (error: any) {
+      messageApi.error(
+        formatApiErrorDetail(error?.response?.data?.detail) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.inspectFailed'),
+      );
+      throw error;
+    }
+  };
+
+  // 处理详情查看
+  const loadInspectionDetail = async (id: number) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await qualityApi.incomingInspection.get(id.toString());
+      setInspectionDetail(detail);
+      setIiTrackingRefreshKey((k) => k + 1);
+      await loadInspectionFieldValuesForDetail(id);
+      return detail;
+    } catch (error: any) {
+      setDetailError(error?.message || t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
+      setInspectionDetail((prev) => (prev?.id === id ? prev : null));
+      return null;
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleDetail = (record: IncomingInspection) => {
+    if (record.id == null) return;
+    setDetailInspectionId(record.id);
+    setDetailVisible(true);
+    setInspectionDetail((prev) => (prev?.id === record.id ? prev : null));
+    void loadInspectionDetail(record.id);
+  };
+
+  // URL 深链：入库确认「前往来料检验」带 purchase_receipt_id / incoming_inspection_id
+  useEffect(() => {
+    if (deepLinkOpenedRef.current) return;
+    const receiptId = searchParams.get('purchase_receipt_id');
+    const inspId = searchParams.get('incoming_inspection_id') || searchParams.get('id');
+
+    if (inspId && /^\d+$/.test(inspId)) {
+      deepLinkOpenedRef.current = true;
+      void (async () => {
+        setDetailInspectionId(Number(inspId));
+        setDetailVisible(true);
+        setInspectionDetail((prev) => (prev?.id === Number(inspId) ? prev : null));
+        const detail = await loadInspectionDetail(Number(inspId));
+        if (detail?.purchase_receipt_id != null) {
+          urlListFiltersRef.current = { purchase_receipt_id: Number(detail.purchase_receipt_id) };
+        }
+    actionRef.current?.reload();
+      })();
+      return;
+    }
+
+    if (receiptId && /^\d+$/.test(receiptId)) {
+      deepLinkOpenedRef.current = true;
+      urlListFiltersRef.current = { purchase_receipt_id: Number(receiptId) };
+      actionRef.current?.reload();
+    }
+  }, [searchParams, messageApi, t, loadInspectionFieldValuesForDetail]);
+
+  // 处理批量导入（UniTable 内置，分片避免大文件超时）
+  const handleImport = async (data: any[][]) => {
+    try {
+      const result = await importExcelMatrixInChunks({
+        data,
+        hasExampleRow: true,
+        title: t('common.importing', { defaultValue: '正在导入数据' }),
+        importChunk: (matrix) => qualityApi.incomingInspection.import(matrix),
+      });
+      const successCount = result.success_count;
+      const failureCount = result.failure_count;
+      if (failureCount > 0) {
+        messageApi.warning(t('common.importResult', { success_count: successCount, failure_count: failureCount }));
+      } else {
+        messageApi.success(t('common.importSuccess', { count: successCount }));
+      }
+      invalidateStats();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('app.kuaizhizao.quality.common.messages.importFailed'));
+    }
+  };
+
+  // 处理批量导出（UniTable 内置）
+  const handleExport = async (type: 'selected' | 'currentPage' | 'all', selectedRowKeys?: React.Key[], currentPageData?: IncomingInspection[]) => {
+    try {
+      if (type === 'all') {
+        const blob = await qualityApi.incomingInspection.export();
+        const exportDate = todaySiteDateString();
+        const filename = `${t('app.kuaizhizao.quality.common.entity.incomingInspection')}_${exportDate}.xlsx`;
+        downloadFile(blob, filename);
+        messageApi.success(t('app.kuaizhizao.quality.common.messages.exportSuccess'));
+      } else {
+        const toExport = type === 'selected' && selectedRowKeys?.length
+          ? (currentPageData || []).filter((r) => r.id != null && selectedRowKeys.includes(r.id))
+          : currentPageData || [];
+        if (toExport.length === 0) {
+          messageApi.warning(t('common.exportNoData'));
+          return;
+        }
+        await downloadRecordsAsXlsx(
+          mapIncomingInspectionExportRows(t, toExport as Array<Record<string, unknown>>),
+          `${t('app.kuaizhizao.quality.common.entity.incomingInspection')}_${todaySiteDateString()}.xlsx`,
+          { columns: buildIncomingInspectionExportColumns(t) },
+        );
+        messageApi.success(t('common.exportCountSuccess', { count: toExport.length }));
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.exportFailed'));
+    }
+  };
+
+  // 从采购入库单 / 代工来料单加载创建来料检验单
+  type PullSourceCandidate = QualityPullCandidateBase & {
+    receipt_code?: string;
+    purchase_order_code?: string;
+    supplier_name?: string;
+    registration_code?: string;
+    customer_name?: string;
+    sales_order_code?: string;
+    work_order_code?: string;
+    registration_date?: string | null;
+    total_quantity?: number | null;
+    needs_temporary_plan?: boolean;
+    capabilities?: {
+      pull_incoming_inspection?: { allowed?: boolean; reason?: string };
+    };
+  };
+
+  const purchaseReceiptPullColumns = useMemo(
+    () => buildIncomingPurchaseReceiptPullColumns(t),
+    [t],
+  );
+  const customerMaterialPullColumns = useMemo(
+    () => buildIncomingCustomerMaterialPullColumns(t),
+    [t],
+  );
+
+  const isPullIncomingInspectionSelectable = useCallback(
+    (row: PullSourceCandidate) => row.capabilities?.pull_incoming_inspection?.allowed !== false,
+    [],
+  );
+
+  const pullQueryScopeOptions = useMemo(
+    () => [
+      { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
+      { label: t('components.uniPullQuery.scopeAll'), value: 'all' },
+    ],
+    [t],
+  );
+
+  const pullFromPurchaseReceiptQuery = useUniPullQuery<PullSourceCandidate>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const trimmed = keyword.trim();
+        const res = await qualityApi.incomingInspection.listPurchaseReceiptPullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          receipt_code: trimmed || undefined,
+        });
+        const rows = (res.data || []) as PullSourceCandidate[];
+        const filtered = isPullableScope(scope)
+          ? rows.filter((row) => isPullIncomingInspectionSelectable(row))
+          : rows;
+        return { data: filtered, total: Number(res.total ?? filtered.length) };
+      } catch {
+        messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadReceiptFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (row) => !isPullIncomingInspectionSelectable(row),
+    onConfirm: async (_keys, rows) => {
+      const selectedIds = rows
+        .filter((row) => isPullIncomingInspectionSelectable(row))
+        .map((row) => Number(row.id))
+        .filter((id) => id > 0);
+      if (!selectedIds.length) {
+        messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectReceipt'));
+        return;
+      }
+      try {
+        let count = 0;
+        for (const receiptId of selectedIds) {
+          const created = await qualityApi.incomingInspection.createFromPurchaseReceipt(String(receiptId));
+          count += Array.isArray(created) ? created.length : 0;
+        }
+        if (!count) {
+          messageApi.warning(t('app.kuaizhizao.quality.incoming.messages.createFailed'));
+          return;
+        }
+        messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createSuccess'));
+        pullFromPurchaseReceiptQuery.closeModal();
+        invalidateStats();
+    actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
+      }
+    },
+  });
+
+  /** 已入库采购入库单补检：仅列出已入库单据；含未配置 IQC 物料，创建时可临时选方案 */
+  const createFromPostedReceipts = useCallback(
+    async (receiptIds: number[], inspectionPlanId?: number | null) => {
+      let count = 0;
+      for (const receiptId of receiptIds) {
+        const created = await qualityApi.incomingInspection.createFromPurchaseReceipt(String(receiptId), {
+          includeUnsetIqc: true,
+          inspectionPlanId: inspectionPlanId ?? undefined,
+        });
+        count += Array.isArray(created) ? created.length : 0;
+      }
+      if (!count) {
+        messageApi.warning(t('app.kuaizhizao.quality.incoming.messages.createFailed'));
+        return false;
+      }
+      messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createFromPostedReceiptSuccess'));
+      return true;
+    },
+    [messageApi, t],
+  );
+
+  const reloadPostedRecheckPlanOptions = useCallback(async (): Promise<
+    Array<{ label: string; value: number }>
+  > => {
+    const res = await inspectionPlanApi.list({
+      plan_type: 'incoming',
+      is_active: true,
+      skip: 0,
+      limit: 100,
+    });
+    const items = unwrapInspectionPlanList(res) as Array<{
+      id?: number;
+      plan_code?: string;
+      plan_name?: string;
+    }>;
+    const options = items
+      .filter((p) => p.id != null && Number(p.id) > 0)
+      .map((p) => ({
+        value: Number(p.id),
+        label: `${p.plan_name || p.plan_code || p.id}${p.plan_code ? ` (${p.plan_code})` : ''}`,
+      }));
+    setPostedRecheckPlanOptions(options);
+    return options;
+  }, []);
+
+  const openPostedRecheckPlanModal = useCallback(
+    async (receiptIds: number[]) => {
+      setPostedRecheckReceiptIds(receiptIds);
+      setPostedRecheckPlanId(null);
+      setPostedRecheckPlanModalOpen(true);
+      setPostedRecheckPlanLoading(true);
+      try {
+        await reloadPostedRecheckPlanOptions();
+      } catch {
+        setPostedRecheckPlanOptions([]);
+        messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadInspectionPlanFailed'));
+      } finally {
+        setPostedRecheckPlanLoading(false);
+      }
+    },
+    [messageApi, reloadPostedRecheckPlanOptions, t],
+  );
+
+  const handleQuickInspectionPlanSuccess = useCallback(
+    (plan: { id?: number; plan_code?: string; plan_name?: string }) => {
+      const newId = Number(plan?.id);
+      if (!(newId > 0)) return;
+      const label = `${plan.plan_name || plan.plan_code || newId}${
+        plan.plan_code ? ` (${plan.plan_code})` : ''
+      }`;
+      setPostedRecheckPlanOptions((prev) => {
+        if (prev.some((o) => o.value === newId)) return prev;
+        return [{ value: newId, label }, ...prev];
+      });
+      setPostedRecheckPlanId(newId);
+      setQuickInspectionPlanModalOpen(false);
+      void reloadPostedRecheckPlanOptions().catch(() => undefined);
+    },
+    [reloadPostedRecheckPlanOptions],
+  );
+
+  const pullFromPostedPurchaseReceiptQuery = useUniPullQuery<PullSourceCandidate>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const trimmed = keyword.trim();
+        const res = await qualityApi.incomingInspection.listPurchaseReceiptPullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          receipt_code: trimmed || undefined,
+          status: '已入库',
+          include_unset_iqc: true,
+        });
+        const rows = (res.data || []) as PullSourceCandidate[];
+        const filtered = isPullableScope(scope)
+          ? rows.filter((row) => isPullIncomingInspectionSelectable(row))
+          : rows;
+        return { data: filtered, total: Number(res.total ?? filtered.length) };
+      } catch {
+        messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadReceiptFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (row) => !isPullIncomingInspectionSelectable(row),
+    onConfirm: async (_keys, rows) => {
+      const selected = rows.filter((row) => isPullIncomingInspectionSelectable(row));
+      const selectedIds = selected.map((row) => Number(row.id)).filter((id) => id > 0);
+      if (!selectedIds.length) {
+        messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectReceipt'));
+        return;
+      }
+      const needsPlan = selected.some((row) => Boolean(row.needs_temporary_plan));
+      if (needsPlan) {
+        pullFromPostedPurchaseReceiptQuery.closeModal();
+        await openPostedRecheckPlanModal(selectedIds);
+        return;
+      }
+      try {
+        const ok = await createFromPostedReceipts(selectedIds);
+        if (ok) {
+          pullFromPostedPurchaseReceiptQuery.closeModal();
+          invalidateStats();
+    actionRef.current?.reload();
+        }
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
+      }
+    },
+  });
+
+  const handlePostedRecheckPlanConfirm = async () => {
+    if (!postedRecheckPlanId) {
+      messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectInspectionPlan'));
+      return;
+    }
+    if (!postedRecheckReceiptIds.length) {
+      messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectReceipt'));
+      return;
+    }
+    setPostedRecheckCreating(true);
+    try {
+      const ok = await createFromPostedReceipts(postedRecheckReceiptIds, postedRecheckPlanId);
+      if (ok) {
+        setPostedRecheckPlanModalOpen(false);
+        setPostedRecheckReceiptIds([]);
+        setPostedRecheckPlanId(null);
+        invalidateStats();
+    actionRef.current?.reload();
+      }
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
+    } finally {
+      setPostedRecheckCreating(false);
+    }
+  };
+  const pullFromCustomerMaterialQuery = useUniPullQuery<PullSourceCandidate>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const trimmed = keyword.trim();
+        const res = await qualityApi.incomingInspection.listCustomerMaterialPullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          registration_code: trimmed || undefined,
+        });
+        const rows = (res.data || []) as PullSourceCandidate[];
+        const filtered = isPullableScope(scope)
+          ? rows.filter((row) => isPullIncomingInspectionSelectable(row))
+          : rows;
+        return { data: filtered, total: Number(res.total ?? filtered.length) };
+      } catch {
+        messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadCustomerMaterialFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (row) => !isPullIncomingInspectionSelectable(row),
+    onConfirm: async (_keys, rows) => {
+      const selectedIds = rows
+        .filter((row) => isPullIncomingInspectionSelectable(row))
+        .map((row) => Number(row.id))
+        .filter((id) => id > 0);
+      if (!selectedIds.length) {
+        messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectCustomerMaterial'));
+        return;
+      }
+      try {
+        let count = 0;
+        for (const registrationId of selectedIds) {
+          const created = await qualityApi.incomingInspection.createFromCustomerMaterial(String(registrationId));
+          count += Array.isArray(created) ? created.length : 0;
+        }
+        if (!count) {
+          messageApi.warning(t('app.kuaizhizao.quality.incoming.messages.createFailed'));
+          return;
+        }
+        messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createFromCustomerMaterialSuccess'));
+        pullFromCustomerMaterialQuery.closeModal();
+        invalidateStats();
+    actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
+      }
+    },
+  });
+  useNewShortcut(pullFromPurchaseReceiptQuery.openModal);
+
+  const createMenuItems = useMemo(
+    () => [
+      {
+        key: 'from-purchase-receipt',
+        label: pullFromPurchaseReceiptAction.label,
+        onClick: () => pullFromPurchaseReceiptQuery.openModal(),
+      },
+      {
+        key: 'from-customer-material',
+        label: pullFromCustomerMaterialAction.label,
+        onClick: () => pullFromCustomerMaterialQuery.openModal(),
+      },
+    ],
+    [
+      pullFromPurchaseReceiptAction.label,
+      pullFromCustomerMaterialAction.label,
+      pullFromPurchaseReceiptQuery.openModal,
+      pullFromCustomerMaterialQuery.openModal,
+    ],
+  );
+
+  // 处理创建不合格品记录
+  const handleCreateDefect = (record: IncomingInspection) => {
+    setCurrentDefectInspection(record);
+    setCreateDefectModalVisible(true);
+  };
+
+  const pushPurchaseReturnDirect = async (record: IncomingInspection) => {
+    await openPushReturnPreview(record);
+  };
+
+  const selectedIncomingForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    const id = Number(selectedRowKeys[0]);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return tableRowsRef.current.find((row) => row.id === id) ?? null;
+  }, [selectedRowKeys]);
+
+  const canPushPurchaseReturnToolbar =
+    selectedIncomingForToolbar?.capabilities?.push_purchase_return?.allowed === true;
+  const canPushInboundToolbar =
+    inboundPerms.canCreate &&
+    selectedIncomingForToolbar?.capabilities?.push_inbound?.allowed === true;
+  const canPushToolbar = canPushPurchaseReturnToolbar || canPushInboundToolbar;
+
+  const toolbarPushDisabledReason = useMemo(() => {
+    const base = buildUniPushToolbarDisabledReason(t, {
+      selectedCount: selectedRowKeys.length,
+      hasSelectedRecord: !!selectedIncomingForToolbar,
+    });
+    if (base) return base;
+    if (selectedIncomingForToolbar && !canPushToolbar) {
+      const qualified = Number(selectedIncomingForToolbar.qualified_quantity ?? 0);
+      const preferInbound = qualified > 0;
+      const reason = preferInbound
+        ? selectedIncomingForToolbar.capabilities?.push_inbound?.reason
+        : selectedIncomingForToolbar.capabilities?.push_purchase_return?.reason;
+      return (
+        qualityInspectionCapabilityReasonMessage(reason, t) ||
+        t('components.uniPush.disabled.unavailable')
+      );
+    }
+    if (
+      selectedIncomingForToolbar &&
+      !inboundPerms.canCreate &&
+      selectedIncomingForToolbar.capabilities?.push_inbound?.allowed
+    ) {
+      return t('app.kuaizhizao.quality.finished.push.inboundNoPermission');
+    }
+    return undefined;
+  }, [
+    canPushToolbar,
+    inboundPerms.canCreate,
+    selectedIncomingForToolbar,
+    selectedRowKeys.length,
+    t,
+  ]);
+
+  const toolbarPushMenuItems = useMemo(
+    () =>
+      buildUniPushMenuItems([
+        {
+          key: 'push-inbound',
+          label: pushToInboundAction.label,
+          disabled: !selectedIncomingForToolbar || !canPushInboundToolbar,
+          title:
+            selectedIncomingForToolbar && !canPushInboundToolbar
+              ? !inboundPerms.canCreate
+                ? t('app.kuaizhizao.quality.finished.push.inboundNoPermission')
+                : qualityInspectionCapabilityReasonMessage(
+                    selectedIncomingForToolbar.capabilities?.push_inbound?.reason,
+                    t,
+                  )
+              : undefined,
+          onClick: () => {
+            if (selectedIncomingForToolbar && canPushInboundToolbar) {
+              void openPushInboundPreview(selectedIncomingForToolbar);
+            }
+          },
+        },
+        {
+          key: 'push-purchase-return',
+          label: pushToPurchaseReturnAction.label,
+          disabled: !selectedIncomingForToolbar || !canPushPurchaseReturnToolbar,
+          title:
+            selectedIncomingForToolbar && !canPushPurchaseReturnToolbar
+              ? qualityInspectionCapabilityReasonMessage(
+                  selectedIncomingForToolbar.capabilities?.push_purchase_return?.reason,
+                  t,
+                )
+              : undefined,
+          onClick: () => {
+            if (selectedIncomingForToolbar && canPushPurchaseReturnToolbar) {
+              void pushPurchaseReturnDirect(selectedIncomingForToolbar);
+            }
+          },
+        },
+      ]),
+    [
+      canPushInboundToolbar,
+      canPushPurchaseReturnToolbar,
+      inboundPerms.canCreate,
+      pushToInboundAction.label,
+      pushToPurchaseReturnAction.label,
+      selectedIncomingForToolbar,
+      t,
+    ],
+  );
+
+  const detailBaseColumns: ProDescriptionsItemProps<IncomingInspection>[] = useMemo(
+    () => [
+      buildQualityInspectionDetailCodeColumn<IncomingInspection>(t),
+      ...buildQualityInspectionDetailMaterialColumns<IncomingInspection>(t),
+      {
+        title: t('app.kuaizhizao.quality.common.columns.purchaseReceiptCode'),
+        dataIndex: 'purchase_receipt_code',
+      },
+      { title: t('app.kuaizhizao.quality.common.columns.supplier'), dataIndex: 'supplier_name' },
+      ...buildQualityInspectionDetailQuantityStatusColumns<IncomingInspection>(t),
+      ...buildQualityInspectionDetailPeopleColumns<IncomingInspection>(t),
+      buildQualityInspectionDetailNotesColumn<IncomingInspection>(t),
+    ],
+    [t]
+  );
+
+  const inspectionCustomFieldColumns = generateInspectionCustomFieldColumns();
+
+  const executeDeleteRow = useCallback(async (record: IncomingInspection) => {
+    await qualityApi.incomingInspection.delete(String(record.id));
+          messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: 1 }));
+          if (inspectionDetail?.id === record.id) {
+            setDetailVisible(false);
+            setInspectionDetail(null);
+          }
+          invalidateStats();
+    actionRef.current?.reload();
+  }, [inspectionDetail?.id, messageApi, t]);
+
+  const executeRevokeConduct = useCallback(async (record: IncomingInspection) => {
+    await qualityApi.incomingInspection.revokeConduct(String(record.id));
+          messageApi.success(t('app.kuaizhizao.quality.common.messages.revokeConductSuccess'));
+          if (inspectionDetail?.id === record.id) {
+            setDetailVisible(false);
+            setInspectionDetail(null);
+          }
+          invalidateStats();
+    actionRef.current?.reload();
+  }, [inspectionDetail?.id, messageApi, t]);
+
+  const executeBatchRevokeConduct = useCallback(async () => {
+    const targets = filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch);
+    if (!targets.length) {
+      messageApi.warning(t('app.kuaizhizao.quality.common.messages.revokeConductBatchEmpty'));
+      return;
+    }
+    try {
+      for (const row of targets) {
+        if (row.id == null) continue;
+        await qualityApi.incomingInspection.revokeConduct(String(row.id));
+      }
+      messageApi.success(
+        t('app.kuaizhizao.quality.common.messages.revokeConductBatchSuccess', { count: targets.length }),
+      );
+      setSelectedRowKeys([]);
+      if (inspectionDetail?.id != null && targets.some((row) => row.id === inspectionDetail.id)) {
+        setDetailVisible(false);
+        setInspectionDetail(null);
+      }
+      invalidateStats();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.common.messages.revokeConductFailed'),
+      );
+    }
+  }, [inspectionDetail?.id, messageApi, selectedRecordsForBatch, t]);
+
+  const renderIncomingRowNodes = (record: IncomingInspection): React.ReactNode[] => {
+    const gates = qualityInspectionRowGates(record, incomingPerms, ncPerms, t);
+    const nodes: React.ReactNode[] = [
+      <Button {...rowActionKind('read')}
+        key="detail"
+        size="small"
+        type="link"
+        icon={<EyeOutlined />}
+        onClick={(e) => {
+          e.stopPropagation();
+          void handleDetail(record);
+        }}
+      >
+        {t('common.detail')}
+      </Button>,
+    ];
+    if (gates.conduct.allowed) {
+      nodes.push(
+        <Button
+          {...rowActionKind('execute')}
+          {...rowActionLabelKeep()}
+          key="inspect"
+          // 主业务动作：排在详情之后、删除之前，避免被「更多」折叠
+          data-action-priority={15}
+          size="small"
+          type="primary"
+          disabled={gates.conduct.disabled}
+          title={gates.conduct.title}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleInspect(record);
+          }}
+        >
+          {t('app.kuaizhizao.quality.common.actions.inspect')}
+        </Button>,
+      );
+    }
+    nodes.push(
+      <UniWorkflowActions
+        {...rowActionKind('skip')}
+        key="wf"
+        record={record}
+        {...qualityInspectionUniAuditProps({
+          entityType: 'incoming_inspection',
+          resourcePrefix: INCOMING_RESOURCE,
+          entityName: t('app.kuaizhizao.quality.common.entity.incomingInspection'),
+          onSuccess: () => {
+    actionRef.current?.reload();
+            invalidateStats();
+            if (inspectionDetail?.id === record.id) {
+              qualityApi.incomingInspection
+                .get(record.id!.toString())
+                .then(async (d) => {
+                  setInspectionDetail(d);
+                  setIiTrackingRefreshKey((k) => k + 1);
+                  if (record.id != null) {
+                    await loadInspectionFieldValuesForDetail(record.id);
+                  }
+                })
+                .catch(() => {});
+            }
+          },
+        })}
+      />,
+    );
+    if (gates.createDefect.allowed) {
+      nodes.push(
+        <Button
+          {...rowActionKind('skip')}
+          key="defect"
+          size="small"
+          type="link"
+          danger
+          disabled={gates.createDefect.disabled}
+          title={gates.createDefect.title}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCreateDefect(record);
+          }}
+        >
+          {t('app.kuaizhizao.quality.common.actions.createDefect')}
+        </Button>
+      );
+    }
+    if (gates.revokeConduct.allowed) {
+      nodes.push(
+        <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')} description={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
+          code: record.inspection_code || record.id,
+        })} onConfirm={() => executeRevokeConduct(record)}>
+              <Button
+          {...rowActionKind('update')}
+          key="revoke-conduct"
+          size="small"
+          type="link"
+          icon={<RollbackOutlined />}
+          disabled={gates.revokeConduct.disabled}
+          title={gates.revokeConduct.title}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
+        </Button>
+            </ActionConfirmPopconfirm>,
+      );
+    }
+    if (gates.delete.allowed) {
+      nodes.push(
+        <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.incoming.messages.deleteConfirm', { count: 1 })} onConfirm={() => executeDeleteRow(record)}>
+              <Button
+          {...rowActionKind('delete')}
+          key="delete"
+          size="small"
+          type="link"
+          danger
+          icon={<DeleteOutlined />}
+          disabled={gates.delete.disabled}
+          title={gates.delete.title}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {t('common.delete')}
+        </Button>
+            </ActionConfirmPopconfirm>,
+      );
+    }
+    return nodes;
+  };
+
+  // 表格列定义
+  const columns: ProColumns<IncomingInspection>[] = useMemo(
+    () => alignProColumns<IncomingInspection>([
+    ...buildQualityInspectionListSearchColumns<IncomingInspection>(
+      t,
+      inspectionDocStatusValueEnum,
+      inspectionQualityStatusValueEnum,
+    ),
+    buildQualityInspectionListCodeColumn<IncomingInspection>(t),
+    buildQualityInspectionListKindColumn<IncomingInspection>(t),
+    stackedPrimarySecondaryColumn<IncomingInspection>(
+      t('app.kuaizhizao.quality.common.columns.supplierReceipt'),
+      'supplierReceipt',
+      ['supplier_name', 'supplierName'],
+      ['purchase_receipt_code', 'purchaseReceiptCode'],
+      { dataIndex: 'supplier_name' },
+    ),
+    {
+      title: t('app.kuaizhizao.quality.common.columns.purchaseReceiptCode'),
+      dataIndex: 'purchase_receipt_code',
+      hideInTable: true,
+    },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.supplier'),
+      dataIndex: 'supplier_name',
+      hideInTable: true,
+      ellipsis: true,
+    },
+    buildQualityInspectionListMaterialColumn<IncomingInspection>(t),
+    ...buildQualityInspectionListMaterialHiddenColumns<IncomingInspection>(t),
+    buildInspectorNameColumn<IncomingInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
+    ...buildQualityInspectionListQuantityResultColumns<IncomingInspection>(t, [
+      {
+        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
+        key: 'downstream_push_progress',
+        dataIndex: 'pushed_purchase_return_quantity',
+        ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
+        render: (_, record) => {
+          const percent = incomingInspectionReturnPushPercent(
+            record.pushed_purchase_return_quantity,
+            record.unqualified_quantity,
+          );
+          return (
+            <DocumentPushProgressBar
+              percent={percent}
+              tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', {
+                percent: Math.round(percent),
+              })}
+            />
+          );
+        },
+      },
+    ]),
+    buildQualityInspectionListNotesColumn<IncomingInspection>(t),
+    ...buildDocumentAuditColumns<IncomingInspection>(t),
+    ...inspectionCustomFieldColumns,
+    ...(incomingAuditColumn ? [incomingAuditColumn] : []),
+    {
+      title: t('app.kuaizhizao.quality.common.columns.lifecycle'),
+      dataIndex: 'lifecycle_stage',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => {
+        const lifecycle = getIncomingInspectionLifecycle(record as Record<string, unknown>);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
+    {
+      title: t('common.actions'),
+      key: 'action',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => renderIncomingRowNodes(record),
+    },
+  ], SALES_DOC_LIST_FIELD_RANK),
+    [t, incomingAuditColumn, inspectionCustomFieldColumns, inspectionDocStatusValueEnum, inspectionQualityStatusValueEnum],
+  );
+
+  return (
+    <ListPageTemplate
+      statCards={[
+        {
+          title: t('app.kuaizhizao.quality.common.stats.pendingCount'),
+          value: stats.pendingCount,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#faad14' },
+        },
+        {
+          title: t('app.kuaizhizao.quality.common.stats.qualifiedCount'),
+          value: stats.qualifiedCount,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#52c41a' },
+        },
+        {
+          title: t('app.kuaizhizao.quality.common.stats.unqualifiedCount'),
+          value: stats.unqualifiedCount,
+          prefix: <CloseCircleOutlined />,
+          valueStyle: { color: '#f5222d' },
+        },
+        {
+          title: t('app.kuaizhizao.quality.common.stats.totalInspected'),
+          value: stats.totalInspected,
+          prefix: <CheckCircleOutlined />,
+          valueStyle: { color: '#1890ff' },
+        },
+      ]}
+    >
+      <UniTable<IncomingInspection>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.incomingInspection)}
+        headerTitle={t('app.kuaizhizao.quality.incoming.pageTitle')}
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection-width-v5"
+        actionRef={actionRef}
+        rowKey="id"
+        columns={columns}
+        showAdvancedSearch={true}
+        pinnedTabsField={QUALITY_INSPECTION_PINNED_STATUS_FIELD}
+        skipFuzzyPinyinClientFilter
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
+          try {
+            const listParams = resolveQualityInspectionListParams(searchFormValues, sort);
+            const response = await qualityApi.incomingInspection.list({
+              skip: (params.current! - 1) * params.pageSize!,
+              limit: params.pageSize,
+              ...listParams,
+              ...urlListFiltersRef.current,
+            });
+            const { data: raw, total } = normalizeQualityInspectionListResponse(response);
+            const data = meta?.purpose === 'prefetch'
+              ? raw as IncomingInspection[]
+              : await enrichInspectionRecordsWithCustomFields(raw as IncomingInspection[]);
+            return {
+              data,
+              success: true,
+              total,
+            };
+          } catch (error) {
+            messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadListFailed'));
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
+        }}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
+        showCreateButton={false}
+        toolBarActionsBeforeCreate={[
+          <UniPullCreateToolbar
+            key="create-incoming"
+            compactKey="create-incoming"
+            createIcon={<PlusOutlined />}
+            createLabel={t('app.kuaizhizao.quality.incoming.createButton')}
+            onCreate={pullFromPurchaseReceiptQuery.openModal}
+            menuItems={createMenuItems}
+          />,
+          <Button
+            key="posted-receipt-recheck"
+            type="primary"
+            onClick={pullFromPostedPurchaseReceiptQuery.openModal}
+          >
+            {t('app.kuaizhizao.quality.incoming.createFromPostedReceiptButton')}
+          </Button>,
+        ]}
+        toolBarRender={() => [
+          <UniPushToolbarButton
+            key={`incoming-inspection-push-${selectedIncomingForToolbar?.id ?? 'none'}`}
+            menuItems={toolbarPushMenuItems}
+            disabled={selectedRowKeys.length !== 1 || !selectedIncomingForToolbar}
+            disabledReason={toolbarPushDisabledReason}
+          />,
+        ]}
+        enableRowSelection={true}
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        showImportButton={true}
+        onImport={handleImport}
+        importHeaders={incomingInspectionImportTemplate.importHeaders}
+        importExampleRow={incomingInspectionImportTemplate.importExampleRow}
+        importColumnOptions={incomingInspectionImportTemplate.importColumnOptions}
+        importFieldMap={incomingInspectionImportTemplate.importHeaderMap}
+        showExportButton={true}
+        onExport={handleExport}
+        showDeleteButton={true}
+        onDelete={async (keys) => {
+          try {
+            const deletable = filterDeletableQualityInspectionRecords(selectedRecordsForBatch);
+            if (!deletable.length) {
+              messageApi.warning(t('app.kuaizhizao.quality.common.messages.deleteBatchEmpty'));
+              return;
+            }
+            const ids = deletable.map((row) => Number(row.id)).filter((id) => Number.isFinite(id));
+            for (const id of ids) {
+              await qualityApi.incomingInspection.delete(String(id));
+            }
+            messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: ids.length }));
+            setSelectedRowKeys([]);
+            if (inspectionDetail?.id != null && ids.includes(inspectionDetail.id)) {
+              setDetailVisible(false);
+              setInspectionDetail(null);
+            }
+            invalidateStats();
+    actionRef.current?.reload();
+          } catch (error: any) {
+            messageApi.error(error.message || t('common.deleteFailed'));
+          }
+        }}
+        toolBarActionsAfterDelete={[
+          <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')} description={t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', { count: filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch).length })} onConfirm={() => executeBatchRevokeConduct()}>
+              <Button key="revoke-conduct-batch" icon={<RollbackOutlined />} onClick={(e) => e.stopPropagation()}>
+            {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
+          </Button>
+            </ActionConfirmPopconfirm>,
+          <UniAuditBatchMenuButton
+            key="incoming-inspection-batch-menu"
+            selectedRowKeys={selectedRowKeys}
+            selectedRecords={selectedRecordsForBatch}
+            auditEnabled={incomingAuditEnabled}
+            permGates={incomingPerms}
+            handlers={incomingAuditBatchHandlers}
+            onSuccess={() => {
+              setSelectedRowKeys([]);
+              invalidateStats();
+    actionRef.current?.reload();
+            }}
+            toolBarButtonSize="middle"
+          />,
+        ]}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.incoming.messages.deleteConfirm', { count })}
+      />
+
+      <FormModalTemplate
+        title={t('app.kuaizhizao.quality.common.modal.inspectTitle', { code: currentInspection?.inspection_code || '' })}
+        open={inspectionModalVisible}
+        onClose={() => {
+          setInspectionModalVisible(false);
+          resetInspectionFormFieldValues();
+        }}
+        onFinish={handleInspectionSubmit}
+        isEdit={false}
+        initialValues={
+          currentInspection ? {
+            qualified_quantity: currentInspection.inspection_quantity || 0,
+            unqualified_quantity: 0,
+          } : {}
+        }
+        width={
+          hasInspectionPlanSteps(getInspectionTemplateSource(currentInspection as Record<string, unknown>))
+            ? MODAL_CONFIG.LARGE_WIDTH
+            : MODAL_CONFIG.STANDARD_WIDTH
+        }
+        grid
+        formRef={formRef}
+      >
+        {currentInspection ? (
+          <Col span={24}>
+            <Card title={t('app.kuaizhizao.quality.common.sections.inspectionInfo')} size="small" style={{ marginBottom: 8 }}>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.materialCode')}：</strong>{currentInspection.material_code}
+                </Col>
+                <Col span={8}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>{currentInspection.material_name}
+                </Col>
+                <Col span={8}>
+                  <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>
+                  {formatQuantityWithUnit(
+                    currentInspection.inspection_quantity,
+                    currentInspection.material_unit,
+                  )}
+                </Col>
+              </Row>
+            </Card>
+          </Col>
+        ) : null}
+        <InspectionTemplateConductFields
+          inspection={currentInspection as Record<string, unknown>}
+          photoCategory="incoming_inspection_attachments"
+          stepPhotoRequired={false}
+        />
+        <InspectionConductQuantityFields
+          materialId={currentInspection?.material_id}
+          materialUnit={currentInspection?.material_unit}
+          scenario="purchase"
+          inspectionQuantity={Number(currentInspection?.inspection_quantity || 0)}
+          inspection={currentInspection as Record<string, unknown> | undefined}
+          t={t}
+        />
+        <InspectionNonconformanceReasonField t={t} />
+        <CustomFieldsFormSection
+          customFields={inspectionFormCustomFields}
+          customFieldValues={inspectionFormCustomFieldValues}
+          gridColumns={2}
+        />
+        <ProFormTextArea
+          name="notes"
+          label={t('app.kuaizhizao.quality.common.form.notes')}
+          placeholder={t('app.kuaizhizao.quality.common.placeholder.notes')}
+          fieldProps={{ rows: 2 }}
+          colProps={{ span: 24 }}
+        />
+        <DocumentAttachmentsField category="incoming_inspection_attachments" />
+      </FormModalTemplate>
+
+      <QualityInspectionDetailDrawer
+        title={t('app.kuaizhizao.quality.common.modal.detailTitle', { code: inspectionDetail?.inspection_code || '' })}
+        open={detailVisible}
+        zIndex={incomingInspectionDetailDrawerZIndex}
+        onClose={() => {
+          setDetailVisible(false);
+          setInspectionDetail(null);
+          setDetailError(null);
+          setDetailInspectionId(null);
+          resetInspectionDetailFieldValues();
+        }}
+        inspection={inspectionDetail}
+        documentType="incoming_inspection"
+        loading={detailLoading}
+        error={detailError}
+        onRetry={detailInspectionId != null ? () => void loadInspectionDetail(detailInspectionId) : undefined}
+        extra={
+          inspectionDetail ? (
+            <Space wrap size="small">
+              {buildInspectionQualityExtraButtons({
+                inspection: inspectionDetail,
+                inspectionType: 'incoming',
+                t,
+                navigate,
+                onRegisterDefect: () => handleCreateDefect(inspectionDetail),
+                canRegisterDefect:
+                  qualityInspectionRowGates(inspectionDetail, incomingPerms, ncPerms, t).createDefect.allowed &&
+                  !qualityInspectionRowGates(inspectionDetail, incomingPerms, ncPerms, t).createDefect.disabled,
+                onCloseDrawer: () => {
+                  setDetailVisible(false);
+                  setInspectionDetail(null);
+                },
+              })}
+              <UniWorkflowActions
+                {...rowActionKind('skip')}
+                record={inspectionDetail}
+                {...qualityInspectionUniAuditProps({
+                  entityType: 'incoming_inspection',
+                  resourcePrefix: INCOMING_RESOURCE,
+                  entityName: t('app.kuaizhizao.quality.common.entity.incomingInspection'),
+                  theme: 'default',
+                  onSuccess: () => {
+    actionRef.current?.reload();
+                    invalidateStats();
+                    if (inspectionDetail?.id) {
+                      qualityApi.incomingInspection
+                        .get(inspectionDetail.id.toString())
+                        .then(async (d) => {
+                          setInspectionDetail(d);
+                          setIiTrackingRefreshKey((k) => k + 1);
+                          await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
+                        })
+                        .catch(() => {});
+                    }
+                  },
+                })}
+              />
+            </Space>
+          ) : null
+        }
+        banner={<InspectionUnqualifiedBanner inspection={inspectionDetail} />}
+        basicColumns={detailBaseColumns}
+        customFields={inspectionListCustomFields}
+        customFieldValues={inspectionDetailCustomFieldValues}
+        tracking={incomingTracking}
+        renderBriefActions={(doc) => (
+          <WarehouseTraceBriefPrimaryActions
+            doc={doc}
+            t={t}
+            navigate={navigate}
+            closeDrawer={() => {
+              setDetailVisible(false);
+              setInspectionDetail(null);
+            }}
+          />
+        )}
+      />
+
+      <UniPullQueryModal<PullSourceCandidate>
+        open={pullFromCustomerMaterialQuery.open}
+        title={pullFromCustomerMaterialAction.label}
+        onCancel={pullFromCustomerMaterialQuery.closeModal}
+        onOk={pullFromCustomerMaterialQuery.handleConfirm}
+        rowKey="id"
+        columns={customerMaterialPullColumns}
+        dataSource={pullFromCustomerMaterialQuery.dataSource}
+        loading={pullFromCustomerMaterialQuery.loading}
+        confirmLoading={pullFromCustomerMaterialQuery.confirmLoading}
+        selectionType={pullFromCustomerMaterialQuery.selectionType}
+        selectedRowKeys={pullFromCustomerMaterialQuery.selectedRowKeys}
+        selectedRows={pullFromCustomerMaterialQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromCustomerMaterialQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromCustomerMaterialQuery.isRowDisabled}
+        searchDraft={pullFromCustomerMaterialQuery.searchDraft}
+        onSearchDraftChange={pullFromCustomerMaterialQuery.setSearchDraft}
+        onSearchApply={pullFromCustomerMaterialQuery.handleSearchApply}
+        onSearchClear={pullFromCustomerMaterialQuery.handleSearchClear}
+        appliedKeyword={pullFromCustomerMaterialQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.quality.pullQuery.registrationCode')}
+        getRowLabel={(row) => row.registration_code || String(row.id)}
+        okText={t('app.kuaizhizao.quality.incoming.pull.ok')}
+        page={pullFromCustomerMaterialQuery.page}
+        pageSize={pullFromCustomerMaterialQuery.pageSize}
+        total={pullFromCustomerMaterialQuery.total}
+        onPageChange={pullFromCustomerMaterialQuery.handlePageChange}
+        scopeOptions={pullFromCustomerMaterialQuery.scopeOptions}
+        scope={pullFromCustomerMaterialQuery.scope}
+        onScopeChange={pullFromCustomerMaterialQuery.handleScopeChange}
+      />
+
+      <UniPullQueryModal<PullSourceCandidate>
+        open={pullFromPurchaseReceiptQuery.open}
+        title={pullFromPurchaseReceiptAction.label}
+        onCancel={pullFromPurchaseReceiptQuery.closeModal}
+        onOk={pullFromPurchaseReceiptQuery.handleConfirm}
+        rowKey="id"
+        columns={purchaseReceiptPullColumns}
+        dataSource={pullFromPurchaseReceiptQuery.dataSource}
+        loading={pullFromPurchaseReceiptQuery.loading}
+        confirmLoading={pullFromPurchaseReceiptQuery.confirmLoading}
+        selectionType={pullFromPurchaseReceiptQuery.selectionType}
+        selectedRowKeys={pullFromPurchaseReceiptQuery.selectedRowKeys}
+        selectedRows={pullFromPurchaseReceiptQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromPurchaseReceiptQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromPurchaseReceiptQuery.isRowDisabled}
+        searchDraft={pullFromPurchaseReceiptQuery.searchDraft}
+        onSearchDraftChange={pullFromPurchaseReceiptQuery.setSearchDraft}
+        onSearchApply={pullFromPurchaseReceiptQuery.handleSearchApply}
+        onSearchClear={pullFromPurchaseReceiptQuery.handleSearchClear}
+        appliedKeyword={pullFromPurchaseReceiptQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.quality.incoming.form.receiptCode')}
+        getRowLabel={(row) => row.receipt_code || String(row.id)}
+        okText={t('app.kuaizhizao.quality.incoming.pull.ok')}
+        page={pullFromPurchaseReceiptQuery.page}
+        pageSize={pullFromPurchaseReceiptQuery.pageSize}
+        total={pullFromPurchaseReceiptQuery.total}
+        onPageChange={pullFromPurchaseReceiptQuery.handlePageChange}
+        scopeOptions={pullFromPurchaseReceiptQuery.scopeOptions}
+        scope={pullFromPurchaseReceiptQuery.scope}
+        onScopeChange={pullFromPurchaseReceiptQuery.handleScopeChange}
+      />
+
+      <UniPullQueryModal<PullSourceCandidate>
+        open={pullFromPostedPurchaseReceiptQuery.open}
+        title={t('app.kuaizhizao.quality.incoming.createFromPostedReceipt')}
+        onCancel={pullFromPostedPurchaseReceiptQuery.closeModal}
+        onOk={pullFromPostedPurchaseReceiptQuery.handleConfirm}
+        rowKey="id"
+        columns={purchaseReceiptPullColumns}
+        dataSource={pullFromPostedPurchaseReceiptQuery.dataSource}
+        loading={pullFromPostedPurchaseReceiptQuery.loading}
+        confirmLoading={pullFromPostedPurchaseReceiptQuery.confirmLoading}
+        selectionType={pullFromPostedPurchaseReceiptQuery.selectionType}
+        selectedRowKeys={pullFromPostedPurchaseReceiptQuery.selectedRowKeys}
+        selectedRows={pullFromPostedPurchaseReceiptQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromPostedPurchaseReceiptQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromPostedPurchaseReceiptQuery.isRowDisabled}
+        searchDraft={pullFromPostedPurchaseReceiptQuery.searchDraft}
+        onSearchDraftChange={pullFromPostedPurchaseReceiptQuery.setSearchDraft}
+        onSearchApply={pullFromPostedPurchaseReceiptQuery.handleSearchApply}
+        onSearchClear={pullFromPostedPurchaseReceiptQuery.handleSearchClear}
+        appliedKeyword={pullFromPostedPurchaseReceiptQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.quality.incoming.form.receiptCode')}
+        getRowLabel={(row) => row.receipt_code || String(row.id)}
+        okText={t('app.kuaizhizao.quality.incoming.pull.ok')}
+        page={pullFromPostedPurchaseReceiptQuery.page}
+        pageSize={pullFromPostedPurchaseReceiptQuery.pageSize}
+        total={pullFromPostedPurchaseReceiptQuery.total}
+        onPageChange={pullFromPostedPurchaseReceiptQuery.handlePageChange}
+        scopeOptions={pullFromPostedPurchaseReceiptQuery.scopeOptions}
+        scope={pullFromPostedPurchaseReceiptQuery.scope}
+        onScopeChange={pullFromPostedPurchaseReceiptQuery.handleScopeChange}
+      />
+
+      <Modal
+        title={t('app.kuaizhizao.quality.incoming.modal.selectInspectionPlanTitle')}
+        open={postedRecheckPlanModalOpen}
+        destroyOnHidden
+        zIndex={postedRecheckPlanModalZIndex}
+        confirmLoading={postedRecheckCreating}
+        okText={t('app.kuaizhizao.quality.incoming.pull.ok')}
+        cancelText={t('common.cancel')}
+        onCancel={() => {
+          setPostedRecheckPlanModalOpen(false);
+          setPostedRecheckReceiptIds([]);
+          setPostedRecheckPlanId(null);
+          setQuickInspectionPlanModalOpen(false);
+        }}
+        onOk={() => void handlePostedRecheckPlanConfirm()}
+        okButtonProps={{ disabled: postedRecheckPlanLoading || !postedRecheckPlanId }}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={t('app.kuaizhizao.quality.incoming.modal.selectInspectionPlanHint')}
+        />
+        <div style={{ marginBottom: 8 }}>{t('app.kuaizhizao.quality.incoming.form.inspectionPlan')}</div>
+        <Select
+          style={{ width: '100%' }}
+          showSearch
+          optionFilterProp="label"
+          loading={postedRecheckPlanLoading}
+          placeholder={t('app.kuaizhizao.quality.incoming.form.selectInspectionPlan')}
+          options={postedRecheckPlanOptions}
+          value={postedRecheckPlanId ?? undefined}
+          onChange={(v) => setPostedRecheckPlanId(v == null ? null : Number(v))}
+          notFoundContent={
+            postedRecheckPlanLoading
+              ? undefined
+              : t('app.kuaizhizao.quality.incoming.messages.noInspectionPlan')
+          }
+        />
+        {inspectionPlanPerms.canCreate ? (
+          <div style={{ marginTop: 8 }}>
+            <Button
+              type="link"
+              size="small"
+              icon={<PlusOutlined />}
+              style={{ paddingInline: 0 }}
+              onClick={() => setQuickInspectionPlanModalOpen(true)}
+            >
+              {t('app.kuaizhizao.quality.incoming.quickPlan.create')}
+            </Button>
+          </div>
+        ) : null}
+      </Modal>
+
+      <InspectionPlanFormModal
+        open={quickInspectionPlanModalOpen}
+        zIndex={quickInspectionPlanModalZIndex}
+        title={t('app.kuaizhizao.quality.incoming.quickPlan.modalTitle')}
+        defaultPlanType="incoming"
+        lockPlanType
+        requireSteps
+        onClose={() => setQuickInspectionPlanModalOpen(false)}
+        onSuccess={handleQuickInspectionPlanSuccess}
+      />
+
+      <Modal
+        title={t('app.kuaizhizao.salesOrder.pushPreviewTitle')}
+        open={pushReturnPreviewOpen}
+        destroyOnHidden
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPushReturnPreview}
+        okText={t('app.kuaizhizao.salesOrder.confirmPush')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pushReturnPreviewConfirming}
+        onOk={() => void handlePushReturnPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pushReturnPreviewLoading ||
+            !pushReturnPreviewData ||
+            !!pushReturnPreviewData?.has_blocking_issues ||
+            !(pushReturnPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0) ||
+            !(Number(pushReturnPreviewQuantity) > 0),
+        }}
+      >
+        {pushReturnPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin description={t('app.kuaizhizao.salesOrder.loadingPreview')} />
+          </div>
+        ) : pushReturnPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushReturnPreviewData.summary}</p>
+            {pushReturnPreviewData.has_blocking_issues && pushReturnPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                title={qualityInspectionCapabilityReasonMessage(
+                  pushReturnPreviewData.blocking_reason,
+                  t,
+                )}
+              />
+            ) : null}
+            {pushReturnPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushReturnPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 920 }}
+                columns={[
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                    width: 130,
+                    render: (_: unknown, row: PushPreviewResponse['items'][number]) => {
+                      const maxQty = Number(row.max_push_quantity ?? 0);
+                      return (
+                        <InputNumber
+                          min={0}
+                          max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          disabled={!(maxQty > 0)}
+                          value={pushReturnPreviewQuantity}
+                          onChange={(val) => setPushReturnPreviewQuantity(Number(val ?? 0))}
+                        />
+                      );
+                    },
+                  },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
+            )}
+            {pushReturnPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pushReturnPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        title={pushToInboundAction.label}
+        open={pushInboundPreviewOpen}
+        destroyOnHidden
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPushInboundPreview}
+        okText={t('app.kuaizhizao.salesOrder.confirmPush')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pushInboundPreviewConfirming}
+        onOk={() => void handlePushInboundPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pushInboundPreviewLoading ||
+            !pushInboundPreviewData ||
+            !!pushInboundPreviewData?.has_blocking_issues ||
+            !(pushInboundPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0) ||
+            !(Number(pushInboundPreviewQuantity) > 0),
+        }}
+      >
+        {pushInboundPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin description={t('app.kuaizhizao.salesOrder.loadingPreview')} />
+          </div>
+        ) : pushInboundPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushInboundPreviewData.summary}</p>
+            {pushInboundPreviewData.has_blocking_issues && pushInboundPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                title={qualityInspectionCapabilityReasonMessage(
+                  pushInboundPreviewData.blocking_reason,
+                  t,
+                )}
+              />
+            ) : null}
+            {pushInboundPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushInboundPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 920 }}
+                columns={[
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                    width: 130,
+                    render: (_: unknown, row: PushPreviewResponse['items'][number]) => {
+                      const maxQty = Number(row.max_push_quantity ?? 0);
+                      return (
+                        <InputNumber
+                          min={0}
+                          max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          disabled={!(maxQty > 0)}
+                          value={pushInboundPreviewQuantity}
+                          onChange={(val) => setPushInboundPreviewQuantity(Number(val ?? 0))}
+                        />
+                      );
+                    },
+                  },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
+            )}
+            {pushInboundPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pushInboundPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      <CreateInspectionDefectModal
+        open={createDefectModalVisible}
+        onClose={() => {
+          setCreateDefectModalVisible(false);
+          setCurrentDefectInspection(null);
+        }}
+        onSuccess={() => {
+          invalidateStats();
+          actionRef.current?.reload();
+        }}
+        inspection={currentDefectInspection}
+        source="incoming"
+        defaultDisposition="return"
+        disposalOptions={disposalOptions}
+        disposalLoading={disposalLoading}
+        canReadNcLedger={canReadNcLedger}
+        ledgerQueryParam="incoming_inspection_id"
+        createDefectBatch={(inspectionId, lines) =>
+          qualityApi.incomingInspection.createDefectBatch(inspectionId, { lines })
+        }
+      />
+    </ListPageTemplate>
+  );
+};
+
+export default IncomingInspectionPage;
+

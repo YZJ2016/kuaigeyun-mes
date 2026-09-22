@@ -1,0 +1,226 @@
+/**
+ * 从数据集同步数据 Modal
+ *
+ * 选择数据集 → 执行查询 → 预览结果 → 确认后回调映射数据
+ * 供业务主数据/单据类页面从其他系统（通过数据集）同步数据使用
+ */
+
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Modal, Select, Button, Table, App, Spin, Empty } from 'antd';
+import { SyncOutlined } from '@ant-design/icons';
+import { getDatasetList, executeDatasetQuery } from '../../services/dataset';
+
+export interface SyncFromDatasetModalProps {
+  /** 是否可见 */
+  open: boolean;
+  /** 关闭回调 */
+  onClose: () => void;
+  /** 确认同步回调，传入映射后的行数据 */
+  onConfirm: (rows: Record<string, any>[]) => void;
+  /** 弹窗标题（默认：'从数据集同步'） */
+  title?: string;
+  /** 弹窗宽度（默认：800） */
+  width?: number;
+  /** 字段映射：数据集列名 -> 目标实体字段名。不传则使用原始列名 */
+  fieldMapping?: Record<string, string>;
+  /** 最多获取行数（默认：500） */
+  limit?: number;
+  /** 与详情抽屉、左侧追溯浮层同屏时抬高 */
+  zIndex?: number;
+}
+
+/**
+ * 从数据集同步数据 Modal
+ */
+const SyncFromDatasetModal: React.FC<SyncFromDatasetModalProps> = ({
+  open,
+  onClose,
+  onConfirm,
+  title = '从数据集同步',
+  width = 800,
+  fieldMapping,
+  limit = 500,
+  zIndex,
+}) => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const [datasetOptions, setDatasetOptions] = useState<{ label: string; value: string }[]>([]);
+  const [selectedDatasetUuid, setSelectedDatasetUuid] = useState<string | undefined>();
+  const [loadingDatasets, setLoadingDatasets] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const [queryResult, setQueryResult] = useState<{
+    data: Record<string, any>[];
+    columns: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setSelectedDatasetUuid(undefined);
+      setQueryResult(null);
+      loadDatasets();
+    }
+  }, [open]);
+
+  const loadDatasets = async () => {
+    setLoadingDatasets(true);
+    try {
+      const pageSize = 100;
+      const opts: { label: string; value: string }[] = [];
+      let page = 1;
+      const maxPages = 50;
+      while (page <= maxPages) {
+        const res = await getDatasetList({ page, page_size: pageSize, is_active: true });
+        opts.push(
+          ...res.items.map((d) => ({
+            label: `${d.name} (${d.code})`,
+            value: d.uuid,
+          })),
+        );
+        if (res.items.length < pageSize || opts.length >= res.total) break;
+        page += 1;
+      }
+      setDatasetOptions(opts);
+    } catch (e: any) {
+      messageApi.error(e?.message || t('components.syncFromDataset.loadListFailed'));
+    } finally {
+      setLoadingDatasets(false);
+    }
+  };
+
+  const handleExecute = async () => {
+    if (!selectedDatasetUuid) {
+      messageApi.warning(t('components.syncFromDataset.selectFirst'));
+      return;
+    }
+    setExecuting(true);
+    setQueryResult(null);
+    try {
+      const res = await executeDatasetQuery(selectedDatasetUuid, {
+        limit,
+        offset: 0,
+      });
+      if (!res.success) {
+        messageApi.error(res.error || t('components.syncFromDataset.queryFailed'));
+        return;
+      }
+      const data = res.data || [];
+      const columns = res.columns || (data.length > 0 ? Object.keys(data[0]) : []);
+      setQueryResult({ data, columns });
+      messageApi.success(t('components.syncFromDataset.dataFetched', { count: data.length }));
+    } catch (e: any) {
+      messageApi.error(e?.message || t('components.syncFromDataset.queryFailed'));
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  const handleConfirm = () => {
+    if (!queryResult || queryResult.data.length === 0) {
+      messageApi.warning(t('components.syncFromDataset.noDataToSync'));
+      return;
+    }
+    const rows = fieldMapping && Object.keys(fieldMapping).length > 0
+      ? queryResult.data.map((row) => {
+          const mapped: Record<string, any> = {};
+          for (const [srcKey, targetKey] of Object.entries(fieldMapping)) {
+            if (row[srcKey] !== undefined) {
+              mapped[targetKey] = row[srcKey];
+            }
+          }
+          return mapped;
+        })
+      : queryResult.data;
+    onConfirm(rows);
+    onClose();
+  };
+
+  const tableColumns =
+    queryResult?.columns.map((col) => ({
+      title: fieldMapping?.[col] || col,
+      dataIndex: col,
+      key: col,
+      ellipsis: true,
+    })) || [];
+
+  return (
+    <Modal
+      title={title}
+      open={open}
+      onCancel={onClose}
+      zIndex={zIndex}
+      width={width}
+      footer={[
+        <Button key="cancel" onClick={onClose}>
+          取消
+        </Button>,
+        <Button
+          key="execute"
+          type="default"
+          icon={<SyncOutlined />}
+          loading={executing}
+          disabled={!selectedDatasetUuid}
+          onClick={handleExecute}
+        >
+          执行查询
+        </Button>,
+        <Button
+          key="confirm"
+          type="primary"
+          disabled={!queryResult || queryResult.data.length === 0}
+          onClick={handleConfirm}
+        >
+          确认同步 ({queryResult?.data.length ?? 0} 条)
+        </Button>,
+      ]}
+    >
+      <div style={{ marginBottom: 16 }}>
+        <span style={{ marginRight: 8 }}>选择数据集：</span>
+        <Select
+          placeholder="请选择数据集"
+          style={{ width: 320 }}
+          loading={loadingDatasets}
+          options={datasetOptions}
+          value={selectedDatasetUuid}
+          onChange={setSelectedDatasetUuid}
+          showSearch
+          optionFilterProp="label"
+          allowClear
+        />
+      </div>
+
+      {executing && (
+        <div style={{ textAlign: 'center', padding: 40 }}>
+          <Spin description="正在执行查询...">
+            <div style={{ minHeight: 24 }} />
+          </Spin>
+        </div>
+      )}
+
+      {!executing && queryResult && (
+        <div style={{ maxHeight: 400, overflow: 'auto' }}>
+          {queryResult.data.length === 0 ? (
+            <Empty description="查询结果为空" />
+          ) : (
+            <Table
+              dataSource={queryResult.data}
+              columns={tableColumns}
+              rowKey={(_, i) => String(i)}
+              pagination={{ pageSize: 10, size: 'small' }}
+              size="small"
+              scroll={{ x: 'max-content' }}
+            />
+          )}
+        </div>
+      )}
+
+      {!executing && !queryResult && (
+        <div style={{ color: '#999', textAlign: 'center', padding: 40 }}>
+          选择数据集后点击「执行查询」获取数据
+        </div>
+      )}
+    </Modal>
+  );
+};
+
+export default SyncFromDatasetModal;

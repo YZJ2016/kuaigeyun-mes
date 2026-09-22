@@ -1,0 +1,649 @@
+"""
+超级管理员组织管理 API 模块
+
+提供超级管理员对组织的管理接口，包括组织注册审核、启用/禁用等。
+
+Author: Luigi Lu
+Date: 2025-12-27
+"""
+
+
+from typing import Optional
+from datetime import datetime
+from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Query, Depends, status
+from loguru import logger
+
+from infra.schemas.tenant import (
+    TenantResponse,
+    TenantListResponse,
+    TenantUpdate,
+    TenantCreate,
+    SharedUserQuotaResponse,
+    SyncTenantLimitsFromPlanResponse,
+)
+from infra.services.tenant_service import TenantService, schedule_initialize_tenant_data
+from infra.api.deps.services import get_tenant_service_with_fallback
+from infra.models.tenant import TenantStatus, TenantPlan
+from infra.api.deps.deps import get_current_infra_superadmin
+from infra.models.infra_superadmin import InfraSuperAdmin
+from infra.domain.timezone_utils import now
+from infra.exceptions.exceptions import NotFoundError, ValidationError, ConflictError
+from typing import Any
+
+# 创建路由
+router = APIRouter(prefix="/tenants", tags=["Platform - Tenants"])
+
+
+async def _rollback_created_tenant(tenant_id: int) -> None:
+    """创建流程失败时清理已写入的组织记录。"""
+    from infra.models.tenant import Tenant as TenantModel
+    from infra.models.tenant_activity_log import TenantActivityLog
+
+    await TenantActivityLog.filter(tenant_id=tenant_id).delete()
+    await TenantModel.filter(id=tenant_id).delete()
+
+
+class BulkInactivityTimeoutBody(BaseModel):
+    """批量设置所有租户的「用户不活动超时」（秒）；0 表示禁用无操作自动退出。"""
+
+    inactivity_timeout: int = Field(0, ge=0, le=86400 * 7, description="秒，0=禁用")
+
+
+class BulkInactivityTimeoutResponse(BaseModel):
+    tenant_count: int
+    updated: int
+    inactivity_timeout: int
+
+
+@router.get("", response_model=TenantListResponse)
+async def list_tenants_for_superadmin(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(10, ge=1, le=100, description="每页数量"),
+    status: Optional[TenantStatus] = Query(None, description="组织状态筛选"),
+    plan: Optional[TenantPlan] = Query(None, description="组织套餐筛选"),
+    parent_tenant_id: Optional[int] = Query(None, ge=1, description="父组织筛选"),
+    is_subtenant: Optional[bool] = Query(None, description="是否子组织筛选"),
+    name: Optional[str] = Query(None, description="组织名称搜索（模糊搜索）"),
+    domain: Optional[str] = Query(None, description="域名搜索（模糊搜索）"),
+    sort: Optional[str] = Query(None, description="排序字段（如：name、status、created_at）"),
+    order: Optional[str] = Query(None, description="排序顺序（asc 或 desc）"),
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
+    """
+    获取组织列表（超级管理员）
+    
+    超级管理员可以查看所有组织，支持分页、状态筛选、套餐筛选、文本字段模糊搜索、排序。
+    未指定父组织/是否子组织筛选时，按主组织分页并附带本页主组织的全部子组织，供前端树表挂载。
+    使用 ProTable 原生搜索逻辑，简单可靠。
+    此接口需要平台超级管理员权限。
+    
+    Args:
+        page: 页码（从 1 开始，默认 1）
+        page_size: 每页数量（1-100，默认 10）
+        status: 组织状态筛选（可选，精确匹配）
+        plan: 组织套餐筛选（可选，精确匹配）
+        name: 组织名称搜索（可选，模糊搜索）
+        domain: 域名搜索（可选，模糊搜索）
+        sort: 排序字段（可选，如：name、status、created_at）
+        order: 排序顺序（可选，asc 或 desc）
+        current_admin: 当前平台超级管理员对象（通过依赖注入获取）
+        
+    Returns:
+        TenantListResponse: 组织列表响应数据
+    """
+    from loguru import logger
+    logger.info(f"📋 [list_tenants_for_superadmin] 开始处理请求，admin_id: {current_admin.id}, page: {page}, page_size: {page_size}")
+    
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+    
+    # 构建查询（超级管理员可以跨组织访问）
+    result = await tenant_service.list_tenants(
+        page=page,
+        page_size=page_size,
+        status=status,
+        plan=plan,
+        parent_tenant_id=parent_tenant_id,
+        is_subtenant=is_subtenant,
+        name=name,
+        domain=domain,
+        sort=sort,
+        order=order,
+        skip_tenant_filter=True  # ⭐ 关键：跳过组织过滤
+    )
+    
+    return TenantListResponse(**result)
+
+
+@router.get("/{tenant_id}", response_model=TenantResponse)
+async def get_tenant_detail_for_superadmin(
+    tenant_id: int,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
+    """
+    获取组织详情（超级管理员）
+    
+    超级管理员可以查看任意组织的详细信息。
+    
+    Args:
+        tenant_id: 组织 ID
+        current_admin: 当前超级管理员（依赖注入）
+        
+    Returns:
+        TenantResponse: 组织详情
+        
+    Raises:
+        HTTPException: 当组织不存在时抛出
+    """
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+    
+    # 获取组织（跳过组织过滤）
+    tenant = await tenant_service.get_tenant_by_id(tenant_id, skip_tenant_filter=True)
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织不存在"
+        )
+    
+    return tenant
+
+
+@router.get("/{tenant_id}/shared-user-quota", response_model=SharedUserQuotaResponse)
+async def get_shared_user_quota_for_superadmin(
+    tenant_id: int,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback),
+):
+    """
+    获取主组织共享用户池统计（主组织 + 全部子组织）。
+    """
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+
+    summary = await tenant_service.get_shared_user_quota_summary(tenant_id)
+    logger.info(
+        f"平台超级管理员 {current_admin.username} 查看共享用户池: "
+        f"root_tenant_id={summary['root_tenant_id']}"
+    )
+    return SharedUserQuotaResponse(**summary)
+
+
+@router.post(
+    "/{tenant_id}/sync-limits-from-plan",
+    response_model=SyncTenantLimitsFromPlanResponse,
+)
+async def sync_tenant_limits_from_plan_for_superadmin(
+    tenant_id: int,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback),
+):
+    """
+    按组织当前套餐同步用户/存储配额上限。
+
+    若新上限低于已启用用户数，已有用户不受影响，但禁止继续新增或启用用户，
+    直至有效用户数降至配额以下。
+    """
+    if not tenant_service:
+        tenant_service = TenantService()
+
+    try:
+        result = await tenant_service.sync_tenant_limits_from_plan(tenant_id)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
+
+    logger.info(
+        f"平台超级管理员 {current_admin.username} 同步套餐配额: "
+        f"tenant_id={result['tenant_id']}, over_quota={result['over_quota']}"
+    )
+    return SyncTenantLimitsFromPlanResponse(**result)
+
+
+@router.post("/{tenant_id}/approve", response_model=TenantResponse)
+async def approve_tenant_registration(
+    tenant_id: int,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
+    """
+    审核通过组织注册
+    
+    将组织状态从 INACTIVE 改为 ACTIVE，允许组织使用系统。
+    
+    Args:
+        tenant_id: 组织 ID
+        current_admin: 当前超级管理员（依赖注入）
+        
+    Returns:
+        TenantResponse: 更新后的组织
+        
+    Raises:
+        HTTPException: 当组织不存在时抛出
+    """
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+    
+    # 获取组织
+    tenant = await tenant_service.get_tenant_by_id(tenant_id, skip_tenant_filter=True)
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织不存在"
+        )
+    
+    # 激活组织
+    tenant = await tenant_service.activate_tenant(tenant_id)
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织不存在"
+        )
+    
+    logger.info(f"平台超级管理员 {current_admin.username} 审核通过组织: {tenant.name} (ID: {tenant.id})")
+    
+    return tenant
+
+
+@router.post("/{tenant_id}/reject", response_model=TenantResponse)
+async def reject_tenant_registration(
+    tenant_id: int,
+    reason: Optional[str] = Query(None, description="拒绝原因"),
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
+    """
+    审核拒绝组织注册
+    
+    将组织状态设置为 SUSPENDED，拒绝组织注册。
+    
+    Args:
+        tenant_id: 组织 ID
+        reason: 拒绝原因（可选）
+        current_admin: 当前超级管理员（依赖注入）
+        
+    Returns:
+        TenantResponse: 更新后的组织
+        
+    Raises:
+        HTTPException: 当组织不存在时抛出
+    """
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+    
+    # 获取组织
+    tenant = await tenant_service.get_tenant_by_id(tenant_id, skip_tenant_filter=True)
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织不存在"
+        )
+    
+    # 暂停组织（拒绝注册）
+    tenant = await tenant_service.update_tenant(
+        tenant_id,
+        TenantUpdate(
+            status=TenantStatus.SUSPENDED,
+            settings={
+                **tenant.settings,
+                "rejection_reason": reason or "审核未通过",
+                "rejected_by": current_admin.username,
+                "rejected_at": str(now()),
+            }
+        ),
+        skip_tenant_filter=True
+    )
+    
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织不存在"
+        )
+    
+    logger.info(f"平台超级管理员 {current_admin.username} 拒绝组织注册: {tenant.name} (ID: {tenant.id}), 原因: {reason}")
+    
+    return tenant
+
+
+@router.post("/{tenant_id}/activate", response_model=TenantResponse)
+async def activate_tenant_by_superadmin(
+    tenant_id: int,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
+    """
+    激活组织（超级管理员）
+    
+    将组织状态设置为 ACTIVE。
+    
+    Args:
+        tenant_id: 组织 ID
+        current_admin: 当前超级管理员（依赖注入）
+        tenant_service: 组织服务（依赖注入）
+        
+    Returns:
+        TenantResponse: 更新后的组织
+        
+    Raises:
+        HTTPException: 当组织不存在时抛出
+    """
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+    tenant = await tenant_service.activate_tenant(tenant_id, skip_tenant_filter=True)
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织不存在"
+        )
+    
+    logger.info(f"平台超级管理员 {current_admin.username} 激活组织: {tenant.name} (ID: {tenant.id})")
+    
+    return tenant
+
+
+@router.post("/{tenant_id}/deactivate", response_model=TenantResponse)
+async def deactivate_tenant_by_superadmin(
+    tenant_id: int,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
+    """
+    停用组织（超级管理员）
+    
+    将组织状态设置为 INACTIVE。
+    
+    Args:
+        tenant_id: 组织 ID
+        current_admin: 当前超级管理员（依赖注入）
+        tenant_service: 组织服务（依赖注入）
+        
+    Returns:
+        TenantResponse: 更新后的组织
+        
+    Raises:
+        HTTPException: 当组织不存在时抛出
+    """
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+    tenant = await tenant_service.deactivate_tenant(tenant_id, skip_tenant_filter=True)
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织不存在"
+        )
+    
+    logger.info(f"平台超级管理员 {current_admin.username} 停用组织: {tenant.name} (ID: {tenant.id})")
+    
+    return tenant
+
+
+@router.post("", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
+async def create_tenant_by_superadmin(
+    data: TenantCreate,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
+    """
+    创建组织（平台超级管理员）
+    
+    创建新组织并保存到数据库。如果域名已存在，则抛出异常。
+    
+    Args:
+        data: 组织创建数据
+        current_admin: 当前平台超级管理员（依赖注入）
+        tenant_service: 组织服务（依赖注入）
+        
+    Returns:
+        TenantResponse: 创建的组织
+        
+    Raises:
+        HTTPException: 当域名已存在时抛出
+    """
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+
+    if not data.admin_account:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请指定组织管理员账户",
+        )
+    
+    # ⚠️ 第三阶段改进：统一错误处理
+    # 异常由全局异常处理中间件统一处理
+    tenant = await tenant_service.create_tenant(data)
+
+    # 先创建管理员，失败则回滚组织，避免留下无管理员且名称占用的脏数据
+    from infra.schemas.user import UserCreate
+    from infra.services.user_service import UserService
+
+    admin = data.admin_account
+    user_service = UserService()
+    try:
+        admin_user = await user_service.create_user(
+            UserCreate(
+                username=admin.username,
+                phone=admin.phone,
+                password=admin.password,
+                full_name=admin.full_name,
+                tenant_id=tenant.id,
+                is_active=True,
+                is_infra_admin=False,
+                is_tenant_admin=True,
+            ),
+            tenant_id=tenant.id,
+        )
+    except Exception:
+        await _rollback_created_tenant(tenant.id)
+        raise
+
+    from core.services.tenant.tenant_init_data_service import TenantInitDataService
+
+    await TenantInitDataService.set_tenant_data_initializing(tenant.id, True)
+    # 系统级初始化耗时较长，放后台执行，接口立即返回
+    schedule_initialize_tenant_data(
+        tenant.id,
+        init_data_options=data.init_data_options,
+        industry_preset=data.industry_preset,
+    )
+    logger.info(
+        f"平台超级管理员 {current_admin.username} 创建组织: {tenant.name} (ID: {tenant.id})，"
+        f"管理员: {admin_user.username} (ID: {admin_user.id})，初始化任务已提交后台"
+    )
+    return tenant
+
+
+@router.put("/{tenant_id}", response_model=TenantResponse)
+async def update_tenant_by_superadmin(
+    tenant_id: int,
+    data: TenantUpdate,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
+    """
+    更新组织（平台超级管理员）
+    
+    更新组织信息。所有字段都是可选的，只更新提供的字段。
+    
+    Args:
+        tenant_id: 组织 ID
+        data: 组织更新数据
+        current_admin: 当前平台超级管理员（依赖注入）
+        tenant_service: 组织服务（依赖注入）
+        
+    Returns:
+        TenantResponse: 更新后的组织
+        
+    Raises:
+        HTTPException: 当组织不存在时抛出
+    """
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+    
+    tenant = await tenant_service.update_tenant(tenant_id, data, skip_tenant_filter=True)
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织不存在"
+        )
+    
+    logger.info(f"平台超级管理员 {current_admin.username} 更新组织: {tenant.name} (ID: {tenant.id})")
+    return tenant
+
+
+@router.delete("/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_tenant_by_superadmin(
+    tenant_id: int,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
+):
+    """
+    删除组织（平台超级管理员）
+
+    仅已暂停且无业务单据的组织允许删除，删除后从系统中移除。
+    
+    Args:
+        tenant_id: 组织 ID
+        current_admin: 当前平台超级管理员（依赖注入）
+        tenant_service: 组织服务（依赖注入）
+        
+    Raises:
+        HTTPException: 当组织不存在时抛出
+    """
+    # ⚠️ 第三阶段改进：使用依赖注入的服务
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+    success = await tenant_service.delete_tenant(tenant_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="组织不存在"
+        )
+    
+    logger.info(f"平台超级管理员 {current_admin.username} 删除组织: ID {tenant_id}")
+
+
+@router.post(
+    "/bulk-inactivity-timeout",
+    response_model=BulkInactivityTimeoutResponse,
+    summary="Batch-set site inactivity timeout for all tenants",
+)
+async def bulk_set_inactivity_timeout_for_all_tenants(
+    body: BulkInactivityTimeoutBody,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+):
+    """
+    将 **所有组织** 的站点设置 `security.inactivity_timeout` 更新为指定值（默认 0）。
+    0 表示前端不启用「长时间无操作自动退出」；不影响 JWT 有效期（见基础设施环境变量）。
+
+    需要平台超级管理员 Token。
+    """
+    from core.services.system.site_setting_service import SiteSettingService
+
+    result = await SiteSettingService.set_inactivity_timeout_for_all_tenants(
+        inactivity_timeout=body.inactivity_timeout
+    )
+    logger.info(
+        f"平台超级管理员 {current_admin.username} 批量设置不活动超时: "
+        f"{result['inactivity_timeout']}s, tenants={result['tenant_count']}"
+    )
+    return BulkInactivityTimeoutResponse(**result)
+
+
+class ApplicationCenterCategoryPermission(BaseModel):
+    allow_self_service_toggle: bool = Field(
+        False,
+        description="是否允许组织管理员在应用中心自主安装/启用/禁用该分类应用",
+    )
+
+
+class ApplicationCenterPermissionsBody(BaseModel):
+    basic: ApplicationCenterCategoryPermission = Field(default_factory=ApplicationCenterCategoryPermission)
+    pro: ApplicationCenterCategoryPermission = Field(default_factory=ApplicationCenterCategoryPermission)
+    industry: ApplicationCenterCategoryPermission = Field(default_factory=ApplicationCenterCategoryPermission)
+    dedicated: ApplicationCenterCategoryPermission = Field(default_factory=ApplicationCenterCategoryPermission)
+
+
+class ApplicationCenterPermissionsResponse(BaseModel):
+    tenant_id: int
+    category_permissions: dict
+    package: dict
+    effective: dict
+
+
+@router.get(
+    "/{tenant_id}/application-center-permissions",
+    response_model=ApplicationCenterPermissionsResponse,
+    summary="Get tenant application center category permissions",
+)
+async def get_tenant_application_center_permissions(
+    tenant_id: int,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback),
+):
+    _ = current_admin
+    tenant = await tenant_service.get_tenant_by_id(tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="组织不存在")
+    from core.services.application.application_center_permission_service import (
+        ApplicationCenterPermissionService,
+    )
+
+    caps = await ApplicationCenterPermissionService.build_center_capabilities(tenant_id)
+    return ApplicationCenterPermissionsResponse(
+        tenant_id=tenant_id,
+        category_permissions=caps["category_permissions"],
+        package=caps["package"],
+        effective=caps["effective"],
+    )
+
+
+@router.put(
+    "/{tenant_id}/application-center-permissions",
+    response_model=ApplicationCenterPermissionsResponse,
+    summary="Update tenant application center category permissions",
+)
+async def put_tenant_application_center_permissions(
+    tenant_id: int,
+    body: ApplicationCenterPermissionsBody,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback),
+):
+    tenant = await tenant_service.get_tenant_by_id(tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="组织不存在")
+
+    from core.services.application.application_center_permission_service import (
+        ApplicationCenterPermissionService,
+    )
+
+    payload = {
+        "basic": body.basic.model_dump(),
+        "pro": body.pro.model_dump(),
+        "industry": body.industry.model_dump(),
+        "dedicated": body.dedicated.model_dump(),
+    }
+    await ApplicationCenterPermissionService.set_category_permissions(tenant_id, payload)
+    caps = await ApplicationCenterPermissionService.build_center_capabilities(tenant_id)
+    logger.info(
+        f"平台超级管理员 {current_admin.username} 更新组织 {tenant_id} 应用中心权限"
+    )
+    return ApplicationCenterPermissionsResponse(
+        tenant_id=tenant_id,
+        category_permissions=caps["category_permissions"],
+        package=caps["package"],
+        effective=caps["effective"],
+    )
+

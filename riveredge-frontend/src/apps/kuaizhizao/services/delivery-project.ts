@@ -1,0 +1,714 @@
+/**
+ * 交付项目（订单交机）API
+ */
+
+import { apiRequest } from '../../../services/api';
+
+export interface DeliveryMember {
+  user_id: number;
+  user_name: string;
+}
+
+export interface DeliveryProjectNodeDocument {
+  id: number;
+  project_id: number;
+  node_id: number;
+  node_name?: string | null;
+  doc_type: string;
+  doc_id: number;
+  doc_code: string;
+  title?: string | null;
+  party_name?: string | null;
+  doc_date?: string | null;
+  status?: string | null;
+  review_status?: string | null;
+  progress_percent?: number | null;
+  linked_at?: string | null;
+  linked_by_name?: string | null;
+}
+
+export interface DeliveryAlertRow {
+  alert_kind: string;
+  project_id: number;
+  project_code: string;
+  project_name: string;
+  node_id: number;
+  node_name: string;
+  is_milestone: boolean;
+  planned_end_date?: string | null;
+  days_remaining?: number | null;
+  days_overdue?: number | null;
+  owner_name?: string | null;
+  project_owner_name?: string | null;
+}
+
+export interface DeliveryTaskParticipantAction {
+  user_id: number;
+  user_name: string;
+  role: string;
+  action: string;
+  status: string;
+  acted_at?: string | null;
+  remark?: string | null;
+  kit_status?: string | null;
+  progress_percent?: number | string | null;
+}
+
+export interface DeliveryProjectNodeTask {
+  id: number;
+  project_id: number;
+  node_id: number;
+  template_task_id?: number | null;
+  task_key?: string | null;
+  task_name: string;
+  core_task?: string | null;
+  sort_order: number;
+  status: string;
+  owner_id?: number | null;
+  owner_name?: string | null;
+  members?: DeliveryMember[];
+  planned_start_date?: string | null;
+  planned_end_date?: string | null;
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
+  progress_percent?: number | string;
+  track_mode?: string;
+  kit_status?: string;
+  participant_mode?: string;
+  participant_actions?: DeliveryTaskParticipantAction[];
+  attachments?: Array<{ uid?: string; name?: string; status?: string; url?: string }> | null;
+}
+
+export interface DeliveryProjectNode {
+  id: number;
+  project_id: number;
+  node_key: string;
+  node_name: string;
+  sort_order: number;
+  status: string;
+  progress_percent: number | string;
+  owner_id?: number | null;
+  owner_name?: string | null;
+  planned_start_date?: string | null;
+  planned_end_date?: string | null;
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
+  is_critical: boolean;
+  is_milestone: boolean;
+  tasks?: DeliveryProjectNodeTask[];
+}
+
+export interface DeliveryProjectNodeScheduleChangeItem {
+  field: string;
+  before?: string | null;
+  after?: string | null;
+}
+
+export interface DeliveryProjectNodeScheduleRevision {
+  id: number;
+  project_id: number;
+  node_id: number;
+  edit_reason: string;
+  changes: DeliveryProjectNodeScheduleChangeItem[];
+  edited_by_id?: number | null;
+  edited_by_name?: string | null;
+  edited_at: string;
+}
+
+export interface DeliveryProject {
+  id: number;
+  project_code: string;
+  project_name: string;
+  process_template_id?: number | null;
+  process_template_name?: string | null;
+  sales_order_id?: number | null;
+  sales_order_code?: string | null;
+  customer_id?: number | null;
+  customer_name?: string | null;
+  delivery_date?: string | null;
+  owner_id?: number | null;
+  owner_name?: string | null;
+  members?: DeliveryMember[];
+  material_code?: string | null;
+  material_name?: string | null;
+  material_spec?: string | null;
+  status: string;
+  progress_percent: number | string;
+  current_node_key?: string | null;
+  current_node_name?: string | null;
+  planned_start_date?: string | null;
+  planned_end_date?: string | null;
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
+  notes?: string | null;
+  rd_project_id?: number | null;
+  config_attrs?: Record<string, unknown> | null;
+  board_section?: string;
+  parent_project_id?: number | null;
+  parent_project_code?: string | null;
+  parent_sync_task_key?: string | null;
+  line_role?: string;
+  sideline_count?: number;
+  nodes?: DeliveryProjectNode[];
+  created_at?: string;
+  updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
+}
+
+export interface DeliveryLinkedRdProject {
+  id: number;
+  project_code: string;
+  project_name: string;
+}
+
+export interface DeliveryWorkbenchRelatedAttachment {
+  uid: string;
+  name?: string | null;
+  url?: string | null;
+  source_type: 'node_report' | 'node_task' | string;
+  source_id: number;
+  source_label: string;
+  node_name?: string | null;
+}
+
+export interface DeliveryProjectWorkbench extends DeliveryProject {
+  recent_reports?: DeliveryNodeReport[];
+  open_issues?: DeliveryIssue[];
+  linked_rd_project?: DeliveryLinkedRdProject | null;
+  node_documents?: DeliveryProjectNodeDocument[];
+  related_attachments?: DeliveryWorkbenchRelatedAttachment[];
+}
+
+export interface DeliveryProcessTemplateNodeTask {
+  id?: number;
+  template_node_id?: number;
+  task_key: string;
+  task_name: string;
+  core_task?: string | null;
+  sort_order: number;
+  default_owner_role?: string | null;
+  owner_id?: number | null;
+  owner_name?: string | null;
+  members?: DeliveryMember[];
+  planned_duration_days?: number;
+  track_mode?: string;
+  participant_mode?: string;
+}
+
+export interface DeliveryProcessTemplateNode {
+  id?: number;
+  template_id?: number;
+  node_key: string;
+  node_name: string;
+  sort_order: number;
+  default_owner_role?: string | null;
+  planned_duration_days: number;
+  duration_rules?: {
+    attr_key: string;
+    days_by_value: Record<string, number>;
+  } | null;
+  is_critical: boolean;
+  is_milestone: boolean;
+  tasks?: DeliveryProcessTemplateNodeTask[];
+}
+
+export interface DeliveryProcessTemplate {
+  id: number;
+  template_code: string;
+  template_name: string;
+  project_type?: string | null;
+  is_active: boolean;
+  is_default: boolean;
+  notes?: string | null;
+  nodes: DeliveryProcessTemplateNode[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DeliveryNodeReport {
+  id: number;
+  report_code: string;
+  project_id: number;
+  project_code: string;
+  node_id: number;
+  node_key: string;
+  node_name: string;
+  reporter_name?: string | null;
+  report_date: string;
+  progress_percent: number | string;
+  content?: string | null;
+  status: string;
+  reviewer_name?: string | null;
+  reviewed_at?: string | null;
+  review_notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
+}
+
+export interface DeliveryIssue {
+  id: number;
+  issue_code: string;
+  project_id: number;
+  project_code: string;
+  node_id?: number | null;
+  node_name?: string | null;
+  issue_type: string;
+  priority: string;
+  status: string;
+  title: string;
+  description?: string | null;
+  assignee_name?: string | null;
+  due_date?: string | null;
+  resolution?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
+}
+
+export interface DeliveryProgressSummaryRow {
+  id: number;
+  project_code: string;
+  project_name: string;
+  customer_name?: string | null;
+  sales_order_code?: string | null;
+  delivery_date?: string | null;
+  owner_name?: string | null;
+  material_code?: string | null;
+  material_name?: string | null;
+  status: string;
+  progress_percent: number | string;
+  current_node_name?: string | null;
+  planned_end_date?: string | null;
+  overdue_node_count: number;
+  open_issue_count: number;
+  days_to_delivery?: number | null;
+  node_summary?: string | null;
+}
+
+export interface DeliveryGanttItem {
+  id: number;
+  project_id: number;
+  node_id: number;
+  project_code: string;
+  project_name: string;
+  node_name: string;
+  customer_name?: string | null;
+  node_status?: string | null;
+  planned_start_date?: string | null;
+  planned_end_date?: string | null;
+  progress?: number;
+}
+
+export interface DeliveryDashboard {
+  kpis: {
+    active_projects: number;
+    overdue_nodes: number;
+    at_risk_projects: number;
+    open_issues: number;
+    alert_count: number;
+  };
+  recent_projects: DeliveryProject[];
+  overdue_nodes: Array<{
+    project_id: number;
+    project_code?: string;
+    project_name?: string;
+    node_id: number;
+    node_name: string;
+    planned_end_date?: string;
+  }>;
+  alerts?: DeliveryAlertRow[];
+  project_gantt?: DeliveryGanttItem[];
+}
+
+export interface DeliveryFollowUpRow extends DeliveryProject {
+  nodes: DeliveryProjectNode[];
+}
+
+export interface DeliveryScheduleRow {
+  project_id: number;
+  project_code: string;
+  project_name: string;
+  customer_name?: string | null;
+  delivery_date?: string | null;
+  owner_name?: string | null;
+  status: string;
+  progress_percent: number | string;
+  current_node_name?: string | null;
+  schedule_node_name?: string | null;
+  schedule_node_owner_name?: string | null;
+  planned_start_date?: string | null;
+  planned_end_date?: string | null;
+  node_status?: string | null;
+  report_overdue: boolean;
+  created_at?: string;
+  updated_at?: string;
+  created_by_name?: string | null;
+  updated_by_name?: string | null;
+}
+
+export interface DeliveryProcessProgressRow {
+  id: string;
+  project_id: number;
+  project_code: string;
+  project_name: string;
+  sales_order_code?: string | null;
+  customer_name?: string | null;
+  project_owner_name?: string | null;
+  material_name?: string | null;
+  delivery_date?: string | null;
+  node_id: number;
+  node_key: string;
+  node_name: string;
+  sort_order: number;
+  node_status: string;
+  progress_percent: number | string;
+  node_owner_name?: string | null;
+  planned_start_date?: string | null;
+  planned_end_date?: string | null;
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
+  reporter_name?: string | null;
+  issue_count: number;
+  is_critical: boolean;
+  is_milestone: boolean;
+}
+
+export interface DeliveryIssueProgressRow {
+  id: number;
+  issue_code: string;
+  project_code: string;
+  project_name: string;
+  customer_name?: string | null;
+  node_name?: string | null;
+  issue_type: string;
+  priority: string;
+  status: string;
+  title: string;
+  assignee_name?: string | null;
+  due_date?: string | null;
+  created_at?: string | null;
+}
+
+export interface DeliveryWorkshopBoardColumn {
+  task_key: string;
+  task_name: string;
+  node_key: string;
+  node_name: string;
+  track_mode: string;
+  sort_order: number;
+}
+
+export interface DeliveryWorkshopBoardCell {
+  task_id?: number | null;
+  task_key: string;
+  node_key: string;
+  track_mode: string;
+  kit_status: string;
+  status?: string | null;
+  actual_end_date?: string | null;
+  owner_name?: string | null;
+}
+
+export interface DeliveryWorkshopBoardRow {
+  project_id: number;
+  project_code: string;
+  project_name: string;
+  customer_name?: string | null;
+  material_code?: string | null;
+  material_name?: string | null;
+  material_spec?: string | null;
+  delivery_date?: string | null;
+  owner_name?: string | null;
+  status: string;
+  progress_percent: number | string;
+  board_section: string;
+  config_attrs?: Record<string, unknown> | null;
+  cells: DeliveryWorkshopBoardCell[];
+}
+
+export const DELIVERY_BOARD_SECTION: Record<string, string> = {
+  inventory: '库存',
+  returned: '退回',
+  active: '在制',
+  shipped: '已发',
+};
+
+export const DELIVERY_KIT_STATUS: Record<string, string> = {
+  none: '无',
+  ready: '有',
+  na: '不适用',
+};
+
+export const DELIVERY_TASK_TRACK_MODE: Record<string, string> = {
+  progress: '进度',
+  kit: '齐套',
+};
+
+export const DELIVERY_TASK_PARTICIPANT_MODE: Record<string, string> = {
+  solo: '负责人',
+  signoff_all: '会签',
+  signoff_any: '或签',
+  each_act: '分人操作',
+};
+
+export const DELIVERY_TASK_PARTICIPANT_ACTION_STATUS: Record<string, string> = {
+  pending: '待确认',
+  done: '已确认',
+};
+
+export const DELIVERY_LINE_ROLE: Record<string, string> = {
+  main: '主线',
+  sideline: '旁线',
+};
+
+const BASE = '/apps/kuaizhizao';
+
+export const deliveryProjectApi = {
+  list: (params?: Record<string, unknown>) =>
+    apiRequest<{ items: DeliveryProject[]; total: number }>(`${BASE}/delivery-projects`, { method: 'GET', params }),
+  workshopBoard: (params?: Record<string, unknown>) =>
+    apiRequest<{
+      columns: DeliveryWorkshopBoardColumn[];
+      items: DeliveryWorkshopBoardRow[];
+      total: number;
+    }>(`${BASE}/delivery-projects/workshop-board`, { method: 'GET', params }),
+  patchWorkshopBoardCell: (data: {
+    project_id: number;
+    task_id: number;
+    kit_status?: string;
+    actual_end_date?: string | null;
+    status?: string;
+  }) =>
+    apiRequest<DeliveryWorkshopBoardCell>(`${BASE}/delivery-projects/workshop-board/cells`, {
+      method: 'PATCH',
+      data,
+    }),
+  get: (id: number) => apiRequest<DeliveryProject>(`${BASE}/delivery-projects/${id}`, { method: 'GET' }),
+  getWorkbench: (id: number) =>
+    apiRequest<DeliveryProjectWorkbench>(`${BASE}/delivery-projects/${id}/workbench`, { method: 'GET' }),
+  listSidelines: (id: number) =>
+    apiRequest<{ items: DeliveryProject[]; total: number }>(
+      `${BASE}/delivery-projects/${id}/sidelines`,
+      { method: 'GET' },
+    ),
+  createSideline: (
+    id: number,
+    data: {
+      project_name: string;
+      parent_sync_task_key: string;
+      process_template_id?: number;
+      delivery_date?: string;
+      owner_id?: number;
+      notes?: string;
+      config_attrs?: Record<string, unknown>;
+      planned_start_date?: string;
+    },
+  ) =>
+    apiRequest<DeliveryProject>(`${BASE}/delivery-projects/${id}/sidelines`, {
+      method: 'POST',
+      data,
+    }),
+  create: (data: Record<string, unknown>) =>
+    apiRequest<DeliveryProject>(`${BASE}/delivery-projects`, { method: 'POST', data }),
+  update: (id: number, data: Record<string, unknown>) =>
+    apiRequest<DeliveryProject>(`${BASE}/delivery-projects/${id}`, { method: 'PUT', data }),
+  delete: (id: number) => apiRequest(`${BASE}/delivery-projects/${id}`, { method: 'DELETE' }),
+  start: (id: number) => apiRequest<DeliveryProject>(`${BASE}/delivery-projects/${id}/start`, { method: 'POST' }),
+  pause: (id: number) => apiRequest<DeliveryProject>(`${BASE}/delivery-projects/${id}/pause`, { method: 'POST' }),
+  resume: (id: number) => apiRequest<DeliveryProject>(`${BASE}/delivery-projects/${id}/resume`, { method: 'POST' }),
+  cancel: (id: number) => apiRequest<DeliveryProject>(`${BASE}/delivery-projects/${id}/cancel`, { method: 'POST' }),
+  complete: (id: number, data?: { force?: boolean; reason?: string }) =>
+    apiRequest<DeliveryProject>(`${BASE}/delivery-projects/${id}/complete`, { method: 'POST', data: data ?? {} }),
+  changeTemplate: (id: number, processTemplateId: number) =>
+    apiRequest<DeliveryProject>(`${BASE}/delivery-projects/${id}/change-template`, {
+      method: 'POST',
+      data: { process_template_id: processTemplateId },
+    }),
+  updateNode: (projectId: number, nodeId: number, data: Record<string, unknown>) =>
+    apiRequest<DeliveryProjectNode>(`${BASE}/delivery-projects/${projectId}/nodes/${nodeId}`, { method: 'PUT', data }),
+  listNodeScheduleRevisions: (projectId: number, nodeId: number) =>
+    apiRequest<DeliveryProjectNodeScheduleRevision[]>(
+      `${BASE}/delivery-projects/${projectId}/nodes/${nodeId}/schedule-revisions`,
+      { method: 'GET' },
+    ),
+  startNode: (projectId: number, nodeId: number) =>
+    apiRequest<DeliveryProjectNode>(`${BASE}/delivery-projects/${projectId}/nodes/${nodeId}/start`, { method: 'POST' }),
+  completeNode: (projectId: number, nodeId: number) =>
+    apiRequest<DeliveryProjectNode>(`${BASE}/delivery-projects/${projectId}/nodes/${nodeId}/complete`, { method: 'POST' }),
+  listNodeDocuments: (projectId: number, nodeId?: number) =>
+    apiRequest<DeliveryProjectNodeDocument[]>(`${BASE}/delivery-projects/${projectId}/node-documents`, {
+      method: 'GET',
+      params: nodeId ? { node_id: nodeId } : undefined,
+    }),
+  linkNodeDocument: (projectId: number, data: Record<string, unknown>) =>
+    apiRequest<DeliveryProjectNodeDocument>(`${BASE}/delivery-projects/${projectId}/node-documents`, {
+      method: 'POST',
+      data,
+    }),
+  unlinkNodeDocument: (projectId: number, linkId: number) =>
+    apiRequest(`${BASE}/delivery-projects/${projectId}/node-documents/${linkId}`, { method: 'DELETE' }),
+  createNodeTask: (projectId: number, data: Record<string, unknown>) =>
+    apiRequest<DeliveryProjectNodeTask>(`${BASE}/delivery-projects/${projectId}/node-tasks`, {
+      method: 'POST',
+      data,
+    }),
+  updateNodeTask: (projectId: number, taskId: number, data: Record<string, unknown>) =>
+    apiRequest<DeliveryProjectNodeTask>(`${BASE}/delivery-projects/${projectId}/node-tasks/${taskId}`, {
+      method: 'PUT',
+      data,
+    }),
+  deleteNodeTask: (projectId: number, taskId: number) =>
+    apiRequest(`${BASE}/delivery-projects/${projectId}/node-tasks/${taskId}`, { method: 'DELETE' }),
+  submitNodeTaskParticipantAction: (
+    projectId: number,
+    taskId: number,
+    data: { remark?: string; kit_status?: string; progress_percent?: number },
+  ) =>
+    apiRequest<DeliveryProjectNodeTask>(
+      `${BASE}/delivery-projects/${projectId}/node-tasks/${taskId}/participant-action`,
+      { method: 'POST', data },
+    ),
+  progressSummary: (params?: Record<string, unknown>) =>
+    apiRequest<{ items: DeliveryProgressSummaryRow[]; total: number }>(
+      `${BASE}/delivery-reports/progress-summary`,
+      { method: 'GET', params },
+    ),
+  dashboard: () => apiRequest<DeliveryDashboard>(`${BASE}/delivery-dashboard`, { method: 'GET' }),
+  followUp: (params?: Record<string, unknown>) =>
+    apiRequest<{ items: DeliveryFollowUpRow[]; total: number }>(`${BASE}/delivery-follow-up`, { method: 'GET', params }),
+  schedules: (params?: Record<string, unknown>) =>
+    apiRequest<{ items: DeliveryScheduleRow[]; total: number }>(`${BASE}/delivery-schedules`, { method: 'GET', params }),
+  processProgress: (params?: Record<string, unknown>) =>
+    apiRequest<{ items: DeliveryProcessProgressRow[]; total: number }>(
+      `${BASE}/delivery-reports/process-progress`,
+      { method: 'GET', params },
+    ),
+  issueProgress: (params?: Record<string, unknown>) =>
+    apiRequest<{ items: DeliveryIssueProgressRow[]; total: number }>(
+      `${BASE}/delivery-reports/issue-progress`,
+      { method: 'GET', params },
+    ),
+  previewPushFromSalesOrder: (salesOrderId: number) =>
+    apiRequest(`${BASE}/sales-orders/${salesOrderId}/push-to-delivery-project/preview`, { method: 'GET' }),
+  pushFromSalesOrder: (salesOrderId: number, data?: Record<string, unknown>) =>
+    apiRequest<DeliveryProject>(`${BASE}/sales-orders/${salesOrderId}/push-to-delivery-project`, { method: 'POST', data }),
+};
+
+export const deliveryProcessTemplateApi = {
+  list: (params?: Record<string, unknown>) =>
+    apiRequest<{ items: DeliveryProcessTemplate[]; total: number }>(`${BASE}/delivery-process-templates`, { method: 'GET', params }),
+  get: (id: number) => apiRequest<DeliveryProcessTemplate>(`${BASE}/delivery-process-templates/${id}`, { method: 'GET' }),
+  create: (data: Record<string, unknown>) =>
+    apiRequest<DeliveryProcessTemplate>(`${BASE}/delivery-process-templates`, { method: 'POST', data }),
+  update: (id: number, data: Record<string, unknown>) =>
+    apiRequest<DeliveryProcessTemplate>(`${BASE}/delivery-process-templates/${id}`, { method: 'PUT', data }),
+  delete: (id: number) => apiRequest(`${BASE}/delivery-process-templates/${id}`, { method: 'DELETE' }),
+  setDefault: (id: number) =>
+    apiRequest<DeliveryProcessTemplate>(`${BASE}/delivery-process-templates/${id}/set-default`, { method: 'POST' }),
+};
+
+export const deliveryNodeReportApi = {
+  list: (params?: Record<string, unknown>) =>
+    apiRequest<{ items: DeliveryNodeReport[]; total: number }>(`${BASE}/delivery-node-reports`, { method: 'GET', params }),
+  get: (id: number) => apiRequest<DeliveryNodeReport>(`${BASE}/delivery-node-reports/${id}`, { method: 'GET' }),
+  create: (data: Record<string, unknown>) =>
+    apiRequest<DeliveryNodeReport>(`${BASE}/delivery-node-reports`, { method: 'POST', data }),
+  update: (id: number, data: Record<string, unknown>) =>
+    apiRequest<DeliveryNodeReport>(`${BASE}/delivery-node-reports/${id}`, { method: 'PUT', data }),
+  delete: (id: number) => apiRequest(`${BASE}/delivery-node-reports/${id}`, { method: 'DELETE' }),
+  submit: (id: number) => apiRequest<DeliveryNodeReport>(`${BASE}/delivery-node-reports/${id}/submit`, { method: 'POST' }),
+  review: (id: number, data: { approved: boolean; review_notes?: string }) =>
+    apiRequest<DeliveryNodeReport>(`${BASE}/delivery-node-reports/${id}/review`, { method: 'POST', data }),
+};
+
+export const deliveryIssueApi = {
+  list: (params?: Record<string, unknown>) =>
+    apiRequest<{ items: DeliveryIssue[]; total: number }>(`${BASE}/delivery-issues`, { method: 'GET', params }),
+  get: (id: number) => apiRequest<DeliveryIssue>(`${BASE}/delivery-issues/${id}`, { method: 'GET' }),
+  create: (data: Record<string, unknown>) =>
+    apiRequest<DeliveryIssue>(`${BASE}/delivery-issues`, { method: 'POST', data }),
+  update: (id: number, data: Record<string, unknown>) =>
+    apiRequest<DeliveryIssue>(`${BASE}/delivery-issues/${id}`, { method: 'PUT', data }),
+  delete: (id: number) => apiRequest(`${BASE}/delivery-issues/${id}`, { method: 'DELETE' }),
+};
+
+export const DELIVERY_NODE_DOCUMENT_TYPES: Record<string, string> = {
+  sales_order: '销售订单',
+  purchase_order: '采购订单',
+  work_order: '工单',
+  purchase_receipt: '采购入库',
+  sales_delivery: '销售出库',
+  quality_inspection: '检验单',
+  rd_project: '研发项目',
+};
+
+/** 节点关联单据类型 → 对应单据列表页 */
+export const DELIVERY_NODE_DOCUMENT_LIST_PATHS: Record<keyof typeof DELIVERY_NODE_DOCUMENT_TYPES, string> = {
+  sales_order: '/apps/kuaizhizao/sales-management/sales-orders',
+  purchase_order: '/apps/kuaizhizao/purchase-management/purchase-orders',
+  work_order: '/apps/kuaizhizao/production-execution/work-orders',
+  purchase_receipt: '/apps/kuaizhizao/purchase-management/inbound',
+  sales_delivery: '/apps/kuaizhizao/sales-management/outbound',
+  quality_inspection: '/apps/kuaizhizao/quality-management/incoming-inspection',
+  rd_project: '/apps/kuaiplm/rd-projects',
+};
+
+export const DELIVERY_ALERT_KIND: Record<string, string> = {
+  due_soon: '临期',
+  overdue: '逾期',
+  milestone_overdue: '里程碑逾期',
+};
+
+export const DELIVERY_PROJECT_STATUS: Record<string, string> = {
+  draft: '草稿',
+  in_progress: '进行中',
+  paused: '暂停',
+  completed: '已完成',
+  cancelled: '已取消',
+};
+
+export const DELIVERY_NODE_STATUS: Record<string, string> = {
+  not_started: '未开始',
+  in_progress: '进行中',
+  completed: '已完成',
+  overdue: '逾期',
+};
+
+export const DELIVERY_NODE_TASK_STATUS: Record<string, string> = {
+  todo: '待办',
+  in_progress: '进行中',
+  done: '已完成',
+  cancelled: '已取消',
+};
+
+export const DELIVERY_NODE_REPORT_STATUS: Record<string, string> = {
+  draft: '草稿',
+  submitted: '已提交',
+  approved: '已通过',
+  rejected: '已驳回',
+};
+
+export const DELIVERY_ISSUE_STATUS: Record<string, string> = {
+  open: '待处理',
+  in_progress: '处理中',
+  resolved: '已解决',
+  closed: '已关闭',
+};
+
+export const DELIVERY_ISSUE_PRIORITY: Record<string, string> = {
+  low: '低',
+  normal: '普通',
+  high: '高',
+  urgent: '紧急',
+};
+
+export const DELIVERY_ISSUE_TYPE: Record<string, string> = {
+  blocker: '阻塞',
+  quality: '质量',
+  delivery: '交期',
+  other: '其他',
+};

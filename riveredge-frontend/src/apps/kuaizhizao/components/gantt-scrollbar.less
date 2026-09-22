@@ -1,0 +1,302 @@
+/**
+ * 甘特图滚动条：与全局完全统一（6px、rgba(0,0,0,0.06)/0.1）
+ * 必须在 @svar-ui/react-gantt/all.css 之后导入以覆盖库样式
+ */
+@scrollbar-thumb: rgba(0, 0, 0, 0.16);
+@scrollbar-thumb-hover: rgba(0, 0, 0, 0.06);
+@scrollbar-thumb-dark: rgba(255, 255, 255, 0.18);
+@scrollbar-thumb-hover-dark: rgba(255, 255, 255, 0.28);
+@scheduling-radius-sm: var(--ant-border-radius-sm, var(--ant-borderRadiusSM, 4px));
+
+.gantt-chart-wrapper {
+  position: relative;
+  max-height: var(--gantt-max-height, 62vh);
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: @scrollbar-thumb transparent;
+  contain: layout paint;
+}
+
+/* 可视排产（RiverGantt）：不限高，按行数自然撑开 */
+.gantt-chart-wrapper--visual {
+  max-height: none;
+  overflow: visible;
+}
+
+/* 研发看板甘特：贴齐卡片内容区，高度由行数驱动 */
+.gantt-chart-wrapper--rd-dashboard,
+.gantt-chart-wrapper--delivery-dashboard {
+  width: 100%;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
+  box-sizing: border-box;
+}
+
+.gantt-chart-wrapper--rd-dashboard .wx-layout,
+.gantt-chart-wrapper--rd-dashboard .wx-content.wx-layout,
+.gantt-chart-wrapper--delivery-dashboard .wx-layout,
+.gantt-chart-wrapper--delivery-dashboard .wx-content.wx-layout {
+  width: 100% !important;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 研发看板甘特：暗黑模式跟随 Ant Design token，与卡片内背景一致 */
+.gantt-chart-wrapper--rd-dashboard .wx-willow-dark-theme,
+.gantt-chart-wrapper--delivery-dashboard .wx-willow-dark-theme {
+  --wx-background: var(--ant-color-bg-container, #141414);
+  --wx-background-alt: var(--ant-color-fill-alter, rgba(255, 255, 255, 0.04));
+  --wx-background-hover: var(--ant-color-fill-secondary, rgba(255, 255, 255, 0.06));
+  --wx-gantt-border-color: var(--ant-color-border-secondary, #424242);
+  --wx-color-font: var(--ant-color-text, rgba(255, 255, 255, 0.85));
+  --wx-color-font-alt: var(--ant-color-text-secondary, rgba(255, 255, 255, 0.65));
+  --wx-grid-header-font-color: var(--ant-color-text, rgba(255, 255, 255, 0.85));
+  --wx-grid-body-font-color: var(--ant-color-text, rgba(255, 255, 255, 0.85));
+  --wx-gantt-select-color: var(--ant-color-fill-secondary, rgba(255, 255, 255, 0.08));
+  --wx-gantt-progress-border-color: var(--ant-color-border-secondary, #424242);
+}
+
+.module-chart-panel--fit-content.ant-card > .ant-card-body {
+  overflow: hidden;
+}
+
+.uni-dashboard .dashboard-main-scroll-inner .ant-row > .ant-col > .module-chart-panel--fit-content,
+.uni-dashboard .dashboard-main-scroll-inner .ant-row > .ant-col > div > .module-chart-panel--fit-content {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* 尺寸与轨道 */
+.gantt-chart-wrapper ::-webkit-scrollbar,
+.gantt-chart-wrapper *::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+  background: transparent !important;
+}
+.gantt-chart-wrapper ::-webkit-scrollbar-track,
+.gantt-chart-wrapper *::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+/* 滑块：与全局完全统一颜色（素雅风格） */
+.gantt-chart-wrapper ::-webkit-scrollbar-thumb,
+.gantt-chart-wrapper *::-webkit-scrollbar-thumb {
+  background-color: @scrollbar-thumb !important;
+  border-radius: @scheduling-radius-sm !important;
+}
+.gantt-chart-wrapper ::-webkit-scrollbar-thumb:hover,
+.gantt-chart-wrapper *::-webkit-scrollbar-thumb:hover {
+  background-color: @scrollbar-thumb-hover !important;
+}
+
+[data-theme='dark'] {
+  .gantt-chart-wrapper {
+    scrollbar-color: @scrollbar-thumb-dark transparent;
+  }
+
+  .gantt-chart-wrapper ::-webkit-scrollbar-thumb,
+  .gantt-chart-wrapper *::-webkit-scrollbar-thumb {
+    background-color: @scrollbar-thumb-dark !important;
+  }
+
+  .gantt-chart-wrapper ::-webkit-scrollbar-thumb:hover,
+  .gantt-chart-wrapper *::-webkit-scrollbar-thumb:hover {
+    background-color: @scrollbar-thumb-hover-dark !important;
+  }
+
+  .gantt-chart-wrapper .gantt-station-status-badge--idle {
+    color: #95de64;
+    background: rgba(82, 196, 26, 0.16);
+    border-color: rgba(82, 196, 26, 0.45);
+  }
+
+  .gantt-chart-wrapper .gantt-station-status-badge--busy {
+    color: #ffc53d;
+    background: rgba(250, 173, 20, 0.16);
+    border-color: rgba(250, 173, 20, 0.45);
+  }
+
+  .gantt-chart-wrapper .gantt-station-status-badge--conflict {
+    color: #ff7875;
+    background: rgba(255, 77, 79, 0.16);
+    border-color: rgba(255, 77, 79, 0.45);
+  }
+
+  .gantt-chart-wrapper .gantt-station-status-badge--default {
+    color: var(--ant-color-text-tertiary, rgba(255, 255, 255, 0.45));
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--ant-color-border, #424242);
+  }
+}
+
+/* 隐藏轨道两侧的箭头按钮 */
+.gantt-chart-wrapper ::-webkit-scrollbar-button,
+.gantt-chart-wrapper *::-webkit-scrollbar-button {
+  display: none !important;
+}
+
+/* 角落透明 */
+.gantt-chart-wrapper ::-webkit-scrollbar-corner,
+.gantt-chart-wrapper *::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+/* 任务标签：第一行产品名，第二行工单号（小字） */
+.gantt-chart-wrapper .gantt-task-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  min-width: 0;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.gantt-chart-wrapper .gantt-task-label-primary {
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-chart-wrapper .gantt-task-label-code {
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.82;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-chart-wrapper .gantt-task-label--station-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.gantt-chart-wrapper .gantt-task-label--station-row .gantt-task-label-primary {
+  flex: 1;
+  min-width: 0;
+}
+
+.gantt-chart-wrapper .gantt-station-status-badge {
+  flex-shrink: 0;
+  max-width: 68px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+  border-radius: @scheduling-radius-sm;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-chart-wrapper .gantt-station-status-badge--count {
+  min-width: 16px;
+  max-width: 28px;
+  padding: 0 5px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 空闲：可用产能 */
+.gantt-chart-wrapper .gantt-station-status-badge--idle {
+  color: #389e0d;
+  background: #f6ffed;
+  border-color: #b7eb8f;
+}
+
+/* 已排工序：占用中（琥珀色，与右侧蓝色工序条区分） */
+.gantt-chart-wrapper .gantt-station-status-badge--busy {
+  color: #d48806;
+  background: #fff7e6;
+  border-color: #ffd591;
+}
+
+/* 冲突：需处理 */
+.gantt-chart-wrapper .gantt-station-status-badge--conflict {
+  color: #cf1322;
+  background: #fff1f0;
+  border-color: #ffa39e;
+}
+
+.gantt-chart-wrapper .gantt-station-status-badge--default {
+  color: #8c8c8c;
+  background: #fafafa;
+  border-color: #d9d9d9;
+}
+
+/* 左侧工位列表 */
+.gantt-chart-wrapper .wx-text.wx-pqc08MHU:has(.gantt-task-label) {
+  white-space: normal;
+  overflow: hidden;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.gantt-chart-wrapper .wx-text.wx-pqc08MHU:has(.gantt-task-label--station-row) {
+  align-items: center;
+}
+
+/* 时间轴任务条内标签 */
+.gantt-chart-wrapper .wx-GKbcLEGA.wx-content:has(.gantt-task-label),
+.gantt-chart-wrapper .wx-content:has(.gantt-task-label) {
+  white-space: normal;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.gantt-task-blue .gantt-task-label-code,
+.gantt-task-red .gantt-task-label-code,
+.wx-task.gantt-task-blue .gantt-task-label-code,
+.wx-task.gantt-task-red .gantt-task-label-code {
+  opacity: 0.9;
+}
+
+/* 尝试覆盖任务条颜色：兼容多种 DOM 命名 */
+.gantt-task-yellow,
+.gantt-task-yellow .wx-task,
+.gantt-task-yellow .wx-task-bar,
+.wx-task.gantt-task-yellow,
+.wx-task.gantt-task-yellow .wx-task-bar {
+  background: #fadb14 !important;
+  border-color: #fadb14 !important;
+  color: #1f1f1f !important;
+}
+
+.gantt-task-red,
+.gantt-task-red .wx-task,
+.gantt-task-red .wx-task-bar,
+.wx-task.gantt-task-red,
+.wx-task.gantt-task-red .wx-task-bar {
+  background: #ff4d4f !important;
+  border-color: #ff4d4f !important;
+  color: #fff !important;
+}
+
+.gantt-task-blue,
+.gantt-task-blue .wx-task,
+.gantt-task-blue .wx-task-bar,
+.wx-task.gantt-task-blue,
+.wx-task.gantt-task-blue .wx-task-bar {
+  background: #1677ff !important;
+  border-color: #1677ff !important;
+  color: #fff !important;
+}
+
+.gantt-task-gray,
+.gantt-task-gray .wx-task,
+.gantt-task-gray .wx-task-bar,
+.wx-task.gantt-task-gray,
+.wx-task.gantt-task-gray .wx-task-bar {
+  background: #bfbfbf !important;
+  border-color: #bfbfbf !important;
+  color: #1f1f1f !important;
+}

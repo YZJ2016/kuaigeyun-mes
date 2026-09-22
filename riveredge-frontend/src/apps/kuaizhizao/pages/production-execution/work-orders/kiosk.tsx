@@ -1,0 +1,1499 @@
+/**
+ * 高级生产终端 (Premium Production Terminal)
+ * 
+ * Author: Antigravity
+ * Date: 2026-02-05
+ */
+
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'
+import { 
+  Card, Button, Tag, message, Input, Empty, 
+  List, Typography, Form, Progress, Tooltip, Tabs, theme, Alert, Segmented, Modal, Radio, Select, Divider, Table
+} from 'antd';
+import { 
+  PlayCircleOutlined, 
+  CheckCircleOutlined,
+  ReloadOutlined,
+  SwapOutlined,
+  PauseCircleOutlined,
+  AlertOutlined,
+  StopOutlined,
+  UnorderedListOutlined,
+  FileProtectOutlined,
+  HistoryOutlined,
+  PrinterOutlined,
+  QrcodeOutlined,
+} from '@ant-design/icons';
+
+import { HMI_DESIGN_TOKENS, HMI_LAYOUT, TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { PremiumTerminalTemplate } from '../../../../../components/layout-templates/hmi';
+import {
+  touchButtonProps,
+  touchCardProps,
+  TouchListItem,
+  WorkOrderStatusTag,
+} from '../../../../../components/touch-terminal';
+import { workOrderApi, reportingApi, warehouseApi } from '../../../services/production';
+import StationBinder, { getStationStorageKey, type StationInfo } from '../../../components/StationBinder';
+import ReportingParameterForm from './components/ReportingParameterForm';
+import MaterialBindingModal from './components/MaterialBindingModal';
+import BarcodePrintModal from './components/BarcodePrintModal';
+import ProcessInspectionModal from './components/ProcessInspectionModal';
+import NumericKeypad from './components/NumericKeypad';
+import DocumentCenter, { type DocumentCenterTabKey } from './components/DocumentCenter';
+import { getToken } from '../../../../../utils/auth';
+import { getAvatarText } from '../../../../../utils/avatar';
+import { getCurrentUser, CurrentUser } from '../../../../../services/auth';
+import dayjs from 'dayjs';
+import { formatDateTime } from '../../../../../utils/format';
+import { formatOperationInspectionSummary, getOperationCardPhase, getOperationProgressPercent, getOperationQualityMetrics, getProcessInspectionCardStatus, isOperationEffectivelyCompleted } from '../../../utils/workOrderReporting';
+import { fetchKuaiiotFillContext } from '../../../../../utils/kuaiiotFillContext';
+import { equipmentApi } from '../../../services/equipment';
+import { convertProductionInputToBaseQty } from '../../../../../utils/materialScenarioUnit';
+
+const { Search } = Input;
+const { Text, Title } = Typography;
+
+interface WorkOrder {
+  id?: number;
+  code?: string;
+  name?: string;
+  product_id?: number;
+  product_code?: string;
+  product_name?: string;
+  quantity?: number;
+  status?: string;
+  priority?: string;
+  completed_quantity?: number;
+  unqualified_quantity?: number;
+  qualified_quantity?: number;
+  planned_start_date?: string;
+  planned_end_date?: string;
+  work_center_id?: number;
+  work_center_name?: string;
+  product_unit?: string;
+  base_unit?: string;
+  unit_to_base_factor?: number;
+  is_frozen?: boolean;
+  freeze_reason?: string | null;
+}
+
+const WORK_ORDER_PAGE_SIZE = 50;
+
+const operationHasSimpleInspection = (operation: any) => {
+  if (!operation) return false;
+  const mode = operation.inspection_mode ?? operation.inspectionMode;
+  if (mode === 'simple') return true;
+  const dt = operation.defect_types ?? operation.defectTypes;
+  return Array.isArray(dt) && dt.length > 0;
+};
+
+const WorkOrdersKioskPage: React.FC = () => {
+  const { t } = useTranslation()
+    const { token } = theme.useToken();
+    const [loading, setLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMoreWorkOrders, setHasMoreWorkOrders] = useState(true);
+    const [workOrderSkip, setWorkOrderSkip] = useState(0);
+    const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+    const [searchKeyword, setSearchKeyword] = useState('');
+    const [stationInfo, setStationInfo] = useState<StationInfo | null>(null);
+    const [userInfo, setUserInfo] = useState<CurrentUser | null>(null);
+    
+    // 选中状态
+    const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(null);
+    const [operations, setOperations] = useState<any[]>([]);
+    const [activeOperation, setActiveOperation] = useState<any>(null);
+    const [opsLoading, setOpsLoading] = useState(false);
+    const [form] = Form.useForm();
+    const [isPaused, setIsPaused] = useState(false);
+    const [recentOps, setRecentOps] = useState<Array<{ time: string; action: string; detail?: string; operator?: string }>>([]);
+    const [middleTabKey, setMiddleTabKey] = useState<string>('operation');
+    const [docSubTabKey, setDocSubTabKey] = useState<DocumentCenterTabKey>('sop');
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [focusedNumField, setFocusedNumField] = useState<'qualified_quantity' | 'unqualified_quantity' | null>(null);
+    // 不良品弹窗：输入不合格数>0时弹出
+    const [defectModalVisible, setDefectModalVisible] = useState(false);
+    const [defectTypeOptions, setDefectTypeOptions] = useState<Array<{ code: string; name: string }>>([]);
+    const [selectedDefectType, setSelectedDefectType] = useState<string | null>(null);
+    // 作业指导书弹窗
+    const [sopModalVisible, setSopModalVisible] = useState(false);
+    const [sopModalTab, setSopModalTab] = useState<'static' | 'guided'>('static');
+    // 报工参数弹窗
+    const [paramModalVisible, setParamModalVisible] = useState(false);
+    const [reportingParameters, setReportingParameters] = useState<Array<{ id: string; name: string; type: 'string' | 'number' | 'boolean'; defaultValue?: unknown }>>([
+        { id: 'quality', name: '首检', type: 'boolean', defaultValue: true },
+    ]);
+    // 物料绑定弹窗
+    const [materialBindingModalVisible, setMaterialBindingModalVisible] = useState(false);
+    const [lastReportingRecordId, setLastReportingRecordId] = useState<string | number | null>(null);
+    // 条码打印弹窗
+    const [barcodePrintModalVisible, setBarcodePrintModalVisible] = useState(false);
+    const [barcodePrintLevel, setBarcodePrintLevel] = useState<'work_order' | 'operation'>('operation');
+    // 工序检验弹窗
+    const [processInspectionModalVisible, setProcessInspectionModalVisible] = useState(false);
+    // 工单列表筛选：全部/只看本机台/只看当前用户
+    const [workOrderFilter, setWorkOrderFilter] = useState<'all' | 'station' | 'currentUser'>('all');
+
+    useEffect(() => {
+        // Load User Info
+        getCurrentUser().then(user => {
+             setUserInfo(user);
+        }).catch(err => {
+             console.error('Failed to load user info', err);
+             // Optionally redirect to login if critical
+        });
+
+        const storageKey = getStationStorageKey();
+        const savedStation = localStorage.getItem(storageKey);
+        if (savedStation) {
+            try {
+                const info = JSON.parse(savedStation);
+                setStationInfo(info);
+                loadWorkOrders((info as any).workCenterId);
+            } catch (e) {
+                localStorage.removeItem(storageKey);
+            }
+        }
+    }, []);
+
+    // 不良品弹窗打开时：只显示当前工序关联的不良品项
+    useEffect(() => {
+        if (!defectModalVisible || !activeOperation) return;
+        const opDefects = activeOperation?.defect_types ?? activeOperation?.defectTypes ?? [];
+        setDefectTypeOptions(opDefects.map((d: any) => ({ code: d.code, name: d.name })));
+    }, [defectModalVisible, activeOperation]);
+
+
+    const loadWorkOrders = async (
+        workCenterId?: number,
+        filterOverride?: 'all' | 'station' | 'currentUser',
+        options?: { append?: boolean },
+    ) => {
+        const append = Boolean(options?.append);
+        if (append) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+            setHasMoreWorkOrders(true);
+            setWorkOrderSkip(0);
+        }
+        setLoadError(null);
+        try {
+            const effectiveFilter = filterOverride ?? workOrderFilter;
+            const skip = append ? workOrderSkip : 0;
+            const params: any = {
+                skip,
+                limit: WORK_ORDER_PAGE_SIZE,
+                include_readiness: false,
+            };
+            // 仅在选择「只看本机台」时按工作中心筛选；「全部」时显示所有工单（含未设置工作中心的）
+            if (effectiveFilter === 'station' && workCenterId) params.work_center_id = workCenterId;
+            if (effectiveFilter === 'currentUser' && userInfo?.id) params.assigned_worker_id = userInfo.id;
+            const response = await workOrderApi.list(params);
+            const data = response?.data ?? (Array.isArray(response) ? response : []);
+            const list = Array.isArray(data) ? data : [];
+            setWorkOrderSkip(skip + list.length);
+            setHasMoreWorkOrders(list.length >= WORK_ORDER_PAGE_SIZE);
+            const filtered = list.filter(
+                (wo: WorkOrder) =>
+                    ['released', 'in_progress'].includes(wo.status || '') &&
+                    wo.is_frozen !== true,
+            );
+            setWorkOrders((prev) => (append ? [...prev, ...filtered] : filtered));
+
+            if (selectedWorkOrder) {
+                const updated = list.find((wo: WorkOrder) => wo.id === selectedWorkOrder.id);
+                if (updated) setSelectedWorkOrder(updated);
+            }
+        } catch (error) {
+            console.error(error);
+            setLoadError('加载工单列表失败，请重试');
+            message.error(t('app.kuaizhizao.workOrder.kioskLoadListFailed'));
+        } finally {
+            setLoading(false);
+            setLoadingMore(false);
+        }
+    };
+
+    const handleSelectWorkOrder = async (workOrder: WorkOrder) => {
+        if (selectedWorkOrder?.id === workOrder.id) return;
+        setSelectedWorkOrder(workOrder);
+        setOperations([]);
+        setActiveOperation(null);
+        
+        if (workOrder.id) {
+            setOpsLoading(true);
+            try {
+                // Fetch real operations
+                const ops = await workOrderApi.getOperations(workOrder.id.toString());
+                // Sort ops by sequence if needed, usually backend returns sorted or we trust list order
+                const sortedOps = Array.isArray(ops) ? ops.sort((a: any, b: any) => a.sequence - b.sequence) : [];
+                setOperations(sortedOps);
+                
+                // Find active operation: first 'processing', then 'pending', else last one?
+                // Logic: Current active is the one being worked on, or the next available.
+                const current = sortedOps.find((o: any) => o.status === 'processing') || sortedOps.find((o: any) => o.status === 'pending');
+                setActiveOperation(current || sortedOps[0]);
+            } catch (error) {
+                console.error(error);
+                message.error(t('app.kuaizhizao.workOrder.kioskLoadOpsFailed'));
+            } finally {
+                setOpsLoading(false);
+            }
+        }
+    };
+
+    const handleSwitchStation = () => {
+        localStorage.removeItem(getStationStorageKey());
+        setStationInfo(null);
+        setWorkOrders([]);
+        setSelectedWorkOrder(null);
+    };
+
+    const addRecentOp = (action: string, detail?: string) => {
+        const time = new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const operator = userInfo?.full_name || userInfo?.username || '操作员';
+        setRecentOps(prev => [{ time, action, detail, operator }, ...prev].slice(0, 20));
+    };
+
+    const handleStart = async () => {
+        if (!selectedWorkOrder?.id || !activeOperation?.id) return;
+        if (selectedWorkOrder.is_frozen === true) {
+            message.warning(
+                t('app.kuaizhizao.workOrder.kioskFrozenCannotOperate', {
+                    reason: selectedWorkOrder.freeze_reason || '—',
+                }),
+            );
+            return;
+        }
+        const st = String(selectedWorkOrder.status || '').trim().toLowerCase();
+        if (st !== 'released' && st !== 'in_progress' && st !== '已下达' && st !== '执行中') {
+            message.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'));
+            return;
+        }
+        try {
+            setOpsLoading(true);
+            // Call startOperation API
+            await workOrderApi.startOperation(selectedWorkOrder.id.toString(), activeOperation.id);
+            addRecentOp('开始执行', activeOperation.operation_name || activeOperation.name);
+            message.success(t('app.kuaizhizao.workOrder.kioskOpStarted'));
+            
+            // Refresh operations and work order list status
+            const ops = await workOrderApi.getOperations(selectedWorkOrder.id.toString());
+            setOperations(ops || []);
+            const updatedOp = ops.find((o: any) => o.id === activeOperation.id);
+            if (updatedOp) setActiveOperation(updatedOp);
+
+            loadWorkOrders(stationInfo?.workCenterId);
+        } catch (error: any) {
+            console.error(error);
+            const detail = error?.response?.data?.detail || error?.message || '';
+            if (typeof detail === 'string' && (detail.includes('需要先下达') || detail.includes('只能开始已下达'))) {
+                message.warning(t('app.kuaizhizao.workOrder.msgReleaseBeforeStart'));
+            } else {
+                message.error(t('common.operationFailed'));
+            }
+        } finally {
+            setOpsLoading(false);
+        }
+    };
+
+    const handleQuickPick = async () => {
+        if (!selectedWorkOrder?.id) {
+            message.warning('请先选择工单');
+            return;
+        }
+        try {
+            setLoading(true);
+            await warehouseApi.productionPicking.quickPick(selectedWorkOrder.id.toString());
+            message.success(t('app.kuaizhizao.workOrder.kioskOneClickPickingSuccess'));
+        } catch (error) {
+            console.error(error);
+            message.error('领料失败');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleOpenParamModal = async () => {
+        setParamModalVisible(true);
+        const assignedEquipmentId = activeOperation?.assigned_equipment_id;
+        if (!assignedEquipmentId) return;
+        try {
+            const eqRes = await equipmentApi.list({ limit: 1000 });
+            const equipment = (eqRes.items ?? []).find((item: { id?: number }) => item.id === assignedEquipmentId) as
+                | { uuid?: string }
+                | undefined;
+            if (!equipment?.uuid) return;
+            const fillContext = await fetchKuaiiotFillContext({
+                context: 'reporting',
+                equipment_uuid: equipment.uuid,
+            });
+            if (!fillContext?.values) return;
+            const dynamicParams = Object.entries(fillContext.values).map(([id, value]) => ({
+                id,
+                name: id,
+                type: typeof value === 'boolean' ? 'boolean' as const : typeof value === 'number' ? 'number' as const : 'string' as const,
+                defaultValue: value,
+            }));
+            if (dynamicParams.length > 0) {
+                setReportingParameters(dynamicParams);
+                form.setFieldsValue(fillContext.values);
+            }
+        } catch {
+            // kuaiiot 未安装或无绑定设备时保持默认参数
+        }
+    };
+
+    const handlePrintWorkOrder = () => {
+        if (!selectedWorkOrder?.id) {
+            message.warning('请先选择工单');
+            return;
+        }
+        const url = workOrderApi.getPrintUrl(selectedWorkOrder.id.toString());
+        window.open(url, '_blank');
+    };
+
+    const handleReport = async () => {
+        try {
+            if (selectedWorkOrder?.is_frozen === true) {
+                message.warning(
+                    t('app.kuaizhizao.workOrder.kioskFrozenCannotOperate', {
+                        reason: selectedWorkOrder.freeze_reason || '—',
+                    }),
+                );
+                return;
+            }
+            const values = await form.validateFields();
+            if (!activeOperation || !selectedWorkOrder) return;
+            const qualified = Number(values.qualified_quantity) || 0;
+            const unqualified = Number(values.unqualified_quantity) || 0;
+            const qty = qualified + unqualified;
+            if (qty <= 0) {
+                message.warning(t('app.kuaizhizao.workOrder.kioskQtySumMustBePositive'));
+                return;
+            }
+            if (unqualified > 0 && defectTypeOptions.length > 0 && !selectedDefectType) {
+                message.warning(t('app.kuaizhizao.workOrder.kioskSelectDefectType'));
+                return;
+            }
+            setOpsLoading(true);
+            const sopParams = Object.fromEntries(
+                Object.entries(values).filter(([k]) => !['qualified_quantity', 'unqualified_quantity', 'work_hours', 'remarks'].includes(k))
+            );
+            
+            const qtyContext = selectedWorkOrder;
+            const reportedQtyBase = convertProductionInputToBaseQty(qty, qtyContext);
+            const qualifiedQtyBase = convertProductionInputToBaseQty(qualified, qtyContext);
+            const unqualifiedQtyBase = convertProductionInputToBaseQty(unqualified, qtyContext);
+
+            const created = await reportingApi.create({
+                work_order_id: selectedWorkOrder.id!,
+                work_order_code: selectedWorkOrder.code || '',
+                work_order_name: selectedWorkOrder.name || selectedWorkOrder.product_name || '',
+                operation_id: activeOperation.operation_id ?? activeOperation.id,
+                operation_code: activeOperation.operation_code || '',
+                operation_name: activeOperation.operation_name || activeOperation.name || '',
+                worker_id: userInfo?.id ?? 0,
+                worker_name: userInfo?.full_name || userInfo?.username || '操作员',
+                reported_quantity: reportedQtyBase,
+                qualified_quantity: qualifiedQtyBase,
+                unqualified_quantity: unqualifiedQtyBase,
+                work_hours: Number(values.work_hours) || 0,
+                status: 'pending',
+                reported_at: new Date().toISOString(),
+                remarks: values.remarks,
+                sop_parameters: Object.keys(sopParams).length ? sopParams : undefined,
+            });
+            
+            // 不合格数 > 0 且已选不良品类型时，创建不良品记录
+            if (
+                unqualified > 0 &&
+                selectedDefectType &&
+                created?.id &&
+                operationHasSimpleInspection(activeOperation)
+            ) {
+                const selectedDefect = defectTypeOptions.find((opt) => opt.code === selectedDefectType);
+                try {
+                    await reportingApi.recordDefect(created.id.toString(), {
+                        defect_quantity: unqualifiedQtyBase,
+                        defect_type: selectedDefectType,
+                        defect_reason: selectedDefect?.name || selectedDefectType,
+                        disposition: 'quarantine',
+                    });
+                } catch (defectErr: unknown) {
+                    console.error('创建不良品记录失败', defectErr);
+                    const detail = defectErr instanceof Error ? defectErr.message : String(defectErr);
+                    message.warning(
+                        detail
+                            ? `${t('app.kuaizhizao.workReporting.defectCreateAfterReportFailed')}：${detail}`
+                            : t('app.kuaizhizao.workReporting.defectCreateAfterReportFailed'),
+                    );
+                }
+            }
+            
+            addRecentOp('完成报工', `合格 ${qualified} / 不合格 ${unqualified}`);
+            message.success('报工成功');
+            form.resetFields();
+            setSelectedDefectType(null);
+            
+            if (created?.id) {
+                setLastReportingRecordId(created.id);
+                // Optionally auto-open material binding
+                // setMaterialBindingModalVisible(true);
+            }
+            
+            // Refresh
+            loadWorkOrders(stationInfo?.workCenterId);
+            if (selectedWorkOrder.id) {
+                const ops = await workOrderApi.getOperations(selectedWorkOrder.id.toString());
+                setOperations(ops || []);
+                const updatedOp = ops.find((o: any) => o.id === activeOperation.id);
+                if (updatedOp) setActiveOperation(updatedOp);
+            }
+            
+        } catch (error) {
+            console.error(error);
+            // validate error
+        } finally {
+            setOpsLoading(false);
+        }
+    };
+
+    const STATUS_LABELS: Record<string, string> = {
+        draft: '草稿', released: '已下达', in_progress: '生产中', completed: '已完成', cancelled: '已取消',
+        pending: '待执行', processing: '执行中',
+    };
+    const PRIORITY_LABELS: Record<string, string> = {
+        low: '低', normal: '普通', high: '高', urgent: '紧急',
+    };
+    const formatDate = (d?: string) => d ? formatDateTime(d, 'MM-DD HH:mm') : '—';
+
+    const filteredWorkOrders = workOrders.filter(wo => {
+        const matchSearch = !searchKeyword ||
+            wo.code?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+            wo.product_name?.toLowerCase().includes(searchKeyword.toLowerCase());
+        if (!matchSearch) return false;
+        if (workOrderFilter === 'station' && stationInfo?.workCenterId != null) {
+            return wo.work_center_id === stationInfo.workCenterId;
+        }
+        return true;
+    });
+
+    const renderLeftPanel = () => (
+        <Card
+            {...touchCardProps({ fill: true, className: 'hmi-kiosk-panel' })}
+            title={
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />
+                    工单列表
+                </span>
+            }
+            extra={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontWeight: 400 }}>共 {filteredWorkOrders.length} 项</span>}
+            style={{
+                width: HMI_LAYOUT.LEFT_PANEL_WIDTH,
+                minWidth: HMI_LAYOUT.LEFT_PANEL_WIDTH,
+                height: '100%',
+            }}
+            styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } }}
+        >
+            <div style={{ padding: HMI_DESIGN_TOKENS.PANEL_PADDING, borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, flexShrink: 0 }}>
+                <Select
+                    value={workOrderFilter}
+                    getPopupContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
+                    onChange={(v) => {
+                        setWorkOrderFilter(v);
+                        loadWorkOrders(stationInfo?.workCenterId, v);
+                    }}
+                    options={[
+                        { label: t('app.kuaizhizao.workOrder.formSegmentAll'), value: 'all' },
+                        { label: t('app.kuaizhizao.workOrder.kioskFilterStation'), value: 'station' },
+                        { label: t('app.kuaizhizao.workOrder.kioskFilterCurrentUser'), value: 'currentUser' },
+                    ]}
+                    style={{ width: '100%', marginBottom: 12 }}
+                    className="kiosk-work-order-filter-select"
+                    classNames={{ popup: "kiosk-work-order-filter-dropdown" }}
+                />
+                <Search
+                    placeholder="搜索编号或产品"
+                    onChange={e => setSearchKeyword(e.target.value)}
+                    style={{ background: HMI_DESIGN_TOKENS.BG_CARD, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS }}
+                />
+            </div>
+            <div className="kiosk-work-order-list hmi-kiosk-panel__scroll" style={{ padding: HMI_DESIGN_TOKENS.PANEL_PADDING }}>
+                <style>{`
+                    .kiosk-work-order-filter-select.ant-select .ant-select-selector,
+                    .kiosk-work-order-filter-select.ant-select-single .ant-select-selection-item {
+                        font-size: 14px !important;
+                        font-weight: 400 !important;
+                        color: ${HMI_DESIGN_TOKENS.TEXT_TERTIARY} !important;
+                    }
+                    .kiosk-work-order-filter-dropdown .ant-select-item { font-size: 14px !important; font-weight: 400 !important; color: ${HMI_DESIGN_TOKENS.TEXT_TERTIARY} !important; }
+                `}</style>
+                {loading ? (
+                    <div style={{ textAlign: 'center', padding: 24 }}>加载中…</div>
+                ) : filteredWorkOrders.length === 0 ? (
+                    <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>选择工位后加载工单</span>}
+                    />
+                ) : (
+                    <>
+                    {filteredWorkOrders.map((wo) => {
+                        const isSelected = selectedWorkOrder?.id === wo.id;
+                        const pct = Math.round(((wo.completed_quantity || 0) / (wo.quantity || 1)) * 100);
+                        const isComplete = wo.status === 'completed';
+                        return (
+                            <TouchListItem
+                                key={wo.id ?? wo.code}
+                                selected={isSelected}
+                                onClick={() => handleSelectWorkOrder(wo)}
+                                title={
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                        <span>{wo.code}</span>
+                                        <WorkOrderStatusTag status={wo.status}>{STATUS_LABELS[wo.status || ''] || wo.status}</WorkOrderStatusTag>
+                                    </div>
+                                }
+                                subtitle={
+                                    <>
+                                        <div>{wo.product_name}</div>
+                                        <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap', fontSize: 12, color: HMI_DESIGN_TOKENS.TEXT_TERTIARY }}>
+                                            {wo.work_center_name && <span>{wo.work_center_name}</span>}
+                                            {wo.priority && wo.priority !== 'normal' && <Tag style={{ margin: 0, fontSize: 11 }}>{PRIORITY_LABELS[wo.priority] || wo.priority}</Tag>}
+                                            <span>{formatDate(wo.planned_start_date)} ~ {formatDate(wo.planned_end_date)}</span>
+                                        </div>
+                                        <Progress
+                                            percent={pct}
+                                            size="small"
+                                            strokeColor={isComplete ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.STATUS_INFO}
+                                            style={{ marginTop: 8, marginBottom: 0 }}
+                                        />
+                                    </>
+                                }
+                            />
+                        );
+                    })}
+                    <div style={{ textAlign: 'center', padding: '12px 0 4px' }}>
+                        {hasMoreWorkOrders ? (
+                            <Button
+                                size="large"
+                                loading={loadingMore}
+                                onClick={() => loadWorkOrders(stationInfo?.workCenterId, undefined, { append: true })}
+                            >
+                                {t('app.kuaizhizao.workOrder.kioskLoadMore')}
+                            </Button>
+                        ) : (
+                            <span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
+                                {t('app.kuaizhizao.workOrder.kioskNoMore')}
+                            </span>
+                        )}
+                    </div>
+                    </>
+                )}
+            </div>
+        </Card>
+    );
+
+    const currentStatusLabel = !selectedWorkOrder
+        ? '待选择'
+        : (activeOperation?.status === 'processing' ? '执行中' : activeOperation?.status === 'completed' ? '已完成' : '待执行');
+
+    const kioskInspectionSummary = (() => {
+        if (!activeOperation) return '—';
+        const summary = formatOperationInspectionSummary(activeOperation, {
+            none: t('app.kuaizhizao.workOrder.opCard.inspectionNone'),
+            simple: t('app.kuaizhizao.workOrder.opCard.inspectionSimple'),
+            planFallback: t('app.kuaizhizao.workOrder.opCard.inspectionPlanFallback'),
+        });
+        const qcStatus = getProcessInspectionCardStatus(activeOperation);
+        if (!qcStatus) return summary;
+        return `${summary} - ${t(`app.kuaizhizao.workOrder.opCard.processInspectionStatus.${qcStatus}`)}`;
+    })();
+
+    const panelStyle: React.CSSProperties = {
+        background: HMI_DESIGN_TOKENS.BG_CARD,
+        borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+        border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+        padding: HMI_DESIGN_TOKENS.PANEL_PADDING,
+        height: '100%',
+        minHeight: 0,
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+    };
+
+    const docCenterProps = {
+        sopContent: selectedWorkOrder
+            ? `操作指引：${selectedWorkOrder.code}${activeOperation ? `\n工序：${activeOperation.name || activeOperation.operation_name}` : ''}`
+            : undefined,
+        drawings: selectedWorkOrder ? [{ id: '1', name: '图纸.png', url: '' }] : [],
+    };
+
+    const renderWipTab = () => {
+        if (!selectedWorkOrder) {
+            return (
+                <div style={{ padding: 24, textAlign: 'center' }}>
+                    <Empty 
+                        description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY }}>当前工位暂无正在执行的工单，可在左侧选择工单查看进进度。</span>}
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                </div>
+            );
+        }
+
+        // Mock WIP data based on work order operations
+        const wipData = operations.map((op, idx) => ({
+            key: op.id,
+            sequence: idx + 1,
+            name: op.name || op.operation_name,
+            input: selectedWorkOrder.quantity || 0,
+            output: op.completed_quantity || 0,
+            scrap: op.unqualified_quantity || 0,
+            yield: op.completed_quantity ? Math.round(((Number(op.completed_quantity) - (Number(op.unqualified_quantity) || 0)) / (Number(selectedWorkOrder.quantity) || 1)) * 100) : 0,
+            status: op.status,
+        }));
+
+        return (
+            <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16, height: '100%', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Title level={4} style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, margin: 0 }}>工序流转进度 - {selectedWorkOrder.code}</Title>
+                    <Tag color="blue">在制数量: {Math.max(0, (Number(selectedWorkOrder.quantity || 0) - (Number(selectedWorkOrder.completed_quantity) || 0)))}</Tag>
+                </div>
+                
+                <Table
+                    dataSource={wipData}
+                    pagination={false}
+                    size="small"
+                    bordered
+                    className="kiosk-wip-table"
+                    columns={[
+                        { title: '序号', dataIndex: 'sequence', width: 60, align: 'center' },
+                        { title: '工序名称', dataIndex: 'name', minWidth: 120 },
+                        { title: '投入数', dataIndex: 'input', width: 80, align: 'right' },
+                        { title: t('app.kuaizhizao.workOrder.kioskOutputQty'), dataIndex: 'output', width: 80, align: 'right', render: (val: number) => <span style={{ color: HMI_DESIGN_TOKENS.STATUS_OK, fontWeight: 600 }}>{val}</span> },
+                        { title: '不良数', dataIndex: 'scrap', width: 80, align: 'right', render: (val: number) => <span style={{ color: val > 0 ? HMI_DESIGN_TOKENS.STATUS_ALARM : HMI_DESIGN_TOKENS.TEXT_TERTIARY }}>{val}</span> },
+                        { title: t('app.kuaizhizao.workOrder.kioskPassRate'), dataIndex: 'yield', width: 80, align: 'right', render: (val: number) => `${val}%` },
+                    ]}
+                    rowClassName={(record: any) => record.key === activeOperation?.id ? 'kiosk-wip-row-active' : ''}
+                />
+                
+                <style>{`
+                    .kiosk-wip-table .ant-table { background: transparent !important; color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important; }
+                    .kiosk-wip-table .ant-table-thead > tr > th { background: rgba(255,255,255,0.05) !important; color: ${HMI_DESIGN_TOKENS.TEXT_SECONDARY} !important; border-bottom: 1px solid ${HMI_DESIGN_TOKENS.BORDER} !important; }
+                    .kiosk-wip-table .ant-table-tbody > tr > td { border-bottom: 1px solid ${HMI_DESIGN_TOKENS.BORDER} !important; }
+                    .kiosk-wip-table .ant-table-cell { font-size: 16px !important; padding: 16px 12px !important; }
+                    .kiosk-wip-row-active { background: rgba(22, 119, 255, 0.1) !important; }
+                `}</style>
+            </div>
+        );
+    };
+
+    const renderOperationTab = () => {
+        if (!selectedWorkOrder) {
+            return (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}>
+                            <UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE, color: HMI_DESIGN_TOKENS.STATUS_INFO }} />
+                            请选择工单开始
+                        </div>
+                        <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskSelectWorkOrder')}</div>
+                    </div>
+                </div>
+            );
+        }
+
+        const jobCardAccent = selectedWorkOrder.status === 'in_progress' || selectedWorkOrder.status === 'processing' ? HMI_DESIGN_TOKENS.STATUS_WARNING : HMI_DESIGN_TOKENS.STATUS_INFO;
+
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: HMI_DESIGN_TOKENS.SECTION_GAP, flex: 1, minHeight: 0 }}>
+                    <Card
+                        style={{
+                            background: HMI_DESIGN_TOKENS.BG_CARD,
+                            border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                        }}
+                        styles={{ body: { padding: 16 } }}
+                    >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <Text style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12 }}>正在执行</Text>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                                        <Title level={2} style={{ margin: 0, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_TITLE_MIN }}>{selectedWorkOrder.code}</Title>
+                                        <Tag color={jobCardAccent}>{selectedWorkOrder.product_name}</Tag>
+                                    </div>
+                                </div>
+                            </div>
+                            {/* 工序圆环：不换行，超宽横向滑动 */}
+                            {operations.length > 0 && (
+                                <div style={{ overflowX: 'auto', overflowY: 'hidden', margin: '0 -8px', WebkitOverflowScrolling: 'touch' }}>
+                                    <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 16, padding: '0 8px', minWidth: 'min-content' }}>
+                                        {operations.map((op, idx) => {
+                                            const isActive = op.id === activeOperation?.id;
+                                            const woQty = Number(selectedWorkOrder?.quantity || 0);
+                                            const phase = getOperationCardPhase(op, woQty);
+                                            const isCompleted = phase === 'completed';
+                                            const isPaused = phase === 'paused';
+                                            const isProcessing = phase === 'in_progress' || isPaused;
+                                            const progress = getOperationProgressPercent(op, woQty);
+                                            const strokeColor = isCompleted
+                                              ? HMI_DESIGN_TOKENS.STATUS_OK
+                                              : isPaused
+                                                ? HMI_DESIGN_TOKENS.STATUS_WARNING
+                                                : isProcessing
+                                                  ? HMI_DESIGN_TOKENS.STATUS_WARNING
+                                                  : HMI_DESIGN_TOKENS.STATUS_INFO;
+                                            const opName = op.name || op.operation_name || `工序${idx + 1}`;
+                                            return (
+                                                <Tooltip title={opName} key={op.id}>
+                                                    <div
+                                                        onClick={() => setActiveOperation(op)}
+                                                        style={{
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            alignItems: 'center',
+                                                            cursor: 'pointer',
+                                                            padding: 8,
+                                                            flexShrink: 0,
+                                                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                                                            background: isActive ? (isProcessing ? 'rgba(255,179,0,0.15)' : 'rgba(22,119,255,0.15)') : 'transparent',
+                                                            border: `2px solid ${isActive ? strokeColor : 'transparent'}`,
+                                                        }}
+                                                    >
+                                                        <Progress
+                                                            type="circle"
+                                                            percent={progress}
+                                                            size={64}
+                                                            strokeColor={strokeColor}
+                                                            railColor="rgba(255,255,255,0.1)"
+                                                            showInfo={true}
+                                                            format={(p) => <span style={{ fontSize: 14, fontWeight: 600, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY }}>{p}%</span>}
+                                                        />
+                                                        <div style={{ marginTop: 6, fontSize: 16, color: isActive ? HMI_DESIGN_TOKENS.TEXT_PRIMARY : HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontWeight: isActive ? 600 : 400, whiteSpace: 'nowrap' }}>{opName}</div>
+                                                    </div>
+                                                </Tooltip>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+
+                    <Card
+                        loading={opsLoading}
+                        style={{ flex: 1, minHeight: 0, background: 'rgba(255,255,255,0.04)', border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS }}
+                        styles={{ body: { padding: 24, overflowY: 'auto' } }}
+                    >
+                        {operations.length === 0 ? (
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.msgNoOperations')}</span>} />
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: HMI_DESIGN_TOKENS.SECTION_GAP }}>
+                                {activeOperation ? (
+                                    <>
+                                        {/* 选中工序信息 */}
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, padding: 16, background: HMI_DESIGN_TOKENS.BG_ELEVATED, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                                                <div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>工序名称</div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, fontWeight: 600 }}>{activeOperation.name || activeOperation.operation_name}</div>
+                                                </div>
+                                                <div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>状态</div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
+                                                        {(() => {
+                                                            const phase = getOperationCardPhase(
+                                                                activeOperation,
+                                                                Number(selectedWorkOrder?.quantity || 0),
+                                                            );
+                                                            if (phase === 'completed') return '已完成';
+                                                            if (phase === 'paused') return '已暂停';
+                                                            if (phase === 'in_progress') return '执行中';
+                                                            return '待执行';
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>完成进度</div>
+                                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
+                                                        {activeOperation.reporting_type === 'status'
+                                                            ? (activeOperation.status === 'completed' ? '100%' : '0%')
+                                                            : (() => {
+                                                                const qm = getOperationQualityMetrics(activeOperation);
+                                                                const done = qm.fromInspection
+                                                                    ? qm.qualified
+                                                                    : (activeOperation.completed_quantity ?? 0);
+                                                                return `${done} / ${selectedWorkOrder?.quantity ?? 0}`;
+                                                            })()}
+                                                    </div>
+                                                </div>
+                                                {activeOperation.reporting_type !== 'status' && (() => {
+                                                    const qm = getOperationQualityMetrics(activeOperation);
+                                                    return (
+                                                    <>
+                                                        <div>
+                                                            <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>{t('app.kuaizhizao.workOrder.kioskQualifiedUnqualified')}</div>
+                                                            <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
+                                                                {qm.qualified} / {qm.unqualified}
+                                                            </div>
+                                                        </div>
+                                                        {qm.rate != null && (
+                                                            <div>
+                                                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>{t('app.kuaizhizao.workOrder.kioskPassRate')}</div>
+                                                                <div style={{ color: HMI_DESIGN_TOKENS.STATUS_OK, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, fontWeight: 600 }}>
+                                                                    {qm.rate}%
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                    );
+                                                })()}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<FileProtectOutlined />} onClick={() => { setSopModalTab('static'); setSopModalVisible(true); }}>
+                                                    作业指导书
+                                                </Button>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} onClick={() => void handleOpenParamModal()}>
+                                                    报工参数
+                                                </Button>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!lastReportingRecordId} onClick={() => setMaterialBindingModalVisible(true)}>
+                                                    物料绑定
+                                                </Button>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!activeOperation} onClick={() => { setBarcodePrintLevel('operation'); setBarcodePrintModalVisible(true); }}>
+                                                    条码打印
+                                                </Button>
+                                                <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!activeOperation} onClick={() => setProcessInspectionModalVisible(true)}>
+                                                    工序检验
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <Form form={form} layout="vertical">
+                                        <div style={{ display: 'flex', gap: HMI_DESIGN_TOKENS.SECTION_GAP, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                            <Form.Item name="qualified_quantity" label={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskQualifiedQty')}</Text>} initialValue={0} rules={[{ required: true, message: '请用右侧小键盘输入' }]}>
+                                                <Input
+                                                    type="text"
+                                                    inputMode="none"
+                                                    readOnly
+                                                    onClick={(e) => { e.stopPropagation(); setFocusedNumField('qualified_quantity'); }}
+                                                    style={{
+                                                        height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
+                                                        fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE,
+                                                        textAlign: 'center',
+                                                        background: focusedNumField === 'qualified_quantity' ? HMI_DESIGN_TOKENS.LIST_CARD_SELECTED_BG : HMI_DESIGN_TOKENS.BG_CARD,
+                                                        color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
+                                                        border: `2px solid ${focusedNumField === 'qualified_quantity' ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.BORDER}`,
+                                                        borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                />
+                                            </Form.Item>
+                                            <Form.Item name="unqualified_quantity" label={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskUnqualifiedQty')}</Text>} initialValue={0} rules={[{ required: true, message: '请用右侧小键盘输入' }]}>
+                                                <Input
+                                                    type="text"
+                                                    inputMode="none"
+                                                    readOnly
+                                                    onClick={(e) => { e.stopPropagation(); setFocusedNumField('unqualified_quantity'); }}
+                                                    style={{
+                                                        height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT,
+                                                        fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE,
+                                                        textAlign: 'center',
+                                                        background: focusedNumField === 'unqualified_quantity' ? HMI_DESIGN_TOKENS.LIST_CARD_SELECTED_BG : HMI_DESIGN_TOKENS.BG_CARD,
+                                                        color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
+                                                        border: `2px solid ${focusedNumField === 'unqualified_quantity' ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.BORDER}`,
+                                                        borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                />
+                                            </Form.Item>
+                                            <Form.Item label={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>总数</Text>}>
+                                                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.qualified_quantity !== curr.qualified_quantity || prev.unqualified_quantity !== curr.unqualified_quantity}>
+                                                    {({ getFieldValue }) => {
+                                                        const q = Number(getFieldValue('qualified_quantity')) || 0;
+                                                        const u = Number(getFieldValue('unqualified_quantity')) || 0;
+                                                        return (
+                                                            <div style={{ height: TOUCH_SCREEN_CONFIG.BUTTON_MIN_HEIGHT, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, display: 'flex', alignItems: 'center', justifyContent: 'center', background: HMI_DESIGN_TOKENS.BG_ELEVATED, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS }}>
+                                                                {q + u}
+                                                            </div>
+                                                        );
+                                                    }}
+                                                </Form.Item>
+                                            </Form.Item>
+                                            <Form.Item label={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>&nbsp;</span>}>
+                                                <Button
+                                                    size="large"
+                                                    {...touchButtonProps({
+                                                      variant: 'success',
+                                                      size: 'action',
+                                                      loading: opsLoading,
+                                                      disabled: isWorkOrderFrozen,
+                                                    })}
+                                                    icon={<CheckCircleOutlined />}
+                                                    onClick={handleReport}
+                                                    title={frozenOperateHint}
+                                                >
+                                                    确认报工
+                                                </Button>
+                                            </Form.Item>
+                                        </div>
+                                    </Form>
+                                    </>
+                                ) : (
+                                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, padding: 16, textAlign: 'center' }}>请先选择工序</div>
+                                )}
+                            </div>
+                        )}
+                    </Card>
+            </div>
+        );
+    };
+
+    const renderMiddlePanel = () => (
+        <div className="kiosk-middle-tabs" style={panelStyle} onClick={() => setFocusedNumField(null)}>
+            <style>{`
+                .kiosk-middle-tabs .ant-tabs { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+                .kiosk-middle-tabs .ant-tabs-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+                .kiosk-middle-tabs .ant-tabs-content-holder { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+                .kiosk-middle-tabs .ant-tabs-tabpane { flex: 1; min-height: 0; overflow: hidden; }
+                .kiosk-middle-tabs .ant-tabs-tabpane:not(.ant-tabs-tabpane-active) { display: none !important; }
+                .kiosk-middle-tabs .ant-tabs-tabpane.ant-tabs-tabpane-active { display: flex !important; flex-direction: column; }
+                .kiosk-middle-tabs .ant-tabs-tab { font-size: ${HMI_DESIGN_TOKENS.FONT_CARD_HEADER}px !important; font-weight: 600 !important; color: ${HMI_DESIGN_TOKENS.TEXT_PRIMARY} !important; }
+                .kiosk-middle-tabs .ant-tabs-tab .anticon { font-size: ${HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE}px !important; }
+                .kiosk-middle-tabs .ant-tabs-nav { margin-bottom: 12px !important; padding-top: 0 !important; }
+                .kiosk-middle-tabs .ant-tabs-tab { padding-top: 0 !important; }
+            `}</style>
+            <Tabs
+                activeKey={middleTabKey}
+                onChange={setMiddleTabKey}
+                destroyOnHidden={true}
+                size="large"
+                style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}
+                tabBarStyle={{ marginBottom: 12, paddingTop: 0, borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, minHeight: 40 }}
+                items={[
+                    {
+                        key: 'operation',
+                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}><PlayCircleOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />工单操作</span>,
+                        children: (
+                            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                                {renderOperationTab()}
+                            </div>
+                        ),
+                    },
+                    {
+                        key: 'doc',
+                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}><FileProtectOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />文档</span>,
+                        children: (
+                            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                                <Segmented
+                                    value={docSubTabKey}
+                                    onChange={v => setDocSubTabKey(v as DocumentCenterTabKey)}
+                                    options={[
+                                        { label: t('app.kuaizhizao.workOrder.modalSopTitle'), value: 'sop' },
+                                        { label: '图纸', value: 'drawings' },
+                                        { label: t('app.kuaizhizao.workOrder.kioskDocCode'), value: 'cnc' },
+                                        { label: t('app.kuaizhizao.workOrder.colAttachments'), value: 'attachments' },
+                                    ]}
+                                    style={{ marginBottom: 12, flexShrink: 0, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}
+                                />
+                                <div style={{ flex: 1, minHeight: 0 }}>
+                                    <DocumentCenter {...docCenterProps} singleTab={docSubTabKey} style={{ height: '100%', minWidth: 0 }} />
+                                </div>
+                            </div>
+                        ),
+                    },
+                    {
+                        key: 'wip',
+                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}><UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />{t('app.kuaizhizao.workOrder.kioskTabWip')}</span>,
+                        children: (
+                            <div style={{ flex: 1, minHeight: 0 }}>
+                                {renderWipTab()}
+                            </div>
+                        ),
+                    },
+                ]}
+            />
+        </div>
+    );
+
+    const isRunning = activeOperation?.status === 'processing';
+    const isWorkOrderFrozen = selectedWorkOrder?.is_frozen === true;
+    const frozenOperateHint = isWorkOrderFrozen
+        ? t('app.kuaizhizao.workOrder.kioskFrozenCannotOperate', {
+            reason: selectedWorkOrder?.freeze_reason || '—',
+          })
+        : undefined;
+    const handleStartEnd = () => {
+        if (isRunning) {
+            addRecentOp('结束', activeOperation?.name);
+            message.info('结束操作（可在此接入结束逻辑）');
+        } else {
+            handleStart();
+        }
+    };
+    const handlePauseResume = () => {
+        setIsPaused(p => !p);
+        addRecentOp(isPaused ? '继续' : '暂停');
+        message.info(isPaused ? '已继续' : '已暂停');
+    };
+    const handleCall = () => {
+        addRecentOp('呼叫');
+        message.info('已发起呼叫');
+    };
+
+    const handleKeypadInput = (field: string, action: 'digit' | 'backspace' | 'clear', value?: string) => {
+        const v = form.getFieldValue(field);
+        const str = String(v ?? '');
+        let next: string;
+        if (action === 'clear') next = '0';
+        else if (action === 'backspace') next = str.length <= 1 ? '0' : str.slice(0, -1);
+        else if (value === '.') {
+            if (str.includes('.')) return;
+            next = str === '0' || str === '' ? '0.' : str + '.';
+        } else {
+            next = str === '0' && !str.includes('.') && value !== '0' ? (value ?? '0') : str + (value ?? '0');
+        }
+        form.setFieldValue(field, next === '.' ? '0.' : next);
+        // 不合格数 > 0 时弹出不良品选项
+        if (field === 'unqualified_quantity') {
+            const num = parseFloat(next === '.' ? '0.' : next) || 0;
+            if (num > 0) {
+                setDefectModalVisible(true);
+            } else {
+                setSelectedDefectType(null);
+            }
+        }
+    };
+
+    const showNumericKeypad = middleTabKey === 'operation' && !!selectedWorkOrder && !!activeOperation && !!focusedNumField;
+
+    const renderRightPanel = () => (
+        <div style={panelStyle}>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                {showNumericKeypad ? (
+                    <>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600, marginBottom: 12 }}>
+                            数字输入
+                        </span>
+                        <div style={{ flex: 1, minHeight: 0 }}>
+                            <NumericKeypad
+                                focusedField={focusedNumField}
+                                onInput={handleKeypadInput}
+                                onSelectField={(k) => setFocusedNumField(k as 'qualified_quantity' | 'unqualified_quantity')}
+                                fields={[
+                                    { key: 'qualified_quantity', label: t('app.kuaizhizao.workOrder.kioskQualifiedQty') },
+                                    { key: 'unqualified_quantity', label: t('app.kuaizhizao.workOrder.kioskUnqualifiedQty') },
+                                ]}
+                            />
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600, marginBottom: 12 }}>
+                            <HistoryOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />
+                            最近操作记录
+                        </span>
+                        <div style={{ flex: 1, overflowY: 'auto', background: 'rgba(255,255,255,0.04)', borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS, border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, padding: HMI_DESIGN_TOKENS.PANEL_PADDING }}>
+                            {recentOps.length === 0 ? (
+                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>暂无记录</span>} style={{ marginTop: 24 }} />
+                            ) : (
+                                <List
+                                    size="small"
+                                    dataSource={recentOps}
+                                    split={false}
+                                    renderItem={(item, idx) => (
+                                        <List.Item
+                                            style={{
+                                                border: 'none',
+                                                borderBottom: idx < recentOps.length - 1 ? `1px solid ${HMI_DESIGN_TOKENS.BORDER}` : 'none',
+                                                padding: '10px 0',
+                                                color: HMI_DESIGN_TOKENS.TEXT_SECONDARY,
+                                                fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%', minWidth: 0 }}>
+                                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {item.operator || '操作员'} - {item.time}
+                                                </div>
+                                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {item.action}{item.detail ? ` - ${item.detail}` : ''}
+                                                </div>
+                                            </div>
+                                        </List.Item>
+                                    )}
+                                />
+                            )}
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+
+    if (!stationInfo) {
+        return (
+            <PremiumTerminalTemplate title="生产终端 - 绑定工位">
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div
+                        style={{
+                            width: 500,
+                            background: 'rgba(0, 12, 28, 0.95)',
+                            borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                            boxShadow: HMI_DESIGN_TOKENS.CARD_SHADOW,
+                            border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+                            padding: HMI_DESIGN_TOKENS.SECTION_GAP,
+                        }}
+                    >
+                        <StationBinder onBindSuccess={() => {
+                            const info = JSON.parse(localStorage.getItem(getStationStorageKey()) || '{}') as StationInfo;
+                            setStationInfo(info);
+                            loadWorkOrders(info.workCenterId);
+                        }} />
+                    </div>
+                </div>
+            </PremiumTerminalTemplate>
+        );
+    }
+
+    return (
+        <PremiumTerminalTemplate
+            title="生产终端"
+            operatorName={userInfo?.full_name || userInfo?.username || (stationInfo as any).operatorName || '未登录'}
+            operatorAvatar={
+                userInfo?.avatar 
+                    ? (userInfo.avatar.startsWith('http') 
+                        ? userInfo.avatar 
+                        : `/api/v1/core/files/${userInfo.avatar}/download?access_token=${getToken() || ''}`)
+                    : ((userInfo?.full_name || userInfo?.username)
+                        ? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(getAvatarText(userInfo.full_name, userInfo.username))}`
+                        : undefined)
+            }
+            operatorRole={userInfo?.is_tenant_admin ? '管理员' : '操作员'}
+            stationName={stationInfo.stationName}
+            stationWorkshop={stationInfo.workshopName}
+            stationLine={stationInfo.lineName}
+            stationArea={(stationInfo as any).areaName}
+            deviceName={(stationInfo as any).deviceName || '未连接'}
+            headerExtra={
+                <div className="header-extra-buttons" style={{ display: 'flex', gap: HMI_DESIGN_TOKENS.BUTTON_GAP }}>
+                    <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<ReloadOutlined />} onClick={() => loadWorkOrders(stationInfo?.workCenterId)}>{t('common.refresh')}</Button>
+                    <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<SwapOutlined />} onClick={handleSwitchStation}>{t('app.kuaizhizao.workOrder.actionSwitchStation')}</Button>
+                </div>
+            }
+        >
+            <style>{`
+                .kiosk-modal-terminal-bg .ant-modal-content {
+                    background: linear-gradient(180deg, #0f2847 0%, #0a1f3c 40%, #061428 70%, #000814 100%) !important;
+                }
+                .kiosk-modal-terminal-bg .ant-modal-header { background: transparent !important; }
+                .kiosk-modal-terminal-bg .ant-modal-body { background: transparent !important; }
+                .kiosk-modal-terminal-bg .ant-modal-footer { background: transparent !important; }
+            `}</style>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: HMI_DESIGN_TOKENS.SECTION_GAP, flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+                {loadError && (
+                    <Alert
+                        type="error"
+                        title={loadError}
+                        showIcon
+                        closable={{ onClose: () => setLoadError(null) }}
+                        style={{ flexShrink: 0 }}
+                    />
+                )}
+                {isWorkOrderFrozen && frozenOperateHint && (
+                    <Alert
+                        type="warning"
+                        title={frozenOperateHint}
+                        showIcon
+                        style={{ flexShrink: 0 }}
+                    />
+                )}
+                {/* 指标条：统一底条，轻量分隔线 */}
+                <div
+                    onClick={() => setFocusedNumField(null)}
+                    style={{
+                    display: 'flex',
+                    flexShrink: 0,
+                    height: HMI_LAYOUT.METRICS_HEIGHT,
+                    minHeight: HMI_LAYOUT.METRICS_HEIGHT,
+                    background: HMI_DESIGN_TOKENS.BG_CARD,
+                    borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                    border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+                }}>
+                    {[
+                        { label: '工单数', value: String(filteredWorkOrders.length), valueColor: HMI_DESIGN_TOKENS.STATUS_INFO },
+                        { label: '计划/已报', planValue: selectedWorkOrder?.quantity ?? '—', reportedValue: selectedWorkOrder?.completed_quantity ?? 0 },
+                        { label: t('app.kuaizhizao.workOrder.kioskPassRate'), value: selectedWorkOrder && (selectedWorkOrder.completed_quantity ?? 0) > 0 ? `${Math.round(((selectedWorkOrder.qualified_quantity ?? ((selectedWorkOrder.completed_quantity ?? 0) - (selectedWorkOrder.unqualified_quantity ?? 0))) / (selectedWorkOrder.completed_quantity ?? 1)) * 100)}%` : '—', valueColor: selectedWorkOrder && (selectedWorkOrder.completed_quantity ?? 0) > 0 ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.TEXT_TERTIARY },
+                        { label: t('app.kuaizhizao.workOrder.opCard.inspection'), value: kioskInspectionSummary, valueColor: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                        { label: '当前状态', value: currentStatusLabel, valueColor: currentStatusLabel === '执行中' ? token.colorWarning : currentStatusLabel === '已完成' ? token.colorSuccess : HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                    ].map((item, i) => {
+                        const valueEl = 'planValue' in item ? (
+                            <span style={{ fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, fontWeight: 600 }}>
+                                <span style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY }}>{item.planValue}</span>
+                                <span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, margin: '0 4px' }}>/</span>
+                                <span style={{ color: HMI_DESIGN_TOKENS.STATUS_OK }}>{item.reportedValue}</span>
+                            </span>
+                        ) : (
+                            <div style={{ color: item.valueColor, fontSize: HMI_DESIGN_TOKENS.FONT_FIGURE, fontWeight: 600 }}>{item.value}</div>
+                        );
+                        return (
+                        <Tooltip key={i} title={undefined}>
+                            <div key={i} style={{
+                                flex: 1,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'center',
+                                padding: '0 16px',
+                                borderRight: i < 4 ? `1px solid ${HMI_DESIGN_TOKENS.BORDER}` : 'none',
+                                cursor: 'default',
+                            }}>
+                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: 12, marginBottom: 2 }}>{item.label}</div>
+                                {valueEl}
+                            </div>
+                        </Tooltip>
+                    );})}
+                </div>
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: `${HMI_LAYOUT.LEFT_PANEL_WIDTH}px 1fr ${HMI_LAYOUT.RIGHT_PANEL_WIDTH}px`,
+                    gridTemplateRows: '1fr',
+                    gap: HMI_DESIGN_TOKENS.SECTION_GAP,
+                    flex: 1,
+                    minHeight: 0,
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    alignContent: 'stretch',
+                }}>
+                    {renderLeftPanel()}
+                    {renderMiddlePanel()}
+                    {renderRightPanel()}
+                </div>
+                {/* 底部操作栏：始终显示，未选工单时置灰辅助功能 */}
+                <div className="hmi-kiosk-footer" onClick={() => setFocusedNumField(null)}>
+                    <Button
+                        size="large"
+                        {...touchButtonProps({
+                          variant: !selectedWorkOrder || isWorkOrderFrozen ? 'default' : isRunning ? 'primary' : 'success',
+                          size: 'action',
+                          disabled: !selectedWorkOrder || isWorkOrderFrozen,
+                        })}
+                        icon={isRunning ? <StopOutlined /> : <PlayCircleOutlined />}
+                        onClick={handleStartEnd}
+                        title={frozenOperateHint}
+                    >
+                        {isRunning ? '结束' : '开始'}
+                    </Button>
+                    {activeOperation?.status === 'processing' && (
+                        <Button
+                            size="large"
+                            {...touchButtonProps({
+                              variant: 'success',
+                              size: 'action',
+                              disabled: isWorkOrderFrozen,
+                            })}
+                            icon={<CheckCircleOutlined />}
+                            onClick={handleReport}
+                            title={frozenOperateHint}
+                        >
+                            完成报工
+                        </Button>
+                    )}
+                    <Button
+                        size="large"
+                        {...touchButtonProps({ size: 'action' })}
+                        icon={<PauseCircleOutlined />}
+                        disabled={!selectedWorkOrder}
+                        onClick={handlePauseResume}
+                    >
+                        {isPaused ? '继续' : '暂停'}
+                    </Button>
+                    <Button
+                        size="large"
+                        {...touchButtonProps({ variant: 'danger', size: 'action' })}
+                        icon={<AlertOutlined />}
+                        onClick={handleCall}
+                        style={{ background: HMI_DESIGN_TOKENS.STATUS_ALARM, borderColor: HMI_DESIGN_TOKENS.STATUS_ALARM, color: '#fff' }}
+                    >
+                        呼叫
+                    </Button>
+
+                    <Divider orientation="vertical" style={{ height: 40, borderColor: 'rgba(255,255,255,0.1)' }} />
+
+                    <Button size="large" {...touchButtonProps({ size: 'action' })} icon={<HistoryOutlined />} disabled={!selectedWorkOrder} onClick={handleQuickPick}>
+                        领料
+                    </Button>
+                    <Button size="large" {...touchButtonProps({ size: 'action' })} icon={<PrinterOutlined />} disabled={!selectedWorkOrder} onClick={handlePrintWorkOrder}>
+                        打印
+                    </Button>
+                    <Button
+                        size="large"
+                        {...touchButtonProps({ size: 'action' })}
+                        icon={<QrcodeOutlined />}
+                        disabled={!selectedWorkOrder}
+                        onClick={() => { setBarcodePrintLevel('work_order'); setBarcodePrintModalVisible(true); }}
+                    >
+                        条码
+                    </Button>
+                </div>
+            </div>
+            {/* 不良品类型选择弹窗：渲染到全屏容器内，否则全屏时不可见 */}
+            <Modal
+                className="modal-no-limit-height"
+                title="选择不良品类型"
+                open={defectModalVisible}
+                rootClassName="kiosk-modal-terminal-bg"
+                getContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
+                onCancel={() => {
+                    setDefectModalVisible(false);
+                }}
+                styles={{
+                    header: { background: 'transparent', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                    body: { background: 'transparent', color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                    footer: { background: 'transparent', borderTop: `1px solid ${HMI_DESIGN_TOKENS.BORDER}` },
+                }}
+                footer={[
+                    <Button key="cancel" onClick={() => setDefectModalVisible(false)}>取消</Button>,
+                    <Button
+                        key="ok"
+                        type="primary"
+                        onClick={() => {
+                            if (selectedDefectType) {
+                                setDefectModalVisible(false);
+                            } else {
+                                message.warning(t('app.kuaizhizao.workOrder.kioskSelectDefectType'));
+                            }
+                        }}
+                    >
+                        确定
+                    </Button>,
+                ]}
+                width={480}
+                destroyOnHidden
+            >
+                <div style={{ padding: '8px 0' }}>
+                    <div style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: 12, marginBottom: 12 }}>
+                        不合格数 &gt; 0 时请选择不良品类型：
+                    </div>
+                    {defectTypeOptions.length === 0 ? (
+                        <Empty description="当前工序未关联不良品项，请联系管理员在工序中配置" />
+                    ) : (
+                        <Radio.Group
+                            value={selectedDefectType ?? undefined}
+                            onChange={(e) => setSelectedDefectType(e.target.value)}
+                            style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
+                        >
+                            {defectTypeOptions.map((opt) => (
+                                <Radio
+                                    key={opt.code}
+                                    value={opt.code}
+                                    style={{ fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}
+                                >
+                                    {opt.name} ({opt.code})
+                                </Radio>
+                            ))}
+                        </Radio.Group>
+                    )}
+                </div>
+            </Modal>
+            {/* 作业指导书弹窗 */}
+            <Modal
+                className="modal-no-limit-height"
+                title="作业指导书"
+                open={sopModalVisible}
+                rootClassName="kiosk-modal-terminal-bg"
+                onCancel={() => setSopModalVisible(false)}
+                footer={null}
+                width={720}
+                destroyOnHidden
+                getContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
+                styles={{
+                    header: { background: 'transparent', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                    body: { background: 'transparent', color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                }}
+            >
+                <Tabs
+                    activeKey={sopModalTab}
+                    onChange={(k) => setSopModalTab(k as 'static' | 'guided')}
+                    items={[
+                        {
+                            key: 'static',
+                            label: t('app.kuaizhizao.workOrder.kioskSopStatic'),
+                            children: (
+                                <div style={{ padding: '16px 0', minHeight: 320, maxHeight: '60vh', overflowY: 'auto' }}>
+                                    {docCenterProps.sopContent ? (
+                                        <Typography.Paragraph style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, lineHeight: 1.8 }}>
+                                            {docCenterProps.sopContent}
+                                        </Typography.Paragraph>
+                                    ) : (
+                                        <Empty description="暂无图文作业指导" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 48 }} />
+                                    )}
+                                </div>
+                            ),
+                        },
+                        {
+                            key: 'guided',
+                            label: t('app.kuaizhizao.workOrder.kioskSopGuided'),
+                            children: (
+                                <div style={{ padding: '16px 0', minHeight: 320, maxHeight: '60vh', overflowY: 'auto' }}>
+                                    <Empty description="分步引导式作业指导开发中" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 48 }} />
+                                </div>
+                            ),
+                        },
+                    ]}
+                />
+            </Modal>
+            {/* 报工参数弹窗 */}
+            <Modal
+                className="modal-no-limit-height"
+                title="报工参数采集"
+                open={paramModalVisible}
+                rootClassName="kiosk-modal-terminal-bg"
+                onCancel={() => setParamModalVisible(false)}
+                footer={[
+                    <Button key="close" onClick={() => setParamModalVisible(false)}>{t('common.close')}</Button>,
+                ]}
+                width={640}
+                destroyOnHidden
+                getContainer={() => document.querySelector('.premium-terminal-fullscreen-wrap') || document.body}
+                styles={{
+                    header: { background: 'transparent', borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                    body: { background: 'transparent', color: HMI_DESIGN_TOKENS.TEXT_PRIMARY },
+                }}
+            >
+                <ReportingParameterForm
+                    form={form}
+                    parameters={reportingParameters}
+                    embedded
+                />
+            </Modal>
+            {/* 物料绑定弹窗 */}
+            {lastReportingRecordId && (
+                <MaterialBindingModal
+                    visible={materialBindingModalVisible}
+                    reportingRecordId={lastReportingRecordId}
+                    onCancel={() => setMaterialBindingModalVisible(false)}
+                />
+            )}
+            {/* 条码打印弹窗 */}
+            <BarcodePrintModal
+                visible={barcodePrintModalVisible}
+                level={barcodePrintLevel}
+                workOrderId={selectedWorkOrder?.id}
+                operationId={activeOperation?.id}
+                onCancel={() => setBarcodePrintModalVisible(false)}
+            />
+            {/* 工序检验弹窗 */}
+            <ProcessInspectionModal
+                visible={processInspectionModalVisible}
+                workOrderId={selectedWorkOrder?.id}
+                operationId={activeOperation?.id}
+                workOrderCode={selectedWorkOrder?.code}
+                operationName={activeOperation?.name || activeOperation?.operation_name}
+                onCancel={() => setProcessInspectionModalVisible(false)}
+            />
+        </PremiumTerminalTemplate>
+    ); 
+};
+
+export default WorkOrdersKioskPage;

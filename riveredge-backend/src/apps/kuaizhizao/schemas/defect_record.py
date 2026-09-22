@@ -1,0 +1,227 @@
+"""
+不良品记录数据验证Schema模块
+
+定义不良品记录相关的Pydantic数据验证Schema。
+
+Author: Luigi Lu
+Date: 2025-01-04
+"""
+
+from datetime import datetime
+from typing import Optional, List
+from pydantic import BaseModel, Field, ConfigDict
+from decimal import Decimal
+from apps.kuaizhizao.services.document_action_policy.types import NonconformingLedgerCapabilities
+
+
+class DefectRecordBase(BaseModel):
+    """
+    不良品记录基础Schema
+
+    包含所有不良品记录的基本字段。
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    code: Optional[str] = Field(None, description="不良品记录编码（可选，创建时自动生成）")
+    reporting_record_id: Optional[int] = Field(None, description="报工记录ID（关联ReportingRecord）")
+    # 关联检验单（支持从不合格检验单创建不合格品记录）
+    incoming_inspection_id: Optional[int] = Field(None, description="来料检验单ID（关联IncomingInspection）")
+    incoming_inspection_code: Optional[str] = Field(None, description="来料检验单编码")
+    process_inspection_id: Optional[int] = Field(None, description="过程检验单ID（关联ProcessInspection）")
+    process_inspection_code: Optional[str] = Field(None, description="过程检验单编码")
+    finished_goods_inspection_id: Optional[int] = Field(None, description="成品检验单ID（关联FinishedGoodsInspection）")
+    finished_goods_inspection_code: Optional[str] = Field(None, description="成品检验单编码")
+    work_order_id: Optional[int] = Field(None, description="工单ID（可选，从检验单获取）")
+    work_order_code: Optional[str] = Field(None, description="工单编码")
+    operation_id: Optional[int] = Field(None, description="工序ID（可选，从过程检验单获取）")
+    operation_code: Optional[str] = Field(None, description="工序编码")
+    operation_name: Optional[str] = Field(None, description="工序名称")
+    product_id: int = Field(..., description="产品ID")
+    product_code: str = Field(..., description="产品编码")
+    product_name: str = Field(..., description="产品名称")
+    defect_quantity: Decimal = Field(..., description="不良品数量")
+    defect_type: str = Field("other", description="不良品类型（dimension/appearance/function/material/other）")
+    defect_reason: str = Field(..., description="不良品原因")
+    disposition: str = Field("quarantine", description="处理方式（quarantine/rework/scrap/accept/downgrade/other）")
+    quarantine_location: Optional[str] = Field(None, description="隔离位置（当处理方式为隔离时使用）")
+    rework_order_id: Optional[int] = Field(None, description="返工单ID（当处理方式为返工时关联）")
+    scrap_record_id: Optional[int] = Field(None, description="报废记录ID（当处理方式为报废时关联）")
+    downgrade_material_id: Optional[int] = Field(None, description="降级回用目标原料物料ID")
+    downgrade_material_code: Optional[str] = Field(None, description="降级回用目标原料编码")
+    downgrade_material_name: Optional[str] = Field(None, description="降级回用目标原料名称")
+    downgrade_material_unit: Optional[str] = Field(None, description="降级回用目标原料单位")
+    downgrade_warehouse_id: Optional[int] = Field(None, description="降级回用入库仓库ID")
+    downgrade_warehouse_name: Optional[str] = Field(None, description="降级回用入库仓库名称")
+    other_inbound_id: Optional[int] = Field(None, description="降级回用或让步接收（过程/报工）生成的其他入库单ID")
+    purchase_return_id: Optional[int] = Field(None, description="退货处置生成的采购退货单ID")
+    finished_goods_receipt_id: Optional[int] = Field(None, description="让步接收生成的成品/半成品入库单ID")
+    accept_purchase_receipt_id: Optional[int] = Field(None, description="让步接收生成的采购入库单ID")
+    status: str = Field("draft", description="状态（draft/processed/cancelled）")
+    remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+
+class DefectRecordCreate(DefectRecordBase):
+    """
+    不良品记录创建Schema
+
+    用于创建新不良品记录的数据验证。
+    """
+    code: Optional[str] = Field(None, description="不良品记录编码（可选，如果不提供则自动生成）")
+
+
+class DefectRecordCreateFromReporting(BaseModel):
+    """
+    从报工记录创建不良品记录请求Schema
+
+    用于从报工记录创建不良品记录的简化请求。
+    """
+    defect_quantity: Decimal = Field(..., description="不良品数量")
+    defect_type: str = Field("other", description="不良品类型（dimension/appearance/function/material/other）")
+    defect_reason: str = Field(..., description="不良品原因")
+    disposition: str = Field("quarantine", description="处理方式（return/quarantine/rework/scrap/accept/downgrade/other）")
+    quarantine_location: Optional[str] = Field(None, description="隔离位置（当处理方式为隔离时使用）")
+    quarantine_warehouse_id: Optional[int] = Field(None, description="隔离仓库ID")
+    stock_warehouse_id: Optional[int] = Field(None, description="报废扣减或让步放行仓库ID")
+    downgrade_material_id: Optional[int] = Field(None, description="降级回用目标原料物料ID")
+    downgrade_warehouse_id: Optional[int] = Field(None, description="降级回用入库仓库ID")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class DefectRecordCreateFromInspection(BaseModel):
+    """
+    从检验单创建不合格品记录请求Schema
+
+    用于从不合格检验单创建不合格品记录的简化请求。
+    """
+    defect_quantity: Decimal = Field(..., description="不合格品数量")
+    defect_type: str = Field("other", description="不合格品类型（dimension/appearance/function/material/other）")
+    defect_reason: str = Field(..., description="不合格原因")
+    disposition: str = Field("quarantine", description="处理方式（return/rework/scrap/accept/quarantine/downgrade/other）")
+    quarantine_location: Optional[str] = Field(None, description="隔离位置")
+    quarantine_warehouse_id: Optional[int] = Field(None, description="隔离仓库ID")
+    stock_warehouse_id: Optional[int] = Field(None, description="报废扣减或让步放行仓库ID")
+    downgrade_material_id: Optional[int] = Field(None, description="降级回用目标原料物料ID")
+    downgrade_warehouse_id: Optional[int] = Field(None, description="降级回用入库仓库ID")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class DefectRecordCreateFromInspectionBatch(BaseModel):
+    """从检验单批量创建不合格品记录（按类型/原因/处置拆分行）。"""
+
+    lines: List[DefectRecordCreateFromInspection] = Field(
+        ...,
+        min_length=1,
+        description="不合格明细行，各行数量之和不得超过检验单待登记不合格数量",
+    )
+
+
+class DefectRecordCreateFromReportingBatch(BaseModel):
+    """从报工记录批量创建不良品记录。"""
+
+    lines: List[DefectRecordCreateFromReporting] = Field(
+        ...,
+        min_length=1,
+        description="不良明细行，各行数量之和不得超过报工待登记不合格数量",
+    )
+
+
+class DefectRecordUpdate(BaseModel):
+    """
+    不良品记录更新Schema
+
+    用于更新不良品记录的数据验证，允许部分字段更新。
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    defect_quantity: Optional[Decimal] = Field(None, description="不良品数量")
+    defect_type: Optional[str] = Field(None, description="不良品类型")
+    defect_reason: Optional[str] = Field(None, description="不良品原因")
+    disposition: Optional[str] = Field(None, description="处理方式")
+    quarantine_location: Optional[str] = Field(None, description="隔离位置")
+    rework_order_id: Optional[int] = Field(None, description="返工单ID")
+    scrap_record_id: Optional[int] = Field(None, description="报废记录ID")
+    downgrade_material_id: Optional[int] = Field(None, description="降级回用目标原料物料ID")
+    downgrade_warehouse_id: Optional[int] = Field(None, description="降级回用入库仓库ID")
+    other_inbound_id: Optional[int] = Field(None, description="降级回用或让步接收（过程/报工）生成的其他入库单ID")
+    purchase_return_id: Optional[int] = Field(None, description="退货处置生成的采购退货单ID")
+    finished_goods_receipt_id: Optional[int] = Field(None, description="让步接收生成的成品/半成品入库单ID")
+    accept_purchase_receipt_id: Optional[int] = Field(None, description="让步接收生成的采购入库单ID")
+    status: Optional[str] = Field(None, description="状态")
+    remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+
+class DefectRecordResponse(DefectRecordBase):
+    """
+    不良品记录响应Schema
+
+    用于API响应的数据格式。
+    """
+    id: int = Field(..., description="不良品记录ID")
+    uuid: str = Field(..., description="业务ID")
+    tenant_id: int = Field(..., description="组织ID")
+    processed_at: Optional[datetime] = Field(None, description="处理时间")
+    processed_by: Optional[int] = Field(None, description="处理人ID")
+    processed_by_name: Optional[str] = Field(None, description="处理人姓名")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    capabilities: Optional[NonconformingLedgerCapabilities] = Field(
+        None, description="业务态 capabilities（不含 RBAC）"
+    )
+
+
+class DefectRecordListResponse(BaseModel):
+    """
+    不良品记录列表响应Schema
+
+    用于不良品记录列表API的响应数据格式。
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(..., description="不良品记录ID")
+    uuid: str = Field(..., description="业务ID")
+    code: str = Field(..., description="不良品记录编码")
+    incoming_inspection_id: Optional[int] = Field(None, description="来料检验单ID")
+    incoming_inspection_code: Optional[str] = Field(None, description="来料检验单编码")
+    process_inspection_id: Optional[int] = Field(None, description="过程检验单ID")
+    process_inspection_code: Optional[str] = Field(None, description="过程检验单编码")
+    finished_goods_inspection_id: Optional[int] = Field(None, description="成品检验单ID")
+    finished_goods_inspection_code: Optional[str] = Field(None, description="成品检验单编码")
+    work_order_code: Optional[str] = Field(None, description="工单编码")
+    operation_name: Optional[str] = Field(None, description="工序名称")
+    product_id: Optional[int] = Field(None, description="产品ID")
+    product_code: Optional[str] = Field(None, description="产品编码")
+    product_name: Optional[str] = Field(None, description="产品名称")
+    defect_quantity: Decimal = Field(..., description="不良品数量")
+    defect_type: str = Field(..., description="不良品类型")
+    defect_reason: str = Field(..., description="不良品原因")
+    disposition: str = Field(..., description="处理方式")
+    remarks: Optional[str] = Field(None, description="备注")
+    downgrade_material_id: Optional[int] = Field(None, description="降级回用目标原料物料ID")
+    downgrade_material_code: Optional[str] = Field(None, description="降级回用目标原料编码")
+    downgrade_material_name: Optional[str] = Field(None, description="降级回用目标原料名称")
+    downgrade_warehouse_id: Optional[int] = Field(None, description="降级回用入库仓库ID")
+    downgrade_warehouse_name: Optional[str] = Field(None, description="降级回用入库仓库名称")
+    other_inbound_id: Optional[int] = Field(None, description="降级回用或让步接收（过程/报工）生成的其他入库单ID")
+    purchase_return_id: Optional[int] = Field(None, description="退货处置生成的采购退货单ID")
+    finished_goods_receipt_id: Optional[int] = Field(None, description="让步接收生成的成品/半成品入库单ID")
+    accept_purchase_receipt_id: Optional[int] = Field(None, description="让步接收生成的采购入库单ID")
+    rework_order_id: Optional[int] = Field(None, description="返工单ID")
+    scrap_record_id: Optional[int] = Field(None, description="报废记录ID")
+    status: str = Field(..., description="状态")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: Optional[datetime] = Field(None, description="更新时间")
+    created_by: Optional[int] = Field(None, description="创建人ID")
+    created_by_name: Optional[str] = Field(None, description="创建人姓名")
+    updated_by: Optional[int] = Field(None, description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    capabilities: Optional[NonconformingLedgerCapabilities] = Field(
+        None, description="业务态 capabilities（不含 RBAC）"
+    )
+

@@ -1,0 +1,64 @@
+{
+  "sortOrder": 201,
+  "industryId": "machining",
+  "primaryCategory": "raw_materials",
+  "id": "raw_structural_profile_cn_sme",
+  "name": "原材料-型钢与结构材",
+  "description": "机架、底座、支撑件常用型钢，按国标材质与规格组织。",
+  "items": [
+    {
+      "preset_key": "cn_raw_angle_q235_l40x4",
+      "name": "等边角钢",
+      "specification": "L40×4",
+      "gb_standard": "GB/T 706",
+      "gb_code": "GB706-L40X4-Q235B",
+      "base_unit": "千克",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_channel_q235_8",
+      "name": "槽钢",
+      "specification": "8#",
+      "gb_standard": "GB/T 706",
+      "gb_code": "GB706-8-Q235B",
+      "base_unit": "千克",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_hbeam_q235_150x100",
+      "name": "H型钢",
+      "specification": "150×100",
+      "gb_standard": "GB/T 11263",
+      "gb_code": "GB11263-H150X100-Q235B",
+      "base_unit": "千克",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_square_tube_q235_50x50x3",
+      "name": "方管",
+      "specification": "50×50×3",
+      "gb_standard": "GB/T 6728",
+      "gb_code": "GB6728-50X50X3-Q235B",
+      "base_unit": "米",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_rect_tube_q235_80x40x3",
+      "name": "矩形管",
+      "specification": "80×40×3",
+      "gb_standard": "GB/T 6728",
+      "gb_code": "GB6728-80X40X3-Q235B",
+      "base_unit": "米",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_raw_round_tube_q235_dn25",
+      "name": "焊接钢管",
+      "specification": "DN25",
+      "gb_standard": "GB/T 3091",
+      "gb_code": "GB3091-DN25-Q235B",
+      "base_unit": "米",
+      "texture": "Q235B"
+    }
+  ]
+}

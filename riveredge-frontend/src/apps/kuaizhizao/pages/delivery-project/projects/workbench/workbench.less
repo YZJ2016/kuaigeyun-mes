@@ -1,0 +1,62 @@
+@import '../../../../../../components/layout-templates/projectWorkbenchShell.less';
+
+.delivery-workbench-table-host {
+  width: 100%;
+  min-width: 0;
+}
+
+.delivery-workbench-table {
+  .ant-table {
+    table-layout: fixed;
+  }
+
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    white-space: nowrap;
+  }
+
+  .ant-table-cell-ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ant-table-tbody > tr > td.uni-table-operation-cell,
+  .ant-table-thead > tr > th.uni-table-operation-cell {
+    overflow: hidden;
+  }
+
+  .ant-table-tbody > tr > td.uni-table-operation-cell .uni-table-operation-actions {
+    width: max-content;
+    flex: none;
+  }
+}
+
+.delivery-project-workbench-side-table {
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    white-space: nowrap;
+  }
+}
+
+.delivery-project-node-panel {
+  .delivery-project-node-section-card {
+    background: var(--ant-color-fill-alter);
+    border-color: var(--ant-color-border-secondary);
+
+    > .ant-card-head {
+      background: color-mix(in srgb, var(--ant-color-fill-alter) 82%, var(--ant-color-bg-container));
+      border-bottom-color: var(--ant-color-border-secondary);
+    }
+
+    > .ant-card-body {
+      background: var(--ant-color-fill-alter);
+    }
+  }
+
+  .delivery-project-workbench-node-table {
+    .ant-table-thead > tr > th,
+    .ant-table-tbody > tr > td {
+      white-space: nowrap;
+    }
+  }
+}

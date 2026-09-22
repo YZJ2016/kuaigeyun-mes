@@ -1,0 +1,320 @@
+/**
+ * 质检方案新建/编辑弹窗（可复用）
+ *
+ * 供质检方案管理页、工序表单内「快速新增质检方案」等场景使用。
+ */
+
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  ProFormInstance,
+  ProFormText,
+  ProFormTextArea,
+  ProFormItem,
+  ProFormSwitch,
+  ProFormDependency,
+} from '@ant-design/pro-components';
+import { App, Row, Col } from 'antd';
+import { FormModalTemplate } from '../../../components/layout-templates';
+import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
+import CodeField from '../../../components/code-field';
+import { UniDropdown } from '../../../components/uni-dropdown';
+import { inspectionPlanApi } from '../services/production';
+import { InspectionPlanStepEditor, type InspectionPlanStepItem } from './InspectionPlanStepEditor';
+import { bumpPlanVersion, stepsFingerprint } from '../types/inspectionStepSpec';
+import { getQualityPlanTypeFallback } from '../pages/quality-management/components/qualityMeta';
+import { getAntdModal } from '../../../utils/antdAppApis';
+export interface InspectionPlanRecord {
+  id?: number;
+  uuid?: string;
+  plan_code?: string;
+  plan_name?: string;
+  plan_type?: string;
+  operation_id?: number;
+  version?: string;
+  is_active?: boolean;
+  remarks?: string;
+  steps?: InspectionPlanStepItem[];
+}
+
+export interface InspectionPlanFormModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: (plan: InspectionPlanRecord) => void;
+  editId?: number | string | null;
+  /** 新建过程检验方案时预填工序 ID */
+  operationId?: number | null;
+  /** 新建时预填方案类型（incoming / process / finished / outbound） */
+  defaultPlanType?: string;
+  /** 锁定方案类型（不可改），用于来料补检等固定环节的快速创建 */
+  lockPlanType?: boolean;
+  /** 新建时至少一条检验步骤；默认 true */
+  requireSteps?: boolean;
+  /** 覆盖默认标题 */
+  title?: React.ReactNode;
+  zIndex?: number;
+}
+
+export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = ({
+  open,
+  onClose,
+  editId = null,
+  onSuccess,
+  operationId,
+  defaultPlanType,
+  lockPlanType = false,
+  requireSteps = true,
+  title,
+  zIndex,
+}) => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const formRef = useRef<ProFormInstance>();
+  const [formLoading, setFormLoading] = useState(false);
+  const [steps, setSteps] = useState<InspectionPlanStepItem[]>([]);
+  const [stepsBaseline, setStepsBaseline] = useState('');
+  const [currentPlan, setCurrentPlan] = useState<InspectionPlanRecord | null>(null);
+  const planTypeOptions = useMemo(() => getQualityPlanTypeFallback(t), [t]);
+  const isEdit = editId != null && editId !== '';
+  const resolvedDefaultPlanType = useMemo(() => {
+    if (defaultPlanType) return defaultPlanType;
+    if (operationId != null) return 'process';
+    return undefined;
+  }, [defaultPlanType, operationId]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!isEdit) {
+      formRef.current?.resetFields();
+      setSteps([]);
+      setStepsBaseline('');
+      setCurrentPlan(null);
+      const initial: Record<string, unknown> = {
+        plan_type: resolvedDefaultPlanType,
+        version: '1.0',
+        is_active: true,
+      };
+      if (operationId != null) {
+        initial.operation_id = operationId;
+      }
+      formRef.current?.setFieldsValue(initial);
+      return;
+    }
+    void (async () => {
+      try {
+        setFormLoading(true);
+        const detail = await inspectionPlanApi.get(String(editId));
+        setCurrentPlan(detail);
+        const stepItems: InspectionPlanStepItem[] = (detail.steps || []).map((s: any) => ({
+          sequence: s.sequence ?? 0,
+          step_key: s.step_key,
+          inspection_item: s.inspection_item || '',
+          inspection_method: s.inspection_method,
+          acceptance_criteria: s.acceptance_criteria,
+          value_type: s.value_type,
+          value_spec: s.value_spec,
+          sampling_type: (s.sampling_type as 'full' | 'sampling') || 'full',
+          quality_standard_id: s.quality_standard_id,
+          remarks: s.remarks,
+        }));
+        setSteps(stepItems);
+        setStepsBaseline(stepsFingerprint(stepItems));
+        formRef.current?.setFieldsValue({
+          plan_code: detail.plan_code,
+          plan_name: detail.plan_name,
+          plan_type: detail.plan_type,
+          version: detail.version,
+          is_active: detail.is_active,
+          remarks: detail.remarks,
+          operation_id: detail.operation_id,
+        });
+      } catch {
+        messageApi.error(t('app.kuaizhizao.quality.plans.messages.loadDetailFailed'));
+      } finally {
+        setFormLoading(false);
+      }
+    })();
+  }, [open, isEdit, editId, operationId, resolvedDefaultPlanType, messageApi, t]);
+
+  const submitPlan = async (values: any) => {
+    const planCode = typeof values.plan_code === 'string' ? values.plan_code.trim() : values.plan_code;
+    const submitData = {
+      ...values,
+      plan_code: planCode,
+      plan_type: lockPlanType && resolvedDefaultPlanType ? resolvedDefaultPlanType : values.plan_type,
+      material_id: null,
+      material_code: null,
+      material_name: null,
+      steps: steps.map((s, i) => ({ ...s, sequence: i })),
+    };
+
+    if (isEdit && currentPlan?.id) {
+      await inspectionPlanApi.update(String(currentPlan.id), submitData);
+      messageApi.success(t('app.kuaizhizao.quality.plans.messages.updateSuccess'));
+      const updated = await inspectionPlanApi.get(String(currentPlan.id));
+      onSuccess(updated);
+    } else {
+      const created = await inspectionPlanApi.create(submitData);
+      messageApi.success(t('app.kuaizhizao.quality.plans.messages.createSuccess'));
+      onSuccess(created);
+    }
+    handleClose();
+  };
+
+  const handleClose = () => {
+    onClose();
+    formRef.current?.resetFields();
+    setSteps([]);
+    setStepsBaseline('');
+    setCurrentPlan(null);
+  };
+
+  const handleSubmit = async (values: any): Promise<void> => {
+    try {
+      if (requireSteps && steps.length === 0) {
+        messageApi.warning(t('app.kuaizhizao.quality.plans.validation.requiredSteps'));
+        throw new Error('steps_required');
+      }
+      setFormLoading(true);
+      const stepsChanged = isEdit && stepsFingerprint(steps) !== stepsBaseline;
+      if (stepsChanged) {
+        const nextVersion = bumpPlanVersion(values.version || currentPlan?.version);
+        getAntdModal().confirm({
+          title: t('app.kuaizhizao.quality.plans.versionBump.title'),
+          content: t('app.kuaizhizao.quality.plans.versionBump.content', {
+            from: values.version || currentPlan?.version || '1.0',
+            to: nextVersion,
+          }),
+          okText: t('app.kuaizhizao.quality.plans.versionBump.confirm'),
+          cancelText: t('common.cancel'),
+          onOk: async () => {
+            await submitPlan({ ...values, version: nextVersion });
+          },
+        });
+        return;
+      }
+      await submitPlan(values);
+    } catch (error: any) {
+      if (error?.message !== 'steps_required') {
+        messageApi.error(error.message || t('common.operationFailed'));
+      }
+      throw error;
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  return (
+    <FormModalTemplate
+      title={
+        title ??
+        (isEdit
+          ? t('app.kuaizhizao.quality.plans.modal.editTitle')
+          : t('app.kuaizhizao.quality.plans.modal.createTitle'))
+      }
+      open={open}
+      onClose={handleClose}
+      onFinish={handleSubmit}
+      isEdit={isEdit}
+      loading={formLoading}
+      width={MODAL_CONFIG.LARGE_WIDTH}
+      formRef={formRef as React.RefObject<ProFormInstance>}
+      className="inspection-plan-modal"
+      grid={false}
+      zIndex={zIndex}
+    >
+      <ProFormItem name="operation_id" hidden>
+        <input type="hidden" />
+      </ProFormItem>
+      <Row gutter={16}>
+        <ProFormDependency name={['plan_type']}>
+          {({ plan_type }) => (
+            <Col span={12}>
+              <CodeField
+                pageCode="kuaizhizao-quality-inspection-plan"
+                name="plan_code"
+                label={t('app.kuaizhizao.quality.plans.form.planCode')}
+                required
+                autoGenerateOnCreate={!isEdit}
+                showGenerateButton={false}
+                documentId={isEdit ? currentPlan?.id : undefined}
+                context={{
+                  plan_type: plan_type || resolvedDefaultPlanType || '',
+                }}
+              />
+            </Col>
+          )}
+        </ProFormDependency>
+        <Col span={12}>
+          <ProFormText
+            name="plan_name"
+            label={t('app.kuaizhizao.quality.plans.form.planName')}
+            rules={[{ required: true, message: t('app.kuaizhizao.quality.plans.validation.requiredPlanName') }]}
+            placeholder={t('app.kuaizhizao.quality.plans.placeholder.enterPlanName')}
+          />
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormItem
+            name="plan_type"
+            label={t('app.kuaizhizao.quality.plans.form.planType')}
+            extra={
+              lockPlanType
+                ? t('app.kuaizhizao.quality.plans.form.planTypeLockedHint')
+                : t('app.kuaizhizao.quality.plans.form.planTypeHint')
+            }
+            rules={[{ required: true, message: t('app.kuaizhizao.quality.plans.validation.requiredPlanType') }]}
+          >
+            <UniDropdown
+              placeholder={t('app.kuaizhizao.quality.plans.placeholder.selectPlanType')}
+              showSearch
+              allowClear={!lockPlanType}
+              disabled={lockPlanType}
+              options={planTypeOptions}
+              style={{ width: '100%' }}
+            />
+          </ProFormItem>
+        </Col>
+        <Col span={12}>
+          <ProFormText
+            name="version"
+            label={t('app.kuaizhizao.quality.plans.form.version')}
+            initialValue="1.0"
+            extra={t('app.kuaizhizao.quality.plans.form.versionHint')}
+          />
+        </Col>
+      </Row>
+
+      <ProFormItem label={t('app.kuaizhizao.quality.plans.form.steps')} style={{ width: '100%' }} required={requireSteps}>
+        <InspectionPlanStepEditor
+          value={steps}
+          onChange={setSteps}
+          disabled={false}
+          parentModalZIndex={zIndex}
+        />
+      </ProFormItem>
+
+      <Row gutter={16}>
+        <Col span={24}>
+          <ProFormTextArea
+            name="remarks"
+            label={t('common.remark')}
+            placeholder={t('app.kuaizhizao.quality.plans.placeholder.optional')}
+          />
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormSwitch
+            name="is_active"
+            label={t('app.kuaizhizao.quality.plans.form.isActive')}
+            initialValue={true}
+          />
+        </Col>
+      </Row>
+    </FormModalTemplate>
+  );
+};
+
+export default InspectionPlanFormModal;

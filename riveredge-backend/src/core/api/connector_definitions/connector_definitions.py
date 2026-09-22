@@ -1,0 +1,139 @@
+"""
+连接器定义 API 路由
+
+返回预置及可配置的应用连接器定义，供连接器市场展示。
+首批仅返回预置连接器，预留从配置/数据库读取自定义连接器的扩展能力。
+
+扩展预留（后续迭代）：
+- 从系统配置或数据库读取自定义连接器（id、name、type、category、config_schema、default_config）
+- 通过「连接器配置」管理页或配置文件增加自定义连接器
+"""
+
+from fastapi import APIRouter, Depends
+from typing import List, Dict, Any, Optional
+
+from core.api.deps.deps import get_current_tenant
+from infra.api.deps.deps import get_current_user as soil_get_current_user
+from infra.models.user import User
+
+router = APIRouter(prefix="/connector-definitions", tags=["Core - Connector Definitions"])
+
+# 预置应用连接器定义（与前端 connectors.tsx 保持一致，icon 为字符串供前端映射）
+PRESET_APP_CONNECTORS: List[Dict[str, Any]] = [
+    {"id": "feishu", "name": "飞书", "type": "feishu", "category": "collaboration", "description": "飞书开放平台自建应用", "icon": "MessageOutlined", "default_config": {"app_id": "", "app_secret": "", "encrypt_key": "", "verification_token": ""}},
+    {"id": "dingtalk", "name": "钉钉", "type": "dingtalk", "category": "collaboration", "description": "钉钉企业内部应用", "icon": "MessageOutlined", "default_config": {"corpid": "", "agent_id": "", "app_key": "", "app_secret": "", "aes_key": "", "token": ""}},
+    {"id": "wecom", "name": "企业微信", "type": "wecom", "category": "collaboration", "description": "企业微信自建应用（登录、消息、通讯录同步）", "icon": "MessageOutlined", "default_config": {"corp_id": "", "corp_secret": "", "agent_id": "", "token": "", "encoding_aes_key": ""}},
+    # ERP（精确到具体产品）
+    {"id": "kingdee_galaxy", "name": "金蝶云星空", "type": "kingdee_galaxy", "category": "erp", "description": "金蝶云星空 WebAPI", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_id": "", "app_secret": "", "acct_id": "", "username": "", "lcid": "2052"}},
+    {"id": "kingdee_xingchen", "name": "金蝶云星辰", "type": "kingdee_xingchen", "category": "erp", "description": "金蝶云星辰开放接口", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_id": "", "app_secret": "", "acct_id": "", "lcid": "2052"}},
+    {"id": "kingdee_kis_cloud", "name": "金蝶 KIS 云", "type": "kingdee_kis_cloud", "category": "erp", "description": "金蝶 KIS 云开放接口", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_id": "", "app_secret": "", "acct_id": "", "lcid": "2052"}},
+    {"id": "kingdee_kis", "name": "金蝶 KIS", "type": "kingdee_kis", "category": "erp", "description": "金蝶 KIS 专业版 / 商贸版接口", "icon": "CloudOutlined", "default_config": {"base_url": "", "instance_id": "", "app_secret": ""}},
+    {"id": "yonyou_yonbip", "name": "用友 YonBIP", "type": "yonyou_yonbip", "category": "erp", "description": "用友 YonBIP 开放平台", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": "", "corp_id": "", "user_id": ""}},
+    {"id": "yonyou_u8", "name": "用友 U8", "type": "yonyou_u8", "category": "erp", "description": "用友 U8 OpenAPI", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": "", "corp_id": "", "user_id": ""}},
+    {"id": "yonyou_u9", "name": "用友 U9", "type": "yonyou_u9", "category": "erp", "description": "用友 U9 开放接口", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": "", "corp_id": "", "user_id": ""}},
+    {"id": "yonyou_nc", "name": "用友 NC Cloud", "type": "yonyou_nc", "category": "erp", "description": "用友 NC Cloud 开放平台", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": "", "corp_id": "", "user_id": ""}},
+    {"id": "sap_s4hana", "name": "SAP S/4HANA", "type": "sap_s4hana", "category": "erp", "description": "SAP S/4HANA Cloud OData / API", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "client": "", "username": "", "password": "", "language": "ZH"}},
+    {"id": "sap_b1", "name": "SAP Business One", "type": "sap_b1", "category": "erp", "description": "SAP Business One Service Layer", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "company_db": "", "username": "", "password": "", "language": "ZH"}},
+    {"id": "oracle_netsuite", "name": "Oracle NetSuite", "type": "oracle_netsuite", "category": "erp", "description": "Oracle NetSuite SuiteTalk / REST", "icon": "CloudOutlined", "default_config": {"base_url": "", "account": "", "consumer_key": "", "consumer_secret": "", "token_id": "", "token_secret": ""}},
+    {"id": "odoo", "name": "Odoo", "type": "odoo", "category": "erp", "description": "Odoo External API / XML-RPC", "icon": "CloudOutlined", "default_config": {"base_url": "", "db": "", "username": "", "password": ""}},
+    {"id": "inspur_gs", "name": "浪潮 GS Cloud", "type": "inspur_gs", "category": "erp", "description": "浪潮 GS Cloud 开放接口", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": ""}},
+    {"id": "inspur_ps", "name": "浪潮 PS Cloud", "type": "inspur_ps", "category": "erp", "description": "浪潮 PS Cloud 开放接口", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": ""}},
+    {"id": "digiwin_t100", "name": "鼎捷 T100", "type": "digiwin_t100", "category": "erp", "description": "鼎捷 T100 REST API", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "username": "", "password": "", "company_id": ""}},
+    {"id": "digiwin_yifei", "name": "鼎捷易飞", "type": "digiwin_yifei", "category": "erp", "description": "鼎捷易飞 REST API", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "username": "", "password": "", "company_id": ""}},
+    {"id": "digiwin_yizhu", "name": "鼎捷易助", "type": "digiwin_yizhu", "category": "erp", "description": "鼎捷易助 REST API", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "username": "", "password": "", "company_id": ""}},
+    {"id": "digiwin_yituo", "name": "鼎捷易拓", "type": "digiwin_yituo", "category": "erp", "description": "鼎捷易拓 REST API", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "username": "", "password": "", "company_id": ""}},
+    {"id": "digiwin_e10", "name": "鼎捷 E10", "type": "digiwin_e10", "category": "erp", "description": "鼎捷 E10 ERP 开放接口", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "username": "", "password": "", "tenant_id": ""}},
+    {"id": "chanjet_tplus", "name": "畅捷通 T+", "type": "chanjet_tplus", "category": "erp", "description": "畅捷通 T+ OpenAPI", "icon": "CloudOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": ""}},
+    {"id": "grasp_huihuang", "name": "管家婆辉煌", "type": "grasp_huihuang", "category": "erp", "description": "管家婆辉煌系列开放接口", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": ""}},
+    {"id": "super_erp", "name": "速达 ERP", "type": "super_erp", "category": "erp", "description": "速达 ERP 接口服务", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    {"id": "erpnext", "name": "ERPNext", "type": "erpnext", "category": "erp", "description": "ERPNext REST API", "icon": "CloudOutlined", "default_config": {"base_url": "", "api_key": "", "api_secret": ""}},
+    {"id": "sunlike_erp", "name": "天心天思 ERP", "type": "sunlike_erp", "category": "erp", "description": "天心天思天思系列 ERP", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    # PLM
+    {"id": "teamcenter", "name": "Teamcenter", "type": "teamcenter", "category": "plm", "description": "西门子 Teamcenter", "icon": "AppstoreOutlined", "default_config": {"base_url": "", "username": "", "password": "", "database": ""}},
+    {"id": "windchill", "name": "Windchill", "type": "windchill", "category": "plm", "description": "PTC Windchill REST", "icon": "AppstoreOutlined", "default_config": {"base_url": "", "username": "", "password": "", "csrf_token": ""}},
+    {"id": "caxa", "name": "CAXA", "type": "caxa", "category": "plm", "description": "CAXA 数码大方 PLM 数据服务", "icon": "AppstoreOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    {"id": "sipm", "name": "思普 PLM", "type": "sipm", "category": "plm", "description": "思普 PLM 开放接口", "icon": "AppstoreOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    {"id": "sanpin_plm", "name": "三品 PLM", "type": "sanpin_plm", "category": "plm", "description": "三品软件 PLM 系统", "icon": "AppstoreOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    {"id": "sunlike_plm", "name": "天心天思 PLM", "type": "sunlike_plm", "category": "plm", "description": "天心天思 PLM 管理系统", "icon": "AppstoreOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    {"id": "inteplm", "name": "英特 PLM", "type": "inteplm", "category": "plm", "description": "英特 PLM 数据服务", "icon": "AppstoreOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    # CRM
+    {"id": "xiaoshouyi", "name": "销售易", "type": "xiaoshouyi", "category": "crm", "description": "销售易开放 API", "icon": "TeamOutlined", "default_config": {"base_url": "", "app_id": "", "app_secret": "", "grant_type": "client_credentials"}},
+    {"id": "fenxiang", "name": "纷享销客", "type": "fenxiang", "category": "crm", "description": "纷享销客开放平台", "icon": "TeamOutlined", "default_config": {"base_url": "", "corp_id": "", "corp_secret": "", "app_id": "", "app_secret": ""}},
+    {"id": "salesforce", "name": "Salesforce", "type": "salesforce", "category": "crm", "description": "Salesforce CRM", "icon": "TeamOutlined", "default_config": {"base_url": "https://login.salesforce.com", "client_id": "", "client_secret": "", "username": "", "password": "", "security_token": ""}},
+    {"id": "qidian", "name": "腾讯企点", "type": "qidian", "category": "crm", "description": "腾讯企点 CRM API", "icon": "TeamOutlined", "default_config": {"app_id": "", "app_secret": ""}},
+    {"id": "supra_crm", "name": "超兔 CRM", "type": "supra_crm", "category": "crm", "description": "超兔一体化云平台 CRM", "icon": "TeamOutlined", "default_config": {"base_url": "", "api_key": "", "api_secret": ""}},
+    # OA
+    {"id": "weaver", "name": "泛微 OA", "type": "weaver", "category": "oa", "description": "泛微 e-cology API", "icon": "ApartmentOutlined", "default_config": {"base_url": "", "appid": "", "appsecret": ""}},
+    {"id": "seeyon", "name": "致远 OA", "type": "seeyon", "category": "oa", "description": "致远协同办公 API", "icon": "ApartmentOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    {"id": "landray", "name": "蓝凌 OA", "type": "landray", "category": "oa", "description": "蓝凌 EKp 协同办公平台", "icon": "ApartmentOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    {"id": "cloudhub", "name": "云之家", "type": "cloudhub", "category": "oa", "description": "金蝶云之家开放平台", "icon": "ApartmentOutlined", "default_config": {"base_url": "", "app_id": "", "app_secret": ""}},
+    {"id": "tongda_oa", "name": "通达 OA", "type": "tongda_oa", "category": "oa", "description": "通达 OA 办公系统", "icon": "ApartmentOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    # IoT
+    {"id": "alicloud_iot", "name": "阿里云 IoT", "type": "alicloud_iot", "category": "iot", "description": "阿里云 IoT 平台 API", "icon": "CloudOutlined", "default_config": {"access_key_id": "", "access_key_secret": "", "region_id": "cn-shanghai"}},
+    {"id": "huaweicloud_iot", "name": "华为云 IoT", "type": "huaweicloud_iot", "category": "iot", "description": "华为云 IoT (OceanConnect)", "icon": "CloudOutlined", "default_config": {"app_id": "", "secret": "", "base_url": ""}},
+    {"id": "rootcloud", "name": "树根互联", "type": "rootcloud", "category": "iot", "description": "树根互联工业互联网平台", "icon": "RocketOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": ""}},
+    {"id": "casicloud", "name": "航天云网", "type": "casicloud", "category": "iot", "description": "航天云网 INDICS 平台", "icon": "InteractionOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": ""}},
+    {"id": "thingsboard", "name": "ThingsBoard", "type": "thingsboard", "category": "iot", "description": "ThingsBoard 开源 IoT 平台", "icon": "RocketOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    {"id": "jetlinks", "name": "JetLinks", "type": "jetlinks", "category": "iot", "description": "JetLinks 开源 IoT 平台", "icon": "RocketOutlined", "default_config": {"base_url": "", "token": ""}},
+    # WMS
+    {"id": "flux_wms", "name": "富勒 WMS", "type": "flux_wms", "category": "wms", "description": "富勒 WMS 仓储管理系统", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": "", "warehouse_id": ""}},
+    {"id": "digiwin_wms", "name": "鼎捷 WMS", "type": "digiwin_wms", "category": "wms", "description": "鼎捷 WMS 仓储管理系统", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    {"id": "kejian_wms", "name": "科箭 WMS", "type": "kejian_wms", "category": "wms", "description": "科箭云仓储 WMS", "icon": "CloudOutlined", "default_config": {"base_url": "", "client_id": "", "client_secret": ""}},
+    {"id": "openwms", "name": "OpenWMS", "type": "openwms", "category": "wms", "description": "OpenWMS 开源仓储管理系统", "icon": "DatabaseOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
+    # 存储（对象存储 / NAS）
+    {"id": "alicloud_oss", "name": "阿里云 OSS", "type": "alicloud_oss", "category": "storage", "description": "阿里云对象存储 OSS", "icon": "CloudServerOutlined", "default_config": {"endpoint": "", "access_key_id": "", "access_key_secret": "", "bucket": "", "region": "cn-hangzhou"}},
+    {"id": "tencent_cos", "name": "腾讯云 COS", "type": "tencent_cos", "category": "storage", "description": "腾讯云对象存储 COS", "icon": "CloudServerOutlined", "default_config": {"endpoint": "", "secret_id": "", "secret_key": "", "bucket": "", "region": ""}},
+    {"id": "huaweicloud_obs", "name": "华为云 OBS", "type": "huaweicloud_obs", "category": "storage", "description": "华为云对象存储 OBS", "icon": "CloudServerOutlined", "default_config": {"endpoint": "", "access_key_id": "", "secret_access_key": "", "bucket": "", "region": "cn-north-4"}},
+    {"id": "aws_s3", "name": "Amazon S3", "type": "aws_s3", "category": "storage", "description": "Amazon S3 对象存储", "icon": "CloudServerOutlined", "default_config": {"endpoint": "", "access_key_id": "", "secret_access_key": "", "bucket": "", "region": "us-east-1"}},
+    {"id": "minio", "name": "MinIO", "type": "minio", "category": "storage", "description": "MinIO S3 兼容对象存储", "icon": "HddOutlined", "default_config": {"endpoint": "", "access_key": "", "secret_key": "", "bucket": "", "region": "us-east-1", "use_path_style": True, "use_ssl": True}},
+    {"id": "qiniu_kodo", "name": "七牛云 Kodo", "type": "qiniu_kodo", "category": "storage", "description": "七牛云对象存储 Kodo", "icon": "CloudServerOutlined", "default_config": {"endpoint": "", "access_key": "", "secret_key": "", "bucket": "", "region": "z0"}},
+    {"id": "nas_webdav", "name": "NAS / WebDAV", "type": "nas_webdav", "category": "storage", "description": "群晖 / 威联通等 NAS WebDAV 协议", "icon": "HddOutlined", "default_config": {"base_url": "", "username": "", "password": "", "root_path": "/"}},
+    {"id": "nas_smb", "name": "NAS / SMB", "type": "nas_smb", "category": "storage", "description": "NAS SMB/CIFS 共享目录", "icon": "HddOutlined", "default_config": {"host": "", "share": "", "username": "", "password": "", "domain": "", "port": 445}},
+    # AI（应用连接列表行，可多条不同 model；选用在 KU-AI → 模型设置）
+    {"id": "deepseek", "name": "DeepSeek", "type": "deepseek", "category": "ai", "description": "DeepSeek OpenAI 兼容 API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://api.deepseek.com", "model": "deepseek-v4-flash"}},
+    {"id": "openai", "name": "OpenAI", "type": "openai", "category": "ai", "description": "OpenAI Chat Completions API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"}},
+    {"id": "qwen", "name": "通义千问", "type": "qwen", "category": "ai", "description": "阿里云百炼兼容模式（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus"}},
+    {"id": "zhipu", "name": "智谱 GLM", "type": "zhipu", "category": "ai", "description": "智谱开放平台 API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4-flash"}},
+    {"id": "moonshot", "name": "月之暗面 Kimi", "type": "moonshot", "category": "ai", "description": "Moonshot OpenAI 兼容 API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-auto"}},
+    {"id": "siliconflow", "name": "硅基流动", "type": "siliconflow", "category": "ai", "description": "SiliconFlow OpenAI 兼容 API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-V3"}},
+    {"id": "amap", "name": "高德地图", "type": "amap", "category": "other", "description": "物流跟踪看板地图与地址地理编码（JS Key + REST Key）", "icon": "EnvironmentOutlined", "default_config": {"js_key": "", "security_code": "", "rest_key": ""}},
+    {"id": "kuaidi100", "name": "快递100", "type": "kuaidi100", "category": "other", "description": "实时快递轨迹查询（授权码 + API Key）", "icon": "CarOutlined", "default_config": {"customer": "", "api_key": ""}},
+    {"id": "kdniao", "name": "快递鸟", "type": "kdniao", "category": "other", "description": "即时查询轨迹（用户 ID + API Key）", "icon": "CarOutlined", "default_config": {"ebusiness_id": "", "api_key": ""}},
+    {"id": "aliyun_market", "name": "阿里云市场", "type": "aliyun_market", "category": "other", "description": "云市场 API（调用地址 + AppCode + 场景）", "icon": "CloudOutlined", "default_config": {"scene": "express_query", "http_method": "POST", "query_url": "", "app_code": ""}},
+    {"id": "tencent_market", "name": "腾讯云市场", "type": "tencent_market", "category": "other", "description": "云市场 API（调用地址 + AppCode + 场景）", "icon": "CloudOutlined", "default_config": {"scene": "express_query", "http_method": "POST", "query_url": "", "app_code": ""}},
+]
+
+CATEGORIES = [
+    {"key": "all", "label": "全部"},
+    {"key": "collaboration", "label": "协作"},
+    {"key": "erp", "label": "ERP 企业资源"},
+    {"key": "plm", "label": "PLM 产品生命周期"},
+    {"key": "crm", "label": "CRM 客户管理"},
+    {"key": "oa", "label": "OA 办公"},
+    {"key": "iot", "label": "IoT 物联网"},
+    {"key": "wms", "label": "WMS 仓储"},
+    {"key": "storage", "label": "存储"},
+    {"key": "ai", "label": "AI"},
+    {"key": "other", "label": "其他"},
+]
+
+
+@router.get("", response_model=dict)
+async def list_connector_definitions(
+    category: Optional[str] = None,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取连接器定义列表
+    
+    返回预置应用连接器定义，供连接器市场展示。
+    后续可扩展：从系统配置或数据库读取自定义连接器。
+    """
+    items = list(PRESET_APP_CONNECTORS)
+    if category and category != "all":
+        items = [c for c in items if c.get("category") == category]
+    return {
+        "items": items,
+        "categories": CATEGORIES,
+    }

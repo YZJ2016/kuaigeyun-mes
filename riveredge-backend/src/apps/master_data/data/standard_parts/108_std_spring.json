@@ -1,0 +1,64 @@
+{
+  "sortOrder": 108,
+  "industryId": "machining",
+  "primaryCategory": "standard_parts",
+  "id": "std_spring_cn_sme",
+  "name": "弹簧件-压簧拉簧碟簧",
+  "description": "用于机构回位、缓冲与预紧的常用弹簧元件。",
+  "items": [
+    {
+      "preset_key": "cn_spring_compression_cyl_gbt2089_d20",
+      "name": "圆柱螺旋压缩弹簧",
+      "specification": "d=2.0 D=20 L0=60",
+      "gb_standard": "GB/T 2089",
+      "gb_code": "GB2089-D2-D20-L60",
+      "base_unit": "件",
+      "texture": "65Mn"
+    },
+    {
+      "preset_key": "cn_spring_compression_cyl_gbt2089_d25",
+      "name": "圆柱螺旋压缩弹簧",
+      "specification": "d=2.5 D=25 L0=80",
+      "gb_standard": "GB/T 2089",
+      "gb_code": "GB2089-D2.5-D25-L80",
+      "base_unit": "件",
+      "texture": "65Mn"
+    },
+    {
+      "preset_key": "cn_spring_extension_gbt1239_1_d16",
+      "name": "圆柱螺旋拉伸弹簧",
+      "specification": "d=1.6 D=12 L0=80",
+      "gb_standard": "GB/T 1239.1",
+      "gb_code": "GB1239.1-D1.6-D12-L80",
+      "base_unit": "件",
+      "texture": "65Mn"
+    },
+    {
+      "preset_key": "cn_spring_torsion_gbt1239_3_d14",
+      "name": "圆柱螺旋扭转弹簧",
+      "specification": "d=1.4 D=10",
+      "gb_standard": "GB/T 1239.3",
+      "gb_code": "GB1239.3-D1.4-D10",
+      "base_unit": "件",
+      "texture": "65Mn"
+    },
+    {
+      "preset_key": "cn_spring_disc_gbt1972_30x15x1_5",
+      "name": "碟形弹簧",
+      "specification": "30×15×1.5",
+      "gb_standard": "GB/T 1972",
+      "gb_code": "GB1972-30X15X1.5",
+      "base_unit": "件",
+      "texture": "弹簧钢"
+    },
+    {
+      "preset_key": "cn_wave_spring_jbt8135_25",
+      "name": "波形弹簧垫圈",
+      "specification": "25",
+      "gb_standard": "JB/T 8135",
+      "gb_code": "JBT8135-25",
+      "base_unit": "件",
+      "texture": "弹簧钢"
+    }
+  ]
+}

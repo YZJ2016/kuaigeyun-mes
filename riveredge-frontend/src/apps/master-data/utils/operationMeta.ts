@@ -1,0 +1,258 @@
+/**
+ * 工序管理：报工类型 / 超报方式 / 不良品项 / 启用状态徽章（唯一真源）
+ *
+ * - 启用：MarkerTag filled
+ * - 类型 / 模式 / 分类标识：MarkerTag filled
+ */
+
+import React from 'react';
+import { Space } from 'antd';
+import type { TFunction } from 'i18next';
+import { MarkerTag } from '../../../constants/statusBadges';
+import type { DefectTypeMinimal } from '../types/process';
+
+export type OperationReportingType = 'quantity' | 'status';
+export type OperationOverReportMode = 'none' | 'fixed' | 'percent';
+
+const REPORTING_TYPE_MARKER_COLOR: Record<OperationReportingType, string> = {
+  quantity: 'processing',
+  status: 'success',
+};
+
+const OVER_REPORT_MODE_MARKER_COLOR: Record<Exclude<OperationOverReportMode, 'none'>, string> = {
+  fixed: 'geekblue',
+  percent: 'orange',
+};
+
+const DEFECT_TYPE_MARKER_COLOR = 'warning';
+const PERSONNEL_MARKER_COLOR = 'cyan';
+const OVERFLOW_MARKER_COLOR = 'default';
+
+export function normalizeOperationReportingType(value?: string | null): OperationReportingType | null {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'quantity') return 'quantity';
+  if (raw === 'status') return 'status';
+  return null;
+}
+
+export function normalizeOperationOverReportMode(value?: string | null): OperationOverReportMode {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'fixed') return 'fixed';
+  if (raw === 'percent') return 'percent';
+  return 'none';
+}
+
+export function getOperationReportingTypeText(
+  t: TFunction,
+  reportingType?: string | null,
+): string {
+  const normalized = normalizeOperationReportingType(reportingType);
+  if (normalized === 'quantity') return t('field.operation.reportingTypeQuantity');
+  if (normalized === 'status') return t('field.operation.reportingTypeStatus');
+  return '-';
+}
+
+export function renderOperationReportingTypeMarker(
+  t: TFunction,
+  reportingType?: string | null,
+): React.ReactNode {
+  const normalized = normalizeOperationReportingType(reportingType);
+  if (!normalized) return '-';
+  return React.createElement(
+    MarkerTag,
+    { color: REPORTING_TYPE_MARKER_COLOR[normalized] },
+    getOperationReportingTypeText(t, normalized),
+  );
+}
+
+export function getOperationOverReportModeText(
+  t: TFunction,
+  mode?: string | null,
+): string {
+  const normalized = normalizeOperationOverReportMode(mode);
+  if (normalized === 'fixed') return t('field.operation.overReportModeFixed');
+  if (normalized === 'percent') return t('field.operation.overReportModePercent');
+  return t('field.operation.overReportModeNone');
+}
+
+export function renderOperationOverReportModeMarker(
+  t: TFunction,
+  mode?: string | null,
+  value?: number | string | null,
+): React.ReactNode {
+  const normalized = normalizeOperationOverReportMode(mode);
+  const baseLabel = getOperationOverReportModeText(t, normalized);
+  if (normalized === 'none') {
+    return React.createElement(MarkerTag, { color: 'default' }, baseLabel);
+  }
+  const numeric = Number(value ?? 0) || 0;
+  const detail = normalized === 'fixed' ? ` +${numeric}` : ` ${numeric}%`;
+  const label = numeric > 0 ? `${baseLabel}${detail}` : baseLabel;
+  return React.createElement(
+    MarkerTag,
+    { color: OVER_REPORT_MODE_MARKER_COLOR[normalized] },
+    label,
+  );
+}
+
+export function renderOperationDefectTypeMarkers(
+  defectTypes?: DefectTypeMinimal[] | null,
+  maxVisible = 3,
+): React.ReactNode {
+  const arr = Array.isArray(defectTypes) ? defectTypes : [];
+  if (!arr.length) return '-';
+  const visible = arr.slice(0, maxVisible);
+  const overflow = arr.length - visible.length;
+  return React.createElement(
+    Space,
+    { size: 'small', wrap: true },
+    ...visible.map((item) =>
+      React.createElement(
+        MarkerTag,
+        { key: item.uuid ?? item.code ?? item.name, color: DEFECT_TYPE_MARKER_COLOR },
+        item.name ?? item.code ?? '-',
+      ),
+    ),
+    overflow > 0
+      ? React.createElement(MarkerTag, { color: OVERFLOW_MARKER_COLOR }, `+${overflow}`)
+      : null,
+  );
+}
+
+export function renderOperationPersonnelMarkers(
+  names?: string[] | null,
+  maxVisible = 3,
+): React.ReactNode {
+  const arr = Array.isArray(names) ? names.filter(Boolean) : [];
+  if (!arr.length) return '-';
+  const visible = arr.slice(0, maxVisible);
+  const overflow = arr.length - visible.length;
+  return React.createElement(
+    Space,
+    { size: 'small', wrap: true },
+    ...visible.map((name, index) =>
+      React.createElement(
+        MarkerTag,
+        { key: `${name}-${index}`, color: PERSONNEL_MARKER_COLOR },
+        name,
+      ),
+    ),
+    overflow > 0
+      ? React.createElement(MarkerTag, { color: OVERFLOW_MARKER_COLOR }, `+${overflow}`)
+      : null,
+  );
+}
+
+const INSPECTION_PLAN_MARKER_COLOR = 'purple';
+
+/** 列表：解析工序默认质检方案名称（有序多方案） */
+export function resolveOperationInspectionPlanLabels(record: {
+  inspectionMode?: string | null;
+  inspection_mode?: string | null;
+  defaultInspectionPlanNames?: string[] | null;
+  default_inspection_plan_names?: string[] | null;
+  defaultInspectionPlanName?: string | null;
+  default_inspection_plan_name?: string | null;
+  defaultInspectionPlanIds?: number[] | null;
+  default_inspection_plan_ids?: number[] | null;
+  defaultInspectionPlanId?: number | null;
+  default_inspection_plan_id?: number | null;
+  inspectionStages?: Record<string, { mode?: string; planIds?: number[]; plan_ids?: number[] }> | null;
+  inspection_stages?: Record<string, { mode?: string; planIds?: number[]; plan_ids?: number[] }> | null;
+}): string[] {
+  const mode = String(record.inspectionMode ?? record.inspection_mode ?? '').trim().toLowerCase();
+  if (mode && mode !== 'plan') return [];
+
+  const namesRaw =
+    record.defaultInspectionPlanNames ?? record.default_inspection_plan_names ?? [];
+  const names = (Array.isArray(namesRaw) ? namesRaw : [])
+    .map((n) => String(n ?? '').trim())
+    .filter(Boolean);
+  if (names.length) return names;
+
+  const single = String(
+    record.defaultInspectionPlanName ?? record.default_inspection_plan_name ?? '',
+  ).trim();
+  if (single) return [single];
+
+  const idsRaw =
+    record.defaultInspectionPlanIds
+    ?? record.default_inspection_plan_ids
+    ?? (record.inspectionStages?.ipqc?.planIds
+      ?? record.inspection_stages?.ipqc?.plan_ids
+      ?? record.inspectionStages?.ipqc?.plan_ids
+      ?? record.inspection_stages?.ipqc?.planIds);
+  const ids = (Array.isArray(idsRaw)
+    ? idsRaw
+    : record.defaultInspectionPlanId != null || record.default_inspection_plan_id != null
+      ? [record.defaultInspectionPlanId ?? record.default_inspection_plan_id]
+      : []
+  )
+    .map((x) => Number(x))
+    .filter((id) => Number.isFinite(id) && id > 0);
+  return ids.map((id) => `#${id}`);
+}
+
+export function renderOperationInspectionPlanMarkers(
+  names?: string[] | null,
+  maxVisible = 2,
+): React.ReactNode {
+  const arr = Array.isArray(names) ? names.filter((n) => Boolean(n && String(n).trim())) : [];
+  if (!arr.length) return '-';
+  const visible = arr.slice(0, maxVisible);
+  const overflow = arr.length - visible.length;
+  return React.createElement(
+    Space,
+    { size: 'small', wrap: true },
+    ...visible.map((name, index) =>
+      React.createElement(
+        MarkerTag,
+        { key: `${name}-${index}`, color: INSPECTION_PLAN_MARKER_COLOR },
+        name,
+      ),
+    ),
+    overflow > 0
+      ? React.createElement(MarkerTag, { color: OVERFLOW_MARKER_COLOR }, `+${overflow}`)
+      : null,
+  );
+}
+
+/** 列表/详情：合并默认人员姓名与工作小组名称（与编辑表单人员/小组配置一致） */
+export function resolveOperationDefaultPersonnelLabels(record: {
+  defaultOperatorNames?: string[] | null;
+  default_operator_names?: string[] | null;
+  defaultTeamNames?: string[] | null;
+  default_team_names?: string[] | null;
+}): string[] {
+  const operators = record.defaultOperatorNames ?? record.default_operator_names ?? [];
+  const teams = record.defaultTeamNames ?? record.default_team_names ?? [];
+  return [
+    ...(Array.isArray(operators) ? operators : []),
+    ...(Array.isArray(teams) ? teams : []),
+  ].filter((name): name is string => Boolean(name && String(name).trim()));
+}
+
+export function renderOperationActiveStatusTag(
+  t: TFunction,
+  isActive?: boolean | null,
+): React.ReactNode {
+  const active = Boolean(isActive);
+  return React.createElement(
+    MarkerTag,
+    { color: active ? 'success' : 'default' },
+    active ? t('common.enabled') : t('common.disabled'),
+  );
+}
+
+export function buildOperationReportingTypeValueEnum(t: TFunction) {
+  return {
+    quantity: {
+      text: t('field.operation.reportingTypeQuantity'),
+      status: 'Processing',
+    },
+    status: {
+      text: t('field.operation.reportingTypeStatus'),
+      status: 'Success',
+    },
+  } as const;
+}

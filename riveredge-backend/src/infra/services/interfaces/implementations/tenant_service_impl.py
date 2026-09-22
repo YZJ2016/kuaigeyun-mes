@@ -1,0 +1,174 @@
+"""
+组织服务实现
+
+将TenantService适配为TenantServiceInterface接口实现。
+
+Author: Luigi Lu
+Date: 2025-12-27
+"""
+
+from typing import Any, Dict, Optional
+from tortoise.backends.base.client import BaseDBAsyncClient
+from infra.services.interfaces.service_interface import TenantServiceInterface
+from infra.services.tenant_service import TenantService
+
+
+class TenantServiceImpl(TenantServiceInterface):
+    """
+    组织服务实现类
+    
+    将 TenantService 适配为接口实现。
+    """
+    
+    def __init__(self):
+        self._tenant_service = TenantService()
+    
+    @property
+    def service_name(self) -> str:
+        return "tenant_service"
+    
+    @property
+    def service_version(self) -> str:
+        return "1.0.0"
+    
+    async def health_check(self) -> Dict[str, Any]:
+        """服务健康检查"""
+        return {
+            "status": "healthy",
+            "service": "tenant_service",
+            "version": self.service_version
+        }
+    
+    async def list_tenants(
+        self,
+        page: int = 1,
+        page_size: int = 10,
+        status: Optional[Any] = None,
+        plan: Optional[Any] = None,
+        parent_tenant_id: Optional[int] = None,
+        is_subtenant: Optional[bool] = None,
+        name: Optional[str] = None,
+        domain: Optional[str] = None,
+        sort: Optional[str] = None,
+        order: Optional[str] = None,
+        skip_tenant_filter: bool = False
+    ) -> Dict[str, Any]:
+        """获取组织列表"""
+        return await self._tenant_service.list_tenants(
+            page=page,
+            page_size=page_size,
+            status=status,
+            plan=plan,
+            parent_tenant_id=parent_tenant_id,
+            is_subtenant=is_subtenant,
+            name=name,
+            domain=domain,
+            sort=sort,
+            order=order,
+            skip_tenant_filter=skip_tenant_filter
+        )
+    
+    async def get_tenant_by_id(
+        self,
+        tenant_id: int,
+        skip_tenant_filter: bool = True
+    ) -> Optional[Any]:
+        """根据ID获取组织"""
+        return await self._tenant_service.get_tenant_by_id(
+            tenant_id=tenant_id,
+            skip_tenant_filter=skip_tenant_filter
+        )
+    
+    async def create_tenant(self, data: Any) -> Any:
+        """创建组织"""
+        return await self._tenant_service.create_tenant(data)
+    
+    async def update_tenant(
+        self,
+        tenant_id: int,
+        data: Any,
+        skip_tenant_filter: bool = True
+    ) -> Optional[Any]:
+        """更新组织"""
+        return await self._tenant_service.update_tenant(
+            tenant_id=tenant_id,
+            data=data,
+            skip_tenant_filter=skip_tenant_filter
+        )
+    
+    async def delete_tenant(
+        self,
+        tenant_id: int,
+        skip_tenant_filter: bool = True
+    ) -> bool:
+        """删除组织"""
+        return await self._tenant_service.delete_tenant(
+            tenant_id=tenant_id,
+            skip_tenant_filter=skip_tenant_filter
+        )
+
+    async def activate_tenant(
+        self,
+        tenant_id: int,
+        skip_tenant_filter: bool = True
+    ) -> Optional[Any]:
+        """激活组织（审核通过）"""
+        return await self._tenant_service.activate_tenant(
+            tenant_id=tenant_id,
+            skip_tenant_filter=skip_tenant_filter
+        )
+
+    async def deactivate_tenant(
+        self,
+        tenant_id: int,
+        skip_tenant_filter: bool = True
+    ) -> Optional[Any]:
+        """停用组织"""
+        return await self._tenant_service.deactivate_tenant(
+            tenant_id=tenant_id,
+            skip_tenant_filter=skip_tenant_filter
+        )
+
+    async def initialize_tenant_data(
+        self,
+        tenant_id: int,
+        init_data_options: Optional[Any] = None,
+        current_user_id: Optional[int] = None,
+        industry_preset: Optional[str] = None,
+    ) -> None:
+        """初始化组织默认数据"""
+        await self._tenant_service.initialize_tenant_data(
+            tenant_id=tenant_id,
+            init_data_options=init_data_options,
+            current_user_id=current_user_id,
+            industry_preset=industry_preset,
+        )
+
+    async def get_shared_user_quota_summary(self, tenant_id: int) -> Dict[str, Any]:
+        """获取主组织共享用户池统计"""
+        return await self._tenant_service.get_shared_user_quota_summary(tenant_id)
+
+    async def sync_tenant_limits_from_plan(
+        self,
+        tenant_id: int,
+        skip_tenant_filter: bool = True,
+    ) -> Dict[str, Any]:
+        """从当前套餐同步组织配额上限"""
+        return await self._tenant_service.sync_tenant_limits_from_plan(
+            tenant_id,
+            skip_tenant_filter=skip_tenant_filter,
+        )
+
+    async def assert_shared_user_quota_capacity(
+        self,
+        tenant_id: int,
+        increment: int = 1,
+        using_db: Optional[BaseDBAsyncClient] = None,
+    ) -> None:
+        """校验共享用户池容量"""
+        await self._tenant_service.assert_shared_user_quota_capacity(
+            tenant_id,
+            increment=increment,
+            using_db=using_db,
+        )
+

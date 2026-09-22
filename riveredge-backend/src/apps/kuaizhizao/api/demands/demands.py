@@ -1,0 +1,796 @@
+"""
+统一需求管理 API 路由模块
+
+提供统一需求管理相关的API接口，支持销售预测和销售订单两种需求类型。
+
+根据《☆ 用户使用全场景推演.md》的设计理念，将销售预测和销售订单统一为需求管理。
+
+Author: Luigi Lu
+Date: 2025-01-14
+"""
+
+import uuid
+from datetime import date
+from typing import Optional, Dict, Any, List
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException
+from loguru import logger
+
+from core.api.deps import get_current_user, get_current_tenant
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
+from infra.models.user import User
+from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
+
+from apps.kuaizhizao.services.demand_service import DemandService, DEMAND_SORTABLE_FIELDS
+from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+from apps.kuaizhizao.schemas.document_relation import ChangeImpactResponse
+from apps.kuaizhizao.schemas.demand import (
+    DemandCreate,
+    DemandUpdate,
+    DemandResponse,
+    DemandListResponse,
+    DemandItemCreate,
+    DemandItemUpdate,
+    DemandItemResponse,
+)
+from typing import List
+
+# 初始化服务实例
+demand_service = DemandService()
+document_relation_service = DocumentRelationNewService()
+
+# 创建路由
+router = APIRouter(
+    prefix="/demands",
+    tags=["App - Kuaige Zhizao - Demand Management"],
+    dependencies=[Depends(require_kuaizhizao_module_access("plan-management-demand-management"))],
+)
+
+
+def _http_exception_with_trace(
+    status_code: int,
+    message: str,
+    route: str,
+    tenant_id: Optional[int] = None,
+) -> HTTPException:
+    trace_id = uuid.uuid4().hex
+    logger.warning(
+        "demand_api_error trace_id={} tenant_id={} route={} status_code={} message={}",
+        trace_id,
+        tenant_id,
+        route,
+        status_code,
+        message,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"message": message, "trace_id": trace_id},
+    )
+
+
+@router.post("", response_model=DemandResponse, summary="Create demand")
+async def create_demand(
+    demand_data: DemandCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    创建统一需求
+    
+    支持创建销售预测（sales_forecast）和销售订单（sales_order）两种类型。
+    需求编码会自动生成：
+    - 销售预测：SF-YYYYMMDD-序号
+    - 销售订单：SO-YYYYMMDD-序号
+    """
+    try:
+        result = await demand_service.create_demand(
+            tenant_id=tenant_id,
+            demand_data=demand_data,
+            created_by=current_user.id
+        )
+        return result
+    except ValidationError as e:
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/demands", tenant_id)
+    except Exception as e:
+        logger.error(f"创建需求失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "创建需求失败", "/demands", tenant_id)
+
+
+@router.post("/batch", response_model=Dict[str, Any], summary="Batch create demands")
+async def batch_create_demands(
+    demands_data: List[DemandCreate],
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量创建统一需求
+    
+    支持批量创建销售预测和销售订单。
+    返回成功和失败的数量及详细信息。
+    """
+    try:
+        success_count = 0
+        failure_count = 0
+        errors = []
+        created_demands = []
+        
+        for index, demand_data in enumerate(demands_data, start=1):
+            try:
+                demand = await demand_service.create_demand(
+                    tenant_id=tenant_id,
+                    demand_data=demand_data,
+                    created_by=current_user.id
+                )
+                created_demands.append(demand)
+                success_count += 1
+            except Exception as e:
+                failure_count += 1
+                errors.append({
+                    "row": index,
+                    "error": str(e),
+                    "data": demand_data.model_dump() if hasattr(demand_data, 'model_dump') else demand_data.dict(),
+                })
+                logger.error(f"批量创建需求失败（第{index}行）: {e}")
+        
+        return {
+            "success": True,
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "errors": errors,
+            "created_demands": [d.model_dump() if hasattr(d, 'model_dump') else d.dict() for d in created_demands],
+        }
+    except Exception as e:
+        logger.error(f"批量创建需求异常: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"批量创建需求失败: {str(e)}",
+            "/demands/batch",
+            tenant_id,
+        )
+
+
+@router.get("/statistics", summary="Demand statistics (KPI cards)")
+async def get_demand_statistics(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """
+    返回需求各维度数量，用于列表页指标卡片。
+    指标：活动需求、待审核、已审核、已下推计算、总金额。
+    """
+    from datetime import date
+    from apps.kuaizhizao.models.demand import Demand
+    from tortoise.functions import Sum
+
+    today = date.today()
+    base = Demand.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    audited = ("AUDITED", "已审核", "CONFIRMED", "已确认", "audited", "已通过")
+    pending_review = ("PENDING", "PENDING_REVIEW", "待审核", "pending_review")
+
+    try:
+        active_count = await base.exclude(
+            status__in=["DRAFT", "草稿", "draft", "CANCELLED", "已取消", "cancelled"],
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"],
+        ).count()
+    except Exception as e:
+        logger.warning(f"demand-statistics active_count: {e}")
+        active_count = 0
+
+    try:
+        pending_review_count = await base.filter(
+            review_status__in=list(pending_review),
+        ).count()
+    except Exception as e:
+        logger.warning(f"demand-statistics pending_review_count: {e}")
+        pending_review_count = 0
+
+    try:
+        audited_count = await base.filter(
+            status__in=list(audited),
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"],
+        ).filter(
+            pushed_to_computation=False,
+        ).count()
+    except Exception as e:
+        logger.warning(f"demand-statistics audited_count: {e}")
+        audited_count = 0
+
+    try:
+        pushed_count = await base.filter(
+            pushed_to_computation=True,
+        ).count()
+    except Exception as e:
+        logger.warning(f"demand-statistics pushed_count: {e}")
+        pushed_count = 0
+
+    try:
+        agg = await base.exclude(
+            status__in=["DRAFT", "草稿", "draft", "CANCELLED", "已取消", "cancelled"],
+        ).exclude(
+            review_status__in=["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"],
+        ).aggregate(total=Sum("total_amount"))
+        total_amount = float(agg.get("total") or 0)
+    except Exception as e:
+        logger.warning(f"demand-statistics total_amount: {e}")
+        total_amount = 0
+
+    return {
+        "active_count": active_count,
+        "pending_review_count": pending_review_count,
+        "audited_count": audited_count,
+        "pushed_count": pushed_count,
+        "total_amount": round(total_amount, 2),
+    }
+
+
+@router.get("", summary="List demands")
+async def list_demands(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(20, ge=1, le=100, description="限制数量"),
+    demand_type: str = Query("demand_plan", description="需求类型（当前仅支持 demand_plan）"),
+    demand_status: Optional[str] = Query(None, description="需求状态", alias="status"),
+    pushed_to_computation: Optional[bool] = Query(None, description="是否已下推计算"),
+    business_mode: Optional[str] = Query(None, description="业务模式（MTS / MTO / ATO）"),
+    review_status: Optional[str] = Query(None, description="审核状态"),
+    keyword: Optional[str] = Query(None, description="关键词（编码、名称、来源编码、客户名称等）"),
+    demand_code: Optional[str] = Query(None, description="需求编码（模糊）"),
+    demand_name: Optional[str] = Query(None, description="需求名称（模糊）"),
+    start_date_from: Optional[date] = Query(None, description="计划开始日期起"),
+    start_date_to: Optional[date] = Query(None, description="计划开始日期止"),
+    end_date_from: Optional[date] = Query(None, description="计划结束日期起"),
+    end_date_to: Optional[date] = Query(None, description="计划结束日期止"),
+    created_start_date: Optional[date] = Query(None, description="创建日期起"),
+    created_end_date: Optional[date] = Query(None, description="创建日期止"),
+    order_by: Optional[str] = Query(None, description="排序字段，如 demand_code、-created_at"),
+    include_items: bool = Query(False, description="是否包含明细"),
+    pullable_only: Optional[bool] = Query(
+        None,
+        description="仅可加载建单；需配合 pull_target",
+    ),
+    pull_target: Optional[str] = Query(
+        None,
+        description="加载目标：demand_computation；与 pullable_only 组合使用",
+    ),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取需求列表
+    
+    支持按需求类型、状态、业务模式、审核状态等条件筛选。
+    """
+    try:
+        safe_order_by = None
+        if order_by:
+            field = order_by.lstrip("-")
+            if field in DEMAND_SORTABLE_FIELDS:
+                safe_order_by = order_by
+
+        filters = {'demand_type': "demand_plan" if demand_type != "demand_plan" else demand_type}
+        if demand_status:
+            filters['status'] = demand_status
+        if pushed_to_computation is not None:
+            filters['pushed_to_computation'] = pushed_to_computation
+        if business_mode:
+            filters['business_mode'] = business_mode
+        if review_status:
+            filters['review_status'] = review_status
+        if keyword and str(keyword).strip():
+            filters['keyword'] = str(keyword).strip()
+        if demand_code and str(demand_code).strip():
+            filters['demand_code'] = str(demand_code).strip()
+        if demand_name and str(demand_name).strip():
+            filters['demand_name'] = str(demand_name).strip()
+        if start_date_from is not None:
+            filters['start_date_from'] = start_date_from
+        if start_date_to is not None:
+            filters['start_date_to'] = start_date_to
+        if end_date_from is not None:
+            filters['end_date_from'] = end_date_from
+        if end_date_to is not None:
+            filters['end_date_to'] = end_date_to
+        if created_start_date is not None:
+            filters['created_start_date'] = created_start_date
+        if created_end_date is not None:
+            filters['created_end_date'] = created_end_date
+        if safe_order_by:
+            filters['order_by'] = safe_order_by
+        if include_items:
+            filters['include_items'] = True
+        if pullable_only is not None:
+            filters['pullable_only'] = pullable_only
+        if pull_target and str(pull_target).strip():
+            filters['pull_target'] = str(pull_target).strip()
+        
+        result = await demand_service.list_demands(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            **filters
+        )
+        return result
+    except Exception as e:
+        logger.exception("获取需求列表失败: %s", e)
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取需求列表失败", "/demands", tenant_id)
+
+
+@router.get("/orphan-report", response_model=Dict[str, Any], summary="Scan orphan demands (read-only)")
+async def inspect_orphan_demands(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    巡检孤儿需求（仅查询，不修改）。
+
+    返回当前租户的：销售订单数、销售预测数、需求总数，以及来源单据已不存在的需求 ID 列表（孤儿）。
+    用于确认数据后再决定是否调用 POST /clean-orphans 清理。
+    """
+    try:
+        result = await demand_service.inspect_orphan_demands(tenant_id=tenant_id)
+        return result
+    except Exception as e:
+        logger.error(f"巡检孤儿需求失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"巡检孤儿需求失败: {str(e)}",
+            "/demands/orphan-report",
+            tenant_id,
+        )
+
+
+@router.get("/{demand_id}", response_model=DemandResponse, summary="Get demand")
+async def get_demand(
+    demand_id: int = Path(..., description="需求ID"),
+    include_items: bool = Query(False, description="是否包含明细"),
+    include_duration: bool = Query(False, description="是否包含耗时统计"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取需求详情
+    
+    可以指定是否包含需求明细和耗时统计。
+    """
+    try:
+        result = await demand_service.get_demand_by_id(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            include_items=include_items,
+            include_duration=include_duration
+        )
+        
+        return result
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}", tenant_id)
+    except Exception as e:
+        logger.error(f"获取需求详情失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取需求详情失败", "/demands/{demand_id}", tenant_id)
+
+
+@router.get("/{demand_id}/change-impact", response_model=ChangeImpactResponse, summary="Demand change impact")
+async def get_demand_change_impact(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取需求变更对下游的影响范围（排程管理增强）
+    返回受影响的需求计算、生产计划、工单及建议操作。
+    """
+    try:
+        return await document_relation_service.get_change_impact_demand(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/change-impact", tenant_id)
+    except Exception as e:
+        logger.error(f"获取需求变更影响失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "获取变更影响失败", "/demands/{demand_id}/change-impact", tenant_id)
+
+
+@router.get("/{demand_id}/recalc-history", summary="Demand recalc history")
+async def get_demand_recalc_history(
+    demand_id: int = Path(..., description="需求ID"),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取需求重算历史列表，用于「重算过程」展示。"""
+    try:
+        return await demand_service.list_demand_recalc_history(
+            tenant_id=tenant_id, demand_id=demand_id, limit=limit
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/recalc-history", tenant_id)
+
+
+@router.get("/{demand_id}/snapshots", summary="List demand snapshots")
+async def get_demand_snapshots(
+    demand_id: int = Path(..., description="需求ID"),
+    limit: int = Query(20, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取需求快照列表。"""
+    try:
+        return await demand_service.list_demand_snapshots(
+            tenant_id=tenant_id, demand_id=demand_id, limit=limit
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/snapshots", tenant_id)
+
+
+@router.delete("/{demand_id}", summary="Delete demand")
+async def delete_demand(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    删除需求
+
+    只能删除草稿或待审核状态的需求。已审核或已下推计算的需求不允许删除。
+    """
+    try:
+        await demand_service.delete_demand(tenant_id=tenant_id, demand_id=demand_id)
+        return {"success": True, "message": "删除成功"}
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}", tenant_id)
+    except Exception as e:
+        logger.error(f"删除需求失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "删除需求失败", "/demands/{demand_id}", tenant_id)
+
+
+@router.put("/{demand_id}", response_model=DemandResponse, summary="Update demand")
+async def update_demand(
+    demand_id: int = Path(..., description="需求ID"),
+    demand_data: DemandUpdate = ...,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    更新需求
+
+    草稿状态：可修改全部字段。
+    非草稿状态（与上游同步）：仅支持修改优先级(priority)和备注(notes)，用于排产等场景。
+    """
+    try:
+        result = await demand_service.update_demand(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            demand_data=demand_data,
+            updated_by=current_user.id
+        )
+        return result
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}", tenant_id)
+    except Exception as e:
+        logger.error(f"更新需求失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "更新需求失败", "/demands/{demand_id}", tenant_id)
+
+
+@router.post("/{demand_id}/submit", response_model=DemandResponse, summary="Submit demand")
+async def submit_demand(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    提交需求（提交审核）
+    
+    只能提交草稿状态的需求，提交后状态变为待审核。
+    """
+    try:
+        result = await demand_service.submit_demand(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            submitted_by=current_user.id
+        )
+        return result
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/submit", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/submit", tenant_id)
+    except Exception as e:
+        logger.error(f"提交需求失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "提交需求失败", "/demands/{demand_id}/submit", tenant_id)
+
+
+@router.post("/{demand_id}/approve", response_model=DemandResponse, summary="Approve demand")
+async def approve_demand(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    审核通过需求
+    
+    只能审核待审核状态的需求。
+    """
+    try:
+        result = await demand_service.approve_demand(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            approved_by=current_user.id,
+            rejection_reason=None
+        )
+        return result
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/approve", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/approve", tenant_id)
+    except Exception as e:
+        logger.error(f"审核需求失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "审核需求失败", "/demands/{demand_id}/approve", tenant_id)
+
+
+@router.post("/{demand_id}/reject", response_model=DemandResponse, summary="Reject demand")
+async def reject_demand(
+    demand_id: int = Path(..., description="需求ID"),
+    rejection_reason: str = Query(..., description="驳回原因"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    驳回需求
+    
+    只能审核待审核状态的需求。
+    """
+    try:
+        result = await demand_service.approve_demand(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            approved_by=current_user.id,
+            rejection_reason=rejection_reason
+        )
+        return result
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/reject", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/reject", tenant_id)
+    except Exception as e:
+        logger.error(f"驳回需求失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "驳回需求失败", "/demands/{demand_id}/reject", tenant_id)
+
+
+@router.post("/{demand_id}/close", response_model=DemandResponse, summary="Close demand")
+async def close_demand(
+    demand_id: int = Path(..., description="需求ID"),
+    reason: Optional[str] = Query(None, description="关闭原因"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """关闭已审核/已确认需求：终止剩余计划，进入 CLOSED。"""
+    try:
+        return await demand_service.close_demand(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            closed_by=current_user.id,
+            reason=reason,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/close", tenant_id
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/close", tenant_id
+        )
+    except Exception as e:
+        logger.error(f"关闭需求失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "关闭需求失败",
+            "/demands/{demand_id}/close",
+            tenant_id,
+        )
+
+
+# ==================== 需求明细管理 ====================
+
+@router.post("/{demand_id}/items", response_model=DemandItemResponse, summary="Add demand line")
+async def add_demand_item(
+    demand_id: int = Path(..., description="需求ID"),
+    item_data: DemandItemCreate = ...,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    添加需求明细
+    
+    根据需求类型自动处理明细字段：
+    - 销售预测：需要填写预测日期或预测月份
+    - 销售订单：需要填写交货日期，自动计算金额和剩余数量
+    """
+    try:
+        result = await demand_service.add_demand_item(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            item_data=item_data
+        )
+        return result
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/items", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/demands/{demand_id}/items", tenant_id)
+    except Exception as e:
+        logger.error(f"添加需求明细失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "添加需求明细失败", "/demands/{demand_id}/items", tenant_id)
+
+
+@router.put("/{demand_id}/items/{item_id}", response_model=DemandItemResponse, summary="Update demand line")
+async def update_demand_item(
+    demand_id: int = Path(..., description="需求ID"),
+    item_id: int = Path(..., description="明细ID"),
+    item_data: DemandItemUpdate = ...,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    更新需求明细
+    
+    根据需求类型自动处理明细字段。
+    """
+    try:
+        result = await demand_service.update_demand_item(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            item_id=item_id,
+            item_data=item_data
+        )
+        return result
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/items/{item_id}", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/demands/{demand_id}/items/{item_id}", tenant_id)
+    except Exception as e:
+        logger.error(f"更新需求明细失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "更新需求明细失败", "/demands/{demand_id}/items/{item_id}", tenant_id)
+
+
+@router.delete("/{demand_id}/items/{item_id}", summary="Delete demand line")
+async def delete_demand_item(
+    demand_id: int = Path(..., description="需求ID"),
+    item_id: int = Path(..., description="明细ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    删除需求明细
+    
+    删除后会自动更新需求的总数量和总金额。
+    """
+    try:
+        await demand_service.delete_demand_item(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            item_id=item_id
+        )
+        return {"success": True, "message": "删除成功"}
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/items/{item_id}", tenant_id)
+    except Exception as e:
+        logger.error(f"删除需求明细失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "删除需求明细失败", "/demands/{demand_id}/items/{item_id}", tenant_id)
+
+
+@router.get("/{demand_id}/push-to-computation/preview", response_model=Dict[str, Any], summary="Preview demand push to computation")
+async def preview_push_demand_to_computation(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """下推需求计算预览：返回明细数量、已下推、可下推，不实际创建。"""
+    try:
+        return await demand_service.preview_push_demand_to_computation(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/push-to-computation/preview", tenant_id)
+    except (ValidationError, BusinessLogicError) as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/push-to-computation/preview", tenant_id)
+    except Exception as e:
+        logger.error(f"下推需求预览失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"下推需求预览失败: {str(e)}",
+            "/demands/{demand_id}/push-to-computation/preview",
+            tenant_id,
+        )
+
+
+@router.post("/{demand_id}/push-to-computation", response_model=Dict[str, Any], summary="Push demand to material planning")
+async def push_demand_to_computation(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    将需求下推到物料需求运算（一键下推）
+    
+    只能下推已审核的需求。下推后会：
+    1. 标记需求为已下推
+    2. 创建需求计算任务（待步骤1.2实现统一需求计算服务后完善）
+    """
+    try:
+        result = await demand_service.push_to_computation(
+            tenant_id=tenant_id,
+            demand_id=demand_id,
+            created_by=current_user.id
+        )
+        return result
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/push-to-computation", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(http_status.HTTP_422_UNPROCESSABLE_ENTITY, str(e), "/demands/{demand_id}/push-to-computation", tenant_id)
+    except Exception as e:
+        logger.error(f"下推需求失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"下推需求失败: {str(e)}",
+            "/demands/{demand_id}/push-to-computation",
+            tenant_id,
+        )
+
+
+@router.post("/{demand_id}/withdraw-from-computation", response_model=DemandResponse, summary="Withdraw demand computation")
+async def withdraw_demand_from_computation(
+    demand_id: int = Path(..., description="需求ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    撤回需求计算
+
+    将已下推到需求计算的需求撤回，清除计算记录及关联。
+    若下游单据（工单/采购单/生产计划/采购申请）未执行，允许撤回并级联删除；已执行则不允许撤回。
+    """
+    try:
+        result = await demand_service.withdraw_from_computation(
+            tenant_id=tenant_id,
+            demand_id=demand_id
+        )
+        return result
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/demands/{demand_id}/withdraw-from-computation", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/demands/{demand_id}/withdraw-from-computation", tenant_id)
+    except Exception as e:
+        logger.error(f"撤回需求计算失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"撤回需求计算失败: {str(e)}",
+            "/demands/{demand_id}/withdraw-from-computation",
+            tenant_id,
+        )
+
+
+@router.post("/clean-orphans", response_model=Dict[str, Any], summary="Clean orphan demands")
+async def clean_orphan_demands(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    清理孤儿需求
+
+    将来源单据（销售订单或销售预测）已被删除、但需求记录仍存在的需求进行软删除，
+    使其不再在需求列表中展示。用于在改动删除逻辑前已产生的历史孤儿数据。
+    """
+    try:
+        result = await demand_service.clean_orphan_demands(tenant_id=tenant_id)
+        return result
+    except Exception as e:
+        logger.error(f"清理孤儿需求失败: {e}")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"清理孤儿需求失败: {str(e)}",
+            "/demands/clean-orphans",
+            tenant_id,
+        )

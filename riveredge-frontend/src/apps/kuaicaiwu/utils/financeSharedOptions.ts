@@ -1,0 +1,236 @@
+/**
+ * Shared select options and display formatters for finance management pages.
+ * Backend values remain Chinese; labels are translated via i18n.
+ */
+import type { TFunction } from 'i18next';
+
+const PAYMENT_METHOD_I18N: Record<string, string> = {
+  银行转账: 'app.kuaicaiwu.financeUi.paymentMethod.bankTransfer',
+  现金: 'app.kuaicaiwu.financeUi.paymentMethod.cash',
+  票据: 'app.kuaicaiwu.financeUi.paymentMethod.note',
+  在线支付: 'app.kuaicaiwu.financeUi.paymentMethod.online',
+  其他: 'app.kuaicaiwu.financeUi.paymentMethod.other',
+};
+
+export function getPaymentMethodOptions(t: TFunction) {
+  return Object.entries(PAYMENT_METHOD_I18N).map(([value, key]) => ({
+    label: t(key),
+    value,
+  }));
+}
+
+export function formatPaymentMethod(value: string | null | undefined, t: TFunction): string {
+  if (!value) return '—';
+  const key = PAYMENT_METHOD_I18N[value];
+  return key ? t(key) : value;
+}
+
+/** 与后端收款/付款单 payment_method 存值一致 */
+export const BANK_TRANSFER_PAYMENT_METHOD = '银行转账';
+export const CASH_PAYMENT_METHOD = '现金';
+/** 收/付款方式「票据」：关联应收/应付票据台账（票种在台账内区分） */
+export const NOTE_PAYMENT_METHOD = '票据';
+
+export function isNotePaymentMethod(method: string | null | undefined): boolean {
+  return String(method || '').trim() === NOTE_PAYMENT_METHOD;
+}
+
+export function isBankTransferPaymentMethod(method: string | null | undefined): boolean {
+  return String(method || '').trim() === BANK_TRANSFER_PAYMENT_METHOD;
+}
+
+export function isCashPaymentMethod(method: string | null | undefined): boolean {
+  return String(method || '').trim() === CASH_PAYMENT_METHOD;
+}
+
+/** 银行转账或现金收付款时，入账账户必选 */
+export function requiresLedgerAccount(method: string | null | undefined): boolean {
+  return isBankTransferPaymentMethod(method) || isCashPaymentMethod(method);
+}
+
+export function assertBankAccountForTransfer(
+  paymentMethod: string | null | undefined,
+  bankAccountId: unknown,
+  t: TFunction,
+): void {
+  assertBankAccountForPaymentMethod(paymentMethod, bankAccountId, t);
+}
+
+export function assertBankAccountForPaymentMethod(
+  paymentMethod: string | null | undefined,
+  bankAccountId: unknown,
+  t: TFunction,
+): void {
+  const missing = bankAccountId == null || bankAccountId === '';
+  if (isBankTransferPaymentMethod(paymentMethod) && missing) {
+    throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForTransfer'));
+  }
+  if (isCashPaymentMethod(paymentMethod) && missing) {
+    throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForCash'));
+  }
+}
+
+export function formatBankAccountOptionLabel(account: {
+  account_name: string;
+  account_number?: string | null;
+  account_type?: string | null;
+}): string {
+  if (String(account.account_type || '').toLowerCase() === 'cash' || !account.account_number) {
+    return account.account_name;
+  }
+  return `${account.account_name} (${account.account_number})`;
+}
+
+/** 按收付款方式过滤入账账户：转账→银行，现金→库存现金 */
+export function filterBankAccountsForPaymentMethod<T extends { account_type?: string | null }>(
+  accounts: T[],
+  paymentMethod: string | null | undefined,
+): T[] {
+  if (isBankTransferPaymentMethod(paymentMethod)) {
+    return accounts.filter((a) => String(a.account_type || 'bank').toLowerCase() !== 'cash');
+  }
+  if (isCashPaymentMethod(paymentMethod)) {
+    return accounts.filter((a) => String(a.account_type || '').toLowerCase() === 'cash');
+  }
+  return accounts;
+}
+
+export function getReceiptSettlementTypeOptions(t: TFunction) {
+  return [
+    { label: t('app.kuaicaiwu.receipt.settlementType.normal'), value: 'normal' },
+    { label: t('app.kuaicaiwu.receipt.settlementType.prepayment'), value: 'prepayment' },
+  ];
+}
+
+export function getPaymentSettlementTypeOptions(t: TFunction) {
+  return [
+    { label: t('app.kuaicaiwu.payment.settlementType.normal'), value: 'normal' },
+    { label: t('app.kuaicaiwu.payment.settlementType.prepayment'), value: 'prepayment' },
+  ];
+}
+
+export function formatReceiptSettlementType(value: string | null | undefined, t: TFunction): string {
+  if (value === 'prepayment') return t('app.kuaicaiwu.receipt.settlementType.prepayment');
+  return t('app.kuaicaiwu.receipt.settlementType.normal');
+}
+
+export function formatPaymentSettlementType(value: string | null | undefined, t: TFunction): string {
+  if (value === 'prepayment') return t('app.kuaicaiwu.payment.settlementType.prepayment');
+  return t('app.kuaicaiwu.payment.settlementType.normal');
+}
+
+export function buildReceivableStatusEnum(t: TFunction) {
+  return {
+    未收款: { text: t('app.kuaicaiwu.financeStatus.receivable.unpaid') },
+    部分收款: { text: t('app.kuaicaiwu.financeStatus.receivable.partial') },
+    已结清: { text: t('app.kuaicaiwu.financeStatus.receivable.settled') },
+    已冲减: { text: t('app.kuaicaiwu.financeStatus.receivable.offset') },
+  };
+}
+
+export function buildPayableStatusEnum(t: TFunction) {
+  return {
+    未付款: { text: t('app.kuaicaiwu.financeStatus.payable.unpaid') },
+    部分付款: { text: t('app.kuaicaiwu.financeStatus.payable.partial') },
+    已结清: { text: t('app.kuaicaiwu.financeStatus.payable.settled') },
+    已冲减: { text: t('app.kuaicaiwu.financeStatus.payable.offset') },
+  };
+}
+
+export function buildReviewStatusEnum(t: TFunction) {
+  return {
+    待审核: { text: t('app.kuaicaiwu.financeStatus.review.pending') },
+    已审核: { text: t('app.kuaicaiwu.financeStatus.review.approved') },
+    已驳回: { text: t('app.kuaicaiwu.financeStatus.review.rejected') },
+    通过: { text: t('app.kuaicaiwu.financeStatus.review.approved') },
+    驳回: { text: t('app.kuaicaiwu.financeStatus.review.rejected') },
+  };
+}
+
+export function buildVoucherStatusEnum(t: TFunction) {
+  return {
+    Draft: { text: t('app.kuaicaiwu.financeStatus.voucher.draft') },
+    Confirmed: { text: t('app.kuaicaiwu.financeStatus.voucher.confirmed') },
+    Cancelled: { text: t('app.kuaicaiwu.financeStatus.voucher.cancelled') },
+  };
+}
+
+export function buildUnifiedInvoiceStatusEnum(t: TFunction) {
+  return {
+    DRAFT: { text: t('app.kuaicaiwu.financeStatus.unifiedInvoice.draft') },
+    CONFIRMED: { text: t('app.kuaicaiwu.financeStatus.unifiedInvoice.confirmed') },
+    VERIFIED: { text: t('app.kuaicaiwu.financeStatus.unifiedInvoice.verified') },
+    CANCELLED: { text: t('app.kuaicaiwu.financeStatus.unifiedInvoice.cancelled') },
+  };
+}
+
+const CHINESE_INVOICE_TYPE_I18N: Record<string, string> = {
+  增值税专用发票: 'app.kuaicaiwu.salesInvoice.invoiceType.vatSpecial',
+  增值税普通发票: 'app.kuaicaiwu.salesInvoice.invoiceType.vatNormal',
+  电子发票: 'app.kuaicaiwu.salesInvoice.invoiceType.electronic',
+  收据: 'app.kuaicaiwu.salesInvoice.invoiceType.receipt',
+  其他: 'app.kuaicaiwu.purchaseInvoice.invoiceType.other',
+  VAT_SPECIAL: 'app.kuaicaiwu.invoice.invoiceType.vatSpecial',
+  VAT_NORMAL: 'app.kuaicaiwu.invoice.invoiceType.vatNormal',
+  ELECTRONIC: 'app.kuaicaiwu.invoice.invoiceType.electronic',
+};
+
+export function getChineseInvoiceTypeOptions(t: TFunction, opts?: { includeOther?: boolean; includeReceipt?: boolean }) {
+  const base = [
+    { label: t('app.kuaicaiwu.salesInvoice.invoiceType.vatSpecial'), value: '增值税专用发票' },
+    { label: t('app.kuaicaiwu.salesInvoice.invoiceType.vatNormal'), value: '增值税普通发票' },
+    { label: t('app.kuaicaiwu.salesInvoice.invoiceType.electronic'), value: '电子发票' },
+  ];
+  if (opts?.includeReceipt !== false) {
+    base.push({ label: t('app.kuaicaiwu.salesInvoice.invoiceType.receipt'), value: '收据' });
+  }
+  if (opts?.includeOther) {
+    base.push({ label: t('app.kuaicaiwu.purchaseInvoice.invoiceType.other'), value: '其他' });
+  }
+  return base;
+}
+
+export function formatChineseInvoiceType(value: string | null | undefined, t: TFunction): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '—';
+  const key = CHINESE_INVOICE_TYPE_I18N[raw];
+  return key ? t(key) : raw;
+}
+
+export function getUnifiedInvoiceTypeOptions(t: TFunction) {
+  return [
+    { label: t('app.kuaicaiwu.invoice.invoiceType.vatSpecial'), value: 'VAT_SPECIAL' },
+    { label: t('app.kuaicaiwu.invoice.invoiceType.vatNormal'), value: 'VAT_NORMAL' },
+    { label: t('app.kuaicaiwu.invoice.invoiceType.electronic'), value: 'ELECTRONIC' },
+  ];
+}
+
+export function buildPartnerStatementStatusEnum(t: TFunction) {
+  return {
+    Draft: { text: t('app.kuaicaiwu.partnerStatement.status.draft') },
+    Confirmed: { text: t('app.kuaicaiwu.partnerStatement.status.confirmed') },
+    Sent: { text: t('app.kuaicaiwu.partnerStatement.status.sent') },
+    Disputed: { text: t('app.kuaicaiwu.partnerStatement.status.disputed') },
+  };
+}
+
+const SENT_CHANNEL_I18N: Record<string, string> = {
+  wechat_manual: 'app.kuaicaiwu.partnerStatement.sentChannel.wechatManual',
+  print: 'app.kuaicaiwu.partnerStatement.sentChannel.print',
+  export: 'app.kuaicaiwu.partnerStatement.sentChannel.export',
+  email_manual: 'app.kuaicaiwu.partnerStatement.sentChannel.emailManual',
+  other: 'app.kuaicaiwu.partnerStatement.sentChannel.other',
+};
+
+export function getSentChannelOptions(t: TFunction) {
+  return Object.entries(SENT_CHANNEL_I18N).map(([value, key]) => ({
+    label: t(key),
+    value,
+  }));
+}
+
+export function formatSentChannel(value: string | null | undefined, t: TFunction): string {
+  if (!value) return '—';
+  const key = SENT_CHANNEL_I18N[value];
+  return key ? t(key) : value;
+}

@@ -1,0 +1,2644 @@
+/**
+ * RiverEdge SaaS 多组织框架 - 统一标签栏组件
+ *
+ * 提供多标签页管理功能，支持标签的添加、切换、关闭等操作
+ */
+
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo, type CSSProperties, type Key, type ReactNode } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip, message, Popover, Menu } from 'antd';
+import type { ItemType } from 'antd/es/menu/interface';
+import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinFilled, StarFilled, MenuOutlined } from '@ant-design/icons';
+import type { MenuDataItem } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
+import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
+import { removeCustomPageTitle, resolveCustomPageTitle, setCustomPageTitle } from '../../utils/customPageTitle';
+import {
+  useConfigStore,
+  resolveEffectiveHomePath,
+  LEGACY_TENANT_DEFAULT_HOME_PATHS,
+  getPersistedConfigs,
+} from '../../stores/configStore';
+import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
+import { useThemeStore } from '../../stores/themeStore';
+import { getSavedTabs, setSavedTabs } from '../../stores/tabsStorage';
+import {
+  buildLegacyLocalTabsMigrationPatch,
+  buildUniTabsPreferencePatch,
+  readUniTabsStateFromPreferenceCache,
+  readUniTabsStateFromPreferences,
+  UNI_TABS_STATE_PREF_KEY,
+} from '../../stores/uniTabsPreference';
+import {
+  getSessionTabs,
+  setSessionTabs,
+} from '../../stores/sessionTabsCache';
+import { getTenantId, getToken } from '../../utils/auth';
+import { getSessionCurrentUser } from '../../utils/sessionCurrentUser';
+import {
+  getEffectiveHome,
+  getTenantBackendHome,
+  EFFECTIVE_HOME_QUERY_KEY,
+  TENANT_BACKEND_HOME_QUERY_KEY,
+} from '../../services/menu';
+import { RouteTransition } from '../route-transition';
+import { TabRouteCache } from './TabRouteCache';
+import { isCreateTabKey } from './isCreateTabKey';
+import { readUniTabsBorderRadius } from '../../utils/themeBorderRadius';
+import { isAppGroupTitleItem } from '../../utils/permission';
+import { dispatchRouteSoftRefresh } from '../../hooks/useRouteSoftRefresh';
+
+function isTenantDefaultHomePath(p: string): boolean {
+  return (LEGACY_TENANT_DEFAULT_HOME_PATHS as readonly string[]).includes(p);
+}
+
+/** 登录/切租户中转占位首页，不得从持久化或会话恢复（真首页由 effective-home 注入） */
+function stripPlaceholderHomeTabs(tabs: TabItem[]): TabItem[] {
+  return tabs.filter((tab) => !isTenantDefaultHomePath(tab.key));
+}
+
+/** 占位首页不得入栏：首页未就绪一律拒绝；就绪后仅允许与有效首页 path 一致 */
+function shouldSkipPlaceholderHomeTab(path: string, tenantHomePath: string, homeReady: boolean): boolean {
+  if (!isTenantDefaultHomePath(path)) return false;
+  if (!homeReady) return true;
+  return path !== tenantHomePath;
+}
+
+function tabsForPersistence(tabs: TabItem[], tenantHomePath: string, homeReady: boolean): TabItem[] {
+  const stripped = stripPlaceholderHomeTabs(tabs);
+  if (!homeReady || !tenantHomePath) return stripped;
+  if (isTenantDefaultHomePath(tenantHomePath)) return tabs;
+  return tabs.filter((tab) => !isTenantDefaultHomePath(tab.key) || tab.key === tenantHomePath);
+}
+
+/** 有效首页就绪后：剔除冲突占位首页，并把真实首页固定到第一位 */
+function normalizeTabsForTenantHome(
+  tabs: TabItem[],
+  tenantHomePath: string,
+  getTabTitle: (path: string) => string,
+): TabItem[] {
+  let next = tabs;
+  if (!isTenantDefaultHomePath(tenantHomePath)) {
+    next = next.filter((t) => !isTenantDefaultHomePath(t.key));
+  } else {
+    next = next.filter((t) => !isTenantDefaultHomePath(t.key) || t.key === tenantHomePath);
+  }
+
+  const existingHome = next.find((t) => t.key === tenantHomePath);
+  const homeTab: TabItem =
+    existingHome != null
+      ? { ...existingHome, closable: false, pinned: false }
+      : {
+          key: tenantHomePath,
+          path: tenantHomePath,
+          label: getTabTitle(tenantHomePath),
+          closable: false,
+          pinned: false,
+        };
+  const rest = next.filter((t) => t.key !== tenantHomePath);
+  return [homeTab, ...rest];
+}
+
+function tabsSameKeys(a: TabItem[], b: TabItem[]): boolean {
+  return a.length === b.length && a.every((tab, idx) => tab.key === b[idx]?.key);
+}
+
+function isAppGroupPlaceholderMenuItem(item: {
+  key?: Key;
+  className?: string;
+}): boolean {
+  const key = String(item.key ?? '');
+  const cls = String(item.className ?? '');
+  return key.startsWith('app-group-placeholder-') || cls.includes('app-group-placeholder-item');
+}
+
+/** 与左侧栏应用分组标题一致（BasicLayout APP_GROUP_TITLE_TEXT_STYLE） */
+const APP_GROUP_TITLE_LABEL_STYLE: CSSProperties = {
+  fontSize: 12,
+  color: 'var(--ant-colorPrimary)',
+  fontWeight: 700,
+  lineHeight: 1.2,
+  display: 'inline-flex',
+  alignItems: 'center',
+};
+
+function resolveFullscreenMenuLabel(item: MenuDataItem): ReactNode {
+  if (typeof item.label === 'string' && item.label) return item.label;
+  return item.name || (item as { title?: string }).title || '';
+}
+
+/**
+ * 全屏快捷菜单：应用分组按左侧栏 type:group 渲染（主色标题、无展开箭头），
+ * 真实菜单项仍为同级兄弟节点；占位子项跳过。
+ */
+function buildFullscreenNavMenuItems(
+  items: MenuDataItem[],
+  navigate: (path: string) => void,
+): ItemType[] {
+  const buildItems = (list: MenuDataItem[], depth = 0): ItemType[] =>
+    list.flatMap((item): ItemType[] => {
+      if (isAppGroupPlaceholderMenuItem(item) || item.hideInMenu) {
+        return [];
+      }
+
+      const rawChildren = (item.children || (item as { routes?: MenuDataItem[] }).routes) ?? [];
+      const realChildren = rawChildren.filter(
+        (child) => !isAppGroupPlaceholderMenuItem(child) && !child.hideInMenu,
+      );
+      const labelText = resolveFullscreenMenuLabel(item);
+      const itemKey = String(item.key || item.path || item.name || '');
+
+      if (isAppGroupTitleItem(item) || item.type === 'group') {
+        const isAppGroup = isAppGroupTitleItem(item);
+        return [
+          {
+            type: 'group',
+            key: itemKey,
+            label: isAppGroup ? (
+              <span className="menu-group-title-app-label" style={APP_GROUP_TITLE_LABEL_STYLE}>
+                {labelText}
+              </span>
+            ) : (
+              labelText
+            ),
+            className: isAppGroup ? 'menu-group-title-app' : item.className,
+            children: buildItems(realChildren, depth + 1),
+          },
+        ];
+      }
+
+      return [
+        {
+          key: item.path || itemKey,
+          icon:
+            depth === 0 && item.icon ? <span className="anticon">{item.icon}</span> : undefined,
+          label: labelText,
+          children: realChildren.length ? buildItems(realChildren, depth + 1) : undefined,
+          onClick: realChildren.length
+            ? undefined
+            : () => {
+                if (item.path) navigate(item.path);
+              },
+        },
+      ];
+    });
+
+  return buildItems(items);
+}
+
+/** 工作台 / 模块看板：外层 UniTabs 不滚动，由 DashboardTemplate / UniDashboard 内部承担 */
+function isDashboardLikePage(pathname: string): boolean {
+  const p = pathname.replace(/\/$/, '') || '/';
+  if (p === '/system/dashboard/workplace' || p === '/system/dashboard/analysis') {
+    return true;
+  }
+  if (!p.startsWith('/apps/')) return false;
+  if (p.endsWith('/workspace')) return true;
+  if (p.endsWith('/dashboard')) return true;
+  if (p.endsWith('/inspection-center')) return true;
+  if (p.endsWith('/management-dashboard')) return true;
+  if (p.endsWith('/analysis-center')) return true;
+  return false;
+}
+
+function tabPathname(tabKey: string): string {
+  return (tabKey.split('?')[0] || '/').replace(/\/$/, '') || '/';
+}
+
+/** 当前路由对应的标签 key（activeKey 唯一真源） */
+function resolveRouteTabKey(pathname: string, search: string): string {
+  const searchParams = new URLSearchParams(search || '');
+  searchParams.delete('_refresh');
+  const cleanSearch = searchParams.toString();
+  return pathname + (cleanSearch ? `?${cleanSearch}` : '');
+}
+
+/**
+ * 仅做 redirect 的别名路由：不应单独占标签（目标页会承接导航）。
+ * 新增同类路由时在此补充 pattern。
+ */
+const REDIRECT_ONLY_TAB_PATH_PATTERNS: RegExp[] = [
+  /^\/apps\/kuaiplm\/knowledge-base\/detail\/[^/]+$/,
+  /^\/apps\/kuaicaiwu\/cost-management\/dashboard$/,
+  /^\/apps\/kuaicaiwu\/management-dashboard$/,
+  /^\/apps\/kuaizhizao\/cost-management\/dashboard$/,
+  /^\/apps\/kuaizhizao\/performance\/dashboard$/,
+  /^\/apps\/kuaizhizao\/after-sales-service\/dashboard$/,
+];
+
+function shouldSkipTabPath(pathOrKey: string): boolean {
+  const pathname = tabPathname(pathOrKey);
+  return REDIRECT_ONLY_TAB_PATH_PATTERNS.some((re) => re.test(pathname));
+}
+
+/** 持久化/历史数据：同 pathname 只保留一条（优先保留带 query 的 key） */
+function dedupeTabsByPathname(tabList: TabItem[]): TabItem[] {
+  const result: TabItem[] = [];
+  const pathnameIndex = new Map<string, number>();
+
+  tabList.forEach((tab) => {
+    if (shouldSkipTabPath(tab.key)) return;
+    const pathname = tabPathname(tab.key);
+    const existingIdx = pathnameIndex.get(pathname);
+    if (existingIdx === undefined) {
+      pathnameIndex.set(pathname, result.length);
+      result.push(tab);
+      return;
+    }
+    const existing = result[existingIdx];
+    if (!existing.key.includes('?') && tab.key.includes('?')) {
+      result[existingIdx] = tab;
+    }
+  });
+
+  return result;
+}
+
+/** 合并内存标签与持久化恢复标签，按 pathname 去重（优先保留当前内存中的项） */
+function mergeTabLists(current: TabItem[], restored: TabItem[]): TabItem[] {
+  if (restored.length === 0) return current;
+  if (current.length === 0) return dedupeTabsByPathname(restored);
+  const merged: TabItem[] = [...current];
+  const pathnameSeen = new Set(current.map((tab) => tabPathname(tab.key)));
+  for (const tab of restored) {
+    const pathname = tabPathname(tab.key);
+    if (!pathnameSeen.has(pathname)) {
+      merged.push(tab);
+      pathnameSeen.add(pathname);
+    }
+  }
+  return dedupeTabsByPathname(merged);
+}
+
+function loadPersistedTabs(
+  menuConfig: MenuDataItem[],
+  t: (key: string) => string,
+  tenantHomePath: string,
+  sourceTabs?: TabItem[] | null,
+  options?: { homeReady?: boolean },
+): TabItem[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const parsedTabs = sourceTabs?.length ? sourceTabs : getSavedTabs();
+    if (!parsedTabs.length) return null;
+
+    const validTabs = parsedTabs.filter((tab) => {
+      if (!tab || typeof tab !== 'object' || !tab.key || !tab.path || !tab.label) return false;
+      // 租户侧标签栏不恢复纯 infra 页（平台运维独立入口）
+      if (tab.path.startsWith('/infra')) return false;
+      return true;
+    });
+
+    const contentTabs = stripPlaceholderHomeTabs(validTabs);
+    if (contentTabs.length === 0) return null;
+    const deduped = dedupeTabsByPathname(contentTabs);
+    const homeReady = options?.homeReady === true && !!tenantHomePath;
+    if (!homeReady) {
+      return deduped;
+    }
+    const titleFor = (path: string) => findMenuTitleWithTranslation(path, menuConfig, t);
+    return dedupeTabsByPathname(normalizeTabsForTenantHome(deduped, tenantHomePath, titleFor));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 标签项接口
+ */
+export interface TabItem {
+  key: string;
+  path: string;
+  label: string;
+  closable?: boolean;
+  /** 是否固定 */
+  pinned?: boolean;
+}
+
+
+/**
+ * 统一标签栏组件属性
+ */
+interface UniTabsProps {
+  menuConfig: MenuDataItem[];
+  children: React.ReactNode;
+  /** 是否全屏 */
+  isFullscreen?: boolean;
+  /** 切换全屏状态 */
+  onToggleFullscreen?: () => void;
+}
+
+
+
+/**
+ * 统一标签栏组件
+ */
+export default function UniTabs({ menuConfig, children, isFullscreen = false, onToggleFullscreen }: UniTabsProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { token } = theme.useToken();
+  const { t } = useTranslation(); // 获取翻译函数
+  // 辅助：同步获取持久化配置（从用户偏好存储读取，store 未就绪时从 persist 缓存回退）
+  const getInitialPersistence = () => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const user = getSessionCurrentUser();
+      if (!user) return false;
+      const tenantId = getTenantId() ?? user.tenant_id ?? (user as any)?.tenantId;
+      const userId = user.id ?? (user as any)?.user_id ?? (user as any)?.uuid;
+      if (tenantId == null || userId == null) return false;
+      const key = `user-preference-storage-${tenantId}-${userId}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      const prefs = data?.state?.preferences ?? data?.preferences;
+      return prefs && prefs.tabs_persistence !== undefined ? Boolean(prefs.tabs_persistence) : false;
+    } catch {
+      return false;
+    }
+  };
+
+  // 1. 持久化配置：优先从 store 读取，store 未就绪时从 localStorage 回退
+  const storeTabsPersistence = useUserPreferenceStore((s) => s.preferences?.tabs_persistence);
+  const preferencesInitialized = useUserPreferenceStore((s) => s.initialized);
+  const dashboardQuickEntriesRaw = useUserPreferenceStore((s) => s.preferences?.dashboard_quick_entries);
+  const dashboardQuickEntries = useMemo(
+    () => (Array.isArray(dashboardQuickEntriesRaw) ? dashboardQuickEntriesRaw : []),
+    [dashboardQuickEntriesRaw],
+  );
+  const updatePreferences = useUserPreferenceStore((s) => s.updatePreferences);
+  const tabsPersistence = storeTabsPersistence !== undefined ? Boolean(storeTabsPersistence) : getInitialPersistence();
+
+  /** 站点默认租户首页（工作台 / 应用中心） */
+  const configs = useConfigStore((s) => s.configs);
+  const tenantIdStrForHome = getTenantId()?.toString() ?? null;
+  const { data: tenantBackendHome, isFetched: backendHomeFetched } = useQuery({
+    queryKey: [...TENANT_BACKEND_HOME_QUERY_KEY, tenantIdStrForHome],
+    queryFn: getTenantBackendHome,
+    enabled: !!(getToken() && tenantIdStrForHome),
+    staleTime: 60 * 1000,
+  });
+
+  const { data: effectiveHome, isFetched: effectiveHomeFetched } = useQuery({
+    queryKey: [...EFFECTIVE_HOME_QUERY_KEY, tenantIdStrForHome],
+    queryFn: getEffectiveHome,
+    enabled: !!(getToken() && tenantIdStrForHome),
+    staleTime: 60 * 1000,
+  });
+
+  /** 固定标签栏首位「首页」：角色 > 菜单主页 > 工作台 > 兜底页（与 Logo、登录落地一致） */
+  const tenantHomePath = useMemo(
+    () => resolveEffectiveHomePath(effectiveHome, tenantBackendHome?.path, configs),
+    [effectiveHome, tenantBackendHome?.path, configs],
+  );
+
+  const homePathReady = backendHomeFetched && effectiveHomeFetched;
+
+  /** 关闭默认首页标签时尚未拉取自定义首页时，延后跳转避免误落应用中心 */
+  const pendingDefaultHomeCloseRef = useRef<string | null>(null);
+
+  const tenantIdStrForTabs = getTenantId()?.toString() ?? null;
+
+  // 2. 同步初始化标签列表：会话缓存 > 持久化存储 > 空（等路由同步补当前页）
+  const [tabs, setTabs] = useState<TabItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+
+    const initTenantId = getTenantId();
+    if (initTenantId != null) {
+      const sessionTabs = getSessionTabs(initTenantId);
+      if (sessionTabs?.length) {
+        return dedupeTabsByPathname(stripPlaceholderHomeTabs(sessionTabs));
+      }
+    }
+
+    const localPersistence = getInitialPersistence();
+    if (!localPersistence) return [];
+
+    try {
+      const cloudState = readUniTabsStateFromPreferenceCache();
+      const restored = loadPersistedTabs(menuConfig, t, '', cloudState?.tabs, { homeReady: false });
+      if (restored?.length) return restored;
+    } catch (e) {
+      console.warn('Failed to load tabs from cache', e);
+    }
+    return [];
+  });
+
+  // 3. activeKey 唯一真源：当前路由（登录落地首页、F5 跟 URL；不读云端/本机 activeKey）
+  const [activeKey, setActiveKey] = useState<string>(() =>
+    resolveRouteTabKey(location.pathname, location.search),
+  );
+
+  // 不再需要 isInitialized，因为初始状态就是 initialized
+  // const [isInitialized, setIsInitialized] = useState<boolean>(true);
+
+  const tabsNavRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [refreshKey, setRefreshKey] = useState<number>(0);
+  const favoriteSavingRef = useRef(false);
+
+  // 从 themeStore 订阅标签栏背景色（单一数据源，无需事件监听）
+  const storeTabsBgColor = useThemeStore((s) => s.resolved.tabsBgColor);
+  const storeTabBgColor = useThemeStore((s) => s.resolved.tabBgColor);
+  const storeIsDark = useThemeStore((s) => s.resolved.isDark);
+
+  /**
+   * 根据路径或完整 tabKey 获取标签标题（key 可能含 query，标题按 pathname 查找）
+   */
+  const getTabTitle = useCallback(
+    (pathOrKey: string): string => {
+      const pathname = (pathOrKey || '').split('?')[0];
+      const search = pathOrKey.includes('?') ? pathOrKey.slice(pathOrKey.indexOf('?')) : '';
+      const custom = resolveCustomPageTitle(pathname, search);
+      if (custom) return custom;
+      return findMenuTitleWithTranslation(pathname, menuConfig, t);
+    },
+    [menuConfig, t]
+  );
+
+  /**
+   * 监听语言/菜单变化，自动更新所有标签的标题
+   */
+  useEffect(() => {
+    setTabs((prevTabs) => {
+      // 避免如果不必要的更新
+      let hasChanges = false;
+      const newTabs = prevTabs.map((tab) => {
+        const newLabel = getTabTitle(tab.key);
+        if (newLabel !== tab.label) {
+          hasChanges = true;
+          return { ...tab, label: newLabel };
+        }
+        return tab;
+      });
+      return hasChanges ? newTabs : prevTabs;
+    });
+  }, [t, menuConfig, getTabTitle]);
+
+  /**
+   * 添加标签
+   */
+  const addTab = useCallback(
+    (path: string) => {
+      // 排除登录页等不需要标签的页面（注册功能已整合到登录页面）
+      const excludePaths = ['/login'];
+      if (excludePaths.some((p) => path.startsWith(p))) {
+        return;
+      }
+      if (shouldSkipTabPath(path)) {
+        return;
+      }
+      if (shouldSkipPlaceholderHomeTab(path, tenantHomePath, homePathReady)) {
+        return;
+      }
+
+      setTabs((prevTabs) => {
+        // 检查标签是否已存在
+        const existingTab = prevTabs.find((tab) => tab.key === path);
+        if (existingTab) {
+          return prevTabs;
+        }
+
+        const pathname = tabPathname(path);
+        const existingSamePathname = prevTabs.find((tab) => tabPathname(tab.key) === pathname);
+        if (existingSamePathname) {
+          // 同一路由仅 query 变化（如知识库 articleId）：更新已有标签，不新开
+          return prevTabs.map((tab) =>
+            tab.key === existingSamePathname.key
+              ? { ...tab, key: path, path, label: getTabTitle(path) }
+              : tab,
+          );
+        }
+
+        // 添加新标签
+        const newTab: TabItem = {
+          key: path,
+          path,
+          label: getTabTitle(path),
+          closable: path !== tenantHomePath, // 工作台标签不可关闭
+          pinned: false, // 默认不固定
+        };
+
+        let newTabs: TabItem[];
+
+        // 排序逻辑：工作台 -> 固定标签 -> 其他标签
+        // 如果添加的是工作台，确保它在第一个位置
+        if (path === tenantHomePath) {
+          // 检查是否已存在工作台标签
+          const workplaceTab = prevTabs.find((tab) => tab.key === tenantHomePath);
+          if (workplaceTab) {
+            return prevTabs;
+          }
+          let rest = prevTabs;
+          if (isTenantDefaultHomePath(tenantHomePath)) {
+            rest = prevTabs.filter(
+              (tab) => !isTenantDefaultHomePath(tab.key) || tab.key === tenantHomePath,
+            );
+          } else {
+            rest = prevTabs.filter((tab) => !isTenantDefaultHomePath(tab.key));
+          }
+          rest = rest.filter((tab) => tab.key !== tenantHomePath);
+          newTabs = [newTab, ...rest];
+        } else {
+          // 其他标签：插入到工作台之后，固定标签之后
+          const workplaceTab = prevTabs.find((tab) => tab.key === tenantHomePath);
+          const pinnedTabs = prevTabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath);
+          const unpinnedTabs = prevTabs.filter((tab) => !tab.pinned && tab.key !== tenantHomePath);
+
+          if (workplaceTab) {
+            // 有工作台：工作台 -> 固定标签 -> 新标签 -> 其他标签
+            newTabs = [workplaceTab, ...pinnedTabs, newTab, ...unpinnedTabs];
+          } else {
+            // 没有工作台：先添加工作台，再添加新标签
+            const workplaceTab: TabItem = {
+              key: tenantHomePath,
+              path: tenantHomePath,
+              label: getTabTitle(tenantHomePath),
+              closable: false,
+              pinned: false, // 工作台默认不固定（但始终在第一个位置）
+            };
+            newTabs = [workplaceTab, ...pinnedTabs, newTab, ...unpinnedTabs];
+          }
+        }
+
+      // 引入配置
+      const { getConfig } = useConfigStore.getState();
+      const { getPreference } = useUserPreferenceStore.getState();
+      // 最大标签数优先级：User Preference > Config Store > Default(20)
+      const maxTabs = getPreference('ui.max_tabs', getConfig('ui.max_tabs', 20));
+
+      if (newTabs.length > maxTabs) {
+          // 超过数量时保留新的、关闭旧的：在可关闭且非固定的标签中，排除当前新加的 path，移除最旧的一个
+          const closableTabs = newTabs.filter((tab) => tab.closable && !tab.pinned && tab.key !== tenantHomePath);
+          const closableExceptNew = closableTabs.filter((tab) => tab.key !== path);
+          const oldestTab = closableExceptNew[0];
+          if (oldestTab) {
+            newTabs = newTabs.filter((tab) => tab.key !== oldestTab.key);
+          }
+        }
+
+        return newTabs;
+      });
+    },
+    [getTabTitle, homePathReady, tenantHomePath]
+  );
+
+  /** 始终指向最新 addTab，供「路由同步标签」effect 使用，避免因 getTabTitle/menuConfig 变化导致 addTab 引用变、effect 在无导航时反复执行引发 #185 */
+  const addTabRef = useRef(addTab);
+  addTabRef.current = addTab;
+
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+
+  const activeKeyRef = useRef(activeKey);
+  activeKeyRef.current = activeKey;
+
+  useEffect(() => {
+    const pendingKey = pendingDefaultHomeCloseRef.current;
+    if (!pendingKey || !homePathReady) return;
+    pendingDefaultHomeCloseRef.current = null;
+    const resolvedHome = resolveEffectiveHomePath(effectiveHome, tenantBackendHome?.path, configs);
+    if (pendingKey !== resolvedHome) {
+      setActiveKey(resolvedHome);
+      navigateRef.current(resolvedHome);
+    }
+  }, [homePathReady, effectiveHome, tenantBackendHome?.path, configs]);
+
+  /**
+   * 租户后台首页路径变化时：移除旧首页标签、去掉与当前模式冲突的默认路径标签，并把新首页固定到第一位且不可关闭。
+   * 与 BasicLayout 中 effectiveSystemHomePath 数据源一致（React Query 同 key 缓存共享）。
+   */
+  const prevTenantHomePathRef = useRef<string | null>(null);
+  const didInitialHomeTabNormalizeRef = useRef(false);
+  useEffect(() => {
+    if (!homePathReady || !tenantHomePath) return;
+
+    const prev = prevTenantHomePathRef.current;
+    const homePathChanged = prev !== null && prev !== tenantHomePath;
+    const needsInitialNormalize = !didInitialHomeTabNormalizeRef.current;
+
+    let shouldNormalize = needsInitialNormalize || homePathChanged;
+    setTabs((prevTabs) => {
+      const hasStrayPlaceholder = prevTabs.some(
+        (t) => isTenantDefaultHomePath(t.key) && t.key !== tenantHomePath,
+      );
+      if (!shouldNormalize && !hasStrayPlaceholder) {
+        return prevTabs;
+      }
+
+      let working = stripPlaceholderHomeTabs(prevTabs);
+      if (homePathChanged && prev) {
+        working = working.filter((t) => t.key !== prev);
+      }
+      const normalized = normalizeTabsForTenantHome(working, tenantHomePath, getTabTitle);
+      if (!tabsSameKeys(normalized, prevTabs)) {
+        shouldNormalize = true;
+      }
+      return tabsSameKeys(normalized, prevTabs) ? prevTabs : normalized;
+    });
+
+    if (shouldNormalize) {
+      didInitialHomeTabNormalizeRef.current = true;
+      prevTenantHomePathRef.current = tenantHomePath;
+    }
+
+    const ak = activeKeyRef.current;
+    const shouldRedirectToHome =
+      (isTenantDefaultHomePath(ak) && ak !== tenantHomePath) ||
+      (homePathChanged && prev && ak === prev);
+
+    if (shouldRedirectToHome) {
+      setActiveKey(tenantHomePath);
+      navigateRef.current(tenantHomePath, { replace: true });
+    }
+  }, [homePathReady, tenantHomePath, getTabTitle]);
+
+  /**
+   * 移除标签
+   */
+  const removeTab = useCallback((targetKey: string) => {
+    const targetPathname = tabPathname(targetKey);
+    removeCustomPageTitle(targetKey);
+    removeCustomPageTitle(targetPathname);
+    setTabs((prevTabs) => {
+      const matchKey =
+        prevTabs.find((tab) => tab.key === targetKey)?.key ??
+        prevTabs.find((tab) => tabPathname(tab.key) === targetPathname)?.key;
+      if (!matchKey) return prevTabs;
+      removeCustomPageTitle(matchKey);
+      removeCustomPageTitle(tabPathname(matchKey));
+      return prevTabs.filter((tab) => tab.key !== matchKey);
+    });
+  }, []);
+
+  /**
+   * 固定/取消固定标签
+   */
+  const togglePinTab = useCallback((targetKey: string) => {
+    setTabs((prevTabs) => {
+      const newTabs = prevTabs.map((tab) => {
+        if (tab.key === targetKey) {
+          return { ...tab, pinned: !tab.pinned };
+        }
+        return tab;
+      });
+
+      // 排序：固定标签在前，然后是按顺序排列的其他标签
+      // 工作台始终在第一个位置（如果存在）
+      const workplaceTab = newTabs.find((tab) => tab.key === tenantHomePath);
+      const pinnedTabs = newTabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath);
+      const unpinnedTabs = newTabs.filter((tab) => !tab.pinned && tab.key !== tenantHomePath);
+
+      const sortedTabs: TabItem[] = [];
+      if (workplaceTab) {
+        sortedTabs.push(workplaceTab);
+      }
+      sortedTabs.push(...pinnedTabs);
+      sortedTabs.push(...unpinnedTabs);
+
+      return sortedTabs;
+    });
+  }, [tenantHomePath]);
+
+  /**
+   * 从本地存储加载并验证标签（供持久化异步恢复与租户切换使用）
+   */
+  const loadTabsFromStorage = useCallback((): TabItem[] | null => {
+    const cloudState = readUniTabsStateFromPreferences(
+      useUserPreferenceStore.getState().preferences,
+    );
+    return loadPersistedTabs(menuConfig, t, tenantHomePath, cloudState?.tabs, { homeReady: true });
+  }, [menuConfig, t, tenantHomePath]);
+
+  /** 是否已完成持久化恢复（避免重复覆盖用户操作） */
+  const didRestoreFromSyncRef = useRef(false);
+  /** 正在从存储恢复，避免保存 effect 在同周期用错误数据覆盖 */
+  const isRestoringRef = useRef(false);
+  const tabsForCloudSaveRef = useRef(tabs);
+  tabsForCloudSaveRef.current = tabs;
+
+  const prevTenantIdStrRef = useRef<string | null>(tenantIdStrForTabs);
+
+  /** 当前路由对应的标签 key（与路由同步 effect 一致） */
+  const getCurrentRouteTabKey = useCallback(
+    () => resolveRouteTabKey(location.pathname, location.search),
+    [location.pathname, location.search],
+  );
+
+  /**
+   * 切换租户清空会话后：若首页 path 未变，路由 effect 不会重跑，须主动补回当前页标签，
+   * 否则 tabs=[] 会走无 page-outer 的早期 return，工作台 UniTabs 16px 留白丢失直至整页刷新。
+   */
+  const seedTabsAfterTenantSwitch = useCallback(() => {
+    const routeKey = getCurrentRouteTabKey();
+    queueMicrotask(() => {
+      if (routeKey && routeKey !== '/login') {
+        addTabRef.current(routeKey);
+        setActiveKey(routeKey);
+      }
+    });
+  }, [getCurrentRouteTabKey]);
+
+  /** 切换租户时从该租户的会话/持久化恢复标签（替代 UniTabs key remount） */
+  useEffect(() => {
+    const prev = prevTenantIdStrRef.current;
+    if (prev === tenantIdStrForTabs) return;
+    prevTenantIdStrRef.current = tenantIdStrForTabs;
+    didRestoreFromSyncRef.current = false;
+    didInitialHomeTabNormalizeRef.current = false;
+    prevTenantHomePathRef.current = null;
+
+    const tenantId = getTenantId();
+    if (tenantId == null) {
+      setTabs([]);
+      return;
+    }
+
+    const sessionTabs = getSessionTabs(tenantId);
+    if (sessionTabs?.length) {
+      setTabs(dedupeTabsByPathname(stripPlaceholderHomeTabs(sessionTabs)));
+      setActiveKey(getCurrentRouteTabKey());
+      didRestoreFromSyncRef.current = true;
+      return;
+    }
+
+    // 未开启持久化时不从 localStorage 恢复，避免开关关闭仍带回历史标签
+    if (!tabsPersistence) {
+      setTabs([]);
+      seedTabsAfterTenantSwitch();
+      // 偏好尚未从服务端就绪时勿标记「已恢复」，否则 tabs_persistence 变为 true 后无法再读库/本机镜像
+      if (preferencesInitialized) {
+        didRestoreFromSyncRef.current = true;
+      }
+      return;
+    }
+
+    // 持久化恢复统一交给 homePathReady 后的 effect，避免 configs 猜错首页注入 Default-home
+    setTabs([]);
+    seedTabsAfterTenantSwitch();
+  }, [
+    tenantIdStrForTabs,
+    menuConfig,
+    t,
+    tenantHomePath,
+    homePathReady,
+    tabsPersistence,
+    preferencesInitialized,
+    seedTabsAfterTenantSwitch,
+    getCurrentRouteTabKey,
+  ]);
+
+  /** 会话内实时缓存标签，跨 APP / 组件 remount 不丢（不写占位首页，避免 remount 带回 Default-home） */
+  useLayoutEffect(() => {
+    const tenantId = getTenantId();
+    if (tenantId == null || tabs.length === 0) return;
+    const sessionTabs = tabsForPersistence(tabs, tenantHomePath, homePathReady);
+    if (!sessionTabs.length) return;
+    setSessionTabs(tenantId, sessionTabs, activeKey);
+  }, [tabs, activeKey, tenantHomePath, homePathReady]);
+
+  /**
+   * 当 tabsPersistence 异步恢复为 true 时（如登出后再次登录），从本地存储恢复标签
+   * 解决 clearForLogout 清除 riveredge_tabs_persistence 导致初始化时 tabs=[] 的问题
+   */
+  useEffect(() => {
+    if (!tabsPersistence || !homePathReady || didRestoreFromSyncRef.current) return;
+    const restored = loadTabsFromStorage();
+    if (restored && restored.length > 0) {
+      didRestoreFromSyncRef.current = true;
+      isRestoringRef.current = true;
+      setTabs((prev) =>
+        normalizeTabsForTenantHome(
+          mergeTabLists(stripPlaceholderHomeTabs(prev), restored),
+          tenantHomePath,
+          getTabTitle,
+        ),
+      );
+      setActiveKey(getCurrentRouteTabKey());
+      queueMicrotask(() => {
+        isRestoringRef.current = false;
+      });
+      return;
+    }
+    if (preferencesInitialized) {
+      didRestoreFromSyncRef.current = true;
+    }
+  }, [
+    tabsPersistence,
+    preferencesInitialized,
+    homePathReady,
+    tenantHomePath,
+    getTabTitle,
+    loadTabsFromStorage,
+    getCurrentRouteTabKey,
+  ]);
+
+  const cloudTabsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const legacyTabsMigratedRef = useRef(false);
+  const lastCloudTabsPatchRef = useRef('');
+
+  /** 云端偏好就绪后恢复标签（跨设备真源；每租户会话仅一次） */
+  useEffect(() => {
+    if (!tabsPersistence || !preferencesInitialized || !homePathReady || didRestoreFromSyncRef.current) {
+      return;
+    }
+
+    const cloudState = readUniTabsStateFromPreferences(
+      useUserPreferenceStore.getState().preferences,
+    );
+    const restored = loadPersistedTabs(menuConfig, t, tenantHomePath, cloudState?.tabs, { homeReady: true });
+    if (restored?.length) {
+      didRestoreFromSyncRef.current = true;
+      isRestoringRef.current = true;
+      setTabs((prev) =>
+        normalizeTabsForTenantHome(
+          mergeTabLists(stripPlaceholderHomeTabs(prev), restored),
+          tenantHomePath,
+          getTabTitle,
+        ),
+      );
+      setActiveKey(getCurrentRouteTabKey());
+      queueMicrotask(() => {
+        isRestoringRef.current = false;
+      });
+      return;
+    }
+
+    if (!legacyTabsMigratedRef.current) {
+      const migrationPatch = buildLegacyLocalTabsMigrationPatch();
+      if (migrationPatch) {
+        legacyTabsMigratedRef.current = true;
+        void updatePreferences(migrationPatch).catch(() => {
+          legacyTabsMigratedRef.current = false;
+        });
+      }
+    }
+    didRestoreFromSyncRef.current = true;
+  }, [
+    tabsPersistence,
+    preferencesInitialized,
+    homePathReady,
+    tenantIdStrForTabs,
+    menuConfig,
+    t,
+    tenantHomePath,
+    getTabTitle,
+    updatePreferences,
+    getCurrentRouteTabKey,
+  ]);
+
+  /**
+   * 保存标签：本机镜像 + 防抖写入云端偏好（与收藏/快捷入口同路径）
+   */
+  useEffect(() => {
+    if (!tabsPersistence) return;
+    if (isRestoringRef.current) return;
+
+    const persistTabs = tabsForPersistence(tabs, tenantHomePath, homePathReady);
+
+    try {
+      setSavedTabs(persistTabs);
+    } catch {
+      // ignore
+    }
+
+    if (cloudTabsSaveTimerRef.current) {
+      clearTimeout(cloudTabsSaveTimerRef.current);
+    }
+    cloudTabsSaveTimerRef.current = setTimeout(() => {
+      const patch = buildUniTabsPreferencePatch(persistTabs);
+      const serialized = JSON.stringify(patch[UNI_TABS_STATE_PREF_KEY]);
+      if (serialized === lastCloudTabsPatchRef.current) return;
+      lastCloudTabsPatchRef.current = serialized;
+      void updatePreferences(patch).catch(() => {
+        lastCloudTabsPatchRef.current = '';
+      });
+    }, 600);
+
+    return () => {
+      if (cloudTabsSaveTimerRef.current) {
+        clearTimeout(cloudTabsSaveTimerRef.current);
+        cloudTabsSaveTimerRef.current = null;
+      }
+    };
+  }, [tabs, activeKey, tabsPersistence, tenantHomePath, homePathReady, updatePreferences]);
+
+  /** 关页/刷新前立即落库，避免 600ms 防抖未触发就丢失标签 */
+  useEffect(() => {
+    if (!tabsPersistence) return;
+    const flushCloudTabs = () => {
+      if (isRestoringRef.current) return;
+      const snapshotTabs = tabsForPersistence(
+        tabsForCloudSaveRef.current,
+        tenantHomePath,
+        homePathReady,
+      );
+      if (!snapshotTabs.length) return;
+      const patch = buildUniTabsPreferencePatch(snapshotTabs);
+      const serialized = JSON.stringify(patch[UNI_TABS_STATE_PREF_KEY]);
+      if (serialized === lastCloudTabsPatchRef.current) return;
+      lastCloudTabsPatchRef.current = serialized;
+      void updatePreferences(patch).catch(() => {
+        lastCloudTabsPatchRef.current = '';
+      });
+    };
+    window.addEventListener('pagehide', flushCloudTabs);
+    return () => window.removeEventListener('pagehide', flushCloudTabs);
+  }, [tabsPersistence, tenantHomePath, homePathReady, updatePreferences]);
+
+  /**
+   * 监听路由变化，自动添加标签
+   * 注意：如果启用了持久化且正在恢复标签，不要立即添加标签，避免覆盖恢复的标签
+   */
+  useEffect(() => {
+    if (!location.pathname) return;
+    const tabKey = getCurrentRouteTabKey();
+    if (shouldSkipPlaceholderHomeTab(tabKey, tenantHomePath, homePathReady)) {
+      return;
+    }
+    addTabRef.current(tabKey);
+    setActiveKey((prev) => (prev === tabKey ? prev : tabKey));
+  }, [location.pathname, location.search, getCurrentRouteTabKey, tenantHomePath, homePathReady]);
+
+  /** 有效首页 API 就绪后再注入首页标签，避免自定义首页租户先闪工作台/兜底占位 */
+  useEffect(() => {
+    if (!homePathReady || !tenantHomePath) return;
+    addTabRef.current(tenantHomePath);
+  }, [homePathReady, tenantHomePath]);
+
+  /**
+   * 监听自定义事件更新标签标题
+   */
+  useEffect(() => {
+    const handleUpdateTabTitle = (event: CustomEvent<{ key?: string; path?: string; title: string }>) => {
+      const { key, path, title } = event.detail;
+      if (!title) return;
+
+      if (key) setCustomPageTitle(key, title);
+      if (path) setCustomPageTitle(path, title);
+
+      setTabs((prevTabs) => {
+        return prevTabs.map((tab) => {
+          // 优先匹配 key (完整路径+查询参数)
+          if (key && tab.key === key) {
+            return { ...tab, label: title };
+          }
+          // 其次匹配 path (仅路径部分)
+          if (path && tab.path === path) {
+            return { ...tab, label: title };
+          }
+          // 如果只提供了 path，但 tab.key 包含了 query，我们也尝试匹配 path 部分
+          if (path && tab.key.split('?')[0] === path) {
+             return { ...tab, label: title };
+          }
+          return tab;
+        });
+      });
+    };
+
+    window.addEventListener('riveredge:update-tab-title', handleUpdateTabTitle as EventListener);
+    return () => {
+      window.removeEventListener('riveredge:update-tab-title', handleUpdateTabTitle as EventListener);
+    };
+  }, []);
+
+  /**
+   * 返回时关闭当前标签：state.closeTab 指定要关闭的标签；剥离 closeTab 后保留其余 state
+   *（如入库/出库加载页的 *DirectConfirm，避免一并清空导致确认弹窗无法打开）。
+   * 写入方唯一入口：navigateClosingTab / useLeaveFormTab。
+   */
+  useEffect(() => {
+    const state = location.state as ({ closeTab?: string } & Record<string, unknown>) | null;
+    if (!state?.closeTab) return;
+    const { closeTab, ...rest } = state;
+    removeTab(closeTab);
+    const search = location.search ? location.search : '';
+    navigate(location.pathname + search, {
+      replace: true,
+      state: Object.keys(rest).length > 0 ? rest : {},
+    });
+  }, [location.pathname, location.search, location.state, removeTab, navigate]);
+
+  /**
+   * 监听 refresh 参数，实现局部刷新
+   */
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (!searchParams.has('_refresh')) return;
+    searchParams.delete('_refresh');
+    const newSearch = searchParams.toString();
+    const tabKey = location.pathname + (newSearch ? `?${newSearch}` : '');
+    navigate(tabKey, { replace: true });
+    dispatchRouteSoftRefresh(tabKey);
+    if (isCreateTabKey(tabKey)) {
+      setRefreshKey((prev) => prev + 1);
+    }
+  }, [location.search, location.pathname, navigate]);
+
+  /**
+   * 处理标签切换
+   */
+  const handleTabChange = (key: string) => {
+    setActiveKey(key);
+    navigate(key);
+  };
+
+  /**
+   * 解析关闭默认首页占位标签后应跳转的有效首页（需等自定义首页 API 返回后再决定，避免误跳应用中心）
+   */
+  const resolveHomeAfterClose = useCallback(
+    (closedKey: string): string | 'pending' | null => {
+      if (!isTenantDefaultHomePath(closedKey)) return null;
+      if (!homePathReady) return 'pending';
+      const resolvedHome = resolveEffectiveHomePath(effectiveHome, tenantBackendHome?.path, configs);
+      return closedKey !== resolvedHome ? resolvedHome : null;
+    },
+    [homePathReady, effectiveHome, tenantBackendHome?.path, configs],
+  );
+
+  /**
+   * 处理标签关闭
+   */
+  const handleTabClose = (targetKey: string) => {
+    const targetIndex = tabs.findIndex((tab) => tab.key === targetKey);
+    const newTabs = tabs.filter((tab) => tab.key !== targetKey);
+
+    // 如果关闭的是当前激活的标签，切换到相邻标签
+    if (targetKey === activeKey) {
+      const homeAfterClose = resolveHomeAfterClose(targetKey);
+      if (homeAfterClose === 'pending') {
+        pendingDefaultHomeCloseRef.current = targetKey;
+        removeTab(targetKey);
+        return;
+      }
+      if (typeof homeAfterClose === 'string') {
+        setActiveKey(homeAfterClose);
+        navigate(homeAfterClose);
+      } else if (newTabs.length > 0) {
+        // 优先切换到右侧标签，如果没有则切换到左侧
+        const nextTab = newTabs[targetIndex] || newTabs[targetIndex - 1] || newTabs[0];
+        if (nextTab) {
+          setActiveKey(nextTab.key);
+          navigate(nextTab.key);
+        }
+      } else if (homePathReady) {
+        navigate(tenantHomePath);
+      } else {
+        pendingDefaultHomeCloseRef.current = targetKey;
+      }
+    }
+
+    removeTab(targetKey);
+  };
+
+  /**
+   * 关闭右侧标签
+   */
+  const handleCloseRight = (targetKey: string) => {
+    const targetIndex = tabs.findIndex((tab) => tab.key === targetKey);
+    if (targetIndex === -1) return;
+
+    // 保留目标标签及其左侧的所有标签，以及所有固定标签
+    const leftTabs = tabs.slice(0, targetIndex + 1);
+    const rightTabs = tabs.slice(targetIndex + 1);
+    // 保留右侧的固定标签
+    const rightPinnedTabs = rightTabs.filter((tab) => tab.pinned || tab.key === tenantHomePath);
+    const newTabs = [...leftTabs, ...rightPinnedTabs];
+
+    // 重新排序：工作台 -> 固定标签 -> 其他标签
+    const workplaceTab = newTabs.find((tab) => tab.key === tenantHomePath);
+    const pinnedTabs = newTabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath);
+    const unpinnedTabs = newTabs.filter((tab) => !tab.pinned && tab.key !== tenantHomePath);
+    const sortedTabs: TabItem[] = [];
+    if (workplaceTab) {
+      sortedTabs.push(workplaceTab);
+    }
+    sortedTabs.push(...pinnedTabs);
+    sortedTabs.push(...unpinnedTabs);
+
+    setTabs(sortedTabs);
+
+    // 如果当前激活的标签被关闭，切换到目标标签
+    if (!sortedTabs.find((tab) => tab.key === activeKey)) {
+      setActiveKey(targetKey);
+      navigate(targetKey);
+    }
+  };
+
+  /**
+   * 关闭其他标签
+   */
+  const handleCloseOthers = (targetKey: string) => {
+    // 保留目标标签、工作台标签和所有固定标签
+    const workplaceTab = tabs.find((tab) => tab.key === tenantHomePath);
+    const targetTab = tabs.find((tab) => tab.key === targetKey);
+    const pinnedTabs = tabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath && tab.key !== targetKey);
+    const newTabs: TabItem[] = [];
+
+    // 先添加工作台标签（如果存在且不是目标标签）
+    if (workplaceTab && workplaceTab.key !== targetKey) {
+      newTabs.push(workplaceTab);
+    }
+
+    // 添加固定标签（不包括目标标签）
+    newTabs.push(...pinnedTabs);
+
+    // 添加目标标签（如果存在且不是工作台）
+    if (targetTab) {
+      newTabs.push(targetTab);
+    }
+
+    setTabs(newTabs);
+    setActiveKey(targetKey);
+    navigate(targetKey);
+  };
+
+  /**
+   * 全部关闭
+   */
+  const handleCloseAll = useCallback(() => {
+    // 使用 setTimeout 确保在当前事件循环结束后执行，避免竞态条件
+    setTimeout(() => {
+      // 保留工作台标签和所有固定标签
+      const workplaceTab = tabs.find((tab) => tab.key === tenantHomePath);
+      const pinnedTabs = tabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath);
+      const newTabs: TabItem[] = [];
+
+      // 先添加工作台标签（如果存在）
+      if (workplaceTab) {
+        newTabs.push(workplaceTab);
+      }
+
+      // 添加所有固定标签
+      newTabs.push(...pinnedTabs);
+
+      // 批量更新状态，避免竞态条件
+      if (newTabs.length > 0) {
+        setTabs(newTabs);
+        setActiveKey(newTabs[0].key);
+        // 延迟导航，确保状态更新完成
+        setTimeout(() => navigate(newTabs[0].key), 0);
+      } else {
+        setTabs([]);
+        setActiveKey(tenantHomePath);
+        setTimeout(() => navigate(tenantHomePath), 0);
+      }
+    }, 0);
+  }, [tabs, navigate, tenantHomePath]);
+
+  /**
+   * 处理标签刷新 - 局部刷新当前标签页
+   */
+  const handleTabRefresh = useCallback((tabKey: string) => {
+    const searchParams = new URLSearchParams(location.search || '');
+    searchParams.delete('_refresh');
+    const cleanSearch = searchParams.toString();
+    const currentTabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
+
+    if (currentTabKey !== tabKey) {
+      navigate(tabKey, { replace: true });
+      return;
+    }
+
+    dispatchRouteSoftRefresh(tabKey);
+    if (isCreateTabKey(tabKey)) {
+      setRefreshKey((prev) => prev + 1);
+    }
+  }, [navigate, location.pathname, location.search]);
+
+  /** 从 menuConfig 中按 path 查找菜单元数据 */
+  const findMenuItemByPath = useCallback((targetPath: string): any | null => {
+    const normalizedTarget = (targetPath || '').split('?')[0].replace(/\/$/, '');
+    const walk = (items?: any[]): any | null => {
+      if (!items?.length) return null;
+      for (const item of items) {
+        const itemPath = ((item?.path as string) || '').replace(/\/$/, '');
+        if (itemPath && itemPath === normalizedTarget) return item;
+        const found = walk(item?.children || item?.routes);
+        if (found) return found;
+      }
+      return null;
+    };
+    return walk(menuConfig as any[]);
+  }, [menuConfig]);
+
+  /** 收藏当前标签到工作台快捷入口 */
+  const handleFavoriteToQuickEntry = useCallback(async (tabKey: string) => {
+    if (favoriteSavingRef.current) return;
+    const menuPath = (tabKey || '').split('?')[0];
+    if (!menuPath || menuPath === tenantHomePath) {
+      message.warning(t('ui.message.notSupportFavorite'));
+      return;
+    }
+
+    const menuItem = findMenuItemByPath(menuPath);
+    const menuUuid = String(menuItem?.uuid || menuItem?.key || menuPath);
+    const menuName = String(menuItem?.name || menuItem?.title || getTabTitle(menuPath) || menuPath);
+    const exists = dashboardQuickEntries.some(
+      (item) => item?.menu_path === menuPath || String(item?.menu_uuid) === menuUuid,
+    );
+    if (exists) {
+      message.info(t('ui.message.alreadyInFavorite'));
+      return;
+    }
+
+    const nextEntries = [
+      ...dashboardQuickEntries,
+      {
+        menu_uuid: menuUuid,
+        menu_name: menuName,
+        menu_path: menuPath,
+        sort_order: dashboardQuickEntries.length,
+      },
+    ];
+    favoriteSavingRef.current = true;
+    try {
+      await updatePreferences({ dashboard_quick_entries: nextEntries });
+    } finally {
+      favoriteSavingRef.current = false;
+    }
+    message.success(t('ui.message.favoriteSuccess'));
+  }, [dashboardQuickEntries, findMenuItemByPath, getTabTitle, updatePreferences, tenantHomePath, t]);
+
+  /**
+   * 获取标签右键菜单
+   */
+  const getTabContextMenu = (tabKey: string): MenuProps => {
+    const targetIndex = tabs.findIndex((tab) => tab.key === tabKey);
+    const targetTab = tabs.find((tab) => tab.key === tabKey);
+    const isWorkplace = tabKey === tenantHomePath;
+    const hasRightTabs = targetIndex < tabs.length - 1;
+    const hasOtherTabs = tabs.length > 1;
+    const isPinned = targetTab?.pinned || false;
+
+    const menuItems: MenuProps['items'] = [
+      {
+        key: 'refresh',
+        label: t('common.refresh'),
+        icon: <ReloadOutlined style={{ color: '#10b981' }} />, // 2026 Emerald Green
+      },
+      {
+        type: 'divider',
+        style: { height: 1, backgroundColor: 'rgba(0, 0, 0, 0.04)', margin: '4px 0' },
+      },
+      {
+        key: 'pin',
+        label: isPinned ? t('tabs.unpin') : t('tabs.pin'),
+        icon: <PushpinFilled style={{ color: '#3b82f6', transform: isPinned ? 'rotate(-45deg)' : 'none' }} />, // 2026 Electric Blue
+      },
+      {
+        key: 'favoriteToQuickEntry',
+        label: t('ui.tabs.favoriteToQuickEntry'),
+        icon: <StarFilled style={{ color: '#f59e0b' }} />, // 2026 Amber Gold
+        disabled: isWorkplace,
+      },
+      {
+        type: 'divider',
+        style: { height: 1, backgroundColor: 'rgba(0, 0, 0, 0.04)', margin: '4px 0' },
+      },
+      {
+        key: 'close',
+        label: t('common.close'),
+        disabled: isWorkplace || isPinned, // 工作台和固定标签不可关闭
+      },
+      {
+        key: 'closeRight',
+        label: t('tabs.closeRight'),
+        disabled: !hasRightTabs || isWorkplace,
+      },
+      {
+        key: 'closeOthers',
+        label: t('tabs.closeOthers'),
+        disabled: !hasOtherTabs || isWorkplace,
+      },
+      {
+        key: 'closeAll',
+        label: t('tabs.closeAll'),
+        disabled: tabs.length <= 1 || (tabs.length === 1 && isWorkplace),
+      },
+    ];
+
+    return {
+      items: menuItems,
+      onClick: async ({ key }) => {
+        switch (key) {
+          case 'refresh':
+            handleTabRefresh(tabKey);
+            break;
+          case 'pin':
+            togglePinTab(tabKey);
+            break;
+          case 'favoriteToQuickEntry':
+            await handleFavoriteToQuickEntry(tabKey);
+            break;
+          case 'close':
+            handleTabClose(tabKey);
+            break;
+          case 'closeRight':
+            handleCloseRight(tabKey);
+            break;
+          case 'closeOthers':
+            handleCloseOthers(tabKey);
+            break;
+          case 'closeAll':
+            handleCloseAll();
+            break;
+        }
+      },
+    };
+  };
+
+  /**
+   * 检查是否可以滚动
+   */
+  const checkScrollability = useCallback(() => {
+    if (!tabsNavRef.current) return;
+
+    // Ant Design Tabs 的滚动容器是 .ant-tabs-nav-wrap，而不是 .ant-tabs-nav-list
+    const navWrapElement = tabsNavRef.current.querySelector('.ant-tabs-nav-wrap') as HTMLElement;
+    if (!navWrapElement) return;
+
+    const { scrollLeft, scrollWidth, clientWidth } = navWrapElement;
+
+    // 允许1px的误差，避免浮点数精度问题
+    // 可以向左滚动：当前滚动位置大于0
+    const canScrollLeftValue = scrollLeft > 1;
+
+    // 可以向右滚动：内容宽度大于容器宽度，且当前滚动位置未到达最右边
+    // 当标签占满时，scrollWidth <= clientWidth，此时 canScrollRight 为 false
+    const canScrollRightValue = scrollWidth > clientWidth + 1 && (scrollLeft + clientWidth) < scrollWidth - 1;
+
+    setCanScrollLeft(canScrollLeftValue);
+    setCanScrollRight(canScrollRightValue);
+  }, []);
+
+  /**
+   * 滚动标签栏
+   */
+  const scrollTabs = useCallback((direction: 'left' | 'right') => {
+    if (!tabsNavRef.current) return;
+
+    // Ant Design Tabs 的滚动容器是 .ant-tabs-nav-wrap
+    const navWrapElement = tabsNavRef.current.querySelector('.ant-tabs-nav-wrap') as HTMLElement;
+    if (!navWrapElement) return;
+
+    const scrollAmount = 200; // 每次滚动200px
+    const newScrollLeft = direction === 'left'
+      ? navWrapElement.scrollLeft - scrollAmount
+      : navWrapElement.scrollLeft + scrollAmount;
+
+    navWrapElement.scrollTo({
+      left: newScrollLeft,
+      behavior: 'smooth',
+    });
+
+    // 滚动后重新检查状态
+    setTimeout(() => {
+      checkScrollability();
+    }, 100);
+  }, [checkScrollability]);
+
+  /**
+   * 监听标签变化和窗口大小变化，检查滚动状态
+   */
+  useEffect(() => {
+    // 使用多个延迟检查，确保DOM完全渲染后再检查
+    checkScrollability();
+    const timer1 = setTimeout(checkScrollability, 50);
+    const timer2 = setTimeout(checkScrollability, 100);
+    const timer3 = setTimeout(checkScrollability, 200);
+
+    const handleResize = () => {
+      checkScrollability();
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    // 监听滚动事件 - 使用 .ant-tabs-nav-wrap 作为滚动容器
+    const navWrapElement = tabsNavRef.current?.querySelector('.ant-tabs-nav-wrap') as HTMLElement;
+    if (navWrapElement) {
+      navWrapElement.addEventListener('scroll', checkScrollability);
+    }
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      window.removeEventListener('resize', handleResize);
+      if (navWrapElement) {
+        navWrapElement.removeEventListener('scroll', checkScrollability);
+      }
+    };
+  }, [tabs, checkScrollability]);
+
+  /**
+   * 计算颜色的亮度值
+   * @param color - 颜色值（十六进制或 rgb/rgba 格式）
+   * @returns 亮度值（0-255）
+   */
+  const calculateColorBrightness = (color: string): number => {
+    if (!color || typeof color !== 'string') return 255; // 默认返回浅色
+
+    // 处理十六进制颜色
+    if (color.startsWith('#')) {
+      const hex = color.slice(1);
+      // 处理 3 位十六进制（如 #fff）
+      const fullHex = hex.length === 3
+        ? hex.split('').map(c => c + c).join('')
+        : hex;
+      const r = parseInt(fullHex.slice(0, 2), 16);
+      const g = parseInt(fullHex.slice(2, 4), 16);
+      const b = parseInt(fullHex.slice(4, 6), 16);
+      // 计算亮度 (使用相对亮度公式)
+      return (r * 299 + g * 587 + b * 114) / 1000;
+    }
+
+    // 处理 rgb/rgba 格式
+    if (color.startsWith('rgb')) {
+      const match = color.match(/\d+/g);
+      if (match && match.length >= 3) {
+        const r = parseInt(match[0]);
+        const g = parseInt(match[1]);
+        const b = parseInt(match[2]);
+        return (r * 299 + g * 587 + b * 114) / 1000;
+      }
+    }
+
+    return 255; // 默认返回浅色
+  };
+
+  // 计算标签栏背景色（支持透明度）
+  const tabsBgColor = useMemo(() => {
+    if (storeIsDark) return token.colorBgContainer;
+    return storeTabsBgColor || token.colorBgContainer;
+  }, [storeTabsBgColor, token.colorBgContainer, storeIsDark]);
+
+  /** 激活标签与内容区：自定义标签背景，空则回落系统内容区底色 */
+  const tabFillColor = useMemo(() => {
+    if (storeIsDark) return token.colorBgLayout;
+    return storeTabBgColor || token.colorBgLayout;
+  }, [storeTabBgColor, token.colorBgLayout, storeIsDark]);
+
+  // 根据标签栏背景色计算文字颜色
+  const tabsTextColor = useMemo(() => {
+    if (storeIsDark) return 'var(--ant-colorText)';
+
+    const customBgColor = storeTabsBgColor;
+
+    if (customBgColor) {
+      const brightness = calculateColorBrightness(customBgColor);
+      return brightness < 128 ? '#ffffff' : 'var(--ant-colorText)';
+    }
+    return 'var(--ant-colorText)';
+  }, [storeTabsBgColor, storeIsDark]);
+
+  /** 当前是否为 HMI/生产终端类页面（需使用专用内容容器：左右 16px padding + 系统圆角） */
+  const isHMIPage = useMemo(() => {
+    const key = activeKey || '';
+    return key.includes('production-execution/terminal') || key.includes('/kiosk');
+  }, [activeKey]);
+
+  /** 标签顶角 / 底内凹圆角：保底 4px，高于 4px 时跟随系统 borderRadius */
+  const tabRadius = useMemo(() => readUniTabsBorderRadius(token.borderRadius, 8), [token.borderRadius]);
+  const tabCornerDiameter = tabRadius * 2;
+
+  /** 工作台/模块看板：外层 UniTabs 不滚动，由内部 DashboardTemplate / UniDashboard 承担 */
+  const isDashboardScrollPage = isDashboardLikePage(location.pathname);
+
+  /** 自管边距的页面：运营分析看板（大屏设计器改走普通 page-outer，与打印模板设计器一致） */
+  const isFlushDashboardOuter = useMemo(() => {
+    const path = location.pathname.replace(/\/$/, '');
+    return path === '/system/dashboard/analysis';
+  }, [location.pathname]);
+
+  const isBusinessBoardAnalysisPage = location.pathname.replace(/\/$/, '') === '/system/dashboard/analysis';
+
+  const createTabKeys = useMemo(
+    () => tabs.map((tab) => tab.key).filter(isCreateTabKey),
+    [tabs],
+  );
+
+  const renderRouteContent = (content: React.ReactNode) =>
+    createTabKeys.length > 0 ? (
+      <TabRouteCache
+        activeKey={activeKey}
+        createTabKeys={createTabKeys}
+        refreshToken={refreshKey}
+      >
+        {content}
+      </TabRouteCache>
+    ) : (
+      <RouteTransition>{content}</RouteTransition>
+    );
+
+  // 无标签时仍保留 UniTabs 内容壳（page-outer 16px），避免切换租户清空标签后内容贴边
+  if (tabs.length === 0) {
+    const flushOuter = location.pathname.replace(/\/$/, '') === '/system/dashboard/analysis';
+    const dashboardScroll = isDashboardLikePage(location.pathname);
+    return (
+      <div className="uni-tabs-wrapper uni-tabs-wrapper--empty">
+        <div
+          className={`uni-tabs-content${dashboardScroll ? ' uni-tabs-content-dashboard' : ''}`}
+        >
+          <div
+            className={`uni-tabs-content-page-outer${flushOuter ? ' uni-tabs-content-page-outer--flush' : ''}`}
+          >
+            <div className="uni-tabs-content-page-inner">
+              <RouteTransition>{children}</RouteTransition>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <style>{`
+        /* 标签栏样式优化：半透明背景只画在 .uni-tabs-header 一层，避免嵌套叠色 */
+        .uni-tabs-header .ant-tabs {
+          margin: 0 !important;
+          margin-bottom: 0 !important;
+          border: none !important;
+          border-bottom: none !important;
+          box-shadow: none !important;
+          outline: none !important;
+          background: transparent !important;
+          padding-top: 2px !important;
+          padding-left: 8px !important;
+        }
+        /* 覆盖 Ant Design Tabs 原生下边框样式 */
+        .uni-tabs-container .ant-tabs-nav {
+          margin: 0 !important;
+          margin-bottom: 0 !important;
+          padding: 0 !important;
+          padding-bottom: 0 !important;
+          border-bottom: none !important;
+          height: 38px !important;
+          overflow: visible !important;
+        }
+        .uni-tabs-container .ant-tabs-nav::before {
+          display: none !important;
+          border-bottom: none !important;
+        }
+        .uni-tabs-container .ant-tabs-nav-wrap {
+          border-bottom: none !important;
+          /* 横向滚动；上下给外圆角留出，避免 auto 把另一轴也裁成 hidden */
+          overflow-x: auto !important;
+          overflow-y: visible !important;
+          height: auto !important;
+          min-height: 38px !important;
+          padding-bottom: 0 !important;
+          margin-bottom: 0 !important;
+          box-sizing: border-box !important;
+          position: relative;
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+        /* 隐藏 Chrome/Safari/Webkit 滚动条且不占用高度 */
+        .uni-tabs-container .ant-tabs-nav-wrap::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
+        /* 禁用 Ant Design 原生左侧阴影，使用自定义阴影适配小箭头按钮 */
+        /* 注意：当 can-scroll-left 时，会通过更具体的选择器覆盖此规则显示阴影 */
+        .uni-tabs-container .ant-tabs-nav-wrap::before {
+          display: none !important;
+          border-bottom: none !important;
+        }
+        .uni-tabs-container .ant-tabs-nav-list {
+          border-bottom: none !important;
+          margin-bottom: 0 !important;
+          padding-bottom: 0 !important;
+          padding-left: ${tabRadius}px !important;
+          padding-right: ${tabRadius}px !important;
+          overflow: visible !important;
+          height: 38px !important;
+          display: flex !important;
+          align-items: flex-end !important;
+        }
+        /* 覆盖所有可能的边框颜色 #F0F0F0 */
+        .uni-tabs-container .ant-tabs-nav,
+        .uni-tabs-container .ant-tabs-nav-wrap,
+        .uni-tabs-container .ant-tabs-nav-list,
+        .uni-tabs-container .ant-tabs-tab {
+          border-color: transparent !important;
+        }
+        .uni-tabs-container .ant-tabs-nav::after {
+          display: none !important;
+          border-bottom: none !important;
+        }
+        /* Chrome 式标签：未激活透明，透出总栏背景；激活态用内容区实色。
+         * 未激活也预留 1px 透明边框 + 与激活态相同的盒模型，避免切换时被撑开、整排文字抖动。 */
+        .uni-tabs-container .ant-tabs-tab {
+          margin: 0 !important;
+          padding: 6px 16px !important;
+          border: 1px solid transparent !important;
+          border-bottom: none !important;
+          background: transparent !important;
+          border-top-left-radius: ${tabRadius}px !important;
+          border-top-right-radius: ${tabRadius}px !important;
+          border-bottom-left-radius: 0 !important;
+          border-bottom-right-radius: 0 !important;
+          position: relative;
+          overflow: visible !important;
+          height: 36px !important;
+          line-height: 22px !important;
+          display: flex !important;
+          align-items: center !important;
+          box-sizing: border-box !important;
+        }
+        /* 标签按钮和关闭按钮垂直居中 */
+        .uni-tabs-container .ant-tabs-tab-btn {
+          display: flex !important;
+          align-items: center !important;
+          line-height: 22px !important;
+        }
+        .uni-tabs-container .ant-tabs-tab-remove {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          width: 16px !important;
+          min-width: 16px !important;
+          height: 22px !important;
+          margin: 0 0 0 8px !important;
+          padding: 0 !important;
+          flex: none !important;
+          line-height: 22px !important;
+          font-size: 12px !important;
+          transform: none !important;
+          transition: color 0.15s ease !important;
+        }
+        .uni-tabs-container .ant-tabs-tab-remove:hover,
+        .uni-tabs-container .ant-tabs-tab-remove:active,
+        .uni-tabs-container .ant-tabs-tab-remove:focus {
+          width: 16px !important;
+          height: 22px !important;
+          margin: 0 0 0 8px !important;
+          padding: 0 !important;
+          transform: none !important;
+        }
+        .uni-tabs-container .ant-tabs-tab-remove .anticon,
+        .uni-tabs-container .ant-tabs-tab-remove .anticon svg {
+          width: 12px !important;
+          height: 12px !important;
+          font-size: 12px !important;
+        }
+        /* 未激活标签：使用竖线分隔 */
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) {
+          position: relative;
+        }
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active)::after {
+          content: '';
+          position: absolute;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 1px;
+          height: 16px;
+          background: rgba(0, 0, 0, 0.16) !important;
+          z-index: 1;
+          opacity: 1 !important;
+        }
+        /* 最后一个未激活标签不需要右侧竖线；激活态要用 ::after 画外圆角 */
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active):last-child::after {
+          display: none !important;
+        }
+        .uni-tabs-container .ant-tabs-content-holder {
+          display: none;
+        }
+        
+        /* 移除标签底部指示线 */
+        .uni-tabs-container .ant-tabs-ink-bar {
+          display: none !important;
+        }
+        /* 激活标签背景色与内容区一致，仿 Chrome 浏览器样式 - 使用主题背景色 */
+        /* 参考：https://juejin.cn/post/6986827061461516324 */
+        .uni-tabs-container .ant-tabs-nav-list > .ant-tabs-tab.ant-tabs-tab-active {
+          --uni-tab-line: var(--uni-tabs-rail);
+          --uni-tab-fill: ${tabFillColor};
+          background: var(--uni-tab-fill) !important;
+          border-color: var(--uni-tab-line) !important;
+          border-bottom: none !important;
+          z-index: 3;
+          /* 高度与未激活相同，只向下投影 1px 盖住总栏底线，不抬高顶边、不挤文字 */
+          box-shadow: 0 1px 0 var(--uni-tab-fill) !important;
+        }
+        /* 前一个未激活标签的竖分割线会顶到激活标签左缘，由激活标签盖住 */
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active):has(+ .ant-tabs-tab-active)::after {
+          display: none !important;
+        }
+        /*
+         * 外圆角衔接采用三层叠加（自下而上）：
+         * ① 标签自身直角框线正常绘制（左右边框直通到底，不做局部擦除）；
+         * ② ::before/::after 各叠一个 radius 见方的同色方块打底，盖住直角框线底段
+         *    （从边框列向标签内侧延伸，宽于 1px，避免亚像素错位露出直线）；
+         * ③ .uni-tab-outer-corner 最外层叠外圆角弧线，与侧边框、总栏底线衔接。
+         */
+        .uni-tabs-container .ant-tabs-tab-active::before,
+        .uni-tabs-container .ant-tabs-tab-active::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          width: ${tabRadius}px;
+          height: ${tabRadius}px;
+          background: var(--uni-tab-fill);
+          border: none !important;
+          box-shadow: none !important;
+          pointer-events: none;
+          z-index: 5;
+          display: block !important;
+        }
+        .uni-tabs-container .ant-tabs-tab-active::before { left: -1px; }
+        .uni-tabs-container .ant-tabs-tab-active::after { right: -1px; }
+        /*
+         * 三层叠加③：最外层外圆角（禁止 SVG）。
+         * 外层节点是 radius 见方的裁剪方窗（overflow hidden、无圆角），内层 arc 节点
+         * 用 border + border-radius 画凹弧、用 spread 阴影填弧外侧月牙并盖住总栏底线。
+         * 不能用 radial-gradient 当填充：background 会被节点自身 border-radius 裁掉，
+         * 月牙区域永远填不上，非整数 DPR 下弧线与填充之间会露白。
+         * z-index 必须高于打底方块（5），否则弧线顶端与侧边框同列的一段被方块抹掉。
+         */
+        .uni-tabs-container .uni-tab-outer-corner {
+          display: none;
+          position: absolute;
+          bottom: 0;
+          width: ${tabRadius}px;
+          height: ${tabRadius}px;
+          pointer-events: none;
+          z-index: 6;
+          overflow: hidden;
+        }
+        .uni-tabs-container .ant-tabs-tab-active .uni-tab-outer-corner {
+          display: block;
+        }
+        .uni-tabs-container .ant-tabs-tab-active .uni-tab-outer-corner--left {
+          left: -${tabRadius}px;
+        }
+        .uni-tabs-container .ant-tabs-tab-active .uni-tab-outer-corner--right {
+          right: -${tabRadius}px;
+        }
+        .uni-tabs-container .uni-tab-outer-corner .uni-tab-outer-corner-arc {
+          position: absolute;
+          inset: 0;
+          box-sizing: border-box;
+          border-style: solid;
+          border-color: var(--uni-tab-line);
+          border-width: 0;
+          box-shadow: 0 0 0 ${tabRadius}px var(--uni-tab-fill);
+        }
+        .uni-tabs-container .uni-tab-outer-corner--left .uni-tab-outer-corner-arc {
+          border-right-width: 1px;
+          border-bottom-width: 1px;
+          border-bottom-right-radius: ${tabRadius}px;
+        }
+        .uni-tabs-container .uni-tab-outer-corner--right .uni-tab-outer-corner-arc {
+          border-left-width: 1px;
+          border-bottom-width: 1px;
+          border-bottom-left-radius: ${tabRadius}px;
+        }
+        .uni-tabs-container .ant-tabs-tab-btn {
+          position: static !important;
+          overflow: visible !important;
+        }
+        /* 确保单个标签时也没有底部间距 */
+        .uni-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) {
+          margin-bottom: 0 !important;
+        }
+        .uni-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) .ant-tabs-tab-active {
+          margin-bottom: 0 !important;
+        }
+        /* 禁止激活态改 margin/padding：会把后续标签一起挤动，文字抖动 */
+        /* ==================== 标签栏文字颜色自动适配（根据背景色亮度反色处理） ==================== */
+        /* 未激活标签文字颜色 - 根据标签栏背景色自动适配 */
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) .ant-tabs-tab-btn {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : tabsTextColor} !important;
+          font-weight: normal !important;
+        }
+        /* 未激活标签分隔线颜色 - 根据标签栏背景色自动适配 */
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active)::after {
+          background: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.16)'} !important;
+        }
+        /* Chrome 式效果：激活标签文字颜色 - 激活标签使用内容区背景，文字颜色使用默认主题色 */
+        .uni-tabs-container .ant-tabs-tab-active .ant-tabs-tab-btn {
+          color: var(--ant-colorText) !important;
+          font-weight: normal !important;
+        }
+        /* 标签关闭按钮颜色 - 根据标签栏背景色自动适配 */
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) .ant-tabs-tab-remove {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(0, 0, 0, 0.45)'} !important;
+        }
+        .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) .ant-tabs-tab-remove:hover {
+          color: ${tabsTextColor} !important;
+        }
+        /* Chrome 式效果：激活标签与相邻未激活标签之间的分隔线隐藏 */
+        /* 注意：不能隐藏激活标签的 ::after，因为需要用它来实现右侧圆角 */
+        /* 但是，激活标签后面的标签仍然需要显示分割线，所以不隐藏它 */
+        /* 注释掉原来的规则，让分割线正常显示 */
+        /* .uni-tabs-container .ant-tabs-tab-active + .ant-tabs-tab::after {
+          display: none !important;
+        } */
+        /* 移除标签切换时的过渡动画 */
+        .uni-tabs-container .ant-tabs-tab {
+          transition: none !important;
+        }
+        .uni-tabs-container .ant-tabs-ink-bar {
+          transition: none !important;
+        }
+        /* 标签栏与内容区无缝融合 */
+        .uni-tabs-wrapper {
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          overflow: visible !important;
+        }
+        /* 标签栏总背景：唯一着色层（支持半透明）。
+         * 底轨与布局主框线统一为 inset 投影；激活标签 box-shadow: 0 1px 0 fill 盖住底轨。 */
+        .uni-tabs-header {
+          --uni-tabs-rail: var(--riveredge-layout-frame-color);
+          background: ${tabsBgColor} !important;
+          flex-shrink: 0;
+          height: var(--riveredge-chrome-strip-height, 40px);
+          box-sizing: border-box;
+          margin: 0 0 0 -1px;
+          padding: 0 0 0 1px;
+          width: calc(100% + 1px);
+          max-width: none;
+          min-width: 0;
+          position: sticky;
+          top: 56px; /* ProLayout 顶栏高度 */
+          z-index: 10;
+          overflow: hidden !important;
+          border-bottom: none !important;
+          box-shadow: inset 0 -1px 0 var(--uni-tabs-rail) !important;
+        }
+        .uni-tabs-header::after {
+          content: none !important;
+          display: none !important;
+        }
+        div.uni-tabs-header {
+          background: ${tabsBgColor} !important;
+        }
+        .uni-tabs-container,
+        .uni-tabs-container .ant-tabs-nav,
+        .uni-tabs-container .ant-tabs-nav-wrap,
+        .uni-tabs-container .ant-tabs-nav-list {
+          background: transparent !important;
+        }
+        /* 确保单个标签时也没有底部间距 */
+        .uni-tabs-container .ant-tabs-nav {
+          margin-bottom: 0 !important;
+          padding-bottom: 0 !important;
+        }
+        .uni-tabs-container .ant-tabs-nav-list {
+          margin-bottom: 0 !important;
+          padding-bottom: 0 !important;
+        }
+        /* 当只有一个标签时，确保没有额外间距 */
+        .uni-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) {
+          margin-bottom: 0 !important;
+        }
+        .uni-tabs-container .ant-tabs-nav:has(.ant-tabs-tab:only-child) .ant-tabs-tab-active {
+          margin-bottom: 0 !important;
+        }
+        .uni-tabs-content {
+          flex: 1 1 auto;
+          display: flex;
+          flex-direction: column;
+          overflow-y: auto;
+          overflow-x: hidden;
+          position: relative;
+          background: ${tabFillColor};
+          --ant-colorBgLayout: ${tabFillColor};
+          margin-top: 0 !important;
+          margin-right: 0 !important;
+          margin-bottom: 0 !important;
+          margin-left: 0 !important;
+          padding-top: 0 !important;
+          padding-bottom: 0 !important;
+          box-sizing: border-box !important;
+          /* 修复滚动：使用 calc 计算确切的内容区高度（视口 - 顶栏 - 标签栏）。
+             四边 16px 留白仅由内层 page-outer / hmi / board 的 padding 承担，勿在 content 再叠 margin。 */
+          height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 40px) !important;
+          max-height: calc(100vh - ${isFullscreen ? '0px' : '56px'} - 40px) !important;
+          min-height: calc(100vh - var(--header-height, ${isFullscreen ? '0px' : '56px'}) - var(--tabs-height, 40px)) !important;
+          /* 彻底隐藏滚动条且不占用空间 */
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+        /* 工作台：不滚动，边距由内部 DashboardTemplate 控制避免加载抖动 */
+        .uni-tabs-content.uni-tabs-content-dashboard {
+          overflow: hidden !important;
+          background: transparent !important;
+        }
+
+        /* 普通业务页：占满内容区高度，避免 Safari 26 flex 子项高度坍缩 */
+        .uni-tabs-content-page-outer {
+          display: flex;
+          flex-direction: column;
+          flex: 1 1 auto;
+          width: 100%;
+          height: 100%;
+          min-height: 0;
+          box-sizing: border-box;
+          padding: 16px;
+        }
+        .uni-tabs-content-page-outer.uni-tabs-content-page-outer--flush {
+          padding: 0;
+        }
+        .uni-tabs-content-page-inner {
+          display: flex;
+          flex-direction: column;
+          flex: 1 1 auto;
+          width: 100%;
+          height: 100%;
+          min-height: 0;
+        }
+        .uni-tabs-content::-webkit-scrollbar {
+          display: block !important;
+          width: 6px !important;
+          height: 6px !important;
+        }
+        .uni-tabs-content-hmi-container {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          height: 100%;
+          min-height: 0;
+          width: 100%;
+          box-sizing: border-box;
+          padding: 16px;
+        }
+        /* HMI 内层：带圆角的框，裁剪内部 HMI，工业风边框 */
+        .uni-tabs-content-hmi-inner {
+          flex: 1;
+          min-height: 0;
+          border-radius: ${typeof token.borderRadius === 'number' ? token.borderRadius : 8}px !important;
+          overflow: hidden !important;
+          isolation: isolate;
+          contain: layout paint;
+          border: 1px solid var(--river-border-color);
+        }
+        /* 内层直接子元素（HMI 根）适配圆角与宽度 */
+        .uni-tabs-content-hmi-inner > * {
+          border-radius: inherit;
+          max-width: 100%;
+          box-sizing: border-box;
+        }
+        .uni-tabs-content-board-outer {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          min-height: 0;
+          width: 100%;
+          box-sizing: border-box;
+          padding: 16px;
+        }
+        .uni-tabs-content-board-inner {
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          border-radius: ${typeof token.borderRadius === 'number' ? token.borderRadius : 8}px !important;
+          /* visible：避免裁切中间 WebGL 核（略超出时仍完整）；背景与看板同色，圆角外溢不明显 */
+          overflow: visible !important;
+          isolation: isolate;
+          /* 移除边框，使看板内容与背景融为一体 */
+          border: none;
+        }
+        .uni-tabs-content-board-inner > * {
+          flex: 1;
+          min-height: 0;
+          max-width: 100%;
+          box-sizing: border-box;
+        }
+        /* 确保所有元素在滚动条隐藏时不占位 */
+        * {
+          scrollbar-gutter: auto !important;
+        }
+        /* 标签栏头部包装器 - 包含滚动按钮；宽度锁在视口内，中间标签区可缩可滚 */
+        .uni-tabs-header-wrapper {
+          display: flex;
+          align-items: flex-end;
+          width: 100%;
+          height: 100%;
+          max-width: 100%;
+          min-width: 0;
+          min-height: 0;
+          box-sizing: border-box;
+          position: relative;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          overflow: hidden !important;
+          margin-bottom: 0 !important;
+          padding-bottom: 0 !important;
+          /* 右侧为全屏按钮预留固定槽位，避免标签把按钮挤出视口 */
+          padding-right: ${onToggleFullscreen ? '40px' : '0'} !important;
+          z-index: 1;
+          pointer-events: none;
+        }
+        /* 允许按钮和标签栏接收点击事件 */
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button-wrapper,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button-wrapper,
+        .uni-tabs-header-wrapper .uni-tabs-container {
+          pointer-events: auto;
+        }
+        /* 滚动按钮样式 - 根据标签栏背景色自动适配颜色，统一大小和padding */
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]),
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) {
+          width: 24px !important; /* 图标14px + 左右padding各5px = 24px */
+          height: 40px !important; /* 总高40px */
+          padding: 13px 5px !important; /* 上下13px，左右5px，图标14px居中 */
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          flex-shrink: 0 !important;
+          border: none !important;
+          border-bottom: none !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : token.colorPrimary} !important;
+          cursor: pointer !important;
+          pointer-events: auto !important;
+          position: relative !important;
+          z-index: 2 !important;
+          margin-bottom: 0 !important;
+          margin-top: 0 !important;
+          line-height: 1 !important;
+        }
+        /* 按钮图标颜色 - 根据标签栏背景色自动适配（深色背景使用浅色图标，浅色背景使用主题色） */
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .ant-btn-icon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) span.anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]) svg {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : token.colorPrimary} !important;
+          fill: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : token.colorPrimary} !important;
+        }
+        /* 去掉按钮的所有伪元素和边框 */
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button::before,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button::after {
+          display: none !important;
+        }
+        /* 无法点击时：浅灰色 - 覆盖所有可能的样式，统一大小和padding */
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:disabled,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-disabled,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button[disabled],
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:disabled,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn.ant-btn-disabled,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:disabled,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text.ant-btn-disabled,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button:disabled,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button.ant-btn-disabled,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button[disabled] {
+          width: 24px !important; /* 图标14px + 左右padding各5px = 24px */
+          height: 40px !important; /* 总高40px */
+          padding: 13px 5px !important; /* 上下13px，左右5px，图标14px居中 */
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          flex-shrink: 0 !important;
+          border: none !important;
+          border-bottom: none !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          color: rgba(0, 0, 0, 0.25) !important;
+          cursor: not-allowed !important;
+          pointer-events: none !important;
+          position: relative !important;
+          z-index: 2 !important;
+          margin-bottom: 0 !important;
+          margin-top: 0 !important;
+          line-height: 1 !important;
+        }
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:disabled .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:disabled .ant-btn-icon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:disabled span.anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-disabled .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-disabled .ant-btn-icon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-disabled span.anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button[disabled] .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button[disabled] .ant-btn-icon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button[disabled] span.anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:disabled .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn.ant-btn-disabled .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:disabled .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text.ant-btn-disabled .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button:disabled .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-scroll-button:disabled svg,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:disabled svg {
+          color: rgba(0, 0, 0, 0.25) !important;
+          fill: rgba(0, 0, 0, 0.25) !important;
+        }
+        /* 可以点击时：主题色（默认状态，hover 时加深） */
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover {
+          color: var(--ant-colorPrimaryHover) !important;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .ant-btn-icon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover span.anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-scroll-button.ant-btn-text:not(:disabled):not(.ant-btn-disabled):not([disabled]):hover .anticon {
+          color: var(--ant-colorPrimaryHover) !important;
+        }
+        /* 按钮容器样式 - 高度与按钮一致，宽度等于按钮宽度 */
+        .uni-tabs-scroll-button-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px; /* 按钮宽度 24px，容器宽度也设置为 24px */
+          height: 40px; /* 与按钮高度一致 */
+          padding-bottom: 0 !important;
+          padding-top: 0 !important;
+          border-bottom: none !important;
+          position: relative;
+          overflow: visible; /* 确保分割线可以显示 */
+          flex-shrink: 0; /* 防止被压缩 */
+        }
+        /* 左按钮容器 - 右侧分割线 */
+        .uni-tabs-scroll-button-left {
+          margin-right: 0;
+          position: relative;
+          z-index: 2;
+        }
+        /* 左按钮右侧分割线 - 根据标签栏背景色自动适配 */
+        .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-left)::after {
+          content: '';
+          position: absolute;
+          right: 0;
+          top: -1px;
+          bottom: 0; /* 确保分割线到底部 */
+          width: 1px;
+          background: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.06)'} !important;
+          z-index: 1;
+          opacity: 1 !important;
+        }
+        /* 左侧阴影 - 显示在左按钮右侧，当可以向左滚动时显示，根据标签栏背景色自动适配 */
+        .uni-tabs-header-wrapper.can-scroll-left::before {
+          content: '';
+          position: absolute;
+          left: 24px; /* 按钮宽度 24px，适配新按钮尺寸 */
+          top: 0;
+          bottom: 0; /* 与右侧阴影保持一致，确保对称 */
+          width: 20px;
+          background: linear-gradient(to right, ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.08)'}, transparent) !important;
+          pointer-events: none;
+          z-index: 1; /* 与右侧阴影一致，确保不遮挡标签文字 */
+        }
+        /* 右按钮容器 - 左侧分割线（移除右侧分割线避免重复） */
+        .uni-tabs-scroll-button-right {
+          margin-left: 0;
+          position: relative;
+          z-index: 2;
+        }
+        /* 右按钮左侧分割线 - 根据标签栏背景色自动适配 */
+        .uni-tabs-scroll-button-wrapper:has(.uni-tabs-scroll-button-right)::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: -1px;
+          bottom: 0; /* 确保分割线到底部 */
+          width: 1px;
+          background: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.06)'} !important;
+          z-index: 1;
+          opacity: 1 !important;
+        }
+        /* 右侧阴影 - 显示在小箭头按钮左侧，固定位置不随滚动移动，根据标签栏背景色自动适配 */
+        .uni-tabs-header-wrapper.can-scroll-right::after {
+          content: '';
+          position: absolute;
+          right: 24px; /* 按钮宽度 24px，适配新按钮尺寸 */
+          top: 0;
+          bottom: 0;
+          width: 20px;
+          background: linear-gradient(to left, ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.06)'}, transparent);
+          pointer-events: none;
+          z-index: 1;
+        }
+        /* 如果有全屏按钮且没有右按钮，右侧阴影直接在全屏按钮左侧 */
+        .uni-tabs-header-wrapper.can-scroll-right:has(.uni-tabs-fullscreen-button-wrapper):not(:has(.uni-tabs-scroll-button-right))::after {
+          right: 40px; /* 全屏按钮 40px */
+        }
+        /* 如果有全屏按钮且有右按钮，右侧阴影需要向右偏移 */
+        .uni-tabs-header-wrapper.can-scroll-right:has(.uni-tabs-fullscreen-button-wrapper):has(.uni-tabs-scroll-button-right)::after {
+          right: 64px; /* 右按钮 24px + 全屏按钮 40px */
+        }
+        /* 全屏按钮容器：绝对贴右，不参与标签行伸缩，永不挤出视口 */
+        .uni-tabs-fullscreen-button-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px; /* 按钮宽度 40px，容器宽度也设置为 40px */
+          height: ${isFullscreen ? '100%' : '40px'}; /* 全屏时随标签栏内容区高度，避免底线被裁切 */
+          margin-left: 0;
+          padding-bottom: 0 !important;
+          padding-top: 0 !important;
+          border-bottom: none !important;
+          position: absolute;
+          right: 0;
+          top: 0;
+          overflow: hidden;
+          flex-shrink: 0; /* 防止被压缩 */
+          z-index: 3;
+          background: ${tabsBgColor} !important;
+          /* 左竖线 + 底轨：与布局主框线同一套 inset 投影 */
+          box-shadow: inset 1px 0 0 var(--uni-tabs-rail), inset 0 -1px 0 var(--uni-tabs-rail) !important;
+        }
+        .uni-tabs-fullscreen-button-wrapper::after,
+        .uni-tabs-fullscreen-button-wrapper::before {
+          content: none !important;
+          display: none !important;
+        }
+        /* 全屏按钮样式 - 单独设置，保持左右padding为13px（与左右按钮不同），根据标签栏背景色自动适配 */
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn-text,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button.ant-btn,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button.ant-btn-text {
+          width: 40px !important; /* 正方形，与高度一致 */
+          height: ${isFullscreen ? '100%' : '40px'} !important;
+          padding: 13px !important; /* 四周padding相等（左右13px），图标14px居中 */
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : token.colorPrimary} !important;
+        }
+        /* 全屏按钮图标颜色 - 根据标签栏背景色自动适配 */
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn-text .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button.ant-btn .anticon,
+        .uni-tabs-header-wrapper button.uni-tabs-fullscreen-button.ant-btn-text .anticon {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : token.colorPrimary} !important;
+        }
+        /* 全屏按钮 hover 状态 - 根据标签栏背景色自动适配 */
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button:hover,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn:hover,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn-text:hover {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 1)' : 'var(--ant-colorPrimaryHover)'} !important;
+        }
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button:hover .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn:hover .anticon,
+        .uni-tabs-header-wrapper .uni-tabs-fullscreen-button.ant-btn-text:hover .anticon {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 1)' : 'var(--ant-colorPrimaryHover)'} !important;
+        }
+        /* 标签栏容器：flex 可收缩，避免标签总宽把全屏按钮挤出视口；横向滚动交给 nav-wrap */
+        .uni-tabs-container {
+          flex: 1 1 0%;
+          min-width: 0;
+          max-width: 100%;
+          overflow: visible !important;
+          position: relative;
+          z-index: 1;
+        }
+        .uni-tabs-container.ant-tabs,
+        .uni-tabs-container > .ant-tabs-nav {
+          min-width: 0 !important;
+          max-width: 100% !important;
+        }
+        .uni-tabs-container > .ant-tabs-nav {
+          width: 100% !important;
+        }
+        .uni-tabs-container .ant-tabs-nav-wrap {
+          flex: 1 1 0% !important;
+          min-width: 0 !important;
+        }
+        /* 强制隐藏 tabs nav 的滚动条 */
+        .uni-tabs-container .ant-tabs-nav::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
+        .uni-tabs-container .ant-tabs-nav {
+          overflow-x: auto;
+          overflow-y: visible !important;
+          padding-bottom: 0 !important;
+          margin-bottom: 0 !important;
+          scrollbar-width: none !important; /* Firefox */
+        }
+        .uni-tabs-container .ant-tabs-nav-list {
+          overflow: visible !important;
+          padding-bottom: 0 !important;
+          margin-bottom: 0 !important;
+        }
+        .uni-tabs-container .ant-tabs-tab {
+          overflow: visible !important;
+        }
+        /* 移除所有可能移动的阴影效果和分隔线 */
+        .uni-tabs-container .ant-tabs-nav-more {
+          padding: 8px 0px 8px 8px !important;
+          box-shadow: none !important;
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : tabsTextColor} !important;
+        }
+        /* 更多标签按钮图标颜色 - 根据标签栏背景色自动适配 */
+        .uni-tabs-container .ant-tabs-nav-more .anticon {
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255, 255, 255, 0.85)' : tabsTextColor} !important;
+        }
+        .uni-tabs-container .ant-tabs-nav-operations {
+          box-shadow: none !important;
+        }
+        /* 移除 nav-operations 的伪元素分隔线 */
+        .uni-tabs-container .ant-tabs-nav-operations::before,
+        .uni-tabs-container .ant-tabs-nav-operations::after {
+          display: none !important;
+          box-shadow: none !important;
+        }
+        /* 禁用 Ant Design 原生右侧阴影，使用自定义阴影适配小箭头按钮 */
+        .uni-tabs-container .ant-tabs-nav-wrap::after {
+          display: none !important;
+        }
+        /* 移除 nav-list 的分隔线 */
+        .uni-tabs-container .ant-tabs-nav-list::after {
+          display: none !important;
+        }
+        /* 彻底隐藏所有相关容器的滚动条 */
+        .uni-tabs-container .ant-tabs-nav-wrap::-webkit-scrollbar,
+        .uni-tabs-container .ant-tabs-nav-scroll::-webkit-scrollbar,
+        .uni-tabs-container .ant-tabs-nav-list::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
+        
+        /* 统一内容容器样式 */
+        .uni-tabs-wrapper {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          width: 100%;
+          min-width: 0;
+          max-width: 100%;
+          overflow: hidden;
+        }
+
+        .uni-tabs-content {
+          flex: 1 1 auto;
+          display: flex;
+          flex-direction: column;
+          overflow-y: auto;
+          overflow-x: hidden;
+          position: relative;
+        }
+
+        /* 普通页面统一添加 16px 内边距（顶部由 margin-top 控制，所以顶部内边距为 0） */
+        /* 使用 !important 确保在全屏模式下 padding 不会被 ProLayout 或其他样式覆盖 */
+        .uni-tabs-content-padded {
+          /* 使用 margin 代替 padding，避免在全屏模式下 padding 失效的问题 */
+          /* 此时滚动条会位于内容区域的边缘（margin 内部），而不是窗口边缘 */
+          margin: 16px !important;
+          padding: 0 !important;
+          box-sizing: border-box;
+          width: calc(100% - 32px) !important;
+        }
+        /* 全屏模式主菜单按钮容器 */
+        .uni-tabs-menu-button-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          flex-shrink: 0;
+          position: relative;
+          z-index: 2;
+          pointer-events: auto;
+        }
+        /* 全屏主菜单按钮样式 */
+        .uni-tabs-menu-button {
+          width: 32px !important;
+          height: 32px !important;
+          padding: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          border: none !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          color: ${tabsTextColor === '#ffffff' ? 'rgba(255,255,255,0.85)' : token.colorText} !important;
+          font-size: 16px !important;
+          border-radius: 50% !important;
+          transition: background 0.2s ease !important;
+        }
+        .uni-tabs-menu-button:hover {
+          color: ${tabsTextColor === '#ffffff' ? '#ffffff' : token.colorText} !important;
+          background: ${tabsTextColor === '#ffffff' ? 'rgba(255,255,255,0.15)' : token.colorFillSecondary} !important;
+        }
+        /* 全屏菜单 Popover 内的 antd Menu 样式紧凑化 */
+        .uni-tabs-nav-popover-menu .ant-menu {
+          border: none !important;
+          box-shadow: none !important;
+          max-height: calc(100vh - 80px);
+          overflow-y: auto;
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+        .uni-tabs-nav-popover-menu .ant-menu::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
+        /* 应用分组标题：与左侧栏对齐（左缩进对齐一级菜单图标列） */
+        .uni-tabs-nav-popover-menu .ant-menu-item-group.menu-group-title-app > .ant-menu-item-group-title,
+        .uni-tabs-nav-popover-menu .ant-menu-item-group-title:has(.menu-group-title-app-label) {
+          padding: 8px 16px 4px 24px !important;
+          margin-block: 0 !important;
+          line-height: 1.2 !important;
+          height: auto !important;
+          min-height: 20px !important;
+          cursor: default !important;
+        }
+        .uni-tabs-nav-popover-menu .ant-menu-item-group.menu-group-title-app > .ant-menu-item-group-list:empty {
+          display: none !important;
+        }
+      `}</style>
+      <div 
+        className="uni-tabs-wrapper"
+        style={{
+          '--header-height': isFullscreen ? '0px' : '56px',
+          '--tabs-height': '40px',
+          '--content-margin': '16px',
+        } as CSSProperties}
+      >
+        <div className="uni-tabs-header">
+          <div
+            className={`uni-tabs-header-wrapper ${canScrollLeft ? 'can-scroll-left' : ''} ${canScrollRight ? 'can-scroll-right' : ''}`}
+            ref={tabsNavRef}
+          >
+            {/* 全屏模式：最左侧主菜单入口 */}
+            {isFullscreen && (
+              <div className="uni-tabs-menu-button-wrapper">
+                <Popover
+                  placement="bottomLeft"
+                  trigger="hover"
+                  arrow={false}
+                  classNames={{ root: "uni-tabs-nav-popover-menu" }}
+                  styles={{ root: { width: 240, padding: 0 } }}
+                  content={
+                    <Menu
+                      mode="inline"
+                      selectedKeys={[activeKey.split('?')[0]]}
+                      defaultOpenKeys={[]}
+                      style={{ border: 'none', maxHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}
+                      items={buildFullscreenNavMenuItems(menuConfig, navigate)}
+                    />
+                  }
+                >
+                  <Button
+                    type="text"
+                    className="uni-tabs-menu-button"
+                    icon={<MenuOutlined />}
+                    title="主菜单"
+                  />
+                </Popover>
+              </div>
+            )}
+            {/* 左侧滚动箭头 - 仅在需要时显示 */}
+            {canScrollLeft && (
+              <div className="uni-tabs-scroll-button-wrapper">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CaretLeftFilled />}
+                  onClick={() => scrollTabs('left')}
+                  disabled={!canScrollLeft}
+                  className="uni-tabs-scroll-button uni-tabs-scroll-button-left"
+                />
+              </div>
+            )}
+            <Tabs
+              activeKey={activeKey}
+              onChange={handleTabChange}
+              type="editable-card"
+              hideAdd
+              onEdit={(targetKey, action) => {
+                if (action === 'remove') {
+                  handleTabClose(targetKey as string);
+                }
+              }}
+              items={tabs.map((tab) => ({
+                key: tab.key,
+                label: (
+                  <>
+                    <i className="uni-tab-outer-corner uni-tab-outer-corner--left" aria-hidden="true">
+                      <i className="uni-tab-outer-corner-arc" aria-hidden="true" />
+                    </i>
+                    <Dropdown
+                      menu={getTabContextMenu(tab.key)}
+                      trigger={['contextMenu']}
+                    >
+                      <span
+                        onDoubleClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          // 仪表盘标签和固定标签不可双击关闭
+                          if (tab.key !== tenantHomePath && tab.closable && !tab.pinned) {
+                            handleTabClose(tab.key);
+                          }
+                        }}
+                        style={{ userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+                      >
+                        {tab.label}
+                        {tab.pinned && (
+                          <PushpinFilled
+                            style={{
+                              fontSize: 12,
+                              color: '#3b82f6',
+                              transform: 'rotate(-45deg)',
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
+                      </span>
+                    </Dropdown>
+                    <i className="uni-tab-outer-corner uni-tab-outer-corner--right" aria-hidden="true">
+                      <i className="uni-tab-outer-corner-arc" aria-hidden="true" />
+                    </i>
+                  </>
+                ),
+                closable: tab.closable && !tab.pinned, // 固定标签不可关闭
+              }))}
+              size="small"
+              className="uni-tabs-container"
+            />
+            {/* 右侧滚动箭头 - 仅在需要时显示 */}
+            {canScrollRight && (
+              <div className="uni-tabs-scroll-button-wrapper">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CaretRightFilled />}
+                  onClick={() => scrollTabs('right')}
+                  disabled={!canScrollRight}
+                  className="uni-tabs-scroll-button uni-tabs-scroll-button-right"
+                />
+              </div>
+            )}
+            {/* 全屏按钮 */}
+            {onToggleFullscreen && (
+              <div className="uni-tabs-scroll-button-wrapper uni-tabs-fullscreen-button-wrapper">
+                <Tooltip title={isFullscreen ? t('tabs.exitFullscreen') : t('tabs.fullscreen')} placement="left">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                    onClick={onToggleFullscreen}
+                    className="uni-tabs-scroll-button uni-tabs-fullscreen-button"
+                  />
+                </Tooltip>
+              </div>
+            )}
+          </div>
+        </div>
+        {/*
+          禁止用 content-refresh key 整树 remount：会连带拆掉所有建单 keep-alive。
+          有建单标签时：列表刷新在 TabRouteCache 非建单分支；建单刷新按 refreshToken 单标签重置。
+          无建单标签时：RouteTransition 自带 route-refresh key。
+        */}
+        <div
+          className={`uni-tabs-content${isDashboardScrollPage ? ' uni-tabs-content-dashboard' : ''}${isBusinessBoardAnalysisPage ? ' uni-tabs-content-business-board' : ''}`}
+        >
+          {isHMIPage ? (
+            <div className="uni-tabs-content-hmi-container">
+              <div className="uni-tabs-content-hmi-inner">
+                {renderRouteContent(children)}
+              </div>
+            </div>
+          ) : isBusinessBoardAnalysisPage ? (
+            <div className="uni-tabs-content-board-outer">
+              <div className="uni-tabs-content-board-inner">
+                {renderRouteContent(children)}
+              </div>
+            </div>
+          ) : (
+            <div
+              className={`uni-tabs-content-page-outer${isFlushDashboardOuter ? ' uni-tabs-content-page-outer--flush' : ''}`}
+            >
+              <div className="uni-tabs-content-page-inner">
+                {renderRouteContent(children)}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+

@@ -1,0 +1,21 @@
+# 手工调试时可复制为 workspace.yaml；生产环境由 deploy.env + generate_workspace.py 生成。
+#
+# 定制仓须按 CUSTOM_PROJECTS 选择项目，禁止写死全量 apps: [haoligo, funide-oa, ...]。
+#
+# mode:
+#   link  — Windows junction / Unix symlink（开发推荐）
+#   copy  — 复制目录（CI / 无 symlink 权限时）
+
+mode: link
+
+plugins:
+  - repo: ../kuaigeyun-pro
+    apps:
+      - kuaiai
+      - kuaireport
+      - kuaiiot
+  - repo: ../kuaigeyun-custom
+    app_bindings:
+      - project: funide-oa
+        backend: funide_oa
+        frontend: funide-oa

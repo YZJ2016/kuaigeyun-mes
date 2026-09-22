@@ -1,0 +1,271 @@
+/**
+ * 表单 Modal 布局模板
+ *
+ * 与 Ant Design Modal 标准一致：footer 使用 Modal 自带底栏，内容区随全局 .ant-modal-body 限高滚动，
+ * 行为与厂区管理等使用本模板的弹窗一致，无内层嵌套滚动条。
+ */
+
+import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { Modal, Button, App, Space, Grid, Col } from 'antd';
+import { ProForm, ProFormInstance } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
+import { MODAL_CONFIG, FORM_LAYOUT } from './constants';
+import { useSubmitShortcut } from '../../hooks/useSubmitShortcut';
+import { SUBMIT_SHORTCUT_HINT } from '../../utils/globalSubmitShortcut';
+import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
+
+/**
+ * `grid` 开启时，Alert / 说明 / Divider 等非 ProForm 字段必须包在本组件内。
+ * 裸节点会吃掉 Row gutter 负边距，比同排输入框更宽（连接器高德提示框）。
+ * 仅用于 `FormModalTemplate grid`（或移动端强制 grid）的 children。
+ */
+export function FormModalGridBlock({
+  children,
+  span = 24,
+}: {
+  children: ReactNode;
+  span?: number;
+}) {
+  return <Col span={span}>{children}</Col>;
+}
+
+export interface FormModalTemplateProps {
+  title: ReactNode;
+  open: boolean;
+  /** 关闭弹窗（与 Modal onCancel 一致） */
+  onClose?: () => void;
+  /** @deprecated 请使用 onClose */
+  onCancel?: () => void;
+  /**
+   * 兼容 ModalForm 的 onOpenChange；关闭时会调用 `onOpenChange(false)`。
+   * 仅传本属性、未传 onClose/onCancel 时也能关闭。
+   */
+  onOpenChange?: (open: boolean) => void;
+  onFinish: (values: any) => Promise<void>;
+  isEdit?: boolean;
+  initialValues?: Record<string, any>;
+  /** 表单项；仅使用 formItems 动态表单时可省略 */
+  children?: ReactNode;
+  width?: number;
+  layout?: 'vertical' | 'horizontal';
+  /**
+   * 开启后 ProForm 包 Row+gutter。字段必须带 colProps；
+   * Alert / 说明等非字段必须包 `FormModalGridBlock`，否则会比输入框更宽。
+   * 有明细表时禁止开启（见 form-modal 契约）。
+   */
+  grid?: boolean;
+  loading?: boolean;
+  formRef?:
+    | React.RefObject<ProFormInstance | null>
+    | React.MutableRefObject<ProFormInstance | undefined>;
+  form?: any;
+  onValuesChange?: (changedValues: any, allValues: any) => void;
+  className?: string;
+  modalRender?: (modal: React.ReactNode) => React.ReactNode;
+  extraFooter?: ReactNode;
+  /** 主提交按钮之后的额外底栏（如「拒收」） */
+  extraFooterAfter?: ReactNode;
+  /** 新建模式主按钮文案（默认「保存」，与 Ctrl+S 快捷键一致） */
+  submitText?: string;
+  /** 隐藏默认提交按钮（仅保留取消与 extraFooter） */
+  submitHidden?: boolean;
+  readOnly?: boolean;
+  /** Modal 打开/关闭动画结束后的回调（open 为当前是否打开） */
+  afterOpenChange?: (open: boolean) => void;
+  /** 与详情抽屉、左侧全链路等同屏时需高于 theme.zIndexPopupBase + 嵌套偏移时使用 */
+  zIndex?: number;
+  /**
+   * 兼容历史上误用的 `<FormModalTemplate {...MODAL_CONFIG} />`；模板不使用这些字段。
+   * 弹窗宽度请传 `width={MODAL_CONFIG.STANDARD_WIDTH}` 等。
+   */
+  STANDARD_WIDTH?: number;
+  LARGE_WIDTH?: number;
+  EXTRA_LARGE_WIDTH?: number;
+  SMALL_WIDTH?: number;
+  TINY_WIDTH?: number;
+  BODY_MAX_HEIGHT?: string;
+  /** @deprecated 未实现；仅从 props 剥离 */
+  formItems?: unknown;
+}
+
+export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
+  title,
+  open,
+  onClose,
+  onCancel,
+  onOpenChange,
+  onFinish,
+  isEdit = false,
+  initialValues,
+  children,
+  width = MODAL_CONFIG.STANDARD_WIDTH,
+  layout = FORM_LAYOUT.VERTICAL,
+  grid = false,
+  loading = false,
+  formRef: externalFormRef,
+  form,
+  onValuesChange,
+  className,
+  modalRender,
+  extraFooter,
+  extraFooterAfter,
+  submitText,
+  submitHidden = false,
+  afterOpenChange,
+  zIndex,
+  readOnly = false,
+  STANDARD_WIDTH: _sw,
+  LARGE_WIDTH: _lw,
+  EXTRA_LARGE_WIDTH: _xlw,
+  SMALL_WIDTH: _smw,
+  TINY_WIDTH: _tw,
+  BODY_MAX_HEIGHT: _bmh,
+  formItems: _unusedFormItems,
+}) => {
+  const handleClose = useCallback(() => {
+    onClose?.();
+    if (!onClose) onCancel?.();
+    onOpenChange?.(false);
+  }, [onClose, onCancel, onOpenChange]);
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md && screens.xs;
+  const internalFormRef = useRef<ProFormInstance>();
+  const formRef = externalFormRef || internalFormRef;
+  const [submitting, setSubmitting] = useState(false);
+
+  // 关闭时清提交态，避免上次请求挂起后再次打开仍转圈；禁止把 submitting 绑到 ProForm.loading
+  //（ProForm 在 loading=true 时会直接跳过 onFinish，按钮会永远转圈）
+  useEffect(() => {
+    if (!open) {
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  const handleFinish = useCallback(
+    async (values: any) => {
+      setSubmitting(true);
+      try {
+        await onFinish(values);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [onFinish],
+  );
+
+  const reportFinishFailed = useCallback(
+    (errorFields?: Array<{ errors?: string[] }>) => {
+      const first = errorFields?.[0];
+      const text = first?.errors?.filter(Boolean)[0];
+      const count = errorFields?.length ?? 0;
+      messageApi.error(
+        text
+          ? count > 1
+            ? t('components.layoutTemplates.formModal.checkFormHintWithCount', {
+                message: text,
+                count: count - 1,
+              })
+            : String(text)
+          : t('components.layoutTemplates.formModal.checkFormHint'),
+      );
+    },
+    [messageApi, t],
+  );
+
+  /**
+   * 底栏不走 ProForm.submit()：其内部 loading 为 true 时会直接跳过 onFinish，按钮只转圈不发请求。
+   * 用 validateFields 拿到值后再调业务 onFinish。
+   */
+  const triggerFormSubmit = useCallback(() => {
+    if (submitting || loading) {
+      return;
+    }
+    const inst = formRef.current as ProFormInstance | undefined;
+    if (!inst || typeof inst.validateFields !== 'function') {
+      messageApi.warning(t('components.layoutTemplates.formModal.formNotReady'));
+      return;
+    }
+    setSubmitting(true);
+    void inst
+      .validateFields()
+      .then((values) => onFinish(values))
+      .catch((err: { errorFields?: Array<{ errors?: string[]; name?: unknown }>; message?: string }) => {
+        if (err?.errorFields?.length) {
+          reportFinishFailed(err.errorFields);
+          const firstName = err.errorFields[0]?.name;
+          if (firstName != null && typeof inst.scrollToField === 'function') {
+            inst.scrollToField(firstName as never, { behavior: 'smooth', block: 'center' });
+          }
+        }
+      })
+      .finally(() => {
+        setSubmitting(false);
+      });
+  }, [formRef, loading, messageApi, onFinish, reportFinishFailed, submitting, t]);
+
+  useSubmitShortcut(() => triggerFormSubmit(), open && !submitting && !loading);
+
+  return (
+    <Modal
+      title={title}
+      open={open}
+      onCancel={handleClose}
+      afterOpenChange={afterOpenChange}
+      zIndex={zIndex}
+      width={width}
+      destroyOnHidden
+      className={[className, 'form-modal-template'].filter(Boolean).join(' ')}
+      modalRender={modalRender}
+      maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+      wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+      footer={
+        readOnly ? (
+          <Space wrap>
+            {extraFooter}
+            <Button onClick={handleClose}>关闭</Button>
+            {extraFooterAfter}
+          </Space>
+        ) : (
+          <Space wrap>
+            <Button onClick={handleClose}>
+              {t('common.cancel')}
+            </Button>
+            {extraFooter}
+            {!submitHidden ? (
+              <Button type="primary" loading={loading || submitting} onClick={triggerFormSubmit}>
+                {(isEdit
+                  ? t('components.layoutTemplates.formModal.submitUpdate')
+                  : submitText ?? t('common.save')) + SUBMIT_SHORTCUT_HINT}
+              </Button>
+            ) : null}
+            {extraFooterAfter}
+          </Space>
+        )
+      }
+    >
+      <div className="form-modal-content-inner">
+        <ProForm
+          formRef={formRef}
+          form={form}
+          readonly={readOnly}
+          onFinish={handleFinish}
+          onFinishFailed={({ errorFields }) => reportFinishFailed(errorFields)}
+          scrollToFirstError={{ behavior: 'smooth', block: 'center' }}
+          onValuesChange={onValuesChange}
+          initialValues={initialValues}
+          layout={layout}
+          grid={isMobile ? true : grid}
+          colProps={isMobile ? { span: 24 } : undefined}
+          rowProps={{ gutter: FORM_LAYOUT.GRID_GUTTER }}
+          submitter={false}
+        >
+          {children}
+        </ProForm>
+      </div>
+    </Modal>
+  );
+};
+
+export default FormModalTemplate;

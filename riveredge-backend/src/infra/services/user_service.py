@@ -1,0 +1,448 @@
+"""
+用户服务模块
+
+提供用户的 CRUD 操作和业务逻辑处理。
+
+Author: Luigi Lu
+Date: 2025-12-27
+"""
+
+from typing import Optional, List, Dict, Any
+
+from fastapi import HTTPException, status
+
+from infra.models.user import User
+from infra.schemas.user import UserCreate, UserUpdate
+from infra.domain.tenant_context import get_current_tenant_id, require_tenant_context
+from infra.domain.security.security import hash_password
+from infra.services.tenant_service import TenantService
+from core.services.authorization.user_permission_service import UserPermissionService
+from core.services.authorization.permission_version_service import PermissionVersionService
+
+
+class UserService:
+    """
+    用户服务类
+    
+    提供用户的 CRUD 操作和业务逻辑处理。
+    所有查询自动过滤组织，所有创建操作自动设置 tenant_id。
+    """
+    
+    async def create_user(
+        self,
+        data: UserCreate,
+        tenant_id: Optional[int] = None,
+        *,
+        system_bootstrap: bool = False,
+    ) -> User:
+        """
+        创建用户
+        
+        创建新用户并自动设置组织 ID。
+        
+        Args:
+            data: 用户创建数据
+            tenant_id: 组织 ID（可选，默认从上下文获取）
+            
+        Returns:
+            User: 创建的用户对象
+            
+        Raises:
+            HTTPException: 当邮箱已存在或组织内用户名已存在时抛出
+            
+        Example:
+            >>> service = UserService()
+            >>> user = await service.create_user(
+            ...     UserCreate(
+            ...         username="testuser",
+            ...         email="test@example.com",
+            ...         password="password123",
+            ...         tenant_id=1
+            ...     )
+            ... )
+        """
+        # 获取组织 ID（从参数或上下文）
+        if tenant_id is None:
+            tenant_id = await require_tenant_context()
+        
+        # 检查组织内用户名是否已存在
+        existing_username = await User.get_or_none(
+            tenant_id=tenant_id,
+            username=data.username,
+            deleted_at__isnull=True,
+        )
+        if existing_username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="该组织下用户名已被使用"
+            )
+
+        from infra.domain.security.reserved_username import assert_tenant_user_username_allowed
+
+        try:
+            assert_tenant_user_username_allowed(data.username, system_bootstrap=system_bootstrap)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
+
+        if data.is_active:
+            await TenantService().assert_shared_user_quota_capacity(
+                tenant_id=tenant_id,
+                increment=1,
+            )
+        
+        # 创建用户（自动设置 tenant_id）⭐ 关键
+        password_hash = hash_password(data.password)
+        user = await User.create(
+            tenant_id=tenant_id,  # ⭐ 关键：自动设置组织 ID
+            username=data.username,
+            phone=data.phone if hasattr(data, 'phone') and data.phone else None,  # 手机号（如果存在）
+            email=data.email if data.email else None,  # 邮箱可选，符合中国用户使用习惯
+            password_hash=password_hash,
+            full_name=data.full_name,
+            is_active=data.is_active,
+            is_infra_admin=data.is_infra_admin,
+            is_tenant_admin=data.is_tenant_admin,
+            source=data.source if hasattr(data, 'source') and data.source else None,  # 用户来源
+        )
+        
+        return user
+    
+    async def get_user_by_id(
+        self,
+        user_id: int,
+        tenant_id: Optional[int] = None
+    ) -> Optional[User]:
+        """
+        根据 ID 获取用户
+        
+        获取指定 ID 的用户，自动过滤组织。
+        
+        Args:
+            user_id: 用户 ID
+            tenant_id: 组织 ID（可选，默认从上下文获取）
+            
+        Returns:
+            Optional[User]: 用户对象，如果不存在或不属于当前组织则返回 None
+            
+        Example:
+            >>> service = UserService()
+            >>> user = await service.get_user_by_id(1)
+            >>> if user:
+            ...     print(user.username)
+        """
+        # 获取组织 ID（从参数或上下文）
+        if tenant_id is None:
+            tenant_id = await require_tenant_context()
+        
+        # 查询用户（自动过滤组织）⭐ 关键
+        user = await User.get_or_none(
+            id=user_id,
+            tenant_id=tenant_id  # ⭐ 关键：自动过滤组织
+        )
+        
+        return user
+    
+    async def list_users(
+        self,
+        page: int = 1,
+        page_size: int = 10,
+        keyword: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        tenant_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        获取用户列表
+        
+        获取用户列表，支持分页、关键词搜索（支持拼音首字母搜索）和状态筛选。
+        自动过滤组织：只返回当前组织的用户。
+        
+        Args:
+            page: 页码（默认 1）
+            page_size: 每页数量（默认 10）
+            keyword: 关键词搜索（可选，搜索用户名、邮箱、全名，支持拼音首字母搜索）
+            is_active: 是否激活筛选（可选）
+            tenant_id: 组织 ID（可选，默认从上下文获取）
+            
+        Returns:
+            Dict[str, Any]: 包含 items、total、page、page_size 的字典
+            
+        Example:
+            >>> service = UserService()
+            >>> result = await service.list_users(
+            ...     page=1,
+            ...     page_size=20,
+            ...     keyword="test"
+            ... )
+            >>> len(result["items"]) >= 0
+            True
+        """
+        from core.search_utils import list_with_search
+        
+        # 构建精确匹配条件
+        exact_filters = {}
+        if is_active is not None:
+            exact_filters['is_active'] = is_active
+        
+        # 使用通用搜索工具（自动支持拼音首字母搜索）
+        return await list_with_search(
+            model=User,
+            page=page,
+            page_size=page_size,
+            keyword=keyword,
+            search_fields=['username', 'email', 'full_name'],
+            exact_filters=exact_filters if exact_filters else None,
+            allowed_sort_fields=['username', 'email', 'full_name', 'is_active', 'created_at', 'updated_at'],
+            default_sort='-created_at',
+            tenant_id=tenant_id,
+            skip_tenant_filter=False
+        )
+    
+    async def update_user(
+        self,
+        user_id: int,
+        data: UserUpdate,
+        tenant_id: Optional[int] = None
+    ) -> Optional[User]:
+        """
+        更新用户
+        
+        更新用户信息，自动验证组织权限。
+        
+        Args:
+            user_id: 用户 ID
+            data: 用户更新数据
+            tenant_id: 组织 ID（可选，默认从上下文获取）
+            
+        Returns:
+            Optional[User]: 更新后的用户对象，如果不存在或不属于当前组织则返回 None
+            
+        Raises:
+            HTTPException: 当邮箱或用户名冲突时抛出
+            
+        Example:
+            >>> service = UserService()
+            >>> user = await service.update_user(
+            ...     1,
+            ...     UserUpdate(full_name="新名称")
+            ... )
+        """
+        # 获取组织 ID（从参数或上下文）
+        if tenant_id is None:
+            tenant_id = await require_tenant_context()
+        
+        # 获取用户（自动验证组织权限）⭐ 关键
+        user = await self.get_user_by_id(user_id, tenant_id)
+        if not user:
+            return None
+        
+        # 检查用户名是否冲突（如果更新用户名）
+        if data.username and data.username != user.username:
+            from infra.domain.security.reserved_username import assert_tenant_user_username_mutation_allowed
+
+            try:
+                assert_tenant_user_username_mutation_allowed(
+                    current_username=user.username,
+                    new_username=data.username,
+                )
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=str(exc),
+                ) from exc
+            existing_username = await User.get_or_none(
+                tenant_id=tenant_id,
+                username=data.username
+            )
+            if existing_username:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="该组织下用户名已被使用"
+                )
+        
+        # 更新用户信息
+        update_data = data.model_dump(exclude_unset=True)
+        
+        # 如果更新密码，需要加密
+        if "password" in update_data:
+            update_data["password_hash"] = hash_password(update_data.pop("password"))
+        
+        admin_flag_changed = (
+            "is_tenant_admin" in update_data
+            and bool(update_data["is_tenant_admin"]) != bool(user.is_tenant_admin)
+        )
+
+        # 执行更新
+        for key, value in update_data.items():
+            setattr(user, key, value)
+        
+        await user.save()
+
+        if admin_flag_changed:
+            await PermissionVersionService.bump(tenant_id=tenant_id, user_id=user.id)
+        
+        return user
+    
+    async def delete_user(
+        self,
+        user_id: int,
+        tenant_id: Optional[int] = None
+    ) -> bool:
+        """
+        删除用户（软删除）
+        
+        删除用户，自动验证组织权限。
+        注意：当前实现为硬删除，后续可改为软删除（添加 deleted_at 字段）。
+        
+        Args:
+            user_id: 用户 ID
+            tenant_id: 组织 ID（可选，默认从上下文获取）
+            
+        Returns:
+            bool: 删除成功返回 True，否则返回 False
+            
+        Example:
+            >>> service = UserService()
+            >>> success = await service.delete_user(1)
+            >>> success
+            True
+        """
+        # 获取组织 ID（从参数或上下文）
+        if tenant_id is None:
+            tenant_id = await require_tenant_context()
+        
+        # 获取用户（自动验证组织权限）⭐ 关键
+        user = await self.get_user_by_id(user_id, tenant_id)
+        if not user:
+            return False
+        
+        # 删除用户
+        await user.delete()
+        
+        return True
+    
+    async def toggle_user_status(
+        self,
+        user_id: int,
+        tenant_id: Optional[int] = None
+    ) -> Optional[User]:
+        """
+        切换用户状态
+        
+        切换用户的激活状态（激活/停用），自动验证组织权限。
+        
+        Args:
+            user_id: 用户 ID
+            tenant_id: 组织 ID（可选，默认从上下文获取）
+            
+        Returns:
+            Optional[User]: 更新后的用户对象，如果不存在或不属于当前组织则返回 None
+            
+        Example:
+            >>> service = UserService()
+            >>> user = await service.toggle_user_status(1)
+            >>> user.is_active
+            False
+        """
+        # 获取组织 ID（从参数或上下文）
+        if tenant_id is None:
+            tenant_id = await require_tenant_context()
+        
+        # 获取用户（自动验证组织权限）⭐ 关键
+        user = await self.get_user_by_id(user_id, tenant_id)
+        if not user:
+            return None
+        
+        # 切换状态
+        user.is_active = not user.is_active
+        await user.save()
+        
+        return user
+    
+    async def get_user_with_tenant_info(
+        self,
+        user_id: int,
+        session_tenant_id: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        获取用户及其组织信息
+
+        session_tenant_id 为当前 JWT 会话组织（/auth/me 传入），用于解析 tenant_name。
+        """
+        from infra.models.tenant import Tenant
+
+        user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
+        if not user:
+            return None
+
+        # 会话组织：JWT 显式传入优先，否则用户所属组织
+        effective_tenant_id = (
+            session_tenant_id if session_tenant_id is not None else user.tenant_id
+        )
+
+        tenant_name: Optional[str] = None
+        tenant_plan: Optional[str] = None
+        tenant_expires_at = None
+        if effective_tenant_id is not None:
+            tenant = await Tenant.get_or_none(id=effective_tenant_id)
+            if not tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"组织不存在 (id={effective_tenant_id})",
+                )
+            tenant_name = tenant.name
+            tenant_plan = tenant.plan.value if tenant.plan else None
+            tenant_expires_at = tenant.expires_at
+
+        from core.services.authorization.data_scope_service import DataScopeService
+
+        await user.fetch_related("department", "position")
+        permissions: List[str] = []
+        permission_version = 1
+        permission_tenant_id = effective_tenant_id or user.tenant_id
+        if permission_tenant_id is not None:
+            permission_set = await UserPermissionService.get_user_permissions(
+                user_id=user.id,
+                tenant_id=permission_tenant_id,
+            )
+            permissions = sorted(permission_set)
+            permission_version = await PermissionVersionService.get_version(
+                tenant_id=permission_tenant_id,
+                user_id=user.id,
+            )
+        department = None
+        if user.department:
+            department = {
+                "uuid": str(user.department.uuid),
+                "name": user.department.name,
+            }
+        position = None
+        if user.position:
+            position = {
+                "uuid": str(user.position.uuid),
+                "name": user.position.name,
+            }
+        roles = await DataScopeService.serialize_active_roles(user.id, effective_tenant_id)
+        
+        return {
+            "id": user.id,
+            "uuid": str(user.uuid),
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name,
+            "avatar": user.avatar,
+            "tenant_id": effective_tenant_id,
+            "tenant_name": tenant_name,
+            "tenant_plan": tenant_plan,
+            "tenant_expires_at": tenant_expires_at,
+            "is_active": user.is_active,
+            "is_infra_admin": user.is_infra_admin,
+            "is_tenant_admin": user.is_tenant_admin,
+            "permissions": permissions,
+            "permission_version": permission_version,
+            "department": department,
+            "position": position,
+            "roles": roles,
+        }

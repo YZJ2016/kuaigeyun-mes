@@ -1,0 +1,252 @@
+/**
+ * 部门 API 服务
+ * 
+ * 提供部门管理相关的 API 接口
+ * 注意：所有 API 自动过滤当前组织的部门
+ */
+
+import { apiRequest } from './api';
+
+/**
+ * 部门信息接口
+ */
+export interface Department {
+  uuid: string;
+  name: string;
+  code?: string;
+  description?: string;
+  parent_uuid?: string;
+  manager_uuid?: string;
+  manager_name?: string;
+  sort_order: number;
+  is_active: boolean;
+  tenant_id: number;
+  children_count?: number;
+  user_count?: number;
+  position_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * 部门树形项接口
+ */
+export interface DepartmentTreeItem extends Department {
+  children?: DepartmentTreeItem[];
+}
+
+/**
+ * 部门树形响应数据
+ */
+export interface DepartmentTreeResponse {
+  items: DepartmentTreeItem[];
+  total: number;
+}
+
+/**
+ * 创建部门数据
+ */
+export interface CreateDepartmentData {
+  name: string;
+  code?: string;
+  description?: string;
+  parent_uuid?: string;
+  manager_uuid?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+/**
+ * 更新部门数据
+ */
+export interface UpdateDepartmentData {
+  name?: string;
+  code?: string;
+  description?: string;
+  parent_uuid?: string;
+  manager_uuid?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+/**
+ * 获取部门树形结构
+ * 
+ * 返回完整的部门树形结构，包含所有子部门。支持关键词搜索。
+ * 
+ * @param params - 搜索参数
+ * @returns 部门树形响应数据
+ */
+export async function getDepartmentTree(params?: {
+  keyword?: string;
+  is_active?: boolean;
+}): Promise<DepartmentTreeResponse> {
+  return apiRequest<DepartmentTreeResponse>('/core/departments/tree', {
+    params,
+  });
+}
+
+/**
+ * 获取部门详情
+ * 
+ * 自动验证组织权限：只能获取当前组织的部门。
+ * 
+ * @param departmentUuid - 部门 UUID
+ * @returns 部门信息
+ */
+export async function getDepartmentByUuid(departmentUuid: string): Promise<Department> {
+  return apiRequest<Department>(`/core/departments/${departmentUuid}`);
+}
+
+/**
+ * 创建部门
+ * 
+ * 自动设置当前组织的 tenant_id。
+ * 
+ * @param data - 部门创建数据
+ * @returns 创建的部门信息
+ */
+export async function createDepartment(data: CreateDepartmentData): Promise<Department> {
+  return apiRequest<Department>('/core/departments', {
+    method: 'POST',
+    data,
+  });
+}
+
+/**
+ * 更新部门
+ * 
+ * 自动验证组织权限：只能更新当前组织的部门。
+ * 
+ * @param departmentUuid - 部门 UUID
+ * @param data - 部门更新数据
+ * @returns 更新后的部门信息
+ */
+export async function updateDepartment(departmentUuid: string, data: UpdateDepartmentData): Promise<Department> {
+  return apiRequest<Department>(`/core/departments/${departmentUuid}`, {
+    method: 'PUT',
+    data,
+  });
+}
+
+/**
+ * 删除部门
+ * 
+ * 自动验证组织权限：只能删除当前组织的部门。
+ * 有子部门或关联用户的部门不可删除。
+ * 
+ * @param departmentUuid - 部门 UUID
+ */
+export async function deleteDepartment(departmentUuid: string): Promise<void> {
+  return apiRequest<void>(`/core/departments/${departmentUuid}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * 批量更新部门排序
+ * 
+ * 用于前端拖拽排序后批量更新多个部门的排序顺序。
+ * 
+ * @param departmentOrders - 部门排序列表，格式：[{"uuid": "...", "sort_order": 1}, ...]
+ */
+export async function updateDepartmentOrder(
+  departmentOrders: Array<{ uuid: string; sort_order: number }>
+): Promise<{ success: boolean; message: string }> {
+  return apiRequest<{ success: boolean; message: string }>('/core/departments/sort', {
+    method: 'PUT',
+    data: departmentOrders,
+  });
+}
+
+/**
+ * 批量导入部门
+ * 
+ * @param data - 二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）
+ * @returns 导入结果
+ */
+export async function importDepartments(data: any[][]): Promise<{
+  success_count: number;
+  failure_count: number;
+  errors: Array<{ row: number; error: string }>;
+}> {
+  return apiRequest<{
+    success_count: number;
+    failure_count: number;
+    errors: Array<{ row: number; error: string }>;
+  }>('/core/departments/batch-import', {
+    method: 'POST',
+    data: { data },
+  });
+}
+
+/**
+ * 预设部门项（与后端 PRESET_DEPARTMENTS 一致）
+ */
+export interface PresetDepartmentItem {
+  name: string;
+  code: string;
+  sort_order: number;
+}
+
+/**
+ * 获取部门预设预览列表（静态）
+ */
+export async function getDepartmentPresetPreview(): Promise<PresetDepartmentItem[]> {
+  return apiRequest<PresetDepartmentItem[]>('/core/departments/preset-preview');
+}
+
+/**
+ * 加载中国中小制造业极简部门预设数据
+ * @param codes 仅创建指定编码；不传则创建全部预设
+ */
+export async function loadPresetDepartments(
+  codes?: string[],
+): Promise<{ created: number; message: string }> {
+  return apiRequest<{ created: number; message: string }>('/core/departments/load-preset', {
+    method: 'POST',
+    data: codes?.length ? { codes } : undefined,
+  });
+}
+
+/** 按预设映射补齐部门负责人（销售经理→销售部等） */
+export async function linkPresetDepartmentManagers(): Promise<{ managers_linked: number; message: string }> {
+  return apiRequest<{ managers_linked: number; message: string }>('/core/departments/link-preset-managers', {
+    method: 'POST',
+  });
+}
+
+/** 部门管理 — 数据集关联（与后端 DepartmentDatasetBinding 一致） */
+export interface DepartmentDatasetBindingPayload {
+  dataset_uuid?: string;
+  department_name_column?: string;
+  department_code_column?: string;
+  parent_ref_column?: string;
+  description_column?: string;
+}
+
+export interface DepartmentDatasetSyncResult {
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export async function getDepartmentDatasetBinding(): Promise<DepartmentDatasetBindingPayload> {
+  return apiRequest<DepartmentDatasetBindingPayload>('/core/departments/dataset-binding');
+}
+
+export async function putDepartmentDatasetBinding(
+  body: DepartmentDatasetBindingPayload,
+): Promise<DepartmentDatasetBindingPayload> {
+  return apiRequest<DepartmentDatasetBindingPayload>('/core/departments/dataset-binding', {
+    method: 'PUT',
+    data: body,
+  });
+}
+
+export async function syncDepartmentsFromDataset(): Promise<DepartmentDatasetSyncResult> {
+  return apiRequest<DepartmentDatasetSyncResult>('/core/departments/sync-from-dataset', {
+    method: 'POST',
+  });
+}
+

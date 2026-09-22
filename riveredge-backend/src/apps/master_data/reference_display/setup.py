@@ -1,0 +1,799 @@
+"""主数据引用展示 Provider 注册。"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from tortoise.expressions import F, Q
+
+from apps.master_data.models.customer import Customer
+from apps.master_data.models.drawing import EngineeringDrawing
+from apps.master_data.models.factory import Plant, ProductionLine, WorkCenter, Workshop, Workstation
+from apps.master_data.models.material import BOM, Material, MaterialGroup
+from apps.master_data.models.process import DefectType, Operation, ProcessRoute, SOP
+from apps.master_data.models.supplier import Supplier
+from apps.master_data.models.warehouse import StorageArea, StorageLocation, Warehouse
+from apps.master_data.services.supply_chain_service import RESOURCE_SUPPLIER, RESOURCE_CUSTOMER, SupplyChainService
+from core.models.department import Department
+from core.models.position import Position
+from core.services.authorization.data_scope_service import DataScopeService
+from core.services.reference.reference_display_provider_registry import register_reference_display_provider
+from core.services.reference.tenant_model_display_provider import make_tenant_model_display_provider
+from core.services.user.user_display_service import UserDisplayService
+from infra.models.user import User
+
+_registered = False
+
+
+def _row(*, id: int, uuid: str | None, code: str | None, name: str | None, **extra: Any) -> dict[str, Any]:
+    label_parts = [p for p in [(code or "").strip(), (name or "").strip()] if p]
+    label = " - ".join(label_parts) if label_parts else str(id)
+    return {"id": id, "uuid": uuid, "code": code, "name": name, "label": label, **extra}
+
+
+def _partner_uuid(entity: Any) -> str | None:
+    raw = getattr(entity, "uuid", None)
+    return str(raw) if raw is not None else None
+
+
+def _partner_primary_contact_fields(entity: Any) -> dict[str, Any]:
+    """首条联系人：优先 contacts 明细，否则 legacy 快照字段（与详情 API 一致）。"""
+    from apps.master_data.services.supply_chain_service import _partner_contacts_for_response
+
+    rows = _partner_contacts_for_response(entity)
+    if not rows:
+        return {
+            "contact_person": None,
+            "phone": None,
+            "email": None,
+            "contact_title": None,
+        }
+    first = rows[0]
+    return {
+        "contact_person": first.get("contact_person"),
+        "phone": first.get("phone"),
+        "email": first.get("email"),
+        "contact_title": first.get("contact_title"),
+    }
+
+
+def _customer_display_row(entity: Any) -> dict[str, Any]:
+    """客户下拉回填：首条联系人 + 业务员/地址（供销售订单等表单自动带出）。"""
+    contact = _partner_primary_contact_fields(entity)
+    return _row(
+        id=int(entity.id),
+        uuid=_partner_uuid(entity),
+        code=getattr(entity, "code", None),
+        name=getattr(entity, "name", None),
+        contact_person=contact.get("contact_person"),
+        phone=contact.get("phone"),
+        address=getattr(entity, "address", None),
+        delivery_address=getattr(entity, "delivery_address", None),
+        salesman_id=getattr(entity, "salesman_id", None),
+        salesman_name=getattr(entity, "salesman_name", None),
+        payment_terms_days=getattr(entity, "payment_terms_days", None),
+    )
+
+
+def _supplier_display_row(entity: Any) -> dict[str, Any]:
+    """供应商下拉回填：首条联系人 + 采购员（供采购订单等表单自动带出）。"""
+    contact = _partner_primary_contact_fields(entity)
+    return _row(
+        id=int(entity.id),
+        uuid=_partner_uuid(entity),
+        code=getattr(entity, "code", None),
+        name=getattr(entity, "name", None),
+        contact_person=contact.get("contact_person"),
+        phone=contact.get("phone"),
+        buyer_id=getattr(entity, "buyer_id", None),
+        buyer_name=getattr(entity, "buyer_name", None),
+    )
+
+
+def _flatten_material_source_config(raw: Any) -> dict[str, Any]:
+    """展平 material.source_config 中多余的嵌套 source_config 键（与业务页读取一致）。"""
+    if not raw or not isinstance(raw, dict):
+        return {}
+    if any(
+        key in raw
+        for key in (
+            "default_supplier_id",
+            "outsource_supplier_id",
+            "purchase_lead_time",
+            "production_lead_time",
+            "outsource_lead_time",
+            "source_types",
+            "manufacturing_mode",
+        )
+    ):
+        return raw
+    nested = raw.get("source_config")
+    if isinstance(nested, dict):
+        return nested
+    return raw
+
+
+class _CustomerDisplayProvider:
+    resource_key = "master-data:supply-chain:customer"
+
+    async def search(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        is_active: bool | None,
+        extra: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        skip = (page - 1) * page_size
+        items, total = await SupplyChainService.list_customers(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=page_size,
+            keyword=keyword,
+            is_active=is_active,
+            current_user=user,
+        )
+        return {
+            "items": [_customer_display_row(c) for c in items],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    async def resolve(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        record_ids: list[int] | None,
+        record_uuids: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        ids = sorted({int(i) for i in (record_ids or []) if i is not None})
+        uuids = sorted({str(u).strip() for u in (record_uuids or []) if str(u).strip()})
+        if not ids and not uuids:
+            return []
+        cond = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        if ids and uuids:
+            cond &= Q(id__in=ids) | Q(uuid__in=uuids)
+        elif ids:
+            cond &= Q(id__in=ids)
+        else:
+            cond &= Q(uuid__in=uuids)
+        query = await DataScopeService.apply(
+            Customer.filter(cond),
+            tenant_id=tenant_id,
+            user=user,
+            resource=RESOURCE_CUSTOMER,
+        )
+        rows = await query.all()
+        return [_customer_display_row(r) for r in rows]
+
+
+class _SupplierDisplayProvider:
+    resource_key = "master-data:supply-chain:supplier"
+
+    async def search(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        is_active: bool | None,
+        extra: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        skip = (page - 1) * page_size
+        items, total = await SupplyChainService.list_suppliers(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=page_size,
+            keyword=keyword,
+            is_active=is_active,
+            current_user=user,
+        )
+        return {
+            "items": [_supplier_display_row(s) for s in items],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    async def resolve(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        record_ids: list[int] | None,
+        record_uuids: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        ids = sorted({int(i) for i in (record_ids or []) if i is not None})
+        uuids = sorted({str(u).strip() for u in (record_uuids or []) if str(u).strip()})
+        if not ids and not uuids:
+            return []
+        cond = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        if ids and uuids:
+            cond &= Q(id__in=ids) | Q(uuid__in=uuids)
+        elif ids:
+            cond &= Q(id__in=ids)
+        else:
+            cond &= Q(uuid__in=uuids)
+        query = await DataScopeService.apply(
+            Supplier.filter(cond),
+            tenant_id=tenant_id,
+            user=user,
+            resource=RESOURCE_SUPPLIER,
+        )
+        rows = await query.all()
+        return [_supplier_display_row(r) for r in rows]
+
+
+class _MaterialDisplayProvider:
+    resource_key = "master-data:material"
+
+    async def search(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        is_active: bool | None,
+        extra: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        query = Material.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        # 与物料列表 mastersOnly 一致：仅主物料/非属性 SKU 行
+        query = query.filter(Q(variant_managed=False) | Q(code=F("main_code")))
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+        if extra:
+            group_id = extra.get("group_id") or extra.get("groupId")
+            if group_id is not None:
+                from apps.master_data.services.material_service import MaterialService
+
+                all_group_ids = await MaterialService._get_all_child_group_ids(
+                    tenant_id, int(group_id)
+                )
+                query = query.filter(group_id__in=all_group_ids)
+            source_type = extra.get("source_type") or extra.get("sourceType")
+            if source_type:
+                query = query.filter(source_type=str(source_type))
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(
+                Q(code__icontains=kw)
+                | Q(main_code__icontains=kw)
+                | Q(name__icontains=kw)
+            )
+        total = await query.count()
+        offset = (page - 1) * page_size
+        rows = await query.order_by("main_code", "code").offset(offset).limit(page_size).all()
+        return {
+            "items": [
+                {
+                    **_row(id=r.id, uuid=r.uuid, code=r.main_code or r.code, name=r.name),
+                    "specification": r.specification,
+                    "base_unit": r.base_unit,
+                    "units": r.units,
+                    "source_type": r.source_type,
+                    "main_code": r.main_code,
+                    "group_id": r.group_id,
+                    "images": r.images,
+                }
+                for r in rows
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    async def resolve(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        record_ids: list[int] | None,
+        record_uuids: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        ids = sorted({int(i) for i in (record_ids or []) if i is not None})
+        uuids = sorted({str(u).strip() for u in (record_uuids or []) if str(u).strip()})
+        if not ids and not uuids:
+            return []
+        cond = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        if ids and uuids:
+            cond &= Q(id__in=ids) | Q(uuid__in=uuids)
+        elif ids:
+            cond &= Q(id__in=ids)
+        else:
+            cond &= Q(uuid__in=uuids)
+        rows = await Material.filter(cond).all()
+        return [
+            {
+                **_row(id=r.id, uuid=r.uuid, code=r.main_code or r.code, name=r.name),
+                "specification": r.specification,
+                "base_unit": r.base_unit,
+                "units": r.units,
+                "source_type": r.source_type,
+                "source_config": _flatten_material_source_config(r.source_config),
+                "main_code": r.main_code,
+                "group_id": r.group_id,
+                "images": r.images,
+            }
+            for r in rows
+        ]
+
+
+class _WarehouseDisplayProvider:
+    resource_key = "master-data:warehouse:warehouse"
+
+    async def search(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        is_active: bool | None,
+        extra: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        query = Warehouse.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
+        total = await query.count()
+        offset = (page - 1) * page_size
+        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        return {
+            "items": [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    async def resolve(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        record_ids: list[int] | None,
+        record_uuids: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        ids = sorted({int(i) for i in (record_ids or []) if i is not None})
+        uuids = sorted({str(u).strip() for u in (record_uuids or []) if str(u).strip()})
+        if not ids and not uuids:
+            return []
+        cond = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        if ids and uuids:
+            cond &= Q(id__in=ids) | Q(uuid__in=uuids)
+        elif ids:
+            cond &= Q(id__in=ids)
+        else:
+            cond &= Q(uuid__in=uuids)
+        rows = await Warehouse.filter(cond).all()
+        return [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows]
+
+
+class _WorkshopDisplayProvider:
+    resource_key = "master-data:factory:workshop"
+
+    async def search(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        is_active: bool | None,
+        extra: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        query = Workshop.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
+        total = await query.count()
+        offset = (page - 1) * page_size
+        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        return {
+            "items": [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    async def resolve(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        record_ids: list[int] | None,
+        record_uuids: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        ids = sorted({int(i) for i in (record_ids or []) if i is not None})
+        uuids = sorted({str(u).strip() for u in (record_uuids or []) if str(u).strip()})
+        if not ids and not uuids:
+            return []
+        cond = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        if ids and uuids:
+            cond &= Q(id__in=ids) | Q(uuid__in=uuids)
+        elif ids:
+            cond &= Q(id__in=ids)
+        else:
+            cond &= Q(uuid__in=uuids)
+        rows = await Workshop.filter(cond).all()
+        return [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows]
+
+
+class _PlantDisplayProvider:
+    resource_key = "master-data:factory:plant"
+
+    async def search(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        is_active: bool | None,
+        extra: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        query = Plant.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
+        total = await query.count()
+        offset = (page - 1) * page_size
+        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        return {
+            "items": [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    async def resolve(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        record_ids: list[int] | None,
+        record_uuids: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        ids = sorted({int(i) for i in (record_ids or []) if i is not None})
+        uuids = sorted({str(u).strip() for u in (record_uuids or []) if str(u).strip()})
+        if not ids and not uuids:
+            return []
+        cond = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        if ids and uuids:
+            cond &= Q(id__in=ids) | Q(uuid__in=uuids)
+        elif ids:
+            cond &= Q(id__in=ids)
+        else:
+            cond &= Q(uuid__in=uuids)
+        rows = await Plant.filter(cond).all()
+        return [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows]
+
+
+class _WorkCenterDisplayProvider:
+    resource_key = "master-data:factory:work-center"
+
+    async def search(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        is_active: bool | None,
+        extra: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        query = WorkCenter.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
+        total = await query.count()
+        offset = (page - 1) * page_size
+        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        return {
+            "items": [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    async def resolve(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        record_ids: list[int] | None,
+        record_uuids: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        ids = sorted({int(i) for i in (record_ids or []) if i is not None})
+        uuids = sorted({str(u).strip() for u in (record_uuids or []) if str(u).strip()})
+        if not ids and not uuids:
+            return []
+        cond = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        if ids and uuids:
+            cond &= Q(id__in=ids) | Q(uuid__in=uuids)
+        elif ids:
+            cond &= Q(id__in=ids)
+        else:
+            cond &= Q(uuid__in=uuids)
+        rows = await WorkCenter.filter(cond).all()
+        return [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows]
+
+
+class _DepartmentDisplayProvider:
+    resource_key = "system:department"
+
+    async def search(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        is_active: bool | None,
+        extra: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        query = Department.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
+        total = await query.count()
+        offset = (page - 1) * page_size
+        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        items = [await self._map_row(r) for r in rows]
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    async def resolve(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        record_ids: list[int] | None,
+        record_uuids: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        ids = sorted({int(i) for i in (record_ids or []) if i is not None})
+        uuids = sorted({str(u).strip() for u in (record_uuids or []) if str(u).strip()})
+        if not ids and not uuids:
+            return []
+        cond = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        if ids and uuids:
+            cond &= Q(id__in=ids) | Q(uuid__in=uuids)
+        elif ids:
+            cond &= Q(id__in=ids)
+        else:
+            cond &= Q(uuid__in=uuids)
+        rows = await Department.filter(cond).all()
+        return [await self._map_row(r) for r in rows]
+
+    async def _parent_uuid_for(self, tenant_id: int, parent_id: int | None) -> str | None:
+        if not parent_id:
+            return None
+        parent = await Department.filter(tenant_id=tenant_id, id=parent_id, deleted_at__isnull=True).first()
+        if not parent:
+            return None
+        return (parent.uuid or "").strip() or None
+
+    async def _map_row(self, row: Department) -> dict[str, Any]:
+        parent_uuid = await self._parent_uuid_for(int(row.tenant_id), getattr(row, "parent_id", None))
+        base = _row(
+            id=int(row.id),
+            uuid=row.uuid,
+            code=row.code,
+            name=row.name,
+        )
+        if parent_uuid:
+            base["parent_uuid"] = parent_uuid
+        return base
+
+
+class _PositionDisplayProvider:
+    resource_key = "system:position"
+
+    async def search(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        is_active: bool | None,
+        extra: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        query = Position.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+        if keyword and keyword.strip():
+            kw = keyword.strip()
+            query = query.filter(Q(code__icontains=kw) | Q(name__icontains=kw))
+        total = await query.count()
+        offset = (page - 1) * page_size
+        rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        return {
+            "items": [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    async def resolve(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        record_ids: list[int] | None,
+        record_uuids: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        ids = sorted({int(i) for i in (record_ids or []) if i is not None})
+        uuids = sorted({str(u).strip() for u in (record_uuids or []) if str(u).strip()})
+        if not ids and not uuids:
+            return []
+        cond = Q(tenant_id=tenant_id, deleted_at__isnull=True)
+        if ids and uuids:
+            cond &= Q(id__in=ids) | Q(uuid__in=uuids)
+        elif ids:
+            cond &= Q(id__in=ids)
+        else:
+            cond &= Q(uuid__in=uuids)
+        rows = await Position.filter(cond).all()
+        return [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows]
+
+
+class _UserDisplayProviderAdapter:
+    resource_key = "system:user"
+
+    async def search(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        page: int,
+        page_size: int,
+        keyword: str | None,
+        is_active: bool | None,
+        extra: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        result = await UserDisplayService.search(
+            tenant_id=tenant_id,
+            page=page,
+            page_size=page_size,
+            keyword=keyword,
+            is_active=is_active,
+        )
+        items = [
+            {
+                "id": i.id,
+                "uuid": i.uuid,
+                "code": i.username,
+                "name": i.full_name,
+                "label": i.label,
+            }
+            for i in result["items"]
+        ]
+        return {
+            "items": items,
+            "total": result["total"],
+            "page": result["page"],
+            "page_size": result["page_size"],
+        }
+
+    async def resolve(
+        self,
+        *,
+        tenant_id: int,
+        user: User,
+        record_ids: list[int] | None,
+        record_uuids: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        items = await UserDisplayService.resolve(
+            tenant_id=tenant_id,
+            user_ids=record_ids,
+            user_uuids=record_uuids,
+        )
+        return [
+            {
+                "id": i.id,
+                "uuid": i.uuid,
+                "code": i.username,
+                "name": i.full_name,
+                "label": i.label,
+            }
+            for i in items
+        ]
+
+
+_PROVIDERS = [
+    _CustomerDisplayProvider(),
+    _SupplierDisplayProvider(),
+    _MaterialDisplayProvider(),
+    _WarehouseDisplayProvider(),
+    _WorkshopDisplayProvider(),
+    _PlantDisplayProvider(),
+    _WorkCenterDisplayProvider(),
+    _DepartmentDisplayProvider(),
+    _PositionDisplayProvider(),
+    _UserDisplayProviderAdapter(),
+    make_tenant_model_display_provider(
+        resource_key="master-data:factory:production-line",
+        model=ProductionLine,
+    ),
+    make_tenant_model_display_provider(
+        resource_key="master-data:factory:workstation",
+        model=Workstation,
+    ),
+    make_tenant_model_display_provider(
+        resource_key="master-data:warehouse:storage-area",
+        model=StorageArea,
+    ),
+    make_tenant_model_display_provider(
+        resource_key="master-data:warehouse:storage-location",
+        model=StorageLocation,
+    ),
+    make_tenant_model_display_provider(
+        resource_key="master-data:material:group",
+        model=MaterialGroup,
+    ),
+    make_tenant_model_display_provider(
+        resource_key="master-data:material:bom",
+        model=BOM,
+        code_field="bom_code",
+        name_field="description",
+        order_by="bom_code",
+    ),
+    make_tenant_model_display_provider(
+        resource_key="master-data:process:defect-type",
+        model=DefectType,
+    ),
+    make_tenant_model_display_provider(
+        resource_key="master-data:process:operation",
+        model=Operation,
+    ),
+    make_tenant_model_display_provider(
+        resource_key="master-data:process:route",
+        model=ProcessRoute,
+    ),
+    make_tenant_model_display_provider(
+        resource_key="master-data:process:sop",
+        model=SOP,
+    ),
+    make_tenant_model_display_provider(
+        resource_key="master-data:process:drawing",
+        model=EngineeringDrawing,
+    ),
+]
+
+
+def register_master_data_reference_display_providers() -> None:
+    global _registered
+    if _registered:
+        return
+    for provider in _PROVIDERS:
+        register_reference_display_provider(provider)
+    _registered = True

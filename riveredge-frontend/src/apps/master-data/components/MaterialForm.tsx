@@ -1,0 +1,4321 @@
+/**
+ * 物料表单组件（多标签页）
+ *
+ * 实现物料的新建和编辑功能，包含标签页：
+ * 1. 基本信息（含物料来源）
+ * 2. 属性管理
+ * 3. 多单位管理
+ * 4. 编号映射
+ * 5. 默认值设置
+ *
+ * Author: Luigi Lu
+ * Date: 2026-01-08
+ */
+
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload, Typography, Tooltip } from 'antd';
+import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsFormSection } from '../../../components/custom-fields';
+import { MaterialDedupCreateGuard } from './MaterialDedupAssistant';
+import { FormModalTemplate, DocumentFormPageLayout, DocumentFormPageHeaderActions, DetailDrawerSection } from '../../../components/layout-templates';
+import {
+  MODAL_CONFIG,
+  MODAL_NESTED_ABOVE_PARENT_OFFSET,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+} from '../../../components/layout-templates/constants';
+import { UniDropdown } from '../../../components/uni-dropdown';
+import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, QuestionCircleOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
+import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton, ProFormItem, ProFormField } from '@ant-design/pro-components';
+import {
+  formatMaterialGroupLabel,
+  type Material,
+  type MaterialGroup,
+  type MaterialCreate,
+  type MaterialUpdate,
+  type DepartmentCodeMapping,
+  type CustomerCodeMapping,
+  type SupplierCodeMapping,
+  type MaterialUnit,
+  type MaterialUnits,
+  type MaterialCodeMapping,
+} from '../types/material';
+import type { Customer } from '../types/supply-chain';
+import type { Supplier } from '../types/supply-chain';
+import { customerApi, supplierApi, unwrapSupplyPagedList } from '../services/supply-chain';
+import { warehouseApi, storageLocationApi, storageAreaApi } from '../services/warehouse';
+import { processRouteApi, operationApi } from '../services/process';
+import { materialCodeMappingApi, bomApi } from '../services/material';
+import { materialMarketPriceApi } from '../services/material-market-price';
+import { todaySiteDateString } from '../../../utils/format';
+import type { Warehouse, StorageLocation, StorageArea } from '../types/warehouse';
+import type { ProcessRoute, Operation } from '../types/process';
+import {
+  MaterialVariantCombinationsTable,
+  flushPendingVariantCombinations,
+  isVariantSkuMaterial,
+  normalizeScalarAttrs,
+  type PendingVariantCombination,
+} from './MaterialVariantCombinationsTable';
+import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
+import { testGenerateCode } from '../../../services/codeRule';
+
+import { MaterialUnitQuickSelect } from './MaterialUnitQuickSelect';
+import { useMaterialUnitOptions } from '../hooks/useMaterialUnitOptions';
+import PriceTypeSwitch, { type PriceTypeValue } from '../../../components/price-type-switch/PriceTypeSwitch';
+import { convertUnitPriceByPriceType } from '../utils/resolve-partner-material-price';
+import {
+  DEFAULT_MARKET_FLOAT_FORMULA,
+  bakeQtyFactorIntoFormula,
+  evaluateMarketFloatFormula,
+} from '../utils/market-float-formula';
+import { buildImageUploadFileUrls, getFileByUuid, uploadMultipleFiles } from '../../../services/file';
+import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
+import { BatchSerialRuleFormModal } from './BatchSerialRuleFormModal';
+import {
+  MATERIAL_SOURCE_TYPE_VALUES,
+  buildMaterialSourceTypeOptions,
+  getMaterialSourceTypeLabel,
+} from '../utils/materialSourceType';
+import { MaterialGroupFormModal } from './MaterialGroupFormModal';
+import { RouteFormModal } from './RouteFormModal';
+import { SupplierFormModal } from './SupplierFormModal';
+import { OperationFormModal } from './OperationFormModal';
+import { DEFAULT_MATERIAL_BASE_UNIT } from '../constants/materialDefaults';
+import { QualityMasterDataHint } from '../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint';
+import {
+  InspectionStagesEditor,
+  legacyFromStages,
+  materialStagesToApiPayload,
+  normalizeStagesInput,
+  stagesFromLegacy,
+} from './InspectionStagesEditor';
+const { Panel } = Collapse;
+
+/** 物料附件：图片 + PDF + DWG（与上传校验、后端白名单一致） */
+const MATERIAL_ATTACHMENT_EXT = new Set([
+  'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
+  'pdf', 'dwg', 'dxf', 'step', 'stp', 'xls', 'xlsx',
+]);
+
+function materialAttachmentExtLower(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
+}
+
+function isImageAttachmentExt(ext: string): boolean {
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+}
+
+/** 系统默认规则占位值（提交时转为 null） */
+const SYSTEM_DEFAULT_RULE_VALUE = '__SYSTEM_DEFAULT__';
+
+/** 每种物料来源类型的合法字段白名单（用于过滤混合字段） */
+const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
+  Make: ['manufacturing_mode', 'production_lead_time', 'min_production_batch'],
+  Buy: ['purchase_price', 'purchase_lead_time', 'min_purchase_batch', 'default_supplier_id', 'default_supplier_name'],
+  Outsource: ['outsource_supplier_id', 'outsource_supplier_name', 'outsource_lead_time', 'min_outsource_batch', 'outsource_operation', 'outsource_price', 'material_provided_by'],
+  Phantom: [],
+  CustomerProvided: [],
+  Gift: [],
+  Service: [],
+};
+
+function normalizeSourceTypeValues(
+  sourceType?: string | null,
+  sourceConfig?: Record<string, any> | null,
+): string[] {
+  const configValues = Array.isArray(sourceConfig?.source_types)
+    ? sourceConfig!.source_types
+    : [];
+  const merged = [
+    ...configValues,
+    sourceType,
+  ]
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+  return Array.from(new Set(merged));
+}
+
+/** 主来源按规范顺序取首个选中项，避免多选顺序导致展示/落库漂移 */
+function getPrimarySourceType(sourceTypes: string[]): string | undefined {
+  for (const candidate of MATERIAL_SOURCE_TYPE_VALUES) {
+    if (sourceTypes.includes(candidate)) return candidate;
+  }
+  return sourceTypes[0];
+}
+
+function collectAllowedSourceConfigFields(sourceTypes: string[]): string[] {
+  const allowed = new Set<string>();
+  for (const st of sourceTypes) {
+    for (const field of SOURCE_CONFIG_FIELDS[st] || []) {
+      allowed.add(field);
+    }
+  }
+  return [...allowed];
+}
+
+/**
+ * 物料表单组件属性
+ */
+export interface MaterialFormProps {
+  /** 是否显示 */
+  open: boolean;
+  /** 关闭回调 */
+  onClose: () => void;
+  /**
+   * 仅持久化标准物料字段，须返回含数字主键 id 的物料（供自定义字段落库）。
+   * 禁止在此回调内关页/关弹窗/navigate——须等自定义字段保存后再走 onSubmitSuccess。
+   */
+  onFinish: (values: MaterialCreate | MaterialUpdate) => Promise<Material | void>;
+  /**
+   * 标准字段 + 自定义字段均已落库后调用（关页、关弹窗、刷新列表放这里）。
+   * 不传则兼容旧调用方仍在 onFinish 内关闭（存在丢自定义字段风险）。
+   */
+  onSubmitSuccess?: (saved: Material) => void;
+  /** 是否为编辑模式 */
+  isEdit?: boolean;
+  /** 当前物料数据（编辑模式） */
+  material?: Material;
+  /** 物料分组列表 */
+  materialGroups?: Array<{ id: number; code: string; name: string }>;
+  /** 加载状态 */
+  loading?: boolean;
+  /** 表单初始值 */
+  initialValues?: Partial<MaterialCreate | MaterialUpdate>;
+  /** 暂存 Modal 时的返回路径，设置后点击表单内链接会先暂存表单再跳转 */
+  suspendedModalReturnPath?: string;
+  /** 物料分组列表变更后回调（如快速新增分组后刷新父级列表） */
+  onMaterialGroupsChange?: () => void;
+  /** 防重提示中打开已存在物料（新建时） */
+  onOpenExistingMaterial?: (uuid: string) => void;
+  /** 独立 uni-tab 页（/new、/:uuid/edit），与报价单等建单页同一套打开/关闭/保活 */
+  asPage?: boolean;
+}
+
+/**
+ * 物料表单组件
+ */
+export const MaterialForm: React.FC<MaterialFormProps> = ({
+  open,
+  onClose,
+  onFinish,
+  onSubmitSuccess,
+  isEdit = false,
+  material,
+  materialGroups = [],
+  loading = false,
+  initialValues,
+  suspendedModalReturnPath,
+  onMaterialGroupsChange,
+  onOpenExistingMaterial,
+  asPage = false,
+}) => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
+  const formRef = useRef<ProFormInstance>();
+  const [localMaterialGroups, setLocalMaterialGroups] = useState<MaterialGroup[]>(materialGroups);
+  const [groupFormModalOpen, setGroupFormModalOpen] = useState(false);
+  const [routeFormModalOpen, setRouteFormModalOpen] = useState(false);
+  const [supplierFormModalOpen, setSupplierFormModalOpen] = useState(false);
+  const [operationFormModalOpen, setOperationFormModalOpen] = useState(false);
+  const [supplierQuickCreateField, setSupplierQuickCreateField] = useState<
+    'default_supplier_id' | 'outsource_supplier_id'
+  >('default_supplier_id');
+  
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({ tableName: 'master_data_materials', loadWhenOpen: true, open });
+
+  const sourceTypeOptions = useMemo(() => buildMaterialSourceTypeOptions(t), [t]);
+  const [activeTab, setActiveTab] = useState<string>('basic');
+  const [variantManaged, setVariantManaged] = useState<boolean>(false);
+  const [pendingVariantRows, setPendingVariantRows] = useState<PendingVariantCombination[]>([]);
+
+  useEffect(() => {
+    setLocalMaterialGroups(materialGroups);
+  }, [materialGroups]);
+
+  useEffect(() => {
+    if (!open) {
+      setPendingVariantRows([]);
+      setGroupFormModalOpen(false);
+      setRouteFormModalOpen(false);
+      setSupplierFormModalOpen(false);
+      setOperationFormModalOpen(false);
+      deferredCustomersLoadedRef.current = false;
+      deferredWarehousesLoadedRef.current = false;
+      return;
+    }
+    setActiveTab('basic');
+  }, [open]);
+
+  // 打开表单时同步 variantManaged 状态（编辑已有属性物料时，属性管理标签页需可用）
+  useEffect(() => {
+    if (open) {
+      const iv = initialValues as { variantManaged?: boolean; variant_managed?: boolean } | undefined;
+      const vm =
+        material?.variantManaged ??
+        (material as { variant_managed?: boolean })?.variant_managed ??
+        iv?.variantManaged ??
+        iv?.variant_managed ??
+        false;
+      setVariantManaged(!!vm);
+    }
+  }, [open, isEdit, material, material?.variantManaged, (material as any)?.variant_managed, initialValues]);
+  
+  // 客户和供应商列表
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [processRoutes, setProcessRoutes] = useState<ProcessRoute[]>([]);
+  const [operations, setOperations] = useState<Operation[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [suppliersLoading, setSuppliersLoading] = useState(false);
+  const [warehousesLoading, setWarehousesLoading] = useState(false);
+  const [processRoutesLoading, setProcessRoutesLoading] = useState(false);
+  const [operationsLoading, setOperationsLoading] = useState(false);
+
+  // 编号映射数据
+  const [departmentCodes, setDepartmentCodes] = useState<DepartmentCodeMapping[]>([]);
+  const [customerCodes, setCustomerCodes] = useState<CustomerCodeMapping[]>([]);
+  const [supplierCodes, setSupplierCodes] = useState<SupplierCodeMapping[]>([]);
+  const [externalSystemCodes, setExternalSystemCodes] = useState<MaterialCodeMapping[]>([]);
+  const [externalSystemCodesLoading, setExternalSystemCodesLoading] = useState(false);
+  const deferredCustomersLoadedRef = useRef(false);
+  const deferredWarehousesLoadedRef = useRef(false);
+
+  /** 最后一次自动生成的编号（用于提交时判断是否让后端生成，确保隔离字段生效） */
+  const lastAutoGeneratedCodeRef = useRef<string | null>(null);
+
+  /**
+   * 加载客户列表
+   */
+  const loadCustomers = async () => {
+    try {
+      setCustomersLoading(true);
+      const result = await customerApi.list({ limit: 1000, isActive: true });
+      setCustomers(unwrapSupplyPagedList(result));
+    } catch (error: any) {
+      console.error(t('app.master-data.materialForm.fetchCustomersFailed'), error);
+    } finally {
+      setCustomersLoading(false);
+    }
+  };
+
+  /**
+   * 加载供应商列表
+   */
+  const loadSuppliers = async () => {
+    try {
+      setSuppliersLoading(true);
+      const result = await supplierApi.list({ limit: 1000, isActive: true });
+      setSuppliers(unwrapSupplyPagedList(result));
+    } catch (error: any) {
+      console.error(t('app.master-data.materialForm.fetchSuppliersFailed'), error);
+    } finally {
+      setSuppliersLoading(false);
+    }
+  };
+
+  /**
+   * 加载仓库列表
+   */
+  const loadWarehouses = async () => {
+    try {
+      setWarehousesLoading(true);
+      const result = await warehouseApi.list({ limit: 1000, is_active: true });
+      setWarehouses(result.items);
+    } catch (error: any) {
+      console.error(t('app.master-data.materialForm.fetchWarehousesFailed'), error);
+    } finally {
+      setWarehousesLoading(false);
+    }
+  };
+
+  /**
+   * 加载工艺路线列表
+   */
+  const loadProcessRoutes = async () => {
+    try {
+      setProcessRoutesLoading(true);
+      const result = await processRouteApi.list({ limit: 1000, isActive: true });
+      setProcessRoutes(Array.isArray(result) ? result : result?.data ?? []);
+    } catch (error: any) {
+      console.error(t('app.master-data.materialForm.fetchProcessRoutesFailed'), error);
+    } finally {
+      setProcessRoutesLoading(false);
+    }
+  };
+
+  /**
+   * 加载工序列表（委外工序下拉用）
+   */
+  const loadOperations = async () => {
+    try {
+      setOperationsLoading(true);
+      const result = await operationApi.list({ limit: 1000, isActive: true });
+      setOperations(Array.isArray(result) ? result : result?.data ?? []);
+    } catch (error: any) {
+      console.error(t('app.master-data.materialForm.fetchOperationsFailed'), error);
+    } finally {
+      setOperationsLoading(false);
+    }
+  };
+
+  /**
+   * 加载外部系统编号映射
+   */
+  const loadExternalSystemCodes = async (materialUuid: string) => {
+    try {
+      setExternalSystemCodesLoading(true);
+      const result = await materialCodeMappingApi.list({ materialUuid, page: 1, pageSize: 1000 });
+      setExternalSystemCodes(result.items || []);
+    } catch (error: any) {
+      console.error(t('app.master-data.materialForm.fetchExternalMappingsFailed'), error);
+    } finally {
+      setExternalSystemCodesLoading(false);
+    }
+  };
+
+  /**
+   * 生成编号的辅助函数
+   * 
+   * @param groupId - 物料分组ID
+   * @param sourceType - 物料来源类型
+   * @param name - 物料名称
+   * @param forceUpdate - 是否强制更新编号（即使字段已有值）
+   */
+  const generateCode = useCallback(async (groupId?: number, sourceType?: string, name?: string, forceUpdate: boolean = false) => {
+    if (isEdit || !isAutoGenerateEnabled('master-data-material')) {
+      return;
+    }
+    // 未选择物料分组时，将提示文字填入主编号（红色显示）
+    if (!groupId) {
+      const hint = t('app.master-data.materialForm.mainCodeSelectGroupHint');
+      formRef.current?.setFieldsValue({ mainCode: hint });
+      return;
+    }
+
+    const ruleCode = getPageRuleCode('master-data-material');
+    if (!ruleCode) {
+      console.warn(t('app.master-data.materialForm.codeRuleNotConfigured'));
+      return;
+    }
+    
+    if (ruleCode === 'PROCESS_ROUTE_CODE') {
+      console.error('Error: Material page is using process route code rule! Check codeRulePageConfigs in localStorage.');
+      messageApi.error(t('app.master-data.materialForm.codeRuleConfigError'));
+      return;
+    }
+
+    // 构建上下文：仅末级分组编号（与 material.groupId 对应分组的 code 一致）
+    const context: Record<string, any> = {};
+    
+    if (groupId != null && !(typeof groupId === 'string' && groupId === '')) {
+      const group = localMaterialGroups.find(g => Number(g.id) === Number(groupId));
+      if (group) {
+        const leafCode = (group.code ?? '').toString().trim();
+        context.leaf_group_code = leafCode;
+        context.group_code = leafCode;
+        context.group_code_path = leafCode;
+        context.group_name = group.name;
+      }
+    }
+    
+    // 添加物料来源类型（如果有）
+    if (sourceType) {
+      context.source_type = sourceType;
+    }
+    
+    // 添加物料名称（如果有）
+    if (name) {
+      context.name = name;
+    }
+    
+    // 使用测试生成API预览编号（不更新序号，但会检测重复并自动递增）
+    try {
+      const codeResponse = await testGenerateCode({
+        rule_code: ruleCode,
+        context: Object.keys(context).length > 0 ? context : undefined,
+        check_duplicate: true, // 启用重复检测
+        entity_type: 'material', // 指定实体类型为物料
+      });
+      
+      // 如果强制更新，或者字段为空，或者包含占位符，则更新编号
+      const currentMainCode = formRef.current?.getFieldValue('mainCode');
+      if (forceUpdate || !currentMainCode || currentMainCode.startsWith('[FIELD:') || currentMainCode === '') {
+        formRef.current?.setFieldsValue({
+          mainCode: codeResponse.code,
+        });
+        lastAutoGeneratedCodeRef.current = codeResponse.code;
+      }
+    } catch (error) {
+      console.warn(t('app.master-data.materialForm.autoGenerateCodeFailed'), error);
+    }
+  }, [isEdit, localMaterialGroups, t]);
+
+  /**
+   * 当物料分组加载完成且已选择分组时，重新生成编号（确保 scope_fields 隔离计数生效）
+   * 场景：用户在选择分组时 materialGroups 可能尚未加载，导致 context 缺少 group_code
+   */
+  useEffect(() => {
+    if (isEdit || !isAutoGenerateEnabled('master-data-material') || localMaterialGroups.length === 0) return;
+    const groupId = formRef.current?.getFieldValue('groupId');
+    if (groupId == null || groupId === '') return;
+    const group = localMaterialGroups.find(g => Number(g.id) === Number(groupId));
+    if (group) {
+      const sourceType = formRef.current?.getFieldValue('sourceType');
+      const name = formRef.current?.getFieldValue('name');
+      generateCode(groupId, sourceType, name, true);
+    }
+  }, [localMaterialGroups, isEdit, generateCode]);
+
+  const handleMaterialGroupQuickCreateSuccess = useCallback(
+    (created: MaterialGroup) => {
+      setLocalMaterialGroups((prev) => {
+        if (prev.some((g) => g.id === created.id)) return prev;
+        return [...prev, created];
+      });
+      formRef.current?.setFieldsValue({ groupId: created.id });
+      if (!isEdit && isAutoGenerateEnabled('master-data-material')) {
+        const sourceType = formRef.current?.getFieldValue('sourceType');
+        const name = formRef.current?.getFieldValue('name');
+        void generateCode(created.id, sourceType, name, true);
+      }
+      onMaterialGroupsChange?.();
+    },
+    [generateCode, isEdit, onMaterialGroupsChange],
+  );
+
+  const handleProcessRouteQuickCreateSuccess = useCallback((created: ProcessRoute) => {
+    setProcessRoutes((prev) => {
+      if (prev.some((r) => r.uuid === created.uuid)) return prev;
+      return [...prev, created];
+    });
+    const currentDefaults = formRef.current?.getFieldValue('defaults') ?? {};
+    formRef.current?.setFieldsValue({
+      defaults: { ...currentDefaults, defaultProcessRouteUuid: created.uuid },
+      'defaults.defaultProcessRouteUuid': created.uuid,
+    });
+  }, []);
+
+  const handleSupplierQuickCreateSuccess = useCallback((created: Supplier) => {
+    setSuppliers((prev) => {
+      if (prev.some((s) => s.id === created.id)) return prev;
+      return [...prev, created];
+    });
+    const currentConfig = formRef.current?.getFieldValue('sourceConfig') ?? {};
+    const field = supplierQuickCreateField;
+    formRef.current?.setFieldsValue({
+      sourceConfig: { ...currentConfig, [field]: created.id },
+      [`sourceConfig.${field}`]: created.id,
+    });
+  }, [supplierQuickCreateField]);
+
+  const handleOperationQuickCreateSuccess = useCallback((created: Operation) => {
+    setOperations((prev) => {
+      if (prev.some((o) => o.uuid === created.uuid)) return prev;
+      return [...prev, created];
+    });
+    const uuid = created.uuid;
+    if (!uuid) return;
+    const currentConfig = formRef.current?.getFieldValue('sourceConfig') ?? {};
+    formRef.current?.setFieldsValue({
+      sourceConfig: { ...currentConfig, outsource_operation: uuid },
+      'sourceConfig.outsource_operation': uuid,
+    });
+  }, []);
+
+  /**
+   * 初始化数据
+   */
+  useEffect(() => {
+    if (open) {
+      if (!isEdit) lastAutoGeneratedCodeRef.current = null;
+      // 基础信息/来源标签页所需数据（打开时加载）
+      loadSuppliers();
+      loadProcessRoutes();
+      loadOperations();
+
+      // 如果是新建模式且启用了自动编号，生成编号
+      if (!isEdit) {
+        const initialSourceType = (initialValues as any)?.sourceType
+          || getPrimarySourceType((initialValues as any)?.sourceTypes || []);
+        generateCode(initialValues?.groupId, initialSourceType, initialValues?.name);
+      }
+
+      // 如果是编辑模式，加载物料数据
+      if (isEdit && material) {
+        // 从物料数据中加载编号映射和默认值
+        // 兼容处理：后端可能返回 code_aliases 或 codeAliases
+        const aliases = (material as any).code_aliases || material.codeAliases || [];
+        
+        if (aliases && aliases.length > 0) {
+          // 分离不同类型的编号
+          const deptCodes: DepartmentCodeMapping[] = [];
+          const custCodes: CustomerCodeMapping[] = [];
+          const suppCodes: SupplierCodeMapping[] = [];
+          
+          aliases.forEach((alias: any) => {
+            // 兼容处理：后端可能返回 snake_case 或 camelCase
+            const codeType = alias.code_type || alias.codeType;
+            const externalEntityType = alias.external_entity_type || alias.externalEntityType;
+            const externalEntityId = alias.external_entity_id || alias.externalEntityId;
+            
+            if (codeType === 'CUSTOMER' || externalEntityType === 'customer') {
+              const rawCustomerId = externalEntityId ?? alias.customerId ?? alias.customer_id;
+              const customerId =
+                rawCustomerId != null && rawCustomerId !== '' ? Number(rawCustomerId) : undefined;
+              custCodes.push({
+                customerId: Number.isFinite(customerId) ? customerId! : 0,
+                customerUuid: undefined,
+                customerName: undefined,
+                code: alias.code,
+                name: alias.name,
+                description: alias.description,
+              });
+            } else if (codeType === 'SUPPLIER' || externalEntityType === 'supplier') {
+              const rawSupplierId = externalEntityId ?? alias.supplierId ?? alias.supplier_id;
+              const supplierId =
+                rawSupplierId != null && rawSupplierId !== '' ? Number(rawSupplierId) : undefined;
+              suppCodes.push({
+                supplierId: Number.isFinite(supplierId) ? supplierId! : 0,
+                supplierUuid: undefined,
+                supplierName: undefined,
+                code: alias.code,
+                name: alias.name,
+                description: alias.description,
+              });
+            } else if (['SALE', 'DES', 'PUR', 'WH', 'PROD'].includes(codeType)) {
+              deptCodes.push({
+                code_type: codeType,
+                code: alias.code,
+                department: alias.department,
+                description: alias.description,
+              });
+            }
+          });
+          
+          setDepartmentCodes(deptCodes);
+          setCustomerCodes(custCodes);
+          setSupplierCodes(suppCodes);
+        } else {
+          setDepartmentCodes([]);
+          setCustomerCodes([]);
+          setSupplierCodes([]);
+        }
+        
+        // 加载外部系统编号映射
+        if (material.uuid) {
+          loadExternalSystemCodes(material.uuid);
+        }
+        
+        // 附件预填（图片用缩略 URL；PDF/DWG 仅展示文件名与图标，避免 picture-card 当作图片解码）
+        const materialImagesRaw = (material as any).images || [];
+        const attachmentUuids = materialImagesRaw
+          .map((item: unknown) =>
+            typeof item === 'string' ? item : (item as { uuid?: string; uid?: string })?.uuid ?? (item as { uid?: string })?.uid
+          )
+          .filter(Boolean) as string[];
+        if (attachmentUuids.length > 0) {
+          Promise.all(
+            attachmentUuids.map(async (uuid: string) => {
+              let name = t('app.master-data.materialForm.images');
+              let ext = '';
+              try {
+                const meta = await getFileByUuid(uuid);
+                name = meta.original_name || name;
+                ext = materialAttachmentExtLower(meta.original_name || '');
+                if (!ext && meta.file_extension) ext = String(meta.file_extension).toLowerCase();
+              } catch {
+                /* 元数据失败时仍尝试展示为附件 */
+              }
+              const showAsImage = isImageAttachmentExt(ext);
+              if (showAsImage) {
+                const { thumbUrl, url } = await buildImageUploadFileUrls(uuid);
+                return {
+                  uid: uuid,
+                  name,
+                  status: 'done' as const,
+                  url,
+                  thumbUrl,
+                };
+              }
+              return {
+                uid: uuid,
+                name,
+                status: 'done' as const,
+              };
+            })
+          ).then((fileList) => {
+            setTimeout(() => {
+              formRef.current?.setFieldsValue({ images: fileList });
+            }, 100);
+          });
+        }
+        
+        // 加载默认值（兼容处理：后端可能返回 snake_case 或 camelCase）
+        // 将默认值转换为表单字段格式（对象数组转换为 ID 数组）
+        const materialDefaults = (material as any).defaults;
+        const routeId = (material as any).process_route_id ?? (material as any).processRouteId;
+        const formDefaults: any = materialDefaults ? { ...materialDefaults } : {};
+        
+        if (materialDefaults) {
+          // 将对象数组转换为 ID 数组
+          if (materialDefaults.defaultSuppliers && Array.isArray(materialDefaults.defaultSuppliers)) {
+            formDefaults.defaultSupplierIds = materialDefaults.defaultSuppliers.map((s: any) => s.supplierId || s.supplier_id);
+          }
+          if (materialDefaults.defaultCustomers && Array.isArray(materialDefaults.defaultCustomers)) {
+            formDefaults.defaultCustomerIds = materialDefaults.defaultCustomers.map((c: any) => c.customerId || c.customer_id);
+          }
+          if (materialDefaults.defaultWarehouses && Array.isArray(materialDefaults.defaultWarehouses)) {
+            formDefaults.defaultWarehouseIds = materialDefaults.defaultWarehouses.map((w: any) => w.warehouseId || w.warehouse_id);
+          }
+          delete formDefaults.defaultSuppliers;
+          delete formDefaults.defaultCustomers;
+          delete formDefaults.defaultWarehouses;
+          delete formDefaults.defaultProcessRoute;
+          if (!formDefaults.salePriceMethod) {
+            formDefaults.salePriceMethod = 'fixed';
+          }
+          if (formDefaults.marketFixedSalePrice == null && formDefaults.marketProcessFee != null) {
+            formDefaults.marketFixedSalePrice = formDefaults.marketProcessFee;
+          }
+          formDefaults.marketFloatFormula = bakeQtyFactorIntoFormula(
+            formDefaults.marketFloatFormula || DEFAULT_MARKET_FLOAT_FORMULA,
+            Number(formDefaults.marketQtyFactor),
+          );
+          if (
+            formDefaults.defaultSalePrice != null &&
+            formDefaults.defaultSalePrice !== '' &&
+            (formDefaults.defaultSalePriceType == null || formDefaults.defaultSalePriceType === '')
+          ) {
+            formDefaults.defaultSalePriceType = 'tax_inclusive';
+          }
+          if (
+            formDefaults.defaultPurchasePrice != null &&
+            formDefaults.defaultPurchasePrice !== '' &&
+            (formDefaults.defaultPurchasePriceType == null || formDefaults.defaultPurchasePriceType === '')
+          ) {
+            formDefaults.defaultPurchasePriceType = 'tax_inclusive';
+          }
+        }
+        
+        // 工艺路线回填由下方独立 useEffect（150ms 延后）在 processRoutes 加载完成后写入 defaultProcessRouteUuid，
+        // 此处不再依赖 processRoutes，避免 processRoutes 入 deps 导致 effect 反复执行、循环调用 loadProcessRoutes
+        if (routeId != null && processRoutes.length > 0) {
+          const route = processRoutes.find((pr: { id: number }) => pr.id === routeId);
+          if (route) formDefaults.defaultProcessRouteUuid = route.uuid;
+        }
+        
+        if (Object.keys(formDefaults).length > 0) {
+          setTimeout(() => {
+            const fieldsToSet: any = { defaults: formDefaults };
+            // ProForm 在 name 使用 "defaults.xxx" 时，需要同步写入扁平 key 才能稳定回显
+            Object.keys(formDefaults).forEach((key) => {
+              fieldsToSet[`defaults.${key}`] = formDefaults[key];
+            });
+            formRef.current?.setFieldsValue(fieldsToSet);
+          }, 100);
+        }
+        
+        // 加载物料来源数据（兼容处理：后端可能返回 snake_case 或 camelCase）
+        const materialSourceType = (material as any).source_type || material.sourceType;
+        const materialSourceConfig = (material as any).source_config || material.sourceConfig;
+        const materialSourceTypes = normalizeSourceTypeValues(
+          materialSourceType,
+          materialSourceConfig,
+        );
+        const primaryMaterialSourceType = getPrimarySourceType(materialSourceTypes);
+        
+        if (materialSourceType || materialSourceConfig) {
+          setTimeout(() => {
+            // 关键修复：ProForm 的条件渲染字段使用扁平 key，需要同时设置嵌套对象和扁平 key
+            const fieldsToSet: any = {
+              sourceTypes: materialSourceTypes,
+              sourceType: primaryMaterialSourceType,
+              source_type: primaryMaterialSourceType, // 向后兼容
+              sourceConfig: materialSourceConfig,
+              source_config: materialSourceConfig, // 向后兼容
+            };
+            
+            // 将 sourceConfig 的每个字段展开为扁平 key（如 sourceConfig.manufacturing_mode）
+            if (materialSourceConfig && typeof materialSourceConfig === 'object') {
+              Object.keys(materialSourceConfig).forEach(key => {
+                let val = materialSourceConfig[key];
+                if (key === 'bom_variants' && val != null && typeof val === 'object') {
+                  val = JSON.stringify(val, null, 2);
+                }
+                fieldsToSet[`sourceConfig.${key}`] = val;
+              });
+            }
+            
+            formRef.current?.setFieldsValue(fieldsToSet);
+          }, 100);
+        }
+      } else {
+        // 新建模式，重置数据
+        setDepartmentCodes([]);
+        setCustomerCodes([]);
+        setSupplierCodes([]);
+      }
+    }
+    // 不将 processRoutes 放入 deps：processRoutes 更新会触发本 effect 重跑并再次调用 loadProcessRoutes，
+    // 导致循环重新加载。工艺路线回填由下方独立 useEffect（依赖 processRoutes）在 150ms 后完成。
+  }, [open, isEdit, material, generateCode, initialValues]);
+
+  /** 编号映射、默认值标签页再加载客户/仓库，避免打开表单时并行拉取过多列表 */
+  useEffect(() => {
+    if (!open) return;
+    if (activeTab === 'mapping' || activeTab === 'defaults') {
+      if (!deferredCustomersLoadedRef.current) {
+        deferredCustomersLoadedRef.current = true;
+        loadCustomers();
+      }
+    }
+    if (activeTab === 'defaults' && !deferredWarehousesLoadedRef.current) {
+      deferredWarehousesLoadedRef.current = true;
+      loadWarehouses();
+    }
+  }, [open, activeTab]);
+
+  // 自定义字段数据回填与重置（须等字段定义加载后再 setFieldsValue，避免控件未挂载时写入丢失）
+  useEffect(() => {
+    if (!open) {
+      resetFieldValues();
+      return;
+    }
+    if (!isEdit || !material?.id || customFields.length === 0) return;
+
+    let cancelled = false;
+    loadFieldValues(material.id).then((values) => {
+      if (cancelled || !formRef.current) return;
+      if (Object.keys(values).length === 0) return;
+      formRef.current.setFieldsValue(values);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isEdit, material?.id, customFields.length, loadFieldValues, resetFieldValues]);
+
+  /**
+   * 编辑时：工艺路线列表加载完成后，用物料的 process_route_id 回填「默认工艺路线」
+   * 延后 150ms 执行，避免被主 useEffect 中 100ms 的 defaults 设置覆盖
+   * 关键：ProForm 的 name="defaults.defaultProcessRouteUuid" 需要同时设置扁平 key 才能正确显示
+   */
+  useEffect(() => {
+    if (!isEdit || !material || processRoutes.length === 0) return;
+    const routeId = (material as any).process_route_id ?? (material as any).processRouteId;
+    if (routeId == null) return;
+    const route = processRoutes.find(pr => pr.id === routeId);
+    if (!route) return;
+    const timer = setTimeout(() => {
+      if (formRef.current) {
+        const currentDefaults = formRef.current.getFieldValue('defaults') || {};
+        if (currentDefaults.defaultProcessRouteUuid !== route.uuid) {
+          // 同时设置嵌套对象和扁平 key，确保 ProFormSelect（name="defaults.defaultProcessRouteUuid"）能正确显示
+          formRef.current.setFieldsValue({
+            defaults: { ...currentDefaults, defaultProcessRouteUuid: route.uuid },
+            'defaults.defaultProcessRouteUuid': route.uuid,
+          });
+        }
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [isEdit, material, processRoutes]);
+
+  /**
+   * 当客户列表加载完成后，更新客户编号映射中的名称
+   */
+  useEffect(() => {
+    if (customers.length === 0 || customerCodes.length === 0) return;
+    const updatedCodes = customerCodes.map((code) => {
+      if (!code.customerId) return code;
+      const customer = customers.find((c) => c.id === code.customerId);
+      if (!customer) return code;
+      return {
+        ...code,
+        customerUuid: customer.uuid,
+        customerName: customer.name,
+      };
+    });
+    const hasChanges = updatedCodes.some((code, index) => {
+      const oldCode = customerCodes[index];
+      return (
+        !oldCode
+        || code.customerName !== oldCode.customerName
+        || code.customerUuid !== oldCode.customerUuid
+      );
+    });
+    if (hasChanges) {
+      setCustomerCodes(updatedCodes);
+    }
+  }, [customers, customerCodes]);
+  
+  /**
+   * 当供应商列表加载完成后，更新供应商编号映射中的名称
+   */
+  useEffect(() => {
+    if (suppliers.length === 0 || supplierCodes.length === 0) return;
+    const updatedCodes = supplierCodes.map((code) => {
+      if (!code.supplierId) return code;
+      const supplier = suppliers.find((s) => s.id === code.supplierId);
+      if (!supplier) return code;
+      return {
+        ...code,
+        supplierUuid: supplier.uuid,
+        supplierName: supplier.name,
+      };
+    });
+    const hasChanges = updatedCodes.some((code, index) => {
+      const oldCode = supplierCodes[index];
+      return (
+        !oldCode
+        || code.supplierName !== oldCode.supplierName
+        || code.supplierUuid !== oldCode.supplierUuid
+      );
+    });
+    if (hasChanges) {
+      setSupplierCodes(updatedCodes);
+    }
+  }, [suppliers, supplierCodes]);
+
+  /**
+   * 处理表单提交
+   */
+  const handleSubmit = async (values: any) => {
+    try {
+      if (customerCodes.some((code) => code.code?.trim() && !(code.customerId > 0))) {
+        messageApi.error(t('app.master-data.codeMapping.selectCustomer'));
+        throw new Error(t('app.master-data.codeMapping.selectCustomer'));
+      }
+      if (supplierCodes.some((code) => code.code?.trim() && !(code.supplierId > 0))) {
+        messageApi.error(t('app.master-data.codeMapping.selectSupplier'));
+        throw new Error(t('app.master-data.codeMapping.selectSupplier'));
+      }
+      // 处理物料来源数据（兼容处理：同时设置 camelCase 和 snake_case）
+      // 受控 Select 可能使 onFinish 的 values 缺 sourceTypes，需合并 getFieldsValue(true)
+      const allFormValuesForSource = formRef.current?.getFieldsValue?.(true) || {};
+      const rawSourceTypes =
+        values.sourceTypes ?? allFormValuesForSource.sourceTypes;
+      const sourceTypes = normalizeSourceTypeValues(
+        values.sourceType
+          || values.source_type
+          || allFormValuesForSource.sourceType
+          || allFormValuesForSource.source_type,
+        {
+          source_types: Array.isArray(rawSourceTypes)
+            ? rawSourceTypes
+            : rawSourceTypes
+              ? [rawSourceTypes]
+              : [],
+        },
+      );
+      const sourceType = getPrimarySourceType(sourceTypes);
+      if (!sourceType) {
+        messageApi.error(t('app.master-data.materialForm.sourceTypePlaceholder'));
+        setActiveTab('basic');
+        throw new Error(t('app.master-data.materialForm.sourceTypePlaceholder'));
+      }
+      const existingSourceConfig =
+        (material as any)?.source_config || (material as any)?.sourceConfig || {};
+      let formSourceConfig = values.sourceConfig || values.source_config || {};
+      // 兼容 ProForm 扁平 key：从 values 中收集 sourceConfig.xxx 构建对象（条件渲染字段常只出现在扁平 key 中）
+      if (Object.keys(formSourceConfig).length === 0 && typeof values === 'object') {
+        const flat: Record<string, any> = {};
+        for (const key of Object.keys(values)) {
+          if (key === 'sourceConfig' || key === 'source_config') continue;
+          if (key.startsWith('sourceConfig.') && values[key] !== undefined && values[key] !== '') {
+            const subKey = key.slice('sourceConfig.'.length);
+            flat[subKey] = values[key];
+          }
+        }
+        if (Object.keys(flat).length > 0) formSourceConfig = flat;
+      }
+      if (Object.keys(formSourceConfig).length === 0 && formRef.current) {
+        const directSourceConfig = formRef.current.getFieldValue('sourceConfig');
+        if (directSourceConfig && Object.keys(directSourceConfig).length > 0) {
+          formSourceConfig = directSourceConfig;
+        }
+      }
+
+      const sourceConfig = { ...existingSourceConfig, ...formSourceConfig };
+
+      // 同步名称字段，便于后端与下游使用（须在按多选类型过滤前写入）
+      if (sourceConfig.default_supplier_id && suppliers.length > 0) {
+        const supplier = suppliers.find((s) => s.id === sourceConfig.default_supplier_id);
+        if (supplier) sourceConfig.default_supplier_name = supplier.name;
+      }
+      if (sourceConfig.outsource_supplier_id && suppliers.length > 0) {
+        const supplier = suppliers.find((s) => s.id === sourceConfig.outsource_supplier_id);
+        if (supplier) sourceConfig.outsource_supplier_name = supplier.name;
+      }
+
+      // 按全部已选来源类型保留字段（自制+委外等可同时落库）
+      const allowedFields = new Set(collectAllowedSourceConfigFields(sourceTypes));
+      if (allowedFields.has('default_supplier_id')) allowedFields.add('default_supplier_name');
+      if (allowedFields.has('outsource_supplier_id')) allowedFields.add('outsource_supplier_name');
+      const filteredSourceConfig: Record<string, any> = {};
+      for (const key of Object.keys(sourceConfig)) {
+        if (!allowedFields.has(key)) continue;
+        let val = sourceConfig[key];
+        if (key === 'bom_variants' && typeof val === 'string' && val.trim()) {
+          try {
+            val = JSON.parse(val);
+          } catch {
+            messageApi.warning(t('app.master-data.source.bomVariantsLabel') + ': JSON 格式无效');
+          }
+        }
+        filteredSourceConfig[key] = val;
+      }
+      // 同步多来源值（保留单值 source_type 作为主来源，不破坏现有业务链路）
+      if (sourceTypes.length > 0) {
+        filteredSourceConfig.source_types = sourceTypes;
+      } else {
+        delete filteredSourceConfig.source_types;
+      }
+
+      // 处理默认值数据转换（合并已有 defaults，避免只改物料来源时覆盖其他默认值）
+      const allFormValues = formRef.current?.getFieldsValue?.(true) || {};
+      const existingDefaults = (material as any)?.defaults || {};
+      let formDefaultsRaw = values.defaults || {};
+      // 兼容：若 values 中没有 defaults，尝试从 formRef 直接读取（处理条件渲染字段）
+      if (Object.keys(formDefaultsRaw).length === 0 && formRef.current) {
+        const directDefaults = formRef.current.getFieldValue('defaults');
+        if (directDefaults && Object.keys(directDefaults).length > 0) {
+          formDefaultsRaw = directDefaults;
+        }
+      }
+      // 再兜底：有些场景下 defaults 仅存在于 getFieldsValue(true) 中
+      if (Object.keys(formDefaultsRaw).length === 0 && allFormValues.defaults) {
+        formDefaultsRaw = allFormValues.defaults;
+      }
+      // ProForm 在 name 使用 "defaults.xxx" 字符串时，可能返回扁平键（如 values["defaults.defaultTaxRate"]）
+      // 统一回填到 defaults 对象，避免默认值在提交时被遗漏
+      const extractFlatDefaults = (obj: Record<string, any>) =>
+        Object.keys(obj).reduce((acc, key) => {
+          if (key.startsWith('defaults.')) {
+            const nestedKey = key.slice('defaults.'.length);
+            acc[nestedKey] = obj[key];
+          }
+          return acc;
+        }, {} as Record<string, any>);
+      const flatDefaultsFromValues = {
+        ...extractFlatDefaults(values as Record<string, any>),
+        ...extractFlatDefaults(allFormValues as Record<string, any>),
+      };
+      // ProForm 可能用扁平 key 存储嵌套字段，兼容 values['defaults.defaultProcessRouteUuid']
+      const formDefaults = {
+        ...formDefaultsRaw,
+        ...flatDefaultsFromValues,
+        ...(values['defaults.defaultProcessRouteUuid'] !== undefined && { defaultProcessRouteUuid: values['defaults.defaultProcessRouteUuid'] }),
+      };
+      const processedDefaults: any = { ...existingDefaults, ...formDefaults };
+      const saleMethod = processedDefaults.salePriceMethod === 'market' ? 'market' : 'fixed';
+      processedDefaults.salePriceMethod = saleMethod;
+      if (saleMethod === 'market') {
+        const fixed = Number(processedDefaults.marketFixedSalePrice ?? processedDefaults.marketProcessFee ?? 0);
+        if (!processedDefaults.marketBaseQuoteCode) {
+          messageApi.error(t('app.master-data.defaults.marketBaseMaterialRequired'));
+          setActiveTab('defaults');
+          throw new Error(t('app.master-data.defaults.marketBaseMaterialRequired'));
+        }
+        if (fixed < 0) {
+          messageApi.error(t('app.master-data.defaults.marketFixedSalePriceInvalid'));
+          setActiveTab('defaults');
+          throw new Error(t('app.master-data.defaults.marketFixedSalePriceInvalid'));
+        }
+        const formula = bakeQtyFactorIntoFormula(
+          processedDefaults.marketFloatFormula || DEFAULT_MARKET_FLOAT_FORMULA,
+          Number(processedDefaults.marketQtyFactor),
+        );
+        try {
+          evaluateMarketFloatFormula(formula, 1, 1);
+        } catch (e: any) {
+          const msg = e?.message || t('app.master-data.defaults.marketFloatFormulaInvalid');
+          messageApi.error(msg);
+          setActiveTab('defaults');
+          throw new Error(msg);
+        }
+        processedDefaults.marketFixedSalePrice = fixed;
+        processedDefaults.marketFloatFormula = formula;
+        delete processedDefaults.marketProcessFee;
+        delete processedDefaults.marketQtyFactor;
+      }
+
+      // 将 ID 数组转换为对象数组
+      if (formDefaults.defaultSupplierIds && Array.isArray(formDefaults.defaultSupplierIds)) {
+        processedDefaults.defaultSuppliers = formDefaults.defaultSupplierIds.map((id: number, index: number) => {
+          const supplier = suppliers.find(s => s.id === id);
+          return {
+            supplierId: id,
+            supplierUuid: supplier?.uuid,
+            supplierName: supplier?.name,
+            priority: index + 1,
+          };
+        });
+        delete processedDefaults.defaultSupplierIds;
+      }
+      
+      if (formDefaults.defaultCustomerIds && Array.isArray(formDefaults.defaultCustomerIds)) {
+        processedDefaults.defaultCustomers = formDefaults.defaultCustomerIds.map((id: number) => {
+          const customer = customers.find(c => c.id === id);
+          return {
+            customerId: id,
+            customerUuid: customer?.uuid,
+            customerName: customer?.name,
+          };
+        });
+        delete processedDefaults.defaultCustomerIds;
+      }
+      
+      if (formDefaults.defaultWarehouseIds && Array.isArray(formDefaults.defaultWarehouseIds)) {
+        processedDefaults.defaultWarehouses = formDefaults.defaultWarehouseIds.map((id: number, index: number) => {
+          const warehouse = warehouses.find(w => w.id === id);
+          return {
+            warehouseId: id,
+            warehouseUuid: warehouse?.uuid,
+            warehouseName: warehouse?.name,
+            priority: index + 1,
+          };
+        });
+        delete processedDefaults.defaultWarehouseIds;
+      }
+      
+      // 处理默认工艺路线：写入 defaults 供展示，并准备 process_route_id 供后端物料表保存
+      let processRouteIdForSubmit: number | null | undefined;
+      const defaultProcessRouteUuid = formDefaults.defaultProcessRouteUuid;
+      if (defaultProcessRouteUuid) {
+        const route = processRoutes.find(pr => pr.uuid === defaultProcessRouteUuid);
+        if (route) {
+          processedDefaults.defaultProcessRoute = route.id;
+          processedDefaults.defaultProcessRouteUuid = route.uuid;
+          processRouteIdForSubmit = route.id;
+        }
+        // 路线列表未加载时仍保留 UUID in defaults，后端会从 defaults 同步 process_route_id
+      } else if (sourceType === 'Make') {
+        delete processedDefaults.defaultProcessRoute;
+        delete processedDefaults.defaultProcessRouteUuid;
+        processRouteIdForSubmit = null;
+      }
+      
+      // 过滤空值
+      const filteredDefaults: any = {};
+      Object.keys(processedDefaults).forEach(key => {
+        const value = processedDefaults[key];
+        if (value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0)) {
+          filteredDefaults[key] = value;
+        }
+      });
+      
+      // 处理图片上传结果
+      const formImages = values.images || [];
+      const imageUuids = formImages.map((file: any) => {
+        const response = file.response;
+        if (response) {
+          if (Array.isArray(response) && response.length > 0) return response[0].uuid;
+          if (response.uuid) return response.uuid;
+        }
+        return file.uid;
+      });
+      
+      // 组装完整的数据，将驼峰命名转换为蛇形命名
+      const { defaults: _defaults, ...restValues } = values;
+      // 主编码契约（与 management 页约定：列表页不得再删 main_code）：
+      // - 新建 + 本页启用自动编号 + 主编码无任何有效字符 → 不传 main_code，后端 generate_code；
+      // - 否则传 trim 后的 main_code（预览/手填均视为明确指定）。
+      const isAutoGen = !isEdit && isAutoGenerateEnabled('master-data-material');
+      const trimmedMainCode = String(restValues.mainCode ?? '').trim();
+      const omitMainCodeForRuleEngine = isAutoGen && !trimmedMainCode;
+      const submitData: any = {
+        // 基础字段转换（驼峰 -> 蛇形）
+        main_code: omitMainCodeForRuleEngine ? undefined : trimmedMainCode || undefined,
+        name: restValues.name,
+        group_id: restValues.groupId,
+        process_route_id:
+          sourceType === 'Make'
+            ? defaultProcessRouteUuid
+              ? (processRouteIdForSubmit ??
+                (material as any)?.process_route_id ??
+                (material as any)?.processRouteId ??
+                null)
+              : null
+            : ((material as any)?.process_route_id ?? (material as any)?.processRouteId),
+        specification: restValues.specification,
+        base_unit: restValues.baseUnit, // 关键：转换为 base_unit
+        units: restValues.units,
+        batch_managed: restValues.batchManaged,
+        default_batch_rule_id: restValues.batchManaged
+          ? (restValues.defaultBatchRuleId === SYSTEM_DEFAULT_RULE_VALUE || restValues.defaultBatchRuleId == null
+            ? null
+            : restValues.defaultBatchRuleId)
+          : null,
+        serial_managed: restValues.serialManaged,
+        default_serial_rule_id: restValues.serialManaged
+          ? (restValues.defaultSerialRuleId === SYSTEM_DEFAULT_RULE_VALUE || restValues.defaultSerialRuleId == null
+            ? null
+            : restValues.defaultSerialRuleId)
+          : null,
+        variant_managed: restValues.variantManaged,
+        variant_attributes: (() => {
+          if (!restValues.variantManaged) return undefined;
+          if (isVariantSkuMaterial(material)) {
+            const va = material?.variantAttributes ?? (material as any)?.variant_attributes;
+            return va && typeof va === 'object' ? normalizeScalarAttrs(va as Record<string, unknown>) : null;
+          }
+          return null;
+        })(),
+        description: restValues.description,
+        brand: restValues.brand,
+        model: restValues.model,
+        texture: restValues.texture,
+        weight: restValues.weight ?? 0,
+        volume: restValues.volume ?? 0,
+        barcode: restValues.barcode?.trim() || undefined,
+        shelf_life_managed: Boolean(restValues.shelfLifeManaged),
+        shelf_life_days: restValues.shelfLifeManaged ? restValues.shelfLifeDays : null,
+        is_giftable: Boolean(restValues.isGiftable),
+        reference_cost: restValues.referenceCost ?? undefined,
+        country_of_origin: restValues.countryOfOrigin?.trim() || undefined,
+        customs_code: restValues.customsCode?.trim() || undefined,
+        is_active: restValues.isActive,
+        images: imageUuids.length > 0 ? imageUuids : null,
+        // 部门编号
+        department_codes: departmentCodes.length > 0 ? departmentCodes.map(code => ({
+          code_type: code.code_type,
+          code: code.code,
+          department: code.department,
+          description: code.description,
+        })) : undefined,
+        // 客户编号
+        customer_codes: customerCodes.length > 0
+          ? customerCodes
+              .filter((code) => code.customerId > 0)
+              .map((code) => ({
+                customer_id: code.customerId,
+                code: code.code,
+                name: code.name,
+                description: code.description,
+              }))
+          : undefined,
+        // 供应商编号
+        supplier_codes: supplierCodes.length > 0
+          ? supplierCodes
+              .filter((code) => code.supplierId > 0)
+              .map((code) => ({
+                supplier_id: code.supplierId,
+                code: code.code,
+                name: code.name,
+                description: code.description,
+              }))
+          : undefined,
+        // 默认值
+        defaults: Object.keys(filteredDefaults).length > 0 ? filteredDefaults : undefined,
+        // 物料来源控制（后端 MaterialCreate.sourceType 必填；snake/camel 双写）
+        source_type: sourceType,
+        sourceType: sourceType,
+        source_config: filteredSourceConfig,
+        // 质检选项（分场景 IQC/FQC/OQC + legacy 同步）
+        inspection_stages: materialStagesToApiPayload(
+          normalizeStagesInput(
+            values.inspectionStages ||
+              stagesFromLegacy(values.inspectionMode, values.defaultInspectionPlanId),
+          ),
+        ),
+        ...(() => {
+          const leg = legacyFromStages(
+            normalizeStagesInput(
+              values.inspectionStages ||
+                stagesFromLegacy(values.inspectionMode, values.defaultInspectionPlanId),
+            ),
+          );
+          return {
+            inspection_mode: leg.inspectionMode,
+            default_inspection_plan_id: leg.defaultInspectionPlanId ?? null,
+          };
+        })(),
+        over_report_mode: values.overReportMode || 'none',
+        over_report_value: values.overReportValue ?? 0,
+        over_receipt_tolerance_pct:
+          values.overReceiptTolerancePct === undefined || values.overReceiptTolerancePct === ''
+            ? null
+            : values.overReceiptTolerancePct,
+        over_issue_tolerance_pct:
+          values.overIssueTolerancePct === undefined || values.overIssueTolerancePct === ''
+            ? null
+            : values.overIssueTolerancePct,
+      };
+      
+      // 移除 undefined 值
+      Object.keys(submitData).forEach(key => {
+        if (submitData[key] === undefined) {
+          delete submitData[key];
+        }
+      });
+
+      // 自定义字段须从表单实例 + onFinish values 读取；submitData 仅含标准字段蛇形键，不含 custom_*
+      const mergedFormValues = {
+        ...(formRef.current?.getFieldsValue?.(true) || {}),
+        ...values,
+      };
+      const { customData: cfValues } = extractFormValues(
+        mergedFormValues,
+        formRef.current ?? undefined,
+      );
+
+      // 先落库标准字段；关页/关弹窗必须在自定义字段保存之后（onSubmitSuccess）
+      const result = await onFinish(submitData as any);
+
+      if (
+        restValues.variantManaged &&
+        pendingVariantRows.length > 0 &&
+        result &&
+        typeof result === 'object'
+      ) {
+        const created = await flushPendingVariantCombinations(result as Material, pendingVariantRows);
+        if (created > 0) {
+          messageApi.success(
+            t('app.master-data.materials.variantCombosFlushed', {
+              count: created,
+              defaultValue: `已创建 ${created} 条属性组合`,
+            }),
+          );
+          setPendingVariantRows([]);
+        }
+      }
+
+      const savedMaterial: Material | undefined =
+        result && typeof result === 'object' && (result as Material).id != null
+          ? (result as Material)
+          : material;
+
+      // 保存自定义字段值（API 要求 record_id 为数字主键，勿传 uuid）；必须在关页之前完成
+      const recordIdForCustom =
+        savedMaterial?.id != null ? Number(savedMaterial.id) : NaN;
+      if (Number.isFinite(recordIdForCustom) && recordIdForCustom > 0) {
+        await saveCustomFieldValues(recordIdForCustom, cfValues);
+      } else if (Object.keys(cfValues).length > 0) {
+        throw new Error(t('app.master-data.materialForm.customFieldRecordIdMissing', {
+          defaultValue: '物料主键缺失，无法保存自定义字段',
+        }));
+      }
+
+      if (onSubmitSuccess && savedMaterial) {
+        onSubmitSuccess(savedMaterial);
+      }
+
+      return result;
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.materialForm.submitFailed'));
+      throw error;
+    }
+  };
+
+  /**
+   * 处理属性管理开关变化
+   */
+  const handleVariantManagedChange = (checked: boolean) => {
+    setVariantManaged(checked);
+    if (!checked) {
+      setPendingVariantRows([]);
+    }
+  };
+
+  const triggerFormSubmit = useCallback(() => {
+    const inst = formRef.current as ProFormInstance | undefined;
+    if (!inst || typeof inst.submit !== 'function') {
+      messageApi.warning(t('components.layoutTemplates.formModal.formNotReady'));
+      return;
+    }
+    inst.submit();
+  }, [messageApi, t]);
+
+  useSubmitShortcut(() => triggerFormSubmit(), Boolean(asPage && open));
+
+  const formInitialValues = (() => {
+    let vals = !isEdit && !(initialValues?.baseUnit != null && initialValues?.baseUnit !== '')
+      ? { ...initialValues, baseUnit: DEFAULT_MATERIAL_BASE_UNIT }
+      : initialValues;
+    const normalizedSourceTypes = normalizeSourceTypeValues(
+      (vals as any)?.sourceType,
+      { source_types: (vals as any)?.sourceTypes },
+    );
+    const primarySourceType = getPrimarySourceType(normalizedSourceTypes);
+    if (normalizedSourceTypes.length > 0) {
+      vals = {
+        ...(vals as any),
+        sourceTypes: normalizedSourceTypes,
+        sourceType: primarySourceType,
+      } as any;
+    }
+    if (!isEdit && primarySourceType != null && vals?.defaults?.defaultTaxRate == null) {
+      vals = {
+        ...vals,
+        defaults: { ...vals?.defaults, defaultTaxRate: primarySourceType === 'Service' ? 6 : 13 },
+      };
+    }
+    return vals;
+  })();
+
+  const handleFormValuesChange = (changedValues: Record<string, unknown>, allValues: Record<string, any>) => {
+    if (!isEdit && isAutoGenerateEnabled('master-data-material')) {
+      const groupId = allValues.groupId;
+      const sourceType = allValues.sourceType || getPrimarySourceType(allValues.sourceTypes || []);
+      const name = allValues.name;
+      if (changedValues.groupId !== undefined) {
+        generateCode(groupId, sourceType, name, true);
+      } else if (
+        changedValues.sourceType !== undefined
+        || changedValues.sourceTypes !== undefined
+        || changedValues.name !== undefined
+      ) {
+        generateCode(groupId, sourceType, name, false);
+      }
+    }
+
+    // 开启批号/序列号管理时，若未选手动规则则回填「系统默认」，避免必填感缺失却提交失败
+    if (changedValues.batchManaged === true) {
+      const cur = allValues.defaultBatchRuleId;
+      if (cur == null || cur === '') {
+        formRef.current?.setFieldsValue({ defaultBatchRuleId: SYSTEM_DEFAULT_RULE_VALUE });
+      }
+    }
+    if (changedValues.serialManaged === true) {
+      const cur = allValues.defaultSerialRuleId;
+      if (cur == null || cur === '') {
+        formRef.current?.setFieldsValue({ defaultSerialRuleId: SYSTEM_DEFAULT_RULE_VALUE });
+      }
+    }
+  };
+
+  const formTitle = isEdit
+    ? t('app.master-data.materialForm.editMaterial')
+    : t('app.master-data.materialForm.createMaterial');
+
+  const pageSuspendPath = asPage ? undefined : suspendedModalReturnPath;
+
+  const formFields = (
+    <>
+      <MaterialDedupCreateGuard
+        open={open}
+        enabled={!isEdit}
+        onOpenMaterial={onOpenExistingMaterial}
+      />
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        destroyOnHidden={false}
+        items={[
+          {
+            key: 'basic',
+            label: t('app.master-data.materialForm.basicInfo'),
+            children: (
+              <>
+                <BasicInfoTab
+                  part={1}
+                  formRef={formRef}
+                  material={material}
+                  materialGroups={localMaterialGroups}
+                  isEdit={isEdit}
+                  suspendedModalReturnPath={pageSuspendPath}
+                  customFields={customFields}
+                  customFieldValues={customFieldValues}
+                  variantManaged={variantManaged}
+                  onVariantManagedChange={handleVariantManagedChange}
+                  onQuickAddMaterialGroup={() => setGroupFormModalOpen(true)}
+                />
+
+                <MaterialSourceTab
+                  formRef={formRef}
+                  material={material}
+                  suppliers={suppliers}
+                  processRoutes={processRoutes}
+                  operations={operations}
+                  suppliersLoading={suppliersLoading}
+                  processRoutesLoading={processRoutesLoading}
+                  operationsLoading={operationsLoading}
+                  sourceTypeOptions={sourceTypeOptions}
+                  suspendedModalReturnPath={pageSuspendPath}
+                  materialUuid={isEdit && material ? material.uuid : undefined}
+                  onQuickAddProcessRoute={() => setRouteFormModalOpen(true)}
+                  onQuickAddSupplier={() => {
+                    setSupplierQuickCreateField('default_supplier_id');
+                    setSupplierFormModalOpen(true);
+                  }}
+                  onQuickAddOutsourceSupplier={() => {
+                    setSupplierQuickCreateField('outsource_supplier_id');
+                    setSupplierFormModalOpen(true);
+                  }}
+                  onQuickAddOperation={() => setOperationFormModalOpen(true)}
+                />
+                <BasicInfoTab
+                  part={2}
+                  formRef={formRef}
+                  material={material}
+                  materialGroups={[]}
+                  variantManaged={variantManaged}
+                  onVariantManagedChange={handleVariantManagedChange}
+                  isEdit={isEdit}
+                  suspendedModalReturnPath={pageSuspendPath}
+                  customFields={[]}
+                  customFieldValues={{}}
+                />
+              </>
+            ),
+          },
+          {
+            key: 'variant',
+            label: t('app.master-data.materialForm.variantManagement'),
+            disabled: !variantManaged,
+            children: (
+              <MaterialVariantCombinationsTable
+                material={material}
+                variantManaged={variantManaged}
+                isEdit={isEdit}
+                pendingRows={pendingVariantRows}
+                onPendingRowsChange={setPendingVariantRows}
+              />
+            ),
+          },
+          {
+            key: 'units',
+            label: t('app.master-data.materialForm.multiUnit'),
+            children: (
+              <MaterialUnitsManager />
+            ),
+          },
+          {
+            key: 'mapping',
+            label: t('app.master-data.materialForm.codeMapping'),
+            children: (
+              <CodeMappingTab
+                departmentCodes={departmentCodes}
+                customerCodes={customerCodes}
+                supplierCodes={supplierCodes}
+                externalSystemCodes={externalSystemCodes}
+                externalSystemCodesLoading={externalSystemCodesLoading}
+                materialUuid={isEdit && material ? material.uuid : undefined}
+                onExternalSystemCodesChange={setExternalSystemCodes}
+                onReloadExternalSystemCodes={material?.uuid ? () => loadExternalSystemCodes(material.uuid) : undefined}
+                customers={customers}
+                suppliers={suppliers}
+                customersLoading={customersLoading}
+                suppliersLoading={suppliersLoading}
+                onDepartmentCodesChange={setDepartmentCodes}
+                onCustomerCodesChange={setCustomerCodes}
+                onSupplierCodesChange={setSupplierCodes}
+              />
+            ),
+          },
+          {
+            key: 'inspection',
+            label: t('app.master-data.materialForm.inspection'),
+            children: (
+              <MaterialInspectionTab
+                formRef={formRef}
+                material={material}
+                isEdit={isEdit}
+                suspendedModalReturnPath={pageSuspendPath}
+              />
+            ),
+          },
+          {
+            key: 'defaults',
+            label: t('app.master-data.materialForm.defaults'),
+            children: (
+              <DefaultsTab
+                customers={customers}
+                suppliers={suppliers}
+                warehouses={warehouses}
+                customersLoading={customersLoading}
+                suppliersLoading={suppliersLoading}
+                warehousesLoading={warehousesLoading}
+              />
+            ),
+          },
+        ]}
+      />
+    </>
+  );
+
+  return (
+    <>
+      <style>{`
+        /* ==================== MaterialForm Modal 样式 - 完全重写（按 Ant Design 最佳实践） ==================== */
+        /* 备份说明：原样式已移除，以下为按 Ant Design 最佳实践完全重写的样式 */
+        
+        /* Modal 内的 Tabs 内容区域 - 去除顶部多余 padding */
+        .material-form-modal .ant-pro-form .ant-tabs-content-holder {
+          padding-top: 0;
+        }
+        
+        /* Modal 内 Tab 内容区：底部留白 16px；左右不设 padding，与模板 Modal 内容区对齐 */
+        .material-form-modal .ant-pro-form .ant-tabs-tabpane {
+          width: 100%;
+          padding: 0 0 16px 0;
+          box-sizing: border-box;
+        }
+        
+        /* Modal 内的 Collapse - 确保占满宽度 */
+        .material-form-modal .ant-collapse {
+          width: 100%;
+        }
+
+        .material-form-modal .material-form-basic-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          column-gap: 16px;
+          row-gap: 8px;
+          width: 100%;
+          box-sizing: border-box;
+        }
+
+        .material-form-modal .material-form-basic-grid__cell {
+          min-width: 0;
+        }
+
+        .material-form-modal .material-form-basic-grid__cell--full {
+          grid-column: 1 / -1;
+        }
+
+        .material-form-modal .material-form-more-collapse {
+          width: 100%;
+          margin: 4px 0 12px;
+          background: rgba(0, 0, 0, 0.02);
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        .material-form-modal .material-form-more-collapse > .ant-collapse-item {
+          border: none !important;
+        }
+
+        .material-form-modal .material-form-more-collapse > .ant-collapse-item > .ant-collapse-header {
+          padding: 10px 12px !important;
+          align-items: center !important;
+        }
+
+        .material-form-modal .material-form-more-collapse .ant-collapse-content-box {
+          padding: 4px 12px 12px !important;
+        }
+        
+        /* 默认值设置Tab的Collapse - 增加底部margin */
+        .material-form-modal .ant-tabs-tabpane .ant-collapse:not(.material-form-more-collapse) {
+          margin-bottom: 16px;
+        }
+        
+        /* 物料表：只描外框，不画单元格内部分隔线 */
+        .material-form-modal .ant-table-wrapper {
+          width: 100%;
+        }
+        .material-form-modal .ant-table-wrapper .ant-table {
+          border: 1px solid var(--ant-colorBorder);
+          border-radius: var(--ant-borderRadius);
+          overflow: hidden;
+        }
+
+        .material-form-modal .material-units-table .ant-table-cell {
+          vertical-align: middle;
+        }
+
+        .material-form-modal .material-units-conversion-row.ant-space-compact {
+          width: 100%;
+        }
+
+        .material-form-modal .material-units-conversion-row .material-units-conversion-sep,
+        .material-form-modal .material-units-conversion-row .material-units-conversion-preview {
+          text-align: center;
+          cursor: default;
+          color: rgba(0, 0, 0, 0.65);
+          background-color: rgba(0, 0, 0, 0.02);
+        }
+
+        .material-form-modal .material-units-conversion-row .material-units-conversion-sep {
+          padding-inline: 0;
+        }
+
+        .material-form-modal .material-units-table .material-units-action-cell {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 24px;
+        }
+        
+        /* Modal 内的 Alert - 确保间距合理 */
+        .material-form-modal .ant-alert {
+          margin-bottom: 16px;
+        }
+        .material-form-modal .ant-alert:last-child {
+          margin-bottom: 0;
+        }
+        .ant-tabs-nav {
+          margin: 0 8px 16px 8px !important;
+        }
+      `}</style>
+      {asPage ? (
+        <DocumentFormPageLayout
+          header={
+            <>
+              <Space align="center" size={8}>
+                <Button
+                  type="text"
+                  icon={<ArrowLeftOutlined />}
+                  aria-label={t('common.back')}
+                  onClick={onClose}
+                />
+                <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                  {formTitle}
+                </Typography.Title>
+              </Space>
+              <DocumentFormPageHeaderActions
+                onCancel={onClose}
+                onSaveDraft={() => undefined}
+                onPrimarySubmit={triggerFormSubmit}
+                isCreatePage={!isEdit}
+                showSaveDraft={false}
+                canSubmitAfterSave={!isEdit}
+                primarySaveLabel={t('components.layoutTemplates.formModal.submitUpdate')}
+                primaryLoading={loading}
+              />
+            </>
+          }
+        >
+          <div className="form-modal-content-inner material-form-modal">
+            <ProForm
+              formRef={formRef}
+              layout="vertical"
+              submitter={false}
+              scrollToFirstError
+              onFinish={handleSubmit}
+              onFinishFailed={({ errorFields }) => {
+                const first = errorFields?.[0];
+                const text = first?.errors?.filter(Boolean)[0];
+                messageApi.error(text || t('components.layoutTemplates.formModal.checkFormHint'));
+              }}
+              onValuesChange={handleFormValuesChange}
+              initialValues={formInitialValues}
+            >
+              {formFields}
+            </ProForm>
+          </div>
+        </DocumentFormPageLayout>
+      ) : (
+        <FormModalTemplate
+          className="material-form-modal"
+          title={formTitle}
+          open={open}
+          onClose={onClose}
+          onFinish={handleSubmit}
+          isEdit={isEdit}
+          loading={loading}
+          width={MODAL_CONFIG.LARGE_WIDTH}
+          formRef={formRef}
+          modalRender={(modal) => (
+            <div data-smart-suggestion-anchor="material-form">{modal}</div>
+          )}
+          initialValues={formInitialValues}
+          layout="vertical"
+          grid={false}
+          onValuesChange={handleFormValuesChange}
+        >
+          {formFields}
+        </FormModalTemplate>
+      )}
+      {groupFormModalOpen ? (
+      <MaterialGroupFormModal
+        open
+        onClose={() => setGroupFormModalOpen(false)}
+        onSuccess={handleMaterialGroupQuickCreateSuccess}
+        materialGroups={localMaterialGroups}
+        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+      />
+      ) : null}
+      {routeFormModalOpen ? (
+      <RouteFormModal
+        open
+        onClose={() => setRouteFormModalOpen(false)}
+        editUuid={null}
+        onSuccess={handleProcessRouteQuickCreateSuccess}
+        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+      />
+      ) : null}
+      {supplierFormModalOpen ? (
+      <SupplierFormModal
+        open
+        onClose={() => setSupplierFormModalOpen(false)}
+        editUuid={null}
+        onSuccess={handleSupplierQuickCreateSuccess}
+        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+      />
+      ) : null}
+      {operationFormModalOpen ? (
+      <OperationFormModal
+        open
+        onClose={() => setOperationFormModalOpen(false)}
+        editUuid={null}
+        onSuccess={handleOperationQuickCreateSuccess}
+        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
+      />
+      ) : null}
+    </>
+  );
+};
+
+/**
+ * 物料质检选项标签页
+ */
+interface MaterialInspectionTabProps {
+  formRef: any;
+  material?: Material;
+  isEdit: boolean;
+  suspendedModalReturnPath?: string;
+}
+
+interface BasicInfoTabProps {
+  part: 1 | 2;
+  formRef: any;
+  material?: Material;
+  materialGroups: MaterialGroup[];
+  isEdit: boolean;
+  suspendedModalReturnPath?: string;
+  customFields?: CustomField[];
+  customFieldValues?: Record<string, any>;
+  variantManaged?: boolean;
+  onVariantManagedChange?: (checked: boolean) => void;
+  onQuickAddMaterialGroup?: () => void;
+}
+
+const MaterialInspectionTab: React.FC<MaterialInspectionTabProps> = () => {
+  const { t } = useTranslation();
+
+  return (
+    <div style={{ padding: '0 0 16px 0' }}>
+      <QualityMasterDataHint scope="material" />
+      <ProFormItem
+        name="inspectionStages"
+        label={t('app.master-data.materialForm.inspectionStagesTitle')}
+      >
+        <InspectionStagesEditor scope="material" />
+      </ProFormItem>
+      <ProFormItem name="inspectionMode" hidden />
+      <ProFormItem name="defaultInspectionPlanId" hidden />
+      <ProFormSelect
+        name="overReportMode"
+        label={t('field.operation.overReportMode')}
+        options={[
+          { label: t('field.operation.overReportModeNone'), value: 'none' },
+          { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
+          { label: t('field.operation.overReportModePercent'), value: 'percent' },
+        ]}
+        fieldProps={{ style: { width: 280 } }}
+      />
+      <ProFormDigit
+        name="overReportValue"
+        label={t('field.operation.overReportValue')}
+        min={0}
+        fieldProps={{ precision: 4, style: { width: 280 } }}
+        extra={t('field.operation.overReportValueExtra')}
+      />
+    </div>
+  );
+};
+
+/**
+ * 多单位编辑区（Form.Item 受控子组件，value/onChange 为唯一数据源）
+ */
+interface MaterialUnitsEditorProps {
+  value?: MaterialUnits;
+  onChange?: (value: MaterialUnits) => void;
+}
+
+const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChange }) => {
+  const { t } = useTranslation();
+  const form = Form.useFormInstance();
+  const units = value?.units ?? [];
+  const scenarios = value?.scenarios ?? {};
+  const { options: unitOptions, valueToLabel: unitValueToLabel, isLoading: loadingUnits } =
+    useMaterialUnitOptions();
+
+  const baseUnit = (Form.useWatch('baseUnit', form) ?? '') as string;
+
+  const commitUnits = (
+    nextUnits: MaterialUnit[],
+    nextScenarios: NonNullable<MaterialUnits['scenarios']> = scenarios,
+  ) => {
+    onChange?.({ units: nextUnits, scenarios: nextScenarios });
+  };
+
+  const handleAddUnit = () => {
+    commitUnits([
+      ...units,
+      { unit: '', numerator: 1, denominator: 1, scenarios: [] },
+    ]);
+  };
+
+  const handleDeleteUnit = (index: number) => {
+    commitUnits(units.filter((_, i) => i !== index));
+  };
+
+  const handleUnitChange = (index: number, field: keyof MaterialUnit, fieldValue: unknown) => {
+    const nextUnits = [...units];
+    nextUnits[index] = { ...nextUnits[index], [field]: fieldValue };
+    commitUnits(nextUnits);
+  };
+
+  const handleScenarioChange = (scenario: string, unit: string) => {
+    onChange?.({
+      units,
+      scenarios: { ...scenarios, [scenario]: unit },
+    });
+  };
+
+  const allUnits = baseUnit ? [baseUnit, ...units.map(u => u.unit).filter(Boolean)] : [];
+
+  const columns = [
+    {
+      title: t('app.master-data.materialForm.unitName'),
+      dataIndex: 'unit',
+      width: 132,
+      render: (_: unknown, record: MaterialUnit, index: number) => (
+        <Select
+          value={record.unit}
+          placeholder={t('app.master-data.materialForm.unitPlaceholder')}
+          onChange={(unitValue: string) => handleUnitChange(index, 'unit', unitValue)}
+          style={{ width: '100%' }}
+          showSearch
+          allowClear
+          loading={loadingUnits}
+          options={unitOptions}
+          filterOption={(input, option) =>
+            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+          }
+        />
+      ),
+    },
+    {
+      title: t('app.master-data.materialForm.conversionRelation'),
+      dataIndex: 'conversion',
+      width: 360,
+      render: (_: unknown, record: MaterialUnit, index: number) => {
+        const numerator = record.numerator || 1;
+        const denominator = record.denominator || 1;
+        const conversionRate = numerator / denominator;
+        const isInteger = Number.isInteger(conversionRate);
+        const previewText = baseUnit
+          ? `= ${isInteger ? conversionRate : `${numerator}/${denominator}`} ${unitValueToLabel[baseUnit] || baseUnit}`
+          : '';
+
+        return (
+          <Space.Compact block className="material-units-conversion-row">
+            <Input
+              style={{ width: '24%' }}
+              type="number"
+              value={numerator}
+              placeholder={t('app.master-data.materialForm.numerator')}
+              onChange={(e) => {
+                const num = parseInt(e.target.value, 10) || 1;
+                handleUnitChange(index, 'numerator', num);
+              }}
+              min={1}
+              step={1}
+            />
+            <Input
+              className="material-units-conversion-sep"
+              style={{ width: '8%' }}
+              value="/"
+              readOnly
+              tabIndex={-1}
+            />
+            <Input
+              style={{ width: '24%' }}
+              type="number"
+              value={denominator}
+              placeholder={t('app.master-data.materialForm.denominator')}
+              onChange={(e) => {
+                const den = parseInt(e.target.value, 10) || 1;
+                handleUnitChange(index, 'denominator', den);
+              }}
+              min={1}
+              step={1}
+            />
+            <Input
+              className="material-units-conversion-preview"
+              style={{ width: '44%' }}
+              value={previewText}
+              readOnly
+              tabIndex={-1}
+            />
+          </Space.Compact>
+        );
+      },
+    },
+    {
+      title: t('app.master-data.materialForm.useScenario'),
+      dataIndex: 'scenarios',
+      render: (_: unknown, record: MaterialUnit, index: number) => (
+        <Select
+          mode="multiple"
+          value={record.scenarios || []}
+          onChange={(scenarioValues: string[]) => handleUnitChange(index, 'scenarios', scenarioValues)}
+          placeholder={t('app.master-data.materialForm.useScenarioPlaceholder')}
+          style={{ width: '100%' }}
+          maxTagCount="responsive"
+          options={[
+            { label: t('app.master-data.materialForm.purchase'), value: 'purchase' },
+            { label: t('app.master-data.materialForm.sale'), value: 'sale' },
+            { label: t('app.master-data.materialForm.production'), value: 'production' },
+            { label: t('app.master-data.materialForm.inventory'), value: 'inventory' },
+          ]}
+        />
+      ),
+    },
+    {
+      title: t('common.actions'),
+      width: 88,
+      align: 'center' as const,
+      render: (_: unknown, __: MaterialUnit, index: number) => (
+        <div className="material-units-action-cell">
+          <Button
+            type="link"
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteUnit(index)}
+          >
+            {t('common.delete')}
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div style={{ width: '100%', display: 'block', boxSizing: 'border-box' }}>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontWeight: 500 }}>{t('app.master-data.materialForm.multiUnit')}</div>
+        {baseUnit && (
+          <div style={{
+            padding: '4px 12px',
+            background: '#e6f7ff',
+            borderRadius: '4px',
+            border: '1px solid #91d5ff',
+            fontSize: '12px',
+            color: '#1890ff',
+          }}>
+            {t('app.master-data.materialForm.baseUnitColon')}<strong>{unitValueToLabel[baseUnit] || baseUnit}</strong>
+          </div>
+        )}
+      </div>
+      <Table
+        className="material-units-table"
+        columns={columns}
+        dataSource={units}
+        rowKey={(_, index) => `unit-${index}`}
+        pagination={false}
+        style={{ width: '100%' }}
+        footer={() => (
+          <Button
+            type="dashed"
+            icon={<PlusOutlined />}
+            onClick={handleAddUnit}
+            block
+          >
+            {t('app.master-data.materialForm.addAuxiliaryUnit')}
+          </Button>
+        )}
+      />
+      {units.length > 0 && allUnits.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.master-data.materialForm.scenarioUnitMappingOptional')}</div>
+          <div style={{ marginBottom: 8, color: '#666', fontSize: 12 }}>
+            {t('app.master-data.materialForm.scenarioUnitMappingHint')}
+          </div>
+          <Row gutter={16}>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.purchaseUnit')}</div>
+              <Select
+                value={scenarios.purchase}
+                onChange={(unitValue: string) => handleScenarioChange('purchase', unitValue)}
+                placeholder={t('app.master-data.materialForm.selectPurchaseUnit')}
+                allowClear
+                style={{ width: '100%' }}
+                showSearch
+                loading={loadingUnits}
+                options={unitOptions.filter((opt) => allUnits.includes(opt.value))}
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+              />
+            </Col>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.saleUnit')}</div>
+              <Select
+                value={scenarios.sale}
+                onChange={(unitValue: string) => handleScenarioChange('sale', unitValue)}
+                placeholder={t('app.master-data.materialForm.selectSaleUnit')}
+                allowClear
+                style={{ width: '100%' }}
+                showSearch
+                loading={loadingUnits}
+                options={unitOptions.filter((opt) => allUnits.includes(opt.value))}
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+              />
+            </Col>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.productionUnit')}</div>
+              <Select
+                value={scenarios.production}
+                onChange={(unitValue: string) => handleScenarioChange('production', unitValue)}
+                placeholder={t('app.master-data.materialForm.selectProductionUnit')}
+                allowClear
+                style={{ width: '100%' }}
+                showSearch
+                loading={loadingUnits}
+                options={unitOptions.filter((opt) => allUnits.includes(opt.value))}
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+              />
+            </Col>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.inventoryUnit')}</div>
+              <Input
+                value={baseUnit ? (unitValueToLabel[baseUnit] || baseUnit) : ''}
+                disabled
+                placeholder={t('app.master-data.materialForm.baseUnitLabel')}
+              />
+            </Col>
+          </Row>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * 多单位管理（Form.Item name="units" 注册字段，提交时由 ProForm 自然收集）
+ */
+const MaterialUnitsManager: React.FC = () => (
+  <Form.Item name="units" noStyle>
+    <MaterialUnitsEditor />
+  </Form.Item>
+);
+
+/**
+ * 基本信息标签页（按字段作用分两段：part1 标识与分类，part2 管理开关与描述；中间为物料来源）
+ */
+const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
+  part,
+  formRef,
+  material,
+  materialGroups,
+  isEdit,
+  suspendedModalReturnPath,
+  customFields = [],
+  customFieldValues = {},
+  variantManaged,
+  onVariantManagedChange,
+  onQuickAddMaterialGroup,
+}) => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
+  const [batchRules, setBatchRules] = useState<{ id: number; name: string; code: string }[]>([]);
+  const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
+  const [batchRuleQuickAddOpen, setBatchRuleQuickAddOpen] = useState(false);
+  const [serialRuleQuickAddOpen, setSerialRuleQuickAddOpen] = useState(false);
+  const ruleQuickAddZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
+
+  const loadRules = useCallback(async () => {
+    try {
+      const [batchRes, serialRes] = await Promise.all([
+        batchRuleApi.list({ pageSize: 200, isActive: true }),
+        serialRuleApi.list({ pageSize: 200, isActive: true }),
+      ]);
+      setBatchRules(batchRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
+      setSerialRules(serialRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadRules();
+  }, [loadRules]);
+
+  const groupId = ProForm.useWatch('groupId');
+  const shelfLifeManaged = ProForm.useWatch('shelfLifeManaged');
+
+  if (part === 1) {
+    const moreFieldsPanel = (
+      <Panel
+        key="extended"
+        header={
+          <Space size={8} wrap>
+            <span>{t('app.master-data.materialForm.viewMoreFields')}</span>
+            <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+              {t('app.master-data.materialForm.viewMoreFieldsHint')}
+            </Typography.Text>
+          </Space>
+        }
+      >
+        <div className="material-form-basic-grid">
+          <div className="material-form-basic-grid__cell">
+            <ProFormDigit
+              name="weight"
+              label={t('app.master-data.materialForm.weight')}
+              placeholder={t('app.master-data.materialForm.weightPlaceholder')}
+              min={0}
+              fieldProps={{ precision: 4 }}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormDigit
+              name="volume"
+              label={t('app.master-data.materialForm.volume')}
+              placeholder={t('app.master-data.materialForm.volumePlaceholder')}
+              min={0}
+              fieldProps={{ precision: 4 }}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormText
+              name="barcode"
+              label={t('app.master-data.materialForm.barcode')}
+              placeholder={t('app.master-data.materialForm.barcodePlaceholder')}
+              rules={[{ max: 100, message: t('app.master-data.materialForm.barcodeMax') }]}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormDigit
+              name="referenceCost"
+              label={t('app.master-data.materialForm.referenceCost')}
+              placeholder={t('app.master-data.materialForm.referenceCostPlaceholder')}
+              min={0}
+              fieldProps={{ precision: 4 }}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormText
+              name="countryOfOrigin"
+              label={t('app.master-data.materialForm.countryOfOrigin')}
+              placeholder={t('app.master-data.materialForm.countryOfOriginPlaceholder')}
+              rules={[{ max: 100, message: t('app.master-data.materialForm.textureMax') }]}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormText
+              name="customsCode"
+              label={t('app.master-data.materialForm.customsCode')}
+              placeholder={t('app.master-data.materialForm.customsCodePlaceholder')}
+              rules={[{ max: 50, message: t('app.master-data.materialForm.barcodeMax') }]}
+            />
+          </div>
+          <div className="material-form-basic-grid__cell">
+            <ProFormSwitch
+              name="shelfLifeManaged"
+              label={t('app.master-data.materialForm.shelfLifeManaged')}
+            />
+          </div>
+          {shelfLifeManaged ? (
+            <div className="material-form-basic-grid__cell">
+              <ProFormDigit
+                name="shelfLifeDays"
+                label={t('app.master-data.materialForm.shelfLifeDays')}
+                placeholder={t('app.master-data.materialForm.shelfLifeDaysPlaceholder')}
+                min={1}
+                fieldProps={{ precision: 0 }}
+                rules={[
+                  {
+                    required: true,
+                    message: t('app.master-data.materialForm.shelfLifeDaysRequired'),
+                  },
+                ]}
+              />
+            </div>
+          ) : null}
+        </div>
+      </Panel>
+    );
+
+    return (
+      <>
+      <div className="material-form-basic-grid">
+        <div className="material-form-basic-grid__cell">
+          <ProFormText
+            name="mainCode"
+            label={t('app.master-data.materialForm.mainCode')}
+            placeholder={isAutoGenerateEnabled('master-data-material') ? t('app.master-data.materialForm.mainCodeAuto') : t('app.master-data.materialForm.mainCodePlaceholder')}
+            disabled={isEdit && material?.mainCodeEditable !== true}
+            tooltip={
+              isEdit
+                ? material?.mainCodeEditable === true
+                  ? t('app.master-data.materialForm.mainCodeEditableExtra')
+                  : material?.mainCodeLockReason ||
+                    t('app.master-data.materialForm.mainCodeLockedExtra')
+                : t('app.master-data.materialForm.mainCodeExtra')
+            }
+            rules={[
+              { required: true, message: t('app.master-data.materialForm.mainCodeRequired') },
+              { max: 50, message: t('app.master-data.materialForm.mainCodeMax') },
+              {
+                validator: (_, value) => {
+                  if (value === t('app.master-data.materialForm.mainCodeSelectGroupHint')) {
+                    return Promise.reject(new Error(t('app.master-data.materialForm.mainCodeSelectGroupHint')));
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
+            fieldProps={{
+              style: !groupId ? { color: 'red' } : { textTransform: 'uppercase' },
+            }}
+          />
+        </div>
+        <div className="material-form-basic-grid__cell">
+          <ProFormText
+            name="name"
+            label={t('app.master-data.materialForm.materialName')}
+            placeholder={t('app.master-data.materialForm.materialNamePlaceholder')}
+            rules={[
+              { required: true, message: t('app.master-data.materialForm.materialNameRequired') },
+              { max: 200, message: t('app.master-data.materialForm.materialNameMax') },
+            ]}
+          />
+        </div>
+        <div className="material-form-basic-grid__cell">
+          <ProFormItem
+            name="groupId"
+            label={t('app.master-data.materialForm.materialGroup')}
+            required
+            rules={[
+              { required: true, message: t('app.master-data.materialForm.materialGroupRequired') },
+            ]}
+          >
+            <UniDropdown
+              placeholder={t('app.master-data.materialForm.materialGroupPlaceholder')}
+              options={materialGroups.map((g) => ({
+                label: formatMaterialGroupLabel(g),
+                value: g.id,
+              }))}
+              showSearch
+              style={{ width: '100%' }}
+              optionFilterProp="label"
+              quickCreate={
+                onQuickAddMaterialGroup
+                  ? {
+                      label: t('app.master-data.materialForm.quickAddMaterialGroup'),
+                      onClick: () => onQuickAddMaterialGroup(),
+                    }
+                  : undefined
+              }
+            />
+          </ProFormItem>
+        </div>
+        <div className="material-form-basic-grid__cell">
+          <ProFormItem
+            name="baseUnit"
+            label={t('app.master-data.materialForm.baseUnit')}
+            rules={[{ required: true, message: t('app.master-data.materialForm.baseUnitPlaceholder') }]}
+          >
+            <MaterialUnitQuickSelect
+              placeholder={t('app.master-data.materialForm.baseUnitPlaceholder')}
+            />
+          </ProFormItem>
+        </div>
+        <div className="material-form-basic-grid__cell">
+          <ProFormText
+            name="specification"
+            label={t('app.master-data.materialForm.specification')}
+            placeholder={t('app.master-data.materialForm.specificationPlaceholder')}
+            rules={[{ max: 500, message: t('app.master-data.materialForm.specificationMax') }]}
+          />
+        </div>
+        <div className="material-form-basic-grid__cell">
+          <ProFormText
+            name="model"
+            label={t('app.master-data.materialForm.model')}
+            placeholder={t('app.master-data.materialForm.modelPlaceholder')}
+            rules={[{ max: 100, message: t('app.master-data.materialForm.modelMax') }]}
+          />
+        </div>
+        <div className="material-form-basic-grid__cell">
+          <ProFormText
+            name="brand"
+            label={t('app.master-data.materialForm.brand')}
+            placeholder={t('app.master-data.materialForm.brandPlaceholder')}
+            rules={[{ max: 100, message: t('app.master-data.materialForm.brandMax') }]}
+          />
+        </div>
+        <div className="material-form-basic-grid__cell">
+          <ProFormText
+            name="texture"
+            label={t('app.master-data.materialForm.texture')}
+            placeholder={t('app.master-data.materialForm.texturePlaceholder')}
+            rules={[{ max: 100, message: t('app.master-data.materialForm.textureMax') }]}
+          />
+        </div>
+      </div>
+      <CustomFieldsFormSection
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        gridColumns={4}
+      />
+      <Collapse
+        variant="borderless"
+        defaultActiveKey={[]}
+        className="material-form-more-collapse"
+        expandIconPlacement="start"
+      >
+        {moreFieldsPanel}
+      </Collapse>
+      </>
+    );
+  }
+
+  return (
+    <>
+    <div className="material-form-basic-grid">
+      <div className="material-form-basic-grid__cell">
+        <ProFormSwitch name="batchManaged" label={t('app.master-data.materialForm.batchManaged')} />
+      </div>
+      <div className="material-form-basic-grid__cell">
+        <ProFormSwitch name="serialManaged" label={t('app.master-data.materialForm.serialManaged')} />
+      </div>
+      <div className="material-form-basic-grid__cell">
+        <ProFormSwitch
+          name="variantManaged"
+          label={t('app.master-data.materialForm.variantManaged')}
+          fieldProps={{ onChange: onVariantManagedChange }}
+        />
+      </div>
+      <div className="material-form-basic-grid__cell">
+        <ProFormSwitch name="isGiftable" label={t('app.master-data.materialForm.isGiftable')} />
+      </div>
+    </div>
+    <Row gutter={16} style={{ width: '100%' }}>
+      <ProFormDependency name={['batchManaged']}>
+        {({ batchManaged }) =>
+          batchManaged ? (
+            <Col span={12}>
+              <ProFormField
+                name="defaultBatchRuleId"
+                label={t('app.master-data.materialForm.defaultBatchRule')}
+                renderFormItem={(p: any) => (
+                  <UniDropdown
+                    {...p.fieldProps}
+                    allowClear
+                    showSearch
+                    style={{ width: '100%' }}
+                    placeholder={t('app.master-data.materialForm.defaultBatchRulePlaceholder')}
+                    options={[
+                      {
+                        label: t('app.master-data.materialForm.systemDefaultRule'),
+                        value: SYSTEM_DEFAULT_RULE_VALUE,
+                      },
+                      ...batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id })),
+                    ]}
+                    quickCreate={{
+                      label: t('app.master-data.materialForm.quickAddBatchRule'),
+                      onClick: () => setBatchRuleQuickAddOpen(true),
+                    }}
+                  />
+                )}
+              />
+            </Col>
+          ) : null
+        }
+      </ProFormDependency>
+      <ProFormDependency name={['serialManaged']}>
+        {({ serialManaged }) =>
+          serialManaged ? (
+            <Col span={12}>
+              <ProFormField
+                name="defaultSerialRuleId"
+                label={t('app.master-data.materialForm.defaultSerialRule')}
+                renderFormItem={(p: any) => (
+                  <UniDropdown
+                    {...p.fieldProps}
+                    allowClear
+                    showSearch
+                    style={{ width: '100%' }}
+                    placeholder={t('app.master-data.materialForm.defaultSerialRulePlaceholder')}
+                    options={[
+                      {
+                        label: t('app.master-data.materialForm.systemDefaultRule'),
+                        value: SYSTEM_DEFAULT_RULE_VALUE,
+                      },
+                      ...serialRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id })),
+                    ]}
+                    quickCreate={{
+                      label: t('app.master-data.materialForm.quickAddSerialRule'),
+                      onClick: () => setSerialRuleQuickAddOpen(true),
+                    }}
+                  />
+                )}
+              />
+            </Col>
+          ) : null
+        }
+      </ProFormDependency>
+      <Col span={24}>
+        <ProFormUploadButton
+          name="images"
+          label={t('app.master-data.materialForm.materialImages')}
+          extra={t('app.master-data.materialForm.materialAttachmentsHint')}
+          max={5}
+          fieldProps={{
+            multiple: true,
+            listType: "picture-card",
+            accept: '.jpg,.jpeg,.png,.gif,.webp,.svg,.pdf,.dwg,.dxf,.step,.stp,.xls,.xlsx',
+            beforeUpload: (file) => {
+              const ext = materialAttachmentExtLower((file as File).name);
+              if (!MATERIAL_ATTACHMENT_EXT.has(ext)) {
+                messageApi.error(t('app.master-data.materialForm.attachmentInvalidType'));
+                return Upload.LIST_IGNORE;
+              }
+              return true;
+            },
+            customRequest: async (options) => {
+              try {
+                const res = await uploadMultipleFiles([options.file as File], { category: 'material_images' });
+                if (options.onSuccess) {
+                  options.onSuccess(res[0], options.file as any);
+                }
+              } catch (err) {
+                if (options.onError) {
+                  options.onError(err as any);
+                }
+              }
+            }
+          }}
+        />
+      </Col>
+      <Col span={24}>
+        <ProFormTextArea
+          name="description"
+          label={t('common.remark')}
+          placeholder={t('app.master-data.materialForm.descriptionPlaceholder')}
+          fieldProps={{ rows: 3, maxLength: 500 }}
+        />
+      </Col>
+      <Col span={24}>
+        <ProFormSwitch name="isActive" label={t('app.master-data.materialForm.isActive')} />
+      </Col>
+    </Row>
+    {batchRuleQuickAddOpen ? (
+      <BatchSerialRuleFormModal
+        open
+        kind="batch"
+        editUuid={null}
+        onClose={() => setBatchRuleQuickAddOpen(false)}
+        zIndex={ruleQuickAddZIndex}
+        onSuccess={(created) => {
+          const id = Number(created.id);
+          void loadRules().then(() => {
+            if (Number.isFinite(id) && id > 0) {
+              setBatchRules((prev) =>
+                prev.some((r) => r.id === id)
+                  ? prev
+                  : [...prev, { id, name: created.name, code: created.code }],
+              );
+              formRef?.current?.setFieldsValue({ defaultBatchRuleId: id });
+            }
+          });
+        }}
+      />
+    ) : null}
+    {serialRuleQuickAddOpen ? (
+      <BatchSerialRuleFormModal
+        open
+        kind="serial"
+        editUuid={null}
+        onClose={() => setSerialRuleQuickAddOpen(false)}
+        zIndex={ruleQuickAddZIndex}
+        onSuccess={(created) => {
+          const id = Number(created.id);
+          void loadRules().then(() => {
+            if (Number.isFinite(id) && id > 0) {
+              setSerialRules((prev) =>
+                prev.some((r) => r.id === id)
+                  ? prev
+                  : [...prev, { id, name: created.name, code: created.code }],
+              );
+              formRef?.current?.setFieldsValue({ defaultSerialRuleId: id });
+            }
+          });
+        }}
+      />
+    ) : null}
+    </>
+  );
+};
+
+/**
+ * 编号映射标签页
+ */
+interface CodeMappingTabProps {
+  departmentCodes: DepartmentCodeMapping[];
+  customerCodes: CustomerCodeMapping[];
+  supplierCodes: SupplierCodeMapping[];
+  externalSystemCodes: MaterialCodeMapping[];
+  externalSystemCodesLoading: boolean;
+  materialUuid?: string;
+  customers: Customer[];
+  suppliers: Supplier[];
+  customersLoading: boolean;
+  suppliersLoading: boolean;
+  onDepartmentCodesChange: (codes: DepartmentCodeMapping[]) => void;
+  onCustomerCodesChange: (codes: CustomerCodeMapping[]) => void;
+  onSupplierCodesChange: (codes: SupplierCodeMapping[]) => void;
+  onExternalSystemCodesChange: (codes: MaterialCodeMapping[]) => void;
+  onReloadExternalSystemCodes?: () => void;
+}
+
+/** 编号映射统一行类型（用于单表展示） */
+type CodeMappingSourceType = 'department' | 'customer' | 'supplier' | 'external';
+interface CodeMappingRow {
+  key: string;
+  sourceType: CodeMappingSourceType;
+  sourceIndex?: number;
+  externalUuid?: string;
+  /** 映射类型展示 */
+  typeLabel: string;
+  /** 编号（部门/客户/供应商为 code，外部为 externalCode） */
+  code: string;
+  /** 关联方/类型（部门为编号类型，客户为客户名，供应商为供应商名，外部为外部系统） */
+  relation: string;
+  name?: string;
+  description?: string;
+  /** 其他：部门为 department，外部为 isActive */
+  extra?: string | React.ReactNode;
+}
+
+const CodeMappingTab: React.FC<CodeMappingTabProps> = ({
+  departmentCodes,
+  customerCodes,
+  supplierCodes,
+  externalSystemCodes,
+  externalSystemCodesLoading,
+  materialUuid,
+  customers,
+  suppliers,
+  customersLoading,
+  suppliersLoading,
+  onDepartmentCodesChange,
+  onCustomerCodesChange,
+  onSupplierCodesChange,
+  onReloadExternalSystemCodes,
+}) => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const [addForm] = Form.useForm();
+  const [externalSystemForm] = Form.useForm();
+
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [addModalType, setAddModalType] = useState<CodeMappingSourceType>('department');
+  const [editingRow, setEditingRow] = useState<CodeMappingRow | null>(null);
+  const [externalSystemModalVisible, setExternalSystemModalVisible] = useState(false);
+  const [editingExternalSystemCode, setEditingExternalSystemCode] = useState<MaterialCodeMapping | null>(null);
+
+  const codeMappingTypeOptions = useMemo(() => [
+    { label: t('app.master-data.codeMapping.department'), value: 'department' as CodeMappingSourceType },
+    { label: t('app.master-data.codeMapping.customer'), value: 'customer' as CodeMappingSourceType },
+    { label: t('app.master-data.codeMapping.supplier'), value: 'supplier' as CodeMappingSourceType },
+    { label: t('app.master-data.codeMapping.external'), value: 'external' as CodeMappingSourceType },
+  ], [t]);
+
+  const departmentCodeTypeLabels = useMemo(() => ({
+    SALE: t('app.master-data.codeMapping.sale'),
+    DES: t('app.master-data.codeMapping.des'),
+    PUR: t('app.master-data.codeMapping.pur'),
+    WH: t('app.master-data.codeMapping.wh'),
+    PROD: t('app.master-data.codeMapping.prod'),
+  }), [t]);
+
+  const departmentCodeTypes = useMemo(() => [
+    { label: t('app.master-data.codeMapping.sale'), value: 'SALE' },
+    { label: t('app.master-data.codeMapping.des'), value: 'DES' },
+    { label: t('app.master-data.codeMapping.pur'), value: 'PUR' },
+    { label: t('app.master-data.codeMapping.wh'), value: 'WH' },
+    { label: t('app.master-data.codeMapping.prod'), value: 'PROD' },
+  ], [t]);
+
+  const resolveCustomerRelation = useCallback(
+    (code: CustomerCodeMapping) => {
+      if (code.customerName) return code.customerName;
+      const customer = customers.find((c) => c.id === code.customerId);
+      if (customer) return `${customer.code} - ${customer.name}`;
+      return code.customerId > 0 ? `#${code.customerId}` : '';
+    },
+    [customers],
+  );
+
+  const resolveSupplierRelation = useCallback(
+    (code: SupplierCodeMapping) => {
+      if (code.supplierName) return code.supplierName;
+      const supplier = suppliers.find((s) => s.id === code.supplierId);
+      if (supplier) return `${supplier.code} - ${supplier.name}`;
+      return code.supplierId > 0 ? `#${code.supplierId}` : '';
+    },
+    [suppliers],
+  );
+
+  // 合并为统一表格数据源
+  const codeMappingRows: CodeMappingRow[] = useMemo(() => {
+    const rows: CodeMappingRow[] = [];
+    departmentCodes.forEach((r, i) => {
+      rows.push({
+        key: `dept-${i}`,
+        sourceType: 'department',
+        sourceIndex: i,
+        typeLabel: t('app.master-data.codeMapping.department'),
+        code: r.code,
+        relation: (departmentCodeTypeLabels as any)[r.code_type] ?? r.code_type,
+        name: r.name,
+        description: r.description,
+        extra: r.department,
+      });
+    });
+    customerCodes.forEach((r, i) => {
+      rows.push({
+        key: `cust-${i}`,
+        sourceType: 'customer',
+        sourceIndex: i,
+        typeLabel: t('app.master-data.codeMapping.customer'),
+        code: r.code,
+        relation: resolveCustomerRelation(r),
+        name: r.name,
+        description: r.description,
+      });
+    });
+    supplierCodes.forEach((r, i) => {
+      rows.push({
+        key: `supp-${i}`,
+        sourceType: 'supplier',
+        sourceIndex: i,
+        typeLabel: t('app.master-data.codeMapping.supplier'),
+        code: r.code,
+        relation: resolveSupplierRelation(r),
+        name: r.name,
+        description: r.description,
+      });
+    });
+    if (materialUuid) {
+      externalSystemCodes.forEach((r) => {
+        rows.push({
+          key: `ext-${r.uuid}`,
+          sourceType: 'external',
+          externalUuid: r.uuid,
+          typeLabel: t('app.master-data.codeMapping.external'),
+          code: r.externalCode,
+          relation: r.externalSystem,
+          name: r.internalCode,
+          description: r.description,
+          extra: (
+            <Tag color={r.isActive ? 'success' : 'default'} variant="solid">{r.isActive ? t('common.enabled') : t('common.disabled')}</Tag>
+          ),
+        });
+      });
+    }
+    return rows;
+  }, [departmentCodes, customerCodes, supplierCodes, externalSystemCodes, materialUuid, departmentCodeTypeLabels, resolveCustomerRelation, resolveSupplierRelation, t]);
+
+  const closeAddModal = () => {
+    setAddModalVisible(false);
+    setEditingRow(null);
+    addForm.resetFields();
+  };
+
+  const handleDeleteRow = (record: CodeMappingRow) => {
+    if (record.sourceType === 'department' && record.sourceIndex !== undefined) {
+      const newCodes = [...departmentCodes];
+      newCodes.splice(record.sourceIndex, 1);
+      onDepartmentCodesChange(newCodes);
+    } else if (record.sourceType === 'customer' && record.sourceIndex !== undefined) {
+      const newCodes = [...customerCodes];
+      newCodes.splice(record.sourceIndex, 1);
+      onCustomerCodesChange(newCodes);
+    } else if (record.sourceType === 'supplier' && record.sourceIndex !== undefined) {
+      const newCodes = [...supplierCodes];
+      newCodes.splice(record.sourceIndex, 1);
+      onSupplierCodesChange(newCodes);
+    } else if (record.sourceType === 'external' && record.externalUuid) {
+      materialCodeMappingApi.delete(record.externalUuid!).then(() => {
+        messageApi.success(t('common.deleteSuccess'));
+        onReloadExternalSystemCodes?.();
+      }).catch((err: any) => {
+        messageApi.error(err.message || t('common.deleteFailed'));
+      });
+    }
+  };
+
+  const handleOpenAddModal = (type?: CodeMappingSourceType) => {
+    const nextType = type ?? 'department';
+    setEditingRow(null);
+    setAddModalType(nextType);
+    setAddModalVisible(true);
+    addForm.resetFields();
+  };
+
+  const handleOpenEditMappingModal = (record: CodeMappingRow) => {
+    if (record.sourceType === 'external') return;
+    if (record.sourceIndex === undefined) return;
+    setEditingRow(record);
+    setAddModalType(record.sourceType);
+    setAddModalVisible(true);
+    addForm.resetFields();
+    if (record.sourceType === 'department') {
+      const row = departmentCodes[record.sourceIndex];
+      addForm.setFieldsValue({
+        code_type: row.code_type,
+        code: row.code,
+        name: row.name,
+        department: row.department,
+        description: row.description,
+      });
+      return;
+    }
+    if (record.sourceType === 'customer') {
+      const row = customerCodes[record.sourceIndex];
+      addForm.setFieldsValue({
+        customerId: row.customerId > 0 ? row.customerId : undefined,
+        code: row.code,
+        name: row.name,
+        description: row.description,
+      });
+      return;
+    }
+    if (record.sourceType === 'supplier') {
+      const row = supplierCodes[record.sourceIndex];
+      addForm.setFieldsValue({
+        supplierId: row.supplierId > 0 ? row.supplierId : undefined,
+        code: row.code,
+        name: row.name,
+        description: row.description,
+      });
+    }
+  };
+
+  const handleAddSubmit = () => {
+    if (addModalType === 'department') {
+      addForm.validateFields().then((values) => {
+        if (editingRow?.sourceType === 'department' && editingRow.sourceIndex !== undefined) {
+          const newCodes = [...departmentCodes];
+          newCodes[editingRow.sourceIndex] = values;
+          onDepartmentCodesChange(newCodes);
+        } else {
+          onDepartmentCodesChange([...departmentCodes, values]);
+        }
+        closeAddModal();
+      }).catch(() => {});
+      return;
+    }
+    if (addModalType === 'customer') {
+      addForm.validateFields().then((values) => {
+        const customer = customers.find((c) => c.id === values.customerId);
+        const nextRow = {
+          ...values,
+          customerName: customer?.name,
+          customerUuid: customer?.uuid,
+        };
+        if (editingRow?.sourceType === 'customer' && editingRow.sourceIndex !== undefined) {
+          const newCodes = [...customerCodes];
+          newCodes[editingRow.sourceIndex] = nextRow;
+          onCustomerCodesChange(newCodes);
+        } else {
+          onCustomerCodesChange([...customerCodes, nextRow]);
+        }
+        closeAddModal();
+      }).catch(() => {});
+      return;
+    }
+    if (addModalType === 'supplier') {
+      addForm.validateFields().then((values) => {
+        const supplier = suppliers.find((s) => s.id === values.supplierId);
+        const nextRow = {
+          ...values,
+          supplierName: supplier?.name,
+          supplierUuid: supplier?.uuid,
+        };
+        if (editingRow?.sourceType === 'supplier' && editingRow.sourceIndex !== undefined) {
+          const newCodes = [...supplierCodes];
+          newCodes[editingRow.sourceIndex] = nextRow;
+          onSupplierCodesChange(newCodes);
+        } else {
+          onSupplierCodesChange([...supplierCodes, nextRow]);
+        }
+        closeAddModal();
+      }).catch(() => {});
+      return;
+    }
+    if (addModalType === 'external' && materialUuid) {
+      addForm.validateFields().then(async (values) => {
+        await materialCodeMappingApi.create({
+          materialUuid,
+          internalCode: values.internalCode || '',
+          externalCode: values.externalCode,
+          externalSystem: values.externalSystem,
+          description: values.description,
+          isActive: values.isActive !== false,
+        });
+        messageApi.success(t('common.createSuccess'));
+        closeAddModal();
+        onReloadExternalSystemCodes?.();
+      }).catch(() => {});
+    }
+  };
+
+  const openEditExternalModal = (record: MaterialCodeMapping) => {
+    setEditingExternalSystemCode(record);
+    externalSystemForm.setFieldsValue({
+      externalSystem: record.externalSystem,
+      externalCode: record.externalCode,
+      internalCode: record.internalCode,
+      description: record.description,
+      isActive: record.isActive,
+    });
+    setExternalSystemModalVisible(true);
+  };
+
+  return (
+    <>
+      <Table<CodeMappingRow>
+        dataSource={codeMappingRows}
+        loading={externalSystemCodesLoading}
+        columns={[
+          { title: t('app.master-data.codeMapping.mappingType'), dataIndex: 'typeLabel', key: 'typeLabel', width: 100 },
+          {
+            title: `${t('common.name')} / ${t('app.master-data.codeMapping.code')}`,
+            key: 'nameCode',
+            width: 180,
+            ellipsis: false,
+            render: (_, record) => {
+              const name = record.name?.trim() ?? '';
+              const code = record.code?.trim() ?? '';
+              if (name && code) {
+                return <UniTableStackedPrimaryCell primary={name} secondary={code} />;
+              }
+              if (name) {
+                return (
+                  <UniTableStackedPrimaryCell
+                    primary={name}
+                    secondary="-"
+                    secondaryCopyable={false}
+                  />
+                );
+              }
+              return (
+                <UniTableStackedPrimaryCell
+                  primary={code || '-'}
+                  secondary="-"
+                  secondaryCopyable={Boolean(code)}
+                />
+              );
+            },
+          },
+          { title: t('app.master-data.codeMapping.relation'), dataIndex: 'relation', key: 'relation', width: 160, ellipsis: true },
+          { title: t('common.remark'), dataIndex: 'description', key: 'description', ellipsis: true },
+          { title: t('app.master-data.codeMapping.extra'), dataIndex: 'extra', key: 'extra', width: 100 },
+          {
+            title: t('common.actions'),
+            key: 'action',
+            width: 72,
+            fixed: 'right' as const,
+            render: (_, record) => (
+              <Space size="small">
+                {record.sourceType === 'external' ? (
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<EditOutlined />}
+                    title={t('common.edit')}
+                    aria-label={t('common.edit')}
+                    onClick={() => {
+                      const ext = externalSystemCodes.find((e) => e.uuid === record.externalUuid);
+                      if (ext) openEditExternalModal(ext);
+                    }}
+                  />
+                ) : (
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<EditOutlined />}
+                    title={t('common.edit')}
+                    aria-label={t('common.edit')}
+                    onClick={() => handleOpenEditMappingModal(record)}
+                  />
+                )}
+                <Button
+                  type="link"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  title={t('common.delete')}
+                  aria-label={t('common.delete')}
+                  onClick={() => handleDeleteRow(record)}
+                />
+              </Space>
+            ),
+          },
+        ]}
+        pagination={false}
+        locale={{ emptyText: t('app.master-data.codeMapping.noMapping') }}
+        footer={() => (
+          <Button
+            type="dashed"
+            icon={<PlusOutlined />}
+            onClick={() => handleOpenAddModal()}
+            block
+          >
+            {t('app.master-data.codeMapping.addMapping')}
+          </Button>
+        )}
+      />
+
+      {/* 统一添加编号映射 Modal */}
+      <Modal
+        title={
+          editingRow
+            ? `${t('common.edit')} — ${codeMappingTypeOptions.find((o) => o.value === addModalType)?.label ?? ''}`
+            : t('app.master-data.codeMapping.addMapping')
+        }
+        open={addModalVisible}
+        onOk={handleAddSubmit}
+        onCancel={closeAddModal}
+        width={600}
+      >
+        <Form form={addForm} layout="vertical">
+          <Form.Item label={t('app.master-data.codeMapping.mappingType')}>
+            <Select
+              value={addModalType}
+              disabled={!!editingRow}
+              options={codeMappingTypeOptions.filter(o => o.value !== 'external' || materialUuid)}
+              onChange={(v) => {
+                setAddModalType(v as CodeMappingSourceType);
+                addForm.resetFields();
+              }}
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+          {addModalType === 'department' && (
+            <>
+              <Form.Item name="code_type" label={t('app.master-data.codeMapping.codeType')} rules={[{ required: true, message: t('app.master-data.codeMapping.codeTypeRequired') }]}>
+                <Select placeholder={t('app.master-data.codeMapping.codeTypePlaceholder')} options={departmentCodeTypes} />
+              </Form.Item>
+              <Form.Item name="code" label={t('app.master-data.codeMapping.code')} rules={[{ required: true, message: t('app.master-data.codeMapping.codeRequired') }]}>
+                <Input placeholder={t('app.master-data.codeMapping.codePlaceholder')} />
+              </Form.Item>
+              <Form.Item name="name" label={t('app.master-data.codeMapping.nameOptional')}>
+                <Input placeholder={t('app.master-data.codeMapping.nameOptional')} />
+              </Form.Item>
+              <Form.Item name="department" label={t('app.master-data.codeMapping.departmentOptional')}>
+                <Input placeholder={t('app.master-data.codeMapping.departmentOptional')} />
+              </Form.Item>
+              <Form.Item name="description" label={t('app.master-data.codeMapping.descriptionOptional')}>
+                <Input.TextArea placeholder={t('app.master-data.codeMapping.descriptionOptional')} rows={3} />
+              </Form.Item>
+            </>
+          )}
+          {addModalType === 'customer' && (
+            <>
+              <Form.Item name="customerId" label={t('app.master-data.codeMapping.customerLabel')} rules={[{ required: true, message: t('app.master-data.codeMapping.selectCustomer') }]}>
+                <Select
+                  placeholder={t('app.master-data.codeMapping.selectCustomerPlaceholder')}
+                  loading={customersLoading}
+                  showSearch
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                  options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
+                />
+              </Form.Item>
+              <Form.Item name="code" label={t('app.master-data.codeMapping.customerCode')} rules={[{ required: true, message: t('field.customer.codeRequired') }]}>
+                <Input placeholder={t('field.customer.codePlaceholder')} />
+              </Form.Item>
+              <Form.Item name="name" label={t('app.master-data.codeMapping.nameOptional')}>
+                <Input placeholder={t('app.master-data.codeMapping.nameOptional')} />
+              </Form.Item>
+              <Form.Item name="description" label={t('app.master-data.codeMapping.descriptionOptional')}>
+                <Input.TextArea placeholder={t('app.master-data.codeMapping.descriptionOptional')} rows={3} />
+              </Form.Item>
+            </>
+          )}
+          {addModalType === 'supplier' && (
+            <>
+              <Form.Item name="supplierId" label={t('app.master-data.codeMapping.supplierLabel')} rules={[{ required: true, message: t('app.master-data.codeMapping.selectSupplier') }]}>
+                <Select
+                  placeholder={t('app.master-data.codeMapping.selectSupplierPlaceholder')}
+                  loading={suppliersLoading}
+                  showSearch
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                  options={suppliers.map(s => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                />
+              </Form.Item>
+              <Form.Item name="code" label={t('app.master-data.codeMapping.supplierCode')} rules={[{ required: true, message: t('field.supplier.codeRequired') }]}>
+                <Input placeholder={t('field.supplier.codePlaceholder')} />
+              </Form.Item>
+              <Form.Item name="name" label={t('app.master-data.codeMapping.nameOptional')}>
+                <Input placeholder={t('app.master-data.codeMapping.nameOptional')} />
+              </Form.Item>
+              <Form.Item name="description" label={t('app.master-data.codeMapping.descriptionOptional')}>
+                <Input.TextArea placeholder={t('app.master-data.codeMapping.descriptionOptional')} rows={3} />
+              </Form.Item>
+            </>
+          )}
+          {addModalType === 'external' && materialUuid && (
+            <>
+              <Form.Item name="externalSystem" label={t('app.master-data.codeMapping.externalSystem')} rules={[{ required: true, message: t('app.master-data.codeMapping.externalSystemRequired') }]}>
+                <Input placeholder={t('app.master-data.codeMapping.externalSystemPlaceholder')} />
+              </Form.Item>
+              <Form.Item name="externalCode" label={t('app.master-data.codeMapping.externalCode')} rules={[{ required: true, message: t('app.master-data.codeMapping.externalCodeRequired') }]}>
+                <Input placeholder={t('app.master-data.codeMapping.externalCodePlaceholder')} />
+              </Form.Item>
+              <Form.Item name="internalCode" label={t('app.master-data.codeMapping.internalCodeOptional')} tooltip={t('app.master-data.codeMapping.internalCodeTooltip')}>
+                <Input placeholder={t('app.master-data.codeMapping.internalCodeOptional')} />
+              </Form.Item>
+              <Form.Item name="description" label={t('app.master-data.codeMapping.descriptionOptional')}>
+                <Input.TextArea placeholder={t('app.master-data.codeMapping.descriptionOptional')} rows={3} />
+              </Form.Item>
+              <Form.Item name="isActive" label={t('app.master-data.materialForm.isActive')} valuePropName="checked" initialValue={true}>
+                <Switch />
+              </Form.Item>
+            </>
+          )}
+        </Form>
+      </Modal>
+
+      {/* 编辑外部系统编号映射 Modal */}
+      {materialUuid && (
+        <Modal
+          title={t('app.master-data.codeMapping.editExternal')}
+          open={externalSystemModalVisible}
+          onOk={async () => {
+            try {
+              const values = await externalSystemForm.validateFields();
+              if (editingExternalSystemCode) {
+                await materialCodeMappingApi.update(editingExternalSystemCode.uuid, {
+                  externalSystem: values.externalSystem,
+                  externalCode: values.externalCode,
+                  internalCode: values.internalCode || undefined,
+                  description: values.description,
+                  isActive: values.isActive,
+                });
+                messageApi.success(t('common.updateSuccess'));
+              }
+              setExternalSystemModalVisible(false);
+              setEditingExternalSystemCode(null);
+              externalSystemForm.resetFields();
+              onReloadExternalSystemCodes?.();
+            } catch (error: any) {
+              messageApi.error(error.message || t('common.updateFailed'));
+            }
+          }}
+          onCancel={() => {
+            setExternalSystemModalVisible(false);
+            setEditingExternalSystemCode(null);
+            externalSystemForm.resetFields();
+          }}
+          width={600}
+        >
+          <Form form={externalSystemForm} layout="vertical">
+            <Form.Item name="externalSystem" label={t('app.master-data.codeMapping.externalSystem')} rules={[{ required: true, message: t('app.master-data.codeMapping.externalSystemRequired') }]}>
+              <Input placeholder={t('app.master-data.codeMapping.externalSystemPlaceholder')} />
+            </Form.Item>
+            <Form.Item name="externalCode" label={t('app.master-data.codeMapping.externalCode')} rules={[{ required: true, message: t('app.master-data.codeMapping.externalCodeRequired') }]}>
+              <Input placeholder={t('app.master-data.codeMapping.externalCodePlaceholder')} />
+            </Form.Item>
+            <Form.Item name="internalCode" label={t('app.master-data.codeMapping.internalCodeOptional')} tooltip={t('app.master-data.codeMapping.internalCodeTooltip')}>
+              <Input placeholder={t('app.master-data.codeMapping.internalCodeOptional')} />
+            </Form.Item>
+            <Form.Item name="description" label={t('app.master-data.codeMapping.descriptionOptional')}>
+              <Input.TextArea placeholder={t('app.master-data.codeMapping.descriptionOptional')} rows={3} />
+            </Form.Item>
+            <Form.Item name="isActive" label={t('app.master-data.materialForm.isActive')} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </Form>
+        </Modal>
+      )}
+    </>
+  );
+};
+
+/**
+ * 默认值设置标签页
+ */
+interface DefaultsTabProps {
+  customers: Customer[];
+  suppliers: Supplier[];
+  warehouses: Warehouse[];
+  customersLoading: boolean;
+  suppliersLoading: boolean;
+  warehousesLoading: boolean;
+}
+
+function useMaterialDefaultField<T>(name: string): T | undefined {
+  const form = Form.useFormInstance();
+  const nested = Form.useWatch(['defaults', name], form);
+  const flat = Form.useWatch(`defaults.${name}`, form);
+  return (nested ?? flat) as T | undefined;
+}
+
+/** 行情定价：固定售价 + 浮动公式随表单与当日行情即时算出建议售价。 */
+const MarketSuggestedPriceLive: React.FC = () => {
+  const form = Form.useFormInstance();
+  const quoteCode = String(useMaterialDefaultField<string>('marketBaseQuoteCode') || '').trim();
+  const formula = useMaterialDefaultField<string>('marketFloatFormula');
+  const fixed = Number(useMaterialDefaultField<number>('marketFixedSalePrice') ?? 0);
+  const taxR = Number(useMaterialDefaultField<number>('defaultTaxRate') ?? 0);
+  const priceType = useMaterialDefaultField<string>('defaultSalePriceType');
+  const [spot, setSpot] = useState<{ code: string; unitPrice: number; priceType: string } | null>(null);
+
+  useEffect(() => {
+    if (!quoteCode) {
+      setSpot(null);
+      return;
+    }
+    let cancelled = false;
+    void materialMarketPriceApi
+      .list({ quoteCode, priceDate: todaySiteDateString(), limit: 1 })
+      .then((res) => {
+        if (cancelled) return;
+        const row = res.items[0];
+        if (!row || !(Number(row.unitPrice) > 0)) {
+          setSpot(null);
+          return;
+        }
+        setSpot({
+          code: quoteCode,
+          unitPrice: Number(row.unitPrice),
+          priceType: row.priceType,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setSpot(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quoteCode]);
+
+  useEffect(() => {
+    if (!quoteCode || !spot || spot.code !== quoteCode) return;
+    try {
+      const saleType: PriceTypeValue = priceType === 'tax_exclusive' ? 'tax_exclusive' : 'tax_inclusive';
+      const spotType: PriceTypeValue = spot.priceType === 'tax_exclusive' ? 'tax_exclusive' : 'tax_inclusive';
+      const spotNorm = convertUnitPriceByPriceType(spot.unitPrice, taxR, spotType, saleType);
+      const floating = evaluateMarketFloatFormula(formula || DEFAULT_MARKET_FLOAT_FORMULA, spotNorm, 1);
+      const next = Number((fixed + floating).toFixed(6));
+      const current = Number(
+        form.getFieldValue('defaults.defaultSalePrice') ??
+          form.getFieldValue(['defaults', 'defaultSalePrice']) ??
+          0,
+      );
+      if (current !== next) {
+        form.setFieldValue('defaults.defaultSalePrice', next);
+      }
+    } catch {
+      /* 公式未写完整时不覆盖建议售价 */
+    }
+  }, [quoteCode, formula, fixed, taxR, priceType, spot, form]);
+
+  return null;
+};
+
+const DefaultsTab: React.FC<DefaultsTabProps> = ({
+  customers,
+  suppliers,
+  warehouses,
+  customersLoading,
+  suppliersLoading,
+  warehousesLoading,
+}) => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const defaultsForm = Form.useFormInstance();
+  const { options: unitOptions, isLoading: unitOptionsLoading } = useMaterialUnitOptions();
+  const [storageLocations, setStorageLocations] = useState<StorageLocation[]>([]);
+  const [storageLocationsLoading, setStorageLocationsLoading] = useState(false);
+  const [storageAreas, setStorageAreas] = useState<StorageArea[]>([]);
+
+  useEffect(() => {
+    const loadStorageMaster = async () => {
+      try {
+        setStorageLocationsLoading(true);
+        const [locRes, areaRes] = await Promise.all([
+          storageLocationApi.list({ limit: 1000, is_active: true }),
+          storageAreaApi.list({ limit: 1000, is_active: true }),
+        ]);
+        setStorageLocations(locRes.items ?? []);
+        setStorageAreas(areaRes.items ?? []);
+      } catch (error) {
+        console.error('加载库位选项失败:', error);
+      } finally {
+        setStorageLocationsLoading(false);
+      }
+    };
+    loadStorageMaster();
+  }, []);
+
+  return (
+    <>
+        <DetailDrawerSection title={t('app.master-data.defaults.finance')}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect
+                name="defaults.defaultTaxRate"
+                label={t('app.master-data.defaults.defaultTaxRate')}
+                placeholder={t('app.master-data.defaults.defaultTaxRatePlaceholder')}
+                options={[
+                  { label: t('app.master-data.defaults.taxRate0'), value: 0 },
+                  { label: t('app.master-data.defaults.taxRate3'), value: 3 },
+                  { label: t('app.master-data.defaults.taxRate6'), value: 6 },
+                  { label: t('app.master-data.defaults.taxRate9'), value: 9 },
+                  { label: t('app.master-data.defaults.taxRate13'), value: 13 },
+                ]}
+              />
+            </Col>
+          </Row>
+        </DetailDrawerSection>
+
+        {/* 销售默认值：单位已在【多单位管理】标签配置 */}
+        <DetailDrawerSection title={t('app.master-data.defaults.sale')}>
+          <ProFormText name="defaults.defaultSalePriceType" hidden initialValue="tax_inclusive" />
+          <ProFormText name="defaults.marketBaseQuoteName" hidden />
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect
+                name="defaults.salePriceMethod"
+                label={t('app.master-data.defaults.salePriceMethod')}
+                tooltip={t('app.master-data.defaults.salePriceMethodHint')}
+                initialValue="fixed"
+                options={[
+                  { label: t('app.master-data.defaults.salePriceMethodFixed'), value: 'fixed' },
+                  { label: t('app.master-data.defaults.salePriceMethodMarket'), value: 'market' },
+                ]}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormSelect
+                name="defaults.defaultCustomerIds"
+                label={t('app.master-data.defaults.defaultCustomers')}
+                placeholder={t('app.master-data.defaults.selectCustomers')}
+                options={customers.map(c => ({ label: `${c.code} - ${c.name}`, value: c.id }))}
+                fieldProps={{
+                  mode: 'multiple',
+                  loading: customersLoading,
+                  showSearch: true,
+                  filterOption: (input: string, option: any) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                }}
+              />
+            </Col>
+          </Row>
+          <ProFormDependency name={['defaults.salePriceMethod']}>
+            {() => {
+              const readDefault = (key: string) =>
+                defaultsForm.getFieldValue(`defaults.${key}`) ??
+                defaultsForm.getFieldValue(['defaults', key]);
+              const method = readDefault('salePriceMethod') ?? 'fixed';
+              const priceTypeSwitch = (
+                <Form.Item
+                  noStyle
+                  shouldUpdate={(prev, cur) =>
+                    prev?.defaults?.defaultSalePriceType !== cur?.defaults?.defaultSalePriceType ||
+                    prev?.['defaults.defaultSalePriceType'] !== cur?.['defaults.defaultSalePriceType'] ||
+                    prev?.defaults?.defaultSalePrice !== cur?.defaults?.defaultSalePrice ||
+                    prev?.['defaults.defaultSalePrice'] !== cur?.['defaults.defaultSalePrice'] ||
+                    prev?.defaults?.marketFixedSalePrice !== cur?.defaults?.marketFixedSalePrice ||
+                    prev?.['defaults.marketFixedSalePrice'] !== cur?.['defaults.marketFixedSalePrice'] ||
+                    prev?.defaults?.defaultTaxRate !== cur?.defaults?.defaultTaxRate ||
+                    prev?.['defaults.defaultTaxRate'] !== cur?.['defaults.defaultTaxRate']
+                  }
+                >
+                  {({ getFieldValue, setFieldValue }) => {
+                    const priceType = (getFieldValue('defaults.defaultSalePriceType') ??
+                      getFieldValue(['defaults', 'defaultSalePriceType']) ??
+                      'tax_inclusive') as PriceTypeValue;
+                    return (
+                      <PriceTypeSwitch
+                        checked={priceType === 'tax_inclusive'}
+                        onChange={(checked) => {
+                          const nextType: PriceTypeValue = checked ? 'tax_inclusive' : 'tax_exclusive';
+                          const fromType: PriceTypeValue = checked ? 'tax_exclusive' : 'tax_inclusive';
+                          const taxR =
+                            Number(getFieldValue('defaults.defaultTaxRate')) ||
+                            Number(getFieldValue(['defaults', 'defaultTaxRate'])) ||
+                            0;
+                          const convertField = (name: string) => {
+                            const raw =
+                              Number(getFieldValue(`defaults.${name}`)) ||
+                              Number(getFieldValue(['defaults', name])) ||
+                              0;
+                            if (raw > 0) {
+                              setFieldValue(
+                                `defaults.${name}`,
+                                convertUnitPriceByPriceType(raw, taxR, fromType, nextType),
+                              );
+                            }
+                          };
+                          convertField('defaultSalePrice');
+                          convertField('marketFixedSalePrice');
+                          setFieldValue('defaults.defaultSalePriceType', nextType);
+                        }}
+                      />
+                    );
+                  }}
+                </Form.Item>
+              );
+              const salePriceField = (
+                <Form.Item
+                  label={
+                    method === 'market'
+                      ? t('app.master-data.defaults.marketSuggestedPrice')
+                      : t('app.master-data.defaults.defaultSalePrice')
+                  }
+                  tooltip={
+                    method === 'market'
+                      ? t('app.master-data.defaults.marketCompositionHint')
+                      : t('app.master-data.defaults.defaultSalePriceTypeHint')
+                  }
+                >
+                  <Row gutter={8} align="middle" wrap={false}>
+                    <Col flex="auto">
+                      <ProFormDigit
+                        name="defaults.defaultSalePrice"
+                        placeholder={t('app.master-data.defaults.defaultSalePricePlaceholder')}
+                        min={0}
+                        fieldProps={{ style: { width: '100%' }, disabled: method === 'market' }}
+                        noStyle
+                      />
+                    </Col>
+                    {method !== 'market' ? <Col flex="none">{priceTypeSwitch}</Col> : null}
+                  </Row>
+                </Form.Item>
+              );
+              if (method !== 'market') {
+                return <Row gutter={16}><Col span={12}>{salePriceField}</Col></Row>;
+              }
+              return (
+                <>
+                  <MarketSuggestedPriceLive />
+                  <Row gutter={16} style={{ marginBottom: 8 }}>
+                    <Col span={24}>
+                      <Typography.Text type="secondary">
+                        {t('app.master-data.defaults.marketComposition')}
+                      </Typography.Text>
+                    </Col>
+                  </Row>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item
+                        label={t('app.master-data.defaults.marketFixedSalePrice')}
+                        tooltip={t('app.master-data.defaults.defaultSalePriceTypeHint')}
+                      >
+                        <Row gutter={8} align="middle" wrap={false}>
+                          <Col flex="auto">
+                            <ProFormDigit
+                              name="defaults.marketFixedSalePrice"
+                              min={0}
+                              fieldProps={{ style: { width: '100%' } }}
+                              noStyle
+                            />
+                          </Col>
+                          <Col flex="none">{priceTypeSwitch}</Col>
+                        </Row>
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>{salePriceField}</Col>
+                  </Row>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <ProFormSelect
+                        name="defaults.marketBaseQuoteCode"
+                        label={
+                          <span style={{ position: 'relative', display: 'inline' }}>
+                            {t('app.master-data.defaults.marketBaseMaterial')}
+                            <Typography.Link
+                              onClick={() => navigate('/apps/master-data/materials/market-prices')}
+                              style={{
+                                position: 'absolute',
+                                left: '100%',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                marginLeft: 8,
+                                whiteSpace: 'nowrap',
+                                lineHeight: 1,
+                                height: '1em',
+                                fontSize: 12,
+                              }}
+                            >
+                              <LinkOutlined style={{ marginRight: 4 }} />
+                              {t('app.master-data.defaults.marketGoMaintain')}
+                            </Typography.Link>
+                          </span>
+                        }
+                        rules={[{ required: true, message: t('app.master-data.defaults.marketBaseMaterialRequired') }]}
+                        request={async () => {
+                          const items = await materialMarketPriceApi.listInstruments();
+                          return items.map((it) => ({
+                            label: `${it.code} ${it.name}`.trim(),
+                            value: it.code,
+                            quoteName: it.name,
+                          }));
+                        }}
+                        fieldProps={{
+                          showSearch: true,
+                          optionFilterProp: 'label',
+                          onChange: (_value: string, option: any) => {
+                            defaultsForm.setFieldValue(
+                              'defaults.marketBaseQuoteName',
+                              option?.quoteName,
+                            );
+                          },
+                        }}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <ProFormText
+                        name="defaults.marketFloatFormula"
+                        label={t('app.master-data.defaults.marketFloatFormula')}
+                        initialValue={DEFAULT_MARKET_FLOAT_FORMULA}
+                        extra={t('app.master-data.defaults.marketFloatFormulaHint')}
+                        rules={[
+                          { required: true, message: t('app.master-data.defaults.marketFloatFormulaRequired') },
+                          {
+                            validator: async (_, value) => {
+                              evaluateMarketFloatFormula(value || DEFAULT_MARKET_FLOAT_FORMULA, 1, 1);
+                            },
+                          },
+                        ]}
+                      />
+                    </Col>
+                  </Row>
+                </>
+              );
+            }}
+          </ProFormDependency>
+        </DetailDrawerSection>
+
+        <DetailDrawerSection title={t('app.master-data.defaults.purchase')}>
+          <ProFormText name="defaults.defaultPurchasePriceType" hidden initialValue="tax_inclusive" />
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label={t('app.master-data.defaults.defaultPurchasePrice')}
+                tooltip={t('app.master-data.defaults.defaultPurchasePriceTypeHint')}
+              >
+                <Row gutter={8} align="middle" wrap={false}>
+                  <Col flex="auto">
+                    <ProFormDigit
+                      name="defaults.defaultPurchasePrice"
+                      placeholder={t('app.master-data.defaults.defaultPurchasePricePlaceholder')}
+                      min={0}
+                      fieldProps={{ style: { width: '100%' } }}
+                      noStyle
+                    />
+                  </Col>
+                  <Col flex="none">
+                    <Form.Item
+                      noStyle
+                      shouldUpdate={(prev, cur) =>
+                        prev?.defaults?.defaultPurchasePriceType !== cur?.defaults?.defaultPurchasePriceType ||
+                        prev?.['defaults.defaultPurchasePriceType'] !== cur?.['defaults.defaultPurchasePriceType'] ||
+                        prev?.defaults?.defaultPurchasePrice !== cur?.defaults?.defaultPurchasePrice ||
+                        prev?.['defaults.defaultPurchasePrice'] !== cur?.['defaults.defaultPurchasePrice'] ||
+                        prev?.defaults?.defaultTaxRate !== cur?.defaults?.defaultTaxRate ||
+                        prev?.['defaults.defaultTaxRate'] !== cur?.['defaults.defaultTaxRate']
+                      }
+                    >
+                      {({ getFieldValue, setFieldValue }) => {
+                        const priceType = (getFieldValue('defaults.defaultPurchasePriceType') ??
+                          getFieldValue(['defaults', 'defaultPurchasePriceType']) ??
+                          'tax_inclusive') as PriceTypeValue;
+                        return (
+                          <PriceTypeSwitch
+                            checked={priceType === 'tax_inclusive'}
+                            onChange={(checked) => {
+                              const nextType: PriceTypeValue = checked ? 'tax_inclusive' : 'tax_exclusive';
+                              const fromType: PriceTypeValue = checked ? 'tax_exclusive' : 'tax_inclusive';
+                              const raw =
+                                Number(getFieldValue('defaults.defaultPurchasePrice')) ||
+                                Number(getFieldValue(['defaults', 'defaultPurchasePrice'])) ||
+                                0;
+                              const taxR =
+                                Number(getFieldValue('defaults.defaultTaxRate')) ||
+                                Number(getFieldValue(['defaults', 'defaultTaxRate'])) ||
+                                0;
+                              if (raw > 0) {
+                                const converted = convertUnitPriceByPriceType(raw, taxR, fromType, nextType);
+                                setFieldValue('defaults.defaultPurchasePrice', converted);
+                              }
+                              setFieldValue('defaults.defaultPurchasePriceType', nextType);
+                            }}
+                          />
+                        );
+                      }}
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <ProFormSelect
+                name="defaults.defaultSupplierIds"
+                label={t('app.master-data.defaults.defaultSuppliers')}
+                placeholder={t('app.master-data.defaults.selectSuppliers')}
+                options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                fieldProps={{
+                  mode: 'multiple',
+                  loading: suppliersLoading,
+                  showSearch: true,
+                  filterOption: (input: string, option: any) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                }}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDependency name={['baseUnit', 'units']}>
+                {({ baseUnit, units }) => {
+                  const auxiliaryUnits =
+                    units?.units?.map((u: MaterialUnit) => u.unit).filter(Boolean) ?? [];
+                  const allowedUnits = baseUnit
+                    ? [baseUnit, ...auxiliaryUnits.filter((u: string) => u !== baseUnit)]
+                    : auxiliaryUnits;
+                  const purchaseUnitOptions =
+                    allowedUnits.length > 0
+                      ? unitOptions.filter((opt) => allowedUnits.includes(opt.value))
+                      : unitOptions;
+                  return (
+                    <ProFormSelect
+                      name="defaults.defaultPurchaseUnit"
+                      label={t('app.master-data.defaults.defaultPurchaseUnit')}
+                      placeholder={t('app.master-data.materialForm.selectPurchaseUnit')}
+                      options={purchaseUnitOptions}
+                      fieldProps={{
+                        allowClear: true,
+                        showSearch: true,
+                        loading: unitOptionsLoading,
+                        filterOption: (input: string, option: any) =>
+                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                      }}
+                    />
+                  );
+                }}
+              </ProFormDependency>
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.defaultPurchaseLeadTime"
+                label={t('app.master-data.defaults.defaultPurchaseLeadTime')}
+                placeholder={t('app.master-data.defaults.defaultPurchaseLeadTimePlaceholder')}
+                min={0}
+                fieldProps={{ precision: 0 }}
+              />
+            </Col>
+          </Row>
+        </DetailDrawerSection>
+
+        {/* 库存默认值 */}
+        <DetailDrawerSection title={t('app.master-data.defaults.inventory')} marginBottom={0}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect
+                name="defaults.defaultWarehouseIds"
+                label={t('app.master-data.defaults.defaultWarehouses')}
+                placeholder={t('app.master-data.defaults.selectWarehouses')}
+                options={warehouses.map(w => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
+                fieldProps={{
+                  mode: 'multiple',
+                  loading: warehousesLoading,
+                  showSearch: true,
+                  filterOption: (input: string, option: any) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                }}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDependency name={['defaults.defaultWarehouseIds', 'defaults.defaultLocation']}>
+                {(values) => {
+                  const defaultWarehouseIds: number[] =
+                    values['defaults.defaultWarehouseIds'] ?? [];
+                  const currentLocation = values['defaults.defaultLocation'];
+                  let filteredLocations = storageLocations;
+                  if (defaultWarehouseIds.length > 0 && storageAreas.length > 0) {
+                    const allowedAreaIds = new Set(
+                      storageAreas
+                        .filter((area) => defaultWarehouseIds.includes(area.warehouseId))
+                        .map((area) => area.id),
+                    );
+                    filteredLocations = storageLocations.filter((loc) =>
+                      allowedAreaIds.has(loc.storageAreaId),
+                    );
+                  }
+                  const locationOptions = filteredLocations.map((loc) => ({
+                    label: loc.storageAreaCode
+                      ? `${loc.code} - ${loc.name} (${loc.storageAreaCode})`
+                      : `${loc.code} - ${loc.name}`,
+                    value: loc.code,
+                  }));
+                  if (
+                    currentLocation
+                    && !locationOptions.some((opt) => opt.value === currentLocation)
+                  ) {
+                    locationOptions.unshift({
+                      label: String(currentLocation),
+                      value: String(currentLocation),
+                    });
+                  }
+                  return (
+                    <ProFormSelect
+                      name="defaults.defaultLocation"
+                      label={t('app.master-data.defaults.defaultLocation')}
+                      placeholder={t('app.kuaizhizao.warehouseOtherInbound.field.selectLocation')}
+                      options={locationOptions}
+                      fieldProps={{
+                        allowClear: true,
+                        showSearch: true,
+                        loading: storageLocationsLoading,
+                        filterOption: (input: string, option: any) =>
+                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+                      }}
+                    />
+                  );
+                }}
+              </ProFormDependency>
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.safetyStock"
+                label={t('app.master-data.defaults.safetyStock')}
+                placeholder={t('app.master-data.defaults.safetyStockPlaceholder')}
+                min={0}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="defaults.maxStock"
+                label={t('app.master-data.defaults.maxStock')}
+                placeholder={t('app.master-data.defaults.maxStockPlaceholder')}
+                min={0}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="overReceiptTolerancePct"
+                label={t('app.master-data.materialForm.overReceiptTolerancePct')}
+                placeholder={t('app.master-data.materialForm.overQtyTolerancePlaceholder')}
+                min={0}
+                max={100}
+                fieldProps={{ precision: 2 }}
+                extra={t('app.master-data.materialForm.overReceiptTolerancePctExtra')}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormDigit
+                name="overIssueTolerancePct"
+                label={t('app.master-data.materialForm.overIssueTolerancePct')}
+                placeholder={t('app.master-data.materialForm.overQtyTolerancePlaceholder')}
+                min={0}
+                max={100}
+                fieldProps={{ precision: 2 }}
+                extra={t('app.master-data.materialForm.overIssueTolerancePctExtra')}
+              />
+            </Col>
+          </Row>
+        </DetailDrawerSection>
+    </>
+  );
+};
+
+/**
+ * 物料来源配置标签页
+ */
+interface MaterialSourceTabProps {
+  formRef: any;
+  material?: Material;
+  suppliers: Supplier[];
+  processRoutes: ProcessRoute[];
+  operations: Operation[];
+  suppliersLoading: boolean;
+  processRoutesLoading: boolean;
+  operationsLoading: boolean;
+  sourceTypeOptions: Array<{ label: string; value: string }>;
+  suspendedModalReturnPath?: string;
+  materialUuid?: string;
+  onQuickAddProcessRoute?: () => void;
+  onQuickAddSupplier?: () => void;
+  onQuickAddOutsourceSupplier?: () => void;
+  onQuickAddOperation?: () => void;
+}
+
+const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
+  formRef,
+  material,
+  suppliers,
+  processRoutes,
+  operations,
+  suppliersLoading,
+  processRoutesLoading,
+  operationsLoading,
+  sourceTypeOptions,
+  suspendedModalReturnPath,
+  materialUuid,
+  onQuickAddProcessRoute,
+  onQuickAddSupplier,
+  onQuickAddOutsourceSupplier,
+  onQuickAddOperation,
+}) => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
+  const [sourceTypes, setSourceTypes] = useState<string[]>(() =>
+    normalizeSourceTypeValues(
+      material?.sourceType || material?.source_type,
+      ((material as any)?.sourceConfig || (material as any)?.source_config || {}) as Record<string, any>,
+    ),
+  );
+  const manufacturingModeOptions = useMemo(() => [
+    { label: t('app.master-data.materialForm.manufacturingFabrication'), value: 'fabrication' },
+    { label: t('app.master-data.materialForm.manufacturingAssembly'), value: 'assembly' },
+  ], [t]);
+  const manufacturingModeHintMap = useMemo(
+    (): Record<string, string> => ({
+      fabrication: t('app.master-data.materialForm.manufacturingFabricationHint'),
+      assembly: t('app.master-data.materialForm.manufacturingAssemblyHint'),
+    }),
+    [t],
+  );
+
+  const materialId = material?.id;
+  const [bomVersionRows, setBomVersionRows] = useState<
+    Array<{ version: string; uuid: string; isDefault: boolean; bomCode?: string }>
+  >([]);
+  const [bomVersionsLoading, setBomVersionsLoading] = useState(false);
+  const [selectedBomVersion, setSelectedBomVersion] = useState<string | undefined>();
+
+  const loadBomVersions = useCallback(async () => {
+    if (!materialId) {
+      setBomVersionRows([]);
+      setSelectedBomVersion(undefined);
+      return;
+    }
+    setBomVersionsLoading(true);
+    try {
+      const items = await bomApi.getByMaterial(materialId, undefined, false, true);
+      const byVersion = new Map<string, { version: string; uuid: string; isDefault: boolean; bomCode?: string }>();
+      for (const item of items) {
+        const version = item.version ?? '1.0';
+        const existing = byVersion.get(version);
+        if (!existing) {
+          byVersion.set(version, {
+            version,
+            uuid: String(item.uuid ?? ''),
+            isDefault: Boolean(item.isDefault),
+            bomCode: item.bomCode,
+          });
+        } else if (item.isDefault && item.uuid) {
+          existing.isDefault = true;
+          existing.uuid = String(item.uuid);
+        }
+      }
+      const rows = [...byVersion.values()].sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
+      setBomVersionRows(rows);
+      const defaultRow = rows.find((r) => r.isDefault) ?? rows[0];
+      setSelectedBomVersion(defaultRow?.version);
+    } catch (e: unknown) {
+      messageApi.error((e as Error).message || t('app.master-data.materialForm.fetchBomVersionsFailed'));
+      setBomVersionRows([]);
+      setSelectedBomVersion(undefined);
+    } finally {
+      setBomVersionsLoading(false);
+    }
+  }, [materialId, messageApi, t]);
+
+  useEffect(() => {
+    if (!sourceTypes.includes('Make')) {
+      setBomVersionRows([]);
+      setSelectedBomVersion(undefined);
+      return;
+    }
+    void loadBomVersions();
+  }, [loadBomVersions, sourceTypes]);
+
+  const goBomDesigner = (version?: string) => {
+    if (!materialId) return;
+    const p = new URLSearchParams();
+    p.set('materialId', String(materialId));
+    if (version) p.set('version', version);
+    navigate(`/apps/master-data/process/engineering-bom/designer?${p}`);
+  };
+
+  const handleDefaultBomVersionChange = async (version: string | undefined) => {
+    if (!version || !materialId) return;
+    const row = bomVersionRows.find((r) => r.version === version);
+    if (!row?.uuid) return;
+    try {
+      await bomApi.update(row.uuid, { isDefault: true });
+      setBomVersionRows((prev) =>
+        prev.map((r) => ({ ...r, isDefault: r.version === version })),
+      );
+      setSelectedBomVersion(version);
+      messageApi.success(t('app.master-data.bom.setDefaultSuccess'));
+    } catch (e: unknown) {
+      messageApi.error((e as Error).message || t('common.operationFailed'));
+    }
+  };
+
+
+  useEffect(() => {
+    const nextSourceTypes = normalizeSourceTypeValues(
+      material?.sourceType || material?.source_type,
+      ((material as any)?.sourceConfig || (material as any)?.source_config || {}) as Record<string, any>,
+    );
+    setSourceTypes(nextSourceTypes);
+  }, [material]);
+
+  const handleSourceTypeChange = (values: string[], manufacturingMode?: string) => {
+    const nextSourceTypes = Array.isArray(values) ? values : [];
+    const value = getPrimarySourceType(nextSourceTypes);
+    setSourceTypes(nextSourceTypes);
+    formRef.current?.setFieldsValue({
+      sourceTypes: nextSourceTypes,
+      sourceType: value,
+      source_type: value,
+      'defaults.defaultTaxRate': value === 'Service' ? 6 : 13,
+    });
+
+    const currentConfig =
+      formRef.current?.getFieldValue('sourceConfig') ||
+      formRef.current?.getFieldValue('source_config') ||
+      {};
+    let newConfig: Record<string, any> = { ...currentConfig };
+
+    // 多选时同时初始化各来源配置，取消勾选时清掉对应字段
+    if (nextSourceTypes.includes('Make')) {
+      newConfig = {
+        ...newConfig,
+        manufacturing_mode: manufacturingMode ?? newConfig.manufacturing_mode,
+        production_lead_time: newConfig.production_lead_time,
+        min_production_batch: newConfig.min_production_batch,
+      };
+    }
+    if (nextSourceTypes.includes('Buy')) {
+      newConfig = {
+        ...newConfig,
+        default_supplier_id: newConfig.default_supplier_id,
+        purchase_lead_time: newConfig.purchase_lead_time,
+        min_purchase_batch: newConfig.min_purchase_batch,
+        purchase_price: newConfig.purchase_price,
+      };
+    }
+    if (nextSourceTypes.includes('Outsource')) {
+      newConfig = {
+        ...newConfig,
+        outsource_supplier_id: newConfig.outsource_supplier_id,
+        outsource_operation: newConfig.outsource_operation,
+        outsource_lead_time: newConfig.outsource_lead_time,
+        outsource_price: newConfig.outsource_price,
+        material_provided_by: newConfig.material_provided_by || 'enterprise',
+      };
+    }
+
+    const allowed = new Set(collectAllowedSourceConfigFields(nextSourceTypes));
+    if (allowed.has('default_supplier_id')) allowed.add('default_supplier_name');
+    if (allowed.has('outsource_supplier_id')) allowed.add('outsource_supplier_name');
+    for (const key of Object.keys(newConfig)) {
+      if (!allowed.has(key)) delete newConfig[key];
+    }
+
+    formRef.current?.setFieldsValue({
+      sourceConfig: newConfig,
+      source_config: newConfig,
+    });
+  };
+
+  return (
+    <Card
+      bordered
+      style={{
+        marginBottom: 16,
+        backgroundColor: '#fafafa',
+        borderColor: token.colorBorder,
+        borderRadius: token.borderRadius,
+      }}
+      styles={{ body: { padding: 16 } }}
+    >
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormSelect
+            name="sourceTypes"
+            label={t('app.master-data.materialForm.sourceTypeLabel')}
+            placeholder={t('app.master-data.materialForm.sourceTypePlaceholder')}
+            options={sourceTypeOptions}
+            rules={[
+              {
+                required: true,
+                type: 'array',
+                min: 1,
+                message: t('app.master-data.materialForm.sourceTypePlaceholder'),
+              },
+            ]}
+            fieldProps={{
+              mode: 'multiple',
+              // 勿用本地 state 覆盖 Form 的 value，否则提交时 sourceTypes 可能为空
+              onChange: (vals: string[]) => handleSourceTypeChange(vals),
+              maxTagCount: 'responsive',
+            }}
+            extra={t('app.master-data.materialForm.sourceTypeExtra')}
+          />
+          <ProFormText name="sourceType" hidden />
+          <ProFormText name="source_type" hidden />
+        </Col>
+      </Row>
+
+      <ProFormDependency name={['sourceTypes', 'sourceType']}>
+        {({ sourceTypes: formSourceTypes, sourceType: currentSourceType }) => {
+          const selectedTypes = normalizeSourceTypeValues(currentSourceType, {
+            source_types: Array.isArray(formSourceTypes)
+              ? formSourceTypes
+              : formSourceTypes
+                ? [formSourceTypes]
+                : sourceTypes,
+          });
+          const showSectionTitle =
+            selectedTypes.filter((st) =>
+              ['Make', 'Buy', 'Outsource', 'Phantom', 'Service'].includes(st),
+            ).length > 1;
+          const sectionTitle = (sourceTypeCode: string) =>
+            showSectionTitle ? (
+              <Typography.Text
+                type="secondary"
+                style={{ display: 'block', margin: '8px 0 4px', fontSize: 12 }}
+              >
+                {getMaterialSourceTypeLabel(sourceTypeCode, t)}
+              </Typography.Text>
+            ) : null;
+
+          return (
+            <>
+              {selectedTypes.includes('Make') ? (
+                <>
+                  {sectionTitle('Make')}
+                  <Row gutter={16} style={{ marginTop: 0 }}>
+                    <Col span={8}>
+                      <ProFormDependency name={['sourceConfig.manufacturing_mode']}>
+                        {({ 'sourceConfig.manufacturing_mode': mode }) => (
+                          <ProFormSelect
+                            name="sourceConfig.manufacturing_mode"
+                            label={t('app.master-data.materialForm.manufacturingMode')}
+                            placeholder={t('app.master-data.materialForm.manufacturingModePlaceholder')}
+                            options={manufacturingModeOptions}
+                            extra={
+                              mode && manufacturingModeHintMap[mode as string]
+                                ? manufacturingModeHintMap[mode as string]
+                                : t('app.master-data.materialForm.manufacturingModeExtra')
+                            }
+                            fieldProps={{ allowClear: true }}
+                          />
+                        )}
+                      </ProFormDependency>
+                    </Col>
+                    <Col span={5}>
+                      <ProFormItem
+                        name="defaults.defaultProcessRouteUuid"
+                        label={
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span>{t('app.master-data.source.defaultProcessRoute')}</span>
+                            <Tooltip title={t('app.master-data.source.defaultProcessRouteMaterialHint')}>
+                              <QuestionCircleOutlined
+                                style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
+                              />
+                            </Tooltip>
+                          </span>
+                        }
+                      >
+                        <UniDropdown
+                          placeholder={t('app.master-data.source.selectProcessRoute')}
+                          options={processRoutes.map((pr) => ({
+                            label: `${pr.code} - ${pr.name}`,
+                            value: pr.uuid,
+                          }))}
+                          allowClear
+                          showSearch
+                          loading={processRoutesLoading}
+                          optionFilterProp="label"
+                          style={{ width: '100%' }}
+                          quickCreate={
+                            onQuickAddProcessRoute
+                              ? {
+                                  label: t('app.master-data.materialForm.quickAddProcessRoute'),
+                                  onClick: () => onQuickAddProcessRoute(),
+                                }
+                              : undefined
+                          }
+                        />
+                      </ProFormItem>
+                    </Col>
+                    <Col span={5}>
+                      <ProFormItem
+                        label={
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span>{t('app.master-data.source.defaultBomVersion')}</span>
+                            <Tooltip title={t('app.master-data.source.defaultBomVersionHint')}>
+                              <QuestionCircleOutlined
+                                style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
+                              />
+                            </Tooltip>
+                          </span>
+                        }
+                      >
+                        <UniDropdown
+                          placeholder={
+                            materialId
+                              ? t('app.master-data.source.selectDefaultBomVersion')
+                              : t('app.master-data.source.saveMaterialFirstForBom')
+                          }
+                          disabled={!materialId}
+                          loading={bomVersionsLoading}
+                          allowClear={false}
+                          showSearch
+                          optionFilterProp="label"
+                          style={{ width: '100%' }}
+                          value={selectedBomVersion}
+                          options={bomVersionRows.map((row) => ({
+                            value: row.version,
+                            label: row.isDefault
+                              ? `${row.version} ${t('app.kuaizhizao.demandComputation.bomVersionDefault')}`
+                              : row.version,
+                          }))}
+                          onChange={(val) => handleDefaultBomVersionChange(val as string | undefined)}
+                          quickCreate={
+                            materialId
+                              ? {
+                                  label: t('app.master-data.materialForm.quickMaintainBom'),
+                                  onClick: () => goBomDesigner(),
+                                }
+                              : undefined
+                          }
+                        />
+                      </ProFormItem>
+                    </Col>
+                    <Col span={3}>
+                      <ProFormDigit
+                        name="sourceConfig.production_lead_time"
+                        label={t('app.master-data.source.productionLeadTime')}
+                        placeholder={t('app.master-data.source.leadTimePlaceholder')}
+                        min={0}
+                      />
+                    </Col>
+                    <Col span={3}>
+                      <ProFormDigit
+                        name="sourceConfig.min_production_batch"
+                        label={t('app.master-data.source.minProductionBatch')}
+                        placeholder={t('app.master-data.source.minBatchPlaceholder')}
+                        min={0}
+                      />
+                    </Col>
+                  </Row>
+                </>
+              ) : null}
+
+              {selectedTypes.includes('Buy') ? (
+                <>
+                  {sectionTitle('Buy')}
+                  <Row gutter={16} style={{ marginTop: 0 }}>
+                    <Col span={12}>
+                      <ProFormItem
+                        name="sourceConfig.default_supplier_id"
+                        label={t('app.master-data.source.defaultSupplier')}
+                      >
+                        <UniDropdown
+                          placeholder={t('app.master-data.source.selectDefaultSupplier')}
+                          options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                          loading={suppliersLoading}
+                          showSearch
+                          allowClear
+                          style={{ width: '100%' }}
+                          optionFilterProp="label"
+                          quickCreate={
+                            onQuickAddSupplier
+                              ? {
+                                  label: t('app.master-data.materialForm.quickAddSupplier'),
+                                  onClick: () => onQuickAddSupplier(),
+                                }
+                              : undefined
+                          }
+                        />
+                      </ProFormItem>
+                    </Col>
+                    <Col span={4}>
+                      <ProFormDigit
+                        name="sourceConfig.purchase_lead_time"
+                        label={t('app.master-data.source.purchaseLeadTime')}
+                        placeholder={t('app.master-data.source.leadTimePlaceholder')}
+                        min={0}
+                      />
+                    </Col>
+                    <Col span={4}>
+                      <ProFormDigit
+                        name="sourceConfig.min_purchase_batch"
+                        label={t('app.master-data.source.minPurchaseBatch')}
+                        placeholder={t('app.master-data.source.minBatchPlaceholder')}
+                        min={0}
+                      />
+                    </Col>
+                    <Col span={4}>
+                      <ProFormDigit
+                        name="sourceConfig.purchase_price"
+                        label={t('app.master-data.source.purchasePrice')}
+                        placeholder={t('app.master-data.source.pricePlaceholder')}
+                        min={0}
+                        fieldProps={{ precision: 2 }}
+                      />
+                    </Col>
+                  </Row>
+                </>
+              ) : null}
+
+              {selectedTypes.includes('Outsource') ? (
+                <>
+                  {sectionTitle('Outsource')}
+                  <Row gutter={16} style={{ marginTop: 0 }}>
+                    <Col span={6}>
+                      <ProFormItem
+                        name="sourceConfig.outsource_supplier_id"
+                        label={t('app.master-data.source.outsourceSupplier')}
+                        rules={[{ required: true, message: t('app.master-data.source.selectOutsourceSupplier') }]}
+                      >
+                        <UniDropdown
+                          placeholder={t('app.master-data.source.selectOutsourceSupplier')}
+                          options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
+                          loading={suppliersLoading}
+                          showSearch
+                          style={{ width: '100%' }}
+                          optionFilterProp="label"
+                          quickCreate={
+                            onQuickAddOutsourceSupplier
+                              ? {
+                                  label: t('app.master-data.materialForm.quickAddSupplier'),
+                                  onClick: () => onQuickAddOutsourceSupplier(),
+                                }
+                              : undefined
+                          }
+                        />
+                      </ProFormItem>
+                    </Col>
+                    <Col span={6}>
+                      <ProFormItem
+                        name="sourceConfig.outsource_operation"
+                        label={t('app.master-data.source.outsourceOperation')}
+                        rules={[{ required: true, message: t('app.master-data.source.selectOutsourceOperation') }]}
+                      >
+                        <UniDropdown
+                          placeholder={t('app.master-data.source.selectOutsourceOperation')}
+                          options={operations.map((op) => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
+                          loading={operationsLoading}
+                          showSearch
+                          style={{ width: '100%' }}
+                          optionFilterProp="label"
+                          quickCreate={
+                            onQuickAddOperation
+                              ? {
+                                  label: t('app.master-data.materialForm.quickAddOperation'),
+                                  onClick: () => onQuickAddOperation(),
+                                }
+                              : undefined
+                          }
+                        />
+                      </ProFormItem>
+                    </Col>
+                    <Col span={4}>
+                      <ProFormDigit
+                        name="sourceConfig.outsource_lead_time"
+                        label={t('app.master-data.source.outsourceLeadTime')}
+                        placeholder={t('app.master-data.source.leadTimePlaceholder')}
+                        min={0}
+                      />
+                    </Col>
+                    <Col span={4}>
+                      <ProFormDigit
+                        name="sourceConfig.outsource_price"
+                        label={t('app.master-data.source.outsourcePrice')}
+                        placeholder={t('app.master-data.source.pricePlaceholder')}
+                        min={0}
+                        fieldProps={{ precision: 2 }}
+                      />
+                    </Col>
+                    <Col span={4}>
+                      <ProFormSelect
+                        name="sourceConfig.material_provided_by"
+                        label={t('app.master-data.source.materialProvidedBy')}
+                        placeholder={t('app.master-data.source.selectPlaceholder')}
+                        options={[
+                          { label: t('app.master-data.source.enterpriseProvide'), value: 'enterprise' },
+                          { label: t('app.master-data.source.supplierProvide'), value: 'supplier' },
+                        ]}
+                        initialValue="enterprise"
+                      />
+                    </Col>
+                  </Row>
+                </>
+              ) : null}
+
+              {selectedTypes.includes('Phantom') ? (
+                <>
+                  {sectionTitle('Phantom')}
+                  <Row gutter={16} style={{ marginTop: 0 }}>
+                    <Col span={24}>
+                      <Alert
+                        title={t('app.master-data.source.phantomTip')}
+                        description={t('app.master-data.source.phantomTipDesc')}
+                        type="info"
+                        showIcon
+                      />
+                    </Col>
+                  </Row>
+                </>
+              ) : null}
+
+              {selectedTypes.includes('Service') ? (
+                <>
+                  {sectionTitle('Service')}
+                  <Row gutter={16} style={{ marginTop: 0 }}>
+                    <Col span={24}>
+                      <Alert
+                        title={t('app.master-data.source.serviceTip')}
+                        description={t('app.master-data.source.serviceTipDesc')}
+                        type="info"
+                        showIcon
+                      />
+                    </Col>
+                  </Row>
+                </>
+              ) : null}
+            </>
+          );
+        }}
+      </ProFormDependency>
+
+    </Card>
+  );
+};
+
+export default MaterialForm;

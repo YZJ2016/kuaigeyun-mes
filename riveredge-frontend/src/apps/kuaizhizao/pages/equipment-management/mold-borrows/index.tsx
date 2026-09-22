@@ -1,0 +1,594 @@
+import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormDatePicker,
+  ProFormSelect,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
+import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
+import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
+import { App, Button, Modal, Row, Col } from 'antd';
+import dayjs from 'dayjs';
+import { UniTable } from '../../../../../components/uni-table';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
+import { moldApi } from '../../../services/equipment';
+import { borrowsApi } from '../../../services/moldOps';
+import { workOrderApi } from '../../../services/work-order';
+import { useNavigate } from 'react-router-dom';
+import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString } from '../../../../../utils/formDate';
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  EQUIPMENT_OPS_PINNED_STATUS_FIELD,
+  normalizeEquipmentListResponse,
+  resolveAssetWorkflowListParams,
+} from '../../../utils/equipmentListCore';
+import {
+  buildDetailDrawerEditExtra,
+  EquipmentMasterDetailDrawer,
+  useEquipmentDetailDrawer,
+} from '../shared/equipmentMasterDataDetail';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+
+
+const P = 'app.kuaizhizao.moldOps.borrow';
+const RESOURCE = 'kuaizhizao:mold-borrow';
+
+interface MoldBorrow {
+  id?: number;
+  document_no?: string;
+  borrow_no?: string;
+  mold_id?: number;
+  mold_code?: string;
+  mold_name?: string;
+  work_order_no?: string;
+  source_no?: string;
+  source_id?: number;
+  source_type?: string;
+  department?: string;
+  department_name?: string;
+  borrower_id?: number;
+  borrower_name?: string;
+  borrow_date?: string;
+  expected_return_date?: string;
+  status?: string;
+  remark?: string;
+  updated_at?: string;
+}
+
+function buildMoldBorrowSubmitPayload(values: Record<string, unknown>) {
+  const workOrderId =
+    typeof values.work_order_id === 'number'
+      ? values.work_order_id
+      : values.work_order_id != null && values.work_order_id !== ''
+        ? Number(values.work_order_id)
+        : undefined;
+  const workOrderNo =
+    typeof values.work_order_no === 'string' ? values.work_order_no.trim() : undefined;
+  return {
+    mold_id: values.mold_id,
+    borrow_date: toApiDateString(values.borrow_date),
+    borrower_id: values.borrower_id,
+    borrower_name: values.borrower_name,
+    department_name: values.department,
+    expected_return_date: toApiDateString(values.expected_return_date),
+    source_type: workOrderId || workOrderNo ? 'work_order' : undefined,
+    source_id: Number.isFinite(workOrderId) ? workOrderId : undefined,
+    source_no: workOrderNo || undefined,
+    remark: values.remark,
+  };
+}
+
+const IN_PROGRESS_WO_STATUSES = new Set([
+  'released',
+  '已下达',
+  'in_progress',
+  '执行中',
+  '进行中',
+  '生产中',
+  'IN_PROGRESS',
+  'RELEASED',
+]);
+
+const MoldBorrowsPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
+  const perms = useResourcePermissions(RESOURCE);
+  const returnPerms = useResourcePermissions('kuaizhizao:mold-return');
+  const actionRef = useRef<ActionType>(null);
+  const formRef = useRef<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [current, setCurrent] = useState<MoldBorrow | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [moldOptions, setMoldOptions] = useState<{ label: string; value: number }[]>([]);
+  const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
+    useEquipmentDetailDrawer<MoldBorrow>();
+
+  const handleDetail = (record: MoldBorrow) => {
+    if (!record.id) return;
+    void openDetail(() => borrowsApi.get(record.id!), t(`${P}.listFailed`));
+  };
+
+  const loadMoldOptions = async () => {
+    const res = await moldApi.list({ limit: 1000 });
+    setMoldOptions(
+      (res.items ?? []).map((m: { id: number; code: string; name: string }) => ({
+        label: `${m.code} - ${m.name}`,
+        value: m.id,
+      })),
+    );
+  };
+
+  const handleCreate = () => {
+    setIsEdit(false);
+    setCurrent(null);
+    setFormInitialValues({ borrow_date: dayjs() });
+    setModalVisible(true);
+    void loadMoldOptions();
+  };
+  useNewShortcut(handleCreate);
+
+  const handleEdit = async (record: MoldBorrow) => {
+    if (!record.id) return;
+    try {
+      const detail = await borrowsApi.get(record.id);
+      const borrowerUuid = await resolveUserUuidById(detail.borrower_id);
+      setIsEdit(true);
+      setCurrent(detail);
+      setFormInitialValues({
+        mold_id: detail.mold_id,
+        work_order_id: detail.source_id,
+        work_order_no: detail.source_no ?? detail.work_order_no,
+        department: detail.department_name ?? detail.department,
+        borrower_uuid: borrowerUuid,
+        borrower_id: detail.borrower_id,
+        borrower_name: detail.borrower_name,
+        borrow_date: detail.borrow_date ? dayjs(detail.borrow_date) : dayjs(),
+        expected_return_date: detail.expected_return_date
+          ? dayjs(detail.expected_return_date)
+          : undefined,
+        remark: detail.remark,
+      });
+      setModalVisible(true);
+      void loadMoldOptions();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.listFailed`)));
+    }
+  };
+
+  const executeDelete = async (keys: React.Key[]) => {
+    try {
+      for (const id of keys) {
+        await borrowsApi.delete(Number(id));
+      }
+      messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    }
+  };
+
+  const handlePushReturn = (record: MoldBorrow) => {
+    if (!record.id) return;
+    navigate(
+      `/apps/kuaizhizao/equipment-management/mold-returns?borrow_id=${record.id}`,
+    );
+  };
+
+  const handleSubmit = async (values: Record<string, unknown>) => {
+    const payload = buildMoldBorrowSubmitPayload(values);
+    setSubmitting(true);
+    try {
+      if (isEdit && current?.id) {
+        await borrowsApi.update(current.id, payload);
+        messageApi.success(t('common.updateSuccess'));
+      } else {
+        await borrowsApi.create(payload);
+        messageApi.success(t('common.createSuccess'));
+      }
+      setModalVisible(false);
+      setFormInitialValues(undefined);
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const borrowStatusValueEnum = useMemo(
+    () => ({
+      领用中: { text: '领用中' },
+      已归还: { text: '已归还' },
+    }),
+    [],
+  );
+
+  const detailColumns: ProDescriptionsItemProps<MoldBorrow>[] = useMemo(
+    () => [
+      {
+        title: t(`${P}.col.borrowNo`),
+        dataIndex: 'document_no',
+        render: (_, r) => r.document_no ?? r.borrow_no ?? '-',
+      },
+      { title: t(`${P}.col.mold`), dataIndex: 'mold_name' },
+      {
+        title: t(`${P}.col.workOrderNo`),
+        dataIndex: 'source_no',
+        render: (_, r) => r.source_no ?? r.work_order_no ?? '-',
+      },
+      {
+        title: t(`${P}.col.department`),
+        dataIndex: 'department_name',
+        render: (_, r) => r.department_name ?? r.department ?? '-',
+      },
+      { title: t(`${P}.col.borrower`), dataIndex: 'borrower_name' },
+      { title: t(`${P}.col.borrowDate`), dataIndex: 'borrow_date', valueType: 'date' },
+      {
+        title: t(`${P}.col.expectedReturnDate`),
+        dataIndex: 'expected_return_date',
+        valueType: 'date',
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
+      },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
+
+  const columns: ProColumns<MoldBorrow>[] = useMemo(() => alignProColumns<MoldBorrow>([
+      {
+        title: t(`${P}.col.borrowDate`),
+        dataIndex: 'doc_date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 10 } as ProColumns['search'],
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        formItemProps: formDateRangeFormItemProps,
+        search: { order: 11 } as ProColumns['search'],
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        valueType: 'select',
+        valueEnum: borrowStatusValueEnum,
+        hideInTable: true,
+        search: { order: 20 } as ProColumns['search'],
+      },
+      {
+        title: t(`${P}.col.borrowNo`),
+        dataIndex: 'document_no',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        fixed: 'left',
+        sorter: true,
+        search: { order: 30 } as ProColumns['search'],
+        render: (_, r) => {
+          const no = r.document_no ?? r.borrow_no;
+          return no != null && no !== '' ? String(no) : '-';
+        },
+      },
+      {
+        title: t(`${P}.col.mold`),
+        dataIndex: 'mold_name',
+        minWidth: 160,
+        uniTablePrimaryFlex: true,
+        uniTableRemainderFlex: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.mold_name != null && r.mold_name !== '' ? String(r.mold_name) : '-'),
+      },
+      {
+        title: t(`${P}.col.workOrderNo`),
+        dataIndex: 'source_no',
+        width: 130,
+        minWidth: 130,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) => {
+          const no = r.source_no ?? r.work_order_no;
+          return no != null && no !== '' ? String(no) : '-';
+        },
+      },
+      {
+        title: t(`${P}.col.borrower`),
+        dataIndex: 'borrower_name',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        sorter: true,
+        hideInSearch: true,
+        render: (_, r) =>
+          r.borrower_name != null && r.borrower_name !== '' ? String(r.borrower_name) : '-',
+      },
+      {
+        title: t(`${P}.col.borrowDate`),
+        dataIndex: 'borrow_date',
+        width: 132,
+        minWidth: 132,
+        uniTableKeepWidth: true,
+        resizable: false,
+        sorter: true,
+        hideInSearch: true,
+        valueType: 'date',
+      },
+      {
+        title: t(`${P}.col.expectedReturnDate`),
+        dataIndex: 'expected_return_date',
+        width: 132,
+        minWidth: 132,
+        uniTableKeepWidth: true,
+        resizable: false,
+        sorter: true,
+        hideInSearch: true,
+        valueType: 'date',
+      },
+      ...buildDocumentAuditColumns<MoldBorrow>(t),
+      {
+        title: t('common.status'),
+        key: 'lifecycle',
+        dataIndex: 'status',
+        hideInSearch: true,
+        fixed: 'right',
+        render: (_, r) => renderDocumentStatusTag(r.status ?? '-', r.status),
+      },
+      {
+        title: t('common.actions'),
+        key: 'option',
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) => (
+          <>
+            <Button
+              {...rowActionKind('read')}
+              type="link"
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDetail(record);
+              }}
+            >
+              {t('common.detail')}
+            </Button>
+            {perms.canUpdate && record.status === '领用中' && (
+              <Button
+                {...rowActionKind('update')}
+                type="link"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleEdit(record);
+                }}
+              >
+                {t('common.edit')}
+              </Button>
+            )}
+            {returnPerms.canCreate && record.status === '领用中' && (
+              <Button
+                {...rowActionKind('create')}
+                {...rowActionLabelKeep()}
+                type="link"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePushReturn(record);
+                }}
+              >
+                {t(`${P}.action.pushReturn`)}
+              </Button>
+            )}
+            {perms.canDelete && (
+              <ActionConfirmPopconfirm
+                title={t('common.deleteTitle')}
+                onConfirm={() => record.id && void executeDelete([record.id])}
+              >
+                <Button
+                  {...rowActionKind('delete')}
+                  type="link"
+                  size="small"
+                  danger
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('common.delete')}
+                </Button>
+              </ActionConfirmPopconfirm>
+            )}
+          </>
+        ),
+      },
+    ], SALES_DOC_LIST_FIELD_RANK),
+    [t, perms, returnPerms, borrowStatusValueEnum],
+  );
+
+  return (
+    <>
+      <ListPageTemplate>
+        <UniTable<MoldBorrow>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldBorrows)}
+          headerTitle={t(`${P}.title`)}
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-borrows-width-v2"
+          actionRef={actionRef}
+          rowKey="id"
+          columns={columns}
+          showAdvancedSearch
+          pinnedTabsField={EQUIPMENT_OPS_PINNED_STATUS_FIELD}
+          skipFuzzyPinyinClientFilter
+          request={async (params, sort, _filter, searchFormValues) => {
+            try {
+              const listParams = resolveAssetWorkflowListParams(searchFormValues, sort);
+              const res = await borrowsApi.list({
+                skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+                limit: params.pageSize,
+                ...listParams,
+              });
+              const { data, total } = normalizeEquipmentListResponse(res);
+              return { data: data as MoldBorrow[], success: true, total };
+            } catch {
+              messageApi.error(t(`${P}.listFailed`));
+              return { data: [], success: false, total: 0 };
+            }
+          }}
+          showCreateButton={perms.canCreate}
+          createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
+          onCreate={handleCreate}
+          showDeleteButton={perms.canDelete}
+          deleteConfirmTitle={t('common.batchDeleteTitle')}
+          deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
+          
+          onDelete={executeDelete}
+          enableRowSelection={perms.canDelete}
+        />
+      </ListPageTemplate>
+
+      <FormModalTemplate
+        title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
+        open={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        loading={submitting}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        formRef={formRef}
+        initialValues={formInitialValues}
+        grid={false}
+      >
+        <Row gutter={16}>
+          <Col span={24}>
+            <ProFormSelect
+              name="mold_id"
+              label={t(`${P}.form.mold`)}
+              options={moldOptions}
+              rules={[{ required: true }]}
+              showSearch
+              disabled={isEdit}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="work_order_id"
+              label={t(`${P}.col.workOrderNo`)}
+              showSearch
+              fieldProps={{
+                allowClear: true,
+                filterOption: false,
+                onChange: (_value, option) => {
+                  const opt = Array.isArray(option) ? option[0] : option;
+                  const code =
+                    opt && typeof opt === 'object' && 'workOrderCode' in opt
+                      ? String((opt as { workOrderCode?: string }).workOrderCode || '')
+                      : '';
+                  formRef.current?.setFieldsValue({ work_order_no: code || undefined });
+                },
+              }}
+              request={async () => {
+                const res = await workOrderApi.list({ limit: 300 });
+                const items = res?.items ?? res?.data ?? (Array.isArray(res) ? res : []);
+                return items
+                  .filter((wo: { status?: string }) =>
+                    IN_PROGRESS_WO_STATUSES.has(String(wo.status || '')),
+                  )
+                  .map((wo: { id: number; code?: string; name?: string; product_name?: string }) => ({
+                    label: `${wo.code || ''} - ${wo.name || wo.product_name || ''}`.trim(),
+                    value: wo.id,
+                    workOrderCode: wo.code,
+                  }));
+              }}
+            />
+            <ProFormText name="work_order_no" hidden />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="department" label={t(`${P}.col.department`)} />
+          </Col>
+          <Col span={12}>
+            <EquipmentPersonSelect
+              uuidFieldName="borrower_uuid"
+              idFieldName="borrower_id"
+              nameFieldName="borrower_name"
+              label={t(`${P}.col.borrower`)}
+              formRef={formRef}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="borrow_date"
+              label={t(`${P}.col.borrowDate`)}
+              rules={[{ required: true }]}
+              formItemProps={formDateFormItemProps}
+              fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormDatePicker
+              name="expected_return_date"
+              label={t(`${P}.col.expectedReturnDate`)}
+              formItemProps={formDateFormItemProps}
+              fieldProps={EQUIPMENT_DATE_FIELD_PROPS}
+            />
+          </Col>
+          <Col span={24}>
+            <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
+          </Col>
+        </Row>
+      </FormModalTemplate>
+
+      <EquipmentMasterDetailDrawer
+        open={detailVisible}
+        loading={detailLoading}
+        detail={detail}
+        title={`${t('common.detail')}${detail?.document_no ?? detail?.borrow_no ? ` - ${detail.document_no ?? detail.borrow_no}` : ''}`}
+        onClose={closeDetail}
+        basicColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(
+          t,
+          Boolean(detail && perms.canUpdate && detail.status === '领用中'),
+          () => {
+            if (!detail) return;
+            closeDetail();
+            void handleEdit(detail);
+          },
+        )}
+      />
+    </>
+  );
+};
+
+export default MoldBorrowsPage;

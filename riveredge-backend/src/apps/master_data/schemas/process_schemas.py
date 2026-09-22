@@ -1,0 +1,1028 @@
+"""
+工艺数据 Schema 模块
+
+定义工艺数据的 Pydantic Schema（不良品、工序、工艺路线、作业程序），用于数据验证和序列化。
+"""
+
+from pydantic import BaseModel, Field, field_validator, validator, ConfigDict, AliasChoices
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+from decimal import Decimal
+
+from apps.master_data.schemas.material_schemas import InspectionStagePolicySchema
+
+
+class OperationInspectionStagesSchema(BaseModel):
+    """工序分场景质检策略（仅 IPQC）。"""
+
+    ipqc: Optional[InspectionStagePolicySchema] = Field(None, description="过程 IPQC")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class DefectTypeBase(BaseModel):
+    """不良品基础 Schema"""
+    
+    code: str = Field(..., max_length=50, description="不良品编码")
+    name: str = Field(..., max_length=200, description="不良品名称")
+    category: Optional[str] = Field(None, max_length=50, description="分类")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        """验证编码格式"""
+        if not v or not v.strip():
+            raise ValueError("不良品编码不能为空")
+        return v.strip().upper()
+    
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """验证名称格式"""
+        if not v or not v.strip():
+            raise ValueError("不良品名称不能为空")
+        return v.strip()
+
+
+class DefectTypeCreate(DefectTypeBase):
+    """创建不良品 Schema"""
+    pass
+
+
+class DefectTypeUpdate(BaseModel):
+    """更新不良品 Schema"""
+    
+    code: Optional[str] = Field(None, max_length=50, description="不良品编码")
+    name: Optional[str] = Field(None, max_length=200, description="不良品名称")
+    category: Optional[str] = Field(None, max_length=50, description="分类")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
+    
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: Optional[str]) -> Optional[str]:
+        """验证编码格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("不良品编码不能为空")
+        return v.strip().upper() if v else None
+    
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        """验证名称格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("不良品名称不能为空")
+        return v.strip() if v else None
+
+
+class DefectTypeResponse(DefectTypeBase):
+    """不良品响应 Schema（含 alias 便于前端 camelCase 一致）"""
+
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
+
+
+class DefectTypeListResponse(BaseModel):
+    """不良品列表分页响应"""
+    data: List[DefectTypeResponse] = Field(..., description="列表数据")
+    total: int = Field(..., ge=0, description="总条数")
+
+
+class DefectTypeMinimal(BaseModel):
+    """不良品项简要（工序绑定用）"""
+    uuid: str = Field(..., description="UUID")
+    code: str = Field(..., description="编码")
+    name: str = Field(..., description="名称")
+
+
+class OperationBase(BaseModel):
+    """工序基础 Schema"""
+    
+    code: str = Field(..., max_length=50, description="工序编码")
+    name: str = Field(..., max_length=200, description="工序名称")
+    description: Optional[str] = Field(None, description="描述")
+    reporting_type: str = Field("quantity", alias="reportingType", max_length=20, description="报工类型（quantity:按数量报工, status:按状态报工）")
+    allow_jump: bool = Field(False, alias="allowJump", description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）")
+    is_node_operation: bool = Field(False, alias="isNodeOperation", description="是否节点工序（允许跳转时前序节点仍不可跳过）")
+    over_report_mode: str = Field("none", alias="overReportMode", max_length=20, description="超报模式：none/fixed/percent")
+    over_report_value: Decimal = Field(Decimal("0"), alias="overReportValue", description="超报值：fixed 为额外数量，percent 为百分数")
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
+    inspection_mode: str = Field("none", alias="inspectionMode", max_length=20, description="质检模式（legacy，由 inspection_stages 同步）")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID（legacy，多方案时为首项）")
+    default_inspection_plan_ids: Optional[List[int]] = Field(
+        None,
+        alias="defaultInspectionPlanIds",
+        description="默认质检方案有序 ID 列表（写入 inspection_stages.ipqc.plan_ids）",
+    )
+    inspection_stages: Optional[OperationInspectionStagesSchema] = Field(
+        None, alias="inspectionStages", description="过程检验策略 JSON（ipqc）"
+    )
+    
+    @field_validator("reporting_type")
+    @classmethod
+    def validate_reporting_type(cls, v: str) -> str:
+        """验证报工类型"""
+        if not v:
+            return "quantity"
+        allowed_types = ["quantity", "status"]
+        if v not in allowed_types:
+            raise ValueError(f"报工类型必须是: {', '.join(allowed_types)}")
+        return v
+
+    @field_validator("over_report_mode")
+    @classmethod
+    def validate_over_report_mode(cls, v: str) -> str:
+        if not v:
+            return "none"
+        m = str(v).lower().strip()
+        if m not in ("none", "fixed", "percent"):
+            raise ValueError("超报模式必须是: none, fixed, percent")
+        return m
+
+    @field_validator("over_report_value")
+    @classmethod
+    def validate_over_report_value(cls, v: Decimal, info) -> Decimal:
+        mode = info.data.get("over_report_mode") or info.data.get("overReportMode") or "none"
+        m = str(mode).lower().strip()
+        val = v if v is not None else Decimal("0")
+        if m == "percent" and val > Decimal("100"):
+            raise ValueError("按比例超报时，超报值须在 0–100 之间（百分数）")
+        if val < 0:
+            raise ValueError("超报值不能为负数")
+        return val
+    
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        """验证编码格式"""
+        if not v or not v.strip():
+            raise ValueError("工序编码不能为空")
+        return v.strip().upper()
+    
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """验证名称格式"""
+        if not v or not v.strip():
+            raise ValueError("工序名称不能为空")
+        return v.strip()
+
+
+class OperationCreate(OperationBase):
+    """创建工序 Schema"""
+    defect_type_uuids: Optional[List[str]] = Field(None, alias="defectTypeUuids", description="允许绑定的不良品项 UUID 列表")
+    default_operator_uuids: Optional[List[str]] = Field(None, alias="defaultOperatorUuids", description="默认生产人员（用户UUID列表）")
+    default_team_ids: Optional[List[int]] = Field(None, alias="defaultTeamIds", description="默认工作小组 ID 列表")
+    default_workshop_ids: Optional[List[int]] = Field(None, alias="defaultWorkshopIds", description="默认车间 ID 列表")
+    default_work_center_ids: Optional[List[int]] = Field(None, alias="defaultWorkCenterIds", description="默认工作中心 ID 列表")
+    default_station_ids: Optional[List[int]] = Field(None, alias="defaultStationIds", description="默认工位 ID 列表")
+    default_equipment_ids: Optional[List[int]] = Field(None, alias="defaultEquipmentIds", description="默认设备 ID 列表")
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class OperationUpdate(BaseModel):
+    """更新工序 Schema"""
+    
+    code: Optional[str] = Field(None, max_length=50, description="工序编码")
+    name: Optional[str] = Field(None, max_length=200, description="工序名称")
+    description: Optional[str] = Field(None, description="描述")
+    reporting_type: Optional[str] = Field(None, alias="reportingType", max_length=20, description="报工类型（quantity:按数量报工, status:按状态报工）")
+    allow_jump: Optional[bool] = Field(None, alias="allowJump", description="是否允许跳转（true:允许跳转，不依赖上道工序完成, false:不允许跳转，必须完成上道工序）")
+    is_node_operation: Optional[bool] = Field(None, alias="isNodeOperation", description="是否节点工序（允许跳转时前序节点仍不可跳过）")
+    over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="超报模式：none/fixed/percent")
+    over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="超报值")
+    is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
+    defect_type_uuids: Optional[List[str]] = Field(None, alias="defectTypeUuids", description="允许绑定的不良品项 UUID 列表")
+    default_operator_uuids: Optional[List[str]] = Field(None, alias="defaultOperatorUuids", description="默认生产人员（用户UUID列表）")
+    default_team_ids: Optional[List[int]] = Field(None, alias="defaultTeamIds", description="默认工作小组 ID 列表")
+    default_workshop_ids: Optional[List[int]] = Field(None, alias="defaultWorkshopIds", description="默认车间 ID 列表")
+    default_work_center_ids: Optional[List[int]] = Field(None, alias="defaultWorkCenterIds", description="默认工作中心 ID 列表")
+    default_station_ids: Optional[List[int]] = Field(None, alias="defaultStationIds", description="默认工位 ID 列表")
+    default_equipment_ids: Optional[List[int]] = Field(None, alias="defaultEquipmentIds", description="默认设备 ID 列表")
+    inspection_mode: Optional[str] = Field(None, alias="inspectionMode", max_length=20, description="质检模式（legacy）")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID（legacy，多方案时为首项）")
+    default_inspection_plan_ids: Optional[List[int]] = Field(
+        None,
+        alias="defaultInspectionPlanIds",
+        description="默认质检方案有序 ID 列表（写入 inspection_stages.ipqc.plan_ids）",
+    )
+    inspection_stages: Optional[OperationInspectionStagesSchema] = Field(
+        None, alias="inspectionStages", description="过程检验策略"
+    )
+    model_config = ConfigDict(populate_by_name=True)
+    
+    @field_validator("reporting_type")
+    @classmethod
+    def validate_reporting_type(cls, v: Optional[str]) -> Optional[str]:
+        """验证报工类型"""
+        if v is not None and v not in ("quantity", "status"):
+            raise ValueError("报工类型必须是: quantity, status")
+        return v
+
+    @field_validator("over_report_mode")
+    @classmethod
+    def validate_over_report_mode_update(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        m = str(v).lower().strip()
+        if m not in ("none", "fixed", "percent"):
+            raise ValueError("超报模式必须是: none, fixed, percent")
+        return m
+    
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: Optional[str]) -> Optional[str]:
+        """验证编码格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("工序编码不能为空")
+        return v.strip().upper() if v else None
+    
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        """验证名称格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("工序名称不能为空")
+        return v.strip() if v else None
+
+
+class OperationResponse(OperationBase):
+    """工序响应 Schema"""
+
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="租户ID")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+    defect_types: List[DefectTypeMinimal] = Field(default_factory=list, alias="defectTypes", description="允许绑定的不良品项")
+    default_operator_ids: List[int] = Field(default_factory=list, alias="defaultOperatorIds", description="默认生产人员（用户ID列表）")
+    default_operator_uuids: List[str] = Field(default_factory=list, alias="defaultOperatorUuids", description="默认生产人员 UUID列表")
+    default_operator_names: List[str] = Field(default_factory=list, alias="defaultOperatorNames", description="默认生产人员姓名列表")
+    default_team_ids: List[int] = Field(default_factory=list, alias="defaultTeamIds", description="默认工作小组 ID 列表")
+    default_team_names: List[str] = Field(default_factory=list, alias="defaultTeamNames", description="默认工作小组名称列表")
+    default_workshop_ids: List[int] = Field(default_factory=list, alias="defaultWorkshopIds", description="默认车间 ID 列表")
+    default_work_center_ids: List[int] = Field(default_factory=list, alias="defaultWorkCenterIds", description="默认工作中心 ID 列表")
+    default_station_ids: List[int] = Field(default_factory=list, alias="defaultStationIds", description="默认工位 ID 列表")
+    default_equipment_ids: List[int] = Field(default_factory=list, alias="defaultEquipmentIds", description="默认设备 ID 列表")
+    inspection_mode: str = Field("none", alias="inspectionMode", description="质检模式（legacy）")
+    default_inspection_plan_id: Optional[int] = Field(None, alias="defaultInspectionPlanId", description="默认质检方案ID（legacy，多方案时为首项）")
+    default_inspection_plan_ids: List[int] = Field(
+        default_factory=list,
+        alias="defaultInspectionPlanIds",
+        description="默认质检方案有序 ID 列表",
+    )
+    inspection_stages: Optional[OperationInspectionStagesSchema] = Field(
+        None, alias="inspectionStages", description="过程检验策略"
+    )
+    default_inspection_plan_name: Optional[str] = Field(None, alias="defaultInspectionPlanName", description="默认质检方案名称（冗余，首项）")
+    default_inspection_plan_names: List[str] = Field(
+        default_factory=list,
+        alias="defaultInspectionPlanNames",
+        description="默认质检方案名称有序列表",
+    )
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True, by_alias=True)
+
+
+class OperationListResponse(BaseModel):
+    """工序列表分页响应"""
+
+    data: List["OperationResponse"] = Field(..., description="列表数据")
+    total: int = Field(..., ge=0, description="总条数")
+
+
+class ProcessRouteBase(BaseModel):
+    """工艺路线基础 Schema"""
+
+    code: str = Field(..., max_length=50, description="工艺路线编码")
+    name: str = Field(..., max_length=200, description="工艺路线名称")
+    description: Optional[str] = Field(None, description="描述")
+    version: str = Field("1.0", max_length=20, description="版本号（如：v1.0、v1.1）")
+    version_description: Optional[str] = Field(None, description="版本说明")
+    base_version: Optional[str] = Field(None, max_length=20, description="基于版本（从哪个版本创建）")
+    effective_date: Optional[datetime] = Field(None, description="生效日期")
+    operation_sequence: Optional[Dict[str, Any]] = Field(None, description="工序序列（JSON格式，支持子工艺路线）")
+    parent_route_uuid: Optional[str] = Field(None, description="父工艺路线UUID（如果此工艺路线是子工艺路线）")
+    parent_operation_uuid: Optional[str] = Field(None, max_length=100, description="父工序UUID（此子工艺路线所属的父工序）")
+    level: int = Field(0, ge=0, le=3, description="嵌套层级（0为主工艺路线，1为第一层子工艺路线，最多3层）")
+    is_active: bool = Field(True, description="是否启用")
+    over_report_mode: str = Field("none", alias="overReportMode", max_length=20, description="路线默认超报模式：none/fixed/percent")
+    over_report_value: Decimal = Field(Decimal("0"), alias="overReportValue", description="路线默认超报值")
+    allow_operation_jump: bool = Field(
+        False,
+        alias="allowOperationJump",
+        description="路线级是否允许工序跳转（为真时启用节点工序控制）",
+    )
+
+    class Config:
+        populate_by_name = True
+
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if not v or not v.strip():
+            raise ValueError("工艺路线编码不能为空")
+        return v.strip().upper()
+
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if not v or not v.strip():
+            raise ValueError("工艺路线名称不能为空")
+        return v.strip()
+
+
+class ProcessRouteCreate(ProcessRouteBase):
+    """创建工艺路线 Schema"""
+    pass
+
+
+class ProcessRouteUpdate(BaseModel):
+    """更新工艺路线 Schema"""
+    
+    code: Optional[str] = Field(None, max_length=50, description="工艺路线编码")
+    name: Optional[str] = Field(None, max_length=200, description="工艺路线名称")
+    description: Optional[str] = Field(None, description="描述")
+    version: Optional[str] = Field(None, max_length=20, description="版本号")
+    version_description: Optional[str] = Field(None, description="版本说明")
+    base_version: Optional[str] = Field(None, max_length=20, description="基于版本")
+    effective_date: Optional[datetime] = Field(None, description="生效日期")
+    operation_sequence: Optional[Dict[str, Any]] = Field(None, description="工序序列（JSON格式）")
+    is_active: Optional[bool] = Field(None, description="是否启用")
+    over_report_mode: Optional[str] = Field(None, alias="overReportMode", description="路线默认超报模式")
+    over_report_value: Optional[Decimal] = Field(None, alias="overReportValue", description="路线默认超报值")
+    allow_operation_jump: Optional[bool] = Field(None, alias="allowOperationJump", description="路线级是否允许工序跳转")
+    
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("工艺路线编码不能为空")
+        return v.strip().upper() if v else None
+    
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("工艺路线名称不能为空")
+        return v.strip() if v else None
+
+
+class ProcessRouteResponse(ProcessRouteBase):
+    """工艺路线响应 Schema"""
+    
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., description="租户ID")
+    parent_route_uuid: Optional[str] = Field(None, description="父工艺路线UUID")
+    level: int = Field(0, description="嵌套层级（0为主工艺路线，1-3为子工艺路线）")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    created_by: Optional[int] = Field(None, alias="createdBy", description="创建人ID")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by: Optional[int] = Field(None, alias="updatedBy", description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+
+
+class ProcessRouteListResponse(BaseModel):
+    """工艺路线列表分页响应"""
+
+    data: List[ProcessRouteResponse] = Field(..., description="列表数据")
+    total: int = Field(..., ge=0, description="总条数")
+
+
+# ==================== 级联查询相关 Schema ====================
+
+class OperationTreeResponse(OperationResponse):
+    """工序树形响应 Schema（用于级联查询）"""
+    
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+        by_alias = True
+
+
+class ProcessRouteTreeResponse(ProcessRouteResponse):
+    """工艺路线树形响应 Schema（包含工序列表）"""
+    
+    operations: List[OperationTreeResponse] = Field(default_factory=list, description="工序列表（按序列顺序）")
+    
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+        by_alias = True
+
+
+# ==================== 工艺路线版本管理相关 Schema ====================
+
+class ProcessRouteVersionCreate(BaseModel):
+    """创建工艺路线新版本 Schema"""
+    
+    version: str = Field(..., max_length=20, description="版本号（如：v1.1）")
+    version_description: Optional[str] = Field(None, description="版本说明")
+    effective_date: Optional[datetime] = Field(None, description="生效日期（可选，默认为当前日期）")
+    apply_strategy: str = Field(
+        "new_only",
+        description="版本应用策略：new_only（仅新工单使用新版本，推荐）或 all（所有工单使用新版本，谨慎使用）"
+    )
+    
+    @validator("apply_strategy")
+    def validate_apply_strategy(cls, v):
+        """验证版本应用策略"""
+        allowed_strategies = ["new_only", "all"]
+        if v not in allowed_strategies:
+            raise ValueError(f"版本应用策略必须是: {', '.join(allowed_strategies)}")
+        return v
+
+
+class ProcessRouteVersionCompare(BaseModel):
+    """工艺路线版本对比 Schema"""
+    
+    version1: str = Field(..., max_length=20, description="版本1")
+    version2: str = Field(..., max_length=20, description="版本2")
+
+
+# ==================== 工艺路线模板管理相关 Schema ====================
+
+class ProcessRouteTemplateBase(BaseModel):
+    """工艺路线模板基础 Schema"""
+    
+    code: str = Field(..., max_length=50, description="模板编码（组织内唯一）")
+    name: str = Field(..., max_length=200, description="模板名称")
+    category: Optional[str] = Field(None, max_length=50, description="模板分类（如：注塑类、组装类、包装类等）")
+    description: Optional[str] = Field(None, description="模板描述")
+    scope: str = Field(
+        "all_materials",
+        description="适用范围（all_materials:所有物料, all_groups:所有物料分组, specific_groups:特定物料分组）"
+    )
+    scope_groups: Optional[List[str]] = Field(None, description="适用范围物料分组UUID列表（当scope为specific_groups时使用）")
+    process_route_config: Optional[Dict[str, Any]] = Field(None, description="工艺路线配置（JSON格式）")
+    version: str = Field("1.0", max_length=20, description="模板版本号")
+    version_description: Optional[str] = Field(None, description="版本说明")
+    is_active: bool = Field(True, description="是否启用")
+    
+    @validator("scope")
+    def validate_scope(cls, v):
+        """验证适用范围"""
+        allowed_scopes = ["all_materials", "all_groups", "specific_groups"]
+        if v not in allowed_scopes:
+            raise ValueError(f"适用范围必须是: {', '.join(allowed_scopes)}")
+        return v
+
+
+class ProcessRouteTemplateCreate(ProcessRouteTemplateBase):
+    """创建工艺路线模板 Schema"""
+    pass
+
+
+class ProcessRouteTemplateUpdate(BaseModel):
+    """更新工艺路线模板 Schema"""
+    
+    name: Optional[str] = Field(None, max_length=200, description="模板名称")
+    category: Optional[str] = Field(None, max_length=50, description="模板分类")
+    description: Optional[str] = Field(None, description="模板描述")
+    scope: Optional[str] = Field(None, description="适用范围")
+    scope_groups: Optional[List[str]] = Field(None, description="适用范围物料分组UUID列表")
+    process_route_config: Optional[Dict[str, Any]] = Field(None, description="工艺路线配置")
+    is_active: Optional[bool] = Field(None, description="是否启用")
+
+
+class ProcessRouteTemplateResponse(ProcessRouteTemplateBase):
+    """工艺路线模板响应 Schema"""
+    
+    id: int = Field(..., description="模板ID")
+    uuid: str = Field(..., description="模板UUID")
+    tenant_id: int = Field(..., description="组织ID")
+    base_version: Optional[str] = Field(None, description="基于版本")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+
+
+class ProcessRouteTemplateVersionCreate(BaseModel):
+    """创建工艺路线模板新版本 Schema"""
+    
+    version: str = Field(..., max_length=20, description="版本号（如：v1.1）")
+    version_description: Optional[str] = Field(None, description="版本说明")
+
+
+class ProcessRouteFromTemplateCreate(BaseModel):
+    """基于模板创建工艺路线 Schema"""
+    
+    template_uuid: str = Field(..., description="模板UUID")
+    code: str = Field(..., max_length=50, description="工艺路线编码")
+    name: str = Field(..., max_length=200, description="工艺路线名称")
+    description: Optional[str] = Field(None, description="描述")
+    is_active: bool = Field(True, description="是否启用")
+
+
+class ProcessRouteVersionCompareResult(BaseModel):
+    """工艺路线版本对比结果 Schema"""
+    
+    version1: str = Field(..., description="版本1")
+    version2: str = Field(..., description="版本2")
+    added_operations: List[Dict[str, Any]] = Field(default_factory=list, description="新增工序")
+    removed_operations: List[Dict[str, Any]] = Field(default_factory=list, description="删除工序")
+    modified_operations: List[Dict[str, Any]] = Field(default_factory=list, description="修改工序（包含变化详情）")
+    sequence_changes: List[Dict[str, Any]] = Field(default_factory=list, description="工序顺序变化")
+
+
+class SOPBase(BaseModel):
+    """作业程序（SOP）基础 Schema — 工艺路线与 BOM 融合主数据，产出作业指导书与报工数据采集项"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    sop_domain: str = Field(
+        ...,
+        max_length=10,
+        description="业务域 pe=PE制造工段SOP qc=QC材料SOP",
+        validation_alias=AliasChoices("sop_domain", "sopDomain"),
+    )
+    code: str = Field(..., max_length=100, description="SOP编码")
+    name: str = Field(..., max_length=200, description="SOP名称")
+    operation_id: Optional[int] = Field(
+        None,
+        description="关联工序ID",
+        validation_alias=AliasChoices("operation_id", "operationId"),
+    )
+    version: Optional[str] = Field(None, max_length=20, description="版本号")
+    content: Optional[str] = Field(None, description="SOP内容（支持富文本）")
+    attachments: Optional[List[Dict[str, Any]]] = Field(None, description="附件列表（JSON格式）")
+    flow_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="流程配置（ProFlow JSON格式，作业指导步骤与顺序）",
+        validation_alias=AliasChoices("flow_config", "flowConfig"),
+    )
+    form_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="报工数据采集项（Formily Schema，数字/选择/文本/日期时间及必填与校验）",
+        validation_alias=AliasChoices("form_config", "formConfig"),
+    )
+    is_active: bool = Field(
+        True,
+        description="是否启用",
+        validation_alias=AliasChoices("is_active", "isActive"),
+    )
+    # 阶段一：绑定与融合
+    material_group_uuids: Optional[List[str]] = Field(
+        None,
+        description="绑定的物料组 UUID 列表",
+        validation_alias=AliasChoices("material_group_uuids", "materialGroupUuids"),
+    )
+    material_uuids: Optional[List[str]] = Field(
+        None,
+        description="绑定的具体物料 UUID 列表，匹配时优先于物料组",
+        validation_alias=AliasChoices("material_uuids", "materialUuids"),
+    )
+    route_uuids: Optional[List[str]] = Field(
+        None,
+        description="载入的工艺路线 UUID 列表，作为融合输入",
+        validation_alias=AliasChoices("route_uuids", "routeUuids"),
+    )
+    bom_load_mode: Optional[str] = Field(
+        "by_material",
+        max_length=32,
+        description="BOM载入方式：by_material/by_material_group/specific_bom",
+        validation_alias=AliasChoices("bom_load_mode", "bomLoadMode"),
+    )
+    specific_bom_uuid: Optional[str] = Field(
+        None,
+        max_length=36,
+        description="指定BOM的UUID（bom_load_mode=specific_bom时使用）",
+        validation_alias=AliasChoices("specific_bom_uuid", "specificBomUuid"),
+    )
+    carrier: Optional[str] = Field(
+        "electronic",
+        max_length=20,
+        description="载体 electronic/paper/hybrid",
+    )
+    storage_plant_id: Optional[int] = Field(
+        None,
+        description="纸质原件存放厂区ID",
+        validation_alias=AliasChoices("storage_plant_id", "storagePlantId"),
+    )
+    storage_location: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="纸质存放位置",
+        validation_alias=AliasChoices("storage_location", "storageLocation"),
+    )
+    keeper_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="纸质保管人",
+        validation_alias=AliasChoices("keeper_name", "keeperName"),
+    )
+    page_count: Optional[int] = Field(
+        None,
+        description="纸质页数",
+        validation_alias=AliasChoices("page_count", "pageCount"),
+    )
+    paper_size: Optional[str] = Field(
+        None,
+        max_length=30,
+        description="纸张规格",
+        validation_alias=AliasChoices("paper_size", "paperSize"),
+    )
+    change_reason: Optional[str] = Field(
+        None,
+        description="变更原因",
+        validation_alias=AliasChoices("change_reason", "changeReason"),
+    )
+    qms_document_uuid: Optional[str] = Field(
+        None,
+        max_length=36,
+        description="关联质量体系文件UUID",
+        validation_alias=AliasChoices("qms_document_uuid", "qmsDocumentUuid"),
+    )
+
+    @validator("sop_domain")
+    def validate_sop_domain(cls, v):
+        from apps.master_data.constants.sop_domain import SOP_DOMAINS
+
+        domain = (v or "").strip().lower()
+        if domain not in SOP_DOMAINS:
+            raise ValueError("sop_domain 必须是 pe 或 qc")
+        return domain
+
+    @validator("carrier")
+    def validate_carrier(cls, v):
+        if v is not None and v not in ("electronic", "paper", "hybrid"):
+            raise ValueError("carrier 必须是 electronic、paper 或 hybrid")
+        return v or "electronic"
+
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if not v or not v.strip():
+            raise ValueError("SOP编码不能为空")
+        return v.strip().upper()
+    
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if not v or not v.strip():
+            raise ValueError("SOP名称不能为空")
+        return v.strip()
+    
+    @validator("bom_load_mode")
+    def validate_bom_load_mode(cls, v):
+        """验证 BOM 载入方式"""
+        if v is not None and v not in ("by_material", "by_material_group", "specific_bom"):
+            raise ValueError("bom_load_mode 必须是 by_material、by_material_group 或 specific_bom")
+        return v or "by_material"
+
+
+class SOPCreate(SOPBase):
+    """创建作业程序（SOP） Schema"""
+    pass
+
+
+class SOPBatchCreateFromRouteRequest(BaseModel):
+    """按工艺路线批量创建 SOP 请求"""
+    process_route_uuid: str = Field(..., description="工艺路线UUID")
+    material_uuids: Optional[List[str]] = Field(None, description="绑定的物料UUID列表（可选）")
+    material_group_uuids: Optional[List[str]] = Field(None, description="绑定的物料组UUID列表（可选）")
+
+
+class SOPUpdate(BaseModel):
+    """更新作业程序（SOP） Schema；请求体支持 snake_case 与 camelCase。"""
+    model_config = ConfigDict(populate_by_name=True)
+
+    code: Optional[str] = Field(None, max_length=100, description="SOP编码")
+    name: Optional[str] = Field(None, max_length=200, description="SOP名称")
+    operation_id: Optional[int] = Field(
+        None,
+        description="关联工序ID",
+        validation_alias=AliasChoices("operation_id", "operationId"),
+    )
+    version: Optional[str] = Field(None, max_length=20, description="版本号")
+    content: Optional[str] = Field(None, description="SOP内容（支持富文本）")
+    attachments: Optional[List[Dict[str, Any]]] = Field(None, description="附件列表（JSON格式）")
+    flow_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="流程配置（ProFlow JSON格式）",
+        validation_alias=AliasChoices("flow_config", "flowConfig"),
+    )
+    form_config: Optional[Dict[str, Any]] = Field(
+        None,
+        description="报工数据采集项（Formily Schema）",
+        validation_alias=AliasChoices("form_config", "formConfig"),
+    )
+    is_active: Optional[bool] = Field(
+        None,
+        description="是否启用",
+        validation_alias=AliasChoices("is_active", "isActive"),
+    )
+    material_group_uuids: Optional[List[str]] = Field(
+        None,
+        description="绑定的物料组 UUID 列表",
+        validation_alias=AliasChoices("material_group_uuids", "materialGroupUuids"),
+    )
+    material_uuids: Optional[List[str]] = Field(
+        None,
+        description="绑定的具体物料 UUID 列表",
+        validation_alias=AliasChoices("material_uuids", "materialUuids"),
+    )
+    route_uuids: Optional[List[str]] = Field(
+        None,
+        description="载入的工艺路线 UUID 列表",
+        validation_alias=AliasChoices("route_uuids", "routeUuids"),
+    )
+    bom_load_mode: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="BOM载入方式",
+        validation_alias=AliasChoices("bom_load_mode", "bomLoadMode"),
+    )
+    specific_bom_uuid: Optional[str] = Field(
+        None,
+        max_length=36,
+        description="指定BOM的UUID",
+        validation_alias=AliasChoices("specific_bom_uuid", "specificBomUuid"),
+    )
+    carrier: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="载体 electronic/paper/hybrid",
+    )
+    storage_plant_id: Optional[int] = Field(
+        None,
+        validation_alias=AliasChoices("storage_plant_id", "storagePlantId"),
+    )
+    storage_location: Optional[str] = Field(
+        None,
+        max_length=200,
+        validation_alias=AliasChoices("storage_location", "storageLocation"),
+    )
+    keeper_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        validation_alias=AliasChoices("keeper_name", "keeperName"),
+    )
+    page_count: Optional[int] = Field(
+        None,
+        validation_alias=AliasChoices("page_count", "pageCount"),
+    )
+    paper_size: Optional[str] = Field(
+        None,
+        max_length=30,
+        validation_alias=AliasChoices("paper_size", "paperSize"),
+    )
+    change_reason: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("change_reason", "changeReason"),
+    )
+    qms_document_uuid: Optional[str] = Field(
+        None,
+        max_length=36,
+        validation_alias=AliasChoices("qms_document_uuid", "qmsDocumentUuid"),
+    )
+
+    @validator("carrier")
+    def validate_carrier_update(cls, v):
+        if v is not None and v not in ("electronic", "paper", "hybrid"):
+            raise ValueError("carrier 必须是 electronic、paper 或 hybrid")
+        return v
+    
+    @validator("bom_load_mode")
+    def validate_bom_load_mode_update(cls, v):
+        if v is not None and v not in ("by_material", "by_material_group", "specific_bom"):
+            raise ValueError("bom_load_mode 必须是 by_material、by_material_group 或 specific_bom")
+        return v
+    
+    @validator("code")
+    def validate_code(cls, v):
+        """验证编码格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("SOP编码不能为空")
+        return v.strip().upper() if v else None
+    
+    @validator("name")
+    def validate_name(cls, v):
+        """验证名称格式"""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("SOP名称不能为空")
+        return v.strip() if v else None
+
+
+class SOPResponse(SOPBase):
+    """作业程序（SOP）响应 Schema"""
+    
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., description="租户ID")
+    control_status: str = Field(
+        "draft",
+        description="文控状态",
+        validation_alias=AliasChoices("control_status", "controlStatus"),
+    )
+    current_revision: Optional[str] = Field(
+        None,
+        description="当前修订号",
+        validation_alias=AliasChoices("current_revision", "currentRevision"),
+    )
+    effective_at: Optional[datetime] = Field(
+        None,
+        validation_alias=AliasChoices("effective_at", "effectiveAt"),
+    )
+    obsolete_at: Optional[datetime] = Field(
+        None,
+        validation_alias=AliasChoices("obsolete_at", "obsoleteAt"),
+    )
+    approved_at: Optional[datetime] = Field(
+        None,
+        validation_alias=AliasChoices("approved_at", "approvedAt"),
+    )
+    approved_by_name: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("approved_by_name", "approvedByName"),
+    )
+    issued_copy_count: int = Field(
+        0,
+        description="已发放受控份数",
+        validation_alias=AliasChoices("issued_copy_count", "issuedCopyCount"),
+    )
+    pending_retrieve_copy_count: int = Field(
+        0,
+        description="待回收受控份数",
+        validation_alias=AliasChoices("pending_retrieve_copy_count", "pendingRetrieveCopyCount"),
+    )
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    deleted_at: Optional[datetime] = Field(None, description="删除时间")
+    
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+
+
+class SopRevisionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: int
+    uuid: Optional[str] = None
+    sop_id: int = Field(..., validation_alias=AliasChoices("sop_id", "sopId"))
+    revision: str
+    carrier: str
+    content: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
+    flow_config: Optional[Dict[str, Any]] = Field(
+        None, validation_alias=AliasChoices("flow_config", "flowConfig")
+    )
+    form_config: Optional[Dict[str, Any]] = Field(
+        None, validation_alias=AliasChoices("form_config", "formConfig")
+    )
+    storage_location: Optional[str] = Field(
+        None, validation_alias=AliasChoices("storage_location", "storageLocation")
+    )
+    change_reason: Optional[str] = Field(
+        None, validation_alias=AliasChoices("change_reason", "changeReason")
+    )
+    effective_at: Optional[datetime] = Field(
+        None, validation_alias=AliasChoices("effective_at", "effectiveAt")
+    )
+    obsolete_at: Optional[datetime] = Field(
+        None, validation_alias=AliasChoices("obsolete_at", "obsoleteAt")
+    )
+    published_by_name: Optional[str] = Field(
+        None, validation_alias=AliasChoices("published_by_name", "publishedByName")
+    )
+    created_at: Optional[datetime] = Field(None, validation_alias=AliasChoices("created_at", "createdAt"))
+
+
+class SopControlledCopyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: int
+    uuid: Optional[str] = None
+    sop_id: int = Field(..., validation_alias=AliasChoices("sop_id", "sopId"))
+    copy_no: str = Field(..., validation_alias=AliasChoices("copy_no", "copyNo"))
+    location_type: str = Field(..., validation_alias=AliasChoices("location_type", "locationType"))
+    station_id: Optional[int] = Field(None, validation_alias=AliasChoices("station_id", "stationId"))
+    holder_user_id: Optional[int] = Field(
+        None, validation_alias=AliasChoices("holder_user_id", "holderUserId")
+    )
+    location_note: Optional[str] = Field(
+        None, validation_alias=AliasChoices("location_note", "locationNote")
+    )
+    revision: str
+    status: str
+    issued_at: Optional[datetime] = Field(None, validation_alias=AliasChoices("issued_at", "issuedAt"))
+    issued_by_name: Optional[str] = Field(
+        None, validation_alias=AliasChoices("issued_by_name", "issuedByName")
+    )
+    retrieved_at: Optional[datetime] = Field(
+        None, validation_alias=AliasChoices("retrieved_at", "retrievedAt")
+    )
+    retrieved_by_name: Optional[str] = Field(
+        None, validation_alias=AliasChoices("retrieved_by_name", "retrievedByName")
+    )
+
+
+class SopControlledCopyDispatchRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    location_type: str = Field(..., validation_alias=AliasChoices("location_type", "locationType"))
+    station_id: Optional[int] = Field(None, validation_alias=AliasChoices("station_id", "stationId"))
+    holder_user_id: Optional[int] = Field(
+        None, validation_alias=AliasChoices("holder_user_id", "holderUserId")
+    )
+    location_note: Optional[str] = Field(
+        None, validation_alias=AliasChoices("location_note", "locationNote")
+    )
+
+
+class SopControlledCopyRecallRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    copy_id: int = Field(..., validation_alias=AliasChoices("copy_id", "copyId"))
+    mark_lost: bool = Field(
+        False,
+        description="标记为丢失而非正常回收",
+        validation_alias=AliasChoices("mark_lost", "markLost"),
+    )
+
+
+class SopReviseRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    change_reason: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("change_reason", "changeReason"),
+    )
+
+
+class SopWorkflowNoteRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    note: Optional[str] = Field(None, description="审核意见或备注")
+
+
+class SopPrintDataResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    sop_uuid: str = Field(..., validation_alias=AliasChoices("sop_uuid", "sopUuid"))
+    code: str
+    name: str
+    revision: str
+    carrier: str
+    controlled: bool = Field(..., description="是否受控打印")
+    copy_no: Optional[str] = Field(None, validation_alias=AliasChoices("copy_no", "copyNo"))
+    watermark: str
+    storage_location: Optional[str] = Field(
+        None, validation_alias=AliasChoices("storage_location", "storageLocation")
+    )
+    content: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
+    steps: Optional[List[Dict[str, Any]]] = None
+
+
+class SopRevisionListResponse(BaseModel):
+    data: List[SopRevisionResponse]
+    total: int
+    audience: Optional[str] = None
+    can_view_history: bool = Field(False, alias="canViewHistory")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SopControlledCopyListResponse(BaseModel):
+    data: List[SopControlledCopyResponse]
+    total: int
+
+
+class SOPListResponse(BaseModel):
+    """作业程序（SOP）列表分页响应"""
+
+    data: List[SOPResponse] = Field(..., description="列表数据")
+    total: int = Field(..., ge=0, description="总条数")
+

@@ -1,0 +1,53 @@
+/**
+ * 系统兜底首页（无角色首页、无菜单主页且关闭系统级工作台时使用）
+ */
+
+import React from 'react';
+import { Button, Card, Typography, Space } from 'antd';
+import { HomeOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useConfigStore } from '../../../stores/configStore';
+
+const { Title, Paragraph } = Typography;
+
+const DefaultHomePage: React.FC = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const dashboardEnabled = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
+
+  return (
+    <div style={{ padding: 24, maxWidth: 720, margin: '0 auto' }}>
+      <Card>
+        <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
+          <Title level={4} style={{ margin: 0 }}>
+            <HomeOutlined style={{ marginRight: 8 }} />
+            {t('pages.system.defaultHome.title', { defaultValue: '欢迎使用' })}
+          </Title>
+          <Paragraph type="secondary" style={{ marginBottom: 8 }}>
+            {t('pages.system.defaultHome.description')}
+          </Paragraph>
+          <Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 13 }}>
+            {t('pages.system.defaultHome.setupMenu')}
+            <br />
+            {t('pages.system.defaultHome.setupRole')}
+            <br />
+            {t('pages.system.defaultHome.setupSite')}
+          </Paragraph>
+          <Space wrap>
+            {dashboardEnabled ? (
+              <Button type="primary" onClick={() => navigate('/system/dashboard/workplace')}>
+                {t('pages.system.defaultHome.goWorkplace', { defaultValue: '前往工作台' })}
+              </Button>
+            ) : null}
+            <Button icon={<AppstoreOutlined />} onClick={() => navigate('/system/applications')}>
+              {t('pages.system.defaultHome.goApplications', { defaultValue: '应用中心' })}
+            </Button>
+          </Space>
+        </Space>
+      </Card>
+    </div>
+  );
+};
+
+export default DefaultHomePage;

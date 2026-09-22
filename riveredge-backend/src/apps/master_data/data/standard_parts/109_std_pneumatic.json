@@ -1,0 +1,64 @@
+{
+  "sortOrder": 109,
+  "industryId": "machining",
+  "primaryCategory": "standard_parts",
+  "id": "std_pneumatic_cn_sme",
+  "name": "气动元件-执行与控制",
+  "description": "覆盖自动化产线通用气缸、阀组、接头与气源处理组合件。",
+  "items": [
+    {
+      "preset_key": "cn_cylinder_iso6431_sc63x100",
+      "name": "标准气缸",
+      "specification": "SC63×100",
+      "gb_standard": "GB/T 2348",
+      "gb_code": "GB2348-SC63X100",
+      "base_unit": "支",
+      "texture": "铝合金"
+    },
+    {
+      "preset_key": "cn_cylinder_compact_sda32x25",
+      "name": "薄型气缸",
+      "specification": "SDA32×25",
+      "gb_standard": "GB/T 2348",
+      "gb_code": "GB2348-SDA32X25",
+      "base_unit": "支",
+      "texture": "铝合金"
+    },
+    {
+      "preset_key": "cn_solenoid_valve_5_2_24v",
+      "name": "二位五通电磁阀",
+      "specification": "24VDC",
+      "gb_standard": "GB/T 7932",
+      "gb_code": "GB7932-5/2-24V",
+      "base_unit": "个",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_air_treatment_frl_g1_4",
+      "name": "气源处理三联件",
+      "specification": "G1/4",
+      "gb_standard": "GB/T 17446",
+      "gb_code": "GB17446-FRL-G1/4",
+      "base_unit": "套",
+      "texture": "组合件"
+    },
+    {
+      "preset_key": "cn_pushin_fitting_pc8_02",
+      "name": "快插直通接头",
+      "specification": "PC8-02",
+      "gb_standard": "GB/T 14513",
+      "gb_code": "GB14513-PC8-02",
+      "base_unit": "个",
+      "texture": "黄铜镀镍"
+    },
+    {
+      "preset_key": "cn_pu_tube_8x5",
+      "name": "聚氨酯气管",
+      "specification": "8×5",
+      "gb_standard": "GB/T 18948",
+      "gb_code": "GB18948-8X5",
+      "base_unit": "米",
+      "texture": "PU"
+    }
+  ]
+}

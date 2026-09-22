@@ -1,0 +1,350 @@
+"""
+销售订单管理模块数据验证schema
+
+提供销售订单相关的数据验证和序列化。
+
+Author: Luigi Lu
+Date: 2026-01-19
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, date
+from typing import Optional, List
+from decimal import Decimal
+from pydantic import Field, field_validator, model_validator
+from core.schemas.base import BaseSchema
+from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
+from apps.kuaizhizao.schemas.sales_contract_term import SalesContractTermSnapshot
+from apps.kuaizhizao.services.document_action_policy.types import SalesOrderCapabilities
+
+
+# === 销售订单收款里程碑 ===
+
+class SalesOrderMilestoneCreate(BaseSchema):
+    milestone_name: str = Field(..., max_length=200)
+    planned_date: date
+    planned_amount: Decimal = Decimal("0")
+    planned_ratio: Optional[Decimal] = None
+    billing_trigger: str = "milestone"
+    is_prepayment: bool = False
+    auto_generate_receivable: bool = False
+    bank_account_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class SalesOrderMilestoneResponse(SalesOrderMilestoneCreate):
+    id: int
+    uuid: str
+    tenant_id: int
+    sales_order_id: int
+    status: str
+    receivable_id: Optional[int] = None
+    receivable_code: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# === 销售订单明细 ===
+
+class SalesOrderItemBase(BaseSchema):
+    """销售订单明细基础schema"""
+    material_id: Optional[int] = Field(None, description="物料ID")
+    material_code: str = Field(..., max_length=100, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_unit: Optional[str] = Field(None, max_length=20, description="物料单位")
+    conversion_factor: Optional[Decimal] = Field(None, gt=0, description="单位换算因子（业务单位->基础单位）")
+    required_quantity: Decimal = Field(..., gt=0, description="需求数量")
+    delivery_date: date = Field(..., description="交货日期")
+    unit_price: Optional[Decimal] = Field(None, ge=0, description="单价（不含税）")
+    tax_rate: Optional[Decimal] = Field(None, ge=0, le=100, description="税率（%）")
+    item_amount: Optional[Decimal] = Field(None, ge=0, description="价税合计")
+    is_gift: bool = Field(False, description="是否赠品")
+    gift_ref_unit_price: Optional[Decimal] = Field(None, ge=0, description="赠品参考单价")
+    price_settlement_status: Optional[str] = Field(None, max_length=20, description="定价状态")
+    provisional_unit_price: Optional[Decimal] = Field(None, ge=0, description="暂估参考单价")
+    variant_attributes: Optional[dict] = Field(None, description="属性（配置件专用，如 {\"color\":\"red\",\"size\":\"M\"}）")
+    configurable_selections: Optional[dict] = Field(None, description="配置位选择（BOM配置位，格式 {\"parentMaterialId_configurableGroupId\": componentId}）")
+    notes: Optional[str] = Field(None, description="备注")
+
+
+class SalesOrderItemCreate(SalesOrderItemBase):
+    """创建销售订单明细schema"""
+    pass
+
+
+class SalesOrderItemUpdate(BaseSchema):
+    """更新销售订单明细schema"""
+    material_id: Optional[int] = None
+    material_code: Optional[str] = Field(None, max_length=100)
+    material_name: Optional[str] = Field(None, max_length=200)
+    material_spec: Optional[str] = Field(None, max_length=200)
+    material_unit: Optional[str] = Field(None, max_length=20)
+    conversion_factor: Optional[Decimal] = Field(None, gt=0)
+    required_quantity: Optional[Decimal] = Field(None, gt=0)
+    delivery_date: Optional[date] = None
+    unit_price: Optional[Decimal] = Field(None, ge=0)
+    tax_rate: Optional[Decimal] = Field(None, ge=0, le=100)
+    item_amount: Optional[Decimal] = Field(None, ge=0)
+    is_gift: Optional[bool] = None
+    gift_ref_unit_price: Optional[Decimal] = Field(None, ge=0)
+    price_settlement_status: Optional[str] = Field(None, max_length=20)
+    provisional_unit_price: Optional[Decimal] = Field(None, ge=0)
+    variant_attributes: Optional[dict] = None
+    configurable_selections: Optional[dict] = None
+    notes: Optional[str] = None
+
+
+class SalesOrderItemResponse(SalesOrderItemBase):
+    """销售订单明细响应schema"""
+    id: int
+    uuid: str
+    tenant_id: int
+    sales_order_id: int
+    configurable_selections: Optional[dict] = Field(None, description="配置位选择")
+    delivered_quantity: Optional[Decimal] = Field(None, description="已交货数量")
+    remaining_quantity: Optional[Decimal] = Field(None, description="剩余数量")
+    delivery_status: Optional[str] = Field(None, max_length=20, description="交货状态")
+    work_order_id: Optional[int] = Field(None, description="工单ID")
+    work_order_code: Optional[str] = Field(None, max_length=50, description="工单编码")
+    price_settled_at: Optional[datetime] = Field(None, description="定价时间")
+    price_settled_by: Optional[int] = Field(None, description="定价人ID")
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# === 销售订单 ===
+
+class SalesOrderBase(BaseSchema):
+    """销售订单基础schema"""
+    order_code: Optional[str] = Field(None, max_length=50, description="订单编码（自动生成，无需填写）")
+    order_name: Optional[str] = Field(None, max_length=200, description="订单名称（选填，不填时以订单编码作为展示名）")
+    order_date: date = Field(..., description="订单日期")
+    delivery_date: date = Field(..., description="交货日期")
+    
+    # 客户信息（必填）
+    customer_id: int = Field(..., description="客户ID")
+    customer_name: str = Field(..., max_length=200, description="客户名称")
+    customer_contact: Optional[str] = Field(None, max_length=100, description="客户联系人")
+    customer_phone: Optional[str] = Field(None, max_length=20, description="客户电话")
+    
+    # 金额信息
+    total_quantity: Decimal = Field(Decimal("0"), ge=0, description="总数量")
+    total_amount: Decimal = Field(Decimal("0"), ge=0, description="总金额")
+    price_type: Optional[str] = Field(DEFAULT_SALES_PRICE_TYPE, max_length=20, description="价格类型：含税(tax_inclusive)/不含税(tax_exclusive)")
+    discount_amount: Decimal = Field(Decimal("0"), ge=0, description="整单优惠金额")
+    
+    # 状态
+    status: DemandStatus = Field(DemandStatus.DRAFT, description="订单状态")
+    
+    # 时间节点记录（用于耗时统计）
+    submit_time: Optional[datetime] = Field(None, description="提交时间")
+    
+    # 审核信息
+    reviewer_id: Optional[int] = Field(None, description="审核人ID")
+    reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
+    review_time: Optional[datetime] = Field(None, description="审核时间")
+    review_status: ReviewStatus = Field(ReviewStatus.PENDING, description="审核状态")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
+    
+    # 销售信息
+    salesman_id: Optional[int] = Field(None, description="销售员ID")
+    salesman_name: Optional[str] = Field(None, max_length=100, description="销售员姓名")
+    
+    # 物流信息
+    shipping_address: Optional[str] = Field(None, description="收货地址")
+    shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
+    payment_terms: Optional[str] = Field(None, max_length=100, description="付款条件")
+    contract_id: Optional[int] = Field(None, description="关联销售合同ID")
+    contract_code: Optional[str] = Field(None, max_length=50, description="关联销售合同编码")
+    is_release_order: bool = Field(False, description="是否为框架合同释放单")
+    currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码（默认 CNY）")
+    
+    prepayment_amount: Optional[Decimal] = Field(None, ge=0, description="预收款金额")
+    prepayment_bank_account_id: Optional[int] = Field(None, description="预收款银行账户ID")
+
+    term_group_id: Optional[int] = Field(None, description="条款组ID")
+    term_group_name: Optional[str] = Field(None, max_length=200, description="条款组名称（快照）")
+    contract_terms: Optional[List[SalesContractTermSnapshot]] = Field(None, description="订单条款快照")
+
+    notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    
+    # 费用信息
+    fee_details: Optional[List[dict]] = Field(None, description="费用明细 (JSON)")
+    total_fee_amount: Decimal = Field(Decimal("0"), ge=0, description="总费用金额")
+
+
+class SalesOrderCreate(SalesOrderBase):
+    """创建销售订单schema"""
+    # 覆盖 Base 默认 0：省略时由服务端按明细汇总，避免下推/合同转单/同步未传总额被当成「显式 0」
+    total_amount: Optional[Decimal] = Field(
+        None, ge=0, description="总金额（省略则按明细与整单优惠计算）"
+    )
+    total_quantity: Optional[Decimal] = Field(
+        None, ge=0, description="总数量（省略则按明细汇总）"
+    )
+    items: List[SalesOrderItemCreate] = Field(default_factory=list, description="订单明细")
+    payment_milestones: List[SalesOrderMilestoneCreate] = Field(
+        default_factory=list, description="收款里程碑"
+    )
+    
+    @model_validator(mode='after')
+    def validate_items(self):
+        """验证订单明细"""
+        if not self.items or len(self.items) == 0:
+            raise ValueError("销售订单必须至少包含一条明细")
+        return self
+
+
+class SalesOrderUpdate(BaseSchema):
+    """更新销售订单schema。status/review_status 由工作流控制，不允许客户端直接修改。"""
+    order_code: Optional[str] = Field(None, max_length=50, description="订单编码（仅草稿或无下游时可改）")
+    order_name: Optional[str] = Field(None, max_length=200)
+    order_date: Optional[date] = None
+    delivery_date: Optional[date] = None
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = Field(None, max_length=200)
+    customer_contact: Optional[str] = Field(None, max_length=100)
+    customer_phone: Optional[str] = Field(None, max_length=20)
+    total_quantity: Optional[Decimal] = Field(None, ge=0)
+    total_amount: Optional[Decimal] = Field(None, ge=0)
+    price_type: Optional[str] = Field(None, max_length=20)
+    discount_amount: Optional[Decimal] = Field(None, ge=0)
+    salesman_id: Optional[int] = None
+    salesman_name: Optional[str] = Field(None, max_length=100)
+    shipping_address: Optional[str] = None
+    shipping_method: Optional[str] = Field(None, max_length=50)
+    payment_terms: Optional[str] = Field(None, max_length=100)
+    currency_code: Optional[str] = Field(None, max_length=20)
+    notes: Optional[str] = None
+    attachments: Optional[List[dict]] = None
+    fee_details: Optional[List[dict]] = None
+    total_fee_amount: Optional[Decimal] = Field(None, ge=0)
+    term_group_id: Optional[int] = None
+    contract_terms: Optional[List[SalesContractTermSnapshot]] = None
+    items: Optional[List[SalesOrderItemCreate]] = None
+    payment_milestones: Optional[List[SalesOrderMilestoneCreate]] = None
+
+
+class SalesOrderResponse(SalesOrderBase):
+    """销售订单响应schema"""
+    id: int
+    uuid: str
+    tenant_id: int
+    pushed_to_computation: bool = Field(False, description="是否已下推到需求计算")
+    computation_id: Optional[int] = Field(None, description="需求计算ID")
+    computation_code: Optional[str] = Field(None, max_length=50, description="需求计算编码")
+    planning_pushed_to_computation: bool = Field(
+        False, description="计划侧已下推需求计算（与统一需求下推同进同退）"
+    )
+    planning_computation_id: Optional[int] = Field(None, description="计划侧关联需求计算ID")
+    planning_computation_code: Optional[str] = Field(None, max_length=50, description="计划侧关联需求计算编码")
+    planning_computation_pushed_at: Optional[datetime] = Field(None, description="计划侧下推需求计算时间")
+    is_active: bool = Field(True, description="是否启用")
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[int] = None
+    updated_by_name: Optional[str] = None
+    external_sync_at: Optional[datetime] = Field(
+        None, description="最近从外部接口/数据集同步时间", serialization_alias="externalSyncAt"
+    )
+    created_at: datetime
+    updated_at: datetime
+    items: Optional[List[SalesOrderItemResponse]] = Field(None, description="订单明细")
+    payment_milestones: Optional[List[SalesOrderMilestoneResponse]] = Field(
+        None, description="收款里程碑"
+    )
+    duration_info: Optional[dict] = Field(None, description="耗时统计信息")
+    delivery_progress: Optional[float] = Field(None, description="交货进度 0-100")
+    invoice_progress: Optional[float] = Field(None, description="开票进度 0-100")
+    pushed_work_order_quantity: Decimal = Field(Decimal("0"), description="已下推工单数量")
+    remaining_push_quantity: Decimal = Field(Decimal("0"), description="剩余可下推数量")
+    work_order_push_progress: float = Field(0.0, description="工单下推占比 0-100")
+    pushed_work_order_codes: List[str] = Field(
+        default_factory=list,
+        description="已下推工单编码（列表 hover 用，排除已取消）",
+    )
+    has_shippable_products: bool = Field(False, description="是否存在可发货产品（库存满足且仍有欠交）")
+    shippable_quantity: float = Field(0.0, description="当前可发货数量合计（扣除已通知占用）")
+    demand_synced: Optional[bool] = Field(None, description="本次操作是否已同步至关联需求")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供前端 UniLifecycleStepper 展示）")
+    audit: Optional[dict] = Field(None, description="审核相位（唯一来源：{entity_type, phase, enabled, allowed_actions}，供 uni-audit 渲染）")
+    capabilities: Optional[SalesOrderCapabilities] = Field(
+        None,
+        description="业务态动作 capabilities（不含 RBAC，与 service 门禁一致）",
+    )
+    order_code_editable: bool = Field(True, description="订单编号是否可编辑（草稿或无下游）")
+    order_code_locked_reason: Optional[str] = Field(
+        None, description="编号锁定原因码（document_code.*）"
+    )
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+
+
+class SalesOrderListResponse(BaseSchema):
+    """销售订单列表响应schema"""
+    data: List[SalesOrderResponse]
+    total: int
+    success: bool = True
+
+
+class SalesOrderRemindCreate(BaseSchema):
+    """销售订单提醒创建schema"""
+    recipient_user_uuid: str = Field(..., description="提醒对象（用户UUID）")
+    action_type: str = Field(..., description="提醒操作：review/delivery/invoice/follow_up/other")
+    remarks: Optional[str] = Field(None, max_length=500, description="备注")
+
+
+# === 销售订单追踪 (Sales Enablement 360 View) ===
+
+class TrackingWorkOrderInfo(BaseSchema):
+    """追踪视图：关联工单信息"""
+    work_order_id: int
+    work_order_code: str
+    product_name: str
+    quantity: Decimal
+    completed_quantity: Decimal
+    status: str
+
+
+class TrackingDeliveryInfo(BaseSchema):
+    """追踪视图：关联发货单信息"""
+    delivery_id: int
+    delivery_code: str
+    delivery_date: Optional[date]
+    status: str
+
+
+class TrackingMaterialShortageInfo(BaseSchema):
+    """追踪视图：物料缺口预警"""
+    material_code: str
+    material_name: str
+    required_quantity: Decimal
+    shortage_quantity: Decimal
+
+
+class SalesOrderTrackingResponse(BaseSchema):
+    """销售订单全息追踪视图响应"""
+    sales_order_id: int
+    sales_order_code: str
+    
+    # 核心进度统计 (0 - 100)
+    material_prep_progress: float = Field(0.0, description="备料进度 (100 - (缺口总额/需求总额)*100)")
+    production_progress: float = Field(0.0, description="生产进度 (关联工单完成率综合)")
+    delivery_progress: float = Field(0.0, description="发货进度 (订单明细发货率)")
+    
+    # 详情数据
+    work_orders: List[TrackingWorkOrderInfo] = Field(default_factory=list, description="关联生产工单明细")
+    deliveries: List[TrackingDeliveryInfo] = Field(default_factory=list, description="关联发货单明细")
+    material_shortages: List[TrackingMaterialShortageInfo] = Field(default_factory=list, description="物料缺货明细")

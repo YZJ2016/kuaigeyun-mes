@@ -1,0 +1,1147 @@
+"""
+设备管理 API 路由
+
+提供设备的 CRUD 操作。
+
+Author: Luigi Lu
+Date: 2026-01-05
+"""
+
+from typing import List, Optional
+from datetime import datetime
+import base64
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
+from fastapi.responses import HTMLResponse, JSONResponse, Response
+
+from apps.kuaizhizao.models.equipment import Equipment, EquipmentCalibration
+from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
+from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
+from apps.kuaizhizao.models.equipment_ops import (
+    EquipmentSpotCheck,
+    EquipmentRoutePatrol,
+    EquipmentRoutePatrolLine,
+    EquipmentScrapApplication,
+)
+from apps.kuaizhizao.models.spare_part import SparePartRequisition
+from apps.kuaizhizao.schemas.equipment import (
+    EquipmentCreate,
+    EquipmentUpdate,
+    EquipmentResponse,
+    EquipmentListResponse,
+    EquipmentCalibrationCreate,
+    EquipmentCalibrationCreateWithEquipment,
+    EquipmentCalibrationUpdate,
+    EquipmentCalibrationResponse,
+    EquipmentCalibrationListResponse,
+    EquipmentCalibrationReminderResponse,
+    EquipmentCalibrationReminderListResponse,
+    EquipmentCalibrationReminderSettingsResponse,
+    EquipmentCalibrationReminderSettingsUpdate,
+    MeasuringInstrumentCalibrationAlertReportItem,
+    MeasuringInstrumentCalibrationAlertReportResponse,
+    MeasuringInstrumentCalibrationDetailReportItem,
+    MeasuringInstrumentCalibrationDetailReportResponse,
+)
+from apps.kuaizhizao.schemas.equipment_oee import (
+    EquipmentOEResponse,
+    EquipmentOEEListResponse,
+    EquipmentOEETrendResponse,
+)
+from apps.kuaizhizao.services.equipment_service import EquipmentService
+from apps.kuaizhizao.services.equipment_oee_service import EquipmentOEEService
+from apps.kuaizhizao.services.equipment_calibration_settings_service import (
+    get_calibration_reminder_settings,
+    set_calibration_reminder_settings,
+)
+from core.api.deps.deps import get_current_tenant
+from core.api.deps.access import require_permission_codes
+from core.utils.timezone_utils import to_api_isoformat
+from infra.api.deps.deps import get_current_user as soil_get_current_user
+from infra.models.user import User
+from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+router = APIRouter(prefix="/equipment", tags=["App - Kuaige Zhizao - Equipment"])
+
+
+@router.post("", response_model=EquipmentResponse, status_code=status.HTTP_201_CREATED)
+async def create_equipment(
+    data: EquipmentCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    创建设备
+    
+    创建新设备并保存到数据库。
+    
+    Args:
+        data: 设备创建数据
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        EquipmentResponse: 创建的设备对象
+        
+    Raises:
+        HTTPException: 当设备编码已存在或数据验证失败时抛出
+    """
+    try:
+        equipment = await EquipmentService.create_equipment(
+            tenant_id=tenant_id,
+            data=data,
+            created_by=current_user.id
+        )
+        return EquipmentResponse.model_validate(equipment)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+
+
+@router.get("", response_model=EquipmentListResponse)
+async def list_equipment(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    type: Optional[str] = Query(None, description="设备类型（可选）"),
+    category: Optional[str] = Query(None, description="设备分类（可选）"),
+    equipment_nature: Optional[str] = Query(None, description="设备性质（可选）"),
+    exclude_equipment_nature: Optional[str] = Query(None, description="排除的设备性质（可选）"),
+    status: Optional[str] = Query(None, description="设备状态（可选）"),
+    is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
+    workshop_id: Optional[int] = Query(None, description="车间ID（可选）"),
+    production_line_id: Optional[int] = Query(None, description="产线ID（线组，可选）"),
+    workstation_id: Optional[int] = Query(None, description="工位ID（可选）"),
+    search: Optional[str] = Query(None, description="搜索关键词（可选，搜索编码、名称）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（与 search 等价）"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取设备列表
+    
+    获取当前组织的设备列表，支持筛选和搜索。
+    
+    Args:
+        skip: 跳过数量
+        limit: 限制数量
+        type: 设备类型（可选）
+        category: 设备分类（可选）
+        status: 设备状态（可选）
+        is_active: 是否启用（可选）
+        workstation_id: 工位ID（可选）
+        search: 搜索关键词（可选，搜索编码、名称）
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        EquipmentListResponse: 设备列表响应
+    """
+    equipment_list, total = await EquipmentService.list_equipment(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        type=type,
+        category=category,
+        equipment_nature=equipment_nature,
+        exclude_equipment_nature=exclude_equipment_nature,
+        status=status,
+        is_active=is_active,
+        workshop_id=workshop_id,
+        production_line_id=production_line_id,
+        workstation_id=workstation_id,
+        search=search,
+        keyword=keyword,
+        order_by=order_by,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+    )
+    
+    items = [EquipmentResponse.model_validate(eq) for eq in equipment_list]
+    
+    return EquipmentListResponse(
+        items=items,
+        total=total,
+        skip=skip,
+        limit=limit
+    )
+
+
+@router.get(
+    "/calibrations",
+    response_model=EquipmentCalibrationListResponse,
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:equipment-calibration:read",
+                "kuaizhizao:measuring-instrument-calibration:read",
+            )
+        )
+    ],
+)
+async def list_equipment_calibrations(
+    equipment_uuid: Optional[str] = Query(None, description="设备UUID（可选，不传则返回全量）"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    keyword: Optional[str] = Query(None, description="模糊搜索"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    order_by: Optional[str] = Query(None, description="排序字段"),
+    calibration_start_date: Optional[str] = Query(None, description="校准日期起"),
+    calibration_end_date: Optional[str] = Query(None, description="校准日期止"),
+    created_start_date: Optional[str] = Query(None, description="创建日期起"),
+    created_end_date: Optional[str] = Query(None, description="创建日期止"),
+    updated_start_date: Optional[str] = Query(None, description="更新日期起"),
+    updated_end_date: Optional[str] = Query(None, description="更新日期止"),
+    equipment_nature: Optional[str] = Query(None, description="设备性质（可选）"),
+    exclude_equipment_nature: Optional[str] = Query(None, description="排除的设备性质（可选）"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """获取设备校验记录列表（支持按设备筛选或全量）"""
+    items, total = await EquipmentService.list_all_calibrations(
+        tenant_id=tenant_id,
+        equipment_uuid=equipment_uuid,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        search=search,
+        order_by=order_by,
+        calibration_start_date=calibration_start_date,
+        calibration_end_date=calibration_end_date,
+        created_start_date=created_start_date,
+        created_end_date=created_end_date,
+        updated_start_date=updated_start_date,
+        updated_end_date=updated_end_date,
+        equipment_nature=equipment_nature,
+        exclude_equipment_nature=exclude_equipment_nature,
+    )
+    equipment_ids = {c.equipment_id for c in items}
+    equipments = {e.id: e for e in await Equipment.filter(id__in=equipment_ids)}
+    resp_items = []
+    for c in items:
+        eq = equipments.get(c.equipment_id)
+        d = EquipmentCalibrationResponse.model_validate(c)
+        d.equipment_code = eq.code if eq else None
+        d.equipment_name = eq.name if eq else None
+        resp_items.append(d)
+    return EquipmentCalibrationListResponse(items=resp_items, total=total, skip=skip, limit=limit)
+
+
+@router.post(
+    "/calibrations",
+    response_model=EquipmentCalibrationResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:equipment-calibration:create",
+                "kuaizhizao:measuring-instrument-calibration:create",
+            )
+        )
+    ],
+)
+async def create_equipment_calibration_record(
+    data: EquipmentCalibrationCreateWithEquipment,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """创建设备校验记录（独立检定页）"""
+    try:
+        create_data = EquipmentCalibrationCreate(
+            calibration_date=data.calibration_date,
+            result=data.result,
+            plan_type=data.plan_type,
+            certificate_no=data.certificate_no,
+            expiry_date=data.expiry_date,
+            attachment_uuid=data.attachment_uuid,
+            attachments=data.attachments,
+            remark=data.remark,
+        )
+        calib = await EquipmentService.create_equipment_calibration(
+            tenant_id=tenant_id,
+            equipment_uuid=data.equipment_uuid,
+            data=create_data,
+            current_user=current_user,
+        )
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, data.equipment_uuid)
+        resp = EquipmentCalibrationResponse.model_validate(calib)
+        resp.equipment_code = equipment.code
+        resp.equipment_name = equipment.name
+        return resp
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.put(
+    "/calibrations/{calib_uuid}",
+    response_model=EquipmentCalibrationResponse,
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:equipment-calibration:update",
+                "kuaizhizao:measuring-instrument-calibration:update",
+            )
+        )
+    ],
+)
+async def update_equipment_calibration_record(
+    calib_uuid: str,
+    data: EquipmentCalibrationUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新设备校验记录"""
+    try:
+        calib = await EquipmentService.update_equipment_calibration(
+            tenant_id=tenant_id,
+            calib_uuid=calib_uuid,
+            data=data,
+            current_user=current_user,
+        )
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, calib.equipment_uuid)
+        resp = EquipmentCalibrationResponse.model_validate(calib)
+        resp.equipment_code = equipment.code
+        resp.equipment_name = equipment.name
+        return resp
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete(
+    "/calibrations/{calib_uuid}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:equipment-calibration:delete",
+                "kuaizhizao:measuring-instrument-calibration:delete",
+            )
+        )
+    ],
+)
+async def delete_equipment_calibration_record(
+    calib_uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除设备校验记录"""
+    try:
+        await EquipmentService.delete_equipment_calibration(
+            tenant_id=tenant_id,
+            calib_uuid=calib_uuid,
+            current_user=current_user,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/calibration-reminders",
+    response_model=EquipmentCalibrationReminderListResponse,
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:maintenance-reminder:read",
+                "kuaizhizao:measuring-instrument-calibration-reminder:read",
+            )
+        )
+    ],
+)
+async def list_equipment_calibration_reminders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    due_type: Optional[str] = Query(None, description="due_soon/overdue"),
+    equipment_nature: Optional[str] = Query(None, description="设备性质（可选）"),
+    exclude_equipment_nature: Optional[str] = Query(None, description="排除的设备性质（可选）"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """设备检定到期提醒"""
+    items, total = await EquipmentService.list_calibration_alerts(
+        tenant_id,
+        skip,
+        limit,
+        due_type,
+        equipment_nature=equipment_nature,
+        exclude_equipment_nature=exclude_equipment_nature,
+    )
+    return EquipmentCalibrationReminderListResponse(
+        items=[EquipmentCalibrationReminderResponse.model_validate(i) for i in items],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+_CALIBRATION_REMINDER_READ_PERMISSIONS = (
+    "kuaizhizao:maintenance-reminder:read",
+    "kuaizhizao:measuring-instrument-calibration-reminder:read",
+)
+
+_CALIBRATION_REMINDER_UPDATE_PERMISSIONS = (
+    "kuaizhizao:maintenance-reminder:update",
+    "kuaizhizao:measuring-instrument-calibration-reminder:update",
+)
+
+
+@router.get(
+    "/calibration-reminder-settings",
+    response_model=EquipmentCalibrationReminderSettingsResponse,
+    dependencies=[
+        Depends(require_permission_codes(*_CALIBRATION_REMINDER_READ_PERMISSIONS))
+    ],
+)
+async def get_equipment_calibration_reminder_settings(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """读取设备校准到期提前提醒天数（租户级）。"""
+    data = await get_calibration_reminder_settings(tenant_id)
+    return EquipmentCalibrationReminderSettingsResponse.model_validate(data)
+
+
+@router.put(
+    "/calibration-reminder-settings",
+    response_model=EquipmentCalibrationReminderSettingsResponse,
+    dependencies=[
+        Depends(require_permission_codes(*_CALIBRATION_REMINDER_UPDATE_PERMISSIONS))
+    ],
+)
+async def update_equipment_calibration_reminder_settings(
+    body: EquipmentCalibrationReminderSettingsUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新设备校准到期提前提醒天数（租户级）。"""
+    try:
+        saved = await set_calibration_reminder_settings(
+            tenant_id,
+            advance_days=body.advance_days,
+            description="API 更新设备校准到期提醒天数",
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return EquipmentCalibrationReminderSettingsResponse.model_validate(saved)
+
+
+@router.get(
+    "/reports/measuring-instrument-calibration-alerts",
+    response_model=MeasuringInstrumentCalibrationAlertReportResponse,
+    dependencies=[
+        Depends(
+            require_permission_codes("kuaizhizao:measuring-instrument-report-calibration-alerts:read")
+        )
+    ],
+)
+async def report_measuring_instrument_calibration_alerts(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    due_type: Optional[str] = Query(None, description="due_soon/overdue"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    items, total = await EquipmentService.report_measuring_instrument_calibration_alerts(
+        tenant_id, skip, limit, due_type
+    )
+    return MeasuringInstrumentCalibrationAlertReportResponse(
+        items=[MeasuringInstrumentCalibrationAlertReportItem.model_validate(i) for i in items],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/reports/measuring-instrument-calibration-detail",
+    response_model=MeasuringInstrumentCalibrationDetailReportResponse,
+    dependencies=[
+        Depends(
+            require_permission_codes("kuaizhizao:measuring-instrument-report-calibration-detail:read")
+        )
+    ],
+)
+async def report_measuring_instrument_calibration_detail(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    calibration_start_date: Optional[str] = Query(None, description="校准日期起"),
+    calibration_end_date: Optional[str] = Query(None, description="校准日期止"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    items, total = await EquipmentService.report_measuring_instrument_calibration_detail(
+        tenant_id,
+        skip,
+        limit,
+        calibration_start_date=calibration_start_date,
+        calibration_end_date=calibration_end_date,
+    )
+    return MeasuringInstrumentCalibrationDetailReportResponse(
+        items=[MeasuringInstrumentCalibrationDetailReportItem.model_validate(i) for i in items],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/print-cards",
+    summary="Print equipment identification cards",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:print"))],
+)
+async def print_equipment_cards(
+    uuids: List[str] = Query(..., description="设备 UUID 列表"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量打印设备标识卡（统一 DocumentPrintService + 打印模板）。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_equipment_cards(
+            tenant_id=tenant_id,
+            equipment_uuids=uuids,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'inline; filename="equipment-cards.pdf"'},
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/id/{equipment_id}/print",
+    summary="Print equipment identification card by id",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:print"))],
+)
+async def print_equipment_card_by_id(
+    equipment_id: int = Path(..., description="设备主键 ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """按主键打印单张设备标识卡（与统一 printApiPath 映射一致）。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="equipment_card",
+            document_id=equipment_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="equipment-card-{equipment_id}.pdf"'},
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/{uuid}/print",
+    summary="Print equipment identification card",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:print"))],
+)
+async def print_equipment_card(
+    uuid: str = Path(..., description="设备UUID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """按 UUID 打印单张设备标识卡。"""
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        result = await DocumentPrintService().print_equipment_cards(
+            tenant_id=tenant_id,
+            equipment_uuids=[uuid],
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="equipment-card-{uuid}.pdf"'},
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/resolve-scan",
+    response_model=EquipmentResponse,
+    summary="Resolve equipment by scan content",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:read"))],
+)
+async def resolve_equipment_by_scan(
+    q: str = Query(..., min_length=1, description="扫码原文或手输内容"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """解析系统 EQ 码、设备编码或手工绑定码。"""
+    try:
+        equipment = await EquipmentService.resolve_by_scan(tenant_id, q)
+        return EquipmentResponse.model_validate(equipment)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+
+@router.get("/{uuid}", response_model=EquipmentResponse)
+async def get_equipment(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取设备详情
+    
+    根据UUID获取设备详情。
+    
+    Args:
+        uuid: 设备UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        EquipmentResponse: 设备详情
+        
+    Raises:
+        HTTPException: 当设备不存在时抛出
+    """
+    try:
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
+        return EquipmentResponse.model_validate(equipment)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.put("/{uuid}", response_model=EquipmentResponse)
+async def update_equipment(
+    uuid: str,
+    data: EquipmentUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    更新设备
+    
+    更新设备信息。
+    
+    Args:
+        uuid: 设备UUID
+        data: 设备更新数据
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        EquipmentResponse: 更新后的设备对象
+        
+    Raises:
+        HTTPException: 当设备不存在或数据验证失败时抛出
+    """
+    try:
+        equipment = await EquipmentService.update_equipment(
+            tenant_id=tenant_id,
+            uuid=uuid,
+            data=data
+        )
+        return EquipmentResponse.model_validate(equipment)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+
+
+@router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_equipment(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    删除设备
+    
+    软删除设备（标记为已删除，不实际删除数据）。
+    
+    Args:
+        uuid: 设备UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Raises:
+        HTTPException: 当设备不存在时抛出
+    """
+    try:
+        await EquipmentService.delete_equipment(tenant_id, uuid)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.get("/{uuid}/trace")
+async def get_equipment_trace(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取设备使用记录追溯
+    
+    获取设备的使用历史、维护历史、故障历史。
+    
+    Args:
+        uuid: 设备UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        dict: 设备追溯信息，包含使用历史、维护历史、故障历史
+        
+    Raises:
+        HTTPException: 当设备不存在时抛出
+    """
+    try:
+        # 验证设备是否存在
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
+        
+        # 获取维护计划历史
+        maintenance_plans = await MaintenancePlan.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True
+        ).order_by("-created_at").limit(50)
+        
+        # 获取维护执行记录历史
+        maintenance_executions = await MaintenanceExecution.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True
+        ).order_by("-execution_date").limit(50)
+        
+        # 获取故障记录历史
+        equipment_faults = await EquipmentFault.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True
+        ).order_by("-fault_date").limit(50)
+        
+        # 获取维修记录历史
+        equipment_repairs = await EquipmentRepair.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True
+        ).order_by("-repair_date").limit(50)
+        
+        # 获取校验记录历史
+        equipment_calibrations = await EquipmentCalibration.filter(
+            tenant_id=tenant_id,
+            equipment_id=equipment.id,
+            deleted_at__isnull=True
+        ).order_by("-calibration_date").limit(50)
+
+        spot_checks = await EquipmentSpotCheck.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        ).order_by("-check_date", "-created_at").limit(50)
+
+        patrol_line_ids = await EquipmentRoutePatrolLine.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        ).values_list("route_patrol_id", flat=True)
+        patrol_ids = list(dict.fromkeys(patrol_line_ids))
+        route_patrols: list[EquipmentRoutePatrol] = []
+        if patrol_ids:
+            route_patrols = await EquipmentRoutePatrol.filter(
+                tenant_id=tenant_id,
+                id__in=patrol_ids,
+                deleted_at__isnull=True,
+            ).order_by("-patrol_date", "-created_at").limit(50)
+
+        spare_part_requisitions = await SparePartRequisition.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        ).order_by("-created_at").limit(50)
+
+        scrap_applications = await EquipmentScrapApplication.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        ).order_by("-created_at").limit(50)
+
+        return {
+            "equipment": {
+                "uuid": equipment.uuid,
+                "code": equipment.code,
+                "name": equipment.name,
+                "status": equipment.status,
+            },
+            "maintenance_plans": [
+                {
+                    "uuid": plan.uuid,
+                    "plan_no": plan.plan_no,
+                    "plan_name": plan.plan_name,
+                    "plan_type": plan.plan_type,
+                    "maintenance_type": plan.maintenance_type,
+                    "status": plan.status,
+                    "planned_start_date": to_api_isoformat(plan.planned_start_date) if plan.planned_start_date else None,
+                    "planned_end_date": to_api_isoformat(plan.planned_end_date) if plan.planned_end_date else None,
+                    "created_at": to_api_isoformat(plan.created_at),
+                }
+                for plan in maintenance_plans
+            ],
+            "maintenance_executions": [
+                {
+                    "uuid": exec.uuid,
+                    "execution_no": exec.execution_no,
+                    "execution_date": to_api_isoformat(exec.execution_date),
+                    "executor_name": exec.executor_name,
+                    "execution_result": exec.execution_result,
+                    "status": exec.status,
+                    "maintenance_cost": float(exec.maintenance_cost) if exec.maintenance_cost else None,
+                    "created_at": to_api_isoformat(exec.created_at),
+                }
+                for exec in maintenance_executions
+            ],
+            "equipment_faults": [
+                {
+                    "uuid": fault.uuid,
+                    "fault_no": fault.fault_no,
+                    "fault_date": to_api_isoformat(fault.fault_date),
+                    "fault_type": fault.fault_type,
+                    "fault_level": fault.fault_level,
+                    "status": fault.status,
+                    "repair_required": fault.repair_required,
+                    "created_at": to_api_isoformat(fault.created_at),
+                }
+                for fault in equipment_faults
+            ],
+            "equipment_repairs": [
+                {
+                    "uuid": repair.uuid,
+                    "repair_no": repair.repair_no,
+                    "repair_date": to_api_isoformat(repair.repair_date),
+                    "repair_type": repair.repair_type,
+                    "repairer_name": repair.repairer_name,
+                    "repair_duration": float(repair.repair_duration) if repair.repair_duration else None,
+                    "repair_cost": float(repair.repair_cost) if repair.repair_cost else None,
+                    "status": repair.status,
+                    "repair_result": repair.repair_result,
+                    "arrival_at": to_api_isoformat(repair.arrival_at) if repair.arrival_at else None,
+                    "arrival_by_name": repair.arrival_by_name,
+                    "fault_cause": repair.fault_cause,
+                    "repair_content": repair.repair_content,
+                    "completed_at": to_api_isoformat(repair.completed_at) if repair.completed_at else None,
+                    "created_at": to_api_isoformat(repair.created_at),
+                }
+                for repair in equipment_repairs
+            ],
+            "equipment_calibrations": [
+                {
+                    "uuid": calib.uuid,
+                    "calibration_date": to_api_isoformat(calib.calibration_date),
+                    "result": calib.result,
+                    "certificate_no": calib.certificate_no,
+                    "expiry_date": to_api_isoformat(calib.expiry_date) if calib.expiry_date else None,
+                    "remark": calib.remark,
+                    "created_at": to_api_isoformat(calib.created_at),
+                }
+                for calib in equipment_calibrations
+            ],
+            "spot_checks": [
+                {
+                    "id": row.id,
+                    "document_no": row.document_no,
+                    "check_date": to_api_isoformat(row.check_date) if row.check_date else None,
+                    "inspector_name": row.inspector_name,
+                    "status": row.status,
+                    "has_abnormality": row.has_abnormality,
+                    "abnormality_description": row.abnormality_description,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in spot_checks
+            ],
+            "route_patrols": [
+                {
+                    "id": row.id,
+                    "document_no": row.document_no,
+                    "route_code": row.route_code,
+                    "route_name": row.route_name,
+                    "patrol_date": to_api_isoformat(row.patrol_date) if row.patrol_date else None,
+                    "inspector_name": row.inspector_name,
+                    "status": row.status,
+                    "has_abnormality": row.has_abnormality,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in route_patrols
+            ],
+            "spare_part_requisitions": [
+                {
+                    "id": row.id,
+                    "requisition_no": row.requisition_no,
+                    "purpose": row.purpose,
+                    "applicant_name": row.applicant_name,
+                    "status": row.status,
+                    "approved_at": to_api_isoformat(row.approved_at) if row.approved_at else None,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in spare_part_requisitions
+            ],
+            "scrap_applications": [
+                {
+                    "id": row.id,
+                    "application_no": row.application_no,
+                    "reason": row.reason,
+                    "scrap_date": to_api_isoformat(row.scrap_date) if row.scrap_date else None,
+                    "applicant_name": row.applicant_name,
+                    "status": row.status,
+                    "approved_at": to_api_isoformat(row.approved_at) if row.approved_at else None,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in scrap_applications
+            ],
+        }
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.post("/{uuid}/calibrations", response_model=EquipmentCalibrationResponse, status_code=status.HTTP_201_CREATED)
+async def create_equipment_calibration(
+    uuid: str,
+    data: EquipmentCalibrationCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    创建设备校验记录
+    """
+    try:
+        calib = await EquipmentService.create_equipment_calibration(
+            tenant_id=tenant_id,
+            equipment_uuid=uuid,
+            data=data,
+            current_user=current_user,
+        )
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
+        resp = EquipmentCalibrationResponse.model_validate(calib)
+        resp.equipment_code = equipment.code
+        resp.equipment_name = equipment.name
+        return resp
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ========== 设备OEE统计相关端点 ==========
+
+@router.get("/{uuid}/oee", response_model=EquipmentOEResponse)
+async def get_equipment_oee(
+    uuid: str,
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取设备OEE统计
+    
+    根据设备UUID获取设备OEE统计数据。
+    """
+    try:
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
+        
+        date_start_dt = None
+        date_end_dt = None
+        if date_start:
+            date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+        if date_end:
+            date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+        
+        oee_service = EquipmentOEEService()
+        oee_data = await oee_service.calculate_equipment_oee(
+            tenant_id=tenant_id,
+            equipment_id=equipment.id,
+            date_start=date_start_dt,
+            date_end=date_end_dt,
+        )
+        
+        return EquipmentOEResponse(**oee_data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"计算OEE失败: {str(e)}")
+
+
+@router.get("/oee/list", response_model=EquipmentOEEListResponse)
+async def list_equipment_oee(
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    equipment_ids: Optional[str] = Query(None, description="设备ID列表（逗号分隔）"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取设备OEE统计列表
+    
+    获取当前组织的设备OEE统计列表。
+    """
+    try:
+        date_start_dt = None
+        date_end_dt = None
+        if date_start:
+            date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+        if date_end:
+            date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+        
+        equipment_id_list = None
+        if equipment_ids:
+            equipment_id_list = [int(id.strip()) for id in equipment_ids.split(',') if id.strip()]
+        
+        oee_service = EquipmentOEEService()
+        oee_list = await oee_service.list_equipment_oee(
+            tenant_id=tenant_id,
+            date_start=date_start_dt,
+            date_end=date_end_dt,
+            equipment_ids=equipment_id_list,
+            skip=skip,
+            limit=limit,
+        )
+        
+        items = [EquipmentOEResponse(**data) for data in oee_list]
+        
+        return EquipmentOEEListResponse(items=items, total=len(items))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"获取OEE统计列表失败: {str(e)}")
+
+
+@router.get("/{uuid}/oee/trend", response_model=EquipmentOEETrendResponse)
+async def get_equipment_oee_trend(
+    uuid: str,
+    date_start: Optional[str] = Query(None, description="开始日期（YYYY-MM-DD）"),
+    date_end: Optional[str] = Query(None, description="结束日期（YYYY-MM-DD）"),
+    period: str = Query("day", description="统计周期（day/week/month）"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取设备OEE趋势数据
+    
+    根据设备UUID获取设备OEE趋势数据。
+    """
+    try:
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
+        
+        date_start_dt = None
+        date_end_dt = None
+        if date_start:
+            date_start_dt = datetime.fromisoformat(date_start.replace('Z', '+00:00'))
+        if date_end:
+            date_end_dt = datetime.fromisoformat(date_end.replace('Z', '+00:00'))
+        
+        if period not in ["day", "week", "month"]:
+            raise ValidationError("统计周期必须是 day、week 或 month 之一")
+        
+        oee_service = EquipmentOEEService()
+        trend_data = await oee_service.get_equipment_oee_trend(
+            tenant_id=tenant_id,
+            equipment_id=equipment.id,
+            date_start=date_start_dt,
+            date_end=date_end_dt,
+            period=period,
+        )
+        
+        return EquipmentOEETrendResponse(**trend_data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"获取OEE趋势数据失败: {str(e)}")
+

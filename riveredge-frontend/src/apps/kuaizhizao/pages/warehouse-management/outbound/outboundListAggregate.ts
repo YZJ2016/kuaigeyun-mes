@@ -1,0 +1,297 @@
+import type { CurrentUser } from '../../../../../types/api';
+import { warehouseApi } from '../../../services/warehouse-execution';
+import { outsourceMaterialIssueApi } from '../../../services/production';
+import {
+  normalizeWarehouseListResponse,
+  sortOutboundHubRows,
+} from '../../../utils/warehouseListCore';
+import { shouldFetchOutboundHubType } from '../../../utils/warehouseHubFetchGates';
+import type { OutboundHubOrder } from './outboundHubTypes';
+import {
+  mapOutsourceIssueToOutbound,
+  pickOutboundHubDateCandidate,
+  resolveOutboundHubDateRaw,
+  resolveOutboundHubOperator,
+} from './outboundHubTypes';
+
+function withOutboundHubDisplayFields(row: OutboundHubOrder): OutboundHubOrder {
+  const dateRaw = resolveOutboundHubDateRaw(row);
+  const operator = resolveOutboundHubOperator(row);
+  const rowRec = row as Record<string, unknown>;
+  const updatedAt = rowRec.updated_at ?? rowRec.updatedAt;
+  const createdAt = rowRec.created_at ?? rowRec.createdAt;
+  let deliveryDate: string | undefined;
+  if (dateRaw != null && String(dateRaw).trim() !== '') {
+    const text = String(dateRaw).trim();
+    deliveryDate = /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : text;
+  }
+  return {
+    ...row,
+    ...(updatedAt != null && String(updatedAt).trim() !== ''
+      ? { updated_at: String(updatedAt) }
+      : {}),
+    ...(createdAt != null && String(createdAt).trim() !== ''
+      ? { created_at: String(createdAt) }
+      : {}),
+    ...(deliveryDate ? { delivery_date: deliveryDate } : {}),
+    ...(operator ? { delivered_by: operator } : {}),
+  };
+}
+
+const emptyList = { items: [] as unknown[], total: 0 };
+
+const toList = (r: unknown) => {
+  const { data, total } = normalizeWarehouseListResponse(r);
+  return { items: data, total };
+};
+
+function sourceStatus(
+  hubStatus: string | undefined,
+  pendingStatus: string,
+  postedStatus: string,
+): string | undefined {
+  if (hubStatus === 'pending') return pendingStatus;
+  if (hubStatus === 'posted') return postedStatus;
+  if (!hubStatus || hubStatus === 'all') return undefined;
+  return hubStatus;
+}
+
+export type OutboundListEnrichers = {
+  enrichProductionPickingRecordsWithCustomFields: (rows: OutboundHubOrder[]) => Promise<OutboundHubOrder[]>;
+  enrichSalesDeliveryRecordsWithCustomFields: (rows: OutboundHubOrder[]) => Promise<OutboundHubOrder[]>;
+};
+
+export async function fetchOutboundHubList(
+  params: Record<string, unknown>,
+  enrichers: OutboundListEnrichers,
+  user: CurrentUser | undefined,
+): Promise<{ data: OutboundHubOrder[]; total: number; success: boolean }> {
+  const skip = (((params.current as number) || 1) - 1) * ((params.pageSize as number) || 20);
+  const limit = (params.pageSize as number) || 20;
+  const typeFilter = params.outbound_type as string | undefined;
+  const hubStatus = params.status as string | undefined;
+  const scopedOutboundTypes = Array.isArray(params.hub_scoped_outbound_types)
+    ? (params.hub_scoped_outbound_types as OutboundHubOrder['outbound_type'][])
+    : undefined;
+  const typed = Boolean(typeFilter);
+  const fetchSkip = typed ? skip : 0;
+  const fetchLimit = typed ? limit : skip + limit;
+
+  const fetchPicking = shouldFetchOutboundHubType(user, typeFilter, 'production_picking', scopedOutboundTypes);
+  const fetchDelivery = shouldFetchOutboundHubType(user, typeFilter, 'sales_delivery', scopedOutboundTypes);
+  const fetchOutsource = shouldFetchOutboundHubType(user, typeFilter, 'outsource_issue', scopedOutboundTypes);
+  const fetchOther = shouldFetchOutboundHubType(user, typeFilter, 'other_outbound', scopedOutboundTypes);
+  const fetchBorrow = shouldFetchOutboundHubType(user, typeFilter, 'material_borrow', scopedOutboundTypes);
+  const fetchPurchaseReturn = shouldFetchOutboundHubType(user, typeFilter, 'purchase_return', scopedOutboundTypes);
+
+  const baseParams = {
+    skip: fetchSkip,
+    limit: fetchLimit,
+    keyword: params.keyword,
+    order_by: params.order_by,
+    warehouse_id: params.warehouse_id,
+    warehouse_name: params.warehouse_name,
+    customer_name: params.customer_name,
+    total_quantity: params.total_quantity,
+    created_start_date: params.created_start_date,
+    created_end_date: params.created_end_date,
+    updated_start_date: params.updated_start_date,
+    updated_end_date: params.updated_end_date,
+  };
+
+  const [pickingSettled, deliverySettled, outsourceSettled, otherSettled, borrowSettled, purchaseReturnSettled] =
+    await Promise.allSettled([
+      fetchPicking
+        ? warehouseApi.productionPicking.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, '待领料', '已领料'),
+          })
+        : Promise.resolve(emptyList),
+      fetchDelivery
+        ? warehouseApi.salesDelivery.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, '待出库', '已出库'),
+          })
+        : Promise.resolve(emptyList),
+      fetchOutsource
+        ? outsourceMaterialIssueApi.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, 'draft', 'completed'),
+          })
+        : Promise.resolve(emptyList),
+      fetchOther
+        ? warehouseApi.otherOutbound.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, '待出库', '已出库'),
+          })
+        : Promise.resolve(emptyList),
+      fetchBorrow
+        ? warehouseApi.materialBorrow.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, '待借出', '已借出'),
+          })
+        : Promise.resolve(emptyList),
+      fetchPurchaseReturn
+        ? warehouseApi.purchaseReturn.list({
+            ...baseParams,
+            status: sourceStatus(hubStatus, '待退货', '已退货'),
+          })
+        : Promise.resolve(emptyList),
+    ]);
+
+  const settledOrEmpty = (settled: PromiseSettledResult<unknown>) => {
+    if (settled.status === 'fulfilled') return settled.value;
+    return emptyList;
+  };
+  const anySourceFailed = [
+    pickingSettled,
+    deliverySettled,
+    outsourceSettled,
+    otherSettled,
+    borrowSettled,
+    purchaseReturnSettled,
+  ].some((s) => s.status === 'rejected');
+  if (anySourceFailed) {
+    const firstReject = [
+      pickingSettled,
+      deliverySettled,
+      outsourceSettled,
+      otherSettled,
+      borrowSettled,
+      purchaseReturnSettled,
+    ].find((s): s is PromiseRejectedResult => s.status === 'rejected');
+    // 保留首个失败原因，供调用方决定是否提示；不中断其它来源数据合并
+    console.warn('[outboundHub] partial list source failed', firstReject?.reason);
+  }
+
+  const pickingRes = settledOrEmpty(pickingSettled);
+  const deliveryRes = settledOrEmpty(deliverySettled);
+  const outsourceRes = settledOrEmpty(outsourceSettled);
+  const otherRes = settledOrEmpty(otherSettled);
+  const borrowRes = settledOrEmpty(borrowSettled);
+  const purchaseReturnRes = settledOrEmpty(purchaseReturnSettled);
+
+  const pickingData = fetchPicking
+    ? await enrichers.enrichProductionPickingRecordsWithCustomFields(
+        toList(pickingRes).items.map(
+          (item) =>
+            ({
+              ...(item as Record<string, unknown>),
+              outbound_type: 'production_picking' as const,
+              delivery_date: pickOutboundHubDateCandidate(
+                (item as Record<string, unknown>).picking_time,
+                (item as Record<string, unknown>).pickingTime,
+                (item as Record<string, unknown>).created_at,
+                (item as Record<string, unknown>).createdAt,
+              ),
+              delivered_by: (item as Record<string, unknown>).picker_name,
+            }) as OutboundHubOrder,
+        ),
+      )
+    : [];
+  const deliveryData = fetchDelivery
+    ? await enrichers.enrichSalesDeliveryRecordsWithCustomFields(
+        toList(deliveryRes).items.map(
+          (item) =>
+            ({
+              ...(item as Record<string, unknown>),
+              outbound_type: 'sales_delivery' as const,
+              delivery_date: pickOutboundHubDateCandidate(
+                (item as Record<string, unknown>).delivery_time,
+                (item as Record<string, unknown>).deliveryTime,
+                (item as Record<string, unknown>).delivery_date,
+                (item as Record<string, unknown>).deliveryDate,
+              ),
+              delivered_by: (item as Record<string, unknown>).deliverer_name,
+            }) as OutboundHubOrder,
+        ),
+      )
+    : [];
+  const outsourceData = fetchOutsource
+    ? toList(outsourceRes).items.map((item) => mapOutsourceIssueToOutbound(item as Record<string, unknown>))
+    : [];
+  const otherData = fetchOther
+    ? toList(otherRes).items.map(
+        (item) =>
+          ({
+            ...(item as Record<string, unknown>),
+            outbound_type: 'other_outbound' as const,
+            delivery_code: (item as Record<string, unknown>).outbound_code,
+            delivery_date: pickOutboundHubDateCandidate(
+              (item as Record<string, unknown>).delivery_time,
+              (item as Record<string, unknown>).deliveryTime,
+              (item as Record<string, unknown>).created_at,
+              (item as Record<string, unknown>).createdAt,
+            ),
+            delivered_by: (item as Record<string, unknown>).deliverer_name,
+          }) as OutboundHubOrder,
+      )
+    : [];
+  const borrowData = fetchBorrow
+    ? toList(borrowRes).items.map(
+        (item) =>
+          ({
+            ...(item as Record<string, unknown>),
+            outbound_type: 'material_borrow' as const,
+            delivery_code: (item as Record<string, unknown>).borrow_code,
+            delivery_date: pickOutboundHubDateCandidate(
+              (item as Record<string, unknown>).borrow_time,
+              (item as Record<string, unknown>).borrowTime,
+              (item as Record<string, unknown>).created_at,
+              (item as Record<string, unknown>).createdAt,
+            ),
+            delivered_by: (item as Record<string, unknown>).borrower_name,
+          }) as OutboundHubOrder,
+      )
+    : [];
+  const purchaseReturnData = fetchPurchaseReturn
+    ? toList(purchaseReturnRes).items.map(
+        (item) =>
+          ({
+            ...(item as Record<string, unknown>),
+            outbound_type: 'purchase_return' as const,
+            return_code: (item as Record<string, unknown>).return_code,
+            delivery_code: (item as Record<string, unknown>).return_code,
+            delivery_date: pickOutboundHubDateCandidate(
+              (item as Record<string, unknown>).return_time,
+              (item as Record<string, unknown>).returnTime,
+              (item as Record<string, unknown>).created_at,
+              (item as Record<string, unknown>).createdAt,
+            ),
+            delivered_by: (item as Record<string, unknown>).returner_name,
+            total_quantity:
+              (item as Record<string, unknown>).total_quantity ??
+              (item as Record<string, unknown>).total_return_quantity,
+          }) as OutboundHubOrder,
+      )
+    : [];
+
+  const combinedData: OutboundHubOrder[] = [
+    ...pickingData,
+    ...deliveryData,
+    ...outsourceData,
+    ...otherData,
+    ...borrowData,
+    ...purchaseReturnData,
+  ].map(withOutboundHubDisplayFields);
+
+  const sorted = sortOutboundHubRows(
+    combinedData as Record<string, unknown>[],
+    typeof params.order_by === 'string' ? params.order_by : undefined,
+  ) as OutboundHubOrder[];
+
+  const sourceTotal =
+    (fetchPicking ? toList(pickingRes).total : 0) +
+    (fetchDelivery ? toList(deliveryRes).total : 0) +
+    (fetchOutsource ? toList(outsourceRes).total : 0) +
+    (fetchOther ? toList(otherRes).total : 0) +
+    (fetchBorrow ? toList(borrowRes).total : 0) +
+    (fetchPurchaseReturn ? toList(purchaseReturnRes).total : 0);
+
+  if (typed) {
+    return { data: sorted, success: !anySourceFailed, total: sourceTotal };
+  }
+
+  const page = sorted.slice(skip, skip + limit);
+  return { data: page, success: !anySourceFailed, total: sourceTotal };
+}

@@ -1,0 +1,304 @@
+"""
+需求重算影响分析服务
+
+将变更事件转换为受影响对象集合（需求/需求计算/计划等），
+并输出风险与审批建议，用于后续编排器决策。
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Dict, List, Set
+
+from apps.kuaizhizao.models.demand import Demand
+from apps.kuaizhizao.models.demand_change_event import DemandChangeEvent
+from apps.kuaizhizao.models.demand_computation import DemandComputation
+from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
+from apps.kuaizhizao.models.demand_impact_record import DemandImpactRecord
+from apps.kuaizhizao.models.demand_item import DemandItem
+from apps.kuaizhizao.models.work_order import WorkOrder
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+
+from apps.kuaizhizao.constants.demand_computation_status import (
+    RECOMPUTABLE_COMPUTATION_STATUSES,
+)
+
+
+class DemandReplanImpactService:
+    """需求重算影响分析"""
+
+    @staticmethod
+    def _is_within_frozen_horizon(effective_at: datetime | None, frozen_days: int = 7) -> bool:
+        if not effective_at:
+            return False
+        try:
+            site_today = to_site_date(resolve_business_datetime())
+            effective_site_date = to_site_date(effective_at)
+            return (effective_site_date - site_today).days <= frozen_days
+        except Exception:
+            return False
+
+    @staticmethod
+    async def collect_computation_ids_for_demands(
+        tenant_id: int,
+        demand_ids: Set[int] | List[int],
+    ) -> Set[int]:
+        """按需求反查关联需求计算（含合并计算的 demand_ids）。"""
+        ids: Set[int] = set()
+        normalized = {int(i) for i in demand_ids if i is not None}
+        if not normalized:
+            return ids
+
+        for cid in await Demand.filter(
+            tenant_id=tenant_id,
+            id__in=list(normalized),
+            deleted_at__isnull=True,
+        ).values_list("computation_id", flat=True):
+            if cid:
+                ids.add(int(cid))
+
+        primary_ids = await DemandComputation.filter(
+            tenant_id=tenant_id,
+            demand_id__in=list(normalized),
+        ).values_list("id", flat=True)
+        ids.update(int(i) for i in primary_ids)
+
+        merged_rows = await DemandComputation.filter(
+            tenant_id=tenant_id,
+            demand_ids__not_isnull=True,
+        ).values_list("id", "demand_ids")
+        for cid, raw_ids in merged_rows:
+            if not isinstance(raw_ids, list):
+                continue
+            member_ids = {int(x) for x in raw_ids if x is not None}
+            if member_ids.intersection(normalized):
+                ids.add(int(cid))
+        return ids
+
+    @staticmethod
+    async def filter_recomputable_computation_ids(
+        tenant_id: int,
+        computation_ids: Set[int] | List[int],
+    ) -> List[int]:
+        """仅保留可重算（完成/失败）的需求计算。"""
+        normalized = sorted({int(i) for i in computation_ids if i is not None})
+        if not normalized:
+            return []
+        rows = await DemandComputation.filter(
+            tenant_id=tenant_id,
+            id__in=normalized,
+            computation_status__in=list(RECOMPUTABLE_COMPUTATION_STATUSES),
+        ).values_list("id", flat=True)
+        return sorted(int(i) for i in rows)
+
+    async def analyze_event(
+        self,
+        tenant_id: int,
+        event: DemandChangeEvent,
+    ) -> Dict[str, Any]:
+        """执行影响分析并写入 DemandImpactRecord。"""
+        await DemandImpactRecord.filter(tenant_id=tenant_id, event_id=event.id).delete()
+
+        if event.source_type == "sales_order":
+            result = await self._analyze_sales_order_change(tenant_id, event)
+        elif event.source_type == "sales_forecast":
+            result = await self._analyze_sales_forecast_change(tenant_id, event)
+        elif event.source_type == "bom_change":
+            result = await self._analyze_bom_change(tenant_id, event)
+        elif event.source_type == "process_route_change":
+            result = await self._analyze_process_route_change(tenant_id, event)
+        else:
+            result = {
+                "records": [],
+                "demand_ids": [],
+                "computation_ids": [],
+                "plan_ids": [],
+                "material_ids": [],
+            }
+
+        for rec in result["records"]:
+            await DemandImpactRecord.create(tenant_id=tenant_id, event_id=event.id, **rec)
+
+        await DemandChangeEvent.filter(tenant_id=tenant_id, id=event.id).update(event_status="analyzed")
+        return {
+            "event_id": event.id,
+            "impact_count": len(result["records"]),
+            "demand_ids": result["demand_ids"],
+            "computation_ids": result["computation_ids"],
+            "plan_ids": result["plan_ids"],
+            "material_ids": result["material_ids"],
+        }
+
+    async def _analyze_sales_order_change(self, tenant_id: int, event: DemandChangeEvent) -> Dict[str, Any]:
+        demands = await Demand.filter(
+            tenant_id=tenant_id,
+            source_type="sales_order",
+            source_id=event.source_id,
+            deleted_at__isnull=True,
+        ).all()
+        return await self._build_common_result(
+            tenant_id=tenant_id,
+            event=event,
+            demands=demands,
+            reason="销售订单变更影响需求与需求计算",
+            risk_level="medium",
+        )
+
+    async def _analyze_sales_forecast_change(self, tenant_id: int, event: DemandChangeEvent) -> Dict[str, Any]:
+        demands = await Demand.filter(
+            tenant_id=tenant_id,
+            source_type="sales_forecast",
+            source_id=event.source_id,
+            deleted_at__isnull=True,
+        ).all()
+        return await self._build_common_result(
+            tenant_id=tenant_id,
+            event=event,
+            demands=demands,
+            reason="销售预测变更影响需求与需求计算",
+            risk_level="low",
+        )
+
+    async def _analyze_bom_change(self, tenant_id: int, event: DemandChangeEvent) -> Dict[str, Any]:
+        payload = event.payload or {}
+        material_id = payload.get("material_id") or event.source_id
+        demand_ids = set(
+            await DemandItem.filter(
+                tenant_id=tenant_id,
+                material_id=material_id,
+            ).values_list("demand_id", flat=True)
+        )
+        demands = []
+        if demand_ids:
+            demands = await Demand.filter(
+                tenant_id=tenant_id,
+                id__in=list(demand_ids),
+                deleted_at__isnull=True,
+            ).all()
+        result = await self._build_common_result(
+            tenant_id=tenant_id,
+            event=event,
+            demands=demands,
+            reason="BOM变更影响物料需求展开结果",
+            risk_level="high",
+            extra_material_ids=[material_id] if material_id else [],
+            force_approval=True,
+        )
+        return result
+
+    async def _analyze_process_route_change(self, tenant_id: int, event: DemandChangeEvent) -> Dict[str, Any]:
+        payload = event.payload or {}
+        process_route_id = payload.get("process_route_id") or event.source_id
+        work_orders = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            process_route_id=process_route_id,
+            deleted_at__isnull=True,
+        ).all()
+        sales_order_ids = [int(wo.sales_order_id) for wo in work_orders if wo.sales_order_id]
+        demands = []
+        if sales_order_ids:
+            demands = await Demand.filter(
+                tenant_id=tenant_id,
+                source_type="sales_order",
+                source_id__in=sales_order_ids,
+                deleted_at__isnull=True,
+            ).all()
+        return await self._build_common_result(
+            tenant_id=tenant_id,
+            event=event,
+            demands=demands,
+            reason="工艺路线变更影响工单与需求交期",
+            risk_level="high",
+            force_approval=True,
+        )
+
+    async def _build_common_result(
+        self,
+        tenant_id: int,
+        event: DemandChangeEvent,
+        demands: List[Demand],
+        reason: str,
+        risk_level: str,
+        extra_material_ids: List[int] | None = None,
+        force_approval: bool = False,
+    ) -> Dict[str, Any]:
+        frozen_hit = self._is_within_frozen_horizon(event.effective_at)
+        needs_approval = force_approval or frozen_hit or risk_level in ("high",)
+
+        demand_ids: Set[int] = {int(d.id) for d in demands}
+        computation_ids: Set[int] = set()
+        plan_ids: Set[int] = set()
+        material_ids: Set[int] = set(extra_material_ids or [])
+        records: List[Dict[str, Any]] = []
+
+        for d in demands:
+            records.append(
+                {
+                    "impact_type": "demand",
+                    "impact_id": int(d.id),
+                    "impact_code": d.demand_code,
+                    "impact_scope": "direct",
+                    "impact_reason": reason,
+                    "impact_payload": {"source_type": d.source_type, "source_id": d.source_id},
+                    "risk_level": risk_level,
+                    "needs_approval": needs_approval,
+                    "frozen_horizon_hit": frozen_hit,
+                }
+            )
+            if d.computation_id:
+                computation_ids.add(int(d.computation_id))
+
+        computation_ids.update(
+            await self.collect_computation_ids_for_demands(tenant_id, demand_ids)
+        )
+        recomputable_ids = set(
+            await self.filter_recomputable_computation_ids(tenant_id, computation_ids)
+        )
+        computation_ids = recomputable_ids
+
+        if computation_ids:
+            items = await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                computation_id__in=list(computation_ids),
+            ).values_list("material_id", flat=True)
+            material_ids.update(int(mid) for mid in items if mid)
+            for cid, ccode in await DemandComputation.filter(
+                tenant_id=tenant_id,
+                id__in=list(computation_ids),
+            ).values_list("id", "computation_code"):
+                records.append(
+                    {
+                        "impact_type": "computation",
+                        "impact_id": int(cid),
+                        "impact_code": ccode,
+                        "impact_scope": "direct",
+                        "impact_reason": "需求计算输入已变化，建议重算",
+                        "impact_payload": {"demand_ids": list(demand_ids)},
+                        "risk_level": risk_level,
+                        "needs_approval": needs_approval,
+                        "frozen_horizon_hit": frozen_hit,
+                    }
+                )
+
+        for mid in material_ids:
+            records.append(
+                {
+                    "impact_type": "material",
+                    "impact_id": int(mid),
+                    "impact_code": str(mid),
+                    "impact_scope": "transitive",
+                    "impact_reason": "变更涉及物料主数据/结构，需刷新建议量",
+                    "impact_payload": None,
+                    "risk_level": risk_level,
+                    "needs_approval": needs_approval,
+                    "frozen_horizon_hit": frozen_hit,
+                }
+            )
+
+        return {
+            "records": records,
+            "demand_ids": sorted(demand_ids),
+            "computation_ids": sorted(computation_ids),
+            "plan_ids": sorted(plan_ids),
+            "material_ids": sorted(material_ids),
+        }

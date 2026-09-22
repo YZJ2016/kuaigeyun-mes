@@ -1,0 +1,51 @@
+/**
+ * 库位表单 Schema 配置
+ */
+
+import type { FieldConfig } from './form-schemas';
+
+export const storageLocationFormSchema: FieldConfig[] = [
+  {
+    name: 'code',
+    type: 'text',
+    labelKey: 'field.storageLocation.code',
+    placeholderKey: 'field.storageLocation.codePlaceholder',
+    required: true,
+    colSpan: 12,
+    rules: [
+      { required: true, messageKey: 'field.storageLocation.codeRequired' },
+    ],
+    fieldProps: { style: { textTransform: 'uppercase' } },
+  },
+  {
+    name: 'name',
+    type: 'text',
+    labelKey: 'field.storageLocation.name',
+    required: true,
+    colSpan: 12,
+    rules: [{ required: true, messageKey: 'field.storageLocation.nameRequired' }],
+  },
+  {
+    name: 'storageAreaId',
+    type: 'select',
+    labelKey: 'field.storageLocation.storageAreaId',
+    placeholderKey: 'field.storageLocation.storageAreaIdPlaceholder',
+    required: true,
+    colSpan: 12,
+    rules: [{ required: true, messageKey: 'field.storageLocation.storageAreaIdRequired' }],
+  },
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields', colSpan: 24 },
+  {
+    name: 'description',
+    type: 'textarea',
+    labelKey: 'common.remark',
+    colSpan: 24,
+    fieldProps: { rows: 2, maxLength: 1000 },
+  },
+  {
+    name: 'isActive',
+    type: 'switch',
+    labelKey: 'common.enabled',
+    colSpan: 12,
+  },
+];

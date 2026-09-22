@@ -1,0 +1,170 @@
+import { apiRequest } from '../../../../services/api';
+
+export interface PartnerStatementLine {
+  date: string;
+  doc_type: string;
+  doc_code: string;
+  summary?: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  doc_id?: number;
+  doc_amount?: number;
+  prior_stated_amount?: number;
+  remaining_amount?: number;
+  statement_amount?: number;
+  /** 0=应收/应付等主行，1=其下核销的收/付款单 */
+  tree_level?: number;
+  parent_doc_id?: number;
+  parent_doc_code?: string;
+  inbound_detail_doc_type?: string;
+  inbound_detail_doc_id?: number;
+}
+
+export interface PartnerStatementSummary {
+  opening_balance: number;
+  debit_total: number;
+  credit_total: number;
+  closing_balance: number;
+}
+
+export interface PartnerStatementPreview {
+  partner_id: number;
+  partner_name: string;
+  partner_type: string;
+  start_date: string;
+  end_date: string;
+  company_name: string;
+  balance_label: string;
+  summary: PartnerStatementSummary;
+  lines: PartnerStatementLine[];
+  partner_snapshot?: Record<string, unknown>;
+  /** 本期因已纳入其它对账单而排除的行数 */
+  excluded_from_period?: number;
+  /** 同一往来同一 YYYY-MM 已存在的对账单 */
+  existing_period_statement_id?: number | null;
+  existing_period_statement_code?: string | null;
+  existing_period?: string | null;
+}
+
+export interface PartnerStatement {
+  id: number;
+  statement_code: string;
+  partner_id: number;
+  partner_name: string;
+  partner_type: string;
+  statement_period: string;
+  start_date: string;
+  end_date: string;
+  opening_balance: number;
+  debit_total: number;
+  credit_total: number;
+  closing_balance: number;
+  status: string;
+  company_name?: string;
+  transaction_details?: {
+    summary?: PartnerStatementSummary;
+    lines?: PartnerStatementLine[];
+    balance_label?: string;
+    partner_snapshot?: Record<string, unknown>;
+  };
+  confirmed_at?: string;
+  sent_at?: string;
+  sent_channel?: string;
+  dispute_reason?: string;
+  disputed_at?: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+  created_by_name?: string;
+  updated_by_name?: string;
+}
+
+export interface PartnerStatementLineAmountInput {
+  doc_type: string;
+  doc_id: number;
+  statement_amount: number;
+}
+
+export interface PartnerStatementListParams {
+  limit?: number;
+  partner_type?: string;
+  partner_id?: number;
+  statement_period?: string;
+  status?: string;
+  keyword?: string;
+  statement_code?: string;
+  partner_name?: string;
+  created_start_date?: string;
+  created_end_date?: string;
+  updated_start_date?: string;
+  updated_end_date?: string;
+  sort_field?: string;
+  sort_order?: 'asc' | 'desc';
+}
+
+const API = '/apps/kuaicaiwu/partner-statements';
+
+export const partnerStatementService = {
+  preview: (params: {
+    partner_id: number;
+    partner_type: string;
+    start_date: string;
+    end_date: string;
+  }) =>
+    apiRequest<PartnerStatementPreview>(`${API}/preview`, { method: 'GET', params }),
+
+  create: (data: {
+    partner_id: number;
+    partner_type: string;
+    statement_period: string;
+    start_date?: string;
+    end_date?: string;
+    notes?: string;
+    attachments?: Array<{ uid?: string; name?: string; status?: string; url?: string }>;
+    line_amounts?: PartnerStatementLineAmountInput[];
+  }) => apiRequest<PartnerStatement>(API, { method: 'POST', data }),
+
+  list: (params?: PartnerStatementListParams) =>
+    apiRequest<{ items: PartnerStatement[]; total: number }>(API, { method: 'GET', params }),
+
+  get: (id: number) => apiRequest<PartnerStatement>(`${API}/${id}`, { method: 'GET' }),
+
+  updateLines: (id: number, lines: PartnerStatementLineAmountInput[]) =>
+    apiRequest<PartnerStatement>(`${API}/${id}/lines`, {
+      method: 'PATCH',
+      data: { lines },
+    }),
+
+  confirm: (id: number) => apiRequest<PartnerStatement>(`${API}/${id}/confirm`, { method: 'POST' }),
+
+  markSent: (id: number, data: { channel: string; notes?: string }) =>
+    apiRequest<PartnerStatement>(`${API}/${id}/mark-sent`, { method: 'POST', data }),
+
+  dispute: (id: number, reason: string) =>
+    apiRequest<PartnerStatement>(`${API}/${id}/dispute`, { method: 'POST', data: { reason } }),
+
+  delete: (id: number) => apiRequest<void>(`${API}/${id}`, { method: 'DELETE' }),
+
+  exportFile: (id: number, format: 'xlsx' | 'pdf') =>
+    apiRequest<Blob>(`${API}/${id}/export`, {
+      method: 'GET',
+      params: { format },
+      responseType: 'blob',
+    }),
+
+  getLineDetail: (params: { doc_type: string; doc_id: number }) =>
+    apiRequest<{ items: Array<Record<string, unknown>> }>(`${API}/line-detail`, {
+      method: 'GET',
+      params,
+    }),
+};
+
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

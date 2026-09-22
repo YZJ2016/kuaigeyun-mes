@@ -1,0 +1,82 @@
+{
+  "sortOrder": 102,
+  "industryId": "machining",
+  "primaryCategory": "standard_parts",
+  "id": "std_fastener_nut_washer_cn_sme",
+  "name": "紧固件-螺母与垫圈（通用）",
+  "description": "与六角螺栓/螺钉配套使用的高频螺母、平垫、弹垫、防松件。",
+  "items": [
+    {
+      "preset_key": "cn_nut_hex_gbt6170_m6",
+      "name": "六角螺母",
+      "specification": "M6",
+      "gb_standard": "GB/T 6170",
+      "gb_code": "GB6170-M6",
+      "base_unit": "件",
+      "texture": "碳钢镀锌"
+    },
+    {
+      "preset_key": "cn_nut_hex_gbt6170_m8",
+      "name": "六角螺母",
+      "specification": "M8",
+      "gb_standard": "GB/T 6170",
+      "gb_code": "GB6170-M8",
+      "base_unit": "件",
+      "texture": "碳钢镀锌"
+    },
+    {
+      "preset_key": "cn_nut_hex_gbt6170_m10",
+      "name": "六角螺母",
+      "specification": "M10",
+      "gb_standard": "GB/T 6170",
+      "gb_code": "GB6170-M10",
+      "base_unit": "件",
+      "texture": "碳钢镀锌"
+    },
+    {
+      "preset_key": "cn_nut_nylon_gbt889_m8",
+      "name": "1型非金属嵌件六角锁紧螺母",
+      "specification": "M8",
+      "gb_standard": "GB/T 889.1",
+      "gb_code": "GB889.1-M8",
+      "base_unit": "件",
+      "texture": "碳钢+尼龙圈"
+    },
+    {
+      "preset_key": "cn_washer_flat_gbt97_m6",
+      "name": "平垫圈",
+      "specification": "6",
+      "gb_standard": "GB/T 97.1",
+      "gb_code": "GB97.1-6",
+      "base_unit": "件",
+      "texture": "碳钢镀锌"
+    },
+    {
+      "preset_key": "cn_washer_flat_gbt97_m8",
+      "name": "平垫圈",
+      "specification": "8",
+      "gb_standard": "GB/T 97.1",
+      "gb_code": "GB97.1-8",
+      "base_unit": "件",
+      "texture": "碳钢镀锌"
+    },
+    {
+      "preset_key": "cn_washer_spring_gbt93_m8",
+      "name": "弹簧垫圈",
+      "specification": "8",
+      "gb_standard": "GB/T 93",
+      "gb_code": "GB93-8",
+      "base_unit": "件",
+      "texture": "弹簧钢"
+    },
+    {
+      "preset_key": "cn_washer_spring_gbt93_m10",
+      "name": "弹簧垫圈",
+      "specification": "10",
+      "gb_standard": "GB/T 93",
+      "gb_code": "GB93-10",
+      "base_unit": "件",
+      "texture": "弹簧钢"
+    }
+  ]
+}

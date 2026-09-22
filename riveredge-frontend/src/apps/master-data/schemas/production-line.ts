@@ -1,0 +1,51 @@
+/**
+ * 产线表单 Schema 配置
+ */
+
+import type { FieldConfig } from './form-schemas';
+
+export const productionLineFormSchema: FieldConfig[] = [
+  {
+    name: 'code',
+    type: 'text',
+    labelKey: 'field.productionLine.code',
+    placeholderKey: 'field.productionLine.codePlaceholder',
+    required: true,
+    colSpan: 12,
+    rules: [
+      { required: true, messageKey: 'field.productionLine.codeRequired' },
+    ],
+    fieldProps: { style: { textTransform: 'uppercase' } },
+  },
+  {
+    name: 'name',
+    type: 'text',
+    labelKey: 'field.productionLine.name',
+    required: true,
+    colSpan: 12,
+    rules: [{ required: true, messageKey: 'field.productionLine.nameRequired' }],
+  },
+  {
+    name: 'workshopId',
+    type: 'select',
+    labelKey: 'field.productionLine.workshopId',
+    placeholderKey: 'field.productionLine.workshopIdPlaceholder',
+    required: true,
+    colSpan: 12,
+    rules: [{ required: true, messageKey: 'field.productionLine.workshopIdRequired' }],
+  },
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields', colSpan: 24 },
+  {
+    name: 'description',
+    type: 'textarea',
+    labelKey: 'common.remark',
+    colSpan: 24,
+    fieldProps: { rows: 2, maxLength: 1000 },
+  },
+  {
+    name: 'isActive',
+    type: 'switch',
+    labelKey: 'common.enabled',
+    colSpan: 12,
+  },
+];

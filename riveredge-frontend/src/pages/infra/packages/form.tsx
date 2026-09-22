@@ -1,0 +1,148 @@
+/**
+ * 套餐表单项组件（仅渲染字段，不包含 submitter）
+ */
+
+import { useEffect, useMemo } from 'react';
+import { Form } from 'antd';
+import {
+  ProFormText,
+  ProFormDigit,
+  ProFormSwitch,
+  ProFormSelect,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
+import SafeProFormSelect from '../../../components/safe-pro-form-select';
+import { useQuery } from '@tanstack/react-query';
+import { getApplicationList } from '../../../services/application';
+import {
+  TENANT_PLAN_SORT_ORDER,
+  resolveTenantPlanLabelKey,
+  tenantPlanAllowsProApps,
+} from '../../../services/tenant';
+import { useTranslation } from 'react-i18next';
+
+function AllowProAppsByPlanField() {
+  const { t } = useTranslation();
+  const form = Form.useFormInstance();
+  const plan = Form.useWatch('plan', form);
+  const allows = tenantPlanAllowsProApps(plan);
+
+  useEffect(() => {
+    if (plan == null || plan === '') return;
+    if (form.getFieldValue('allow_pro_apps') !== allows) {
+      form.setFieldValue('allow_pro_apps', allows);
+    }
+  }, [allows, form, plan]);
+
+  return (
+    <ProFormSwitch
+      name="allow_pro_apps"
+      label={t('pages.infra.package.allowProApps')}
+      disabled
+      extra={t('pages.infra.package.allowProAppsByPlanHelp')}
+    />
+  );
+}
+
+export default function PackageForm() {
+  const { t } = useTranslation();
+
+  /** 类型选项：内置 TenantPlan 档位文案，禁止用套餐名称冒充类型；同档可建多套餐 */
+  const planOptions = useMemo(
+    () =>
+      TENANT_PLAN_SORT_ORDER.map((plan) => {
+        const labelKey = resolveTenantPlanLabelKey(plan);
+        return {
+          label: labelKey ? t(labelKey) : plan,
+          value: plan,
+        };
+      }),
+    [t],
+  );
+
+  const { data: applicationOptions = [], isLoading: appOptionsLoading } = useQuery({
+    queryKey: ['package-app-options'],
+    queryFn: async () => {
+      const apps = await getApplicationList({ limit: 1000 });
+      return (apps || [])
+        .map((app) => ({
+          label: `${app.name} (${app.code})`,
+          value: app.code,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+    },
+  });
+
+  return (
+    <>
+      <ProFormText
+        name="name"
+        label={t('pages.infra.package.name')}
+        rules={[{ required: true, message: t('pages.infra.package.nameRequired') }]}
+      />
+
+      <SafeProFormSelect
+        name="plan"
+        label={t('pages.infra.package.plan')}
+        options={planOptions}
+        rules={[{ required: true, message: t('pages.infra.package.planRequired') }]}
+        extra={t('pages.infra.package.planBuiltinHelp')}
+      />
+
+      <ProFormDigit
+        name="max_users"
+        label={t('pages.infra.package.maxUsers')}
+        min={1}
+        rules={[{ required: true, message: t('pages.infra.package.maxUsersRequired') }]}
+      />
+
+      <ProFormDigit
+        name="max_storage_mb"
+        label={t('pages.infra.package.maxStorage')}
+        min={1}
+        rules={[{ required: true, message: t('pages.infra.package.maxStorageRequired') }]}
+      />
+
+      <ProFormDigit
+        name="max_branch_organizations"
+        label={t('pages.infra.package.maxBranchOrganizations')}
+        min={0}
+        fieldProps={{ precision: 0 }}
+        tooltip={t('pages.infra.package.maxBranchOrganizationsHelp')}
+      />
+
+      <AllowProAppsByPlanField />
+
+      <ProFormSelect
+        name="allowed_app_codes"
+        label={t('pages.infra.package.allowedApps')}
+        mode="multiple"
+        options={applicationOptions}
+        loading={appOptionsLoading}
+        fieldProps={{
+          optionFilterProp: 'label',
+          showSearch: true,
+        }}
+        extra={t('pages.infra.package.allowedAppsHelp')}
+      />
+
+      <ProFormText
+        name="description"
+        label={t('common.remark')}
+      />
+
+      <ProFormTextArea
+        name="features"
+        label={t('pages.infra.package.features')}
+        placeholder={t('pages.infra.package.featuresPlaceholder')}
+        help={t('pages.infra.package.featuresHelp')}
+      />
+
+      <ProFormSwitch
+        name="is_active"
+        label={t('pages.infra.package.isActive')}
+        initialValue={true}
+      />
+    </>
+  );
+}

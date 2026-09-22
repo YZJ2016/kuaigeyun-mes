@@ -1,0 +1,1078 @@
+"""
+工程图纸业务服务
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
+from tortoise.expressions import Q
+
+from apps.common.audit_actor import (
+    apply_create_audit,
+    apply_update_audit,
+    audit_response_fields,
+    operator_name_from_user,
+)
+from apps.master_data.models.drawing import EngineeringDrawing
+from apps.master_data.models.material import Material
+from apps.master_data.models.process import Operation, ProcessRoute
+from apps.master_data.schemas.drawing_schemas import (
+    AssociatedMaterialBrief,
+    AssociatedOperationBrief,
+    AssociatedProcessRouteBrief,
+    EngineeringDrawingCreate,
+    EngineeringDrawingObsoleteRequest,
+    EngineeringDrawingPrintDataResponse,
+    EngineeringDrawingResponse,
+    EngineeringDrawingRevisionBrief,
+    EngineeringDrawingRevisionCreate,
+    EngineeringDrawingUpdate,
+    FileBriefResponse,
+    LinkedBomBrief,
+)
+from apps.master_data.services.drawing_security import (
+    DEFAULT_DRAWING_SECURITY_LEVEL,
+    PRINT_LOAN_REQUIRED_LEVELS,
+    SECURITY_LEVEL_LABELS,
+    DrawingSecurityService,
+    normalize_security_level,
+)
+from core.services.file.document_version_policy import (
+    can_view_historical_versions,
+    filter_version_rows,
+    resolve_audience,
+)
+from core.services.file.file_service import FileService
+from infra.exceptions.exceptions import AuthorizationError, NotFoundError, ValidationError
+from infra.models.user import User
+
+
+def _utcnow() -> datetime:
+    from core.utils.timezone_utils import now_utc
+
+    return now_utc()
+
+
+def _norm_uuid_list(value: Any) -> List[str]:
+    if not value:
+        return []
+    if not isinstance(value, list):
+        return []
+    out: List[str] = []
+    for item in value:
+        if isinstance(item, str) and item.strip():
+            out.append(item.strip())
+    return out
+
+
+def _next_revision(revision: str) -> str:
+    rev = (revision or "A").strip().upper()
+    if len(rev) == 1 and rev.isalpha():
+        if rev == "Z":
+            return "AA"
+        return chr(ord(rev) + 1)
+    if rev.isdigit():
+        return str(int(rev) + 1).zfill(len(rev))
+    m = re.match(r"^(.+?)(\d+)$", rev)
+    if m:
+        prefix, num = m.group(1), m.group(2)
+        return f"{prefix}{str(int(num) + 1).zfill(len(num))}"
+    return f"{rev}-1"
+
+
+def _row_sort_key(drawing: EngineeringDrawing, field: str) -> tuple:
+    if field == "released_at":
+        val = drawing.released_at or drawing.created_at
+    else:
+        val = getattr(drawing, field, None) or drawing.created_at
+    return (val, drawing.created_at, drawing.id)
+
+
+def pick_current_effective_rows(rows: List[EngineeringDrawing]) -> List[EngineeringDrawing]:
+    """每个图号保留一条现行有效版：最新 Released，否则最新 Draft。"""
+    by_code: Dict[str, List[EngineeringDrawing]] = {}
+    for row in rows:
+        by_code.setdefault(row.code, []).append(row)
+
+    effective: List[EngineeringDrawing] = []
+    for group in by_code.values():
+        released = [r for r in group if (r.status or "") == "Released"]
+        if released:
+            effective.append(max(released, key=lambda r: _row_sort_key(r, "released_at")))
+            continue
+        working = [r for r in group if (r.status or "") in ("Draft", "Editing", "Pending")]
+        if working:
+            effective.append(max(working, key=lambda r: _row_sort_key(r, "created_at")))
+    return effective
+
+
+class _AssociationMaps:
+    __slots__ = (
+        "materials_by_uuid",
+        "routes_by_uuid",
+        "operations_by_uuid",
+        "materials_by_id",
+        "folders_by_id",
+    )
+
+    def __init__(self) -> None:
+        self.materials_by_uuid: Dict[str, AssociatedMaterialBrief] = {}
+        self.routes_by_uuid: Dict[str, AssociatedProcessRouteBrief] = {}
+        self.operations_by_uuid: Dict[str, AssociatedOperationBrief] = {}
+        self.materials_by_id: Dict[int, Material] = {}
+        self.folders_by_id: Dict[int, tuple[str, str]] = {}
+
+
+async def _build_association_maps(
+    tenant_id: int, drawings: List[EngineeringDrawing]
+) -> _AssociationMaps:
+    maps = _AssociationMaps()
+    if not drawings:
+        return maps
+
+    material_uuids: set[str] = set()
+    route_uuids: set[str] = set()
+    operation_uuids: set[str] = set()
+    bom_material_ids: set[int] = set()
+
+    for drawing in drawings:
+        material_uuids.update(_norm_uuid_list(drawing.material_uuids))
+        route_uuids.update(_norm_uuid_list(drawing.process_route_uuids))
+        operation_uuids.update(_norm_uuid_list(drawing.operation_uuids))
+        if drawing.linked_bom_material_id:
+            bom_material_ids.add(int(drawing.linked_bom_material_id))
+
+    if material_uuids or bom_material_ids:
+        query = Material.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        filters = Q()
+        if material_uuids:
+            filters |= Q(uuid__in=list(material_uuids))
+        if bom_material_ids:
+            filters |= Q(id__in=list(bom_material_ids))
+        materials = await query.filter(filters).all()
+        for mat in materials:
+            brief = AssociatedMaterialBrief(uuid=mat.uuid, main_code=mat.main_code, name=mat.name)
+            maps.materials_by_uuid[mat.uuid] = brief
+            maps.materials_by_id[mat.id] = mat
+
+    if route_uuids:
+        routes = await ProcessRoute.filter(
+            tenant_id=tenant_id, uuid__in=list(route_uuids), deleted_at__isnull=True
+        ).all()
+        for route in routes:
+            maps.routes_by_uuid[route.uuid] = AssociatedProcessRouteBrief(
+                uuid=route.uuid, code=route.code, name=route.name
+            )
+
+    if operation_uuids:
+        operations = await Operation.filter(
+            tenant_id=tenant_id, uuid__in=list(operation_uuids), deleted_at__isnull=True
+        ).all()
+        for op in operations:
+            maps.operations_by_uuid[op.uuid] = AssociatedOperationBrief(
+                uuid=op.uuid, code=op.code, name=op.name
+            )
+
+    folder_ids = {d.folder_id for d in drawings if d.folder_id}
+    if folder_ids:
+        from apps.master_data.services.drawing_folder_service import DrawingFolderService
+
+        maps.folders_by_id = await DrawingFolderService.folder_briefs(tenant_id, folder_ids)
+
+    return maps
+
+
+def _apply_associations(
+    drawing: EngineeringDrawing, maps: Optional[_AssociationMaps]
+) -> Dict[str, Any]:
+    if not maps:
+        return {}
+
+    material_uuids = _norm_uuid_list(drawing.material_uuids)
+    route_uuids = _norm_uuid_list(drawing.process_route_uuids)
+    operation_uuids = _norm_uuid_list(drawing.operation_uuids)
+
+    materials = [maps.materials_by_uuid[u] for u in material_uuids if u in maps.materials_by_uuid]
+    process_routes = [maps.routes_by_uuid[u] for u in route_uuids if u in maps.routes_by_uuid]
+    operations = [maps.operations_by_uuid[u] for u in operation_uuids if u in maps.operations_by_uuid]
+
+    linked_bom: Optional[LinkedBomBrief] = None
+    if drawing.linked_bom_material_id and drawing.linked_bom_version:
+        mat = maps.materials_by_id.get(int(drawing.linked_bom_material_id))
+        if mat:
+            linked_bom = LinkedBomBrief(
+                material_id=mat.id,
+                material_code=mat.main_code,
+                material_name=mat.name,
+                version=drawing.linked_bom_version,
+            )
+
+    out: Dict[str, Any] = {}
+    if materials:
+        out["materials"] = materials
+    if process_routes:
+        out["process_routes"] = process_routes
+    if operations:
+        out["operations"] = operations
+    if linked_bom:
+        out["linked_bom"] = linked_bom
+    return out
+
+
+async def _ensure_file_uuids(tenant_id: int, uuids: List[str], label: str) -> None:
+    for uid in uuids:
+        try:
+            await FileService.get_file_by_uuid(tenant_id, uid)
+        except NotFoundError as e:
+            raise ValidationError(f"{label}文件不存在: {uid}") from e
+
+
+async def _file_brief(tenant_id: int, file_uuid: str) -> Optional[FileBriefResponse]:
+    if not file_uuid:
+        return None
+    try:
+        f = await FileService.get_file_by_uuid(tenant_id, file_uuid)
+    except NotFoundError:
+        return None
+    preview_url = None
+    try:
+        from core.services.file.file_preview_service import FilePreviewService
+
+        preview_url = await FilePreviewService.generate_simple_preview_url(
+            file_uuid=f.uuid,
+            tenant_id=tenant_id,
+        )
+    except Exception:
+        preview_url = None
+    return FileBriefResponse(
+        uuid=f.uuid,
+        original_name=f.original_name,
+        file_extension=f.file_extension,
+        file_size=int(f.file_size or 0),
+        preview_url=preview_url,
+    )
+
+
+async def _to_response(
+    tenant_id: int,
+    drawing: EngineeringDrawing,
+    maps: Optional[_AssociationMaps] = None,
+) -> EngineeringDrawingResponse:
+    supp_uuids = _norm_uuid_list(drawing.supplementary_file_uuids)
+    supp_files: List[FileBriefResponse] = []
+    for uid in supp_uuids:
+        brief = await _file_brief(tenant_id, uid)
+        if brief:
+            supp_files.append(brief)
+    payload: Dict[str, Any] = {
+        "id": drawing.id,
+        "uuid": drawing.uuid,
+        "tenant_id": drawing.tenant_id,
+        "code": drawing.code,
+        "name": drawing.name,
+        "revision": drawing.revision,
+        "drawing_type": drawing.drawing_type,
+        "status": drawing.status,
+        "file_uuid": drawing.file_uuid,
+        "supplementary_file_uuids": supp_uuids or None,
+        "material_uuids": _norm_uuid_list(drawing.material_uuids) or None,
+        "process_route_uuids": _norm_uuid_list(drawing.process_route_uuids) or None,
+        "operation_uuids": _norm_uuid_list(drawing.operation_uuids) or None,
+        "description": drawing.description,
+        "released_at": drawing.released_at,
+        "released_by": drawing.released_by,
+        "obsolete_at": drawing.obsolete_at,
+        "obsolete_reason": drawing.obsolete_reason,
+        "created_at": drawing.created_at,
+        "updated_at": drawing.updated_at,
+        **audit_response_fields(drawing),
+        "linked_bom_material_id": drawing.linked_bom_material_id,
+        "linked_bom_version": drawing.linked_bom_version,
+        "last_step_bom_import_at": drawing.last_step_bom_import_at,
+        "checked_out_by": drawing.checked_out_by,
+        "checked_out_by_name": drawing.checked_out_by_name,
+        "checked_out_at": drawing.checked_out_at,
+        "checkout_comment": drawing.checkout_comment,
+        "folder_id": drawing.folder_id,
+        "security_level": drawing.security_level or DEFAULT_DRAWING_SECURITY_LEVEL,
+        "folder_uuid": None,
+        "folder_name": None,
+        "file": await _file_brief(tenant_id, drawing.file_uuid),
+        "supplementary_files": supp_files or None,
+    }
+    if drawing.folder_id:
+        brief = maps.folders_by_id.get(drawing.folder_id) if maps else None
+        if not brief:
+            from apps.master_data.services.drawing_folder_service import DrawingFolderService
+
+            fetched = await DrawingFolderService.folder_briefs(tenant_id, [drawing.folder_id])
+            brief = fetched.get(drawing.folder_id)
+        if brief:
+            payload["folder_uuid"], payload["folder_name"] = brief
+    payload.update(_apply_associations(drawing, maps))
+    return EngineeringDrawingResponse.model_validate(payload)
+
+
+async def _to_responses(
+    tenant_id: int, drawings: List[EngineeringDrawing]
+) -> List[EngineeringDrawingResponse]:
+    maps = await _build_association_maps(tenant_id, drawings)
+    return [await _to_response(tenant_id, d, maps) for d in drawings]
+
+
+class DrawingService:
+    @staticmethod
+    async def create_drawing(
+        tenant_id: int,
+        data: EngineeringDrawingCreate,
+        current_user: Optional[User] = None,
+    ) -> EngineeringDrawingResponse:
+        await _ensure_file_uuids(tenant_id, [data.file_uuid], "主")
+        supp = _norm_uuid_list(data.supplementary_file_uuids)
+        if supp:
+            await _ensure_file_uuids(tenant_id, supp, "附加")
+
+        exists = await EngineeringDrawing.filter(
+            tenant_id=tenant_id,
+            code=data.code,
+            revision=data.revision,
+            deleted_at__isnull=True,
+        ).exists()
+        if exists:
+            raise ValidationError(f"图号 {data.code} 修订版 {data.revision} 已存在")
+
+        payload = {
+            "tenant_id": tenant_id,
+            "code": data.code,
+            "name": data.name,
+            "revision": data.revision,
+            "drawing_type": data.drawing_type,
+            "status": "Draft",
+            "file_uuid": data.file_uuid,
+            "supplementary_file_uuids": supp or None,
+            "material_uuids": _norm_uuid_list(data.material_uuids) or None,
+            "process_route_uuids": _norm_uuid_list(data.process_route_uuids) or None,
+            "operation_uuids": _norm_uuid_list(data.operation_uuids) or None,
+            "folder_id": await DrawingService._resolve_folder_id(tenant_id, data.folder_uuid),
+            "security_level": normalize_security_level(
+                data.security_level or DEFAULT_DRAWING_SECURITY_LEVEL
+            ),
+            "description": (data.description or "").strip() or None,
+        }
+        apply_create_audit(payload, current_user)
+        drawing = await EngineeringDrawing.create(**payload)
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    async def update_drawing(
+        tenant_id: int,
+        drawing_uuid: str,
+        data: EngineeringDrawingUpdate,
+        current_user: Optional[User] = None,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        DrawingService._require_checkout_owner(drawing, current_user, action="编辑")
+
+        update_data = data.model_dump(exclude_unset=True, by_alias=False)
+        if "file_uuid" in update_data and update_data["file_uuid"]:
+            await _ensure_file_uuids(tenant_id, [update_data["file_uuid"]], "主")
+        if "supplementary_file_uuids" in update_data:
+            supp = _norm_uuid_list(update_data["supplementary_file_uuids"])
+            if supp:
+                await _ensure_file_uuids(tenant_id, supp, "附加")
+            update_data["supplementary_file_uuids"] = supp or None
+        for key in ("material_uuids", "process_route_uuids", "operation_uuids"):
+            if key in update_data:
+                update_data[key] = _norm_uuid_list(update_data[key]) or None
+        if "folder_uuid" in update_data:
+            update_data["folder_id"] = await DrawingService._resolve_folder_id(
+                tenant_id, update_data.pop("folder_uuid")
+            )
+        if "name" in update_data and update_data["name"]:
+            update_data["name"] = update_data["name"].strip()
+        if "security_level" in update_data and update_data["security_level"]:
+            update_data["security_level"] = normalize_security_level(update_data["security_level"])
+        if "description" in update_data:
+            update_data["description"] = (update_data["description"] or "").strip() or None
+
+        for k, v in update_data.items():
+            setattr(drawing, k, v)
+        apply_update_audit(drawing, current_user)
+        await drawing.save()
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    async def list_drawings(
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        status: Optional[str] = None,
+        drawing_type: Optional[str] = None,
+        security_level: Optional[str] = None,
+        keyword: Optional[str] = None,
+        material_uuid: Optional[str] = None,
+        process_route_uuid: Optional[str] = None,
+        operation_uuid: Optional[str] = None,
+        folder_uuid: Optional[str] = None,
+        unclassified: bool = False,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        view: str = "current",
+        current_user: Optional[User] = None,
+    ) -> Tuple[List[EngineeringDrawingResponse], int]:
+        from apps.master_data.services.drawing_folder_service import DrawingFolderService
+
+        folder_ids, unclassified_only = await DrawingFolderService.resolve_filter_folder_ids(
+            tenant_id, folder_uuid, unclassified
+        )
+        allowed_levels = await DrawingSecurityService.allowed_security_levels(
+            tenant_id, current_user
+        )
+        query = EngineeringDrawing.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if allowed_levels is not None:
+            query = query.filter(security_level__in=allowed_levels)
+        if security_level:
+            query = query.filter(security_level=normalize_security_level(security_level))
+        if status:
+            query = query.filter(status=status)
+        if drawing_type:
+            query = query.filter(drawing_type=drawing_type)
+        if keyword:
+            kw = keyword.strip()
+            if kw:
+                query = query.filter(
+                    Q(code__icontains=kw)
+                    | Q(name__icontains=kw)
+                    | Q(description__icontains=kw)
+                )
+        if material_uuid:
+            query = query.filter(material_uuids__contains=[material_uuid])
+        if process_route_uuid:
+            query = query.filter(process_route_uuids__contains=[process_route_uuid])
+        if operation_uuid:
+            query = query.filter(operation_uuids__contains=[operation_uuid])
+        if unclassified_only:
+            query = query.filter(folder_id__isnull=True)
+        elif folder_ids is not None:
+            query = query.filter(folder_id__in=folder_ids)
+
+        order_field = "created_at"
+        if sort_by in ("code", "name", "revision", "status", "created_at", "released_at"):
+            order_field = sort_by
+        descending = (sort_order or "desc").lower() == "desc"
+
+        if (view or "current").lower() == "current":
+            page_rows, total = await DrawingService._list_current_effective_page(
+                tenant_id=tenant_id,
+                skip=skip,
+                limit=limit,
+                status=status,
+                drawing_type=drawing_type,
+                keyword=keyword,
+                material_uuid=material_uuid,
+                process_route_uuid=process_route_uuid,
+                operation_uuid=operation_uuid,
+                folder_ids=folder_ids,
+                unclassified_only=unclassified_only,
+                order_field=order_field,
+                descending=descending,
+                security_levels=allowed_levels,
+                requested_security_level=security_level,
+            )
+            items = await _to_responses(tenant_id, page_rows)
+            return items, total
+
+        order_expr = f"-{order_field}" if descending else order_field
+        total = await query.count()
+        rows = await query.order_by(order_expr).offset(skip).limit(limit)
+        items = await _to_responses(tenant_id, rows)
+        return items, total
+
+    @staticmethod
+    async def _list_current_effective_page(
+        *,
+        tenant_id: int,
+        skip: int,
+        limit: int,
+        status: Optional[str],
+        drawing_type: Optional[str],
+        keyword: Optional[str],
+        material_uuid: Optional[str],
+        process_route_uuid: Optional[str],
+        operation_uuid: Optional[str],
+        folder_ids: Optional[List[int]],
+        unclassified_only: bool,
+        order_field: str,
+        descending: bool,
+        security_levels: Optional[List[str]] = None,
+        requested_security_level: Optional[str] = None,
+    ) -> Tuple[List[EngineeringDrawing], int]:
+        """
+        view=current：ROW_NUMBER() PARTITION BY code 后 OFFSET/LIMIT，
+        不把全部修订版拉进应用内存再切片。
+        """
+        from tortoise import Tortoise
+
+        where = [
+            "tenant_id = $1",
+            "deleted_at IS NULL",
+            "status IN ('Released', 'Draft', 'Editing', 'Pending')",
+        ]
+        params: List[Any] = [tenant_id]
+        p = 2
+
+        if status:
+            where.append(f"status = ${p}")
+            params.append(status)
+            p += 1
+        if drawing_type:
+            where.append(f"drawing_type = ${p}")
+            params.append(drawing_type)
+            p += 1
+        if keyword:
+            kw = keyword.strip()
+            if kw:
+                where.append(
+                    f"(code ILIKE ${p} OR name ILIKE ${p} OR COALESCE(description, '') ILIKE ${p})"
+                )
+                params.append(f"%{kw}%")
+                p += 1
+        if material_uuid:
+            where.append(f"material_uuids::jsonb @> ${p}::jsonb")
+            params.append(f'["{material_uuid}"]')
+            p += 1
+        if process_route_uuid:
+            where.append(f"process_route_uuids::jsonb @> ${p}::jsonb")
+            params.append(f'["{process_route_uuid}"]')
+            p += 1
+        if operation_uuid:
+            where.append(f"operation_uuids::jsonb @> ${p}::jsonb")
+            params.append(f'["{operation_uuid}"]')
+            p += 1
+        level_sql, level_params, p = DrawingSecurityService.sql_in_clause(security_levels, p)
+        if level_sql:
+            where.append(level_sql)
+            params.extend(level_params)
+        if requested_security_level:
+            where.append(f"security_level = ${p}")
+            params.append(normalize_security_level(requested_security_level))
+            p += 1
+        if unclassified_only:
+            where.append("folder_id IS NULL")
+        elif folder_ids is not None:
+            if not folder_ids:
+                where.append("1 = 0")
+            else:
+                placeholders = ", ".join(f"${p + i}" for i in range(len(folder_ids)))
+                where.append(f"folder_id IN ({placeholders})")
+                params.extend(folder_ids)
+                p += len(folder_ids)
+
+        order_col = {
+            "code": "code",
+            "name": "name",
+            "revision": "revision",
+            "status": "status",
+            "created_at": "created_at",
+            "released_at": "COALESCE(released_at, created_at)",
+        }.get(order_field, "created_at")
+        direction = "DESC" if descending else "ASC"
+
+        cte = f"""
+        WITH filtered AS (
+          SELECT *
+          FROM apps_master_data_engineering_drawings
+          WHERE {" AND ".join(where)}
+        ),
+        ranked AS (
+          SELECT
+            id,
+            code,
+            name,
+            revision,
+            status,
+            created_at,
+            released_at,
+            ROW_NUMBER() OVER (
+              PARTITION BY code
+              ORDER BY
+                CASE WHEN status = 'Released' THEN 0 ELSE 1 END,
+                CASE
+                  WHEN status = 'Released' THEN COALESCE(released_at, created_at)
+                  ELSE created_at
+                END DESC NULLS LAST,
+                id DESC
+            ) AS rn
+          FROM filtered
+        )
+        """
+        conn = Tortoise.get_connection("default")
+        count_rows = await conn.execute_query_dict(
+            cte + " SELECT COUNT(*)::int AS c FROM ranked WHERE rn = 1",
+            params,
+        )
+        total = int(count_rows[0]["c"]) if count_rows else 0
+        if total == 0 or limit <= 0:
+            return [], total
+
+        page_params = list(params)
+        page_params.extend([skip, limit])
+        id_rows = await conn.execute_query_dict(
+            cte
+            + f"""
+            SELECT id FROM ranked
+            WHERE rn = 1
+            ORDER BY {order_col} {direction}, id {direction}
+            OFFSET ${p} LIMIT ${p + 1}
+            """,
+            page_params,
+        )
+        ids = [int(r["id"]) for r in id_rows]
+        if not ids:
+            return [], total
+
+        fetched = await EngineeringDrawing.filter(id__in=ids)
+        by_id = {row.id: row for row in fetched}
+        page_rows = [by_id[i] for i in ids if i in by_id]
+        return page_rows, total
+
+    @staticmethod
+    async def get_drawing(
+        tenant_id: int,
+        drawing_uuid: str,
+        current_user: Optional[User] = None,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        await DrawingSecurityService.assert_can_view(tenant_id, current_user, drawing)
+        maps = await _build_association_maps(tenant_id, [drawing])
+        return await _to_response(tenant_id, drawing, maps)
+
+    @staticmethod
+    async def list_revisions(
+        tenant_id: int,
+        drawing_uuid: str,
+        current_user: Optional[User] = None,
+        permission_codes: Optional[List[str]] = None,
+    ) -> Tuple[str, List[EngineeringDrawingRevisionBrief], str, bool]:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        await DrawingSecurityService.assert_can_view(tenant_id, current_user, drawing)
+        rows = await EngineeringDrawing.filter(
+            tenant_id=tenant_id,
+            code=drawing.code,
+            deleted_at__isnull=True,
+        ).order_by("created_at")
+        allowed_levels = await DrawingSecurityService.allowed_security_levels(
+            tenant_id, current_user
+        )
+        if allowed_levels is not None:
+            rows = [r for r in rows if r.security_level in allowed_levels]
+
+        latest_released_uuid: Optional[str] = None
+        for r in reversed(rows):
+            if (r.status or "") == "Released":
+                latest_released_uuid = r.uuid
+                break
+
+        by_uuid = {r.uuid: r for r in rows}
+        policy_rows: List[Dict[str, Any]] = []
+        for r in rows:
+            status_raw = (r.status or "").strip()
+            if status_raw == "Released":
+                policy_status = "effective"
+            elif status_raw == "Obsolete":
+                policy_status = "obsolete"
+            else:
+                policy_status = "draft"
+            is_latest = r.uuid == latest_released_uuid
+            policy_rows.append(
+                {
+                    "uuid": r.uuid,
+                    "status": policy_status,
+                    "is_effective": policy_status == "effective",
+                    "is_latest_effective": is_latest,
+                    "created_by": getattr(r, "created_by", None),
+                }
+            )
+
+        current_user_id = getattr(current_user, "id", None) if current_user else None
+        is_author = bool(
+            current_user_id is not None
+            and getattr(drawing, "created_by", None) is not None
+            and int(drawing.created_by) == int(current_user_id)
+        )
+        audience = resolve_audience(
+            permission_codes=permission_codes,
+            is_author=is_author,
+        )
+        visible = filter_version_rows(
+            policy_rows,
+            audience=audience,
+            current_user_id=current_user_id,
+        )
+        revisions = [
+            EngineeringDrawingRevisionBrief.model_validate(
+                {
+                    "uuid": by_uuid[v["uuid"]].uuid,
+                    "revision": by_uuid[v["uuid"]].revision,
+                    "status": by_uuid[v["uuid"]].status,
+                    "released_at": by_uuid[v["uuid"]].released_at,
+                    "obsolete_reason": by_uuid[v["uuid"]].obsolete_reason,
+                    "created_at": by_uuid[v["uuid"]].created_at,
+                }
+            )
+            for v in visible
+            if v.get("uuid") in by_uuid
+        ]
+        return (
+            drawing.code,
+            revisions,
+            audience.value,
+            can_view_historical_versions(audience),
+        )
+
+    @staticmethod
+    async def delete_drawing(tenant_id: int, drawing_uuid: str) -> None:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        if (drawing.status or "") == "Editing":
+            raise ValidationError("检出中的图纸请先撤销检出再删除")
+        if (drawing.status or "") not in ("Draft", "Obsolete"):
+            raise ValidationError("仅草稿或已作废状态图纸可删除")
+        drawing.deleted_at = _utcnow()
+        await drawing.save()
+
+    @staticmethod
+    async def release_drawing(
+        tenant_id: int,
+        drawing_uuid: str,
+        released_by: Optional[int] = None,
+        current_user: Optional[User] = None,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        if (drawing.status or "") != "Pending":
+            raise ValidationError("仅待审图纸可发布，请先提交签审")
+        return await DrawingService._publish_pending(tenant_id, drawing, released_by, current_user)
+
+    @staticmethod
+    async def checkout_drawing(
+        tenant_id: int,
+        drawing_uuid: str,
+        current_user: User,
+        comment: Optional[str] = None,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        if (drawing.status or "") != "Draft":
+            raise ValidationError("仅草稿状态图纸可检出")
+        if drawing.checked_out_by:
+            raise ValidationError(f"图纸已被 {drawing.checked_out_by_name or drawing.checked_out_by} 检出")
+        drawing.status = "Editing"
+        drawing.checked_out_by = int(current_user.id)
+        drawing.checked_out_by_name = operator_name_from_user(current_user) or None
+        drawing.checked_out_at = _utcnow()
+        drawing.checkout_comment = (comment or "").strip() or None
+        apply_update_audit(drawing, current_user)
+        await drawing.save()
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    async def checkin_drawing(
+        tenant_id: int,
+        drawing_uuid: str,
+        current_user: User,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        DrawingService._require_checkout_owner(drawing, current_user, action="检入")
+        DrawingService._clear_checkout(drawing)
+        drawing.status = "Draft"
+        apply_update_audit(drawing, current_user)
+        await drawing.save()
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    async def undo_checkout_drawing(
+        tenant_id: int,
+        drawing_uuid: str,
+        current_user: User,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        DrawingService._require_checkout_owner(drawing, current_user, action="撤销检出")
+        DrawingService._clear_checkout(drawing)
+        drawing.status = "Draft"
+        apply_update_audit(drawing, current_user)
+        await drawing.save()
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    async def submit_drawing(
+        tenant_id: int,
+        drawing_uuid: str,
+        current_user: User,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        if (drawing.status or "") != "Draft":
+            raise ValidationError("仅已检入的草稿可提交签审")
+        drawing.status = "Pending"
+        apply_update_audit(drawing, current_user)
+        await drawing.save()
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    async def approve_drawing(
+        tenant_id: int,
+        drawing_uuid: str,
+        current_user: User,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        if (drawing.status or "") != "Pending":
+            raise ValidationError("仅待审图纸可审核通过")
+        return await DrawingService._publish_pending(
+            tenant_id, drawing, int(current_user.id), current_user
+        )
+
+    @staticmethod
+    async def reject_drawing(
+        tenant_id: int,
+        drawing_uuid: str,
+        current_user: User,
+        reason: Optional[str] = None,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        if (drawing.status or "") != "Pending":
+            raise ValidationError("仅待审图纸可驳回")
+        drawing.status = "Draft"
+        note = (reason or "").strip()
+        if note:
+            prev = (drawing.description or "").strip()
+            drawing.description = f"{prev}\n驳回：{note}".strip() if prev else f"驳回：{note}"
+        apply_update_audit(drawing, current_user)
+        await drawing.save()
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    async def revoke_drawing(
+        tenant_id: int,
+        drawing_uuid: str,
+        current_user: User,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        if (drawing.status or "") != "Pending":
+            raise ValidationError("仅待审图纸可撤回")
+        drawing.status = "Draft"
+        apply_update_audit(drawing, current_user)
+        await drawing.save()
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    async def _publish_pending(
+        tenant_id: int,
+        drawing: EngineeringDrawing,
+        released_by: Optional[int],
+        current_user: Optional[User],
+    ) -> EngineeringDrawingResponse:
+        now = _utcnow()
+        old_released = await EngineeringDrawing.filter(
+            tenant_id=tenant_id,
+            code=drawing.code,
+            status="Released",
+            deleted_at__isnull=True,
+        ).all()
+        for old in old_released:
+            old.status = "Obsolete"
+            old.obsolete_at = now
+            old.obsolete_reason = old.obsolete_reason or f"被修订版 {drawing.revision} 取代"
+            await old.save()
+
+        DrawingService._clear_checkout(drawing)
+        drawing.status = "Released"
+        drawing.released_at = now
+        drawing.released_by = released_by
+        apply_update_audit(drawing, current_user)
+        await drawing.save()
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    def _clear_checkout(drawing: EngineeringDrawing) -> None:
+        drawing.checked_out_by = None
+        drawing.checked_out_by_name = None
+        drawing.checked_out_at = None
+        drawing.checkout_comment = None
+
+    @staticmethod
+    def _require_checkout_owner(
+        drawing: EngineeringDrawing,
+        current_user: Optional[User],
+        *,
+        action: str,
+    ) -> None:
+        if (drawing.status or "") != "Editing":
+            raise ValidationError(f"请先检出后再{action}")
+        if current_user is None:
+            raise ValidationError(f"请先检出后再{action}")
+        if drawing.checked_out_by != int(current_user.id):
+            owner = drawing.checked_out_by_name or str(drawing.checked_out_by)
+            raise ValidationError(f"图纸已被 {owner} 检出，无法{action}")
+
+    @staticmethod
+    async def obsolete_drawing(
+        tenant_id: int,
+        drawing_uuid: str,
+        body: EngineeringDrawingObsoleteRequest,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        if (drawing.status or "") != "Released":
+            raise ValidationError("仅已发布图纸可作废")
+        drawing.status = "Obsolete"
+        drawing.obsolete_at = _utcnow()
+        drawing.obsolete_reason = (body.reason or "").strip() or None
+        await drawing.save()
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    async def create_revision(
+        tenant_id: int,
+        drawing_uuid: str,
+        body: EngineeringDrawingRevisionCreate,
+        current_user: Optional[User] = None,
+    ) -> EngineeringDrawingResponse:
+        source = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        if (source.status or "") != "Released":
+            raise ValidationError("仅已发布图纸可升版")
+
+        new_revision = _next_revision(source.revision)
+        while await EngineeringDrawing.filter(
+            tenant_id=tenant_id,
+            code=source.code,
+            revision=new_revision,
+            deleted_at__isnull=True,
+        ).exists():
+            new_revision = _next_revision(new_revision)
+
+        file_uuid = body.file_uuid or source.file_uuid
+        supp = (
+            _norm_uuid_list(body.supplementary_file_uuids)
+            if body.supplementary_file_uuids is not None
+            else _norm_uuid_list(source.supplementary_file_uuids)
+        )
+        await _ensure_file_uuids(tenant_id, [file_uuid], "主")
+        if supp:
+            await _ensure_file_uuids(tenant_id, supp, "附加")
+
+        payload = {
+            "tenant_id": tenant_id,
+            "code": source.code,
+            "name": source.name,
+            "revision": new_revision,
+            "drawing_type": source.drawing_type,
+            "status": "Draft",
+            "file_uuid": file_uuid,
+            "supplementary_file_uuids": supp or None,
+            "material_uuids": _norm_uuid_list(source.material_uuids) or None,
+            "process_route_uuids": _norm_uuid_list(source.process_route_uuids) or None,
+            "operation_uuids": _norm_uuid_list(source.operation_uuids) or None,
+            "folder_id": source.folder_id,
+            "security_level": source.security_level or DEFAULT_DRAWING_SECURITY_LEVEL,
+            "description": (body.description if body.description is not None else source.description),
+        }
+        apply_create_audit(payload, current_user)
+        drawing = await EngineeringDrawing.create(**payload)
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    async def list_by_context(
+        tenant_id: int,
+        material_uuid: Optional[str] = None,
+        process_route_uuid: Optional[str] = None,
+        operation_uuid: Optional[str] = None,
+        current_user: Optional[User] = None,
+    ) -> List[EngineeringDrawingResponse]:
+        from apps.master_data.services.drawing_distribution_service import DrawingDistributionService
+
+        query = EngineeringDrawing.filter(
+            tenant_id=tenant_id,
+            status="Released",
+            deleted_at__isnull=True,
+        )
+        allowed_levels = await DrawingSecurityService.allowed_security_levels(
+            tenant_id, current_user
+        )
+        if allowed_levels is not None:
+            query = query.filter(security_level__in=allowed_levels)
+        if await DrawingDistributionService.is_distribution_required(tenant_id):
+            issued_ids = await DrawingDistributionService.issued_drawing_ids(tenant_id)
+            if not issued_ids:
+                return []
+            query = query.filter(id__in=issued_ids)
+        if material_uuid:
+            query = query.filter(material_uuids__contains=[material_uuid])
+        if process_route_uuid:
+            query = query.filter(process_route_uuids__contains=[process_route_uuid])
+        if operation_uuid:
+            query = query.filter(operation_uuids__contains=[operation_uuid])
+        rows = await query.order_by("-released_at", "-created_at")
+        return await _to_responses(tenant_id, rows)
+
+    @staticmethod
+    async def get_print_data(
+        tenant_id: int,
+        drawing_uuid: str,
+        current_user: User,
+    ) -> EngineeringDrawingPrintDataResponse:
+        from apps.master_data.services.drawing_loan_service import DrawingLoanService
+        from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
+
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        await DrawingSecurityService.assert_can_view(tenant_id, current_user, drawing)
+        level = drawing.security_level
+        if level not in SECURITY_LEVEL_LABELS:
+            raise ValidationError(f"图纸密级配置无效: {level}")
+        if level in PRINT_LOAN_REQUIRED_LEVELS:
+            borrowed = await DrawingLoanService.has_active_loan(
+                tenant_id, int(current_user.id), drawing.id
+            )
+            if not borrowed:
+                raise AuthorizationError("秘密/机密图纸须先完成借阅审批才能打印")
+        file_brief = await _file_brief(tenant_id, drawing.file_uuid)
+        stamp = to_api_isoformat(resolve_business_datetime())
+        user_name = operator_name_from_user(current_user) or (current_user.username or "")
+        watermark = f"{user_name} {stamp} {drawing.code}-{drawing.revision} {SECURITY_LEVEL_LABELS[level]}"
+        return EngineeringDrawingPrintDataResponse(
+            code=drawing.code,
+            name=drawing.name,
+            revision=drawing.revision,
+            security_level=level,
+            watermark=watermark,
+            preview_url=file_brief.preview_url if file_brief else None,
+            file_name=file_brief.original_name if file_brief else None,
+        )
+
+    @staticmethod
+    async def _resolve_folder_id(tenant_id: int, folder_uuid: Optional[str]) -> Optional[int]:
+        from apps.master_data.services.drawing_folder_service import DrawingFolderService
+
+        return await DrawingFolderService.resolve_folder_id(tenant_id, folder_uuid)
+
+    @staticmethod
+    async def move_folder(
+        tenant_id: int,
+        drawing_uuid: str,
+        folder_uuid: Optional[str],
+        current_user: Optional[User] = None,
+    ) -> EngineeringDrawingResponse:
+        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
+        drawing.folder_id = await DrawingService._resolve_folder_id(tenant_id, folder_uuid)
+        apply_update_audit(drawing, current_user)
+        await drawing.save()
+        return await _to_response(tenant_id, drawing)
+
+    @staticmethod
+    async def _get_active_or_404(tenant_id: int, drawing_uuid: str) -> EngineeringDrawing:
+        drawing = await EngineeringDrawing.get_or_none(
+            tenant_id=tenant_id,
+            uuid=drawing_uuid,
+            deleted_at__isnull=True,
+        )
+        if not drawing:
+            raise NotFoundError(f"图纸不存在: {drawing_uuid}")
+        return drawing

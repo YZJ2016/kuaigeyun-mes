@@ -1,0 +1,626 @@
+/**
+ * Formily Schema 编辑器组件
+ * 
+ * 用于配置 eSOP 节点的表单字段（Formily Schema）
+ */
+
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Button, Card, Form, Input, Select, InputNumber, Switch, Space, message, Modal } from 'antd';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import type { ISchema } from '@formily/json-schema';
+
+const { TextArea } = Input;
+
+/**
+ * 表单字段配置接口
+ */
+interface FormFieldConfig {
+  /**
+   * 字段代码（唯一标识）
+   */
+  code: string;
+  /**
+   * 字段标签
+   */
+  label: string;
+  /**
+   * 字段类型
+   */
+  type: 'string' | 'number' | 'boolean' | 'date' | 'select';
+  /**
+   * 是否必填
+   */
+  required?: boolean;
+  /**
+   * 占位符
+   */
+  placeholder?: string;
+  /**
+   * 默认值
+   */
+  default?: any;
+  /**
+   * 字段描述
+   */
+  description?: string;
+  /**
+   * 组件类型（Formily 组件）
+   */
+  component?: string;
+  /**
+   * 组件属性
+   */
+  componentProps?: Record<string, any>;
+  /**
+   * 选项（用于 select 类型）
+   */
+  options?: Array<{ label: string; value: any }>;
+  /**
+   * 最小值（用于 number 类型）
+   */
+  min?: number;
+  /**
+   * 最大值（用于 number 类型）
+   */
+  max?: number;
+  /**
+   * 单位（用于 number 类型，如：N·m、℃、kg）
+   */
+  unit?: string;
+  /**
+   * 小数位数（用于 number 类型）
+   */
+  precision?: number;
+}
+
+/**
+ * Formily Schema 编辑器组件属性
+ */
+interface FormSchemaEditorProps {
+  /**
+   * 当前 Schema（Formily Schema 格式）
+   */
+  value?: ISchema;
+  /**
+   * 变化回调
+   */
+  onChange?: (schema: ISchema) => void;
+}
+
+/**
+ * Formily Schema 编辑器组件
+ */
+const FormSchemaEditor: React.FC<FormSchemaEditorProps> = ({ value, onChange }) => {
+  const { t } = useTranslation();
+  const [fields, setFields] = useState<FormFieldConfig[]>([]);
+  const [editingField, setEditingField] = useState<FormFieldConfig | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number>(-1);
+  const [fieldForm] = Form.useForm();
+
+  /**
+   * 从 Schema 解析字段配置
+   */
+  useEffect(() => {
+    if (value && value.properties) {
+      const parsedFields: FormFieldConfig[] = [];
+      Object.entries(value.properties).forEach(([code, fieldSchema]: [string, any]) => {
+        // 解析验证规则
+        const validators = fieldSchema['x-validator'] || [];
+        let min: number | undefined;
+        let max: number | undefined;
+        
+        validators.forEach((validator: any) => {
+          if (validator.type === 'range') {
+            min = validator.min;
+            max = validator.max;
+          }
+        });
+        
+        parsedFields.push({
+          code,
+          label: fieldSchema.title || code,
+          type: fieldSchema.type || 'string',
+          required: fieldSchema.required || false,
+          placeholder: fieldSchema.description || fieldSchema['x-component-props']?.placeholder,
+          default: fieldSchema.default,
+          description: fieldSchema.description,
+          component: fieldSchema['x-component'] || 'Input',
+          componentProps: fieldSchema['x-component-props'] || {},
+          options: fieldSchema.enum ? fieldSchema.enum.map((val: any, idx: number) => ({
+            label: fieldSchema.enumNames?.[idx] || val,
+            value: val,
+          })) : undefined,
+          min,
+          max,
+          unit: fieldSchema['x-component-props']?.unit,
+          precision: fieldSchema['x-component-props']?.precision,
+        });
+      });
+      setFields(parsedFields);
+    } else {
+      setFields([]);
+    }
+  }, [value]);
+
+  /**
+   * 添加字段
+   */
+  const handleAddField = () => {
+    setEditingField({
+      code: '',
+      label: '',
+      type: 'string',
+      required: false,
+    });
+    setEditingIndex(-1);
+    fieldForm.resetFields();
+    fieldForm.setFieldsValue({
+      label: '',
+      type: 'string',
+      required: false,
+      placeholder: '',
+      component: 'Input',
+      options: [{ label: '', value: '' }],
+    });
+  };
+
+  /**
+   * 编辑字段
+   */
+  const handleEditField = (index: number) => {
+    const field = fields[index];
+    setEditingField(field);
+    setEditingIndex(index);
+    fieldForm.setFieldsValue({
+      label: field.label,
+      type: field.type,
+      required: field.required || false,
+      placeholder: field.placeholder || '',
+      description: field.description || '',
+      component: field.component || 'Input',
+      default: field.default,
+      min: field.min,
+      max: field.max,
+      unit: field.unit || '',
+      precision: field.precision,
+      options: field.options && field.options.length > 0 ? field.options : [{ label: '', value: '' }],
+    });
+  };
+
+  /**
+   * 删除字段
+   */
+  const handleDeleteField = (index: number) => {
+    const newFields = fields.filter((_, i) => i !== index);
+    setFields(newFields);
+    updateSchema(newFields);
+  };
+
+  /**
+   * 保存字段配置
+   */
+  const handleSaveField = () => {
+    fieldForm.validateFields().then((values) => {
+      const code =
+        editingIndex >= 0 ? fields[editingIndex].code : generateCodeFromLabel(values.label, fields);
+      const newField: FormFieldConfig = {
+        code,
+        label: values.label,
+        type: values.type,
+        required: values.required || false,
+        placeholder: values.placeholder,
+        description: values.description,
+        component: values.type === 'string' ? (values.component || 'Input') : getDefaultComponent(values.type),
+        default: values.default,
+        min: values.min,
+        max: values.max,
+        unit: values.unit,
+        precision: values.precision,
+      };
+
+      // 如果是 select 类型，从表单列表取选项（格式 [{ label, value }]）
+      if (values.type === 'select' && Array.isArray(values.options)) {
+        const list = values.options
+          .map((o: any) => {
+            if (!o) return null;
+            const label = String(o.label ?? '').trim();
+            const val = o.value;
+            if (label === '' && (val === undefined || val === '')) return null;
+            return { label: label || String(val), value: val === undefined || val === '' ? label : val };
+          })
+          .filter(Boolean) as Array<{ label: string; value: any }>;
+        if (list.length === 0) {
+          message.error(t('app.master-data.formSchema.optionsRequired'));
+          return;
+        }
+        newField.options = list;
+      }
+
+      let newFields: FormFieldConfig[];
+      if (editingIndex >= 0) {
+        // 更新现有字段
+        newFields = fields.map((f, i) => (i === editingIndex ? newField : f));
+      } else {
+        // 添加新字段（code 已由 generateCodeFromLabel 保证唯一）
+        newFields = [...fields, newField];
+      }
+
+      setFields(newFields);
+      updateSchema(newFields);
+      setEditingField(null);
+      setEditingIndex(-1);
+      fieldForm.resetFields();
+      message.success(editingIndex >= 0 ? t('app.master-data.formSchema.fieldUpdated') : t('app.master-data.formSchema.fieldAdded'));
+    });
+  };
+
+  /**
+   * 更新 Schema
+   */
+  const updateSchema = (fieldList: FormFieldConfig[]) => {
+    const properties: Record<string, any> = {};
+
+    fieldList.forEach((field) => {
+      const fieldSchema: any = {
+        type: field.type,
+        title: field.label,
+        'x-decorator': 'FormItem',
+        'x-component': field.component || getDefaultComponent(field.type),
+        'x-component-props': {
+          placeholder: field.placeholder || t('app.master-data.formSchema.enterPlaceholder', { label: field.label }),
+          ...(field.componentProps || {}),
+        },
+      };
+
+      if (field.required) {
+        fieldSchema.required = true;
+      }
+
+      if (field.description) {
+        fieldSchema.description = field.description;
+      }
+
+      if (field.default !== undefined && field.default !== null) {
+        fieldSchema.default = field.default;
+      }
+
+      // 处理 select 类型的选项
+      if (field.type === 'select' && field.options) {
+        fieldSchema.enum = field.options.map((opt) => opt.value);
+        fieldSchema.enumNames = field.options.map((opt) => opt.label);
+      }
+
+      // 根据类型设置组件属性
+      switch (field.type) {
+        case 'string':
+          if (field.component === 'Input.TextArea') {
+            fieldSchema['x-component'] = 'Input.TextArea';
+            fieldSchema['x-component-props'] = {
+              ...fieldSchema['x-component-props'],
+              rows: 4,
+            };
+          }
+          break;
+        case 'number':
+          fieldSchema['x-component'] = 'InputNumber';
+          // 配置数字类型的属性
+          const numberProps: any = {};
+          if (field.unit) {
+            numberProps.unit = field.unit;
+          }
+          if (field.precision !== undefined) {
+            numberProps.precision = field.precision;
+          }
+          if (field.min !== undefined) {
+            numberProps.min = field.min;
+          }
+          if (field.max !== undefined) {
+            numberProps.max = field.max;
+          }
+          fieldSchema['x-component-props'] = {
+            ...fieldSchema['x-component-props'],
+            ...numberProps,
+          };
+          // 添加范围验证规则
+          if (field.min !== undefined || field.max !== undefined) {
+            fieldSchema['x-validator'] = [
+              {
+                type: 'range',
+                min: field.min,
+                max: field.max,
+              },
+            ];
+          }
+          break;
+        case 'date':
+          fieldSchema['x-component'] = 'DatePicker';
+          fieldSchema['x-component-props'] = {
+            ...fieldSchema['x-component-props'],
+            format: 'YYYY-MM-DD',
+          };
+          break;
+        case 'boolean':
+          fieldSchema['x-component'] = 'Switch';
+          break;
+      }
+
+      properties[field.code] = fieldSchema;
+    });
+
+    const schema: ISchema = {
+      type: 'object',
+      properties,
+    };
+
+    onChange?.(schema);
+  };
+
+  /**
+   * 根据字段标签生成唯一 code（仅字母、数字、下划线，用于 Schema key）
+   */
+  const generateCodeFromLabel = (label: string, existingFields: FormFieldConfig[]): string => {
+    const existingCodes = new Set(existingFields.map((f) => f.code));
+    let base = (label || '')
+      .replace(/[\s\u4e00-\u9fa5]/g, '_')
+      .replace(/[^a-zA-Z0-9_]/g, '')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, 40)
+      .toLowerCase();
+    if (!base) base = 'field';
+    if (!/^[a-zA-Z]/.test(base)) base = 'f_' + base;
+    let code = base;
+    let n = 0;
+    while (existingCodes.has(code)) {
+      n += 1;
+      code = `${base}_${n}`;
+    }
+    return code;
+  };
+
+  /**
+   * 获取默认组件
+   */
+  const getDefaultComponent = (type: string): string => {
+    const componentMap: Record<string, string> = {
+      string: 'Input',
+      number: 'InputNumber',
+      boolean: 'Switch',
+      date: 'DatePicker',
+      select: 'Select',
+    };
+    return componentMap[type] || 'Input';
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <strong>{t('app.master-data.formSchema.fieldConfig')}</strong>
+          <span style={{ marginLeft: 8, color: '#666', fontSize: 12 }}>
+            {t('app.master-data.formSchema.fieldCount', { count: fields.length })}
+          </span>
+        </div>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAddField}>
+          {t('app.master-data.formSchema.addField')}
+        </Button>
+      </div>
+
+      {fields.length > 0 ? (
+        <div style={{ marginBottom: 16 }}>
+          {fields.map((field, index) => (
+            <Card
+              key={field.code}
+              size="small"
+              style={{ marginBottom: 8 }}
+              title={
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>
+                    {field.label} ({field.code})
+                    {field.required && <span style={{ color: 'red', marginLeft: 4 }}>*</span>}
+                  </span>
+                  <Space>
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => handleEditField(index)}
+                    >
+                      {t('common.edit')}
+                    </Button>
+                    <Button
+                      type="link"
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleDeleteField(index)}
+                    >
+                      {t('common.delete')}
+                    </Button>
+                  </Space>
+                </div>
+              }
+            >
+              <div style={{ fontSize: 12, color: '#666' }}>
+                <div>{t('app.master-data.formSchema.type')}: {field.type}</div>
+                {field.description && <div>{t('common.remark')}: {field.description}</div>}
+                {field.component && <div>{t('app.master-data.formSchema.component')}: {field.component}</div>}
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div style={{ padding: 24, textAlign: 'center', background: '#f5f5f5', borderRadius: 4, color: '#999' }}>
+          {t('app.master-data.formSchema.noFields')}
+        </div>
+      )}
+
+      {/* 字段编辑 Modal */}
+      <Modal
+        title={editingIndex >= 0 ? t('app.master-data.formSchema.editField') : t('app.master-data.formSchema.addFieldTitle')}
+        open={editingField !== null}
+        onCancel={() => {
+          setEditingField(null);
+          setEditingIndex(-1);
+        }}
+        onOk={handleSaveField}
+        width={600}
+      >
+        <Form form={fieldForm} layout="vertical">
+          <Form.Item
+            name="label"
+            label={t('app.master-data.formSchema.fieldLabel')}
+            rules={[{ required: true, message: t('app.master-data.formSchema.fieldLabelRequired') }]}
+          >
+            <Input placeholder={t('app.master-data.formSchema.fieldLabelPlaceholder')} />
+          </Form.Item>
+          <Form.Item
+            name="type"
+            label={t('app.master-data.formSchema.fieldType')}
+            rules={[{ required: true, message: t('app.master-data.formSchema.fieldTypeRequired') }]}
+          >
+            <Select>
+              <Select.Option value="string">{t('app.master-data.formSchema.typeString')}</Select.Option>
+              <Select.Option value="number">{t('app.master-data.formSchema.typeNumber')}</Select.Option>
+              <Select.Option value="boolean">{t('app.master-data.formSchema.typeBoolean')}</Select.Option>
+              <Select.Option value="date">{t('app.master-data.formSchema.typeDate')}</Select.Option>
+              <Select.Option value="select">{t('app.master-data.formSchema.typeSelect')}</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}
+          >
+            {({ getFieldValue }) => {
+              const type = getFieldValue('type');
+              if (type !== 'string') {
+                return null;
+              }
+              return (
+                <Form.Item
+                  name="component"
+                  label={t('app.master-data.formSchema.componentType')}
+                  rules={[{ required: true, message: t('app.master-data.formSchema.componentTypeRequired') }]}
+                >
+                  <Select>
+                    <Select.Option value="Input">{t('app.master-data.formSchema.compInput')}</Select.Option>
+                    <Select.Option value="Input.TextArea">{t('app.master-data.formSchema.compTextArea')}</Select.Option>
+                  </Select>
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
+          <Form.Item name="placeholder" label={t('app.master-data.formSchema.placeholder')}>
+            <Input placeholder={t('app.master-data.formSchema.placeholderInput')} />
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.type !== currentValues.type}
+          >
+            {({ getFieldValue }) => {
+              const type = getFieldValue('type');
+              if (type === 'select') {
+                return (
+                  <Form.Item
+                    label={t('app.master-data.formSchema.optionsJson')}
+                    tooltip={t('app.master-data.formSchema.optionsTooltip')}
+                    required
+                  >
+                    <Form.List
+                      name="options"
+                      initialValue={[{ label: '', value: '' }]}
+                      rules={[
+                        {
+                          validator: async (_, list) => {
+                            if (!list || list.length === 0) {
+                              return Promise.reject(new Error(t('app.master-data.formSchema.optionsRequired')));
+                            }
+                            const invalid = list.some((item: any) => !item?.label?.trim() && (item?.value === undefined || item?.value === ''));
+                            if (invalid) {
+                              return Promise.reject(new Error(t('app.master-data.formSchema.optionsFormatError')));
+                            }
+                          },
+                        },
+                      ]}
+                    >
+                      {(fields, { add, remove }) => (
+                        <>
+                          {fields.map(({ key, name, ...rest }) => (
+                            <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                              <Form.Item
+                                {...rest}
+                                name={[name, 'label']}
+                                rules={[{ required: true, message: t('app.master-data.formSchema.fieldLabelRequired') }]}
+                                style={{ marginBottom: 0, minWidth: 140 }}
+                              >
+                                <Input placeholder={t('app.master-data.formSchema.optionsLabelPlaceholder')} />
+                              </Form.Item>
+                              <Form.Item
+                                {...rest}
+                                name={[name, 'value']}
+                                rules={[{ required: true, message: t('app.master-data.formSchema.optionsValueRequired') }]}
+                                style={{ marginBottom: 0, minWidth: 140 }}
+                              >
+                                <Input placeholder={t('app.master-data.formSchema.optionsValuePlaceholder')} />
+                              </Form.Item>
+                              <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />
+                            </Space>
+                          ))}
+                          <Form.Item style={{ marginBottom: 0 }}>
+                            <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                              {t('app.master-data.formSchema.addOption')}
+                            </Button>
+                          </Form.Item>
+                        </>
+                      )}
+                    </Form.List>
+                  </Form.Item>
+                );
+              }
+              if (type === 'number') {
+                return (
+                  <>
+                    <Form.Item
+                      name="min"
+                      label={t('app.master-data.formSchema.minValue')}
+                    >
+                      <InputNumber placeholder={t('app.master-data.formSchema.minPlaceholder')} style={{ width: '100%' }} />
+                    </Form.Item>
+                    <Form.Item
+                      name="max"
+                      label={t('app.master-data.formSchema.maxValue')}
+                    >
+                      <InputNumber placeholder={t('app.master-data.formSchema.maxPlaceholder')} style={{ width: '100%' }} />
+                    </Form.Item>
+                    <Form.Item
+                      name="unit"
+                      label={t('common.unit')}
+                    >
+                      <Input placeholder={t('app.master-data.formSchema.unitPlaceholder')} />
+                    </Form.Item>
+                    <Form.Item
+                      name="precision"
+                      label={t('app.master-data.formSchema.precision')}
+                    >
+                      <InputNumber min={0} max={10} placeholder={t('app.master-data.formSchema.precisionPlaceholder')} style={{ width: '100%' }} />
+                    </Form.Item>
+                  </>
+                );
+              }
+              return null;
+            }}
+          </Form.Item>
+          <Form.Item name="description" label={t('common.remark')}>
+            <TextArea rows={2} placeholder={t('app.master-data.formSchema.fieldDescriptionPlaceholder')} />
+          </Form.Item>
+          <Form.Item name="required" label={t('app.master-data.formSchema.required')} valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+};
+
+export default FormSchemaEditor;
+

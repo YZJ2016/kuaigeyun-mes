@@ -1,0 +1,356 @@
+/**
+ * 绩效数据 API 服务
+ *
+ * 提供假期、技能、员工绩效的 API 调用方法
+ * 后端 API 位于 /apps/master-data/performance
+ */
+
+import { api } from '../../../services/api';
+import type {
+  Holiday,
+  HolidayCreate,
+  HolidayUpdate,
+  HolidayListParams,
+  HolidayCnImportRequest,
+  HolidayCnImportResult,
+  Shift,
+  ShiftCreate,
+  ShiftUpdate,
+  ShiftRoster,
+  ShiftRosterCreate,
+  Skill,
+  SkillCreate,
+  SkillUpdate,
+  SkillListParams,
+  EmployeePerformanceConfig,
+  EmployeePerformanceConfigCreate,
+  EmployeePerformanceConfigUpdate,
+  HourlyRate,
+  HourlyRateCreate,
+  HourlyRateUpdate,
+  KPIDefinition,
+  KPIDefinitionCreate,
+  KPIDefinitionUpdate,
+  PerformanceSummary,
+  PerformanceDetail,
+  PerformanceCalculateResult,
+  PerformanceListResult,
+  WorkCalendarConfig,
+  WorkCalendarConfigUpdate,
+  EffectiveWorkCalendar,
+  OvertimePlan,
+  OvertimePlanCreate,
+  OvertimePlanUpdate,
+} from '../types/performance';
+
+const PERF_BASE = '/apps/master-data/performance';
+
+/**
+ * 工作日历 API
+ */
+export const workCalendarApi = {
+  get: async (): Promise<WorkCalendarConfig> => api.get(`${PERF_BASE}/work-calendar`),
+  update: async (data: WorkCalendarConfigUpdate): Promise<WorkCalendarConfig> =>
+    api.put(`${PERF_BASE}/work-calendar`, data),
+  getEffective: async (params: {
+    dateFrom: string;
+    dateTo: string;
+  }): Promise<EffectiveWorkCalendar> =>
+    api.get(`${PERF_BASE}/work-calendar/effective`, { params }),
+};
+
+export const stationUnavailableApi = {
+  list: async (params?: {
+    stationId?: number;
+    dateFrom?: string;
+    dateTo?: string;
+    skip?: number;
+    limit?: number;
+  }) => api.get(`${PERF_BASE}/work-calendar/station-unavailable`, { params }),
+  create: async (data: {
+    stationId: number;
+    startAt: string;
+    endAt: string;
+    reason?: string;
+    isActive?: boolean;
+  }) => api.post(`${PERF_BASE}/work-calendar/station-unavailable`, data),
+  update: async (
+    uuid: string,
+    data: Partial<{
+      stationId: number;
+      startAt: string;
+      endAt: string;
+      reason?: string | null;
+      isActive?: boolean;
+    }>,
+  ) => api.put(`${PERF_BASE}/work-calendar/station-unavailable/${uuid}`, data),
+  delete: async (uuid: string) =>
+    api.delete(`${PERF_BASE}/work-calendar/station-unavailable/${uuid}`),
+};
+
+/**
+ * 加班计划 API
+ */
+export const overtimeApi = {
+  list: async (params?: {
+    dateFrom?: string;
+    dateTo?: string;
+    isActive?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<PerformanceListResult<OvertimePlan>> =>
+    api.get(`${PERF_BASE}/overtimes`, { params }),
+  create: async (data: OvertimePlanCreate): Promise<OvertimePlan> =>
+    api.post(`${PERF_BASE}/overtimes`, data),
+  get: async (uuid: string): Promise<OvertimePlan> => api.get(`${PERF_BASE}/overtimes/${uuid}`),
+  update: async (uuid: string, data: OvertimePlanUpdate): Promise<OvertimePlan> =>
+    api.put(`${PERF_BASE}/overtimes/${uuid}`, data),
+  delete: async (uuid: string): Promise<void> => api.delete(`${PERF_BASE}/overtimes/${uuid}`),
+};
+
+/**
+ * 假期 API 服务
+ */
+export const shiftApi = {
+  create: async (data: ShiftCreate): Promise<Shift> => api.post(`${PERF_BASE}/shifts`, data),
+  list: async (params?: {
+    skip?: number;
+    limit?: number;
+    is_active?: boolean;
+    keyword?: string;
+    order_by?: string;
+    created_start_date?: string;
+    created_end_date?: string;
+    updated_start_date?: string;
+    updated_end_date?: string;
+  }): Promise<PerformanceListResult<Shift>> => api.get(`${PERF_BASE}/shifts`, { params }),
+  get: async (uuid: string): Promise<Shift> => api.get(`${PERF_BASE}/shifts/${uuid}`),
+  update: async (uuid: string, data: ShiftUpdate): Promise<Shift> =>
+    api.put(`${PERF_BASE}/shifts/${uuid}`, data),
+  delete: async (uuid: string): Promise<void> => api.delete(`${PERF_BASE}/shifts/${uuid}`),
+};
+
+export const shiftRosterApi = {
+  create: async (data: ShiftRosterCreate): Promise<ShiftRoster> =>
+    api.post(`${PERF_BASE}/shift-rosters`, data),
+  list: async (params?: {
+    work_group_id?: number;
+    employee_id?: number;
+    period_start?: string;
+    status?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<ShiftRoster[]> => api.get(`${PERF_BASE}/shift-rosters`, { params }),
+  getByWeek: async (params: {
+    workGroupId?: number;
+    employeeId?: number;
+    periodStart: string;
+  }): Promise<ShiftRoster> =>
+    api.get(`${PERF_BASE}/shift-rosters/by-week`, { params }),
+  get: async (uuid: string): Promise<ShiftRoster> => api.get(`${PERF_BASE}/shift-rosters/${uuid}`),
+  saveAssignments: async (
+    uuid: string,
+    assignments: Array<{ employeeId: number; workDate: string; shiftId?: number | null }>,
+  ): Promise<ShiftRoster> =>
+    api.put(`${PERF_BASE}/shift-rosters/${uuid}/assignments`, { assignments }),
+  publish: async (uuid: string): Promise<ShiftRoster> =>
+    api.post(`${PERF_BASE}/shift-rosters/${uuid}/publish`),
+  copyFromPreviousWeek: async (uuid: string): Promise<ShiftRoster> =>
+    api.post(`${PERF_BASE}/shift-rosters/${uuid}/copy-from-previous-week`),
+};
+
+export const holidayApi = {
+  create: async (data: HolidayCreate): Promise<Holiday> => {
+    return api.post('/apps/master-data/performance/holidays', data);
+  },
+  list: async (params?: HolidayListParams): Promise<PerformanceListResult<Holiday>> => {
+    return api.get('/apps/master-data/performance/holidays', { params });
+  },
+  get: async (uuid: string): Promise<Holiday> => {
+    return api.get(`/apps/master-data/performance/holidays/${uuid}`);
+  },
+  update: async (uuid: string, data: HolidayUpdate): Promise<Holiday> => {
+    return api.put(`/apps/master-data/performance/holidays/${uuid}`, data);
+  },
+  delete: async (uuid: string): Promise<void> => {
+    return api.delete(`/apps/master-data/performance/holidays/${uuid}`);
+  },
+  importCn: async (data: HolidayCnImportRequest): Promise<HolidayCnImportResult> => {
+    return api.post('/apps/master-data/performance/holidays/import-cn', data);
+  },
+};
+
+/**
+ * 技能 API 服务
+ */
+export const skillApi = {
+  create: async (data: SkillCreate): Promise<Skill> => {
+    return api.post('/apps/master-data/performance/skills', data);
+  },
+  list: async (params?: SkillListParams): Promise<PerformanceListResult<Skill>> => {
+    return api.get('/apps/master-data/performance/skills', { params });
+  },
+  get: async (uuid: string): Promise<Skill> => {
+    return api.get(`/apps/master-data/performance/skills/${uuid}`);
+  },
+  update: async (uuid: string, data: SkillUpdate): Promise<Skill> => {
+    return api.put(`/apps/master-data/performance/skills/${uuid}`, data);
+  },
+  delete: async (uuid: string): Promise<void> => {
+    return api.delete(`/apps/master-data/performance/skills/${uuid}`);
+  },
+};
+
+export interface EmployeeOption {
+  id: number;
+  full_name: string;
+  username: string;
+}
+
+export const employeePerformanceApi = {
+  listEmployees: async (params?: { skip?: number; limit?: number }): Promise<{ items: EmployeeOption[]; total: number }> => {
+    return api.get(`${PERF_BASE}/employees`, { params });
+  },
+  listDepartments: async (): Promise<{ items: { id: number; name: string }[] }> => {
+    return api.get(`${PERF_BASE}/departments`);
+  },
+  listPositions: async (): Promise<{ items: { id: number; name: string }[] }> => {
+    return api.get(`${PERF_BASE}/positions`);
+  },
+  listConfigs: async (params?: {
+    skip?: number;
+    limit?: number;
+    employee_id?: number;
+    keyword?: string;
+    order_by?: string;
+    calc_mode?: string;
+    is_active?: boolean;
+    created_start_date?: string;
+    created_end_date?: string;
+    updated_start_date?: string;
+    updated_end_date?: string;
+  }): Promise<PerformanceListResult<EmployeePerformanceConfig>> => {
+    return api.get(`${PERF_BASE}/employee-configs`, { params });
+  },
+  getConfig: async (id: number): Promise<EmployeePerformanceConfig> => {
+    return api.get(`${PERF_BASE}/employee-configs/${id}`);
+  },
+  createConfig: async (data: EmployeePerformanceConfigCreate): Promise<EmployeePerformanceConfig> => {
+    return api.post(`${PERF_BASE}/employee-configs`, data);
+  },
+  updateConfig: async (id: number, data: EmployeePerformanceConfigUpdate): Promise<EmployeePerformanceConfig> => {
+    return api.put(`${PERF_BASE}/employee-configs/${id}`, data);
+  },
+  deleteConfig: async (id: number): Promise<void> => {
+    return api.delete(`${PERF_BASE}/employee-configs/${id}`);
+  },
+  listHourlyRates: async (params?: {
+    skip?: number;
+    limit?: number;
+    keyword?: string;
+    order_by?: string;
+    is_active?: boolean;
+    created_start_date?: string;
+    created_end_date?: string;
+    updated_start_date?: string;
+    updated_end_date?: string;
+  }): Promise<PerformanceListResult<HourlyRate>> => {
+    return api.get(`${PERF_BASE}/hourly-rates`, { params });
+  },
+  getHourlyRate: async (id: number): Promise<HourlyRate> => {
+    return api.get(`${PERF_BASE}/hourly-rates/${id}`);
+  },
+  createHourlyRate: async (data: HourlyRateCreate): Promise<HourlyRate> => {
+    return api.post(`${PERF_BASE}/hourly-rates`, data);
+  },
+  updateHourlyRate: async (id: number, data: HourlyRateUpdate): Promise<HourlyRate> => {
+    return api.put(`${PERF_BASE}/hourly-rates/${id}`, data);
+  },
+  deleteHourlyRate: async (id: number): Promise<void> => {
+    return api.delete(`${PERF_BASE}/hourly-rates/${id}`);
+  },
+  listKpiDefinitions: async (params?: {
+    skip?: number;
+    limit?: number;
+    keyword?: string;
+    order_by?: string;
+    calc_type?: string;
+    is_active?: boolean;
+    created_start_date?: string;
+    created_end_date?: string;
+    updated_start_date?: string;
+    updated_end_date?: string;
+  }): Promise<PerformanceListResult<KPIDefinition>> => {
+    return api.get(`${PERF_BASE}/kpi-definitions`, { params });
+  },
+  getKpiDefinition: async (id: number): Promise<KPIDefinition> => {
+    return api.get(`${PERF_BASE}/kpi-definitions/${id}`);
+  },
+  createKpiDefinition: async (data: KPIDefinitionCreate): Promise<KPIDefinition> => {
+    return api.post(`${PERF_BASE}/kpi-definitions`, data);
+  },
+  updateKpiDefinition: async (id: number, data: KPIDefinitionUpdate): Promise<KPIDefinition> => {
+    return api.put(`${PERF_BASE}/kpi-definitions/${id}`, data);
+  },
+  deleteKpiDefinition: async (id: number): Promise<void> => {
+    return api.delete(`${PERF_BASE}/kpi-definitions/${id}`);
+  },
+  listSummaries: async (params?: {
+    period?: string;
+    employee_id?: number;
+    skip?: number;
+    limit?: number;
+    keyword?: string;
+    order_by?: string;
+    status?: string;
+    created_start_date?: string;
+    created_end_date?: string;
+    updated_start_date?: string;
+    updated_end_date?: string;
+  }): Promise<PerformanceListResult<PerformanceSummary>> => {
+    return api.get(`${PERF_BASE}/summaries`, { params });
+  },
+  getDetail: async (params: { period: string; employee_id: number }): Promise<PerformanceDetail> => {
+    return api.get(`${PERF_BASE}/details`, { params });
+  },
+  getSummary: async (summaryId: number): Promise<PerformanceSummary> => {
+    return api.get(`${PERF_BASE}/summaries/${summaryId}`);
+  },
+  calculate: async (period: string): Promise<PerformanceCalculateResult> => {
+    return api.post(`${PERF_BASE}/calculate`, null, { params: { period } });
+  },
+  distributeByWorkGroup: async (
+    workGroupUuid: string,
+    params: { period: string; total_amount: number },
+  ): Promise<PerformanceSummary[]> => {
+    return api.post(`${PERF_BASE}/work-groups/${workGroupUuid}/distribute`, null, { params });
+  },
+  confirmSummary: async (id: number): Promise<PerformanceSummary> => {
+    return api.post(`${PERF_BASE}/summaries/${id}/confirm`);
+  },
+  reopenSummary: async (id: number): Promise<PerformanceSummary> => {
+    return api.post(`${PERF_BASE}/summaries/${id}/reopen`);
+  },
+  batchConfirm: async (period: string): Promise<{ period: string; confirmed_count: number; skipped_count: number }> => {
+    return api.post(`${PERF_BASE}/summaries/batch-confirm`, null, { params: { period } });
+  },
+  exportSummaries: async (period: string, status = 'confirmed'): Promise<{ csv: string; totalAmount: number }> => {
+    const csv = await api.get<string>(`${PERF_BASE}/summaries/export`, {
+      params: { period, status },
+      responseType: 'text',
+    });
+    const lines = String(csv).trim().split('\n');
+    const last = lines[lines.length - 1]?.split(',') ?? [];
+    const totalAmount = Number(last[last.length - 1]) || 0;
+    return { csv: String(csv), totalAmount };
+  },
+  getPayrollTotal: async (period: string): Promise<{ period: string; total_amount: number; employee_count: number }> => {
+    return api.get(`${PERF_BASE}/summaries/payroll-total`, { params: { period } });
+  },
+  listKpiScores: async (params?: { period?: string; employee_id?: number }) => {
+    return api.get<Array<{ kpi_code: string; score: number; source_data_json?: Record<string, unknown> }>>(
+      `${PERF_BASE}/kpi-scores`,
+      { params },
+    );
+  },
+};

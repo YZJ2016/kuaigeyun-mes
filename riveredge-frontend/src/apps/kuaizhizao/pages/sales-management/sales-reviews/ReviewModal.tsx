@@ -1,0 +1,211 @@
+/**
+ * 订单评审 — 评审中部门意见 Modal（列表操作列「评审」打开）
+ * 上半：单头摘要 + 明细（审什么）；下半：各部门意见（怎么审）
+ */
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { App, Button, Empty, Modal, Result, Space, Spin, Table } from 'antd';
+import { useTranslation } from 'react-i18next';
+import { DetailDrawerSection } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  salesReviewApi,
+  type SalesReview,
+  type SalesReviewItem,
+} from '../../../services/sales-review';
+import {
+  SalesReviewDeptOpinionsPanel,
+  validateDeptOpinionForm,
+  type DeptOpinionFormState,
+} from './DeptOpinionsPanel';
+import { SalesReviewBasicInfo } from './SalesReviewBasicInfo';
+import { formatAmount, formatPrice, formatQuantity } from '../../../../../utils/format';
+
+export type SalesReviewReviewModalProps = {
+  open: boolean;
+  reviewId: number | null;
+  canApprove: boolean;
+  onClose: () => void;
+  onSuccess?: (row: SalesReview) => void;
+};
+
+export const SalesReviewReviewModal: React.FC<SalesReviewReviewModalProps> = ({
+  open,
+  reviewId,
+  canApprove,
+  onClose,
+  onSuccess,
+}) => {
+  const { t } = useTranslation();
+  const { message } = App.useApp();
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [review, setReview] = useState<SalesReview | null>(null);
+  const [opinionForms, setOpinionForms] = useState<Record<string, DeptOpinionFormState>>({});
+
+  const load = useCallback(
+    async (id: number) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const row = await salesReviewApi.get(id);
+        setReview(row);
+        setOpinionForms({});
+      } catch (err) {
+        setReview(null);
+        setError(getApiErrorMessage(err, t('app.kuaizhizao.salesReview.loadFailed')));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [t],
+  );
+
+  useEffect(() => {
+    if (!open || reviewId == null) {
+      setReview(null);
+      setError(null);
+      setOpinionForms({});
+      return;
+    }
+    void load(reviewId);
+  }, [open, reviewId, load]);
+
+  const submitDept = async (deptCode: string) => {
+    if (!review) return;
+    const formState = opinionForms[deptCode] || { result: 'pass' as const, opinion: '' };
+    const invalid = validateDeptOpinionForm(
+      formState,
+      t('app.kuaizhizao.salesReview.failOpinionRequired'),
+      t('app.kuaizhizao.salesReview.reviewerRequired'),
+    );
+    if (invalid) {
+      message.error(invalid);
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const row = await salesReviewApi.submitDeptOpinion(review.id, deptCode, {
+        result: formState.result,
+        opinion: formState.opinion || null,
+        reviewed_by: formState.reviewed_by ?? null,
+      });
+      setReview(row);
+      message.success(t('app.kuaizhizao.salesReview.deptOpinionSuccess'));
+      setOpinionForms((prev) => {
+        const next = { ...prev };
+        delete next[deptCode];
+        return next;
+      });
+      onSuccess?.(row);
+    } catch (err) {
+      message.error(getApiErrorMessage(err, t('common.operationFailed')));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const lineColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.salesReview.colMaterialCode'),
+        dataIndex: 'material_code',
+        width: 120,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesReview.colMaterialName'),
+        dataIndex: 'material_name',
+        ellipsis: true,
+      },
+      {
+        title: t('common.quantity'),
+        dataIndex: 'quantity',
+        width: 90,
+        align: 'right' as const,
+        render: (v: unknown) => formatQuantity(v),
+      },
+      {
+        title: t('app.kuaizhizao.salesReview.colUnitPrice'),
+        dataIndex: 'unit_price',
+        width: 100,
+        align: 'right' as const,
+        render: (v: unknown) => formatPrice(v),
+      },
+      {
+        title: t('app.kuaizhizao.salesReview.colAmount'),
+        dataIndex: 'amount',
+        width: 100,
+        align: 'right' as const,
+        render: (v: unknown) => formatAmount(v),
+      },
+    ],
+    [t],
+  );
+
+  const titleCode = review?.review_code ? ` ${review.review_code}` : '';
+  const items = (review?.items || []) as SalesReviewItem[];
+
+  return (
+    <Modal
+      title={t('app.kuaizhizao.salesReview.reviewModalTitle', { code: titleCode })}
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      width={960}
+      destroyOnHidden
+      mask={{ closable: true }}
+      styles={{ body: { maxHeight: '75vh', overflowY: 'auto' } }}
+    >
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 48 }}>
+          <Spin />
+        </div>
+      ) : error ? (
+        <Result
+          status="error"
+          title={error}
+          extra={
+            reviewId != null ? (
+              <Button type="primary" onClick={() => void load(reviewId)}>
+                {t('app.kuaizhizao.salesReview.retry')}
+              </Button>
+            ) : null
+          }
+        />
+      ) : review ? (
+        <Space orientation="vertical" style={{ width: '100%' }} size="medium">
+          <DetailDrawerSection title={t('app.kuaizhizao.salesReview.basicInfoTitle')} titleAccent>
+            <SalesReviewBasicInfo review={review} variant="modal" />
+          </DetailDrawerSection>
+
+          <DetailDrawerSection title={t('app.kuaizhizao.salesReview.itemsTitle')} titleAccent>
+            {items.length ? (
+              <Table
+                size="small"
+                rowKey={(r) => String(r.id ?? `${r.material_code}-${r.line_no}`)}
+                pagination={false}
+                columns={lineColumns}
+                dataSource={items}
+                style={{ width: '100%', margin: 0 }}
+                scroll={{ x: true }}
+              />
+            ) : (
+              <Empty description={t('app.kuaizhizao.salesReview.itemsEmpty')} />
+            )}
+          </DetailDrawerSection>
+
+          <SalesReviewDeptOpinionsPanel
+            review={review}
+            canApprove={canApprove}
+            opinionForms={opinionForms}
+            setOpinionForms={setOpinionForms}
+            actionLoading={submitting}
+            onSubmitDept={submitDept}
+          />
+        </Space>
+      ) : null}
+    </Modal>
+  );
+};

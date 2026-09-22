@@ -1,0 +1,123 @@
+"""
+集成配置管理 Schema 模块
+
+定义集成配置管理相关的 Pydantic Schema，用于 API 请求和响应验证。
+"""
+
+from datetime import datetime
+from typing import Dict, Any, Optional, List
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+from core.config.integration_type_spec import assert_allowed_integration_type
+
+
+class IntegrationConfigBase(BaseModel):
+    """
+    集成配置基础 Schema
+    
+    包含集成配置的基本字段，用于创建和更新操作。
+    """
+    name: str = Field(..., min_length=1, max_length=100, description="集成名称")
+    code: str = Field(..., min_length=1, max_length=50, description="集成代码（唯一，用于程序识别）")
+    type: str = Field(..., min_length=1, max_length=40, description="集成类型：OAuth、API、Webhook、Database等")
+    description: Optional[str] = Field(None, description="集成描述")
+    config: Dict[str, Any] = Field(default_factory=dict, description="配置信息（JSON）")
+    is_active: bool = Field(default=True, description="是否启用")
+    
+    @field_validator('type')
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        """验证集成类型（含数据源、应用连接器；历史伞型先归一）"""
+        return assert_allowed_integration_type(v)
+
+
+class IntegrationConfigCreate(IntegrationConfigBase):
+    """
+    集成配置创建 Schema
+    
+    用于创建新集成配置的请求数据。
+    """
+    pass
+
+
+class IntegrationConfigUpdate(BaseModel):
+    """
+    集成配置更新 Schema
+    
+    用于更新集成配置的请求数据，所有字段可选。
+    """
+    name: Optional[str] = Field(None, min_length=1, max_length=100, description="集成名称")
+    description: Optional[str] = Field(None, description="集成描述")
+    config: Optional[Dict[str, Any]] = Field(None, description="配置信息（JSON）")
+    is_active: Optional[bool] = Field(None, description="是否启用")
+
+
+class IntegrationConfigResponse(IntegrationConfigBase):
+    """
+    集成配置响应 Schema
+    
+    用于返回集成配置信息。
+    config 已脱敏，密码等敏感字段不暴露。
+    """
+    uuid: str = Field(..., description="集成配置UUID（对外暴露，业务标识）")
+    tenant_id: int = Field(..., description="组织ID")
+    is_connected: bool = Field(..., description="是否已连接")
+    last_connected_at: Optional[datetime] = Field(None, description="最后连接时间")
+    last_error: Optional[str] = Field(None, description="最后错误信息")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+    is_system_default: bool = Field(False, description="是否系统默认数据源（密码来自ENV，不可编辑）")
+    is_editable: bool = Field(True, description="是否可编辑")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TestConfigRequest(BaseModel):
+    """
+    保存前测试连接请求 Schema
+    
+    用于新建/编辑时，在保存前测试连接配置是否有效。
+    不落库，仅验证配置。
+    """
+    type: str = Field(..., description="集成类型：postgresql、mysql、mongodb、api 等")
+    config: Dict[str, Any] = Field(default_factory=dict, description="连接配置（JSON）")
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        return assert_allowed_integration_type(v)
+
+
+class TestConnectionResponse(BaseModel):
+    """
+    测试连接响应 Schema
+    
+    用于返回连接测试结果。
+    """
+    success: bool = Field(..., description="是否成功")
+    message: str = Field(..., description="消息")
+    data: Optional[Dict[str, Any]] = Field(None, description="测试结果数据")
+    error: Optional[str] = Field(None, description="错误信息")
+
+
+class SyncContactsResponse(BaseModel):
+    """通讯录同步结果。"""
+    success: bool = Field(..., description="是否成功")
+    message: str = Field(..., description="消息")
+    departments: Optional[Dict[str, int]] = Field(None, description="部门同步统计")
+    users: Optional[Dict[str, int]] = Field(None, description="成员同步统计")
+    synced_at: Optional[str] = Field(None, description="同步完成时间（ISO8601）")
+    error: Optional[str] = Field(None, description="错误信息")
+
+
+class LoadConnectorApiPresetsResponse(BaseModel):
+    """应用连接器加载常用接口预设结果。"""
+    connection_uuid: str = Field(..., description="连接器 UUID")
+    connection_code: str = Field(..., description="连接器代码")
+    connection_type: str = Field(..., description="连接器类型")
+    created_count: int = Field(..., description="新建接口数")
+    skipped_count: int = Field(..., description="已存在跳过数")
+    categorized_count: int = Field(0, description="已存在接口补充分类数")
+    created_codes: List[str] = Field(default_factory=list, description="新建接口 code")
+    skipped_codes: List[str] = Field(default_factory=list, description="跳过接口 code")
+    categorized_codes: List[str] = Field(default_factory=list, description="补充分类接口 code")

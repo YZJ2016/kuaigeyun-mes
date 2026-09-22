@@ -1,0 +1,348 @@
+/**
+ * 我的任务 - 看板视图组件
+ * 
+ * 提供看板布局的任务管理界面，支持拖拽切换状态
+ */
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { App, Card, Badge, Tag, Button, Space, message, Drawer, Typography, Descriptions, Divider, Empty } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, FileTextOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { DragEndEvent } from '@dnd-kit/core';
+import KanbanBoard, { KanbanColumn, KanbanCardProps } from '../../../components/kanban-board';
+import {
+  getUserTasks,
+  getUserTaskStats,
+  processUserTask,
+  UserTask,
+  UserTaskStats,
+  TaskActionRequest,
+} from '../../../services/userTask';
+import { handleError } from '../../../utils/errorHandler';
+import { formatDateTimeBySiteSetting, formatDateBySiteSetting } from '../../../utils/format';
+
+const { Text, Paragraph } = Typography;
+
+/**
+ * 看板视图组件属性
+ */
+interface KanbanViewProps {
+  /**
+   * 任务类型（pending=待处理, submitted=我提交的）
+   */
+  taskType: 'pending' | 'submitted';
+  /**
+   * 刷新回调
+   */
+  onRefresh?: () => void;
+}
+
+/**
+ * 看板视图组件
+ */
+const KanbanView: React.FC<KanbanViewProps> = ({ taskType, onRefresh }) => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const [tasks, setTasks] = useState<UserTask[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<UserTask | null>(null);
+
+  /**
+   * 加载任务列表
+   */
+  const loadTasks = async () => {
+    setLoading(true);
+    try {
+      const response = await getUserTasks({
+        page: 1,
+        page_size: 1000, // 看板视图需要加载所有任务
+        task_type: taskType,
+      });
+      setTasks(response.items);
+    } catch (error: any) {
+      handleError(error, t('pages.personal.tasks.getListFailed'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTasks();
+  }, [taskType]);
+
+  /**
+   * 任务状态标签
+   */
+  const getStatusTag = (status: string) => {
+    const statusMap: Record<string, { color: string; text: string }> = {
+      pending: { color: 'processing', text: t('pages.personal.tasks.statusPending') },
+      approved: { color: 'success', text: t('pages.personal.tasks.statusApproved') },
+      rejected: { color: 'error', text: t('pages.personal.tasks.statusRejected') },
+      cancelled: { color: 'default', text: t('pages.personal.tasks.statusCancelled') },
+    };
+    const statusInfo = statusMap[status] || { color: 'default', text: status };
+    return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+  };
+
+  /**
+   * 按状态分组任务
+   */
+  const columns: KanbanColumn[] = useMemo(() => {
+    if (taskType === 'pending') {
+      // 待处理任务：只显示待处理状态
+      return [
+        {
+          id: 'pending',
+          title: t('pages.personal.tasks.statusPending'),
+          color: '#1890ff',
+          items: tasks.filter((t) => t.status === 'pending'),
+        },
+      ];
+    } else {
+      // 我提交的任务：显示所有状态
+      return [
+        {
+          id: 'pending',
+          title: t('pages.personal.tasks.pendingApproval'),
+          color: '#1890ff',
+          items: tasks.filter((t) => t.status === 'pending'),
+        },
+        {
+          id: 'approved',
+          title: t('pages.personal.tasks.statusApproved'),
+          color: '#52c41a',
+          items: tasks.filter((t) => t.status === 'approved'),
+        },
+        {
+          id: 'rejected',
+          title: t('pages.personal.tasks.statusRejected'),
+          color: '#ff4d4f',
+          items: tasks.filter((t) => t.status === 'rejected'),
+        },
+        {
+          id: 'cancelled',
+          title: t('pages.personal.tasks.statusCancelled'),
+          color: '#999',
+          items: tasks.filter((t) => t.status === 'cancelled'),
+        },
+      ];
+    }
+  }, [tasks, taskType, t]);
+
+  /**
+   * 处理拖拽结束
+   */
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    // 查找拖拽的任务
+    const taskId = String(active.id);
+    const task = tasks.find((t) => t.uuid === taskId);
+
+    if (!task) {
+      return;
+    }
+
+    // 获取目标状态
+    const targetColumnId = over.id as string;
+
+    // 如果任务已经在目标状态，不处理
+    if (task.status === targetColumnId) {
+      return;
+    }
+
+    // 只有待处理任务可以拖拽到已通过或已拒绝
+    if (task.status === 'pending' && taskType === 'pending') {
+      if (targetColumnId === 'approved' || targetColumnId === 'rejected') {
+        try {
+          const action: TaskActionRequest = {
+            action: targetColumnId === 'approved' ? 'approve' : 'reject',
+          };
+          await processUserTask(task.uuid, action);
+          messageApi.success(targetColumnId === 'approved' ? t('pages.personal.tasks.approveSuccess') : t('pages.personal.tasks.rejectSuccess'));
+          loadTasks();
+          onRefresh?.();
+        } catch (error: any) {
+          handleError(error, t('pages.personal.tasks.processFailed'));
+        }
+      }
+    }
+  };
+
+  /**
+   * 渲染任务卡片
+   */
+  const renderCard: KanbanCardProps['renderCard'] = (task: UserTask) => {
+    return (
+      <div>
+        <div style={{ marginBottom: 8 }}>
+          <Text strong style={{ fontSize: 14 }}>
+            {task.title}
+          </Text>
+        </div>
+        {task.content && (
+          <Paragraph
+            ellipsis={{ rows: 2, expandable: false }}
+            style={{ marginBottom: 8, fontSize: 12, color: '#666' }}
+          >
+            {task.content}
+          </Paragraph>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Space size="small">
+            {getStatusTag(task.status)}
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {formatDateBySiteSetting(task.submitted_at)}
+            </Text>
+          </Space>
+          {task.status === 'pending' && taskType === 'pending' && (
+            <Space size="small">
+              <Button
+                type="text"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedTask(task);
+                  setDetailDrawerVisible(true);
+                }}
+              />
+            </Space>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  /**
+   * 处理卡片点击
+   */
+  const handleCardClick = (task: UserTask) => {
+    setSelectedTask(task);
+    setDetailDrawerVisible(true);
+  };
+
+  /**
+   * 处理任务（审批或拒绝）
+   */
+  const handleProcessTask = async (task: UserTask, action: 'approve' | 'reject') => {
+    try {
+      const data: TaskActionRequest = {
+        action,
+      };
+      await processUserTask(task.uuid, data);
+      messageApi.success(action === 'approve' ? t('pages.personal.tasks.approveSuccess') : t('pages.personal.tasks.rejectSuccess'));
+      setDetailDrawerVisible(false);
+      setSelectedTask(null);
+      loadTasks();
+      onRefresh?.();
+    } catch (error: any) {
+      handleError(error, t('pages.personal.tasks.processFailed'));
+    }
+  };
+
+  return (
+    <>
+      <KanbanBoard
+        columns={columns}
+        cardProps={{
+          data: tasks,
+          idField: 'uuid',
+          titleField: 'title',
+          renderCard,
+          onCardClick: handleCardClick,
+        }}
+        onDragEnd={handleDragEnd}
+        showCount={true}
+      />
+
+      {/* 任务详情抽屉 */}
+      <Drawer
+        title={t('pages.personal.tasks.detailTitle')}
+        placement="right"
+        size={600}
+        open={detailDrawerVisible}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setSelectedTask(null);
+        }}
+        extra={
+          selectedTask?.status === 'pending' && taskType === 'pending' ? (
+            <Space>
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleProcessTask(selectedTask, 'approve')}
+              >
+                {selectedTask.data?.is_personal ? t('pages.personal.tasks.complete') : t('pages.personal.tasks.approve')}
+              </Button>
+              {!selectedTask.data?.is_personal && (
+                <Button
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => handleProcessTask(selectedTask, 'reject')}
+                >
+                  {t('pages.personal.tasks.reject')}
+                </Button>
+              )}
+            </Space>
+          ) : null
+        }
+      >
+        {selectedTask && (
+          <div>
+            <Descriptions column={1} bordered>
+              <Descriptions.Item label={t('pages.personal.tasks.taskTitleLabel')}>
+                <Text strong>{selectedTask.title}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label={t('pages.personal.tasks.taskContentLabel')}>
+                {selectedTask.content || t('pages.personal.tasks.noContent')}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('common.status')}>
+                {getStatusTag(selectedTask.status)}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('pages.personal.tasks.submittedAt')}>
+                {formatDateTimeBySiteSetting(selectedTask.submitted_at)}
+              </Descriptions.Item>
+              {selectedTask.completed_at && (
+                <Descriptions.Item label={t('pages.personal.tasks.completedAt')}>
+                  {formatDateTimeBySiteSetting(selectedTask.completed_at)}
+                </Descriptions.Item>
+              )}
+              {selectedTask.current_node && (
+                <Descriptions.Item label={t('pages.personal.tasks.currentNode')}>
+                  {selectedTask.current_node}
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+
+            {selectedTask.data && Object.keys(selectedTask.data).length > 0 && (
+              <>
+                <Divider>{t('pages.personal.tasks.formData')}</Divider>
+                <pre
+                  style={{
+                    padding: '12px',
+                    background: '#f5f5f5',
+                    borderRadius: '4px',
+                    maxHeight: '300px',
+                    overflow: 'auto',
+                  }}
+                >
+                  {JSON.stringify(selectedTask.data, null, 2)}
+                </pre>
+              </>
+            )}
+          </div>
+        )}
+      </Drawer>
+    </>
+  );
+};
+
+export default KanbanView;
+

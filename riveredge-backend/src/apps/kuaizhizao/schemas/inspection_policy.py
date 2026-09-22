@@ -1,0 +1,41 @@
+"""组织级质检环节开关（IQC/IPQC/FQC/OQC）API Schema。"""
+
+from typing import Dict, Optional
+
+from pydantic import Field
+
+from core.schemas.base import BaseSchema
+
+
+class QualityInspectionStageTogglesResponse(BaseSchema):
+    """当前组织质检各环节的启用状态。"""
+
+    iqc_enabled: bool = Field(..., description="来料检（IQC）环节是否启用")
+    ipqc_enabled: bool = Field(..., description="过程检（IPQC）环节是否启用")
+    fqc_enabled: bool = Field(..., description="成品检（FQC）环节是否启用")
+    oqc_enabled: bool = Field(..., description="出货检（OQC）环节是否启用")
+
+
+class QualityInspectionStageTogglesUpdate(BaseSchema):
+    """部分更新；仅提交的字段会被覆盖，其余保持原配置。"""
+
+    iqc_enabled: Optional[bool] = Field(None, description="来料检（IQC）")
+    ipqc_enabled: Optional[bool] = Field(None, description="过程检（IPQC）")
+    fqc_enabled: Optional[bool] = Field(None, description="成品检（FQC）")
+    oqc_enabled: Optional[bool] = Field(None, description="出货检（OQC）")
+
+
+class QualityEffectiveConfigResponse(BaseSchema):
+    """聚合的组织质检有效配置（环节开关 + 业务参数）。"""
+
+    stage_enabled: Dict[str, bool] = Field(..., description="环节总开关 iqc/ipqc/fqc/oqc")
+    module_enabled: Dict[str, bool] = Field(..., description="模块能力 incoming/process/finished/defect_handling")
+    auto_create: Dict[str, bool] = Field(..., description="各节点自动建单开关")
+    gate: Dict[str, bool] = Field(
+        ...,
+        description="门禁含 require_fai_before_mass_reporting 等",
+    )
+    fai: Dict[str, bool] = Field(
+        default_factory=dict,
+        description="FAI 相关开关 auto_create_fai_on_work_order",
+    )

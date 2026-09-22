@@ -1,0 +1,1963 @@
+"""
+集成配置管理服务模块
+
+提供集成配置的 CRUD 操作和连接测试功能。
+系统默认数据源（code=system_default）：密码来自环境变量，不可编辑/删除。
+"""
+
+import asyncio
+from typing import Optional, List, Dict, Any, Tuple  # noqa: F401
+from urllib.parse import urlparse
+from uuid import UUID
+from tortoise.exceptions import IntegrityError
+import httpx  # 仅用于 BasicAuth 等类型
+
+from core.models.integration_config import IntegrationConfig
+from core.schemas.integration_config import IntegrationConfigCreate, IntegrationConfigUpdate
+from core.utils.timezone_utils import resolve_business_datetime
+from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.infrastructure.http import get_http_client
+from core.config.data_source_type_spec import (
+    DATA_SOURCE_CONFIG_ONLY_TYPES,
+    DATA_SOURCE_TYPE_LABELS,
+)
+
+# 系统默认数据源代码（密码从 ENV 读取，不可编辑）
+SYSTEM_DEFAULT_CODE = "system_default"
+
+# 对象存储连接器（配置用 endpoint/bucket/region，非 base_url）
+OBJECT_STORAGE_TYPES = (
+    "alicloud_oss",
+    "tencent_cos",
+    "huaweicloud_obs",
+    "aws_s3",
+    "minio",
+    "qiniu_kodo",
+)
+
+def _config_only_user_message(integration_type: str) -> str:
+    """对仅配置校验的类型返回明确文案，避免与真实建连成功混淆。"""
+    label = DATA_SOURCE_TYPE_LABELS.get(integration_type, integration_type)
+    return (
+        f"{label} 配置检查通过：已校验必填项；当前版本未发起真实连接，"
+        f"无法确认网络、端口与账号密码是否可用。"
+    )
+
+
+def _get_system_default_pg_config() -> Dict[str, Any]:
+    """从环境变量获取系统默认 PostgreSQL 连接配置（密码不落库）"""
+    from infra.config.infra_config import infra_settings
+    return {
+        "host": infra_settings.DB_HOST,
+        "port": infra_settings.DB_PORT,
+        "user": infra_settings.DB_USER,
+        "username": infra_settings.DB_USER,
+        "password": infra_settings.DB_PASSWORD,
+        "database": infra_settings.DB_NAME,
+    }
+
+
+_SENSITIVE_CONFIG_KEYS = (
+    "password",
+    "app_secret",
+    "client_secret",
+    "secret",
+    "corp_secret",
+    "api_key",
+    "api_secret",
+    "access_key_secret",
+    "secret_access_key",
+    "secret_key",
+    "rest_key",
+    "security_code",
+    "js_key",
+    "app_code",
+)
+
+
+def _mask_config_password(config: Dict[str, Any]) -> Dict[str, Any]:
+    """脱敏：将 config 中的敏感字段替换为占位符，避免 API 暴露"""
+    if not config:
+        return {}
+    out = dict(config)
+    api_key = out.get("api_key")
+    api_key_configured = bool(isinstance(api_key, str) and api_key.strip() and api_key.strip() != "****")
+    for key in _SENSITIVE_CONFIG_KEYS:
+        if key in out and out[key]:
+            out[key] = "****"
+    if "api_key" in config or api_key_configured:
+        out["api_key_configured"] = api_key_configured
+    return out
+
+
+def build_integration_response(integration: IntegrationConfig) -> Dict[str, Any]:
+    """构建 API 响应（config 脱敏，is_system_default/is_editable；历史伞型 type 归一）"""
+    from core.config.integration_type_spec import normalize_integration_type
+
+    is_system_default = integration.code == SYSTEM_DEFAULT_CODE
+    return {
+        "uuid": str(integration.uuid),
+        "tenant_id": integration.tenant_id,
+        "name": integration.name,
+        "code": integration.code,
+        "type": normalize_integration_type(integration.type),
+        "description": integration.description,
+        "config": _mask_config_password(integration.config or {}),
+        "is_active": integration.is_active,
+        "is_connected": integration.is_connected,
+        "last_connected_at": integration.last_connected_at,
+        "last_error": integration.last_error,
+        "created_at": integration.created_at,
+        "updated_at": integration.updated_at,
+        "is_system_default": is_system_default,
+        "is_editable": not is_system_default,
+    }
+
+
+async def migrate_legacy_integration_types(
+    integrations: List[IntegrationConfig],
+) -> None:
+    """将列表中的历史伞型 type 落库归一（幂等）。"""
+    from core.config.integration_type_spec import (
+        LEGACY_INTEGRATION_TYPE_ALIASES,
+        normalize_integration_type,
+    )
+
+    for integration in integrations:
+        raw = integration.type or ""
+        if raw not in LEGACY_INTEGRATION_TYPE_ALIASES:
+            continue
+        normalized = normalize_integration_type(raw)
+        if normalized == raw:
+            continue
+        integration.type = normalized
+        await integration.save(update_fields=["type", "updated_at"])
+
+
+async def migrate_legacy_integration_types_for_tenant(tenant_id: int) -> None:
+    """组织内历史伞型 type 一次性落库归一（列表/详情前调用）。"""
+    from core.config.integration_type_spec import LEGACY_INTEGRATION_TYPE_ALIASES
+
+    legacy_keys = list(LEGACY_INTEGRATION_TYPE_ALIASES.keys())
+    if not legacy_keys:
+        return
+    rows = await IntegrationConfig.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        type__in=legacy_keys,
+    ).all()
+    if rows:
+        await migrate_legacy_integration_types(rows)
+
+
+class IntegrationConfigService:
+    """
+    集成配置管理服务类
+    
+    提供集成配置的 CRUD 操作和连接测试功能。
+    """
+    
+    @staticmethod
+    async def create_integration(
+        tenant_id: int,
+        data: IntegrationConfigCreate
+    ) -> IntegrationConfig:
+        """
+        创建集成配置
+        
+        Args:
+            tenant_id: 组织ID
+            data: 集成配置创建数据
+            
+        Returns:
+            IntegrationConfig: 创建的集成配置对象
+            
+        Raises:
+            ValidationError: 当集成代码已存在时抛出
+        """
+        try:
+            integration = IntegrationConfig(
+                tenant_id=tenant_id,
+                **data.model_dump()
+            )
+            await integration.save()
+            return integration
+        except IntegrityError:
+            raise ValidationError(f"集成代码 {data.code} 已存在")
+    
+    @staticmethod
+    async def get_integration_by_uuid(
+        tenant_id: int,
+        uuid: str
+    ) -> IntegrationConfig:
+        """
+        根据UUID获取集成配置
+        
+        Args:
+            tenant_id: 组织ID
+            uuid: 集成配置UUID
+            
+        Returns:
+            IntegrationConfig: 集成配置对象
+            
+        Raises:
+            NotFoundError: 当集成配置不存在时抛出
+        """
+        integration = await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            uuid=uuid,
+            deleted_at__isnull=True
+        ).first()
+        
+        if not integration:
+            raise NotFoundError("集成配置不存在")
+
+        await migrate_legacy_integration_types([integration])
+        
+        return integration
+    
+    @staticmethod
+    async def get_integration_by_code(
+        tenant_id: int,
+        code: str
+    ) -> Optional[IntegrationConfig]:
+        """
+        根据代码获取集成配置
+        
+        Args:
+            tenant_id: 组织ID
+            code: 集成代码
+            
+        Returns:
+            IntegrationConfig: 集成配置对象，如果不存在返回 None
+        """
+        return await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            code=code,
+            deleted_at__isnull=True
+        ).first()
+    
+    @staticmethod
+    async def list_integrations(
+        tenant_id: int,
+        page: int = 1,
+        page_size: int = 20,
+        type: Optional[str] = None,
+        types: Optional[list[str]] = None,
+        is_active: Optional[bool] = None,
+        search: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+    ) -> tuple[List[IntegrationConfig], int]:
+        """
+        获取集成配置列表（分页）
+
+        Args:
+            tenant_id: 组织ID
+            page: 页码（从 1 开始）
+            page_size: 每页数量
+            type: 集成类型（可选）
+            is_active: 是否启用（可选）
+            search: 关键词（名称、代码、描述）
+            sort_by / sort_order: 排序（白名单字段）
+
+        Returns:
+            (集成配置列表, 总数)
+        """
+        await migrate_legacy_integration_types_for_tenant(tenant_id)
+
+        query = IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+
+        if types is not None:
+            query = query.filter(type__in=types)
+        elif type:
+            query = query.filter(type=type)
+
+        if is_active is not None:
+            query = query.filter(is_active=is_active)
+
+        if search:
+            from tortoise.expressions import Q
+            q = search.strip()
+            if q:
+                query = query.filter(
+                    Q(name__icontains=q)
+                    | Q(code__icontains=q)
+                    | Q(description__icontains=q)
+                )
+
+        total = await query.count()
+
+        allowed_sort = {
+            "name",
+            "code",
+            "type",
+            "created_at",
+            "updated_at",
+            "is_active",
+            "last_connected_at",
+        }
+        if sort_by in allowed_sort:
+            desc = sort_order and str(sort_order).lower() in ("desc", "descend")
+            primary = f"-{sort_by}" if desc else sort_by
+            ordered = query.order_by(primary, "id")
+        else:
+            ordered = query.order_by("-created_at", "id")
+
+        safe_page = max(page, 1)
+        safe_size = min(max(page_size, 1), 1000)
+        offset = (safe_page - 1) * safe_size
+        items = await ordered.offset(offset).limit(safe_size).all()
+        return items, total
+    
+    @staticmethod
+    async def update_integration(
+        tenant_id: int,
+        uuid: str,
+        data: IntegrationConfigUpdate
+    ) -> IntegrationConfig:
+        """
+        更新集成配置
+        
+        Args:
+            tenant_id: 组织ID
+            uuid: 集成配置UUID
+            data: 集成配置更新数据
+            
+        Returns:
+            IntegrationConfig: 更新后的集成配置对象
+            
+        Raises:
+            NotFoundError: 当集成配置不存在时抛出
+        """
+        integration = await IntegrationConfigService.get_integration_by_uuid(tenant_id, uuid)
+        if integration.code == SYSTEM_DEFAULT_CODE:
+            raise ValidationError("系统默认数据源不可编辑，密码来自环境变量")
+        
+        update_data = data.model_dump(exclude_unset=True)
+
+        if "config" in update_data and isinstance(update_data["config"], dict):
+            old_cfg = dict(integration.config or {})
+            new_cfg = dict(update_data["config"])
+            merged = {**old_cfg, **new_cfg}
+            for sk in _SENSITIVE_CONFIG_KEYS:
+                new_val = merged.get(sk)
+                if new_val in (None, "", "****") and old_cfg.get(sk) not in (None, "", "****"):
+                    merged[sk] = old_cfg[sk]
+            merged.pop("api_key_configured", None)
+            update_data["config"] = merged
+        
+        for key, value in update_data.items():
+            setattr(integration, key, value)
+        
+        await integration.save()
+        return integration
+    
+    @staticmethod
+    async def delete_integration(
+        tenant_id: int,
+        uuid: str
+    ) -> None:
+        """
+        删除集成配置（软删除）
+        
+        Args:
+            tenant_id: 组织ID
+            uuid: 集成配置UUID
+            
+        Raises:
+            NotFoundError: 当集成配置不存在时抛出
+        """
+        integration = await IntegrationConfigService.get_integration_by_uuid(tenant_id, uuid)
+        if integration.code == SYSTEM_DEFAULT_CODE:
+            raise ValidationError("系统默认数据源不可删除")
+        
+        # 软删除
+        integration.deleted_at = resolve_business_datetime()
+        await integration.save()
+
+    @staticmethod
+    async def ensure_system_default(tenant_id: int) -> Dict[str, Any]:
+        """
+        确保当前租户存在系统默认数据源（code=system_default）。
+
+        与迁移 140 行为一致：指向应用主库，密码来自环境变量，config 仅存标识。
+        若已软删除则恢复；已存在则直接返回。
+
+        Returns:
+            dict: { created: bool, restored: bool, item: IntegrationConfig }
+        """
+        existing = await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            code=SYSTEM_DEFAULT_CODE,
+            deleted_at__isnull=True,
+        ).first()
+        if existing:
+            return {"created": False, "restored": False, "item": existing}
+
+        soft_deleted = await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            code=SYSTEM_DEFAULT_CODE,
+        ).first()
+        if soft_deleted and soft_deleted.deleted_at is not None:
+            soft_deleted.deleted_at = None
+            soft_deleted.name = "系统默认数据库"
+            soft_deleted.type = "postgresql"
+            soft_deleted.description = "应用主数据库，密码来自环境变量，不可编辑"
+            soft_deleted.config = {"_system_default": True}
+            soft_deleted.is_active = True
+            soft_deleted.last_error = None
+            await soft_deleted.save()
+            return {"created": False, "restored": True, "item": soft_deleted}
+
+        integration = await IntegrationConfig.create(
+            tenant_id=tenant_id,
+            name="系统默认数据库",
+            code=SYSTEM_DEFAULT_CODE,
+            type="postgresql",
+            description="应用主数据库，密码来自环境变量，不可编辑",
+            config={"_system_default": True},
+            is_active=True,
+            is_connected=False,
+        )
+        return {"created": True, "restored": False, "item": integration}
+    
+    @staticmethod
+    async def test_connection(
+        tenant_id: int,
+        uuid: str
+    ) -> Dict[str, Any]:
+        """
+        测试连接
+        
+        Args:
+            tenant_id: 组织ID
+            uuid: 集成配置UUID
+            
+        Returns:
+            Dict[str, Any]: 连接测试结果
+            
+        Raises:
+            NotFoundError: 当集成配置不存在时抛出
+        """
+        integration = await IntegrationConfigService.get_integration_by_uuid(tenant_id, uuid)
+        
+        try:
+            # 根据集成类型测试连接
+            if integration.type in ("API", "api"):
+                result = await IntegrationConfigService._test_api_connection(integration)
+            elif integration.type == "OAuth":
+                result = await IntegrationConfigService._test_oauth_connection(integration)
+            elif integration.type == "Webhook":
+                result = await IntegrationConfigService._test_webhook_connection(integration)
+            elif integration.type == "Database":
+                result = await IntegrationConfigService._test_database_connection(integration)
+            elif integration.type == "postgresql":
+                result = await IntegrationConfigService._test_postgresql_connection(integration)
+            elif integration.type == "mysql":
+                result = await IntegrationConfigService._test_mysql_connection(integration)
+            elif integration.type == "mongodb":
+                result = await IntegrationConfigService._test_mongodb_connection(integration)
+            elif integration.type == "sqlserver":
+                result = await IntegrationConfigService._test_sqlserver_connection(integration)
+            elif integration.type in DATA_SOURCE_CONFIG_ONLY_TYPES or integration.type == "Database":
+                result = await IntegrationConfigService._test_database_config_validation(integration)
+            elif integration.type == "feishu":
+                result = await IntegrationConfigService._test_feishu_connection(integration)
+            elif integration.type == "dingtalk":
+                result = await IntegrationConfigService._test_dingtalk_connection(integration)
+            elif integration.type == "wecom":
+                result = await IntegrationConfigService._test_wecom_connection(integration)
+            elif integration.type == "kingdee_galaxy":
+                from core.services.integration.kingdee_galaxy_service import (
+                    test_kingdee_galaxy_connection_config,
+                )
+
+                result = await test_kingdee_galaxy_connection_config(integration.config or {})
+            elif integration.type in (
+                "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
+                "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
+                "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
+                "inspur_gs", "inspur_ps",
+                "digiwin_t100", "digiwin_yifei", "digiwin_yizhu", "digiwin_yituo", "digiwin_e10",
+                "chanjet_tplus", "grasp_huihuang", "super_erp", "erpnext", "sunlike_erp",
+                "teamcenter", "windchill", "caxa", "sanpin_plm", "sunlike_plm", "sipm", "inteplm",
+                "salesforce", "xiaoshouyi", "fenxiang", "qidian", "supra_crm",
+                "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
+                "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
+                "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
+                "nas_webdav", "nas_smb",
+            ):
+                result = await IntegrationConfigService._test_rest_api_connection(integration)
+            elif integration.type in OBJECT_STORAGE_TYPES:
+                result = await IntegrationConfigService._test_object_storage_connection(integration)
+            elif integration.type in (
+                "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow",
+            ):
+                result = await IntegrationConfigService._test_llm_connection(integration)
+            elif integration.type == "amap":
+                from core.services.amap_geocode_service import test_amap_connection_config
+
+                result = await test_amap_connection_config(integration.config or {})
+            elif integration.type == "kuaidi100":
+                from core.services.logistics_service import test_kuaidi100_connection_config
+
+                result = await test_kuaidi100_connection_config(integration.config or {})
+            elif integration.type == "kdniao":
+                from core.services.logistics_service import test_kdniao_connection_config
+
+                result = await test_kdniao_connection_config(integration.config or {})
+            elif integration.type in ("aliyun_market", "tencent_market"):
+                from core.services.logistics_service import test_cloud_market_connection_config
+
+                result = await test_cloud_market_connection_config(integration.config or {})
+            else:
+                raise ValueError(f"不支持的集成类型: {integration.type}")
+
+            if not isinstance(result, dict):
+                result = {"message": str(result)}
+            if isinstance(result, dict) and result.get("success") is False:
+                raise ValueError(result.get("message", "连接失败"))
+
+            if integration.type in DATA_SOURCE_CONFIG_ONLY_TYPES or integration.type == "Database":
+                # 未真实建连：不标记为已连接，避免列表/详情出现「已连通」误导；也不写入 last_error（非失败）
+                integration.update_connection_status(False, None)
+                await integration.save()
+                merged = {**result, "verification_level": "config_only"}
+                return {
+                    "success": True,
+                    "message": _config_only_user_message(integration.type),
+                    "data": merged,
+                }
+
+            integration.update_connection_status(True)
+            await integration.save()
+            merged = {**result, "verification_level": "live"}
+            return {
+                "success": True,
+                "message": "连接成功",
+                "data": merged,
+            }
+        except Exception as e:
+            # 更新连接状态（失败）
+            integration.update_connection_status(False, str(e))
+            await integration.save()
+            
+            return {
+                "success": False,
+                "message": f"连接失败: {str(e)}",
+                "error": str(e)
+            }
+    
+    @staticmethod
+    async def _test_api_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """
+        测试 API 连接
+        
+        Args:
+            integration: 集成配置对象
+            
+        Returns:
+            Dict[str, Any]: 测试结果
+        """
+        config = integration.get_config()
+        url = config.get("url") or config.get("base_url")
+        if not url:
+            raise ValueError("API URL 未配置")
+        
+        method = config.get("method", "GET")
+        headers = config.get("headers", {})
+        timeout = config.get("timeout", 10.0)
+
+        response = await get_http_client().request(
+            method,
+            url,
+            headers=headers,
+            timeout=timeout,
+        )
+        return {
+            "status_code": response.status_code,
+            "response": response.text[:200] if response.text else "",
+        }
+    
+    @staticmethod
+    async def _test_oauth_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """
+        测试 OAuth 连接
+        
+        Args:
+            integration: 集成配置对象
+            
+        Returns:
+            Dict[str, Any]: 测试结果
+            
+        Note:
+            后续可以集成 authlib 实现完整的 OAuth 测试
+        """
+        config = integration.get_config()
+        # 基本验证：检查必要配置项
+        required_fields = ["client_id", "client_secret", "authorization_url", "token_url"]
+        for field in required_fields:
+            if not config.get(field):
+                raise ValueError(f"OAuth 配置缺少必要字段: {field}")
+        
+        return {
+            "message": "OAuth 配置验证成功（完整连接测试需要集成 authlib）"
+        }
+    
+    @staticmethod
+    async def _test_webhook_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """
+        测试 Webhook 连接
+        
+        Args:
+            integration: 集成配置对象
+            
+        Returns:
+            Dict[str, Any]: 测试结果
+        """
+        config = integration.get_config()
+        url = config.get("url")
+        if not url:
+            raise ValueError("Webhook URL 未配置")
+        
+        # 发送测试请求
+        method = config.get("method", "POST")
+        headers = config.get("headers", {})
+        timeout = config.get("timeout", 10.0)
+        test_payload = config.get("test_payload", {"test": True})
+
+        response = await get_http_client().request(
+            method,
+            url,
+            headers=headers,
+            json=test_payload,
+            timeout=timeout,
+        )
+        return {
+            "status_code": response.status_code,
+            "message": "Webhook 测试请求发送成功",
+        }
+    
+    @staticmethod
+    async def _test_database_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """
+        测试数据库连接
+        
+        Args:
+            integration: 集成配置对象
+            
+        Returns:
+            Dict[str, Any]: 测试结果
+            
+        Note:
+            后续可以集成 Tortoise ORM 或其他数据库驱动实现完整的数据库连接测试
+        """
+        config = integration.get_config()
+        # 基本验证：检查必要配置项
+        required_fields = ["host", "port", "database", "user", "password"]
+        for field in required_fields:
+            if not config.get(field):
+                raise ValueError(f"数据库配置缺少必要字段: {field}")
+        
+        # TODO: 后续可以实现实际的数据库连接测试
+        # 例如：使用 Tortoise ORM 或其他数据库驱动
+        
+        return {
+            "message": "数据库配置验证成功（完整连接测试需要集成数据库驱动）"
+        }
+
+    @staticmethod
+    async def test_config(type_: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        保存前测试连接配置（不落库）
+        
+        Args:
+            type_: 集成类型
+            config: 连接配置字典
+            
+        Returns:
+            Dict[str, Any]: 测试结果 { success, message, data?, error? }
+        """
+        class _TempConfig:
+            def __init__(self, t: str, c: Dict[str, Any]):
+                self.type = t
+                self.config = c or {}
+            def get_config(self) -> Dict[str, Any]:
+                return self.config
+
+        temp = _TempConfig(type_, config)
+        try:
+            if temp.type in ("API", "api"):
+                result = await IntegrationConfigService._test_api_connection(temp)
+            elif temp.type == "OAuth":
+                result = await IntegrationConfigService._test_oauth_connection(temp)
+            elif temp.type == "Webhook":
+                result = await IntegrationConfigService._test_webhook_connection(temp)
+            elif temp.type == "Database":
+                result = await IntegrationConfigService._test_database_connection(temp)
+            elif temp.type == "postgresql":
+                result = await IntegrationConfigService._test_postgresql_connection(temp)
+            elif temp.type == "mysql":
+                result = await IntegrationConfigService._test_mysql_connection(temp)
+            elif temp.type == "mongodb":
+                result = await IntegrationConfigService._test_mongodb_connection(temp)
+            elif temp.type == "sqlserver":
+                result = await IntegrationConfigService._test_sqlserver_connection(temp)
+            elif temp.type in DATA_SOURCE_CONFIG_ONLY_TYPES or temp.type == "Database":
+                result = await IntegrationConfigService._test_database_config_validation(temp)
+            elif temp.type == "feishu":
+                result = await IntegrationConfigService._test_feishu_connection(temp)
+            elif temp.type == "dingtalk":
+                result = await IntegrationConfigService._test_dingtalk_connection(temp)
+            elif temp.type == "wecom":
+                result = await IntegrationConfigService._test_wecom_connection(temp)
+            elif temp.type == "kingdee_galaxy":
+                from core.services.integration.kingdee_galaxy_service import (
+                    test_kingdee_galaxy_connection_config,
+                )
+
+                result = await test_kingdee_galaxy_connection_config(temp.config or {})
+            elif temp.type in (
+                "kingdee_xingchen", "kingdee_kis_cloud", "kingdee_kis",
+                "yonyou_yonbip", "yonyou_u8", "yonyou_u9", "yonyou_nc",
+                "sap_s4hana", "sap_b1", "oracle_netsuite", "odoo",
+                "inspur_gs", "inspur_ps",
+                "digiwin_t100", "digiwin_yifei", "digiwin_yizhu", "digiwin_yituo", "digiwin_e10",
+                "chanjet_tplus", "grasp_huihuang", "super_erp", "erpnext", "sunlike_erp",
+                "teamcenter", "windchill", "caxa", "sanpin_plm", "sunlike_plm", "sipm", "inteplm",
+                "salesforce", "xiaoshouyi", "fenxiang", "qidian", "supra_crm",
+                "weaver", "seeyon", "landray", "cloudhub", "tongda_oa",
+                "rootcloud", "casicloud", "alicloud_iot", "huaweicloud_iot", "thingsboard", "jetlinks",
+                "flux_wms", "kejian_wms", "digiwin_wms", "openwms",
+                "nas_webdav", "nas_smb",
+            ):
+                result = await IntegrationConfigService._test_rest_api_connection(temp)
+            elif temp.type in OBJECT_STORAGE_TYPES:
+                result = await IntegrationConfigService._test_object_storage_connection(temp)
+            elif temp.type in (
+                "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow",
+            ):
+                result = await IntegrationConfigService._test_llm_connection(temp)
+            elif temp.type == "amap":
+                from core.services.amap_geocode_service import test_amap_connection_config
+
+                result = await test_amap_connection_config(temp.config or {})
+            elif temp.type == "kuaidi100":
+                from core.services.logistics_service import test_kuaidi100_connection_config
+
+                result = await test_kuaidi100_connection_config(temp.config or {})
+            elif temp.type == "kdniao":
+                from core.services.logistics_service import test_kdniao_connection_config
+
+                result = await test_kdniao_connection_config(temp.config or {})
+            elif temp.type in ("aliyun_market", "tencent_market"):
+                from core.services.logistics_service import test_cloud_market_connection_config
+
+                result = await test_cloud_market_connection_config(temp.config or {})
+            else:
+                raise ValueError(f"不支持的集成类型: {temp.type}")
+            if isinstance(result, dict) and result.get("success") is False:
+                return {
+                    "success": False,
+                    "message": result.get("message", "连接失败"),
+                    "error": result.get("message"),
+                }
+            if not isinstance(result, dict):
+                result = {"message": str(result)}
+            if temp.type in DATA_SOURCE_CONFIG_ONLY_TYPES or temp.type == "Database":
+                return {
+                    "success": True,
+                    "message": _config_only_user_message(temp.type),
+                    "data": {**result, "verification_level": "config_only"},
+                }
+            return {
+                "success": True,
+                "message": result.get("message", "连接成功"),
+                "data": {**result, "verification_level": "live"},
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"连接失败: {str(e)}",
+                "error": str(e),
+            }
+
+    @staticmethod
+    async def get_schema(tenant_id: int, uuid: str) -> Dict[str, Any]:
+        """
+        获取数据源的表/列元数据（用于图形化查询构建器）
+        目前仅支持 PostgreSQL。
+        
+        Returns:
+            Dict: { "tables": [ { "name": "t1", "columns": [ { "name": "c1", "type": "varchar" } ] } ] }
+        """
+        integration = await IntegrationConfigService.get_integration_by_uuid(tenant_id, uuid)
+        if integration.type != "postgresql":
+            return {
+                "tables": [],
+                "error": f"Schema 暂仅支持 PostgreSQL，当前类型: {integration.type}",
+            }
+        config = integration.get_config()
+        if config.get("_system_default"):
+            config = _get_system_default_pg_config()
+        try:
+            import asyncpg
+            host = config.get("host", "localhost")
+            port = config.get("port", 5432)
+            database = config.get("database", "")
+            user = config.get("user") or config.get("username", "")
+            password = config.get("password", "")
+            conn = await asyncpg.connect(
+                host=host,
+                port=int(port),
+                user=user,
+                password=password,
+                database=database,
+            )
+            rows = await conn.fetch(
+                """
+                SELECT table_schema, table_name, column_name, data_type, ordinal_position
+                FROM information_schema.columns
+                WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+                ORDER BY table_schema, table_name, ordinal_position
+                """
+            )
+            await conn.close()
+            tables_map: Dict[str, List[Dict[str, str]]] = {}
+            for row in rows:
+                tbl = f"{row['table_schema']}.{row['table_name']}"
+                if tbl not in tables_map:
+                    tables_map[tbl] = []
+                tables_map[tbl].append({
+                    "name": str(row["column_name"]),
+                    "type": str(row["data_type"]),
+                })
+            tables = [
+                {"name": k, "columns": v}
+                for k, v in tables_map.items()
+            ]
+            return {"tables": tables}
+        except Exception as e:
+            return {"tables": [], "error": str(e)}
+
+    @staticmethod
+    async def _test_postgresql_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试 PostgreSQL 连接（config: host, port, database, user/username, password；系统默认从 ENV 读取）"""
+        config = integration.get_config()
+        if config.get("_system_default"):
+            config = _get_system_default_pg_config()
+        try:
+            import asyncpg
+            host = config.get("host", "localhost")
+            port = config.get("port", 5432)
+            database = config.get("database", "")
+            user = config.get("user") or config.get("username", "")
+            password = config.get("password", "")
+            conn = await asyncpg.connect(
+                host=host,
+                port=int(port),
+                user=user,
+                password=password,
+                database=database,
+            )
+            await conn.fetchval("SELECT 1")
+            await conn.close()
+            return {"success": True, "message": "PostgreSQL 连接成功"}
+        except Exception as e:
+            return {"success": False, "message": f"PostgreSQL 连接失败: {str(e)}"}
+
+    @staticmethod
+    def _normalize_sqlserver_host_and_port(config: Dict[str, Any]) -> tuple[str, int]:
+        """
+        解析 host / port，与 Navicat、SSMS 常见写法一致：
+        - host 可为「tcp:主机,端口」或「主机,端口」，逗号后为 TCP 端口。
+        - 命名实例可写「SERVER\\INSTANCE,端口」（逗号后为静态端口，与 SSMS 一致）。
+        - 若 host 中带端口，则优先使用该端口（避免表单仍填默认 1433 导致 20002）。
+        """
+        raw = (config.get("host") or "").strip()
+        if not raw:
+            return "", 1433
+        host = raw
+        if host.lower().startswith("tcp:"):
+            host = host[4:].strip()
+        port_cfg = config.get("port")
+        embedded: Optional[int] = None
+        # 支持「主机,端口」与「命名实例,端口」（如 SERVER\SQLEXPRESS,50444），与 Navicat/SSMS 常见写法一致
+        if "," in host:
+            left, right = host.rsplit(",", 1)
+            rs = right.strip()
+            if rs.isdigit():
+                host = left.strip()
+                embedded = int(rs)
+        if embedded is not None:
+            port_out = embedded
+        elif port_cfg is None or port_cfg == "":
+            port_out = 1433
+        else:
+            port_out = int(port_cfg)
+        return host, port_out
+
+    @staticmethod
+    def _sqlserver_exception_repr(exc: BaseException) -> str:
+        """将 pymssql/FreeTDS 抛出的 tuple、bytes 等转为可读字符串。"""
+        if isinstance(exc, BaseExceptionGroup):  # py311
+            parts = [IntegrationConfigService._sqlserver_exception_repr(s) for s in exc.exceptions]
+            return "; ".join(parts)
+        args = getattr(exc, "args", None)
+        if args and len(args) == 1 and isinstance(args[0], tuple) and len(args[0]) >= 2:
+            code, msg = args[0][0], args[0][1]
+            if isinstance(msg, (bytes, bytearray)):
+                for enc in ("utf-8", "gbk", "cp936", "latin-1"):
+                    try:
+                        msg = msg.decode(enc).strip()
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    msg = msg.decode("utf-8", errors="replace").strip() or "(binary message)"
+            return f"{code}, {msg}"
+        if isinstance(exc, tuple) and len(exc) >= 2:
+            code, msg = exc[0], exc[1]
+            if isinstance(msg, (bytes, bytearray)):
+                for enc in ("utf-8", "gbk", "cp936", "latin-1"):
+                    try:
+                        msg = msg.decode(enc).strip()
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    msg = msg.decode("utf-8", errors="replace").strip() or "(binary message)"
+            return f"{code}, {msg}"
+        return str(exc).strip() or type(exc).__name__
+
+    @staticmethod
+    def _sqlserver_tcp_probe_sync(host: str, port: int, timeout: float = 5.0) -> Optional[str]:
+        """TCP 层探测；失败时返回简短说明（便于与 TDS 20002 区分）。"""
+        import socket
+
+        try:
+            with socket.create_connection((host, int(port)), timeout=timeout):
+                return None
+        except OSError as e:
+            return f"无法建立 TCP 连接 {host}:{port}（{e.strerror or e}）"
+
+    @staticmethod
+    def _normalize_pymssql_tds_version(raw: Any) -> str:
+        """
+        pymssql/FreeTDS 仅支持约 4.2–7.4；前端「8.0」对应 ODBC/TDS 命名，传入 FreeTDS 易触发 20002，映射为 7.4。
+        """
+        if raw is None or raw == "":
+            return "7.2"
+        s = str(raw).strip()
+        if not s:
+            return "7.2"
+        key = s.replace("_", ".").lower()
+        if key in ("8", "8.0", "80"):
+            return "7.4"
+        allowed = frozenset({"4.2", "5.0", "7.0", "7.1", "7.2", "7.3", "7.4"})
+        if key in allowed:
+            return key
+        # 其它未知值避免传入 FreeTDS 产生怪异 20002
+        return "7.4"
+
+    @staticmethod
+    def _sqlserver_resolve_charset(config: Dict[str, Any]) -> str:
+        """
+        pymssql/FreeTDS 字符集。国内 Sunlike 等库 varchar 多为 GBK(CP936)；
+        TDS 7.0 若不指定 charset 易出现「测试厂」类乱码。可在 config 中设 charset 覆盖。
+        """
+        raw = config.get("charset") or config.get("character_set")
+        if isinstance(raw, str) and raw.strip():
+            k = raw.strip().lower().replace("-", "")
+            if k in ("utf8", "utf"):
+                return "UTF-8"
+            if k in ("gbk", "gb2312", "cp936", "936"):
+                return "CP936"
+            return raw.strip()
+        return "CP936"
+
+    @staticmethod
+    def _sqlserver_python_encoding(charset: str) -> str:
+        """TDS/ODBC charset 名 → Python codec（pymssql charset / pyodbc setdecoding）。"""
+        raw = (charset or "CP936").strip()
+        k = raw.lower().replace("-", "")
+        if k in ("utf8", "utf"):
+            return "utf-8"
+        if k in ("gbk", "gb2312", "cp936", "936", "gb18030"):
+            return "gbk"
+        return raw
+
+    @staticmethod
+    def _sqlserver_configure_pyodbc_conn(conn, config: Dict[str, Any]) -> None:
+        """SQL Server varchar 多为 CP936；pyodbc 默认按 UTF-8 解 SQL_CHAR 会导致中文乱码。"""
+        try:
+            import pyodbc
+        except ImportError:
+            return
+        enc = IntegrationConfigService._sqlserver_python_encoding(
+            IntegrationConfigService._sqlserver_resolve_charset(config)
+        )
+        try:
+            conn.setdecoding(pyodbc.SQL_CHAR, encoding=enc)
+            conn.setdecoding(pyodbc.SQL_WCHAR, encoding="utf-16le")
+            conn.setencoding(encoding=enc)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _sqlserver_normalize_text(val: str, charset: str = "CP936") -> str:
+        """修正 ODBC/pymssql 路径上 varchar 的常见编码误解。"""
+        if not val:
+            return val
+        if val.isascii():
+            return val
+        enc = IntegrationConfigService._sqlserver_python_encoding(charset)
+        for src, tgt in (("latin-1", "utf-8"), ("cp1252", "utf-8")):
+            try:
+                fixed = val.encode(src).decode(tgt)
+                if fixed != val:
+                    return fixed
+            except (UnicodeDecodeError, UnicodeEncodeError):
+                continue
+        if enc != "utf-8":
+            try:
+                fixed = val.encode("latin-1").decode(enc)
+                if fixed != val:
+                    return fixed
+            except (UnicodeDecodeError, UnicodeEncodeError):
+                pass
+        return val
+
+    @staticmethod
+    def _sqlserver_normalize_cell_value(val: Any, config: Dict[str, Any]) -> Any:
+        from datetime import date, datetime, time
+        from decimal import Decimal
+
+        if val is None or isinstance(val, (bool, int, float, Decimal, datetime, date, time)):
+            return val
+        charset = IntegrationConfigService._sqlserver_resolve_charset(config)
+        if isinstance(val, bytes):
+            enc = IntegrationConfigService._sqlserver_python_encoding(charset)
+            for candidate in (enc, "gbk", "utf-8"):
+                try:
+                    return val.decode(candidate)
+                except UnicodeDecodeError:
+                    continue
+            return val.decode("utf-8", errors="replace")
+        if isinstance(val, str):
+            return IntegrationConfigService._sqlserver_normalize_text(val, charset)
+        return val
+
+    @staticmethod
+    def _sqlserver_normalize_rows(rows: List[Any], config: Dict[str, Any]) -> List[dict]:
+        out: List[dict] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            out.append(
+                {
+                    k: IntegrationConfigService._sqlserver_normalize_cell_value(v, config)
+                    for k, v in row.items()
+                }
+            )
+        return out
+
+    @staticmethod
+    def _sqlserver_user_locked_encryption(config: Dict[str, Any]) -> bool:
+        """
+        用户是否锁定了加密策略（仅尝试其选择）。
+        「驱动默认 default」与留空一样：仍允许多策略自动协商（Navicat 常自动试多种组合）。
+        """
+        enc_raw = config.get("encryption")
+        if isinstance(enc_raw, str):
+            k = enc_raw.strip().lower()
+            if not k or k == "default":
+                return False
+            return True
+        if config.get("encrypt") is True or config.get("encrypt") is False:
+            return True
+        return False
+
+    @staticmethod
+    def _sqlserver_connection_attempt_kwargs(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        生成 pymssql.connect 参数列表（去重）。
+        用户未显式配置 encryption/encrypt 时，自动尝试多种加密协商方式，缓解 20002 / Unknown error。
+        """
+        base = IntegrationConfigService._build_sqlserver_connect_kwargs(config)
+        transports = IntegrationConfigService._sqlserver_connect_candidates(base)
+
+        locked_enc = IntegrationConfigService._sqlserver_user_locked_encryption(config)
+
+        if locked_enc:
+            return [dict(t) for t in transports]
+
+        # off 优先：穿透/老版本 SQL Server 在 FreeTDS 下常先于 TLS 协商成功
+        enc_profiles: List[Optional[str]] = ["off", None, "request", "default", "require"]
+
+        attempts: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+
+        for t in transports:
+            for enc in enc_profiles:
+                kw = dict(t)
+                if enc is None:
+                    kw.pop("encryption", None)
+                else:
+                    kw["encryption"] = enc
+                sig = repr(sorted(kw.items()))
+                if sig not in seen:
+                    seen.add(sig)
+                    attempts.append(kw)
+
+        if not locked_enc and not config.get("tds_version"):
+            extras: List[Dict[str, Any]] = []
+            for kw in attempts:
+                if kw.get("tds_version") == "7.2":
+                    alt = dict(kw)
+                    alt["tds_version"] = "7.4"
+                    s = repr(sorted(alt.items()))
+                    if s not in seen:
+                        seen.add(s)
+                        extras.append(alt)
+            attempts.extend(extras)
+
+        return attempts
+
+    @staticmethod
+    def _sqlserver_ping_sync(attempts: List[Dict[str, Any]]) -> None:
+        """在线程中依次尝试 connect + SELECT 1，失败时抛出带摘要的异常。"""
+        import pymssql
+
+        last: Optional[BaseException] = None
+        brief_errors: List[str] = []
+        for kw in attempts:
+            try:
+                conn = pymssql.connect(**kw)
+                try:
+                    cur = conn.cursor()
+                    cur.execute("SELECT 1 AS n")
+                    row = cur.fetchone()
+                    if row is None or row[0] != 1:
+                        raise RuntimeError("SQL Server 探测查询无有效结果")
+                finally:
+                    conn.close()
+                return
+            except Exception as e:
+                last = e
+                enc = kw.get("encryption", "(未设置)")
+                tds = kw.get("tds_version", "")
+                srv = kw.get("server", "")
+                brief_errors.append(
+                    f"[server={srv!s} enc={enc!s} tds={tds!s}] {IntegrationConfigService._sqlserver_exception_repr(e)}"
+                )
+        if last is not None:
+            tail = brief_errors[-5:] if len(brief_errors) > 5 else brief_errors
+            extra = " 最近尝试: " + " | ".join(tail) if tail else ""
+            raise RuntimeError(
+                f"{IntegrationConfigService._sqlserver_exception_repr(last)}{extra}"
+            ) from last
+        raise RuntimeError("SQL Server 连接失败: 无可用连接参数")
+
+    @staticmethod
+    def _format_sqlserver_error(exc: BaseException) -> str:
+        text = IntegrationConfigService._sqlserver_exception_repr(exc)
+        msg = f"SQL Server 连接失败: {text}"
+        if "20002" in text or "Adaptive Server connection failed" in text or "Unknown error" in text:
+            msg += (
+                " 常见排查：①连接测试由「后端服务所在机器」发起，花生壳/FRP 须把公网端口映射到 SQL Server 的 TCP "
+                "端口（与配置中端口一致），并放行防火墙；② SQL Server 配置管理器中启用 TCP/IP、确认实际监听端口；"
+                "③ SQL Server 2008 R2 / 无 TLS 时优先选加密「关闭(off)」、TDS 选 7.2 或 7.4（勿选 8.0：FreeTDS 不支持该字面版本）；"
+                "④已安装 Microsoft ODBC Driver 18 for SQL Server 时，数据集查询会优先走 ODBC（与 Navicat 常用栈一致）。"
+            )
+        return msg
+
+    @staticmethod
+    def _odbc_brace_segment(value: str) -> str:
+        """ODBC 连接串中的 `{literal}`；字面量内的 `}` 需写成 `}}`。"""
+        return "{" + str(value).replace("}", "}}") + "}"
+
+    @staticmethod
+    def _sqlserver_pyodbc_drivers(config: Optional[Dict[str, Any]] = None) -> List[str]:
+        """仅使用 Microsoft ODBC Driver 18（不尝试 Driver 17 / Native Client）。"""
+        del config  # 保留签名，便于调用方传入数据源 config
+        try:
+            import pyodbc
+        except ImportError:
+            return []
+        return [d for d in pyodbc.drivers() if "odbc driver 18" in d.lower()]
+
+    @staticmethod
+    def _sqlserver_pyodbc_encrypt_modes_for_driver(driver: str, config: Dict[str, Any]) -> List[str]:
+        """Driver 18 对老库试 yes/mandatory 会触发 unsupported protocol，默认仅 no/optional。"""
+        modes = IntegrationConfigService._sqlserver_pyodbc_encrypt_modes_for_odbc(config)
+        lo = driver.lower()
+        if "odbc driver 18" not in lo:
+            return modes
+        locked_require = False
+        enc_raw = config.get("encryption")
+        if isinstance(enc_raw, str):
+            k = enc_raw.strip().lower()
+            locked_require = k in ("require", "strict", "mandatory", "true", "yes", "on")
+        if config.get("encrypt") is True:
+            locked_require = True
+        if locked_require:
+            return modes
+        safe = [m for m in modes if m in ("no", "optional")]
+        return safe or ["no", "optional"]
+
+    @staticmethod
+    def _sqlserver_odbc_server_clause(host: str, port_int: int) -> str:
+        """ODBC Server= 片段：默认实例用 tcp: 前缀强制 TCP；命名实例用「实例,端口」形式。"""
+        if "\\" in host:
+            return f"{host},{port_int}"
+        return f"tcp:{host},{port_int}"
+
+    @staticmethod
+    def _sqlserver_pyodbc_encrypt_modes_for_odbc(config: Dict[str, Any]) -> List[str]:
+        """ODBC Driver 18 的 Encrypt= 取值（与 UI 下拉含义对齐）。"""
+        enc_raw = config.get("encryption")
+        if isinstance(enc_raw, str):
+            k = enc_raw.strip().lower()
+            if k in ("off", "false", "no", "disable"):
+                return ["no"]
+            if k in ("require", "strict", "mandatory", "true", "yes", "on"):
+                return ["yes", "mandatory"]
+            if k in ("request", "optional", "prefer", "auto"):
+                return ["optional", "yes"]
+            if k == "default":
+                return ["no", "optional", "yes", "mandatory"]
+        if config.get("encrypt") is True:
+            return ["yes", "mandatory", "no"]
+        if config.get("encrypt") is False:
+            return ["no"]
+        # 默认仅 no/optional：老库 + Driver 18 若试 yes/mandatory 会报 SSL unsupported protocol
+        return ["no", "optional"]
+
+    @staticmethod
+    def _sqlserver_pyodbc_try_sync(config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        使用 pyodbc + 本机已安装的 SQL Server ODBC 驱动尝试建连（SELECT 1）。
+        成功时返回 success/driver/encrypt；跳过（无 pyodbc 或无驱动）返回 skipped+hint；失败返回 error。
+        """
+        try:
+            import pyodbc
+        except ImportError:
+            return {
+                "success": False,
+                "skipped": True,
+                "hint": "可选安装 pyodbc 与 Microsoft ODBC Driver 18 for SQL Server："
+                "在 pymssql/FreeTDS 与目标环境不兼容时，可走 ODBC 栈重试。",
+            }
+
+        drivers = IntegrationConfigService._sqlserver_pyodbc_drivers(config)
+        if not drivers:
+            return {
+                "success": False,
+                "skipped": True,
+                "hint": "未检测到 Microsoft ODBC Driver 18 for SQL Server（pyodbc 已安装）。"
+                "请在运行 RiverEdge 后端的机器上安装 ODBC Driver 18。",
+            }
+
+        host, port_int = IntegrationConfigService._normalize_sqlserver_host_and_port(config)
+        database = (config.get("database") or "").strip()
+        user = (config.get("user") or config.get("username") or "").strip()
+        password = config.get("password")
+        if password is None:
+            password = ""
+        login_timeout = int(config.get("login_timeout", 15))
+        server_clause = IntegrationConfigService._sqlserver_odbc_server_clause(host, port_int)
+
+        last_err: Optional[BaseException] = None
+        for driver in drivers:
+            encrypt_sequence = IntegrationConfigService._sqlserver_pyodbc_encrypt_modes_for_driver(
+                driver, config
+            )
+            for enc in encrypt_sequence:
+                conn_str = (
+                    f"DRIVER={IntegrationConfigService._odbc_brace_segment(driver)};"
+                    f"SERVER={IntegrationConfigService._odbc_brace_segment(server_clause)};"
+                    f"DATABASE={IntegrationConfigService._odbc_brace_segment(database)};"
+                    f"UID={IntegrationConfigService._odbc_brace_segment(user)};"
+                    f"PWD={IntegrationConfigService._odbc_brace_segment(str(password))};"
+                    f"Encrypt={enc};"
+                    "TrustServerCertificate=yes;"
+                    "MARS_Connection=no;"
+                    f"LoginTimeout={login_timeout};"
+                    "APP=RiverEdge-integration-test;"
+                )
+                try:
+                    conn = pyodbc.connect(conn_str)
+                    try:
+                        cur = conn.cursor()
+                        cur.execute("SELECT 1 AS n")
+                        row = cur.fetchone()
+                        if row is None or int(row[0]) != 1:
+                            raise RuntimeError("SQL Server ODBC 探测查询无有效结果")
+                    finally:
+                        conn.close()
+                    return {"success": True, "driver": driver, "encrypt": enc}
+                except Exception as e:
+                    last_err = e
+
+        err_text = (
+            IntegrationConfigService._sqlserver_exception_repr(last_err)
+            if last_err is not None
+            else "unknown"
+        )
+        return {"success": False, "error": err_text}
+
+    @staticmethod
+    def _sqlserver_percent_s_to_odbc_placeholders(sql: str, expected_n: int) -> str:
+        """pymssql 使用 %s；pyodbc 使用 ?。仅替换与参数个数一致的 %s 占位。"""
+        if expected_n == 0:
+            return sql
+        parts = sql.split("%s")
+        if len(parts) - 1 != expected_n:
+            raise ValueError(
+                f"ODBC 路径要求 SQL 中恰有 {expected_n} 个「%s」占位符，当前为 {len(parts) - 1} 个"
+            )
+        return "?".join(parts)
+
+    @staticmethod
+    def _sqlserver_pyodbc_execute_query_sync(
+        config: Dict[str, Any],
+        sql: str,
+        args: Optional[Tuple[Any, ...]] = None,
+    ) -> Dict[str, Any]:
+        """
+        pymssql 失败后使用 pyodbc 执行查询（与测试连接同一套驱动 / Encrypt 策略）。
+        sql 须为 pymssql 风格（%s 占位）；内部转为 ODBC 的 ?。
+        """
+        tup = tuple(args) if args else tuple()
+        try:
+            sql_odbc = IntegrationConfigService._sqlserver_percent_s_to_odbc_placeholders(sql, len(tup))
+        except ValueError as e:
+            return {"success": False, "error": str(e), "skipped": False}
+
+        try:
+            import pyodbc
+        except ImportError:
+            return {
+                "success": False,
+                "skipped": True,
+                "hint": "pyodbc 未安装，无法使用 ODBC 回退执行 SQL。",
+            }
+
+        drivers = IntegrationConfigService._sqlserver_pyodbc_drivers(config)
+        if not drivers:
+            return {
+                "success": False,
+                "skipped": True,
+                "hint": "未检测到 Microsoft ODBC Driver 18，请在后端主机安装 ODBC Driver 18。",
+            }
+
+        host, port_int = IntegrationConfigService._normalize_sqlserver_host_and_port(config)
+        database = (config.get("database") or "").strip()
+        user = (config.get("user") or config.get("username") or "").strip()
+        password = config.get("password")
+        if password is None:
+            password = ""
+        login_timeout = int(config.get("login_timeout", 15))
+        server_clause = IntegrationConfigService._sqlserver_odbc_server_clause(host, port_int)
+
+        last_err: Optional[BaseException] = None
+        brief_errors: List[str] = []
+        for driver in drivers:
+            encrypt_sequence = IntegrationConfigService._sqlserver_pyodbc_encrypt_modes_for_driver(
+                driver, config
+            )
+            for enc in encrypt_sequence:
+                conn_str = (
+                    f"DRIVER={IntegrationConfigService._odbc_brace_segment(driver)};"
+                    f"SERVER={IntegrationConfigService._odbc_brace_segment(server_clause)};"
+                    f"DATABASE={IntegrationConfigService._odbc_brace_segment(database)};"
+                    f"UID={IntegrationConfigService._odbc_brace_segment(user)};"
+                    f"PWD={IntegrationConfigService._odbc_brace_segment(str(password))};"
+                    f"Encrypt={enc};"
+                    "TrustServerCertificate=yes;"
+                    "MARS_Connection=no;"
+                    f"LoginTimeout={login_timeout};"
+                    "APP=RiverEdge-dataset-sql;"
+                )
+                try:
+                    conn = pyodbc.connect(conn_str)
+                    IntegrationConfigService._sqlserver_configure_pyodbc_conn(conn, config)
+                    try:
+                        cur = conn.cursor()
+                        if tup:
+                            cur.execute(sql_odbc, tup)
+                        else:
+                            cur.execute(sql_odbc)
+                        rows = cur.fetchall()
+                        cols = [c[0] for c in (cur.description or [])]
+                        if not rows:
+                            return {"success": True, "data": [], "columns": cols, "total": 0}
+                        data = IntegrationConfigService._sqlserver_normalize_rows(
+                            [dict(zip(cols, row)) for row in rows],
+                            config,
+                        )
+                        return {"success": True, "data": data, "columns": cols, "total": len(data)}
+                    finally:
+                        conn.close()
+                except Exception as e:
+                    last_err = e
+                    brief_errors.append(
+                        f"[{driver} Encrypt={enc}] {IntegrationConfigService._sqlserver_exception_repr(e)}"
+                    )
+
+        err_text = (
+            IntegrationConfigService._sqlserver_exception_repr(last_err)
+            if last_err is not None
+            else "unknown"
+        )
+        tail = brief_errors[-3:] if len(brief_errors) > 3 else brief_errors
+        if tail:
+            err_text += " 最近尝试: " + " | ".join(tail)
+        return {"success": False, "error": err_text, "skipped": False}
+
+    @staticmethod
+    def _sqlserver_encryption_for_pymssql(config: Dict[str, Any]) -> Optional[str]:
+        """
+        pymssql 2.3+ 仅接受 encryption in (None 不传, 'default', 'off', 'request', 'require')。
+        将业务侧常用写法（optional/strict 等）映射到上述枚举。
+        """
+        enc_raw = config.get("encryption")
+        if isinstance(enc_raw, str):
+            k = enc_raw.strip().lower()
+            if k in ("off", "false", "no", "disable"):
+                return "off"
+            if k in ("require", "strict", "mandatory", "true", "yes", "on"):
+                return "require"
+            if k in ("request", "optional", "prefer", "auto"):
+                return "request"
+            if k == "default":
+                return "default"
+            return None
+        if config.get("encrypt") is True:
+            return "request"
+        if config.get("encrypt") is False:
+            return "off"
+        return None
+
+    @staticmethod
+    def _build_sqlserver_connect_kwargs(config: Dict[str, Any]) -> Dict[str, Any]:
+        """从集成 config 构建 pymssql.connect 参数（支持可选 encryption / tds_version）。"""
+        host, port_int = IntegrationConfigService._normalize_sqlserver_host_and_port(config)
+        if not host:
+            raise ValueError("SQL Server 配置缺少 host")
+        database = (config.get("database") or "").strip()
+        if not database:
+            raise ValueError("SQL Server 配置缺少 database")
+        user = (config.get("user") or config.get("username") or "").strip()
+        if not user:
+            raise ValueError("SQL Server 配置缺少 user/username")
+        password = config.get("password")
+        if password is None:
+            password = ""
+        login_timeout = int(config.get("login_timeout", 15))
+        query_timeout = int(config.get("query_timeout", 15))
+
+        kwargs: Dict[str, Any] = {
+            "server": host,
+            "port": str(port_int),
+            "user": user,
+            "password": password,
+            "database": database,
+            "login_timeout": login_timeout,
+            "timeout": query_timeout,
+            "appname": "RiverEdge-integration-test",
+            "autocommit": True,
+        }
+
+        enc = IntegrationConfigService._sqlserver_encryption_for_pymssql(config)
+        if enc is not None:
+            kwargs["encryption"] = enc
+
+        tds_version = config.get("tds_version")
+        # SQL Server 2008 R2 等：默认 7.2；UI 的 8.0 会规范为 7.4（见 _normalize_pymssql_tds_version）
+        kwargs["tds_version"] = IntegrationConfigService._normalize_pymssql_tds_version(tds_version)
+        kwargs["charset"] = IntegrationConfigService._sqlserver_resolve_charset(config)
+
+        return kwargs
+
+    @staticmethod
+    def _sqlserver_connect_candidates(base: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        返回多种 connect 参数，依次尝试。
+        FreeTDS 在部分 NAT/穿透场景下，使用 server=host,port 且省略 port 关键字更稳定。
+        """
+        host = base.get("server") or ""
+        port = base.get("port")
+        if not port or "\\" in host:
+            return [dict(base)]
+        alt = {k: v for k, v in base.items() if k != "port"}
+        alt["server"] = f"{host},{port}"
+        # NAT/穿透场景下「server=host,port 且省略 port」常比拆成 server+port 更稳，优先尝试
+        return [alt, dict(base)]
+
+    @staticmethod
+    async def _test_sqlserver_connection(integration: Any) -> Dict[str, Any]:
+        """测试 SQL Server 连接（TCP 探测 + pymssql 多策略重试；失败时再试 ODBC/pyodbc，贴近 Navicat）。"""
+        try:
+            import pymssql  # noqa: F401
+        except ImportError:
+            return {
+                "success": False,
+                "message": "SQL Server 连接测试需要 pymssql 依赖，请在后端环境中安装并重试",
+            }
+        config = integration.get_config()
+        pwd = config.get("password")
+        if isinstance(pwd, str) and pwd.strip() == "****":
+            return {
+                "success": False,
+                "message": "SQL Server 密码无效：当前为占位符「****」（多为保存数据源时把脱敏显示当成了真实密码）。"
+                "请在编辑数据源中重新输入数据库密码并保存，再测试连接。",
+            }
+        host, port_int = IntegrationConfigService._normalize_sqlserver_host_and_port(config)
+        if not host:
+            return {"success": False, "message": "SQL Server 配置缺少 host"}
+        try:
+            tcp_err = await asyncio.to_thread(
+                IntegrationConfigService._sqlserver_tcp_probe_sync,
+                host,
+                port_int,
+            )
+            if tcp_err:
+                return {
+                    "success": False,
+                    "message": f"SQL Server: {tcp_err}（若本机 Navicat 能连而此处不能，请确认 RiverEdge 后端运行环境与 Navicat 是否在同一网络/能否访问该公网地址与端口。）",
+                }
+        except Exception as e:
+            return {"success": False, "message": f"SQL Server TCP 探测异常: {e}"}
+
+        try:
+            attempts = IntegrationConfigService._sqlserver_connection_attempt_kwargs(config)
+        except ValueError as e:
+            return {"success": False, "message": str(e)}
+        try:
+            await asyncio.to_thread(
+                IntegrationConfigService._sqlserver_ping_sync,
+                attempts,
+            )
+            return {"success": True, "message": "SQL Server 连接成功（pymssql）"}
+        except Exception as e:
+            odbc_res = await asyncio.to_thread(
+                IntegrationConfigService._sqlserver_pyodbc_try_sync,
+                config,
+            )
+            if odbc_res.get("success"):
+                drv = odbc_res.get("driver", "ODBC")
+                enc = odbc_res.get("encrypt", "")
+                detail = f"{drv}" + (f"，Encrypt={enc}" if enc else "")
+                return {
+                    "success": True,
+                    "message": f"SQL Server 连接成功（ODBC / {detail}，与常见 Navicat 配置一致）",
+                }
+            if odbc_res.get("skipped"):
+                hint = odbc_res.get("hint", "")
+                sep = " " if hint else ""
+                return {
+                    "success": False,
+                    "message": IntegrationConfigService._format_sqlserver_error(e) + sep + hint,
+                }
+            odbc_err = odbc_res.get("error", "")
+            return {
+                "success": False,
+                "message": IntegrationConfigService._format_sqlserver_error(e)
+                + " ODBC（pyodbc）补充尝试仍失败："
+                + str(odbc_err).strip(),
+            }
+
+    @staticmethod
+    async def _test_mysql_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试 MySQL 连接（暂未实现实际连接，仅校验必要字段）"""
+        config = integration.get_config()
+        user = config.get("user") or config.get("username")
+        if not config.get("host") or not config.get("database") or not user:
+            raise ValueError("MySQL 配置缺少必要字段: host、database、user/username")
+        return {
+            "message": "MySQL 配置验证成功（完整连接测试需要安装 aiomysql 等驱动）",
+        }
+
+    @staticmethod
+    async def _test_mongodb_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试 MongoDB 连接（暂未实现实际连接）"""
+        config = integration.get_config()
+        if not config.get("host") and not config.get("uri"):
+            raise ValueError("MongoDB 配置缺少 host 或 uri")
+        return {
+            "message": "MongoDB 配置验证成功（完整连接测试需要安装 motor 等驱动）",
+        }
+
+    @staticmethod
+    async def _test_database_config_validation(integration: Any) -> Dict[str, Any]:
+        """通用数据库配置校验（暂未实现实际连接）"""
+        config = integration.get_config()
+        if not config.get("host"):
+            raise ValueError("配置缺少 host")
+        return {
+            "message": f"{integration.type} 配置基本校验通过",
+        }
+
+    # ── 应用连接器测试（协作、ERP、PLM、CRM）────────────────────────────────────
+
+    @staticmethod
+    async def _test_llm_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试 OpenAI 兼容 LLM：GET {base_url}/models。"""
+        config = integration.get_config()
+        base_url = str(config.get("base_url") or "").strip().rstrip("/")
+        api_key = config.get("api_key")
+        model = str(config.get("model") or "").strip()
+        if not base_url:
+            raise ValueError("请填写 Base URL")
+        if not isinstance(api_key, str) or not api_key.strip() or api_key.strip() == "****":
+            raise ValueError("请填写 API Key")
+        if not model:
+            raise ValueError("请填写模型名")
+        url = f"{base_url}/models"
+        resp = await get_http_client().get(
+            url,
+            headers={"Authorization": f"Bearer {api_key.strip()}"},
+            timeout=15.0,
+        )
+        if resp.status_code >= 400:
+            detail = (resp.text or "")[:200]
+            raise ValueError(f"HTTP {resp.status_code}: {detail or '鉴权或地址失败'}")
+        return {"message": f"{integration.type} 连接成功", "model": model, "probe": "models"}
+
+    @staticmethod
+    async def _test_feishu_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试飞书连接（调用 app_access_token 接口）"""
+        config = integration.get_config()
+        app_id = config.get("app_id")
+        app_secret = config.get("app_secret")
+        if not app_id or not app_secret:
+            raise ValueError("飞书配置缺少 app_id 或 app_secret")
+        url = "https://open.feishu.cn/openapi-connector/auth/v1/app_access_token/internal"
+        resp = await get_http_client().post(
+            url,
+            json={"app_id": app_id, "app_secret": app_secret},
+            timeout=10.0,
+        )
+        data = resp.json()
+        if data.get("code") != 0:
+            raise ValueError(data.get("msg", "获取 token 失败"))
+        return {"message": "飞书连接成功", "tenant_access_token": "***"}
+
+    @staticmethod
+    async def _test_dingtalk_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试钉钉连接（调用 gettoken 接口）"""
+        config = integration.get_config()
+        app_key = config.get("app_key")
+        app_secret = config.get("app_secret")
+        if not app_key or not app_secret:
+            raise ValueError("钉钉配置缺少 app_key 或 app_secret")
+        url = "https://oapi.dingtalk.com/gettoken"
+        resp = await get_http_client().get(
+            url,
+            params={"appkey": app_key, "appsecret": app_secret},
+            timeout=10.0,
+        )
+        data = resp.json()
+        if data.get("errcode") != 0:
+            raise ValueError(data.get("errmsg", "获取 token 失败"))
+        return {"message": "钉钉连接成功", "access_token": "***"}
+
+    @staticmethod
+    async def _test_wecom_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """测试企业微信连接（调用 gettoken 接口）"""
+        config = integration.get_config()
+        corp_id = config.get("corp_id")
+        corp_secret = config.get("corp_secret")
+        if not corp_id or not corp_secret:
+            raise ValueError("企业微信配置缺少 corp_id 或 corp_secret")
+        url = "https://qyapi.weixin.qq.com/cgi-bin/gettoken"
+        resp = await get_http_client().get(
+            url,
+            params={"corpid": corp_id, "corpsecret": corp_secret},
+            timeout=10.0,
+        )
+        data = resp.json()
+        if data.get("errcode") != 0:
+            raise ValueError(data.get("errmsg", "获取 token 失败"))
+        return {"message": "企业微信连接成功", "access_token": "***"}
+
+    @staticmethod
+    async def _test_rest_api_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """通用 REST API 连接测试（ERP/PLM/CRM 等）"""
+        config = integration.get_config()
+        base_url = (config.get("base_url") or config.get("url") or "").rstrip("/")
+        if not base_url:
+            raise ValueError("配置缺少 base_url")
+        # 尝试 GET base_url 或 base_url/health 等
+        test_urls = [f"{base_url}/", base_url, f"{base_url}/health", f"{base_url}/api/health"]
+        auth = None
+        username = config.get("username") or config.get("user")
+        password = config.get("password")
+        if username and password:
+            auth = httpx.BasicAuth(username, password)
+        headers = {}
+        if config.get("api_key"):
+            headers["Authorization"] = f"Bearer {config.get('api_key')}"
+        elif config.get("token"):
+            headers["Authorization"] = f"Bearer {config.get('token')}"
+        client = get_http_client()
+        for u in test_urls:
+            try:
+                resp = await client.get(u, auth=auth, headers=headers or None, timeout=10.0)
+                if resp.status_code < 500:
+                    return {"message": "连接成功", "status_code": resp.status_code}
+            except Exception:
+                continue
+        raise ValueError("无法连接到配置的 API 地址，请检查 base_url 和认证信息")
+
+    @staticmethod
+    def _coerce_config_bool(value: Any, default: bool = False) -> bool:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        text = str(value).strip().lower()
+        if text in ("1", "true", "yes", "y", "on"):
+            return True
+        if text in ("0", "false", "no", "n", "off", ""):
+            return False
+        return default
+
+    @staticmethod
+    def _build_minio_base_url(config: Dict[str, Any]) -> str:
+        """构造 MinIO API 根地址（不含 bucket）。"""
+        endpoint = str(config.get("endpoint") or "").strip().rstrip("/")
+        use_ssl = IntegrationConfigService._coerce_config_bool(config.get("use_ssl"), default=True)
+        if not endpoint:
+            raise ValueError("请填写 MinIO Endpoint（如 minio.example.com:9000）")
+        if endpoint.startswith("http://") or endpoint.startswith("https://"):
+            parsed = urlparse(endpoint)
+            if use_ssl and parsed.scheme != "https":
+                raise ValueError(
+                    "已开启「使用 HTTPS」，Endpoint 必须为 https://。"
+                    "若 MinIO 仅提供 HTTP，请关闭该开关或为 MinIO 配置 TLS。"
+                )
+            if not use_ssl and parsed.scheme == "https":
+                raise ValueError(
+                    "已关闭「使用 HTTPS」，Endpoint 应为 http://。"
+                    "若 MinIO 已启用 TLS，请打开「使用 HTTPS」。"
+                )
+            # 去掉误填的 bucket 路径，探测时再按 path-style 拼
+            path = (parsed.path or "").strip("/")
+            if path and path == str(config.get("bucket") or "").strip():
+                return f"{parsed.scheme}://{parsed.netloc}"
+            if path:
+                raise ValueError(
+                    "MinIO Endpoint 请只填 API 地址（如 http://host:9000），不要带 Bucket 路径。"
+                    "控制台端口（常见 9001）不可用作 Endpoint。"
+                )
+            return f"{parsed.scheme}://{parsed.netloc}"
+        scheme = "https" if use_ssl else "http"
+        return f"{scheme}://{endpoint}"
+
+    @staticmethod
+    def _build_minio_bucket_probe_url(config: Dict[str, Any], bucket: str) -> str:
+        """
+        MinIO 探测 URL：默认 path-style HEAD /{bucket}。
+        对根路径 HEAD / 常返回 HTTP 400，不能当作连通性依据。
+        """
+        base = IntegrationConfigService._build_minio_base_url(config)
+        use_path_style = IntegrationConfigService._coerce_config_bool(
+            config.get("use_path_style"), default=True
+        )
+        if use_path_style:
+            return f"{base}/{bucket}"
+        parsed = urlparse(base)
+        return f"{parsed.scheme}://{bucket}.{parsed.netloc}"
+
+    @staticmethod
+    def _build_object_storage_probe_url(storage_type: str, config: Dict[str, Any]) -> str:
+        """根据 endpoint / region / bucket 构造探测 URL。"""
+        endpoint = str(config.get("endpoint") or "").strip().rstrip("/")
+        bucket = str(config.get("bucket") or "").strip()
+        region = str(config.get("region") or "").strip()
+
+        if storage_type == "tencent_cos":
+            if not region:
+                raise ValueError("请填写 Region（如 ap-guangzhou）")
+            if not bucket:
+                raise ValueError("请填写 Bucket")
+            if endpoint:
+                if endpoint.startswith("http://") or endpoint.startswith("https://"):
+                    # 若已是桶域名则直接用；否则拼成桶域名
+                    host = urlparse(endpoint).netloc or endpoint.replace("https://", "").replace("http://", "")
+                    if bucket and host.startswith(f"{bucket}."):
+                        return f"https://{host}"
+                    if "myqcloud.com" in host and not host.startswith(f"{bucket}."):
+                        # cos.ap-xxx.myqcloud.com → bucket.cos.ap-xxx.myqcloud.com
+                        return f"https://{bucket}.{host}"
+                    return endpoint if endpoint.startswith("http") else f"https://{endpoint}"
+                return f"https://{endpoint}"
+            return f"https://{bucket}.cos.{region}.myqcloud.com"
+
+        if storage_type == "minio":
+            return IntegrationConfigService._build_minio_base_url(config)
+
+        if endpoint:
+            if not endpoint.startswith("http://") and not endpoint.startswith("https://"):
+                endpoint = f"https://{endpoint}"
+            return endpoint
+        if storage_type == "alicloud_oss" and bucket and region:
+            return f"https://{bucket}.oss-{region}.aliyuncs.com"
+        if storage_type == "huaweicloud_obs" and bucket and region:
+            return f"https://{bucket}.obs.{region}.myhuaweicloud.com"
+        if storage_type == "aws_s3" and bucket and region:
+            return f"https://{bucket}.s3.{region}.amazonaws.com"
+        raise ValueError("请填写 Endpoint（或 Bucket + Region）")
+
+    @staticmethod
+    async def _test_object_storage_connection(integration: Any) -> Dict[str, Any]:
+        """对象存储连接测试：校验必填项；腾讯云 COS 走官方 SDK HEAD 桶。"""
+        storage_type = getattr(integration, "type", "") or ""
+        config = integration.get_config() if hasattr(integration, "get_config") else (integration.config or {})
+        bucket = str(config.get("bucket") or "").strip()
+        if not bucket:
+            raise ValueError("请填写 Bucket")
+
+        if storage_type == "tencent_cos":
+            from qcloud_cos import CosConfig, CosS3Client
+            from qcloud_cos.cos_exception import CosServiceError
+
+            secret_id = str(config.get("secret_id") or "").strip()
+            secret_key = str(config.get("secret_key") or "").strip()
+            if not secret_id or not secret_key or secret_key == "****":
+                raise ValueError("请填写 SecretId 与 SecretKey")
+            region = str(config.get("region") or "").strip()
+            if not region:
+                raise ValueError("请填写 Region（与控制台桶地域一致，如 ap-shanghai）")
+            probe_url = IntegrationConfigService._build_object_storage_probe_url(storage_type, config)
+            client = CosS3Client(
+                CosConfig(
+                    Region=region,
+                    SecretId=secret_id,
+                    SecretKey=secret_key,
+                    Scheme="https",
+                )
+            )
+            try:
+                await asyncio.to_thread(client.head_bucket, Bucket=bucket)
+            except CosServiceError as e:
+                status = e.get_status_code()
+                code = e.get_error_code() or ""
+                msg = e.get_error_msg() or ""
+                if code == "SignatureDoesNotMatch" or status in (401, 403):
+                    raise ValueError(
+                        f"鉴权失败：{code} {msg}。请核对 SecretId / SecretKey 与桶权限。"
+                    ) from e
+                if status == 404 or code in ("NoSuchBucket", "NoSuchResource"):
+                    raise ValueError(f"桶不存在或无权访问：{bucket}") from e
+                raise ValueError(f"COS 探测失败 HTTP {status}: {code} {msg}") from e
+            except Exception as e:
+                raise ValueError(f"COS 探测失败: {e}") from e
+            return {
+                "message": "腾讯云 COS 连接成功",
+                "status_code": 200,
+                "endpoint": probe_url,
+                "bucket": bucket,
+                "region": region,
+            }
+        # 其它对象存储：校验密钥 + 探测 endpoint 可达（不伪造成功）
+        if storage_type == "alicloud_oss":
+            if not str(config.get("access_key_id") or "").strip():
+                raise ValueError("请填写 Access Key ID")
+            secret = str(config.get("access_key_secret") or "").strip()
+            if not secret or secret == "****":
+                raise ValueError("请填写 Access Key Secret")
+        elif storage_type in ("aws_s3", "huaweicloud_obs"):
+            if not str(config.get("access_key_id") or "").strip():
+                raise ValueError("请填写 Access Key ID")
+            secret = str(config.get("secret_access_key") or "").strip()
+            if not secret or secret == "****":
+                raise ValueError("请填写 Secret Key")
+        elif storage_type in ("minio", "qiniu_kodo"):
+            if not str(config.get("access_key") or "").strip():
+                raise ValueError("请填写 Access Key")
+            secret = str(config.get("secret_key") or "").strip()
+            if not secret or secret == "****":
+                raise ValueError("请填写 Secret Key")
+
+        if storage_type == "minio":
+            return await IntegrationConfigService._test_minio_endpoint(config, bucket)
+
+        probe_url = IntegrationConfigService._build_object_storage_probe_url(storage_type, config)
+        try:
+            resp = await get_http_client().request("HEAD", probe_url, timeout=15.0)
+        except Exception as e:
+            raise ValueError(f"无法访问存储 Endpoint：{e}") from e
+        if resp.status_code >= 500:
+            raise ValueError(f"存储服务异常 HTTP {resp.status_code}")
+        # 未签名时 403 常见，表示域名可达；200 亦成功
+        if resp.status_code in (200, 204, 301, 302, 403):
+            return {
+                "message": f"{storage_type} Endpoint 可达（已校验必填项）",
+                "status_code": resp.status_code,
+                "endpoint": probe_url,
+                "bucket": bucket,
+                "verification_level": "endpoint_reachable",
+            }
+        raise ValueError(f"存储探测失败 HTTP {resp.status_code}，请检查 Endpoint / Bucket / Region")
+
+    @staticmethod
+    async def _test_minio_endpoint(config: Dict[str, Any], bucket: str) -> Dict[str, Any]:
+        """
+        MinIO 连通性：对 path-style /{bucket} 发 HEAD。
+        根路径 HEAD / 在 MinIO 上经常直接 400，不能用来判断可达。
+        未签名时 403 表示 API 可达（密钥正确性需实际上传/SDK 校验）。
+        """
+        base_url = IntegrationConfigService._build_minio_base_url(config)
+        probe_url = IntegrationConfigService._build_minio_bucket_probe_url(config, bucket)
+        try:
+            resp = await get_http_client().request("HEAD", probe_url, timeout=15.0)
+        except Exception as e:
+            err_text = str(e)
+            if "WRONG_VERSION_NUMBER" in err_text or "wrong version number" in err_text.lower():
+                raise ValueError(
+                    "无法访问 MinIO：SSL 协议不匹配（WRONG_VERSION_NUMBER）。"
+                    "通常是用 HTTPS 连接了仅提供 HTTP 的服务。"
+                    "请关闭「使用 HTTPS」并使用 http://host:9000，或为 MinIO 配置 TLS。"
+                ) from e
+            raise ValueError(f"无法访问 MinIO Endpoint：{e}") from e
+
+        status = resp.status_code
+        if status >= 500:
+            raise ValueError(f"MinIO 服务异常 HTTP {status}（Endpoint: {base_url}）")
+        if status == 404:
+            raise ValueError(
+                f"MinIO 桶不存在或路径不对：{bucket}。"
+                f"请确认 Bucket 名称，且 Endpoint 为 S3 API 地址（常见 :9000，不是控制台 :9001）。"
+            )
+        # 200/204 桶可匿名读；301/302 重定向；401/403 需鉴权但服务可达
+        if status in (200, 204, 301, 302, 401, 403):
+            return {
+                "message": "MinIO Endpoint 可达（已校验必填项；未做签名鉴权）",
+                "status_code": status,
+                "endpoint": base_url,
+                "probe_url": probe_url,
+                "bucket": bucket,
+                "verification_level": "endpoint_reachable",
+            }
+        body_preview = ""
+        try:
+            body_preview = (resp.text or "").strip().replace("\n", " ")[:160]
+        except Exception:
+            body_preview = ""
+        hint = (
+            "请确认 Endpoint 为 MinIO S3 API（如 http://host:9000），"
+            "不要填控制台地址；Bucket 名称仅小写字母/数字/连字符。"
+        )
+        if body_preview:
+            raise ValueError(f"MinIO 存储探测失败 HTTP {status}：{body_preview}。{hint}")
+        raise ValueError(f"MinIO 存储探测失败 HTTP {status}。{hint}")

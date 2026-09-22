@@ -1,0 +1,14 @@
+[Unit]
+Description=RiverEdge Production (API + Taskiq + Caddy)
+Wants=riveredge-backend.service riveredge-taskiq-worker.service riveredge-taskiq-scheduler.service riveredge-caddy.service
+After=network-online.target postgresql.service
+Conflicts=caddy.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/bin/systemctl stop riveredge-caddy.service riveredge-taskiq-scheduler.service riveredge-taskiq-worker.service riveredge-backend.service
+
+[Install]
+WantedBy=multi-user.target

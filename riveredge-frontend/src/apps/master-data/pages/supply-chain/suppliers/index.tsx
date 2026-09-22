@@ -1,0 +1,1185 @@
+/**
+ * 供应商管理页面
+ * 
+ * 提供供应商的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
+ */
+
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
+import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
+import { usePagePermissionResource } from '../../../../../hooks/usePagePermissionResource';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Typography } from 'antd';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
+import {
+  DetailDrawerSection,
+  ListPageTemplate,
+  detailDrawerDescriptionItems,
+} from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { PartnerMasterDetailDrawer } from '../../shared/PartnerMasterDetailDrawer';
+import {
+  alignDescriptionColumns,
+  MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
+} from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+
+import { supplierApi, getSupplierSyncBinding, getUserOptions, getDictionaryOptions } from '../../../services/supply-chain';
+import { getDictionaryLabelMapSync } from '../../../../../services/dataDictionaryCache';
+import {
+  buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  GLOBAL_DOC_LIST_FIELD_RANK,
+  resolveSupplierListParams,
+} from '../../../utils/supplyChainListCore';
+import { SupplierFormModal } from '../../../components/SupplierFormModal';
+import SupplierSyncFromSourceModal from '../../../components/SupplierSyncFromSourceModal';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import {
+  ExternalSyncSourceIcon,
+  hasExternalSyncSource,
+} from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
+import type { Supplier, SupplierCreate } from '../../../types/supply-chain';
+import {
+  partnerEnterpriseTypeLabel,
+  partnerInvoiceTypeLabel,
+  partnerPayableRecognitionOverrideLabel,
+  partnerSettlementMethodLabel,
+  partnerTaxpayerTypeLabel,
+} from '../../../utils/partner-static-labels';
+import { importInChunks } from '../../../../../utils/chunkedBulkImport';
+import { downloadFile } from '../../../../../utils';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
+import {
+  buildPartnerEnterpriseTypeImportOptions,
+  buildPartnerInvoiceTypeImportOptions,
+  buildPartnerSettlementMethodImportOptions,
+  buildPartnerTaxpayerTypeImportOptions,
+  parsePartnerEnterpriseTypeImport,
+  parsePartnerInvoiceTypeImport,
+  parsePartnerSettlementMethodImport,
+  parsePartnerTaxpayerTypeImport,
+} from '../../../utils/partner-static-labels';
+import {
+  IMPORT_YES_NO_OPTIONS,
+  importDropdownLabelsFromCodeLabelMap,
+  parseImportCodedCell,
+  resolveDictionaryDisplayLabel,
+} from '../../../../../utils/loadImportDictionaryValues';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  renderMasterActiveTag,
+} from '../../../utils/masterListPresentation';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { useDetailDrawerFeatures } from '../../../../../hooks/useDetailDrawerFeatures';
+/**
+ * 供应商管理列表页面组件
+ */
+const SuppliersPage: React.FC = () => {
+  const { t, i18n } = useTranslation();
+  const { basicUpdatedAtEnabled, timeFieldHidden } = useDetailDrawerFeatures();
+  const { message: messageApi } = App.useApp();
+  const location = useLocation();
+  const pagePermissionResource = usePagePermissionResource(location.pathname);
+  const { canCreate } = useResourcePermissions(pagePermissionResource);
+  const actionRef = useRef<ActionType>(null);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const supplierActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
+    [t],
+  );
+  
+  // Drawer 相关状态（详情查看）
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
+  const [supplierDetail, setSupplierDetail] = useState<Supplier | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  
+  // Modal 相关状态（创建/编辑供应商）
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editUuid, setEditUuid] = useState<string | null>(null);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const loadSupplierSyncBinding = useCallback(() => getSupplierSyncBinding(), []);
+
+  const DICT_CODES = useMemo(
+    () => ['INDUSTRY_SECTOR', 'PARTNER_SOURCE_CHANNEL', 'CUSTOMER_CATEGORY', 'CONTACT_TITLE'],
+    [],
+  );
+  const [dictLabelMaps, setDictLabelMaps] = useState<Record<string, Record<string, string>>>(() => {
+    const seed: Record<string, Record<string, string>> = {};
+    DICT_CODES.forEach((c) => {
+      const m = getDictionaryLabelMapSync(c);
+      if (m) seed[c] = m;
+    });
+    return seed;
+  });
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Supplier>({ tableName: 'master_data_suppliers' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: supplierApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
+  const supplierImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'field.supplier.code' },
+          { field: 'name', required: true, labelKey: 'field.supplier.name' },
+          { field: 'shortName', labelKey: 'field.supplier.shortName' },
+          { field: 'category', labelKey: 'field.supplier.category' , options: importDropdownLabelsFromCodeLabelMap(dictLabelMaps.CUSTOMER_CATEGORY ?? {}) },
+          { field: 'contactPerson', labelKey: 'field.supplier.contactPerson' },
+          { field: 'contactTitle', labelKey: 'field.supplier.contactTitle' , options: importDropdownLabelsFromCodeLabelMap(dictLabelMaps.CONTACT_TITLE ?? {}) },
+          { field: 'phone', labelKey: 'field.supplier.phone' },
+          { field: 'email', labelKey: 'field.supplier.email' },
+          { field: 'address', labelKey: 'field.supplier.address' },
+          { field: 'isActive', labelKey: 'common.enabled' , options: [...IMPORT_YES_NO_OPTIONS] },
+          { field: 'taxRegistrationNo', labelKey: 'field.partner.taxRegistrationNo' },
+          { field: 'invoiceTitle', labelKey: 'field.partner.invoiceTitle' },
+          { field: 'invoiceAddress', labelKey: 'field.partner.invoiceAddress' },
+          { field: 'invoicePhone', labelKey: 'field.partner.invoicePhone' },
+          { field: 'invoiceBankName', labelKey: 'field.partner.invoiceBankName' },
+          { field: 'invoiceBankAccount', labelKey: 'field.partner.invoiceBankAccount' },
+          { field: 'invoiceTypeCode', labelKey: 'field.partner.invoiceType' , options: buildPartnerInvoiceTypeImportOptions(t) },
+          { field: 'taxpayerTypeCode', labelKey: 'field.partner.taxpayerType' , options: buildPartnerTaxpayerTypeImportOptions(t) },
+          { field: 'industryCode', labelKey: 'field.supplier.industry' , options: importDropdownLabelsFromCodeLabelMap(dictLabelMaps.INDUSTRY_SECTOR ?? {}) },
+          { field: 'sourceChannelCode', labelKey: 'field.supplier.sourceChannel' , options: importDropdownLabelsFromCodeLabelMap(dictLabelMaps.PARTNER_SOURCE_CHANNEL ?? {}) },
+          { field: 'estimatedAnnualPurchase', labelKey: 'field.supplier.estimatedAnnualPurchase' },
+          { field: 'creditLimit', labelKey: 'field.supplier.creditLimit' },
+          { field: 'legalRepresentative', labelKey: 'field.partner.legalRepresentative' },
+          { field: 'enterpriseTypeCode', labelKey: 'field.partner.enterpriseType' , options: buildPartnerEnterpriseTypeImportOptions(t) },
+          { field: 'paymentTermsDays', labelKey: 'field.partner.paymentTermsDays' },
+          { field: 'settlementMethodCode', labelKey: 'field.partner.settlementMethod' , options: buildPartnerSettlementMethodImportOptions(t) },
+          { field: 'deliveryContactName', labelKey: 'field.partner.deliveryContactName' },
+          { field: 'deliveryContactPhone', labelKey: 'field.partner.deliveryContactPhone' },
+          { field: 'deliveryAddress', labelKey: 'field.partner.deliveryAddress' },
+        ],
+        [
+          t('app.master-data.suppliers.importExample.code'),
+          t('app.master-data.suppliers.importExample.name'),
+          t('app.master-data.suppliers.importExample.shortName'),
+          t('app.master-data.suppliers.importExample.category'),
+          t('app.master-data.suppliers.importExample.contactPerson'),
+          '',
+          t('app.master-data.suppliers.importExample.phone'),
+          t('app.master-data.suppliers.importExample.email'),
+          t('app.master-data.suppliers.importExample.address'),
+          '是',
+          '', '', '', '', '', '', '', '',
+          '', '', '', '', '', '', '', '', '', '', '',
+        ],
+      ),
+    [t, i18n.language, dictLabelMaps],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const packs = await Promise.all(DICT_CODES.map((c) => getDictionaryOptions(c)));
+        if (cancelled) return;
+        const maps: Record<string, Record<string, string>> = {};
+        DICT_CODES.forEach((code, index) => {
+          maps[code] = Object.fromEntries(packs[index].map((o) => [o.value, o.label]));
+        });
+        setDictLabelMaps(maps);
+      } catch {
+        if (!cancelled) setDictLabelMaps({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [DICT_CODES]);
+
+  const dictLabel = (dictCode: string, value?: string) =>
+    resolveDictionaryDisplayLabel(dictLabelMaps[dictCode], value);
+
+  /**
+   * 处理新建供应商
+   */
+  const handleCreate = () => {
+    setEditUuid(null);
+    setModalVisible(true);
+  };
+
+  const handleSyncComplete = useCallback(() => {
+    setSyncFreshnessKey((key) => key + 1);
+    actionRef.current?.reload();
+  }, []);
+
+  useNewShortcut(handleCreate);
+
+  /**
+   * 处理编辑供应商
+   */
+  const handleEdit = (record: Supplier) => {
+    setEditUuid(record.uuid);
+    setModalVisible(true);
+  };
+
+  /**
+   * 处理删除供应商
+   */
+  const handleDelete = async (record: Supplier) => {
+    try {
+      await supplierApi.delete(record.uuid);
+      messageApi.success(t('common.deleteSuccess'));
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
+  };
+
+  /**
+   * 处理批量删除供应商
+   */
+  const handleBatchDelete = async (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys;
+    if (targetKeys.length === 0) {
+      messageApi.warning(t('common.selectToDelete'));
+      return;
+    }
+
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
+
+      for (const key of targetKeys) {
+        try {
+          await supplierApi.delete(key.toString());
+          successCount++;
+        } catch (error: any) {
+          failCount++;
+          errors.push(error.message || t('common.deleteFailed'));
+        }
+      }
+
+      if (successCount > 0) {
+    messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+      }
+      if (failCount > 0) {
+        messageApi.error(
+          t('common.batchDeletePartial', {
+            count: failCount,
+            errors: errors.length > 0 ? '：' + errors.join('; ') : '',
+          }),
+        );
+      }
+
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.batchDeleteFailed'));
+    }
+  };
+
+  /**
+   * 处理打开详情
+   */
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await supplierApi.get(uuid);
+      setSupplierDetail(detail);
+      if (detail.id != null) {
+        await loadFieldValuesForDetail(detail.id);
+      }
+    } catch (error) {
+      setSupplierDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.suppliers.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleOpenDetail = (record: Supplier) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setSupplierDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
+  /**
+   * 处理关闭详情
+   */
+  const handleCloseDetail = () => {
+    setDrawerVisible(false);
+    setSupplierDetail(null);
+    setDetailError(null);
+    resetDetailFieldValues();
+  };
+
+  const handleModalSuccess = () => {
+    setModalVisible(false);
+    setEditUuid(null);
+    actionRef.current?.reload();
+  };
+
+  /**
+   * 处理批量导入供应商（分片 bulkCreate）
+   */
+  const handleImport = async (data: any[][]) => {
+    if (!data || data.length === 0) {
+      messageApi.warning(t('app.master-data.importEmpty'));
+      return;
+    }
+
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+    const rows = data.slice(2);
+
+    const nonEmptyRows = rows.filter((row: any[]) => {
+      if (!row || row.length === 0) return false;
+      return row.some((cell: any) => {
+        const value = cell !== null && cell !== undefined ? String(cell).trim() : '';
+        return value !== '';
+      });
+    });
+
+    if (nonEmptyRows.length === 0) {
+      messageApi.warning(t('app.master-data.importNoRows'));
+      return;
+    }
+
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      supplierImportTemplate.importHeaderMap,
+    );
+
+    if (headerIndexMap['code'] === undefined) {
+      messageApi.error(t('app.master-data.importMissingField', { field: t('field.supplier.code'), headers: headers.join(', ') }));
+      return;
+    }
+    if (headerIndexMap['name'] === undefined) {
+      messageApi.error(t('app.master-data.importMissingField', { field: t('field.supplier.name'), headers: headers.join(', ') }));
+      return;
+    }
+
+    const importData: SupplierCreate[] = [];
+    const errors: Array<{ row: number; message: string }> = [];
+
+    nonEmptyRows.forEach((row: any[], rowIndex: number) => {
+      const isEmptyRow = !row || row.length === 0 || row.every((cell: any) => {
+        const value = cell !== null && cell !== undefined ? String(cell).trim() : '';
+        return value === '';
+      });
+      if (isEmptyRow) return;
+
+      let actualRowIndex = rowIndex + 3;
+      for (let i = 2; i < data.length; i++) {
+        if (data[i] === row) {
+          actualRowIndex = i + 1;
+          break;
+        }
+      }
+
+      try {
+        if (headerIndexMap.code === undefined || headerIndexMap.name === undefined) {
+          errors.push({ row: actualRowIndex, message: t('app.master-data.headerMappingError') });
+          return;
+        }
+
+        const cellAt = (field: string): string => {
+          const idx = headerIndexMap[field];
+          if (idx === undefined) return '';
+          return String(row[idx] ?? '').trim();
+        };
+        const parseNum = (raw: string): number | undefined => {
+          if (!raw) return undefined;
+          const n = Number(raw);
+          return Number.isFinite(n) ? n : undefined;
+        };
+        const parseActive = (raw: string): boolean => {
+          if (!raw) return true;
+          const v = raw.toLowerCase();
+          if (['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(v)) return false;
+          return true;
+        };
+
+        const codeValue = cellAt('code');
+        const nameValue = cellAt('name');
+        if (!codeValue) {
+          errors.push({ row: actualRowIndex, message: t('app.master-data.suppliers.codeRequired') });
+          return;
+        }
+        if (!nameValue) {
+          errors.push({ row: actualRowIndex, message: t('app.master-data.suppliers.nameRequired') });
+          return;
+        }
+
+        const contactPerson = cellAt('contactPerson') || undefined;
+        const contactTitle =
+          parseImportCodedCell(cellAt('contactTitle'), dictLabelMaps.CONTACT_TITLE) || undefined;
+        const phone = cellAt('phone') || undefined;
+        const email = cellAt('email') || undefined;
+        const contacts =
+          contactPerson || contactTitle || phone || email
+            ? [{ contactPerson, contactTitle, phone, email }]
+            : undefined;
+
+        const supplierData: SupplierCreate = {
+          code: codeValue.toUpperCase(),
+          name: nameValue,
+          shortName: cellAt('shortName') || undefined,
+          category: parseImportCodedCell(cellAt('category'), dictLabelMaps.CUSTOMER_CATEGORY),
+          address: cellAt('address') || undefined,
+          contacts,
+          isActive: parseActive(cellAt('isActive')),
+          taxRegistrationNo: cellAt('taxRegistrationNo') || undefined,
+          invoiceTitle: cellAt('invoiceTitle') || undefined,
+          invoiceAddress: cellAt('invoiceAddress') || undefined,
+          invoicePhone: cellAt('invoicePhone') || undefined,
+          invoiceBankName: cellAt('invoiceBankName') || undefined,
+          invoiceBankAccount: cellAt('invoiceBankAccount') || undefined,
+          invoiceTypeCode: parsePartnerInvoiceTypeImport(cellAt('invoiceTypeCode'), t),
+          taxpayerTypeCode: parsePartnerTaxpayerTypeImport(cellAt('taxpayerTypeCode'), t),
+          industryCode: parseImportCodedCell(cellAt('industryCode'), dictLabelMaps.INDUSTRY_SECTOR),
+          sourceChannelCode: parseImportCodedCell(
+            cellAt('sourceChannelCode'),
+            dictLabelMaps.PARTNER_SOURCE_CHANNEL,
+          ),
+          estimatedAnnualPurchase: parseNum(cellAt('estimatedAnnualPurchase')),
+          creditLimit: parseNum(cellAt('creditLimit')),
+          legalRepresentative: cellAt('legalRepresentative') || undefined,
+          enterpriseTypeCode: parsePartnerEnterpriseTypeImport(cellAt('enterpriseTypeCode'), t),
+          paymentTermsDays: parseNum(cellAt('paymentTermsDays')),
+          settlementMethodCode: parsePartnerSettlementMethodImport(cellAt('settlementMethodCode'), t),
+          deliveryContactName: cellAt('deliveryContactName') || undefined,
+          deliveryContactPhone: cellAt('deliveryContactPhone') || undefined,
+          deliveryAddress: cellAt('deliveryAddress') || undefined,
+        };
+        importData.push(supplierData);
+      } catch (error: any) {
+        errors.push({ row: actualRowIndex, message: error.message || t('app.master-data.dataParseFailed') });
+      }
+    });
+
+    if (errors.length > 0) {
+      getAntdModal().warning({
+        title: t('app.master-data.dataValidationFailed'),
+        width: 600,
+        content: (
+          <div>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
+            <List
+              size="small"
+              dataSource={errors}
+              renderItem={(item) => (
+                <List.Item>
+                  <Typography.Text type="danger">
+                    {t('app.master-data.rowError', { row: item.row, message: item.message })}
+                  </Typography.Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        ),
+      });
+      return;
+    }
+
+    if (importData.length === 0) {
+      messageApi.warning(t('app.master-data.importAllEmpty'));
+      return;
+    }
+
+    try {
+      const CHUNK = 100;
+      const result = await importInChunks({
+        items: importData,
+        chunkSize: CHUNK,
+        title: t('app.master-data.suppliers.importTitle'),
+        showResultModal: false,
+        importChunk: async (chunk) => {
+          const res = await supplierApi.bulkCreate(chunk);
+          return {
+            createdCount: res.createdCount,
+            failedItems: res.failedItems,
+          };
+        },
+      });
+
+      if (result.failureCount > 0) {
+        getAntdModal().warning({
+          title: t('app.master-data.importPartialResultTitle'),
+          width: 600,
+          content: (
+            <div>
+              <p>
+                <strong>{t('app.master-data.importPartialResultIntro', { success: result.successCount, failure: result.failureCount })}</strong>
+              </p>
+              {result.errors.length > 0 && (
+                <List
+                  size="small"
+                  dataSource={result.errors}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <Typography.Text type="danger">
+                        {t('app.master-data.rowError', { row: item.row, message: item.error })}
+                      </Typography.Text>
+                    </List.Item>
+                  )}
+                />
+              )}
+            </div>
+          ),
+        });
+      } else {
+        messageApi.success(t('app.master-data.suppliers.importSuccess', { count: result.successCount }));
+      }
+
+      if (result.successCount > 0) {
+    actionRef.current?.reload();
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.importFailed'));
+    }
+  };
+
+  /**
+   * 处理批量导出供应商
+   */
+  const handleExport = async (
+    type: 'selected' | 'currentPage' | 'all',
+    selectedRowKeys?: React.Key[],
+    currentPageData?: Supplier[]
+  ) => {
+    try {
+      let exportData: Supplier[] = [];
+      let filename = '';
+
+      if (type === 'selected' && selectedRowKeys && selectedRowKeys.length > 0) {
+        if (!currentPageData) {
+          messageApi.warning(t('app.master-data.getSelectedFailed'));
+          return;
+        }
+        exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
+        filename = `${t('app.master-data.suppliers.exportFilenameSelected', { date: todaySiteDateString() })}.csv`;
+      } else if (type === 'currentPage' && currentPageData) {
+        exportData = currentPageData;
+        filename = `${t('app.master-data.suppliers.exportFilenameCurrentPage', { date: todaySiteDateString() })}.csv`;
+      } else {
+        exportData = await fetchAllListItems((p) => supplierApi.list({ ...p, ...lastListParamsRef.current }));
+        filename = `${t('app.master-data.suppliers.exportFilenameAll', { date: todaySiteDateString() })}.csv`;
+      }
+
+      if (exportData.length === 0) {
+        messageApi.warning(t('app.master-data.noExportData'));
+        return;
+      }
+
+      const headers = [
+        t('field.supplier.code'),
+        t('field.supplier.name'),
+        t('field.supplier.shortName'),
+        t('field.supplier.category'),
+        t('field.supplier.contactPerson'),
+        t('field.supplier.contactTitle'),
+        t('field.supplier.phone'),
+        t('field.supplier.email'),
+        t('field.supplier.address'),
+        t('field.supplier.buyer'),
+        t('common.status'),
+        t('common.createdAt'),
+      ];
+      const csvRows: string[] = [headers.join(',')];
+
+      exportData.forEach((item) => {
+        const row = [
+          item.code || '',
+          item.name || '',
+          item.shortName || '',
+          item.category
+            ? dictLabelMaps['CUSTOMER_CATEGORY']?.[item.category] ?? item.category
+            : '',
+          item.contactPerson || '',
+          item.contactTitle
+            ? dictLabelMaps['CONTACT_TITLE']?.[item.contactTitle] ?? item.contactTitle
+            : '',
+          item.phone || '',
+          item.email || '',
+          item.address || '',
+          item.buyerName || '',
+          item.isActive ? t('common.enabled') : t('common.disabled'),
+          item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
+        ];
+        csvRows.push(row.map(cell => {
+          const cellStr = String(cell || '');
+          if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+            return `"${cellStr.replace(/"/g, '""')}"`;
+          }
+          return cellStr;
+        }).join(','));
+      });
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      downloadFile(blob, filename);
+      messageApi.success(t('common.exportSuccess', { count: exportData.length }));
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.exportFailed'));
+    }
+  };
+
+  /**
+   * 表格列定义
+   */
+  const columns: ProColumns<Supplier>[] = useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
+    ...masterCrudCodeNameSearchColumns({
+      code: t('field.supplier.code'),
+      name: t('field.supplier.name'),
+    }),
+    {
+      title: t('field.supplier.code'),
+      dataIndex: 'code',
+      copyable: true,
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      fixed: 'left',
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('field.supplier.name'),
+      dataIndex: 'name',
+      width: 230,
+      minWidth: 230,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, record) => (
+        <span style={{ display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minWidth: 0 }}>
+          <Typography.Text ellipsis style={{ minWidth: 0 }}>
+            {record.name}
+          </Typography.Text>
+          {hasExternalSyncSource(record as unknown as Record<string, unknown>) ? (
+            <ExternalSyncSourceIcon style={{ marginLeft: 4 }} />
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      title: t('field.supplier.shortName'),
+      dataIndex: 'shortName',
+      width: 96,
+      minWidth: 96,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+      // @ts-expect-error UniTable defaultShow：列设置可再打开
+      defaultShow: false,
+    },
+    {
+      title: t('field.supplier.category'),
+      dataIndex: 'category',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      sorter: true,
+      ellipsis: true,
+      render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
+    },
+    {
+      title: t('field.supplier.buyer'),
+      dataIndex: 'buyerName',
+      width: 132,
+      minWidth: 132,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      sorter: true,
+      ellipsis: true,
+    },
+    {
+      title: t('field.supplier.contactPerson'),
+      dataIndex: 'contactPerson',
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+    },
+    {
+      title: t('field.supplier.contactTitle'),
+      dataIndex: 'contactTitle',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+      // @ts-expect-error UniTable defaultShow：列设置可再打开
+      defaultShow: false,
+      render: (_, r) => dictLabel('CONTACT_TITLE', r.contactTitle),
+    },
+    {
+      title: t('field.supplier.phone'),
+      dataIndex: 'phone',
+      width: 132,
+      minWidth: 132,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+    },
+    {
+      title: t('field.supplier.email'),
+      dataIndex: 'email',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+      // @ts-expect-error UniTable defaultShow：列设置可再打开
+      defaultShow: false,
+    },
+    {
+      // 地址长短不一：唯一 RemainderFlex（稀疏不叠）
+      title: t('field.supplier.address'),
+      dataIndex: 'address',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+    },
+    {
+      title: t('field.supplier.buyer'),
+      dataIndex: 'buyerId',
+      hideInTable: true,
+      order: 15,
+      valueType: 'select',
+      request: () => getUserOptions('master-data:supply-chain:supplier'),
+      fieldProps: {
+        showSearch: true,
+        optionFilterProp: 'label',
+        allowClear: true,
+      },
+    },
+    ...buildMasterCrudActiveStatusColumn<Supplier>(t, { activeValueEnum: supplierActiveValueEnum }),
+    {
+      title: t('field.supplier.qualificationStatus'),
+      dataIndex: 'qualificationStatus',
+      width: 110,
+      minWidth: 110,
+      uniTableKeepWidth: true,
+      valueType: 'select',
+      valueEnum: {
+        potential: { text: t('field.supplier.qualification.potential') },
+        qualifying: { text: t('field.supplier.qualification.qualifying') },
+        approved: { text: t('field.supplier.qualification.approved') },
+        suspended: { text: t('field.supplier.qualification.suspended') },
+        eliminated: { text: t('field.supplier.qualification.eliminated') },
+      },
+      render: (_, record) => {
+        const key = record?.qualificationStatus || 'approved';
+        const map: Record<string, string> = {
+          potential: t('field.supplier.qualification.potential'),
+          qualifying: t('field.supplier.qualification.qualifying'),
+          approved: t('field.supplier.qualification.approved'),
+          suspended: t('field.supplier.qualification.suspended'),
+          eliminated: t('field.supplier.qualification.eliminated'),
+        };
+        return map[key] || key;
+      },
+    },
+    {
+      title: t('field.supplier.ratingGrade'),
+      dataIndex: 'ratingGrade',
+      width: 72,
+      minWidth: 72,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      render: (_, record) => record?.ratingGrade || '—',
+    },
+    ...customFieldColumns,
+    ...masterCrudCreatedUpdatedColumns<Supplier>(t),
+    {
+      title: t('common.actions'),
+      key: 'action',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => [
+        <Button
+          key="view"
+          type="link"
+          size="small"
+          {...rowActionKind('read')}
+          onClick={() => handleOpenDetail(record)}
+        />,
+        <Button
+          key="edit"
+          type="link"
+          size="small"
+          {...rowActionKind('update')}
+          onClick={() => handleEdit(record)}
+        />,
+        <Popconfirm
+          key="delete"
+          title={t('app.master-data.suppliers.deleteConfirm')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button type="link" size="small" {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
+    },
+    ];
+  }, [customFields, t, dictLabel, supplierActiveValueEnum]);
+
+  /** 详情列：与表单 Tab「基本信息 / 开票资料 / 业务与扩展」一致 */
+  const detailColumnsBasic: ProDescriptionsItemProps<Supplier>[] = [
+    { title: t('field.supplier.code'), dataIndex: 'code', copyable: true },
+    { title: t('field.supplier.name'), dataIndex: 'name' },
+    { title: t('field.supplier.shortName'), dataIndex: 'shortName' },
+    {
+      title: t('field.supplier.category'),
+      dataIndex: 'category',
+      render: (_, r) => dictLabel('CUSTOMER_CATEGORY', r.category),
+    },
+    { title: t('field.supplier.contactPerson'), dataIndex: 'contactPerson' },
+    {
+      title: t('field.supplier.contactTitle'),
+      dataIndex: 'contactTitle',
+      render: (_, r) => dictLabel('CONTACT_TITLE', r.contactTitle),
+    },
+    { title: t('field.supplier.phone'), dataIndex: 'phone' },
+    { title: t('field.supplier.email'), dataIndex: 'email' },
+    { title: t('field.supplier.buyer'), dataIndex: 'buyerName' },
+    { title: t('field.supplier.address'), dataIndex: 'address', span: 2 },
+    {
+      title: t('common.status'),
+      dataIndex: 'isActive',
+      render: (_, record) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
+    },
+    {
+      title: t('field.supplier.qualificationStatus'),
+      dataIndex: 'qualificationStatus',
+      render: (_, r) => {
+        const key = r?.qualificationStatus || 'approved';
+        const map: Record<string, string> = {
+          potential: t('field.supplier.qualification.potential'),
+          qualifying: t('field.supplier.qualification.qualifying'),
+          approved: t('field.supplier.qualification.approved'),
+          suspended: t('field.supplier.qualification.suspended'),
+          eliminated: t('field.supplier.qualification.eliminated'),
+        };
+        return map[key] || key;
+      },
+    },
+    {
+      title: t('field.supplier.ratingGrade'),
+      dataIndex: 'ratingGrade',
+      render: (_, r) =>
+        r?.ratingGrade
+          ? `${r.ratingGrade}${r.ratingScore != null ? ` (${r.ratingScore})` : ''}`
+          : '—',
+    },
+  ];
+
+  const detailColumnsInvoice: ProDescriptionsItemProps<Supplier>[] = [
+    { title: t('field.partner.taxRegistrationNo'), dataIndex: 'taxRegistrationNo' },
+    { title: t('field.partner.invoiceTitle'), dataIndex: 'invoiceTitle' },
+    { title: t('field.partner.invoiceAddress'), dataIndex: 'invoiceAddress', span: 2 },
+    { title: t('field.partner.invoicePhone'), dataIndex: 'invoicePhone' },
+    { title: t('field.partner.invoiceBankName'), dataIndex: 'invoiceBankName' },
+    { title: t('field.partner.invoiceBankAccount'), dataIndex: 'invoiceBankAccount' },
+    {
+      title: t('field.partner.invoiceType'),
+      dataIndex: 'invoiceTypeCode',
+      render: (_, r) => partnerInvoiceTypeLabel(t, r.invoiceTypeCode),
+    },
+    {
+      title: t('field.partner.taxpayerType'),
+      dataIndex: 'taxpayerTypeCode',
+      render: (_, r) => partnerTaxpayerTypeLabel(t, r.taxpayerTypeCode),
+    },
+  ];
+
+  const detailColumnsExtended: ProDescriptionsItemProps<Supplier>[] = [
+    {
+      title: t('field.supplier.payableRecognitionOverride'),
+      dataIndex: 'payableRecognitionOverride',
+      render: (_, r) => partnerPayableRecognitionOverrideLabel(t, r.payableRecognitionOverride),
+    },
+    {
+      title: t('field.supplier.industry'),
+      dataIndex: 'industryCode',
+      render: (_, r) => dictLabel('INDUSTRY_SECTOR', r.industryCode),
+    },
+    {
+      title: t('field.supplier.sourceChannel'),
+      dataIndex: 'sourceChannelCode',
+      render: (_, r) => dictLabel('PARTNER_SOURCE_CHANNEL', r.sourceChannelCode),
+    },
+    {
+      title: t('field.supplier.estimatedAnnualPurchase'),
+      dataIndex: 'estimatedAnnualPurchase',
+      render: (_, r) =>
+        r.estimatedAnnualPurchase != null && r.estimatedAnnualPurchase !== ''
+          ? Number(r.estimatedAnnualPurchase).toLocaleString()
+          : '—',
+    },
+    {
+      title: t('field.supplier.creditLimit'),
+      dataIndex: 'creditLimit',
+      render: (_, r) =>
+        r.creditLimit != null && r.creditLimit !== ''
+          ? Number(r.creditLimit).toLocaleString()
+          : '—',
+    },
+    { title: t('field.partner.legalRepresentative'), dataIndex: 'legalRepresentative' },
+    {
+      title: t('field.partner.enterpriseType'),
+      dataIndex: 'enterpriseTypeCode',
+      render: (_, r) => partnerEnterpriseTypeLabel(t, r.enterpriseTypeCode),
+    },
+    {
+      title: t('field.partner.paymentTermsDays'),
+      dataIndex: 'paymentTermsDays',
+      render: (_, r) =>
+        r.paymentTermsDays != null && r.paymentTermsDays !== '' ? String(r.paymentTermsDays) : '—',
+    },
+    {
+      title: t('field.partner.settlementMethod'),
+      dataIndex: 'settlementMethodCode',
+      render: (_, r) => partnerSettlementMethodLabel(t, r.settlementMethodCode),
+    },
+    { title: t('field.partner.deliveryContactName'), dataIndex: 'deliveryContactName' },
+    { title: t('field.partner.deliveryContactPhone'), dataIndex: 'deliveryContactPhone' },
+    { title: t('field.partner.deliveryAddress'), dataIndex: 'deliveryAddress', span: 2 },
+    { title: t('common.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
+  ];
+
+  return (
+    <>
+      <ListPageTemplate>
+      <UniTable<Supplier>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('masterData.suppliers')}
+        columnPersistenceId="apps.master-data.pages.supply-chain.suppliers.list-v5"
+        actionRef={actionRef}
+        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
+        request={async (params, sort, __filter, searchFormValues, meta?: UniTableRequestMeta) => {
+          const listParams = resolveSupplierListParams(searchFormValues, sort);
+          lastListParamsRef.current = listParams;
+          const apiParams = {
+            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+            limit: params.pageSize || 20,
+            isActive: listParams.isActive as boolean | undefined,
+            qualificationStatus: listParams.qualificationStatus as string | undefined,
+            category: listParams.category as string | undefined,
+            buyerId: listParams.buyerId as number | undefined,
+            keyword: listParams.keyword as string | undefined,
+            code: listParams.code as string | undefined,
+            name: listParams.name as string | undefined,
+            created_start_date: listParams.created_start_date as string | undefined,
+            created_end_date: listParams.created_end_date as string | undefined,
+            updated_start_date: listParams.updated_start_date as string | undefined,
+            updated_end_date: listParams.updated_end_date as string | undefined,
+            sortBy: listParams.sortBy as string | undefined,
+            sortOrder: listParams.sortOrder as 'asc' | 'desc' | undefined,
+          };
+
+          try {
+            const result = await supplierApi.list(apiParams);
+            const listData = Array.isArray(result) ? result : result?.data ?? [];
+            const enrichedData = meta?.purpose === 'prefetch'
+              ? listData
+              : await enrichRecordsWithCustomFields(listData);
+            return {
+              data: enrichedData,
+              success: true,
+              total: typeof result?.total === 'number' ? result.total : listData.length,
+            };
+          } catch (error: any) {
+            console.error('获取供应商列表失败:', error);
+            messageApi.error(error?.message || t('app.master-data.suppliers.getListFailed'));
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
+        }}
+        rowKey="uuid"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
+        pagination={{
+          defaultPageSize: 20,
+          showSizeChanger: true,
+        }}
+        showCreateButton
+        createButtonText={t('app.master-data.suppliers.create') + NEW_SHORTCUT_HINT}
+        onCreate={handleCreate}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={t('common.confirmBatchDelete')}
+        deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="suppliers-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        showImportButton={true}
+        onImport={handleImport}
+        showSyncButton={canCreate}
+        onSync={() => setSyncModalVisible(true)}
+        syncToolbarExtra={
+          canCreate
+            ? (syncButton) => (
+                <SyncFreshnessBadge
+                  getBinding={loadSupplierSyncBinding}
+                  refreshKey={syncFreshnessKey}
+                >
+                  {syncButton}
+                </SyncFreshnessBadge>
+              )
+            : undefined
+        }
+        importHeaders={supplierImportTemplate.importHeaders}
+        importExampleRow={supplierImportTemplate.importExampleRow}
+        importColumnOptions={supplierImportTemplate.importColumnOptions}
+        importFieldMap={supplierImportTemplate.importHeaderMap}
+        showExportButton={true}
+        onExport={handleExport}
+      />
+      </ListPageTemplate>
+
+      {/* 详情 Drawer（uni-detail） */}
+      <PartnerMasterDetailDrawer
+        title={t('app.master-data.suppliers.detailTitle')}
+        open={drawerVisible}
+        onClose={handleCloseDetail}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        extra={buildDetailDrawerEditExtra(t, Boolean(supplierDetail), () => {
+          if (!supplierDetail) return;
+          handleEdit(supplierDetail);
+        })}
+      >
+        {supplierDetail ? (
+          <>
+            <DetailDrawerSection title={t('field.partner.tabBasic')}>
+              <Descriptions
+                column={2}
+                size="small"
+                items={detailDrawerDescriptionItems(
+                  alignDescriptionColumns(detailColumnsBasic, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                  supplierDetail,
+                )}
+              />
+            </DetailDrawerSection>
+            <DetailDrawerSection title={t('field.partner.tabInvoice')}>
+              <Descriptions
+                column={2}
+                size="small"
+                items={detailDrawerDescriptionItems(
+                  alignDescriptionColumns(detailColumnsInvoice, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                  supplierDetail,
+                )}
+              />
+            </DetailDrawerSection>
+            <DetailDrawerSection title={t('field.partner.tabExtended')}>
+              <Descriptions
+                column={2}
+                size="small"
+                items={detailDrawerDescriptionItems(
+                  alignDescriptionColumns(detailColumnsExtended, MASTER_DATA_DETAIL_BASIC_FIELD_RANK),
+                  supplierDetail,
+                  {
+                    documentType: 'supplier',
+                    showUpdatedAt: basicUpdatedAtEnabled,
+                    timeFieldHidden,
+                  },
+                )}
+              />
+            </DetailDrawerSection>
+            {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+              <DetailDrawerSection title={t('app.master-data.customFields')} marginBottom={0}>
+                <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+              </DetailDrawerSection>
+            ) : null}
+          </>
+        ) : null}
+      </PartnerMasterDetailDrawer>
+
+      {/* 创建/编辑供应商 Modal */}
+      <SupplierFormModal
+        open={modalVisible}
+        onClose={() => { setModalVisible(false); setEditUuid(null); }}
+        editUuid={editUuid}
+        onSuccess={handleModalSuccess}
+      />
+
+      <SupplierSyncFromSourceModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onComplete={handleSyncComplete}
+      />
+    </>
+  );
+};
+
+export default SuppliersPage;

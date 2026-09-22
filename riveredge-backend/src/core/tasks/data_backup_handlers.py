@@ -1,0 +1,323 @@
+"""
+数据备份 / 恢复事件处理器
+
+通过 core.tasks.dispatcher 注册事件名 database/backup.requested 与 database/restore.requested，
+由 DataBackupService 调用 dispatch_event 触发，在 worker 中执行。
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import zipfile
+from datetime import datetime
+from typing import Optional
+
+from loguru import logger
+
+from core.models.data_backup import DataBackup
+from core.services.system.backup_storage import (
+    resolve_data_backup_dir,
+    store_backup_file_path,
+    resolve_backup_file_path,
+)
+from core.services.system.data_backup_jobs import (
+    read_backup_metadata,
+    resolve_backup_scope_for_restore,
+    is_tenant_sql_dump,
+    restore_tenant_backup_from_dump,
+    restore_tenant_uploads_from_zip,
+    repair_tenant_scoped_file_paths,
+    log_missing_upload_files_after_restore,
+    restore_uploads_from_zip,
+    run_backup_dump_and_zip_sync,
+    run_full_backup_dump_and_zip,
+    run_pg_restore,
+    run_tenant_id_replacement,
+)
+from core.tasks.dispatcher import TaskContext, TaskStep, register_event_handler
+from core.utils.timezone_utils import resolve_business_datetime
+
+
+async def _mark_restore_status(
+    backup_uuid: Optional[str],
+    *,
+    status: str,
+    error_message: Optional[str] = None,
+    mark_started: bool = False,
+    mark_completed: bool = False,
+) -> None:
+    if not backup_uuid:
+        return
+    try:
+        backup = await DataBackup.get(uuid=backup_uuid)
+        backup.restore_status = status
+        if mark_started:
+            backup.restore_started_at = resolve_business_datetime()
+            backup.restore_error_message = None
+            backup.restore_completed_at = None
+        if mark_completed:
+            backup.restore_completed_at = resolve_business_datetime()
+        if error_message is not None:
+            backup.restore_error_message = error_message
+        await backup.save()
+    except Exception as e:
+        logger.exception("更新恢复状态失败 backup_uuid={}: {}", backup_uuid, e)
+
+
+async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> None:
+    """数据备份：更新记录 -> dump+zip -> 更新成功/失败。"""
+    event_data = ctx.event.data
+    backup_uuid = event_data.get("backup_uuid")
+    tenant_id = event_data.get("tenant_id")
+    backup_type = event_data.get("backup_type", "full")
+    backup_scope = event_data.get("backup_scope", "full")
+    include_files = event_data.get("include_files")
+
+    backup_dir = resolve_data_backup_dir()
+    temp_dir = os.path.join(backup_dir, f"temp_{backup_uuid}")
+    backup = None
+
+    try:
+        backup = await DataBackup.get(uuid=backup_uuid)
+    except Exception as e:
+        logger.exception(f"备份任务无法加载记录（例如 ORM 未初始化）: {e}")
+        return
+
+    if include_files is None:
+        include_files = backup.include_files
+
+    try:
+        backup.status = "running"
+        backup.started_at = resolve_business_datetime()
+        backup.inngest_run_id = ctx.run_id
+        await backup.save()
+    except Exception as e:
+        logger.exception(f"备份任务进入 running 状态失败: {e}")
+        return
+
+    try:
+
+        def dump_and_create_zip() -> str:
+            return run_backup_dump_and_zip_sync(
+                backup_uuid=str(backup_uuid),
+                backup_name=backup.name,
+                source_tenant_id=backup.tenant_id,
+                tenant_id=tenant_id,
+                backup_type=backup_type,
+                backup_scope=backup_scope,
+                include_files=bool(include_files),
+            )
+
+        final_zip_path = await step.run("dump_and_create_zip", dump_and_create_zip)
+
+        backup.status = "success"
+        backup.completed_at = resolve_business_datetime()
+        backup.file_path = store_backup_file_path(final_zip_path)
+        backup.file_size = os.path.getsize(final_zip_path)
+        await backup.save()
+        logger.info(f"备份完成: {backup_uuid} -> {final_zip_path}")
+    except Exception as e:
+        logger.exception(f"备份任务失败: {e}")
+        if backup is not None:
+            backup.status = "failed"
+            backup.error_message = str(e)
+            backup.completed_at = resolve_business_datetime()
+            try:
+                await backup.save()
+            except Exception as save_e:
+                logger.error(f"写入备份失败状态异常: {save_e}")
+    finally:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) -> None:
+    """数据恢复：可选恢复前备份 -> 解压并 pg_restore / 租户覆盖 -> 恢复 uploads。"""
+    event_data = ctx.event.data
+    backup_uuid = event_data.get("backup_uuid")
+    target_tenant_id = event_data.get("target_tenant_id") or event_data.get("tenant_id")
+    source_tenant_id = event_data.get("source_tenant_id")
+    file_path = event_data.get("file_path")
+    create_pre_restore = event_data.get("create_pre_restore_backup", True)
+
+    backup_dir = resolve_data_backup_dir()
+
+    zip_path = resolve_backup_file_path(file_path) or ""
+    if zip_path and os.path.exists(zip_path):
+        metadata = read_backup_metadata(zip_path)
+        if source_tenant_id is None and metadata.get("source_tenant_id") is not None:
+            source_tenant_id = metadata["source_tenant_id"]
+
+    if not zip_path or not os.path.exists(zip_path):
+        msg = f"备份文件不存在，无法恢复: {file_path}"
+        logger.error(msg)
+        await _mark_restore_status(
+            backup_uuid,
+            status="failed",
+            error_message=msg,
+            mark_completed=True,
+        )
+        return
+
+    backup_scope = resolve_backup_scope_for_restore(
+        zip_path,
+        record_scope=event_data.get("record_backup_scope"),
+        event_scope=event_data.get("backup_scope"),
+    )
+    # Queue payload is server-authored; archive metadata alone cannot grant scope.
+    if backup_scope != "tenant" and event_data.get("allow_global_restore") is not True:
+        await _mark_restore_status(
+            backup_uuid, status="failed",
+            error_message="全局范围恢复缺少平台管理员授权，请重新提交恢复任务",
+            mark_completed=True,
+        )
+        return
+    logger.info(f"恢复范围: backup_scope={backup_scope}")
+
+    if create_pre_restore:
+        pre_restore_name = "恢复前备份"
+        temp_dir = os.path.join(backup_dir, f"temp_pre_restore_{backup_uuid}")
+
+        def do_pre_restore_backup() -> str:
+            if backup_scope == "tenant" and target_tenant_id is not None:
+                return run_backup_dump_and_zip_sync(
+                    backup_uuid=f"pre_restore_{backup_uuid}",
+                    backup_name=pre_restore_name,
+                    source_tenant_id=int(target_tenant_id),
+                    tenant_id=int(target_tenant_id),
+                    backup_type="full",
+                    backup_scope="tenant",
+                )
+            return run_full_backup_dump_and_zip(backup_dir, temp_dir, pre_restore_name)
+
+        try:
+            final_zip_path = await step.run("create_pre_restore_backup", do_pre_restore_backup)
+            pre_backup = await DataBackup.create(
+                tenant_id=target_tenant_id,
+                name=pre_restore_name,
+                backup_type="full",
+                backup_scope="tenant" if backup_scope == "tenant" else "all",
+                status="success",
+                source_type="generated",
+                file_path=store_backup_file_path(final_zip_path),
+                file_size=os.path.getsize(final_zip_path),
+                started_at=resolve_business_datetime(),
+                completed_at=resolve_business_datetime(),
+            )
+            logger.info(f"已创建恢复前备份: {pre_backup.uuid} -> {final_zip_path}")
+        except Exception as e:
+            logger.exception(f"创建恢复前备份失败: {e}")
+            await _mark_restore_status(
+                backup_uuid,
+                status="failed",
+                error_message=f"恢复前备份失败，已终止恢复: {e}",
+                mark_completed=True,
+            )
+            return
+        finally:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+    await _mark_restore_status(backup_uuid, status="running", mark_started=True)
+
+    restore_extract_dir = os.path.join(backup_dir, f"temp_restore_{backup_uuid}")
+
+    def extract_backup() -> str:
+        logger.info(f"开始恢复: zip_path={zip_path}, extract_dir={restore_extract_dir}")
+        if not os.path.exists(zip_path):
+            raise FileNotFoundError(f"备份文件不存在: {zip_path}")
+        os.makedirs(restore_extract_dir, exist_ok=True)
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(restore_extract_dir)
+        db_dump_path = os.path.join(restore_extract_dir, "database.dump")
+        if not os.path.exists(db_dump_path):
+            raise FileNotFoundError(
+                f"备份中未找到 database.dump，zip 内容: {os.listdir(restore_extract_dir)}"
+            )
+        return db_dump_path
+
+    try:
+        db_dump_path = await step.run("extract_backup", extract_backup)
+        if backup_scope != "tenant" and is_tenant_sql_dump(db_dump_path):
+            raise ValueError(
+                "备份文件为租户级 CSV 格式，但元数据/记录范围为全量。"
+                "请确认 backup_metadata.json 中 backup_scope=tenant，或重新创建租户级备份。"
+            )
+
+        if backup_scope == "tenant":
+            if target_tenant_id is None:
+                raise ValueError("租户级恢复缺少目标 tenant_id")
+
+            async def restore_tenant_backup_step() -> int:
+                return await restore_tenant_backup_from_dump(
+                    dump_path=db_dump_path,
+                    target_tenant_id=int(target_tenant_id),
+                    source_tenant_id=int(source_tenant_id) if source_tenant_id is not None else None,
+                )
+
+            effective_source = await step.run("restore_tenant_backup", restore_tenant_backup_step)
+            upload_source_id = int(effective_source)
+            await step.run(
+                "restore_tenant_uploads",
+                lambda: restore_tenant_uploads_from_zip(
+                    zip_path,
+                    restore_extract_dir,
+                    int(target_tenant_id),
+                    upload_source_id if upload_source_id != int(target_tenant_id) else None,
+                ),
+            )
+            if upload_source_id != int(target_tenant_id):
+                await repair_tenant_scoped_file_paths(int(target_tenant_id), upload_source_id)
+            await log_missing_upload_files_after_restore(int(target_tenant_id))
+        else:
+            await step.run("pg_restore", lambda: run_pg_restore(db_dump_path, backup_scope))
+            await step.run(
+                "restore_uploads_from_zip",
+                lambda: restore_uploads_from_zip(zip_path, restore_extract_dir),
+            )
+    except Exception as e:
+        logger.exception(f"备份恢复失败: {e}")
+        await _mark_restore_status(
+            backup_uuid,
+            status="failed",
+            error_message=str(e),
+            mark_completed=True,
+        )
+        if os.path.exists(restore_extract_dir):
+            shutil.rmtree(restore_extract_dir, ignore_errors=True)
+        return
+    finally:
+        if os.path.exists(restore_extract_dir):
+            shutil.rmtree(restore_extract_dir, ignore_errors=True)
+
+    if backup_scope != "tenant" and source_tenant_id is not None and source_tenant_id != target_tenant_id:
+        try:
+            tables_updated = await run_tenant_id_replacement(source_tenant_id, target_tenant_id)
+            logger.info(f"租户ID替换完成，共处理 {tables_updated} 个表")
+        except Exception as e:
+            logger.exception(f"租户ID替换失败: {e}")
+            await _mark_restore_status(
+                backup_uuid,
+                status="failed",
+                error_message=f"租户ID替换失败: {e}",
+                mark_completed=True,
+            )
+            return
+
+    await _mark_restore_status(backup_uuid, status="success", mark_completed=True)
+    logger.info("数据恢复完成")
+
+
+_handlers_registered = False
+
+
+def register_data_backup_handlers() -> None:
+    """注册备份相关事件（幂等，避免热重载或重复 import 时重复注册）。"""
+    global _handlers_registered
+    if _handlers_registered:
+        return
+    _handlers_registered = True
+    register_event_handler("database/backup.requested", handle_database_backup_requested)
+    register_event_handler("database/restore.requested", handle_database_restore_requested)

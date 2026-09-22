@@ -1,0 +1,475 @@
+"""
+部门管理 API 路由
+
+提供部门的 CRUD 操作和树形结构管理。
+"""
+
+from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
+from pydantic import BaseModel, Field
+
+from core.models.department_dataset_binding import DepartmentDatasetBinding
+from core.schemas.department import (
+    DepartmentCreate,
+    DepartmentUpdate,
+    DepartmentResponse,
+    DepartmentTreeResponse,
+    DepartmentTreeItem,
+    DepartmentImportRequest,
+)
+from core.services.organization.department_service import DepartmentService
+from core.api.deps.deps import get_current_tenant
+from core.api.deps.reference_display_access import require_reference_display_access
+from core.api.deps.system_module_access import (
+    require_department_create,
+    require_department_delete,
+    require_department_import,
+    require_department_read,
+    require_department_update,
+)
+from infra.api.deps.deps import get_current_user as soil_get_current_user
+from infra.models.user import User
+from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
+
+
+class LoadDepartmentPresetRequest(BaseModel):
+    """加载部门预设：可指定仅创建勾选的部门编码"""
+
+    codes: Optional[List[str]] = Field(None, description="部门编码列表；不传则加载全部预设")
+
+
+class DepartmentDatasetBindingOut(BaseModel):
+    dataset_uuid: Optional[str] = None
+    department_name_column: Optional[str] = None
+    department_code_column: Optional[str] = None
+    parent_ref_column: Optional[str] = None
+    description_column: Optional[str] = None
+
+
+class DepartmentDatasetBindingUpsert(BaseModel):
+    dataset_uuid: Optional[str] = None
+    department_name_column: Optional[str] = None
+    department_code_column: Optional[str] = None
+    parent_ref_column: Optional[str] = None
+    description_column: Optional[str] = None
+
+
+class DepartmentSyncFromDatasetOut(BaseModel):
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+
+
+def _serialize_department_dataset_binding(row: Optional[DepartmentDatasetBinding]) -> DepartmentDatasetBindingOut:
+    if not row:
+        return DepartmentDatasetBindingOut()
+    return DepartmentDatasetBindingOut(
+        dataset_uuid=row.dataset_uuid,
+        department_name_column=row.department_name_column,
+        department_code_column=row.department_code_column,
+        parent_ref_column=row.parent_ref_column,
+        description_column=row.description_column,
+    )
+
+
+router = APIRouter(prefix="/departments", tags=["Core - Departments"])
+require_department_reference_display_access = require_reference_display_access(
+    "system:department",
+    "缺少部门读或引用展示权限",
+)
+
+
+@router.post("", response_model=DepartmentResponse, status_code=status.HTTP_201_CREATED)
+async def create_department(
+    data: DepartmentCreate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_create),
+):
+    """
+    创建部门
+    
+    创建新部门并保存到数据库。支持树形结构（父子部门关系）。
+    
+    Args:
+        data: 部门创建数据
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        DepartmentResponse: 创建的部门对象
+        
+    Raises:
+        HTTPException: 当父部门不存在或数据验证失败时抛出
+    """
+    try:
+        department = await DepartmentService.create_department(
+            tenant_id=tenant_id,
+            data=data,
+            current_user_id=current_user.id
+        )
+        payload = await DepartmentService.build_department_response(tenant_id, department)
+        return DepartmentResponse.model_validate(payload)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except AuthorizationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+
+
+@router.get("/tree", response_model=DepartmentTreeResponse)
+async def get_department_tree(
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    is_active: Optional[bool] = Query(None, description="是否启用筛选"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_reference_display_access),
+):
+    """
+    获取部门树形结构
+    
+    返回完整的部门树形结构，包含所有子部门。支持关键词搜索。
+    
+    Args:
+        keyword: 关键词搜索
+        is_active: 是否启用筛选
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        DepartmentTreeResponse: 部门树形结构
+    """
+    tree_data = await DepartmentService.get_department_tree(
+        tenant_id=tenant_id,
+        parent_id=None,
+        keyword=keyword,
+        is_active=is_active,
+    )
+    
+    # 转换为树形响应格式
+    def convert_to_tree_item(item: dict) -> DepartmentTreeItem:
+        children = [convert_to_tree_item(child) for child in item.get("children", [])]
+        return DepartmentTreeItem(
+            uuid=item["uuid"],
+            name=item["name"],
+            code=item["code"],
+            description=item.get("description"),
+            parent_uuid=item.get("parent_uuid"),
+            manager_uuid=item.get("manager_uuid"),
+            manager_name=item.get("manager_name"),
+            sort_order=item.get("sort_order", 0),
+            is_active=item.get("is_active", True),
+            children_count=item.get("children_count", 0),
+            user_count=item.get("user_count", 0),
+            position_count=item.get("position_count", 0),
+            children=children,
+        )
+    
+    items = [convert_to_tree_item(item) for item in tree_data]
+    
+    return DepartmentTreeResponse(items=items)
+
+
+@router.get("/preset-preview")
+async def get_department_preset_preview(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_read),
+):
+    """返回预设部门清单（静态），供前端勾选后再创建。"""
+    return list(DepartmentService.PRESET_DEPARTMENTS)
+
+
+@router.get("/dataset-binding", response_model=DepartmentDatasetBindingOut, summary="部门管理关联数据集配置")
+async def get_department_dataset_binding(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_read),
+):
+    row = await DepartmentDatasetBinding.filter(tenant_id=tenant_id).first()
+    return _serialize_department_dataset_binding(row)
+
+
+@router.put("/dataset-binding", response_model=DepartmentDatasetBindingOut, summary="保存部门管理关联数据集配置")
+async def put_department_dataset_binding(
+    body: DepartmentDatasetBindingUpsert,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
+):
+    ds = (body.dataset_uuid or "").strip()
+    if not ds:
+        await DepartmentDatasetBinding.filter(tenant_id=tenant_id).delete()
+        return DepartmentDatasetBindingOut()
+
+    name_c = (body.department_name_column or "").strip()
+    if not name_c:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="已选择数据集时，请填写部门名称对应的结果列名（与 SQL 查询结果列别名一致）",
+        )
+
+    await DepartmentDatasetBinding.filter(tenant_id=tenant_id).delete()
+    row = await DepartmentDatasetBinding.create(
+        tenant_id=tenant_id,
+        dataset_uuid=ds,
+        department_name_column=name_c,
+        department_code_column=(body.department_code_column or "").strip() or None,
+        parent_ref_column=(body.parent_ref_column or "").strip() or None,
+        description_column=(body.description_column or "").strip() or None,
+        sort_order_column=None,
+        is_active_column=None,
+    )
+    return _serialize_department_dataset_binding(row)
+
+
+@router.post("/sync-from-dataset", response_model=DepartmentSyncFromDatasetOut, summary="从绑定数据集同步部门")
+async def sync_departments_from_dataset(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
+):
+    try:
+        result = await DepartmentService.sync_departments_from_dataset(
+            tenant_id=tenant_id,
+            current_user_id=current_user.id,
+        )
+        return DepartmentSyncFromDatasetOut(**result)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+
+
+class DepartmentImportRequestSchema(BaseModel):
+    """部门导入请求 Schema（API层）"""
+
+    data: List[List[Any]] = Field(
+        ...,
+        description="二维数组数据（第一行为表头，第二行为示例数据，从第三行开始为实际数据）",
+    )
+
+
+@router.post("/batch-import")
+async def import_departments(
+    request: DepartmentImportRequestSchema,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_import),
+):
+    """
+    批量导入部门
+
+    接收前端 uni_import 组件传递的二维数组数据，批量创建部门。
+    数据格式：第一行为表头，第二行为示例数据（跳过），从第三行开始为实际数据。
+    """
+    try:
+        result = await DepartmentService.import_departments_from_data(
+            tenant_id=tenant_id,
+            data=request.data,
+            current_user_id=current_user.id,
+        )
+        return result
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导入失败: {str(e)}",
+        )
+
+
+@router.post("/load-preset")
+async def load_preset_departments(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    body: Optional[LoadDepartmentPresetRequest] = Body(None),
+    _auth: object = Depends(require_department_create),
+):
+    """
+    加载中国中小制造业极简部门预设数据。
+    仅创建不存在的部门（按 code 去重）。
+    请求体可传 codes，仅创建选中项；不传则创建全部预设。
+    """
+    codes = body.codes if body else None
+    count = await DepartmentService.load_preset_sme(
+        tenant_id=tenant_id,
+        current_user_id=current_user.id,
+        codes=codes,
+    )
+    return {"created": count, "message": f"已加载 {count} 个部门"}
+
+
+@router.post("/link-preset-managers")
+async def link_preset_department_managers(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
+):
+    """按预设映射补齐部门负责人（销售经理→销售部等），供审批流部门节点使用。"""
+    linked = await DepartmentService.link_preset_department_managers(tenant_id)
+    return {
+        "managers_linked": linked,
+        "message": f"已关联 {linked} 个部门负责人" if linked else "无需更新，部门负责人已配置或缺少对应角色用户",
+    }
+
+
+@router.put("/sort", status_code=status.HTTP_200_OK)
+async def update_department_order(
+    department_orders: List[Dict[str, Any]] = Body(..., description="部门排序列表"),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
+):
+    """批量更新部门排序（拖拽排序后保存）。"""
+    try:
+        await DepartmentService.update_department_order(
+            tenant_id=tenant_id,
+            department_orders=department_orders,
+        )
+        return {"success": True, "message": "排序更新成功"}
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+
+
+@router.get("/{department_uuid}", response_model=DepartmentResponse)
+async def get_department(
+    department_uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_read),
+):
+    """
+    获取部门详情
+    
+    根据UUID获取部门详细信息。
+    
+    Args:
+        department_uuid: 部门UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        DepartmentResponse: 部门详情响应
+        
+    Raises:
+        HTTPException: 当部门不存在时抛出
+    """
+    try:
+        department = await DepartmentService.get_department_by_uuid(
+            tenant_id=tenant_id,
+            department_uuid=department_uuid
+        )
+        payload = await DepartmentService.build_department_response(tenant_id, department)
+        return DepartmentResponse.model_validate(payload)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.put("/{department_uuid}", response_model=DepartmentResponse)
+async def update_department(
+    department_uuid: str,
+    data: DepartmentUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
+):
+    """
+    更新部门
+    
+    更新部门的基本信息。支持修改父部门（树形结构调整）。
+    
+    Args:
+        department_uuid: 部门UUID
+        data: 部门更新数据
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Returns:
+        DepartmentResponse: 更新后的部门对象
+        
+    Raises:
+        HTTPException: 当部门不存在或数据验证失败时抛出
+    """
+    try:
+        department = await DepartmentService.update_department(
+            tenant_id=tenant_id,
+            department_uuid=department_uuid,
+            data=data,
+            current_user_id=current_user.id
+        )
+        payload = await DepartmentService.build_department_response(tenant_id, department)
+        return DepartmentResponse.model_validate(payload)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except AuthorizationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+
+
+@router.delete("/{department_uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_department(
+    department_uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_delete),
+):
+    """
+    删除部门
+    
+    软删除部门。存在子部门、关联用户或关联职位时不可删除。
+    
+    Args:
+        department_uuid: 部门UUID
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+        
+    Raises:
+        HTTPException: 当部门不存在或不可删除时抛出
+    """
+    try:
+        await DepartmentService.delete_department(
+            tenant_id=tenant_id,
+            department_uuid=department_uuid,
+            current_user_id=current_user.id
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except AuthorizationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )

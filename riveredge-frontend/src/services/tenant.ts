@@ -1,0 +1,676 @@
+/**
+ * 组织 API 服务
+ * 
+ * 提供组织管理相关的 API 接口
+ * 注意：组织管理通常需要超级管理员权限
+ */
+
+// 使用 apiRequest 统一处理 HTTP 请求
+
+
+import { apiRequest } from './api';
+
+/**
+ * 组织状态枚举
+ */
+export enum TenantStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+  EXPIRED = 'expired',
+  SUSPENDED = 'suspended',
+}
+
+/**
+ * 组织套餐枚举
+ */
+export enum TenantPlan {
+  TRIAL = 'trial',           // 体验套餐
+  BASIC = 'basic',           // 基础版
+  PROFESSIONAL = 'professional',  // 专业版
+  ENTERPRISE = 'enterprise',  // 旗舰版（存库码仍为 enterprise）
+}
+
+/** 套餐档位展示序真源：体验 → 基础 → 专业 → 旗舰（与后端 TenantPlan 声明序一致） */
+export const TENANT_PLAN_SORT_ORDER: readonly TenantPlan[] = [
+  TenantPlan.TRIAL,
+  TenantPlan.BASIC,
+  TenantPlan.PROFESSIONAL,
+  TenantPlan.ENTERPRISE,
+] as const;
+
+export function tenantPlanSortRank(plan: string | TenantPlan | null | undefined): number {
+  const key = String(plan || '').trim().toLowerCase() as TenantPlan;
+  const index = TENANT_PLAN_SORT_ORDER.indexOf(key);
+  return index >= 0 ? index : TENANT_PLAN_SORT_ORDER.length;
+}
+
+export function compareTenantPlanSort(
+  a: string | TenantPlan | null | undefined,
+  b: string | TenantPlan | null | undefined,
+): number {
+  return tenantPlanSortRank(a) - tenantPlanSortRank(b);
+}
+
+/** 内置套餐类型 i18n key（禁止用套餐名称冒充类型） */
+export const TENANT_PLAN_LABEL_KEYS: Record<TenantPlan, string> = {
+  [TenantPlan.TRIAL]: 'pages.infra.package.planTrial',
+  [TenantPlan.BASIC]: 'pages.infra.package.planBasic',
+  [TenantPlan.PROFESSIONAL]: 'pages.infra.package.planProfessional',
+  [TenantPlan.ENTERPRISE]: 'pages.infra.package.planEnterprise',
+};
+
+export function resolveTenantPlanLabelKey(plan: string | TenantPlan | null | undefined): string | undefined {
+  const key = String(plan || '').trim().toLowerCase() as TenantPlan;
+  return TENANT_PLAN_LABEL_KEYS[key];
+}
+
+/** 套餐类型 MarkerTag 颜色（套餐管理 / 组织管理共用，禁止页面各自映射） */
+export const TENANT_PLAN_MARKER_COLORS: Record<TenantPlan, string> = {
+  [TenantPlan.TRIAL]: 'blue',
+  [TenantPlan.BASIC]: 'green',
+  [TenantPlan.PROFESSIONAL]: 'orange',
+  [TenantPlan.ENTERPRISE]: 'red',
+};
+
+export function resolveTenantPlanMarkerColor(plan: string | TenantPlan | null | undefined): string {
+  const planKey = String(plan || '').toLowerCase() as TenantPlan;
+  return TENANT_PLAN_MARKER_COLORS[planKey] ?? 'default';
+}
+
+/** 与后端 can_use_pro_apps / PACKAGE_CONFIG 一致：仅专业、旗舰开放 PRO */
+export function tenantPlanAllowsProApps(plan: string | TenantPlan | null | undefined): boolean {
+  const key = String(plan || '').trim().toLowerCase();
+  return key === TenantPlan.PROFESSIONAL || key === TenantPlan.ENTERPRISE;
+}
+
+/**
+ * 套餐配置接口
+ */
+export interface PackageConfig {
+  name: string;
+  max_users: number;
+  max_storage_mb: number;
+  max_branch_organizations?: number | null;
+  allow_pro_apps: boolean;
+  allowed_app_codes?: string[];
+  description: string;
+}
+
+/**
+ * 所有套餐配置
+ */
+export interface AllPackageConfigs {
+  [key: string]: PackageConfig;
+}
+
+/**
+ * 套餐信息接口
+ */
+export interface Package {
+  id: number;
+  uuid: string;
+  name: string;
+  plan: string;
+  max_users: number;
+  max_storage_mb: number;
+  max_branch_organizations?: number | null;
+  allow_pro_apps: boolean;
+  allowed_app_codes?: string[];
+  description?: string;
+  features?: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * 套餐创建请求接口
+ */
+export interface PackageCreate {
+  name: string;
+  plan: string;
+  max_users: number;
+  max_storage_mb: number;
+  max_branch_organizations?: number | null;
+  allow_pro_apps: boolean;
+  allowed_app_codes?: string[];
+  description?: string;
+  features?: string[];
+  is_active?: boolean;
+}
+
+/**
+ * 套餐更新请求接口
+ */
+export interface PackageUpdate {
+  name?: string;
+  plan?: string;
+  max_users?: number;
+  max_storage_mb?: number;
+  max_branch_organizations?: number | null;
+  allow_pro_apps?: boolean;
+  allowed_app_codes?: string[];
+  description?: string;
+  features?: string[];
+  is_active?: boolean;
+}
+
+/**
+ * 套餐列表响应接口
+ */
+export interface PackageListResponse {
+  items: Package[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+/**
+ * 组织信息接口
+ */
+export interface Tenant {
+  id: number;
+  uuid: string;
+  name: string;
+  domain: string;
+  status: TenantStatus;
+  plan: TenantPlan;
+  settings: Record<string, any>;
+  parent_tenant_id?: number | null;
+  is_subtenant?: boolean;
+  max_users: number;
+  max_storage: number;
+  sensitive_word_enabled?: boolean;
+  user_count?: number;
+  expires_at?: string;
+  last_login_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * 组织列表查询参数
+ */
+export interface TenantListParams {
+  page?: number;
+  page_size?: number;
+  status?: TenantStatus;
+  plan?: TenantPlan;
+  parent_tenant_id?: number;
+  is_subtenant?: boolean;
+  keyword?: string;  // 关键词搜索（组织名称、域名，使用 OR 逻辑）
+  name?: string;  // 组织名称搜索（精确搜索）
+  domain?: string;  // 域名搜索（精确搜索）
+  sort?: string;  // 排序字段（如 'name', 'created_at'）
+  order?: 'asc' | 'desc';  // 排序方向
+}
+
+/**
+ * 组织列表响应数据
+ */
+export interface TenantListResponse {
+  items: Tenant[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface TenantAdminAccountData {
+  username: string;
+  password: string;
+  full_name?: string;
+  phone?: string;
+}
+
+/**
+ * 创建组织数据
+ */
+export interface CreateTenantData {
+  name: string;
+  domain: string;
+  status?: TenantStatus;
+  plan?: TenantPlan;
+  settings?: Record<string, any>;
+  parent_tenant_id?: number;
+  max_users?: number;
+  max_storage?: number;
+  expires_at?: string;
+  sensitive_word_enabled?: boolean;
+  admin_account: TenantAdminAccountData;
+}
+
+/**
+ * 更新组织数据
+ */
+export interface UpdateTenantData {
+  name?: string;
+  domain?: string;
+  status?: TenantStatus;
+  plan?: TenantPlan;
+  settings?: Record<string, any>;
+  max_users?: number;
+  max_storage?: number;
+  expires_at?: string;
+  sensitive_word_enabled?: boolean;
+}
+
+/**
+ * 获取组织列表
+ *
+ * @param params - 查询参数
+ * @param isSuperAdmin - 是否为平台超级管理员接口（默认 false，使用 /tenants；true 时使用 /infra/tenants）
+ * @returns 组织列表响应数据
+ */
+export async function getTenantList(
+  params: TenantListParams,
+  isSuperAdmin: boolean = false
+): Promise<TenantListResponse> {
+  const endpoint = isSuperAdmin ? '/infra/tenants' : '/tenants';
+  return apiRequest<TenantListResponse>(endpoint, {
+    method: 'GET',
+    params,
+  });
+}
+
+/**
+ * 获取套餐列表
+ *
+ * @param params - 查询参数
+ * @returns 套餐列表响应数据
+ */
+export async function getPackageList(params: {
+  page: number;
+  pageSize: number;
+  plan?: string;
+  name?: string;
+  is_active?: boolean;
+  allow_pro_apps?: boolean;
+  sort?: string;
+  order?: string;
+}): Promise<PackageListResponse> {
+  return apiRequest<PackageListResponse>('/infra/packages', {
+    method: 'GET',
+    params,
+  });
+}
+
+/**
+ * 创建套餐
+ *
+ * @param data - 套餐创建数据
+ * @returns 创建的套餐
+ */
+export async function createPackage(data: PackageCreate): Promise<Package> {
+  return apiRequest<Package>('/infra/packages', {
+    method: 'POST',
+    data,
+  });
+}
+
+/**
+ * 更新套餐
+ *
+ * @param packageId - 套餐ID
+ * @param data - 套餐更新数据
+ * @returns 更新后的套餐
+ */
+export async function updatePackage(packageId: number, data: PackageUpdate): Promise<Package> {
+  return apiRequest<Package>(`/infra/packages/${packageId}`, {
+    method: 'PUT',
+    data,
+  });
+}
+
+/**
+ * 删除套餐
+ *
+ * @param packageId - 套餐ID
+ */
+export async function deletePackage(packageId: number): Promise<void> {
+  return apiRequest<void>(`/infra/packages/${packageId}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * 获取组织详情
+ * 
+ * @param tenantId - 组织 ID
+ * @param isSuperAdmin - 是否为平台超级管理员接口（默认 false，使用 /tenants；true 时使用 /infra/tenants）
+ * @returns 组织详情
+ */
+export async function getTenantById(tenantId: number, isSuperAdmin: boolean = false): Promise<Tenant> {
+  const endpoint = isSuperAdmin ? `/infra/tenants/${tenantId}` : `/tenants/${tenantId}`;
+  return apiRequest<Tenant>(endpoint, {
+    method: 'GET',
+  });
+}
+
+/**
+ * 创建组织
+ * 
+ * @param data - 组织创建数据
+ * @returns 创建的组织
+ */
+export async function createTenant(data: CreateTenantData): Promise<Tenant> {
+  return apiRequest<Tenant>('/tenants', {
+    method: 'POST',
+    data,
+  });
+}
+
+/**
+ * 更新组织
+ * 
+ * @param tenantId - 组织 ID
+ * @param data - 组织更新数据
+ * @returns 更新后的组织
+ */
+export async function updateTenant(tenantId: number, data: UpdateTenantData): Promise<Tenant> {
+  return apiRequest<Tenant>(`/tenants/${tenantId}`, {
+    method: 'PUT',
+    data,
+  });
+}
+
+/**
+ * 删除组织（软删除）
+ * 
+ * @param tenantId - 组织 ID
+ */
+export async function deleteTenant(tenantId: number): Promise<void> {
+  return apiRequest<void>(`/tenants/${tenantId}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * 删除组织（平台超级管理员，软删除）
+ * 
+ * @param tenantId - 组织 ID
+ */
+export async function deleteTenantBySuperAdmin(tenantId: number): Promise<void> {
+  return apiRequest<void>(`/infra/tenants/${tenantId}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * 激活组织
+ * 
+ * @param tenantId - 组织 ID
+ * @returns 更新后的组织
+ */
+/**
+ * 激活组织（平台超级管理员）
+ * 
+ * @param tenantId - 组织 ID
+ * @returns 更新后的组织
+ */
+export async function activateTenant(tenantId: number): Promise<Tenant> {
+  return apiRequest<Tenant>(`/infra/tenants/${tenantId}/activate`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * 停用组织（平台超级管理员）
+ * 
+ * @param tenantId - 组织 ID
+ * @returns 更新后的组织
+ */
+export async function deactivateTenant(tenantId: number): Promise<Tenant> {
+  return apiRequest<Tenant>(`/infra/tenants/${tenantId}/deactivate`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * 获取所有套餐配置
+ * 
+ * @returns 所有套餐配置
+ */
+/**
+ * 获取所有套餐配置（平台超级管理员）
+ *
+ * @returns 所有套餐配置
+ */
+export async function getPackageConfigs(): Promise<AllPackageConfigs> {
+  try {
+    return await apiRequest<AllPackageConfigs>('/infra/packages/config', {
+      method: 'GET',
+    });
+  } catch (error: any) {
+    // 如果 API 返回 401（认证失败），使用默认套餐配置
+    if (error.message?.includes('401') || error.message?.includes('认证已过期')) {
+      console.warn('⚠️ 无法获取套餐配置，使用默认配置');
+      return getDefaultPackageConfigs();
+    }
+    throw error;
+  }
+}
+
+/**
+ * 获取默认套餐配置（后备方案）
+ *
+ * @returns 默认套餐配置
+ */
+function getDefaultPackageConfigs(): AllPackageConfigs {
+  return {
+    trial: {
+      name: '体验套餐',
+      max_users: 10,
+      max_storage_mb: 1024,
+      max_branch_organizations: 0,
+      allow_pro_apps: false,
+      allowed_app_codes: [],
+      description: '适合快速体验系统功能，限制用户数和存储空间',
+    },
+    basic: {
+      name: '基础版',
+      max_users: 50,
+      max_storage_mb: 5120,
+      max_branch_organizations: 1,
+      allow_pro_apps: false,
+      allowed_app_codes: [],
+      description: '适合小型团队使用，提供基础功能',
+    },
+    professional: {
+      name: '专业版',
+      max_users: 200,
+      max_storage_mb: 20480,
+      max_branch_organizations: 3,
+      allow_pro_apps: true,
+      allowed_app_codes: [],
+      description: '适合中型企业使用，提供完整功能和 PRO 应用支持',
+    },
+    enterprise: {
+      name: '旗舰版',
+      max_users: 1000,
+      max_storage_mb: 102400,
+      max_branch_organizations: 10,
+      allow_pro_apps: true,
+      allowed_app_codes: [],
+      description: '适合大型企业使用，提供旗舰级配置和完整功能',
+    },
+  };
+}
+
+/**
+ * 获取指定套餐配置（平台超级管理员）
+ * 
+ * @param plan - 套餐类型
+ * @returns 套餐配置
+ */
+export async function getPackageConfig(plan: TenantPlan): Promise<PackageConfig> {
+  return apiRequest<PackageConfig>(`/infra/packages/${plan}/config`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * 组织使用量统计接口
+ */
+export interface TenantUsage {
+  tenant_id: number;
+  user_count: number;
+  max_users: number;
+  storage_used_mb: number;
+  max_storage_mb: number;
+  user_usage_percent: number;
+  storage_usage_percent: number;
+  warnings: string[];
+}
+
+export interface SharedUserQuotaTenantUsage {
+  tenant_id: number;
+  tenant_name: string;
+  is_subtenant: boolean;
+  user_count: number;
+}
+
+export interface SharedUserQuota {
+  root_tenant_id: number;
+  root_tenant_name: string;
+  max_users: number;
+  used_users: number;
+  remaining_users: number;
+  over_quota: boolean;
+  tenants: SharedUserQuotaTenantUsage[];
+}
+
+export async function getSharedUserQuota(tenantId: number): Promise<SharedUserQuota> {
+  return apiRequest<SharedUserQuota>(`/infra/tenants/${tenantId}/shared-user-quota`, {
+    method: 'GET',
+  });
+}
+
+export interface SyncTenantLimitsFromPlanResult {
+  tenant_id: number;
+  plan: string;
+  max_users: number;
+  max_storage: number;
+  previous_max_users: number;
+  previous_max_storage: number;
+  used_users: number;
+  remaining_users: number;
+  over_quota: boolean;
+}
+
+export async function syncTenantLimitsFromPlan(
+  tenantId: number,
+): Promise<SyncTenantLimitsFromPlanResult> {
+  return apiRequest<SyncTenantLimitsFromPlanResult>(
+    `/infra/tenants/${tenantId}/sync-limits-from-plan`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * 获取组织使用量统计
+ * 
+ * @param tenantId - 组织 ID
+ * @returns 组织使用量统计
+ */
+export async function getTenantUsage(tenantId: number): Promise<TenantUsage> {
+  return apiRequest<TenantUsage>(`/tenants/${tenantId}/usage`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * 组织活动日志接口
+ */
+export interface TenantActivityLog {
+  id: number;
+  tenant_id: number;
+  action: string;
+  description: string;
+  operator_id?: number;
+  operator_name?: string;
+  created_at: string;
+}
+
+/**
+ * 组织活动日志列表查询参数
+ */
+export interface TenantActivityLogListParams {
+  page?: number;
+  page_size?: number;
+  action?: string;
+}
+
+/**
+ * 组织活动日志列表响应数据
+ */
+export interface TenantActivityLogListResponse {
+  items: TenantActivityLog[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+/**
+ * 获取组织活动日志列表
+ * 
+ * @param tenantId - 组织 ID
+ * @param params - 查询参数
+ * @returns 组织活动日志列表响应数据
+ */
+export async function getTenantActivityLogs(
+  tenantId: number,
+  params: TenantActivityLogListParams = {}
+): Promise<TenantActivityLogListResponse> {
+  return apiRequest<TenantActivityLogListResponse>(`/tenants/${tenantId}/activity-logs`, {
+    method: 'GET',
+    params,
+  });
+}
+
+export type AppCenterCategory = 'basic' | 'pro' | 'industry' | 'dedicated';
+
+export interface ApplicationCenterCategoryPermission {
+  allow_self_service_toggle: boolean;
+}
+
+export interface ApplicationCenterEffectiveCategory {
+  allow_self_service_toggle: boolean;
+  package_allows: boolean;
+  can_self_service_toggle: boolean;
+}
+
+export interface ApplicationCenterPermissionsPayload {
+  basic: ApplicationCenterCategoryPermission;
+  pro: ApplicationCenterCategoryPermission;
+  industry: ApplicationCenterCategoryPermission;
+  dedicated: ApplicationCenterCategoryPermission;
+}
+
+export interface ApplicationCenterPermissionsResponse {
+  tenant_id: number;
+  category_permissions: ApplicationCenterPermissionsPayload;
+  package: {
+    allow_pro_apps: boolean;
+    allowed_app_codes: string[];
+  };
+  effective: Record<AppCenterCategory, ApplicationCenterEffectiveCategory>;
+}
+
+export async function getTenantApplicationCenterPermissions(
+  tenantId: number,
+): Promise<ApplicationCenterPermissionsResponse> {
+  return apiRequest<ApplicationCenterPermissionsResponse>(
+    `/infra/tenants/${tenantId}/application-center-permissions`,
+  );
+}
+
+export async function updateTenantApplicationCenterPermissions(
+  tenantId: number,
+  data: ApplicationCenterPermissionsPayload,
+): Promise<ApplicationCenterPermissionsResponse> {
+  return apiRequest<ApplicationCenterPermissionsResponse>(
+    `/infra/tenants/${tenantId}/application-center-permissions`,
+    { method: 'PUT', data },
+  );
+}
+

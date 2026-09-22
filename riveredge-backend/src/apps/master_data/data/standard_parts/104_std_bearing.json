@@ -1,0 +1,82 @@
+{
+  "sortOrder": 104,
+  "industryId": "machining",
+  "primaryCategory": "standard_parts",
+  "id": "std_bearing_and_housing_cn_sme",
+  "name": "传动支承-轴承与轴承座",
+  "description": "中小制造企业最常用滚动轴承与带座轴承规格，适配电机、减速机和输送机构。",
+  "items": [
+    {
+      "preset_key": "cn_bearing_dgbb_gbt276_6201_2rz",
+      "name": "深沟球轴承",
+      "specification": "6201-2RZ",
+      "gb_standard": "GB/T 276",
+      "gb_code": "GB276-6201-2RZ",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_dgbb_gbt276_6202_2rz",
+      "name": "深沟球轴承",
+      "specification": "6202-2RZ",
+      "gb_standard": "GB/T 276",
+      "gb_code": "GB276-6202-2RZ",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_dgbb_gbt276_6203_2rz",
+      "name": "深沟球轴承",
+      "specification": "6203-2RZ",
+      "gb_standard": "GB/T 276",
+      "gb_code": "GB276-6203-2RZ",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_dgbb_gbt276_6204_2rz",
+      "name": "深沟球轴承",
+      "specification": "6204-2RZ",
+      "gb_standard": "GB/T 276",
+      "gb_code": "GB276-6204-2RZ",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_dgbb_gbt276_6305_2rz",
+      "name": "深沟球轴承",
+      "specification": "6305-2RZ",
+      "gb_standard": "GB/T 276",
+      "gb_code": "GB276-6305-2RZ",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_insert_gbt7809_uc204",
+      "name": "带座外球面轴承内芯",
+      "specification": "UC204",
+      "gb_standard": "GB/T 7809",
+      "gb_code": "GB7809-UC204",
+      "base_unit": "件",
+      "texture": "轴承钢"
+    },
+    {
+      "preset_key": "cn_bearing_housing_ucp204",
+      "name": "立式轴承座",
+      "specification": "UCP204",
+      "gb_standard": "JB/T 5308",
+      "gb_code": "JBT5308-UCP204",
+      "base_unit": "件",
+      "texture": "铸铁"
+    },
+    {
+      "preset_key": "cn_bearing_housing_ucf205",
+      "name": "方形法兰轴承座",
+      "specification": "UCF205",
+      "gb_standard": "JB/T 5308",
+      "gb_code": "JBT5308-UCF205",
+      "base_unit": "件",
+      "texture": "铸铁"
+    }
+  ]
+}

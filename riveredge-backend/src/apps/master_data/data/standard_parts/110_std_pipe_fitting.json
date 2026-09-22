@@ -1,0 +1,82 @@
+{
+  "sortOrder": 110,
+  "industryId": "machining",
+  "primaryCategory": "standard_parts",
+  "id": "std_pipe_and_valve_cn_sme",
+  "name": "管路件-接头与阀门",
+  "description": "工业介质输送常用的螺纹管件、法兰、球阀、止回阀等通用器件。",
+  "items": [
+    {
+      "preset_key": "cn_elbow_thread_gbt7306_dn20",
+      "name": "螺纹弯头",
+      "specification": "DN20",
+      "gb_standard": "GB/T 7306",
+      "gb_code": "GB7306-ELBOW-DN20",
+      "base_unit": "个",
+      "texture": "可锻铸铁"
+    },
+    {
+      "preset_key": "cn_tee_thread_gbt7306_dn15",
+      "name": "螺纹三通",
+      "specification": "DN15",
+      "gb_standard": "GB/T 7306",
+      "gb_code": "GB7306-TEE-DN15",
+      "base_unit": "个",
+      "texture": "可锻铸铁"
+    },
+    {
+      "preset_key": "cn_union_thread_gbt14383_dn20",
+      "name": "活接头",
+      "specification": "DN20",
+      "gb_standard": "GB/T 14383",
+      "gb_code": "GB14383-UNION-DN20",
+      "base_unit": "个",
+      "texture": "不锈钢304"
+    },
+    {
+      "preset_key": "cn_flange_plate_gbt9119_dn50",
+      "name": "平焊钢制管法兰",
+      "specification": "DN50 PN16",
+      "gb_standard": "GB/T 9119",
+      "gb_code": "GB9119-DN50-PN16",
+      "base_unit": "片",
+      "texture": "Q235B"
+    },
+    {
+      "preset_key": "cn_ball_valve_gbt12237_dn25",
+      "name": "钢制球阀",
+      "specification": "DN25 PN16",
+      "gb_standard": "GB/T 12237",
+      "gb_code": "GB12237-DN25-PN16",
+      "base_unit": "个",
+      "texture": "不锈钢304"
+    },
+    {
+      "preset_key": "cn_globe_valve_gbt12235_dn25",
+      "name": "钢制截止阀",
+      "specification": "DN25 PN16",
+      "gb_standard": "GB/T 12235",
+      "gb_code": "GB12235-DN25-PN16",
+      "base_unit": "个",
+      "texture": "WCB"
+    },
+    {
+      "preset_key": "cn_check_valve_gbt12236_dn25",
+      "name": "钢制止回阀",
+      "specification": "DN25 PN16",
+      "gb_standard": "GB/T 12236",
+      "gb_code": "GB12236-DN25-PN16",
+      "base_unit": "个",
+      "texture": "WCB"
+    },
+    {
+      "preset_key": "cn_butterfly_valve_gbt12238_dn80",
+      "name": "法兰蝶阀",
+      "specification": "DN80 PN16",
+      "gb_standard": "GB/T 12238",
+      "gb_code": "GB12238-DN80-PN16",
+      "base_unit": "个",
+      "texture": "球墨铸铁"
+    }
+  ]
+}

@@ -1,0 +1,1056 @@
+import { rowActionKind } from '../../../../../components/uni-action';
+/**
+ * 仓库管理页面
+ * 
+ * 提供仓库的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
+ */
+
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
+import { usePagePermissionResource } from '../../../../../hooks/usePagePermissionResource';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { App, Button, List, Modal, Popconfirm, Table, Tooltip, Typography } from 'antd';
+import { downloadFile } from '../../../../../utils';
+import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
+import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
+import { warehouseApi, getWarehouseSyncBinding, type PresetWarehouseItem } from '../../../services/warehouse';
+import {
+  workshopApi,
+  workCenterApi,
+  factoryListItems,
+} from '../../../services/factory';
+import {
+  buildMasterCrudActiveValueEnum,
+  buildMasterCrudActiveStatusColumn,
+  MASTER_CRUD_PINNED_ACTIVE_FIELD,
+  MASTER_DATA_LIST_FIELD_RANK,
+  masterCrudCodeNameSearchColumns,
+  masterCrudCreatedUpdatedColumns,
+  normalizeMasterListResponse,
+  pickOptionalString,
+  resolveMasterCrudListParams,
+} from '../../../utils/masterListCore';
+import {
+  renderMasterActiveTag,
+  renderMasterTypeMarker,
+} from '../../../utils/masterListPresentation';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { WarehouseFormModal } from '../../../components/WarehouseFormModal';
+import WarehouseSyncFromSourceModal from '../../../components/WarehouseSyncFromSourceModal';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import {
+  ExternalSyncSourceIcon,
+  hasExternalSyncSource,
+} from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
+import { QRCodeGenerator } from '../../../../../components/qrcode';
+import type { Warehouse, WarehouseCreate } from '../../../types/warehouse';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../utils/factoryImportTemplate';
+import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
+import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  MasterDataBatchActiveMenuButton,
+  useMasterDataBatchSetActive,
+} from '../../../hooks/useMasterDataBatchSetActive';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
+import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+/**
+ * 仓库管理列表页面组件
+ */
+const WarehousesPage: React.FC = () => {
+  const { t, i18n } = useTranslation();
+  const trialRunMode = useTrialRunMode();
+  const { message: messageApi } = App.useApp();
+  const location = useLocation();
+  const pagePermissionResource = usePagePermissionResource(location.pathname);
+  const { canCreate } = useResourcePermissions(pagePermissionResource);
+  const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
+  
+  // Drawer 相关状态（详情查看）
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailRetryUuidRef = useRef<string | null>(null);
+  const [warehouseDetail, setWarehouseDetail] = useState<Warehouse | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  
+  // Modal 相关状态（创建/编辑仓库）
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editUuid, setEditUuid] = useState<string | null>(null);
+  const [loadPresetLoading, setLoadPresetLoading] = useState(false);
+  const [syncLineSideLoading, setSyncLineSideLoading] = useState(false);
+  const [presetModalVisible, setPresetModalVisible] = useState(false);
+  const [presetList, setPresetList] = useState<PresetWarehouseItem[]>([]);
+  const [selectedPresetNames, setSelectedPresetNames] = useState<string[]>([]);
+  const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const loadWarehouseSyncBinding = useCallback(() => getWarehouseSyncBinding(), []);
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Warehouse>({ tableName: 'master_data_warehouse_warehouses' });
+
+  const { batchActiveMenuItems } = useMasterDataBatchSetActive({
+    update: warehouseApi.update,
+    messageApi,
+    actionRef,
+    selectedRowKeys,
+    setSelectedRowKeys,
+  });
+
+  /**
+   * 当自定义字段加载完成后，刷新表格以显示自定义字段列
+   */
+  const warehouseImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', required: true, labelKey: 'app.master-data.warehouses.code' },
+          { field: 'name', required: true, labelKey: 'app.master-data.warehouses.name' },
+          { field: 'warehouseType', labelKey: 'field.warehouse.warehouseType', options: ['普通仓', '线边仓', '在制品仓', '委外仓', '寄售仓', 'VMI仓', '不良品仓', '待检仓'] },
+          { field: 'workshopCode', labelKey: 'app.master-data.warehouses.workshopCode' },
+          { field: 'workCenterCode', labelKey: 'app.master-data.warehouses.workCenterCode' },
+          { field: 'description', labelKey: 'common.remark' },
+          { field: 'isActive', labelKey: 'common.enabled', aliases: ['是否启用', '启用'], options: [...IMPORT_YES_NO_OPTIONS] },
+        ],
+        [
+          t('app.master-data.warehouses.importExample.code'),
+          t('app.master-data.warehouses.importExample.name'),
+          t('app.master-data.warehouses.importExample.warehouseType'),
+          '',
+          '',
+          t('app.master-data.warehouses.importExample.description'),
+          '是',
+        ],
+      ),
+    [t, i18n.language],
+  );
+
+  const handleCreate = () => {
+    setEditUuid(null);
+    setModalVisible(true);
+  };
+
+  const handleSyncComplete = useCallback(() => {
+    setSyncFreshnessKey((key) => key + 1);
+    actionRef.current?.reload();
+  }, []);
+
+  useNewShortcut(handleCreate);
+
+  /**
+   * 处理编辑仓库
+   */
+  const handleEdit = (record: Warehouse) => {
+    setEditUuid(record.uuid);
+    setModalVisible(true);
+  };
+
+  /**
+   * 处理删除仓库
+   */
+  const handleDelete = async (record: Warehouse) => {
+    try {
+      await warehouseApi.delete(record.uuid);
+      messageApi.success(t('common.deleteSuccess'));
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
+  };
+
+  /**
+   * 处理批量删除仓库
+   */
+  const handleBatchDelete = async (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys;
+    if (targetKeys.length === 0) {
+      messageApi.warning(t('common.selectAtLeastOne'));
+      return;
+    }
+
+    try {
+      const uuids = targetKeys.map(key => String(key));
+      const result = await warehouseApi.batchDelete(uuids);
+      
+      if (result.success) {
+        messageApi.success(result.message || t('app.master-data.batchDeleteSuccess'));
+      } else {
+        messageApi.warning(result.message || t('app.master-data.batchDeletePartial'));
+      }
+      
+      // 清空选择
+      setSelectedRowKeys([]);
+      // 刷新列表
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.batchDeleteFailed'));
+    }
+  };
+
+  /**
+   * 处理导入数据
+   * 
+   * 支持从 Excel 导入仓库数据，批量创建仓库
+   * 数据格式：第一行为表头，第二行为示例数据，从第三行开始为实际数据
+   */
+  const handleImport = async (data: any[][]) => {
+    if (!data || data.length === 0) {
+      messageApi.warning(t('app.master-data.importEmpty'));
+      return;
+    }
+
+    // 解析表头和数据
+    const headers = (data[0] || []).map((h: any) => String(h || '').trim());
+    const rows = data.slice(2); // 跳过表头和示例数据行
+
+    // 过滤空行
+    const nonEmptyRows = rows.filter((row: any[]) => {
+      if (!row || row.length === 0) return false;
+      return row.some((cell: any) => {
+        const value = cell !== null && cell !== undefined ? String(cell).trim() : '';
+        return value !== '';
+      });
+    });
+
+    if (nonEmptyRows.length === 0) {
+      messageApi.warning(t('app.master-data.importNoRows'));
+      return;
+    }
+
+    const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+      headers,
+      warehouseImportTemplate.importHeaderMap,
+    );
+
+    // 验证必需字段
+    if (headerIndexMap['code'] === undefined) {
+      messageApi.error(t('app.master-data.importMissingField', { field: 'code', headers: headers.join(', ') }));
+      return;
+    }
+    if (headerIndexMap['name'] === undefined) {
+      messageApi.error(t('app.master-data.importMissingField', { field: 'name', headers: headers.join(', ') }));
+      return;
+    }
+
+    // 加载车间和工作中心（用于解析 workshopCode/workCenterCode）
+    let workshops: Array<{ id: number; code: string; name: string }> = [];
+    let workCenters: Array<{ id: number; code: string; name: string }> = [];
+    try {
+      const [wsList, wcList] = await Promise.all([
+        workshopApi.list({ limit: 10000, is_active: true }),
+        workCenterApi.list({ limit: 10000, is_active: true }),
+      ]);
+      workshops = factoryListItems(wsList);
+      workCenters = factoryListItems(wcList);
+    } catch (e) {
+      console.warn('加载车间/工作中心失败，线边仓关联将跳过', e);
+    }
+
+    // 解析数据行
+    const importData: WarehouseCreate[] = [];
+    const errors: Array<{ row: number; message: string }> = [];
+
+    nonEmptyRows.forEach((row: any[], rowIndex: number) => {
+      const isEmptyRow = !row || row.length === 0 || row.every((cell: any) => {
+        const value = cell !== null && cell !== undefined ? String(cell).trim() : '';
+        return value === '';
+      });
+
+      if (isEmptyRow) {
+        return;
+      }
+
+      let actualRowIndex = rowIndex + 3;
+      for (let i = 2; i < data.length; i++) {
+        if (data[i] === row) {
+          actualRowIndex = i + 1;
+          break;
+        }
+      }
+
+      try {
+        const codeIndex = headerIndexMap['code'];
+        const nameIndex = headerIndexMap['name'];
+        const descriptionIndex = headerIndexMap['description'];
+        const warehouseTypeIndex = headerIndexMap['warehouseType'];
+        const workshopCodeIndex = headerIndexMap['workshopCode'];
+        const workCenterCodeIndex = headerIndexMap['workCenterCode'];
+
+        if (codeIndex === undefined || nameIndex === undefined) {
+          errors.push({ row: actualRowIndex, message: t('app.master-data.warehouses.headerMapError') });
+          return;
+        }
+
+        const code = row[codeIndex];
+        const name = row[nameIndex];
+        const description = descriptionIndex !== undefined && row[descriptionIndex] !== undefined
+          ? row[descriptionIndex]
+          : undefined;
+        const warehouseTypeVal = warehouseTypeIndex !== undefined && row[warehouseTypeIndex] !== undefined
+          ? String(row[warehouseTypeIndex]).trim()
+          : 'normal';
+        const workshopCodeVal = workshopCodeIndex !== undefined && row[workshopCodeIndex] !== undefined
+          ? String(row[workshopCodeIndex]).trim()
+          : '';
+        const workCenterCodeVal = workCenterCodeIndex !== undefined && row[workCenterCodeIndex] !== undefined
+          ? String(row[workCenterCodeIndex]).trim()
+          : '';
+
+        const codeValue = code !== null && code !== undefined ? String(code).trim() : '';
+        const nameValue = name !== null && name !== undefined ? String(name).trim() : '';
+
+        if (!codeValue) {
+          errors.push({ row: actualRowIndex, message: t('app.master-data.warehouses.codeRequired') });
+          return;
+        }
+        if (!nameValue) {
+          errors.push({ row: actualRowIndex, message: t('app.master-data.warehouses.nameRequired') });
+          return;
+        }
+
+        // 解析仓库类型（支持中文或英文值）
+        const typeMap: Record<string, string> = {
+          normal: 'normal', '普通仓': 'normal', '普通': 'normal',
+          line_side: 'line_side', '线边仓': 'line_side', '线边': 'line_side',
+          wip: 'wip', '在制品仓': 'wip', '在制品': 'wip',
+          outsourcing: 'outsourcing', '委外仓': 'outsourcing', '委外': 'outsourcing',
+          consignment: 'consignment', '寄售仓': 'consignment', '寄售': 'consignment',
+          vmi: 'vmi', 'VMI仓': 'vmi', 'VMI': 'vmi',
+          defect: 'defect', '不良品仓': 'defect', '不良品': 'defect',
+          quarantine: 'quarantine', '待检仓': 'quarantine', '待检': 'quarantine',
+        };
+        const warehouseType = typeMap[warehouseTypeVal] || 'normal';
+
+        // 线边仓时解析车间
+        let workshopId: number | undefined;
+        if (workshopCodeVal) {
+          const found = workshops.find((w) => w.code.toUpperCase() === workshopCodeVal.toUpperCase());
+          if (found) {
+            workshopId = found.id;
+          } else {
+            errors.push({
+              row: actualRowIndex,
+              message: t('app.master-data.warehouses.workshopCodeNotExist', { value: workshopCodeVal }),
+            });
+            return;
+          }
+        }
+        if (warehouseType === 'line_side' && !workshopId) {
+          errors.push({ row: actualRowIndex, message: t('field.warehouse.workshopIdRequired') });
+          return;
+        }
+
+        // 解析工作中心
+        let workCenterId: number | undefined;
+        if (workCenterCodeVal) {
+          const found = workCenters.find((w) => w.code.toUpperCase() === workCenterCodeVal.toUpperCase());
+          if (found) {
+            workCenterId = found.id;
+          }
+        }
+
+        // 构建导入数据
+        const isActiveRaw =
+          headerIndexMap.isActive !== undefined ? String(row[headerIndexMap.isActive] ?? '').trim() : '';
+        const isActive =
+          !isActiveRaw ||
+          !['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(isActiveRaw.toLowerCase());
+        const warehouseData: WarehouseCreate = {
+          code: codeValue.toUpperCase(),
+          name: nameValue,
+          description: description ? String(description).trim() : undefined,
+          isActive,
+          warehouseType,
+          workshopId,
+          workCenterId,
+        };
+
+        importData.push(warehouseData);
+      } catch (error: any) {
+        errors.push({
+          row: actualRowIndex,
+          message: error.message || t('app.master-data.warehouses.dataParseFailed'),
+        });
+      }
+    });
+
+    // 如果有验证错误，显示错误信息
+    if (errors.length > 0) {
+      getAntdModal().warning({
+        title: t('app.master-data.warehouses.importValidationFailed'),
+        width: 600,
+        content: (
+          <div>
+            <p>{t('app.master-data.warehouses.importValidationIntro')}</p>
+            <List
+              size="small"
+              dataSource={errors}
+              renderItem={(item) => (
+                <List.Item>
+                  <Typography.Text type="danger">
+                    {t('app.master-data.warehouses.rowError', { row: item.row, message: item.message })}
+                  </Typography.Text>
+                </List.Item>
+              )}
+            />
+          </div>
+        ),
+      });
+      return;
+    }
+
+    if (importData.length === 0) {
+      messageApi.warning(t('app.master-data.importAllEmpty'));
+      return;
+    }
+
+    // 批量导入
+    try {
+      const result = await importInChunksViaPerItemCreate({
+        items: importData,
+        createOne: async (item: WarehouseCreate, _index) => {
+          return await warehouseApi.create(item);
+        },
+        title: t('app.master-data.warehouses.importTitle'),
+        chunkSize: 100,
+        concurrency: 4,
+      });
+
+      // 显示导入结果
+      if (result.failureCount > 0) {
+        getAntdModal().warning({
+          title: t('app.master-data.warehouses.importPartialFailure'),
+          width: 600,
+          content: (
+            <div>
+              <p>
+                <strong>{t('app.master-data.warehouses.importResult', { success: result.successCount, failure: result.failureCount })}</strong>
+              </p>
+              {result.errors.length > 0 && (
+                <List
+                  size="small"
+                  dataSource={result.errors}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <Typography.Text type="danger">
+                        {t('app.master-data.warehouses.rowError', { row: item.row, message: item.error })}
+                      </Typography.Text>
+                    </List.Item>
+                  )}
+                />
+              )}
+            </div>
+          ),
+        });
+      } else {
+        messageApi.success(t('app.master-data.importSuccess', { count: result.successCount }));
+      }
+
+      // 刷新列表
+      if (result.successCount > 0) {
+    actionRef.current?.reload();
+      }
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.master-data.importFailed'));
+    }
+  };
+
+  /**
+   * 处理批量导出仓库
+   */
+  const handleExport = async (
+    type: 'selected' | 'currentPage' | 'all',
+    selectedRowKeys?: React.Key[],
+    currentPageData?: Warehouse[]
+  ) => {
+    try {
+      let exportData: Warehouse[] = [];
+      let filename = '';
+
+      if (type === 'selected' && selectedRowKeys && selectedRowKeys.length > 0) {
+        // 导出选中的数据
+        if (!currentPageData) {
+          messageApi.warning(t('app.master-data.getSelectedFailed'));
+          return;
+        }
+        exportData = currentPageData.filter(item => selectedRowKeys.includes(item.uuid));
+        filename = t('app.master-data.warehouses.exportFilenameSelected', { date: todaySiteDateString() });
+      } else if (type === 'currentPage' && currentPageData) {
+        // 导出当前页数据
+        exportData = currentPageData;
+        filename = t('app.master-data.warehouses.exportFilenameCurrentPage', { date: todaySiteDateString() });
+      } else {
+        // 导出全部数据
+        exportData = await fetchAllListItems((p) => warehouseApi.list({ ...p, ...lastListParamsRef.current }));
+        filename = t('app.master-data.warehouses.exportFilenameAll', { date: todaySiteDateString() });
+      }
+
+      if (exportData.length === 0) {
+        messageApi.warning(t('app.master-data.noExportData'));
+        return;
+      }
+
+      // 构建 CSV 内容
+      const headers = [
+        t('app.master-data.warehouses.code'),
+        t('app.master-data.warehouses.name'),
+        t('field.warehouse.warehouseType'),
+        t('field.warehouse.workshopName'),
+        t('field.warehouse.workCenterName'),
+        t('common.remark'),
+        t('common.status'),
+        t('common.createdAt'),
+      ];
+      const warehouseTypeLabels: Record<string, string> = {
+        normal: t('warehouse.type.normal'),
+        line_side: t('warehouse.type.line_side'),
+        wip: t('warehouse.type.wip'),
+        outsourcing: t('warehouse.type.outsourcing'),
+        consignment: t('warehouse.type.consignment'),
+        vmi: t('warehouse.type.vmi'),
+        defect: t('warehouse.type.defect'),
+        quarantine: t('warehouse.type.quarantine'),
+      };
+      const rows = exportData.map((item) => [
+        item.code || '',
+        item.name || '',
+        warehouseTypeLabels[item.warehouseType || 'normal'] || item.warehouseType || '',
+        item.workshopName || '',
+        item.workCenterName || '',
+        item.description || '',
+        item.isActive ? t('common.enabled') : t('common.disabled'),
+        item.createdAt ? formatDateTimeBySiteSetting(item.createdAt) : '',
+      ]);
+
+      // 生成 CSV 内容
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      // 下载文件
+      downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
+      messageApi.success(t('app.master-data.exportSuccess'));
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.exportFailed'));
+    }
+  };
+
+  /**
+   * 处理打开详情
+   */
+  const loadDetail = async (uuid: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail = await warehouseApi.get(uuid);
+      setWarehouseDetail(detail);
+      await loadFieldValuesForDetail(detail.id);
+    } catch (error) {
+      setWarehouseDetail(null);
+      setDetailError(getApiErrorMessage(error, t('app.master-data.warehouses.getDetailFailed')));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleOpenDetail = (record: Warehouse) => {
+    detailRetryUuidRef.current = record.uuid;
+    setDrawerVisible(true);
+    setWarehouseDetail(null);
+    setDetailError(null);
+    void loadDetail(record.uuid);
+  };
+
+  /**
+   * 处理关闭详情
+   */
+  const handleCloseDetail = () => {
+    setDrawerVisible(false);
+    setWarehouseDetail(null);
+    setDetailError(null);
+    resetDetailFieldValues();
+  };
+
+  const handleModalSuccess = () => {
+    setModalVisible(false);
+    setEditUuid(null);
+    actionRef.current?.reload();
+  };
+
+  /**
+   * 表格列定义
+   */
+  const warehouseTypeEnum: Record<string, { text: string }> = {
+    normal: { text: t('warehouse.type.normal') },
+    line_side: { text: t('warehouse.type.line_side') },
+    wip: { text: t('warehouse.type.wip') },
+    outsourcing: { text: t('warehouse.type.outsourcing') },
+    consignment: { text: t('warehouse.type.consignment') },
+    vmi: { text: t('warehouse.type.vmi') },
+    defect: { text: t('warehouse.type.defect') },
+    quarantine: { text: t('warehouse.type.quarantine') },
+  };
+
+  const warehouseActiveValueEnum = useMemo(
+    () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
+    [t],
+  );
+
+  const columns: ProColumns<Warehouse>[] = React.useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
+      ...masterCrudCodeNameSearchColumns({
+        code: t('app.master-data.warehouses.code'),
+        name: t('app.master-data.warehouses.name'),
+      }),
+    {
+      title: t('app.master-data.warehouses.code'),
+      dataIndex: 'code',
+      copyable: true,
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      fixed: 'left',
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+    },
+    {
+      title: t('app.master-data.warehouses.name'),
+      dataIndex: 'name',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      sorter: true,
+      hideInSearch: true,
+      render: (_, record) => (
+        <span style={{ display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minWidth: 0 }}>
+          <Typography.Text ellipsis style={{ minWidth: 0 }}>
+            {record.name}
+          </Typography.Text>
+          {hasExternalSyncSource(record as unknown as Record<string, unknown>) ? (
+            <ExternalSyncSourceIcon style={{ marginLeft: 4 }} />
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      title: t('field.warehouse.warehouseType'),
+      key: 'master_warehouse_type',
+      dataIndex: 'warehouseType',
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+      order: 15,
+      valueType: 'select',
+      valueEnum: warehouseTypeEnum,
+      fieldProps: { allowClear: true },
+      sorter: true,
+      render: (_, record) =>
+        renderMasterTypeMarker(
+          warehouseTypeEnum[record.warehouseType || 'normal']?.text || record.warehouseType || '—',
+        ),
+    },
+    {
+      title: t('field.warehouse.workshopName'),
+      key: 'master_warehouse_workshop_name',
+      dataIndex: 'workshopName',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, record) => record.workshopName || '—',
+    },
+    {
+      title: t('field.warehouse.workCenterName'),
+      key: 'master_warehouse_work_center_name',
+      dataIndex: 'workCenterName',
+      width: 160,
+      minWidth: 160,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, record) => record.workCenterName || '—',
+    },
+    {
+      // 备注长短不一：唯一 RemainderFlex（稀疏不叠）
+      title: t('common.remark'),
+      dataIndex: 'description',
+      minWidth: 160,
+      uniTableRemainderFlex: true,
+      uniTablePrimaryFlex: true,
+      resizable: false,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, r) => r.description || '—',
+    },
+    // 插入自定义字段列
+    ...customFieldColumns,
+    ...buildMasterCrudActiveStatusColumn<Warehouse>(t, { activeValueEnum: warehouseActiveValueEnum }),
+    ...masterCrudCreatedUpdatedColumns<Warehouse>(t),
+    {
+      title: t('common.actions'),
+      key: 'action',
+      fixed: 'right',
+      hideInSearch: true,
+      render: (_, record) => [
+        <Button
+          key="view"
+          type="link"
+          size="small"
+          {...rowActionKind('read')}
+          onClick={() => handleOpenDetail(record)}
+        />,
+        <Button
+          key="edit"
+          type="link"
+          size="small"
+          {...rowActionKind('update')}
+          onClick={() => handleEdit(record)}
+        />,
+        <Popconfirm
+          key="delete"
+          title={t('app.master-data.warehouses.deleteConfirm')}
+          description={t('app.master-data.warehouses.deleteDescription')}
+          onConfirm={() => handleDelete(record)}
+        >
+          <Button type="link" size="small" {...rowActionKind('delete')} />
+        </Popconfirm>,
+      ],
+    },
+    ];
+  }, [customFields, t, warehouseActiveValueEnum]);
+
+  /**
+   * 详情 Drawer 的列定义
+   */
+  const detailColumns: ProDescriptionsItemProps<Warehouse>[] = [
+    {
+      title: t('app.master-data.warehouses.code'),
+      dataIndex: 'code',
+    copyable: true,},
+    {
+      title: t('app.master-data.warehouses.name'),
+      dataIndex: 'name',
+    },
+    {
+      title: t('field.warehouse.warehouseType'),
+      dataIndex: 'warehouseType',
+      render: (_, record) =>
+        renderMasterTypeMarker(
+          warehouseTypeEnum[record.warehouseType || 'normal']?.text || record.warehouseType || '-',
+        ),
+    },
+    {
+      title: t('field.warehouse.workshopName'),
+      dataIndex: 'workshopName',
+      render: (_, record) => record.workshopName || '-',
+    },
+    {
+      title: t('field.warehouse.workCenterName'),
+      dataIndex: 'workCenterName',
+      render: (_, record) => record.workCenterName || '-',
+    },
+    {
+      title: t('common.remark'),
+      dataIndex: 'description',
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'isActive',
+      render: (_, record) => renderMasterActiveTag(t, record?.isActive, 'common.enabled', 'common.disabled'),
+    },
+    {
+      title: t('common.createdAt'),
+      dataIndex: 'createdAt',
+      valueType: 'dateTime',
+    },
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updatedAt',
+      valueType: 'dateTime',
+    },
+  ];
+
+  return (
+    <>
+      <ListPageTemplate>
+        <UniTable<Warehouse>
+        columnPersistenceId="apps.master-data.pages.warehouse.warehouses.list-v3"
+        actionRef={actionRef}
+        columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
+          const pageSize = params.pageSize || 20;
+          const skip = ((params.current || 1) - 1) * pageSize;
+          const listParams = resolveMasterCrudListParams(searchFormValues, sort, {
+            extra: (search) => {
+              const warehouse_type = pickOptionalString(search, 'warehouseType');
+              return warehouse_type ? { warehouse_type } : {};
+            },
+          });
+          lastListParamsRef.current = listParams;
+
+          try {
+            const result = await warehouseApi.list({
+              skip,
+              limit: pageSize,
+              ...listParams,
+            });
+            const { data, total } = normalizeMasterListResponse(result);
+            const enrichedData = meta?.purpose === 'prefetch'
+              ? data
+              : await enrichRecordsWithCustomFields(data);
+            return {
+              data: enrichedData,
+              success: true,
+              total,
+            };
+          } catch (error: any) {
+            console.error('获取仓库列表失败:', error);
+            messageApi.error(error?.message || t('app.master-data.warehouses.getListFailed'));
+            return {
+              data: [],
+              success: false,
+              total: 0,
+            };
+          }
+        }}
+        rowKey="uuid"
+        viewTypes={['table', 'help']}
+        helpViewConfig={buildListPageHelpViewConfig('masterData.warehouses')}
+        defaultViewType="table"
+        showImportButton={true}
+        onImport={handleImport}
+        showSyncButton={canCreate}
+        onSync={() => setSyncModalVisible(true)}
+        syncToolbarExtra={
+          canCreate
+            ? (syncButton) => (
+                <SyncFreshnessBadge
+                  getBinding={loadWarehouseSyncBinding}
+                  refreshKey={syncFreshnessKey}
+                >
+                  {syncButton}
+                </SyncFreshnessBadge>
+              )
+            : undefined
+        }
+        importHeaders={warehouseImportTemplate.importHeaders}
+        importExampleRow={warehouseImportTemplate.importExampleRow}
+        importColumnOptions={warehouseImportTemplate.importColumnOptions}
+        importFieldMap={warehouseImportTemplate.importHeaderMap}
+        showExportButton={true}
+        onExport={handleExport}
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField={MASTER_CRUD_PINNED_ACTIVE_FIELD}
+        pagination={{
+          defaultPageSize: 20,
+          showSizeChanger: true,
+        }}
+        showCreateButton
+        createButtonText={t('app.master-data.warehouses.create') + NEW_SHORTCUT_HINT}
+        onCreate={handleCreate}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={t('app.master-data.warehouses.batchDeleteTitle')}
+        deleteConfirmDescription={(count) =>
+          t('app.master-data.warehouses.batchDeleteDescription', { count })
+        }
+        toolBarActionsAfterDelete={[
+          <MasterDataBatchActiveMenuButton
+            menuKey="warehouses-batch-active"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={batchActiveMenuItems}
+          />,
+        ]}
+        toolBarActionsAfterCreate={[
+          trialRunMode ? (
+            <Button {...rowActionKind('import')}
+              key="loadPreset"
+              loading={loadPresetLoading}
+              onClick={async () => {
+                try {
+                  setLoadPresetLoading(true);
+                  const list = await warehouseApi.getPresetPreview();
+                  setPresetList(list);
+                  setSelectedPresetNames(list.map((x) => x.name));
+                  setPresetModalVisible(true);
+                } catch (e: any) {
+                  messageApi.error(e?.message || t('common.operationFailed'));
+                } finally {
+                  setLoadPresetLoading(false);
+                }
+              }}
+            >
+              {t('field.warehouse.loadPreset')}
+            </Button>
+          ) : null,
+        ].filter(Boolean)}
+        toolBarActionsAfterBatch={[
+          <Tooltip key="syncLineSideTip" title={t('field.warehouse.syncLineSideTip')}>
+            <Button {...rowActionKind('update')}
+              key="syncLineSide"
+              loading={syncLineSideLoading}
+              onClick={async () => {
+                try {
+                  setSyncLineSideLoading(true);
+                  const res = await warehouseApi.syncLineSide();
+                  messageApi.success(res.message);
+    actionRef.current?.reload();
+                } catch (e: any) {
+                  messageApi.error(e?.message || t('common.operationFailed'));
+                } finally {
+                  setSyncLineSideLoading(false);
+                }
+              }}
+            >
+              {t('field.warehouse.syncLineSide')}
+            </Button>
+          </Tooltip>,
+        ]}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+      />
+      </ListPageTemplate>
+
+      {/* 详情 Drawer */}
+      <MasterDataDetailDrawer
+        title={t('app.master-data.warehouses.detailTitle')}
+        open={drawerVisible}
+        onClose={handleCloseDetail}
+        detail={warehouseDetail}
+        detailColumns={detailColumns}
+        documentType="warehouse"
+        loading={detailLoading}
+        error={detailError}
+        onRetry={() => {
+          const uuid = detailRetryUuidRef.current;
+          if (uuid) void loadDetail(uuid);
+        }}
+        customFields={customFields}
+        customFieldValues={customFieldValues}
+        basicExtra={
+          warehouseDetail ? (
+            <QRCodeGenerator
+              data={{
+                warehouse_uuid: warehouseDetail.uuid,
+                warehouse_code: warehouseDetail.code,
+                warehouse_name: warehouseDetail.name,
+              }}
+              qrcodeType="TRACE"
+              size={6}
+              noCard={true}
+            />
+          ) : undefined
+        }
+        extra={buildDetailDrawerEditExtra(t, Boolean(warehouseDetail), () => {
+          if (!warehouseDetail) return;
+          handleEdit(warehouseDetail);
+        })}
+      />
+
+      {/* 创建/编辑仓库 Modal */}
+      <WarehouseFormModal
+        open={modalVisible}
+        onClose={() => { setModalVisible(false); setEditUuid(null); }}
+        editUuid={editUuid}
+        onSuccess={handleModalSuccess}
+      />
+
+      <WarehouseSyncFromSourceModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onComplete={handleSyncComplete}
+      />
+
+      {/* 加载预设预览 Modal：可勾选子项后确认 */}
+      <Modal
+        title={t('field.warehouse.loadPreset')}
+        open={presetModalVisible}
+        onCancel={() => setPresetModalVisible(false)}
+        width={560}
+        footer={[
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setPresetModalVisible(false)}>{t('common.cancel')}</Button>,
+          <Button {...rowActionKind('audit')}
+            key="confirm"
+            type="primary"
+            loading={presetConfirmLoading}
+            disabled={selectedPresetNames.length === 0}
+            onClick={async () => {
+              try {
+                setPresetConfirmLoading(true);
+                const res = await warehouseApi.loadPreset(selectedPresetNames);
+                messageApi.success(res.message);
+                setPresetModalVisible(false);
+    actionRef.current?.reload();
+              } catch (e: any) {
+                messageApi.error(e?.message || t('common.operationFailed'));
+              } finally {
+                setPresetConfirmLoading(false);
+              }
+            }}
+          >
+            {t('common.confirm')}
+          </Button>,
+        ]}
+      >
+        <p style={{ marginBottom: 12, color: 'var(--ant-color-text-secondary)' }}>
+          {t('app.master-data.presetModalDesc')}
+        </p>
+        <Table<PresetWarehouseItem>
+          size="small"
+          rowKey="name"
+          dataSource={presetList}
+          pagination={false}
+          scroll={{ y: 280 }}
+          rowSelection={{
+            selectedRowKeys: selectedPresetNames,
+            onChange: (keys) => setSelectedPresetNames(keys as string[]),
+          }}
+          columns={[
+            { title: t('app.master-data.warehouses.name'), dataIndex: 'name', width: 120 },
+            { title: t('common.remark'), dataIndex: 'description', ellipsis: true },
+            {
+              title: t('field.warehouse.warehouseType'),
+              dataIndex: 'warehouse_type',
+              width: 120,
+              render: (v: string) => (v ? t(`warehouse.type.${v}` as any) : '–'),
+            },
+          ]}
+        />
+      </Modal>
+    </>
+  );
+};
+
+export default WarehousesPage;

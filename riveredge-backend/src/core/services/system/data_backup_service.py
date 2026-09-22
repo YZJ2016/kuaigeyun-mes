@@ -1,0 +1,350 @@
+"""
+数据备份服务模块
+
+提供数据备份的创建、查询、删除和恢复功能。
+"""
+
+import os
+from uuid import uuid4
+import shutil
+import asyncio
+from typing import List, Tuple, Optional
+from datetime import datetime
+from loguru import logger
+from tortoise.exceptions import DoesNotExist
+
+from core.models.data_backup import DataBackup
+from core.services.system.backup_storage import (
+    resolve_backup_file_path,
+    resolve_data_backup_dir,
+    store_backup_file_path,
+)
+from core.schemas.data_backup import DataBackupCreate
+from core.tasks.dispatcher import TaskEvent, dispatch_event
+from core.utils.timezone_utils import resolve_business_datetime
+
+
+class DataBackupService:
+    """
+    数据备份服务类
+    
+    管理数据备份记录，并触发后台备份/恢复任务。
+    """
+    
+    @staticmethod
+    def _flatten_exception_message(exc: Exception) -> str:
+        """
+        展开异常链，返回最有价值的根因信息。
+        """
+        parts: list[str] = []
+        visited: set[int] = set()
+        current: Optional[BaseException] = exc
+        while current is not None and id(current) not in visited:
+            visited.add(id(current))
+            text = str(current).strip()
+            if text and text not in parts:
+                parts.append(text)
+            current = current.__cause__ or current.__context__
+        return " | ".join(parts) if parts else exc.__class__.__name__
+
+    @staticmethod
+    async def get_backups(
+        tenant_id: int,
+        page: int = 1,
+        page_size: int = 20,
+        backup_type: Optional[str] = None,
+        backup_scope: Optional[str] = None,
+        status: Optional[str] = None
+    ) -> Tuple[List[DataBackup], int]:
+        """
+        获取备份列表
+        
+        Args:
+            tenant_id: 组织ID
+            page: 页码
+            page_size: 每页数量
+            backup_type: 备份类型可选过滤
+            backup_scope: 备份范围可选过滤
+            status: 状态可选过滤
+            
+        Returns:
+            Tuple[List[DataBackup], int]: (备份列表, 总数)
+        """
+        query = DataBackup.filter(tenant_id=tenant_id)
+        
+        if backup_type:
+            query = query.filter(backup_type=backup_type)
+        if backup_scope:
+            query = query.filter(backup_scope=backup_scope)
+        if status:
+            query = query.filter(status=status)
+            
+        total = await query.count()
+        items = await query.order_by("-created_at").offset((page - 1) * page_size).limit(page_size).all()
+        
+        return items, total
+
+    @staticmethod
+    def resolve_source_tenant_id(backup: DataBackup) -> Optional[int]:
+        """从 zip 元数据或 CSV 推断导出租户 ID；缺失时回退到备份记录 tenant_id。"""
+        from core.services.system.data_backup_jobs import (
+            read_backup_metadata,
+            infer_source_tenant_id_from_zip,
+        )
+
+        if backup.file_path:
+            resolved = resolve_backup_file_path(backup.file_path)
+            if resolved:
+                inferred = infer_source_tenant_id_from_zip(resolved)
+                if inferred is not None:
+                    return int(inferred)
+                meta_src = read_backup_metadata(resolved).get("source_tenant_id")
+                if meta_src is not None:
+                    return int(meta_src)
+        return backup.tenant_id
+
+    @staticmethod
+    def to_response(backup: DataBackup) -> "DataBackupResponse":
+        from core.schemas.data_backup import DataBackupResponse
+
+        return DataBackupResponse.model_validate(backup).model_copy(
+            update={
+                "source_tenant_id": DataBackupService.resolve_source_tenant_id(backup),
+                "file_available": resolve_backup_file_path(backup.file_path) is not None,
+            }
+        )
+
+    @staticmethod
+    async def get_backup_by_uuid(tenant_id: int, uuid: str) -> DataBackup:
+        """
+        通过 UUID 获取备份详情
+        """
+        try:
+            return await DataBackup.get(tenant_id=tenant_id, uuid=uuid)
+        except DoesNotExist:
+            logger.error(f"备份不存在: {uuid}")
+            raise ValueError("备份不存在")
+
+    @staticmethod
+    async def create_backup_task(tenant_id: int, data: DataBackupCreate) -> DataBackup:
+        """
+        创建备份任务记录并通过 PostgreSQL 队列异步执行备份
+        """
+        # 1. 创建备份记录
+        backup = await DataBackup.create(
+            tenant_id=tenant_id,
+            name=data.name,
+            backup_type=data.backup_type,
+            backup_scope=data.backup_scope,
+            include_files=data.include_files,
+            backup_tables=data.backup_tables,
+            status="pending"
+        )
+        
+        # 2. 分发后台任务
+        try:
+            max_attempts = 3
+            task_ids = []
+            last_error: Optional[Exception] = None
+
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    task_ids = await dispatch_event(
+                        TaskEvent(
+                            name="database/backup.requested",
+                            data={
+                                "backup_uuid": str(backup.uuid),
+                                "tenant_id": tenant_id,
+                                "backup_type": data.backup_type,
+                                "backup_scope": data.backup_scope,
+                                "include_files": data.include_files,
+                                "backup_tables": data.backup_tables,
+                            },
+                            id=str(backup.uuid),
+                        )
+                    )
+                    if not task_ids:
+                        raise RuntimeError("未注册 database/backup.requested 处理器，请确认事件处理器已加载")
+                    break
+                except Exception as dispatch_error:
+                    last_error = dispatch_error
+                    logger.warning(
+                        "分发备份任务重试 {}/{} 失败: {}",
+                        attempt,
+                        max_attempts,
+                        DataBackupService._flatten_exception_message(dispatch_error),
+                    )
+                    if attempt < max_attempts:
+                        await asyncio.sleep(attempt)
+
+            if not task_ids:
+                raise last_error or RuntimeError("备份任务分发失败")
+
+            backup.inngest_run_id = task_ids[0]
+            await backup.save()
+            logger.info(f"已分发备份任务: {backup.uuid} task_id={task_ids[0]}")
+        except Exception as e:
+            logger.exception(f"分发备份任务失败: {e}")
+            backup.status = "failed"
+            backup.error_message = (
+                "触发后台任务失败: "
+                f"{DataBackupService._flatten_exception_message(e)}"
+            )
+            await backup.save()
+            
+        return backup
+
+    @staticmethod
+    async def upload_backup_file(tenant_id: int, file, backup_name: str, *, allow_global_backup: bool = False) -> DataBackup:
+        """
+        上传备份文件并创建备份记录
+        """
+        backup_dir = resolve_data_backup_dir()
+        ts = resolve_business_datetime().strftime("%Y%m%d%H%M%S")
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in backup_name)[:100]
+        filename = f"{safe_name}_{ts}_{uuid4().hex}.zip"
+        file_path = os.path.join(backup_dir, filename)
+        created_file = False
+        try:
+            with open(file_path, "xb") as f:
+                created_file = True
+                content = await file.read()
+                f.write(content)
+            file_size = os.path.getsize(file_path)
+            from core.services.system.data_backup_jobs import read_backup_metadata, zip_has_upload_entries
+
+            metadata = read_backup_metadata(file_path)
+            backup_scope = metadata.get("backup_scope", "all")
+            if backup_scope not in ("tenant", "all", "table"):
+                raise ValueError("无效的备份范围")
+            if backup_scope != "tenant" and not allow_global_backup:
+                raise PermissionError("仅平台管理员可上传全局范围备份")
+            include_files = metadata.get("include_files")
+            if include_files is None:
+                include_files = zip_has_upload_entries(file_path)
+            backup = await DataBackup.create(
+                tenant_id=tenant_id,
+                name=backup_name,
+                backup_type="full",
+                backup_scope=backup_scope,
+                include_files=bool(include_files),
+                backup_tables=None,
+                file_path=store_backup_file_path(file_path),
+                file_size=file_size,
+                status="success",
+                source_type="uploaded",
+                started_at=resolve_business_datetime(),
+                completed_at=resolve_business_datetime(),
+            )
+            logger.info(f"已上传备份文件: {backup.uuid} -> {file_path}")
+            return backup
+        except Exception as e:
+            if created_file and os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass
+            raise
+
+    @staticmethod
+    async def delete_backup(tenant_id: int, uuid: str) -> None:
+        """
+        删除备份记录（同时应处理物理文件，通常由 Taskiq 任务或服务层手动处理）
+        """
+        backup = await DataBackupService.get_backup_by_uuid(tenant_id, uuid)
+        
+        # 如果有物理文件，发送删除事件或直接在此删除
+        # 这里选择发送事件让后台清理，或者简单起见如果本地可访问则直接删除
+        import os
+        resolved = resolve_backup_file_path(backup.file_path)
+        if resolved and os.path.exists(resolved):
+            try:
+                os.remove(resolved)
+                logger.info(f"已删除备份文件: {resolved}")
+            except Exception as e:
+                logger.error(f"删除物理文件失败: {e}")
+                
+        await backup.delete()
+
+    @staticmethod
+    async def restore_backup(
+        tenant_id: int,
+        uuid: str,
+        create_pre_restore_backup: bool = True,
+        source_tenant_id: Optional[int] = None,
+        *,
+        allow_global_restore: bool = False,
+    ) -> bool:
+        """
+        触发恢复备份任务
+
+        若 create_pre_restore_backup=True，恢复前会自动创建当前状态的备份。
+        source_tenant_id: 备份中的租户ID，用于恢复时替换；不填则从备份记录推断；若与目标租户不同则自动替换。
+        """
+        backup = await DataBackupService.get_backup_by_uuid(tenant_id, uuid)
+
+        if backup.status != "success":
+            raise ValueError("只能恢复成功的备份")
+
+        from core.services.system.data_backup_jobs import (
+            read_backup_metadata,
+            infer_source_tenant_id_from_zip,
+            resolve_restore_source_tenant_id,
+        )
+
+        resolved_path = resolve_backup_file_path(backup.file_path)
+        if not resolved_path:
+            raise ValueError("备份文件已丢失，请在本服务器重新创建或上传备份后再恢复")
+
+        metadata = read_backup_metadata(resolved_path)
+        backup_scope = metadata.get("backup_scope", backup.backup_scope)
+        if backup_scope not in ("tenant", "all", "table"):
+            raise ValueError("无效的备份范围")
+        if backup_scope != "tenant" and not allow_global_restore:
+            raise PermissionError("仅平台管理员可恢复全局范围备份")
+        meta_src = metadata.get("source_tenant_id")
+        inferred = infer_source_tenant_id_from_zip(resolved_path)
+        src = resolve_restore_source_tenant_id(
+            target_tenant_id=tenant_id,
+            user_source=source_tenant_id,
+            metadata_source=int(meta_src) if meta_src is not None else None,
+            inferred_source=inferred,
+        )
+
+        backup.restore_status = "running"
+        backup.restore_started_at = resolve_business_datetime()
+        backup.restore_completed_at = None
+        backup.restore_error_message = None
+        await backup.save()
+
+        try:
+            task_ids = await dispatch_event(
+                TaskEvent(
+                    name="database/restore.requested",
+                    data={
+                        "backup_uuid": str(backup.uuid),
+                        "target_tenant_id": tenant_id,
+                        "source_tenant_id": src,
+                        "file_path": resolved_path,
+                        "create_pre_restore_backup": create_pre_restore_backup,
+                        "backup_scope": backup_scope,
+                        "record_backup_scope": backup.backup_scope,
+                        "allow_global_restore": allow_global_restore,
+                    },
+                    id=f"restore-{backup.uuid}",
+                )
+            )
+            if not task_ids:
+                raise RuntimeError("未注册 database/restore.requested 处理器，请确认 Worker 已启动")
+            logger.info(f"已分发恢复任务: {backup.uuid} task_id={task_ids[0]}")
+            return True
+        except Exception as e:
+            logger.exception(f"分发恢复任务失败: {e}")
+            backup.restore_status = "failed"
+            backup.restore_error_message = (
+                "触发恢复任务失败: "
+                f"{DataBackupService._flatten_exception_message(e)}"
+            )
+            backup.restore_completed_at = resolve_business_datetime()
+            await backup.save()
+            return False
