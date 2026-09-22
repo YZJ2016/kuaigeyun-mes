@@ -59,7 +59,7 @@ import { setToken, setTenantId, setUserInfo, getTenantId, getToken, getUserInfo 
 import { LANGUAGE_TOOLBAR_SHORT, SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../../utils/localeBootstrap';
 import { resolvePostLoginNavigatePath } from '../../utils/tenantHomePath';
 import { isPureStationAccount, STATION_ENTRY_PATH } from '../../utils/stationAccess';
-import { buildTenantLoginPathForHistoryReplace, resolvePlatformAdminLoginPathFromUrl, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
+import { buildTenantLoginPathForHistoryReplace, isStaticLikePathSegment, resolvePlatformAdminLoginPathFromUrl, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
 import { captureLoginEntryFromCurrentUrl } from '../../utils/loginEntry';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
 const PhoneVerificationModal = lazy(() => import('../../components/phone-verification-modal'));
@@ -202,6 +202,19 @@ export default function LoginPage() {
     const adminLoginPath = resolvePlatformAdminLoginPathFromUrl();
     if (adminLoginPath) {
       navigate(adminLoginPath, { replace: true });
+      return;
+    }
+    // 历史误跳转会留下 ?tenant_domain=xxx.txt；须从地址栏清掉，否则看起来仍在「识别为组织」
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const raw = (params.get('tenant_domain') || '').trim();
+      if (raw && isStaticLikePathSegment(raw)) {
+        params.delete('tenant_domain');
+        const q = params.toString();
+        navigate(q ? `/login?${q}` : '/login', { replace: true });
+      }
+    } catch {
+      /* ignore */
     }
   }, [navigate]);
 
