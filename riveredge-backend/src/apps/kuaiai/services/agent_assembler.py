@@ -11,8 +11,10 @@
    ``build_tool_guard_middleware()`` → ``build_agent``。
 
 ``knowledge_ids`` 不进 tools 装配：``search_knowledge`` handler 调用时经
-``ctx.agent_id`` 回查档案取库列表（S3 已落地）；``mcp_server_ids`` 待 S4。
-档案勾选仅经闭集校验存 JSONB。
+``ctx.agent_id`` 回查档案取库列表（S3 已落地）；``mcp_server_ids``（S4
+已落地）经 ``load_agent_mcp_tools`` 建连装配为 MCP tools，守卫由
+``build_mcp_aware_tool_guard`` 组合（MCP 名集合放行，闭集名走 core
+guard）。档案勾选仅经闭集校验存 JSONB。
 
 默认档案（KR-D8）：仅当未传 ``agent_id`` 且调用方判定本次走 agent 路径时
 按名称 ``DEFAULT_AGENT_PROFILE_NAME``（「默认助手」，对齐 ktg-ai A31）解析，
@@ -25,6 +27,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from loguru import logger
+
 from apps.kuaiai.constants import (
     DEFAULT_AGENT_PROFILE_NAME,
     ENABLED_TOOL_NAMES,
@@ -32,12 +36,13 @@ from apps.kuaiai.constants import (
 )
 from apps.kuaiai.models.agent import KuaiaiAgentProfile
 from apps.kuaiai.services import grant_service
+from apps.kuaiai.services.mcp_client_service import (
+    build_mcp_aware_tool_guard,
+    load_agent_mcp_tools,
+)
 from core.ai.runtime.agent_factory import build_agent
 from core.ai.runtime.model_factory import build_chat_model
-from core.ai.runtime.tool_bridge import (
-    build_tool_guard_middleware,
-    registry_to_lc_tools,
-)
+from core.ai.runtime.tool_bridge import registry_to_lc_tools
 from infra.exceptions.exceptions import AuthorizationError, NotFoundError
 from infra.models.user import User
 
@@ -114,11 +119,30 @@ async def assemble(
         if name in ENABLED_TOOL_NAMES
     ]
     tools = registry_to_lc_tools(tool_names)
+    # S4：档案勾选的 MCP 白名单建连装配（未解析 id 静默过滤、单 server
+    # 失败跳过，均在 load_agent_mcp_tools 内）；外层异常（如行解析 DB
+    # 故障）此处降级按无 MCP 工具继续，不炸整次发送。MCP 工具不在注册表，
+    # 守卫须放行其名（权限/审计/超时由连接级 interceptor 承担）
+    mcp_names: set = set()
+    mcp_ids = getattr(profile, "mcp_server_ids", None) or []
+    if mcp_ids:
+        try:
+            mcp_tools, mcp_names = await load_agent_mcp_tools(
+                tenant_id, list(mcp_ids)
+            )
+            tools = tools + mcp_tools
+        except Exception as exc:
+            logger.warning(
+                "MCP 工具装配失败，按无 MCP 工具继续 agent_id={} "
+                "error_type={}",
+                getattr(profile, "id", None),
+                type(exc).__name__,
+            )
     agent = build_agent(
         model,
         tools,
         system_prompt=(profile.system_prompt or None),
-        middleware=[build_tool_guard_middleware()],
+        middleware=[build_mcp_aware_tool_guard(mcp_names)],
         checkpointer=None,
     )
     model_name = str(

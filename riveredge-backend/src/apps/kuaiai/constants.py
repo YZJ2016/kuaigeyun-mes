@@ -36,6 +36,10 @@ GRANT_TARGET_TYPE_USER = "user"
 # SystemMessage 注入同口径（S3 review m8），防超长塞爆上下文
 KNOWLEDGE_RESULT_MAX_CHARS = 2000
 
+# KR-D11 MCP 工具调用超时（秒）：mcp_client_service interceptor 层
+# asyncio.wait_for 上限（AC5）
+MCP_TOOL_TIMEOUT_SECONDS = 30
+
 # KR-D8 租户默认档案：对齐 ktg-ai A31（``AiAgentProfileServiceImpl.DEFAULT_NAME``）。
 # 仅按名称解析；不强制种子。若租户自行建同名档案，enabled_tools 约定仅
 # ``search_knowledge``（种子非强制，本仓不自动插入）。

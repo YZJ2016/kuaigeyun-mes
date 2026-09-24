@@ -46,6 +46,12 @@ from apps.kuaiai.schemas.knowledge import (
     KnowledgeBaseOut,
     KnowledgeBaseUpdate,
 )
+from apps.kuaiai.schemas.mcp import (
+    McpServerCreate,
+    McpServerOption,
+    McpServerOut,
+    McpServerUpdate,
+)
 from apps.kuaiai.services import (
     agent_service,
     catalog_service,
@@ -54,6 +60,7 @@ from apps.kuaiai.services import (
     session_service,
 )
 from apps.kuaiai.services.knowledge_service import KnowledgeService
+from apps.kuaiai.services.mcp_service import McpService
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
@@ -911,3 +918,140 @@ async def api_list_document_chunks(
         "items": [ChunkOut.model_validate(c) for c in result["items"]],
         "total": result["total"],
     }
+
+
+# ============================================================ S4 MCP 白名单
+
+
+@router.get(
+    "/mcp-servers",
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.mcp",
+                "list",
+                required_permissions=["kuaiai:mcp:list"],
+            )
+        )
+    ],
+)
+async def api_list_mcp_servers(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """MCP 白名单分页 {items,total}；token 打码回显，不回明文。"""
+    result = await McpService.list_servers(tenant_id, page=page, page_size=page_size)
+    return {
+        "items": [McpServerOut.model_validate(McpService.server_out(s)) for s in result["items"]],
+        "total": result["total"],
+    }
+
+
+@router.post(
+    "/mcp-servers",
+    response_model=McpServerOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.mcp",
+                "add",
+                required_permissions=["kuaiai:mcp:add"],
+            )
+        )
+    ],
+)
+async def api_create_mcp_server(
+    payload: McpServerCreate,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    server = await McpService.create_server(tenant_id, current_user, payload)
+    return McpService.server_out(server)
+
+
+# /mcp-servers/options 必须先于 /mcp-servers/{server_id} 注册
+@router.get(
+    "/mcp-servers/options",
+    response_model=list[McpServerOption],
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.mcp",
+                "query",
+                required_permissions=["kuaiai:mcp:query"],
+            )
+        )
+    ],
+)
+async def api_mcp_server_options(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """启用 MCP 服务器下拉项（不含 token/endpoint 等连接信息）。"""
+    return await McpService.list_options(tenant_id)
+
+
+@router.get(
+    "/mcp-servers/{server_id}",
+    response_model=McpServerOut,
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.mcp",
+                "query",
+                required_permissions=["kuaiai:mcp:query"],
+            )
+        )
+    ],
+)
+async def api_get_mcp_server(
+    server_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    server = await McpService.get_server(tenant_id, server_id)
+    return McpService.server_out(server)
+
+
+@router.put(
+    "/mcp-servers/{server_id}",
+    response_model=McpServerOut,
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.mcp",
+                "edit",
+                required_permissions=["kuaiai:mcp:edit"],
+            )
+        )
+    ],
+)
+async def api_update_mcp_server(
+    server_id: int,
+    payload: McpServerUpdate,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    server = await McpService.update_server(tenant_id, current_user, server_id, payload)
+    return McpService.server_out(server)
+
+
+@router.delete(
+    "/mcp-servers/{server_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.mcp",
+                "remove",
+                required_permissions=["kuaiai:mcp:remove"],
+            )
+        )
+    ],
+)
+async def api_delete_mcp_server(
+    server_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    await McpService.delete_server(tenant_id, current_user, server_id)
