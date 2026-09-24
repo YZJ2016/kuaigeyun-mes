@@ -1,10 +1,10 @@
-# 快数采第三方组件合规说明
+# 星数采第三方组件合规说明
 
 ## InfluxDB 2.x OSS
 
-- **用途**：快数采点位短窗历史（高频时序写入）
+- **用途**：星数采点位短窗历史（高频时序写入）
 - **许可**：MIT（InfluxDB 2.x 开源版）
-- **部署方式**：客户或实施方 **自建 OSS 实例**；RiverEdge 通过 HTTP API 读写
+- **部署方式**：客户或实施方 **自建 OSS 实例**；星技谷 通过 HTTP API 读写
 - **禁止**：将 InfluxDB Cloud / Enterprise 作为平台默认内置后端；不得 repackage 为独立 TSDB 产品转售
 
 ## influxdb-client（Python）

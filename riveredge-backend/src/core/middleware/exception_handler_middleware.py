@@ -69,7 +69,7 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
             except Exception:
                 # 如果获取上下文失败，使用基础日志
                 logger.warning(
-                    f"RiverEdge 异常: {e.code} - {e.message} "
+                    f"星技谷 异常: {e.code} - {e.message} "
                     f"(Path: {request.url.path}, Method: {request.method})"
                 )
             

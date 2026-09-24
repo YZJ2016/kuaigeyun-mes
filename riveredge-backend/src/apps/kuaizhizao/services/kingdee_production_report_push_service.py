@@ -139,7 +139,7 @@ def _resolve_local_value(
     if key == "source_record_id":
         return int(record.id)
     if key == "remarks":
-        return _compact_text("快格云报工", record.id, record.operation_name, record.worker_name, record.remarks)
+        return _compact_text("星技谷报工", record.id, record.operation_name, record.worker_name, record.remarks)
     return getattr(record, key, None)
 
 

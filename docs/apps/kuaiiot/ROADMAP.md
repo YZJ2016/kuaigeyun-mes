@@ -1,4 +1,4 @@
-# 快数采（kuaiiot）能力扩展路线图
+# 星数采（kuaiiot）能力扩展路线图
 
 > 工业物联网数采与集成层。连接现场设备/平台，采集实时数据，写回 MES 设备态与业务参数。
 
@@ -11,7 +11,7 @@
 | Tag-Map | 点位定义、单位、写回字段映射 | Wave 1 |
 | Ingest | HTTP/MQTT 入站、device token 鉴权、幂等 | Wave 1 |
 | Snapshot | 最新值快照 + 短窗历史；仪表盘 | Wave 1 |
-| Status-Sync | 写回快制造 `EquipmentStatusMonitor`（`data_source=sensor`） | Wave 1 |
+| Status-Sync | 写回星制造 `EquipmentStatusMonitor`（`data_source=sensor`） | Wave 1 |
 | Alert | 阈值规则 → 告警列表（可选挂 KU-Pulse） | Wave 2 |
 | Edge-Agent | Modbus/OPC UA/S7 协议适配、本地缓冲 | Wave 2 |
 | Report-Fill | 报工 kiosk `sop_parameters` / 点检数值自动填充 | Wave 2 |
@@ -31,7 +31,7 @@
 ## Wave 1.5 — MES 护栏与连接器遥测
 
 - MES 写回护栏：停用/报废/校验中、未闭环故障、进行中维修时不覆盖 status/is_online
-- 设备态归一化：入站 status 映射快制造枚举；未知值→待机；缺失 status 不默认运行中
+- 设备态归一化：入站 status 映射星制造枚举；未知值→待机；缺失 status 不默认运行中
 - 点位模板：通用产线 / 注塑机 / CNC；创建设备可选套用
 - ThingsBoard / JetLinks 遥测拉取 → ingest；手动 API + Taskiq 每 5 分钟
 
@@ -47,7 +47,7 @@
 
 - OEE Live：基于 `data_source=sensor` 监控分段计算可用率；仅在有 MES 良品率时合成 OEE Live（不造假）
 - 数采链路：连接源 → 设备 → 点位 → MES 设备绑定可视化
-- 快报表联动：`GET /analytics/equipment-ops-feed` 供 equipment-ops 大屏 HTTP 数据源消费
+- 星报表联动：`GET /analytics/equipment-ops-feed` 供 equipment-ops 大屏 HTTP 数据源消费
 - InfluxDB 短窗历史已在 Wave 1 接入，Wave 3 不重做 TSDB 选型
 
 ## Wave 4 — 边缘运行时与租户运维
@@ -86,13 +86,13 @@
 | 批量续传 | 冒烟脚本 batch 端点返回 accepted |
 | 入站防护 | 冒烟脚本 201 个 tags 被拒绝 |
 | Edge Agent | `riveredge-backend/src/apps/kuaiiot/edge-agent/` 连接 Modbus 模拟从站并成功 ingest |
-| 告警通知 | 配置中心加载快数采预设，启用 `iot_alert` 规则后阈值触发可收站内信 |
+| 告警通知 | 配置中心加载星数采预设，启用 `iot_alert` 规则后阈值触发可收站内信 |
 | 数据留存 | Taskiq `kuaiiot_retention_tick` 清理过期 dedup 与已确认告警 |
 | 运维概览 | 仪表盘 ops summary 与连接健康定时探测可用 |
 
 ## MES 集成契约
 
-- **设备主数据**：只读快制造 `apps_kuaizhizao_equipment`，kuaiiot 不维护第二套台账
+- **设备主数据**：只读星制造 `apps_kuaizhizao_equipment`，kuaiiot 不维护第二套台账
 - **绑定键**：`equipment.uuid`
 - **写回表**：`apps_kuaizhizao_equipment_status_monitors`
 - **写回字段**：`status` / `is_online` / `temperature` / `pressure` / `vibration` / `other_parameters`

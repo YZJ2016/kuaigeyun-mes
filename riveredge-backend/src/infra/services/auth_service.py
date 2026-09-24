@@ -10,6 +10,7 @@ from starlette.requests import Request
 from typing import Optional
 import asyncio
 import smtplib
+from email.header import Header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import secrets
@@ -406,13 +407,13 @@ class AuthService:
             msg = MIMEMultipart()
             msg['From'] = infra_settings.EMAIL_FROM
             msg['To'] = email
-            msg['Subject'] = "RiverEdge 验证码"
+            msg['Subject'] = Header("星技谷 验证码", "utf-8")
 
             # HTML邮件内容
             html_content = f"""
             <html>
             <body>
-                <h2>RiverEdge 注册验证码</h2>
+                <h2>星技谷 注册验证码</h2>
                 <p>您的验证码是：<strong style="font-size: 24px; color: #1890ff;">{code}</strong></p>
                 <p>验证码有效期为10分钟，请及时使用。</p>
                 <p>如果这不是您的操作，请忽略此邮件。</p>

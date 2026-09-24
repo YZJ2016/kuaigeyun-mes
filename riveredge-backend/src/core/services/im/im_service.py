@@ -46,7 +46,7 @@ KNOWN_MODULE_CODES = (
     "kuaiiot",
     "system",
 )
-KU_AI_MENTION_RE = re.compile(r"@(?:KU-AI|KUAI|快AI|库AI)\b", re.IGNORECASE)
+KU_AI_MENTION_RE = re.compile(r"@(?:星AI|KU-AI|KUAI|快AI|库AI)\b", re.IGNORECASE)
 
 
 class ImService:

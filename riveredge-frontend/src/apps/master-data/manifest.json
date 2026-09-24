@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "企业主数据唯一真源与基础资料协同平台",
   "icon": "database",
-  "author": "RiverEdge Team",
+  "author": "StarTech",
   "entry_point": "../apps/master-data/index.tsx",
   "route_path": "/apps/master-data",
   "sort_order": 150,

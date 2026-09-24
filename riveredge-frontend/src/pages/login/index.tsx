@@ -271,8 +271,8 @@ export default function LoginPage() {
   });
 
   const localizedPlatformName = i18n.language === 'en-US' 
-    ? (platformSettings?.platform_name_en || platformSettings?.login_title_en || platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS')
-    : (platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS');
+    ? (platformSettings?.platform_name_en || platformSettings?.login_title_en || platformSettings?.platform_name || cachedPlatformName || 'StarTech')
+    : (platformSettings?.platform_name || cachedPlatformName || '星技谷');
 
   const loginGuestEnabled = platformSettings?.login_guest_enabled !== false;
   const loginQuickEnabled = platformSettings?.login_quick_enabled !== false;

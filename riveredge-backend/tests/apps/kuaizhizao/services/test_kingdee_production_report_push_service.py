@@ -61,7 +61,7 @@ def test_build_kingdee_production_report_model_defaults():
     assert model["FEntity"][0]["FTimeUnitId"] == "1"
     assert model["FEntity"][0]["FStandHourUnitId"] == "1"
     assert model["FEntity"][0]["FStockInOrgId"]["FNumber"] == "100"
-    assert "快格云报工" in model["FEntity"][0]["FDescriptionE"]
+    assert "星技谷报工" in model["FEntity"][0]["FDescriptionE"]
 
 
 def test_build_kingdee_production_report_model_allows_stock_in_org_via_field_map():

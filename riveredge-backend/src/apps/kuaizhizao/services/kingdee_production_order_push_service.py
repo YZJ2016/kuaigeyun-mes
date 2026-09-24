@@ -124,7 +124,7 @@ def _resolve_local_value(key: str, *, work_order: WorkOrder, cfg: Dict[str, Any]
     if key == "sales_order_code":
         return work_order.sales_order_code
     if key == "remarks":
-        parts = ["快格云工单", work_order.code, work_order.name, work_order.remarks]
+        parts = ["星技谷工单", work_order.code, work_order.name, work_order.remarks]
         return " ".join(str(p).strip() for p in parts if str(p or "").strip())
     if key == "owner_type_id":
         return cfg.get("owner_type_id") or "BD_OwnerOrg"

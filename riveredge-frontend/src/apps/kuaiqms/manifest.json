@@ -1,10 +1,10 @@
 {
   "code": "kuaiqms",
-  "name": "快质量",
+  "name": "星质量",
   "version": "1.0.0",
-  "description": "质量管理应用：检验、改善、体系与质量报表（业务能力由快制造提供）",
+  "description": "质量管理应用：检验、改善、体系与质量报表（业务能力由星制造提供）",
   "icon": "quality",
-  "author": "RiverEdge Team",
+  "author": "StarTech",
   "market_category": "base",
   "is_pro": false,
   "entry_point": "../apps/kuaiqms/index.tsx",

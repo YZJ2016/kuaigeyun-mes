@@ -1,10 +1,10 @@
 {
   "code": "kuaiems",
-  "name": "快设备",
+  "name": "星设备",
   "version": "1.0.0",
-  "description": "设备运维应用：设备/模具/工装台账、作业单据与报表（业务能力由快制造提供）",
+  "description": "设备运维应用：设备/模具/工装台账、作业单据与报表（业务能力由星制造提供）",
   "icon": "wrench",
-  "author": "RiverEdge Team",
+  "author": "StarTech",
   "market_category": "base",
   "is_pro": false,
   "entry_point": "../apps/kuaiems/index.tsx",

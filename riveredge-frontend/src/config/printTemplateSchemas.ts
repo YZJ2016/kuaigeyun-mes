@@ -1066,7 +1066,7 @@ export const getSamplePreviewVariables = (type: string): Record<string, unknown>
   result['print_time'] = formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss');
   result['dateTime'] = formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss');
   result['date'] = formatDateTime(new Date(), 'YYYY-MM-DD');
-  result['company_name'] = 'RiverEdge 智能制造演示环境';
+  result['company_name'] = '星技谷 智能制造演示环境';
   result['document_type_label'] = type;
   if (!schema) return result;
   const commonFields = PRINT_TEMPLATE_SCHEMAS.common.fields;

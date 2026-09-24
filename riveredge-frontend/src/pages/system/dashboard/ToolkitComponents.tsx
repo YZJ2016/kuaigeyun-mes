@@ -517,7 +517,7 @@ export const TextTransformer = () => {
  */
 export const QrGenerator = () => {
   const { t } = useTranslation();
-  const [text, setText] = useState('https://kuaigeyun.com');
+  const [text, setText] = useState('https://example.com');
   const [px, setPx] = useState<160 | 200 | 280>(200);
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${px}x${px}&data=${encodeURIComponent(text)}`;
   const previewW = Math.min(140, px);

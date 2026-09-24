@@ -193,7 +193,7 @@ def build_kingdee_inventory_misc_in_model(
             return config.get("owner_number") or config.get("stock_org_number") or config.get("org_number")
         if key == "remarks":
             return _compact_text(
-                "快格云即时库存",
+                "星技谷即时库存",
                 material_code,
                 batch.batch_no,
                 batch.warehouse_name,

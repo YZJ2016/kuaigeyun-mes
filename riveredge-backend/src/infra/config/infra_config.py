@@ -44,7 +44,7 @@ class InfraSettings(BaseSettings):
     )
 
     # 应用配置
-    APP_NAME: str = Field(default="RiverEdge SaaS Framework", description="应用名称")
+    APP_NAME: str = Field(default="星技谷", description="应用名称")
     APP_VERSION: str = Field(default="1.0.0", description="应用版本")
     DEBUG: bool = Field(default=False, description="调试模式")
     DOCS_ENABLED: bool = Field(
@@ -287,7 +287,7 @@ class InfraSettings(BaseSettings):
         validation_alias=AliasChoices("PLATFORM_SUPERADMIN_PASSWORD", "INFRA_SUPERADMIN_PASSWORD"),
     )
     infra_superadmin_EMAIL: str = Field(
-        default="infra_admin@riveredge.cn",
+        default="infra_admin@startech.local",
         description="平台超级管理员邮箱"
     )
     infra_superadmin_FULL_NAME: str = Field(
@@ -302,8 +302,8 @@ class InfraSettings(BaseSettings):
     SMTP_PASSWORD: str = Field(default="", description="SMTP密码")
     SMTP_TLS: bool = Field(default=True, description="是否启用TLS")
     SMTP_SSL: bool = Field(default=False, description="是否启用SSL")
-    EMAIL_FROM: str = Field(default="noreply@riveredge.cn", description="发件人邮箱")
-    EMAIL_FROM_NAME: str = Field(default="RiverEdge", description="发件人姓名")
+    EMAIL_FROM: str = Field(default="noreply@startech.local", description="发件人邮箱")
+    EMAIL_FROM_NAME: str = Field(default="星技谷", description="发件人姓名")
 
     # 验证码配置
     VERIFICATION_CODE_EXPIRE_MINUTES: int = Field(default=10, description="验证码过期时间（分钟）")
@@ -312,7 +312,7 @@ class InfraSettings(BaseSettings):
     # 短信配置 (阿里云短信服务)
     SMS_ACCESS_KEY_ID: str = Field(default="", description="阿里云AccessKey ID")
     SMS_ACCESS_KEY_SECRET: str = Field(default="", description="阿里云AccessKey Secret")
-    SMS_SIGN_NAME: str = Field(default="RiverEdge", description="短信签名")
+    SMS_SIGN_NAME: str = Field(default="星技谷", description="短信签名")
     SMS_TEMPLATE_CODE: str = Field(default="SMS_123456789", description="短信模板CODE")
     
     # 文件管理配置（第三阶段）

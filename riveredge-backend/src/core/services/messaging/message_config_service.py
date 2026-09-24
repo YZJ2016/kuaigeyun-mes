@@ -19,8 +19,10 @@ from core.schemas.message_config import (
     MessageConfigTestResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from email.header import Header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 from loguru import logger
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
@@ -285,7 +287,7 @@ class MessageConfigService:
         """发送一条最小推送测试；企业微信凭据始终从应用连接器读取。"""
         channel = config or {}
         provider = str(channel.get("provider") or channel.get("connection_type") or "").strip().lower()
-        content = "RiverEdge 消息渠道测试"
+        content = "星技谷 消息渠道测试"
 
         if provider in ("wecom", "wechat_work", "企业微信"):
             from core.services.messaging.wecom_message_service import send_wecom_text_message
@@ -311,7 +313,7 @@ class MessageConfigService:
             headers = channel.get("headers") if isinstance(channel.get("headers"), dict) else None
             resp = await get_http_client().post(
                 url,
-                json={"title": "RiverEdge 消息渠道测试", "content": content, "recipient": target},
+                json={"title": "星技谷 消息渠道测试", "content": content, "recipient": target},
                 headers=headers,
                 timeout=10.0,
             )
@@ -327,14 +329,14 @@ class MessageConfigService:
         发送测试邮件内部方法
         """
         body = (
-            f"这是一条来自 RiverEdge 系统的测试邮件。\n"
+            f"这是一条来自 星技谷 系统的测试邮件。\n"
             f"发送时间：{to_api_isoformat(resolve_business_datetime())}\n"
             f"如果您收到这封邮件，说明您的 SMTP 配置正确。"
         )
         return await MessageConfigService._send_email(
             config,
             target,
-            subject="RiverEdge 消息发送测试",
+            subject="星技谷 消息发送测试",
             content=body,
         )
 
@@ -352,7 +354,7 @@ class MessageConfigService:
         username = config.get("smtp_username")
         password = config.get("smtp_password")
         use_tls = config.get("smtp_use_tls", True)
-        from_name = config.get("from_name", "RiverEdge")
+        from_name = config.get("from_name", "星技谷")
 
         if not all([host, username, password]):
             return False, "参数不完整", "缺少 host, username 或 password"
@@ -366,9 +368,11 @@ class MessageConfigService:
         try:
             import aiosmtplib
             message = MIMEMultipart()
-            message["From"] = f"{from_name} <{username}>"
+            message["From"] = formataddr(
+                (str(Header(str(from_name), "utf-8")), str(username))
+            )
             message["To"] = str(target).strip()
-            message["Subject"] = str(subject).strip()
+            message["Subject"] = Header(str(subject).strip(), "utf-8")
             message.attach(MIMEText(str(content), "plain", "utf-8"))
 
             await aiosmtplib.send(

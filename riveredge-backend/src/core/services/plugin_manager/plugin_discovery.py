@@ -136,7 +136,7 @@ class PluginDiscoveryService:
             version="1.0.0",
             description=f"{plugin_code} 应用",
             icon="appstore",
-            author="RiverEdge Team",
+            author="StarTech",
             entry_point=f"../apps/{plugin_code}/index.tsx",
             route_path=f"/apps/{plugin_code}",
             sort_order=0,

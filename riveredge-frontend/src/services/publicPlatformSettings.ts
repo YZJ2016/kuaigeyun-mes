@@ -45,7 +45,7 @@ export interface PlatformSettings {
 }
 
 const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
-  platform_name: 'RiverEdge SaaS Framework',
+  platform_name: '星技谷',
   theme_color: '#1890ff',
 };
 

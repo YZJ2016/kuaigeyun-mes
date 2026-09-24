@@ -23,7 +23,7 @@ router = APIRouter(prefix="/platform-settings", tags=["Platform - Settings (Publ
 # 降级默认值：数据库异常时返回，确保登录页可加载
 DEFAULT_PLATFORM_SETTINGS = PlatformSettingsResponse(
     id=0,
-    platform_name="RiverEdge SaaS Framework",
+    platform_name="星技谷",
     platform_logo=None,
     favicon=None,
     platform_description=None,

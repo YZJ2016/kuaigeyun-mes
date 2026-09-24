@@ -221,7 +221,7 @@ async def lifespan(app: FastAPI):
             logger.warning("PLATFORM_SUPERADMIN_PASSWORD 未设置，跳过平台超级管理员初始化")
         else:
             username = infra_settings.infra_superadmin_USERNAME
-            email = infra_settings.infra_superadmin_EMAIL or f"{username}@riveredge.cn"
+            email = infra_settings.infra_superadmin_EMAIL or f"{username}@startech.local"
             full_name = infra_settings.infra_superadmin_FULL_NAME or "平台超级管理员"
             existing = await InfraSuperAdmin.get_or_none()
             if not existing:
@@ -431,8 +431,8 @@ from core.utils.json_site_timezone import SiteTimezoneJSONResponse
 
 # 创建FastAPI应用（datetime JSON 唯一出口：站点墙钟）
 app = FastAPI(
-    title="RiverEdge SaaS Platform",
-    description="RiverEdge SaaS 多组织框架 - 平台级后端服务",
+    title="StarTech SaaS Platform",
+    description="星技谷 SaaS 多组织框架 - 平台级后端服务",
     version="1.0.2",
     lifespan=lifespan,
     docs_url=None,  # 禁用默认docs，使用修复版本

@@ -1025,7 +1025,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, [queryClient, logout, navigate]);
 
   // 站点设置：统一从 configStore 获取（app.tsx 初始化时已 fetchConfigs，site-settings 保存时会 refresh）
-  const siteName = (useConfigStore((s) => (s.getConfig('site_name', '') as string)?.trim()) || '') || 'RiverEdge SaaS';
+  const siteName = (useConfigStore((s) => (s.getConfig('site_name', '') as string)?.trim()) || '') || '星技谷';
   const showSiteName = useConfigStore((s) => s.configs.show_site_name !== false);
   const layoutTitle = showSiteName ? siteName : false;
   const enableSystemDashboard = useConfigStore((s) => s.configs.enable_system_dashboard !== false);
@@ -1961,7 +1961,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     const pageTitle = findMenuTitleWithTranslation(location.pathname, breadcrumbMenuData, t);
 
     // 站点名称统一从 configStore 获取
-    const currentSiteName = useConfigStore.getState().getConfig('site_name', 'RiverEdge SaaS') as string;
+    const currentSiteName = useConfigStore.getState().getConfig('site_name', '星技谷') as string;
 
     const customTitle = resolveCustomPageTitle(location.pathname, location.search);
     if (customTitle) {
@@ -1996,7 +1996,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         (path && currentKey.split('?')[0] === path);
       if (!matches) return;
       setCustomPageLabel(title);
-      const currentSiteName = useConfigStore.getState().getConfig('site_name', 'RiverEdge SaaS') as string;
+      const currentSiteName = useConfigStore.getState().getConfig('site_name', '星技谷') as string;
       document.title = `${title} - ${currentSiteName}`;
     };
     window.addEventListener('riveredge:update-tab-title', handleUpdateTabTitle);

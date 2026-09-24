@@ -47,7 +47,7 @@ _PLATFORM_FALLBACK_KEYS = {
 
 # 平台未配置时的默认值（新租户未设置时使用）
 _PLATFORM_DEFAULT_VALUES = {
-    "site_name": "RiverEdge SaaS",
+    "site_name": "星技谷",
     "site_logo": "",  # 无默认 logo 时留空
 }
 

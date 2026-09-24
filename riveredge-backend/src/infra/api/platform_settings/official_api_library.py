@@ -206,7 +206,7 @@ async def update_official_api_library_admin_meta(
     settings = await PlatformSettings.first()
     if not settings:
         settings = await PlatformSettings.create(
-            platform_name="RiverEdge SaaS Framework",
+            platform_name="星技谷",
             official_api_library_host=host,
         )
     else:

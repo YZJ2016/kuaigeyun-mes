@@ -51,7 +51,7 @@ export const AiFieldAssist: React.FC<AiFieldAssistProps> = ({
   };
 
   return (
-    <Tooltip title="KU-AI 润色">
+    <Tooltip title="星AI 润色">
       <Button
         type="text"
         size="small"

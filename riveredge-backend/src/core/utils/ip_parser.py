@@ -450,7 +450,7 @@ async def get_ip_location_detail(ip: str, timeout: float = 3.0) -> Optional[Dict
             return None
         resolve_ip = public
 
-    headers = {"User-Agent": "RiverEdge/1.0"}
+    headers = {"User-Agent": "StarTech/1.0"}
     client = get_http_client()
 
     # 1. ip-api.com
@@ -608,7 +608,7 @@ async def reverse_geocode_label(
     Open-Meteo Geocoding API 仅提供 /v1/search，无 reverse 端点。
     """
     accept_lang = "zh-CN,zh" if str(language).lower().startswith("zh") else "en"
-    headers = {"User-Agent": "RiverEdge/1.0 (weather; https://riveredge.local)"}
+    headers = {"User-Agent": "StarTech/1.0 (weather; https://startech.local)"}
     try:
         r = await get_http_client().get(
             "https://nominatim.openstreetmap.org/reverse",

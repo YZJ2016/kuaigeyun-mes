@@ -1,4 +1,4 @@
-# KU-AI 3D 智能体小人出图规范
+# 星AI 3D 智能体小人出图规范
 
 智能体库专用：1 张标准母版 + 6 张职业变体。能力矩阵不出图。
 
@@ -6,7 +6,7 @@
 
 | 文件名 | 用途 |
 |--------|------|
-| `mascot-base.png` | 标准 KU-AI 小人母版（智能体库默认形象） |
+| `mascot-base.png` | 标准 星AI 小人母版（智能体库默认形象） |
 | `mascot-planner.png` | 计划员顾问 |
 | `mascot-purchase.png` | 采购跟单助手 |
 | `mascot-scheduling.png` | 排程解读助手 |
@@ -19,7 +19,7 @@
 ## 母版 DNA（BASE_BLOCK，7 张图必须完整复用）
 
 ```
-[KU-AI MASCOT DNA — DO NOT CHANGE]
+[星AI MASCOT DNA — DO NOT CHANGE]
 3D stylized AI assistant mascot, chibi proportions (head:body ≈ 1:1.2), full body visible, standing pose.
 Head: soft rounded-rectangle robot head, smooth matte white ceramic shell, subtle purple rim light.
 Face: dark indigo visor band on forehead; two horizontal oval eyes (#312e81), gentle upward curved smile line (friendly, not cartoonish extreme).
@@ -61,7 +61,7 @@ FINAL = BASE_BLOCK + ROLE_BLOCK + SCENE_BLOCK(可选)
 Outfit: minimal indigo-violet trim on white body, no heavy profession gear, neutral helpful pose, arms relaxed at sides.
 Expression: default welcoming smile (reference brand Lottie assistant).
 Props: none, or single soft violet glow orb near chest (abstract AI core).
-Mood: canonical KU-AI brand mascot, manufacturing SaaS assistant.
+Mood: canonical 星AI brand mascot, manufacturing SaaS assistant.
 ```
 
 **SCENE_BLOCK（可选）：**

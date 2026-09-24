@@ -4,7 +4,7 @@
   "version": "1.2.0",
   "description": "制造业行政协同审批与办公流程协同平台",
   "icon": "briefcase",
-  "author": "RiverEdge Team",
+  "author": "StarTech",
   "market_category": "base",
   "is_pro": false,
   "entry_point": "../apps/kuaioa/index.tsx",

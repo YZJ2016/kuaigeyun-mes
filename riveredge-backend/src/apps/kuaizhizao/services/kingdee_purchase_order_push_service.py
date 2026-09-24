@@ -171,7 +171,7 @@ def build_kingdee_purchase_order_model(
         if key == "supplier_number":
             return supplier_number or config.get("supplier_number")
         if key == "remarks":
-            return _compact_text("快格云采购订单", order.order_code, order.notes)
+            return _compact_text("星技谷采购订单", order.order_code, order.notes)
         return getattr(order, key, None)
     field_map = dict(default_field_map)
 

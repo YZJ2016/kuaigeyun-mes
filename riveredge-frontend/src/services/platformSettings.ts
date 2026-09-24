@@ -113,7 +113,7 @@ export async function createPlatformSettings(
 
 /** 默认平台设置（API 失败时降级使用） */
 const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
-  platform_name: 'RiverEdge SaaS Framework',
+  platform_name: '星技谷',
   theme_color: '#1890ff',
 };
 

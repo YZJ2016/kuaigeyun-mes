@@ -261,12 +261,12 @@ export default {
   'ui.systemSettingsPanel.neverExpires': '永久',
   'ui.message.notification': '消息通知',
   'ui.aiAssistant.tooltip': '按 F1 可快速唤起我',
-  'ui.aiAssistant.title': 'KU-AI',
+  'ui.aiAssistant.title': '星AI',
   'ui.aiAssistant.beta': '测试版',
   'ui.aiAssistant.newChat': '新对话',
   'ui.aiAssistant.ariaLabel': 'AI 助手',
   'ui.aiAssistant.welcomeHi': '你好',
-  'ui.aiAssistant.welcomeTitle': '我是 KU-AI 助手',
+  'ui.aiAssistant.welcomeTitle': '我是 星AI 助手',
   'ui.aiAssistant.welcomeDesc': '我能帮你更高效地获取信息并提供支持，你可以随时向我提问。',
   'ui.aiAssistant.senderPlaceholder': '请输入你的问题，按 Enter 发送',
   'ui.aiAssistant.disclaimer': '内容由 AI 生成，仅供参考',
@@ -441,8 +441,8 @@ export default {
   'pages.login.success': '登录成功',
   'pages.login.error': '登录失败',
   'pages.login.pageTitleSuffix': '登录',
-  'pages.login.defaultPlatformName': 'RiverEdge SaaS',
-  'pages.login.defaultDocTitle': 'RiverEdge SaaS - 多组织管理框架',
+  'pages.login.defaultPlatformName': '星技谷',
+  'pages.login.defaultDocTitle': '星技谷 - 多组织管理框架',
   'pages.login.switchLanguage': '切换语言',
   'pages.login.welcome': '欢迎登录',
   'pages.login.welcomeWithName': '欢迎登录 {{name}}',
@@ -808,7 +808,7 @@ export default {
   'components.uniIm.pinSuccess': '已置顶',
   'components.uniIm.unpinSuccess': '已取消置顶',
   'components.uniIm.pinFailed': '置顶操作失败',
-  'components.uniIm.groupInputPlaceholder': '输入消息，可用 @ 提及成员或 @KU-AI',
+  'components.uniIm.groupInputPlaceholder': '输入消息，可用 @ 提及成员或 @星AI',
   'components.uniIm.systemSender': '系统通知',
   'components.uniIm.addedToTodo': '已加入待办',
   'components.uniIm.addedToReminder': '已加入提醒',
@@ -833,8 +833,8 @@ export default {
   'components.uniIm.sendHint': 'Enter 发送',
   'components.uniIm.self': '我',
   'components.uniIm.kuAiSubtitle': '智能助手，随时解答业务问题',
-  'components.uniIm.kuAiEmptyChat': '向 KU-AI 提问，回复会显示在此对话框',
-  'components.uniIm.kuAiUnavailablePlaceholder': 'KU-AI 未就绪，请先完成模型配置',
+  'components.uniIm.kuAiEmptyChat': '向 星AI 提问，回复会显示在此对话框',
+  'components.uniIm.kuAiUnavailablePlaceholder': '星AI 未就绪，请先完成模型配置',
   'components.uniIm.emptyDirectUsers': '暂无其他用户',
   'components.uniIm.noUserListPermission': '无权查看组织用户列表，请联系管理员',
   'components.uniIm.listPaneResize': '拖动调节列表与对话区宽度',
@@ -1447,7 +1447,7 @@ export default {
   'permission.action.receipt': '收款',
   'permission.action.convert-to-order': '转销售订单',
   'permission.action.create-outbound': '生成出库单',
-  'permission.kuaizhizao.pricingView': '查看价格与金额（快制造）',
+  'permission.kuaizhizao.pricingView': '查看价格与金额（星制造）',
   'permission.kuaizhizao.workOrderAssign': '工单派工',
   'permission.kuaizhizao.customerPoolAssign': '客户池 - 分配客户',
   'permission.kuaizhizao.customerPoolRelease': '客户池 - 释放客户',
@@ -1481,7 +1481,7 @@ export default {
 
   // 路径翻译（用于面包屑和标签栏的后备方案）
   'path.apps': '',
-  'path.kuaizhizao': '快制造',
+  'path.kuaizhizao': '星制造',
   'path.timeconfig': '详情抽屉时间显示',
   'path.kuaicaiwu': '轻管理会计',
   'path.plan-management': '计划管理',
@@ -1997,7 +1997,7 @@ export default {
   'components.iterationFloatButton.provenanceStatus.unknown': '来源未知',
   'components.iterationFloatButton.officialRemote': '官方仓库',
   'components.iterationFloatButton.unverifiedAlert': '当前构建未在官方仓库验证，请从正版渠道获取源码部署。',
-  'components.iterationFloatButton.viewOfficialSite': '访问快格云官网',
+  'components.iterationFloatButton.viewOfficialSite': '访问星技谷官网',
   'components.iterationFloatButton.telemetryDisclosure': '可选实例统计说明',
   'components.iterationFloatButton.viewRepo': '查看代码仓库',
   'components.iterationFloatButton.feedbackTitle': '意见与需求反馈',
@@ -2126,8 +2126,8 @@ export default {
   'components.uniReport.template.inventoryLedgerDesc': '仓存类数量合计与 KPI',
   'components.uniReport.template.salesAnalysisTable': '销售分析表',
   'components.uniReport.template.salesAnalysisTableDesc': '日期区间与金额/数量合计',
-  'components.uniReport.template.kuaireportTable': '快报表表格',
-  'components.uniReport.template.kuaireportTableDesc': '快报表 config 模式默认',
+  'components.uniReport.template.kuaireportTable': '星报表表格',
+  'components.uniReport.template.kuaireportTableDesc': '星报表 config 模式默认',
   'components.uniReport.kpi.totalOrders': '订单总数',
   'components.uniReport.kpi.totalAmount': '合计金额',
   'components.uniReport.kpi.pendingReview': '待审核',
@@ -2519,7 +2519,7 @@ export default {
   'components.techStackModal.tabDatabase': '数据库 ({{count}})',
   'components.techStackModal.tabInfrastructure': '基础设施 ({{count}})',
   'components.techStackModal.overview.coreTitle': '核心技术栈',
-  'components.techStackModal.overview.intro': 'RiverEdge SaaS 多组织框架采用现代化的技术栈：',
+  'components.techStackModal.overview.intro': '星技谷 多组织框架采用现代化的技术栈：',
   'components.techStackModal.overview.fastapi': '高性能异步 Web 框架',
   'components.techStackModal.overview.taskiq': '异步任务队列（PostgreSQL broker），由独立 worker 消费；定时任务由 scheduler 投递。',
   'components.techStackModal.overview.react': '现代化前端框架',
@@ -2533,7 +2533,7 @@ export default {
   'components.techStackModal.copyright.important': '重要说明',
   'components.techStackModal.copyright.importantDesc': '使用、修改或分发本项目前，请务必阅读并遵守以下版权与许可声明。',
   'components.techStackModal.copyright.projectTitle': '本项目版权声明',
-  'components.techStackModal.copyright.projectScope': '本声明适用于 RiverEdge SaaS 多组织框架及其相关源代码、文档、插件式应用与衍生产物。',
+  'components.techStackModal.copyright.projectScope': '本声明适用于 星技谷 多组织框架及其相关源代码、文档、插件式应用与衍生产物。',
   'components.techStackModal.copyright.ownershipTitle': '版权归属',
   'components.techStackModal.copyright.ownershipDesc': '{{company}}拥有本项目的著作权。使用、修改、分发等权利由下方 Apache License 2.0 许可协议规定。',
   'components.techStackModal.copyright.trademarkTitle': '商标',
@@ -2625,20 +2625,20 @@ export default {
   'tabs.exitFullscreen': '退出全屏',
 
   // 应用名称翻译（统一规范）
-  'app.kuaizhizao.name': '快制造',
+  'app.kuaizhizao.name': '星制造',
   'app.kuaizhizao.short': '制造',
-  'app.kuaiqms.name': '快质量',
+  'app.kuaiqms.name': '星质量',
   'app.kuaiqms.short': '质量',
-  'app.kuaiqms.homeHint': '请从左侧菜单进入质检、改善与体系业务（页面仍由快制造承载）',
+  'app.kuaiqms.homeHint': '请从左侧菜单进入质检、改善与体系业务（页面仍由星制造承载）',
   'app.kuaiqms.menu.group.workbench': '质检中心',
   'app.kuaiqms.menu.group.basic-data': '基础资料',
   'app.kuaiqms.menu.group.inspection-docs': '检验业务',
   'app.kuaiqms.menu.group.improvement': '质量改善',
   'app.kuaiqms.menu.group.qms-system': '质量体系',
   'app.kuaiqms.menu.group.reports': '质量报表',
-  'app.kuaiems.name': '快设备',
+  'app.kuaiems.name': '星设备',
   'app.kuaiems.short': '设备',
-  'app.kuaiems.homeHint': '请从左侧菜单进入设备、模具与工装业务（页面仍由快制造承载）',
+  'app.kuaiems.homeHint': '请从左侧菜单进入设备、模具与工装业务（页面仍由星制造承载）',
   'app.kuaiems.menu.workbench': '运维看板',
   'app.kuaiems.menu.group.workbench': '设备运维',
   'app.kuaiems.menu.group.equipment': '设备管理',
@@ -2662,10 +2662,10 @@ export default {
   'app.kuaizhizao.menu.measuring-instruments.calibration-reminders': '校准到期提醒',
   'app.kuaizhizao.menu.reports.measuring-instrument-calibration-alerts': '校准到期预警',
   'app.kuaizhizao.menu.reports.measuring-instrument-calibration-detail': '校准记录明细',
-  'app.kuaipd.name': '快交付',
+  'app.kuaipd.name': '星交付',
   'app.kuaipd.short': '交付',
-  'app.kuaipd.homeHint': '请从左侧菜单进入交付项目、物流与售后（页面仍由快制造承载）',
-  'app.kuaiiot.name': '快数采',
+  'app.kuaipd.homeHint': '请从左侧菜单进入交付项目、物流与售后（页面仍由星制造承载）',
+  'app.kuaiiot.name': '星数采',
   'app.kuaiiot.menu.group.monitorOps': '监控运维',
   'app.kuaiiot.menu.group.modelAccess': '模型接入',
   'app.kuaiiot.menu.dashboard': '数采中心',
@@ -2907,7 +2907,7 @@ export default {
     '本模块为电子制造行业包。启用后注入样品加工、BOM 分区等替代扩展，并提供 ESD 等独立功能入口。',
   'app.ind-electronics.home.replaceTitle': '替代扩展',
   'app.ind-electronics.home.replaceHint':
-    '样品加工（钢网/SMT/Gerber/PCB 文案）、BOM 协同分区名（电子/结构）、OEM 签样包（启用后自动替换「生产执行 → 标签工位」，不再单独挂行业包菜单）。日常建单仍在快研发 / 快制造原菜单。',
+    '样品加工（钢网/SMT/Gerber/PCB 文案）、BOM 协同分区名（电子/结构）、OEM 签样包（启用后自动替换「生产执行 → 标签工位」，不再单独挂行业包菜单）。日常建单仍在星研发 / 星制造原菜单。',
   'app.ind-electronics.home.standaloneTitle': '独立功能',
   'app.ind-electronics.home.standaloneHint':
     'ESD 点检与看板仅出现在行业包侧栏；停用本模块后入口消失，通用产品菜单不变。',
@@ -2918,7 +2918,7 @@ export default {
   'app.ind-electronics.esd.dashboardHint': 'ESD 现场看板与指标将在此完善。',
   'app.ind-electronics.esd.introTitle': '采集模型通用，清单与看板由行业包预置',
   'app.ind-electronics.esd.introDesc':
-    'ESD 点检单复用快制造通用点检（A/B/C、审核与超时提醒）。16 类项目与方案由电子制造行业包预置，租户可改启用状态；看板按主数据厂区切换，不写死客户厂区名称。',
+    'ESD 点检单复用星制造通用点检（A/B/C、审核与超时提醒）。16 类项目与方案由电子制造行业包预置，租户可改启用状态；看板按主数据厂区切换，不写死客户厂区名称。',
   'app.ind-electronics.esd.ensureCatalog': '同步预置方案',
   'app.ind-electronics.esd.ensureOk': 'ESD 点检项与方案已同步',
   'app.ind-electronics.esd.schemeCard': 'ESD 点检方案',
@@ -3007,7 +3007,7 @@ export default {
   'app.ind-electronics.labelOem.placeholder':
     'OEM 签样包与周期唯一性已接入；须绑定书面签样打印模板 UUID，元数据不得含客户公司名常量。',
   'app.ind-electronics.labelOem.hostPathHint':
-    '唯一入口：快制造「生产执行 → 标签工位」（/apps/kuaizhizao/production-execution/label-station）；启用本包后由 documentReplacementRegistry 解析到本页并显示签样包 Tab。',
+    '唯一入口：星制造「生产执行 → 标签工位」（/apps/kuaizhizao/production-execution/label-station）；启用本包后由 documentReplacementRegistry 解析到本页并显示签样包 Tab。',
   'app.ind-electronics.labelOem.tabPacks': '签样包',
   'app.ind-electronics.labelOem.packHintTitle': '抽象签样包',
   'app.ind-electronics.labelOem.packHintBody':
@@ -3808,7 +3808,7 @@ export default {
   'app.kuaicaiwu.menu.gl-management': '总账管理',
   'app.kuaicaiwu.menu.gl-management.chart-of-accounts': '会计科目',
   'app.kuaicaiwu.menu.gl-management.vouchers': '会计凭证',
-  'app.kuaiplm.name': '快研发',
+  'app.kuaiplm.name': '星研发',
   'app.kuaiplm.menu.dashboard': '研发看板',
   'app.kuaiplm.menu.group.project-center': '研发项目',
   'app.kuaiplm.menu.group.project-docs': '项目单据',
@@ -4879,7 +4879,7 @@ export default {
   'app.kuaiplm.knowledgeBase.empty.selectDocument': '请选择或创建文档',
   'app.master-data.name': '主数据',
   'app.system.name': '系统配置',
-  'app.kuaiai.name': 'KU-AI',
+  'app.kuaiai.name': '星AI',
   'app.kuaiai.noMenuHint': '本应用无侧栏菜单。请使用顶栏右侧 AI 助手图标，或按 F1 打开对话。',
   'app.kuaiai.menu.pulse': '异常感知',
   'app.kuaiai.menu.ai-operations': '智能运营',
@@ -4890,7 +4890,7 @@ export default {
   'app.kuaiai.menu.trust': '信任中心',
   'app.kuaiai.menu.settings': '模型设置',
   'app.kuaiai.settings.title': '模型设置',
-  'app.kuaiai.settings.subtitle': '选用对话模型连接，并配置 KU-AI 能力与 OCR 视觉端点',
+  'app.kuaiai.settings.subtitle': '选用对话模型连接，并配置 星AI 能力与 OCR 视觉端点',
   'app.kuaiai.settings.providerCardTitle': '对话模型',
   'app.kuaiai.settings.providerCardHint':
     '请先在应用连接器中新建 AI 连接（同一提供商可建多条不同模型），再在此选用当前对话使用的连接。',
@@ -5006,7 +5006,7 @@ export default {
   'app.kuaiai.insights.avgLatency': '平均延迟',
   'app.kuaiai.insights.pulseHits': 'Pulse 建议数',
   'app.kuaiai.insights.knowledgeDocs': '知识语料文档',
-  'app.kuaiai.insights.empty': '启用 KU-AI 后将自动统计调用数据',
+  'app.kuaiai.insights.empty': '启用 星AI 后将自动统计调用数据',
   'app.kuaiai.insights.unknownCap': '其他',
   'app.kuaiai.insights.chartCallsByDay': '每日调用趋势',
   'app.kuaiai.insights.chartCallsByCapability': '能力调用分布',
@@ -6054,7 +6054,7 @@ export default {
   'app.haoligo.equipment.categories.formDefaultSetPh': '可选；与点检方案菜单中配置一致',
   'app.haoligo.equipment.hub.title': '设备管理',
   'app.haoligo.equipment.hub.lead':
-    '点检方案与台账在此维护；报表与看板见下方入口。数据表前缀 haoligo_*，与快制造设备模块隔离。',
+    '点检方案与台账在此维护；报表与看板见下方入口。数据表前缀 haoligo_*，与星制造设备模块隔离。',
   'app.haoligo.equipment.hub.statEquipments': '设备台账',
   'app.haoligo.equipment.hub.sectionMaster': '基础数据',
   'app.haoligo.equipment.hub.sectionReports': '点检与巡检',
@@ -6255,7 +6255,7 @@ export default {
   'app.haoligo.menu.patrol.reports.point-inspection': '设备点检',
   'app.haoligo.menu.patrol.reports.patrol-records': '设备巡检',
 
-  // 快制造应用菜单翻译
+  // 星制造应用菜单翻译
   'app.kuaizhizao.menu.delivery-project': '交付项目',
   'app.kuaizhizao.menu.delivery-project.dashboard': '交付中心',
   'app.kuaizhizao.menu.delivery-project.projects': '交付项目',
@@ -11218,7 +11218,7 @@ export default {
   'app.kuaizhizao.workOrder.esop.untitledStep': '步骤',
   'app.kuaizhizao.workOrder.esop.sharedHeading': '适用全部工序',
   'app.kuaizhizao.timeconfig.pageTitle': '详情抽屉时间显示',
-  'app.kuaizhizao.timeconfig.pageHint': '本页不出现在菜单中，请在地址栏输入 /apps/kuaizhizao/timeconfig 打开。保存后立即作用于快制造业务单据详情抽屉。',
+  'app.kuaizhizao.timeconfig.pageHint': '本页不出现在菜单中，请在地址栏输入 /apps/kuaizhizao/timeconfig 打开。保存后立即作用于星制造业务单据详情抽屉。',
   'app.kuaizhizao.timeconfig.sectionDrawer': '详情抽屉总开关',
   'app.kuaizhizao.timeconfig.sectionFields': '时间字段显示',
   'app.kuaizhizao.timeconfig.sectionFieldsHint': '打开表示在对应单据详情基本信息中显示该时间；关闭则隐藏。',
@@ -22963,8 +22963,8 @@ export default {
   'pages.infra.tenantApplicationCenterPermissions.blockedByPackagePro': '套餐未开通 PRO，组织开关无效',
   'pages.infra.tenantApplicationCenterPermissions.industryProNote': '免费行业包不受 PRO 限制；付费行业包仍须套餐开通 PRO',
   'pages.infra.tenantApplicationCenterPermissions.effectiveLabel': '组织管理员实际可用：{{value}}',
-  'pages.infra.tenantApplicationCenterPermissions.categoryDesc.basic': '主仓基础应用（快制造、主数据、快财务等）',
-  'pages.infra.tenantApplicationCenterPermissions.categoryDesc.pro': '专业版应用（快报表、快数采、KU-AI 等）',
+  'pages.infra.tenantApplicationCenterPermissions.categoryDesc.basic': '主仓基础应用（星制造、主数据、星财务等）',
+  'pages.infra.tenantApplicationCenterPermissions.categoryDesc.pro': '专业版应用（星报表、星数采、星AI 等）',
   'pages.infra.tenantApplicationCenterPermissions.categoryDesc.industry': '行业应用（含主仓免费行业包与私仓付费行业包）',
   'pages.infra.tenantApplicationCenterPermissions.categoryDesc.dedicated': '定制专用应用',
   'pages.system.applications.headerTitle': '应用中心',
@@ -22998,26 +22998,26 @@ export default {
   'pages.system.applications.restoreSuccess': '已恢复默认设置',
   'pages.system.applications.restoreFailed': '恢复失败',
   'pages.system.applications.nameLabel': '应用名称',
-  'sys.app.kuaizhizao.name': '快制造',
+  'sys.app.kuaizhizao.name': '星制造',
   'sys.app.kuaizhizao.desc': '制造业全流程一体化管控与协同平台',
-  'sys.app.kuaiplm.name': '快研发',
+  'sys.app.kuaiplm.name': '星研发',
   'sys.app.kuaiplm.desc': '研发项目 / NPI 阶段门、设计变更与知识中心协同平台',
-  'sys.app.kuaiqms.name': '快质量',
-  'sys.app.kuaiqms.desc': '质检、改善、体系与质量报表（业务能力由快制造提供）',
-  'sys.app.kuaiems.name': '快设备',
-  'sys.app.kuaiems.desc': '设备、模具、工装台账与运维单据（业务能力由快制造提供）',
-  'sys.app.kuaipd.name': '快交付',
-  'sys.app.kuaipd.desc': '交付项目、物流与售后履约（业务能力由快制造提供）',
+  'sys.app.kuaiqms.name': '星质量',
+  'sys.app.kuaiqms.desc': '质检、改善、体系与质量报表（业务能力由星制造提供）',
+  'sys.app.kuaiems.name': '星设备',
+  'sys.app.kuaiems.desc': '设备、模具、工装台账与运维单据（业务能力由星制造提供）',
+  'sys.app.kuaipd.name': '星交付',
+  'sys.app.kuaipd.desc': '交付项目、物流与售后履约（业务能力由星制造提供）',
   'sys.app.kuaicaiwu.name': '轻财务',
   'sys.app.kuaioa.name': '轻办公',
   'sys.app.kuaicaiwu.desc': '聚焦管理会计与经营分析协同平台（不含总账）',
-  'sys.app.kuaireport.name': '快报表',
+  'sys.app.kuaireport.name': '星报表',
   'sys.app.kuaireport.desc': '多源数据聚合与经营分析决策中心',
   'sys.app.master-data.name': '主数据',
   'sys.app.master-data.desc': '系统的唯一数据源',
-  'sys.app.kuaiiot.name': '快数采',
+  'sys.app.kuaiiot.name': '星数采',
   'sys.app.kuaiiot.desc': '工业物联网设备数采与集成平台，支持 MQTT/ThingsBoard/JetLinks 接入与 MES 设备态写回',
-  'sys.app.kuaiai.name': 'KU-AI',
+  'sys.app.kuaiai.name': '星AI',
   'sys.app.kuaiai.desc': '嵌入业务场景的 AI 智能辅助引擎，提供对话助手与业务智能建议',
 
 
@@ -23026,37 +23026,37 @@ export default {
   'pages.system.applications.mock.kuaisrm.name': '快协同',
   'pages.system.applications.mock.kuaisrm.desc': '供应链与供应商协同，即将开放',
   'pages.system.applications.mock.kuaimachinery.name': '机械加工增值包',
-  'pages.system.applications.mock.kuaimachinery.desc': '基于快制造的机械加工行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaimachinery.desc': '基于星制造的机械加工行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaimolding.name': '注塑增值包',
-  'pages.system.applications.mock.kuaimolding.desc': '基于快制造的注塑行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaimolding.desc': '基于星制造的注塑行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.ind-electronics.name': '电子增值包',
-  'pages.system.applications.mock.ind-electronics.desc': '基于快制造的电子行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.ind-electronics.desc': '基于星制造的电子行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaiautoparts.name': '汽配增值包',
-  'pages.system.applications.mock.kuaiautoparts.desc': '基于快制造的汽配行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaiautoparts.desc': '基于星制造的汽配行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaimedical.name': '医疗器械增值包',
-  'pages.system.applications.mock.kuaimedical.desc': '基于快制造的医疗器械行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaimedical.desc': '基于星制造的医疗器械行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaifood.name': '食品饮料增值包',
-  'pages.system.applications.mock.kuaifood.desc': '基于快制造的食品饮料行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaifood.desc': '基于星制造的食品饮料行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaipackaging.name': '包装印刷增值包',
-  'pages.system.applications.mock.kuaipackaging.desc': '基于快制造的包装印刷行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaipackaging.desc': '基于星制造的包装印刷行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaihardware.name': '五金冲压增值包',
-  'pages.system.applications.mock.kuaihardware.desc': '基于快制造的五金冲压行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaihardware.desc': '基于星制造的五金冲压行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaidiecasting.name': '压铸增值包',
-  'pages.system.applications.mock.kuaidiecasting.desc': '基于快制造的压铸行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaidiecasting.desc': '基于星制造的压铸行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaiwiring.name': '线束增值包',
-  'pages.system.applications.mock.kuaiwiring.desc': '基于快制造的线束行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaiwiring.desc': '基于星制造的线束行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaimotor.name': '电机增值包',
-  'pages.system.applications.mock.kuaimotor.desc': '基于快制造的电机行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaimotor.desc': '基于星制造的电机行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaibattery.name': '电池增值包',
-  'pages.system.applications.mock.kuaibattery.desc': '基于快制造的电池行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaibattery.desc': '基于星制造的电池行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuainewequipment.name': '新能源设备增值包',
-  'pages.system.applications.mock.kuainewequipment.desc': '基于快制造的新能源设备行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuainewequipment.desc': '基于星制造的新能源设备行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaisheetmetal.name': '钣金增值包',
-  'pages.system.applications.mock.kuaisheetmetal.desc': '基于快制造的钣金行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaisheetmetal.desc': '基于星制造的钣金行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaimold.name': '模具增值包',
-  'pages.system.applications.mock.kuaimold.desc': '基于快制造的模具行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaimold.desc': '基于星制造的模具行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuaisemiconductor.name': '半导体增值包',
-  'pages.system.applications.mock.kuaisemiconductor.desc': '基于快制造的半导体行业专属能力包，欢迎客户联合共创',
+  'pages.system.applications.mock.kuaisemiconductor.desc': '基于星制造的半导体行业专属能力包，欢迎客户联合共创',
   'pages.system.applications.mock.kuailogistics.name': '快物流',
   'pages.system.applications.mock.kuailogistics.desc': '物流与运力协同，即将开放',
   'pages.system.applications.mock.kuaiaftersales.name': '快售后',
@@ -23158,7 +23158,7 @@ export default {
   'pages.system.siteSettings.clearLogo': '清除Logo',
   'pages.system.siteSettings.siteName': '站点名称',
   'pages.system.siteSettings.siteNamePlaceholder': '请输入站点名称（可选，未配置时使用框架名称）',
-  'pages.system.siteSettings.siteNameTooltip': '未配置时将使用框架名称（RiverEdge SaaS）',
+  'pages.system.siteSettings.siteNameTooltip': '未配置时将使用框架名称（星技谷）',
   'pages.system.siteSettings.showSiteNameOn': '显示',
   'pages.system.siteSettings.showSiteNameOff': '隐藏',
   'pages.system.siteSettings.showSiteNameTooltip': '关闭后侧栏与顶栏仅显示 Logo，不显示站点名称文字',
@@ -23192,9 +23192,9 @@ export default {
   'pages.system.siteSettings.tabFunction': '功能设置',
   'pages.system.siteSettings.tabSystem': '系统设置',
   'pages.system.siteSettings.tabIntegrations': '集成设置',
-  'pages.system.siteSettings.integrationsDeepseekTitle': 'KU-AI - DeepSeek',
+  'pages.system.siteSettings.integrationsDeepseekTitle': '星AI - DeepSeek',
   'pages.system.siteSettings.integrationsDeepseekHint':
-    '配置 DeepSeek API Key 后，顶栏 KU-AI 助手将通过后端安全代理调用 DeepSeek V4 大模型。',
+    '配置 DeepSeek API Key 后，顶栏 星AI 助手将通过后端安全代理调用 DeepSeek V4 大模型。',
   'pages.system.siteSettings.integrationsDeepseekEnabled': '启用 DeepSeek',
   'pages.system.siteSettings.integrationsDeepseekApiKey': 'API Key',
   'pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholder': '请输入 DeepSeek API Key',
@@ -23215,7 +23215,7 @@ export default {
   'pages.system.siteSettings.integrationsDeepseekOcrApiKeyTooltip':
     '与 OCR 端点配套的 API Key；留空则使用上方 DeepSeek API Key（仅当同一服务商时适用）',
   'pages.system.siteSettings.integrationsDeepseekOcrApiKeyPlaceholder': '留空则沿用 DeepSeek API Key',
-  'pages.system.siteSettings.integrationsDeepseekAiTitle': 'KU-AI 能力配置',
+  'pages.system.siteSettings.integrationsDeepseekAiTitle': '星AI 能力配置',
   'pages.system.siteSettings.integrationsDeepseekAiHint':
     '控制对话是否调用业务单据工具、知识语料 RAG，以及企业专属系统说明。',
   'pages.system.siteSettings.integrationsDeepseekToolsEnabled': '启用业务单据工具',
@@ -23227,7 +23227,7 @@ export default {
   'pages.system.siteSettings.integrationsDeepseekRagBackendLlamaIndex': 'LlamaIndex',
   'pages.system.siteSettings.integrationsDeepseekCustomPrompt': '企业系统说明（追加到系统提示词）',
   'pages.system.siteSettings.integrationsDeepseekCustomPromptPlaceholder':
-    '例如：本公司主要使用快制造模块；委外流程需先建委外订单…',
+    '例如：本公司主要使用星制造模块；委外流程需先建委外订单…',
   'pages.system.siteSettings.tabLoginPage': '登录页配置',
   'pages.system.siteSettings.currentTenantDomain': '当前组织域名',
   'pages.system.siteSettings.currentTenantDomainEmpty': '未配置',
@@ -23721,7 +23721,7 @@ export default {
   'pages.system.configCenter.tenantInit.item.warehouse_preset': '仓库预设',
   'pages.system.configCenter.tenantInit.item.operation_preset': '工序预设',
   'pages.system.configCenter.tenantInit.item.variant_attribute_preset': '属性定义预设',
-  'pages.system.configCenter.tenantInit.item.kuaiai_faq_preset': 'KU-AI 默认 FAQ',
+  'pages.system.configCenter.tenantInit.item.kuaiai_faq_preset': '星AI 默认 FAQ',
   'pages.system.configCenter.tenantInit.itemDesc.language': '简体中文、English 等系统语言',
   'pages.system.configCenter.tenantInit.itemDesc.data_dictionary':
     'CURRENCY、TIMEZONE 及已安装应用归属的系统字典',
@@ -23734,7 +23734,7 @@ export default {
   'pages.system.configCenter.tenantInit.itemDesc.menu_sync':
     '按已安装应用将 manifest 菜单写入侧栏（不安装/启用应用，由平台管理员处理）',
   'pages.system.configCenter.tenantInit.itemDesc.application':
-    '扫描并安装默认基础应用（快制造、快研发、轻财务、轻办公、主数据等）',
+    '扫描并安装默认基础应用（星制造、星研发、轻财务、轻办公、主数据等）',
   'pages.system.configCenter.tenantInit.itemDesc.department_preset': '中国中小制造业极简部门结构',
   'pages.system.configCenter.tenantInit.itemDesc.position_preset': '总经理、生产经理等常用职位',
   'pages.system.configCenter.tenantInit.itemDesc.role_preset': '部门经理、普通员工等常用角色',
@@ -25817,12 +25817,12 @@ export default {
   'pages.system.applicationConnections.categoryWms': 'WMS 仓储',
   'pages.system.applicationConnections.categoryStorage': '存储',
   'pages.system.applicationConnections.categoryAi': 'AI',
-  'pages.system.applicationConnections.kuAiSettingsButton': 'KU-AI 配置',
+  'pages.system.applicationConnections.kuAiSettingsButton': '星AI 配置',
   'pages.system.applicationConnections.kuAiMarketTitle': 'AI 连接器密钥',
   'pages.system.applicationConnections.kuAiConfigModalTitle': '配置 {{name}}',
   'pages.system.applicationConnections.llmProviderKeyModalTitle': '配置 {{name}} 密钥',
   'pages.system.applicationConnections.llmProviderKeyHint':
-    '此处仅填写该模型的启用状态、API 地址、模型名与 API Key。选用哪个连接器及 KU-AI 能力开关，请到「KU-AI → 模型设置」。',
+    '此处仅填写该模型的启用状态、API 地址、模型名与 API Key。选用哪个连接器及 星AI 能力开关，请到「星AI → 模型设置」。',
   'pages.system.applicationConnections.llmProviderEnabled': '启用此连接器',
   'pages.system.applicationConnections.llmProviderKeyRequired': '请填写 API Key',
   'pages.system.applicationConnections.llmProviderKeyInvalid': '请重新输入有效的 API Key',
@@ -25830,7 +25830,7 @@ export default {
     '保存已提交，但未能确认 Key 已写入，请刷新后重试或检查站点设置权限',
   'pages.system.applicationConnections.aiPanelTitle': 'AI 连接器密钥',
   'pages.system.applicationConnections.aiPanelHint':
-    'AI 模型密钥保存在站点集成中，不会出现在下方业务应用连接列表。选用哪个模型请到 KU-AI → 模型设置。',
+    'AI 模型密钥保存在站点集成中，不会出现在下方业务应用连接列表。选用哪个模型请到 星AI → 模型设置。',
   'pages.system.applicationConnections.aiPanelEmpty': '尚未配置 AI 密钥，可点击「添加 AI 连接器」从市场选择。',
   'pages.system.applicationConnections.aiPanelAdd': '添加 AI 连接器',
   'pages.system.applicationConnections.aiPanelModelSettings': '模型设置',
@@ -26344,7 +26344,7 @@ export default {
   'pages.system.onboardingWizard.guide.process_routes.standard': '完成产品工艺路线配置，且工序间的逻辑关系（串行/并行）与车间实操一致。',
   'pages.system.onboardingWizard.guide.process_routes.tip': '工时数据的精度直接影响排产（APS）的有效性，初期可使用经验值，后期通过报工数据优化。',
   'pages.system.onboardingWizard.guide.process_routes.dependency': '需预先定义【工作中心】与【资源组】。',
-  'pages.system.onboardingWizard.guide.first_order_run.mission': '快格云制造全链路闭环验证：销售下单 -> 计划排产 -> 车间生产/报工 -> 完工入库 -> 销售发货。',
+  'pages.system.onboardingWizard.guide.first_order_run.mission': '星技谷制造全链路闭环验证：销售下单 -> 计划排产 -> 车间生产/报工 -> 完工入库 -> 销售发货。',
   'pages.system.onboardingWizard.guide.first_order_run.standard': '完成至少一笔完整的「进-销-存-产」一体化业务循环，且库存台账与生产档案准确。',
   'pages.system.onboardingWizard.guide.first_order_run.tip': '这是系统正式上线的终极考核，务必邀请各部门业务骨干参与，确认数据流与价值流的连贯性。',
   'pages.system.onboardingWizard.guide.first_order_run.dependency': '需保证【进销存基础、MES 建模、权限配置】均已就绪。',
@@ -27693,7 +27693,7 @@ export default {
   'pages.system.messageConfig.smtpPassword': '授权码/密码',
   'pages.system.messageConfig.smtpPasswordPlaceholder': '请输入邮箱授权码',
   'pages.system.messageConfig.fromName': '发件人显示名称',
-  'pages.system.messageConfig.fromNamePlaceholder': 'RiverEdge 系统',
+  'pages.system.messageConfig.fromNamePlaceholder': '星技谷 系统',
   'pages.system.messageConfig.smtpUseTls': 'SSL/TLS 加密',
   'pages.system.messageConfig.smsSection': '短信服务配置',
   'pages.system.messageConfig.provider': '服务商',
@@ -28185,21 +28185,21 @@ export default {
   'pages.dashboard.updateLog.entries.system-infra-list-batch-row-selection.title':
     '系统与平台列表多选批量删除接通',
   'pages.dashboard.updateLog.entries.system-infra-list-batch-row-selection.description':
-    '部门/岗位/打印模板/系统参数/集成配置/审批流程改为 enableRowSelection 受控选中；菜单、数据备份、组织、官方接口库、工作时间段与个人任务补齐多选与批量删除；快数采连接/点位/边缘配置、质量内审/管评/体系文件、工作日历加班与停工、装配模板与合同条款管理同步接通；修复系统参数删除按钮属性粘连。',
+    '部门/岗位/打印模板/系统参数/集成配置/审批流程改为 enableRowSelection 受控选中；菜单、数据备份、组织、官方接口库、工作时间段与个人任务补齐多选与批量删除；星数采连接/点位/边缘配置、质量内审/管评/体系文件、工作日历加班与停工、装配模板与合同条款管理同步接通；修复系统参数删除按钮属性粘连。',
   'pages.dashboard.updateLog.entries.plm-master-gl-list-batch-delete.title':
     '研发主数据科目等列表补齐批量删除',
   'pages.dashboard.updateLog.entries.plm-master-gl-list-batch-delete.description':
     '判定规则、年度实验室计划、计量单位与换算、工艺图纸、会计科目列表开启多选并接上工具栏批量删除。',
   'pages.dashboard.updateLog.entries.kuaiai-showcase-scrollbar-gutter.title':
-    'KU-AI 页面加载左移修复',
+    '星AI 页面加载左移修复',
   'pages.dashboard.updateLog.entries.kuaiai-showcase-scrollbar-gutter.description':
     'Showcase 不再自建可见纵滚层，并由 UniTabs 页壳随内容增高，避免加载左移与能力矩阵等内容溢出白底被裁切。',
   'pages.dashboard.updateLog.entries.kuaiiot-menu-icon-depth-contract.title':
-    '快数采菜单图标层级规范',
+    '星数采菜单图标层级规范',
   'pages.dashboard.updateLog.entries.kuaiiot-menu-icon-depth-contract.description':
-    '快数采 manifest 仅保留 APP 与一级分组图标；数采中心、产品模型等下级菜单不再声明 icon，同步后侧栏与菜单管理一致。',
+    '星数采 manifest 仅保留 APP 与一级分组图标；数采中心、产品模型等下级菜单不再声明 icon，同步后侧栏与菜单管理一致。',
   'pages.dashboard.updateLog.entries.kuaiiot-menu-two-groups.title':
-    '快数采一级菜单压为两组',
+    '星数采一级菜单压为两组',
   'pages.dashboard.updateLog.entries.kuaiiot-menu-two-groups.description':
     '侧栏由监控中心/设备模型/接入管理/告警运维四组改为「监控运维」「模型接入」两组；叶子路由与权限不变，需菜单同步或恢复默认后生效。',
   'pages.dashboard.updateLog.entries.equipment-dashboard-kpi-ticker.title':
@@ -28231,9 +28231,9 @@ export default {
   'pages.dashboard.updateLog.entries.tenant-switch-unitabs-padding.description':
     '切换组织清空标签且首页路径未变时，会主动补回当前页标签；无标签时仍保留 page-outer 16px 内容壳，避免工作台贴边需整页刷新。',
   'pages.dashboard.updateLog.entries.kuaiai-menu-leaf-no-icon.title':
-    'KU-AI 二级菜单去掉图标',
+    '星AI 二级菜单去掉图标',
   'pages.dashboard.updateLog.entries.kuaiai-menu-leaf-no-icon.description':
-    'KU-AI 分组下叶子菜单在 manifest 中不再配置 icon，仅保留应用根与分组图标；同步菜单后侧栏与菜单管理一致无叶子图标。',
+    '星AI 分组下叶子菜单在 manifest 中不再配置 icon，仅保留应用根与分组图标；同步菜单后侧栏与菜单管理一致无叶子图标。',
   'pages.dashboard.updateLog.entries.ind-electronics-menu-leaf-no-icon.title':
     '电子制造二级菜单去掉图标',
   'pages.dashboard.updateLog.entries.ind-electronics-menu-leaf-no-icon.description':
@@ -28469,13 +28469,13 @@ export default {
   'pages.dashboard.updateLog.entries.kuaiplm-lab-report-notify-r02.title':
     '实验报告审批消息提醒',
   'pages.dashboard.updateLog.entries.kuaiplm-lab-report-notify-r02.description':
-    '实验报告提交、批准、驳回可按配置中心消息提醒规则推送站内信；预设场景与模板已纳入快研发加载预设。',
+    '实验报告提交、批准、驳回可按配置中心消息提醒规则推送站内信；预设场景与模板已纳入星研发加载预设。',
   'pages.dashboard.updateLog.entries.kuaiplm-lab-judgment-rule-r02.title':
     '实验判定规则主数据',
   'pages.dashboard.updateLog.entries.kuaiplm-lab-judgment-rule-r02.description':
     '实验管理新增版本化判定规则；委托单试验项可选用启用规则并冻结规则版本，实测判定仍仅服务端计算。',
   'pages.dashboard.updateLog.entries.kuaiplm-annual-lab-plan-r07.title':
-    '快研发年度实验计划',
+    '星研发年度实验计划',
   'pages.dashboard.updateLog.entries.kuaiplm-annual-lab-plan-r07.description':
     '实验管理新增年度计划：自动拆 12 个月台账，支持计划审批、月度填报、领料部门经理/销售/计划三级审批，并可关联报告与委托单号。',
   'pages.dashboard.updateLog.entries.kuaizhizao-rework-inventory-verify-r07.title':
@@ -28515,9 +28515,9 @@ export default {
   'pages.dashboard.updateLog.entries.lab-request-create-button-label.description':
     '列表新建与弹窗标题统一为「新建/编辑委托单」，不再使用笼统的「新建」。',
   'pages.dashboard.updateLog.entries.kuaiplm-lab-request-r02.title':
-    '快研发实验管理与实验委托',
+    '星研发实验管理与实验委托',
   'pages.dashboard.updateLog.entries.kuaiplm-lab-request-r02.description':
-    '快研发新增实验管理菜单（实验委托、待检看板）；通用委托单支持 IQC/研发/材料例试/整机例试/委外等类型，行业扩展字段预留 profile，不写死电子料专名。',
+    '星研发新增实验管理菜单（实验委托、待检看板）；通用委托单支持 IQC/研发/材料例试/整机例试/委外等类型，行业扩展字段预留 profile，不写死电子料专名。',
   'pages.dashboard.updateLog.entries.qms-document-reject-inf05.title':
     '体系文件待审驳回',
   'pages.dashboard.updateLog.entries.qms-document-reject-inf05.description':
@@ -28537,7 +28537,7 @@ export default {
   'pages.dashboard.updateLog.entries.kuaiplm-production-file-multitab-rename.title':
     '生产文件改名并改用多标签页',
   'pages.dashboard.updateLog.entries.kuaiplm-production-file-multitab-rename.description':
-    '快研发菜单与页面标题由「生产文件中心」改为「生产文件」；列表改为 MultiTabListPageTemplate，PE 生产软件与研发工具产测分标签展示。',
+    '星研发菜单与页面标题由「生产文件中心」改为「生产文件」；列表改为 MultiTabListPageTemplate，PE 生产软件与研发工具产测分标签展示。',
   'pages.dashboard.updateLog.entries.production-daily-menu-order.title':
     '生产执行菜单调整日报位置',
   'pages.dashboard.updateLog.entries.production-daily-menu-order.description':
@@ -28545,7 +28545,7 @@ export default {
   'pages.dashboard.updateLog.entries.equipment-line-rebind-menu-mount.title':
     '设备换线绑定菜单补挂',
   'pages.dashboard.updateLog.entries.equipment-line-rebind-menu-mount.description':
-    '前端快制造 manifest 补齐设备换线绑定导航与权限码，并与后端 mobile_workbench 同步挂上换线绑定入口，避免有页无菜单。',
+    '前端星制造 manifest 补齐设备换线绑定导航与权限码，并与后端 mobile_workbench 同步挂上换线绑定入口，避免有页无菜单。',
   'pages.dashboard.updateLog.entries.timezone-export-filename-site-day.title':
     '导出文件名改用站点业务日',
   'pages.dashboard.updateLog.entries.timezone-export-filename-site-day.description':
@@ -28557,13 +28557,13 @@ export default {
   'pages.dashboard.updateLog.entries.kuaiplm-firmware-inf05.title':
     '产品固件版本可见性对齐 INF-05',
   'pages.dashboard.updateLog.entries.kuaiplm-firmware-inf05.description':
-    '快研产品固件列表与详情按 INF-05 受众过滤：使用方仅见项目最新已发布版，制定方可见本人草稿履历，管理/总查看可见全历史；生产下载上下文仅最新生产生效版。发布时自动作废同项目先前已发布版，保证生产侧唯一现行固件。',
+    '星研产品固件列表与详情按 INF-05 受众过滤：使用方仅见项目最新已发布版，制定方可见本人草稿履历，管理/总查看可见全历史；生产下载上下文仅最新生产生效版。发布时自动作废同项目先前已发布版，保证生产侧唯一现行固件。',
   'pages.dashboard.updateLog.entries.ind-electronics-label-oem-pack.title':
     '电子制造 OEM 标签签样包',
   'pages.dashboard.updateLog.entries.ind-electronics-label-oem-pack.description':
     '电子行业包补齐 PACK-LABEL：抽象签样包种子落地、扫码字符钩子、箱号周期唯一策略参数；document 替代页复用通用工位引擎并增加签样包 Tab。书面签样模板 UUID 由租户绑定，产品代码不含品牌名单。',
   'pages.dashboard.updateLog.entries.kuaizhizao-label-station-r16.title':
-    '快制造标签工位与装箱扫码引擎',
+    '星制造标签工位与装箱扫码引擎',
   'pages.dashboard.updateLog.entries.kuaizhizao-label-station-r16.description':
     '生产执行新增通用标签工位：型号/工位配置、作业会话、扫码装箱、满箱走 INF-07 打印任务、锁定解锁与解绑补打；装箱绑定权限独立。未启用电子行业包时用本引擎，启用后可由 document 替代加载 OEM 签样页，不写客户专用箱规。',
   'pages.dashboard.updateLog.entries.kuaioa-license-asset-r14.title':
@@ -28624,7 +28624,7 @@ export default {
     '设备管理工装台账补齐入库日期、数量、保管人、产品型号；领用/归还写回当前领用人与时间、最近归还信息；列表筛选导出同步，不新建第二套工装模块。',
   'pages.dashboard.updateLog.entries.kuaiplm-production-file-r06.title': '生产文件中心',
   'pages.dashboard.updateLog.entries.kuaiplm-production-file-r06.description':
-    '快研发新增生产文件中心：PE生产软件按工序到型号目录且生产方仅可见最新生产版；研发烧录工具与产测按项目与发布日期保留历史；共用版本审批、发放与下载调阅记录，消费 INF-05 可见性策略，不替代产品固件与标签扫码作业。',
+    '星研发新增生产文件中心：PE生产软件按工序到型号目录且生产方仅可见最新生产版；研发烧录工具与产测按项目与发布日期保留历史；共用版本审批、发放与下载调阅记录，消费 INF-05 可见性策略，不替代产品固件与标签扫码作业。',
   'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-plan-summary-r03.title':
     '供应商评价计划与周期汇总',
   'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-plan-summary-r03.description':
@@ -28664,7 +28664,7 @@ export default {
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-notification-presets.title':
     '试流超时提醒预设模板与规则',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-notification-presets.description':
-    '快研发配置中心可加载试流待审/工序超时消息模板与提醒规则；租户初始化时随 kuaiplm 一并补齐。',
+    '星研发配置中心可加载试流待审/工序超时消息模板与提醒规则；租户初始化时随 kuaiplm 一并补齐。',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-reminder-inf03.title':
     '试流 8 小时与 24 小时超时提醒',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-reminder-inf03.description':
@@ -28690,13 +28690,13 @@ export default {
   'pages.dashboard.updateLog.entries.kuaiplm-material-review-reject-export.description':
     '物料评审列表待审行增加驳回操作；具备导出权限的用户可导出 Excel（本页、勾选或全部）。',
   'pages.dashboard.updateLog.entries.kuaiplm-wave1-reject-export-pilot.title':
-    '快研单据驳回与列表导出起步',
+    '星研单据驳回与列表导出起步',
   'pages.dashboard.updateLog.entries.kuaiplm-wave1-reject-export-pilot.description':
     '产品固件与样品加工列表支持按权限导出 Excel；样品加工待审行增加驳回操作。其余项目单据将按菜单序逐页补齐。',
   'pages.dashboard.updateLog.entries.ind-electronics-esd-document-shell.title':
     '电子制造 ESD 壳与标签 document 替代',
   'pages.dashboard.updateLog.entries.ind-electronics-esd-document-shell.description':
-    '行业包新增 ESD 点检/看板独立入口壳；OEM 标签签样按 document 替代挂到快制造标签工位宿主 path，启用电子包后自动切换行业页。下一行业可按扩展模板复制 manifest。',
+    '行业包新增 ESD 点检/看板独立入口壳；OEM 标签签样按 document 替代挂到星制造标签工位宿主 path，启用电子包后自动切换行业页。下一行业可按扩展模板复制 manifest。',
   'pages.dashboard.updateLog.entries.industry-ext-profile-reconcile.title':
     '行业扩展 profile 自动补齐',
   'pages.dashboard.updateLog.entries.industry-ext-profile-reconcile.description':
@@ -28704,41 +28704,41 @@ export default {
   'pages.dashboard.updateLog.entries.kuaiplm-bom-section-profile.title':
     'BOM 协同分区名行业可开关',
   'pages.dashboard.updateLog.entries.kuaiplm-bom-section-profile.description':
-    'BOM 协同默认展示「分区一/分区二」；启用电子制造行业包后显示「电子/结构」。提交校验文案随分区标签变化。今日新增快研单据前端 API 客户端已对齐 api 封装。',
+    'BOM 协同默认展示「分区一/分区二」；启用电子制造行业包后显示「电子/结构」。提交校验文案随分区标签变化。今日新增星研单据前端 API 客户端已对齐 api 封装。',
   'pages.dashboard.updateLog.entries.ind-electronics-sample-profile.title':
     '电子制造行业包与样品加工通用化',
   'pages.dashboard.updateLog.entries.ind-electronics-sample-profile.description':
     '新增可开关行业应用「电子制造」：启用后向样品加工注入钢网/SMT/Gerber/PCB 文案；停用后恢复物料编码等中性配置。样品加工种类与附件改由扩展 profile 驱动，不再写死电子工艺。',
   'pages.dashboard.updateLog.entries.kuaiplm-wave1-menu-names.title':
-    '快研项目单据菜单命名规范',
+    '星研项目单据菜单命名规范',
   'pages.dashboard.updateLog.entries.kuaiplm-wave1-menu-names.description':
     '侧栏与列表标题统一为：产品固件、样品加工、物料评审、BOM协同、项目建议、开模打样、试流管理；审批流名称与编码中心页面名同步。',
   'pages.dashboard.updateLog.entries.kuaiplm-wave1-menu.title':
-    '快研项目单据菜单已挂入',
+    '星研项目单据菜单已挂入',
   'pages.dashboard.updateLog.entries.kuaiplm-wave1-menu.description':
-    '快研发侧栏新增「项目单据」分组（固件、样品加工、物料评审、BOM协同、项目建议、开模打样、试流管理）及「跨项目待办」。可从菜单直接进入验收；权限需已同步对应资源码。',
+    '星研发侧栏新增「项目单据」分组（固件、样品加工、物料评审、BOM协同、项目建议、开模打样、试流管理）及「跨项目待办」。可从菜单直接进入验收；权限需已同步对应资源码。',
   'pages.dashboard.updateLog.entries.kuaiplm-wave1-integration.title':
-    '快研优先一联调收口',
+    '星研优先一联调收口',
   'pages.dashboard.updateLog.entries.kuaiplm-wave1-integration.description':
     '研发项目工作台协同入口覆盖固件、样品加工、物料评审、BOM 协同、建议书、开模打样、试流与工程变更；看板新增跨项目待办聚合，可按项目打开对应单据列表。',
   'pages.dashboard.updateLog.entries.kuaiplm-mold-sample.title':
-    '快研开模合同与打样订单起步',
+    '星研开模合同与打样订单起步',
   'pages.dashboard.updateLog.entries.kuaiplm-mold-sample.description':
     '新增开模合同与打样订单：文员上传文件后提交审核，通过后可打印用印并存档。单号接入编码中心；多角色审批由审批流配置。菜单待验收后挂入。',
   'pages.dashboard.updateLog.entries.kuaiplm-project-proposal.title':
-    '快研项目建议书起步',
+    '星研项目建议书起步',
   'pages.dashboard.updateLog.entries.kuaiplm-project-proposal.description':
     '新增项目建议书：销售发起、采购填写供应商后提交审核，通过后可下发研发。单号接入编码中心。菜单待验收后挂入，可直接访问项目建议书路由。',
   'pages.dashboard.updateLog.entries.kuaiplm-bom-collab.title':
-    '快研 BOM 协同单据起步',
+    '星研 BOM 协同单据起步',
   'pages.dashboard.updateLog.entries.kuaiplm-bom-collab.description':
     '新增 BOM 协同：项目发起后电子与结构分区并行填写且互不覆盖；审核通过后文员录入并回写主数据 BOM 引用。单号接入编码中心。菜单待验收后挂入。',
   'pages.dashboard.updateLog.entries.kuaiplm-material-review.title':
-    '快研物料评审单据起步',
+    '星研物料评审单据起步',
   'pages.dashboard.updateLog.entries.kuaiplm-material-review.description':
     '新增物料评审单：从物料库选择物料并标注优先使用、限用、禁止使用；支持提交审核。单号接入编码中心。菜单待验收后挂入，可直接访问物料评审路由。',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process.title':
-    '快研样品加工申请起步',
+    '星研样品加工申请起步',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process.description':
     '新增样品加工申请（钢网/SMT/通用），支持 PCB 料号版本、可配置附件类型与提交审核；单号接入编码中心。菜单待验收后挂入，可直接访问样品加工申请路由。',
   'pages.dashboard.updateLog.entries.kuaioa-form-business-type.title':
@@ -28790,7 +28790,7 @@ export default {
   'pages.dashboard.updateLog.entries.kuaiplm-ecn-api-import.description':
     '工程变更服务改为从 services/api 引入 api 便捷方法，修复 Vite 无法解析 utils/request 导致页面无法编译的问题。',
   'pages.dashboard.updateLog.entries.uni-audit-kuaiplm-handlers.title':
-    '快研发审核分发补齐',
+    '星研发审核分发补齐',
   'pages.dashboard.updateLog.entries.uni-audit-kuaiplm-handlers.description':
     '产品固件、试流、工程变更已在统一审核 HANDLERS 与审批完成回调中登记，修复后端因 manifest.audit 未覆盖而无法启动的问题。',
   'pages.dashboard.updateLog.entries.kuaiplm-ecn-merge-change-desk.title':
@@ -28798,7 +28798,7 @@ export default {
   'pages.dashboard.updateLog.entries.kuaiplm-ecn-merge-change-desk.description':
     '变更管理新增「工程变更」分类与新建入口；列表聚合 ECN 单据，详情支持 ERP 稽核回填。独立工程变更路由改为跳转到工作台对应 Tab，避免双页面。',
   'pages.dashboard.updateLog.entries.kuaiplm-ecn-shell.title':
-    '快研发工程变更单据起步',
+    '星研发工程变更单据起步',
   'pages.dashboard.updateLog.entries.kuaiplm-ecn-shell.description':
     '新增工程变更单头、物料对照行与部门会签骨架；支持提交审核、通过后 ERP 稽核回填（通过关闭/不通过退回）。单号接入编码中心。菜单待验收后挂入，可直接访问工程变更路由。',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-execute.title':
@@ -28810,27 +28810,27 @@ export default {
   'pages.dashboard.updateLog.entries.kuaiplm-product-firmware-upload.description':
     '新建/编辑固件不再手填文件 UUID，改为拖拽上传至文件服务并回写 file_uuid；草稿可暂不传，提交审核仍要求已上传文件。',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow.title':
-    '快研发试流单据上线',
+    '星研发试流单据上线',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow.description':
     '新增试流单头、物料行与工序结果；支持元件/结构/整机三类 business_type、提交审核、顺序填报与结论关闭。单号接入编码中心。菜单待验收后挂入，可直接访问试流路由。',
   'pages.dashboard.updateLog.entries.sidebar-entry-leaf-menu-restore.title':
     '侧栏误藏以入口权限挂载的菜单页',
   'pages.dashboard.updateLog.entries.sidebar-entry-leaf-menu-restore.description':
-    '此前为挡住「子页都无权限仍显示空目录」，把仅挂 entry 的可导航项一律隐藏，误伤 KU-AI 等以应用入口码为真门控的叶子页。现区分空目录与真叶子：有子菜单却全不可见仍隐藏；真叶子持有 entry 则正常显示。菜单管理与侧栏仍是同一棵菜单树，侧栏只多一层当前用户权限过滤。',
+    '此前为挡住「子页都无权限仍显示空目录」，把仅挂 entry 的可导航项一律隐藏，误伤 星AI 等以应用入口码为真门控的叶子页。现区分空目录与真叶子：有子菜单却全不可见仍隐藏；真叶子持有 entry 则正常显示。菜单管理与侧栏仍是同一棵菜单树，侧栏只多一层当前用户权限过滤。',
   'pages.dashboard.updateLog.entries.kuaiplm-product-firmware.title':
-    '快研发产品固件单据上线',
+    '星研发产品固件单据上线',
   'pages.dashboard.updateLog.entries.kuaiplm-product-firmware.description':
     '新增产品固件模型、审核发布流与列表页（草稿→提交→审核→发布供生产下载）；单号规则已接入编码中心。菜单待验收后挂入，可直接访问产品固件路由。',
   'pages.dashboard.updateLog.entries.platform-infra-capability.title':
     '平台基础设施能力补齐',
   'pages.dashboard.updateLog.entries.platform-infra-capability.description':
-    '对齐快研发前后端权限与全局档案总查看；审批缺人时提交失败并支持业务类型选流程与勾选人快照；标准 cron 与提醒账本；业务邮件按模板正文发送、短信禁止模拟成功、通知按配置渠道派发；体系文件版本链与打印幂等桥接底座已就绪。',
+    '对齐星研发前后端权限与全局档案总查看；审批缺人时提交失败并支持业务类型选流程与勾选人快照；标准 cron 与提醒账本；业务邮件按模板正文发送、短信禁止模拟成功、通知按配置渠道派发；体系文件版本链与打印幂等桥接底座已就绪。',
   'pages.dashboard.updateLog.entries.material-variant-master-ensure.title':
     '物料属性组合保存提示主物料不存在',
   'pages.dashboard.updateLog.entries.material-variant-master-ensure.description':
     '编辑页开启属性管理后直接新增组合时，后端未认未落库/属性槽为 {} 的主物料；现创建 SKU 时自动提升头物料并认空对象，前端仅在主物料已落库后即时创建，未落库时进待保存并在提交物料时一并写入。',
   'pages.dashboard.updateLog.entries.kuaiplm-knowledge-base-space-switch-loop.title':
-    '快研发知识库切换目录不停刷新',
+    '星研发知识库切换目录不停刷新',
   'pages.dashboard.updateLog.entries.kuaiplm-knowledge-base-space-switch-loop.description':
     '切空间后仍加载旧文档并用文档 space_id 回拨目录，与列表自动选中形成刷新环；现切目录先清空选中、加载中不清选、仅深链且文档不在当前列表时才对齐空间。',
   'pages.dashboard.updateLog.entries.demand-computation-analysis-null-code.title':
@@ -28838,7 +28838,7 @@ export default {
   'pages.dashboard.updateLog.entries.demand-computation-analysis-null-code.description':
     '分析弹窗重算确认文案在 analysisRecord 为空时仍读 computation_code，与知识库同类；已改为可选链并在无记录时禁用确认。',
   'pages.dashboard.updateLog.entries.kuaiplm-knowledge-base-null-title.title':
-    '快研发知识库打开报错',
+    '星研发知识库打开报错',
   'pages.dashboard.updateLog.entries.kuaiplm-knowledge-base-null-title.description':
     '未选中文档时删除确认仍读取 activeArticle.title，导致 Cannot read properties of null；已改为可选链并在无文档时禁用确认。',
   'pages.dashboard.updateLog.entries.structured-cost-format-currency-import.title':
@@ -28912,15 +28912,15 @@ export default {
   'pages.dashboard.updateLog.entries.popconfirm-migration-hotfix.title':
     '确认框改造善后修复',
   'pages.dashboard.updateLog.entries.popconfirm-migration-hotfix.description':
-    '修复 Popconfirm 批量改造后各应用页 handler 未定义、确认文案损坏、函数体截断与语法错误，涵盖轻财务、轻办公、快报表、快研发与快制造相关列表与抽屉操作。',
+    '修复 Popconfirm 批量改造后各应用页 handler 未定义、确认文案损坏、函数体截断与语法错误，涵盖轻财务、轻办公、星报表、星研发与星制造相关列表与抽屉操作。',
   'pages.dashboard.updateLog.entries.uni-report-remove-view-switcher.title':
     '系统报表移除右上角视图切换',
   'pages.dashboard.updateLog.entries.uni-report-remove-view-switcher.description':
-    '快制造等 UniReport 报表页不再显示表格/帮助视图切换按钮，报表固定为表格视图。',
+    '星制造等 UniReport 报表页不再显示表格/帮助视图切换按钮，报表固定为表格视图。',
   'pages.dashboard.updateLog.entries.pure-confirm-popconfirm.title':
     '纯确认操作统一改用气泡确认',
   'pages.dashboard.updateLog.entries.pure-confirm-popconfirm.description':
-    '快制造、快研发、轻财务、主数据与系统设置中，撤回、删除、发布、排产快捷操作等仅标题或纯文本说明的确认，统一改为 Popconfirm 气泡确认；含表单、预览列表或复杂内容的仍保留 Modal。',
+    '星制造、星研发、轻财务、主数据与系统设置中，撤回、删除、发布、排产快捷操作等仅标题或纯文本说明的确认，统一改为 Popconfirm 气泡确认；含表单、预览列表或复杂内容的仍保留 Modal。',
   'pages.dashboard.updateLog.entries.delivery-dashboard-masonry-balance.title':
     '交付中心事项区恢复两列平衡',
   'pages.dashboard.updateLog.entries.delivery-dashboard-masonry-balance.description':
@@ -28932,7 +28932,7 @@ export default {
   'pages.dashboard.updateLog.entries.module-center-panel-title-no-icon.title':
     '模块中心卡片标题去掉重复图标',
   'pages.dashboard.updateLog.entries.module-center-panel-title-no-icon.description':
-    '交付中心甘特图、快研发看板甘特图及瀑布流事项卡标题仅保留左侧竖条装饰，不再叠加 Outlined 图标。',
+    '交付中心甘特图、星研发看板甘特图及瀑布流事项卡标题仅保留左侧竖条装饰，不再叠加 Outlined 图标。',
   'pages.dashboard.updateLog.entries.delivery-dashboard-kpi-four.title':
     '交付中心指标卡整合为四列',
   'pages.dashboard.updateLog.entries.delivery-dashboard-kpi-four.description':
@@ -29188,7 +29188,7 @@ export default {
   'pages.dashboard.updateLog.entries.kuaizhizao-orm-models-complete.title':
     '修复销售合同条款等接口 500',
   'pages.dashboard.updateLog.entries.kuaizhizao-orm-models-complete.description':
-    '补全快制造 orm_models 声明，销售合同条款组、销售评审、采购询价等新增模型纳入运行时 Tortoise 加载，避免 default_connection 为空导致接口报错。',
+    '补全星制造 orm_models 声明，销售合同条款组、销售评审、采购询价等新增模型纳入运行时 Tortoise 加载，避免 default_connection 为空导致接口报错。',
   'pages.dashboard.updateLog.entries.tortoise-bootstrap-two-phase.title':
     '修复按应用裁剪 ORM 后后端无法启动',
   'pages.dashboard.updateLog.entries.tortoise-bootstrap-two-phase.description':
@@ -29236,7 +29236,7 @@ export default {
   'pages.dashboard.updateLog.entries.approval-multi-approver-fix.description':
     '指定多个用户或角色时，为每位待办人补齐审批任务，并在数据权限层对待审单据只读放行，避免非首位审批人无法打开单据或执行审核。',
   'pages.dashboard.updateLog.entries.kuaizhizao-doc-form-reference-display.title':
-    '快智造单据表单引用数据统一走隐式授权',
+    '星制造单据表单引用数据统一走隐式授权',
   'pages.dashboard.updateLog.entries.kuaizhizao-doc-form-reference-display.description':
     '销售、采购、生产、仓储等单据新建编辑页的客户、供应商、物料与银行账户下拉改走引用展示接口，按单据宿主权限加载，不再因缺少主数据或财务菜单读权限而阻断建单。',
   'pages.dashboard.updateLog.entries.sales-order-form-reference-display.title':
@@ -29344,7 +29344,7 @@ export default {
   'pages.dashboard.updateLog.entries.kuaiplm-rd-projects-hide-material-col.description':
     '研发项目列表不再展示产品物料，列集中到编号名称、负责人、计划完成与阶段进度。',
   'pages.dashboard.updateLog.entries.kuaiplm-rd-projects-align-delivery.title':
-    '快研发菜单与列表对齐交付项目',
+    '星研发菜单与列表对齐交付项目',
   'pages.dashboard.updateLog.entries.kuaiplm-rd-projects-align-delivery.description':
     '项目中心改为研发项目（研发看板、研发项目、阶段管理）；研发项目列表编号名称堆叠，去掉项目类型列，阶段进度改为与交付项目相同的色条节点样式。',
   'pages.dashboard.updateLog.entries.delivery-schedules-menu-rename.title':
@@ -29410,7 +29410,7 @@ export default {
   'pages.dashboard.updateLog.entries.delivery-project-deferred-scope.title':
     '交付项目延伸能力归属说明',
   'pages.dashboard.updateLog.entries.delivery-project-deferred-scope.description':
-    '计效考核归入绩效管理、手机端汇报归入移动应用、工程 BOM 与项目库存通过 KuaiPLM 与仓储链接查看；交付项目聚焦厂内交机流程，现场安装统一走售后服务安装执行。',
+    '计效考核归入绩效管理、手机端汇报归入移动应用、工程 BOM 与项目库存通过 星研发 与仓储链接查看；交付项目聚焦厂内交机流程，现场安装统一走售后服务安装执行。',
   'pages.dashboard.updateLog.entries.delivery-project-features-complete.title':
     '交付项目前端能力补齐',
   'pages.dashboard.updateLog.entries.delivery-project-features-complete.description':
@@ -29422,7 +29422,7 @@ export default {
   'pages.dashboard.updateLog.entries.delivery-project-backend-p1.title':
     '交付项目后端能力补齐',
   'pages.dashboard.updateLog.entries.delivery-project-backend-p1.description':
-    '销售订单可下推交付项目并校验业务态；交付项目支持结案、暂停换模板、明细 JSON 与单据关联；快研发可生成交付项目；节点汇报审核独立权限。',
+    '销售订单可下推交付项目并校验业务态；交付项目支持结案、暂停换模板、明细 JSON 与单据关联；星研发可生成交付项目；节点汇报审核独立权限。',
   'pages.dashboard.updateLog.entries.delivery-project-documents-complete.title':
     '交付项目补齐参考 ERP 单据',
   'pages.dashboard.updateLog.entries.delivery-project-documents-complete.description':
@@ -29468,9 +29468,9 @@ export default {
   'pages.dashboard.updateLog.entries.app-sort-order-2xx-3xx-repair.description':
     '行业包固定 290 段、专业 APP 固定 310–350 段；修复部分租户仍停留在 210–250 导致专业 APP 排在行业包之前的问题，扫描注册时强制对齐排序契约。',
   'pages.dashboard.updateLog.entries.kuaizhizao-delivery-project-menu.title':
-    '快制造新增交付项目菜单（订单交机）',
+    '星制造新增交付项目菜单（订单交机）',
   'pages.dashboard.updateLog.entries.kuaizhizao-delivery-project-menu.description':
-    '销售管理与计划管理之间新增交付项目模块：交付中心、项目列表与详情、流程模板、节点汇报、项目跟进表与问题跟踪；销售订单可下推交付项目；快研发移除交付类型混用。',
+    '销售管理与计划管理之间新增交付项目模块：交付中心、项目列表与详情、流程模板、节点汇报、项目跟进表与问题跟踪；销售订单可下推交付项目；星研发移除交付类型混用。',
   'pages.dashboard.updateLog.entries.sync-mapping-add-more-fields.title':
     '同步字段映射支持添加更多字段',
   'pages.dashboard.updateLog.entries.sync-mapping-add-more-fields.description':
@@ -29622,7 +29622,7 @@ export default {
   'pages.dashboard.updateLog.entries.wo-next-operation-in-app-notify.title':
     '工序完成后可通知下一工序指派人',
   'pages.dashboard.updateLog.entries.wo-next-operation-in-app-notify.description':
-    '当前工序达到完成（报工审核通过或方案质检放行后）时，可按配置向下一工序指派人发送站内信。配置中心消息提醒加载快制造预设后启用「工序完成后通知下一工序」；通知角色选择「下一工序指派人」。待审核报工不再提前将工序标为已完成。',
+    '当前工序达到完成（报工审核通过或方案质检放行后）时，可按配置向下一工序指派人发送站内信。配置中心消息提醒加载星制造预设后启用「工序完成后通知下一工序」；通知角色选择「下一工序指派人」。待审核报工不再提前将工序标为已完成。',
   'pages.dashboard.updateLog.entries.sales-order-lifecycle-audited-shows-dash-fix.title':
     '修复销售订单执行状态显示为 —',
   'pages.dashboard.updateLog.entries.sales-order-lifecycle-audited-shows-dash-fix.description':
@@ -30029,11 +30029,11 @@ export default {
   'pages.dashboard.updateLog.entries.uni-report-search-filters.title':
     '系统自带报表补齐高级搜索筛选',
   'pages.dashboard.updateLog.entries.uni-report-search-filters.description':
-    'KuaizhizaoReport 按业务域自动注入关键词、仓库/物料/供应商/状态等下拉筛选；字段搜索同步并入 column_filters，库存收发存汇总等原先空白的高级搜索现已可用。',
+    '星制造报表 按业务域自动注入关键词、仓库/物料/供应商/状态等下拉筛选；字段搜索同步并入 column_filters，库存收发存汇总等原先空白的高级搜索现已可用。',
   'pages.dashboard.updateLog.entries.uni-report-no-stat-cards.title':
     '系统自带报表取消指标卡',
   'pages.dashboard.updateLog.entries.uni-report-no-stat-cards.description':
-    'UniReport / KuaizhizaoReport 不再挂载 ListPageTemplate 指标卡，工具栏「指标卡」按钮一并消失；汇总仍走表底合计行。',
+    'UniReport / 星制造报表 不再挂载 ListPageTemplate 指标卡，工具栏「指标卡」按钮一并消失；汇总仍走表底合计行。',
   'pages.dashboard.updateLog.entries.warehouse-report-pagination-double-slice.title':
     '修复库存收发存等报表分页始终只有一页',
   'pages.dashboard.updateLog.entries.warehouse-report-pagination-double-slice.description':
@@ -30301,11 +30301,11 @@ export default {
   'pages.dashboard.updateLog.entries.measuring-instruments-menu-docs-reports.title':
     '计量器具菜单补图标与单据报表',
   'pages.dashboard.updateLog.entries.measuring-instruments-menu-docs-reports.description':
-    '快设备计量器具分组增加仪表图标，并补齐校准记录、校准到期提醒、校准到期预警与校准记录明细；测量设备校准数据与设备管理侧隔离。',
+    '星设备计量器具分组增加仪表图标，并补齐校准记录、校准到期提醒、校准到期预警与校准记录明细；测量设备校准数据与设备管理侧隔离。',
   'pages.dashboard.updateLog.entries.measuring-instruments-ledger.title':
     '设备运维新增计量器具台账',
   'pages.dashboard.updateLog.entries.measuring-instruments-ledger.description':
-    '快设备菜单增加计量器具模块，台账记录本次校准时间与校准周期，支持上传计量证书；详情仅保留器具信息与校准记录，不含点检与保养；测量设备不再出现在普通设备台账列表。',
+    '星设备菜单增加计量器具模块，台账记录本次校准时间与校准周期，支持上传计量证书；详情仅保留器具信息与校准记录，不含点检与保养；测量设备不再出现在普通设备台账列表。',
   'pages.dashboard.updateLog.entries.module-chart-mount-masonry-offset-fix.title':
     '模块看板图表偶发偏移修复',
   'pages.dashboard.updateLog.entries.module-chart-mount-masonry-offset-fix.description':
@@ -30511,7 +30511,7 @@ export default {
   'pages.dashboard.updateLog.entries.uni-im-realtime-refresh.description':
     '默认启用 Socket.IO 推送，开发代理打通 /socket.io；顶栏未读与打开中的会话列表/消息另有短轮询兜底，新消息可及时出现在角标与聊天窗。',
   'pages.dashboard.updateLog.entries.uni-im-ai-reply-markdown.title':
-    '在线消息中 KU-AI 回复按 Markdown 渲染',
+    '在线消息中 星AI 回复按 Markdown 渲染',
   'pages.dashboard.updateLog.entries.uni-im-ai-reply-markdown.description':
     '群聊等会话里助手回复的加粗、列表、表格、代码块等 Markdown 语法会正确排版显示，不再把原始标记一并打出。',
   'pages.dashboard.updateLog.entries.uni-im-print-modal-zindex-stack.title':
@@ -30553,7 +30553,7 @@ export default {
   'pages.dashboard.updateLog.entries.uni-im-group-chat.title':
     '在线消息支持公共群与创建群聊',
   'pages.dashboard.updateLog.entries.uni-im-group-chat.description':
-    '默认公共群聊全员可发言；可自定义名称创建群聊（至少 2 人），并可绑定多个业务模块以同步站内推送；群内支持 @成员 与 @KU-AI 让智能助手参与回复。',
+    '默认公共群聊全员可发言；可自定义名称创建群聊（至少 2 人），并可绑定多个业务模块以同步站内推送；群内支持 @成员 与 @星AI 让智能助手参与回复。',
   'pages.dashboard.updateLog.entries.guest-login-ban-message.title':
     '体验登录封禁原因不再被吞掉',
   'pages.dashboard.updateLog.entries.guest-login-ban-message.description':
@@ -30657,23 +30657,23 @@ export default {
   'pages.dashboard.updateLog.entries.uni-im-direct-unread-sort.title':
     '在线消息个人列表未读排到最上',
   'pages.dashboard.updateLog.entries.uni-im-direct-unread-sort.description':
-    '「个人」分类在 KU-AI 置顶之下优先展示有未读的会话；并改进会话标题与联系人展示名匹配，避免未读角标有数却排不到列表顶部。',
+    '「个人」分类在 星AI 置顶之下优先展示有未读的会话；并改进会话标题与联系人展示名匹配，避免未读角标有数却排不到列表顶部。',
   'pages.dashboard.updateLog.entries.uni-im-kuai-inline-chat.title':
-    '在线消息内直接对话 KU-AI',
+    '在线消息内直接对话 星AI',
   'pages.dashboard.updateLog.entries.uni-im-kuai-inline-chat.description':
-    '个人列表点击 KU-AI 不再打开独立助手面板，改为在第三栏对话框内流式对话，输入与发送沿用当前 IM 布局。',
+    '个人列表点击 星AI 不再打开独立助手面板，改为在第三栏对话框内流式对话，输入与发送沿用当前 IM 布局。',
   'pages.dashboard.updateLog.entries.uni-im-kuai-list-avatar-header-fit.title':
-    '在线消息 KU-AI 头像按顶栏原样放入列表',
+    '在线消息 星AI 头像按顶栏原样放入列表',
   'pages.dashboard.updateLog.entries.uni-im-kuai-list-avatar-header-fit.description':
-    '列表 KU-AI 不再放大裁切 Lottie；与顶栏相同的 54px 完整机器人居中放进 40px 圆槽，耳机与紫圆完整可见，外径与用户头像对齐。',
+    '列表 星AI 不再放大裁切 Lottie；与顶栏相同的 54px 完整机器人居中放进 40px 圆槽，耳机与紫圆完整可见，外径与用户头像对齐。',
   'pages.dashboard.updateLog.entries.uni-im-kuai-list-avatar-size.title':
-    '在线消息 KU-AI 列表头像与用户同径',
+    '在线消息 星AI 列表头像与用户同径',
   'pages.dashboard.updateLog.entries.uni-im-kuai-list-avatar-size.description':
-    'KU-AI 列表头像改用与用户相同的 40px 圆形 Avatar 容器，Lottie 按 2.55 倍圆形裁切放大，紫圆视觉直径与下方用户头像一致。',
+    '星AI 列表头像改用与用户相同的 40px 圆形 Avatar 容器，Lottie 按 2.55 倍圆形裁切放大，紫圆视觉直径与下方用户头像一致。',
   'pages.dashboard.updateLog.entries.uni-im-kuai-lottie-avatar.title':
-    '在线消息 KU-AI 改用顶栏同款机器人头像',
+    '在线消息 星AI 改用顶栏同款机器人头像',
   'pages.dashboard.updateLog.entries.uni-im-kuai-lottie-avatar.description':
-    '个人列表置顶 KU-AI 与顶栏一致直接渲染 Lottie 小机器人，不再套方形 Avatar 或方形裁切，圆形观感与下方用户头像对齐。',
+    '个人列表置顶 星AI 与顶栏一致直接渲染 Lottie 小机器人，不再套方形 Avatar 或方形裁切，圆形观感与下方用户头像对齐。',
   'pages.dashboard.updateLog.entries.uni-im-chat-avatar-sender-fix.title':
     '在线消息聊天气泡头像按发送者显示',
   'pages.dashboard.updateLog.entries.uni-im-chat-avatar-sender-fix.description':
@@ -30689,15 +30689,15 @@ export default {
   'pages.dashboard.updateLog.entries.uni-im-direct-contact-recent-sort.title':
     '在线消息个人列表按最近对话排序',
   'pages.dashboard.updateLog.entries.uni-im-direct-contact-recent-sort.description':
-    '「个人」分类除置顶 KU-AI 外，组织用户按最近一条单聊消息时间倒序排列；尚未聊过的用户排在后面并按姓名排序。',
+    '「个人」分类除置顶 星AI 外，组织用户按最近一条单聊消息时间倒序排列；尚未聊过的用户排在后面并按姓名排序。',
   'pages.dashboard.updateLog.entries.uni-im-list-pane-resize-no-ticks.title':
     '在线消息列表拖柄去掉档位刻度',
   'pages.dashboard.updateLog.entries.uni-im-list-pane-resize-no-ticks.description':
     '第二栏与第三栏之间的宽度拖柄保留拖动与四档吸附，移除中间竖条刻度，界面更简洁。',
   'pages.dashboard.updateLog.entries.uni-im-direct-kuai-users.title':
-    '在线消息个人栏置顶 KU-AI 并列出组织用户',
+    '在线消息个人栏置顶 星AI 并列出组织用户',
   'pages.dashboard.updateLog.entries.uni-im-direct-kuai-users.description':
-    '「个人」分类首行固定 KU-AI 入口，点击打开顶栏同款助手；下方按姓名列出当前组织启用用户，支持搜索筛选，点选即可发起单聊并展示历史未读。',
+    '「个人」分类首行固定 星AI 入口，点击打开顶栏同款助手；下方按姓名列出当前组织启用用户，支持搜索筛选，点选即可发起单聊并展示历史未读。',
   'pages.dashboard.updateLog.entries.uni-im-nav-user-avatar.title':
     '在线消息侧栏接入用户真实头像',
   'pages.dashboard.updateLog.entries.uni-im-nav-user-avatar.description':
@@ -30717,15 +30717,15 @@ export default {
   'pages.dashboard.updateLog.entries.uni-im-header-entry.title':
     '在线消息改由顶栏图标打开',
   'pages.dashboard.updateLog.entries.uni-im-header-entry.description':
-    '移除右下角快沟通悬浮按钮；顶栏新增会话图标打开「在线消息」弹窗，未读角标与 KU-AI 同款右下角面板布局保留；系统「消息通知」铃铛仍独立。',
+    '移除右下角快沟通悬浮按钮；顶栏新增会话图标打开「在线消息」弹窗，未读角标与 星AI 同款右下角面板布局保留；系统「消息通知」铃铛仍独立。',
   'pages.dashboard.updateLog.entries.header-mobile-qr-balance.title':
     '顶栏移动端二维码下拉视觉平衡',
   'pages.dashboard.updateLog.entries.header-mobile-qr-balance.description':
     '小程序码与客户端下载码两栏标题下二维码对齐，版本号与包体大小移至底部；去掉中间分隔线与重复说明。',
   'pages.dashboard.updateLog.entries.uni-im-kuai-panel-style.title':
-    '快沟通面板对齐 KU-AI 视觉规范',
+    '快沟通面板对齐 星AI 视觉规范',
   'pages.dashboard.updateLog.entries.uni-im-kuai-panel-style.description':
-    '快沟通弹窗高度与 KU-AI 一致（600–720px），宽度加宽至 920px 以容纳会话列表与聊天区；采用圆角白底与细边框，不使用流光光晕边框；顶栏与输入区风格与 KU-AI 统一。',
+    '快沟通弹窗高度与 星AI 一致（600–720px），宽度加宽至 920px 以容纳会话列表与聊天区；采用圆角白底与细边框，不使用流光光晕边框；顶栏与输入区风格与 星AI 统一。',
   'pages.dashboard.updateLog.entries.header-mobile-miniprogram-merge.title':
     '顶栏小程序码并入手机图标',
   'pages.dashboard.updateLog.entries.header-mobile-miniprogram-merge.description':
@@ -30960,15 +30960,15 @@ export default {
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.title':
     '基础应用与扩展模块边界解耦',
   'pages.dashboard.updateLog.entries.application-layer-host-capabilities.description':
-    '快制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
+    '星制造与轻办公列表不再编译依赖行业包；扩展对照与清单改由平台 host-capabilities 接口按租户已启用模块动态解析。',
   'pages.dashboard.updateLog.entries.project-proposal-funide-menu-route-r01.title':
     '定制 OA 项目建议书菜单指向定制页',
   'pages.dashboard.updateLog.entries.project-proposal-funide-menu-route-r01.description':
-    '定制应用菜单与 document 替代改走 /apps/funide-oa/project-proposals；快研发宿主 path 在启用定制扩展时自动渲染纸质模板表单。',
+    '定制应用菜单与 document 替代改走 /apps/funide-oa/project-proposals；星研发宿主 path 在启用定制扩展时自动渲染纸质模板表单。',
   'pages.dashboard.updateLog.entries.project-proposal-dedicated-split-r01.title':
     '项目建议恢复通用页并分流定制模板',
   'pages.dashboard.updateLog.entries.project-proposal-dedicated-split-r01.description':
-    '快研发项目建议恢复中性列表与单供应商填写；客户纸质模板字段与评审表 UI 迁至定制应用路由，API 与权限仍共用 kuaiplm:project-proposal。',
+    '星研发项目建议恢复中性列表与单供应商填写；客户纸质模板字段与评审表 UI 迁至定制应用路由，API 与权限仍共用 kuaiplm:project-proposal。',
   'pages.dashboard.updateLog.entries.project-proposal-template-fields-r01.title':
     '项目建议书对齐纸质模板字段',
   'pages.dashboard.updateLog.entries.project-proposal-template-fields-r01.description':
@@ -31087,7 +31087,7 @@ export default {
   'pages.dashboard.updateLog.entries.dedicated-oa-bundle-menu-r01.title':
     '专用 OA 定制应用与 R 菜单聚合',
   'pages.dashboard.updateLog.entries.dedicated-oa-bundle-menu-r01.description':
-    '新增 is_dedicated 定制应用：侧栏按 R-01～R-16 两阶段组织菜单并链到快研发/快制造/轻办公/主数据；启用时按 requires_apps 自动安装并拉起依赖应用与组织流程扩展。',
+    '新增 is_dedicated 定制应用：侧栏按 R-01～R-16 两阶段组织菜单并链到星研发/星制造/轻办公/主数据；启用时按 requires_apps 自动安装并拉起依赖应用与组织流程扩展。',
   'pages.dashboard.updateLog.entries.dedicated-app-unbound-visible-r01.title':
     '定制应用未绑定时全员可见',
   'pages.dashboard.updateLog.entries.dedicated-app-unbound-visible-r01.description':
@@ -31103,7 +31103,7 @@ export default {
   'pages.dashboard.updateLog.entries.haolisales-dedicated-app-r01.title':
     '新增销售跟踪专用应用',
   'pages.dashboard.updateLog.entries.haolisales-dedicated-app-r01.description':
-    '与好力 GO 平级启用 haolisales：订单跟踪台账与月度工厂台账独立录入，共用主数据客商与物料，不回写快制造销售订单。',
+    '与好力 GO 平级启用 haolisales：订单跟踪台账与月度工厂台账独立录入，共用主数据客商与物料，不回写星制造销售订单。',
   'pages.dashboard.updateLog.entries.site-logo-round-crop-alpha-r01.title':
     '圆形剪裁 Logo 背景保持透明',
   'pages.dashboard.updateLog.entries.site-logo-round-crop-alpha-r01.description':
@@ -31646,7 +31646,7 @@ export default {
   'pages.dashboard.updateLog.entries.production-files-hide-industry-checklist.title': '生产文件页不再显示行业上线清单',
   'pages.dashboard.updateLog.entries.production-files-hide-industry-checklist.description':
     '生产文件工具栏去掉「行业上线清单」入口及弹窗，避免行业扩展清单干扰日常建档。',
-  'pages.dashboard.updateLog.entries.kuaiplm-system-archive-created-by.title': '快研发多表缺审计列导致 500',
+  'pages.dashboard.updateLog.entries.kuaiplm-system-archive-created-by.title': '星研发多表缺审计列导致 500',
   'pages.dashboard.updateLog.entries.kuaiplm-system-archive-created-by.description':
     '体系归档、年度计划月度台账、实验委托实测行建表漏写 BaseModel 审计列，列表/明细查询报列不存在；已补迁移并对齐建表脚本。',
   'pages.dashboard.updateLog.entries.rework-menu-restore-pack-menu-false.title': '行业扩展单据菜单交还宿主应用',
@@ -31663,8 +31663,8 @@ export default {
     '物料清单 BOM 默认规则为「BOM-物料编码-版本」且无流水号；预览发现编号已存在时改为明确提示修改版本，不再误报「规则未启用」。',
   'pages.dashboard.updateLog.entries.electronics-pack-menu-scope.title': '电子制造菜单只保留行业独有项',
   'pages.dashboard.updateLog.entries.electronics-pack-menu-scope.description':
-    '样品加工、BOM、ECN、试流、返工等 profile 扩展不再聚合到电子制造菜单，仍留在快研发/快制造原位置；行业包仅展示 OEM 签样与 ESD。',
-  'pages.dashboard.updateLog.entries.kuaiplm-router-import-fix-r15.title': '快研发 API 路由恢复',
+    '样品加工、BOM、ECN、试流、返工等 profile 扩展不再聚合到电子制造菜单，仍留在星研发/星制造原位置；行业包仅展示 OEM 签样与 ESD。',
+  'pages.dashboard.updateLog.entries.kuaiplm-router-import-fix-r15.title': '星研发 API 路由恢复',
   'pages.dashboard.updateLog.entries.kuaiplm-router-import-fix-r15.description':
     '修正体系归档服务错误 import，修复 kuaiplm 整应用路由未注册导致的样品加工等 404。',
   'pages.dashboard.updateLog.entries.kuaioa-menu-hr-r01.title': '轻办公人事菜单归类优化',
@@ -31687,7 +31687,7 @@ export default {
     '人事管理新增员工档案台账：支持正式工/临时工、计薪方式、入职离职、银行卡与生活费/岗位工资/社保公积金及节日福利标准；填写离职日期后自动标记为离职。编号自动生成，可与后续考勤、工资结算衔接。',
   'pages.dashboard.updateLog.entries.hr-schedule-split-menu-r01.title': '排班与人事计薪菜单拆分',
   'pages.dashboard.updateLog.entries.hr-schedule-split-menu-r01.description':
-    '快制造原「绩效管理」更名为「排班管理」，仅保留假期、班次、班次排班与工作日历；技能管理、工时单价、KPI、员工绩效配置、绩效汇总及计薪报表入口迁至轻办公「人事管理」。旧链接自动跳转，算薪与报工逻辑不变。',
+    '星制造原「绩效管理」更名为「排班管理」，仅保留假期、班次、班次排班与工作日历；技能管理、工时单价、KPI、员工绩效配置、绩效汇总及计薪报表入口迁至轻办公「人事管理」。旧链接自动跳转，算薪与报工逻辑不变。',
   'pages.dashboard.updateLog.entries.it-admin-asset-lifecycle-r14.title': 'IT 固定资产全链路与导出',
   'pages.dashboard.updateLog.entries.it-admin-asset-lifecycle-r14.description':
     '采买申请补原设备报废阶段、销账后报废校验、附件上传与列表导出；manifest 增加 export/print 权限码。',
@@ -31723,11 +31723,11 @@ export default {
     '部门申请、年度计划、特殊作业资格审核走平台审批流，末节点通过后再写回业务状态并下发；11 月部门申请窗口对已批准部门不再重复提醒。',
   'pages.dashboard.updateLog.entries.qc-sop-domain-r01-55.title': 'QC 材料 SOP 分域目录',
   'pages.dashboard.updateLog.entries.qc-sop-domain-r01-55.description':
-    'SOP 增加 pe/qc 业务域，快质量菜单独立 QC 材料 SOP 入口，与 PE 制造工段 SOP 列表分离，文控升版驳回流程一致。',
+    'SOP 增加 pe/qc 业务域，星质量菜单独立 QC 材料 SOP 入口，与 PE 制造工段 SOP 列表分离，文控升版驳回流程一致。',
   'pages.dashboard.updateLog.entries.annual-lab-plan-next-month-reminder-r07.title':
     '年度例式实验下月任务提醒',
   'pages.dashboard.updateLog.entries.annual-lab-plan-next-month-reminder-r07.description':
-    '已批准年度计划会在各任务月 1 日提醒月度责任人执行例试、上传报告并记录不良；配置中心加载快研发消息预设后启用。',
+    '已批准年度计划会在各任务月 1 日提醒月度责任人执行例试、上传报告并记录不良；配置中心加载星研发消息预设后启用。',
   'pages.dashboard.updateLog.entries.rd-project-system-archive-r01-70.title':
     '研发项目体系归档八类清单',
   'pages.dashboard.updateLog.entries.rd-project-system-archive-r01-70.description':
@@ -31775,7 +31775,7 @@ export default {
   'pages.dashboard.updateLog.entries.industry-pack-extension-menu-aggregation.title':
     '行业包聚合非通用单据菜单',
   'pages.dashboard.updateLog.entries.industry-pack-extension-menu-aggregation.description':
-    '行业扩展 replace 声明自动生成行业包子菜单；启用电子制造等行业包后，样品/BOM/ECN/试流/返工等宿主菜单从快研发快制造侧栏隐藏，统一在行业包下查找。',
+    '行业扩展 replace 声明自动生成行业包子菜单；启用电子制造等行业包后，样品/BOM/ECN/试流/返工等宿主菜单从星研发星制造侧栏隐藏，统一在行业包下查找。',
   'pages.dashboard.updateLog.entries.rework-order-form-profile-dynamic-fields.title':
     '返工单 form-profile 十段与排位',
   'pages.dashboard.updateLog.entries.rework-order-form-profile-dynamic-fields.description':
@@ -31847,7 +31847,7 @@ export default {
   'pages.dashboard.updateLog.entries.report-menu-order-and-labels.title':
     '报表菜单置底且分组四字命名',
   'pages.dashboard.updateLog.entries.report-menu-order-and-labels.description':
-    '轻财务各模块报表分组移至菜单最后一项；分组名称统一为资产报表、成本报表、分析报表等四字文案，与快制造销售报表等命名一致。',
+    '轻财务各模块报表分组移至菜单最后一项；分组名称统一为资产报表、成本报表、分析报表等四字文案，与星制造销售报表等命名一致。',
   'pages.dashboard.updateLog.entries.fa-depr-report-columns.title':
     '固定资产折旧报表列更明细',
   'pages.dashboard.updateLog.entries.fa-depr-report-columns.description':
@@ -31931,7 +31931,7 @@ export default {
   'pages.dashboard.updateLog.entries.sidebar-pro-app-badge-restore.title':
     '侧栏 PRO 应用徽标恢复显示',
   'pages.dashboard.updateLog.entries.sidebar-pro-app-badge-restore.description':
-    '修复分组标题解析应用 code 失败导致快报表、快数采、KU-AI 等专业版应用旁 PRO 徽标丢失的问题。',
+    '修复分组标题解析应用 code 失败导致星报表、星数采、星AI 等专业版应用旁 PRO 徽标丢失的问题。',
   'pages.dashboard.updateLog.entries.ar-ap-return-open-balance-offset.title':
     '退货冲减应收应付可收可付余额',
   'pages.dashboard.updateLog.entries.ar-ap-return-open-balance-offset.description':
@@ -32061,7 +32061,7 @@ export default {
   'pages.dashboard.updateLog.entries.process-route-detail-single-column.description':
     '工艺路线详情抽屉基本信息由双列改为单列，便于阅读编号、名称、工序序列与备注等字段。',
   'pages.dashboard.updateLog.entries.kuaizhizao-reset-include-purchase-inquiry.title':
-    '修复快制造重置后询价单等业务单据仍残留',
+    '修复星制造重置后询价单等业务单据仍残留',
   'pages.dashboard.updateLog.entries.kuaizhizao-reset-include-purchase-inquiry.description':
     '应用「重置数据」原先未覆盖采购询价/供应商报价、销售合同与变更单、需求运算等业务表；现已纳入重置清单，重置后不再残留询价单等单据。',
   'pages.dashboard.updateLog.entries.dashboard-quick-entry-icons-restore.title':
@@ -32125,11 +32125,11 @@ export default {
   'pages.dashboard.updateLog.entries.incoming-inspect-conduct-payload-error-detail.description':
     '执行检验写库时剔除来料单不存在的字段（如 measurement_data），避免 FieldError；Toast 展示后端真实错误；合格与不合格数量之和须等于检验数量，与后端一致。',
   'pages.dashboard.updateLog.entries.kuaiems-domain-prefixed-submenus.title':
-    '快设备侧栏二级菜单加领域前缀',
+    '星设备侧栏二级菜单加领域前缀',
   'pages.dashboard.updateLog.entries.kuaiems-domain-prefixed-submenus.description':
     '设备/模具/工装下「基础资料」「业务单据」分别改为设备资料与设备单据、模具资料与模具单据、工装资料与工装单据，避免三组同名。',
   'pages.dashboard.updateLog.entries.kuaiems-workbench-icon-hardhat.title':
-    '快设备设备运维图标改为安全帽',
+    '星设备设备运维图标改为安全帽',
   'pages.dashboard.updateLog.entries.kuaiems-workbench-icon-hardhat.description':
     '设备运维侧栏图标由工业仪表盘改为安全帽，避免与系统工作台仪表盘图标重复，并与设备管理齿轮区分。',
   'pages.dashboard.updateLog.entries.custom-menu-layout-disable-without-ref-validation.title':
@@ -32137,11 +32137,11 @@ export default {
   'pages.dashboard.updateLog.entries.custom-menu-layout-disable-without-ref-validation.description':
     '关闭启用时跳过 menu_ref 校验，且一键同步菜单不会改自组开关；此前同步后引用失效会导致关闭保存失败，看起来像被私自打开。',
   'pages.dashboard.updateLog.entries.kuaiems-workbench-rename-ops-dashboard.title':
-    '快设备工作台改名为设备运维',
+    '星设备工作台改名为设备运维',
   'pages.dashboard.updateLog.entries.kuaiems-workbench-rename-ops-dashboard.description':
     '一级菜单改为「设备运维」，子页改为「运维看板」；图标改用工业仪表盘，避免与设备管理齿轮图标重复。',
   'pages.dashboard.updateLog.entries.kuaiems-workbench-icon-equipment.title':
-    '快设备设备中心图标调整',
+    '星设备设备中心图标调整',
   'pages.dashboard.updateLog.entries.kuaiems-workbench-icon-equipment.description':
     '设备中心侧栏图标由显示器改为齿轮（equipment），更贴合设备运维语义。',
   'pages.dashboard.updateLog.entries.kuaioa-hr-training-submenu-group.title':
@@ -32155,17 +32155,17 @@ export default {
   'pages.dashboard.updateLog.entries.custom-menu-layout-hoist-ungrouped.title':
     '自组菜单侧栏不再显示未分组标题',
   'pages.dashboard.updateLog.entries.custom-menu-layout-hoist-ungrouped.description':
-    '「未分组」仅作编辑器虚拟桶；侧栏将其子项直接提升到 APP 下，避免快报表等应用多出一层未分组。',
+    '「未分组」仅作编辑器虚拟桶；侧栏将其子项直接提升到 APP 下，避免星报表等应用多出一层未分组。',
   'pages.dashboard.updateLog.entries.kuaireport-two-top-level-menu-groups.title':
-    '快报表侧栏改为两个一级菜单',
+    '星报表侧栏改为两个一级菜单',
   'pages.dashboard.updateLog.entries.kuaireport-two-top-level-menu-groups.description':
     '自制报表、看板设计各建一级分组并挂载对应子页，避免叶子直挂应用根被收入「未分组」。',
   'pages.dashboard.updateLog.entries.kuaiqms-menu-fold-basic-data.title':
-    '快质量侧栏归并基础资料菜单',
+    '星质量侧栏归并基础资料菜单',
   'pages.dashboard.updateLog.entries.kuaiqms-menu-fold-basic-data.description':
     '质检方案并入检验业务，ISO条款与体系文件并入质量体系，去掉一级「基础资料」。',
   'pages.dashboard.updateLog.entries.kuaireport-offline-analysis-center.title':
-    '快报表下线效能中心菜单',
+    '星报表下线效能中心菜单',
   'pages.dashboard.updateLog.entries.kuaireport-offline-analysis-center.description':
     '侧栏仅保留自制报表与看板设计两个入口；效能中心及节点时效、处理效率、跨业务报表等子页不再挂菜单。',
   'pages.dashboard.updateLog.entries.kuaioa-menu-consolidate-groups.title':
@@ -32181,9 +32181,9 @@ export default {
   'pages.dashboard.updateLog.entries.custom-menu-layout-respect-enabled-toggle.description':
     '自组菜单仅以「启用」开关为准：关闭并保存后不再因已有菜单项自动强制开启，侧栏恢复系统默认；布局数据仍保留便于再次启用。',
   'pages.dashboard.updateLog.entries.split-qms-ems-delivery-apps.title':
-    '新增快质量、快设备、快交付独立应用入口',
+    '新增星质量、星设备、星交付独立应用入口',
   'pages.dashboard.updateLog.entries.split-qms-ems-delivery-apps.description':
-    '质量、设备运维、交付/物流/售后从快制造侧栏拆出为独立应用（快质量 kuaiqms、快设备 kuaiems、快交付 kuaipd）；业务页面与权限码仍归属快制造；侧栏顺序为快制造→快质量→快设备→快交付→快研发→轻财务。',
+    '质量、设备运维、交付/物流/售后从星制造侧栏拆出为独立应用（星质量 kuaiqms、星设备 kuaiems、星交付 kuaipd）；业务页面与权限码仍归属星制造；侧栏顺序为星制造→星质量→星设备→星交付→星研发→轻财务。',
   'pages.dashboard.updateLog.entries.reminder-events-audit-columns.title':
     '修复提醒事件表缺少更新人字段',
   'pages.dashboard.updateLog.entries.reminder-events-audit-columns.description':
@@ -32317,13 +32317,13 @@ export default {
     '需求计算下推采购申请时会读取物料来源配置或默认采购价填入建议单价；采购申请转采购订单时，若行上单价为空则回退物料档案采购价，与手工选料带价逻辑一致。',
   'pages.dashboard.updateLog.entries.rich-page-help-views.title': '全站页面帮助视图接入',
   'pages.dashboard.updateLog.entries.rich-page-help-views.description':
-    '业务单据列表、主数据与系统配置页、模块中心工作台及报表支持切换到帮助视图，按当前页面能力阅读分章说明。已覆盖快制造、快财务、基础资料、PLM、IoT 等模块；报表统一使用通用帮助说明。',
+    '业务单据列表、主数据与系统配置页、模块中心工作台及报表支持切换到帮助视图，按当前页面能力阅读分章说明。已覆盖星制造、星财务、基础资料、PLM、IoT 等模块；报表统一使用通用帮助说明。',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.title': '补齐多语言包并提升老挝语覆盖率',
   'pages.dashboard.updateLog.entries.locale-pack-gap-sync.description':
-    '繁中、英、日、越、老五语 key 已与简体中文对齐；老挝语补译系统配置、快制造、基础资料等模块，并新增 glossary 人工词条与 locale 同步脚本，界面英文占位由约 58% 降至约 2%。',
+    '繁中、英、日、越、老五语 key 已与简体中文对齐；老挝语补译系统配置、星制造、基础资料等模块，并新增 glossary 人工词条与 locale 同步脚本，界面英文占位由约 58% 降至约 2%。',
   'pages.dashboard.updateLog.entries.notification-high-value-scenes.title': '配置中心可启用更多业务消息提醒场景',
   'pages.dashboard.updateLog.entries.notification-high-value-scenes.description':
-    '快制造消息提醒新增销售/采购审核、下推工单、工单下达完工返工、质量异常分派、设备派工恢复、库存预警、采购到货逾期与发货确认等场景；配置接收人并启用规则后才会发送，默认关闭以免打扰。',
+    '星制造消息提醒新增销售/采购审核、下推工单、工单下达完工返工、质量异常分派、设备派工恢复、库存预警、采购到货逾期与发货确认等场景；配置接收人并启用规则后才会发送，默认关闭以免打扰。',
   'pages.dashboard.updateLog.entries.work-order-list-query-performance.title': '优化工单列表与工序卡加载速度',
   'pages.dashboard.updateLog.entries.work-order-list-query-performance.description':
     '工单列表、工序卡展开与报工取单原先按每张检验单、每道工序重复查询审核开关与质检策略，现改为整页一次解析；列表取数过程中不再顺带补写拆分工单数据。查询次数不再随每页条数增长，翻页与展开更快。',
@@ -33018,7 +33018,7 @@ export default {
   'pages.infra.provenanceSummary.loadFailed': '加载构建来源汇总失败',
 
   'pages.infra.login.pageTitle': '平台登录',
-  'pages.infra.login.defaultTitle': 'RiverEdge SaaS 平台登录',
+  'pages.infra.login.defaultTitle': '星技谷 平台登录',
   'pages.infra.login.usernameRequired': '请输入用户名',
   'pages.infra.login.usernameMin': '用户名至少3个字符',
   'pages.infra.login.usernamePlaceholder': '用户名',
@@ -33029,7 +33029,7 @@ export default {
   'pages.infra.login.submit': '登录',
   'pages.infra.login.success': '登录成功',
   'pages.infra.login.error': '登录失败，请检查用户名和密码',
-  'pages.infra.login.defaultDocTitle': 'RiverEdge SaaS - 多组织管理框架',
+  'pages.infra.login.defaultDocTitle': '星技谷 - 多组织管理框架',
 
   'pages.infra.operation.title': '平台看板',
   'pages.infra.operation.subtitle': '平台级运营数据概览',
@@ -33450,7 +33450,7 @@ export default {
   'pages.infra.platform.loginClientAndroidEnabledTooltip': '关闭后，登录页不再显示移动端 PDA Android 安装包入口',
 
   // 报表与看板应用
-  'app.kuaireport.name': '快报表',
+  'app.kuaireport.name': '星报表',
   'app.kuaireport.menu.selfMadeReports': '自制报表',
   'app.kuaireport.menu.board-design': '看板设计',
   'app.kuaireport.menu.reports': '报表中心',
@@ -36669,7 +36669,7 @@ export default {
   'pages.system.applications.resetStart': '启动全量物理重置（且自动备份）',
   'pages.system.applications.resetTypeConfirm': '请在下方准确输入以下内容以确认操作：',
   'pages.system.applications.resetWarn1':
-    '重置操作将物理抹除「快制造」应用下所有的销售订单、生产工单、库存流水、需求计划等业务数据。此操作不可撤销！',
+    '重置操作将物理抹除「星制造」应用下所有的销售订单、生产工单、库存流水、需求计划等业务数据。此操作不可撤销！',
   'pages.system.applications.resetWarn2':
     '一旦点击下一步，数据将无法通过常规手段恢复。建议您确保当前没有正在进行的业务，并告知相关团队成员。',
   'pages.system.applications.resetWarnTitle': '极大风险操作：数据重置',

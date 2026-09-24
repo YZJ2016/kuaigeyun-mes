@@ -209,7 +209,7 @@ class TraceReportService:
   </table>
 
   <div class="footer">
-    本报告数据均来自系统已确认业务单据，不含推断信息。RiverEdge 追溯管理系统。
+    本报告数据均来自系统已确认业务单据，不含推断信息。星技谷 追溯管理系统。
   </div>
 </body>
 </html>"""

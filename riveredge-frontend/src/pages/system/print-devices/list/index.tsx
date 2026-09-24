@@ -283,12 +283,12 @@ const PrintDeviceListPage: React.FC = () => {
       const data: PrintDevicePrintData = {
         template_uuid: testTemplate.uuid,
         data: {
-          title: 'RiverEdge System Test Print',
+          title: 'StarTech System Test Print',
           device_name: record.name,
           device_code: record.code,
           print_time: formatDateTime(new Date(), 'YYYY-MM-DD HH:mm:ss'),
           test_message: 'If you can see this, the printer is working correctly.',
-          organization: 'RiverEdge Industrial',
+          organization: 'StarTech Industrial',
         },
         async_execution: false,
       };
