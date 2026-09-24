@@ -4,4 +4,5 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaiai.models.chat",
     "apps.kuaiai.models.catalog",
     "apps.kuaiai.models.agent",
+    "apps.kuaiai.models.knowledge",
 ]

@@ -18,10 +18,15 @@ class AiBusinessContext(BaseModel):
         default=None,
         description=(
             "扩展字段。约定键：capability_mode（ask|query|guide，默认 ask）、"
-            "agent_id（智能体库 id）、preset_prompt（中枢卡片带入的首条用户问题）"
+            "agent_id（智能体库 id）、preset_prompt（中枢卡片带入的首条用户问题）、"
+            "knowledge_id（知识库 id，纯对话请求级单库注入）"
         ),
     )
     agent_id: Optional[str] = Field(default=None, description="智能体库 id")
+    knowledge_id: Optional[int] = Field(
+        default=None,
+        description="知识库 ID（纯对话请求级单库注入；选中档案时忽略并拒绝）",
+    )
 
     def to_broker_dict(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = {}
@@ -35,6 +40,8 @@ class AiBusinessContext(BaseModel):
             payload["record_uuid"] = self.record_uuid
         if self.agent_id:
             payload["agent_id"] = self.agent_id
+        if self.knowledge_id is not None:
+            payload["knowledge_id"] = self.knowledge_id
         if self.extra:
             payload.update(self.extra)
         return payload

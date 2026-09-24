@@ -39,10 +39,16 @@ from langchain_openai import ChatOpenAI
 from loguru import logger
 from tortoise.transactions import in_transaction
 
-from apps.kuaiai.constants import MODEL_TYPE_CHAT, STATUS_ENABLED
+from apps.kuaiai.constants import (
+    KNOWLEDGE_RESULT_MAX_CHARS,
+    MODEL_TYPE_CHAT,
+    STATUS_ENABLED,
+)
 from apps.kuaiai.models.catalog import KuaiaiLlmModel
 from apps.kuaiai.models.chat import KuaiaiChatMessage, KuaiaiChatSession
+from apps.kuaiai.models.knowledge import KuaiaiKnowledgeBase
 from apps.kuaiai.services.agent_assembler import AssembledAgent, assemble
+from apps.kuaiai.services.retrieval import retrieve
 from apps.kuaiai.services.session_service import get_owned_session
 from core.ai.runtime.agent_factory import DEFAULT_RECURSION_LIMIT
 from core.ai.runtime.context import (
@@ -68,6 +74,7 @@ from core.ai.runtime.sse_adapter import agent_to_openai_sse
 from core.ai.runtime_config import AiRuntimeConfig
 from core.utils.timezone_utils import now_utc
 from infra.exceptions.exceptions import (
+    BusinessLogicError,
     ExternalServiceError,
     NotFoundError,
     ValidationError,
@@ -227,6 +234,46 @@ async def _page_context_summary(
     if isinstance(summary, str) and summary.strip():
         return summary.strip()
     return None
+
+
+async def _knowledge_context_summary(
+    tenant_id: int,
+    knowledge_id: Optional[int],
+    messages: List[Dict[str, Any]],
+) -> Optional[str]:
+    """路径 A 请求级知识库注入（S3）：``retrieve`` 命中 → 片段拼 SystemMessage。
+
+    与 ``_page_context_summary`` 同款容错：无命中/检索失败（facade 内部已
+    失败关闭返回 []）一律返回 None 走纯对话；片段 metadata 仅 file_name，
+    不落内部 id/路径/key（KR-I5）。
+    """
+    if knowledge_id is None:
+        return None
+    query = _last_user_content(messages)
+    if not query:
+        return None
+    hits = await retrieve(tenant_id, query, [knowledge_id])
+    if not hits:
+        return None
+    # 拼接片段总长截断到与 search_knowledge Tool 一致的 2000 字符（m8）
+    parts: List[str] = []
+    used = 0
+    for hit in hits:
+        name = str(hit.get("file_name") or "知识文档").strip()
+        content = str(hit.get("content") or "").strip()
+        if not content:
+            continue
+        segment = f"《{name}》：{content}"
+        remain = KNOWLEDGE_RESULT_MAX_CHARS - used
+        if remain <= 0:
+            break
+        if len(segment) > remain:
+            segment = segment[:remain]
+        parts.append(segment)
+        used += len(segment)
+    if not parts:
+        return None
+    return "以下是与问题相关的知识库内容（仅供参考）：\n" + "\n\n".join(parts)
 
 
 async def _match_catalog_model_id(
@@ -723,6 +770,24 @@ async def create_chat_completion(
             agent_path=agent_path,
         )
 
+    # S3 请求级 knowledge_id（路径 A 可选单库注入）：
+    # AC4——选中档案（路径 B）不接受请求级 kid，只用档案 knowledge_ids 经
+    # search_knowledge Tool；路径 A 复核本租户启用库（不存在/跨租户 404，
+    # 停用 400）。拒绝必须先于落库，故在此抛出。
+    knowledge_id = _context_int(context, "knowledge_id")
+    if knowledge_id is not None:
+        if assembled is not None:
+            raise BusinessLogicError(
+                "已选中 Agent 档案，请求级 knowledge_id 不生效"
+            )
+        kb = await KuaiaiKnowledgeBase.get_or_none(
+            tenant_id=tenant_id, id=knowledge_id, deleted_at__isnull=True
+        )
+        if kb is None:
+            raise NotFoundError("知识库", str(knowledge_id))
+        if kb.status != STATUS_ENABLED:
+            raise BusinessLogicError("知识库已停用")
+
     # U-2 解耦：目录行可独立支撑对话。先判定本次模型解析是否命中目录行——
     # 命中即跳过 AiRuntimeConfig.load（连接器未启用不再误伤 422）；
     # 站点开关 stream_enabled / custom_system_prompt 挂在连接器配置上，
@@ -796,6 +861,13 @@ async def create_chat_completion(
     page_summary = await _page_context_summary(context, tenant_id, user)
     if page_summary:
         lc_messages.insert(0, SystemMessage(content=page_summary))
+    # 路径 A 知识库注入（S3）：与页摘要同款 SystemMessage 注入；
+    # 命中为空/检索失败自然走纯对话
+    knowledge_summary = await _knowledge_context_summary(
+        tenant_id, knowledge_id, messages
+    )
+    if knowledge_summary:
+        lc_messages.insert(0, SystemMessage(content=knowledge_summary))
     custom_prompt = (custom_system_prompt or "").strip()
     if custom_prompt:
         lc_messages.insert(0, SystemMessage(content=custom_prompt))

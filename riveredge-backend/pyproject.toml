@@ -49,6 +49,9 @@ dependencies = [
     "langchain==1.4.2",
     "langchain-openai==1.6.5",
     "langgraph==1.2.12",
+    "langchain-text-splitters==1.1.2",
+    "python-docx>=1.2.0",
+    "python-pptx>=1.0.2",
 ]
 
 # Playwright：HTML→PDF。fast-deploy 在 PLAYWRIGHT_POSTINSTALL_ENABLE=1 时 uv sync --extra pdf 并安装 Chromium。

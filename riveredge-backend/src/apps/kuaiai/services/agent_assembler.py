@@ -10,8 +10,9 @@
    ``registry_to_lc_tools(profile.enabled_tools ∩ ENABLED_TOOL_NAMES)`` +
    ``build_tool_guard_middleware()`` → ``build_agent``。
 
-``knowledge_ids`` / ``mcp_server_ids`` 本单元不进 tools：``search_knowledge``
-handler 是 S3 内容、MCP 连接属 S4，档案勾选仅经闭集校验存 JSONB。
+``knowledge_ids`` 不进 tools 装配：``search_knowledge`` handler 调用时经
+``ctx.agent_id`` 回查档案取库列表（S3 已落地）；``mcp_server_ids`` 待 S4。
+档案勾选仅经闭集校验存 JSONB。
 
 默认档案（KR-D8）：仅当未传 ``agent_id`` 且调用方判定本次走 agent 路径时
 按名称 ``DEFAULT_AGENT_PROFILE_NAME``（「默认助手」，对齐 ktg-ai A31）解析，

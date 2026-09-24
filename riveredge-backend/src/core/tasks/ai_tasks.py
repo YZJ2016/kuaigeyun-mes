@@ -57,7 +57,9 @@ async def _run_ocr_extract(tenant_id: int, payload: Dict[str, Any]) -> Dict[str,
 
 
 async def _run_rag_reindex(tenant_id: int, payload: Dict[str, Any]) -> Dict[str, Any]:
-    document_id = payload.get("document_id") or payload.get("knowledge_id")
+    # 只认 document_id：knowledge_id 是库 id（一库多文档），与文档 id
+    # 语义不同，私仓时代的兼容回退键已随 S3 收口移除
+    document_id = payload.get("document_id")
     if document_id is None:
         raise ValueError("rag_reindex 需要 document_id")
     try:
