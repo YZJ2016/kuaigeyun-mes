@@ -22,6 +22,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 import apps.kuaiai.services.agent_assembler as agent_assembler
 import apps.kuaiai.services.chat_service as cs
+import apps.kuaiai.services.mcp_client_service as mcp_client_service
 from apps.kuaiai.models.agent import KuaiaiAgentProfile
 from apps.kuaiai.models.chat import KuaiaiChatMessage
 from apps.kuaiai.services.agent_assembler import AssembledAgent
@@ -326,7 +327,7 @@ class TestAssemble:
                 new=MagicMock(return_value=[]),
             ),
             patch.object(
-                agent_assembler,
+                mcp_client_service,
                 "build_tool_guard_middleware",
                 new=MagicMock(),
             ),
@@ -403,7 +404,7 @@ class TestAssemble:
                 new=MagicMock(return_value=[]),
             ) as mock_tools,
             patch.object(
-                agent_assembler, "build_tool_guard_middleware", new=MagicMock()
+                mcp_client_service, "build_tool_guard_middleware", new=MagicMock()
             ),
             patch.object(
                 agent_assembler, "build_agent", new=MagicMock(return_value="a")
@@ -555,7 +556,7 @@ class TestSendPathBGate:
                 new=MagicMock(return_value=[]),
             ),
             patch.object(
-                agent_assembler, "build_tool_guard_middleware", new=MagicMock()
+                mcp_client_service, "build_tool_guard_middleware", new=MagicMock()
             ),
             patch.object(
                 agent_assembler,

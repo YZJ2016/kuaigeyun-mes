@@ -7,8 +7,8 @@
 - enabled_tools 仅五值闭集子集，未知名 400；写 Tool 默认不勾（由前端/默认值保证）；
 - default_model_id 须指向本租户 model_type=chat 的启用行，跨租户/不存在 404，
   类型或状态不符 400；
-- knowledge_ids / mcp_server_ids 本期仅存 JSONB（库表/MCP 表属 S3/S4），
-  仅做形态归一；归属复核待对应表落地后由调用侧补齐。
+- knowledge_ids / mcp_server_ids 存 JSONB（形态归一）；发送时归属复核在
+  检索 facade / ``load_agent_mcp_tools``（本租户启用未删行；陈旧 id 静默过滤）。
 """
 
 from __future__ import annotations

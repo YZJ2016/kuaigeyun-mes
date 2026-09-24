@@ -10,8 +10,8 @@ readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
     "fastapi>=0.115.0,<0.116.0",
-    "uvicorn[standard]>=0.30.0,<0.31.0",  # 兼容Python 3.11的稳定版
-    "pydantic>=2.9.0,<2.10.0",  # 主流稳定版
+    "uvicorn[standard]>=0.30.0,<0.32.0",  # 兼容Python 3.11的稳定版；>=0.31.1 为 mcp 传递依赖下限
+    "pydantic>=2.9.0,<2.12.0",  # 主流稳定版；>=2.11 为 mcp 传递依赖下限
     "pydantic-settings>=2.6.0,<2.7.0",  # 主流稳定版
     "email-validator>=2.0.0",  # Pydantic EmailStr 类型验证所需
     "tortoise-orm==0.21.1",  # 回退到原来稳定版本
@@ -52,6 +52,7 @@ dependencies = [
     "langchain-text-splitters==1.1.2",
     "python-docx>=1.2.0",
     "python-pptx>=1.0.2",
+    "langchain-mcp-adapters==0.3.2",
 ]
 
 # Playwright：HTML→PDF。fast-deploy 在 PLAYWRIGHT_POSTINSTALL_ENABLE=1 时 uv sync --extra pdf 并安装 Chromium。
