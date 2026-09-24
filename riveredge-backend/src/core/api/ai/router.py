@@ -51,7 +51,8 @@ async def get_ai_status(ai_auth: AiAuth = Depends(get_ai_auth)):
 @router.post(
     "/chat/completions",
     response_model=None,
-    dependencies=[Depends(require_ai_capability("chat"))],
+    # KR-D4/spec134 契约C：对话发送权限 kuaiai:act:execute（"act" 映射，见 core/ai/deps.py）
+    dependencies=[Depends(require_ai_capability("act"))],
     responses={
         200: {
             "description": "Chat completion (JSON or SSE)",

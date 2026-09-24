@@ -18,14 +18,14 @@ from loguru import logger
 
 from apps.kuaizhizao.schemas.fai_balloon_ocr import FaiBalloonCandidate, FaiBalloonOcrResult
 from core.ai.draft_profiles import ensure_draft_profiles
+from core.ai.runtime.model_factory import resolve_model_source
+from core.ai.runtime.vision import extract_text_from_image
 from core.ai.structured_draft import StructuredDraftService
 from core.utils.deepseek_vision_client import (
     extract_json_object,
-    extract_text_from_image,
     guess_image_mime,
     is_deepseek_ocr_model,
 )
-from core.ai.runtime_config import AiRuntimeConfig
 from infra.exceptions.exceptions import ValidationError
 
 # DeepSeek-OCR / 纯 OCR：只抽字；一行一尺寸，便于规则补全
@@ -304,19 +304,13 @@ class FaiBalloonOcrService:
 
         import base64
 
-        config = await AiRuntimeConfig.load(tenant_id)
-        vision_config = {
-            "ocr_base_url": config.ocr_base_url,
-            "ocr_model": config.ocr_model,
-            "ocr_api_key": config.ocr_api_key,
-            "ocr_configured": config.ocr_configured,
-        }
+        # 视觉出站走 model_factory：目录 model_type=vision 行优先 → OCR 组兜底
+        vision_src = await resolve_model_source(tenant_id, model_type="vision")
         b64 = base64.b64encode(image_bytes).decode("ascii")
-        use_plain = is_deepseek_ocr_model(str(config.ocr_model or ""))
+        use_plain = is_deepseek_ocr_model(vision_src.model_name)
         prompt = _BALLOON_PLAIN_OCR_PROMPT if use_plain else _BALLOON_JSON_OCR_PROMPT
         ocr_text = await extract_text_from_image(
             tenant_id=tenant_id,
-            config=vision_config,
             mime=mime,
             b64=b64,
             prompt=prompt,
@@ -326,7 +320,7 @@ class FaiBalloonOcrService:
         logger.info(
             "fai balloon OCR raw tenant_id={} model={} plain={} chars={}",
             tenant_id,
-            config.ocr_model,
+            vision_src.model_name,
             use_plain,
             len(ocr_text or ""),
         )

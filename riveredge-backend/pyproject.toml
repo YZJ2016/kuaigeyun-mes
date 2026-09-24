@@ -46,6 +46,9 @@ dependencies = [
     "python-socketio>=5.11.0,<6",
     "prometheus-client>=0.26.0",
     "xlrd==2.0.1",
+    "langchain==1.4.2",
+    "langchain-openai==1.6.5",
+    "langgraph==1.2.12",
 ]
 
 # Playwright：HTML→PDF。fast-deploy 在 PLAYWRIGHT_POSTINSTALL_ENABLE=1 时 uv sync --extra pdf 并安装 Chromium。

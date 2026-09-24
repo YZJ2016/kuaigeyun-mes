@@ -1,8 +1,10 @@
 """
-DeepSeek / OpenAI 兼容视觉 OCR 客户端
+DeepSeek / OpenAI 兼容视觉 OCR 辅助函数
 
-DeepSeek 官方对话 API 仅支持文本；图片需走独立 OCR 视觉端点（如硅基流动 DeepSeek-OCR）。
-供销售订单智能录单、发票 AI 识别等复用。
+历史直发 HTTP（``post_chat_completions`` / ``extract_text_from_image``）已退役：
+出站一律经 ``core.ai.runtime.model_factory`` / ``runtime.vision``。
+本模块仅保留纯函数工具与 IntegrationConfig OCR 组读取
+（``get_deepseek_runtime_config``），供兜底与 content/mime 归一复用。
 """
 
 from __future__ import annotations
@@ -11,8 +13,6 @@ import json
 import re
 from typing import Any, Dict, Optional
 
-from loguru import logger
-
 from core.utils.integration_settings import (
     DEEPSEEK_DEFAULT_BASE_URL,
     DEEPSEEK_DEFAULT_MODEL,
@@ -20,7 +20,6 @@ from core.utils.integration_settings import (
     resolve_active_llm_integration,
 )
 from infra.exceptions.exceptions import ValidationError
-from infra.infrastructure.http import get_http_client
 
 OCR_NOT_CONFIGURED_MSG = (
     "DeepSeek 对话 API 不支持图片输入。"
@@ -76,16 +75,6 @@ def content_to_text(content: Any) -> str:
     return str(content).strip()
 
 
-def message_text(message: Dict[str, Any]) -> str:
-    if not message:
-        return ""
-    for key in ("content", "reasoning_content", "reasoning"):
-        text = content_to_text(message.get(key))
-        if text:
-            return text
-    return ""
-
-
 def guess_image_mime(image_bytes: bytes, content_type: Optional[str] = None) -> str:
     mime = (content_type or "").split(";")[0].strip().lower()
     if mime.startswith("image/"):
@@ -137,105 +126,3 @@ async def get_deepseek_runtime_config(tenant_id: int) -> Dict[str, Any]:
         "ocr_api_key": ocr_api_key,
         "ocr_configured": is_deepseek_ocr_endpoint_configured(active),
     }
-
-
-async def post_chat_completions(
-    *,
-    tenant_id: int,
-    base_url: str,
-    api_key: str,
-    payload: Dict[str, Any],
-    error_prefix: str,
-    timeout: float = 180.0,
-    log_label: str = "deepseek vision",
-) -> Dict[str, Any]:
-    url = f"{base_url.rstrip('/')}/chat/completions"
-    client = get_http_client()
-    try:
-        response = await client.post(
-            url,
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            timeout=timeout,
-        )
-    except Exception as exc:
-        logger.error(
-            "{} request failed tenant_id={} url={} error={}",
-            log_label,
-            tenant_id,
-            url,
-            exc,
-        )
-        raise ValidationError(f"{error_prefix}：无法连接服务，请检查网络或 Base URL") from exc
-
-    if response.status_code >= 400:
-        detail = response.text
-        try:
-            body = response.json()
-            detail = body.get("error", {}).get("message") or body.get("message") or detail
-        except Exception:
-            pass
-        logger.warning(
-            "{} error tenant_id={} url={} status={} detail={}",
-            log_label,
-            tenant_id,
-            url,
-            response.status_code,
-            detail,
-        )
-        raise ValidationError(f"{error_prefix}：{detail}")
-
-    try:
-        return response.json()
-    except ValueError as exc:
-        raise ValidationError(f"{error_prefix}：服务返回了无效响应") from exc
-
-
-async def extract_text_from_image(
-    *,
-    tenant_id: int,
-    config: Dict[str, Any],
-    mime: str,
-    b64: str,
-    prompt: str = DEFAULT_IMAGE_TEXT_EXTRACT_PROMPT,
-    max_tokens: int = 4096,
-    image_detail: str = "high",
-) -> str:
-    ocr_base_url = config.get("ocr_base_url")
-    ocr_model = config.get("ocr_model")
-    if not ocr_base_url or not ocr_model:
-        raise ValidationError(OCR_NOT_CONFIGURED_MSG)
-
-    detail = image_detail if image_detail in ("low", "high", "auto") else "high"
-    image_part: Dict[str, Any] = {
-        "type": "image_url",
-        "image_url": {"url": f"data:{mime};base64,{b64}", "detail": detail},
-    }
-    ocr_prompt = prompt
-    if is_deepseek_ocr_model(str(ocr_model)):
-        ocr_prompt = f"<image>\n{prompt}"
-    text_part = {"type": "text", "text": ocr_prompt}
-
-    payload = {
-        "model": ocr_model,
-        "messages": [{"role": "user", "content": [image_part, text_part]}],
-        "stream": False,
-        "temperature": 0.1,
-        "max_tokens": max_tokens,
-    }
-    body = await post_chat_completions(
-        tenant_id=tenant_id,
-        base_url=str(ocr_base_url),
-        api_key=config["ocr_api_key"],
-        payload=payload,
-        error_prefix="OCR 视觉识别失败",
-        log_label="deepseek OCR",
-    )
-    choice = (body.get("choices") or [{}])[0]
-    text = message_text(choice.get("message") or {})
-    if not text:
-        raise ValidationError("OCR 未识别到有效文本，请更换更清晰的单据图片")
-    return text

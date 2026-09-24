@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import importlib.util
+import time
 from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
 from fastapi.responses import StreamingResponse
+from loguru import logger
 
-from core.ai.agent_runner import AgentRunner
-from core.ai.completion_service import CompletionService
 from core.ai.deps import AiAuth
 from core.ai.runtime_config import AiRuntimeConfig
 from infra.exceptions.exceptions import ValidationError
@@ -42,7 +42,8 @@ def _normalize_user_chat_messages(messages: List[Dict[str, Any]]) -> List[Dict[s
 
 
 def _kuaiai_composed() -> bool:
-    return importlib.util.find_spec("apps.kuaiai.services.deepseek_service") is not None
+    # KR-D4：单名探测。旧名 apps.kuaiai.services.deepseek_service 已废止，不再探测。
+    return importlib.util.find_spec("apps.kuaiai.services.chat_service") is not None
 
 
 async def create_chat_completion(
@@ -62,9 +63,9 @@ async def create_chat_completion(
         raise ValidationError("messages 不能为空")
 
     if _kuaiai_composed():
-        from apps.kuaiai.services.deepseek_service import DeepSeekService
+        from apps.kuaiai.services.chat_service import create_chat_completion as kuaiai_chat_completion
 
-        result = await DeepSeekService.create_chat_completion(
+        result = await kuaiai_chat_completion(
             ai_auth.tenant_id,
             normalized,
             model=model,
@@ -81,16 +82,30 @@ async def create_chat_completion(
             return StreamingResponse(result, media_type="text/event-stream")
         return result
 
+    # KR-G0 兜底分支（find_spec 未命中 kuaiai）：出站改走
+    # core/ai/runtime/model_factory（目录行优先 → IntegrationConfig 兜底），
+    # 退役 CompletionService / AgentRunner。
+    from core.ai.runtime.memory import dicts_to_lc_messages, message_text
+    from core.ai.runtime.model_factory import build_chat_model
+
     config = await AiRuntimeConfig.load(ai_auth.tenant_id)
-    payload = {
-        "model": model or config.chat_model,
-        "messages": normalized,
-        "temperature": temperature if temperature is not None else 0.7,
-    }
+    if stream and not config.stream_enabled:
+        raise ValidationError("站点未启用流式对话")
+
+    chat = await build_chat_model(ai_auth.tenant_id)
+    # 兜底路径忽略客户端 model 覆盖（路径 A 走目录白名单，这里直绑任意值
+    # 语义不一致）；模型名以目录行/IntegrationConfig 配置为准
+    model_name = chat.model_name
+    bound = chat.bind(
+        temperature=temperature if temperature is not None else 0.7,
+    )
+    lc_messages = dicts_to_lc_messages(normalized)
+
     if stream:
+        from core.ai.runtime.sse_adapter import chat_to_openai_sse
         from core.services.realtime.ai_stream_bridge import wrap_ai_sse_stream
 
-        stream_iter = CompletionService.stream_chat(config, payload)
+        stream_iter = chat_to_openai_sse(bound, lc_messages, model_name=model_name)
         session_id = None
         if isinstance(context, dict):
             raw_session = context.get("session_id")
@@ -104,10 +119,38 @@ async def create_chat_completion(
         )
         return StreamingResponse(wrapped, media_type="text/event-stream")
 
-    runner = AgentRunner(config=config, tool_executor=None)
-    return await runner.run(
-        normalized,
-        model=model,
-        temperature=temperature,
-        stream=False,
-    )
+    try:
+        response = await bound.ainvoke(lc_messages)
+    except Exception as exc:
+        # KR-I5：仅记录异常类型，不落 base_url/key
+        logger.error(
+            "AI 兜底对话失败 tenant_id={} error_type={}",
+            ai_auth.tenant_id,
+            type(exc).__name__,
+        )
+        raise ValidationError("AI 对话调用失败，请稍后重试") from exc
+
+    usage_meta = getattr(response, "usage_metadata", None) or {}
+    return {
+        "id": getattr(response, "id", None) or "chatcmpl-kuaiai",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": model_name,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": message_text(response)},
+                "finish_reason": (
+                    (getattr(response, "response_metadata", None) or {}).get(
+                        "finish_reason"
+                    )
+                    or "stop"
+                ),
+            }
+        ],
+        "usage": {
+            "prompt_tokens": usage_meta.get("input_tokens"),
+            "completion_tokens": usage_meta.get("output_tokens"),
+            "total_tokens": usage_meta.get("total_tokens"),
+        },
+    }

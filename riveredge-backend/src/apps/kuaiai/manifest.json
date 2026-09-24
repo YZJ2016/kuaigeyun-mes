@@ -1,0 +1,170 @@
+{
+  "code": "kuaiai",
+  "name": "KU-AI",
+  "version": "2.0.0",
+  "is_pro": true,
+  "market_category": "pro",
+  "description": "嵌入业务场景的 AI 智能辅助引擎：全宽对话、顶栏助手、Agent 档案、知识库与 MCP 白名单",
+  "icon": "sparkles",
+  "author": "RiverEdge Team",
+  "entry_point": "../apps/kuaiai/index.tsx",
+  "route_path": "/apps/kuaiai",
+  "sort_order": 350,
+  "menu_config": {
+    "title": "app.kuaiai.name",
+    "icon": "sparkles",
+    "path": "/apps/kuaiai",
+    "permission": "kuaiai:entry:read",
+    "children": [
+      {
+        "title": "app.kuaiai.menu.chat",
+        "path": "/apps/kuaiai/chat",
+        "icon": "message",
+        "permission": "kuaiai:entry:read",
+        "sort_order": 1
+      },
+      {
+        "title": "app.kuaiai.menu.agents",
+        "path": "/apps/kuaiai/agents",
+        "icon": "robot",
+        "permission": "kuaiai:agent:list",
+        "sort_order": 2
+      },
+      {
+        "title": "app.kuaiai.menu.knowledge",
+        "path": "/apps/kuaiai/knowledge",
+        "icon": "book",
+        "permission": "kuaiai:knowledge:list",
+        "sort_order": 3
+      },
+      {
+        "title": "app.kuaiai.menu.models",
+        "path": "/apps/kuaiai/models",
+        "icon": "deploymentUnit",
+        "permission": "kuaiai:model:list",
+        "sort_order": 4
+      },
+      {
+        "title": "app.kuaiai.menu.mcp",
+        "path": "/apps/kuaiai/mcp",
+        "icon": "api",
+        "permission": "kuaiai:mcp:list",
+        "sort_order": 5
+      }
+    ]
+  },
+  "permissions": [
+    "kuaiai:entry:read",
+    "kuaiai:act:execute",
+    "kuaiai:session:list",
+    "kuaiai:session:query",
+    "kuaiai:session:add",
+    "kuaiai:session:edit",
+    "kuaiai:session:remove",
+    "kuaiai:agent:list",
+    "kuaiai:agent:query",
+    "kuaiai:agent:add",
+    "kuaiai:agent:edit",
+    "kuaiai:agent:remove",
+    "kuaiai:knowledge:list",
+    "kuaiai:knowledge:query",
+    "kuaiai:knowledge:add",
+    "kuaiai:knowledge:edit",
+    "kuaiai:knowledge:remove",
+    "kuaiai:mcp:list",
+    "kuaiai:mcp:query",
+    "kuaiai:mcp:add",
+    "kuaiai:mcp:edit",
+    "kuaiai:mcp:remove",
+    "kuaiai:model:list",
+    "kuaiai:model:query",
+    "kuaiai:model:add",
+    "kuaiai:model:edit",
+    "kuaiai:model:remove"
+  ],
+  "ai_tools": [
+    {
+      "name": "search_knowledge",
+      "description": "检索企业知识库（当前暂未启用，S3 上线）",
+      "permission": "kuaiai:act:execute",
+      "handler": "apps.kuaiai.services.chat_tools:search_knowledge",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string", "description": "检索问题"}
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "query_workorder",
+      "description": "查询生产工单（按工单 id 查详情摘要，或按编码/关键词/状态列表查询）",
+      "permission": "kuaizhizao:work-order:read",
+      "handler": "apps.kuaiai.services.chat_tools:query_workorder",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "work_order_id": {"type": "integer", "description": "工单 ID"},
+          "code": {"type": "string", "description": "工单编码（模糊）"},
+          "keyword": {"type": "string", "description": "关键词（编码/名称/产品）"},
+          "status": {"type": "string", "description": "工单状态过滤"},
+          "limit": {"type": "integer", "description": "返回条数上限（默认10）"}
+        }
+      }
+    },
+    {
+      "name": "list_workorder_tasks",
+      "description": "列出工单工序任务及各自状态/完成数量",
+      "permission": "kuaizhizao:work-order:read",
+      "handler": "apps.kuaiai.services.chat_tools:list_workorder_tasks",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "work_order_id": {"type": "integer", "description": "工单 ID"}
+        },
+        "required": ["work_order_id"]
+      }
+    },
+    {
+      "name": "submit_production_feedback",
+      "description": "为工单工序提交报工（本人自报；代报/小组报工走业务页面）",
+      "permission": "kuaizhizao:production-execution-reporting:create",
+      "handler": "apps.kuaiai.services.chat_tools:submit_production_feedback",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "work_order_id": {"type": "integer", "description": "工单 ID"},
+          "operation_id": {"type": "integer", "description": "工序 ID（list_workorder_tasks 返回的 operation_id）"},
+          "reported_quantity": {"type": "number", "description": "报工数量"},
+          "qualified_quantity": {"type": "number", "description": "合格数量（缺省=报工-不合格）"},
+          "unqualified_quantity": {"type": "number", "description": "不合格数量"},
+          "work_hours": {"type": "number", "description": "工时（小时，可空）"},
+          "remarks": {"type": "string", "description": "备注"}
+        },
+        "required": ["work_order_id", "operation_id", "reported_quantity"]
+      }
+    },
+    {
+      "name": "update_workorder_status",
+      "description": "更新工单状态（仅放行迁移：已下达→in_progress、in_progress→paused、paused→in_progress、in_progress→cancelled）",
+      "permission": "kuaizhizao:work-order:update",
+      "handler": "apps.kuaiai.services.chat_tools:update_workorder_status",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "work_order_id": {"type": "integer", "description": "工单 ID"},
+          "status": {
+            "type": "string",
+            "enum": ["in_progress", "paused", "completed", "cancelled"],
+            "description": "目标状态"
+          }
+        },
+        "required": ["work_order_id", "status"]
+      }
+    }
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
+}

@@ -807,47 +807,16 @@ class ImService:
 
         reply_text = ""
         try:
-            import importlib.util
+            # KR-G0：出站改走 runtime/model_factory（目录行优先 → 连接器兜底）
+            from core.ai.runtime.memory import message_text
+            from core.ai.runtime.model_factory import build_chat_model
 
-            if importlib.util.find_spec("apps.kuaiai.services.deepseek_service") is not None:
-                from apps.kuaiai.services.deepseek_service import DeepSeekService
-
-                user = await User.filter(id=trigger_user_id, tenant_id=tenant_id).first()
-                result = await DeepSeekService.create_chat_completion(
-                    tenant_id,
-                    messages,
-                    stream=False,
-                    user=user,
-                    is_infra_admin=False,
-                    is_tenant_admin=False,
-                    context={"source": "im_group"},
-                )
-                if isinstance(result, dict):
-                    choices = result.get("choices") or []
-                    if choices:
-                        reply_text = str(
-                            (choices[0].get("message") or {}).get("content") or ""
-                        ).strip()
-            else:
-                from core.ai.completion_service import CompletionService
-                from core.ai.runtime_config import AiRuntimeConfig
-
-                config = await AiRuntimeConfig.load(tenant_id)
-                result = await CompletionService.complete(
-                    config,
-                    {
-                        "model": config.chat_model,
-                        "messages": messages,
-                        "temperature": 0.7,
-                    },
-                )
-                choices = result.get("choices") or []
-                if choices:
-                    reply_text = str(
-                        (choices[0].get("message") or {}).get("content") or ""
-                    ).strip()
+            chat = await build_chat_model(tenant_id)
+            response = await chat.bind(temperature=0.7).ainvoke(messages)
+            reply_text = message_text(response).strip()
         except Exception as exc:
-            logger.warning("IM KU-AI 调用失败: {}", exc)
+            # KR-I5：不落异常原文（可能含上游地址）
+            logger.warning("IM KU-AI 调用失败: {}", type(exc).__name__)
             reply_text = ""
 
         if not reply_text:

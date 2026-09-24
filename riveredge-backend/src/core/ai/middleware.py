@@ -64,18 +64,44 @@ class AiAuditMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _extract_identity(request: Request) -> tuple[Optional[int], Optional[int]]:
-        tenant_raw = request.headers.get("X-Tenant-ID") or request.headers.get("x-tenant-id")
-        tenant_id: Optional[int] = None
-        if tenant_raw and str(tenant_raw).strip().isdigit():
-            tenant_id = int(str(tenant_raw).strip())
+        """审计归属只认已认证身份。
 
-        user_id: Optional[int] = None
+        红线：禁止信 ``X-Tenant-ID`` 等客户端租户头（可伪造归属）。
+        优先取 get_current_user 处理期写入的 ``request.state.tenant_id``
+        /``user_id``（JWT 解析结果）；state 缺失时回退直接解析
+        Authorization JWT（与 OperationLogMiddleware 同款）。
+        """
         state = getattr(request, "state", None)
         if state is not None:
-            user = getattr(state, "user", None)
-            if user is not None and getattr(user, "id", None) is not None:
-                user_id = int(user.id)
-        return tenant_id, user_id
+            cached_tenant_id = getattr(state, "tenant_id", None)
+            cached_user_id = getattr(state, "user_id", None)
+            if cached_user_id is not None:
+                try:
+                    tenant_id = (
+                        int(cached_tenant_id) if cached_tenant_id is not None else None
+                    )
+                    return tenant_id, int(cached_user_id)
+                except (ValueError, TypeError):
+                    pass
+
+        authorization = request.headers.get("Authorization")
+        if not authorization or not authorization.startswith("Bearer "):
+            return None, None
+        try:
+            from infra.domain.security.security import get_token_payload
+
+            payload = get_token_payload(authorization[7:])
+            if not payload:
+                return None, None
+            tenant_id = payload.get("tenant_id")
+            sub = payload.get("sub")
+            tenant_id_int = int(tenant_id) if tenant_id is not None else None
+            user_id_int = int(sub) if sub is not None else None
+            return tenant_id_int, user_id_int
+        except (ValueError, TypeError):
+            return None, None
+        except Exception:  # noqa: BLE001
+            return None, None
 
     @staticmethod
     async def _persist_audit(

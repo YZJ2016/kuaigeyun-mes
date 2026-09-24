@@ -7,15 +7,15 @@ import json
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
+from loguru import logger
 from pydantic import BaseModel
 
-from core.ai.completion_service import CompletionService
-from core.ai.runtime_config import AiRuntimeConfig
+from core.ai.runtime.memory import message_text
+from core.ai.runtime.model_factory import build_chat_model
+from core.ai.runtime.vision import extract_text_from_image
 from core.utils.deepseek_vision_client import (
     extract_json_object,
-    extract_text_from_image,
     guess_image_mime,
-    message_text,
 )
 from infra.exceptions.exceptions import ValidationError
 
@@ -56,25 +56,28 @@ class StructuredDraftService:
         error_prefix: str,
         temperature: float = 0.2,
     ) -> Dict[str, Any]:
-        config = await AiRuntimeConfig.load(tenant_id)
-        payload = {
-            "model": config.chat_model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_content},
-            ],
-            "response_format": {"type": "json_object"},
-            "temperature": temperature,
-        }
-        body = await CompletionService.complete(
-            config,
-            payload,
-            error_prefix=error_prefix,
-            timeout=180.0,
+        chat = await build_chat_model(tenant_id)
+        bound = chat.bind(
+            response_format={"type": "json_object"},
+            temperature=temperature,
         )
-        choice = (body.get("choices") or [{}])[0]
-        text = message_text(choice.get("message") or {})
-        return extract_json_object(text)
+        try:
+            response = await bound.ainvoke(
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_content},
+                ]
+            )
+        except Exception as exc:
+            # KR-I5：仅记录异常类型，不落 base_url/key
+            logger.error(
+                "{} tenant_id={} error_type={}",
+                error_prefix,
+                tenant_id,
+                type(exc).__name__,
+            )
+            raise ValidationError(error_prefix) from exc
+        return extract_json_object(message_text(response))
 
     @classmethod
     async def structure_text(
@@ -98,25 +101,28 @@ class StructuredDraftService:
                 f"用户说明：\n{source_text}"
             )
 
-        config = await AiRuntimeConfig.load(tenant_id)
-        payload = {
-            "model": config.chat_model,
-            "messages": [
-                {"role": "system", "content": profile.system_prompt},
-                {"role": "user", "content": user_content},
-            ],
-            "response_format": {"type": "json_object"},
-            "temperature": 0.1,
-        }
-        body = await CompletionService.complete(
-            config,
-            payload,
-            error_prefix=f"{schema_name} 字段结构化失败",
-            timeout=180.0,
+        error_prefix = f"{schema_name} 字段结构化失败"
+        chat = await build_chat_model(tenant_id)
+        bound = chat.bind(
+            response_format={"type": "json_object"},
+            temperature=0.1,
         )
-        choice = (body.get("choices") or [{}])[0]
-        text = message_text(choice.get("message") or {})
-        data = extract_json_object(text)
+        try:
+            response = await bound.ainvoke(
+                [
+                    {"role": "system", "content": profile.system_prompt},
+                    {"role": "user", "content": user_content},
+                ]
+            )
+        except Exception as exc:
+            logger.error(
+                "{} tenant_id={} error_type={}",
+                error_prefix,
+                tenant_id,
+                type(exc).__name__,
+            )
+            raise ValidationError(error_prefix) from exc
+        data = extract_json_object(message_text(response))
         items_raw = data.get("items") or []
         if isinstance(items_raw, list):
             data["items"] = [row for row in items_raw if isinstance(row, dict)]
@@ -151,17 +157,9 @@ class StructuredDraftService:
         if not mime.startswith("image/"):
             raise ValidationError("仅支持图片格式（JPG、PNG、WEBP 等）")
 
-        config = await AiRuntimeConfig.load(tenant_id)
-        vision_config = {
-            "ocr_base_url": config.ocr_base_url,
-            "ocr_model": config.ocr_model,
-            "ocr_api_key": config.ocr_api_key,
-            "ocr_configured": config.ocr_configured,
-        }
         b64 = base64.b64encode(image_bytes).decode("ascii")
         ocr_text = await extract_text_from_image(
             tenant_id=tenant_id,
-            config=vision_config,
             mime=mime,
             b64=b64,
             prompt=ocr_prompt,
