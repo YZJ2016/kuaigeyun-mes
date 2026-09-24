@@ -12,6 +12,7 @@ CATALOG_STATUSES = frozenset({STATUS_ENABLED, STATUS_DISABLED})
 # llm_models.model_type 闭集（KR-D5：至少 chat|embed|vision）
 MODEL_TYPES = frozenset({"chat", "embed", "vision"})
 MODEL_TYPE_CHAT = "chat"
+MODEL_TYPE_EMBED = "embed"
 
 # KR-D10 受控写 Tool 闭集五值：保存时校验，未知名 400；写 Tool 默认不勾
 ENABLED_TOOL_NAMES = frozenset(
@@ -30,6 +31,10 @@ GRANT_MODE_USER = "USER"
 GRANT_MODES = frozenset({GRANT_MODE_ROLE, GRANT_MODE_USER})
 GRANT_TARGET_TYPE_ROLE = "role"
 GRANT_TARGET_TYPE_USER = "user"
+
+# 知识检索片段拼接总长上限（字符）：search_knowledge Tool 返回与路径 A
+# SystemMessage 注入同口径（S3 review m8），防超长塞爆上下文
+KNOWLEDGE_RESULT_MAX_CHARS = 2000
 
 # KR-D8 租户默认档案：对齐 ktg-ai A31（``AiAgentProfileServiceImpl.DEFAULT_NAME``）。
 # 仅按名称解析；不强制种子。若租户自行建同名档案，enabled_tools 约定仅

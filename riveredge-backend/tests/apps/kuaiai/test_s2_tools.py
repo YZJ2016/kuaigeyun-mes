@@ -3,7 +3,7 @@
 全部 mock Tortoise / 业务 service，不需要真实数据库。覆盖：
 - handler 经 tool_bridge 端到端：有 ctx 调到底层 service；无 ctx → 错误 ToolMessage
 - build_tool_guard_middleware：无权限回 ToolMessage(status="error")
-- search_knowledge stub 固定文案（不假检索）
+- search_knowledge 闭包文案（无档案绑定不检索，S3 真实现见 test_s3_wiring）
 - page_context：白名单 screen / 未知 screen / 未知 resource / 无权限 / label 不进返回值
 - manifest ai_tools 五名与 ENABLED_TOOL_NAMES 一致、handler 可 import
 """
@@ -277,11 +277,12 @@ class TestToolBridgeEndToEnd:
         assert payload.qualified_quantity == Decimal("5")
 
     @pytest.mark.asyncio
-    async def test_search_knowledge_stub(self, ai_ctx):
+    async def test_search_knowledge_no_agent_profile(self, ai_ctx):
+        """S3 起接真检索：ctx 无 agent_id → 未绑定档案文案（不假检索）。"""
         tools = registry_to_lc_tools(["search_knowledge"])
         result = await tools[0].ainvoke({"query": "如何报工"})
-        assert result == chat_tools._ERR_SEARCH_KNOWLEDGE_STUB
-        assert "暂未启用" in result
+        assert result == chat_tools._ERR_NO_AGENT_PROFILE
+        assert "档案" in result
 
     @pytest.mark.asyncio
     async def test_search_knowledge_no_ctx_error_text(self):

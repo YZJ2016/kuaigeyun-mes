@@ -36,7 +36,24 @@ from apps.kuaiai.schemas.chat import (
     ChatSessionOut,
     ChatSessionUpdate,
 )
-from apps.kuaiai.services import agent_service, catalog_service, grant_service, session_service
+from apps.kuaiai.schemas.knowledge import (
+    ChunkOut,
+    DocumentCreate,
+    DocumentListOut,
+    DocumentOut,
+    KnowledgeBaseCreate,
+    KnowledgeBaseOption,
+    KnowledgeBaseOut,
+    KnowledgeBaseUpdate,
+)
+from apps.kuaiai.services import (
+    agent_service,
+    catalog_service,
+    grant_service,
+    knowledge_base_service,
+    session_service,
+)
+from apps.kuaiai.services.knowledge_service import KnowledgeService
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
@@ -606,3 +623,291 @@ async def api_put_agent_grants(
     return await grant_service.replace_grants(
         tenant_id, profile, payload.target_ids, current_user
     )
+
+
+# ============================================================ S3 知识库
+
+
+@router.get(
+    "/knowledge-bases",
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "list",
+                required_permissions=["kuaiai:knowledge:list"],
+            )
+        )
+    ],
+)
+async def api_list_knowledge_bases(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    keyword: str | None = Query(None),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """知识库分页列表 {items,total}；keyword 命中 name。"""
+    result = await knowledge_base_service.list_bases(
+        tenant_id, page=page, page_size=page_size, keyword=keyword
+    )
+    return {
+        "items": [KnowledgeBaseOut.model_validate(b) for b in result["items"]],
+        "total": result["total"],
+    }
+
+
+@router.post(
+    "/knowledge-bases",
+    response_model=KnowledgeBaseOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "add",
+                required_permissions=["kuaiai:knowledge:add"],
+            )
+        )
+    ],
+)
+async def api_create_knowledge_base(
+    payload: KnowledgeBaseCreate,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    return await knowledge_base_service.create_base(tenant_id, current_user, payload)
+
+
+# /knowledge-bases/options 必须先于 /knowledge-bases/{kb_id} 注册
+@router.get(
+    "/knowledge-bases/options",
+    response_model=list[KnowledgeBaseOption],
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "query",
+                required_permissions=["kuaiai:knowledge:query"],
+            )
+        )
+    ],
+)
+async def api_knowledge_base_options(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """启用知识库下拉项。"""
+    return await knowledge_base_service.base_options(tenant_id)
+
+
+@router.get(
+    "/knowledge-bases/{kb_id}",
+    response_model=KnowledgeBaseOut,
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "query",
+                required_permissions=["kuaiai:knowledge:query"],
+            )
+        )
+    ],
+)
+async def api_get_knowledge_base(
+    kb_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await knowledge_base_service.get_base(tenant_id, kb_id)
+
+
+@router.put(
+    "/knowledge-bases/{kb_id}",
+    response_model=KnowledgeBaseOut,
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "edit",
+                required_permissions=["kuaiai:knowledge:edit"],
+            )
+        )
+    ],
+)
+async def api_update_knowledge_base(
+    kb_id: int,
+    payload: KnowledgeBaseUpdate,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    return await knowledge_base_service.update_base(
+        tenant_id, current_user, kb_id, payload
+    )
+
+
+@router.delete(
+    "/knowledge-bases/{kb_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "remove",
+                required_permissions=["kuaiai:knowledge:remove"],
+            )
+        )
+    ],
+)
+async def api_delete_knowledge_base(
+    kb_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    await knowledge_base_service.delete_base(tenant_id, current_user, kb_id)
+
+
+@router.get(
+    "/knowledge-bases/{kb_id}/documents",
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "list",
+                required_permissions=["kuaiai:knowledge:list"],
+            )
+        )
+    ],
+)
+async def api_list_kb_documents(
+    kb_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """库下文档分页 {items,total}；先复核库归属（跨租户 404）。
+
+    列表摘去 raw_content 全文（DocumentListOut），detail 端点才回全文。
+    """
+    base = await knowledge_base_service.get_base(tenant_id, kb_id)
+    result = await KnowledgeService.list_documents(
+        tenant_id, base.id, page=page, page_size=page_size
+    )
+    return {
+        "items": [DocumentListOut.model_validate(d) for d in result["items"]],
+        "total": result["total"],
+    }
+
+
+@router.post(
+    "/knowledge-bases/{kb_id}/documents",
+    response_model=DocumentOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "add",
+                required_permissions=["kuaiai:knowledge:add"],
+            )
+        )
+    ],
+)
+async def api_create_kb_document(
+    kb_id: int,
+    payload: DocumentCreate,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    base = await knowledge_base_service.get_base(tenant_id, kb_id)
+    return await KnowledgeService.create_document(
+        tenant_id, current_user, base.id, payload
+    )
+
+
+@router.get(
+    "/documents/{document_id}",
+    response_model=DocumentOut,
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "query",
+                required_permissions=["kuaiai:knowledge:query"],
+            )
+        )
+    ],
+)
+async def api_get_document(
+    document_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await KnowledgeService.get_document(tenant_id, document_id)
+
+
+@router.delete(
+    "/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "remove",
+                required_permissions=["kuaiai:knowledge:remove"],
+            )
+        )
+    ],
+)
+async def api_delete_document(
+    document_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await KnowledgeService.delete_document(tenant_id, document_id)
+
+
+@router.post(
+    "/documents/{document_id}/parse",
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "edit",
+                required_permissions=["kuaiai:knowledge:edit"],
+            )
+        )
+    ],
+)
+async def api_parse_document(
+    document_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    """投递解析异步任务（taskiq），返回 job 状态对象。"""
+    return await KnowledgeService.request_parse(
+        tenant_id, current_user.id, document_id
+    )
+
+
+@router.get(
+    "/documents/{document_id}/chunks",
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaiai.knowledge",
+                "query",
+                required_permissions=["kuaiai:knowledge:query"],
+            )
+        )
+    ],
+)
+async def api_list_document_chunks(
+    document_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """切块只读浏览 {items,total}；不回 embedding 向量。"""
+    result = await KnowledgeService.list_chunks(
+        tenant_id, document_id, page=page, page_size=page_size
+    )
+    return {
+        "items": [ChunkOut.model_validate(c) for c in result["items"]],
+        "total": result["total"],
+    }

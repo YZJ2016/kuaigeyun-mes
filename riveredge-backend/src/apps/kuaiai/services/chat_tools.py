@@ -27,6 +27,7 @@ from typing import Any, List, Optional, Tuple
 from loguru import logger
 from tortoise.transactions import in_transaction
 
+from apps.kuaiai.constants import KNOWLEDGE_RESULT_MAX_CHARS, STATUS_ENABLED
 from core.ai.runtime.context import AiRuntimeContext, get_ai_context
 from core.ai.tool_registry import ToolRegistry
 from infra.exceptions.exceptions import (
@@ -36,7 +37,14 @@ from infra.exceptions.exceptions import (
 )
 
 _ERR_NO_CONTEXT = "AI 工具缺少租户/用户上下文，无法执行"
-_ERR_SEARCH_KNOWLEDGE_STUB = "知识库检索暂未启用（S3 上线）"
+_ERR_NO_AGENT_PROFILE = "未绑定 Agent 档案，无法确定知识库范围"
+_ERR_AGENT_DISABLED = "该 Agent 档案已停用"
+_ERR_NO_KNOWLEDGE = "该档案未配置知识库"
+_ERR_NO_HIT = "未检索到相关知识"
+
+# search_knowledge 返回给模型读的片段总长度上限（防超长塞爆上下文）；
+# 共享常量存 apps.kuaiai.constants（路径 A 注入同口径）
+_KNOWLEDGE_RESULT_MAX_CHARS = KNOWLEDGE_RESULT_MAX_CHARS
 
 # update_workorder_status 允许的目标状态：draft/released/split 走专门流程
 # （提交/下达/拆分），不开放给 Tool 直改。
@@ -124,15 +132,76 @@ def _display_name(user: Any) -> str:
     return str(name).strip() or f"用户{getattr(user, 'id', '')}"
 
 
+def _format_knowledge_hits(hits: List[dict]) -> str:
+    """检索命中拼成模型可读短文本：仅 file_name + 片段，总长截断。
+
+    片段 metadata 不落内部路径/key（KR-I5）；仅文档标题与正文。
+    """
+    parts: List[str] = []
+    used = 0
+    for hit in hits:
+        name = str(hit.get("file_name") or "知识文档").strip()
+        content = str(hit.get("content") or "").strip()
+        if not content:
+            continue
+        segment = f"【{name}】{content}"
+        remain = _KNOWLEDGE_RESULT_MAX_CHARS - used
+        if remain <= 0:
+            break
+        if len(segment) > remain:
+            segment = segment[:remain]
+        parts.append(segment)
+        used += len(segment)
+    return "\n\n".join(parts) if parts else _ERR_NO_HIT
+
+
 async def search_knowledge(
     query: str,
     ctx: Optional[AiRuntimeContext] = None,
 ) -> str:
-    """知识库检索（S3 才上线）：失败关闭 stub，禁止假检索。"""
-    _ = query
-    if not _ctx_ok(_resolve_ctx(ctx)):
+    """知识库检索（S3）：ctx.agent_id → 档案 knowledge_ids → retrieval facade。
+
+    闭包失败关闭：无档案/档案停用/未配库/无命中一律回固定文案，不假检索；
+    档案按 tenant+未删除+status 复核（装配期已校验，此处防御运行期停用），
+    knowledge_ids 由 facade 再复核启用态。
+    """
+    ctx = _resolve_ctx(ctx)
+    if not _ctx_ok(ctx):
         return _ERR_NO_CONTEXT
-    return _ERR_SEARCH_KNOWLEDGE_STUB
+    agent_id = getattr(ctx, "agent_id", None)
+    if agent_id is None:
+        return _ERR_NO_AGENT_PROFILE
+    try:
+        from apps.kuaiai.models.agent import KuaiaiAgentProfile
+        from apps.kuaiai.services.retrieval import retrieve
+
+        profile = await KuaiaiAgentProfile.filter(
+            tenant_id=ctx.tenant_id,
+            id=int(agent_id),
+            deleted_at__isnull=True,
+        ).first()
+        if profile is None:
+            return _ERR_NO_AGENT_PROFILE
+        if getattr(profile, "status", None) != STATUS_ENABLED:
+            return _ERR_AGENT_DISABLED
+        raw_ids = profile.knowledge_ids
+        knowledge_ids = [
+            int(i)
+            for i in (raw_ids if isinstance(raw_ids, list) else [])
+            if isinstance(i, int) and not isinstance(i, bool) and i > 0
+        ]
+        if not knowledge_ids:
+            return _ERR_NO_KNOWLEDGE
+        hits = await retrieve(ctx.tenant_id, str(query or ""), knowledge_ids)
+    except Exception as exc:
+        logger.warning(
+            "AI tool search_knowledge 失败 error_type={}",
+            type(exc).__name__,
+        )
+        return "检索知识库失败，请稍后重试"
+    if not hits:
+        return _ERR_NO_HIT
+    return _format_knowledge_hits(hits)
 
 
 async def query_workorder(
@@ -382,7 +451,7 @@ CHAT_TOOL_DEFINITIONS: List[dict] = [
         "type": "function",
         "function": {
             "name": "search_knowledge",
-            "description": "检索企业知识库（当前暂未启用）",
+            "description": "检索企业知识库（返回相关文档片段）",
             "parameters": {
                 "type": "object",
                 "properties": {
