@@ -1794,11 +1794,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 接管 F1 控制，开启 AI 助手（仅在 AI 应用已启用时）
+      // 接管 F1 控制，开关 AI 助手抽屉（仅在 AI 应用已启用时）
       if (e.key === 'F1' && hasAiAssistantEntry) {
         e.preventDefault();
         e.stopPropagation();
-        openAiAssistant();
+        if (aiAssistantOpen) {
+          setAiAssistantOpen(false);
+        } else {
+          openAiAssistant();
+        }
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -1842,7 +1846,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [hasAiAssistantEntry, openAiAssistant]);
+  }, [hasAiAssistantEntry, openAiAssistant, aiAssistantOpen]);
 
   useEffect(() => {
     if (!hasAiAssistantEntry) return;

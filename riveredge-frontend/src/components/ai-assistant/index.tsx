@@ -3,12 +3,13 @@ import { createPortal } from 'react-dom'
 import { createCache, StyleProvider } from '@ant-design/cssinjs'
 import { message, Button, Spin, theme, Tag } from 'antd'
 import BorderBeam from 'antd/es/border-beam'
-import { CloseOutlined, CopyOutlined, ReloadOutlined, PlusOutlined, CaretDownOutlined } from '@ant-design/icons'
+import { CloseOutlined, CopyOutlined, ReloadOutlined, PlusOutlined, CaretDownOutlined, FullscreenOutlined } from '@ant-design/icons'
 import { Bubble, Prompts, Sender } from '@ant-design/x'
 import type { PromptsItemType } from '@ant-design/x'
 import { useXChat, XRequest } from '@ant-design/x-sdk'
 import Lottie from 'lottie-react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import {
   buildKuaiChatAuthHeaders,
   KuaiDeepSeekChatProvider,
@@ -233,6 +234,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
   onConfirmAction,
 }) => {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const promptItems = usePromptItems()
   const { token } = theme.useToken()
   const [senderValue, setSenderValue] = useState('')
@@ -272,6 +274,11 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
   const handleNewChatClick = () => {
     onNewChat()
     setSenderValue('')
+  }
+
+  const handleOpenFullChat = () => {
+    navigate('/apps/kuaiai/chat')
+    onClose?.()
   }
 
   const senderFooter = useCallback(
@@ -334,6 +341,14 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
             className="ai-qa-header-icon-btn"
             aria-label={t('ui.aiAssistant.newChat')}
             title={t('ui.aiAssistant.newChat')}
+          />
+          <Button
+            type="text"
+            icon={<FullscreenOutlined />}
+            onClick={handleOpenFullChat}
+            className="ai-qa-header-icon-btn"
+            aria-label={t('ui.aiAssistant.openFullChat', { defaultValue: '打开全宽对话' })}
+            title={t('ui.aiAssistant.openFullChat', { defaultValue: '打开全宽对话' })}
           />
           <Button
             type="text"

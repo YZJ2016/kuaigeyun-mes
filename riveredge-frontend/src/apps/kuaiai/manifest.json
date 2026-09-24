@@ -1,0 +1,85 @@
+{
+  "code": "kuaiai",
+  "name": "星AI",
+  "version": "2.0.0",
+  "is_pro": true,
+  "market_category": "pro",
+  "description": "嵌入业务场景的 AI 智能辅助引擎：全宽对话、顶栏助手、Agent 档案、知识库与 MCP 白名单",
+  "icon": "sparkles",
+  "author": "StarTech",
+  "entry_point": "../apps/kuaiai/index.tsx",
+  "route_path": "/apps/kuaiai",
+  "sort_order": 350,
+  "menu_config": {
+    "title": "app.kuaiai.name",
+    "icon": "sparkles",
+    "path": "/apps/kuaiai",
+    "permission": "kuaiai:entry:read",
+    "children": [
+      {
+        "title": "app.kuaiai.menu.chat",
+        "path": "/apps/kuaiai/chat",
+        "icon": "message",
+        "permission": "kuaiai:entry:read",
+        "sort_order": 1
+      },
+      {
+        "title": "app.kuaiai.menu.agents",
+        "path": "/apps/kuaiai/agents",
+        "icon": "robot",
+        "permission": "kuaiai:agent:list",
+        "sort_order": 2
+      },
+      {
+        "title": "app.kuaiai.menu.knowledge",
+        "path": "/apps/kuaiai/knowledge",
+        "icon": "book",
+        "permission": "kuaiai:knowledge:list",
+        "sort_order": 3
+      },
+      {
+        "title": "app.kuaiai.menu.models",
+        "path": "/apps/kuaiai/models",
+        "icon": "deploymentUnit",
+        "permission": "kuaiai:model:list",
+        "sort_order": 4
+      },
+      {
+        "title": "app.kuaiai.menu.mcp",
+        "path": "/apps/kuaiai/mcp",
+        "icon": "api",
+        "permission": "kuaiai:mcp:list",
+        "sort_order": 5
+      }
+    ]
+  },
+  "permissions": [
+    "kuaiai:entry:read",
+    "kuaiai:act:execute",
+    "kuaiai:session:list",
+    "kuaiai:session:query",
+    "kuaiai:session:add",
+    "kuaiai:session:edit",
+    "kuaiai:session:remove",
+    "kuaiai:agent:list",
+    "kuaiai:agent:query",
+    "kuaiai:agent:add",
+    "kuaiai:agent:edit",
+    "kuaiai:agent:remove",
+    "kuaiai:knowledge:list",
+    "kuaiai:knowledge:query",
+    "kuaiai:knowledge:add",
+    "kuaiai:knowledge:edit",
+    "kuaiai:knowledge:remove",
+    "kuaiai:mcp:list",
+    "kuaiai:mcp:query",
+    "kuaiai:mcp:add",
+    "kuaiai:mcp:edit",
+    "kuaiai:mcp:remove",
+    "kuaiai:model:list",
+    "kuaiai:model:query",
+    "kuaiai:model:add",
+    "kuaiai:model:edit",
+    "kuaiai:model:remove"
+  ]
+}
