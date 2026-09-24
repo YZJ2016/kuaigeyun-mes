@@ -1048,7 +1048,7 @@ export default function UniImPanel({
     if (!selectedUuid || !text) {
       return;
     }
-    const mentionKuAi = /@(?:KU-AI|KUAI|快AI|库AI)\b/i.test(text);
+    const mentionKuAi = /@(?:星AI|KU-AI|KUAI|快AI|库AI)\b/i.test(text);
     try {
       await sendImMessage(selectedUuid, text, { mention_ku_ai: mentionKuAi });
       setDraft('');
@@ -1204,7 +1204,7 @@ export default function UniImPanel({
         return {
           isSelf: false,
           fullName: isAi ? t('ui.aiAssistant.title') : t('components.uniIm.systemSender'),
-          username: isAi ? 'KU-AI' : 'system',
+          username: isAi ? '星AI' : 'system',
           imageSrc: undefined as string | undefined,
           useTextAvatar: true,
           onImageError: () => undefined,
@@ -2047,12 +2047,12 @@ export default function UniImPanel({
                             className={styles.mentionItem}
                             onClick={() => {
                               setDraft((prev) =>
-                                prev.replace(/@([^\s@]*)$/, '@KU-AI '),
+                                prev.replace(/@([^\s@]*)$/, '@星AI '),
                               );
                               setMentionQuery(null);
                             }}
                           >
-                            @KU-AI
+                            @星AI
                           </button>
                           {groupMembers
                             .filter((m: ImMember) => {

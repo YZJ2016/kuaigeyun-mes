@@ -61,7 +61,7 @@ async def send_jpush_test_notification(
     user_id: int,
     client_key: str = CLIENT_KEY_HAOLIGO,
     title: str = "推送测试",
-    body: str = "这是一条来自 RiverEdge 的测试推送",
+    body: str = "这是一条来自 星技谷 的测试推送",
     registration_id: str | None = None,
 ) -> dict[str, Any]:
     """向指定用户 alias 或 RegistrationID 发送测试通知，返回极光原始响应便于排查。"""

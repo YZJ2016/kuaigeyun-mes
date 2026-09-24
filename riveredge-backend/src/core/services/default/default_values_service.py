@@ -32,7 +32,7 @@ class DefaultValuesService:
         # 系统基本信息
         {
             "key": "system.name",
-            "value": "RiverEdge制造管理系统",
+            "value": "星技谷制造管理系统",
             "type": "string",
             "description": "系统名称",
             "is_system": True,

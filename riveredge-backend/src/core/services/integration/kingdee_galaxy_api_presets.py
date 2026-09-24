@@ -320,7 +320,7 @@ def build_prd_morpt_sample_model() -> Dict[str, Any]:
         "FDate": "2026-01-01",
         "FPrdOrgId": {"FNumber": "100"},
         "FWorkshipIdH": {"FNumber": "BM000001"},
-        "FDescription": "快格云报工推送示例",
+        "FDescription": "星技谷报工推送示例",
         "FEntity": [
             {
                 "FEntryID": 0,
@@ -339,7 +339,7 @@ def build_prd_morpt_sample_model() -> Dict[str, Any]:
                 "FStandHourUnitId": "1",
                 "FStockInOrgId": {"FNumber": "100"},
                 "FSrcBillType": "PRD_MO",
-                "FDescriptionE": "快格云报工推送示例明细",
+                "FDescriptionE": "星技谷报工推送示例明细",
             }
         ],
     }
@@ -367,7 +367,7 @@ def build_sal_sale_order_sample_model() -> Dict[str, Any]:
         "FDate": "2026-01-01",
         "FSaleOrgId": {"FNumber": "100"},
         "FCustId": {"FNumber": "CUST001"},
-        "FNote": "快格云销售订单推送示例",
+        "FNote": "星技谷销售订单推送示例",
         "FSaleOrderEntry": [
             {
                 "FEntryID": 0,
@@ -399,7 +399,7 @@ def build_pur_purchase_order_sample_model() -> Dict[str, Any]:
         "FDate": "2026-01-01",
         "FPurchaseOrgId": {"FNumber": "100"},
         "FSupplierId": {"FNumber": "VEN001"},
-        "FNote": "快格云采购订单推送示例",
+        "FNote": "星技谷采购订单推送示例",
         "FPOOrderEntry": [
             {
                 "FEntryID": 0,
@@ -432,7 +432,7 @@ def build_stk_miscellaneous_sample_model() -> Dict[str, Any]:
         "FDate": "2026-01-01",
         "FOwnerTypeIdHead": "BD_OwnerOrg",
         "FOwnerIdHead": {"FNumber": "100"},
-        "FNote": "快格云即时库存推送示例",
+        "FNote": "星技谷即时库存推送示例",
         "FEntity": [
             {
                 "FEntryID": 0,
@@ -465,7 +465,7 @@ def build_prd_mo_sample_model() -> Dict[str, Any]:
         "FPrdOrgId": {"FNumber": "100"},
         "FOwnerTypeId": "BD_OwnerOrg",
         "FPPBOMType": "1",
-        "FDescription": "快格云工单推送示例",
+        "FDescription": "星技谷工单推送示例",
         "FTreeEntity": [
             {
                 "FEntryID": 0,
@@ -497,7 +497,7 @@ def build_prd_mo_save_preset_body() -> Dict[str, Any]:
 def build_prd_mo_push_preset_body() -> Dict[str, Any]:
     """工单页「推送」专用：生产订单 Save 请求体（完整 JSON，可在接口管理编辑）。"""
     model = build_prd_mo_sample_model()
-    model["FDescription"] = "快格云工单推送金蝶生产订单"
+    model["FDescription"] = "星技谷工单推送金蝶生产订单"
     return build_save_body(
         form_id=PRD_MO_FORM_ID,
         model=model,
@@ -674,7 +674,7 @@ def list_kingdee_galaxy_api_presets() -> List[KingdeeGalaxyApiPreset]:
             "code_suffix": PUR_PURCHASE_ORDER_PUSH_PRESET_CODE_SUFFIX,
             "name": "金蝶推送采购订单",
             "description": (
-                "快格云采购订单 → 金蝶 PUR_PurchaseOrder 推送用 Save 接口。"
+                "星技谷采购订单 → 金蝶 PUR_PurchaseOrder 推送用 Save 接口。"
                 "页面推送弹窗优先选用本接口。"
             ),
             "path": SAVE_PATH,
@@ -705,7 +705,7 @@ def list_kingdee_galaxy_api_presets() -> List[KingdeeGalaxyApiPreset]:
             "code_suffix": PRD_MO_PUSH_PRESET_CODE_SUFFIX,
             "name": "金蝶推送生产订单",
             "description": (
-                "快格云工单 → 金蝶生产订单（PRD_MO）推送用 Save 接口。"
+                "星技谷工单 → 金蝶生产订单（PRD_MO）推送用 Save 接口。"
                 "与「金蝶保存生产订单」同路径；页面推送弹窗优先选用本接口。"
                 "联调前请按账套改组织/车间/物料/单位等编码。"
             ),
@@ -836,7 +836,7 @@ def list_kingdee_galaxy_api_presets() -> List[KingdeeGalaxyApiPreset]:
             "code_suffix": SAL_SALE_ORDER_PUSH_PRESET_CODE_SUFFIX,
             "name": "金蝶推送销售订单",
             "description": (
-                "快格云销售订单 → 金蝶 SAL_SaleOrder 推送用 Save 接口。"
+                "星技谷销售订单 → 金蝶 SAL_SaleOrder 推送用 Save 接口。"
                 "页面推送弹窗优先选用本接口。"
             ),
             "path": SAVE_PATH,
@@ -874,7 +874,7 @@ def list_kingdee_galaxy_api_presets() -> List[KingdeeGalaxyApiPreset]:
             "code_suffix": STK_MISCELLANEOUS_PUSH_PRESET_CODE_SUFFIX,
             "name": "金蝶推送其他入库单",
             "description": (
-                "快格云物料批次 → 金蝶 STK_MISCELLANEOUS 推送用 Save 接口。"
+                "星技谷物料批次 → 金蝶 STK_MISCELLANEOUS 推送用 Save 接口。"
                 "页面推送弹窗优先选用本接口。"
             ),
             "path": SAVE_PATH,

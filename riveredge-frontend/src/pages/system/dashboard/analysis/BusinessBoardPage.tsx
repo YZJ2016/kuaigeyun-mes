@@ -934,7 +934,7 @@ const BusinessBoardPage: React.FC = () => {
     };
   }, [timeRange]);
 
-  const siteName = (useConfigStore((state) => state.configs['site_name']) as string) || 'RiverEdge SaaS';
+  const siteName = (useConfigStore((state) => state.configs['site_name']) as string) || '星技谷';
   const siteLogoUrl = useSiteLogoUrl();
 
   const defaultBoardTitle = t('dashboard.businessBoard.siteTitle', { siteName });

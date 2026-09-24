@@ -1,10 +1,10 @@
 {
   "code": "kuaiplm",
-  "name": "快研发",
+  "name": "星研发",
   "version": "1.0.0",
   "description": "研发项目 NPI 阶段门与设计变更知识协同平台",
   "icon": "layers",
-  "author": "RiverEdge Team",
+  "author": "StarTech",
   "market_category": "base",
   "is_pro": false,
   "entry_point": "../apps/kuaiplm/index.tsx",

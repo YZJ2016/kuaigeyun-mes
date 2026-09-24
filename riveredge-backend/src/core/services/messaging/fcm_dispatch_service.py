@@ -244,7 +244,7 @@ async def send_fcm_test_notification(
     tenant_id: int,
     user_id: int,
     title: str = "推送测试",
-    body: str = "这是一条来自 RiverEdge 的 FCM 测试推送",
+    body: str = "这是一条来自 星技谷 的 FCM 测试推送",
     fcm_token: str | None = None,
 ) -> dict[str, Any]:
     """向指定用户或单个 FCM token 发送测试通知。"""

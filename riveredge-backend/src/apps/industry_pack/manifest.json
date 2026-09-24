@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "行业应用统一入口，各行业模块作为子菜单挂载",
   "icon": "layers",
-  "author": "RiverEdge Team",
+  "author": "StarTech",
   "market_category": "industry",
   "is_pro": false,
   "hide_from_application_center": true,

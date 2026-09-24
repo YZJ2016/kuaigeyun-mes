@@ -1748,7 +1748,7 @@ const ApplicationListPage: React.FC = () => {
                 {t('pages.system.applications.resetWarnTitle', { defaultValue: '极大风险操作：数据重置' })}
               </div>
               <p style={{ color: '#666', marginBottom: 24, padding: '0 20px', lineHeight: '1.6' }}>
-                {t('pages.system.applications.resetWarn1', { defaultValue: '重置操作将物理抹除“快制造”应用下所有的销售订单、生产工单、库存流水、需求计划等业务数据。此操作不可撤销！' })}
+                {t('pages.system.applications.resetWarn1', { defaultValue: '重置操作将物理抹除“星制造”应用下所有的销售订单、生产工单、库存流水、需求计划等业务数据。此操作不可撤销！' })}
               </p>
               <Button 
                 type="primary" 

@@ -13,7 +13,7 @@ export default {
   'pages.login.error': 'ログインに失敗しました',
   'pages.login.pageTitleSuffix': 'サインイン',
   'pages.login.defaultPlatformName': 'リバーエッジSaaS',
-  'pages.login.defaultDocTitle': 'RiverEdge SaaS - マルチテナント管理',
+  'pages.login.defaultDocTitle': 'StarTech - マルチテナント管理',
   'pages.login.switchLanguage': '言語',
   'pages.login.welcome': 'いらっしゃいませ',
   'pages.login.welcomeWithName': '{{name}} へようこそ',

@@ -45,7 +45,7 @@ def _resolve_local_value(key: str, *, work_order: WorkOrder, cfg: Dict[str, Any]
     if key in cfg and cfg.get(key) not in (None, ""):
         return cfg.get(key)
     if key == "source_system":
-        return cfg.get("source_system") or "kuaigeyun"
+        return cfg.get("source_system") or "startech"
     if key == "source_type":
         return SOURCE_TYPE
     if key == "source_id":
@@ -65,7 +65,7 @@ def build_oa_document_model(
         model: Dict[str, Any] = dict(template)
     else:
         model = {
-            "source_system": config.get("source_system") or "kuaigeyun",
+            "source_system": config.get("source_system") or "startech",
             "source_type": SOURCE_TYPE,
             "source_id": int(work_order.id),
         }

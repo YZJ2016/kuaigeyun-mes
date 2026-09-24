@@ -40,7 +40,7 @@ const UserTermsContent = () => (
   <div style={{ maxHeight: '60vh', overflowY: 'auto', padding: '0 8px' }}>
     <Title level={4}>用户服务协议</Title>
     <Paragraph>
-      欢迎使用 RiverEdge（以下简称&quot;本项目&quot;或&quot;本软件&quot;）。本用户服务协议（以下简称&quot;本协议&quot;）约定您与 RiverEdge 相关权利人之间，就使用本软件及（如适用）我们运营的在线服务的权利义务。
+      欢迎使用 星技谷（以下简称&quot;本项目&quot;或&quot;本软件&quot;）。本用户服务协议（以下简称&quot;本协议&quot;）约定您与 星技谷 相关权利人之间，就使用本软件及（如适用）我们运营的在线服务的权利义务。
     </Paragraph>
     <Paragraph>
       当您点击&quot;同意&quot;、注册、登录或开始使用时，即表示您已阅读、理解并同意接受本协议。若您代表组织使用，您保证已获得该组织授权，并使该组织受本协议约束。
@@ -53,10 +53,10 @@ const UserTermsContent = () => (
 
     <Title level={5}>一、定义与适用范围</Title>
     <Paragraph>
-      1.1 &quot;开源软件&quot;：指以 Apache 2.0 发布的 RiverEdge 源代码、文档及随附材料，完整许可见项目仓库 LICENSE，或 https://www.apache.org/licenses/LICENSE-2.0 。
+      1.1 &quot;开源软件&quot;：指以 Apache 2.0 发布的 星技谷 源代码、文档及随附材料，完整许可见项目仓库 LICENSE，或 https://www.apache.org/licenses/LICENSE-2.0 。
     </Paragraph>
     <Paragraph>
-      1.2 &quot;在线服务&quot;：指由我们或经授权方部署并运营、供您通过网络访问的 RiverEdge 多组织管理服务（如适用），功能可包括用户与组织管理、权限、业务单据、文件与集成等，以实际开通范围为准。
+      1.2 &quot;在线服务&quot;：指由我们或经授权方部署并运营、供您通过网络访问的 星技谷 多组织管理服务（如适用），功能可包括用户与组织管理、权限、业务单据、文件与集成等，以实际开通范围为准。
     </Paragraph>
     <Paragraph>
       1.3 &quot;您&quot;：指注册、登录或使用开源软件/在线服务的个人，或该个人所代表的组织。
@@ -122,7 +122,7 @@ const UserTermsContent = () => (
       5.1 开源软件的著作权等权利由贡献者及权利人依 Apache 2.0 及适用法律享有。您可在遵守 Apache 2.0 的前提下使用、复制、修改、再分发开源软件（含源码与目标码形式）。
     </Paragraph>
     <Paragraph>
-      5.2 Apache 2.0 不授予商标权。&quot;RiverEdge&quot;名称、标识、徽标及其他品牌元素的权利仍归权利人所有。未经书面许可，不得暗示我们背书、赞助或与您的产品/服务存在关联。
+      5.2 Apache 2.0 不授予商标权。&quot;星技谷&quot;名称、标识、徽标及其他品牌元素的权利仍归权利人所有。未经书面许可，不得暗示我们背书、赞助或与您的产品/服务存在关联。
     </Paragraph>
     <Paragraph>
       5.3 使用在线服务时，您获得的是在服务期内访问与使用该服务的权利；这不改变开源软件的 Apache 2.0 授权，也不将您的业务数据转让给我们。
@@ -221,7 +221,7 @@ const PrivacyTermsContent = () => (
   <div style={{ maxHeight: '60vh', overflowY: 'auto', padding: '0 8px' }}>
     <Title level={4}>隐私政策</Title>
     <Paragraph>
-      RiverEdge SaaS 多组织管理框架（以下简称&quot;我们&quot;）非常重视用户的隐私保护。本隐私政策说明了我们如何收集、使用、存储和保护您的个人信息。请您仔细阅读本隐私政策。
+      星技谷多组织管理框架（以下简称&quot;我们&quot;）非常重视用户的隐私保护。本隐私政策说明了我们如何收集、使用、存储和保护您的个人信息。请您仔细阅读本隐私政策。
     </Paragraph>
 
     <Divider />

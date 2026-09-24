@@ -1,6 +1,6 @@
 # 工程图纸受控
 
-落点：主数据 → 工艺 → 图纸管理；快研发 → 设计数据 → 同一路径。
+落点：主数据 → 工艺 → 图纸管理；星研发 → 设计数据 → 同一路径。
 
 ## 状态机
 
@@ -45,7 +45,7 @@ Released --revision--> Draft（新修订）
 
 ## 第 3 波：工程变更 + 图档发放
 
-- **图纸工程变更**不新开页，并进快研发变更台。已发布图纸可发起升版 / 换文件 / 作废等变更；创建走 `kuaiplm:change:create`，签审走 `drawing_change` 审核节点。执行后升版或作废。图纸页「工程变更」跳转变更台弹窗。
+- **图纸工程变更**不新开页，并进星研发变更台。已发布图纸可发起升版 / 换文件 / 作废等变更；创建走 `kuaiplm:change:create`，签审走 `drawing_change` 审核节点。执行后升版或作废。图纸页「工程变更」跳转变更台弹窗。
 - **图档发放**新页 `/apps/master-data/process/drawing-distributions`，资源 `master-data:process:drawing-distribution`。
 - 发放状态：`Draft → Pending → Issued → Recalled`。`approve` 发放；`recall` 收回。
 - **车间只读已发放版**：发放页开关写入 `DrawingDistributionPolicy`。`list_by_context` 仅此一门：启用则只返回已发放未收回图纸；关闭则仍为当前 Released。失败不回落另一套。

@@ -89,4 +89,4 @@ Agent 参考实现见仓库 `riveredge-backend/src/apps/kuaiiot/edge-agent/`，�
 
 ## 无 IoT 平台直连
 
-客户不部署 ThingsBoard 时，设备/Edge Agent 可直接 HTTP ingest 到快数采；MQTT 接入需自建 Broker（如 mosquitto、EMQX），快数采仅作订阅客户端。
+客户不部署 ThingsBoard 时，设备/Edge Agent 可直接 HTTP ingest 到星数采；MQTT 接入需自建 Broker（如 mosquitto、EMQX），星数采仅作订阅客户端。

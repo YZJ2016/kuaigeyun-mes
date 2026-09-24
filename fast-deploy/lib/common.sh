@@ -1085,7 +1085,7 @@ caddy_diagnose_start_failure() {
     if caddy_https_enabled; then
         log_error "HTTPS 需 caddy 绑定 80/443：sudo setcap 'cap_net_bind_service=+ep' $(command -v caddy 2>/dev/null || echo caddy)"
         log_error "并确认 80/443 公网可达、系统 caddy.service 已 stop+disable"
-        log_error "HTTPS 需 apex 与 www 均解析到本机（例如 kuaigeyun.com 与 www.kuaigeyun.com）"
+        log_error "HTTPS 需 apex 与 www 均解析到本机（例如 example.com 与 www.example.com）"
     fi
 }
 
@@ -3517,7 +3517,7 @@ cmd_start_dev() {
     start_frontend_dev
     ensure_playwright_chromium_postinstall
     DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
-    log_ok "RiverEdge 开发环境已就绪"
+    log_ok "星技谷 开发环境已就绪"
     print_special_deps_hint
     local lan_ip
     lan_ip="$(detect_server_ip)"
@@ -3554,7 +3554,7 @@ cmd_start_prod() {
         if start_prod_via_systemd; then
             ensure_playwright_chromium_postinstall
             DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
-            log_ok "RiverEdge 生产环境已就绪（systemd 托管）"
+            log_ok "星技谷 生产环境已就绪（systemd 托管）"
             print_special_deps_hint
             local access_ip="${SERVER_IP:-127.0.0.1}"
             local web_url
@@ -3574,7 +3574,7 @@ cmd_start_prod() {
     fi
     ensure_playwright_chromium_postinstall
     DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
-    log_ok "RiverEdge 生产环境已就绪"
+    log_ok "星技谷 生产环境已就绪"
     print_special_deps_hint
     local access_ip="${SERVER_IP:-127.0.0.1}"
     local web_url
@@ -4237,7 +4237,7 @@ cmd_check_special() {
 cmd_status() {
     load_deploy_env
     local server_ip web_url
-    echo "=== RiverEdge ${DEPLOY_MODE} 状态 ==="
+    echo "=== 星技谷 ${DEPLOY_MODE} 状态 ==="
     echo "  低配模式: $(low_spec_mode_status_label)"
     for name in backend frontend worker scheduler caddy; do
         local pidf="$LOGS_DIR/${name}.pid"

@@ -53,12 +53,13 @@ class PlatformSettings(Model):
     # 平台基本信息
     platform_name = fields.CharField(
         max_length=200,
-        default="RiverEdge SaaS Framework",
+        default="星技谷",
         description="平台名称"
     )
     platform_name_en = fields.CharField(
         max_length=200,
         null=True,
+        default="StarTech",
         description="平台名称（英文）"
     )
     platform_logo = fields.CharField(

@@ -49,7 +49,7 @@ export default function PlatformLoginPage() {
 
   // 设置页面标题
   useEffect(() => {
-    const platformName = platformSettings?.platform_name || 'RiverEdge SaaS';
+    const platformName = platformSettings?.platform_name || '星技谷';
     document.title = `${platformName} - ${t('pages.infra.login.pageTitle')}`;
     
     // 组件卸载时恢复默认标题

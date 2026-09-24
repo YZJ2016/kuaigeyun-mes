@@ -4,7 +4,7 @@
   "version": "0.8.5",
   "description": "电子制造小场景插件（ESD、OEM 签样、Gerber/钢网/SMT 预置）。组织流程 profile 已迁至 funide-oa 定制应用。",
   "icon": "cpu",
-  "author": "RiverEdge",
+  "author": "StarTech",
   "market_category": "industry",
   "is_pro": false,
   "entry_point": "../apps/ind-electronics/index.tsx",

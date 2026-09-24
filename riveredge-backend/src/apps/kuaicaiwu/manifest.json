@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "管理会计总账核算与经营分析协同平台",
   "icon": "wallet",
-  "author": "RiverEdge Team",
+  "author": "StarTech",
   "market_category": "base",
   "is_pro": false,
   "entry_point": "../apps/kuaicaiwu/index.tsx",

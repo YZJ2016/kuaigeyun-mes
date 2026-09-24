@@ -72,7 +72,7 @@ class DocsBasicAuthMiddleware(BaseHTTPMiddleware):
 def _docs_unauthorized() -> Response:
     return Response(
         status_code=401,
-        headers={"WWW-Authenticate": 'Basic realm="RiverEdge API Documentation"'},
+        headers={"WWW-Authenticate": 'Basic realm="StarTech API Documentation"'},
         content="Authentication required",
         media_type="text/plain",
     )

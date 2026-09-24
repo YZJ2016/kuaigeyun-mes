@@ -311,7 +311,7 @@ async def update_header_miniprogram_qr_admin(
 
     settings = await PlatformSettings.first()
     if not settings:
-        settings = await PlatformSettings.create(platform_name="RiverEdge SaaS Framework")
+        settings = await PlatformSettings.create(platform_name="星技谷")
 
     file_uuid: str | None
     if body.file_uuid is None:

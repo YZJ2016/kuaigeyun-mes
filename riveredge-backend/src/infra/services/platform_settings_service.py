@@ -54,7 +54,7 @@ class PlatformSettingsService:
         if not settings:
             # 创建默认设置
             settings = await PlatformSettings.create(
-                platform_name="RiverEdge SaaS Framework"
+                platform_name="星技谷"
             )
         return PlatformSettingsResponse.model_validate(settings)
     
@@ -132,7 +132,7 @@ class PlatformSettingsService:
         if not settings:
             # 如果不存在，创建新设置
             create_data = PlatformSettingsCreate(
-                platform_name=data.platform_name or "RiverEdge SaaS Framework",
+                platform_name=data.platform_name or "星技谷",
                 platform_logo=data.platform_logo,
                 favicon=data.favicon,
                 platform_description=data.platform_description,

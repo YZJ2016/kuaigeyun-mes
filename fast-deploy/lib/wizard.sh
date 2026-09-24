@@ -160,9 +160,11 @@ wizard_print_kuaige_logo() {
         [ -z "$line" ] && continue
         wizard_logo_print_line "$line"
     done <<'EOF'                                                                            
-██ ▄█▀ ██  ██ ▄████▄ ██  ▄████  ██████ 
-████   ██  ██ ██▄▄██ ██ ██  ▄▄▄ ██▄▄   
-██ ▀█▄ ▀████▀ ██  ██ ██  ▀███▀  ██▄▄▄▄ 
+ ____  _             _____         _     
+/ ___|| |_ __ _ _ __|_   _|__  ___| |__  
+\___ \| __/ _` | '__| | |/ _ \/ __| '_ \ 
+ ___) | || (_| | |    | |  __/ (__| | | |
+|____/ \__\__,_|_|    |_|\___|\___|_| |_|
                                                                                                        
 EOF
 }
@@ -171,12 +173,12 @@ wizard_print_kuaige_header() {
     echo ""
     wizard_print_kuaige_logo
     echo ""
-    wizard_logo_print_caption "RiverEdge · Intelligent Deploy Console"
+    wizard_logo_print_caption "StarTech · Intelligent Deploy Console"
 }
 
 wizard_show_official_repo_notice() {
     wizard_panel_line "${WIZARD_BOLD}${WIZARD_CYAN}OFFICIAL 正版仓库${WIZARD_RESET}  ${WIZARD_DIM}Gitee${WIZARD_RESET}  ${WIZARD_OFFICIAL_REPO_GITEE}  ${WIZARD_DIM}GitHub${WIZARD_RESET}  ${WIZARD_OFFICIAL_REPO_GITHUB}"
-    wizard_panel_line "${WIZARD_BOLD}${WIZARD_CYAN}NOTICE 渠道警示${WIZARD_RESET}  ${WIZARD_DIM}非上述官方仓库来源的分发、收费推广或所谓「官方授权版」，均与快格云制造无关联，请自行甄别。${WIZARD_RESET}"
+    wizard_panel_line "${WIZARD_BOLD}${WIZARD_CYAN}NOTICE 渠道警示${WIZARD_RESET}  ${WIZARD_DIM}非上述官方仓库来源的分发、收费推广或所谓「官方授权版」，均与星技谷制造无关联，请自行甄别。${WIZARD_RESET}"
     wizard_panel_mid
 }
 
@@ -220,7 +222,7 @@ wizard_panel_line_center() {
 }
 
 wizard_say() {
-    echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} $*"
+    echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} $*"
     [ "${WIZARD_TYPING:-1}" = "1" ] && sleep 0.12
 }
 
@@ -1187,7 +1189,7 @@ wizard_ask_mode() {
     echo "    1) 生产环境 — 构建静态前端 + Caddy 反代"
     echo "    2) 开发环境 — Vite 热重载 + 后端 reload"
     local choice
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 输入 1 或 2 [默认 1]: ")" choice
+    read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 输入 1 或 2 [默认 1]: ")" choice
     case "${choice:-1}" in
         2|dev) export DEPLOY_MODE=dev ;;
         *) export DEPLOY_MODE=prod ;;
@@ -1265,19 +1267,19 @@ wizard_collect_local_db_config() {
     db_user="$(read_env_value DB_USER || true)"
     [ -z "$db_user" ] && db_user="postgres"
     wizard_say "本地安装将创建/使用该 PostgreSQL 用户（建议 postgres）"
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} PostgreSQL 用户名 [${db_user}]: ")" input
+    read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} PostgreSQL 用户名 [${db_user}]: ")" input
     db_user="${input:-$db_user}"
     set_env_value DB_USER "$db_user"
 
     db_port="$(read_env_value DB_PORT || true)"
     [ -z "$db_port" ] && db_port="$(detect_postgres_port)"
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} PostgreSQL 端口 [${db_port}]: ")" input
+    read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} PostgreSQL 端口 [${db_port}]: ")" input
     db_port="${input:-$db_port}"
     set_env_value DB_PORT "$db_port"
 
     db_name="$(read_env_value DB_NAME || true)"
     [ -z "$db_name" ] && db_name="riveredge"
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 数据库名 [${db_name}]: ")" input
+    read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 数据库名 [${db_name}]: ")" input
     db_name="${input:-$db_name}"
     set_env_value DB_NAME "$db_name"
 
@@ -1296,25 +1298,25 @@ wizard_collect_remote_db_config() {
     set_env_value DB_TARGET "remote"
 
     db_host="$(read_env_value DB_HOST || true)"
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 远程 PostgreSQL 主机 (IP/域名): ")" db_host
+    read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 远程 PostgreSQL 主机 (IP/域名): ")" db_host
     [ -n "$db_host" ] || { wizard_say_fail "主机不能为空"; return 1; }
     set_env_value DB_HOST "$db_host"
 
     db_port="$(read_env_value DB_PORT || true)"
     [ -z "$db_port" ] && db_port="5432"
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 端口 [${db_port}]: ")" input
+    read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 端口 [${db_port}]: ")" input
     db_port="${input:-$db_port}"
     set_env_value DB_PORT "$db_port"
 
     db_user="$(read_env_value DB_USER || true)"
     [ -z "$db_user" ] && db_user="postgres"
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 用户名 [${db_user}]: ")" input
+    read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 用户名 [${db_user}]: ")" input
     db_user="${input:-$db_user}"
     set_env_value DB_USER "$db_user"
 
     db_name="$(read_env_value DB_NAME || true)"
     [ -z "$db_name" ] && db_name="riveredge"
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 数据库名 [${db_name}]: ")" input
+    read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 数据库名 [${db_name}]: ")" input
     db_name="${input:-$db_name}"
     set_env_value DB_NAME "$db_name"
 
@@ -1339,7 +1341,7 @@ wizard_collect_admin_config() {
     admin_user="$(read_env_value PLATFORM_SUPERADMIN_USERNAME || true)"
     [ -z "$admin_user" ] && admin_user="infra_admin"
     wizard_say "请设定平台超级管理员（首次登录使用）"
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 超管用户名 [${admin_user}]: ")" input
+    read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 超管用户名 [${admin_user}]: ")" input
     admin_user="${input:-$admin_user}"
     set_env_value PLATFORM_SUPERADMIN_USERNAME "$admin_user"
 
@@ -1370,10 +1372,10 @@ wizard_collect_server_access() {
     echo ""
     echo "    1) 使用检测到的 IP (${detected_ip})"
     echo "    2) 手动输入"
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 请选择 [1/2] (默认 1): ")" choice
+    read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 请选择 [1/2] (默认 1): ")" choice
     case "${choice:-1}" in
         2|manual|input)
-            read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 请输入服务器 IP: ")" input
+            read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 请输入服务器 IP: ")" input
             input="$(echo "$input" | tr -d '[:space:]')"
             if [ -z "$input" ]; then
                 wizard_say_fail "服务器 IP 不能为空"
@@ -1401,7 +1403,7 @@ wizard_plan_database() {
     echo "    1) 本地安装 PostgreSQL — 本机安装 PG15，使用你此刻指定的账号/密码/库名"
     echo "    2) 使用远程数据库 — 跳过本地 PostgreSQL 安装，连接已有库"
     local mode
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 请选择 [1/2] (默认 1): ")" mode
+    read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 请选择 [1/2] (默认 1): ")" mode
     mode="${mode:-1}"
     case "$mode" in
         2|remote)
@@ -1444,7 +1446,7 @@ wizard_plan_preinstall() {
         echo "    1) 使用已有配置继续"
         echo "    2) 重新填写数据库与超管"
         local choice
-        read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 请选择 [1/2] (默认 1): ")" choice
+        read -rp "$(echo -e "${WIZARD_CYAN}StarTech${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 请选择 [1/2] (默认 1): ")" choice
         case "${choice:-1}" in
             2|reconfig|new)
                 wizard_say "将重新填写安装规划..."
@@ -1833,7 +1835,7 @@ wizard_show_summary() {
     wizard_panel_kv "WeChat" "lu_dingjie"
     wizard_panel_bot
     echo ""
-    wizard_say "感谢使用 RiverEdge，祝运行顺利。"
+    wizard_say "感谢使用 星技谷，祝运行顺利。"
     echo ""
 }
 

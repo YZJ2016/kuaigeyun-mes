@@ -1,12 +1,12 @@
 {
   "code": "kuaiai",
-  "name": "KU-AI",
+  "name": "星AI",
   "version": "2.0.0",
   "is_pro": true,
   "market_category": "pro",
   "description": "嵌入业务场景的 AI 智能辅助引擎：全宽对话、顶栏助手、Agent 档案、知识库与 MCP 白名单",
   "icon": "sparkles",
-  "author": "RiverEdge Team",
+  "author": "StarTech",
   "entry_point": "../apps/kuaiai/index.tsx",
   "route_path": "/apps/kuaiai",
   "sort_order": 350,
@@ -85,7 +85,7 @@
   "ai_tools": [
     {
       "name": "search_knowledge",
-      "description": "检索企业知识库（当前暂未启用，S3 上线）",
+      "description": "检索企业知识库（返回相关文档片段）",
       "permission": "kuaiai:act:execute",
       "handler": "apps.kuaiai.services.chat_tools:search_knowledge",
       "parameters": {

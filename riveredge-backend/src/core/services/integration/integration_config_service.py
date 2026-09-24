@@ -1260,7 +1260,7 @@ class IntegrationConfigService:
                 "success": False,
                 "skipped": True,
                 "hint": "未检测到 Microsoft ODBC Driver 18 for SQL Server（pyodbc 已安装）。"
-                "请在运行 RiverEdge 后端的机器上安装 ODBC Driver 18。",
+                "请在运行 星技谷 后端的机器上安装 ODBC Driver 18。",
             }
 
         host, port_int = IntegrationConfigService._normalize_sqlserver_host_and_port(config)
@@ -1288,7 +1288,7 @@ class IntegrationConfigService:
                     "TrustServerCertificate=yes;"
                     "MARS_Connection=no;"
                     f"LoginTimeout={login_timeout};"
-                    "APP=RiverEdge-integration-test;"
+                    "APP=startech-integration-test;"
                 )
                 try:
                     conn = pyodbc.connect(conn_str)
@@ -1382,7 +1382,7 @@ class IntegrationConfigService:
                     "TrustServerCertificate=yes;"
                     "MARS_Connection=no;"
                     f"LoginTimeout={login_timeout};"
-                    "APP=RiverEdge-dataset-sql;"
+                    "APP=startech-dataset-sql;"
                 )
                 try:
                     conn = pyodbc.connect(conn_str)
@@ -1470,7 +1470,7 @@ class IntegrationConfigService:
             "database": database,
             "login_timeout": login_timeout,
             "timeout": query_timeout,
-            "appname": "RiverEdge-integration-test",
+            "appname": "startech-integration-test",
             "autocommit": True,
         }
 
@@ -1530,7 +1530,7 @@ class IntegrationConfigService:
             if tcp_err:
                 return {
                     "success": False,
-                    "message": f"SQL Server: {tcp_err}（若本机 Navicat 能连而此处不能，请确认 RiverEdge 后端运行环境与 Navicat 是否在同一网络/能否访问该公网地址与端口。）",
+                    "message": f"SQL Server: {tcp_err}（若本机 Navicat 能连而此处不能，请确认 星技谷 后端运行环境与 Navicat 是否在同一网络/能否访问该公网地址与端口。）",
                 }
         except Exception as e:
             return {"success": False, "message": f"SQL Server TCP 探测异常: {e}"}

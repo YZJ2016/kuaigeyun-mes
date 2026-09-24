@@ -1,10 +1,10 @@
 {
   "code": "kuaipd",
-  "name": "快交付",
+  "name": "星交付",
   "version": "1.0.0",
-  "description": "交付履约应用：交付项目、物流与售后（业务能力由快制造提供）",
+  "description": "交付履约应用：交付项目、物流与售后（业务能力由星制造提供）",
   "icon": "truck",
-  "author": "RiverEdge Team",
+  "author": "StarTech",
   "market_category": "base",
   "is_pro": false,
   "entry_point": "../apps/kuaipd/index.tsx",

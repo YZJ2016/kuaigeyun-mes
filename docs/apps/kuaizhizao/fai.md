@@ -2,7 +2,7 @@
 
 ## 落点
 
-快制造 → **质量管理** → **首件检验** → FAI 单  
+星制造 → **质量管理** → **首件检验** → FAI 单  
 路径：`/apps/kuaizhizao/quality-management/fai-orders`  
 权限：`kuaizhizao:quality-management-fai-orders:*`
 
@@ -10,7 +10,7 @@
 
 ## 与 OpenFAI 对照
 
-| OpenFAI 能力 | RiverEdge |
+| OpenFAI 能力 | 星技谷 |
 |--------------|-----------|
 | 零件/图纸 | 物料 + 图纸号/版本；图纸可上传图片（JPG/PNG/WEBP） |
 | OCR 气泡 | 气泡图编辑器内「OCR 识别」；走租户 OCR 视觉端点 + 结构化候选（**不拷贝 OpenFAI**） |
@@ -39,7 +39,7 @@
 ## 许可说明（禁止拷贝）
 
 [OpenFAI](https://gitee.com/openquality/OpenFAI) 使用 **PolyForm Noncommercial**，商业用途须其商业授权。  
-本模块**仅参考业务闭环与能力拆分**，使用 RiverEdge 现有技术栈自研，**禁止移植其源码、OCR 配置页或报告模板二进制**。
+本模块**仅参考业务闭环与能力拆分**，使用 星技谷 现有技术栈自研，**禁止移植其源码、OCR 配置页或报告模板二进制**。
 
 ## 状态与放行
 
