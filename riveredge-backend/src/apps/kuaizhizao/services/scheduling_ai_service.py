@@ -531,8 +531,8 @@ class SchedulingAiService:
         """Phase 3：派工单图片 OCR → 改期提案。"""
         import base64
 
-        from core.ai.runtime_config import AiRuntimeConfig
-        from core.utils.deepseek_vision_client import extract_text_from_image, guess_image_mime
+        from core.ai.runtime.vision import extract_text_from_image
+        from core.utils.deepseek_vision_client import guess_image_mime
 
         if not image_bytes:
             raise ValidationError("请上传图片")
@@ -540,17 +540,10 @@ class SchedulingAiService:
             raise ValidationError("图片大小不能超过 12MB")
 
         mime = guess_image_mime(image_bytes, content_type)
-        config_model = await AiRuntimeConfig.load(tenant_id)
-        vision_config = {
-            "ocr_base_url": config_model.ocr_base_url,
-            "ocr_model": config_model.ocr_model,
-            "ocr_api_key": config_model.ocr_api_key,
-            "ocr_configured": config_model.ocr_configured,
-        }
         b64 = base64.b64encode(image_bytes).decode("ascii")
+        # 视觉出站走 model_factory（目录 vision 行优先 → OCR 组兜底）
         ocr_text = await extract_text_from_image(
             tenant_id=tenant_id,
-            config=vision_config,
             mime=mime,
             b64=b64,
             prompt=_DISPATCH_OCR_PROMPT,

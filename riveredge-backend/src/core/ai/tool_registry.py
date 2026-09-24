@@ -56,17 +56,28 @@ class ToolRegistry:
     def ensure_defaults(cls) -> None:
         if cls._defaults_loaded:
             return
-        cls._defaults_loaded = True
         try:
             from apps.kuaiai.services.chat_tools import CHAT_TOOL_DEFINITIONS
-
-            for item in CHAT_TOOL_DEFINITIONS:
-                fn = (item.get("function") or {})
-                name = str(fn.get("name") or "")
-                if name and name not in cls._tools:
-                    cls.register(name, item, permission="kuaiai:entry:read")
         except ImportError:
+            # KU-AI 未组装是进程内稳定状态，置位避免每调用重复 import
+            cls._defaults_loaded = True
             logger.debug("KU-AI 未组装，跳过默认 ToolRegistry 注册")
+            return
+        for item in CHAT_TOOL_DEFINITIONS:
+            fn = item.get("function") or {}
+            name = str(fn.get("name") or "")
+            if not name or name in cls._tools:
+                continue
+            permission = item.get("permission")
+            if not permission:
+                # 配合 tool_bridge fail-closed：兜底项无权限码不注册，
+                # 不用 entry:read 放大到写工具，也不用哨兵码占位
+                logger.debug("AI tool 兜底定义无权限码，跳过注册: {}", name)
+                continue
+            cls.register(name, item, permission=permission)
+        # 标记只在 import + 注册循环成功后置位；非 ImportError 异常
+        # 不置位，允许下次调用重试
+        cls._defaults_loaded = True
 
     @classmethod
     def register_from_manifest(cls, app_code: str, manifest: Dict[str, Any]) -> None:

@@ -362,7 +362,16 @@ class TenantInitDataService:
             return await MenuService.sync_all_menus_from_applications(tenant_id)
 
         if key == "kuaiai_faq_preset":
-            from apps.kuaiai.services.faq_seed_service import FaqSeedService
+            # KR-D18：FAQ 本期不做，apps.kuaiai.services.faq_seed_service 尚不存在；
+            # 保留该初始化项但加 guard——模块缺失时记 warning 跳过（返回 0），
+            # 不使租户初始化流程崩溃。
+            try:
+                from apps.kuaiai.services.faq_seed_service import FaqSeedService
+            except ImportError:
+                logger.warning(
+                    "kuaiai_faq_preset 跳过：apps.kuaiai.services.faq_seed_service 未实现（KR-D18 暂缓）"
+                )
+                return 0
 
             return await FaqSeedService.seed_default_faqs(
                 tenant_id,
