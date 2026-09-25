@@ -5,18 +5,14 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, Optional, Type, TypeVar, Union
 
 from loguru import logger
 from pydantic import BaseModel
 
-from core.ai.runtime.memory import message_text
 from core.ai.runtime.model_factory import build_chat_model
 from core.ai.runtime.vision import extract_text_from_image
-from core.utils.deepseek_vision_client import (
-    extract_json_object,
-    guess_image_mime,
-)
+from core.utils.deepseek_vision_client import guess_image_mime
 from infra.exceptions.exceptions import ValidationError
 
 T = TypeVar("T", bound=BaseModel)
@@ -55,14 +51,17 @@ class StructuredDraftService:
         user_content: str,
         error_prefix: str,
         temperature: float = 0.2,
-    ) -> Dict[str, Any]:
+        # 注意：json_mode 下 dict schema 不参与请求也不做字段校验（仅选 parser）；
+        # 要校验过的 pydantic 对象请传 BaseModel 子类。
+        schema: Optional[Union[Type[T], Dict[str, Any]]] = None,
+    ) -> Union[Dict[str, Any], T]:
         chat = await build_chat_model(tenant_id)
-        bound = chat.bind(
-            response_format={"type": "json_object"},
-            temperature=temperature,
-        )
+        # json_mode：响应面仍是 response_format=json_object，兼容面最广；
+        # 不提供抠 JSON 回退——解析失败即整体失败。
+        structured = chat.with_structured_output(schema, method="json_mode")
+        bound = structured.bind(temperature=temperature)
         try:
-            response = await bound.ainvoke(
+            result = await bound.ainvoke(
                 [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_content},
@@ -77,7 +76,15 @@ class StructuredDraftService:
                 type(exc).__name__,
             )
             raise ValidationError(error_prefix) from exc
-        return extract_json_object(message_text(response))
+        # dict/None schema 只保证「是合法 JSON」，不保证是对象；下游一律按 dict 消费，
+        # 顶层为数组/标量时按失败关闭，不放任 AttributeError 漏成 500
+        if not (isinstance(schema, type) and issubclass(schema, BaseModel)):
+            if not isinstance(result, dict):
+                logger.error(
+                    "{} tenant_id={} non_object_json", error_prefix, tenant_id
+                )
+                raise ValidationError(error_prefix)
+        return result
 
     @classmethod
     async def structure_text(
@@ -103,12 +110,13 @@ class StructuredDraftService:
 
         error_prefix = f"{schema_name} 字段结构化失败"
         chat = await build_chat_model(tenant_id)
-        bound = chat.bind(
-            response_format={"type": "json_object"},
-            temperature=0.1,
+        # include_raw：解析失败不抛穿，先拿到 raw/parsed/parsing_error 再决定归一或失败
+        structured = chat.with_structured_output(
+            result_type, method="json_mode", include_raw=True
         )
+        bound = structured.bind(temperature=0.1)
         try:
-            response = await bound.ainvoke(
+            out = await bound.ainvoke(
                 [
                     {"role": "system", "content": profile.system_prompt},
                     {"role": "user", "content": user_content},
@@ -122,13 +130,9 @@ class StructuredDraftService:
                 type(exc).__name__,
             )
             raise ValidationError(error_prefix) from exc
-        data = extract_json_object(message_text(response))
-        items_raw = data.get("items") or []
-        if isinstance(items_raw, list):
-            data["items"] = [row for row in items_raw if isinstance(row, dict)]
-        else:
-            data["items"] = []
-        result = result_type.model_validate(data)
+        result = out.get("parsed") if isinstance(out, dict) else out
+        if result is None:
+            result = cls._salvage_parsed(out, result_type, tenant_id, error_prefix)
         if (
             profile.validate_meaningful
             and source_label == "OCR 文本"
@@ -136,6 +140,54 @@ class StructuredDraftService:
         ):
             raise ValidationError(profile.empty_ocr_message)
         return result
+
+    @staticmethod
+    def _salvage_parsed(
+        out: Any,
+        result_type: Type[T],
+        tenant_id: int,
+        error_prefix: str,
+    ) -> T:
+        """解析失败的严格归一（非抠 JSON）：raw content 本就是 json_object 响应，
+        仅做 json.loads + `items` 归一（None→[]、剔除非 dict 行，沿用旧口径），
+        再 model_validate；仍失败则抛 ValidationError。"""
+        raw = out.get("raw") if isinstance(out, dict) else None
+        content = getattr(raw, "content", None)
+        data: Any = None
+        if isinstance(content, str) and content.strip():
+            try:
+                data = json.loads(content)
+            except (json.JSONDecodeError, ValueError):
+                data = None
+        elif isinstance(content, list):
+            # 部分端点回 content blocks：拼接 text 块再解析
+            text = "".join(
+                b.get("text", "")
+                for b in content
+                if isinstance(b, dict) and b.get("type") == "text"
+            )
+            if text.strip():
+                try:
+                    data = json.loads(text)
+                except (json.JSONDecodeError, ValueError):
+                    data = None
+        if isinstance(data, dict):
+            items_raw = data.get("items") or []
+            data["items"] = (
+                [row for row in items_raw if isinstance(row, dict)]
+                if isinstance(items_raw, list)
+                else []
+            )
+            try:
+                return result_type.model_validate(data)
+            except Exception:
+                pass
+        logger.error(
+            "{} tenant_id={} parse_failed",
+            error_prefix,
+            tenant_id,
+        )
+        raise ValidationError(error_prefix)
 
     @classmethod
     async def structure_from_image(

@@ -71,11 +71,41 @@ export interface ChatMessageOut {
 
 // ============================================================ 会话 / 消息 REST
 
-export function listChatSessions(page = 1, pageSize = 50): Promise<ChatSessionOut[]> {
-  return apiRequest<ChatSessionOut[]>(`${KUAI_AI_API}/sessions`, {
+/** 会话列表页：后端现网回裸数组（丢弃 total）；兼容 {items,total} 信封。 */
+export interface ChatSessionListPage {
+  items: ChatSessionOut[];
+  /** 有信封时带回；裸数组时为 undefined，由调用方用满页探测 */
+  total?: number;
+}
+
+function normalizeSessionListPage(raw: unknown): ChatSessionListPage {
+  if (Array.isArray(raw)) {
+    return { items: raw as ChatSessionOut[] };
+  }
+  if (raw && typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+    const items = Array.isArray(obj.items)
+      ? (obj.items as ChatSessionOut[])
+      : Array.isArray(obj.data)
+        ? (obj.data as ChatSessionOut[])
+        : [];
+    const totalRaw = obj.total;
+    const total =
+      typeof totalRaw === 'number' && Number.isFinite(totalRaw) ? totalRaw : undefined;
+    return { items, total };
+  }
+  return { items: [] };
+}
+
+export async function listChatSessions(
+  page = 1,
+  pageSize = 50,
+): Promise<ChatSessionListPage> {
+  const raw = await apiRequest<unknown>(`${KUAI_AI_API}/sessions`, {
     method: 'GET',
     params: { page, page_size: pageSize },
   });
+  return normalizeSessionListPage(raw);
 }
 
 export function createChatSession(payload: ChatSessionCreatePayload): Promise<ChatSessionOut> {

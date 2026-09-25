@@ -493,6 +493,12 @@ async def test_agent_sse_no_ainvoke_fallback_after_tool_event():
     assert frames[-1] == "data: [DONE]"
     error_frame = json.loads(frames[-2][len("data: ") :])
     assert "error" in error_frame
+    start = json.loads(frames[0][len("data: ") :])
+    assert start["kuaiai_tool"]["phase"] == "start"
+    assert start["choices"][0]["delta"] == {}
+    end = json.loads(frames[1][len("data: ") :])
+    assert end["kuaiai_tool"]["phase"] == "end"
+    assert end["kuaiai_tool"]["result_summary"] == "done"
 
 
 @pytest.mark.asyncio

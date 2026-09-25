@@ -55,11 +55,22 @@ import { KUAI_AI_OPTION_KEYS } from '../../constants';
 import ChatMessageList, { type PendingExchange } from './MessageList';
 import './index.less';
 
-/** 会话侧栏拉取上限（后端 page_size 上限 200；侧栏即“最近会话”列表，超出部分不可达） */
+/** 每页条数（与后端 page_size 上限一致；首屏仍只拉第 1 页，更多靠「加载更多」） */
 const SESSIONS_PAGE_SIZE = 200;
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
+}
+
+/** 有 total 时比累计条数；裸数组时满页即可能还有下一页 */
+function sessionsPageHasMore(
+  pageItems: ChatSessionOut[],
+  pageSize: number,
+  loadedCount: number,
+  total?: number,
+): boolean {
+  if (total != null) return loadedCount < total;
+  return pageItems.length >= pageSize;
 }
 
 const KuaiaiChatPage: React.FC = () => {
@@ -82,10 +93,17 @@ const KuaiaiChatPage: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<PendingExchange | null>(null);
   const [renaming, setRenaming] = useState<{ id: number; title: string } | null>(null);
+  const [sessions, setSessions] = useState<ChatSessionOut[]>([]);
+  const [sessionsPage, setSessionsPage] = useState(1);
+  const [sessionsTotal, setSessionsTotal] = useState<number | undefined>(undefined);
+  const [sessionsHasMore, setSessionsHasMore] = useState(false);
+  const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // 同步发送闸：React state 异步，同帧内两次 onSubmit 都会看到 sending=false
   const sendingRef = useRef(false);
+  // 首屏 invalidate 时递增，丢弃进行中的「加载更多」结果，避免追加到已重置列表
+  const sessionsListGenRef = useRef(0);
 
   // ---------------- 数据 ----------------
 
@@ -94,10 +112,17 @@ const KuaiaiChatPage: React.FC = () => {
     queryFn: () => listChatSessions(1, SESSIONS_PAGE_SIZE),
     enabled: canListSessions,
   });
-  const sessions: ChatSessionOut[] = useMemo(
-    () => sessionsQuery.data ?? [],
-    [sessionsQuery.data],
-  );
+
+  // 首屏（或 invalidate 后）重置为第 1 页；已加载的后续页丢弃（选中会话/消息区不动）
+  useEffect(() => {
+    if (!sessionsQuery.data) return;
+    sessionsListGenRef.current += 1;
+    const { items, total } = sessionsQuery.data;
+    setSessions(items);
+    setSessionsPage(1);
+    setSessionsTotal(total);
+    setSessionsHasMore(sessionsPageHasMore(items, SESSIONS_PAGE_SIZE, items.length, total));
+  }, [sessionsQuery.data]);
 
   const agentOptionsQuery = useQuery({
     queryKey: KUAI_AI_OPTION_KEYS.agents,
@@ -173,6 +198,48 @@ const KuaiaiChatPage: React.FC = () => {
     () => queryClient.invalidateQueries({ queryKey: ['kuaiai', 'chat-sessions'] }),
     [queryClient],
   );
+
+  const handleLoadMoreSessions = useCallback(async () => {
+    if (loadingMoreSessions || !sessionsHasMore || !canListSessions) return;
+    const gen = sessionsListGenRef.current;
+    const nextPage = sessionsPage + 1;
+    setLoadingMoreSessions(true);
+    try {
+      const { items, total } = await listChatSessions(nextPage, SESSIONS_PAGE_SIZE);
+      if (gen !== sessionsListGenRef.current) return;
+      const mergedTotal = total ?? sessionsTotal;
+      const seen = new Set(sessions.map((s) => s.id));
+      const appended = items.filter((s) => !seen.has(s.id));
+      const next = appended.length ? [...sessions, ...appended] : sessions;
+      setSessions(next);
+      setSessionsPage(nextPage);
+      if (total != null) setSessionsTotal(total);
+      setSessionsHasMore(
+        sessionsPageHasMore(items, SESSIONS_PAGE_SIZE, next.length, mergedTotal),
+      );
+    } catch (error) {
+      if (gen !== sessionsListGenRef.current) return;
+      messageApi.error(
+        getApiErrorMessage(
+          error,
+          t('app.kuaiai.chat.loadMoreSessionsFailed', {
+            defaultValue: '加载更多会话失败',
+          }),
+        ),
+      );
+    } finally {
+      setLoadingMoreSessions(false);
+    }
+  }, [
+    canListSessions,
+    loadingMoreSessions,
+    messageApi,
+    sessions,
+    sessionsHasMore,
+    sessionsPage,
+    sessionsTotal,
+    t,
+  ]);
 
   const handleNewSession = useCallback(async () => {
     try {
@@ -393,54 +460,70 @@ const KuaiaiChatPage: React.FC = () => {
               description={t('app.kuaiai.chat.noSessions', { defaultValue: '暂无会话' })}
             />
           ) : (
-            sessions.map((s) => {
-              const menuItems = sessionMenuItems(s);
-              return (
-                <div
-                  key={s.id}
-                  className={`kuaiai-chat-session-item${
-                    s.id === selectedSessionId ? ' is-active' : ''
-                  }`}
-                  onClick={() => setSelectedSessionId(s.id)}
-                >
-                  <div className="kuaiai-chat-session-main">
-                    <div className="kuaiai-chat-session-title">
-                      {s.title?.trim() ||
-                        t('app.kuaiai.chat.untitledSession', { defaultValue: '未命名会话' })}
+            <>
+              {sessions.map((s) => {
+                const menuItems = sessionMenuItems(s);
+                return (
+                  <div
+                    key={s.id}
+                    className={`kuaiai-chat-session-item${
+                      s.id === selectedSessionId ? ' is-active' : ''
+                    }`}
+                    onClick={() => setSelectedSessionId(s.id)}
+                  >
+                    <div className="kuaiai-chat-session-main">
+                      <div className="kuaiai-chat-session-title">
+                        {s.title?.trim() ||
+                          t('app.kuaiai.chat.untitledSession', { defaultValue: '未命名会话' })}
+                      </div>
+                      <div className="kuaiai-chat-session-time">
+                        {s.last_message_at || s.updated_at
+                          ? dayjs(s.last_message_at || s.updated_at).format('MM-DD HH:mm')
+                          : ''}
+                      </div>
                     </div>
-                    <div className="kuaiai-chat-session-time">
-                      {s.last_message_at || s.updated_at
-                        ? dayjs(s.last_message_at || s.updated_at).format('MM-DD HH:mm')
-                        : ''}
-                    </div>
+                    {menuItems.length > 0 ? (
+                      <Dropdown
+                        trigger={['click']}
+                        menu={{
+                          items: menuItems,
+                          onClick: ({ key, domEvent }) => {
+                            domEvent.stopPropagation();
+                            if (key === 'rename') {
+                              setRenaming({ id: s.id, title: s.title || '' });
+                            } else if (key === 'delete') {
+                              handleDelete(s);
+                            }
+                          },
+                        }}
+                      >
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<MoreOutlined />}
+                          className="kuaiai-chat-session-more"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </Dropdown>
+                    ) : null}
                   </div>
-                  {menuItems.length > 0 ? (
-                    <Dropdown
-                      trigger={['click']}
-                      menu={{
-                        items: menuItems,
-                        onClick: ({ key, domEvent }) => {
-                          domEvent.stopPropagation();
-                          if (key === 'rename') {
-                            setRenaming({ id: s.id, title: s.title || '' });
-                          } else if (key === 'delete') {
-                            handleDelete(s);
-                          }
-                        },
-                      }}
-                    >
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<MoreOutlined />}
-                        className="kuaiai-chat-session-more"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </Dropdown>
-                  ) : null}
+                );
+              })}
+              {sessionsHasMore ? (
+                <div className="kuaiai-chat-load-more">
+                  <Button
+                    type="link"
+                    size="small"
+                    block
+                    loading={loadingMoreSessions}
+                    disabled={loadingMoreSessions}
+                    onClick={() => void handleLoadMoreSessions()}
+                  >
+                    {t('common.loadMore', { defaultValue: '加载更多' })}
+                  </Button>
                 </div>
-              );
-            })
+              ) : null}
+            </>
           )}
         </div>
       </aside>

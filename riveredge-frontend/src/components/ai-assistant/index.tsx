@@ -17,6 +17,7 @@ import {
   parseKuaiChatErrorResponse,
   stripAssistantThinkContent,
   type ChatIntegrationStatus,
+  type KuaiToolTrace,
 } from '../../services/deepseekChat'
 import { useChatIntegrationStatus } from '../../hooks/useChatIntegrationStatus'
 import { useAiContext, toAiContextApiPayload } from '../../contexts/AiContext'
@@ -29,6 +30,7 @@ import './index.less'
 type XChatMessage = {
   role: string
   content: string
+  toolTraces?: KuaiToolTrace[]
 }
 
 /** Bubble.List 单条 item 形状（与 Ant Design X 默认对话样式一致） */
@@ -37,7 +39,7 @@ type BubbleItem = {
   role: 'user' | 'ai'
   content: string
   status?: 'local' | 'loading' | 'updating' | 'success' | 'error' | 'abort'
-  extraInfo?: Record<string, unknown>
+  extraInfo?: { lastUserMessage?: string; toolTraces?: KuaiToolTrace[] }
 }
 
 export interface AIAssistantProps {
@@ -204,6 +206,27 @@ function renderAiBubbleContent(content: unknown) {
   const text = typeof content === 'string' ? content : ''
   if (!text.trim()) return null
   return <AiAssistantMarkdown content={text} />
+}
+
+function ToolTraceList({ traces }: { traces: KuaiToolTrace[] }) {
+  if (!traces.length) return null
+  return (
+    <ul className="ai-qa-tool-traces">
+      {traces.map((trace, index) => (
+        <li key={`${trace.name}-${index}`}>
+          <span className="ai-qa-tool-trace-phase">
+            {trace.phase === 'start' ? '正在调用' : '已调用'} {trace.name}
+          </span>
+          {trace.phase === 'start' && trace.argsSummary ? (
+            <span className="ai-qa-tool-trace-detail">{trace.argsSummary}</span>
+          ) : null}
+          {trace.phase === 'end' && trace.resultSummary ? (
+            <span className="ai-qa-tool-trace-detail">{trace.resultSummary}</span>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 type AIAssistantDialogUIProps = {
@@ -411,12 +434,15 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
                       style={{ width: 32, height: 32 }}
                     />
                   ),
-                  footer: (content: unknown, info: { status?: string; extraInfo?: { lastUserMessage?: string } }) => {
+                  footer: (content: unknown, info: { status?: string; extraInfo?: { lastUserMessage?: string; toolTraces?: KuaiToolTrace[] } }) => {
                     if (info?.status === 'loading') return null
                     const lastUser = info?.extraInfo?.lastUserMessage ?? ''
                     const text = typeof content === 'string' ? content : ''
+                    const traces = info?.extraInfo?.toolTraces ?? []
                     const confirmToken = extractConfirmToken(text)
                     return (
+                      <>
+                        <ToolTraceList traces={traces} />
                       <div className="ai-qa-bubble-actions">
                         {confirmToken && onConfirmAction ? (
                           <Button
@@ -449,6 +475,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
                           </span>
                         ) : null}
                       </div>
+                      </>
                     )
                   },
                 },
@@ -539,7 +566,11 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
         role,
         content,
         status: m.status,
-        extraInfo: { ...((m.extraInfo as object) || {}), lastUserMessage },
+        extraInfo: {
+          ...((m.extraInfo as object) || {}),
+          lastUserMessage,
+          ...(role === 'ai' && msg?.toolTraces?.length ? { toolTraces: msg.toolTraces } : {}),
+        },
       }
     })
   }, [chat.messages])
