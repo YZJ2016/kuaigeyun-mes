@@ -154,6 +154,9 @@ get_listening_pids_raw() {
               Select-Object -ExpandProperty OwningProcess -Unique |
               Where-Object { \$_ -gt 0 }
         " 2>/dev/null | tr -d '\r' | sort -u | grep -E '^[0-9]+$' || true
+    elif command -v lsof >/dev/null 2>&1; then
+        # macOS / Linux：netstat -ano 是 Windows 输出格式，Unix 上恒为空，须用 lsof
+        lsof -nP -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null | sort -u | grep -E '^[0-9]+$' || true
     else
         netstat -ano 2>/dev/null \
             | grep LISTENING \
@@ -201,7 +204,9 @@ graceful_kill_pid() {
     pid_is_alive "$pid" || return 0
     kill -INT "$pid" 2>/dev/null || taskkill.exe //PID "$pid" //T 2>/dev/null || true
     sleep 3
-    pid_is_alive "$pid" && taskkill.exe //F //PID "$pid" //T 2>/dev/null || true
+    if pid_is_alive "$pid"; then
+        taskkill.exe //F //PID "$pid" //T 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+    fi
 }
 
 kill_pids() {
@@ -214,7 +219,7 @@ kill_pids() {
     sleep 2
     for pid in $pids; do
         [ -n "$pid" ] || continue
-        taskkill.exe //F //PID "$pid" 2>/dev/null || true
+        taskkill.exe //F //PID "$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
     done
     sleep 1
 }
@@ -240,7 +245,10 @@ kill_port() {
             kill_pids "$alive_pids"
         fi
         if [ "$port" = "${BACKEND_PORT}" ]; then
-            backend_http_ready || return 0
+            # /health 挂了但端口仍被僵尸进程占用时不能算清完，否则新实例 bind 失败
+            if ! backend_http_ready && [ -z "$(get_listening_pids_raw "$port")" ]; then
+                return 0
+            fi
         else
             [ -z "$(get_listening_pids_raw "$port")" ] && return 0
         fi
@@ -250,6 +258,8 @@ kill_port() {
 
     if [ "$port" = "${BACKEND_PORT}" ]; then
         backend_http_ready && { log_error "端口 $port 仍被占用（HTTP /health 可访问）"; return 1; }
+        pids="$(get_listening_pids_raw "$port")"
+        [ -n "$pids" ] && { log_error "端口 $port 仍有监听: $pids"; return 1; }
         return 0
     fi
     pids="$(get_listening_pids_raw "$port")"
@@ -408,7 +418,13 @@ ensure_mobile_port_free() {
 
 # Windows：清理 taskiq worker / scheduler 整棵树（uv run / taskiq.exe 会 fork，仅杀 pidfile 会残留占 PG 连接的子进程）
 kill_taskiq_processes() {
-    command -v powershell.exe >/dev/null 2>&1 || return 0
+    if ! command -v powershell.exe >/dev/null 2>&1; then
+        # macOS / Linux：按命令行匹配 taskiq worker/scheduler（uv run 启动器与 python 子进程均含此串）
+        pkill -INT -f 'core\.tasks\.taskiq_app:(broker|scheduler)' 2>/dev/null || true
+        sleep 2
+        pkill -KILL -f 'core\.tasks\.taskiq_app:(broker|scheduler)' 2>/dev/null || true
+        return 0
+    fi
     local round=0
     while [ "$round" -lt 3 ]; do
         local killed
@@ -459,12 +475,15 @@ kill_taskiq_processes() {
 
 taskiq_service_running() {
     local token=$1
-    command -v powershell.exe >/dev/null 2>&1 || return 1
-    powershell.exe -NoProfile -Command "
-        \$found = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-            Where-Object { \$_.CommandLine -and (\$_.CommandLine -match 'core\.tasks\.taskiq_app:${token}') }
-        if (\$found) { exit 0 } else { exit 1 }
-    " >/dev/null 2>&1
+    if command -v powershell.exe >/dev/null 2>&1; then
+        powershell.exe -NoProfile -Command "
+            \$found = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+                Where-Object { \$_.CommandLine -and (\$_.CommandLine -match 'core\.tasks\.taskiq_app:${token}') }
+            if (\$found) { exit 0 } else { exit 1 }
+        " >/dev/null 2>&1
+    else
+        pgrep -f "core\.tasks\.taskiq_app:${token}" >/dev/null 2>&1
+    fi
 }
 
 cleanup_backend_processes() {
@@ -495,8 +514,8 @@ start_backend() {
     log_info "正在拉起后端 (${BACKEND_PORT})..."
     if [ "$skip_cleanup" != "1" ]; then
         cleanup_backend_processes || { log_error "后端端口未释放，拒绝启动"; return 1; }
-    elif backend_http_ready; then
-        log_error "8200 仍被占用（/health 可访问），请先结束其他终端的 uvicorn 后重试"
+    elif backend_http_ready || backend_port_ready; then
+        log_error "8200 仍被占用，请先结束其他终端的 uvicorn 后重试"
         return 1
     fi
 
@@ -589,18 +608,44 @@ start_worker() {
     log_success "Taskiq 异步引擎已就绪!"
 }
 
+# 前端不能只清端口：vite 默认遇占用会悄悄换端口（strictPort 未开时漂到 8101+），
+# 且旧实例可能端口检测不到，须连 pidfile 一起杀
+stop_frontend() {
+    if [ -f ".logs/frontend.pid" ]; then
+        local pid
+        pid="$(cat .logs/frontend.pid 2>/dev/null)"
+        [ -n "$pid" ] && graceful_kill_pid "$pid"
+        rm -f .logs/frontend.pid
+    fi
+    kill_port "${FRONTEND_PORT}" || true
+}
+
 start_frontend() {
     ensure_nodejs_path || return 1
     log_info "正在拉起前端 (${FRONTEND_PORT})..."
-    kill_port "${FRONTEND_PORT}" || true
+    stop_frontend
     cd riveredge-frontend
-    [ -f "../.logs/frontend.pid" ] && rm -f "../.logs/frontend.pid"
     export VITE_BACKEND_HOST="${VITE_BACKEND_HOST:-127.0.0.1}"
     export VITE_BACKEND_PORT="${VITE_BACKEND_PORT:-${BACKEND_PORT}}"
-    nohup npx vite --port "${FRONTEND_PORT}" --host 0.0.0.0 > ../.logs/frontend.log 2>&1 &
+    nohup npx vite --port "${FRONTEND_PORT}" --strictPort --host 0.0.0.0 > ../.logs/frontend.log 2>&1 &
     echo $! > ../.logs/frontend.pid
     cd ..
-    log_success "前端已挂起!"
+
+    local retries=0
+    while [ "$retries" -lt 15 ]; do
+        if [ -n "$(get_listening_pids_raw "${FRONTEND_PORT}")" ]; then
+            log_success "前端已挂起!"
+            return 0
+        fi
+        if ! pid_is_alive "$(cat .logs/frontend.pid 2>/dev/null)"; then
+            log_error "前端进程已退出，请查看 .logs/frontend.log"
+            return 1
+        fi
+        sleep 1
+        retries=$((retries + 1))
+    done
+    log_error "前端 ${FRONTEND_PORT} 未监听，请查看 .logs/frontend.log"
+    return 1
 }
 
 start_mobile() {
@@ -684,7 +729,7 @@ stop_all() {
     done
     kill_taskiq_processes
     cleanup_backend_processes || log_warn "后端清理未完全成功，请检查 .logs/backend.log"
-    kill_port "${FRONTEND_PORT}" || true
+    stop_frontend
     stop_mobile
 }
 
@@ -747,7 +792,7 @@ case "$CMD" in
         fi
         ;;
     be) start_backend ;;
-    fe) kill_port "${FRONTEND_PORT}"; start_frontend ;;
+    fe) start_frontend ;;
     me|h5)
         mkdir -p .logs
         start_mobile || exit 1
