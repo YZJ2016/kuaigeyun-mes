@@ -1,8 +1,9 @@
 """LangChain 流 → OpenAI chunk SSE 线格式（KR-D14，逐字节兼容 deepseekChat.ts）。
 
-主路径：``astream_events(version="v2")`` 仅取 ``on_chat_model_stream`` →
-``choices[].delta.content`` chunk → ``[DONE]``。``on_tool_start/end`` 等
-扩展事件不进线格式（前端按白名单忽略；工具轨迹以落库历史为准展示）。
+主路径：``astream_events(version="v2")`` 取 ``on_chat_model_stream`` →
+``choices[].delta.content`` chunk → ``[DONE]``。``on_tool_start/end`` 另发
+顶层 ``kuaiai_tool`` 扩展帧（不写入 ``delta.content``）；旧客户端只读
+正文时忽略该帧。工具轨迹仍以落库历史为准，扩展帧只供抽屉实时反馈。
 
 兼容分支（KR-D14，**不是**假流式兜底）：流式在产出任何内容且**未发生
 任何工具执行**前失败（典型如端点不支持 tool_calls 流式）→ 该轮回退
@@ -22,6 +23,42 @@ from loguru import logger
 from core.ai.runtime.memory import message_text
 
 _SSE_DONE = b"data: [DONE]\n\n"
+_SUMMARY_LIMIT = 120
+
+
+def _short_text(value: Any) -> str:
+    """工具参数/结果压成单行短摘要，避免把整段 JSON 或密钥推进 SSE。"""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        text = value
+    else:
+        text = message_text(value) if hasattr(value, "content") else ""
+        if not text:
+            try:
+                text = json.dumps(value, ensure_ascii=False, default=str)
+            except (TypeError, ValueError):
+                text = str(value)
+    text = " ".join(text.split())
+    if len(text) <= _SUMMARY_LIMIT:
+        return text
+    return text[:_SUMMARY_LIMIT] + "…"
+
+
+def _tool_notice(event: Dict[str, Any]) -> Dict[str, str]:
+    data = event.get("data") or {}
+    name = str(event.get("name") or data.get("name") or "tool").strip() or "tool"
+    if event.get("event") == "on_tool_start":
+        notice = {"phase": "start", "name": name}
+        summary = _short_text(data.get("input"))
+        if summary:
+            notice["args_summary"] = summary
+        return notice
+    notice = {"phase": "end", "name": name}
+    summary = _short_text(data.get("output"))
+    if summary:
+        notice["result_summary"] = summary
+    return notice
 
 
 def _chunk_payload(model_name: str, delta: Dict[str, Any]) -> bytes:
@@ -31,6 +68,19 @@ def _chunk_payload(model_name: str, delta: Dict[str, Any]) -> bytes:
         "created": int(time.time()),
         "model": model_name,
         "choices": [{"index": 0, "delta": delta}],
+    }
+    return f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8")
+
+
+def _tool_payload(model_name: str, notice: Dict[str, str]) -> bytes:
+    """扩展帧：空 delta，工具反馈放在顶层 kuaiai_tool，不进回答正文。"""
+    chunk = {
+        "id": "chatcmpl-kuaiai",
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": model_name,
+        "kuaiai_tool": notice,
+        "choices": [{"index": 0, "delta": {}}],
     }
     return f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8")
 
@@ -49,13 +99,15 @@ async def _iter_agent_texts(
     messages: List[Any],
     config: Optional[Dict[str, Any]],
     tool_events: List[str],
-) -> AsyncIterator[str]:
+) -> AsyncIterator[tuple]:
+    """产出 (\"text\", str) 或 (\"tool\", notice)。工具帧不计入已发出的正文。"""
     async for event in agent.astream_events(
         {"messages": messages}, config=config, version="v2"
     ):
         kind = event.get("event")
         if kind in _TOOL_EVENT_NAMES:
             tool_events.append(kind)
+            yield ("tool", _tool_notice(event))
             continue
         if kind != "on_chat_model_stream":
             continue
@@ -64,7 +116,7 @@ async def _iter_agent_texts(
             continue
         text = message_text(chunk)
         if text:
-            yield text
+            yield ("text", text)
 
 
 def _final_message_text(result: Any) -> str:
@@ -90,9 +142,14 @@ async def agent_to_openai_sse(
     first = True
     tool_events: List[str] = []
     try:
-        async for text in _iter_agent_texts(agent, messages, config, tool_events):
+        async for kind, payload in _iter_agent_texts(
+            agent, messages, config, tool_events
+        ):
+            if kind == "tool":
+                yield _tool_payload(model_name, payload)
+                continue
             emitted = True
-            delta: Dict[str, Any] = {"content": text}
+            delta: Dict[str, Any] = {"content": payload}
             if first:
                 delta["role"] = "assistant"
                 first = False

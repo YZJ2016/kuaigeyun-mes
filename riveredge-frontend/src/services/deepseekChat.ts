@@ -39,15 +39,57 @@ type DeepSeekChoice = {
   message?: { content?: string; role?: string };
 };
 
+export type KuaiToolTrace = {
+  phase: 'start' | 'end';
+  name: string;
+  argsSummary?: string;
+  resultSummary?: string;
+};
+
 type DeepSeekChunk = {
   choices?: DeepSeekChoice[];
+  kuaiai_tool?: {
+    phase?: string;
+    name?: string;
+    args_summary?: string;
+    result_summary?: string;
+  };
 };
+
+function readToolTrace(raw: DeepSeekChunk['kuaiai_tool']): KuaiToolTrace | null {
+  if (!raw || (raw.phase !== 'start' && raw.phase !== 'end')) return null;
+  const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+  if (!name) return null;
+  const trace: KuaiToolTrace = { phase: raw.phase, name };
+  if (raw.args_summary) trace.argsSummary = raw.args_summary;
+  if (raw.result_summary) trace.resultSummary = raw.result_summary;
+  return trace;
+}
+
+/** 结束帧合并到同名未结束的开始帧，避免抽屉里同一调用占两行。 */
+export function mergeToolTrace(origin: KuaiToolTrace[] | undefined, next: KuaiToolTrace): KuaiToolTrace[] {
+  const list = origin ? [...origin] : [];
+  if (next.phase === 'end') {
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      if (list[i].phase === 'start' && list[i].name === next.name) {
+        list[i] = { ...list[i], ...next, phase: 'end' };
+        return list;
+      }
+    }
+  }
+  list.push(next);
+  return list;
+}
 
 /**
  * 不展示 reasoning_content / think 区块，仅保留回答正文。
  */
 export class KuaiDeepSeekChatProvider<
-  ChatMessage extends { role?: string; content?: string } = { role?: string; content?: string },
+  ChatMessage extends { role?: string; content?: string; toolTraces?: KuaiToolTrace[] } = {
+    role?: string;
+    content?: string;
+    toolTraces?: KuaiToolTrace[];
+  },
   Input = Record<string, unknown>,
   Output = Record<string, unknown>,
 > extends DeepSeekChatProvider<ChatMessage, Input, Output> {
@@ -55,6 +97,7 @@ export class KuaiDeepSeekChatProvider<
     const { originMessage, chunk, responseHeaders } = info;
     let currentContent = '';
     let role = 'assistant';
+    let toolTraces = originMessage?.toolTraces;
 
     try {
       let message: DeepSeekChunk | undefined;
@@ -65,6 +108,9 @@ export class KuaiDeepSeekChatProvider<
       } else {
         message = chunk as DeepSeekChunk;
       }
+
+      const trace = readToolTrace(message?.kuaiai_tool);
+      if (trace) toolTraces = mergeToolTrace(toolTraces, trace);
 
       message?.choices?.forEach((choice) => {
         if (choice?.delta) {
@@ -86,6 +132,7 @@ export class KuaiDeepSeekChatProvider<
     return {
       content: stripAssistantThinkContent(`${originMessageContent}${currentContent}`),
       role: role || 'assistant',
+      ...(toolTraces?.length ? { toolTraces } : {}),
     } as ChatMessage;
   }
 }
