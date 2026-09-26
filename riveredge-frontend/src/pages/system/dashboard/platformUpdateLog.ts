@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'unitable-fixed-column-offset-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-fixed-column-offset-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unitable-fixed-column-offset-r01.description',
+  },
+  {
+    id: 'unitable-header-width-single-pass-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-header-width-single-pass-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unitable-header-width-single-pass-r01.description',
+  },
+  {
     id: 'ind-relay-remark-i18n-r01',
     date: '2026-09-26',
     type: 'fix',
