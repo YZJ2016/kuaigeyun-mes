@@ -109,15 +109,18 @@ import TopBarSearch from '../components/TopBarSearch';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import { HeaderClientDownloadButton } from '../components/header-client-download';
-import ThemeEditor from '../components/theme-editor';
 import IterationFloatButton from '../components/iteration-float-button';
-import { UniImHeaderButton, UniImPanel } from '../components/uni-im';
+import { UniImHeaderButton } from '../components/uni-im/UniImHeaderButton';
 import { LinkedDocumentDetailProvider } from '../components/linked-document-detail';
 import MenuSyncPrompt from '../components/menu-sync-prompt';
 import { RouteTransition } from '../components/route-transition';
 const TenantBootstrapModal = React.lazy(() => import('../components/tenant-bootstrap-modal'));
 /** AI 助手按需加载，避免动画/AntX 栈进入启动主图 */
 const AiAssistant = React.lazy(() => import('../components/ai-assistant'));
+/** 主题编辑只在第一次打开时加载，关闭态不进首屏 */
+const ThemeEditor = React.lazy(() => import('../components/theme-editor'));
+/** 消息窗口只在第一次打开时加载；顶栏按钮仍立即可用 */
+const UniImPanel = React.lazy(() => import('../components/uni-im/UniImDock'));
 import { getTenantById, getPackageConfigs } from '../services/tenant';
 import { getToken, clearAuth, getTenantId } from '../utils/auth';
 import { resolveIsInfraSuperAdminSession } from '../utils/infraSuperAdminSession';
@@ -865,6 +868,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
+  const [themeEditorEverOpened, setThemeEditorEverOpened] = useState(false);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
   /** 开始面板：挂载与退场动画（仿 Win11 自左下上浮/下沉） */
   const [systemSettingsPanelMounted, setSystemSettingsPanelMounted] = useState(false);
@@ -2426,6 +2430,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * 处理主题颜色切换
    */
   const handleThemeChange = () => {
+    setThemeEditorEverOpened(true);
     setThemeEditorOpen(true);
   };
 
@@ -3408,14 +3413,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
       />
 
-      {/* 主题编辑面板 */}
-      <ThemeEditor
-        open={themeEditorOpen}
-        onClose={() => setThemeEditorOpen(false)}
-        onThemeUpdate={(themeConfig) => {
-          // 主题更新回调（可选）
-        }}
-      />
+      {/* 主题编辑：第一次打开后再挂载 */}
+      {themeEditorEverOpened && (
+        <React.Suspense fallback={null}>
+          <ThemeEditor
+            open={themeEditorOpen}
+            onClose={() => setThemeEditorOpen(false)}
+            onThemeUpdate={() => {
+              // 主题更新回调（可选）
+            }}
+          />
+        </React.Suspense>
+      )}
 
       {/* AI 助手：首次打开后再挂载，避免未使用时常驻重包 */}
       {aiAssistantEverOpened && (
@@ -3495,13 +3504,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       {/* UNI-IM：顶栏入口 + 右下角弹窗（非独立路由） */}
       {uniImEverOpened ? (
         <LinkedDocumentDetailProvider>
-          <UniImPanel
-            open={uniImOpen}
-            minimized={uniImMinimized}
-            onMinimizedChange={setUniImMinimized}
-            onClose={closeUniIm}
-            hasKuAiEntry={hasAiAssistantEntry}
-          />
+          <React.Suspense fallback={null}>
+            <UniImPanel
+              open={uniImOpen}
+              minimized={uniImMinimized}
+              onMinimizedChange={setUniImMinimized}
+              onClose={closeUniIm}
+              hasKuAiEntry={hasAiAssistantEntry}
+            />
+          </React.Suspense>
         </LinkedDocumentDetailProvider>
       ) : null}
 

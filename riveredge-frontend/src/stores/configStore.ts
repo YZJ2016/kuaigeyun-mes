@@ -264,10 +264,12 @@ export const TENANT_HOME_WORKPLACE = '/system/dashboard/workplace';
 /** 无角色/菜单首页且关闭系统工作台时的独立兜底页（不再使用应用中心） */
 export const TENANT_HOME_FALLBACK = '/system/default-home';
 
-/** 历史占位首页 path，切换有效首页时需从标签栏剔除 */
+/**
+ * 登录/切租户中转占位首页 path：未作为当前有效首页时不得入栏、不得从云端/会话恢复。
+ * 不含 `/system/applications`：应用中心是系统配置业务页，须可独立开标签（兜底首页已迁至 default-home）。
+ */
 export const LEGACY_TENANT_DEFAULT_HOME_PATHS = [
   TENANT_HOME_WORKPLACE,
-  '/system/applications',
   TENANT_HOME_FALLBACK,
 ] as const;
 
@@ -299,7 +301,7 @@ export function resolveEffectiveHomePath(
   return resolveTenantHomePath(backendHomePath, configs);
 }
 
-/** 登录后默认落地（持久化 configs；关闭「系统级仪表盘」时为应用中心） */
+/** 登录后默认落地（持久化 configs；关闭「系统级仪表盘」时为 default-home） */
 export function getDefaultTenantHomePath(): string {
   return getTenantHomePathFromConfigs(getPersistedConfigs() ?? {});
 }
