@@ -54,3 +54,35 @@ def test_v2_body_wraps_data_when_missing():
     assert ensure("https://lzhtech.kdgalaxy.com/kapi/oauth2/getToken", {"client_id": "a"}) == {
         "client_id": "a"
     }
+
+
+def test_v2_query_and_batchequery_also_get_paging():
+    ensure = _mod.ensure_kingdee_v2_request_body
+    assert ensure("https://x/kapi/v2/sm/sm_salorder/query", {}) == {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100,
+    }
+    assert ensure("https://x/kapi/v2/im/im_mdc_mftfeedorder/batcheQuery", {"data": {}}) == {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100,
+    }
+    # 写操作不塞分页
+    assert ensure("https://x/kapi/v2/sm/sm_salorder/batchSubmit", {"data": []}) == {"data": []}
+
+
+def test_v2_inventory_params_body_not_wrapped_as_data():
+    ensure = _mod.ensure_kingdee_v2_request_body
+    body = {"params": {"org": "100"}, "pageNo": 1, "pageSize": 100}
+    assert ensure("https://x/kapi/v2/im/getInventoryDetail", body) == body
+    assert ensure("https://x/kapi/v2/im/getInventorySum", {"params": {"org": "100"}}) == {
+        "params": {"org": "100"},
+        "pageNo": 1,
+        "pageSize": 100,
+    }
+    # 旧错误包法应还原
+    assert ensure(
+        "https://x/kapi/v2/im/getInventoryDetail",
+        {"data": {"params": {"org": "100"}}, "pageNo": 1, "pageSize": 100},
+    ) == {"params": {"org": "100"}, "pageNo": 1, "pageSize": 100}

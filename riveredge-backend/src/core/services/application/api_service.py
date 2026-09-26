@@ -165,6 +165,7 @@ class APIService:
         *,
         category_id: Optional[int] = None,
         preset_code_suffixes: Optional[List[str]] = None,
+        preset_loader: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         按连接器类型加载常用接口预设（已存在 code 则跳过）。
@@ -180,6 +181,7 @@ class APIService:
                 integration,
                 category_id=category_id,
                 preset_code_suffixes=preset_code_suffixes,
+                preset_loader=preset_loader or "kingdee_cosmic",
             )
         if conn_type != "kingdee_galaxy":
             raise ValidationError(
@@ -356,12 +358,22 @@ class APIService:
         *,
         category_id: Optional[int] = None,
         preset_code_suffixes: Optional[List[str]] = None,
+        preset_loader: str = "kingdee_cosmic",
     ) -> Dict[str, Any]:
-        """加载金蝶云苍穹 OpenAPI 常用接口预设。"""
+        """加载金蝶云苍穹 OpenAPI 常用 / 制造链路接口预设。"""
         from core.services.integration.kingdee_cosmic_api_presets import (
             list_kingdee_cosmic_api_presets,
             resolve_preset_api_code,
         )
+        from core.services.integration.kingdee_cosmic_mfg_api_presets import (
+            list_kingdee_cosmic_mfg_api_presets,
+        )
+
+        loader = str(preset_loader or "kingdee_cosmic").strip() or "kingdee_cosmic"
+        if loader == "kingdee_cosmic_mfg":
+            presets = list_kingdee_cosmic_mfg_api_presets()
+        else:
+            presets = list_kingdee_cosmic_api_presets()
 
         allowed_suffixes: Optional[set[str]] = None
         if preset_code_suffixes is not None:
@@ -374,7 +386,7 @@ class APIService:
         created: List[str] = []
         skipped: List[str] = []
         categorized: List[str] = []
-        for preset in list_kingdee_cosmic_api_presets():
+        for preset in presets:
             code_suffix = str(preset["code_suffix"] or "").strip()
             if allowed_suffixes is not None and code_suffix not in allowed_suffixes:
                 continue
@@ -477,6 +489,7 @@ class APIService:
             connection_uuid,
             category_id=category.id,
             preset_code_suffixes=normalized_keys,
+            preset_loader=pack.get("preset_loader"),
         )
 
         return {
@@ -1070,17 +1083,42 @@ class APIService:
                 elif conn_type in ("kingdee_cosmic", "kingdee_xinghan", "kingdee_ai_suite"):
                     from core.services.integration.kingdee_cosmic_service import (
                         apply_kingdee_cosmic_session_headers,
+                        build_kingdee_cosmic_gateway_headers,
+                        build_kingdee_cosmic_get_token_payload,
                         login_kingdee_cosmic_session,
                     )
 
                     try:
                         cfg = api.integration_config.get_config()
-                        session = await login_kingdee_cosmic_session(cfg)
-                        request_headers = apply_kingdee_cosmic_session_headers(
-                            request_headers,
-                            config=cfg,
-                            access_token=str(session["access_token"]),
+                        url_lower = str(url or "").lower()
+                        path_lower = str(api.path or "").lower().replace("\\", "/")
+                        # getToken 本身不要先换票再带 Bearer 重放；用连接器配置组真实请求体
+                        is_oauth_token = (
+                            "oauth2/gettoken" in path_lower
+                            or url_lower.rstrip("/").endswith("/kapi/oauth2/gettoken")
                         )
+                        # 门户页/绝对非 kapi 地址不是 OpenAPI，带 token 会落到错误数据中心
+                        is_open_api = "/kapi/" in url_lower or path_lower.startswith("kapi/")
+                        if is_oauth_token:
+                            url = str(url or "").rstrip("/")
+                            request_headers = build_kingdee_cosmic_gateway_headers(cfg)
+                            if test_request.headers:
+                                request_headers.update(test_request.headers)
+                            live_body = build_kingdee_cosmic_get_token_payload(cfg)
+                            if test_request.body:
+                                # 测试抽屉显式传入的非空字段覆盖（**** 视为未填）
+                                for key, value in test_request.body.items():
+                                    text = str(value or "").strip()
+                                    if text and text != "****":
+                                        live_body[key] = value
+                            request_body = live_body
+                        elif is_open_api:
+                            session = await login_kingdee_cosmic_session(cfg)
+                            request_headers = apply_kingdee_cosmic_session_headers(
+                                request_headers,
+                                config=cfg,
+                                access_token=str(session["access_token"]),
+                            )
                     except ValueError as exc:
                         return {
                             "status_code": 0,
