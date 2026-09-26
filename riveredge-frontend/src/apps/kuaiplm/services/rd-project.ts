@@ -91,6 +91,8 @@ export interface RdProjectDeliverable {
   file_url?: string | null;
   file_name?: string | null;
   file_uuid?: string | null;
+  material_code?: string | null;
+  legacy_material_code?: string | null;
 }
 
 export interface RdProjectDeliverableVersion {
@@ -105,6 +107,7 @@ export interface RdProjectDeliverableVersion {
   deliverable_type?: string | null;
   file_url?: string | null;
   file_name?: string | null;
+  file_uuid?: string | null;
   change_summary?: string | null;
   created_by_name?: string | null;
   created_at?: string;
@@ -115,6 +118,7 @@ export interface RdProjectDeliverableVersionListResponse {
   total: number;
   audience: string;
   can_view_history: boolean;
+  can_download_history?: boolean;
 }
 
 export interface RdProjectLink {
@@ -379,7 +383,13 @@ export async function listRdProjectDeliverableVersions(
 export async function reviseRdProjectDeliverable(
   projectId: number | string,
   deliverableId: number | string,
-  data?: { version?: string; change_summary?: string; file_url?: string; file_name?: string },
+  data?: {
+    version?: string;
+    change_summary?: string;
+    file_url?: string;
+    file_name?: string;
+    file_uuid?: string;
+  },
 ) {
   return apiRequest<RdProjectDeliverable>(
     `${BASE}/${projectId}/deliverables/${deliverableId}/revise`,

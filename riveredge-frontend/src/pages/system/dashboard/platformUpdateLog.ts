@@ -44,6 +44,54 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'windows-install-download-mirrors-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.windows-install-download-mirrors-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.windows-install-download-mirrors-r01.description',
+  },
+  {
+    id: 'rd-schematic-gerber-l39-naming-r01',
+    date: '2026-09-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-schematic-gerber-l39-naming-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-schematic-gerber-l39-naming-r01.description',
+  },
+  {
+    id: 'rd-software-spec-l38-naming-r01',
+    date: '2026-09-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-software-spec-l38-naming-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-software-spec-l38-naming-r01.description',
+  },
+  {
+    id: 'rd-part-spec-l37-material-catalog-r01',
+    date: '2026-09-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-part-spec-l37-material-catalog-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-part-spec-l37-material-catalog-r01.description',
+  },
+  {
+    id: 'rd-file-change-l34-deliverable-ux-r01',
+    date: '2026-09-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.rd-file-change-l34-deliverable-ux-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rd-file-change-l34-deliverable-ux-r01.description',
+  },
+  {
+    id: 'purchase-order-push-invoice-code-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-push-invoice-code-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-push-invoice-code-r01.description',
+  },
+  {
     id: 'unitable-fixed-column-offset-r01',
     date: '2026-09-26',
     type: 'fix',

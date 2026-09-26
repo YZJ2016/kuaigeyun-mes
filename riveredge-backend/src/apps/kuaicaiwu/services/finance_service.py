@@ -645,8 +645,13 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         if not skip_legacy_amount_gate:
             await self._validate_purchase_invoice_amount_gate(tenant_id=tenant_id, invoice_data=invoice_data)
         user_info = await self.get_user_info(created_by)
-        code = (invoice_code or "").strip() or await self.generate_code(
-            tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today_site_str()}"
+        # 编码只走 resolved `code`，禁止再进 payload，否则与 create(invoice_code=…) 冲突
+        code = (
+            (invoice_code or "").strip()
+            or str(getattr(invoice_data, "invoice_code", None) or "").strip()
+            or await self.generate_code(
+                tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today_site_str()}"
+            )
         )
         async with in_transaction():
             from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
@@ -654,6 +659,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             payload = invoice_data.model_dump(
                 exclude_unset=True,
                 exclude={
+                    "invoice_code",
                     "created_by",
                     "source_type",
                     "source_id",

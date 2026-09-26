@@ -38,11 +38,19 @@ function Get-UniqueUrls([string[]]$Urls) {
 }
 
 function Invoke-DownloadWithFallback([string[]]$Urls, [string]$Dest) {
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
     foreach ($url in (Get-UniqueUrls $Urls)) {
         try {
             Write-Info "download: $url"
-            Invoke-WebRequest -Uri $url -OutFile $Dest -UseBasicParsing
-            return $true
+            if (Test-Path $Dest) { Remove-Item $Dest -Force -ErrorAction SilentlyContinue }
+            if ($curl) {
+                & $curl.Source -fsSL --connect-timeout 15 --max-time 600 -A 'riveredge-fast-deploy' -L -o $Dest $url
+                if (($LASTEXITCODE -eq 0) -and (Test-Path $Dest) -and ((Get-Item $Dest).Length -gt 0)) {
+                    return $true
+                }
+            }
+            Invoke-WebRequest -Uri $url -OutFile $Dest -UseBasicParsing -TimeoutSec 600 -UserAgent 'riveredge-fast-deploy'
+            if ((Test-Path $Dest) -and ((Get-Item $Dest).Length -gt 0)) { return $true }
         } catch {
             Write-Info "download failed ($url): $($_.Exception.Message)"
         }

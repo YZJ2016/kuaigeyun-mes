@@ -5011,9 +5011,40 @@ export default {
   'app.kuaiplm.rdProjects.detail.deliverable.createTitle': '新建交付物',
   'app.kuaiplm.rdProjects.detail.deliverable.editTitle': '编辑交付物',
   'app.kuaiplm.rdProjects.detail.deliverable.name': '交付物名称',
-  'app.kuaiplm.rdProjects.detail.deliverable.typePlaceholder': '如：文档、图纸包',
+  'app.kuaiplm.rdProjects.detail.deliverable.typePlaceholder': '如：材料部品规格书',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.partSpec': '材料部品规格书',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.softwareSpec': '软件开发规格书',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.schematic': '原理图',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.layout': 'Layout',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.gerber': 'Gerber',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.panelization': '拼版资料',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.schematicGerber': '原理图/Layout/Gerber',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.testReport': '测试报告',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.document': '其它文档',
+  'app.kuaiplm.rdProjects.detail.deliverable.materialCode': '材料料号',
+  'app.kuaiplm.rdProjects.detail.deliverable.catalogCode': '料号',
+  'app.kuaiplm.rdProjects.detail.deliverable.materialCodeRequired': '部品规格书须填写材料料号',
+  'app.kuaiplm.rdProjects.detail.deliverable.materialCodePlaceholder': '如 MAT-001',
+  'app.kuaiplm.rdProjects.detail.deliverable.pcbCode': 'PCB料号',
+  'app.kuaiplm.rdProjects.detail.deliverable.pcbCodeRequired': '原理图/Layout/Gerber 须填写 PCB 料号',
+  'app.kuaiplm.rdProjects.detail.deliverable.pcbCodePlaceholder': '如 PCB-001',
+  'app.kuaiplm.rdProjects.detail.deliverable.partSpecHint':
+    '同一材料料号视为同一目录；文件名须以料号开头（如 MAT-001_A1.pdf），升版请在备注填写更改明细',
+  'app.kuaiplm.rdProjects.detail.deliverable.softwareSpecHint':
+    '文件名须为「项目号_版本号_更新日期」（例：{{projectCode}}_A1_20260926.pdf）；升版保留历史，备注填写更改明细；历史全量下载需资深制定方权限',
+  'app.kuaiplm.rdProjects.detail.deliverable.schematicGerberHint':
+    '文件名须为「PCB料号_版本号_更新日期」（例：PCB001_A1_20260926.zip）；同 PCB 料号相邻展示；升版填更改明细；历史全量下载需资深制定方权限',
+  'app.kuaiplm.rdProjects.detail.deliverable.changeDetailPlaceholder': '升版或更新时填写更改明细',
   'app.kuaiplm.rdProjects.detail.deliverable.fileUrl': '文件链接',
   'app.kuaiplm.rdProjects.detail.deliverable.fileName': '文件名',
+  'app.kuaiplm.rdProjects.detail.deliverable.file': '文件',
+  'app.kuaiplm.rdProjects.detail.deliverable.fileUploadHint': '点击或拖拽文件到此处',
+  'app.kuaiplm.rdProjects.detail.deliverable.fileUploadSubHint': '仅支持单个文件；提交审核前必须上传',
+  'app.kuaiplm.rdProjects.detail.deliverable.fileRequired': '请上传交付物文件',
+  'app.kuaiplm.rdProjects.detail.deliverable.reviseFileOptional': '可选；不上传则沿用当前生效文件',
+  'app.kuaiplm.rdProjects.detail.deliverable.historyDownloadDenied':
+    '当前身份可查看履历，历史文件下载仅资深制定方或全局总查看可用',
+  'app.kuaiplm.rdProjects.detail.deliverable.download': '下载',
   'app.kuaiplm.rdProjects.detail.deliverable.createSuccess': '交付物已创建',
   'app.kuaiplm.rdProjects.detail.deliverable.updateSuccess': '交付物已更新',
   'app.kuaiplm.rdProjects.detail.deliverable.deleteConfirm': '删除交付物？',
@@ -28602,6 +28633,30 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.rd-schematic-gerber-l39-naming-r01.title':
+    '原理图 Layout Gerber 命名联调',
+  'pages.dashboard.updateLog.entries.rd-schematic-gerber-l39-naming-r01.description':
+    '研发交付物拆分原理图/Layout/Gerber/拼版类型，强制「PCB料号_版本号_更新日期」命名与 PCB 料号字段；同料号相邻展示，升版保留履历。',
+  'pages.dashboard.updateLog.entries.rd-software-spec-l38-naming-r01.title':
+    '软件开发规格书命名规则联调',
+  'pages.dashboard.updateLog.entries.rd-software-spec-l38-naming-r01.description':
+    '研发交付物「软件开发规格书」文件名强制「项目号_版本号_更新日期」；表单提示当前项目代号；升版保留履历，历史下载仍走资深制定方权限。',
+  'pages.dashboard.updateLog.entries.rd-part-spec-l37-material-catalog-r01.title':
+    '材料部品规格书料号目录联调',
+  'pages.dashboard.updateLog.entries.rd-part-spec-l37-material-catalog-r01.description':
+    '研发项目交付物支持材料部品规格书类型与料号字段；文件名须含料号；IQC「上传部品规格书」权限可独立上传/升版；列表按料号相邻展示，备注填写更改明细。',
+  'pages.dashboard.updateLog.entries.rd-file-change-l34-deliverable-ux-r01.title':
+    '研发文件下发变更交付物联调',
+  'pages.dashboard.updateLog.entries.rd-file-change-l34-deliverable-ux-r01.description':
+    '研发交付物与图纸工程变更对齐五级签审模板 rd_file_change；项目交付物支持上传升版、仅待提交/驳回可删、版本履历按权限下载历史文件；启用审核后行内不再提供手工通过/驳回。',
+  'pages.dashboard.updateLog.entries.windows-install-download-mirrors-r01.title':
+    '修复 Windows 安装脚本多数组件下不动',
+  'pages.dashboard.updateLog.entries.windows-install-download-mirrors-r01.description':
+    '安装向导改为优先国内 Node/Python 镜像与可用的 GitHub 加速，uv 走国内 PyPI；不再依赖已失效的 winget 与旧 ghproxy 源。',
+  'pages.dashboard.updateLog.entries.purchase-order-push-invoice-code-r01.title':
+    '修复从采购订单下推采购发票失败',
+  'pages.dashboard.updateLog.entries.purchase-order-push-invoice-code-r01.description':
+    '创建采购发票时发票编码不再重复传入，从采购订单下推可正常生成草稿发票。',
   'pages.dashboard.updateLog.entries.unitable-fixed-column-offset-r01.title':
     '列表左右固定列不再二次定位',
   'pages.dashboard.updateLog.entries.unitable-fixed-column-offset-r01.description':
