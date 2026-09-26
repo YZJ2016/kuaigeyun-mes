@@ -9,6 +9,10 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, TypedDict
 
 from core.services.integration.kingdee_cosmic_api_presets import list_kingdee_cosmic_api_presets
+from core.services.integration.kingdee_cosmic_mfg_api_presets import (
+    get_kingdee_cosmic_mfg_pack_meta,
+    list_kingdee_cosmic_mfg_api_presets,
+)
 from core.services.integration.kingdee_galaxy_api_presets import list_kingdee_galaxy_api_presets
 
 
@@ -53,9 +57,27 @@ def _build_kingdee_cosmic_pack() -> ApiLibraryPackDefinition:
     }
 
 
+def _build_kingdee_cosmic_mfg_pack() -> ApiLibraryPackDefinition:
+    meta = get_kingdee_cosmic_mfg_pack_meta()
+    return {
+        "pack_id": meta["pack_id"],
+        "name": meta["title"],
+        "description": (
+            f"{meta['description']}"
+            "加载前请配置并测通金蝶AI苍穹连接器；即时库存请将 params.org 改为本环境库存组织编码。"
+        ),
+        "connector_type": "kingdee_cosmic",
+        "category_name": "金蝶AI苍穹·制造链路",
+        "category_code": "kingdee_cosmic_mfg",
+        "category_description": "销售→生产→领料入库出库→即时库存",
+        "preset_loader": "kingdee_cosmic_mfg",
+    }
+
+
 _API_LIBRARY_PACKS: Dict[str, ApiLibraryPackDefinition] = {
     "kingdee_galaxy": _build_kingdee_galaxy_pack(),
     "kingdee_cosmic": _build_kingdee_cosmic_pack(),
+    "kingdee_cosmic_mfg": _build_kingdee_cosmic_mfg_pack(),
 }
 
 
@@ -66,14 +88,18 @@ def get_api_library_pack(pack_id: str) -> Optional[ApiLibraryPackDefinition]:
     return _API_LIBRARY_PACKS.get(normalized)
 
 
-def list_api_library_pack_previews(pack: ApiLibraryPackDefinition) -> List[Dict[str, str]]:
-    loader = pack["preset_loader"]
+def _presets_for_loader(loader: str) -> List[Dict[str, Any]]:
     if loader == "kingdee_galaxy":
-        presets = list_kingdee_galaxy_api_presets()
-    elif loader == "kingdee_cosmic":
-        presets = list_kingdee_cosmic_api_presets()
-    else:
-        return []
+        return list(list_kingdee_galaxy_api_presets())
+    if loader == "kingdee_cosmic":
+        return list(list_kingdee_cosmic_api_presets())
+    if loader == "kingdee_cosmic_mfg":
+        return list(list_kingdee_cosmic_mfg_api_presets())
+    return []
+
+
+def list_api_library_pack_previews(pack: ApiLibraryPackDefinition) -> List[Dict[str, str]]:
+    presets = _presets_for_loader(pack["preset_loader"])
     return [
         {
             "item_key": item["code_suffix"],
