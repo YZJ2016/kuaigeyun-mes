@@ -274,6 +274,10 @@ export default defineConfig({
         manualChunks: (id) => {
           const norm = id.replace(/\\/g, '/');
           if (id.includes('node_modules') || id.includes('\0') || /\/_virtual\//.test(norm)) {
+            // lodash 与 @mlightcad 共用。若留在 CAD chunk，壳上的 merge 会静态拉起
+            // 整包 libredwg + three（约 3MB），每个页面启动都要先下图纸引擎。
+            // 必须写在 @mlightcad 判断之前：嵌套在其 node_modules 里的 lodash 也归到 vendor。
+            if (/\/node_modules\/lodash(-es)?\//.test(norm)) return 'vendor';
             // 巨型/按需栈单独拆出，避免进首屏
             if (id.includes('@univerjs')) return 'vendor-univerjs';
             if (id.includes('monaco-editor') || id.includes('@monaco-editor')) return 'vendor-monaco';

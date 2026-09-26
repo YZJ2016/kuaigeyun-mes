@@ -44,6 +44,54 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'first-screen-defer-unused-panels-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.first-screen-defer-unused-panels-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.first-screen-defer-unused-panels-r01.description',
+  },
+  {
+    id: 'wip-card-plain-dark-title-white-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.wip-card-plain-dark-title-white-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.wip-card-plain-dark-title-white-r01.description',
+  },
+  {
+    id: 'page-load-drop-cad-and-solar-icons-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.page-load-drop-cad-and-solar-icons-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.page-load-drop-cad-and-solar-icons-r01.description',
+  },
+  {
+    id: 'app-center-independent-tab-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.app-center-independent-tab-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-center-independent-tab-r01.description',
+  },
+  {
+    id: 'uni-im-wechat-time-divider-r01',
+    date: '2026-09-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-im-wechat-time-divider-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-im-wechat-time-divider-r01.description',
+  },
+  {
+    id: 'theme-config-desc-shorten-r01',
+    date: '2026-09-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.theme-config-desc-shorten-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.theme-config-desc-shorten-r01.description',
+  },
+  {
     id: 'outbound-manual-push-status-i18n-r01',
     date: '2026-09-26',
     type: 'fix',

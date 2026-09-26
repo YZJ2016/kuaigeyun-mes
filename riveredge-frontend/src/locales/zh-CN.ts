@@ -362,9 +362,9 @@ export default {
   'components.themeEditor.config.title': '主题配置',
   'components.themeEditor.config.hint': '调整主题相关的配置选项',
   'components.themeEditor.tabsPersistence.label': '标签栏持久化',
-  'components.themeEditor.tabsPersistence.desc': '登录后从云端恢复上次未关闭的标签（含钉住状态），可跨设备同步',
+  'components.themeEditor.tabsPersistence.desc': '登录后云端恢复未关标签',
   'components.themeEditor.sidebarSearchBgFollow.label': '搜索栏背景跟随',
-  'components.themeEditor.sidebarSearchBgFollow.desc': '搜索背景跟标签栏或菜单栏',
+  'components.themeEditor.sidebarSearchBgFollow.desc': '搜索背景跟所选栏',
   'components.themeEditor.sidebarSearchBgFollow.tabs': '标签栏',
   'components.themeEditor.sidebarSearchBgFollow.sider': '菜单栏',
   'components.themeEditor.sidebarMenuDensity.label': '菜单间距',
@@ -28602,6 +28602,26 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.first-screen-defer-unused-panels-r01.title':
+    '首屏不再提前下载未打开的面板',
+  'pages.dashboard.updateLog.entries.first-screen-defer-unused-panels-r01.description':
+    '关联单据详情、主题编辑和在线消息窗口改为第一次打开时再加载，顶栏入口和打开后的功能不变。',
+  'pages.dashboard.updateLog.entries.page-load-drop-cad-and-solar-icons-r01.title':
+    '页面打开不再连带下载图纸引擎和整套图标',
+  'pages.dashboard.updateLog.entries.page-load-drop-cad-and-solar-icons-r01.description':
+    '公共入口不再因为共用函数把图纸 CAD 和 Three.js 打进每个页面。应用中心只注册实际用到的 Solar 图标，不再打包 6MB 整库。',
+  'pages.dashboard.updateLog.entries.wip-card-plain-dark-title-white-r01.title':
+    '深色简约模式工序卡标题改为白字',
+  'pages.dashboard.updateLog.entries.wip-card-plain-dark-title-white-r01.description':
+    '工作台在制工序卡在深色「简约色彩」下，标题与进度文案不再使用主色蓝（与进度条同色不可见），改为白色以保证有进度时仍可读。',
+  'pages.dashboard.updateLog.entries.app-center-independent-tab-r01.title':
+    '修复应用中心无法独立开标签',
+  'pages.dashboard.updateLog.entries.app-center-independent-tab-r01.description':
+    '系统配置打开应用中心时不再被当成占位首页而跳过建签；应用中心恢复为可关闭的独立标签，与工作台并存。',
+  'pages.dashboard.updateLog.entries.theme-config-desc-shorten-r01.title':
+    '主题配置两项说明改短',
+  'pages.dashboard.updateLog.entries.theme-config-desc-shorten-r01.description':
+    '标签栏持久化、搜索栏背景跟随的说明改为短句，避免两列并排时文案挤到一起。',
   'pages.dashboard.updateLog.entries.outbound-manual-push-status-i18n-r01.title':
     '手动推送单据状态改为中文',
   'pages.dashboard.updateLog.entries.outbound-manual-push-status-i18n-r01.description':
@@ -31315,6 +31335,10 @@ export default {
     '销售订单菜单徽章改按发货状态统计',
   'pages.dashboard.updateLog.entries.sales-order-menu-badge-delivery-status.description':
     '左侧菜单销售订单徽章不再统计待审核与执行中订单，仅在有待交货或部分交货明细时提示；逾期未交仍显示红色，未开通财务模块的组织不再被大量蓝色徽章干扰。',
+  'pages.dashboard.updateLog.entries.uni-im-wechat-time-divider-r01.title':
+    '在线消息会话增加仿微信时间分隔',
+  'pages.dashboard.updateLog.entries.uni-im-wechat-time-divider-r01.description':
+    '个人与群聊消息列表中，首条消息以及与上一条间隔大于三十分钟时居中显示时间；连续发言不再逐条标时，当天只显示时分，跨天显示昨天或月日。',
   'pages.dashboard.updateLog.entries.uni-im-list-pane-resize.title':
     '在线消息列表栏支持四档拖动调宽',
   'pages.dashboard.updateLog.entries.uni-im-list-pane-resize.description':
