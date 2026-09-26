@@ -510,12 +510,94 @@ async def _reset_tortoise_for_reinit() -> None:
         Tortoise._apps.clear()
 
 
+# 上次成功 init 的运行时模型模块列表（用于启用应用后增量重建）
+_last_runtime_model_modules: tuple[str, ...] | None = None
+_tortoise_reload_lock: asyncio.Lock | None = None
+
+
+def _get_tortoise_reload_lock() -> asyncio.Lock:
+    global _tortoise_reload_lock
+    if _tortoise_reload_lock is None:
+        _tortoise_reload_lock = asyncio.Lock()
+    return _tortoise_reload_lock
+
+
+async def reload_tortoise_for_enabled_apps() -> bool:
+    """按应用中心当前启用集重建 Tortoise ORM。
+
+    启动时只加载已启用应用的模型；应用中心事后启用（如 ind-relay）会挂上路由，
+    但模型仍未注册会导致 ``default_connection ... cannot be None``。
+    启用/动态注册应用后须调用本函数。启用集未变则跳过。
+
+    Returns:
+        bool: 是否执行了重建
+    """
+    global _last_runtime_model_modules
+
+    from core.services.application.enabled_apps import (
+        clear_enabled_apps_cache,
+        resolve_enabled_app_codes,
+    )
+    from infra.config.infra_config import setup_tortoise_timezone_env
+
+    async with _get_tortoise_reload_lock():
+        clear_enabled_apps_cache()
+        enabled_codes = await resolve_enabled_app_codes()
+        runtime_config = await get_dynamic_tortoise_config(enabled_codes=enabled_codes)
+        runtime_config = await _finalize_tortoise_config(runtime_config)
+        runtime_models = tuple(runtime_config["apps"]["models"]["models"])
+
+        if Tortoise._inited and _last_runtime_model_modules == runtime_models:
+            logger.debug("Tortoise ORM 已与启用集一致，跳过重建")
+            return False
+
+        setup_tortoise_timezone_env()
+        logger.info(
+            "🔧 按启用集重建 Tortoise ORM（{} → {} 个模型模块）",
+            len(_last_runtime_model_modules or ()),
+            len(runtime_models),
+        )
+        if Tortoise._inited:
+            await _reset_tortoise_for_reinit()
+        await Tortoise.init(config=runtime_config)
+        _last_runtime_model_modules = runtime_models
+        logger.info("Tortoise ORM 已按启用集重建完成")
+        return True
+
+
+async def _verify_tortoise_connection() -> None:
+    from tortoise import connections
+
+    try:
+        connections.get("default")
+        logger.debug("Tortoise ORM 连接验证成功")
+
+        if hasattr(Tortoise, "_router") and Tortoise._router is not None:
+            if hasattr(Tortoise._router, "_routers"):
+                routers = Tortoise._router._routers
+                if routers is None:
+                    logger.warning("⚠️ Tortoise ORM router._routers 是 None，尝试修复...")
+                    Tortoise._router._routers = []
+                    logger.info("✅ Tortoise ORM router._routers 已修复为空列表")
+                else:
+                    logger.debug(f"Tortoise ORM router._routers 正确设置: {type(routers)}")
+            else:
+                logger.warning("⚠️ Tortoise ORM router 没有 _routers 属性")
+        else:
+            logger.warning("⚠️ Tortoise ORM 没有 _router 属性或 _router 是 None")
+
+    except Exception as conn_error:
+        logger.warning(f"Tortoise ORM 连接验证失败: {conn_error}")
+
+
 async def init_tortoise_dynamic() -> None:
     """
     使用动态配置初始化 Tortoise（API 与 Taskiq worker 共用）。
 
     两阶段：先以平台基线模型连库并查应用中心，再按启用集加载完整 ORM。
     """
+    global _last_runtime_model_modules
+
     if Tortoise._inited:
         return
 
@@ -548,34 +630,14 @@ async def init_tortoise_dynamic() -> None:
     else:
         logger.info("🔧 启用集无额外应用 ORM，保持平台基线 Tortoise 配置")
 
+    _last_runtime_model_modules = tuple(runtime_models)
+
     logger.debug(
         f"Tortoise ORM 配置: routers={runtime_config.get('routers')}, "
         f"use_tz={runtime_config.get('use_tz')}, timezone={runtime_config.get('timezone')}"
     )
     logger.info("Tortoise ORM 初始化完成")
-
-    from tortoise import connections
-
-    try:
-        connections.get("default")
-        logger.debug("Tortoise ORM 连接验证成功")
-
-        if hasattr(Tortoise, "_router") and Tortoise._router is not None:
-            if hasattr(Tortoise._router, "_routers"):
-                routers = Tortoise._router._routers
-                if routers is None:
-                    logger.warning("⚠️ Tortoise ORM router._routers 是 None，尝试修复...")
-                    Tortoise._router._routers = []
-                    logger.info("✅ Tortoise ORM router._routers 已修复为空列表")
-                else:
-                    logger.debug(f"Tortoise ORM router._routers 正确设置: {type(routers)}")
-            else:
-                logger.warning("⚠️ Tortoise ORM router 没有 _routers 属性")
-        else:
-            logger.warning("⚠️ Tortoise ORM 没有 _router 属性或 _router 是 None")
-
-    except Exception as conn_error:
-        logger.warning(f"Tortoise ORM 连接验证失败: {conn_error}")
+    await _verify_tortoise_connection()
 
 
 async def init_tortoise_for_worker_process() -> None:
