@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'tortoise-orm-reset-apps-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tortoise-orm-reset-apps-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tortoise-orm-reset-apps-r01.description',
+  },
+  {
+    id: 'material-review-l40-template-r01',
+    date: '2026-09-26',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.material-review-l40-template-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-review-l40-template-r01.description',
+  },
+  {
     id: 'windows-install-download-mirrors-r01',
     date: '2026-09-26',
     type: 'fix',

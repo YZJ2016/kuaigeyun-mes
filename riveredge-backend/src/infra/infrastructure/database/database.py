@@ -504,10 +504,27 @@ async def _finalize_tortoise_config(config: dict) -> dict:
 
 
 async def _reset_tortoise_for_reinit() -> None:
+    """关闭连接并清空 Tortoise 应用注册，使模型可再次 ``init``。
+
+    Tortoise 真源属性是 ``apps`` / ``_reset_apps``（会把各模型
+    ``default_connection`` 置为 None）。历史上误写不存在的 ``_apps``，
+    导致重建时旧模型连接状态与注册表不一致。
+    """
     await Tortoise.close_connections()
     Tortoise._inited = False
-    if hasattr(Tortoise, "_apps") and isinstance(Tortoise._apps, dict):
-        Tortoise._apps.clear()
+    await Tortoise._reset_apps()
+
+
+def _tortoise_has_unbound_models() -> bool:
+    """任一已登记模型丢失 default_connection，或已 init 却无应用表，视为 ORM 损坏。"""
+    if Tortoise._inited and not Tortoise.apps:
+        return True
+    for app_models in Tortoise.apps.values():
+        for model in app_models.values():
+            meta = getattr(model, "_meta", None)
+            if meta is not None and getattr(meta, "default_connection", None) is None:
+                return True
+    return False
 
 
 # 上次成功 init 的运行时模型模块列表（用于启用应用后增量重建）
@@ -527,7 +544,7 @@ async def reload_tortoise_for_enabled_apps() -> bool:
 
     启动时只加载已启用应用的模型；应用中心事后启用（如 ind-relay）会挂上路由，
     但模型仍未注册会导致 ``default_connection ... cannot be None``。
-    启用/动态注册应用后须调用本函数。启用集未变则跳过。
+    启用/动态注册应用后须调用本函数。启用集未变且模型均已绑连接则跳过。
 
     Returns:
         bool: 是否执行了重建
@@ -547,9 +564,16 @@ async def reload_tortoise_for_enabled_apps() -> bool:
         runtime_config = await _finalize_tortoise_config(runtime_config)
         runtime_models = tuple(runtime_config["apps"]["models"]["models"])
 
-        if Tortoise._inited and _last_runtime_model_modules == runtime_models:
+        modules_unchanged = (
+            Tortoise._inited and _last_runtime_model_modules == runtime_models
+        )
+        if modules_unchanged and not _tortoise_has_unbound_models():
             logger.debug("Tortoise ORM 已与启用集一致，跳过重建")
             return False
+        if modules_unchanged and _tortoise_has_unbound_models():
+            logger.warning(
+                "Tortoise 启用集未变但存在 default_connection 为 None 的模型，强制重建"
+            )
 
         setup_tortoise_timezone_env()
         logger.info(
@@ -557,9 +581,22 @@ async def reload_tortoise_for_enabled_apps() -> bool:
             len(_last_runtime_model_modules or ()),
             len(runtime_models),
         )
-        if Tortoise._inited:
-            await _reset_tortoise_for_reinit()
-        await Tortoise.init(config=runtime_config)
+        try:
+            if Tortoise._inited or Tortoise.apps:
+                await _reset_tortoise_for_reinit()
+            await Tortoise.init(config=runtime_config)
+        except Exception:
+            logger.exception("Tortoise ORM 按启用集重建失败，尝试再次 init 恢复")
+            try:
+                if Tortoise._inited or Tortoise.apps:
+                    await _reset_tortoise_for_reinit()
+                await Tortoise.init(config=runtime_config)
+            except Exception:
+                logger.exception(
+                    "Tortoise ORM 恢复 init 仍失败；进程内模型可能 default_connection "
+                    "为 None，须重启后端"
+                )
+                raise
         _last_runtime_model_modules = runtime_models
         logger.info("Tortoise ORM 已按启用集重建完成")
         return True

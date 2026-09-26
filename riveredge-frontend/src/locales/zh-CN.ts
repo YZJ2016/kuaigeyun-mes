@@ -4579,6 +4579,8 @@ export default {
   'app.kuaiplm.sampleProcess.messages.deleteOnlyDraft': '仅草稿或已驳回可删除，请重新勾选',
   'app.kuaiplm.materialReview.title': '物料评审',
   'app.kuaiplm.materialReview.createButton': '新建物料评审',
+  'app.kuaiplm.materialReview.createTitle': '新建物料评审',
+  'app.kuaiplm.materialReview.editTitle': '编辑物料评审',
   'app.kuaiplm.materialReview.fields.code': '评审单号',
   'app.kuaiplm.materialReview.fields.project': '研发项目',
   'app.kuaiplm.materialReview.fields.title': '标题',
@@ -4592,6 +4594,13 @@ export default {
   'app.kuaiplm.materialReview.usage.preferred': '优先使用',
   'app.kuaiplm.materialReview.usage.limited': '限用',
   'app.kuaiplm.materialReview.usage.forbidden': '禁止使用',
+  'app.kuaiplm.materialReview.usageHint':
+    '每行从物料库选择物料，并标注使用状态：优先使用 / 限用 / 禁止使用。也可下载标准模板填写后导入。',
+  'app.kuaiplm.materialReview.actions.downloadTemplate': '下载填写模板',
+  'app.kuaiplm.materialReview.actions.importTemplate': '导入模板',
+  'app.kuaiplm.materialReview.actions.downloadSheet': '下载评审单',
+  'app.kuaiplm.materialReview.template.sampleName': '示例物料（请改为真实物料）',
+  'app.kuaiplm.materialReview.template.sampleRemark': '示例行可删；使用状态填：优先使用 / 限用 / 禁止使用',
   'app.kuaiplm.materialReview.status.draft': '草稿',
   'app.kuaiplm.materialReview.status.pending': '待审核',
   'app.kuaiplm.materialReview.status.approved': '已审核',
@@ -4602,6 +4611,11 @@ export default {
   'app.kuaiplm.materialReview.messages.noExportData': '暂无可导出的物料评审',
   'app.kuaiplm.materialReview.messages.deleteOnlyDraft': '仅草稿或已驳回可删除，请重新勾选',
   'app.kuaiplm.materialReview.messages.lineRequired': '请至少添加一行物料并标注使用状态',
+  'app.kuaiplm.materialReview.messages.templateDownloaded': '填写模板已下载',
+  'app.kuaiplm.materialReview.messages.templateImported': '已导入 {{count}} 行物料',
+  'app.kuaiplm.materialReview.messages.templateEmpty': '模板无有效数据行',
+  'app.kuaiplm.materialReview.messages.templateRowInvalid':
+    '模板行无效（须有物料编码、名称，且使用状态为优先使用/限用/禁止使用）：{{code}}',
   'app.kuaiplm.bomCollab.title': 'BOM协同',
   'app.kuaiplm.bomCollab.createButton': '新建BOM协同',
   'app.kuaiplm.bomCollab.fields.code': '协同单号',
@@ -28635,6 +28649,14 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.tortoise-orm-reset-apps-r01.title':
+    '修复应用启用后工作台统计等接口 ORM 未绑定',
+  'pages.dashboard.updateLog.entries.tortoise-orm-reset-apps-r01.description':
+    'Tortoise 重建改为调用官方 _reset_apps；启用集未变但模型丢失连接时会强制重建，且 ORM 失败不再静默继续挂路由，避免报工/工作台统计出现 default_connection cannot be None。',
+  'pages.dashboard.updateLog.entries.material-review-l40-template-r01.title':
+    '物料评审标准模板与使用状态联调',
+  'pages.dashboard.updateLog.entries.material-review-l40-template-r01.description':
+    '物料评审支持下载/导入填写模板，行内优先使用/限用/禁止使用分色展示；表单改为表头→明细→备注；启用审核后行内不再手工通过/驳回；详情可下载本单评审表。',
   'pages.dashboard.updateLog.entries.rd-schematic-gerber-l39-naming-r01.title':
     '原理图 Layout Gerber 命名联调',
   'pages.dashboard.updateLog.entries.rd-schematic-gerber-l39-naming-r01.description':

@@ -706,17 +706,11 @@ async def enable_application(
             uuid=uuid
         )
         
-        # ⚠️ 第一阶段改进：动态注册应用路由
-        try:
-            # 使用应用代码注册路由
-            app_code = application.get('code') or application.get('uuid')
-            if app_code:
-                await ApplicationRegistryService.register_single_app(app_code)
-        except Exception as route_error:
-            # 路由注册失败不影响应用启用，只记录日志
-            import logging
-            logging.warning(f"应用路由注册失败（不影响应用启用）: {route_error}")
-        
+        # 动态注册：先按启用集重建 ORM，再挂路由；失败须暴露，不得静默继续
+        app_code = application.get("code") or application.get("uuid")
+        if app_code:
+            await ApplicationRegistryService.register_single_app(app_code)
+
         return ApplicationResponse.model_validate(_application_response_dict(application, pro_info))
     except NotFoundError as e:
         raise HTTPException(
