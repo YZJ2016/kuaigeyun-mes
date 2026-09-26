@@ -187,7 +187,7 @@ export default function RelayLineCapacityPage() {
               <Switch checkedChildren={t('common.enable')} unCheckedChildren={t('common.disable')} />
             </Form.Item>
           ) : null}
-          <Form.Item name="remarks" label={t('common.remarks')}>
+          <Form.Item name="remarks" label={t('common.remark')}>
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>

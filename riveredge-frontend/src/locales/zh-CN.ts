@@ -28602,6 +28602,18 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.ind-relay-remark-i18n-r01.title':
+    '修复继电器行业包备注显示为 common.remarks',
+  'pages.dashboard.updateLog.entries.ind-relay-remark-i18n-r01.description':
+    '产线节拍与换型矩阵的备注字段改为已有文案 key common.remark，不再露出未翻译的 common.remarks。',
+  'pages.dashboard.updateLog.entries.ind-relay-orm-hot-reload-r01.title':
+    '修复启用行业包后接口报 ORM 未注册',
+  'pages.dashboard.updateLog.entries.ind-relay-orm-hot-reload-r01.description':
+    '应用中心事后启用继电器等行业包时，会按启用集重建 Tortoise ORM 再挂路由，避免换型/节拍接口出现 default_connection cannot be None。',
+  'pages.dashboard.updateLog.entries.workplace-tab-stay-until-close-r01.title':
+    '工作台标签不再先消失再出现',
+  'pages.dashboard.updateLog.entries.workplace-tab-stay-until-close-r01.description':
+    '打开其它页面时，工作台标签会留在标签栏，不再被当成占位首页先清掉再补回。只有手动关闭后才从栏上消失。',
   'pages.dashboard.updateLog.entries.first-screen-defer-unused-panels-r01.title':
     '首屏不再提前下载未打开的面板',
   'pages.dashboard.updateLog.entries.first-screen-defer-unused-panels-r01.description':

@@ -44,6 +44,30 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'ind-relay-remark-i18n-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-relay-remark-i18n-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ind-relay-remark-i18n-r01.description',
+  },
+  {
+    id: 'workplace-tab-stay-until-close-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.workplace-tab-stay-until-close-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.workplace-tab-stay-until-close-r01.description',
+  },
+  {
+    id: 'ind-relay-orm-hot-reload-r01',
+    date: '2026-09-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-relay-orm-hot-reload-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ind-relay-orm-hot-reload-r01.description',
+  },
+  {
     id: 'first-screen-defer-unused-panels-r01',
     date: '2026-09-26',
     type: 'improvement',

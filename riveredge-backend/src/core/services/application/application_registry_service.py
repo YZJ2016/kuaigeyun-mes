@@ -377,28 +377,24 @@ class ApplicationRegistryService:
     @classmethod
     async def register_single_app(cls, app_code: str) -> bool:
         """
-        注册单个应用的路由和模型
-        
-        用于应用启用时动态注册。
-        
-        Args:
-            app_code: 应用代码
-            
-        Returns:
-            bool: 是否注册成功
+        注册单个应用的路由，并按启用集重建 Tortoise ORM。
+
+        用于应用启用时动态注册。进程级 ORM 按「任一租户已启用」加载，
+        路由按应用 code 挂载；不得只查「首个租户」是否启用。
         """
         try:
-            # 从数据库查询应用信息（动态获取首个租户 ID，避免硬编码）
-            from infra.infrastructure.database.database import get_db_connection
-            conn = await get_db_connection()
-            
-            try:
-                tenant_row = await conn.fetchrow(
-                    "SELECT id FROM infra_tenants WHERE deleted_at IS NULL ORDER BY id ASC LIMIT 1"
-                )
-                default_tenant_id = tenant_row["id"] if tenant_row else 1
+            from infra.infrastructure.database.database import (
+                get_db_connection,
+                reload_tortoise_for_enabled_apps,
+            )
 
-                rows = await conn.fetch("""
+            # 启用后先重建 ORM，再挂路由（否则会 default_connection is None）
+            await reload_tortoise_for_enabled_apps()
+
+            conn = await get_db_connection()
+            try:
+                rows = await conn.fetch(
+                    """
                     SELECT uuid, code, name, description, version, changelog,
                            route_path, entry_point, menu_config,
                            is_system, is_active, is_installed,
@@ -408,13 +404,15 @@ class ApplicationRegistryService:
                       AND is_installed = TRUE
                       AND is_active = TRUE
                       AND deleted_at IS NULL
-                      AND tenant_id = $2
+                    ORDER BY tenant_id ASC
                     LIMIT 1
-                """, app_code, default_tenant_id)
+                    """,
+                    app_code,
+                )
 
                 if not rows:
                     all_rows = await conn.fetch(
-                        "SELECT code, is_active, is_installed FROM core_applications WHERE code = $1",
+                        "SELECT tenant_id, code, is_active, is_installed FROM core_applications WHERE code = $1",
                         app_code,
                     )
                     logger.warning(f"应用 {app_code} 不存在或未启用；全部记录={all_rows}")
@@ -423,16 +421,12 @@ class ApplicationRegistryService:
                 app_data = dict(rows[0])
             finally:
                 await conn.close()
-            
-            # 解析JSON字段
-            if app_data.get('menu_config') and isinstance(app_data['menu_config'], str):
+
+            if app_data.get("menu_config") and isinstance(app_data["menu_config"], str):
                 try:
-                    app_data['menu_config'] = json.loads(app_data['menu_config'])
+                    app_data["menu_config"] = json.loads(app_data["menu_config"])
                 except json.JSONDecodeError:
-                    app_data['menu_config'] = None
-            
-            # 注册应用模型
-            await cls._register_app_models([app_data])
+                    app_data["menu_config"] = None
 
             try:
                 await cls._register_app_routes([app_data])
@@ -447,7 +441,7 @@ class ApplicationRegistryService:
             cls._registered_apps[app_code] = app_data
             logger.info(f"✅ 应用 {app_code} 动态注册成功")
             return True
-            
+
         except Exception as e:
             logger.error(f"❌ 注册应用 {app_code} 失败: {e}")
             return False
