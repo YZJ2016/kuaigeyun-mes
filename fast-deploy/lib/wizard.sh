@@ -1531,7 +1531,7 @@ wizard_install_method_hint() {
                 *) echo "国内源优先安装" ;;
             esac
             ;;
-        uv) echo "国内 ghproxy 优先 / 官方兜底" ;;
+        uv) echo "国内 PyPI / GitHub 加速优先" ;;
         postgresql)
             case "$plat" in
                 rhel|fedora)

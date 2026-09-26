@@ -215,7 +215,14 @@ ELECTRONICS_RD_DELIVERABLE_SEED: Dict[str, Any] = {
         "part_spec_types": ["part_spec", "component_spec"],
         "test_report_types": ["test_report", "test"],
         "software_spec_types": ["software_spec", "sw_spec"],
-        "schematic_gerber_types": ["schematic", "gerber", "schematic_gerber"],
+        "schematic_gerber_types": [
+            "schematic",
+            "gerber",
+            "schematic_gerber",
+            "layout",
+            "panelization",
+            "panel",
+        ],
     },
 }
 

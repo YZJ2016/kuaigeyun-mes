@@ -21,8 +21,10 @@ import {
   Table,
   Tag,
   Typography,
+  Upload,
   theme,
 } from 'antd';
+import type { UploadFile } from 'antd/es/upload/interface';
 import {
   EditOutlined,
   LinkOutlined,
@@ -38,12 +40,15 @@ import {
   FormOutlined,
   FileProtectOutlined,
   SwapOutlined,
+  InboxOutlined,
 } from '@ant-design/icons';
 import {
   ProFormDatePicker,
+  ProFormDependency,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
+  ProFormUploadDragger,
 } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { buildFutureDateShortcutFieldProps } from '../../../../utils/futureDatePickerShortcuts';
@@ -52,10 +57,16 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../components/uni-tabs/navigateClosingTab';
 import { useTranslation } from 'react-i18next';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../hooks/useAuditRequired';
 import { ListPageTemplate, FormModalTemplate, ProjectWorkbenchToolbar } from '../../../../components/layout-templates';
 import { ActionConfirmPopconfirm } from '../../../../components/action-confirm';
 import { UniUserSelect } from '../../../../components/uni-user-select';
 import { resolveUserDisplay, type User } from '../../../../services/user';
+import { getFileDownloadUrlWithToken, uploadFile } from '../../../../services/file';
+import {
+  extractUploadFileUuids,
+  normalizeUploadFileList,
+} from '../../../../components/custom-fields/customFieldFileUtils';
 import {
   getRdProjectWorkbench,
   pushTrialWorkOrder,
@@ -117,6 +128,37 @@ const DELIVERABLE_STATUS_COLOR: Record<string, string> = {
   APPROVED: 'success',
   REJECTED: 'error',
 };
+
+const DELIVERABLE_FILE_CATEGORY = 'rd_deliverable';
+
+const PART_SPEC_TYPES = new Set(['part_spec', 'component_spec']);
+
+function isPartSpecType(type?: string | null): boolean {
+  return PART_SPEC_TYPES.has(String(type || '').trim().toLowerCase());
+}
+
+const SOFTWARE_SPEC_TYPES = new Set(['software_spec', 'sw_spec']);
+
+function isSoftwareSpecType(type?: string | null): boolean {
+  return SOFTWARE_SPEC_TYPES.has(String(type || '').trim().toLowerCase());
+}
+
+const SCHEMATIC_GERBER_TYPES = new Set([
+  'schematic',
+  'gerber',
+  'schematic_gerber',
+  'layout',
+  'panelization',
+  'panel',
+]);
+
+function isSchematicGerberType(type?: string | null): boolean {
+  return SCHEMATIC_GERBER_TYPES.has(String(type || '').trim().toLowerCase());
+}
+
+function needsMaterialCode(type?: string | null): boolean {
+  return isPartSpecType(type) || isSchematicGerberType(type);
+}
 
 function resolveDeliverableEngineeringLink(
   deliverable: RdProjectDeliverable,
@@ -185,6 +227,48 @@ const RdProjectDetailPage: React.FC = () => {
   const location = useLocation();
   const leaveRdProjectDetail = useLeaveFormTab('/apps/kuaiplm/rd-projects');
   const projectPerms = useResourcePermissions('kuaiplm:project');
+  const deliverableAuditEnabled = useAuditRequired('rd_deliverable');
+  const canWriteDeliverable =
+    projectPerms.canCreate ||
+    projectPerms.canUpdate ||
+    Boolean(projectPerms.canAction?.('upload-part-spec'));
+  const deliverableTypeOptions = useMemo(
+    () => [
+      {
+        value: 'part_spec',
+        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.partSpec'),
+      },
+      {
+        value: 'software_spec',
+        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.softwareSpec'),
+      },
+      {
+        value: 'schematic',
+        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.schematic'),
+      },
+      {
+        value: 'layout',
+        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.layout'),
+      },
+      {
+        value: 'gerber',
+        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.gerber'),
+      },
+      {
+        value: 'panelization',
+        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.panelization'),
+      },
+      {
+        value: 'test_report',
+        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.testReport'),
+      },
+      {
+        value: 'document',
+        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.document'),
+      },
+    ],
+    [t],
+  );
   const { token } = theme.useToken();
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(true);
@@ -199,10 +283,15 @@ const RdProjectDetailPage: React.FC = () => {
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionRows, setVersionRows] = useState<RdProjectDeliverableVersion[]>([]);
   const [versionAudience, setVersionAudience] = useState('');
+  const [versionCanDownloadHistory, setVersionCanDownloadHistory] = useState(false);
   const [versionTarget, setVersionTarget] = useState<RdProjectDeliverable | null>(null);
   const [reviseOpen, setReviseOpen] = useState(false);
   const [reviseTarget, setReviseTarget] = useState<RdProjectDeliverable | null>(null);
   const [reviseSummary, setReviseSummary] = useState('');
+  const [reviseFileUuid, setReviseFileUuid] = useState<string | undefined>();
+  const [reviseFileName, setReviseFileName] = useState<string | undefined>();
+  const [reviseFileList, setReviseFileList] = useState<UploadFile[]>([]);
+  const [reviseSubmitting, setReviseSubmitting] = useState(false);
   const [gateEditOpen, setGateEditOpen] = useState(false);
   const [editingGate, setEditingGate] = useState<RdProjectGate | null>(null);
   const [pushModalOpen, setPushModalOpen] = useState(false);
@@ -379,7 +468,24 @@ const RdProjectDetailPage: React.FC = () => {
     setEditingDeliverable(item);
     setDeliverableModalOpen(true);
     setTimeout(() => {
-      deliverableFormRef.current?.setFieldsValue(item);
+      deliverableFormRef.current?.setFieldsValue({
+        ...item,
+        file_uuid: item.file_uuid,
+        file_name: item.file_name,
+        file_upload: item.file_uuid
+          ? [
+              {
+                uid: item.file_uuid,
+                name: item.file_name || item.file_uuid,
+                status: 'done',
+                response: {
+                  uuid: item.file_uuid,
+                  original_name: item.file_name || item.file_uuid,
+                },
+              },
+            ]
+          : [],
+      });
     }, 0);
   };
 
@@ -478,7 +584,16 @@ const RdProjectDetailPage: React.FC = () => {
   const renderGatePanel = useCallback(
     (gate: RdProjectGate) => {
       const gateTasks = tasks.filter((task) => task.gate_id === gate.id);
-      const gateDeliverables = deliverables.filter((item) => item.gate_id === gate.id);
+      // 同料号相邻，便于部品规格书「料号目录」演示
+      const gateDeliverables = deliverables
+        .filter((item) => item.gate_id === gate.id)
+        .slice()
+        .sort((a, b) => {
+          const codeA = String(a.material_code || '').trim();
+          const codeB = String(b.material_code || '').trim();
+          if (codeA !== codeB) return codeA.localeCompare(codeB, 'zh-CN');
+          return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
+        });
       const taskRows = buildTaskRows(gateTasks);
       const gateStatus = gate.status ?? 'PENDING';
 
@@ -636,14 +751,16 @@ const RdProjectDetailPage: React.FC = () => {
             className="rd-project-gate-section-card"
             title={`${t('app.kuaiplm.rdProjects.detail.deliverable.name')} (${gateDeliverables.length})`}
             extra={
-              <Button
-                type="link"
-                size="small"
-                icon={<PlusOutlined />}
-                onClick={() => openCreateDeliverable(gate)}
-              >
-                {t('app.kuaiplm.rdProjects.detail.deliverable.createTitle')}
-              </Button>
+              canWriteDeliverable ? (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<PlusOutlined />}
+                  onClick={() => openCreateDeliverable(gate)}
+                >
+                  {t('app.kuaiplm.rdProjects.detail.deliverable.createTitle')}
+                </Button>
+              ) : null
             }
           >
             <Table
@@ -655,6 +772,13 @@ const RdProjectDetailPage: React.FC = () => {
               columns={[
                 { title: t('common.name'), dataIndex: 'name', ellipsis: true },
                 {
+                  title: t('app.kuaiplm.rdProjects.detail.deliverable.catalogCode'),
+                  dataIndex: 'material_code',
+                  width: 120,
+                  ellipsis: true,
+                  render: (v: string) => v || '—',
+                },
+                {
                   title: t('app.kuaiplm.rdProjects.detail.deliverable.version'),
                   dataIndex: 'version',
                   width: 72,
@@ -663,8 +787,11 @@ const RdProjectDetailPage: React.FC = () => {
                 {
                   title: t('app.kuaiplm.common.columns.type'),
                   dataIndex: 'deliverable_type',
-                  width: 100,
-                  render: (v) => v || '—',
+                  width: 120,
+                  render: (v: string) => {
+                    const opt = deliverableTypeOptions.find((o) => o.value === v);
+                    return opt?.label || v || '—';
+                  },
                 },
                 {
                   title: t('common.status'),
@@ -693,9 +820,11 @@ const RdProjectDetailPage: React.FC = () => {
                           {t('app.kuaiplm.rdProjects.detail.deliverable.openEngineering')}
                         </Button>
                       ) : null}
-                      <Button type="link" size="small" onClick={() => openEditDeliverable(row)}>
-                        {t('common.edit')}
-                      </Button>
+                      {canWriteDeliverable ? (
+                        <Button type="link" size="small" onClick={() => openEditDeliverable(row)}>
+                          {t('common.edit')}
+                        </Button>
+                      ) : null}
                       <Button
                         type="link"
                         size="small"
@@ -703,10 +832,12 @@ const RdProjectDetailPage: React.FC = () => {
                           setVersionTarget(row);
                           setVersionModalOpen(true);
                           setVersionLoading(true);
+                          setVersionCanDownloadHistory(false);
                           try {
                             const res = await listRdProjectDeliverableVersions(id!, row.id!);
                             setVersionRows(res.items || []);
                             setVersionAudience(res.audience || '');
+                            setVersionCanDownloadHistory(Boolean(res.can_download_history));
                           } catch (error: any) {
                             messageApi.error(error?.message || t('common.operationFailed'));
                           } finally {
@@ -733,7 +864,7 @@ const RdProjectDetailPage: React.FC = () => {
                           {t('app.kuaiplm.common.deliverableStatus.submitted')}
                         </Button>
                       ) : null}
-                      {row.status === 'SUBMITTED' ? (
+                      {!deliverableAuditEnabled && row.status === 'SUBMITTED' ? (
                         <Button
                           type="link"
                           size="small"
@@ -750,20 +881,24 @@ const RdProjectDetailPage: React.FC = () => {
                           {t('app.kuaiplm.common.actions.approve')}
                         </Button>
                       ) : null}
-                      {row.status === 'APPROVED' ? (
+                      {row.status === 'APPROVED' && canWriteDeliverable ? (
                         <Button
                           type="link"
                           size="small"
                           onClick={() => {
                             setReviseTarget(row);
                             setReviseSummary('');
+                            setReviseFileUuid(undefined);
+                            setReviseFileName(undefined);
+                            setReviseFileList([]);
                             setReviseOpen(true);
                           }}
                         >
                           {t('app.kuaiplm.rdProjects.detail.deliverable.revise')}
                         </Button>
                       ) : null}
-                      {row.status === 'PENDING' || row.status === 'SUBMITTED' ? (
+                      {!deliverableAuditEnabled &&
+                      (row.status === 'PENDING' || row.status === 'SUBMITTED') ? (
                         <Button
                           type="link"
                           size="small"
@@ -781,23 +916,25 @@ const RdProjectDetailPage: React.FC = () => {
                           {t('app.kuaiplm.common.actions.reject')}
                         </Button>
                       ) : null}
-                      <ActionConfirmPopconfirm
-                        title={t('app.kuaiplm.rdProjects.detail.deliverable.deleteConfirm')}
-                        onConfirm={async () => {
-                          await deleteRdProjectDeliverable(id!, row.id!);
-                          messageApi.success(t('common.deleteSuccess'));
-                          load();
-                        }}
-                      >
-                        <Button
-                          type="link"
-                          size="small"
-                          danger
-                          onClick={(e) => e.stopPropagation()}
+                      {row.status === 'PENDING' || row.status === 'REJECTED' ? (
+                        <ActionConfirmPopconfirm
+                          title={t('app.kuaiplm.rdProjects.detail.deliverable.deleteConfirm')}
+                          onConfirm={async () => {
+                            await deleteRdProjectDeliverable(id!, row.id!);
+                            messageApi.success(t('common.deleteSuccess'));
+                            load();
+                          }}
                         >
-                          {t('common.delete')}
-                        </Button>
-                      </ActionConfirmPopconfirm>
+                          <Button
+                            type="link"
+                            size="small"
+                            danger
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {t('common.delete')}
+                          </Button>
+                        </ActionConfirmPopconfirm>
+                      ) : null}
                     </Space>
                     );
                   },
@@ -808,7 +945,7 @@ const RdProjectDetailPage: React.FC = () => {
         </Space>
       );
     },
-    [t, tasks, deliverables, id, messageApi, load, project?.material_id, gates],
+    [t, tasks, deliverables, id, messageApi, load, project?.material_id, gates, deliverableAuditEnabled, canWriteDeliverable, deliverableTypeOptions],
   );
 
   if (loading) {
@@ -1338,12 +1475,47 @@ const RdProjectDetailPage: React.FC = () => {
         }}
         formRef={deliverableFormRef}
         onFinish={async (values) => {
+          const formUpload = deliverableFormRef.current?.getFieldValue?.('file_upload');
+          const formFileUuid = deliverableFormRef.current?.getFieldValue?.('file_uuid');
+          const formFileName = deliverableFormRef.current?.getFieldValue?.('file_name');
+          const uploadList = normalizeUploadFileList(formUpload ?? values.file_upload);
+          const uploadedUuids = extractUploadFileUuids(uploadList);
+          const fileUuid =
+            uploadedUuids[0] ||
+            String(formFileUuid ?? values.file_uuid ?? '').trim() ||
+            undefined;
+          const fileName =
+            String(formFileName ?? values.file_name ?? '').trim() ||
+            (uploadList[0]?.name as string | undefined) ||
+            undefined;
+          const dtype = String(values.deliverable_type || '').trim() || undefined;
           const payload = {
-            ...values,
             gate_id: values.gate_id ?? activeGate?.id,
+            name: values.name,
+            deliverable_type: dtype,
+            status: values.status,
+            description: values.description,
+            file_uuid: fileUuid,
+            file_name: fileName,
+            material_code: needsMaterialCode(dtype)
+              ? String(values.material_code || '').trim() || undefined
+              : values.material_code
+                ? String(values.material_code).trim() || undefined
+                : undefined,
+            legacy_material_code: values.legacy_material_code
+              ? String(values.legacy_material_code).trim() || undefined
+              : undefined,
           };
           if (!payload.gate_id) {
             messageApi.error(t('app.kuaiplm.rdProjects.detail.task.gateRequired'));
+            return;
+          }
+          if (needsMaterialCode(dtype) && !payload.material_code) {
+            messageApi.error(
+              isSchematicGerberType(dtype)
+                ? t('app.kuaiplm.rdProjects.detail.deliverable.pcbCodeRequired')
+                : t('app.kuaiplm.rdProjects.detail.deliverable.materialCodeRequired'),
+            );
             return;
           }
           if (editingDeliverable?.id) {
@@ -1370,20 +1542,134 @@ const RdProjectDetailPage: React.FC = () => {
           label={t('app.kuaiplm.rdProjects.detail.deliverable.name')}
           rules={[{ required: true }]}
         />
-        <ProFormText
+        <ProFormSelect
           name="deliverable_type"
           label={t('app.kuaiplm.common.columns.type')}
+          options={deliverableTypeOptions}
           placeholder={t('app.kuaiplm.rdProjects.detail.deliverable.typePlaceholder')}
+          showSearch
+          allowClear
         />
+        <ProFormDependency name={['deliverable_type']}>
+          {({ deliverable_type }) => {
+            if (isPartSpecType(deliverable_type)) {
+              return (
+                <>
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    title={t('app.kuaiplm.rdProjects.detail.deliverable.partSpecHint')}
+                  />
+                  <ProFormText
+                    name="material_code"
+                    label={t('app.kuaiplm.rdProjects.detail.deliverable.materialCode')}
+                    rules={[
+                      {
+                        required: true,
+                        message: t('app.kuaiplm.rdProjects.detail.deliverable.materialCodeRequired'),
+                      },
+                    ]}
+                    placeholder={t('app.kuaiplm.rdProjects.detail.deliverable.materialCodePlaceholder')}
+                  />
+                </>
+              );
+            }
+            if (isSoftwareSpecType(deliverable_type)) {
+              const code = project?.project_code?.trim() || 'PROJECT';
+              return (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  title={t('app.kuaiplm.rdProjects.detail.deliverable.softwareSpecHint', {
+                    projectCode: code,
+                  })}
+                />
+              );
+            }
+            if (isSchematicGerberType(deliverable_type)) {
+              return (
+                <>
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    title={t('app.kuaiplm.rdProjects.detail.deliverable.schematicGerberHint')}
+                  />
+                  <ProFormText
+                    name="material_code"
+                    label={t('app.kuaiplm.rdProjects.detail.deliverable.pcbCode')}
+                    rules={[
+                      {
+                        required: true,
+                        message: t('app.kuaiplm.rdProjects.detail.deliverable.pcbCodeRequired'),
+                      },
+                    ]}
+                    placeholder={t('app.kuaiplm.rdProjects.detail.deliverable.pcbCodePlaceholder')}
+                  />
+                </>
+              );
+            }
+            return null;
+          }}
+        </ProFormDependency>
         <ProFormSelect
           name="status"
           label={t('common.status')}
           initialValue="PENDING"
           options={deliverableStatusOptions}
         />
-        <ProFormText name="file_url" label={t('app.kuaiplm.rdProjects.detail.deliverable.fileUrl')} />
-        <ProFormText name="file_name" label={t('app.kuaiplm.rdProjects.detail.deliverable.fileName')} />
-        <ProFormTextArea name="description" label={t('common.remark')} />
+        <ProFormText name="file_uuid" hidden />
+        <ProFormText name="file_name" hidden />
+        <ProFormUploadDragger
+          name="file_upload"
+          label={t('app.kuaiplm.rdProjects.detail.deliverable.file')}
+          max={1}
+          icon={<InboxOutlined />}
+          title={t('app.kuaiplm.rdProjects.detail.deliverable.fileUploadHint')}
+          description={t('app.kuaiplm.rdProjects.detail.deliverable.fileUploadSubHint')}
+          fieldProps={{
+            multiple: false,
+            maxCount: 1,
+            style: { width: '100%' },
+            customRequest: async (options) => {
+              try {
+                const raw = options.file as File;
+                const res = await uploadFile(raw, {
+                  category: DELIVERABLE_FILE_CATEGORY,
+                });
+                const uuid = String(res?.uuid || '').trim();
+                if (!uuid) {
+                  throw new Error(t('app.kuaiplm.rdProjects.detail.deliverable.fileRequired'));
+                }
+                const fileName = res.original_name || res.name || raw.name;
+                deliverableFormRef.current?.setFieldsValue?.({
+                  file_uuid: uuid,
+                  file_name: fileName,
+                });
+                options.onSuccess?.(
+                  { uuid, original_name: fileName, name: res.name || fileName },
+                  raw as never,
+                );
+              } catch (err) {
+                options.onError?.(err as Error);
+              }
+            },
+            onRemove: () => {
+              deliverableFormRef.current?.setFieldsValue?.({
+                file_uuid: undefined,
+                file_name: undefined,
+              });
+              return true;
+            },
+          }}
+        />
+        <ProFormTextArea
+          name="description"
+          label={t('common.remark')}
+          placeholder={t('app.kuaiplm.rdProjects.detail.deliverable.changeDetailPlaceholder')}
+        />
       </FormModalTemplate>
 
       <Modal
@@ -1396,13 +1682,20 @@ const RdProjectDetailPage: React.FC = () => {
           setVersionModalOpen(false);
           setVersionTarget(null);
           setVersionRows([]);
+          setVersionCanDownloadHistory(false);
         }}
         destroyOnHidden
-        width={720}
+        width={820}
       >
         {versionAudience ? (
           <Typography.Paragraph type="secondary">
             {t('app.kuaiplm.rdProjects.detail.deliverable.audience')}: {versionAudience}
+            {!versionCanDownloadHistory ? (
+              <>
+                <br />
+                {t('app.kuaiplm.rdProjects.detail.deliverable.historyDownloadDenied')}
+              </>
+            ) : null}
           </Typography.Paragraph>
         ) : null}
         <Spin spinning={versionLoading}>
@@ -1439,6 +1732,37 @@ const RdProjectDetailPage: React.FC = () => {
                 width: 100,
                 render: (v) => v || '—',
               },
+              {
+                title: t('app.kuaiplm.rdProjects.detail.deliverable.file'),
+                key: 'file',
+                width: 100,
+                render: (_: unknown, row: RdProjectDeliverableVersion) => {
+                  const uuid = String(row.file_uuid || '').trim();
+                  const url = String(row.file_url || '').trim();
+                  if (!uuid && !url) return '—';
+                  return (
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<CloudDownloadOutlined />}
+                      onClick={async () => {
+                        try {
+                          if (uuid) {
+                            const downloadUrl = await getFileDownloadUrlWithToken(uuid);
+                            window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+                            return;
+                          }
+                          window.open(url, '_blank', 'noopener,noreferrer');
+                        } catch (error: any) {
+                          messageApi.error(error?.message || t('common.operationFailed'));
+                        }
+                      }}
+                    >
+                      {t('app.kuaiplm.rdProjects.detail.deliverable.download')}
+                    </Button>
+                  );
+                },
+              },
             ]}
             locale={{ emptyText: t('common.noData') }}
           />
@@ -1448,35 +1772,131 @@ const RdProjectDetailPage: React.FC = () => {
       <Modal
         title={t('app.kuaiplm.rdProjects.detail.deliverable.reviseTitle')}
         open={reviseOpen}
+        confirmLoading={reviseSubmitting}
         onCancel={() => {
           setReviseOpen(false);
           setReviseTarget(null);
+          setReviseFileList([]);
+          setReviseFileUuid(undefined);
+          setReviseFileName(undefined);
         }}
         onOk={async () => {
           if (!reviseTarget?.id) return;
+          setReviseSubmitting(true);
           try {
             await reviseRdProjectDeliverable(id!, reviseTarget.id, {
               change_summary: reviseSummary || undefined,
+              file_uuid: reviseFileUuid,
+              file_name: reviseFileName,
             });
             messageApi.success(t('app.kuaiplm.rdProjects.detail.deliverable.reviseSuccess'));
             setReviseOpen(false);
             setReviseTarget(null);
+            setReviseFileList([]);
+            setReviseFileUuid(undefined);
+            setReviseFileName(undefined);
             load();
           } catch (error: any) {
             messageApi.error(error?.message || t('common.operationFailed'));
+          } finally {
+            setReviseSubmitting(false);
           }
         }}
         destroyOnHidden
       >
         <Typography.Paragraph type="secondary">
           {reviseTarget?.name} ({reviseTarget?.version || 'A0'})
+          {reviseTarget?.material_code
+            ? ` / ${t('app.kuaiplm.rdProjects.detail.deliverable.materialCode')}: ${reviseTarget.material_code}`
+            : ''}
         </Typography.Paragraph>
+        {isPartSpecType(reviseTarget?.deliverable_type) ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={t('app.kuaiplm.rdProjects.detail.deliverable.partSpecHint')}
+          />
+        ) : null}
+        {isSoftwareSpecType(reviseTarget?.deliverable_type) ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={t('app.kuaiplm.rdProjects.detail.deliverable.softwareSpecHint', {
+              projectCode: project?.project_code?.trim() || 'PROJECT',
+            })}
+          />
+        ) : null}
+        {isSchematicGerberType(reviseTarget?.deliverable_type) ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={t('app.kuaiplm.rdProjects.detail.deliverable.schematicGerberHint')}
+          />
+        ) : null}
+        <Typography.Text style={{ display: 'block', marginBottom: 8 }}>
+          {t('app.kuaiplm.rdProjects.detail.deliverable.changeSummary')}
+        </Typography.Text>
         <Input.TextArea
           rows={3}
           value={reviseSummary}
           onChange={(e) => setReviseSummary(e.target.value)}
           placeholder={t('app.kuaiplm.rdProjects.detail.deliverable.changeSummary')}
+          style={{ marginBottom: 16 }}
         />
+        <Typography.Text style={{ display: 'block', marginBottom: 8 }}>
+          {t('app.kuaiplm.rdProjects.detail.deliverable.file')}
+        </Typography.Text>
+        <Upload.Dragger
+          multiple={false}
+          maxCount={1}
+          fileList={reviseFileList}
+          customRequest={async (options) => {
+            try {
+              const raw = options.file as File;
+              const res = await uploadFile(raw, { category: DELIVERABLE_FILE_CATEGORY });
+              const uuid = String(res?.uuid || '').trim();
+              if (!uuid) {
+                throw new Error(t('app.kuaiplm.rdProjects.detail.deliverable.fileRequired'));
+              }
+              const fileName = res.original_name || res.name || raw.name;
+              setReviseFileUuid(uuid);
+              setReviseFileName(fileName);
+              setReviseFileList([
+                {
+                  uid: uuid,
+                  name: fileName,
+                  status: 'done',
+                  response: { uuid, original_name: fileName },
+                },
+              ]);
+              options.onSuccess?.(
+                { uuid, original_name: fileName, name: res.name || fileName },
+                raw as never,
+              );
+            } catch (err) {
+              options.onError?.(err as Error);
+            }
+          }}
+          onRemove={() => {
+            setReviseFileUuid(undefined);
+            setReviseFileName(undefined);
+            setReviseFileList([]);
+            return true;
+          }}
+        >
+          <p className="ant-upload-drag-icon">
+            <InboxOutlined />
+          </p>
+          <p className="ant-upload-text">
+            {t('app.kuaiplm.rdProjects.detail.deliverable.fileUploadHint')}
+          </p>
+          <p className="ant-upload-hint">
+            {t('app.kuaiplm.rdProjects.detail.deliverable.reviseFileOptional')}
+          </p>
+        </Upload.Dragger>
       </Modal>
 
       <FormModalTemplate

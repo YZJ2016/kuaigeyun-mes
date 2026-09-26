@@ -76,7 +76,7 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "publish": "发布",
     "close": "关闭",
     "obsolete": "作废",
-    "upload-part-spec": "上传零件规格",
+    "upload-part-spec": "上传部品规格书",
 }
 
 PERMISSION_CODE_DISPLAY_LABELS: dict[str, str] = {
