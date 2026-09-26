@@ -28602,6 +28602,14 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.unitable-fixed-column-offset-r01.title':
+    '列表左右固定列不再二次定位',
+  'pages.dashboard.updateLog.entries.unitable-fixed-column-offset-r01.description':
+    'UniTable 在画出前按已定列宽写好左右固定列的位置，勾选列、状态列和操作列不再在首帧之后被重新挪动。',
+  'pages.dashboard.updateLog.entries.unitable-header-width-single-pass-r01.title':
+    '列表标题列宽不再先窄后撑开',
+  'pages.dashboard.updateLog.entries.unitable-header-width-single-pass-r01.description':
+    'UniTable 按表格托盘宽度一次算完列宽，不再在画出之后读取表体滚动口重算，标题行不再出现先按一版宽度再撑开的过程。',
   'pages.dashboard.updateLog.entries.ind-relay-remark-i18n-r01.title':
     '修复继电器行业包备注显示为 common.remarks',
   'pages.dashboard.updateLog.entries.ind-relay-remark-i18n-r01.description':

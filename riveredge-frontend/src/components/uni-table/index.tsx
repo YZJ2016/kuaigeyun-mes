@@ -86,9 +86,124 @@ const DATA_ACTION_ICON_ONLY_MAX_WIDTH = 1280
 const TOOLBAR_CLUSTER_GAP = 16
 
 /**
+ * rc-table 的粘性 left/right 来自测宽行的一次性记录。
+ * 操作列和托盘宽度在那次记录之后才提交，首帧固定列会按旧偏移画出，
+ * 绘制后再被 ResizeObserver 挪到新位置。中间列只用 col 宽，所以不动。
+ * 这里在绘制前按当前测宽行写回表头 col 与固定列偏移，与随后的实测一致。
+ */
+function syncFixedColumnStickyOffsets(root: HTMLElement): void {
+  const container = root.querySelector<HTMLElement>('.uni-table-pro-table .ant-table-wrapper .ant-table-container')
+  if (!container) return
+  const measureRow = container.querySelector<HTMLElement>('tr.ant-table-measure-row')
+  if (!measureRow || measureRow.children.length === 0) return
+  const widths = Array.from(measureRow.children, (cell) => (cell as HTMLElement).offsetWidth)
+  if (widths.every((width) => width <= 0)) return
+
+  const gutter = root.classList.contains('uni-table-scroll-y-mode')
+    ? getUniTableVerticalScrollbarWidth()
+    : 0
+  const holders = [
+    container.querySelector<HTMLElement>(':scope > .ant-table-header'),
+    container.querySelector<HTMLElement>(':scope > .ant-table-body'),
+    container.querySelector<HTMLElement>(':scope > .ant-table-summary'),
+    container.querySelector<HTMLElement>(':scope > .ant-table-content'),
+  ].filter((holder): holder is HTMLElement => holder != null)
+
+  holders.forEach((holder) => {
+    const table = holder.firstElementChild
+    if (!(table instanceof HTMLTableElement)) return
+    const withGutter =
+      gutter > 0 &&
+      (holder.classList.contains('ant-table-header') || holder.classList.contains('ant-table-summary'))
+    const colgroup = Array.from(table.children).find((el) => el.tagName === 'COLGROUP')
+    const cols = colgroup
+      ? (Array.from(colgroup.children).filter((el) => el.tagName === 'COL') as HTMLElement[])
+      : []
+    const dataColCount =
+      withGutter && cols.length === widths.length + 1 ? widths.length : Math.min(widths.length, cols.length)
+    const indexRow = Array.from(table.rows).find((row) => {
+      if (row.classList.contains('ant-table-measure-row')) return false
+      const dataCells = Array.from(row.cells).filter(
+        (cell) => !cell.classList.contains('ant-table-cell-scrollbar'),
+      )
+      return dataCells.length === widths.length
+    })
+    const indexCells = indexRow
+      ? Array.from(indexRow.cells).filter((cell) => !cell.classList.contains('ant-table-cell-scrollbar'))
+      : []
+    for (let i = 0; i < dataColCount; i += 1) {
+      const cell = indexCells[i]
+      const col = cols[i]
+      if (!cell || !col) continue
+      const fixed =
+        cell.classList.contains('ant-table-cell-fix-left') ||
+        cell.classList.contains('ant-table-cell-fix-right')
+      if (!fixed) continue
+      const width = widths[i]
+      if (!(width > 0)) continue
+      const next = `${width}px`
+      if (col.style.width !== next) col.style.width = next
+    }
+
+    const rightGutter = withGutter ? gutter : 0
+    for (const row of table.rows) {
+      if (row.classList.contains('ant-table-measure-row')) continue
+      applyFixedRowOffsets(row, widths, rightGutter)
+    }
+  })
+}
+
+function applyFixedRowOffsets(row: HTMLElement, widths: number[], rightGutter: number): void {
+  const cells: HTMLElement[] = []
+  for (let i = 0; i < row.children.length; i += 1) {
+    const cell = row.children[i] as HTMLElement
+    if (cell.classList.contains('ant-table-cell-scrollbar')) continue
+    cells.push(cell)
+  }
+  const useMeasure = cells.length === widths.length
+  let left = 0
+  const rightIndexes: number[] = []
+  for (let i = 0; i < cells.length; i += 1) {
+    const cell = cells[i]
+    const width = useMeasure ? widths[i] : cell.offsetWidth
+    if (cell.classList.contains('ant-table-cell-fix-left')) {
+      const next = `${left}px`
+      if (cell.style.left !== next) cell.style.left = next
+      left += width
+    }
+    if (cell.classList.contains('ant-table-cell-fix-right')) rightIndexes.push(i)
+  }
+  let right = rightGutter
+  for (let k = rightIndexes.length - 1; k >= 0; k -= 1) {
+    const index = rightIndexes[k]
+    const cell = cells[index]
+    const next = `${right}px`
+    if (cell.style.right !== next) cell.style.right = next
+    right += useMeasure ? widths[index] : cell.offsetWidth
+  }
+}
+
+/**
+ * 列宽预算用表格托盘的内容宽，不读 `.ant-table-body` / `.ant-table-content`。
+ * 滚动口宽度会随刚设上的列宽变化，读它会在首帧之后再改一版标题列宽。
+ */
+function readStableTableBudgetWidth(root: HTMLElement): number {
+  const wrapper = root.querySelector('.uni-table-pro-table .ant-table-wrapper') as HTMLElement | null
+  const host = wrapper ?? root
+  const tableContainer = host.querySelector('.ant-table-container') as HTMLElement | null
+  let borderX = 0
+  if (tableContainer) {
+    const style = getComputedStyle(tableContainer)
+    borderX = (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.borderRightWidth) || 0)
+  }
+  return Math.max(0, Math.round(host.clientWidth - borderX))
+}
+
+/**
  * 测量元素「内容实际占用」宽度。
  * ProTable 工具栏 left/right 常带 flex:1，直接读 scrollWidth 会被撑满，导致永远判定为仅图标。
  */
+
 function measureOccupiedWidth(el: HTMLElement | null | undefined): number {
   if (!el) return 0
   const kids = Array.from(el.children) as HTMLElement[]
@@ -182,6 +297,7 @@ import { resolveUniReportTableBodyScrollY } from '../uni-report/uniReportScrollP
 import {
   buildUniTableFillerColumn,
   getUniTableLifecycleCellClassName,
+  getUniTableVerticalScrollbarWidth,
   isUniTableAuditPhaseColumn,
   isUniTableAuditStackedColumn,
   isUniTableDetailProgressColumn,
@@ -1370,8 +1486,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [tableData, setTableData] = useState<T[]>([])
   const [requestInFlight, setRequestInFlight] = useState(true)
   const [containerLayoutWidth, setContainerLayoutWidth] = useState(0)
-  /** containerLayoutWidth 是否已取自表体滚动口（clientWidth 已含纵向滚动条扣除） */
-  const [layoutWidthIsScrollHost, setLayoutWidthIsScrollHost] = useState(false)
   const [fillViewportMeasuredScrollY, setFillViewportMeasuredScrollY] = useState<number | undefined>()
   const [reportMeasuredScrollY, setReportMeasuredScrollY] = useState<number | undefined>()
   const reportMeasuredScrollYRef = React.useRef<number | undefined>(undefined)
@@ -3144,7 +3258,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         includeSelection: tableHasRowSelection,
         includeExpandable: tableHasExpandable,
         scrollYEnabled: proTableBodyScrollYEnabled,
-        layoutWidthIsScrollHost,
       }),
     [
       columnsForLayoutPlan,
@@ -3152,7 +3265,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       tableHasRowSelection,
       tableHasExpandable,
       proTableBodyScrollYEnabled,
-      layoutWidthIsScrollHost,
     ],
   )
 
@@ -3517,29 +3629,38 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     measure()
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null
-    const tbody = root.querySelector('.ant-table-tbody')
-    if (ro && tbody) ro.observe(tbody)
-    return () => ro?.disconnect()
+    // 不监听 tbody：列宽一变 tbody 就变，观察它会在首帧之后再改一版标题列宽。
+    // 行数据与列结构变化已在依赖里，绘制前完成实测。
     // 同 viewport 实测：不可依赖 effectiveTableColumns（实测改宽会换新引用 → 同步死循环）
   }, [tableData, columnStructureSig, currentViewType, showDelayedLoading])
 
   React.useLayoutEffect(() => {
     const root = containerRef.current
     if (!root) return
+    // 列宽 state 提交后的这一帧：测宽行已是最终 col 宽，固定列偏移仍是上一轮记录。
+    // 绘制前写回，避免左右固定列在首帧之后再挪一次。
+    syncFixedColumnStickyOffsets(root)
+  }, [
+    containerLayoutWidth,
+    measuredOperationWidths,
+    measuredPrimaryFlexWidths,
+    tableData,
+    columnStructureSig,
+    currentViewType,
+    showDelayedLoading,
+    layoutPlan.mode,
+  ])
+
+  React.useLayoutEffect(() => {
+    const root = containerRef.current
+    if (!root) return
 
     const syncContainerLayout = () => {
-      // 列宽预算必须用横向滚动口 clientWidth，禁止用外层 container 宽：
-      // 外层常比 .ant-table-body/.ant-table-content 宽几～十几 px，会把 scroll.x 撑出假横滚。
-      const scrollHost = (root.querySelector('.ant-table-body') ||
-        root.querySelector('.ant-table-content')) as HTMLElement | null
-      const hostWidth = scrollHost?.clientWidth ?? 0
-      const fromScrollHost = hostWidth > 0
-      const width = fromScrollHost ? hostWidth : root.clientWidth
+      // 只用托盘宽度。纵向滚动条由布局引擎按 scroll.y 扣除，不再改读滚动口。
+      const width = readStableTableBudgetWidth(root)
       if (width > 0) {
         setContainerLayoutWidth((prev) => (prev === width ? prev : width))
       }
-      setLayoutWidthIsScrollHost((prev) => (prev === fromScrollHost ? prev : fromScrollHost))
 
       const toolbar = root.querySelector(
         '.ant-pro-table-list-toolbar-container',
@@ -3576,8 +3697,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     const ro =
       typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => syncContainerLayout()) : null
     ro?.observe(root)
-    const scrollHost = root.querySelector('.ant-table-body') || root.querySelector('.ant-table-content')
-    if (ro && scrollHost) ro.observe(scrollHost)
     const toolbar = root.querySelector('.ant-pro-table-list-toolbar-container')
     if (ro && toolbar) ro.observe(toolbar)
     const left = root.querySelector('.ant-pro-table-list-toolbar-left')
