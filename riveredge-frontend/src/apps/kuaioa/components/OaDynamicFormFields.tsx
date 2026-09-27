@@ -21,6 +21,8 @@ type Props = {
   schema: OaFormFieldSchema[];
   namePrefix?: string | string[];
   disabled?: boolean;
+  /** 宿主资源码，动态表单内部门字段引用鉴权 */
+  hostResource?: string;
 };
 
 type StoredUser = { id: number; name: string };
@@ -164,6 +166,7 @@ const OaDynamicFormFields: React.FC<Props> = ({
   schema,
   namePrefix = 'form_data',
   disabled = false,
+  hostResource,
 }) => {
   if (!schema.length) return null;
 
@@ -263,6 +266,7 @@ const OaDynamicFormFields: React.FC<Props> = ({
               rules={rules}
               colProps={colProps}
               disabled={disabled}
+              hostResource={hostResource}
             />
           );
         }

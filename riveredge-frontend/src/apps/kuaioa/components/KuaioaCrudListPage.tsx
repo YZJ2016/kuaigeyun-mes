@@ -13,6 +13,7 @@ import {
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
+  ProFormTimePicker,
 } from '@ant-design/pro-components';
 import { App, Button, Form } from 'antd';
 import type { FormInstance } from 'antd';
@@ -64,6 +65,7 @@ export type KuaioaFieldConfig = {
     | 'switch'
     | 'number'
     | 'date'
+    | 'time'
     | 'datetime'
     | 'month'
     | 'year'
@@ -146,6 +148,8 @@ type Props = {
     allValues: Record<string, unknown>,
     form: FormInstance,
   ) => void;
+  /** 部门下拉额外选项（员工档案部门名等），与部门树合并 */
+  departmentExtraOptions?: Array<{ label: string; value: string }>;
   /** 默认 STANDARD_WIDTH（双栏）。有明细 Table 时传 LARGE_WIDTH */
   modalWidth?: number;
   /**
@@ -223,6 +227,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   mapRecordToFormValues,
   mapFormValuesToPayload,
   onFormValuesChange,
+  departmentExtraOptions,
   modalWidth,
   modalGrid = true,
   expiringListFn,
@@ -512,6 +517,17 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         return col;
       }
 
+      if (field.type === 'time') {
+        col.hideInSearch = true;
+        col.render = (_, row) => {
+          const raw = row[field.name];
+          if (raw == null || raw === '') return '-';
+          const text = String(raw).trim();
+          return text.length >= 5 ? text.slice(0, 5) : text;
+        };
+        return col;
+      }
+
       if (field.type === 'datetime' || field.name.endsWith('_at')) {
         col.hideInSearch = true;
         col.render = (_, row) => {
@@ -535,7 +551,9 @@ const KuaioaCrudListPage: React.FC<Props> = ({
           const raw = row[field.name];
           const text = raw == null || raw === '' ? '' : String(raw);
           if (!text) return '-';
-          const fromOptions = field.options?.find((o) => String(o.value) === text)?.label;
+          const fromOptions =
+            field.options?.find((o) => String(o.value) === text)?.label ||
+            field.options?.find((o) => String(o.label) === text)?.label;
           const label =
             fromOptions ||
             t(`${field.labelKey}.${text}`, { defaultValue: text });
@@ -836,6 +854,9 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                     form={form}
                     resource={resource}
                     editing={editing}
+                    departmentExtraOptions={
+                      lookupKind === 'department' ? departmentExtraOptions : undefined
+                    }
                   />
                 );
                 /**
@@ -861,6 +882,18 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                     rules={rules}
                     colProps={colProps}
                     fieldProps={fieldWidth}
+                  />
+                );
+              }
+              if (field.type === 'time') {
+                return (
+                  <ProFormTimePicker
+                    key={field.name}
+                    name={field.name}
+                    label={label}
+                    rules={rules}
+                    colProps={colProps}
+                    fieldProps={{ ...fieldWidth, format: 'HH:mm', needConfirm: false }}
                   />
                 );
               }

@@ -82,6 +82,8 @@ export interface UpdateDepartmentData {
 export async function getDepartmentTree(params?: {
   keyword?: string;
   is_active?: boolean;
+  /** 宿主 {app}:{module}，供引用 display 隐式鉴权 */
+  host_resource?: string;
 }): Promise<DepartmentTreeResponse> {
   return apiRequest<DepartmentTreeResponse>('/core/departments/tree', {
     params,

@@ -11,6 +11,8 @@ from typing import Any, Optional
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 
+from loguru import logger
+
 from apps.kuaioa.models.attendance import KuaioaAttendanceDay, KuaioaAttendanceSheet
 from apps.kuaioa.models.employee import KuaioaEmployeeProfile
 from apps.kuaioa.models.leave import KuaioaLeaveRequest
@@ -490,6 +492,13 @@ class AttendanceService:
                 deleted_at__isnull=True,
             ).first()
         if not emp:
+            logger.warning(
+                "leave 考勤回写员工未匹配 tenant={} leave_id={} applicant_id={} applicant_name={}",
+                tenant_id,
+                getattr(leave, "id", None),
+                leave.applicant_id,
+                leave.applicant_name,
+            )
             return 0
 
         deduct_amount = None

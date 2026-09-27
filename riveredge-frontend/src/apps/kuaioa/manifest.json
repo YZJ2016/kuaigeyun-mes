@@ -115,22 +115,34 @@
                 "sort_order": 5
               },
               {
+                "title": "app.kuaioa.menu.attendance-daily",
+                "path": "/apps/kuaioa/hr/attendance-daily",
+                "permission": "kuaioa:attendance-daily:read",
+                "sort_order": 6
+              },
+              {
+                "title": "app.kuaioa.menu.attendance-analysis",
+                "path": "/apps/kuaioa/hr/attendance-analysis",
+                "permission": "kuaioa:attendance-analysis:read",
+                "sort_order": 7
+              },
+              {
                 "title": "app.kuaioa.menu.attendance",
                 "path": "/apps/kuaioa/hr/attendance",
                 "permission": "kuaioa:attendance:read",
-                "sort_order": 6
+                "sort_order": 8
               },
               {
                 "title": "app.kuaioa.menu.attendance-rest",
                 "path": "/apps/kuaioa/hr/attendance/day-register?mode=rest",
                 "permission": "kuaioa:attendance:update",
-                "sort_order": 7
+                "sort_order": 9
               },
               {
                 "title": "app.kuaioa.menu.attendance-night",
                 "path": "/apps/kuaioa/hr/attendance/day-register?mode=night",
                 "permission": "kuaioa:attendance:update",
-                "sort_order": 8
+                "sort_order": 10
               }
             ]
           },
@@ -453,6 +465,14 @@
     "kuaioa:attendance:delete",
     "kuaioa:attendance:submit",
     "kuaioa:attendance:export",
+    "kuaioa:attendance-daily:read",
+    "kuaioa:attendance-daily:create",
+    "kuaioa:attendance-daily:update",
+    "kuaioa:attendance-daily:delete",
+    "kuaioa:attendance-daily:import",
+    "kuaioa:attendance-daily:export",
+    "kuaioa:attendance-analysis:read",
+    "kuaioa:attendance-analysis:export",
     "kuaioa:living-advance:read",
     "kuaioa:living-advance:create",
     "kuaioa:living-advance:update",
@@ -526,6 +546,14 @@
   "dependencies": {
     "riveredge-backend": ">=1.0.0",
     "riveredge-frontend": ">=1.0.0"
+  },
+  "requires_apps": [
+    "kuaizhizao"
+  ],
+  "module_references": {
+    "__all_modules__": [
+      "system:department"
+    ]
   },
   "audit": [
     {

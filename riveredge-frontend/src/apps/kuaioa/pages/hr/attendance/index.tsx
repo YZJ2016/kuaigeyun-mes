@@ -18,6 +18,7 @@ import {
   loadOaWorkshopNameOptions,
 } from '../../../utils/oaWorkshopOptions';
 import { runKuaioaListExport } from '../../../utils/kuaioaListExport';
+import { buildOaAttendanceSheetStatusEnum } from '../../../utils/oaFormEnums';
 
 const AttendanceListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -40,12 +41,13 @@ const AttendanceListPage: React.FC = () => {
     })();
   }, []);
 
+  const statusEnum = useMemo(() => buildOaAttendanceSheetStatusEnum(t), [t]);
   const statusOptions = useMemo(
     () => [
-      { label: t('app.kuaioa.attendance.status.draft'), value: 'draft' },
-      { label: t('app.kuaioa.attendance.status.submitted'), value: 'submitted' },
+      { label: statusEnum.draft.text, value: 'draft' },
+      { label: statusEnum.submitted.text, value: 'submitted' },
     ],
-    [t],
+    [statusEnum],
   );
 
   const fields = useMemo(
@@ -109,6 +111,7 @@ const AttendanceListPage: React.FC = () => {
       codeField="sheet_code"
       nameField="workshop_name"
       autoGenerateCode
+      statusEnum={statusEnum}
       statusPresentation="marker"
       detailVariant="master"
       getDetailFn={getAttendanceSheet}

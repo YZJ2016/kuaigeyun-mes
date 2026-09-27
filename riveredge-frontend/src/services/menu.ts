@@ -206,6 +206,9 @@ export async function updateMenuOrder(menuOrders: MenuOrderItem[]): Promise<{ su
 export async function syncAllMenus(): Promise<{ success: boolean; message: string; count?: number }> {
   return apiRequest<{ success: boolean; message: string; count?: number }>('/core/menus/sync-all', {
     method: 'POST',
+    /** 与 syncAllManifestsAndMenus 对齐；全量写菜单实测可达数分钟 */
+    timeoutMs: 360_000,
+    maxRetries: 1,
   });
 }
 

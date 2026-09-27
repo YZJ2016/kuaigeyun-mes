@@ -36,6 +36,26 @@ export function buildOaEmployeeStatusEnum(t: TFunction) {
   };
 }
 
+/** 月度考勤单草稿/已提交 */
+export function buildOaAttendanceSheetStatusEnum(t: TFunction) {
+  return {
+    draft: { text: t('app.kuaioa.attendance.status.draft'), status: 'Default' as const },
+    submitted: { text: t('app.kuaioa.attendance.status.submitted'), status: 'Success' as const },
+  };
+}
+
+/** 每日考勤结果 */
+export function buildOaAttendanceDailyResultOptions(t: TFunction) {
+  return [
+    { label: t('app.kuaioa.attendanceDaily.result.normal'), value: 'normal' },
+    { label: t('app.kuaioa.attendanceDaily.result.late'), value: 'late' },
+    { label: t('app.kuaioa.attendanceDaily.result.early'), value: 'early' },
+    { label: t('app.kuaioa.attendanceDaily.result.absent'), value: 'absent' },
+    { label: t('app.kuaioa.attendanceDaily.result.leave'), value: 'leave' },
+    { label: t('app.kuaioa.attendanceDaily.result.rest'), value: 'rest' },
+  ];
+}
+
 /** 员工档案用工类型（表单 / 导入 / 列表展示共用） */
 export function buildOaEmploymentTypeOptions(t: TFunction) {
   return [
