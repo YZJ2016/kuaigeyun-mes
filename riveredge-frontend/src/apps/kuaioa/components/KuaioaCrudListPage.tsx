@@ -65,6 +65,8 @@ export type KuaioaFieldConfig = {
     | 'number'
     | 'date'
     | 'datetime'
+    | 'month'
+    | 'year'
     | 'file'
     | 'user'
     | 'userIds'
@@ -76,6 +78,8 @@ export type KuaioaFieldConfig = {
   options?: Array<{ label: string; value: string | number | boolean }>;
   /** select / userIds 多选 */
   mode?: 'multiple';
+  /** 表单只读展示（如选人后回填原生活费） */
+  readonly?: boolean;
   required?: boolean;
   hideInTable?: boolean;
   hideInForm?: boolean;
@@ -164,6 +168,14 @@ type Props = {
     selectedRowKeys?: React.Key[],
     pageData?: Record<string, unknown>[],
   ) => Promise<void>;
+  /** 列表批量导入（须 manifest import 权限 + 完整模板） */
+  showImportButton?: boolean;
+  onImport?: (data: unknown[][]) => void | boolean | Promise<void | boolean>;
+  importHeaders?: string[];
+  importExampleRow?: string[];
+  importColumnOptions?: Array<string[] | undefined>;
+  importFieldMap?: Record<string, string>;
+  importTemplateName?: string;
 };
 
 type KuaioaListScope = 'all' | 'expiring';
@@ -212,6 +224,13 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   toolBarActionsBeforeCreate,
   showExportButton = false,
   onExport,
+  showImportButton = false,
+  onImport,
+  importHeaders,
+  importExampleRow,
+  importColumnOptions,
+  importFieldMap,
+  importTemplateName,
 }) => {
   const { t } = useTranslation();
   const currentUser = useCurrentUser();
@@ -719,6 +738,21 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
         showExportButton={showExportButton}
         onExport={onExport}
+        showImportButton={showImportButton}
+        onImport={
+          onImport
+            ? async (data) => {
+                const result = await onImport(data);
+                reloadTable();
+                return result;
+              }
+            : undefined
+        }
+        importHeaders={importHeaders}
+        importExampleRow={importExampleRow}
+        importColumnOptions={importColumnOptions}
+        importFieldMap={importFieldMap}
+        importTemplateName={importTemplateName}
       />
 
       <FormModalTemplate
@@ -791,6 +825,30 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                   />
                 );
               }
+              if (field.type === 'month') {
+                return (
+                  <ProFormDatePicker
+                    key={field.name}
+                    name={field.name}
+                    label={label}
+                    rules={rules}
+                    colProps={colProps}
+                    fieldProps={{ ...fieldWidth, picker: 'month', format: 'YYYY-MM' }}
+                  />
+                );
+              }
+              if (field.type === 'year') {
+                return (
+                  <ProFormDatePicker
+                    key={field.name}
+                    name={field.name}
+                    label={label}
+                    rules={rules}
+                    colProps={colProps}
+                    fieldProps={{ ...fieldWidth, picker: 'year', format: 'YYYY' }}
+                  />
+                );
+              }
               if (field.type === 'datetime') {
                 return (
                   <ProFormDatePicker
@@ -838,7 +896,10 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                     colProps={colProps}
                     options={field.options}
                     mode={field.mode}
-                    allowClear
+                    allowClear={!field.readonly}
+                    showSearch
+                    optionFilterProp="label"
+                    disabled={field.readonly}
                   />
                 );
               }
@@ -881,6 +942,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                     label={label}
                     rules={rules}
                     colProps={colProps}
+                    disabled={field.readonly}
                     fieldProps={fieldWidth}
                   />
                 );
@@ -892,6 +954,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                   label={label}
                   rules={rules}
                   colProps={colProps}
+                  disabled={field.readonly}
                 />
               );
             })}

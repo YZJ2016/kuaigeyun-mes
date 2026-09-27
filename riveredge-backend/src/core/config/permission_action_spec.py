@@ -31,6 +31,12 @@ STANDARD_ACTIONS: set[str] = {
     "dispatch",
     "recall",
     "confirm_adjustment",
+    # PLM 项目零件规格上传
+    "upload-part-spec",
+    # 应用管理破坏性操作（须搭配 RBAC + 二次确认）
+    "reset-data",
+    # 开放 API 凭证管理
+    "manage",
 }
 
 def canonical_action(action: str) -> str:
@@ -62,6 +68,7 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "dispatch": "发出",
     "confirm_adjustment": "确认调整",
     "recall": "确认收回",
+    "reset-data": "重置数据",
     "claim": "认领",
     "recycle": "回收",
     "release": "释放",
@@ -69,6 +76,7 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "publish": "发布",
     "close": "关闭",
     "obsolete": "作废",
+    "upload-part-spec": "上传零件规格",
 }
 
 PERMISSION_CODE_DISPLAY_LABELS: dict[str, str] = {
@@ -93,6 +101,7 @@ PERMISSION_CODE_DISPLAY_LABELS: dict[str, str] = {
     "haoligo:finance-equipment-payables:submit": "提交财务",
     "haoligo:finance-equipment-payables:execute": "登记付款",
     "system:application-connection:execute": "同步通讯录",
+    "system:open-api:manage": "管理开放凭证",
     "system:document-time-rewrite:read": "查看单据时间修正",
     "system:document-time-rewrite:execute": "执行单据时间修正",
     "system:document-global-view:read": "全局档案总查看",

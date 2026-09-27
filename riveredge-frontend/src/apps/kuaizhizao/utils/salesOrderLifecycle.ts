@@ -121,6 +121,22 @@ function buildMainStages(stageName: string): SubStage[] {
   const normalized = normalizeStageName(stageName);
   const order = MAIN_STAGE_KEYS;
 
+  // 终态异常：主轴全 pending，避免把「已关闭」映射到 completed 节点盖成「已完成」
+  if (
+    normalized === '已关闭' ||
+    normalized === '已取消' ||
+    normalized === '已驳回' ||
+    normalized === 'closed' ||
+    normalized === 'cancelled' ||
+    normalized === 'rejected'
+  ) {
+    return order.map((key) => ({
+      key,
+      label: MAIN_STAGE_LABELS[key],
+      status: 'pending' as const,
+    }));
+  }
+
   const stageToIndex: Record<string, number> = {
     草稿: 0,
     待审核: 0,
@@ -133,9 +149,6 @@ function buildMainStages(stageName: string): SubStage[] {
     账款发票: 4,
     账款发票处理: 4,
     已完成: 5,
-    已驳回: 0,
-    已取消: 0,
-    已关闭: 5,
   };
 
   const currentIdx = stageToIndex[normalized] ?? 0;
@@ -263,6 +276,7 @@ const SALES_ORDER_STAGE_I18N_BY_KEY: Record<string, string> = {
   delivered: 'app.kuaizhizao.salesOrder.lifecycleDelivered',
   invoicing: 'app.kuaizhizao.salesOrder.lifecycleInvoicing',
   completed: 'app.kuaizhizao.salesOrder.lifecycleCompleted',
+  closed: 'app.kuaizhizao.salesOrder.lifecycleClosed',
 };
 
 const SHIPPABLE_ELIGIBLE_STAGES = new Set(['执行中', '已生效', '发货出库', '已交货']);

@@ -40,14 +40,20 @@ from apps.master_data.services.drawing_security import (
     DrawingSecurityService,
     normalize_security_level,
 )
+from core.services.approval.approval_instance_service import ApprovalInstanceService
+from core.services.approval.audit_binding_service import AuditBindingService
 from core.services.file.document_version_policy import (
     can_view_historical_versions,
     filter_version_rows,
     resolve_audience,
 )
 from core.services.file.file_service import FileService
+from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import AuthorizationError, NotFoundError, ValidationError
 from infra.models.user import User
+
+AUDIT_NODE = "engineering_drawing"
+ENTITY_TYPE = "engineering_drawing"
 
 
 def _utcnow() -> datetime:
@@ -237,6 +243,8 @@ async def _file_brief(tenant_id: int, file_uuid: str) -> Optional[FileBriefRespo
         f = await FileService.get_file_by_uuid(tenant_id, file_uuid)
     except NotFoundError:
         return None
+    if not await FileService.file_content_available(tenant_id, f):
+        return None
     preview_url = None
     try:
         from core.services.file.file_preview_service import FilePreviewService
@@ -278,6 +286,9 @@ async def _to_response(
         "status": drawing.status,
         "file_uuid": drawing.file_uuid,
         "supplementary_file_uuids": supp_uuids or None,
+        "project_id": drawing.project_id,
+        "project_code": drawing.project_code,
+        "project_name": drawing.project_name,
         "material_uuids": _norm_uuid_list(drawing.material_uuids) or None,
         "process_route_uuids": _norm_uuid_list(drawing.process_route_uuids) or None,
         "operation_uuids": _norm_uuid_list(drawing.operation_uuids) or None,
@@ -323,6 +334,26 @@ async def _to_responses(
     return [await _to_response(tenant_id, d, maps) for d in drawings]
 
 
+async def _resolve_drawing_project(
+    tenant_id: int,
+    project_id: Optional[int],
+    project_code: Optional[str],
+) -> tuple[Optional[int], Optional[str], Optional[str]]:
+    if project_id is not None:
+        from apps.kuaiplm.models.rd_project import RdProject
+
+        project = await RdProject.filter(
+            tenant_id=tenant_id, id=int(project_id), deleted_at__isnull=True
+        ).first()
+        if not project:
+            raise ValidationError("研发项目不存在")
+        return project.id, project.project_code, project.project_name
+    code = str(project_code or "").strip()
+    if not code:
+        return None, None, None
+    return None, code, code
+
+
 class DrawingService:
     @staticmethod
     async def create_drawing(
@@ -344,6 +375,9 @@ class DrawingService:
         if exists:
             raise ValidationError(f"图号 {data.code} 修订版 {data.revision} 已存在")
 
+        project_id, project_code, project_name = await _resolve_drawing_project(
+            tenant_id, data.project_id, data.project_code
+        )
         payload = {
             "tenant_id": tenant_id,
             "code": data.code,
@@ -353,6 +387,9 @@ class DrawingService:
             "status": "Draft",
             "file_uuid": data.file_uuid,
             "supplementary_file_uuids": supp or None,
+            "project_id": project_id,
+            "project_code": project_code,
+            "project_name": project_name,
             "material_uuids": _norm_uuid_list(data.material_uuids) or None,
             "process_route_uuids": _norm_uuid_list(data.process_route_uuids) or None,
             "operation_uuids": _norm_uuid_list(data.operation_uuids) or None,
@@ -397,6 +434,15 @@ class DrawingService:
             update_data["security_level"] = normalize_security_level(update_data["security_level"])
         if "description" in update_data:
             update_data["description"] = (update_data["description"] or "").strip() or None
+        if "project_id" in update_data or "project_code" in update_data:
+            project_id, project_code, project_name = await _resolve_drawing_project(
+                tenant_id,
+                update_data.pop("project_id", None),
+                update_data.pop("project_code", None),
+            )
+            update_data["project_id"] = project_id
+            update_data["project_code"] = project_code
+            update_data["project_name"] = project_name
 
         for k, v in update_data.items():
             setattr(drawing, k, v)
@@ -411,6 +457,7 @@ class DrawingService:
         limit: int = 20,
         status: Optional[str] = None,
         drawing_type: Optional[str] = None,
+        exclude_drawing_types: Optional[List[str]] = None,
         security_level: Optional[str] = None,
         keyword: Optional[str] = None,
         material_uuid: Optional[str] = None,
@@ -421,6 +468,7 @@ class DrawingService:
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
         view: str = "current",
+        production_view: bool = False,
         current_user: Optional[User] = None,
     ) -> Tuple[List[EngineeringDrawingResponse], int]:
         from apps.master_data.services.drawing_folder_service import DrawingFolderService
@@ -440,6 +488,8 @@ class DrawingService:
             query = query.filter(status=status)
         if drawing_type:
             query = query.filter(drawing_type=drawing_type)
+        if exclude_drawing_types:
+            query = query.exclude(drawing_type__in=exclude_drawing_types)
         if keyword:
             kw = keyword.strip()
             if kw:
@@ -471,6 +521,7 @@ class DrawingService:
                 limit=limit,
                 status=status,
                 drawing_type=drawing_type,
+                exclude_drawing_types=exclude_drawing_types,
                 keyword=keyword,
                 material_uuid=material_uuid,
                 process_route_uuid=process_route_uuid,
@@ -481,6 +532,7 @@ class DrawingService:
                 descending=descending,
                 security_levels=allowed_levels,
                 requested_security_level=security_level,
+                production_view=production_view,
             )
             items = await _to_responses(tenant_id, page_rows)
             return items, total
@@ -499,16 +551,18 @@ class DrawingService:
         limit: int,
         status: Optional[str],
         drawing_type: Optional[str],
-        keyword: Optional[str],
-        material_uuid: Optional[str],
-        process_route_uuid: Optional[str],
-        operation_uuid: Optional[str],
-        folder_ids: Optional[List[int]],
-        unclassified_only: bool,
-        order_field: str,
-        descending: bool,
+        exclude_drawing_types: Optional[List[str]] = None,
+        keyword: Optional[str] = None,
+        material_uuid: Optional[str] = None,
+        process_route_uuid: Optional[str] = None,
+        operation_uuid: Optional[str] = None,
+        folder_ids: Optional[List[int]] = None,
+        unclassified_only: bool = False,
+        order_field: str = "created_at",
+        descending: bool = True,
         security_levels: Optional[List[str]] = None,
         requested_security_level: Optional[str] = None,
+        production_view: bool = False,
     ) -> Tuple[List[EngineeringDrawing], int]:
         """
         view=current：ROW_NUMBER() PARTITION BY code 后 OFFSET/LIMIT，
@@ -516,10 +570,14 @@ class DrawingService:
         """
         from tortoise import Tortoise
 
+        if production_view:
+            status_filter = "('Released',)"
+        else:
+            status_filter = "('Released', 'Draft', 'Editing', 'Pending')"
         where = [
             "tenant_id = $1",
             "deleted_at IS NULL",
-            "status IN ('Released', 'Draft', 'Editing', 'Pending')",
+            f"status IN {status_filter}",
         ]
         params: List[Any] = [tenant_id]
         p = 2
@@ -532,6 +590,11 @@ class DrawingService:
             where.append(f"drawing_type = ${p}")
             params.append(drawing_type)
             p += 1
+        if exclude_drawing_types:
+            placeholders = ", ".join(f"${p + i}" for i in range(len(exclude_drawing_types)))
+            where.append(f"drawing_type NOT IN ({placeholders})")
+            params.extend(exclude_drawing_types)
+            p += len(exclude_drawing_types)
         if keyword:
             kw = keyword.strip()
             if kw:
@@ -738,8 +801,8 @@ class DrawingService:
         drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
         if (drawing.status or "") == "Editing":
             raise ValidationError("检出中的图纸请先撤销检出再删除")
-        if (drawing.status or "") not in ("Draft", "Obsolete"):
-            raise ValidationError("仅草稿或已作废状态图纸可删除")
+        if (drawing.status or "") != "Draft":
+            raise ValidationError("仅草稿状态图纸可删除；已发布或作废图纸只能升版，不可删除")
         drawing.deleted_at = _utcnow()
         await drawing.save()
 
@@ -805,6 +868,18 @@ class DrawingService:
         return await _to_response(tenant_id, drawing)
 
     @staticmethod
+    async def _require_change_summary_if_revision(
+        tenant_id: int, drawing: EngineeringDrawing
+    ) -> None:
+        has_prior = await EngineeringDrawing.filter(
+            tenant_id=tenant_id,
+            code=drawing.code,
+            deleted_at__isnull=True,
+        ).exclude(id=drawing.id).exists()
+        if has_prior and not str(drawing.description or "").strip():
+            raise ValidationError("升版后提交须填写更改明细（备注）")
+
+    @staticmethod
     async def submit_drawing(
         tenant_id: int,
         drawing_uuid: str,
@@ -813,9 +888,53 @@ class DrawingService:
         drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
         if (drawing.status or "") != "Draft":
             raise ValidationError("仅已检入的草稿可提交签审")
+        if not str(drawing.file_uuid or "").strip():
+            raise ValidationError("提交前须上传主文件")
+        await DrawingService._require_change_summary_if_revision(tenant_id, drawing)
+
         drawing.status = "Pending"
+        drawing.submitted_at = resolve_business_datetime()
         apply_update_audit(drawing, current_user)
         await drawing.save()
+
+        approval_instance = None
+        if await AuditBindingService.is_audit_enabled(tenant_id, AUDIT_NODE):
+            approval_instance = await ApprovalInstanceService.start_approval_for_node(
+                tenant_id=tenant_id,
+                user_id=current_user.id,
+                node_key=AUDIT_NODE,
+                entity_type=ENTITY_TYPE,
+                entity_id=drawing.id,
+                entity_uuid=str(drawing.uuid),
+                title=f"工程图纸审核 {drawing.code}-{drawing.revision}",
+                content=drawing.name,
+                business_type=drawing.drawing_type or "",
+                send_notification=True,
+            )
+            if approval_instance is None:
+                raise ValidationError(
+                    f"审核已开启但未找到可用审批流程，请检查 {AUDIT_NODE} 绑定"
+                )
+
+        from apps.kuaiplm.services.plm_audit_flow_sync import submit_instance_auto_passed
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_ENGINEERING_DRAWING,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_submit(
+            tenant_id,
+            entity_type=ENTITY_ENGINEERING_DRAWING,
+            entity_id=drawing.id,
+            entity_uuid=str(drawing.uuid),
+            submitted_at=drawing.submitted_at,
+            doc_code=f"{drawing.code}-{drawing.revision}",
+            title=drawing.name or drawing.code,
+            doc_label="工程图纸 ",
+        )
+
+        if submit_instance_auto_passed(approval_instance):
+            return await DrawingService.approve_drawing(tenant_id, drawing_uuid, current_user)
         return await _to_response(tenant_id, drawing)
 
     @staticmethod
@@ -827,9 +946,31 @@ class DrawingService:
         drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
         if (drawing.status or "") != "Pending":
             raise ValidationError("仅待审图纸可审核通过")
-        return await DrawingService._publish_pending(
+        from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
+
+        await assert_plm_manual_approval_action(
+            tenant_id,
+            audit_node=AUDIT_NODE,
+            entity_type=ENTITY_TYPE,
+            entity_id=drawing.id,
+            doc_label="工程图纸",
+            verb="审核",
+        )
+        result = await DrawingService._publish_pending(
             tenant_id, drawing, int(current_user.id), current_user
         )
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_ENGINEERING_DRAWING,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_terminal(
+            tenant_id,
+            entity_type=ENTITY_ENGINEERING_DRAWING,
+            entity_id=drawing.id,
+            reason="审核通过",
+        )
+        return result
 
     @staticmethod
     async def reject_drawing(
@@ -841,13 +982,35 @@ class DrawingService:
         drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
         if (drawing.status or "") != "Pending":
             raise ValidationError("仅待审图纸可驳回")
+        from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
+
+        await assert_plm_manual_approval_action(
+            tenant_id,
+            audit_node=AUDIT_NODE,
+            entity_type=ENTITY_TYPE,
+            entity_id=drawing.id,
+            doc_label="工程图纸",
+            verb="驳回",
+        )
         drawing.status = "Draft"
+        drawing.submitted_at = None
         note = (reason or "").strip()
         if note:
             prev = (drawing.description or "").strip()
             drawing.description = f"{prev}\n驳回：{note}".strip() if prev else f"驳回：{note}"
         apply_update_audit(drawing, current_user)
         await drawing.save()
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_ENGINEERING_DRAWING,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_terminal(
+            tenant_id,
+            entity_type=ENTITY_ENGINEERING_DRAWING,
+            entity_id=drawing.id,
+            reason="驳回",
+        )
         return await _to_response(tenant_id, drawing)
 
     @staticmethod
@@ -860,8 +1023,20 @@ class DrawingService:
         if (drawing.status or "") != "Pending":
             raise ValidationError("仅待审图纸可撤回")
         drawing.status = "Draft"
+        drawing.submitted_at = None
         apply_update_audit(drawing, current_user)
         await drawing.save()
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_ENGINEERING_DRAWING,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_terminal(
+            tenant_id,
+            entity_type=ENTITY_ENGINEERING_DRAWING,
+            entity_id=drawing.id,
+            reason="撤回",
+        )
         return await _to_response(tenant_id, drawing)
 
     @staticmethod
@@ -968,6 +1143,9 @@ class DrawingService:
             "status": "Draft",
             "file_uuid": file_uuid,
             "supplementary_file_uuids": supp or None,
+            "project_id": source.project_id,
+            "project_code": source.project_code,
+            "project_name": source.project_name,
             "material_uuids": _norm_uuid_list(source.material_uuids) or None,
             "process_route_uuids": _norm_uuid_list(source.process_route_uuids) or None,
             "operation_uuids": _norm_uuid_list(source.operation_uuids) or None,
@@ -1034,15 +1212,34 @@ class DrawingService:
             if not borrowed:
                 raise AuthorizationError("秘密/机密图纸须先完成借阅审批才能打印")
         file_brief = await _file_brief(tenant_id, drawing.file_uuid)
+        from apps.master_data.services.drawing_watermark_service import (
+            DrawingWatermarkService,
+            WatermarkRenderContext,
+        )
+
         stamp = to_api_isoformat(resolve_business_datetime())
         user_name = operator_name_from_user(current_user) or (current_user.username or "")
-        watermark = f"{user_name} {stamp} {drawing.code}-{drawing.revision} {SECURITY_LEVEL_LABELS[level]}"
+        site_name = await DrawingWatermarkService.resolve_site_name(tenant_id)
+        ctx = WatermarkRenderContext(
+            user=user_name,
+            time=stamp,
+            code=drawing.code,
+            revision=drawing.revision,
+            security_level=level,
+            site_name=site_name,
+        )
+        watermark, watermark_style = await DrawingWatermarkService.build_print_watermark(
+            tenant_id,
+            security_level=level,
+            ctx=ctx,
+        )
         return EngineeringDrawingPrintDataResponse(
             code=drawing.code,
             name=drawing.name,
             revision=drawing.revision,
             security_level=level,
             watermark=watermark,
+            watermark_style=watermark_style,
             preview_url=file_brief.preview_url if file_brief else None,
             file_name=file_brief.original_name if file_brief else None,
         )

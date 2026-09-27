@@ -21,6 +21,7 @@ import { hasAnyPermission } from '../utils/permission';
 import { useRedirectIfSystemDashboardOff } from '../hooks/useRedirectIfSystemDashboardOff';
 import DefaultHomeRouteGate from '../components/default-home-route-gate';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import TenantDomainLoginRoute from './TenantDomainLoginRoute';
 
 // 核心页面（立即加载，首屏必需）
 import IndexPage from '../pages';
@@ -180,6 +181,7 @@ const PackagesPage = React.lazy(() => import('../pages/infra/packages'));
 const SensitiveWordBlacklistPage = React.lazy(() => import('../pages/infra/sensitive-word-blacklist'));
 const PlatformAdminPage = React.lazy(() => import('../pages/infra/admin'));
 const OfficialApiLibraryPage = React.lazy(() => import('../pages/infra/official-api-library'));
+const OpenApiPage = React.lazy(() => import('../pages/infra/open-api/list'));
 const ClientReleasesPage = React.lazy(() => import('../pages/infra/client-releases'));
 const LicenseManagementPage = React.lazy(() => import('../pages/infra/license-management'));
 
@@ -194,6 +196,8 @@ const SystemRoutes: React.FC = () => (
     <Route path="/init/template-select" element={<Suspense fallback={<PageSkeleton />}><TemplateSelectPage /></Suspense>} />
     <Route path="/qrcode/scan" element={<Suspense fallback={<PageSkeleton />}><QRCodeScanPage /></Suspense>} />
     <Route path="/docs" element={<Suspense fallback={<PageSkeleton />}><DocsPage /></Suspense>} />
+    {/* 组织入口唯一真源：/{tenantDomain}（须排在单段静态公开路由之后） */}
+    <Route path="/:tenantDomain" element={<TenantDomainLoginRoute />} />
 
     <Route path="/system/dashboard" element={<Navigate to="/system/dashboard/workplace" replace />} />
     <Route
@@ -277,6 +281,7 @@ const SystemRoutes: React.FC = () => (
 
     <Route path="/infra/admin" element={withSuspense(PlatformAdminPage)} />
     <Route path="/infra/official-api-library" element={withSuspense(OfficialApiLibraryPage)} />
+    <Route path="/infra/open-api" element={withSuspense(OpenApiPage)} />
     <Route path="/infra/client-releases" element={withSuspense(ClientReleasesPage)} />
     <Route path="/infra/license-management" element={withSuspense(LicenseManagementPage)} />
     <Route path="/infra/operation" element={withSuspense(PlatformOperationPage)} />

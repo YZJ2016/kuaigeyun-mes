@@ -18,6 +18,11 @@ from tortoise.expressions import F
 
 from apps.kuaizhizao.models.inventory_transfer import InventoryTransfer, InventoryTransferItem
 from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
+from apps.kuaizhizao.utils.stock_posting import (
+    reuse_or_begin_transaction,
+    serialize_stock_document,
+)
+from core.utils.decimal_limits import assert_amount, assert_price, assert_quantity
 from apps.kuaizhizao.schemas.inventory_transfer import (
     InventoryTransferCreate,
     InventoryTransferCreateWithItems,
@@ -134,7 +139,10 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         if not material_code or not material_name:
             raise ValidationError("物料编码/名称不能为空，请重新选择物料")
 
-        amount = item_data.quantity * item_data.unit_price
+        assert_quantity(item_data.quantity, "调拨数量")
+        assert_price(item_data.unit_price or Decimal("0"), "调拨单价")
+        amount = item_data.quantity * (item_data.unit_price or Decimal("0"))
+        assert_amount(amount, "调拨金额")
         return await InventoryTransferItem.create(
             tenant_id=tenant_id,
             uuid=str(uuid.uuid4()),
@@ -702,6 +710,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
             await self._update_transfer_statistics(tenant_id, item.transfer_id)
 
+    @serialize_stock_document("inventory_transfer", "transfer_id")
     async def execute_inventory_transfer(
         self,
         tenant_id: int,
@@ -723,18 +732,19 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             NotFoundError: 调拨单不存在
             ValidationError: 数据验证失败
         """
-        async with in_transaction():
-            # 获取调拨单
-            transfer = await InventoryTransfer.get_or_none(
+        _draft = frozenset({"draft", "DRAFT", "草稿"})
+        async with reuse_or_begin_transaction():
+            # 获取调拨单（行锁：与 serialize advisory 叠加，防并发双过账）
+            transfer = await InventoryTransfer.filter(
                 id=transfer_id,
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
-            )
+            ).select_for_update().first()
 
             if not transfer:
                 raise NotFoundError(f"调拨单不存在: {transfer_id}")
 
-            if transfer.status != 'draft':
+            if transfer.status not in _draft:
                 raise ValidationError(f"调拨单状态为{transfer.status}，不能执行调拨")
 
             # 获取所有待调拨的明细

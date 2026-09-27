@@ -78,8 +78,27 @@ function createCategories(moduleParams: Record<string, ParamMeta[]>): ConfigCate
   }));
 }
 
+const MASTER_DATA_PARAMETER_CATEGORY: ConfigCategory = {
+  id: 'master_data',
+  nameKey: 'path.master-data',
+  descriptionKey: 'pages.system.configCenter.category.master_dataDesc',
+  params: [
+    {
+      key: 'master_data.drawing_max_upload_size_mb',
+      nameKey: 'pages.system.configCenter.param.master_data_drawing_max_upload_size_mb',
+      descriptionKey: 'pages.system.configCenter.param.master_data_drawing_max_upload_size_mb_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.master_data.drawing_max_upload_size_mb',
+      type: 'number',
+      min: 1,
+      max: 100,
+    },
+  ],
+};
+
 /** 1. 参数设置（设置业务本身） */
-export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
+export const PARAMETER_CATEGORIES: ConfigCategory[] = [
+  ...createCategories({
   common: [
     {
       key: 'common.trial_run_mode',
@@ -270,7 +289,9 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
       ],
     },
   ],
-});
+  }),
+  MASTER_DATA_PARAMETER_CATEGORY,
+];
 
 /** 2. 审核设置（唯一源：/core/audit-bindings + manifest.audit） */
 export const AUDIT_CATEGORIES: ConfigCategory[] = createCategories({});
@@ -344,6 +365,25 @@ export const AUTOMATION_CATEGORIES: ConfigCategory[] = createCategories({
         { value: 'none', labelKey: 'common.close' },
         { value: 'direct_inbound', labelKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_direct' },
         { value: 'inbound_notice', labelKey: 'pages.system.configCenter.param.work_order_last_operation_auto_inbound_mode_opt_notice' },
+      ],
+    },
+    {
+      key: 'production.output_basis',
+      nameKey: 'pages.system.configCenter.param.production_output_basis',
+      descriptionKey: 'pages.system.configCenter.param.production_output_basis_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.production.output_basis',
+      type: 'select',
+      selectOptions: [
+        { value: 'all_operations', labelKey: 'pages.system.configCenter.param.production_output_basis_opt_all' },
+        {
+          value: 'last_operation_qualified',
+          labelKey: 'pages.system.configCenter.param.production_output_basis_opt_last_qualified',
+        },
+        {
+          value: 'last_operation_effective_qualified',
+          labelKey: 'pages.system.configCenter.param.production_output_basis_opt_last_effective',
+        },
       ],
     },
   ],

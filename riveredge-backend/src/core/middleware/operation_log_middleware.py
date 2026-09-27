@@ -65,6 +65,24 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
             return response
 
         tenant_id, user_id = self._extract_identity(request)
+        # 平台超管：tenant_id 哨兵 0，仍记操作日志
+        if user_id is not None and tenant_id is None:
+            if getattr(getattr(request, "state", None), "is_infra_superadmin", False):
+                tenant_id = 0
+            else:
+                # 再尝试从 JWT 识别超管
+                authorization = request.headers.get("Authorization")
+                if authorization and authorization.startswith("Bearer "):
+                    from infra.domain.security.infra_superadmin_security import (
+                        get_infra_superadmin_token_payload,
+                    )
+                    infra_payload = get_infra_superadmin_token_payload(authorization[7:])
+                    if infra_payload:
+                        tenant_id = 0
+                        try:
+                            user_id = int(infra_payload.get("sub"))
+                        except (TypeError, ValueError):
+                            pass
         if tenant_id is None or user_id is None:
             logger.debug(
                 "⚠️ 未能从请求中解析身份 path={} tenant_id={} user_id={}", 
@@ -85,6 +103,14 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
         )
 
         if is_mutation:
+            channel = request.headers.get("X-Client-Channel") or request.headers.get("x-client-channel") or "-"
+            idem = request.headers.get("Idempotency-Key") or request.headers.get("idempotency-key") or ""
+            idem_part = f" idem={idem[:36]}" if idem else ""
+            open_app = getattr(getattr(request, "state", None), "open_api_app_id", None) or ""
+            open_acct = getattr(getattr(request, "state", None), "open_api_acct_id", None) or ""
+            open_part = ""
+            if open_app or open_acct:
+                open_part = f" open_app={open_app or '-'} acct={open_acct or '-'}"
             payload = {
                 "tenant_id": tenant_id,
                 "user_id": user_id,
@@ -95,7 +121,9 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
                 "operation_content": (
                     f"{request.method} {request.url.path} - "
                     f"{'成功' if response.status_code < 400 else '失败'} "
-                    f"(状态码: {response.status_code})"
+                    f"(状态码: {response.status_code}, channel={channel}"
+                    f"{idem_part}"
+                    f"{open_part})"
                 ),
                 "ip_address": ip_address,
                 "user_agent": request.headers.get("User-Agent", ""),

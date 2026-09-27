@@ -341,6 +341,19 @@ def test_resolve_purchase_push_lines_splits():
     assert [line["qty"] for line in lines] == [40, 60]
 
 
+def test_normalize_work_order_granularity():
+    assert DemandComputationService.normalize_work_order_granularity("grouped") == "grouped"
+    assert DemandComputationService.normalize_work_order_granularity("individual") == "individual"
+    assert DemandComputationService.normalize_work_order_granularity(None) == "grouped"
+
+
+def test_resolve_default_work_order_granularity():
+    with_trees = SimpleNamespace(demand_item_bom_trees=[{"demand_item_id": 1}])
+    without_trees = SimpleNamespace(demand_item_bom_trees=[])
+    assert DemandComputationService.resolve_default_work_order_granularity(with_trees) == "grouped"
+    assert DemandComputationService.resolve_default_work_order_granularity(without_trees) == "individual"
+
+
 def test_group_preview_item_id_is_computation_item_id(monkeypatch):
     """工单组预览行的 item_id 必须是 DemandComputationItem.id，不能写成 material_id。"""
     import asyncio
@@ -396,3 +409,52 @@ def test_group_preview_item_id_is_computation_item_id(monkeypatch):
     assert rows[0]["item_id"] == 55
     assert rows[0]["material_id"] == 101
     assert rows[0]["max_push_quantity"] == 10
+
+
+def test_grouped_push_counts_one_group_for_multi_line_order():
+    from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+
+    trees = [
+        {
+            "demand_item_id": idx,
+            "material_id": 100 + idx,
+            "material_code": f"FG-{idx}",
+            "material_name": "成品",
+            "source_type": SOURCE_TYPE_MAKE,
+            "required_quantity": 10,
+            "bom_level": 0,
+            "children": [],
+        }
+        for idx in range(1, 6)
+    ]
+    item_by_material = {
+        100 + idx: SimpleNamespace(material_id=100 + idx)
+        for idx in range(1, 6)
+    }
+    count = WorkOrderGroupService.count_pushable_groups_for_computation(
+        trees,
+        generate_mode="work_order_only",
+        already_pushed_keys=set(),
+        item_by_material=item_by_material,
+    )
+    assert count == 1
+
+
+def test_resolve_production_selected_computation_item_ids():
+    items = [
+        SimpleNamespace(
+            id=10,
+            material_id=1,
+            material_source_type=SOURCE_TYPE_MAKE,
+            suggested_work_order_quantity=5,
+        ),
+        SimpleNamespace(
+            id=11,
+            material_id=2,
+            material_source_type=SOURCE_TYPE_BUY,
+            suggested_purchase_order_quantity=3,
+        ),
+    ]
+    svc = DemandComputationService()
+    resolved = svc._resolve_production_selected_computation_item_ids(items, [10, 11])
+    assert resolved == {10}

@@ -51,6 +51,67 @@ class InfraSettings(BaseSettings):
         default=True,
         description="是否启用 ReDoc 与 OpenAPI schema（生产小内存可关闭以省约 MB 级常驻内存）",
     )
+    CLIENT_CHANNEL_WRITE_GUARD_ENABLED: bool = Field(
+        default=True,
+        description="是否对 /api 写请求强制要求官方 X-Client-Channel（pc/android/…/integration）",
+    )
+    OPEN_API_INTEGRATION_CREDENTIAL_REQUIRED: bool = Field(
+        default=True,
+        description="integration 渠道写请求是否强制要求开放 API Token（拒绝普通用户 JWT）",
+    )
+    OPEN_API_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=120,
+        description="开放 API Token 有效期（分钟）",
+    )
+    OPEN_API_JWT_SECRET: str = Field(
+        default="",
+        description="开放 API Token 独立签名密钥；空则回退 JWT_SECRET_KEY（生产务必单独配置）",
+    )
+    INFRA_SUPERADMIN_JWT_SECRET: str = Field(
+        default="",
+        description="平台超管 Token 独立签名密钥；空则回退 JWT_SECRET_KEY",
+    )
+    INFRA_SUPERADMIN_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=15,
+        description="平台超管访问令牌过期时间（分钟），默认 15",
+    )
+    API_WRITE_RATE_LIMIT_ENABLED: bool = Field(
+        default=True,
+        description="是否对 /api 写请求启用进程内按用户限流",
+    )
+    API_WRITE_RATE_LIMIT_PER_MINUTE: int = Field(
+        default=120,
+        description="普通写接口每用户每分钟上限",
+    )
+    API_CRITICAL_WRITE_RATE_LIMIT_PER_MINUTE: int = Field(
+        default=30,
+        description="关键写（审核/下推/确认等）每用户每分钟上限",
+    )
+    API_IDEMPOTENCY_GUARD_ENABLED: bool = Field(
+        default=True,
+        description="是否启用写接口幂等（Idempotency-Key + 关键路径短窗去重）",
+    )
+    API_IDEMPOTENCY_TTL_SECONDS: float = Field(
+        default=300.0,
+        description="显式 Idempotency-Key 结果缓存秒数",
+    )
+    API_IDEMPOTENCY_SOFT_TTL_SECONDS: float = Field(
+        default=2.5,
+        description="关键路径无幂等键时的连点去重窗口秒数",
+    )
+    INTEGRATION_CLIENT_IP_ALLOWLIST_STR: str = Field(
+        default="",
+        alias="INTEGRATION_CLIENT_IP_ALLOWLIST",
+        description="integration 渠道允许的客户端 IP（逗号分隔，空=不限制）",
+    )
+
+    @property
+    def INTEGRATION_CLIENT_IP_ALLOWLIST(self) -> list[str]:
+        raw = (self.INTEGRATION_CLIENT_IP_ALLOWLIST_STR or "").strip()
+        if not raw:
+            return []
+        return [p.strip() for p in raw.split(",") if p.strip()]
+
     ENVIRONMENT: str = Field(default="development", description="运行环境")
     GIT_SHA: str = Field(
         default="",
@@ -125,6 +186,24 @@ class InfraSettings(BaseSettings):
     JWT_ALGORITHM: str = Field(default="HS256", description="JWT 算法")
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, description="访问令牌过期时间（分钟）")
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, description="刷新令牌过期时间（天）")
+
+    # 登录防暴力破解（PG Cache 计数真源）
+    LOGIN_BRUTE_FORCE_IDENT_MAX_FAILURES: int = Field(
+        default=5,
+        description="单账号窗口内允许的最大失败次数，超限临时锁定",
+    )
+    LOGIN_BRUTE_FORCE_IP_MAX_FAILURES: int = Field(
+        default=30,
+        description="单 IP 窗口内允许的最大失败次数，超限临时锁定",
+    )
+    LOGIN_BRUTE_FORCE_WINDOW_SECONDS: int = Field(
+        default=900,
+        description="失败计数滑动窗口（秒），默认 15 分钟",
+    )
+    LOGIN_BRUTE_FORCE_LOCK_SECONDS: int = Field(
+        default=900,
+        description="超限后锁定持续时间（秒），默认 15 分钟",
+    )
 
     # 前端服务配置
     FRONTEND_HOST: str = Field(default="127.0.0.1", description="前端服务主机地址")
@@ -337,6 +416,10 @@ class InfraSettings(BaseSettings):
         default="",
         description="数据备份 zip 目录；留空则使用 {WORKDIR 或后端根目录}/backups",
     )
+    PG_BIN_DIR: str = Field(
+        default="",
+        description="可选：部署机上 PostgreSQL 客户端目录（仅旧版二进制恢复）；留空则用 PATH。备份创建不依赖此项",
+    )
     MAX_FILE_SIZE: int = Field(default=100 * 1024 * 1024, description="最大文件大小（字节）")
     
     # 安全增强配置
@@ -414,6 +497,18 @@ class InfraSettings(BaseSettings):
             str: JWT 密钥
         """
         return self.JWT_SECRET_KEY
+
+    @property
+    def resolved_open_api_jwt_secret(self) -> str:
+        """开放 API 签名密钥；未单独配置时回退用户 JWT 密钥。"""
+        custom = (self.OPEN_API_JWT_SECRET or "").strip()
+        return custom if custom else self.JWT_SECRET_KEY
+
+    @property
+    def resolved_infra_superadmin_jwt_secret(self) -> str:
+        """平台超管签名密钥；未单独配置时回退用户 JWT 密钥。"""
+        custom = (self.INFRA_SUPERADMIN_JWT_SECRET or "").strip()
+        return custom if custom else self.JWT_SECRET_KEY
 
     @property
     def docs_basic_auth_enabled(self) -> bool:

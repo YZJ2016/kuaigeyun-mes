@@ -16,6 +16,13 @@ from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 from loguru import logger
 
+from core.utils.decimal_limits import (
+    AMOUNT_DIGITS,
+    PRICE_DIGITS,
+    QUANTITY_DIGITS,
+    assert_decimal_fits,
+)
+
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.master_data.models.material import Material, BOM
 from apps.master_data.models.factory import WorkCenter
@@ -245,6 +252,13 @@ class SalesOrderService:
             tax_rate=tax_r,
             item_amount=item_amt,
         )
+        SalesOrderService._validate_sales_item_decimal_limits(
+            required_quantity=req_qty,
+            unit_price=unit_pr,
+            item_amount=item_amt,
+            gift_ref_unit_price=gift_ref,
+            provisional_unit_price=provisional_price,
+        )
         return {
             "material_id": item_data.material_id or 0,
             "material_code": mat_code,
@@ -267,6 +281,115 @@ class SalesOrderService:
             "provisional_unit_price": provisional_price,
             "_item_amount": item_amt,
         }
+
+    @staticmethod
+    def _decimal_abs_limit(max_digits: int, decimal_places: int) -> Decimal:
+        from core.utils.decimal_limits import decimal_abs_limit
+
+        return decimal_abs_limit(max_digits, decimal_places)
+
+    # 与 core.utils.decimal_limits 对齐；销售订单表字段已扩至至少该口径
+    _SO_QTY_MAX_DIGITS, _SO_QTY_DECIMAL_PLACES = QUANTITY_DIGITS
+    _SO_PRICE_MAX_DIGITS, _SO_PRICE_DECIMAL_PLACES = PRICE_DIGITS
+    _SO_AMOUNT_MAX_DIGITS, _SO_AMOUNT_DECIMAL_PLACES = AMOUNT_DIGITS
+
+    @classmethod
+    def _assert_decimal_fits(
+        cls,
+        value: Optional[Decimal],
+        *,
+        max_digits: int,
+        decimal_places: int,
+        field_label: str,
+    ) -> None:
+        assert_decimal_fits(
+            value,
+            max_digits=max_digits,
+            decimal_places=decimal_places,
+            field_label=field_label,
+        )
+
+    @classmethod
+    def _validate_sales_item_decimal_limits(
+        cls,
+        *,
+        required_quantity: Decimal,
+        unit_price: Decimal,
+        item_amount: Optional[Decimal],
+        gift_ref_unit_price: Optional[Decimal] = None,
+        provisional_unit_price: Optional[Decimal] = None,
+    ) -> None:
+        cls._assert_decimal_fits(
+            required_quantity,
+            max_digits=cls._SO_QTY_MAX_DIGITS,
+            decimal_places=cls._SO_QTY_DECIMAL_PLACES,
+            field_label="销售订单明细数量",
+        )
+        cls._assert_decimal_fits(
+            unit_price,
+            max_digits=cls._SO_PRICE_MAX_DIGITS,
+            decimal_places=cls._SO_PRICE_DECIMAL_PLACES,
+            field_label="销售订单明细单价",
+        )
+        cls._assert_decimal_fits(
+            item_amount,
+            max_digits=cls._SO_AMOUNT_MAX_DIGITS,
+            decimal_places=cls._SO_AMOUNT_DECIMAL_PLACES,
+            field_label="销售订单明细金额",
+        )
+        cls._assert_decimal_fits(
+            gift_ref_unit_price,
+            max_digits=cls._SO_PRICE_MAX_DIGITS,
+            decimal_places=cls._SO_PRICE_DECIMAL_PLACES,
+            field_label="赠品参考单价",
+        )
+        cls._assert_decimal_fits(
+            provisional_unit_price,
+            max_digits=cls._SO_PRICE_MAX_DIGITS,
+            decimal_places=cls._SO_PRICE_DECIMAL_PLACES,
+            field_label="暂估参考单价",
+        )
+
+    @classmethod
+    def _validate_sales_order_decimal_limits(
+        cls,
+        *,
+        discount_amount: Optional[Decimal] = None,
+        total_quantity: Optional[Decimal] = None,
+        total_amount: Optional[Decimal] = None,
+        total_fee_amount: Optional[Decimal] = None,
+        prepayment_amount: Optional[Decimal] = None,
+    ) -> None:
+        cls._assert_decimal_fits(
+            total_quantity,
+            max_digits=cls._SO_QTY_MAX_DIGITS,
+            decimal_places=cls._SO_QTY_DECIMAL_PLACES,
+            field_label="销售订单总数量",
+        )
+        cls._assert_decimal_fits(
+            total_amount,
+            max_digits=cls._SO_AMOUNT_MAX_DIGITS,
+            decimal_places=cls._SO_AMOUNT_DECIMAL_PLACES,
+            field_label="销售订单总金额",
+        )
+        cls._assert_decimal_fits(
+            discount_amount,
+            max_digits=cls._SO_AMOUNT_MAX_DIGITS,
+            decimal_places=cls._SO_AMOUNT_DECIMAL_PLACES,
+            field_label="销售订单优惠金额",
+        )
+        cls._assert_decimal_fits(
+            total_fee_amount,
+            max_digits=cls._SO_AMOUNT_MAX_DIGITS,
+            decimal_places=cls._SO_AMOUNT_DECIMAL_PLACES,
+            field_label="销售订单费用金额",
+        )
+        cls._assert_decimal_fits(
+            prepayment_amount,
+            max_digits=cls._SO_AMOUNT_MAX_DIGITS,
+            decimal_places=cls._SO_AMOUNT_DECIMAL_PLACES,
+            field_label="销售订单预收款金额",
+        )
 
     @staticmethod
     def _validate_sales_item_non_negative(
@@ -449,12 +572,12 @@ class SalesOrderService:
                 price_type,
             )
             incl_goods += incl
-        discount = Decimal(str(order.discount_amount or 0))
+        discount = Decimal(str(getattr(order, "discount_amount", None) or 0))
         if discount > incl_goods:
             discount = incl_goods
         goods_after = incl_goods - discount
         customer_fees = Decimal("0")
-        for fee in order.fee_details or []:
+        for fee in getattr(order, "fee_details", None) or []:
             if isinstance(fee, dict) and fee.get("bearer") == "other_side":
                 customer_fees += Decimal(str(fee.get("amount") or 0))
         return max(Decimal("0"), goods_after + customer_fees)
@@ -951,7 +1074,9 @@ class SalesOrderService:
         hint = shippable_hint or {}
         base["has_shippable_products"] = bool(hint.get("has_shippable_products"))
         base["shippable_quantity"] = float(hint.get("shippable_quantity") or 0.0)
-        if base["has_shippable_products"]:
+        # 已关闭/已取消/已完成：禁止可发货覆盖生命周期阶段名（否则「已关闭」被盖掉）
+        _terminal_for_ship_overlay = self._is_terminal_business_status(order.status)
+        if base["has_shippable_products"] and not _terminal_for_ship_overlay:
             lifecycle = dict(lifecycle)
             lifecycle["current_stage_name"] = "可发货"
             lifecycle["status"] = "success"
@@ -1316,6 +1441,26 @@ class SalesOrderService:
         if not self._is_review_approved(order.review_status):
             raise BusinessLogicError("只有已审核通过的订单才能关闭")
 
+    async def _assert_no_open_downstream_work_orders(
+        self, tenant_id: int, sales_order_id: int
+    ) -> None:
+        """关闭前：阻止存在未完工已下推工单（released/in_progress）。"""
+        from apps.kuaizhizao.models.work_order import WorkOrder
+
+        open_statuses = ("released", "in_progress", "已下达", "执行中")
+        open_wo = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            deleted_at__isnull=True,
+            status__in=list(open_statuses),
+        ).count()
+        if open_wo > 0:
+            raise BusinessLogicError(
+                f"销售订单仍有 {open_wo} 张未完工工单（已下达/执行中），"
+                "请先完工、取消或冻结相关工单后再关闭订单"
+            )
+
+
     async def _validate_customer_credit_limit_before_release(
         self,
         *,
@@ -1541,6 +1686,23 @@ class SalesOrderService:
         import uuid
         return f"SO-{today}-{uuid.uuid4().hex[:6].upper()}"
 
+    @staticmethod
+    def _validate_sales_order_dates(
+        *,
+        order_date: Optional[date],
+        delivery_date: Optional[date],
+        items: Optional[List[Any]] = None,
+    ) -> None:
+        """交货日期不得早于订单日期（表头与明细行）。"""
+        if order_date is not None and delivery_date is not None and delivery_date < order_date:
+            raise ValidationError("交货日期不能早于订单日期")
+        if order_date is None or not items:
+            return
+        for idx, it in enumerate(items):
+            item_dd = getattr(it, "delivery_date", None)
+            if item_dd is not None and item_dd < order_date:
+                raise ValidationError(f"第{idx + 1}行交货日期不能早于订单日期")
+
     async def _validate_sales_order_contract(
         self,
         tenant_id: int,
@@ -1596,6 +1758,11 @@ class SalesOrderService:
             raise BusinessLogicError("销售管理模块未启用，无法创建销售订单")
 
         await self._validate_sales_order_contract(tenant_id, sales_order_data)
+        self._validate_sales_order_dates(
+            order_date=getattr(sales_order_data, "order_date", None),
+            delivery_date=getattr(sales_order_data, "delivery_date", None),
+            items=getattr(sales_order_data, "items", None),
+        )
 
         # 自动占号场景：即使前端已带 order_code，冲突时仍在服务端重占号重试
         last_error: Exception | None = None
@@ -1636,6 +1803,13 @@ class SalesOrderService:
                 total_quantity=getattr(sales_order_data, "total_quantity", None),
                 total_amount=getattr(sales_order_data, "total_amount", None),
                 total_fee_amount=getattr(sales_order_data, "total_fee_amount", None),
+            )
+            self._validate_sales_order_decimal_limits(
+                discount_amount=getattr(sales_order_data, "discount_amount", None),
+                total_quantity=getattr(sales_order_data, "total_quantity", None),
+                total_amount=getattr(sales_order_data, "total_amount", None),
+                total_fee_amount=getattr(sales_order_data, "total_fee_amount", None),
+                prepayment_amount=getattr(sales_order_data, "prepayment_amount", None),
             )
             order_dict = sales_order_data.model_dump(exclude=_SALES_ORDER_PERSIST_EXCLUDE)
             from apps.kuaizhizao.services.sales_order_terms_service import SalesOrderTermsService
@@ -1711,6 +1885,18 @@ class SalesOrderService:
                 source_amounts=[row["_item_amount"] for row in item_rows],
                 target_total=target_total,
             )
+            total_amt = sum(allocated_amounts, Decimal("0"))
+            self._validate_sales_order_decimal_limits(
+                total_quantity=total_qty,
+                total_amount=total_amt,
+            )
+            for amt in allocated_amounts:
+                self._assert_decimal_fits(
+                    amt,
+                    max_digits=self._SO_AMOUNT_MAX_DIGITS,
+                    decimal_places=self._SO_AMOUNT_DECIMAL_PLACES,
+                    field_label="销售订单明细金额",
+                )
             for idx, row in enumerate(item_rows):
                 await SalesOrderItem.create(
                     tenant_id=tenant_id,
@@ -1736,7 +1922,6 @@ class SalesOrderService:
                     price_settlement_status=row["price_settlement_status"],
                     provisional_unit_price=row["provisional_unit_price"],
                 )
-            total_amt = sum(allocated_amounts, Decimal("0"))
             await SalesOrder.filter(id=order.id).update(
                 total_quantity=total_qty,
                 total_amount=total_amt,
@@ -2008,6 +2193,9 @@ class SalesOrderService:
             "total_amount",
             "order_code",
             "planning_pushed_to_computation",
+            "discount_amount",
+            "fee_details",
+            "price_type",
         )
         if not headers:
             return []
@@ -2666,6 +2854,22 @@ class SalesOrderService:
             existing_items, sales_order_data.items
         )
 
+        effective_order_date = (
+            sales_order_data.order_date
+            if "order_date" in sales_order_data.model_fields_set
+            else order.order_date
+        )
+        effective_delivery_date = (
+            sales_order_data.delivery_date
+            if "delivery_date" in sales_order_data.model_fields_set
+            else order.delivery_date
+        )
+        self._validate_sales_order_dates(
+            order_date=effective_order_date,
+            delivery_date=effective_delivery_date,
+            items=sales_order_data.items if sales_order_data.items is not None else None,
+        )
+
         if approval_edit_context:
             from core.config.audit_editable_fields import is_field_editable
             node_editable = approval_edit_context.get("editable_fields")
@@ -2691,6 +2895,13 @@ class SalesOrderService:
                 total_quantity=getattr(sales_order_data, "total_quantity", None),
                 total_amount=getattr(sales_order_data, "total_amount", None),
                 total_fee_amount=getattr(sales_order_data, "total_fee_amount", None),
+            )
+            self._validate_sales_order_decimal_limits(
+                discount_amount=getattr(sales_order_data, "discount_amount", None),
+                total_quantity=getattr(sales_order_data, "total_quantity", None),
+                total_amount=getattr(sales_order_data, "total_amount", None),
+                total_fee_amount=getattr(sales_order_data, "total_fee_amount", None),
+                prepayment_amount=getattr(sales_order_data, "prepayment_amount", None),
             )
             upd = sales_order_data.model_dump(
                 exclude_unset=True, exclude=_SALES_ORDER_PERSIST_EXCLUDE
@@ -2795,6 +3006,18 @@ class SalesOrderService:
                     source_amounts=[row["_item_amount"] for row in item_rows],
                     target_total=target_total,
                 )
+                total_amt = sum(allocated_amounts, Decimal("0"))
+                self._validate_sales_order_decimal_limits(
+                    total_quantity=total_qty,
+                    total_amount=total_amt,
+                )
+                for amt in allocated_amounts:
+                    self._assert_decimal_fits(
+                        amt,
+                        max_digits=self._SO_AMOUNT_MAX_DIGITS,
+                        decimal_places=self._SO_AMOUNT_DECIMAL_PLACES,
+                        field_label="销售订单明细金额",
+                    )
                 for idx, row in enumerate(item_rows):
                     await SalesOrderItem.create(
                         tenant_id=tenant_id,
@@ -2818,7 +3041,6 @@ class SalesOrderService:
                         is_gift=row["is_gift"],
                         gift_ref_unit_price=row["gift_ref_unit_price"],
                     )
-                total_amt = sum(allocated_amounts, Decimal("0"))
                 await SalesOrder.filter(id=sales_order_id).update(
                     total_quantity=total_qty,
                     total_amount=total_amt,
@@ -4656,12 +4878,25 @@ class SalesOrderService:
         operation_func,
         **kwargs,
     ) -> Dict[str, Any]:
-        """通用批量操作包装器"""
+        """通用批量操作包装器（订单 ID 去重，避免明细多选重复执行）。"""
         success_count = 0
         failed_count = 0
         failed_items = []
+        seen: set[int] = set()
+        unique_ids: List[int] = []
+        for raw in sales_order_ids:
+            try:
+                oid = int(raw)
+            except (TypeError, ValueError):
+                failed_count += 1
+                failed_items.append({"id": raw, "reason": "无效的销售订单ID"})
+                continue
+            if oid <= 0 or oid in seen:
+                continue
+            seen.add(oid)
+            unique_ids.append(oid)
 
-        for oid in sales_order_ids:
+        for oid in unique_ids:
             try:
                 await operation_func(tenant_id, oid, operator_id, **kwargs)
                 success_count += 1
@@ -4673,7 +4908,7 @@ class SalesOrderService:
             "success_count": success_count,
             "failed_count": failed_count,
             "failed_items": failed_items,
-            "total": len(sales_order_ids),
+            "total": len(unique_ids),
             "success": True,
         }
 
@@ -4727,14 +4962,20 @@ class SalesOrderService:
         sales_order_id: int,
         closed_by: int,
         reason: Optional[str] = None,
-    ) -> SalesOrderResponse:
-        """关闭销售订单：终止剩余未执行部分，已交货/已开票数据保留。"""
+        *,
+        assemble_response: bool = True,
+    ) -> Optional[SalesOrderResponse]:
+        """关闭销售订单：终止剩余未执行部分，已交货/已开票数据保留。
+
+        assemble_response=False 用于批量关闭，跳过昂贵的详情组装，避免列表卡死。
+        """
         order = await SalesOrder.get_or_none(
             tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
         )
         if not order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         await self._assert_sales_order_capability_for_order(tenant_id, order, "close")
+        await self._assert_no_open_downstream_work_orders(tenant_id, sales_order_id)
 
         from apps.common.base_service import AppBaseService
         closer_name = await AppBaseService().get_user_name(closed_by)
@@ -4756,6 +4997,9 @@ class SalesOrderService:
                 close_reason,
             )
 
+        if not assemble_response:
+            return None
+
         # 关闭已落库；详情组装失败不得回滚业务结果（历史曾因枚举缺 CLOSED / 自动修复误伤）
         try:
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
@@ -4771,9 +5015,13 @@ class SalesOrderService:
         sales_order_ids: List[int],
         closed_by: int,
     ) -> Dict[str, Any]:
-        """批量关闭销售订单"""
+        """批量关闭销售订单（不组装详情，避免 N 次全量查询卡住前端）"""
         return await self._bulk_operation_wrapper(
-            tenant_id, sales_order_ids, closed_by, self.close_sales_order
+            tenant_id,
+            sales_order_ids,
+            closed_by,
+            self.close_sales_order,
+            assemble_response=False,
         )
 
     async def _resolve_status_before_close(
@@ -4809,8 +5057,13 @@ class SalesOrderService:
         sales_order_id: int,
         reopened_by: int,
         reason: Optional[str] = None,
-    ) -> SalesOrderResponse:
-        """撤回关闭：将已关闭订单恢复为关闭前状态，继续履约。"""
+        *,
+        assemble_response: bool = True,
+    ) -> Optional[SalesOrderResponse]:
+        """撤回关闭：将已关闭订单恢复为关闭前状态，继续履约。
+
+        assemble_response=False 用于批量撤回关闭，跳过昂贵的详情组装。
+        """
         order = await SalesOrder.get_or_none(
             tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
         )
@@ -4840,6 +5093,9 @@ class SalesOrderService:
                 reopen_reason,
             )
 
+        if not assemble_response:
+            return None
+
         try:
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
         except Exception as e:
@@ -4854,25 +5110,43 @@ class SalesOrderService:
         sales_order_ids: List[int],
         reopened_by: int,
     ) -> Dict[str, Any]:
-        """批量撤回关闭销售订单"""
+        """批量撤回关闭销售订单（不组装详情）"""
         return await self._bulk_operation_wrapper(
-            tenant_id, sales_order_ids, reopened_by, self.reopen_sales_order
+            tenant_id,
+            sales_order_ids,
+            reopened_by,
+            self.reopen_sales_order,
+            assemble_response=False,
         )
 
     async def bulk_delete_sales_orders(
         self,
         tenant_id: int,
         sales_order_ids: List[int],
+        current_user: Optional["User"] = None,
     ) -> Dict[str, Any]:
-        """批量删除销售订单"""
-        deleted = 0
+        """批量删除销售订单。返回 success_count / failed_count，与其它批量操作契约一致。"""
+        success_count = 0
+        failed_count = 0
+        failed_items: List[Dict[str, Any]] = []
         for oid in sales_order_ids:
             try:
-                await self.delete_sales_order(tenant_id, oid)
-                deleted += 1
-            except (NotFoundError, BusinessLogicError):
-                pass
-        return {"deleted_count": deleted, "total": len(sales_order_ids), "success": True}
+                await self.delete_sales_order(tenant_id, oid, current_user=current_user)
+                success_count += 1
+            except (NotFoundError, BusinessLogicError, ValidationError) as e:
+                failed_count += 1
+                failed_items.append({"id": oid, "reason": str(e)})
+            except Exception as e:
+                failed_count += 1
+                failed_items.append({"id": oid, "reason": str(e)})
+        return {
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "failed_items": failed_items,
+            "deleted_count": success_count,
+            "total": len(sales_order_ids),
+            "success": failed_count == 0,
+        }
 
     async def confirm_sales_order(
         self,

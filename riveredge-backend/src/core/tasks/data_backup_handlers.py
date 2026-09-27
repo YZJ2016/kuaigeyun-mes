@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import shutil
 import zipfile
-from datetime import datetime
+from datetime import timedelta
 from typing import Optional
 
 from loguru import logger
@@ -22,21 +22,64 @@ from core.services.system.backup_storage import (
     resolve_backup_file_path,
 )
 from core.services.system.data_backup_jobs import (
+    BackupProgressReporter,
     read_backup_metadata,
     resolve_backup_scope_for_restore,
+    is_full_logical_csv_dump,
     is_tenant_sql_dump,
     restore_tenant_backup_from_dump,
     restore_tenant_uploads_from_zip,
     repair_tenant_scoped_file_paths,
     log_missing_upload_files_after_restore,
     restore_uploads_from_zip,
-    run_backup_dump_and_zip_sync,
-    run_full_backup_dump_and_zip,
+    run_backup_dump_and_zip,
     run_pg_restore,
     run_tenant_id_replacement,
 )
 from core.tasks.dispatcher import TaskContext, TaskStep, register_event_handler
 from core.utils.timezone_utils import resolve_business_datetime
+
+# 全站同时只允许一个备份任务跑，避免多任务并发打爆内存（专用连接持锁，不用连接池）
+_BACKUP_ADVISORY_LOCK_KEY = 824_601_001
+_BACKUP_STALE_AFTER = timedelta(hours=12)
+
+
+async def _try_acquire_backup_lock():
+    """
+    用独立 asyncpg 连接获取 session 级 advisory lock。
+    成功返回连接（须在 finally 中 unlock+close）；失败返回 None。
+    """
+    from core.services.system.data_backup_jobs import _asyncpg_connect
+
+    conn = await _asyncpg_connect()
+    try:
+        locked = await conn.fetchval(
+            "SELECT pg_try_advisory_lock($1)",
+            _BACKUP_ADVISORY_LOCK_KEY,
+        )
+        if not locked:
+            await conn.close()
+            return None
+        return conn
+    except Exception:
+        await conn.close()
+        raise
+
+
+async def _release_backup_lock(lock_conn) -> None:
+    if lock_conn is None:
+        return
+    try:
+        await lock_conn.execute(
+            "SELECT pg_advisory_unlock($1)",
+            _BACKUP_ADVISORY_LOCK_KEY,
+        )
+    except Exception as e:
+        logger.warning("释放备份 advisory lock 失败: {}", e)
+    try:
+        await lock_conn.close()
+    except Exception as e:
+        logger.warning("关闭备份 lock 连接失败: {}", e)
 
 
 async def _mark_restore_status(
@@ -71,12 +114,14 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
     backup_uuid = event_data.get("backup_uuid")
     tenant_id = event_data.get("tenant_id")
     backup_type = event_data.get("backup_type", "full")
-    backup_scope = event_data.get("backup_scope", "full")
+    # 注意：scope 默认应为 tenant/all，不能用 type 的 "full"
+    backup_scope = event_data.get("backup_scope") or "tenant"
     include_files = event_data.get("include_files")
 
     backup_dir = resolve_data_backup_dir()
     temp_dir = os.path.join(backup_dir, f"temp_{backup_uuid}")
     backup = None
+    lock_conn = None
 
     try:
         backup = await DataBackup.get(uuid=backup_uuid)
@@ -84,22 +129,74 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
         logger.exception(f"备份任务无法加载记录（例如 ORM 未初始化）: {e}")
         return
 
+    # 事件缺 tenant_id 时回退到备份记录，避免租户级备份误拒
+    if tenant_id is None:
+        tenant_id = backup.tenant_id
+
     if include_files is None:
         include_files = backup.include_files
 
-    try:
-        backup.status = "running"
-        backup.started_at = resolve_business_datetime()
-        backup.inngest_run_id = ctx.run_id
+    # 终态任务禁止被 PG 队列僵尸消息再次拉起（OOM 重启死循环根因）
+    if backup.status in ("success", "failed"):
+        logger.warning(
+            "跳过已终态备份任务 uuid={} status={} name={}",
+            backup_uuid,
+            backup.status,
+            backup.name,
+        )
+        return
+
+    now = resolve_business_datetime()
+    created_at = backup.created_at
+    if created_at is not None:
+        age = now - created_at if created_at.tzinfo else now.replace(tzinfo=None) - created_at
+        if age > _BACKUP_STALE_AFTER:
+            backup.status = "failed"
+            backup.error_message = (
+                f"过期备份任务已自动取消（创建已超过 {_BACKUP_STALE_AFTER.total_seconds() / 3600:.0f} 小时，"
+                "避免队列重投导致机器 OOM）"
+            )
+            backup.progress_message = "已取消：任务过期"
+            backup.completed_at = now
+            await backup.save()
+            logger.warning(
+                "取消过期备份任务 uuid={} age_hours={:.1f} name={}",
+                backup_uuid,
+                age.total_seconds() / 3600,
+                backup.name,
+            )
+            return
+
+    lock_conn = await _try_acquire_backup_lock()
+    if lock_conn is None:
+        backup.status = "failed"
+        backup.error_message = "已有备份任务在执行，拒绝并发（防止内存打爆）"
+        backup.progress_message = "已取消：并发冲突"
+        backup.completed_at = now
         await backup.save()
-    except Exception as e:
-        logger.exception(f"备份任务进入 running 状态失败: {e}")
+        logger.warning("拒绝并发备份 uuid={} name={}", backup_uuid, backup.name)
         return
 
     try:
+        backup.status = "running"
+        backup.progress = 0
+        backup.progress_message = "任务已开始"
+        backup.started_at = resolve_business_datetime()
+        backup.inngest_run_id = ctx.run_id
+        backup.error_message = None
+        await backup.save()
+    except Exception as e:
+        logger.exception(f"备份任务进入 running 状态失败: {e}")
+        await _release_backup_lock(lock_conn)
+        lock_conn = None
+        return
 
-        def dump_and_create_zip() -> str:
-            return run_backup_dump_and_zip_sync(
+    progress = BackupProgressReporter(str(backup_uuid))
+
+    try:
+
+        async def dump_and_create_zip() -> str:
+            return await run_backup_dump_and_zip(
                 backup_uuid=str(backup_uuid),
                 backup_name=backup.name,
                 source_tenant_id=backup.tenant_id,
@@ -107,11 +204,14 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
                 backup_type=backup_type,
                 backup_scope=backup_scope,
                 include_files=bool(include_files),
+                on_progress=progress.report,
             )
 
         final_zip_path = await step.run("dump_and_create_zip", dump_and_create_zip)
 
         backup.status = "success"
+        backup.progress = 100
+        backup.progress_message = "备份完成"
         backup.completed_at = resolve_business_datetime()
         backup.file_path = store_backup_file_path(final_zip_path)
         backup.file_size = os.path.getsize(final_zip_path)
@@ -122,12 +222,15 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
         if backup is not None:
             backup.status = "failed"
             backup.error_message = str(e)
+            backup.progress_message = "备份失败"
             backup.completed_at = resolve_business_datetime()
             try:
                 await backup.save()
             except Exception as save_e:
                 logger.error(f"写入备份失败状态异常: {save_e}")
     finally:
+        await _release_backup_lock(lock_conn)
+        lock_conn = None
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -179,9 +282,9 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
         pre_restore_name = "恢复前备份"
         temp_dir = os.path.join(backup_dir, f"temp_pre_restore_{backup_uuid}")
 
-        def do_pre_restore_backup() -> str:
+        async def do_pre_restore_backup() -> str:
             if backup_scope == "tenant" and target_tenant_id is not None:
-                return run_backup_dump_and_zip_sync(
+                return await run_backup_dump_and_zip(
                     backup_uuid=f"pre_restore_{backup_uuid}",
                     backup_name=pre_restore_name,
                     source_tenant_id=int(target_tenant_id),
@@ -189,7 +292,15 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
                     backup_type="full",
                     backup_scope="tenant",
                 )
-            return run_full_backup_dump_and_zip(backup_dir, temp_dir, pre_restore_name)
+            return await run_backup_dump_and_zip(
+                backup_uuid=f"pre_restore_{backup_uuid}",
+                backup_name=pre_restore_name,
+                source_tenant_id=None,
+                tenant_id=None,
+                backup_type="full",
+                backup_scope="all",
+                include_files=True,
+            )
 
         try:
             final_zip_path = await step.run("create_pre_restore_backup", do_pre_restore_backup)
@@ -244,6 +355,11 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
             raise ValueError(
                 "备份文件为租户级 CSV 格式，但元数据/记录范围为全量。"
                 "请确认 backup_metadata.json 中 backup_scope=tenant，或重新创建租户级备份。"
+            )
+        if backup_scope != "tenant" and is_full_logical_csv_dump(db_dump_path):
+            raise ValueError(
+                "该备份为全量逻辑 CSV（asyncpg）格式，暂不支持一键全库恢复。"
+                "请使用租户级备份恢复，或使用 pg_dump 自定义格式备份后再恢复。"
             )
 
         if backup_scope == "tenant":

@@ -37,6 +37,8 @@ class DataBackupResponse(DataBackupBase):
     file_size: Optional[int] = None
     source_type: str = "generated"
     status: str
+    progress: int = Field(0, description="备份进度百分比 0-100")
+    progress_message: Optional[str] = Field(None, description="备份进度说明")
     inngest_run_id: Optional[str] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

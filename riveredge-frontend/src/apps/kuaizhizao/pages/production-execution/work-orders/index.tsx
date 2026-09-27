@@ -370,6 +370,7 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
 import { isManualAuditEnabled } from '../../../../../utils/auditMode'
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 const getFirstNonEmptyString = (...candidates: Array<unknown>): string | undefined => {
   for (const candidate of candidates) {
     if (typeof candidate === 'string') {
@@ -1584,6 +1585,19 @@ const WorkOrdersPage: React.FC = () => {
     tableSearchFormRef.current?.setFieldsValue?.(params)
     actionRef.current?.reload?.()
   }, [])
+
+  /** F1-14：逾期卡 = 进行中 + 计划结束日早于今天 */
+  const applyWorkOrderOverdueListFilter = useCallback(() => {
+    const endBeforeToday = dayjs().subtract(1, 'day').endOf('day')
+    const params = {
+      [LIST_LIFECYCLE_STAGE_FIELD]: 'in_progress',
+      planned_end_date: [dayjs('1970-01-01').startOf('day'), endBeforeToday],
+    }
+    commitListPageSearchParams(tableSearchParamsRef, params)
+    tableSearchFormRef.current?.setFieldsValue?.(params)
+    setHighlightPlannedEndOverdue(true)
+    actionRef.current?.reload?.()
+  }, [])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [highlightPlannedEndOverdue, setHighlightPlannedEndOverdue] = useState(false)
   /** 工序列提示：页面刷新后流光引导一次 */
@@ -1910,6 +1924,7 @@ const WorkOrdersPage: React.FC = () => {
         allow_operation_jump: pp.allowOperationJump ?? false,
       })
 
+      const ppAllowJump = Boolean(pp.allowOperationJump)
       const mapLinesToOperations = () =>
         (pp.lines ?? [])
           .map((ln, index) => {
@@ -1929,12 +1944,14 @@ const WorkOrdersPage: React.FC = () => {
             const workshopIds = Array.isArray(ln.workshopIds)
               ? ln.workshopIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
               : []
+            const isNode = Boolean(ln.isNodeOperation)
             return {
               operation_id: op.id,
               operation_code: ln.code ?? op.code,
               operation_name: ln.name ?? op.name,
               sequence: index + 1,
-              is_node_operation: Boolean(ln.isNodeOperation),
+              is_node_operation: isNode,
+              allow_jump: ppAllowJump && !isNode,
               reporting_type:
                 ln.reportingType ?? op.reportingType ?? (op as any).reporting_type ?? 'quantity',
               over_report_mode: ln.overReportMode ?? 'none',
@@ -5020,65 +5037,14 @@ const WorkOrdersPage: React.FC = () => {
       }
 
       // 处理工序设置
-      // 如果选择了工序，需要转换为后端需要的格式
-      if (values.operations && Array.isArray(values.operations) && values.operations.length > 0) {
-        // 将工序ID数组转换为工序对象数组（包含 operation_code 和 operation_name）
-        values.operations = values.operations.map((opId: number, index: number) => {
-          const operationDetail = operationList.find(op => op.id === opId)
-          if (!operationDetail) {
-            throw new Error(`工序ID ${opId} 不存在`)
-          }
-          const so = selectedOperations.find((o: any) => o.operation_id === opId)
-          return {
-            operation_id: opId,
-            operation_code: operationDetail.code,
-            operation_name: operationDetail.name,
-            sequence: index + 1,
-            reporting_type:
-              so?.reporting_type ??
-              operationDetail.reportingType ??
-              (operationDetail as any).reporting_type ??
-              'quantity',
-            allow_jump: false,
-            is_node_operation: so?.is_node_operation ?? false,
-            over_report_mode:
-              so?.over_report_mode ??
-              (operationDetail as any).overReportMode ??
-              (operationDetail as any).over_report_mode ??
-              'none',
-            over_report_value:
-              Number(
-                so?.over_report_value ??
-                  (operationDetail as any).overReportValue ??
-                  (operationDetail as any).over_report_value ??
-                  0
-              ) || 0,
-          }
-        })
-      } else if (selectedOperations.length > 0) {
-        // 使用从工艺路线加载或用户在工单上调整后的工序（含允许跳转、节点、预绑定派工）
-        values.operations = selectedOperations.map((op: any, i: number) => ({
-          operation_id: op.operation_id,
-          operation_code: op.operation_code,
-          operation_name: op.operation_name,
-          sequence: op.sequence ?? i + 1,
-          reporting_type: op.reporting_type ?? 'quantity',
-          allow_jump: false,
-          is_node_operation: op.is_node_operation ?? false,
-          over_report_mode: op.over_report_mode ?? 'none',
-          over_report_value: Number(op.over_report_value ?? 0) || 0,
-          ...(Array.isArray(op.assigned_worker_ids) && op.assigned_worker_ids.length
-            ? { assigned_worker_ids: op.assigned_worker_ids }
-            : {}),
-          ...(op.assigned_worker_id != null ? { assigned_worker_id: op.assigned_worker_id } : {}),
-          ...(op.assigned_team_id != null ? { assigned_team_id: op.assigned_team_id } : {}),
-          ...(op.assigned_equipment_id != null
-            ? { assigned_equipment_id: op.assigned_equipment_id }
-            : {}),
-          ...(op.workshop_id != null ? { workshop_id: op.workshop_id } : {}),
-        }))
+      const opsPayload = buildOperationsForCreatePayload(
+        values,
+        selectedOperations as Array<Record<string, unknown>>,
+        operationList,
+      )
+      if (opsPayload) {
+        values.operations = opsPayload
       } else {
-        // 没有选择工序，删除该字段，让后端自动匹配
         delete values.operations
       }
 
@@ -5154,7 +5120,9 @@ const WorkOrdersPage: React.FC = () => {
           setup_time: op.setup_time,
           remarks: op.remarks,
           reporting_type: op.reporting_type ?? 'quantity',
-          allow_jump: false,
+          allow_jump:
+            Boolean(values.allow_operation_jump ?? currentWorkOrder?.allow_operation_jump) &&
+            !Boolean(op.is_node_operation),
           is_node_operation: op.is_node_operation ?? false,
           over_report_mode: op.over_report_mode ?? 'none',
           over_report_value: Number(op.over_report_value ?? 0) || 0,
@@ -5233,7 +5201,7 @@ const WorkOrdersPage: React.FC = () => {
       resetWorkOrderFormFieldValues()
       invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败')
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')))
       throw error
     }
   }
@@ -8009,7 +7977,7 @@ const WorkOrdersPage: React.FC = () => {
           onClick:
             (statistics.overdue_count ?? 0) > 0
               ? () => {
-                  applyWorkOrderListLifecycleFilter('in_progress')
+                  applyWorkOrderOverdueListFilter()
                 }
               : undefined,
         },
@@ -9689,10 +9657,31 @@ const WorkOrdersPage: React.FC = () => {
                     }
                     setCreateProcessRouteId(Number(value))
                     const routeDetail = await processRouteApi.get(route.uuid)
-                    const routeJump =
+                    let routeJump = Boolean(
                       (routeDetail as any)?.allow_operation_jump ??
-                      (routeDetail as any)?.allowOperationJump ??
-                      false
+                        (routeDetail as any)?.allowOperationJump ??
+                        false,
+                    )
+                    // 当前产品若有产品工艺且指向该路线，优先用产品工艺的「允许工序跳转」
+                    try {
+                      const productId = formRef.current?.getFieldValue('product_id')
+                      const mat =
+                        (productId != null
+                          ? productList.find((p: any) => Number(p.id) === Number(productId))
+                          : null) ?? formProductMaterial
+                      const matUuid = (mat as any)?.uuid
+                      if (matUuid) {
+                        const pp = await productProcessApi.get(String(matUuid))
+                        if (
+                          pp?.processRouteId != null &&
+                          Number(pp.processRouteId) === Number(value)
+                        ) {
+                          routeJump = Boolean(pp.allowOperationJump)
+                        }
+                      }
+                    } catch {
+                      // 忽略产品工艺读取失败，回退路线开关
+                    }
                     formRef.current?.setFieldsValue({ allow_operation_jump: routeJump })
                     const operations = parseOperationSequence(
                       routeDetail?.operation_sequence,
@@ -9702,7 +9691,12 @@ const WorkOrdersPage: React.FC = () => {
                       setSelectedOperations(
                         operations.map((op: any) => {
                           const { id: _woOpId, ...rest } = op
-                          return rest
+                          const isNode = Boolean(rest.is_node_operation ?? rest.isNodeOperation)
+                          return {
+                            ...rest,
+                            is_node_operation: isNode,
+                            allow_jump: routeJump && !isNode,
+                          }
                         }),
                       )
                       formRef.current?.setFieldsValue({
@@ -11039,7 +11033,7 @@ const WorkOrdersPage: React.FC = () => {
             applyWorkOrderExpandBundle(panelWorkOrderId, bundle, workOrderDetail)
             setWorkOrderOperations(bundle.operations || [])
           } catch (error: any) {
-            messageApi.error(error.message || '操作失败')
+            messageApi.error(getApiErrorMessage(error, t('common.operationFailed')))
             throw error
           }
         }}

@@ -34,6 +34,7 @@ const APPROVER_OPTIONS = (t: (k: string) => string) => [
   { label: t('pages.approval.designer.approverTypeRole'), value: 'role' },
   { label: t('pages.approval.designer.approverTypeDept'), value: 'department' },
   { label: t('pages.approval.designer.approverTypeManager'), value: 'manager' },
+  { label: t('pages.approval.designer.approverTypeOptional'), value: 'initiator_select' },
 ];
 
 interface ApprovalNodeFormProps {
@@ -151,6 +152,18 @@ export const ApprovalNodeForm: React.FC<ApprovalNodeFormProps> = () => {
       </ProFormDependency>
       <ProFormSwitch name="allowTransfer" label={t('pages.approval.designer.allowTransfer')} />
       <ProFormSwitch name="allowAddSign" label={t('pages.approval.designer.allowAddSign')} />
+      <ProFormSelect
+        name="emptyApproverPolicy"
+        label={t('pages.approval.designer.emptyApproverPolicy')}
+        options={[
+          { label: t('pages.approval.designer.emptyApproverPolicyBlock'), value: 'block' },
+          { label: t('pages.approval.designer.emptyApproverPolicyAutoPass'), value: 'auto_pass' },
+          { label: t('pages.approval.designer.emptyApproverPolicyEscalate'), value: 'escalate_admin' },
+          { label: t('pages.approval.designer.emptyApproverPolicyFallback'), value: 'fallback_user' },
+        ]}
+        initialValue="block"
+        tooltip={t('pages.approval.designer.emptyApproverPolicyTip')}
+      />
       <ProFormDigit
         name="timeoutHours"
         label={t('pages.approval.designer.timeoutHours')}
@@ -292,17 +305,30 @@ export function mergeFormToNodeData(
   const v = { ...values };
   if (nodeType === 'approval' || nodeType === 'cc') {
     const approverType = v.approverType as string;
-    if (approverType === 'user' && v.approvers) v.approverIds = v.approvers;
-    if (approverType === 'role' && v.roles) v.approverIds = v.roles;
-    if (approverType === 'department') {
-      if (v.departmentScope === 'specified' && v.departments) {
-        v.approverIds = v.departments;
-      } else {
+    // 必须用 `'approvers' in v`：空数组是合法清空；且不能让残留的旧 approvers 覆盖已写入的 approverIds
+    if (approverType === 'user' && 'approvers' in v) {
+      const raw = v.approvers;
+      v.approverIds = (Array.isArray(raw) ? raw : raw != null ? [raw] : [])
+        .map((x) => String(x ?? '').trim())
+        .filter(Boolean);
+    } else if (approverType === 'role' && 'roles' in v) {
+      const raw = v.roles;
+      v.approverIds = (Array.isArray(raw) ? raw : raw != null ? [raw] : [])
+        .map((x) => String(x ?? '').trim())
+        .filter(Boolean);
+    } else if (approverType === 'department') {
+      if (v.departmentScope === 'specified' && 'departments' in v) {
+        const raw = v.departments;
+        v.approverIds = (Array.isArray(raw) ? raw : raw != null ? [raw] : [])
+          .map((x) => String(x ?? '').trim())
+          .filter(Boolean);
+      } else if (v.departmentScope !== 'specified') {
         v.departmentScope = 'submitter';
         delete v.approverIds;
       }
       delete v.departments;
     }
+    // 表单临时字段不得残留进 nodeDataMap，否则保存时旧 approvers 会盖掉新 approverIds
     delete v.approvers;
     delete v.roles;
   }

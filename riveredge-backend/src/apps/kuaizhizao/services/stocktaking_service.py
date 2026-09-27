@@ -16,6 +16,11 @@ from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.models.stocktaking import Stocktaking, StocktakingItem
+from apps.kuaizhizao.utils.stock_posting import (
+    reuse_or_begin_transaction,
+    serialize_stock_document,
+)
+from core.utils.decimal_limits import assert_amount, assert_price, assert_quantity
 from apps.kuaizhizao.schemas.stocktaking import (
     StocktakingCreate,
     StocktakingUpdate,
@@ -470,11 +475,16 @@ class StocktakingService(AppBaseService[Stocktaking]):
 
             # 更新字段
             if item_data.actual_quantity is not None:
+                assert_quantity(item_data.actual_quantity, "实际数量")
+                assert_quantity(item.book_quantity, "账面数量")
+                assert_price(item.unit_price or Decimal("0"), "盘点单价")
                 item.actual_quantity = item_data.actual_quantity
                 # 重新计算差异数量
                 item.difference_quantity = item.actual_quantity - item.book_quantity
                 # 重新计算差异金额
-                item.difference_amount = item.difference_quantity * item.unit_price
+                item.difference_amount = item.difference_quantity * (item.unit_price or Decimal("0"))
+                assert_quantity(item.difference_quantity, "差异数量")
+                assert_amount(item.difference_amount, "差异金额")
             if item_data.remarks is not None:
                 item.remarks = item_data.remarks
 
@@ -668,9 +678,14 @@ class StocktakingService(AppBaseService[Stocktaking]):
             # 获取盘点人信息
             user_info = await self.get_user_info(counted_by)
 
+            assert_quantity(actual_quantity, "实际数量")
+            assert_quantity(item.book_quantity, "账面数量")
+            assert_price(item.unit_price or Decimal("0"), "盘点单价")
             # 计算差异
             difference_quantity = actual_quantity - item.book_quantity
-            difference_amount = difference_quantity * item.unit_price
+            difference_amount = difference_quantity * (item.unit_price or Decimal("0"))
+            assert_quantity(difference_quantity, "差异数量")
+            assert_amount(difference_amount, "差异金额")
 
             # 更新盘点明细
             item.actual_quantity = actual_quantity
@@ -705,6 +720,7 @@ class StocktakingService(AppBaseService[Stocktaking]):
             completed_by=adjusted_by,
         )
 
+    @serialize_stock_document("stocktaking", "stocktaking_id")
     async def complete_stocktaking(
         self,
         tenant_id: int,
@@ -712,12 +728,12 @@ class StocktakingService(AppBaseService[Stocktaking]):
         completed_by: int,
     ) -> StocktakingResponse:
         """完成盘点：校验全部已盘点，有差异则调库存，无差异直接结案"""
-        async with in_transaction():
-            stocktaking = await Stocktaking.get_or_none(
+        async with reuse_or_begin_transaction():
+            stocktaking = await Stocktaking.filter(
                 id=stocktaking_id,
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
-            )
+            ).select_for_update().first()
 
             if not stocktaking:
                 raise NotFoundError(f"盘点单不存在: {stocktaking_id}")
@@ -879,6 +895,9 @@ class StocktakingService(AppBaseService[Stocktaking]):
                 deleted_at__isnull=True,
             )
             material_unit = str(getattr(material, "base_unit", None) or "个") if material else "个"
+        assert_quantity(book_quantity, "账面数量")
+        assert_quantity(item_data.actual_quantity, "实际数量")
+        assert_price(item_data.unit_price or Decimal("0"), "盘点单价")
         return await StocktakingItem.create(
             tenant_id=tenant_id,
             uuid=str(uuid.uuid4()),

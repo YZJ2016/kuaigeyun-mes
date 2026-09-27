@@ -1406,7 +1406,7 @@ class ApprovalInstanceService:
         empty_policy = str(
             (node_data or {}).get("emptyApproverPolicy")
             or (node_data or {}).get("empty_approver_policy")
-            or "auto_pass"
+            or "block"
         ).strip().lower()
 
         try:
@@ -1459,8 +1459,14 @@ class ApprovalInstanceService:
                     raise ValidationError(
                         f"{resolve_err}；且未配置可用的兜底审批人（fallbackApproverIds）"
                     ) from resolve_err
+            elif empty_policy == "block":
+                raise ValidationError(
+                    f"{resolve_err}（emptyApproverPolicy=block，禁止跳过）"
+                ) from resolve_err
             else:
-                raise
+                raise ValidationError(
+                    f"审批节点 emptyApproverPolicy 非法: {empty_policy!r}"
+                ) from resolve_err
 
         if not approvers:
             if empty_policy == "auto_pass":
@@ -1707,7 +1713,7 @@ class ApprovalInstanceService:
         """
         解析节点审批人。兼容前端 camelCase（approverType, approverIds）与后端 snake_case。
         支持：user（指定用户）、role（角色）、department（部门负责人）、manager（直属上级）、
-        form/form_select/selected（发起时勾选快照）。
+        initiator_select / form / form_select / selected（发起时勾选快照）。
         找不到有效审批人时抛 ValidationError，禁止回落到提交人。
         """
         node_data = node.get("data", {})
@@ -1752,7 +1758,7 @@ class ApprovalInstanceService:
                 )
             return active
 
-        if approver_type in {"form", "form_select", "selected"}:
+        if approver_type in {"form", "form_select", "selected", "initiator_select"}:
             return await _from_selected_snapshot()
 
         if approver_type == "user":
@@ -2896,6 +2902,28 @@ class ApprovalInstanceService:
                     await svc.reject(tenant_id, int(entity_id), approver)
                 logger.info(f"产品固件 {entity_id} 审批回调完成: {approval_instance.status}")
 
+            async def _handle_lab_request() -> None:
+                from apps.kuaiplm.schemas.lab_request import LabRequestRejectRequest
+                from apps.kuaiplm.services.lab_request_service import LabRequestService
+                from infra.models.user import User
+
+                if not entity_id:
+                    return
+                approver = await User.get_or_none(id=approver_id)
+                if not approver:
+                    return
+                svc = LabRequestService()
+                if approval_instance.status == "approved":
+                    await svc.approve(tenant_id, int(entity_id), approver)
+                elif approval_instance.status == "rejected":
+                    await svc.reject(
+                        tenant_id,
+                        int(entity_id),
+                        LabRequestRejectRequest(reason="审批驳回"),
+                        approver,
+                    )
+                logger.info(f"实验委托 {entity_id} 审批回调完成: {approval_instance.status}")
+
             async def _handle_production_file() -> None:
                 from apps.kuaiplm.services.production_file_service import ProductionFileService
                 from infra.models.user import User
@@ -3257,6 +3285,7 @@ class ApprovalInstanceService:
                 "receivable": _handle_receivable,
                 "purchase_invoice": _handle_purchase_invoice,
                 "product_firmware": _handle_product_firmware,
+                "lab_request": _handle_lab_request,
                 "production_file": _handle_production_file,
                 "trial_flow": _handle_trial_flow,
                 "rework_order": _handle_rework_order,
