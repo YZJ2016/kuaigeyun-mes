@@ -3,7 +3,7 @@
 挂载：应用安装启用后由 ApplicationRegistryService 挂到 /api/v1/apps/kuaiai。
 权限码与 spec 134/135 契约 B/C 逐字一致（kuaiai:{domain}:{list|query|add|edit|remove}）。
 这些 action 动词不在 STANDARD_ACTIONS 内，require_permission_codes 装配期即
-validate 会拒绝，故统一用 require_access(required_permissions=...) 做显式权限码
+validate 会拒绝，故统一用本地 require_kuaiai(...) 做显式权限码
 校验（required_permissions 不经 validate_permission_code，RBAC 精确匹配生效；
 check_abac 留默认 True 对齐兄弟应用，仅在存在匹配 ABAC 策略时叠加判定）。
 
@@ -61,7 +61,7 @@ from apps.kuaiai.services import (
 )
 from apps.kuaiai.services.knowledge_service import KnowledgeService
 from apps.kuaiai.services.mcp_service import McpService
-from core.api.deps.access import require_access
+from apps.kuaiai.api._deps import require_kuaiai
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 
@@ -73,11 +73,7 @@ router = APIRouter(prefix="", tags=["App - KU-AI"])
     response_model=list[ChatSessionOut],
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.session",
-                "list",
-                required_permissions=["kuaiai:session:list"],
-            )
+            require_kuaiai("kuaiai:session:list")
         )
     ],
 )
@@ -100,11 +96,7 @@ async def api_list_sessions(
     status_code=status.HTTP_201_CREATED,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.session",
-                "add",
-                required_permissions=["kuaiai:session:add"],
-            )
+            require_kuaiai("kuaiai:session:add")
         )
     ],
 )
@@ -121,11 +113,7 @@ async def api_create_session(
     response_model=ChatSessionOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.session",
-                "query",
-                required_permissions=["kuaiai:session:query"],
-            )
+            require_kuaiai("kuaiai:session:query")
         )
     ],
 )
@@ -142,11 +130,7 @@ async def api_get_session(
     response_model=ChatSessionOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.session",
-                "edit",
-                required_permissions=["kuaiai:session:edit"],
-            )
+            require_kuaiai("kuaiai:session:edit")
         )
     ],
 )
@@ -164,11 +148,7 @@ async def api_update_session(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.session",
-                "remove",
-                required_permissions=["kuaiai:session:remove"],
-            )
+            require_kuaiai("kuaiai:session:remove")
         )
     ],
 )
@@ -185,11 +165,7 @@ async def api_delete_session(
     response_model=list[ChatMessageOut],
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.session",
-                "query",
-                required_permissions=["kuaiai:session:query"],
-            )
+            require_kuaiai("kuaiai:session:query")
         )
     ],
 )
@@ -210,11 +186,7 @@ async def api_list_messages(
     response_model=list[LlmProviderOut],
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.model",
-                "list",
-                required_permissions=["kuaiai:model:list"],
-            )
+            require_kuaiai("kuaiai:model:list")
         )
     ],
 )
@@ -234,11 +206,7 @@ async def api_list_llm_providers(
     status_code=status.HTTP_201_CREATED,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.model",
-                "add",
-                required_permissions=["kuaiai:model:add"],
-            )
+            require_kuaiai("kuaiai:model:add")
         )
     ],
 )
@@ -256,11 +224,7 @@ async def api_create_llm_provider(
     response_model=LlmProviderOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.model",
-                "query",
-                required_permissions=["kuaiai:model:query"],
-            )
+            require_kuaiai("kuaiai:model:query")
         )
     ],
 )
@@ -277,11 +241,7 @@ async def api_get_llm_provider(
     response_model=LlmProviderOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.model",
-                "edit",
-                required_permissions=["kuaiai:model:edit"],
-            )
+            require_kuaiai("kuaiai:model:edit")
         )
     ],
 )
@@ -302,11 +262,7 @@ async def api_update_llm_provider(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.model",
-                "remove",
-                required_permissions=["kuaiai:model:remove"],
-            )
+            require_kuaiai("kuaiai:model:remove")
         )
     ],
 )
@@ -323,11 +279,7 @@ async def api_delete_llm_provider(
     response_model=list[LlmModelOption],
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.model",
-                "query",
-                required_permissions=["kuaiai:model:query"],
-            )
+            require_kuaiai("kuaiai:model:query")
         )
     ],
 )
@@ -344,11 +296,7 @@ async def api_llm_model_options(
     response_model=list[LlmModelOut],
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.model",
-                "list",
-                required_permissions=["kuaiai:model:list"],
-            )
+            require_kuaiai("kuaiai:model:list")
         )
     ],
 )
@@ -371,11 +319,7 @@ async def api_list_llm_models(
     status_code=status.HTTP_201_CREATED,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.model",
-                "add",
-                required_permissions=["kuaiai:model:add"],
-            )
+            require_kuaiai("kuaiai:model:add")
         )
     ],
 )
@@ -392,11 +336,7 @@ async def api_create_llm_model(
     response_model=LlmModelOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.model",
-                "query",
-                required_permissions=["kuaiai:model:query"],
-            )
+            require_kuaiai("kuaiai:model:query")
         )
     ],
 )
@@ -412,11 +352,7 @@ async def api_get_llm_model(
     response_model=LlmModelOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.model",
-                "edit",
-                required_permissions=["kuaiai:model:edit"],
-            )
+            require_kuaiai("kuaiai:model:edit")
         )
     ],
 )
@@ -436,11 +372,7 @@ async def api_update_llm_model(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.model",
-                "remove",
-                required_permissions=["kuaiai:model:remove"],
-            )
+            require_kuaiai("kuaiai:model:remove")
         )
     ],
 )
@@ -460,11 +392,7 @@ async def api_delete_llm_model(
     response_model=list[AgentProfileOption],
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.agent",
-                "query",
-                required_permissions=["kuaiai:agent:query"],
-            )
+            require_kuaiai("kuaiai:agent:query")
         )
     ],
 )
@@ -481,11 +409,7 @@ async def api_agent_options(
     response_model=list[AgentProfileOut],
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.agent",
-                "list",
-                required_permissions=["kuaiai:agent:list"],
-            )
+            require_kuaiai("kuaiai:agent:list")
         )
     ],
 )
@@ -505,11 +429,7 @@ async def api_list_agents(
     status_code=status.HTTP_201_CREATED,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.agent",
-                "add",
-                required_permissions=["kuaiai:agent:add"],
-            )
+            require_kuaiai("kuaiai:agent:add")
         )
     ],
 )
@@ -526,11 +446,7 @@ async def api_create_agent(
     response_model=AgentProfileOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.agent",
-                "query",
-                required_permissions=["kuaiai:agent:query"],
-            )
+            require_kuaiai("kuaiai:agent:query")
         )
     ],
 )
@@ -546,11 +462,7 @@ async def api_get_agent(
     response_model=AgentProfileOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.agent",
-                "edit",
-                required_permissions=["kuaiai:agent:edit"],
-            )
+            require_kuaiai("kuaiai:agent:edit")
         )
     ],
 )
@@ -570,11 +482,7 @@ async def api_update_agent(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.agent",
-                "remove",
-                required_permissions=["kuaiai:agent:remove"],
-            )
+            require_kuaiai("kuaiai:agent:remove")
         )
     ],
 )
@@ -591,11 +499,7 @@ async def api_delete_agent(
     response_model=AgentGrantsOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.agent",
-                "query",
-                required_permissions=["kuaiai:agent:query"],
-            )
+            require_kuaiai("kuaiai:agent:query")
         )
     ],
 )
@@ -612,11 +516,7 @@ async def api_get_agent_grants(
     response_model=AgentGrantsOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.agent",
-                "edit",
-                required_permissions=["kuaiai:agent:edit"],
-            )
+            require_kuaiai("kuaiai:agent:edit")
         )
     ],
 )
@@ -639,11 +539,7 @@ async def api_put_agent_grants(
     "/knowledge-bases",
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "list",
-                required_permissions=["kuaiai:knowledge:list"],
-            )
+            require_kuaiai("kuaiai:knowledge:list")
         )
     ],
 )
@@ -669,11 +565,7 @@ async def api_list_knowledge_bases(
     status_code=status.HTTP_201_CREATED,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "add",
-                required_permissions=["kuaiai:knowledge:add"],
-            )
+            require_kuaiai("kuaiai:knowledge:add")
         )
     ],
 )
@@ -691,11 +583,7 @@ async def api_create_knowledge_base(
     response_model=list[KnowledgeBaseOption],
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "query",
-                required_permissions=["kuaiai:knowledge:query"],
-            )
+            require_kuaiai("kuaiai:knowledge:query")
         )
     ],
 )
@@ -711,11 +599,7 @@ async def api_knowledge_base_options(
     response_model=KnowledgeBaseOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "query",
-                required_permissions=["kuaiai:knowledge:query"],
-            )
+            require_kuaiai("kuaiai:knowledge:query")
         )
     ],
 )
@@ -731,11 +615,7 @@ async def api_get_knowledge_base(
     response_model=KnowledgeBaseOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "edit",
-                required_permissions=["kuaiai:knowledge:edit"],
-            )
+            require_kuaiai("kuaiai:knowledge:edit")
         )
     ],
 )
@@ -755,11 +635,7 @@ async def api_update_knowledge_base(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "remove",
-                required_permissions=["kuaiai:knowledge:remove"],
-            )
+            require_kuaiai("kuaiai:knowledge:remove")
         )
     ],
 )
@@ -775,11 +651,7 @@ async def api_delete_knowledge_base(
     "/knowledge-bases/{kb_id}/documents",
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "list",
-                required_permissions=["kuaiai:knowledge:list"],
-            )
+            require_kuaiai("kuaiai:knowledge:list")
         )
     ],
 )
@@ -809,11 +681,7 @@ async def api_list_kb_documents(
     status_code=status.HTTP_201_CREATED,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "add",
-                required_permissions=["kuaiai:knowledge:add"],
-            )
+            require_kuaiai("kuaiai:knowledge:add")
         )
     ],
 )
@@ -834,11 +702,7 @@ async def api_create_kb_document(
     response_model=DocumentOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "query",
-                required_permissions=["kuaiai:knowledge:query"],
-            )
+            require_kuaiai("kuaiai:knowledge:query")
         )
     ],
 )
@@ -854,11 +718,7 @@ async def api_get_document(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "remove",
-                required_permissions=["kuaiai:knowledge:remove"],
-            )
+            require_kuaiai("kuaiai:knowledge:remove")
         )
     ],
 )
@@ -873,11 +733,7 @@ async def api_delete_document(
     "/documents/{document_id}/parse",
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "edit",
-                required_permissions=["kuaiai:knowledge:edit"],
-            )
+            require_kuaiai("kuaiai:knowledge:edit")
         )
     ],
 )
@@ -896,11 +752,7 @@ async def api_parse_document(
     "/documents/{document_id}/chunks",
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.knowledge",
-                "query",
-                required_permissions=["kuaiai:knowledge:query"],
-            )
+            require_kuaiai("kuaiai:knowledge:query")
         )
     ],
 )
@@ -927,11 +779,7 @@ async def api_list_document_chunks(
     "/mcp-servers",
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.mcp",
-                "list",
-                required_permissions=["kuaiai:mcp:list"],
-            )
+            require_kuaiai("kuaiai:mcp:list")
         )
     ],
 )
@@ -954,11 +802,7 @@ async def api_list_mcp_servers(
     status_code=status.HTTP_201_CREATED,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.mcp",
-                "add",
-                required_permissions=["kuaiai:mcp:add"],
-            )
+            require_kuaiai("kuaiai:mcp:add")
         )
     ],
 )
@@ -977,11 +821,7 @@ async def api_create_mcp_server(
     response_model=list[McpServerOption],
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.mcp",
-                "query",
-                required_permissions=["kuaiai:mcp:query"],
-            )
+            require_kuaiai("kuaiai:mcp:query")
         )
     ],
 )
@@ -997,11 +837,7 @@ async def api_mcp_server_options(
     response_model=McpServerOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.mcp",
-                "query",
-                required_permissions=["kuaiai:mcp:query"],
-            )
+            require_kuaiai("kuaiai:mcp:query")
         )
     ],
 )
@@ -1018,11 +854,7 @@ async def api_get_mcp_server(
     response_model=McpServerOut,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.mcp",
-                "edit",
-                required_permissions=["kuaiai:mcp:edit"],
-            )
+            require_kuaiai("kuaiai:mcp:edit")
         )
     ],
 )
@@ -1041,11 +873,7 @@ async def api_update_mcp_server(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[
         Depends(
-            require_access(
-                "kuaiai.mcp",
-                "remove",
-                required_permissions=["kuaiai:mcp:remove"],
-            )
+            require_kuaiai("kuaiai:mcp:remove")
         )
     ],
 )
