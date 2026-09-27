@@ -28860,6 +28860,10 @@ export default {
     '外贸销售行业插件补齐工作台与跟进',
   'pages.dashboard.updateLog.entries.ind-foreign-trade-full-plugin-r01.description':
     '行业包「外贸销售」下增加工作台、外贸客户、询盘导入、客户跟进四个入口；跟进与统计仅覆盖外贸客户，支持筛选导出与行内新建跟进。',
+  'pages.dashboard.updateLog.entries.official-api-library-third-party-catalog-r01.title':
+    '官方接口库目录跟随配置的第三方域名',
+  'pages.dashboard.updateLog.entries.official-api-library-third-party-catalog-r01.description':
+    '平台设置把官方库域名改成第三方后，接口库弹窗目录会从该域名远程拉取，不再因本机可写官方库而继续展示本机（如 kuaigeyun.com）上的接口包。',
   'pages.dashboard.updateLog.entries.official-api-library-submit-client-channel-r01.title':
     '提交官方接口库携带客户端渠道',
   'pages.dashboard.updateLog.entries.official-api-library-submit-client-channel-r01.description':
