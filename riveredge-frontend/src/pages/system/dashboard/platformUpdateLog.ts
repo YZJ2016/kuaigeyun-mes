@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'mobile-equip-upload-category-perm-r01',
+    date: '2026-09-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-equip-upload-category-perm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-equip-upload-category-perm-r01.description',
+  },
+  {
     id: 'sales-order-form-dropdown-perf-r01',
     date: '2026-09-27',
     type: 'improvement',

@@ -28744,6 +28744,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.mobile-equip-upload-category-perm-r01.title':
+    '移动端设备点检与巡检照片上传权限修复',
+  'pages.dashboard.updateLog.entries.mobile-equip-upload-category-perm-r01.description':
+    '业务附件上传白名单补登记点检/巡检现场照片分类，车间角色有单据新建或编辑权限即可上传，不再因缺少系统文件权限误报 HTTP 403。',
   'pages.dashboard.updateLog.entries.sales-order-form-dropdown-perf-r01.title':
     '新建销售订单下拉选项加载更快',
   'pages.dashboard.updateLog.entries.sales-order-form-dropdown-perf-r01.description':
