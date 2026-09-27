@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Button, DatePicker, Input, Select, Space, Table, Typography } from 'antd';
+import { Alert, App, Button, DatePicker, Input, Select, Space, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -22,7 +22,8 @@ const AnnualPayrollStatsPage: React.FC = () => {
   const [workshopOptions, setWorkshopOptions] = useState<Array<{ label: string; value: string }>>(
     [],
   );
-  const [keyword, setKeyword] = useState('');
+  const [keywordInput, setKeywordInput] = useState('');
+  const [appliedKeyword, setAppliedKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
 
@@ -47,7 +48,7 @@ const AnnualPayrollStatsPage: React.FC = () => {
       const res = await listAnnualPayrollStats({
         year: y,
         workshop_name: workshop || undefined,
-        keyword: keyword.trim() || undefined,
+        keyword: appliedKeyword.trim() || undefined,
       });
       setRows(res.items);
     } catch (error) {
@@ -55,7 +56,16 @@ const AnnualPayrollStatsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [keyword, message, t, workshop, year]);
+  }, [appliedKeyword, message, t, workshop, year]);
+
+  const runSearch = () => {
+    const next = keywordInput.trim();
+    if (next === appliedKeyword) {
+      void load();
+      return;
+    }
+    setAppliedKeyword(next);
+  };
 
   const money = (v: unknown) => Number(v || 0).toFixed(2);
 
@@ -178,12 +188,18 @@ const AnnualPayrollStatsPage: React.FC = () => {
             style={{ width: 160 }}
           />
           <Input
-            placeholder={t('app.kuaioa.employee.fullName')}
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            style={{ width: 140 }}
+            allowClear
+            placeholder={t('app.kuaioa.annualStats.namePlaceholder')}
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
+            onPressEnter={() => runSearch()}
+            onClear={() => {
+              setKeywordInput('');
+              setAppliedKeyword('');
+            }}
+            style={{ width: 160 }}
           />
-          <Button type="primary" loading={loading} onClick={() => void load()}>
+          <Button type="primary" loading={loading} onClick={() => runSearch()}>
             {t('common.search')}
           </Button>
           {perms.canExport && rows.length > 0 ? (
@@ -208,9 +224,12 @@ const AnnualPayrollStatsPage: React.FC = () => {
         </Space>
       }
     >
-      <Typography.Paragraph type="secondary">
-        {t('app.kuaioa.annualStats.hint')}
-      </Typography.Paragraph>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        title={t('app.kuaioa.annualStats.hint')}
+      />
       <Table<Row>
         size="small"
         loading={loading}
@@ -220,6 +239,11 @@ const AnnualPayrollStatsPage: React.FC = () => {
         pagination={false}
         bordered
         scroll={{ x: 2800 }}
+        locale={{
+          emptyText: appliedKeyword
+            ? t('app.kuaioa.annualStats.emptyName')
+            : t('app.kuaioa.annualStats.emptyYear'),
+        }}
       />
     </ListPageTemplate>
   );

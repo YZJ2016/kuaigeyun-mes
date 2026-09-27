@@ -429,6 +429,8 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "A级", "value": "A", "description": "A级", "sort_order": 2},
             {"label": "B级", "value": "B", "description": "B级", "sort_order": 3},
             {"label": "C级", "value": "C", "description": "C级", "sort_order": 4},
+            {"label": "D级", "value": "D", "description": "D级", "sort_order": 5},
+            {"label": "已成交", "value": "DEAL", "description": "已成交客户", "sort_order": 6},
         ],
     },
     {

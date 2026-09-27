@@ -64,6 +64,14 @@ export interface Customer extends PartnerInvoiceAndExtendedFields {
   assignedAt?: string;
   lastFollowUpAt?: string;
   recycleAt?: string;
+  followStatus?: string;
+  projectDescription?: string;
+  intentMaterialName?: string;
+  regionText?: string;
+  marketScope?: string;
+  countryCode?: string;
+  campaignName?: string;
+  requiredCapacityText?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -84,6 +92,13 @@ export interface CustomerCreate extends PartnerInvoiceAndExtendedFields {
   creditLimit?: number;
   revenueRecognitionOverride?: string | null;
   salesmanId?: number;
+  projectDescription?: string;
+  intentMaterialName?: string;
+  regionText?: string;
+  marketScope?: string;
+  countryCode?: string;
+  campaignName?: string;
+  requiredCapacityText?: string;
   isActive?: boolean;
 }
 
@@ -101,6 +116,14 @@ export interface CustomerUpdate extends PartnerInvoiceAndExtendedFields {
   creditLimit?: number;
   revenueRecognitionOverride?: string | null;
   salesmanId?: number | null;
+  projectDescription?: string;
+  intentMaterialName?: string;
+  regionText?: string;
+  marketScope?: string;
+  countryCode?: string;
+  campaignName?: string;
+  requiredCapacityText?: string;
+  followStatus?: string;
   isActive?: boolean;
 }
 

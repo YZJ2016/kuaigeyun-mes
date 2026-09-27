@@ -1,9 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { App, List, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import KuaioaCrudListPage from '../../../components/KuaioaCrudListPage';
 import { runKuaioaListExport } from '../../../utils/kuaioaListExport';
-import { buildOaEmployeeStatusEnum } from '../../../utils/oaFormEnums';
+import {
+  buildOaEmployeeStatusEnum,
+  buildOaEmploymentTypeOptions,
+} from '../../../utils/oaFormEnums';
+import { loadOaProductionLineNameOptions, loadOaWorkshopNameOptions } from '../../../utils/oaWorkshopOptions';
 import {
   createEmployee,
   deleteEmployee,
@@ -40,14 +44,10 @@ function parseOptionalNumber(raw: string): number | undefined {
 const EmployeesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const [workshopOptions, setWorkshopOptions] = useState<OptionItem[]>([]);
+  const [lineOptions, setLineOptions] = useState<OptionItem[]>([]);
 
-  const employmentOptions = useMemo(
-    () => [
-      { label: t('app.kuaioa.employee.employmentType.formal'), value: 'formal' },
-      { label: t('app.kuaioa.employee.employmentType.temp'), value: 'temp' },
-    ],
-    [t],
-  );
+  const employmentOptions = useMemo(() => buildOaEmploymentTypeOptions(t), [t]);
 
   const payMethodOptions = useMemo(
     () => [
@@ -67,6 +67,24 @@ const EmployeesPage: React.FC = () => {
   );
 
   const statusEnum = useMemo(() => buildOaEmployeeStatusEnum(t), [t]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([loadOaWorkshopNameOptions(), loadOaProductionLineNameOptions()])
+      .then(([workshops, lines]) => {
+        if (cancelled) return;
+        setWorkshopOptions(workshops);
+        setLineOptions(lines.map(({ label, value }) => ({ label, value })));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWorkshopOptions([]);
+        setLineOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const employeeImportTemplate = useMemo(
     () =>
@@ -234,11 +252,15 @@ const EmployeesPage: React.FC = () => {
       {
         name: 'workshop_name',
         labelKey: 'app.kuaioa.employee.workshop',
+        type: 'select' as const,
+        options: workshopOptions,
         width: 120,
       },
       {
         name: 'production_line_name',
         labelKey: 'app.kuaioa.employee.productionLine',
+        type: 'select' as const,
+        options: lineOptions,
         width: 100,
         hideInTable: true,
       },
@@ -364,7 +386,7 @@ const EmployeesPage: React.FC = () => {
         hideInTable: true,
       },
     ],
-    [employmentOptions, payMethodOptions, statusOptions],
+    [employmentOptions, payMethodOptions, statusOptions, workshopOptions, lineOptions],
   );
 
   const handleImport = async (data: unknown[][]) => {

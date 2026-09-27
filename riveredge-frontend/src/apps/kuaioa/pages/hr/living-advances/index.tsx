@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { App } from 'antd';
+import { useTranslation } from 'react-i18next';
 import KuaioaCrudListPage from '../../../components/KuaioaCrudListPage';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { listEmployees } from '../../../services/employees';
@@ -9,6 +11,16 @@ import {
   listLivingAdvances,
   updateLivingAdvance,
 } from '../../../services/payroll';
+import { runKuaioaListExport } from '../../../utils/kuaioaListExport';
+import { buildFactoryImportTemplate } from '../../../../master-data/utils/factoryImportTemplate';
+import {
+  buildOaImportCellReader,
+  collectOaImportNonEmptyRows,
+  resolveOaEmployeeId,
+  runOaChunkedCreateImport,
+  showOaImportValidationErrors,
+  type OaImportRowError,
+} from '../../../utils/kuaioaSpreadsheetImport';
 
 type EmpSnap = {
   bank_name: string;
@@ -17,11 +29,16 @@ type EmpSnap = {
   base_living: number;
 };
 
+type EmpRow = { id: number; employee_code?: string | null; full_name?: string | null };
+
 const LivingAdvancesPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
   const currentUser = useCurrentUser();
   const [employeeOptions, setEmployeeOptions] = useState<Array<{ label: string; value: number }>>(
     [],
   );
+  const [employees, setEmployees] = useState<EmpRow[]>([]);
   const [empSnap, setEmpSnap] = useState<Record<number, EmpSnap>>({});
 
   const registrarName = useMemo(() => {
@@ -32,6 +49,7 @@ const LivingAdvancesPage: React.FC = () => {
   useEffect(() => {
     void (async () => {
       const res = await listEmployees({ status: 'active' });
+      setEmployees(res.items as EmpRow[]);
       setEmployeeOptions(
         res.items.map((e) => ({
           label: `${e.employee_code || ''} ${e.full_name}`.trim(),
@@ -143,6 +161,106 @@ const LivingAdvancesPage: React.FC = () => {
     [employeeOptions],
   );
 
+  const importTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'employee_code',
+            labelKey: 'app.kuaioa.employee.code',
+            aliases: ['员工编号', '工号'],
+          },
+          {
+            field: 'employee_name',
+            labelKey: 'app.kuaioa.employee.fullName',
+            aliases: ['姓名'],
+          },
+          {
+            field: 'year_month',
+            required: true,
+            labelKey: 'app.kuaioa.payroll.yearMonth',
+            aliases: ['月份'],
+          },
+          {
+            field: 'amount',
+            required: true,
+            labelKey: 'app.kuaioa.livingPayout.advanceAmount',
+            aliases: ['预支金额', '金额'],
+          },
+          {
+            field: 'workshop_name',
+            labelKey: 'app.kuaioa.attendance.workshop',
+            aliases: ['车间'],
+          },
+          { field: 'notes', labelKey: 'common.remark', aliases: ['备注'] },
+        ],
+        ['EMP001', '张三', '2026-09', '500', '', ''],
+      ),
+    [t],
+  );
+
+  const handleImport = async (data: unknown[][]) => {
+    const parsed = collectOaImportNonEmptyRows(data);
+    if (!parsed) {
+      messageApi.warning(t('app.kuaioa.import.empty'));
+      return false;
+    }
+    if (parsed.rows.length === 0) {
+      messageApi.warning(t('app.kuaioa.import.noRows'));
+      return false;
+    }
+    const cellOf = buildOaImportCellReader(parsed.headers, importTemplate.importHeaderMap);
+    const importData: Record<string, unknown>[] = [];
+    const errors: OaImportRowError[] = [];
+    parsed.rows.forEach((row, rowIndex) => {
+      if (!Array.isArray(row)) return;
+      const actualRowIndex = rowIndex + 3;
+      const yearMonth = cellOf(row, 'year_month');
+      if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+        errors.push({ row: actualRowIndex, message: t('app.kuaioa.import.yearMonthInvalid') });
+        return;
+      }
+      const employeeId = resolveOaEmployeeId(
+        cellOf(row, 'employee_code'),
+        cellOf(row, 'employee_name'),
+        employees,
+      );
+      if (!employeeId) {
+        errors.push({ row: actualRowIndex, message: t('app.kuaioa.import.employeeNotFound') });
+        return;
+      }
+      const amount = Number(cellOf(row, 'amount'));
+      if (!Number.isFinite(amount)) {
+        errors.push({ row: actualRowIndex, message: t('app.kuaioa.import.amountInvalid') });
+        return;
+      }
+      const snap = empSnap[employeeId];
+      importData.push({
+        year_month: yearMonth,
+        employee_id: employeeId,
+        amount,
+        workshop_name: cellOf(row, 'workshop_name') || snap?.workshop_name || undefined,
+        base_living: snap?.base_living,
+        bank_name: snap?.bank_name || undefined,
+        bank_account: snap?.bank_account || undefined,
+        notes: cellOf(row, 'notes') || undefined,
+      });
+    });
+    if (errors.length > 0) {
+      showOaImportValidationErrors(t, errors);
+      return false;
+    }
+    return runOaChunkedCreateImport({
+      t,
+      messageApi,
+      items: importData,
+      createOne: (item) => createLivingAdvance(item),
+      title: t('app.kuaioa.livingAdvance.importTitle'),
+      successKey: 'app.kuaioa.livingAdvance.importSuccess',
+    });
+  };
+
   return (
     <KuaioaCrudListPage
       createButtonKey="app.kuaioa.livingAdvance.createButton"
@@ -153,7 +271,7 @@ const LivingAdvancesPage: React.FC = () => {
       statusPresentation="marker"
       detailVariant="master"
       getDetailFn={getLivingAdvance}
-      columnPersistenceId="apps.kuaioa.living-advance.list-v3"
+      columnPersistenceId="apps.kuaioa.living-advance.list-v4"
       fields={fields}
       listFn={listLivingAdvances}
       createFn={createLivingAdvance}
@@ -202,6 +320,34 @@ const LivingAdvancesPage: React.FC = () => {
         } = values;
         return rest;
       }}
+      showExportButton
+      onExport={async (type, keys, pageData) => {
+        await runKuaioaListExport({
+          type,
+          keys,
+          pageData,
+          listFn: listLivingAdvances,
+          columns: [
+            { key: 'advance_code', title: t('app.kuaioa.livingAdvance.code') },
+            { key: 'year_month', title: t('app.kuaioa.payroll.yearMonth') },
+            { key: 'employee_name', title: t('app.kuaioa.employee.fullName') },
+            { key: 'workshop_name', title: t('app.kuaioa.attendance.workshop') },
+            { key: 'base_living', title: t('app.kuaioa.livingPayout.fixedAmount') },
+            { key: 'amount', title: t('app.kuaioa.livingPayout.advanceAmount') },
+            { key: 'status', title: t('common.status') },
+          ],
+          filename: t('app.kuaioa.livingAdvance.exportFileName'),
+          messageApi,
+          noDataText: t('common.exportNoData'),
+        });
+      }}
+      showImportButton
+      onImport={handleImport}
+      importHeaders={importTemplate.importHeaders}
+      importExampleRow={importTemplate.importExampleRow}
+      importColumnOptions={importTemplate.importColumnOptions}
+      importFieldMap={importTemplate.importHeaderMap}
+      importTemplateName={t('app.kuaioa.livingAdvance.exportFileName')}
     />
   );
 };

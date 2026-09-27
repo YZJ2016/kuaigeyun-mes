@@ -66,6 +66,22 @@ def _strip_customer_pool_managed_fields(data: Dict[str, Any]) -> None:
         data.pop(key, None)
 
 
+def _assert_customer_phone_or_email(data: Dict[str, Any]) -> None:
+    """手机号与邮箱至少填一项（含 contacts 明细首条）。"""
+    phone = str(data.get("phone") or "").strip()
+    email = str(data.get("email") or "").strip()
+    if phone or email:
+        return
+    contacts = data.get("contacts")
+    if isinstance(contacts, list):
+        for row in contacts:
+            if not isinstance(row, dict):
+                continue
+            if str(row.get("phone") or "").strip() or str(row.get("email") or "").strip():
+                return
+    raise ValidationError("手机号与邮箱至少填写一项")
+
+
 def _normalize_partner_name(name: Optional[str]) -> str:
     """客户/供应商名称：去首尾空白。"""
     return str(name or "").strip()
@@ -371,8 +387,13 @@ class SupplyChainService:
         create_data["salesman_name"] = None
         create_data["assigned_at"] = None
         create_data["recycle_at"] = None
+        if not create_data.get("follow_status"):
+            create_data["follow_status"] = "pending"
+        if not create_data.get("market_scope"):
+            create_data["market_scope"] = "domestic"
 
         _apply_partner_contacts_payload(create_data)
+        _assert_customer_phone_or_email(create_data)
 
         try:
             apply_create_audit(create_data, current_user)
@@ -581,6 +602,14 @@ class SupplyChainService:
         salesman_changed = salesman_field_present and salesman_change != customer.salesman_id
 
         _apply_partner_contacts_payload(update_data)
+        contact_keys = ("phone", "email", "contacts")
+        if any(k in update_data for k in contact_keys):
+            merged_contact = {
+                "phone": update_data["phone"] if "phone" in update_data else customer.phone,
+                "email": update_data["email"] if "email" in update_data else customer.email,
+                "contacts": update_data["contacts"] if "contacts" in update_data else customer.contacts,
+            }
+            _assert_customer_phone_or_email(merged_contact)
 
         if salesman_changed:
             if salesman_change:

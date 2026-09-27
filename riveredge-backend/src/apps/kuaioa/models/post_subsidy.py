@@ -6,7 +6,7 @@ from core.models.base import BaseModel
 
 
 class KuaioaPostSubsidy(BaseModel):
-    """岗位补贴多行登记，结算重建时汇总进 post_allowance。"""
+    """岗位补贴多行登记；结算重建时按项目写入夜班/高温/岗位津贴列。"""
 
     tenant_id = fields.IntField(description="租户ID")
     subsidy_code = fields.CharField(max_length=50, description="单号")

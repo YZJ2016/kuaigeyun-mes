@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import KuaioaCrudListPage from '../../../components/KuaioaCrudListPage';
 import {
@@ -12,11 +13,32 @@ import {
   updateAttendanceSheet,
 } from '../../../services/attendance';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import {
+  loadOaProductionLineNameOptions,
+  loadOaWorkshopNameOptions,
+} from '../../../utils/oaWorkshopOptions';
+import { runKuaioaListExport } from '../../../utils/kuaioaListExport';
 
 const AttendanceListPage: React.FC = () => {
   const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const perms = useResourcePermissions('kuaioa:attendance');
+  const [workshopOptions, setWorkshopOptions] = useState<Array<{ label: string; value: string }>>(
+    [],
+  );
+  const [lineOptions, setLineOptions] = useState<Array<{ label: string; value: string }>>([]);
+
+  useEffect(() => {
+    void (async () => {
+      const [workshops, lines] = await Promise.all([
+        loadOaWorkshopNameOptions(),
+        loadOaProductionLineNameOptions(),
+      ]);
+      setWorkshopOptions(workshops);
+      setLineOptions(lines.map(({ label, value }) => ({ label, value })));
+    })();
+  }, []);
 
   const statusOptions = useMemo(
     () => [
@@ -39,12 +61,16 @@ const AttendanceListPage: React.FC = () => {
       {
         name: 'workshop_name',
         labelKey: 'app.kuaioa.attendance.workshop',
+        type: 'select' as const,
+        options: workshopOptions,
         required: true,
         width: 140,
       },
       {
         name: 'production_line_name',
         labelKey: 'app.kuaioa.attendance.productionLine',
+        type: 'select' as const,
+        options: lineOptions,
         width: 120,
       },
       {
@@ -73,7 +99,7 @@ const AttendanceListPage: React.FC = () => {
         hideInTable: true,
       },
     ],
-    [statusOptions],
+    [lineOptions, statusOptions, workshopOptions],
   );
 
   return (
@@ -86,12 +112,32 @@ const AttendanceListPage: React.FC = () => {
       statusPresentation="marker"
       detailVariant="master"
       getDetailFn={getAttendanceSheet}
-      columnPersistenceId="apps.kuaioa.attendance.list-v1"
+      columnPersistenceId="apps.kuaioa.attendance.list-v2"
       fields={fields}
       listFn={listAttendanceSheets}
       createFn={createAttendanceSheet}
       updateFn={updateAttendanceSheet}
       deleteFn={deleteAttendanceSheet}
+      showExportButton
+      onExport={async (type, keys, pageData) => {
+        await runKuaioaListExport({
+          type,
+          keys,
+          pageData,
+          listFn: listAttendanceSheets,
+          columns: [
+            { key: 'sheet_code', title: t('app.kuaioa.attendance.code') },
+            { key: 'year_month', title: t('app.kuaioa.attendance.yearMonth') },
+            { key: 'workshop_name', title: t('app.kuaioa.attendance.workshop') },
+            { key: 'production_line_name', title: t('app.kuaioa.attendance.productionLine') },
+            { key: 'has_night', title: t('app.kuaioa.attendance.hasNight') },
+            { key: 'status', title: t('common.status') },
+          ],
+          filename: t('app.kuaioa.attendance.exportFileName'),
+          messageApi,
+          noDataText: t('common.exportNoData'),
+        });
+      }}
       extraActions={[
         {
           key: 'fill',
