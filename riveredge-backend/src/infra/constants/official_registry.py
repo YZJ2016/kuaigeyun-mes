@@ -127,6 +127,26 @@ async def is_serving_configured_official_api_library(request_host: str) -> bool:
     return is_request_on_official_api_library_host(current, configured)
 
 
+def should_use_local_official_api_library_catalog(
+    *,
+    request_host: str,
+    configured_host: str,
+    local_writable: bool,
+) -> bool:
+    """目录/详情/提交是否读本机官方库表。
+
+    - 请求 Host 命中配置的官方库域名 → 本地真源
+    - 配置为第三方域名且本机并非该域名 → 远程拉取（禁止本机可写时仍用本地表冒充「来源」）
+    - 配置仍为默认官方域 → 开发/官方 SaaS 本机可写时用本地
+    """
+    configured = normalize_registry_host(configured_host) or DEFAULT_OFFICIAL_API_LIBRARY_HOST
+    if request_host and is_request_on_official_api_library_host(request_host, configured):
+        return True
+    if not is_official_registry_host(configured):
+        return False
+    return bool(local_writable)
+
+
 async def is_official_api_library_public_host(request_host: str) -> bool:
     """公开目录 API 允许的 Host（缺省 kuaigeyun.com + 平台配置的官方库域名）。"""
     if is_local_official_api_library_host():

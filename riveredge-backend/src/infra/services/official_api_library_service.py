@@ -19,9 +19,9 @@ from infra.constants.official_registry import (
     OFFICIAL_API_LIBRARY_API_PREFIX,
     base_url_for_official_api_library_host,
     is_local_official_api_library_host,
-    is_serving_configured_official_api_library,
     resolve_official_api_library_base_url,
     resolve_official_api_library_host,
+    should_use_local_official_api_library_catalog,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.http import get_http_client
@@ -429,11 +429,12 @@ async def _official_api_library_meta() -> Dict[str, str]:
 
 
 async def _use_local_official_api_library(*, request_host: str = "") -> bool:
-    if is_local_official_api_library_host():
-        return True
-    if request_host:
-        return await is_serving_configured_official_api_library(request_host)
-    return False
+    configured = await resolve_official_api_library_host()
+    return should_use_local_official_api_library_catalog(
+        request_host=request_host,
+        configured_host=configured,
+        local_writable=is_local_official_api_library_host(),
+    )
 
 
 async def list_official_api_library(*, request_host: str = "") -> Dict[str, Any]:

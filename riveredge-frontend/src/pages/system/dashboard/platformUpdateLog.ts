@@ -44,6 +44,15 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'official-api-library-third-party-catalog-r01',
+    date: '2026-09-27',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.official-api-library-third-party-catalog-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.official-api-library-third-party-catalog-r01.description',
+  },
+  {
     id: 'official-api-library-submit-client-channel-r01',
     date: '2026-09-27',
     type: 'fix',
