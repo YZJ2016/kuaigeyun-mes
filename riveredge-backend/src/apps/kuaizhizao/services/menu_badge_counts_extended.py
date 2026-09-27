@@ -12,6 +12,10 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+from apps.kuaizhizao.constants.demand_computation_status import (
+    DEMAND_COMPUTATION_STATUS_COMPUTING,
+    DEMAND_COMPUTATION_STATUS_PENDING,
+)
 from apps.kuaizhizao.constants.purchase_inquiry import PurchaseInquiryStatus
 from apps.kuaizhizao.services.menu_badge_counts_service import (
     _DOC_TERMINAL_STATUSES,
@@ -61,6 +65,15 @@ _INQUIRY_OPEN: List[str] = [
     PurchaseInquiryStatus.PENDING_COMPARE.value,
     PurchaseInquiryStatus.AWARDED.value,
     "草稿",
+    "询价中",
+    "待比价",
+    "已定标",
+]
+# 询价「延期」不含草稿（草稿不算业务待办逾期）
+_INQUIRY_OVERDUE_OPEN: List[str] = [
+    PurchaseInquiryStatus.QUOTING.value,
+    PurchaseInquiryStatus.PENDING_COMPARE.value,
+    PurchaseInquiryStatus.AWARDED.value,
     "询价中",
     "待比价",
     "已定标",
@@ -170,9 +183,12 @@ async def _section_purchase_inquiry(tenant_id: int, now_date) -> BadgeFragment:
     )
     od, pending, prog = await _gather_counts(
         qs.filter(quote_deadline__lt=now_date, quote_deadline__isnull=False)
-        .filter(status__in=_INQUIRY_OPEN)
+        .filter(status__in=_INQUIRY_OVERDUE_OPEN)
         .count(),
-        qs.filter(review_status__in=_RV_PENDING).exclude(status__in=inquiry_done).count(),
+        qs.filter(review_status__in=_RV_PENDING)
+        .exclude(status__in=inquiry_done)
+        .exclude(quote_deadline__lt=now_date)
+        .count(),
         qs.filter(
             status__in=[
                 PurchaseInquiryStatus.QUOTING.value,
@@ -185,6 +201,7 @@ async def _section_purchase_inquiry(tenant_id: int, now_date) -> BadgeFragment:
         )
         .exclude(review_status__in=_RV_PENDING)
         .exclude(status__in=inquiry_done)
+        .exclude(quote_deadline__lt=now_date)
         .count(),
     )
     return {"purchase_inquiry": _tri(od, pending, prog)}
@@ -195,18 +212,42 @@ async def _section_demand_and_reporting(tenant_id: int, now_date) -> BadgeFragme
     from apps.kuaizhizao.models.demand_computation import DemandComputation
     from apps.kuaizhizao.models.reporting_record import ReportingRecord
 
-    demand_term = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "已关闭", "已取消"]))
+    # 与需求计划列表一致：仅 demand_plan；历史 sales_order/sales_forecast 行不计角标
+    demand_inactive = list(
+        dict.fromkeys(
+            [
+                *_DOC_TERMINAL_STATUSES,
+                "已关闭",
+                "已取消",
+                DocumentStatus.DRAFT.value,
+                "草稿",
+                "draft",
+            ]
+        )
+    )
+    demand_rejected = ["REJECTED", "已驳回", "审核驳回", "驳回", "rejected"]
     audited = [DocumentStatus.AUDITED.value, "已审核", "AUDITED", "CONFIRMED", "已确认"]
-    # 与列表「进行中」及 statistics.pending_count 对齐；含执行中的计算中态
-    dc_open_statuses = ["进行中", "计算中", "pending", "running"]
-    dm = Demand.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    # 与 DemandComputation 状态真源对齐：待执行 + 计算中
+    dc_open_statuses = [
+        DEMAND_COMPUTATION_STATUS_PENDING,
+        DEMAND_COMPUTATION_STATUS_COMPUTING,
+    ]
+    dm = Demand.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        demand_type="demand_plan",
+        is_active=True,
+        pushed_to_computation=False,
+    ).exclude(status__in=demand_inactive).exclude(review_status__in=demand_rejected)
+    # 延期与进行中互斥：过期只进 overdue；exclude(end_date__lt=…) 保留 NULL 与未到期
+    not_overdue = dm.exclude(end_date__lt=now_date)
     dm_od, dm_p, dm_x, dc_x, rep_p = await _gather_counts(
-        dm.filter(end_date__lt=now_date, end_date__isnull=False).exclude(status__in=demand_term).count(),
-        dm.filter(review_status__in=_RV_PENDING).exclude(status__in=[*demand_term, "DRAFT", "草稿"]).count(),
-        dm.filter(status__in=audited, review_status__in=[ReviewStatus.APPROVED.value, "APPROVED", "已通过"])
-        .filter(pushed_to_computation=False)
-        .exclude(status__in=demand_term)
-        .count(),
+        dm.filter(end_date__lt=now_date, end_date__isnull=False).count(),
+        not_overdue.filter(review_status__in=_RV_PENDING).count(),
+        not_overdue.filter(
+            status__in=audited,
+            review_status__in=[ReviewStatus.APPROVED.value, "APPROVED", "已通过"],
+        ).count(),
         DemandComputation.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -475,7 +516,9 @@ async def _section_equipment_documents(tenant_id: int, now: datetime, now_date) 
         ).count(),
         MaintenanceExecution.filter(
             tenant_id=tenant_id, deleted_at__isnull=True, status__in=["草稿", "已确认"]
-        ).count(),
+        )
+        .exclude(execution_date__lt=now)
+        .count(),
         MoldTrial.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="进行中").count(),
     )
     mold_b_od, mold_b_x, mold_m_od, mold_m_p, mold_m_x, mold_r_od, mold_r_p, mold_r_x, mold_s = await _gather_counts(
@@ -486,7 +529,9 @@ async def _section_equipment_documents(tenant_id: int, now: datetime, now_date) 
             expected_return_date__lt=now_date,
             expected_return_date__isnull=False,
         ).count(),
-        MoldBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="领用中").count(),
+        MoldBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="领用中")
+        .exclude(expected_return_date__lt=now_date)
+        .count(),
         MoldMaintenance.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -495,10 +540,14 @@ async def _section_equipment_documents(tenant_id: int, now: datetime, now_date) 
         )
         .exclude(status__in=mold_maint_term)
         .count(),
-        MoldMaintenance.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交").count(),
+        MoldMaintenance.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交")
+        .exclude(planned_date__lt=now_date)
+        .count(),
         MoldMaintenance.filter(
             tenant_id=tenant_id, deleted_at__isnull=True, status__in=["进行中", "已审核"]
-        ).count(),
+        )
+        .exclude(planned_date__lt=now_date)
+        .count(),
         MoldRepair.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -507,8 +556,12 @@ async def _section_equipment_documents(tenant_id: int, now: datetime, now_date) 
         )
         .exclude(status__in=mold_maint_term)
         .count(),
-        MoldRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交").count(),
-        MoldRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["进行中", "已审核"]).count(),
+        MoldRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交")
+        .exclude(planned_date__lt=now_date)
+        .count(),
+        MoldRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["进行中", "已审核"])
+        .exclude(planned_date__lt=now_date)
+        .count(),
         MoldScrapApplication.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交").count(),
     )
     tool_b_od, tool_b_x, tool_m_od, tool_m_p, tool_m_x, tool_r_od, tool_r_p, tool_r_x, tool_s, tool_led = await _gather_counts(
@@ -519,7 +572,9 @@ async def _section_equipment_documents(tenant_id: int, now: datetime, now_date) 
             expected_return_date__lt=now_date,
             expected_return_date__isnull=False,
         ).count(),
-        ToolBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="领用中").count(),
+        ToolBorrow.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="领用中")
+        .exclude(expected_return_date__lt=now_date)
+        .count(),
         ToolMaintenance.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -528,10 +583,14 @@ async def _section_equipment_documents(tenant_id: int, now: datetime, now_date) 
         )
         .exclude(status__in=mold_maint_term)
         .count(),
-        ToolMaintenance.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交").count(),
+        ToolMaintenance.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交")
+        .exclude(planned_date__lt=now_date)
+        .count(),
         ToolMaintenance.filter(
             tenant_id=tenant_id, deleted_at__isnull=True, status__in=["进行中", "已审核"]
-        ).count(),
+        )
+        .exclude(planned_date__lt=now_date)
+        .count(),
         ToolRepair.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -540,8 +599,12 @@ async def _section_equipment_documents(tenant_id: int, now: datetime, now_date) 
         )
         .exclude(status__in=mold_maint_term)
         .count(),
-        ToolRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交").count(),
-        ToolRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["进行中", "已审核"]).count(),
+        ToolRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交")
+        .exclude(planned_date__lt=now_date)
+        .count(),
+        ToolRepair.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["进行中", "已审核"])
+        .exclude(planned_date__lt=now_date)
+        .count(),
         ToolScrapApplication.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="已提交").count(),
         Tool.filter(tenant_id=tenant_id, deleted_at__isnull=True, status__in=["维修中", "校验中"]).count(),
     )
@@ -580,7 +643,9 @@ async def _section_warehouse_extra(tenant_id: int, now_date) -> BadgeFragment:
             suggested_order_date__lt=now_date,
             suggested_order_date__isnull=False,
         ).count(),
-        ReplenishmentSuggestion.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="pending").count(),
+        ReplenishmentSuggestion.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="pending")
+        .exclude(suggested_order_date__lt=now_date)
+        .count(),
     )
     return {
         "backflush_record": _tri(pending=bf_p),

@@ -105,6 +105,10 @@ _WORK_ORDER_TERMINAL: List[str] = [
     "已关闭",
     "CLOSED",
 ]
+# 与列表一致：拆分子单不计；逾期也不计已拆分壳
+_WORK_ORDER_OVERDUE_EXCLUDED: List[str] = list(
+    dict.fromkeys([*_WORK_ORDER_TERMINAL, "split", "已拆分", "SPLIT", "draft", "草稿", "DRAFT"])
+)
 _WORK_ORDER_IN_PROGRESS: List[str] = [
     "released",
     "in_progress",
@@ -113,6 +117,7 @@ _WORK_ORDER_IN_PROGRESS: List[str] = [
     "RELEASED",
     "IN_PROGRESS",
 ]
+_WORK_ORDER_LIST_GROUP_ROLES: List[str] = ["root", "component", "outsource_component"]
 _REWORK_TERMINAL: List[str] = sorted(
     set(TERMINAL_REWORK_ORDER_STATUSES)
     | {"已关闭", "已取消", "CLOSED", "CANCELLED", "closed", "cancelled"}
@@ -129,20 +134,28 @@ async def _safe_section(name: str, fn: Callable[[], Awaitable[BadgeFragment]]) -
 
 
 async def _section_work_orders(ctx: BadgeScopeCtx, now: datetime) -> BadgeFragment:
+    from tortoise.expressions import Q
+
     from apps.kuaizhizao.models.work_order import WorkOrder
     from apps.kuaizhizao.models.rework_order import ReworkOrder
 
     tid = ctx.tenant_id
+    # 与工单列表一致：仅根单；拆分子单挂在 children，不计角标
+    wo_base = WorkOrder.filter(
+        tenant_id=tid,
+        deleted_at__isnull=True,
+        parent_work_order_id__isnull=True,
+    ).filter(
+        Q(group_role__isnull=True) | Q(group_role__in=_WORK_ORDER_LIST_GROUP_ROLES)
+    )
     wo_overdue, wo_in_progress, ro_overdue, ro_in_progress = await _gather_counts(
         badge_count(
-            WorkOrder.filter(tenant_id=tid, deleted_at__isnull=True, planned_end_date__lt=now).exclude(
-                status__in=_WORK_ORDER_TERMINAL
-            ),
+            wo_base.filter(planned_end_date__lt=now).exclude(status__in=_WORK_ORDER_OVERDUE_EXCLUDED),
             ctx,
             RES_WORK_ORDER,
         ),
         badge_count(
-            WorkOrder.filter(tenant_id=tid, deleted_at__isnull=True, status__in=_WORK_ORDER_IN_PROGRESS),
+            wo_base.filter(status__in=_WORK_ORDER_IN_PROGRESS).exclude(planned_end_date__lt=now),
             ctx,
             RES_WORK_ORDER,
         ),
@@ -154,7 +167,9 @@ async def _section_work_orders(ctx: BadgeScopeCtx, now: datetime) -> BadgeFragme
             RES_REWORK_ORDER,
         ),
         badge_count(
-            ReworkOrder.filter(tenant_id=tid, deleted_at__isnull=True, status__in=_REWORK_IN_PROGRESS),
+            ReworkOrder.filter(tenant_id=tid, deleted_at__isnull=True, status__in=_REWORK_IN_PROGRESS).exclude(
+                planned_end_date__lt=now
+            ),
             ctx,
             RES_REWORK_ORDER,
         ),
@@ -273,7 +288,7 @@ async def _section_sales(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
             RES_SALES_ORDER,
         ),
         SalesForecast.filter(tenant_id=tid, deleted_at__isnull=True, end_date__lt=now_date)
-        .exclude(status__in=_DOC_TERMINAL_STATUSES)
+        .exclude(status__in=["DRAFT", "草稿", "draft", *_DOC_TERMINAL_STATUSES])
         .count(),
         SalesForecast.filter(
             tenant_id=tid,
@@ -281,9 +296,11 @@ async def _section_sales(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
             review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
         )
         .exclude(status__in=["DRAFT", "草稿", *_DOC_TERMINAL_STATUSES])
+        .exclude(end_date__lt=now_date)
         .count(),
         SalesForecast.filter(tenant_id=tid, deleted_at__isnull=True, status__in=so_active)
         .exclude(status__in=_DOC_TERMINAL_STATUSES)
+        .exclude(end_date__lt=now_date)
         .count(),
     )
     return {
@@ -345,7 +362,11 @@ async def _section_purchase(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
             RES_INBOUND,
         ),
         badge_count(
-            _pr.filter(status__in=tuple(_INBOUND_PENDING_STATUSES)).exclude(review_status__in=_RV_PENDING),
+            _pr.filter(
+                status__in=tuple(
+                    s for s in _INBOUND_PENDING_STATUSES if s not in ("草稿", "draft", "DRAFT")
+                )
+            ).exclude(review_status__in=_RV_PENDING),
             ctx,
             RES_INBOUND,
         ),
@@ -369,11 +390,7 @@ async def _section_quality_inspection(ctx: BadgeScopeCtx) -> BadgeFragment:
         ProcessInspection.filter(tenant_id=tid, deleted_at__isnull=True, status="待检验").count(),
         FinishedGoodsInspection.filter(tenant_id=tid, deleted_at__isnull=True, status="待检验").count(),
         FaiOrder.filter(tenant_id=tid, deleted_at__isnull=True, status="submitted").count(),
-        FaiOrder.filter(
-            tenant_id=tid,
-            deleted_at__isnull=True,
-            status__in=["draft", "in_progress", "rejected"],
-        ).count(),
+        FaiOrder.filter(tenant_id=tid, deleted_at__isnull=True, status="in_progress").count(),
     )
     return {
         "incoming_inspection": {"overdue": 0, "pending": c1, "in_progress": 0},
@@ -552,12 +569,24 @@ async def _section_sales_docs(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
             ctx,
             RES_QUOTATION,
         ),
-        badge_count(qb_open.filter(review_status__in=_RV_PENDING).exclude(status__in=qb_done), ctx, RES_QUOTATION),
-        badge_count(qb_open.filter(status="已发送").exclude(review_status__in=_RV_PENDING), ctx, RES_QUOTATION),
+        badge_count(
+            qb_open.filter(review_status__in=_RV_PENDING)
+            .exclude(status__in=qb_done)
+            .exclude(valid_until__lt=now_date),
+            ctx,
+            RES_QUOTATION,
+        ),
+        badge_count(
+            qb_open.filter(status="已发送")
+            .exclude(review_status__in=_RV_PENDING)
+            .exclude(valid_until__lt=now_date),
+            ctx,
+            RES_QUOTATION,
+        ),
         rn.filter(planned_receipt_date__lt=now_date, planned_receipt_date__isnull=False)
         .exclude(status__in=rn_done).count(),
-        rn.filter(status="待收货").count(),
-        rn.filter(status="已通知").count(),
+        rn.filter(status="待收货").exclude(planned_receipt_date__lt=now_date).count(),
+        rn.filter(status="已通知").exclude(planned_receipt_date__lt=now_date).count(),
         badge_count(prt.filter(review_status__in=_RV_PENDING).exclude(status__in=return_done), ctx, RES_PURCHASE_RETURN),
         badge_count(prt.filter(status="待退货").exclude(review_status__in=_RV_PENDING), ctx, RES_PURCHASE_RETURN),
         badge_count(
@@ -565,8 +594,16 @@ async def _section_sales_docs(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
             ctx,
             RES_SHIPMENT_NOTICE,
         ),
-        badge_count(sn.filter(status="待发货"), ctx, RES_SHIPMENT_NOTICE),
-        badge_count(sn.filter(status="已通知"), ctx, RES_SHIPMENT_NOTICE),
+        badge_count(
+            sn.filter(status="待发货").exclude(planned_ship_date__lt=now_date),
+            ctx,
+            RES_SHIPMENT_NOTICE,
+        ),
+        badge_count(
+            sn.filter(status="已通知").exclude(planned_ship_date__lt=now_date),
+            ctx,
+            RES_SHIPMENT_NOTICE,
+        ),
         badge_count(sr.filter(review_status__in=_RV_PENDING).exclude(status__in=return_done), ctx, RES_SALES_RETURN),
         badge_count(sr.filter(status="待退货").exclude(review_status__in=_RV_PENDING), ctx, RES_SALES_RETURN),
     )
@@ -581,20 +618,37 @@ async def _section_sales_docs(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
 
 async def _section_misc_ops(ctx: BadgeScopeCtx, now: datetime, now_date) -> BadgeFragment:
     from apps.kuaizhizao.models.customer_follow_up import CustomerFollowUp
+    from apps.kuaizhizao.models.outsource_order import OutsourceOrder
     from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
     from apps.kuaizhizao.models.equipment_fault import EquipmentFault
     from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
     from apps.kuaizhizao.models.maintenance_reminder import MaintenanceReminder
-    from apps.kuaizhizao.models.inspection_plan import InspectionPlan
 
     tid = ctx.tenant_id
     ow = OutsourceWorkOrder.filter(tenant_id=tid, deleted_at__isnull=True)
+    oo = OutsourceOrder.filter(tenant_id=tid, deleted_at__isnull=True)
     ow_term = list(dict.fromkeys([*_WORK_ORDER_TERMINAL, *_DOC_TERMINAL_STATUSES]))
+    ow_overdue_ex = list(dict.fromkeys([*ow_term, "draft", "草稿", "DRAFT"]))
     ef = EquipmentFault.filter(tenant_id=tid, deleted_at__isnull=True)
     mp = MaintenancePlan.filter(tenant_id=tid, deleted_at__isnull=True)
     mp_term = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "已完成", "已取消"]))
+    oo_active = ["released", "in_progress", "已下达", "进行中"]
 
-    cfu_od, ow_od, ow_p, ow_x, ef_p, ef_x, mp_od, mp_p, mp_x, mrem, ip_cnt = await _gather_counts(
+    (
+        cfu_od,
+        ow_od,
+        ow_p,
+        ow_x,
+        oo_od,
+        oo_p,
+        oo_x,
+        ef_p,
+        ef_x,
+        mp_od,
+        mp_p,
+        mp_x,
+        mrem,
+    ) = await _gather_counts(
         badge_count(
             CustomerFollowUp.filter(
                 tenant_id=tid,
@@ -606,13 +660,28 @@ async def _section_misc_ops(ctx: BadgeScopeCtx, now: datetime, now_date) -> Badg
             RES_CUSTOMER_FOLLOW_UP,
         ),
         badge_count(
-            ow.filter(planned_end_date__lt=now, planned_end_date__isnull=False).exclude(status__in=ow_term),
+            ow.filter(planned_end_date__lt=now, planned_end_date__isnull=False).exclude(
+                status__in=ow_overdue_ex
+            ),
             ctx,
             RES_OUTSOURCE_ORDER,
         ),
         badge_count(ow.filter(status="draft"), ctx, RES_OUTSOURCE_ORDER),
         badge_count(
-            ow.filter(status__in=["released", "in_progress", "已下达", "进行中"]),
+            ow.filter(status__in=oo_active).exclude(planned_end_date__lt=now),
+            ctx,
+            RES_OUTSOURCE_ORDER,
+        ),
+        badge_count(
+            oo.filter(planned_end_date__lt=now, planned_end_date__isnull=False).exclude(
+                status__in=ow_overdue_ex
+            ),
+            ctx,
+            RES_OUTSOURCE_ORDER,
+        ),
+        badge_count(oo.filter(status="draft"), ctx, RES_OUTSOURCE_ORDER),
+        badge_count(
+            oo.filter(status__in=oo_active).exclude(planned_end_date__lt=now),
             ctx,
             RES_OUTSOURCE_ORDER,
         ),
@@ -620,20 +689,22 @@ async def _section_misc_ops(ctx: BadgeScopeCtx, now: datetime, now_date) -> Badg
         ef.filter(status="处理中").count(),
         mp.filter(planned_end_date__lt=now, planned_end_date__isnull=False)
         .exclude(status__in=mp_term).count(),
-        mp.filter(status__in=["草稿", "已发布"]).count(),
-        mp.filter(status="执行中").count(),
+        # 保养方案：已发布待执行为待办；草稿不计角标
+        mp.filter(status="已发布").exclude(planned_end_date__lt=now).count(),
+        mp.filter(status="执行中").exclude(planned_end_date__lt=now).count(),
         MaintenanceReminder.filter(tenant_id=tid, deleted_at__isnull=True, is_handled=False).count(),
-        InspectionPlan.filter(tenant_id=tid, deleted_at__isnull=True, is_active=False).count(),
     )
     return {
         "customer_follow_up": {"overdue": cfu_od, "pending": 0, "in_progress": 0},
         "outsource_work_order": {"overdue": ow_od, "pending": ow_p, "in_progress": ow_x},
+        "outsource_order": {"overdue": oo_od, "pending": oo_p, "in_progress": oo_x},
         # 装箱绑定为已发生记录，无「待办」状态；不得把历史绑定总量当成徽章
         "packing_binding": {"overdue": 0, "pending": 0, "in_progress": 0},
         "equipment_fault": {"overdue": 0, "pending": ef_p, "in_progress": ef_x},
         "maintenance_plan": {"overdue": mp_od, "pending": mp_p, "in_progress": mp_x},
         "maintenance_reminder": {"overdue": 0, "pending": mrem, "in_progress": 0},
-        "inspection_plan": {"overdue": 0, "pending": ip_cnt, "in_progress": 0},
+        # 检验方案为主数据，无业务待办角标（原 is_active=False 计数属误计）
+        "inspection_plan": {"overdue": 0, "pending": 0, "in_progress": 0},
     }
 
 
@@ -645,7 +716,10 @@ async def _section_finance(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
 
     tid = ctx.tenant_id
     recv_pending, pay_pending, recv_voucher, pay_voucher, recv_overdue = await _gather_counts(
-        Receivable.filter(tenant_id=tid, deleted_at__isnull=True, remaining_amount__gt=0).count(),
+        # 未逾期的开放应收（与 overdue 互斥）
+        Receivable.filter(tenant_id=tid, deleted_at__isnull=True, remaining_amount__gt=0)
+        .exclude(due_date__lt=now_date)
+        .count(),
         Payable.filter(tenant_id=tid, deleted_at__isnull=True, remaining_amount__gt=0).count(),
         Receipt.filter(tenant_id=tid, deleted_at__isnull=True, unsettled_amount__gt=0)
         .exclude(status="Cancelled").count(),

@@ -3276,6 +3276,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
             return (
               <div
+                className={badgeEl ? 'menu-item-badge-host' : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                 }}
@@ -3305,10 +3306,25 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     prefetchSystemRoute(path);
                   }
                 }}
-                style={{ display: 'block', width: '100%' }}
+                style={{ display: 'block', width: '100%', minWidth: 0 }}
               >
-                <Link to={item.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 6 }}>
-                  {dom}
+                <Link
+                  to={item.path}
+                  className={badgeEl ? 'menu-item-badge-link' : undefined}
+                  style={
+                    badgeEl
+                      ? {
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          width: '100%',
+                          minWidth: 0,
+                          gap: 6,
+                        }
+                      : undefined
+                  }
+                >
+                  {badgeEl ? <span className="menu-item-badge-label">{dom}</span> : dom}
                   {badgeEl}
                 </Link>
               </div>
