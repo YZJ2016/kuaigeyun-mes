@@ -5257,12 +5257,54 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                     operator_name=receiver_name,
                 )
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
-                await InventoryCostService().apply_finished_goods_receipt_cost(
+                fg_unit_cost = await InventoryCostService().apply_finished_goods_receipt_cost(
                     tenant_id, receipt_id, receipt.work_order_id
                 )
             except Exception as inv_e:
                 logger.error("成品入库确认-更新库存失败: %s", inv_e)
                 raise
+
+            # 5. 会计事件（spec 142）：与过账同事务，失败即整单回滚。
+            # 成本金额可取则取（工单单位成本 × 入库数量），取不到时记数量事件，禁止写假金额。
+            from apps.kuaicaiwu.services.finance_integration_hooks import (
+                record_finance_accounting_event,
+            )
+
+            fg_total_qty = Decimal("0")
+            for it in items:
+                line_qty = Decimal(str(it.receipt_quantity or it.qualified_quantity or 0))
+                if line_qty <= 0:
+                    continue
+                fg_total_qty += convert_to_base_quantity(
+                    material_by_id.get(it.material_id),
+                    line_qty,
+                    from_unit=getattr(it, "material_unit", None),
+                )
+            fg_event_amount = (
+                (Decimal(str(fg_unit_cost)) * fg_total_qty).quantize(Decimal("0.01"))
+                if fg_unit_cost
+                else None
+            )
+            await record_finance_accounting_event(
+                tenant_id=tenant_id,
+                event_type="FINISHED_GOODS_RECEIPT_TO_INVENTORY",
+                business_type="inventory",
+                source_doc_type="finished_goods_receipt",
+                source_doc_id=receipt_id,
+                source_doc_code=receipt.receipt_code,
+                target_doc_type="finished_goods_receipt",
+                target_doc_id=receipt_id,
+                target_doc_code=receipt.receipt_code,
+                amount=fg_event_amount,
+                operator_id=confirmed_by,
+                notes=f"成品入库确认 {receipt.receipt_code}（生产入库）",
+                payload={
+                    "work_order_id": getattr(receipt, "work_order_id", None),
+                    "work_order_code": getattr(receipt, "work_order_code", None),
+                    "unit_cost": str(fg_unit_cost) if fg_unit_cost else None,
+                    "quantity": str(fg_total_qty),
+                },
+            )
 
             updated_receipt = await self.get_finished_goods_receipt_by_id(tenant_id, receipt_id)
             return updated_receipt
@@ -8700,11 +8742,17 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                                 tenant_id, int(so.id), confirmed_by
                             )
                         except Exception as milestone_exc:
+                            # spec 142：里程碑应收生成失败不得仅记日志当成功；此时过账已提交，
+                            # 抛出为可见失败（出库已确认、账未记）
                             logger.exception(
-                                "销售出库单 %s 按到货收款节点自动生成应收失败（不影响出库确认）: %s",
+                                "销售出库单 %s 按到货收款节点自动生成应收失败: %s",
                                 delivery_row.delivery_code,
                                 milestone_exc,
                             )
+                            raise BusinessLogicError(
+                                f"销售出库单 {delivery_row.delivery_code} 已出库，"
+                                f"但按到货收款节点自动生成应收失败: {milestone_exc}"
+                            ) from milestone_exc
                         return updated_delivery
             pull_preview = await receivable_pull_service.preview_pull_from_sales_delivery(
                 tenant_id, delivery_id
@@ -8786,7 +8834,10 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     notes=f"销售出库单 {delivery_row.delivery_code} 自动生成应收单",
                 )
             except Exception as rel_e:
-                logger.warning("创建销售出库→应收单 单据关联/会计事件失败: %s", rel_e)
+                # spec 142：关联/会计事件失败不得仅记日志当成功；此处已过账提交，
+                # 抛出后由外层包装为接口错误（出库已确认、账未记 = 诚实可见失败）
+                logger.error("创建销售出库→应收单 单据关联/会计事件失败: %s", rel_e)
+                raise
             prepaid_apply = Decimal(str(pull_plan.get("prepaid_apply") or 0))
             if prepaid_apply > 0:
                 try:
@@ -8798,17 +8849,28 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         operator_id=confirmed_by,
                     )
                 except Exception as prep_e:
+                    # spec 142：核销预收失败同样不得假装成功，抛出为可见失败
                     logger.exception(
                         "销售出库单 %s 自动应收后核销预收失败: %s",
                         delivery_row.delivery_code,
                         prep_e,
                     )
+                    raise BusinessLogicError(
+                        f"销售出库单 {delivery_row.delivery_code} 应收单已生成，"
+                        f"但核销预收失败: {prep_e}"
+                    ) from prep_e
         except Exception as e:
+            # spec 142：应收生成/会计事件失败须冒泡到接口层，不得假装成功；
+            # 此时过账已提交，「出库已确认、应收未记」为可见失败（可人工补应收后重推）
             logger.exception(
                 "销售出库单 %s 自动生成应收单失败: %s",
                 getattr(updated_delivery, "delivery_code", delivery_id),
                 e,
             )
+            raise BusinessLogicError(
+                f"销售出库单 {getattr(updated_delivery, 'delivery_code', delivery_id)} "
+                f"已出库，但自动生成应收单失败: {e}"
+            ) from e
 
         return updated_delivery
 
@@ -10233,15 +10295,22 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                                 notes=f"采购入库单 {receipt_for_payable.receipt_code} 自动生成应付单",
                             )
                         except Exception as rel_e:
+                            # spec 142：关联/会计事件失败向上抛，不得仅记日志当成功
                             logger.exception(
                                 "创建采购入库→应付单 单据关联/会计事件失败 receipt_code=%s",
                                 receipt_for_payable.receipt_code,
                             )
+                            raise
             except Exception as e:
+                # spec 142：过账已提交，应付生成失败为可见失败（入库已确认、账未记）
                 logger.exception(
-                    "自动生成应付单失败 receipt_code=%s（不影响入库确认结果）",
+                    "自动生成应付单失败 receipt_code=%s",
                     receipt_for_payable.receipt_code,
                 )
+                raise BusinessLogicError(
+                    f"采购入库单 {receipt_for_payable.receipt_code} "
+                    f"已入库，但自动生成应付单失败: {e}"
+                ) from e
         # #region agent log
         _agent_debug_ndjson(
             "warehouse_service.confirm_receipt:after_tx",
@@ -13001,7 +13070,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().on_sales_return_confirmed(tenant_id, return_id)
             except Exception as cost_e:
-                logger.warning("销售退货确认-成本处理失败: %s", cost_e)
+                # spec 142：成本处理与库存同一成败——在过账事务内抛出即整单回滚
+                logger.error("销售退货确认-成本处理失败: %s", cost_e)
+                raise
 
         # 过账事务已提交。红字应收须在外层创建：create_receivable 内部另有 in_transaction()，
         # 嵌套时部分环境会回滚退货状态/库存，但接口仍返回成功体。
@@ -13108,7 +13179,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         notes=f"销售退货单 {ret_obj.return_code} 自动生成红字应收单",
                     )
                 except Exception as rel_e:
-                    logger.warning("销售退货确认-创建应收单关联/会计事件失败: %s", rel_e)
+                    # spec 142：关联/会计事件失败向上抛，不得仅记日志当成功
+                    logger.error("销售退货确认-创建应收单关联/会计事件失败: %s", rel_e)
+                    raise
                 red_receivable_id = int(receivable.id)
             elif total_amount <= 0:
                 logger.warning(
@@ -13117,7 +13190,12 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     getattr(ret_obj, "return_code", None),
                 )
         except Exception as fin_e:
-            logger.warning("销售退货确认-创建红字应收单失败: %s", fin_e)
+            # spec 142：过账已提交，红字应收生成失败为可见失败（退货已确认、账未记）
+            logger.exception("销售退货确认-创建红字应收单失败: %s", fin_e)
+            raise BusinessLogicError(
+                f"销售退货单 {getattr(ret_obj, 'return_code', return_id)} "
+                f"已退货，但自动生成红字应收单失败: {fin_e}"
+            ) from fin_e
 
         if total_amount > 0:
             try:
@@ -13132,7 +13210,12 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     red_receivable_id=red_receivable_id,
                 )
             except Exception as offset_e:
-                logger.warning("销售退货确认-冲减蓝字应收未结余额失败: %s", offset_e)
+                # spec 142：冲减失败不得假装成功，抛出为可见失败（退货已确认、冲减未记）
+                logger.error("销售退货确认-冲减蓝字应收未结余额失败: %s", offset_e)
+                raise BusinessLogicError(
+                    f"销售退货单 {getattr(ret_obj, 'return_code', return_id)} "
+                    f"已退货，但冲减蓝字应收未结余额失败: {offset_e}"
+                ) from offset_e
 
         return updated_return
 
@@ -13284,7 +13367,9 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     tenant_id, return_id, operator_id=updated_by
                 )
             except Exception as offset_e:
-                logger.warning("销售退货撤回-回滚蓝字应收冲减失败: %s", offset_e)
+                # spec 142：撤回对冲与库存回滚同一成败——事务内抛出即整单回滚
+                logger.error("销售退货撤回-回滚蓝字应收冲减失败: %s", offset_e)
+                raise
 
             from apps.kuaizhizao.services.inventory_service import InventoryService
             items = await SalesReturnItem.filter(tenant_id=tenant_id, return_id=return_id).all()
@@ -14744,7 +14829,9 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().on_purchase_return_confirmed(tenant_id, return_id)
             except Exception as cost_e:
-                logger.warning("采购退货确认-成本处理失败: %s", cost_e)
+                # spec 142：成本处理与库存同一成败——在过账事务内抛出即整单回滚
+                logger.error("采购退货确认-成本处理失败: %s", cost_e)
+                raise
 
         await sync_purchase_orders_after_purchase_return(tenant_id, return_id)
 
@@ -14826,10 +14913,17 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         notes=f"采购退货单 {ret_obj.return_code} 自动生成红字应付单",
                     )
                 except Exception as rel_e:
-                    logger.warning("采购退货确认-创建应付单关联/会计事件失败: %s", rel_e)
+                    # spec 142：关联/会计事件失败向上抛，不得仅记日志当成功
+                    logger.error("采购退货确认-创建应付单关联/会计事件失败: %s", rel_e)
+                    raise
                 red_payable_id = int(payable.id)
         except Exception as fin_e:
-            logger.warning("采购退货确认-创建红字应付单失败: %s", fin_e)
+            # spec 142：过账已提交，红字应付生成失败为可见失败（退货已确认、账未记）
+            logger.exception("采购退货确认-创建红字应付单失败: %s", fin_e)
+            raise BusinessLogicError(
+                f"采购退货单 {getattr(ret_obj, 'return_code', return_id)} "
+                f"已退货，但自动生成红字应付单失败: {fin_e}"
+            ) from fin_e
 
         if total_amount > 0:
             try:
@@ -14844,7 +14938,12 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     red_payable_id=red_payable_id,
                 )
             except Exception as offset_e:
-                logger.warning("采购退货确认-冲减蓝字应付未结余额失败: %s", offset_e)
+                # spec 142：冲减失败不得假装成功，抛出为可见失败（退货已确认、冲减未记）
+                logger.error("采购退货确认-冲减蓝字应付未结余额失败: %s", offset_e)
+                raise BusinessLogicError(
+                    f"采购退货单 {getattr(ret_obj, 'return_code', return_id)} "
+                    f"已退货，但冲减蓝字应付未结余额失败: {offset_e}"
+                ) from offset_e
 
         return updated_return
 
@@ -14982,7 +15081,9 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     tenant_id, return_id, operator_id=updated_by
                 )
             except Exception as offset_e:
-                logger.warning("采购退货撤回-回滚蓝字应付冲减失败: %s", offset_e)
+                # spec 142：撤回对冲与库存回滚同一成败——事务内抛出即整单回滚
+                logger.error("采购退货撤回-回滚蓝字应付冲减失败: %s", offset_e)
+                raise
 
             from apps.kuaizhizao.services.inventory_service import InventoryService
             from tortoise.timezone import now as tz_now
@@ -15515,7 +15616,9 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 await InventoryCostService().on_other_inbound_confirmed(tenant_id, inbound_id)
             except Exception as cost_e:
-                logger.warning("其他入库确认-成本处理失败: %s", cost_e)
+                # spec 142：成本处理与库存同一成败——在过账事务内抛出即整单回滚
+                logger.error("其他入库确认-成本处理失败: %s", cost_e)
+                raise
 
             try:
                 from apps.kuaicaiwu.services.finance_integration_hooks import (
@@ -15525,7 +15628,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 inbound_fresh = await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
                 amount = Decimal("0")
                 for it in await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id):
-                    amount += Decimal(str(getattr(it, "amount", 0) or getattr(it, "inbound_amount", 0) or 0))
+                    amount += Decimal(str(getattr(it, "total_amount", 0) or 0))
                 await record_finance_accounting_event(
                     tenant_id=tenant_id,
                     event_type="WAREHOUSE_INBOUND",
@@ -15542,7 +15645,9 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     payload={"supplier_id": getattr(inbound_fresh, "supplier_id", None)},
                 )
             except Exception as ev_e:
-                logger.warning("其他入库确认-会计事件失败: %s", ev_e)
+                # spec 142：会计事件与库存同一成败——事务内抛出即整单回滚
+                logger.error("其他入库确认-会计事件失败: %s", ev_e)
+                raise
 
             return OtherInboundResponse.model_validate(
                 await OtherInbound.get(tenant_id=tenant_id, id=inbound_id)
@@ -16114,7 +16219,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 outbound_fresh = await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
                 amount = Decimal("0")
                 for it in await OtherOutboundItem.filter(tenant_id=tenant_id, outbound_id=outbound_id):
-                    amount += Decimal(str(getattr(it, "amount", 0) or getattr(it, "outbound_amount", 0) or 0))
+                    amount += Decimal(str(getattr(it, "total_amount", 0) or 0))
                 await record_finance_accounting_event(
                     tenant_id=tenant_id,
                     event_type="WAREHOUSE_OUTBOUND",
@@ -16130,7 +16235,9 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                     notes=f"其他出库确认 {getattr(outbound_fresh, 'outbound_code', outbound_id)}",
                 )
             except Exception as ev_e:
-                logger.warning("其他出库确认-会计事件失败: %s", ev_e)
+                # spec 142：会计事件与库存同一成败——事务内抛出即整单回滚
+                logger.error("其他出库确认-会计事件失败: %s", ev_e)
+                raise
 
             return OtherOutboundResponse.model_validate(
                 await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)

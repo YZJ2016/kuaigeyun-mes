@@ -117,19 +117,21 @@ def _http_exception_with_trace(
     )
 
 
-async def _get_reporting_estimated_wage_rate(tenant_id: int) -> Decimal:
-    """读取报工统计预估工资基数，未配置时回退到 30。"""
-    default_rate = Decimal("30")
+async def _get_reporting_estimated_wage_rate(tenant_id: int) -> Optional[Decimal]:
+    """读取报工统计预估工资基数；未配置（或配置无效）返回 None，禁止回退常数。
+
+    spec 142：缺配置时 estimated_wages 返回 null + 「未配置」标记，其余字段照常返回。
+    """
     try:
         biz_config = await BusinessConfigService().get_business_config(tenant_id)
         reporting_cfg = (biz_config or {}).get("parameters", {}).get("reporting", {})
         configured_rate = reporting_cfg.get("estimated_wage_rate")
         if configured_rate is None:
-            return default_rate
+            return None
         rate = Decimal(str(configured_rate))
-        return rate if rate > 0 else default_rate
+        return rate if rate > 0 else None
     except Exception:
-        return default_rate
+        return None
 
 
 async def _emit_overview_statistics_alert(tenant_id: int, trace_id: str, error_message: str) -> None:
@@ -267,8 +269,12 @@ async def get_reporting_overview_statistics(
         hours_vals = await base.filter(reported_at__gte=month_start_dt).values_list("work_hours", flat=True)
         cumulative_hours = round(float(sum(v or 0 for v in hours_vals)), 1)
 
-        # 估算工资（工时 × 统一配置基数）
-        estimated_wages = round(cumulative_hours * float(wage_rate), 2)
+        # 估算工资（工时 × 统一配置基数）；缺配置为 null + 「未配置」，禁止回退 30（spec 142）
+        estimated_wages = (
+            round(cumulative_hours * float(wage_rate), 2)
+            if wage_rate is not None
+            else None
+        )
 
         # 停机记录数（当月）
         try:
@@ -314,18 +320,23 @@ async def get_reporting_overview_statistics(
             trace_id=trace_id,
             error_message=str(e),
         )
-        cumulative_hours = 0; estimated_wages = 0; downtime_records = 0
+        cumulative_hours = 0; estimated_wages = None; downtime_records = 0
         exception_reports = 0; efficiency = 0; trend_hours = [0] * 7
 
     return ReportingOverviewStatisticsResponse.model_validate({
         "cumulative_hours": cumulative_hours,
         "estimated_wages": estimated_wages,
+        "estimated_wages_note": None if wage_rate is not None else "未配置",
         "downtime_records": downtime_records,
         "exception_reports": exception_reports,
         "efficiency": efficiency,
         "trends": {
             "hours": trend_hours,
-            "wages": [round(h * float(wage_rate), 2) for h in trend_hours],
+            "wages": (
+                [round(h * float(wage_rate), 2) for h in trend_hours]
+                if wage_rate is not None
+                else [None] * len(trend_hours)
+            ),
             "efficiency": [efficiency] * 7,
         },
     })

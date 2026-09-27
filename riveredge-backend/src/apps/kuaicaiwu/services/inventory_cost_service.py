@@ -269,12 +269,14 @@ class InventoryCostService:
                     inbound_unit_price=unit_price,
                 )
             except Exception as exc:
-                logger.warning(
+                # spec 142：行级成本失败也须上抛——调用方在过账事务内，抛出即整单回滚
+                logger.error(
                     "销售退货移动平均成本更新失败 return={} material={}: {}",
                     return_id,
                     item.material_id,
                     exc,
                 )
+                raise
 
     async def on_purchase_receipt_confirmed(self, tenant_id: int, receipt_id: int) -> None:
         from apps.kuaizhizao.utils.material_unit_utils import (
@@ -439,12 +441,14 @@ class InventoryCostService:
                     inbound_unit_price=unit_cost,
                 )
             except Exception as exc:
-                logger.warning(
+                # spec 142：行级成本失败也须上抛——调用方在过账事务内，抛出即整单回滚
+                logger.error(
                     "成品入库成本结转失败 receipt={} material={}: {}",
                     receipt_id,
                     item.material_id,
                     exc,
                 )
+                raise
         return unit_cost if total_inbound > 0 else None
 
     async def on_other_inbound_confirmed(self, tenant_id: int, inbound_id: int) -> None:
@@ -469,12 +473,14 @@ class InventoryCostService:
                     inbound_unit_price=unit_price,
                 )
             except Exception as exc:
-                logger.warning(
+                # spec 142：行级成本失败也须上抛——调用方在过账事务内，抛出即整单回滚
+                logger.error(
                     "其他入库移动平均成本更新失败 inbound={} material={}: {}",
                     inbound_id,
                     item.material_id,
                     exc,
                 )
+                raise
 
     async def on_outsource_receipt_confirmed(self, tenant_id: int, receipt_id: int) -> Optional[Decimal]:
         """委外收货确认：材料+加工暂估写入成品移动平均。"""
@@ -544,13 +550,15 @@ class InventoryCostService:
                 inbound_unit_price=unit_cost,
             )
         except Exception as exc:
-            logger.warning(
+            # spec 142：成本结转失败上抛（detached task 壳层记 error 落可见失败，
+            # 不再静默返回 None 假装无成本）
+            logger.error(
                 "委外收货成本结转失败 receipt={} product={}: {}",
                 receipt_id,
                 work_order.product_id,
                 exc,
             )
-            return None
+            raise
 
         now = resolve_business_datetime()
         await OutsourceMaterialReceipt.filter(id=receipt.id, tenant_id=tenant_id).update(

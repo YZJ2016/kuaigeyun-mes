@@ -218,52 +218,57 @@ class FaDepreciationService:
         if not lines:
             raise BusinessLogicError("无可计提明细")
 
-        for line in lines:
-            amt = quantize_money(line.final_amount)
-            if amt <= 0:
-                continue
-            asset = await FaAsset.get_or_none(
-                id=line.asset_id, tenant_id=tenant_id, deleted_at__isnull=True
-            )
-            if not asset:
-                continue
-            asset.accumulated_depreciation = quantize_money(asset.accumulated_depreciation) + amt
-            asset.depreciated_periods = int(asset.depreciated_periods or 0) + 1
-            await asset.save()
+        # spec 142：资产累计折旧变更 + 会计事件 + 批次确认同事务——
+        # 事件失败整批回滚，重试不会重复累加折旧或重复产生事件
+        from tortoise.transactions import in_transaction
 
-            event = await AccountingEventService.record_event(
-                tenant_id=tenant_id,
-                event_type="FA_DEPRECIATION",
-                business_type="fixed_asset",
-                source_doc_type="fa_depr_run_line",
-                source_doc_id=line.id,
-                source_doc_code=f"{run.run_code}-{asset.asset_code}",
-                target_doc_type="fa_asset",
-                target_doc_id=asset.id,
-                target_doc_code=asset.asset_code,
-                amount=amt,
-                operator_id=user.id,
-                notes=f"{run.period_year:04d}-{run.period_month:02d} 固定资产折旧 {asset.asset_name}",
-                payload={
-                    "expense_account_code": asset.expense_account_code,
-                    "accumulated_depreciation_account_code": asset.accumulated_depreciation_account_code,
-                    "asset_account_code": asset.asset_account_code,
-                    "department_id": asset.department_id,
-                    "department_name": asset.department_name,
-                    "asset_code": asset.asset_code,
-                    "asset_name": asset.asset_name,
-                    "period_year": run.period_year,
-                    "period_month": run.period_month,
-                },
-            )
-            line.accounting_event_id = event.id
-            await line.save()
+        async with in_transaction():
+            for line in lines:
+                amt = quantize_money(line.final_amount)
+                if amt <= 0:
+                    continue
+                asset = await FaAsset.get_or_none(
+                    id=line.asset_id, tenant_id=tenant_id, deleted_at__isnull=True
+                )
+                if not asset:
+                    continue
+                asset.accumulated_depreciation = quantize_money(asset.accumulated_depreciation) + amt
+                asset.depreciated_periods = int(asset.depreciated_periods or 0) + 1
+                await asset.save()
 
-        run.status = "confirmed"
-        run.confirmed_at = resolve_business_datetime()
-        run.confirmed_by = user.id
-        run.confirmed_by_name = getattr(user, "name", None) or getattr(user, "username", None)
-        await run.save()
+                event = await AccountingEventService.record_event(
+                    tenant_id=tenant_id,
+                    event_type="FA_DEPRECIATION",
+                    business_type="fixed_asset",
+                    source_doc_type="fa_depr_run_line",
+                    source_doc_id=line.id,
+                    source_doc_code=f"{run.run_code}-{asset.asset_code}",
+                    target_doc_type="fa_asset",
+                    target_doc_id=asset.id,
+                    target_doc_code=asset.asset_code,
+                    amount=amt,
+                    operator_id=user.id,
+                    notes=f"{run.period_year:04d}-{run.period_month:02d} 固定资产折旧 {asset.asset_name}",
+                    payload={
+                        "expense_account_code": asset.expense_account_code,
+                        "accumulated_depreciation_account_code": asset.accumulated_depreciation_account_code,
+                        "asset_account_code": asset.asset_account_code,
+                        "department_id": asset.department_id,
+                        "department_name": asset.department_name,
+                        "asset_code": asset.asset_code,
+                        "asset_name": asset.asset_name,
+                        "period_year": run.period_year,
+                        "period_month": run.period_month,
+                    },
+                )
+                line.accounting_event_id = event.id
+                await line.save()
+
+            run.status = "confirmed"
+            run.confirmed_at = resolve_business_datetime()
+            run.confirmed_by = user.id
+            run.confirmed_by_name = getattr(user, "name", None) or getattr(user, "username", None)
+            await run.save()
         return await self.get_run(tenant_id, run_id)
 
     async def depreciation_detail_report(
@@ -430,34 +435,39 @@ class FaAdjustmentService:
         )
         if not asset:
             raise NotFoundError("资产不存在")
-        amt = quantize_money(row.adjustment_amount)
-        asset.accumulated_depreciation = quantize_money(asset.accumulated_depreciation) + amt
-        await asset.save()
-        await record_finance_accounting_event(
-            tenant_id=tenant_id,
-            event_type="FA_DEPRECIATION",
-            business_type="fixed_asset_adjustment",
-            source_doc_type="fa_depr_adjustment",
-            source_doc_id=row.id,
-            source_doc_code=row.adjustment_code,
-            target_doc_type="fa_asset",
-            target_doc_id=asset.id,
-            target_doc_code=asset.asset_code,
-            amount=abs(amt),
-            operator_id=user.id,
-            notes=row.reason or f"折旧调整 {row.adjustment_code}",
-            payload={
-                "expense_account_code": asset.expense_account_code,
-                "accumulated_depreciation_account_code": asset.accumulated_depreciation_account_code,
-                "department_id": asset.department_id,
-                "department_name": asset.department_name,
-                "period_year": row.period_year,
-                "period_month": row.period_month,
-            },
-        )
-        row.status = "confirmed"
-        await touch_updated(row, user)
-        await row.save()
+        # spec 142：资产累计折旧变更 + 会计事件 + 单据状态同事务——
+        # 事件失败整单回滚，重试不会重复累加折旧
+        from tortoise.transactions import in_transaction
+
+        async with in_transaction():
+            amt = quantize_money(row.adjustment_amount)
+            asset.accumulated_depreciation = quantize_money(asset.accumulated_depreciation) + amt
+            await asset.save()
+            await record_finance_accounting_event(
+                tenant_id=tenant_id,
+                event_type="FA_DEPRECIATION",
+                business_type="fixed_asset_adjustment",
+                source_doc_type="fa_depr_adjustment",
+                source_doc_id=row.id,
+                source_doc_code=row.adjustment_code,
+                target_doc_type="fa_asset",
+                target_doc_id=asset.id,
+                target_doc_code=asset.asset_code,
+                amount=abs(amt),
+                operator_id=user.id,
+                notes=row.reason or f"折旧调整 {row.adjustment_code}",
+                payload={
+                    "expense_account_code": asset.expense_account_code,
+                    "accumulated_depreciation_account_code": asset.accumulated_depreciation_account_code,
+                    "department_id": asset.department_id,
+                    "department_name": asset.department_name,
+                    "period_year": row.period_year,
+                    "period_month": row.period_month,
+                },
+            )
+            row.status = "confirmed"
+            await touch_updated(row, user)
+            await row.save()
         return model_to_dict(row)
 
 

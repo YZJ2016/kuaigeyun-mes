@@ -36,6 +36,11 @@ async def record_finance_accounting_event(
     notes: Optional[str] = None,
     payload: Optional[dict[str, Any]] = None,
 ) -> None:
+    """记录会计事件。失败向上抛（spec 142：业财与库存同一成败，禁止只记日志假装成功）。
+
+    调用方口径：在过账事务内调用 → 抛出即整单回滚；在过账事务提交后调用
+    （如销售/采购退货的红字应收应付）→ 接口报错，「单据已确认、账未记」为可见失败。
+    """
     try:
         enriched = dict(payload or {})
         # 从应收/应付补齐辅助核算维度，供总账凭证模板使用
@@ -119,6 +124,12 @@ async def record_finance_accounting_event(
             target_doc_id,
             e,
         )
+        from infra.exceptions.exceptions import BusinessLogicError
+
+        raise BusinessLogicError(
+            f"记录会计事件失败 {source_doc_type}#{source_doc_id}"
+            f"→{target_doc_type}#{target_doc_id} ({event_type}): {e}"
+        ) from e
 
 
 async def link_finance_document_relation(
@@ -133,6 +144,7 @@ async def link_finance_document_relation(
     relation_desc: str,
     created_by: int,
 ) -> None:
+    """建立业财单据关联。失败向上抛（spec 142）：关系未建成不得显示为成功。"""
     try:
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
@@ -166,6 +178,12 @@ async def link_finance_document_relation(
             target_id,
             e,
         )
+        from infra.exceptions.exceptions import BusinessLogicError
+
+        raise BusinessLogicError(
+            f"创建单据关联失败 {source_type}#{source_id}"
+            f"→{target_type}#{target_id}: {e}"
+        ) from e
 
 
 async def cleanup_payables_for_purchase_receipt(
@@ -411,52 +429,57 @@ async def ensure_prepayment_payment_for_purchase_order(
         payment_code = await allocate_payment_code(tenant_id)
         biz_date = to_site_date(resolve_business_datetime())
 
-        payment = await Payment.create(
-            tenant_id=tenant_id,
-            payment_code=payment_code,
-            supplier_id=supplier_id,
-            supplier_name=supplier_name,
-            total_amount=amount,
-            settled_amount=Decimal("0.00"),
-            unsettled_amount=amount,
-            payment_date=biz_date,
-            payment_method=payment_method,
-            bank_account=bank_account_label,
-            bank_account_id=bank_account_id,
-            settlement_type="prepayment",
-            status="Confirmed",
-            notes=f"采购订单 {order_code} 审核通过自动生成预付付款单",
-            created_by=operator_id,
-            created_by_name=user_info["name"],
-            updated_by=operator_id,
-            updated_by_name=user_info["name"],
-        )
+        # spec 142：付款单创建 + 单据关联 + 会计事件同事务——
+        # 任一步失败全部回滚，重试不会产出无关联的重复付款单
+        from tortoise.transactions import in_transaction
 
-        await link_finance_document_relation(
-            tenant_id=tenant_id,
-            source_type="purchase_order",
-            source_id=order_id,
-            source_code=order_code,
-            target_type="payment",
-            target_id=payment.id,
-            target_code=payment.payment_code,
-            relation_desc="采购订单审核通过自动生成预付付款单",
-            created_by=operator_id,
-        )
-        await record_finance_accounting_event(
-            tenant_id=tenant_id,
-            event_type="PURCHASE_ORDER_TO_PREPAYMENT",
-            business_type="payment",
-            source_doc_type="purchase_order",
-            source_doc_id=order_id,
-            source_doc_code=order_code,
-            target_doc_type="Payment",
-            target_doc_id=payment.id,
-            target_doc_code=payment.payment_code,
-            amount=amount,
-            operator_id=operator_id,
-            notes=f"采购订单 {order_code} 自动生成预付付款单",
-        )
+        async with in_transaction():
+            payment = await Payment.create(
+                tenant_id=tenant_id,
+                payment_code=payment_code,
+                supplier_id=supplier_id,
+                supplier_name=supplier_name,
+                total_amount=amount,
+                settled_amount=Decimal("0.00"),
+                unsettled_amount=amount,
+                payment_date=biz_date,
+                payment_method=payment_method,
+                bank_account=bank_account_label,
+                bank_account_id=bank_account_id,
+                settlement_type="prepayment",
+                status="Confirmed",
+                notes=f"采购订单 {order_code} 审核通过自动生成预付付款单",
+                created_by=operator_id,
+                created_by_name=user_info["name"],
+                updated_by=operator_id,
+                updated_by_name=user_info["name"],
+            )
+
+            await link_finance_document_relation(
+                tenant_id=tenant_id,
+                source_type="purchase_order",
+                source_id=order_id,
+                source_code=order_code,
+                target_type="payment",
+                target_id=payment.id,
+                target_code=payment.payment_code,
+                relation_desc="采购订单审核通过自动生成预付付款单",
+                created_by=operator_id,
+            )
+            await record_finance_accounting_event(
+                tenant_id=tenant_id,
+                event_type="PURCHASE_ORDER_TO_PREPAYMENT",
+                business_type="payment",
+                source_doc_type="purchase_order",
+                source_doc_id=order_id,
+                source_doc_code=order_code,
+                target_doc_type="Payment",
+                target_doc_id=payment.id,
+                target_doc_code=payment.payment_code,
+                amount=amount,
+                operator_id=operator_id,
+                notes=f"采购订单 {order_code} 自动生成预付付款单",
+            )
         return payment.id
     except Exception as e:
         logger.error(
@@ -514,52 +537,57 @@ async def ensure_prepayment_receipt_for_sales_order(
         receipt_code = await allocate_receipt_code(tenant_id)
         biz_date = to_site_date(resolve_business_datetime())
 
-        receipt = await Receipt.create(
-            tenant_id=tenant_id,
-            receipt_code=receipt_code,
-            customer_id=customer_id,
-            customer_name=customer_name,
-            total_amount=amount,
-            settled_amount=Decimal("0.00"),
-            unsettled_amount=amount,
-            receipt_date=biz_date,
-            payment_method=payment_method,
-            bank_account=bank_account_label,
-            bank_account_id=bank_account_id,
-            settlement_type="prepayment",
-            status="Confirmed",
-            notes=f"销售订单 {order_code} 审核通过自动生成预收收款单",
-            created_by=operator_id,
-            created_by_name=user_info["name"],
-            updated_by=operator_id,
-            updated_by_name=user_info["name"],
-        )
+        # spec 142：收款单创建 + 单据关联 + 会计事件同事务——
+        # 任一步失败全部回滚，重试不会产出无关联的重复收款单
+        from tortoise.transactions import in_transaction
 
-        await link_finance_document_relation(
-            tenant_id=tenant_id,
-            source_type="sales_order",
-            source_id=order_id,
-            source_code=order_code,
-            target_type="receipt",
-            target_id=receipt.id,
-            target_code=receipt.receipt_code,
-            relation_desc="销售订单审核通过自动生成预收收款单",
-            created_by=operator_id,
-        )
-        await record_finance_accounting_event(
-            tenant_id=tenant_id,
-            event_type="SALES_ORDER_TO_PREPAYMENT",
-            business_type="receipt",
-            source_doc_type="sales_order",
-            source_doc_id=order_id,
-            source_doc_code=order_code,
-            target_doc_type="Receipt",
-            target_doc_id=receipt.id,
-            target_doc_code=receipt.receipt_code,
-            amount=amount,
-            operator_id=operator_id,
-            notes=f"销售订单 {order_code} 自动生成预收收款单",
-        )
+        async with in_transaction():
+            receipt = await Receipt.create(
+                tenant_id=tenant_id,
+                receipt_code=receipt_code,
+                customer_id=customer_id,
+                customer_name=customer_name,
+                total_amount=amount,
+                settled_amount=Decimal("0.00"),
+                unsettled_amount=amount,
+                receipt_date=biz_date,
+                payment_method=payment_method,
+                bank_account=bank_account_label,
+                bank_account_id=bank_account_id,
+                settlement_type="prepayment",
+                status="Confirmed",
+                notes=f"销售订单 {order_code} 审核通过自动生成预收收款单",
+                created_by=operator_id,
+                created_by_name=user_info["name"],
+                updated_by=operator_id,
+                updated_by_name=user_info["name"],
+            )
+
+            await link_finance_document_relation(
+                tenant_id=tenant_id,
+                source_type="sales_order",
+                source_id=order_id,
+                source_code=order_code,
+                target_type="receipt",
+                target_id=receipt.id,
+                target_code=receipt.receipt_code,
+                relation_desc="销售订单审核通过自动生成预收收款单",
+                created_by=operator_id,
+            )
+            await record_finance_accounting_event(
+                tenant_id=tenant_id,
+                event_type="SALES_ORDER_TO_PREPAYMENT",
+                business_type="receipt",
+                source_doc_type="sales_order",
+                source_doc_id=order_id,
+                source_doc_code=order_code,
+                target_doc_type="Receipt",
+                target_doc_id=receipt.id,
+                target_doc_code=receipt.receipt_code,
+                amount=amount,
+                operator_id=operator_id,
+                notes=f"销售订单 {order_code} 自动生成预收收款单",
+            )
         return receipt.id
     except Exception as e:
         logger.error(

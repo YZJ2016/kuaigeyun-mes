@@ -348,6 +348,8 @@ class DocumentPushPipeline:
                 category=category,
                 connector_type=str(connector_type or "").strip() or None,
                 target_profile=str(target_profile or "").strip() or None,
+                source_type=str(source_type or "").strip() or None,
+                source_id=int(source_id) if source_id else None,
             )
         except Exception:
             logger.warning(

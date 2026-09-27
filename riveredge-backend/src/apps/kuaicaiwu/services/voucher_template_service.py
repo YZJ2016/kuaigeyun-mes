@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from apps.kuaicaiwu.models.accounting_event import AccountingEvent
 from apps.kuaicaiwu.models.chart_of_account import ChartOfAccount
+from infra.exceptions.exceptions import BusinessLogicError
 
 
 class VoucherTemplateService:
@@ -44,6 +45,8 @@ class VoucherTemplateService:
         "COGS_TRANSFER": "cogs_transfer",
         "WAREHOUSE_INBOUND": "inventory_receipt",
         "WAREHOUSE_OUTBOUND": "inventory_issue",
+        # 生产入库（成品/半成品）：借库存商品、贷生产成本（spec 142）
+        "FINISHED_GOODS_RECEIPT_TO_INVENTORY": "finished_goods_receipt",
         "FA_DEPRECIATION": "fa_depreciation",
         "FA_DISPOSAL": "fa_disposal",
         "FA_IMPAIRMENT": "fa_impairment",
@@ -109,6 +112,18 @@ class VoucherTemplateService:
             {"side": "debit", "account_code": "6401", "summary": "主营业务成本"},
             {"side": "credit", "account_code": "1405", "summary": "库存商品出库"},
         ],
+        "finished_goods_receipt": [
+            {"side": "debit", "account_code": "1405", "summary": "库存商品入库"},
+            # 生产成本科目编码随准则体系不同（企业准则 5001 / 小企业准则 4301），
+            # 按 名称+类型 优先解析，避免错记主营业务收入（spec 142 评审 M4）
+            {
+                "side": "credit",
+                "account_code": "5001",
+                "account_name": "生产成本",
+                "account_type": "cost",
+                "summary": "生产成本结转",
+            },
+        ],
         "cogs_transfer": [
             {"side": "debit", "account_code": "6401", "summary": "结转销售成本"},
             {"side": "credit", "account_code": "1405", "summary": "库存商品"},
@@ -128,14 +143,28 @@ class VoucherTemplateService:
     }
 
     async def _resolve_account(
-        self, tenant_id: int, account_code: str
+        self,
+        tenant_id: int,
+        account_code: str,
+        account_name: Optional[str] = None,
+        account_type: Optional[str] = None,
     ) -> Optional[ChartOfAccount]:
-        return await ChartOfAccount.filter(
+        """按编码解析科目；给了名称+类型时优先按名称解析（同一科目在不同准则下编码不同，
+        如生产成本：企业准则 5001 / 小企业准则 4301，而 5001 在小企业准则下是主营业务收入）。"""
+        base = ChartOfAccount.filter(
             tenant_id=tenant_id,
-            account_code=account_code,
             is_active=True,
             deleted_at__isnull=True,
-        ).first()
+        )
+        if account_name:
+            by_name = await base.filter(account_name=account_name).filter(
+                account_type=account_type
+            ).first() if account_type else await base.filter(
+                account_name=account_name
+            ).first()
+            if by_name:
+                return by_name
+        return await base.filter(account_code=account_code).first()
 
     def _partner_from_event(self, event: AccountingEvent) -> Dict[str, Any]:
         payload = event.payload or {}
@@ -359,9 +388,18 @@ class VoucherTemplateService:
         cf_item_id = await resolve_cash_flow_item_id(tenant_id, cf_code) if cf_code else None
         lines: List[Dict[str, Any]] = []
         for idx, row in enumerate(rows, start=1):
-            account = await self._resolve_account(tenant_id, row["account_code"])
+            account = await self._resolve_account(
+                tenant_id,
+                row["account_code"],
+                account_name=row.get("account_name"),
+                account_type=row.get("account_type"),
+            )
             if not account:
-                continue
+                # spec 142：科目缺失失败关闭，禁止静默丢分录行产出单边/空草稿
+                raise BusinessLogicError(
+                    f"凭证模板 {template_key} 科目缺失："
+                    f"{row.get('account_name') or row['account_code']}（事件 {event.event_type}）"
+                )
             is_debit = row["side"] == "debit"
             line: Dict[str, Any] = {
                 "line_no": idx,

@@ -262,14 +262,18 @@ class FaAssetService:
         payload = self._validate_depreciation_payload(payload)
         payload = self._recalc_depreciation_fields(payload)
         apply_create_audit(payload, resolved_user)
-        row = await FaAsset.create(**payload)
-        await self._record_impairment_increase(
-            tenant_id,
-            row,
-            previous_impairment=Decimal("0"),
-            new_impairment=quantize_money(row.impairment_value),
-            user=resolved_user,
-        )
+        # spec 142：资产落库与减值会计事件同事务——事件失败则资产创建一并回滚
+        from tortoise.transactions import in_transaction
+
+        async with in_transaction():
+            row = await FaAsset.create(**payload)
+            await self._record_impairment_increase(
+                tenant_id,
+                row,
+                previous_impairment=Decimal("0"),
+                new_impairment=quantize_money(row.impairment_value),
+                user=resolved_user,
+            )
         return await self.get_asset(tenant_id, row.id)
 
     async def update_asset(
@@ -343,14 +347,19 @@ class FaAssetService:
         recalc = self._recalc_depreciation_fields(draft)
         row.monthly_depreciation = recalc["monthly_depreciation"]
         await touch_updated(row, user)
-        await row.save()
-        await self._record_impairment_increase(
-            tenant_id,
-            row,
-            previous_impairment=previous_impairment,
-            new_impairment=quantize_money(row.impairment_value),
-            user=user,
-        )
+        # spec 142：资产变更与减值会计事件同事务——事件失败整单回滚，
+        # 重试不会出现 delta=0 导致事件永久缺失
+        from tortoise.transactions import in_transaction
+
+        async with in_transaction():
+            await row.save()
+            await self._record_impairment_increase(
+                tenant_id,
+                row,
+                previous_impairment=previous_impairment,
+                new_impairment=quantize_money(row.impairment_value),
+                user=user,
+            )
         return await self.get_asset(tenant_id, asset_id)
 
     async def delete_asset(self, tenant_id: int, asset_id: int, user: User) -> None:

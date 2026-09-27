@@ -326,6 +326,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
                 code = receipt_data.code or await self._generate_outsource_receipt_code(tenant_id)
                 resolved_received_at = resolve_business_datetime(receipt_data.received_at)
+                now = resolved_received_at
                 resolved_received_by = (
                     int(receipt_data.received_by)
                     if getattr(receipt_data, "received_by", None) and int(receipt_data.received_by) > 0
@@ -479,7 +480,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             try:
                 await InventoryCostService().on_outsource_receipt_confirmed(tenant_id, receipt_id)
             except Exception as exc:
-                logger.warning(
+                # spec 142：detached task 失败必须 error 级可见，不得以 warning 当成功
+                logger.error(
                     "委外收货异步成本结转失败 receipt_id=%s: %s",
                     receipt_id,
                     exc,
@@ -535,7 +537,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     created_by=created_by,
                 )
             except Exception as exc:
-                logger.warning("委外收货异步生成应付单失败 receipt_id=%s: %s", receipt_id, exc)
+                # spec 142：detached task 失败必须 error 级可见，不得以 warning 当成功
+                logger.error("委外收货异步生成应付单失败 receipt_id=%s: %s", receipt_id, exc)
 
         try:
             loop = asyncio.get_running_loop()
@@ -624,7 +627,10 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                 notes=f"委外收货单 {material_receipt.code} 自动生成应付单",
             )
         except Exception as e:
-            logger.warning("委外收货自动生成应付单失败（不影响收货结果）: %s", e)
+            # spec 142：不再就地吞掉；抛出后由调度壳 _run 记录失败日志。
+            # 该任务为收货提交后的 detached task，失败不阻塞收货接口（见 _schedule_auto_payable_for_outsource_receipt）。
+            logger.error("委外收货自动生成应付单失败 receipt_id=%s: %s", material_receipt.id, e)
+            raise
 
     async def _normalize_legacy_draft_receipts(
         self, receipts: List[OutsourceMaterialReceipt]

@@ -148,31 +148,36 @@ class FaDisposalService:
         )
         if not asset:
             raise NotFoundError("资产不存在")
-        asset.status = "disposed"
-        await touch_updated(asset, user)
-        await asset.save()
+        # spec 142：资产状态变更 + 会计事件 + 单据状态同事务——
+        # 事件失败整单回滚，重试不会重复记 FA_DISPOSAL
+        from tortoise.transactions import in_transaction
 
-        await record_finance_accounting_event(
-            tenant_id=tenant_id,
-            event_type="FA_DISPOSAL",
-            business_type="fixed_asset_disposal",
-            source_doc_type="fa_disposal",
-            source_doc_id=row.id,
-            source_doc_code=row.disposal_code,
-            target_doc_type="fa_asset",
-            target_doc_id=asset.id,
-            target_doc_code=asset.asset_code,
-            amount=quantize_money(asset.original_value),
-            operator_id=user.id,
-            notes=row.notes or f"资产清理 {asset.asset_name}",
-            payload={
-                "asset_account_code": asset.asset_account_code,
-                "accumulated_depreciation_account_code": asset.accumulated_depreciation_account_code,
-                "accumulated_depreciation": float(asset.accumulated_depreciation),
-                "disposal_amount": float(row.disposal_amount),
-            },
-        )
-        row.status = "confirmed"
-        await touch_updated(row, user)
-        await row.save()
+        async with in_transaction():
+            asset.status = "disposed"
+            await touch_updated(asset, user)
+            await asset.save()
+
+            await record_finance_accounting_event(
+                tenant_id=tenant_id,
+                event_type="FA_DISPOSAL",
+                business_type="fixed_asset_disposal",
+                source_doc_type="fa_disposal",
+                source_doc_id=row.id,
+                source_doc_code=row.disposal_code,
+                target_doc_type="fa_asset",
+                target_doc_id=asset.id,
+                target_doc_code=asset.asset_code,
+                amount=quantize_money(asset.original_value),
+                operator_id=user.id,
+                notes=row.notes or f"资产清理 {asset.asset_name}",
+                payload={
+                    "asset_account_code": asset.asset_account_code,
+                    "accumulated_depreciation_account_code": asset.accumulated_depreciation_account_code,
+                    "accumulated_depreciation": float(asset.accumulated_depreciation),
+                    "disposal_amount": float(row.disposal_amount),
+                },
+            )
+            row.status = "confirmed"
+            await touch_updated(row, user)
+            await row.save()
         return model_to_dict(row)

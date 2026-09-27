@@ -40,7 +40,7 @@ def test_build_draft_lines_from_fa_impairment_event():
     credit_account.aux_supplier = False
     credit_account.aux_department = False
 
-    async def resolve_side_effect(_tenant_id, code):
+    async def resolve_side_effect(_tenant_id, code, **_kwargs):
         if code == "6701":
             return debit_account
         if code == "1603":
