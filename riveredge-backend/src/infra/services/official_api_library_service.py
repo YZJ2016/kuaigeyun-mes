@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 from loguru import logger
 
+from core.utils.client_channel import CLIENT_CHANNEL_HEADER
 from infra.constants.official_registry import (
     OFFICIAL_API_LIBRARY_API_PREFIX,
     base_url_for_official_api_library_host,
@@ -25,6 +26,10 @@ from infra.constants.official_registry import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.http import get_http_client
 from infra.models.official_api_library import OfficialApiLibraryPack
+
+# 跨部署提交走服务端 httpx，须带官方渠道以过写门禁。
+# 不用 integration：该渠道强制开放 API Token，社区公开提交不适用。
+_OFFICIAL_LIBRARY_OUTBOUND_HEADERS = {CLIENT_CHANNEL_HEADER: "pc"}
 
 _PACK_ID_SAFE = re.compile(r"[^a-z0-9_]+")
 _SENSITIVE_HEADER_KEYS = frozenset(
@@ -332,7 +337,11 @@ class OfficialApiLibraryClient:
         client = get_http_client()
         base = await self._base_url()
         try:
-            resp = await client.get(await self._url("/packs"), timeout=15.0)
+            resp = await client.get(
+                await self._url("/packs"),
+                headers=_OFFICIAL_LIBRARY_OUTBOUND_HEADERS,
+                timeout=15.0,
+            )
         except httpx.HTTPError as exc:
             logger.warning("官方接口库目录请求失败 err={}", exc)
             raise ValidationError(f"无法连接官方接口库（{base}），请检查网络后重试") from exc
@@ -344,7 +353,11 @@ class OfficialApiLibraryClient:
         client = get_http_client()
         base = await self._base_url()
         try:
-            resp = await client.get(await self._url(f"/packs/{pack_id}"), timeout=15.0)
+            resp = await client.get(
+                await self._url(f"/packs/{pack_id}"),
+                headers=_OFFICIAL_LIBRARY_OUTBOUND_HEADERS,
+                timeout=15.0,
+            )
         except httpx.HTTPError as exc:
             logger.warning("官方接口包详情请求失败 pack_id={} err={}", pack_id, exc)
             raise ValidationError(f"无法连接官方接口库（{base}），请检查网络后重试") from exc
@@ -356,7 +369,12 @@ class OfficialApiLibraryClient:
         client = get_http_client()
         base = await self._base_url()
         try:
-            resp = await client.post(await self._url("/submit"), json=payload, timeout=30.0)
+            resp = await client.post(
+                await self._url("/submit"),
+                json=payload,
+                headers=_OFFICIAL_LIBRARY_OUTBOUND_HEADERS,
+                timeout=30.0,
+            )
         except httpx.HTTPError as exc:
             logger.warning("提交官方接口库失败 err={}", exc)
             raise ValidationError(f"无法连接官方接口库（{base}），请检查网络后重试") from exc
@@ -365,19 +383,37 @@ class OfficialApiLibraryClient:
         return self._parse_json(resp, "提交到官方接口库失败")
 
     @staticmethod
-    def _parse_json(resp: httpx.Response, default_error: str) -> Dict[str, Any]:
+    def _extract_remote_error_detail(payload: Any) -> str:
+        """解析远端错误：FastAPI detail / 平台 error.message 信封。"""
+        if not isinstance(payload, dict):
+            return ""
+        raw = payload.get("detail")
+        if raw is None:
+            err = payload.get("error")
+            if isinstance(err, dict):
+                raw = err.get("message") or err.get("code")
+            else:
+                raw = payload.get("message")
+        if isinstance(raw, dict):
+            return str(raw.get("message") or raw).strip()
+        if isinstance(raw, list):
+            parts = []
+            for item in raw:
+                if isinstance(item, dict):
+                    parts.append(str(item.get("msg") or item.get("message") or item))
+                else:
+                    parts.append(str(item))
+            return "; ".join(p for p in parts if p).strip()
+        return str(raw or "").strip()
+
+    @classmethod
+    def _parse_json(cls, resp: httpx.Response, default_error: str) -> Dict[str, Any]:
         try:
             payload = resp.json()
         except Exception as exc:
             raise ValidationError(default_error) from exc
         if resp.status_code >= 400:
-            detail = ""
-            if isinstance(payload, dict):
-                raw = payload.get("detail") or payload.get("message") or ""
-                if isinstance(raw, dict):
-                    detail = str(raw.get("message") or raw)
-                else:
-                    detail = str(raw)
+            detail = cls._extract_remote_error_detail(payload)
             raise ValidationError(detail or default_error)
         if not isinstance(payload, dict):
             raise ValidationError(default_error)
