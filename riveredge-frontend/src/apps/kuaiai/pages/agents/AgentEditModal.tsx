@@ -61,19 +61,19 @@ export function AgentEditModal({ open, agent, onCancel, onSaved }: AgentEditModa
   const { data: chatModelOptions } = useQuery({
     queryKey: KUAI_AI_OPTION_KEYS.chatModels,
     queryFn: () => listModelOptions('chat'),
-    enabled: open && hasPermission(currentUser, 'kuaiai:model:query'),
+    enabled: open && hasPermission(currentUser, 'kuaiai:model:read'),
     staleTime: 60_000,
   });
   const { data: knowledgeOptions } = useQuery({
     queryKey: KUAI_AI_OPTION_KEYS.knowledgeBases,
     queryFn: listKnowledgeBaseOptions,
-    enabled: open && hasPermission(currentUser, 'kuaiai:knowledge:query'),
+    enabled: open && hasPermission(currentUser, 'kuaiai:knowledge:read'),
     staleTime: 60_000,
   });
   const { data: mcpOptions } = useQuery({
     queryKey: KUAI_AI_OPTION_KEYS.mcpServers,
     queryFn: listMcpServerOptions,
-    enabled: open && hasPermission(currentUser, 'kuaiai:mcp:query'),
+    enabled: open && hasPermission(currentUser, 'kuaiai:mcp:read'),
     staleTime: 60_000,
   });
 

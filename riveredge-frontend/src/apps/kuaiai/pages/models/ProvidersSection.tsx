@@ -39,9 +39,9 @@ export function ProvidersSection() {
   const [editing, setEditing] = useState<LlmProviderOut | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const canAdd = hasPermission(currentUser, 'kuaiai:model:add');
-  const canEdit = hasPermission(currentUser, 'kuaiai:model:edit');
-  const canRemove = hasPermission(currentUser, 'kuaiai:model:remove');
+  const canAdd = hasPermission(currentUser, 'kuaiai:model:create');
+  const canEdit = hasPermission(currentUser, 'kuaiai:model:update');
+  const canRemove = hasPermission(currentUser, 'kuaiai:model:delete');
 
   useEffect(() => {
     if (!open) return;

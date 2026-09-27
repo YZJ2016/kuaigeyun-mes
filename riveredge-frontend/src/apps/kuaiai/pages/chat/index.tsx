@@ -5,8 +5,8 @@
  *   选中会话加载 listChatMessages 渲染历史（含 tool 轨迹）。
  * - 右上：档案下拉（agents/options，allowClear）；无档案时显示 chat 模型下拉
  *   （llm-models/options?model_type=chat）；选中档案后隐藏模型下拉（不发模型覆盖）。
- * - 发送：无会话且有 session:add 时先 createChatSession（带当前 agent_id/模型名）→
- *   再走 POST /core/ai/chat/completions（SSE）；无 session:add 不自动建会话。
+ * - 发送：无会话且有 session:create 时先 createChatSession（带当前 agent_id/模型名）→
+ *   再走 POST /core/ai/chat/completions（SSE）；无 session:create 不自动建会话。
  *   流式累积渲染，流结束重拉 messages 拿服务端落库的 tool/assistant 行。
  *   发送权限码 kuaiai:act:execute。
  * - 会话恢复（KR-F5）：历史会话 agent_id 不在当前 options → 清空选择且发送
@@ -79,11 +79,11 @@ const KuaiaiChatPage: React.FC = () => {
   const currentUser = useCurrentUser();
   const queryClient = useQueryClient();
 
-  const canListSessions = hasPermission(currentUser, 'kuaiai:session:list');
-  const canQuerySession = hasPermission(currentUser, 'kuaiai:session:query');
-  const canAddSession = hasPermission(currentUser, 'kuaiai:session:add');
-  const canEditSession = hasPermission(currentUser, 'kuaiai:session:edit');
-  const canRemoveSession = hasPermission(currentUser, 'kuaiai:session:remove');
+  const canListSessions = hasPermission(currentUser, 'kuaiai:session:display');
+  const canQuerySession = hasPermission(currentUser, 'kuaiai:session:read');
+  const canAddSession = hasPermission(currentUser, 'kuaiai:session:create');
+  const canEditSession = hasPermission(currentUser, 'kuaiai:session:update');
+  const canRemoveSession = hasPermission(currentUser, 'kuaiai:session:delete');
   const canSend = hasPermission(currentUser, 'kuaiai:act:execute');
 
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
@@ -127,8 +127,8 @@ const KuaiaiChatPage: React.FC = () => {
   const agentOptionsQuery = useQuery({
     queryKey: KUAI_AI_OPTION_KEYS.agents,
     queryFn: listAgentOptions,
-    // /agents/options 需 kuaiai:agent:query；无权限不打 403，下拉恒空
-    enabled: hasPermission(currentUser, 'kuaiai:agent:query'),
+    // /agents/options 需 kuaiai:agent:read；无权限不打 403，下拉恒空
+    enabled: hasPermission(currentUser, 'kuaiai:agent:read'),
     retry: 1,
   });
   const agentOptions = useMemo(() => agentOptionsQuery.data ?? [], [agentOptionsQuery.data]);
@@ -136,8 +136,8 @@ const KuaiaiChatPage: React.FC = () => {
   const modelOptionsQuery = useQuery({
     queryKey: KUAI_AI_OPTION_KEYS.chatModels,
     queryFn: () => listModelOptions('chat'),
-    // /llm-models/options 需 kuaiai:model:query
-    enabled: hasPermission(currentUser, 'kuaiai:model:query'),
+    // /llm-models/options 需 kuaiai:model:read
+    enabled: hasPermission(currentUser, 'kuaiai:model:read'),
     retry: 1,
   });
   const modelOptions = useMemo(() => modelOptionsQuery.data ?? [], [modelOptionsQuery.data]);
@@ -315,10 +315,10 @@ const KuaiaiChatPage: React.FC = () => {
       const content = (raw || '').trim();
       // sendingRef 同步拦截同帧重复提交（setSending 异步来不及生效）
       if (!content || sendingRef.current || !canSend) return;
-      // 无会话时须有 session:add 才能自动建会话；按钮门控之外再拦发送路径
+      // 无会话时须有 session:create 才能自动建会话；按钮门控之外再拦发送路径
       if (selectedSessionId == null && !canAddSession) {
         const msg = t('app.kuaiai.chat.noAddSessionPermission', {
-          defaultValue: '当前账号无新建会话权限（kuaiai:session:add），无法发送',
+          defaultValue: '当前账号无新建会话权限（kuaiai:session:create），无法发送',
         });
         setSenderValue(content);
         messageApi.error(msg);

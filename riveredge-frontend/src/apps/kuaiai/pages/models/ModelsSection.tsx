@@ -42,9 +42,9 @@ export function ModelsSection() {
   const [filterProviderId, setFilterProviderId] = useState<number | undefined>();
   const [filterModelType, setFilterModelType] = useState<string | undefined>();
 
-  const canAdd = hasPermission(currentUser, 'kuaiai:model:add');
-  const canEdit = hasPermission(currentUser, 'kuaiai:model:edit');
-  const canRemove = hasPermission(currentUser, 'kuaiai:model:remove');
+  const canAdd = hasPermission(currentUser, 'kuaiai:model:create');
+  const canEdit = hasPermission(currentUser, 'kuaiai:model:update');
+  const canRemove = hasPermission(currentUser, 'kuaiai:model:delete');
 
   // 厂商目录：过滤下拉 + 表单下拉 + 列表 provider 名称回显共用
   const { data: providers } = useQuery({

@@ -27,9 +27,9 @@ export default function KuaiaiMcpPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const currentUser = useCurrentUser();
-  const canAdd = hasPermission(currentUser, 'kuaiai:mcp:add');
-  const canEdit = hasPermission(currentUser, 'kuaiai:mcp:edit');
-  const canRemove = hasPermission(currentUser, 'kuaiai:mcp:remove');
+  const canAdd = hasPermission(currentUser, 'kuaiai:mcp:create');
+  const canEdit = hasPermission(currentUser, 'kuaiai:mcp:update');
+  const canRemove = hasPermission(currentUser, 'kuaiai:mcp:delete');
 
   const actionRef = useRef<ActionType>(null);
   const queryClient = useQueryClient();

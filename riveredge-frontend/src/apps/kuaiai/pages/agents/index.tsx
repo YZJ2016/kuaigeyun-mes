@@ -32,9 +32,9 @@ export default function KuaiaiAgentsPage() {
   const currentUser = useCurrentUser();
   const queryClient = useQueryClient();
 
-  const canAdd = hasPermission(currentUser, 'kuaiai:agent:add');
-  const canEdit = hasPermission(currentUser, 'kuaiai:agent:edit');
-  const canRemove = hasPermission(currentUser, 'kuaiai:agent:remove');
+  const canAdd = hasPermission(currentUser, 'kuaiai:agent:create');
+  const canEdit = hasPermission(currentUser, 'kuaiai:agent:update');
+  const canRemove = hasPermission(currentUser, 'kuaiai:agent:delete');
 
   const [editOpen, setEditOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AgentProfileOut | null>(null);
