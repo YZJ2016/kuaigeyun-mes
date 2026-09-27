@@ -98,5 +98,20 @@ fi
 git commit -m "$COMMIT_MSG"
 build_web_verify_single_dist_commit || true
 
+# 构建耗时长，推送前再合一次上游，降低 period 内被并行推送打成 non-FF 的概率
+git fetch "$UPSTREAM_REMOTE" "$UPSTREAM_BRANCH"
+BEHIND_AFTER=$(git rev-list --count HEAD.."@{upstream}")
+if [ "${BEHIND_AFTER}" != "0" ]; then
+  if [ "${BUILD_WEB_SKIP_PULL:-0}" = "1" ]; then
+    echo "错误: 构建后本地落后于 ${UPSTREAM_REF}，且 BUILD_WEB_SKIP_PULL=1，拒绝推送。"
+    exit 1
+  fi
+  echo "构建期间上游前进 ${BEHIND_AFTER} 个提交，推送前再 git pull --no-rebase..."
+  git pull --no-rebase "$UPSTREAM_REMOTE" "$UPSTREAM_BRANCH" || {
+    echo "错误: 推送前与上游合并失败，请先手动解决冲突。"
+    exit 1
+  }
+fi
+
 build_web_push_with_lease "$CURRENT_BRANCH"
 echo "完成: $(git rev-parse --short HEAD) 已推送到 ${UPSTREAM_REMOTE}/${CURRENT_BRANCH}（历史仅 tip 含 dist）"
