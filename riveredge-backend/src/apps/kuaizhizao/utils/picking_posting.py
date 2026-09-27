@@ -8,12 +8,14 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence
 
 from apps.kuaizhizao.utils.mrp_quantity import MRP_QTY_STEP, mrp_qty
 
-# 防超发容差：允许在 BOM 上限基础上略超 1%（与历史口径一致，但用 Decimal 计算）
-OVERPICK_TOLERANCE_RATIO = Decimal("1.01")
+# 补料申请计入正式领料上限的状态（取消单不计入）
+_MATERIAL_CALL_EXTRA_STATUSES = frozenset(
+    {"pending", "processing", "partial", "completed"}
+)
 
 # 正式发料完成态（生产领料确认、退料选取、成本核算、报表等唯一口径）
 PRODUCTION_PICKING_COST_ELIGIBLE_STATUSES = frozenset(
@@ -74,21 +76,76 @@ def resolve_work_order_pick_limit(
     return mrp_qty(base * (Decimal("1") + ratio))
 
 
+def resolve_work_order_pick_cap(
+    allowed_bom: Decimal,
+    over_issue_allowance_ratio: Decimal,
+    material_call_extra: Decimal = Decimal("0"),
+) -> Decimal:
+    """
+    正式发料防超发上限 = BOM×(1+超发比例) + 工单补料申请授权数量。
+
+    补料（报废/失误等）经申请后应可领，不得仍按纯 BOM 配方拦截。
+    """
+    bom_cap = resolve_work_order_pick_limit(allowed_bom, over_issue_allowance_ratio)
+    extra = mrp_qty(material_call_extra)
+    if extra < 0:
+        extra = Decimal("0")
+    return mrp_qty(bom_cap + extra)
+
+
+async def load_work_order_material_call_extra_map(
+    tenant_id: int,
+    work_order_id: int,
+    material_ids: Sequence[int],
+) -> Dict[int, Decimal]:
+    """按物料汇总工单未取消补料申请的申请数量（正式领料额外额度）。"""
+    mids = sorted({int(x) for x in material_ids if x is not None and int(x) > 0})
+    if not mids or work_order_id <= 0:
+        return {}
+
+    from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
+    from apps.kuaizhizao.models.material_call_request_item import MaterialCallRequestItem
+
+    call_ids = await MaterialCallRequest.filter(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        deleted_at__isnull=True,
+        status__in=list(_MATERIAL_CALL_EXTRA_STATUSES),
+    ).values_list("id", flat=True)
+    ids = [int(x) for x in call_ids if x]
+    if not ids:
+        return {}
+
+    rows = await MaterialCallRequestItem.filter(
+        tenant_id=tenant_id,
+        request_id__in=ids,
+        material_id__in=mids,
+    ).all()
+    out: Dict[int, Decimal] = {}
+    for row in rows:
+        mid = int(getattr(row, "material_id", 0) or 0)
+        if mid <= 0:
+            continue
+        out[mid] = out.get(mid, Decimal("0")) + mrp_qty(
+            getattr(row, "requested_quantity", 0) or 0
+        )
+    return out
+
+
 def exceeds_work_order_pick_limit(total_attempt: Decimal, allowed: Decimal) -> bool:
     """
-    工单领料是否超出 BOM 配方上限（含 1% 容差）。
+    工单领料是否超出已解析上限（组织/物料超发比例与补料额度已计入 allowed）。
 
-    全程 Decimal + mrp_qty，避免 float(0.29) * 1.01 与 0.29 比较误拦。
+    全程 Decimal + mrp_qty；仅允许一个数量步长内的显示精度误差，禁止再叠硬编码超发比例。
     """
     total = mrp_qty(total_attempt)
     limit = mrp_qty(allowed)
     if limit <= 0:
         return total > 0
-    cap = mrp_qty(limit * OVERPICK_TOLERANCE_RATIO)
-    if total <= cap:
+    if total <= limit:
         return False
-    # 超出容差但在 1 个数量步长内：视为显示精度内相等，不拦截
-    if total - cap <= MRP_QTY_STEP:
+    # 超出上限但在 1 个数量步长内：视为显示精度内相等，不拦截
+    if total - limit <= MRP_QTY_STEP:
         return False
     return True
 

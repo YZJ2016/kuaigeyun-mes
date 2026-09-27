@@ -435,7 +435,12 @@ export const warehouseApi = {
   },
   materialReturn: {
     list: async (params?: any) => apiRequest('/apps/kuaizhizao/material-returns', { method: 'GET', params }),
-    create: async (data: any) => apiRequest('/apps/kuaizhizao/material-returns', { method: 'POST', data }),
+    create: async (data: any, options?: { autoConfirm?: boolean }) =>
+      apiRequest('/apps/kuaizhizao/material-returns', {
+        method: 'POST',
+        data,
+        params: options?.autoConfirm ? { auto_confirm: true } : undefined,
+      }),
     update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/material-returns/${id}`, { method: 'PUT', data }),
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/material-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/material-returns/${id}`, { method: 'GET' }),
@@ -568,6 +573,7 @@ export const warehouseApi = {
       }),
     pullFromSalesOrderItems: async (
       selectedItemIds: number[],
+      deliveryQuantities?: Record<number, number>,
     ): Promise<{
       success: boolean;
       message: string;
@@ -577,7 +583,10 @@ export const warehouseApi = {
     }> =>
       apiRequest('/apps/kuaizhizao/sales-deliveries/pull-from-sales-order-items', {
         method: 'POST',
-        data: { selected_item_ids: selectedItemIds },
+        data: {
+          selected_item_ids: selectedItemIds,
+          ...(deliveryQuantities ? { delivery_quantities: deliveryQuantities } : {}),
+        },
       }),
     listShipmentNoticePullLines: async (params: {
       skip?: number;

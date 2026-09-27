@@ -45,6 +45,7 @@ import {
   explicitKindToActionKind,
   type ResolvedRowActionTone,
   type RowActionPermissionKind,
+  type RowActionVisualProfile,
   isAppLocalAuditAction,
   readActionVisualProfile,
 } from './actionText'
@@ -90,14 +91,24 @@ function clonePropsForRowTone(
 }
 
 const ROW_ACTION_SUCCESS_KINDS = new Set<RowActionPermissionKind>(['execute', 'complete', 'approve'])
+/** 跨资源 / 无 :execute 码的正向动作：绿色靠 visual profile，RBAC 靠真实 manifest action */
+const ROW_ACTION_SUCCESS_VISUAL_PROFILES = new Set<RowActionVisualProfile>([
+  'collect-receipt',
+  'make-payment',
+  'run-computation',
+])
 
 function rowActionClassName(
   kind: ReturnType<typeof resolveActionKind>,
   explicit?: RowActionPermissionKind | null,
+  profile?: RowActionVisualProfile | null,
 ): string {
   const parts = ['ant-btn-row-action']
   if (kind === 'detail') parts.push('ant-btn-row-action-detail')
-  if (explicit && ROW_ACTION_SUCCESS_KINDS.has(explicit)) {
+  if (
+    (explicit && ROW_ACTION_SUCCESS_KINDS.has(explicit)) ||
+    (profile && ROW_ACTION_SUCCESS_VISUAL_PROFILES.has(profile))
+  ) {
     parts.push('ant-btn-row-action-success')
   }
   return parts.filter(Boolean).join(' ')
@@ -136,6 +147,15 @@ function defaultIconForRowActionWithKind(
   }
   if (readActionVisualProfile(node) === 'copy-create') {
     return <CopyOutlined />
+  }
+  if (readActionVisualProfile(node) === 'collect-receipt') {
+    return <CheckCircleOutlined />
+  }
+  if (readActionVisualProfile(node) === 'make-payment') {
+    return <CheckCircleOutlined />
+  }
+  if (readActionVisualProfile(node) === 'run-computation') {
+    return <PlayCircleOutlined />
   }
   if (readActionVisualProfile(node) === 'pick-settlement') {
     return <CheckCircleOutlined />
@@ -272,10 +292,11 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
       catalogLabel ?? (normalizeActionLabelText(rawChildrenText) || props.children)
     const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
     const kind = resolveEffectiveActionKind(node, inheritedExplicit)
+    const profile = readActionVisualProfile(node)
     const currentIcon = props.icon
     const defaultIcon = defaultIconForRowActionWithKind(node, inheritedExplicit)
     const nextIcon = defaultIcon ?? currentIcon
-    const targetClass = rowActionClassName(kind, explicit)
+    const targetClass = rowActionClassName(kind, explicit, profile)
 
     const sameTone = rowActionToneMatchesProps(tone, props as Record<string, unknown>)
     const sameClass = String(props.className || '').trim() === targetClass
@@ -307,6 +328,7 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
     const tone = resolveButtonToneFromNode(node, inheritedExplicit)
     const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
     const kind = resolveEffectiveActionKind(node, inheritedExplicit)
+    const profile = readActionVisualProfile(node)
     const defaultIcon = defaultIconForRowActionWithKind(node, inheritedExplicit)
     if (
       ctx.suppressAuditSemanticActions &&
@@ -318,7 +340,7 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
     return (
       <Button
         size="small"
-        className={rowActionClassName(kind, explicit)}
+        className={rowActionClassName(kind, explicit, profile)}
         type={tone.type}
         danger={tone.mode === 'destructive' ? true : tone.danger}
         icon={(props.icon as React.ReactNode) || defaultIcon}

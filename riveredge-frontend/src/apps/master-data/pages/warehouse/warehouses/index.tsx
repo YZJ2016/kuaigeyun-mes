@@ -340,6 +340,7 @@ const WarehousesPage: React.FC = () => {
           consignment: 'consignment', '寄售仓': 'consignment', '寄售': 'consignment',
           vmi: 'vmi', 'VMI仓': 'vmi', 'VMI': 'vmi',
           defect: 'defect', '不良品仓': 'defect', '不良品': 'defect',
+          scrap: 'scrap', '报废品仓': 'scrap', '报废仓': 'scrap', '报废': 'scrap',
           quarantine: 'quarantine', '待检仓': 'quarantine', '待检': 'quarantine',
         };
         const warehouseType = typeMap[warehouseTypeVal] || 'normal';
@@ -532,6 +533,7 @@ const WarehousesPage: React.FC = () => {
         consignment: t('warehouse.type.consignment'),
         vmi: t('warehouse.type.vmi'),
         defect: t('warehouse.type.defect'),
+        scrap: t('warehouse.type.scrap'),
         quarantine: t('warehouse.type.quarantine'),
       };
       const rows = exportData.map((item) => [
@@ -612,6 +614,7 @@ const WarehousesPage: React.FC = () => {
     consignment: { text: t('warehouse.type.consignment') },
     vmi: { text: t('warehouse.type.vmi') },
     defect: { text: t('warehouse.type.defect') },
+    scrap: { text: t('warehouse.type.scrap') },
     quarantine: { text: t('warehouse.type.quarantine') },
   };
 

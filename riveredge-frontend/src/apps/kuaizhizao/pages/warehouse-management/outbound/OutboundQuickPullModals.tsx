@@ -1,6 +1,6 @@
 import React, { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Select } from 'antd';
+import { App, InputNumber, Select } from 'antd';
 import { listSalesOrders } from '../../../services/sales-order';
 import { shipmentNoticeApi } from '../../../services/shipment-notice';
 import { outsourceWorkOrderApi } from '../../../services/production';
@@ -73,6 +73,8 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
     const [pullSourceWorkOrderOptions, setPullSourceWorkOrderOptions] = useState<Array<{ value: number; label: string }>>([]);
     const [pullSourceOutsourceOptions, setPullSourceOutsourceOptions] = useState<Array<{ value: number; label: string }>>([]);
     const [pullSourceDeliveryOptions, setPullSourceDeliveryOptions] = useState<Array<{ value: number; label: string }>>([]);
+    /** 销售订单取单：本次下推数量（与销售订单下推预览同契约，上限为可发货） */
+    const [salesOrderPullQtys, setSalesOrderPullQtys] = useState<Record<number, number>>({});
 
     const pullDocumentScopeOptions = useMemo(
       () => [
@@ -179,6 +181,7 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
       onOpen: () => {
         pullSourceSalesOrderIdRef.current = undefined;
         setPullSourceSalesOrderId(undefined);
+        setSalesOrderPullQtys({});
         void listSalesOrders({ skip: 0, limit: 100 })
           .then((res) => {
             const rows = Array.isArray((res as { data?: Array<{ id?: number; order_code?: string }> })?.data)
@@ -204,7 +207,19 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
             sales_order_id: pullSourceSalesOrderIdRef.current,
             pullable_only: isPullableScope(scope),
           });
-          return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+          const rows = listRes?.data ?? [];
+          setSalesOrderPullQtys((prev) => {
+            const next = { ...prev };
+            for (const row of rows) {
+              const id = Number(row.id);
+              if (!Number.isFinite(id) || id <= 0) continue;
+              if (next[id] == null) {
+                next[id] = Number(row.remaining_quantity ?? 0);
+              }
+            }
+            return next;
+          });
+          return { data: rows, total: listRes?.total ?? 0 };
         } catch (error: unknown) {
           messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseOutbound.pull.loadSalesOrdersFailed')));
           return { data: [], total: 0 };
@@ -212,16 +227,45 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
       },
       isRowDisabled: (record) => !isPullLineSelectable(record),
       onConfirm: async (_keys, rows) => {
-        const selectedIds = rows
-          .filter((row) => isPullLineSelectable(row))
-          .map((row) => Number(row.id))
-          .filter((id) => id > 0);
+        const selected = rows.filter((row) => isPullLineSelectable(row));
+        if (!selected.length) {
+          messageApi.warning(t('app.kuaizhizao.warehouseOutbound.pull.soSelectLinesFirst'));
+          return;
+        }
+        const deliveryQuantities: Record<number, number> = {};
+        for (const row of selected) {
+          const id = Number(row.id);
+          const maxQty = Number(row.remaining_quantity ?? 0);
+          const qty = Number(salesOrderPullQtys[id] ?? maxQty);
+          if (!Number.isFinite(id) || id <= 0) continue;
+          if (!Number.isFinite(qty) || qty <= 0) {
+            messageApi.warning(
+              t('app.kuaizhizao.salesOrder.pushQtyInvalid', {
+                code: row.material_code || id,
+              }),
+            );
+            return;
+          }
+          if (qty > maxQty) {
+            messageApi.warning(
+              t('app.kuaizhizao.salesOrder.pushQtyExceedsShippable', {
+                code: row.material_code || id,
+              }),
+            );
+            return;
+          }
+          deliveryQuantities[id] = qty;
+        }
+        const selectedIds = Object.keys(deliveryQuantities).map((k) => Number(k));
         if (!selectedIds.length) {
           messageApi.warning(t('app.kuaizhizao.warehouseOutbound.pull.soSelectLinesFirst'));
           return;
         }
         try {
-          const res = await warehouseApi.salesDelivery.pullFromSalesOrderItems(selectedIds);
+          const res = await warehouseApi.salesDelivery.pullFromSalesOrderItems(
+            selectedIds,
+            deliveryQuantities,
+          );
           messageApi.success(
             res.message ||
               t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
@@ -230,7 +274,10 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
               }),
           );
           pullFromSalesOrderQuery.closeModal();
-          onSuccess();
+          onSuccess?.({
+            pullKey: 'sales_order',
+            createdCount: res.deliveries?.length ?? selectedIds.length,
+          });
         } catch (error: unknown) {
           messageApi.error(
             getApiErrorMessage(
@@ -576,6 +623,33 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
           align: 'right' as const,
           render: formatQuantity,
         },
+        {
+          title: t('app.kuaizhizao.salesOrder.colPushQty'),
+          key: 'push_quantity',
+          width: 130,
+          render: (_: unknown, record: PullSalesOrderCandidate) => {
+            const id = Number(record.id);
+            const maxQty = Number(record.remaining_quantity ?? 0);
+            const disabled = !Number.isFinite(maxQty) || maxQty <= 0;
+            return (
+              <InputNumber
+                min={0}
+                max={maxQty > 0 ? maxQty : undefined}
+                step={1}
+                disabled={disabled}
+                style={{ width: '100%' }}
+                value={Number.isFinite(id) ? salesOrderPullQtys[id] : undefined}
+                onChange={(v) => {
+                  if (!Number.isFinite(id) || id <= 0) return;
+                  setSalesOrderPullQtys((prev) => ({
+                    ...prev,
+                    [id]: Number(v ?? 0),
+                  }));
+                }}
+              />
+            );
+          },
+        },
         { title: t('app.kuaizhizao.warehouseOutbound.col.customer'), dataIndex: 'customer_name', width: 140, ellipsis: true },
         {
           title: t('app.kuaizhizao.warehouseOutbound.pull.convertStatus'),
@@ -590,7 +664,7 @@ const OutboundQuickPullModals = forwardRef<OutboundQuickPullModalsRef, OutboundQ
             ),
         },
       ],
-      [t],
+      [salesOrderPullQtys, t],
     );
 
     const shipmentNoticeColumns = useMemo(

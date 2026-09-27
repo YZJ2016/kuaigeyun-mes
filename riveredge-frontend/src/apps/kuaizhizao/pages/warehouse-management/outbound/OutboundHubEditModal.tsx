@@ -1069,7 +1069,10 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
             />
           </Col>
           <Col span={8}>
-            <OutboundEntryOperatorField hook={operatorHook} />
+            <OutboundEntryOperatorField
+              hook={operatorHook}
+              label={t('app.kuaizhizao.warehouseOutbound.field.picker')}
+            />
           </Col>
         </Row>
       ) : null}

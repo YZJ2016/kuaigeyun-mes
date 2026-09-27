@@ -3696,6 +3696,7 @@ const MaterialsManagementPage: React.FC = () => {
         t('app.master-data.materials.materialCode'),
         t('app.master-data.materials.materialName'),
         t('app.master-data.materials.specification'),
+        t('app.master-data.materials.model'),
         t('app.master-data.materials.baseUnit'),
         t('app.master-data.materials.sourceType'),
         t('common.status'),
@@ -3706,6 +3707,7 @@ const MaterialsManagementPage: React.FC = () => {
         const code = (r as any).mainCode || (r as any).code || ''
         const name = r.name || ''
         const spec = (r as any).specification || ''
+        const model = r.model || ''
         const unit = (r as any).baseUnit || ''
         const matType = (r as any).sourceType ?? (r as any).source_type ?? ''
         const isActive = r?.isActive ?? (r as any)?.is_active
@@ -3715,7 +3717,7 @@ const MaterialsManagementPage: React.FC = () => {
           '',
         )
         csvRows.push(
-          [code, name, spec, unit, matType, status, createdAt]
+          [code, name, spec, model, unit, matType, status, createdAt]
             .map((c) => {
               const s = String(c ?? '')
               return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s

@@ -38,6 +38,17 @@ def test_validate_defect_lines_batch_rejects_over_budget():
         )
 
 
+def test_validate_defect_lines_batch_error_includes_registered():
+    svc = DefectRecordService()
+    with pytest.raises(ValidationError, match="已登记20"):
+        svc._validate_defect_lines_batch(
+            [_line("1")],
+            existing_registered=Decimal("20"),
+            unqualified_quantity=Decimal("20"),
+            source="incoming",
+        )
+
+
 def test_assert_defect_quantity_budget_counts_existing_registered():
     DefectRecordService._assert_defect_quantity_budget(
         Decimal("5"),

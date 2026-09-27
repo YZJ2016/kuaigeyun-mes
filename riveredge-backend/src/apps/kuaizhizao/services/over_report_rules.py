@@ -145,3 +145,14 @@ def remaining_completed_headroom(
     cap = max_completed_quantity_for_plan(plan_qty, mode, value)
     current = to_decimal(current_completed)
     return max(Decimal("0"), cap - current)
+
+
+def first_operation_material_incoming(plan_qty: Any, work_order_operation: Any) -> Decimal:
+    """
+    首道在制起点：工单计划数量按本道超报规则抬高。
+
+    若首道转入仍用裸计划数，则「计划剩余可报」含超报、「物料剩余」不含，
+    min() 后「本次可报」永远卡在计划数，工序超报配置形同失效。
+    """
+    om, ov = tuple_from_model(work_order_operation)
+    return max_completed_quantity_for_plan(plan_qty, om, ov)

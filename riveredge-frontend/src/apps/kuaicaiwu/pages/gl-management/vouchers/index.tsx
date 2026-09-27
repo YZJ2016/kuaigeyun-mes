@@ -130,7 +130,10 @@ const GlVouchersPage: React.FC = () => {
             apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', {
               params: { limit: 1000, is_active: true },
             }),
-            apiRequest<unknown>('/core/departments/tree', { method: 'GET' }),
+            apiRequest<unknown>('/core/departments/tree', {
+              method: 'GET',
+              params: { is_active: true },
+            }),
             apiRequest<unknown>('/core/users', { params: { limit: 500, is_active: true } }),
             glService.listProjects(),
             glService.listCashFlowItems(),
@@ -147,7 +150,10 @@ const GlVouchersPage: React.FC = () => {
         setSupplierOptions(mapPartner(suppRes));
         const flattenDept = (nodes: any[], out: { label: string; value: number }[] = []) => {
           for (const n of nodes || []) {
-            if (n?.id) out.push({ label: String(n.name || n.title || n.id), value: Number(n.id) });
+            const deptId = Number(n?.id);
+            if (Number.isFinite(deptId) && deptId > 0) {
+              out.push({ label: String(n.name || n.code || deptId), value: deptId });
+            }
             if (n?.children) flattenDept(n.children, out);
           }
           return out;
@@ -256,8 +262,21 @@ const GlVouchersPage: React.FC = () => {
     (text: string | undefined, record: GlVoucher) => {
       const value = String(text || '').trim();
       if (!value) return '—';
+      const tipLines = value.split('、').filter(Boolean);
       return (
-        <Tooltip title={value}>
+        <Tooltip
+          title={
+            tipLines.length > 1 ? (
+              <div>
+                {tipLines.map((line) => (
+                  <div key={line}>{line}</div>
+                ))}
+              </div>
+            ) : (
+              value
+            )
+          }
+        >
           <a
             onClick={(e) => {
               e.stopPropagation();
@@ -414,8 +433,8 @@ const GlVouchersPage: React.FC = () => {
           {
             title: t(`${NS}.col.debitAccounts`, { defaultValue: '借方科目' }),
             dataIndex: 'debit_accounts',
-            width: 200,
-            minWidth: 180,
+            width: 240,
+            minWidth: 220,
             uniTableKeepWidth: true,
             resizable: false,
             hideInSearch: true,
@@ -425,8 +444,8 @@ const GlVouchersPage: React.FC = () => {
           {
             title: t(`${NS}.col.creditAccounts`, { defaultValue: '贷方科目' }),
             dataIndex: 'credit_accounts',
-            width: 200,
-            minWidth: 180,
+            width: 240,
+            minWidth: 220,
             uniTableKeepWidth: true,
             resizable: false,
             hideInSearch: true,
@@ -480,7 +499,7 @@ const GlVouchersPage: React.FC = () => {
               const acts: React.ReactNode[] = [
                 <Button
                   key="detail"
-                  {...rowActionKind('detail')}
+                  {...rowActionKind('read')}
                   onClick={() => void openDetail(record)}
                 />,
               ];
@@ -895,7 +914,6 @@ const GlVouchersPage: React.FC = () => {
       render: (_: unknown, record: DraftLine, index: number) => (
         <InputNumber
           size="medium"
-          min={0}
           precision={amountDecimals}
           style={{ width: '100%' }}
           value={record.debit_amount}
@@ -916,7 +934,6 @@ const GlVouchersPage: React.FC = () => {
       render: (_: unknown, record: DraftLine, index: number) => (
         <InputNumber
           size="medium"
-          min={0}
           precision={amountDecimals}
           style={{ width: '100%' }}
           value={record.credit_amount}
@@ -953,7 +970,7 @@ const GlVouchersPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.voucher)}
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.vouchers.list-v3"
+        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.vouchers.list-v4"
         columns={columns}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
@@ -1196,7 +1213,7 @@ const GlVouchersPage: React.FC = () => {
                 summary: editing.summary,
                 attachments: mapAttachmentsToUploadList(editing.attachments),
               }
-            : { voucher_date: dayjs(), voucher_word: '记' }
+            : { voucher_date: dayjs(), voucher_word: '记', attachments: [] }
         }
         onFinish={handleSave}
       >
@@ -1224,7 +1241,11 @@ const GlVouchersPage: React.FC = () => {
           label={t(`${NS}.field.summary`, { defaultValue: '摘要' })}
           fieldProps={{ rows: 2 }}
         />
-        <div style={{ marginBottom: 8 }}>
+        <DocumentAttachmentsField
+          category="gl_voucher_attachments"
+          label={t(`${NS}.field.attachments`, { defaultValue: '原始凭证' })}
+        />
+        <div style={{ marginBottom: 8, marginTop: 8 }}>
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
             <Typography.Text strong>
               {t(`${NS}.lines`, { defaultValue: '分录' })}
@@ -1253,10 +1274,6 @@ const GlVouchersPage: React.FC = () => {
               </Typography.Text>
             </Space>
           )}
-        />
-        <DocumentAttachmentsField
-          category="gl_voucher_attachments"
-          label={t(`${NS}.field.attachments`, { defaultValue: '原始凭证' })}
         />
       </FormModalTemplate>
 

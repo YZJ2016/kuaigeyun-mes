@@ -16,7 +16,7 @@ import { completeDeliveryNodeDocumentLinkIfPending } from '../../delivery-projec
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Row, Col, Table, Empty, Form as AntForm, Input, InputNumber, List, Typography, theme, Spin, Select, Switch, Alert } from 'antd';
+import { App, Button, Space, Modal, Row, Col, Table, Empty, Form as AntForm, Input, InputNumber, List, Typography, theme, Spin, Select, Switch, Alert, Radio } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
@@ -127,6 +127,7 @@ import {
   getPurchaseOrderSyncBinding,
   previewPushToReceiptNotice, previewPushToReceipt, previewPushToInvoice, previewPushToPurchaseReturn,
   type DocumentPushPreview,
+  type PurchaseInvoicePushMode,
   PurchaseOrder, PurchaseOrderItem
 } from '../../../services/purchase';
 import {
@@ -329,7 +330,7 @@ type PurchaseOrderDetail = PurchaseOrder;
 type PullPurchaseRequisitionCandidate = PurchaseRequisitionPullLine;
 type PullPurchaseInquiryCandidate = PurchaseInquiryPurchasePullLine;
 
-type PushPreviewKind = 'receipt_notice' | 'receipt' | 'invoice' | 'purchase_return';
+type PushPreviewKind = 'receipt_notice' | 'receipt' | 'invoice' | 'purchase_return' | 'incoming_inspection';
 
 const defaultOrderItem = {
   material_id: undefined,
@@ -1292,17 +1293,22 @@ const PurchaseOrdersPage: React.FC = () => {
   const [pushPreviewTarget, setPushPreviewTarget] = useState<PurchaseOrder | null>(null);
   const [pushPreviewSelectedItemIds, setPushPreviewSelectedItemIds] = useState<number[]>([]);
   const [pushPreviewQuantities, setPushPreviewQuantities] = useState<Record<number, number>>({});
+  const [pushPreviewNotes, setPushPreviewNotes] = useState('');
   const [pushPreviewLineWh, setPushPreviewLineWh] = useState<Record<number, number>>({});
   const [pushPreviewWarehouseOptions, setPushPreviewWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
+  const [pushInvoiceMode, setPushInvoiceMode] = useState<PurchaseInvoicePushMode>('remaining');
+  const [pushInvoiceAmount, setPushInvoiceAmount] = useState<number>(0);
 
   const pushPreviewModalTitle = useMemo(() => {
     if (pushPreviewKind === 'receipt_notice') return pushToReceiptNoticeAction.label;
     if (pushPreviewKind === 'receipt') return pushToReceiptAction.label;
     if (pushPreviewKind === 'invoice') return pushToInvoiceAction.label;
     if (pushPreviewKind === 'purchase_return') return pushToPurchaseReturnAction.label;
+    if (pushPreviewKind === 'incoming_inspection') return pushToIncomingInspectionAction.label;
     return t('app.kuaizhizao.salesOrder.pushPreviewTitle');
   }, [
     pushPreviewKind,
+    pushToIncomingInspectionAction.label,
     pushToInvoiceAction.label,
     pushToPurchaseReturnAction.label,
     pushToReceiptAction.label,
@@ -1325,6 +1331,13 @@ const PurchaseOrdersPage: React.FC = () => {
         pushable: t('app.kuaizhizao.salesOrder.colPushableQty'),
       };
     }
+    if (pushPreviewKind === 'incoming_inspection') {
+      return {
+        quantity: t('app.kuaizhizao.purchaseOrder.col.orderedQty'),
+        pushed: t('app.kuaizhizao.purchaseOrder.col.iqcPushedQty'),
+        pushable: t('app.kuaizhizao.purchaseOrder.col.iqcRemainingQty'),
+      };
+    }
     return {
       quantity: t('common.quantity'),
       pushed: t('app.kuaizhizao.salesOrder.colPushedQty'),
@@ -1333,7 +1346,9 @@ const PurchaseOrdersPage: React.FC = () => {
   }, [pushPreviewKind, t]);
 
   const pushPreviewConfirmLabel =
-    pushPreviewKind === 'receipt_notice' || pushPreviewKind === 'receipt'
+    pushPreviewKind === 'receipt_notice' ||
+    pushPreviewKind === 'receipt' ||
+    pushPreviewKind === 'incoming_inspection'
       ? t('app.kuaizhizao.salesOrder.confirmPush')
       : t('common.confirm');
 
@@ -1370,8 +1385,11 @@ const PurchaseOrdersPage: React.FC = () => {
     setPushPreviewTarget(null);
     setPushPreviewSelectedItemIds([]);
     setPushPreviewQuantities({});
+    setPushPreviewNotes('');
     setPushPreviewLineWh({});
     setPushPreviewWarehouseOptions([]);
+    setPushInvoiceMode('remaining');
+    setPushInvoiceAmount(0);
   }, []);
 
   const openPushReturnWarehouseModal = useCallback(
@@ -1421,7 +1439,7 @@ const PurchaseOrdersPage: React.FC = () => {
   );
 
   const loadPushPreview = useCallback(
-    async (record: PurchaseOrder, kind: PushPreviewKind) => {
+    async (record: PurchaseOrder, kind: PushPreviewKind, invoiceMode?: PurchaseInvoicePushMode) => {
       if (!record.id) return;
       setPushPreviewOpen(true);
       setPushPreviewKind(kind);
@@ -1429,8 +1447,11 @@ const PurchaseOrdersPage: React.FC = () => {
       setPushPreviewConfirming(false);
       setPushPreviewSelectedItemIds([]);
       setPushPreviewQuantities({});
+      setPushPreviewNotes('');
       setPushPreviewLineWh({});
       setPushPreviewWarehouseOptions([]);
+      setPushInvoiceMode(invoiceMode ?? 'remaining');
+      setPushInvoiceAmount(0);
       setPushPreviewLoading(true);
       setPushPreviewData(null);
       try {
@@ -1441,10 +1462,23 @@ const PurchaseOrdersPage: React.FC = () => {
           preview = await previewPushToReceipt(record.id);
         } else if (kind === 'invoice') {
           preview = await previewPushToInvoice(record.id);
+        } else if (kind === 'incoming_inspection') {
+          preview = (await qualityApi.incomingInspection.previewFromPurchaseOrder(
+            record.id,
+          )) as DocumentPushPreview;
         } else {
           preview = await previewPushToPurchaseReturn(record.id);
         }
         setPushPreviewData(preview);
+        if (kind === 'invoice') {
+          const preferred = invoiceMode ?? 'remaining';
+          const modeRow =
+            (preview.invoice_modes || []).find((m) => m.key === preferred && m.allowed) ||
+            (preview.invoice_modes || []).find((m) => m.allowed);
+          const nextMode = (modeRow?.key === 'prepayment' ? 'prepayment' : 'remaining') as PurchaseInvoicePushMode;
+          setPushInvoiceMode(nextMode);
+          setPushInvoiceAmount(Number(modeRow?.amount ?? preview.remaining_total ?? 0));
+        }
         const rows = preview.items || [];
         const ids: number[] = [];
         const qtyMap: Record<number, number> = {};
@@ -1615,10 +1649,56 @@ const PurchaseOrdersPage: React.FC = () => {
       await openPushReturnWarehouseModal(target, quantities);
       return;
     }
+
+    if (kind === 'incoming_inspection') {
+      setPushPreviewConfirming(true);
+      try {
+        const created = await qualityApi.incomingInspection.createFromPurchaseOrder(target.id!, {
+          selectedItemIds: selectedIds,
+          inspectionQuantities: quantities,
+          notes: pushPreviewNotes,
+        });
+        const list = Array.isArray(created) ? created : [];
+        messageApi.success(
+          t('app.kuaizhizao.purchaseOrder.pushIncomingInspectionSuccess', {
+            count: list.length,
+          }),
+        );
+        resetPushPreviewModal();
+        invalidateStatistics();
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+        if (detailDrawerVisible && orderDetail?.id === target.id) {
+          getPurchaseOrder(target.id!).then(setOrderDetail);
+        }
+        if (list.length === 1 && list[0]?.id) {
+          navigate(
+            `/apps/kuaizhizao/quality-management/incoming-inspection?incoming_inspection_id=${list[0].id}`,
+          );
+        } else if (list.length > 1) {
+          navigate('/apps/kuaizhizao/quality-management/incoming-inspection');
+        }
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.pushIncomingInspectionFailed')),
+        );
+      } finally {
+        setPushPreviewConfirming(false);
+      }
+      return;
+    }
+
+    if (!(pushInvoiceAmount > 0)) {
+      messageApi.warning(t('app.kuaizhizao.purchaseOrder.pushInvoiceAmountInvalid'));
+      return;
+    }
     resetPushPreviewModal();
     setPushToInvoiceLoading(true);
     try {
-      const result = await pushPurchaseOrderToInvoice(target.id!);
+      const result = await pushPurchaseOrderToInvoice(target.id!, {
+        invoice_mode: pushInvoiceMode,
+        total_amount: pushInvoiceAmount > 0 ? pushInvoiceAmount : undefined,
+      });
       messageApi.success(t('app.kuaizhizao.purchaseOrder.pushInvoiceSuccess', { code: result.invoice_code || t('app.kuaizhizao.purchaseOrder.createdFallback') }));
       invalidateStatistics();
       invalidateMenuBadgeCounts();
@@ -1638,14 +1718,18 @@ const PurchaseOrdersPage: React.FC = () => {
     messageApi,
     openPushReturnWarehouseModal,
     orderDetail?.id,
+    pushInvoiceAmount,
+    pushInvoiceMode,
     pushPreviewData,
     pushPreviewKind,
     pushPreviewLineWh,
+    pushPreviewNotes,
     pushPreviewQuantities,
     pushPreviewSelectedItemIds,
     pushPreviewTarget,
     resetPushPreviewModal,
     t,
+    navigate,
   ]);
 
   const handlePushToReceipt = useCallback(
@@ -1663,8 +1747,8 @@ const PurchaseOrdersPage: React.FC = () => {
   );
 
   const handlePushToInvoice = useCallback(
-    (record: PurchaseOrder) => {
-      void loadPushPreview(record, 'invoice');
+    (record: PurchaseOrder, mode: PurchaseInvoicePushMode = 'remaining') => {
+      void loadPushPreview(record, 'invoice', mode);
     },
     [loadPushPreview],
   );
@@ -1678,53 +1762,9 @@ const PurchaseOrdersPage: React.FC = () => {
 
   const handlePushToIncomingInspection = useCallback(
     (record: PurchaseOrder) => {
-      if (!record.id) return;
-      Modal.confirm({
-        title: pushToIncomingInspectionAction.label,
-        content: t('app.kuaizhizao.purchaseOrder.pushIncomingInspectionConfirm', {
-          code: record.order_code || record.id,
-        }),
-        okText: t('common.confirm', { defaultValue: '确定' }),
-        cancelText: t('common.cancel', { defaultValue: '取消' }),
-        onOk: async () => {
-          try {
-            const created = await qualityApi.incomingInspection.createFromPurchaseOrder(record.id!);
-            const list = Array.isArray(created) ? created : [];
-            messageApi.success(
-              t('app.kuaizhizao.purchaseOrder.pushIncomingInspectionSuccess', {
-                count: list.length,
-              }),
-            );
-            invalidateStatistics();
-            invalidateMenuBadgeCounts();
-            actionRef.current?.reload();
-            if (list.length === 1 && list[0]?.id) {
-              navigate(
-                `/apps/kuaizhizao/quality-management/incoming-inspection?incoming_inspection_id=${list[0].id}`,
-              );
-            } else if (list.length > 1) {
-              navigate('/apps/kuaizhizao/quality-management/incoming-inspection');
-            }
-          } catch (error: unknown) {
-            messageApi.error(
-              getApiErrorMessage(
-                error,
-                t('app.kuaizhizao.purchaseOrder.pushIncomingInspectionFailed'),
-              ),
-            );
-            throw error;
-          }
-        },
-      });
+      void loadPushPreview(record, 'incoming_inspection');
     },
-    [
-      invalidateMenuBadgeCounts,
-      invalidateStatistics,
-      messageApi,
-      navigate,
-      pushToIncomingInspectionAction.label,
-      t,
-    ],
+    [loadPushPreview],
   );
 
   const handlePushToReturnConfirm = async () => {
@@ -1827,10 +1867,36 @@ const PurchaseOrdersPage: React.FC = () => {
           label: pushToInvoiceAction.label,
           disabled: record.capabilities?.push_invoice?.allowed !== true,
           title: capReason(record.capabilities?.push_invoice),
-          onClick: () => {
-            if (record.capabilities?.push_invoice?.allowed !== true) return;
-            handlePushToInvoice(record);
-          },
+          children: [
+            {
+              key: 'invoice-remaining',
+              label: t('app.kuaizhizao.purchaseOrder.pushInvoiceByRemaining'),
+              disabled: record.capabilities?.push_invoice?.allowed !== true,
+              title: capReason(record.capabilities?.push_invoice),
+              onClick: () => {
+                if (record.capabilities?.push_invoice?.allowed !== true) return;
+                handlePushToInvoice(record, 'remaining');
+              },
+            },
+            {
+              key: 'invoice-prepayment',
+              label: t('app.kuaizhizao.purchaseOrder.pushInvoiceByPrepayment'),
+              disabled:
+                record.capabilities?.push_invoice?.allowed !== true ||
+                !(Number(record.prepayment_amount) > 0),
+              title:
+                record.capabilities?.push_invoice?.allowed !== true
+                  ? capReason(record.capabilities?.push_invoice)
+                  : !(Number(record.prepayment_amount) > 0)
+                    ? t('app.kuaizhizao.purchaseOrder.pushInvoiceNoPrepayment')
+                    : undefined,
+              onClick: () => {
+                if (record.capabilities?.push_invoice?.allowed !== true) return;
+                if (!(Number(record.prepayment_amount) > 0)) return;
+                handlePushToInvoice(record, 'prepayment');
+              },
+            },
+          ],
         },
         {
           key: 'incoming-inspection',
@@ -4062,7 +4128,9 @@ const PurchaseOrdersPage: React.FC = () => {
             pushPreviewLoading ||
             !pushPreviewData ||
             !!pushPreviewData?.has_blocking_issues ||
-            (pushPreviewKind !== 'invoice' && pushPreviewSelectedItemIds.length === 0),
+            (pushPreviewKind === 'invoice'
+              ? !(pushInvoiceAmount > 0)
+              : pushPreviewSelectedItemIds.length === 0),
         }}
       >
         {pushPreviewLoading ? (
@@ -4072,7 +4140,9 @@ const PurchaseOrdersPage: React.FC = () => {
           </div>
         ) : pushPreviewData ? (
           <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPreviewData.summary}</p>
+            {pushPreviewKind !== 'invoice' ? (
+              <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPreviewData.summary}</p>
+            ) : null}
             {pushPreviewData.has_blocking_issues && pushPreviewData.blocking_reason ? (
               <Alert
                 type="warning"
@@ -4177,7 +4247,7 @@ const PurchaseOrdersPage: React.FC = () => {
                           },
                         },
                       ]
-                    : pushPreviewKind === 'purchase_return'
+                    : pushPreviewKind === 'purchase_return' || pushPreviewKind === 'incoming_inspection'
                       ? [
                           {
                             title: t('app.kuaizhizao.salesOrder.colPushQty'),
@@ -4210,22 +4280,106 @@ const PurchaseOrdersPage: React.FC = () => {
                       : []),
                 ]}
               />
-            ) : pushPreviewKind === 'invoice' && pushPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pushPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 860 }}
-                columns={[
-                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
-                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
-                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
-                ]}
-              />
+            ) : pushPreviewKind === 'invoice' ? (
+              <div>
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  title={pushPreviewData.summary}
+                  description={
+                    <Space orientation="vertical" size={4} style={{ width: '100%' }}>
+                      <Typography.Text>
+                        {t('app.kuaizhizao.purchaseOrder.pushInvoiceOrderTotal')}:{' '}
+                        {formatCurrencyAmount(pushPreviewData.order_total)}
+                      </Typography.Text>
+                      <Typography.Text>
+                        {t('app.kuaizhizao.purchaseOrder.pushInvoiceInvoiced')}:{' '}
+                        {formatCurrencyAmount(pushPreviewData.invoiced_total)}
+                      </Typography.Text>
+                      <Typography.Text>
+                        {t('app.kuaizhizao.purchaseOrder.pushInvoiceRemaining')}:{' '}
+                        {formatCurrencyAmount(pushPreviewData.remaining_total)}
+                      </Typography.Text>
+                      <Typography.Text>
+                        {t('app.kuaizhizao.purchaseOrder.pushInvoicePrepayment')}:{' '}
+                        {formatCurrencyAmount(pushPreviewData.prepayment_amount)}
+                      </Typography.Text>
+                    </Space>
+                  }
+                />
+                <div style={{ marginBottom: 12 }}>
+                  <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                    {t('app.kuaizhizao.purchaseOrder.pushInvoiceMode')}
+                  </Typography.Text>
+                  <Radio.Group
+                    value={pushInvoiceMode}
+                    onChange={(e) => {
+                      const next = e.target.value as PurchaseInvoicePushMode;
+                      setPushInvoiceMode(next);
+                      const modeRow = (pushPreviewData.invoice_modes || []).find((m) => m.key === next);
+                      setPushInvoiceAmount(Number(modeRow?.amount ?? 0));
+                    }}
+                    options={(pushPreviewData.invoice_modes || []).map((m) => ({
+                      value: m.key,
+                      disabled: !m.allowed,
+                      label:
+                        m.key === 'prepayment'
+                          ? t('app.kuaizhizao.purchaseOrder.pushInvoiceByPrepayment')
+                          : t('app.kuaizhizao.purchaseOrder.pushInvoiceByRemaining'),
+                    }))}
+                  />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                    {t('app.kuaizhizao.purchaseOrder.pushInvoiceAmount')}
+                  </Typography.Text>
+                  <InputNumber
+                    min={0.01}
+                    max={
+                      pushInvoiceMode === 'prepayment'
+                        ? Number(pushPreviewData.prepayment_pushable ?? 0) || undefined
+                        : Number(pushPreviewData.remaining_total ?? 0) || undefined
+                    }
+                    precision={2}
+                    style={{ width: 220 }}
+                    value={pushInvoiceAmount}
+                    onChange={(v) => setPushInvoiceAmount(Number(v) || 0)}
+                  />
+                </div>
+                {pushPreviewData.items?.length > 0 ? (
+                  <Table
+                    size="small"
+                    dataSource={pushPreviewData.items}
+                    rowKey={(row) => String(row.item_id)}
+                    pagination={false}
+                    scroll={{ x: 860 }}
+                    columns={[
+                      { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                      { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                      { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                    ]}
+                  />
+                ) : null}
+              </div>
             ) : (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseOrder.pull.previewNoLines')} />
             )}
+            {pushPreviewKind === 'incoming_inspection' && !pushPreviewData.has_blocking_issues ? (
+              <div style={{ marginTop: 12 }}>
+                <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                  {t('app.kuaizhizao.purchaseOrder.pushIncomingInspectionNotes')}
+                </Typography.Text>
+                <Input.TextArea
+                  rows={3}
+                  maxLength={500}
+                  showCount
+                  value={pushPreviewNotes}
+                  onChange={(e) => setPushPreviewNotes(e.target.value)}
+                  placeholder={t('app.kuaizhizao.purchaseOrder.pushIncomingInspectionNotesPlaceholder')}
+                />
+              </div>
+            ) : null}
             {pushPreviewData.tip ? (
               <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
                 {pushPreviewData.tip}

@@ -7,8 +7,11 @@ from typing import Any
 
 
 def coerce_api_calendar_date(value: Any) -> Any:
-    if value is None or value == "":
-        return value
+    """空串表示未填日历日 → None（可选字段合法；必填字段由 schema 报缺）。"""
+    if value is None:
+        return None
+    if value == "":
+        return None
     if isinstance(value, date) and not isinstance(value, datetime):
         return value
     if isinstance(value, datetime):
@@ -16,7 +19,7 @@ def coerce_api_calendar_date(value: Any) -> Any:
     if isinstance(value, str):
         text = value.strip()
         if not text:
-            return value
+            return None
         if "T" in text:
             text = text.split("T", 1)[0]
         elif " " in text:

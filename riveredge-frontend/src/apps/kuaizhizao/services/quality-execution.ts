@@ -175,6 +175,16 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/push-to-purchase-receipt/preview`, {
         method: 'GET',
       }),
+    listPurchaseOrderPullCandidates: async (params?: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      order_code?: string;
+    }) =>
+      apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
+        '/apps/kuaizhizao/incoming-inspections/pull-candidates/purchase-orders',
+        { method: 'GET', params },
+      ),
     listPurchaseReceiptPullCandidates: async (params?: {
       skip?: number;
       limit?: number;
@@ -230,11 +240,33 @@ export const qualityApi = {
         data: Object.keys(payload).length ? payload : undefined,
       });
     },
-    createFromPurchaseOrder: async (purchaseOrderId: number | string, selectedItemIds?: number[]) =>
-      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-order/${purchaseOrderId}`, {
-        method: 'POST',
-        data: selectedItemIds?.length ? { selected_item_ids: selectedItemIds } : undefined,
+    previewFromPurchaseOrder: async (purchaseOrderId: number | string) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-order/${purchaseOrderId}/preview`, {
+        method: 'GET',
       }),
+    createFromPurchaseOrder: async (
+      purchaseOrderId: number | string,
+      options?: {
+        selectedItemIds?: number[];
+        inspectionQuantities?: Record<number, number>;
+        notes?: string;
+      },
+    ) => {
+      const payload: Record<string, unknown> = {};
+      if (options?.selectedItemIds?.length) {
+        payload.selected_item_ids = options.selectedItemIds;
+      }
+      if (options?.inspectionQuantities && Object.keys(options.inspectionQuantities).length) {
+        payload.inspection_quantities = options.inspectionQuantities;
+      }
+      if (options?.notes != null && String(options.notes).trim()) {
+        payload.notes = String(options.notes).trim();
+      }
+      return apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-order/${purchaseOrderId}`, {
+        method: 'POST',
+        data: Object.keys(payload).length ? payload : undefined,
+      });
+    },
     ensureForPurchaseReceipt: async (purchaseReceiptId: string) =>
       apiRequest<EnsureIqcForPurchaseReceiptResult>(
         `/apps/kuaizhizao/incoming-inspections/ensure-for-purchase-receipt/${purchaseReceiptId}`,

@@ -912,7 +912,7 @@ const ReceivableList: React.FC = () => {
                     acts.push(
                         <Button
                             key="pay"
-                            {...rowActionCollectReceipt('execute')}
+                            {...rowActionCollectReceipt('skip')}
                             onClick={() =>
                                 navigate(`/apps/kuaicaiwu/finance-management/receipts`, {
                                     state: { pullReceivableId: record.id },

@@ -338,11 +338,12 @@ async def _assert_purchase_receipt_visible(
         return
     # 引用单据（采购订单）仅用于追溯，不应阻塞采购入库单本身的查看/确认。
     # 否则“采购订单下推入库”后会出现可见入库单无法进入详情/确认的阻塞问题。
+    # 数据范围键须与 manifest purchase-receipt.data_scope_key（inbound）一致。
     await DataScopeService.assert_row_visible(
         receipt,
         tenant_id=tenant_id,
         user=current_user,
-        resource="kuaizhizao:purchase-receipt",
+        resource="kuaizhizao:inbound",
     )
 
 
@@ -804,7 +805,7 @@ async def list_production_pickings(
     work_order_id: Optional[int] = Query(None, description="工单ID"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID"),
     warehouse_name: Optional[str] = Query(None, description="仓库名称（模糊）"),
-    keyword: Optional[str] = Query(None, description="模糊搜索（领料单号/工单号/领料人）"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（领料单号/工单号/领料人/车间/物料编码名称规格）"),
     search: Optional[str] = Query(None, description="搜索关键词（与 keyword 等价）"),
     order_by: Optional[str] = Query(None, description="排序字段"),
     created_start_date: Optional[str] = Query(None, description="创建日起"),
@@ -1819,14 +1820,16 @@ async def print_material_borrow(
 @router.post("/material-returns", response_model=MaterialReturnResponse, summary="Create material return slip")
 async def create_material_return(
     return_data: MaterialReturnCreate,
+    auto_confirm: bool = Query(False, description="创建后同事务确认归还入库"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """创建还料单"""
+    """创建还料单；auto_confirm 时建单与确认同事务，失败整单回滚。"""
     return await MaterialReturnService().create_material_return(
         tenant_id=tenant_id,
         return_data=return_data,
-        created_by=current_user.id
+        created_by=current_user.id,
+        auto_confirm=auto_confirm,
     )
 
 
@@ -3690,6 +3693,19 @@ async def pull_sales_deliveries_from_sales_order_items(
         selected_ids = [int(v) for v in raw_ids]
     except (TypeError, ValueError):
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    delivery_quantities_raw = request.get("delivery_quantities")
+    delivery_quantities = None
+    if isinstance(delivery_quantities_raw, dict):
+        delivery_quantities = {}
+        for k, v in delivery_quantities_raw.items():
+            try:
+                qty = float(v or 0)
+            except (TypeError, ValueError):
+                continue
+            if qty > 0:
+                delivery_quantities[int(k)] = qty
+        if not delivery_quantities:
+            delivery_quantities = None
     from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 
     source_items = await SalesOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).only("sales_order_id")
@@ -3704,6 +3720,7 @@ async def pull_sales_deliveries_from_sales_order_items(
             tenant_id=tenant_id,
             item_ids=selected_ids,
             created_by=current_user.id,
+            delivery_quantities=delivery_quantities,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))

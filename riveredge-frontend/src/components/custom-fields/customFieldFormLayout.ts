@@ -22,6 +22,8 @@ export const CUSTOM_FIELD_FORM_CLASS_NAMES = {
   sectionRow: 'custom-fields-form-section-row',
   /** JSON 字段容器 */
   jsonItem: 'custom-fields-form-json-item',
+  /** 字段标题行（名称 + 「自定义字段」徽章） */
+  label: 'custom-fields-form-label',
   /** 标题旁「自定义字段」标签 */
   labelTag: 'custom-fields-form-label-tag',
 } as const;

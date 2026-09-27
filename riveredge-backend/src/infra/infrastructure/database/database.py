@@ -346,6 +346,7 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.voucher",  # 记账凭证
                 "apps.kuaicaiwu.models.voucher_line",  # 凭证分录
                 "apps.kuaicaiwu.models.gl_book_settings",  # 总账账套参数
+                "apps.kuaicaiwu.models.gl_exchange_rate",  # 汇率设置
                 "apps.kuaicaiwu.models.accounting_period",  # 会计期间
                 "apps.kuaicaiwu.models.account_balance",  # 科目余额
                 "apps.kuaicaiwu.models.voucher_summary",  # 摘要库
@@ -636,6 +637,17 @@ async def init_tortoise_dynamic() -> None:
     global _last_runtime_model_modules
 
     if Tortoise._inited:
+        from core.services.application.enabled_apps import resolve_enabled_app_codes
+
+        enabled_codes = await resolve_enabled_app_codes()
+        runtime_config = await get_dynamic_tortoise_config(enabled_codes=enabled_codes)
+        runtime_models = tuple(runtime_config["apps"]["models"]["models"])
+        needs_reload = _tortoise_has_unbound_models() or _last_runtime_model_modules != runtime_models
+        if needs_reload:
+            logger.warning(
+                "Tortoise 已初始化但 ORM 声明已变化或存在未绑定模型，按启用集重建"
+            )
+            await reload_tortoise_for_enabled_apps()
         return
 
     from infra.config.infra_config import setup_tortoise_timezone_env

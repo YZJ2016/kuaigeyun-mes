@@ -39,6 +39,7 @@ from .bank_accounts import router as bank_accounts_router
 from .prepayments import router as prepayments_router
 from .finance_notes import notes_receivable_router, notes_payable_router
 from .gl import router as gl_router
+from .exchange_rates import router as exchange_rates_router
 from .tax import router as tax_router
 from .fixed_assets import router as fixed_assets_router
 
@@ -76,6 +77,7 @@ router.include_router(prepayments_router)
 router.include_router(notes_receivable_router)
 router.include_router(notes_payable_router)
 router.include_router(gl_router)
+router.include_router(exchange_rates_router)
 router.include_router(tax_router)
 router.include_router(fixed_assets_router)
 

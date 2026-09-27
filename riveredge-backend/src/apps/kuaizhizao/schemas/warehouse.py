@@ -1823,6 +1823,10 @@ class OutboundConfirmationRequest(BaseSchema):
     warehouse_name: Optional[str] = Field(None, description="出库仓库名称")
     delivery_time: Optional[datetime] = Field(None, description="出库时间")
     notes: Optional[str] = Field(None, description="确认备注")
+    picker_id: Optional[int] = Field(None, description="领料人用户ID（生产领料确认时可二次选择）")
+    picker_name: Optional[str] = Field(None, max_length=100, description="领料人姓名")
+    deliverer_id: Optional[int] = Field(None, description="出库人用户ID（其他出库等确认时可二次选择）")
+    deliverer_name: Optional[str] = Field(None, max_length=100, description="出库人姓名")
     items: Optional[List[OutboundConfirmationItem]] = Field(
         None,
         description="明细更新（可选，用于补全批号/库位/序列号等）",

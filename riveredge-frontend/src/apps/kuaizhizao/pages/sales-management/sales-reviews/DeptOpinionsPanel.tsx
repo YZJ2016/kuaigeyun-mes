@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Col, Descriptions, Form, Input, Row, Space, Tabs } from 'antd';
+import { Alert, Button, Col, Descriptions, Form, Input, Row, Space, Tabs, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
@@ -22,6 +22,17 @@ export const SALES_REVIEW_DEPT_CODES: SalesReviewDeptCode[] = [
   'production',
   'quality',
 ];
+
+/** 评审中：按本轮意见槽位；草稿/驳回：按头表计划 */
+export function resolveSalesReviewActiveDeptCodes(review: SalesReview): string[] {
+  if (review.dept_opinions?.length) {
+    return review.dept_opinions.map((o) => o.dept_code).filter(Boolean);
+  }
+  if (review.review_dept_plan?.length) {
+    return review.review_dept_plan.map((p) => p.dept_code).filter(Boolean);
+  }
+  return [];
+}
 
 export type DeptOpinionFormState = {
   result: 'pass' | 'fail';
@@ -43,6 +54,8 @@ export type SalesReviewDeptOpinionsPanelProps = {
 type DeptOpinionEditorProps = {
   deptCode: string;
   formState: DeptOpinionFormState;
+  assignedReviewerId?: number | null;
+  assignedReviewerName?: string | null;
   setOpinionForms: SalesReviewDeptOpinionsPanelProps['setOpinionForms'];
   actionLoading: boolean;
   onSubmitDept: (deptCode: string) => void | Promise<void>;
@@ -51,6 +64,8 @@ type DeptOpinionEditorProps = {
 const DeptOpinionEditor: React.FC<DeptOpinionEditorProps> = ({
   deptCode,
   formState,
+  assignedReviewerId,
+  assignedReviewerName,
   setOpinionForms,
   actionLoading,
   onSubmitDept,
@@ -58,8 +73,26 @@ const DeptOpinionEditor: React.FC<DeptOpinionEditorProps> = ({
   const { t } = useTranslation();
   const currentUser = useCurrentUser();
   const [form] = Form.useForm();
+  const lockedAssignee = assignedReviewerId != null && Number(assignedReviewerId) > 0;
+  const canSubmitAsAssignee =
+    !lockedAssignee || Number(currentUser?.id) === Number(assignedReviewerId);
 
   useEffect(() => {
+    if (lockedAssignee) {
+      setOpinionForms((prev) => {
+        const cur = prev[deptCode] || { result: 'pass' as const, opinion: '' };
+        if (cur.reviewed_by === assignedReviewerId) return prev;
+        return {
+          ...prev,
+          [deptCode]: {
+            ...cur,
+            reviewed_by: assignedReviewerId,
+            reviewed_by_name: assignedReviewerName || cur.reviewed_by_name || '',
+          },
+        };
+      });
+      return;
+    }
     if (formState.reviewed_by_uuid) {
       form.setFieldsValue({ reviewer_uuid: formState.reviewed_by_uuid });
       return;
@@ -79,7 +112,16 @@ const DeptOpinionEditor: React.FC<DeptOpinionEditorProps> = ({
         },
       };
     });
-  }, [currentUser, deptCode, form, formState.reviewed_by_uuid, setOpinionForms]);
+  }, [
+    assignedReviewerId,
+    assignedReviewerName,
+    currentUser,
+    deptCode,
+    form,
+    formState.reviewed_by_uuid,
+    lockedAssignee,
+    setOpinionForms,
+  ]);
 
   return (
     <Form form={form} layout="vertical" size={DEPT_OPINION_CONTROL_SIZE}>
@@ -104,41 +146,47 @@ const DeptOpinionEditor: React.FC<DeptOpinionEditorProps> = ({
           </Form.Item>
         </Col>
         <Col span={12}>
-          <UniUserSelect
-            name="reviewer_uuid"
-            label={t('app.kuaizhizao.salesReview.colReviewedBy')}
-            placeholder={t('app.kuaizhizao.salesReview.reviewerPlaceholder')}
-            required
-            rules={[
-              {
-                required: true,
-                message: t('app.kuaizhizao.salesReview.reviewerRequired'),
-              },
-            ]}
-            onChange={(_uuid, user) => {
-              if (user && !Array.isArray(user)) {
+          {lockedAssignee ? (
+            <Form.Item label={t('app.kuaizhizao.salesReview.colReviewedBy')} required>
+              <Typography.Text>{assignedReviewerName || '—'}</Typography.Text>
+            </Form.Item>
+          ) : (
+            <UniUserSelect
+              name="reviewer_uuid"
+              label={t('app.kuaizhizao.salesReview.colReviewedBy')}
+              placeholder={t('app.kuaizhizao.salesReview.reviewerPlaceholder')}
+              required
+              rules={[
+                {
+                  required: true,
+                  message: t('app.kuaizhizao.salesReview.reviewerRequired'),
+                },
+              ]}
+              onChange={(_uuid, user) => {
+                if (user && !Array.isArray(user)) {
+                  setOpinionForms((prev) => ({
+                    ...prev,
+                    [deptCode]: {
+                      ...formState,
+                      reviewed_by: user.id,
+                      reviewed_by_name: user.full_name || user.username || '',
+                      reviewed_by_uuid: user.uuid,
+                    },
+                  }));
+                  return;
+                }
                 setOpinionForms((prev) => ({
                   ...prev,
                   [deptCode]: {
                     ...formState,
-                    reviewed_by: user.id,
-                    reviewed_by_name: user.full_name || user.username || '',
-                    reviewed_by_uuid: user.uuid,
+                    reviewed_by: null,
+                    reviewed_by_name: null,
+                    reviewed_by_uuid: null,
                   },
                 }));
-                return;
-              }
-              setOpinionForms((prev) => ({
-                ...prev,
-                [deptCode]: {
-                  ...formState,
-                  reviewed_by: null,
-                  reviewed_by_name: null,
-                  reviewed_by_uuid: null,
-                },
-              }));
-            }}
-          />
+              }}
+            />
+          )}
         </Col>
       </Row>
       <Form.Item
@@ -157,9 +205,13 @@ const DeptOpinionEditor: React.FC<DeptOpinionEditorProps> = ({
           }
         />
       </Form.Item>
-      <Button type="primary" loading={actionLoading} onClick={() => void onSubmitDept(deptCode)}>
-        {t('app.kuaizhizao.salesReview.submitDeptOpinion')}
-      </Button>
+      {canSubmitAsAssignee ? (
+        <Button type="primary" loading={actionLoading} onClick={() => void onSubmitDept(deptCode)}>
+          {t('app.kuaizhizao.salesReview.submitDeptOpinion')}
+        </Button>
+      ) : (
+        <Alert type="warning" showIcon title={t('app.kuaizhizao.salesReview.notAssignedReviewer')} />
+      )}
     </Form>
   );
 };
@@ -185,24 +237,26 @@ export const SalesReviewDeptOpinionsPanel: React.FC<SalesReviewDeptOpinionsPanel
     return map;
   }, [review.dept_opinions]);
 
+  const activeDeptCodes = useMemo(() => resolveSalesReviewActiveDeptCodes(review), [review]);
+
   const firstPendingDept = useMemo(
     () =>
-      SALES_REVIEW_DEPT_CODES.find((code) => {
+      activeDeptCodes.find((code) => {
         const existing = opinionByDept.get(code);
         return !existing || existing.result === 'pending';
-      }) ?? SALES_REVIEW_DEPT_CODES[0],
-    [opinionByDept],
+      }) ?? activeDeptCodes[0],
+    [activeDeptCodes, opinionByDept],
   );
 
-  const [activeDept, setActiveDept] = useState<string>(SALES_REVIEW_DEPT_CODES[0]);
+  const [activeDept, setActiveDept] = useState<string>(activeDeptCodes[0] || 'tech');
 
   useEffect(() => {
-    setActiveDept(firstPendingDept);
+    if (firstPendingDept) setActiveDept(firstPendingDept);
   }, [review.id, firstPendingDept]);
 
   const tabItems = useMemo(
     () =>
-      SALES_REVIEW_DEPT_CODES.map((code) => {
+      activeDeptCodes.map((code) => {
         const existing = opinionByDept.get(code);
         // 下达评审会 seed result=pending 行；仅 pass/fail 才算已提交
         const isAnswered = Boolean(existing && existing.result !== 'pending');
@@ -233,10 +287,23 @@ export const SalesReviewDeptOpinionsPanel: React.FC<SalesReviewDeptOpinionsPanel
             <DeptOpinionEditor
               deptCode={code}
               formState={formState}
+              assignedReviewerId={existing?.assigned_reviewer_id}
+              assignedReviewerName={existing?.assigned_reviewer_name}
               setOpinionForms={setOpinionForms}
               actionLoading={actionLoading}
               onSubmitDept={onSubmitDept}
             />
+          );
+        } else if (review.status === 'draft' || review.status === 'rejected') {
+          const plan = review.review_dept_plan?.find((p) => p.dept_code === code);
+          content = plan ? (
+            <Descriptions size="small" column={1}>
+              <Descriptions.Item label={t('app.kuaizhizao.salesReview.colReviewedBy')}>
+                {plan.assigned_reviewer_name || '—'}
+              </Descriptions.Item>
+            </Descriptions>
+          ) : (
+            renderSalesReviewDeptOpinionResultTag(t, 'pending')
           );
         } else {
           content = renderSalesReviewDeptOpinionResultTag(t, 'pending');
@@ -253,7 +320,17 @@ export const SalesReviewDeptOpinionsPanel: React.FC<SalesReviewDeptOpinionsPanel
           children: <div style={{ paddingTop: 4 }}>{content}</div>,
         };
       }),
-    [actionLoading, canApprove, onSubmitDept, opinionByDept, opinionForms, review.status, setOpinionForms, t],
+    [
+      actionLoading,
+      canApprove,
+      onSubmitDept,
+      opinionByDept,
+      opinionForms,
+      review.review_dept_plan,
+      review.status,
+      setOpinionForms,
+      t,
+    ],
   );
 
   return (
@@ -261,7 +338,11 @@ export const SalesReviewDeptOpinionsPanel: React.FC<SalesReviewDeptOpinionsPanel
       {review.status === 'reviewing' && canApprove ? (
         <Alert type="info" showIcon title={t('app.kuaizhizao.salesReview.deptOpinionHint')} />
       ) : null}
-      <Tabs activeKey={activeDept} onChange={setActiveDept} items={tabItems} />
+      {activeDeptCodes.length ? (
+        <Tabs activeKey={activeDept} onChange={setActiveDept} items={tabItems} />
+      ) : (
+        <Alert type="warning" showIcon title={t('app.kuaizhizao.salesReview.deptPlanEmptyHint')} />
+      )}
     </Space>
   );
 };

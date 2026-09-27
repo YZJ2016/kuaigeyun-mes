@@ -297,28 +297,26 @@ const MaterialReturnsPage: React.FC = () => {
     }
     setCreateSubmitting(true);
     try {
-      const created = await warehouseApi.materialReturn.create({
-        return_code: values.return_code,
-        borrow_id: selectedBorrowDetail.borrow_id,
-        borrow_code: selectedBorrowDetail.borrow_code,
-        warehouse_id: selectedBorrowDetail.warehouse_id,
-        warehouse_name: selectedBorrowDetail.warehouse_name,
-        returner_id: values.returner_id != null ? Number(values.returner_id) : undefined,
-        returner_name: values.returner_name,
-        notes: values.notes,
-        attachments: normalizeDocumentAttachments(values.attachments),
-        items: validItems,
-      });
-      const createdId = (created as any)?.id;
-      if (andConfirm) {
-        if (!createdId) {
-          throw new Error(t('app.kuaizhizao.warehouseMaterialReturn.msg.createMissingId'));
-        }
-        await warehouseApi.materialReturn.confirm(String(createdId));
-        messageApi.success(t('app.kuaizhizao.warehouseMaterialReturn.msg.createAndConfirmSuccess'));
-      } else {
-        messageApi.success(t('app.kuaizhizao.warehouseMaterialReturn.msg.createSuccess'));
-      }
+      await warehouseApi.materialReturn.create(
+        {
+          return_code: values.return_code,
+          borrow_id: selectedBorrowDetail.borrow_id,
+          borrow_code: selectedBorrowDetail.borrow_code,
+          warehouse_id: selectedBorrowDetail.warehouse_id,
+          warehouse_name: selectedBorrowDetail.warehouse_name,
+          returner_id: values.returner_id != null ? Number(values.returner_id) : undefined,
+          returner_name: values.returner_name,
+          notes: values.notes,
+          attachments: normalizeDocumentAttachments(values.attachments),
+          items: validItems,
+        },
+        { autoConfirm: andConfirm },
+      );
+      messageApi.success(
+        andConfirm
+          ? t('app.kuaizhizao.warehouseMaterialReturn.msg.createAndConfirmSuccess')
+          : t('app.kuaizhizao.warehouseMaterialReturn.msg.createSuccess'),
+      );
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();

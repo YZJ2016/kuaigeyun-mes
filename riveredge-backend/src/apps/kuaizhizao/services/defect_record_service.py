@@ -1783,17 +1783,26 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         quarantine_warehouse_id: Optional[int] = None,
         stock_warehouse_id: Optional[int] = None,
     ) -> DefectRecord:
-        """创建后统一执行处置闭环（兼容旧名）。"""
-        return await self._apply_disposition_after_persist(
-            tenant_id=tenant_id,
-            defect_id=int(defect_record.id),
-            updated_by=created_by,
-            quarantine_location=quarantine_location,
-            quarantine_warehouse_id=quarantine_warehouse_id,
-            stock_warehouse_id=stock_warehouse_id,
-            downgrade_material_id=downgrade_material_id,
-            downgrade_warehouse_id=downgrade_warehouse_id,
-        )
+        """创建后统一执行处置闭环；失败则作废本条仍为草稿的台账，释放待登记额度。"""
+        defect_id = int(defect_record.id)
+        try:
+            return await self._apply_disposition_after_persist(
+                tenant_id=tenant_id,
+                defect_id=defect_id,
+                updated_by=created_by,
+                quarantine_location=quarantine_location,
+                quarantine_warehouse_id=quarantine_warehouse_id,
+                stock_warehouse_id=stock_warehouse_id,
+                downgrade_material_id=downgrade_material_id,
+                downgrade_warehouse_id=downgrade_warehouse_id,
+            )
+        except Exception:
+            await self._cancel_orphan_defect_records_after_failed_disposition(
+                tenant_id,
+                [defect_id],
+                operator_id=created_by,
+            )
+            raise
 
     @staticmethod
     def _dec_qty(value: Any) -> Decimal:
@@ -1833,16 +1842,63 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         existing_registered: Decimal,
         unqualified_quantity: Decimal,
     ) -> None:
-        remaining = max(
-            Decimal("0"),
-            DefectRecordService._dec_qty(unqualified_quantity) - existing_registered,
-        )
+        unqualified = DefectRecordService._dec_qty(unqualified_quantity)
+        registered = DefectRecordService._dec_qty(existing_registered)
+        remaining = max(Decimal("0"), unqualified - registered)
         qty = DefectRecordService._dec_qty(new_quantity)
         if qty <= 0:
             raise ValidationError("不合格品数量必须大于 0")
         if qty > remaining:
             raise ValidationError(
                 f"不合格品数量({qty})不能超过待登记不合格数量({remaining})"
+                f"（检验不合格{unqualified}，已登记{registered}）"
+            )
+
+    async def _cancel_orphan_defect_records_after_failed_disposition(
+        self,
+        tenant_id: int,
+        defect_ids: List[int],
+        *,
+        operator_id: int,
+    ) -> None:
+        """
+        创建台账已提交但处置闭环失败时，作废仍为草稿且未挂下游的记录，释放待登记额度。
+        已闭环或已挂返工/报废/退货/入库的记录不改，避免回滚已成功副作用。
+        """
+        if not defect_ids:
+            return
+        from core.utils.timezone_utils import resolve_business_datetime
+
+        rows = await DefectRecord.filter(
+            tenant_id=tenant_id,
+            id__in=[int(i) for i in defect_ids],
+            deleted_at__isnull=True,
+        ).all()
+        if not rows:
+            return
+        user_info = await self.get_user_info(operator_id)
+        now = resolve_business_datetime()
+        for row in rows:
+            if str(row.status or "") != "draft":
+                continue
+            if (
+                row.scrap_record_id
+                or row.rework_order_id
+                or row.purchase_return_id
+                or row.other_inbound_id
+                or row.finished_goods_receipt_id
+                or getattr(row, "accept_purchase_receipt_id", None)
+            ):
+                continue
+            row.status = "cancelled"
+            row.updated_by = operator_id
+            row.updated_by_name = user_info.get("name")
+            row.updated_at = now
+            await row.save()
+            logger.warning(
+                "不合格品处置失败，已作废孤儿草稿台账 %s (id=%s) 以释放待登记额度",
+                row.code,
+                row.id,
             )
 
     @staticmethod
@@ -1879,12 +1935,15 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         if not lines:
             raise ValidationError("至少登记一行不合格明细")
         total_new = sum(self._dec_qty(line.defect_quantity) for line in lines)
-        remaining = max(Decimal("0"), self._dec_qty(unqualified_quantity) - existing_registered)
+        unqualified = self._dec_qty(unqualified_quantity)
+        registered = self._dec_qty(existing_registered)
+        remaining = max(Decimal("0"), unqualified - registered)
         if total_new <= 0:
             raise ValidationError("明细数量合计必须大于 0")
         if total_new > remaining:
             raise ValidationError(
                 f"明细数量合计({total_new})不能超过待登记不合格数量({remaining})"
+                f"（检验不合格{unqualified}，已登记{registered}）"
             )
         for line in lines:
             if self._dec_qty(line.defect_quantity) <= 0:
@@ -2335,18 +2394,27 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             )
 
         responses: List[DefectRecordResponse] = []
-        for created_id, line in created_payloads:
-            defect_record = await self._maybe_execute_downgrade_after_create(
-                tenant_id=tenant_id,
-                defect_record=await DefectRecord.get(id=created_id),
-                created_by=created_by,
-                downgrade_material_id=line.downgrade_material_id,
-                downgrade_warehouse_id=line.downgrade_warehouse_id,
-                quarantine_location=getattr(line, "quarantine_location", None),
-                quarantine_warehouse_id=getattr(line, "quarantine_warehouse_id", None),
-                stock_warehouse_id=getattr(line, "stock_warehouse_id", None),
+        created_ids = [int(cid) for cid, _ in created_payloads]
+        try:
+            for created_id, line in created_payloads:
+                defect_record = await self._maybe_execute_downgrade_after_create(
+                    tenant_id=tenant_id,
+                    defect_record=await DefectRecord.get(id=created_id),
+                    created_by=created_by,
+                    downgrade_material_id=line.downgrade_material_id,
+                    downgrade_warehouse_id=line.downgrade_warehouse_id,
+                    quarantine_location=getattr(line, "quarantine_location", None),
+                    quarantine_warehouse_id=getattr(line, "quarantine_warehouse_id", None),
+                    stock_warehouse_id=getattr(line, "stock_warehouse_id", None),
+                )
+                responses.append(DefectRecordResponse.model_validate(defect_record))
+        except Exception:
+            await self._cancel_orphan_defect_records_after_failed_disposition(
+                tenant_id,
+                created_ids,
+                operator_id=created_by,
             )
-            responses.append(DefectRecordResponse.model_validate(defect_record))
+            raise
         return responses
 
     async def create_defects_batch_from_process_inspection(
@@ -2434,18 +2502,27 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             )
 
         responses: List[DefectRecordResponse] = []
-        for created_id, line in created_payloads:
-            defect_record = await self._maybe_execute_downgrade_after_create(
-                tenant_id=tenant_id,
-                defect_record=await DefectRecord.get(id=created_id),
-                created_by=created_by,
-                downgrade_material_id=line.downgrade_material_id,
-                downgrade_warehouse_id=line.downgrade_warehouse_id,
-                quarantine_location=getattr(line, "quarantine_location", None),
-                quarantine_warehouse_id=getattr(line, "quarantine_warehouse_id", None),
-                stock_warehouse_id=getattr(line, "stock_warehouse_id", None),
+        created_ids = [int(cid) for cid, _ in created_payloads]
+        try:
+            for created_id, line in created_payloads:
+                defect_record = await self._maybe_execute_downgrade_after_create(
+                    tenant_id=tenant_id,
+                    defect_record=await DefectRecord.get(id=created_id),
+                    created_by=created_by,
+                    downgrade_material_id=line.downgrade_material_id,
+                    downgrade_warehouse_id=line.downgrade_warehouse_id,
+                    quarantine_location=getattr(line, "quarantine_location", None),
+                    quarantine_warehouse_id=getattr(line, "quarantine_warehouse_id", None),
+                    stock_warehouse_id=getattr(line, "stock_warehouse_id", None),
+                )
+                responses.append(DefectRecordResponse.model_validate(defect_record))
+        except Exception:
+            await self._cancel_orphan_defect_records_after_failed_disposition(
+                tenant_id,
+                created_ids,
+                operator_id=created_by,
             )
-            responses.append(DefectRecordResponse.model_validate(defect_record))
+            raise
         return responses
 
     async def create_defects_batch_from_finished_goods_inspection(
@@ -2530,16 +2607,25 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             )
 
         responses: List[DefectRecordResponse] = []
-        for created_id, line in created_payloads:
-            defect_record = await self._maybe_execute_downgrade_after_create(
-                tenant_id=tenant_id,
-                defect_record=await DefectRecord.get(id=created_id),
-                created_by=created_by,
-                downgrade_material_id=line.downgrade_material_id,
-                downgrade_warehouse_id=line.downgrade_warehouse_id,
-                quarantine_location=getattr(line, "quarantine_location", None),
-                quarantine_warehouse_id=getattr(line, "quarantine_warehouse_id", None),
-                stock_warehouse_id=getattr(line, "stock_warehouse_id", None),
+        created_ids = [int(cid) for cid, _ in created_payloads]
+        try:
+            for created_id, line in created_payloads:
+                defect_record = await self._maybe_execute_downgrade_after_create(
+                    tenant_id=tenant_id,
+                    defect_record=await DefectRecord.get(id=created_id),
+                    created_by=created_by,
+                    downgrade_material_id=line.downgrade_material_id,
+                    downgrade_warehouse_id=line.downgrade_warehouse_id,
+                    quarantine_location=getattr(line, "quarantine_location", None),
+                    quarantine_warehouse_id=getattr(line, "quarantine_warehouse_id", None),
+                    stock_warehouse_id=getattr(line, "stock_warehouse_id", None),
+                )
+                responses.append(DefectRecordResponse.model_validate(defect_record))
+        except Exception:
+            await self._cancel_orphan_defect_records_after_failed_disposition(
+                tenant_id,
+                created_ids,
+                operator_id=created_by,
             )
-            responses.append(DefectRecordResponse.model_validate(defect_record))
+            raise
         return responses

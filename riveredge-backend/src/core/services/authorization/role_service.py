@@ -741,6 +741,12 @@ class RoleService:
                         permission_code=permission_code,
                     )
                 )
+
+        # 质检「检验」真源为 :execute；持有 create/update 的角色补齐 execute（仅追加）
+        from core.services.authorization.permission_sync_service import PermissionSyncService
+
+        await PermissionSyncService.ensure_quality_inspection_execute_grants(tenant_id=tenant_id)
+
         # 权限变更后 bump：
         #   1) 租户级版本（user_id=None）：供全局聚合场景使用
         #   2) 持有该角色的每个用户的用户级版本：驱动 UserPermissionService 缓存失效
@@ -815,7 +821,7 @@ class RoleService:
             "sales_",
             "customer",
             "quotation",
-            "receivable",
+            "kuaicaiwu:receivable",
             "kuaizhizao:pricing",
             "kuaizhizao:sales",
             "kuaizhizao:shipment",
@@ -841,7 +847,7 @@ class RoleService:
         "PURCHASE_MANAGER": [
             "purchase_",
             "supplier",
-            "payable",
+            "kuaicaiwu:payable",
             "kuaizhizao:pricing",
             "kuaizhizao:purchase",
             "kuaizhizao:receipt-notice",
@@ -932,8 +938,27 @@ class RoleService:
             "kuaizhizao:inbound",
             "kuaizhizao:outbound",
         ],
-        "FINANCE_MANAGER": ["receivable", "payable", "receipt", "payment", "invoice", "cost_", "kuaizhizao:pricing"],
-        "FINANCE_OPERATOR": ["receivable", "payable", "receipt", "payment", "invoice", "kuaizhizao:pricing"],
+        "FINANCE_MANAGER": [
+            "kuaicaiwu:receivable",
+            "kuaicaiwu:payable",
+            "kuaicaiwu:receipt",
+            "kuaicaiwu:payment",
+            "kuaicaiwu:sales-invoice",
+            "kuaicaiwu:purchase-invoice",
+            "kuaicaiwu:cost",
+            "kuaicaiwu:cost-rule",
+            "kuaicaiwu:cost-report",
+            "kuaizhizao:pricing",
+        ],
+        "FINANCE_OPERATOR": [
+            "kuaicaiwu:receivable",
+            "kuaicaiwu:payable",
+            "kuaicaiwu:receipt",
+            "kuaicaiwu:payment",
+            "kuaicaiwu:sales-invoice",
+            "kuaicaiwu:purchase-invoice",
+            "kuaizhizao:pricing",
+        ],
         "QUALITY_MANAGER": [
             "quality",
             "inspection",
@@ -1083,6 +1108,11 @@ class RoleService:
             [RolePermission(role_id=role.id, permission_id=pid, created_at=now_utc()) for pid in to_add],
             ignore_conflicts=True,
         )
+
+        # 预设角色同步后同样补齐质检 :execute（与权限同步传播同语义）
+        from core.services.authorization.permission_sync_service import PermissionSyncService
+
+        await PermissionSyncService.ensure_quality_inspection_execute_grants(tenant_id=tenant_id)
 
         # 默认数据/字段权限均为开放（全部/明文），仅在显式收敛时落库策略。
 

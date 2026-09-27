@@ -34,6 +34,7 @@ export function FormModalGridBlock({
  * 提交时剥离，避免审计相位等字段进入写库 payload（标准成本二次编辑 500）。
  */
 const FORM_SUBMIT_RESPONSE_META_KEYS = new Set([
+  'id',
   'audit',
   'tenant_id',
   'created_at',

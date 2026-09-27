@@ -671,6 +671,17 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                     "review_remarks",
                 },
             )
+            # 与上方显式 kwargs 冲突的键一律剔除（防止漏 exclude / 旧调用方再塞编码）
+            for _dup in (
+                "invoice_code",
+                "tenant_id",
+                "created_by",
+                "created_by_name",
+                "updated_by",
+                "updated_by_name",
+                "review_status",
+            ):
+                payload.pop(_dup, None)
             amount_excl, tax_amount, total_amount = resolve_invoice_amounts_for_create(
                 Decimal(str(payload["invoice_amount"])),
                 Decimal(str(payload["tax_rate"])),

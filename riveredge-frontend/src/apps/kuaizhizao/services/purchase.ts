@@ -64,6 +64,25 @@ export interface DocumentPushPreview {
   blocking_reason?: string | null;
   tip?: string | null;
   line_warehouse_required?: boolean;
+  /** 采购发票下推：金额与模式 */
+  order_total?: number;
+  invoiced_total?: number;
+  remaining_total?: number;
+  prepayment_amount?: number;
+  prepayment_pushable?: number;
+  invoice_modes?: Array<{
+    key: 'remaining' | 'prepayment' | string;
+    amount: number;
+    allowed: boolean;
+    blocking_reason?: string | null;
+  }>;
+}
+
+export type PurchaseInvoicePushMode = 'remaining' | 'prepayment';
+
+export interface PushToInvoiceRequest {
+  invoice_mode?: PurchaseInvoicePushMode;
+  total_amount?: number;
 }
 
 export interface PushToReceiptNoticeRequest {
@@ -559,9 +578,13 @@ export async function pushPurchaseOrderToReceiptNoticeFromPreview(id: number): P
 /**
  * 下推到采购发票
  */
-export async function pushPurchaseOrderToInvoice(id: number): Promise<any> {
+export async function pushPurchaseOrderToInvoice(
+  id: number,
+  data?: PushToInvoiceRequest,
+): Promise<any> {
   return apiRequest<any>(`/apps/kuaizhizao/purchase-orders/${id}/push-to-invoice`, {
     method: 'POST',
+    data: data ?? {},
   });
 }
 

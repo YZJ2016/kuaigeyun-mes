@@ -477,25 +477,29 @@ class PermissionSyncService:
             from_permission_id,
         )
 
-    # 检验执行从 :update / 历史 :conduct 迁到 :execute；仅追加授权，不删除旧码
+    # 检验执行从 :update / :create / 历史 :conduct 迁到 :execute；仅追加授权，不删除旧码
     _QUALITY_INSPECTION_EXECUTE_GRANT_SOURCES: dict[str, tuple[str, ...]] = {
         "kuaizhizao:quality-management-incoming-inspection:execute": (
             "kuaizhizao:quality-management-incoming-inspection:update",
+            "kuaizhizao:quality-management-incoming-inspection:create",
             "kuaizhizao:incoming-inspection:update",
             "kuaizhizao:incoming-inspection:conduct",
         ),
         "kuaizhizao:quality-management-process-inspection:execute": (
             "kuaizhizao:quality-management-process-inspection:update",
+            "kuaizhizao:quality-management-process-inspection:create",
             "kuaizhizao:process-inspection:update",
             "kuaizhizao:process-inspection:conduct",
         ),
         "kuaizhizao:quality-management-finished-goods-inspection:execute": (
             "kuaizhizao:quality-management-finished-goods-inspection:update",
+            "kuaizhizao:quality-management-finished-goods-inspection:create",
             "kuaizhizao:finished-goods-inspection:update",
             "kuaizhizao:finished-goods-inspection:conduct",
         ),
         "kuaizhizao:quality-management-oqc-inspection:execute": (
             "kuaizhizao:quality-management-oqc-inspection:update",
+            "kuaizhizao:quality-management-oqc-inspection:create",
             "kuaizhizao:oqc-inspection:update",
             "kuaizhizao:oqc-inspection:conduct",
         ),
@@ -559,6 +563,62 @@ class PermissionSyncService:
                     execute_id,
                 )
                 granted += max(0, int(after or 0) - int(before or 0))
+        return granted
+
+    @classmethod
+    async def ensure_quality_inspection_execute_grants(cls, *, tenant_id: int) -> int:
+        """
+        Tortoise 路径：将持有质检 create/update（或历史 conduct）的角色补上 :execute。
+        供角色保存、预设角色同步调用；与权限同步中的 raw SQL 传播同语义、仅追加。
+        """
+        from core.models.permission import Permission
+        from core.models.role_permission import RolePermission
+
+        granted = 0
+        for execute_code, source_codes in cls._QUALITY_INSPECTION_EXECUTE_GRANT_SOURCES.items():
+            execute_perm = await Permission.filter(
+                tenant_id=tenant_id,
+                code=execute_code,
+                deleted_at__isnull=True,
+            ).first()
+            if not execute_perm:
+                continue
+            for source_code in source_codes:
+                source_perm = await Permission.filter(
+                    tenant_id=tenant_id,
+                    code=source_code,
+                    deleted_at__isnull=True,
+                ).first()
+                if not source_perm:
+                    continue
+                source_role_ids = {
+                    int(rp.role_id)
+                    for rp in await RolePermission.filter(permission_id=source_perm.id).all()
+                }
+                if not source_role_ids:
+                    continue
+                existing_role_ids = {
+                    int(rp.role_id)
+                    for rp in await RolePermission.filter(
+                        permission_id=execute_perm.id,
+                        role_id__in=list(source_role_ids),
+                    ).all()
+                }
+                to_add = source_role_ids - existing_role_ids
+                if not to_add:
+                    continue
+                await RolePermission.bulk_create(
+                    [
+                        RolePermission(
+                            role_id=role_id,
+                            permission_id=execute_perm.id,
+                            created_at=now_utc(),
+                        )
+                        for role_id in to_add
+                    ],
+                    ignore_conflicts=True,
+                )
+                granted += len(to_add)
         return granted
 
     # 委外/需求变更：菜单曾共用一码，拆分后把旧码授权幂等复制到新模块（不删旧码）
