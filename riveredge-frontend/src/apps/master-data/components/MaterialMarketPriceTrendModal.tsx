@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Empty, Modal, Result, Space, Spin, Typography } from 'antd';
-import { Line } from '@ant-design/charts';
+import { ChartSuspense, LazyLine } from '../../../components/common/lazyAntCharts';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { formatBusinessDateOnly, formatPrice } from '../../../utils/format';
@@ -119,23 +119,25 @@ export const MaterialMarketPriceTrendModal: React.FC<MaterialMarketPriceTrendMod
           </Space>
 
           <div style={{ height: 260 }}>
-            <Line
-              data={chartData}
-              xField="date"
-              yField="price"
-              shapeField="smooth"
-              axis={{
-                x: { title: false },
-                y: {
-                  title: false,
-                  labelFormatter: (value: number) => formatPrice(value),
-                },
-              }}
-              tooltip={{
-                title: (datum: { date?: string }) => datum.date,
-              }}
-              autoFit
-            />
+            <ChartSuspense>
+              <LazyLine
+                data={chartData}
+                xField="date"
+                yField="price"
+                shapeField="smooth"
+                axis={{
+                  x: { title: false },
+                  y: {
+                    title: false,
+                    labelFormatter: (value: number) => formatPrice(value),
+                  },
+                }}
+                tooltip={{
+                  title: (datum: { date?: string }) => datum.date,
+                }}
+                autoFit
+              />
+            </ChartSuspense>
           </div>
 
           {current > 0 && avgPrice > 0 ? (

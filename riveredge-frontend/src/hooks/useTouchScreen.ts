@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { subscribeResizeBus } from './useResizeBus';
 import {
   isTouchDevice,
   isTouchScreenSize,
@@ -93,7 +94,7 @@ export function useTouchScreen(): UseTouchScreenReturn {
       }, 120);
     };
 
-    window.addEventListener('resize', scheduleResizeSync, { passive: true });
+    const unsubResize = subscribeResizeBus(scheduleResizeSync);
     const onOrientation = () => {
       updateTouchDeviceState();
       updateTouchScreenModeState();
@@ -107,7 +108,7 @@ export function useTouchScreen(): UseTouchScreenReturn {
 
     return () => {
       if (resizeTick) clearTimeout(resizeTick);
-      window.removeEventListener('resize', scheduleResizeSync);
+      unsubResize();
       window.removeEventListener('orientationchange', onOrientation);
       unsubscribe();
     };

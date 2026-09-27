@@ -8,7 +8,13 @@
  */
 
 import React from 'react';
-import { Column, Line, Pie, Scatter } from '@ant-design/charts';
+import {
+  ChartSuspense,
+  LazyColumn,
+  LazyLine,
+  LazyPie,
+  LazyScatter,
+} from '../../common/lazyAntCharts';
 import { ReportComponent } from '../index';
 
 /**
@@ -31,18 +37,24 @@ const ChartComponent: React.FC<ChartComponentProps> = ({ component, data = [] })
     ...config,
   };
 
+  let chart: React.ReactNode;
   switch (chartType) {
     case 'column':
-      return <Column {...commonConfig} />;
+      chart = <LazyColumn {...commonConfig} />;
+      break;
     case 'line':
-      return <Line {...commonConfig} />;
+      chart = <LazyLine {...commonConfig} />;
+      break;
     case 'pie':
-      return <Pie {...commonConfig} />;
+      chart = <LazyPie {...commonConfig} />;
+      break;
     case 'scatter':
-      return <Scatter {...commonConfig} />;
+      chart = <LazyScatter {...commonConfig} />;
+      break;
     default:
-      return <Column {...commonConfig} />;
+      chart = <LazyColumn {...commonConfig} />;
   }
+  return <ChartSuspense>{chart}</ChartSuspense>;
 };
 
 export default ChartComponent;

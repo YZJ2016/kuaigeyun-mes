@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, Row, Col, Statistic, DatePicker, Button, Space, Table, Tag, Spin, Empty, Tooltip } from 'antd';
-import { Bar } from '@ant-design/charts';
+import { ChartSuspense, LazyBar } from '../../../../../../components/common/lazyAntCharts';
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { App } from 'antd';
 import { reportingApi } from '../../../../services/production';
@@ -381,28 +381,32 @@ const ReportingStatisticsPage: React.FC = () => {
             <Row gutter={16} style={{ marginBottom: 12 }}>
               <Col span={12}>
                 <Card title={t('app.kuaizhizao.workReporting.statistics.chartByOperation')}>
-                  <Bar
-                    data={statistics.operation_stats}
-                    xField="operation_name"
-                    yField="reported_quantity"
-                    height={300}
-                    label={{
-                      style: { fill: '#FFFFFF', opacity: 0.6 },
-                    }}
-                  />
+                  <ChartSuspense>
+                    <LazyBar
+                      data={statistics.operation_stats}
+                      xField="operation_name"
+                      yField="reported_quantity"
+                      height={300}
+                      label={{
+                        style: { fill: '#FFFFFF', opacity: 0.6 },
+                      }}
+                    />
+                  </ChartSuspense>
                 </Card>
               </Col>
               <Col span={12}>
                 <Card title={t('app.kuaizhizao.workReporting.statistics.chartByWorker')}>
-                  <Bar
-                    data={statistics.worker_stats}
-                    xField="worker_name"
-                    yField="reported_quantity"
-                    height={300}
-                    label={{
-                      style: { fill: '#FFFFFF', opacity: 0.6 },
-                    }}
-                  />
+                  <ChartSuspense>
+                    <LazyBar
+                      data={statistics.worker_stats}
+                      xField="worker_name"
+                      yField="reported_quantity"
+                      height={300}
+                      label={{
+                        style: { fill: '#FFFFFF', opacity: 0.6 },
+                      }}
+                    />
+                  </ChartSuspense>
                 </Card>
               </Col>
             </Row>

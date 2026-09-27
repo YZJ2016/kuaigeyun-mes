@@ -16,7 +16,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
-import { Column, Pie } from '@ant-design/charts';
+import { ChartSuspense, LazyColumn, LazyPie } from '../../../../../components/common/lazyAntCharts';
 import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
@@ -273,16 +273,18 @@ const ExceptionStatisticsPage: React.FC = () => {
                     ))}
                   </Row>
                   <div style={{ marginTop: 16 }}>
-                    <Column
-                      data={Object.entries(statistics.material_shortage.by_level).map(([level, count]) => ({
-                        level: alertLevelLabel(level),
-                        count,
-                      }))}
-                      xField="level"
-                      yField="count"
-                      label={{ position: 'top' }}
-                      height={300}
-                    />
+                    <ChartSuspense>
+                      <LazyColumn
+                        data={Object.entries(statistics.material_shortage.by_level).map(([level, count]) => ({
+                          level: alertLevelLabel(level),
+                          count,
+                        }))}
+                        xField="level"
+                        yField="count"
+                        label={{ position: 'top' }}
+                        height={300}
+                      />
+                    </ChartSuspense>
                   </div>
                 </>
               )}
@@ -332,16 +334,18 @@ const ExceptionStatisticsPage: React.FC = () => {
                     ))}
                   </Row>
                   <div style={{ marginTop: 16 }}>
-                    <Column
-                      data={Object.entries(statistics.delivery_delay.by_level).map(([level, count]) => ({
-                        level: alertLevelLabel(level),
-                        count,
-                      }))}
-                      xField="level"
-                      yField="count"
-                      label={{ position: 'top' }}
-                      height={300}
-                    />
+                    <ChartSuspense>
+                      <LazyColumn
+                        data={Object.entries(statistics.delivery_delay.by_level).map(([level, count]) => ({
+                          level: alertLevelLabel(level),
+                          count,
+                        }))}
+                        xField="level"
+                        yField="count"
+                        label={{ position: 'top' }}
+                        height={300}
+                      />
+                    </ChartSuspense>
                   </div>
                 </>
               )}
@@ -387,16 +391,18 @@ const ExceptionStatisticsPage: React.FC = () => {
                   ))}
                 </Row>
                 <div style={{ marginTop: 16 }}>
-                  <Column
-                    data={Object.entries(statistics.quality.by_severity).map(([severity, count]) => ({
-                      severity: severityLabel(severity),
-                      count,
-                    }))}
-                    xField="severity"
-                    yField="count"
-                    label={{ position: 'top' }}
-                    height={300}
-                  />
+                  <ChartSuspense>
+                    <LazyColumn
+                      data={Object.entries(statistics.quality.by_severity).map(([severity, count]) => ({
+                        severity: severityLabel(severity),
+                        count,
+                      }))}
+                      xField="severity"
+                      yField="count"
+                      label={{ position: 'top' }}
+                      height={300}
+                    />
+                  </ChartSuspense>
                 </div>
               </>
             )}
@@ -405,30 +411,34 @@ const ExceptionStatisticsPage: React.FC = () => {
           <Card title={t(`${P}.statistics.typeDistributionTitle`)}>
             <Row gutter={16}>
               <Col span={12}>
-                <Pie
-                  data={typeDistributionData}
-                  angleField="value"
-                  colorField="type"
-                  radius={0.8}
-                  label={{
-                    type: 'outer',
-                    content: '{name}: {value} ({percentage})',
-                  }}
-                  height={300}
-                />
+                <ChartSuspense>
+                  <LazyPie
+                    data={typeDistributionData}
+                    angleField="value"
+                    colorField="type"
+                    radius={0.8}
+                    label={{
+                      type: 'outer',
+                      content: '{name}: {value} ({percentage})',
+                    }}
+                    height={300}
+                  />
+                </ChartSuspense>
               </Col>
               <Col span={12}>
-                <Pie
-                  data={statusDistributionData}
-                  angleField="value"
-                  colorField="type"
-                  radius={0.8}
-                  label={{
-                    type: 'outer',
-                    content: '{name}: {value} ({percentage})',
-                  }}
-                  height={300}
-                />
+                <ChartSuspense>
+                  <LazyPie
+                    data={statusDistributionData}
+                    angleField="value"
+                    colorField="type"
+                    radius={0.8}
+                    label={{
+                      type: 'outer',
+                      content: '{name}: {value} ({percentage})',
+                    }}
+                    height={300}
+                  />
+                </ChartSuspense>
               </Col>
             </Row>
           </Card>
