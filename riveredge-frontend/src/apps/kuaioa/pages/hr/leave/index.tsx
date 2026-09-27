@@ -242,13 +242,13 @@ const LeavePage: React.FC = () => {
           {
             field: 'deduct_enabled',
             labelKey: 'app.kuaioa.leave.deductEnabled',
-            aliases: ['是否扣钱'],
+            aliases: ['是否扣款', '是否扣钱'],
             options: [t('common.yes'), t('common.no')],
           },
           {
             field: 'deduct_amount',
             labelKey: 'app.kuaioa.leave.deductAmount',
-            aliases: ['扣钱金额'],
+            aliases: ['扣款金额', '扣钱金额'],
           },
           { field: 'reason', labelKey: 'app.kuaioa.leave.reason', aliases: ['事由'] },
           { field: 'notes', labelKey: 'common.remark', aliases: ['备注'] },
