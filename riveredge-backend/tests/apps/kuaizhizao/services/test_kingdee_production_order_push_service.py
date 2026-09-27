@@ -63,7 +63,7 @@ def test_build_kingdee_production_order_model_defaults():
     assert model["FTreeEntity"][0]["FPlanFinishDate"] == "2026-09-20"
     assert model["FTreeEntity"][0]["FStockInOrgId"]["FNumber"] == "100"
     assert model["FTreeEntity"][0]["FSaleOrderNo"] == "SO-001"
-    assert "快格云工单" in model["FDescription"]
+    assert "星技谷工单" in model["FDescription"]
 
 
 def test_build_kingdee_production_order_model_omits_bill_no_when_disabled():
@@ -92,7 +92,7 @@ def test_build_kingdee_production_order_model_allows_fixed_values_override():
 
     assert model["FTreeEntity"][0]["FCUSTOMQTY"] == 12.5
     assert model["FTreeEntity"][0]["FSourceType"] == "KUAIGE"
-    assert "快格云工单" in model["FDescription"]
+    assert "星技谷工单" in model["FDescription"]
 
 
 def test_build_kingdee_production_order_model_uses_stock_org_override():
