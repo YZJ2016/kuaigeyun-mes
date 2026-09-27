@@ -326,15 +326,15 @@ class FormRequestService:
             raise NotFoundError("申请单不存在")
         if row.status != "pending":
             raise BusinessLogicError("仅待审批状态可撤销")
-        row.status = "cancelled"
-        await touch_updated(row, user or user_id)
-        await row.save()
         await cancel_approval(
             tenant_id,
             entity_type="kuaioa_form_request",
             entity_id=int(row.id),
             operator_id=user_id,
         )
+        row.status = "cancelled"
+        await touch_updated(row, user or user_id)
+        await row.save()
         from apps.kuaioa.services.kuaioa_form_request_reminder_service import (
             KuaioaFormRequestReminderService,
         )

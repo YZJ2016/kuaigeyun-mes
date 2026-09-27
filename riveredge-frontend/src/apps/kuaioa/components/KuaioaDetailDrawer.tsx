@@ -72,6 +72,18 @@ function renderFieldValue(
   if (field.type === 'date' || field.name.endsWith('_date')) {
     return raw ? formatDateBySiteSetting(String(raw)) : '-';
   }
+  if (field.type === 'time') {
+    if (raw == null || raw === '') return '-';
+    const text = String(raw).trim();
+    return text.length >= 5 ? text.slice(0, 5) : text;
+  }
+  if (field.type === 'select' && field.options?.length) {
+    const text = raw == null || raw === '' ? '' : String(raw);
+    if (!text) return '-';
+    const fromValue = field.options.find((o) => String(o.value) === text)?.label;
+    const fromLabel = field.options.find((o) => String(o.label) === text)?.label;
+    return fromValue || fromLabel || text;
+  }
   if (field.type === 'datetime' || field.name.endsWith('_at')) {
     return raw ? formatDateTimeBySiteSetting(String(raw)) : '-';
   }

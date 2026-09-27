@@ -972,13 +972,13 @@ async def sync_application_manifest(
         version = update_data.version or app.get('version', '1.0.0')
         menu_config = update_data.menu_config
 
-        # 清单同步后由 sync-all 或单应用「同步菜单」收尾统一写菜单/权限
+        # 单应用「同步菜单」：写清单后立即同步该应用菜单与权限，避免前端再调全量 sync-all（可达数分钟）
         updated_app = await ApplicationService.update_application(
             tenant_id=tenant_id,
             uuid=str(app['uuid']),
             data=update_data,
-            sync_derived_resources=False,
-            skip_permission_sync=True,
+            sync_derived_resources=True,
+            skip_permission_sync=False,
         )
 
         logger.info(f"✅ 应用清单同步成功: {app_code} v{version}")

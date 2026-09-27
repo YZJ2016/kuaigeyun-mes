@@ -95,7 +95,6 @@ import {
   unbindDedicatedAppFromTenant,
   type DedicatedBindingRow,
 } from '../../../../services/applicationDedicatedBindings';
-import { syncAllMenus } from '../../../../services/menu';
 import { apiRequest } from '../../../../services/api';
 import { rowActionKind, rowActionLabelKeep, rowActionToneDestructive } from '../../../../components/uni-action';
 import {
@@ -287,13 +286,8 @@ const ApplicationListPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
     useGlobalStore.getState().incrementApplicationMenuVersion();
   }, [queryClient]);
-  /** 与「一键同步菜单」第二步一致：按库内清单把菜单写入 core_menus，再刷新前端缓存（避免仅更新了 core_applications 但菜单表滞后） */
+  /** 单应用 sync-manifest 已写 core_menus；此处只刷新前端缓存，勿再调全量 sync-all（会再阻塞数分钟） */
   const finalizeManifestSyncForSidebar = useCallback(async () => {
-    try {
-      await syncAllMenus();
-    } catch {
-      /* 仍刷新侧边栏：清单接口往往已写入菜单；全量入库失败时不阻断 UI */
-    }
     refreshApplicationMenusAfterBackendMenuChange();
   }, [refreshApplicationMenusAfterBackendMenuChange]);
   const actionRef = useRef<ActionType>(null);
@@ -474,9 +468,10 @@ const ApplicationListPage: React.FC = () => {
       setSyncAllLoading(true);
       messageApi.loading({
         content: t('pages.system.applications.syncAllLoading', {
-          defaultValue: '正在同步菜单，请稍候…',
+          defaultValue: '正在同步菜单（全量约需 3–6 分钟），请勿重复点击…',
         }),
         key: 'sync-all',
+        duration: 0,
       });
       const unknown = () => t('pages.system.applications.syncAllErrUnknown', { defaultValue: '未知错误' });
       const result = await syncAllManifestsAndMenus();
@@ -940,12 +935,18 @@ const ApplicationListPage: React.FC = () => {
               title={t('pages.system.applications.syncMenu')}
               description={t('pages.system.applications.syncMenuConfirm')}
               onConfirm={async () => {
-                messageApi.loading({ content: t('pages.system.applications.syncMenuLoading'), key: 'sync-manifest' });
+                messageApi.loading({
+                  content: t('pages.system.applications.syncMenuLoading', {
+                    defaultValue: '正在同步该应用菜单，请稍候…',
+                  }),
+                  key: 'sync-manifest',
+                  duration: 0,
+                });
                 try {
                   const result = await syncApplicationManifest(record.code);
                   if (result.success) {
                     messageApi.success({ content: result.message || t('pages.system.applications.syncMenuSuccess'), key: 'sync-manifest' });
-    actionRef.current?.reload();
+                    actionRef.current?.reload();
                     await finalizeManifestSyncForSidebar();
                   } else {
                     throw new Error(result.message || t('pages.system.applications.syncFailed'));
@@ -1096,7 +1097,11 @@ const ApplicationListPage: React.FC = () => {
             title={t('pages.system.applications.syncMenu')}
             description={t('pages.system.applications.syncMenuConfirm')}
             onConfirm={async () => {
-              messageApi.loading({ content: t('pages.system.applications.syncMenuLoading'), key: 'sync-manifest' });
+              messageApi.loading({
+                content: t('pages.system.applications.syncMenuLoading'),
+                key: 'sync-manifest',
+                duration: 0,
+              });
               try {
                 const result = await syncApplicationManifest(application.code);
 
@@ -1105,7 +1110,7 @@ const ApplicationListPage: React.FC = () => {
                     content: result.message || t('pages.system.applications.syncMenuSuccess'),
                     key: 'sync-manifest'
                   });
-    actionRef.current?.reload();
+                  actionRef.current?.reload();
 
                   await finalizeManifestSyncForSidebar();
                 } else {

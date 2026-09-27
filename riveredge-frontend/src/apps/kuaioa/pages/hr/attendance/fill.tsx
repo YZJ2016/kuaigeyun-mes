@@ -206,9 +206,18 @@ const AttendanceFillPage: React.FC = () => {
     })),
   ];
 
+  const statusLabel =
+    sheet?.status === 'submitted'
+      ? t('app.kuaioa.attendance.status.submitted')
+      : sheet?.status === 'draft'
+        ? t('app.kuaioa.attendance.status.draft')
+        : sheet?.status
+          ? String(sheet.status)
+          : '';
+
   return (
     <ListPageTemplate
-      title={`${t('app.kuaioa.attendance.fillTitle')} ${sheet?.year_month || ''} ${sheet?.workshop_name || ''}`}
+      title={`${t('app.kuaioa.attendance.fillTitle')} ${sheet?.year_month || ''} ${sheet?.workshop_name || ''}${statusLabel ? ` · ${statusLabel}` : ''}`}
       toolbarExtra={
         <Space wrap>
           <Button onClick={() => navigate('/apps/kuaioa/hr/attendance')}>
