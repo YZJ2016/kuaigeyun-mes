@@ -13,6 +13,7 @@ import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, 
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
+import { subscribeResizeBus } from '../../hooks/useResizeBus';
 import { removeCustomPageTitle, resolveCustomPageTitle, setCustomPageTitle } from '../../utils/customPageTitle';
 import {
   useConfigStore,
@@ -1439,7 +1440,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       checkScrollability();
     };
 
-    window.addEventListener('resize', handleResize);
+    const unsubResize = subscribeResizeBus(handleResize);
 
     // 监听滚动事件 - 使用 .ant-tabs-nav-wrap 作为滚动容器
     const navWrapElement = tabsNavRef.current?.querySelector('.ant-tabs-nav-wrap') as HTMLElement;
@@ -1451,7 +1452,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       clearTimeout(timer1);
       clearTimeout(timer2);
       clearTimeout(timer3);
-      window.removeEventListener('resize', handleResize);
+      unsubResize();
       if (navWrapElement) {
         navWrapElement.removeEventListener('scroll', checkScrollability);
       }

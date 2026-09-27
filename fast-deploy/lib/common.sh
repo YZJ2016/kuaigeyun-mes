@@ -3078,6 +3078,7 @@ cmd_build() {
     (
         cd "$FRONTEND_DIR"
         export NODE_OPTIONS="--max-old-space-size=${NODE_BUILD_MEM}"
+        npm run sync:libredwg
         npm run build
     ) || { log_error "前端构建失败"; exit 1; }
     [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 dist/index.html"; exit 1; }
