@@ -127,7 +127,7 @@ async def batch_has_purchasable_remaining(
         return {}
     all_mids: set[int] = set()
     for items in items_by_order.values():
-        for it in items:
+        for it in items or []:
             mid = int(getattr(it, "material_id", 0) or 0)
             if mid > 0:
                 all_mids.add(mid)
@@ -146,7 +146,7 @@ async def batch_has_purchasable_remaining(
     out: Dict[int, bool] = {}
     for oid, items in items_by_order.items():
         totals: Dict[int, Decimal] = {}
-        for it in items:
+        for it in items or []:
             mid = int(getattr(it, "material_id", 0) or 0)
             if mid not in buy_ids:
                 continue
