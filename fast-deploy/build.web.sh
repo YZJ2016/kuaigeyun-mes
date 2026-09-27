@@ -48,6 +48,8 @@ echo "构建 Web: ${SOURCE_COMMIT} ${SOURCE_MSG}"
 build_web_strip_dist_from_history
 
 cd "$PROJECT_ROOT/riveredge-frontend"
+# P5-3：构建前显式同步 CAD wasm/workers（postinstall 已有，部署机无 node_modules 变更时仍需）
+npm run sync:libredwg
 npm run build:16g
 
 WEB_DIST="$PROJECT_ROOT/riveredge-frontend/dist"
