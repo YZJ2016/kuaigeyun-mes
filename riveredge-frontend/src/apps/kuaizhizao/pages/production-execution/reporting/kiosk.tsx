@@ -99,10 +99,12 @@ interface Operation {
   defectTypes?: Array<{ code?: string; name?: string; uuid?: string; id?: number }>;
   inspection_mode?: string;
   inspectionMode?: string;
+  allow_jump?: boolean;
+  allowJump?: boolean;
 }
 
-const effectiveAllowJump = (workOrder: WorkOrder | null, _operation?: Operation | null) =>
-  !!workOrder?.allow_operation_jump;
+const effectiveAllowJump = (workOrder: WorkOrder | null, operation?: Operation | null) =>
+  !!workOrder?.allow_operation_jump || !!operation?.allow_jump || !!operation?.allowJump;
 
 /**
  * 报工管理 - 工位机触屏模式页面
@@ -613,11 +615,20 @@ const ReportingKioskPage: React.FC = () => {
                     <Form.Item
                       name="reported_quantity"
                       label="完成数量"
-                      rules={[{ required: true, message: '请输入完成数量' }]}
+                      rules={[
+                        { required: true, message: '请输入完成数量' },
+                        {
+                          validator: async (_, value) => {
+                            if (value == null || Number(value) < 0.001) {
+                              throw new Error('完成数量须大于 0');
+                            }
+                          },
+                        },
+                      ]}
                     >
                       <InputNumber
                         size="large"
-                        min={0}
+                        min={0.001}
                         max={
                           currentWorkOrder && currentOperation
                             ? getRemainingReportableQuantity(currentOperation, Number(currentWorkOrder.quantity) || 0)

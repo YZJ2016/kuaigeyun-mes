@@ -6,10 +6,12 @@ import React, { lazy, startTransition, Suspense, useCallback, useDeferredValue, 
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Dropdown, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Timeline, Tooltip, theme } from 'antd';
+import { Alert, App, Button, Dropdown, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Timeline, Tooltip, theme } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import {
   CheckOutlined,
+  CompressOutlined,
+  DeleteOutlined,
   EditOutlined,
   ExpandOutlined,
   FilterOutlined,
@@ -20,6 +22,7 @@ import {
   PlusOutlined,
   EyeOutlined,
   SendOutlined,
+  SettingOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
@@ -35,6 +38,9 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { DetailDrawerActions } from '../../../../../components/layout-templates/DetailDrawerActions';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
+import { DictionaryLabel } from '../../../../../components/dictionary-label';
+import { formatProjectRefLabel } from '../../../../kuaiplm/components/Phase2ProjectSelect';
+import { getDictionaryOptions } from '../../../services/supply-chain';
 import { DrawingFormModal } from '../../../components/DrawingFormModal';
 import { DrawingBatchUploadModal } from '../../../components/DrawingBatchUploadModal';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -46,9 +52,11 @@ import { processRouteApi, unwrapProcessPagedList } from '../../../services/proce
 import {
   drawingApi,
   normalizeFileBrief,
+  type DrawingCatalogTab,
   type DrawingListView,
   type DrawingSecurityLevel,
   type DrawingStatus,
+  DRAWING_TYPE_DICTIONARY_CODE,
   type DrawingType,
   type EngineeringDrawing,
   type EngineeringDrawingRevisionBrief,
@@ -70,13 +78,17 @@ import {
   inferNavModeFromTreeKey,
   isVaultTreeKey,
   treeKeyBelongsToMode,
+  withDrawingTreeCount,
   type DrawingNavMode,
+  type DrawingTypeNavItem,
 } from './drawingTreeNav';
 import { drawingFolderApi, type DrawingFolder } from '../../../services/drawingFolder';
 import {
   DrawingFolderFormModal,
   DrawingMoveFolderModal,
 } from './drawingFolderModals';
+import { DrawingWatermarkSettingsModal } from './DrawingWatermarkSettingsModal';
+import { buildWatermarkInlineStyle } from './drawingWatermarkUtils';
 import { isStepFile } from '../../../../../utils/filePreviewKind';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
@@ -86,6 +98,8 @@ import { masterCrudCreatedUpdatedColumns } from '../../../utils/masterListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
+import { canViewDocumentHistory } from '../../../../../utils/permissionContract';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { buildDrawingChangeCreateUrl } from '../../../../kuaiplm/services/master-data-links';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const DRAWING_PERMISSION = 'master-data:process:drawing';
@@ -258,16 +272,22 @@ const DrawingsPage: React.FC = () => {
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;');
+      const watermarkNode =
+        data.watermark && data.watermarkStyle
+          ? `<div class="watermark" style="${buildWatermarkInlineStyle(data.watermarkStyle)}">${escapeHtml(data.watermark)}</div>`
+          : data.watermark
+            ? `<div class="watermark">${escapeHtml(data.watermark)}</div>`
+            : '';
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${escapeHtml(data.code)}</title>
 <style>
 body{font-family:sans-serif;padding:24px;}
-.watermark{position:fixed;top:40%;left:10%;font-size:48px;color:rgba(200,0,0,.15);transform:rotate(-25deg);pointer-events:none;z-index:0;}
+.watermark{pointer-events:none;z-index:0;white-space:pre-wrap;max-width:80%;}
 .content{position:relative;z-index:1;}
 h1{font-size:20px;margin:0 0 8px;}
 .meta{color:#666;font-size:13px;margin-bottom:16px;}
 img{max-width:100%;}
 </style></head><body>
-<div class="watermark">${escapeHtml(data.watermark)}</div>
+${watermarkNode}
 <div class="content">
 <h1>${escapeHtml(data.name)}</h1>
 <div class="meta">${escapeHtml(`${data.code}-${data.revision}`)} ${escapeHtml(t(`app.master-data.drawings.securityLevel.${data.securityLevel}`))}</div>
@@ -299,12 +319,18 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   const [navMode, setNavMode] = useState<DrawingNavMode>('type');
   const [treeSearch, setTreeSearch] = useState('');
   const [selectedTreeKeys, setSelectedTreeKeys] = useState<React.Key[]>([DRAWING_TREE_ALL_KEY]);
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
   const [treeLoading, setTreeLoading] = useState(false);
   const [materialsNav, setMaterialsNav] = useState<DrawingTreeNavItem[]>([]);
   const [routesNav, setRoutesNav] = useState<DrawingTreeNavItem[]>([]);
+  const [drawingTypeNav, setDrawingTypeNav] = useState<DrawingTypeNavItem[]>([]);
   const [materialsLoaded, setMaterialsLoaded] = useState(false);
   const [routesLoaded, setRoutesLoaded] = useState(false);
   const [folders, setFolders] = useState<DrawingFolder[]>([]);
+  const [folderTreeSummary, setFolderTreeSummary] = useState({
+    totalDrawingCount: 0,
+    unclassifiedDrawingCount: 0,
+  });
   const [treeFilter, setTreeFilter] = useState<DrawingTreeFilter>({});
   const [folderForm, setFolderForm] = useState<{
     open: boolean;
@@ -315,9 +341,9 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   }>({ open: false, mode: 'create' });
   const [moveFolder, setMoveFolder] = useState<{
     open: boolean;
-    drawingUuid: string | null;
+    drawingUuids: string[];
     currentFolderUuid?: string | null;
-  }>({ open: false, drawingUuid: null });
+  }>({ open: false, drawingUuids: [] });
   const [folderCtx, setFolderCtx] = useState<{
     x: number;
     y: number;
@@ -333,6 +359,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
 
   const [modalVisible, setModalVisible] = useState(false);
   const [batchUploadOpen, setBatchUploadOpen] = useState(false);
+  const [watermarkSettingsOpen, setWatermarkSettingsOpen] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -354,14 +381,24 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   const [stepBomOpen, setStepBomOpen] = useState(false);
   const [stepBomDrawing, setStepBomDrawing] = useState<EngineeringDrawing | null>(null);
   const [listView, setListView] = useState<DrawingListView>('current');
+  const [catalogTab, setCatalogTab] = useState<DrawingCatalogTab>('engineering');
+  const [rdListViewScope, setRdListViewScope] = useState<'all' | 'production'>('all');
+  const [requireChangeSummaryOnEdit, setRequireChangeSummaryOnEdit] = useState(false);
   const [revisions, setRevisions] = useState<EngineeringDrawingRevisionBrief[]>([]);
   const [revisionsLoading, setRevisionsLoading] = useState(false);
+  const canViewHistory = canViewDocumentHistory(currentUser);
+  const rdProductionView = rdListViewScope === 'production';
+  const fixedCatalogDrawingType: DrawingType | undefined =
+    catalogTab === 'product_spec' ? 'product_spec' : undefined;
+  const excludeCatalogDrawingTypes =
+    catalogTab === 'engineering' ? 'product_spec' : undefined;
 
   const showPreviewPane = showInlinePreview && !!inlinePreviewFile?.uuid;
 
   treeFilterRef.current = treeFilter;
 
-  const typeLabel = (type: DrawingType) => t(`app.master-data.drawings.type.${type}`);
+  const typeLabel = (type: DrawingType) =>
+    t(`app.master-data.drawings.type.${type}`, { defaultValue: type });
   const statusLabel = (status: DrawingStatus) => t(`app.master-data.drawings.status.${status}`);
 
   const loadMaterialsNav = useCallback(async () => {
@@ -407,13 +444,22 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   const loadFolders = useCallback(async () => {
     setTreeLoading(true);
     try {
-      setFolders(await drawingFolderApi.tree());
+      const result = await drawingFolderApi.tree({
+        drawingType: fixedCatalogDrawingType,
+        excludeDrawingTypes: excludeCatalogDrawingTypes,
+      });
+      setFolders(result.data);
+      setFolderTreeSummary({
+        totalDrawingCount: result.totalDrawingCount,
+        unclassifiedDrawingCount: result.unclassifiedDrawingCount,
+      });
     } catch {
       setFolders([]);
+      setFolderTreeSummary({ totalDrawingCount: 0, unclassifiedDrawingCount: 0 });
     } finally {
       setTreeLoading(false);
     }
-  }, []);
+  }, [excludeCatalogDrawingTypes, fixedCatalogDrawingType]);
 
   useEffect(() => {
     void loadFolders();
@@ -424,13 +470,58 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     if (paneMode === 'filter' && navMode === 'route') void loadRoutesNav();
   }, [paneMode, navMode, loadMaterialsNav, loadRoutesNav]);
 
+  useEffect(() => {
+    if (paneMode !== 'filter' || navMode !== 'type') return;
+    let cancelled = false;
+    void getDictionaryOptions(DRAWING_TYPE_DICTIONARY_CODE)
+      .then((options) => {
+        if (cancelled) return;
+        setDrawingTypeNav(
+          options.map((item) => ({ value: String(item.value), label: String(item.label) })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setDrawingTypeNav([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [navMode, paneMode]);
+
   const treeData: DataNode[] = useMemo(
     () =>
       paneMode === 'vault'
-        ? buildDrawingVaultTree(t, folders, treeSearch)
-        : buildDrawingNavTree(navMode, t, materialsNav, routesNav, treeSearch),
-    [paneMode, t, folders, treeSearch, navMode, materialsNav, routesNav],
+        ? buildDrawingVaultTree(t, folders, treeSearch, folderTreeSummary)
+        : buildDrawingNavTree(navMode, t, materialsNav, routesNav, treeSearch, drawingTypeNav),
+    [paneMode, t, folders, treeSearch, navMode, materialsNav, routesNav, folderTreeSummary, drawingTypeNav],
   );
+
+  const collectTreeExpandableKeys = useCallback((nodes: DataNode[]): React.Key[] => {
+    const keys: React.Key[] = [];
+    const walk = (data: DataNode[]) => {
+      data.forEach((node) => {
+        if (node.children?.length) {
+          keys.push(node.key);
+          walk(node.children);
+        }
+      });
+    };
+    walk(nodes);
+    return keys;
+  }, []);
+
+  const vaultExpandableKeys = useMemo(
+    () => (paneMode === 'vault' ? collectTreeExpandableKeys(treeData) : []),
+    [collectTreeExpandableKeys, paneMode, treeData],
+  );
+
+  const handleToggleFolderExpand = useCallback(() => {
+    setExpandedKeys((prev) => (prev.length > 0 ? [] : vaultExpandableKeys));
+  }, [vaultExpandableKeys]);
+
+  const handleTreeExpand = useCallback((keys: React.Key[]) => {
+    setExpandedKeys(keys);
+  }, []);
 
   const handlePaneModeChange = useCallback((mode: DrawingPaneMode) => {
     setPaneMode(mode);
@@ -509,67 +600,147 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     return folderUuidFromTreeKey(String(selectedTreeKeys[0] ?? ''));
   }, [paneMode, selectedTreeKeys]);
 
-  const selectedVaultFolder = useMemo(() => {
-    if (!selectedVaultFolderUuid) return null;
-    return findDrawingFolderByUuid(folders, selectedVaultFolderUuid);
-  }, [folders, selectedVaultFolderUuid]);
-
-  const openRenameFolder = useCallback(() => {
-    if (!selectedVaultFolder) return;
+  const openEditFolder = useCallback((folder: Pick<DrawingFolder, 'uuid' | 'name'>) => {
     setFolderForm({
       open: true,
       mode: 'rename',
-      folderUuid: selectedVaultFolder.uuid,
-      initialName: selectedVaultFolder.name,
+      folderUuid: folder.uuid,
+      initialName: folder.name,
     });
-  }, [selectedVaultFolder]);
+  }, []);
+
+  const confirmDeleteFolder = useCallback(
+    (folder: Pick<DrawingFolder, 'uuid' | 'name'>) => {
+      getAntdModal().confirm({
+        title: t('common.delete'),
+        content: t('app.master-data.drawings.folder.deleteConfirm'),
+        okButtonProps: { danger: true },
+        onOk: async () => {
+          await drawingFolderApi.delete(folder.uuid);
+          messageApi.success(t('common.deleteSuccess'));
+          if (treeFilter.folderUuid === folder.uuid) {
+            setSelectedTreeKeys([DRAWING_TREE_ALL_KEY]);
+            treeFilterRef.current = {};
+            setTreeFilter({});
+            actionRef.current?.reload();
+          }
+          await loadFolders();
+        },
+      });
+    },
+    [loadFolders, messageApi, t, treeFilter.folderUuid],
+  );
+
+  const stopVaultFolderTreeActionEvent = useCallback((event: React.MouseEvent | React.KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+
+  const renderVaultFolderTitle = useCallback(
+    (node: DataNode) => {
+      const folderUuid = folderUuidFromTreeKey(String(node.key));
+      if (!folderUuid) {
+        return node.title as React.ReactNode;
+      }
+      const folder = findDrawingFolderByUuid(folders, folderUuid);
+      if (!folder) {
+        return node.title as React.ReactNode;
+      }
+      const folderLabel = withDrawingTreeCount(folder.name, folder.drawingCount);
+      if (!canUpdate && !canDelete) {
+        return folderLabel;
+      }
+      return (
+        <span className="drawing-vault-folder-tree-title">
+          <span className="drawing-vault-folder-tree-title-text">{folderLabel}</span>
+          <span
+            className="drawing-vault-folder-tree-title-actions"
+            onClick={stopVaultFolderTreeActionEvent}
+            onMouseDown={stopVaultFolderTreeActionEvent}
+          >
+            <Space size={0} align="center">
+              {canUpdate ? (
+                <Tooltip title={t('common.edit')}>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<EditOutlined />}
+                    aria-label={t('common.edit')}
+                    onClick={(event) => {
+                      stopVaultFolderTreeActionEvent(event);
+                      openEditFolder(folder);
+                    }}
+                  />
+                </Tooltip>
+              ) : null}
+              {canDelete ? (
+                <Tooltip title={t('common.delete')}>
+                  <Button
+                    type="text"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    aria-label={t('common.delete')}
+                    onClick={(event) => {
+                      stopVaultFolderTreeActionEvent(event);
+                      confirmDeleteFolder(folder);
+                    }}
+                  />
+                </Tooltip>
+              ) : null}
+            </Space>
+          </span>
+        </span>
+      );
+    },
+    [
+      canDelete,
+      canUpdate,
+      confirmDeleteFolder,
+      folders,
+      openEditFolder,
+      stopVaultFolderTreeActionEvent,
+      t,
+    ],
+  );
 
   const folderTreeActions = useMemo(() => {
     if (paneMode !== 'vault') return null;
-    if (!canCreate && !(canUpdate && selectedVaultFolderUuid)) return null;
+    if (!canCreate && vaultExpandableKeys.length === 0) return null;
     return (
-      <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+      <div style={{ display: 'flex', gap: 8, width: '100%' }}>
         {canCreate ? (
           <Button
             type="primary"
-            block
             icon={<PlusOutlined />}
+            style={{ flex: 1 }}
             onClick={() => openCreateFolder(selectedVaultFolderUuid)}
           >
             {t('app.master-data.drawings.folder.create')}
           </Button>
         ) : null}
-        {canUpdate ? (
-          <Tooltip
+        {vaultExpandableKeys.length > 0 ? (
+          <Button
+            icon={expandedKeys.length > 0 ? <CompressOutlined /> : <ExpandOutlined />}
+            onClick={handleToggleFolderExpand}
             title={
-              selectedVaultFolder
-                ? t('app.master-data.drawings.folder.renameHint')
-                : t('app.master-data.drawings.folder.renameSelectHint')
+              expandedKeys.length > 0
+                ? t('app.master-data.materials.collapseAll')
+                : t('app.master-data.materials.expandAll')
             }
-          >
-            <span style={{ display: 'block', width: '100%' }}>
-              <Button
-                block
-                icon={<EditOutlined />}
-                disabled={!selectedVaultFolder}
-                onClick={openRenameFolder}
-              >
-                {t('app.master-data.drawings.folder.rename')}
-              </Button>
-            </span>
-          </Tooltip>
+          />
         ) : null}
-      </Space>
+      </div>
     );
   }, [
     canCreate,
-    canUpdate,
+    expandedKeys.length,
+    handleToggleFolderExpand,
     openCreateFolder,
-    openRenameFolder,
     paneMode,
-    selectedVaultFolder,
     selectedVaultFolderUuid,
     t,
+    vaultExpandableKeys.length,
   ]);
 
   const handleTreeSelect = useCallback(
@@ -659,6 +830,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
 
   const handleCreate = useCallback(() => {
     setEditUuid(null);
+    setRequireChangeSummaryOnEdit(false);
     setModalVisible(true);
   }, []);
 
@@ -765,6 +937,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       const created = await drawingApi.createRevision(record.uuid, {});
       messageApi.success(t('app.master-data.drawings.revisionSuccess'));
       actionRef.current?.reload();
+      setRequireChangeSummaryOnEdit(true);
       setEditUuid(created.uuid);
       setModalVisible(true);
     } catch (err: any) {
@@ -889,6 +1062,18 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     [messageApi, t],
   );
 
+  const handleBatchMove = useCallback((keys: React.Key[]) => {
+    const uuids = keys.map(String);
+    if (!uuids.length) return;
+    const rows = drawingRowsRef.current.filter((row) => uuids.includes(row.uuid));
+    const folderIds = new Set(rows.map((row) => row.folderUuid ?? ''));
+    setMoveFolder({
+      open: true,
+      drawingUuids: uuids,
+      currentFolderUuid: folderIds.size === 1 ? rows[0]?.folderUuid ?? null : null,
+    });
+  }, []);
+
   const drawingBatchMenuItems = useMemo(() => {
     const items = [];
     if (canSubmit) {
@@ -915,8 +1100,16 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         onClick: handleBatchApprove,
       });
     }
+    if (canUpdate) {
+      items.push({
+        key: 'batchMove',
+        label: t('app.master-data.drawings.folder.batchMove'),
+        icon: <FolderOutlined />,
+        onClick: handleBatchMove,
+      });
+    }
     return items;
-  }, [canApprove, canSubmit, handleBatchApprove, handleBatchSubmit, t]);
+  }, [canApprove, canSubmit, canUpdate, handleBatchApprove, handleBatchMove, handleBatchSubmit, t]);
 
   useEffect(() => {
     const deepLinkUuid = searchParams.get('uuid');
@@ -973,22 +1166,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
             {t('app.master-data.drawings.importStepBom')}
           </Button>
         ) : null}
-        {canUpdate ? (
-          <Button
-            key="moveFolder"
-            {...rowActionKind('update')}
-            {...rowActionLabelKeep()}
-            onClick={() =>
-              setMoveFolder({
-                open: true,
-                drawingUuid: record.uuid,
-                currentFolderUuid: record.folderUuid ?? null,
-              })
-            }
-          >
-            {t('app.master-data.drawings.folder.move')}
-          </Button>
-        ) : null}
         {record.status === 'Draft' && (
           <>
             {canUpdate ? (
@@ -1021,6 +1198,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
                 key="edit"
                 {...rowActionKind('update')}
                 onClick={() => {
+                  setRequireChangeSummaryOnEdit(record.revision !== 'A');
                   setEditUuid(record.uuid);
                   setModalVisible(true);
                 }}
@@ -1087,15 +1265,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
             ) : null}
           </>
         )}
-        {record.status === 'Obsolete' && canDelete && (
-          <Popconfirm
-            key="delete"
-            title={t('common.confirmDelete')}
-            onConfirm={() => handleDeleteDrawing(record)}
-          >
-            <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
-          </Popconfirm>
-        )}
         {canPrint ? (
           <Button key="print" {...rowActionKind('print')} onClick={() => void openDrawingPrint(record)} />
         ) : null}
@@ -1143,7 +1312,16 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       {
         title: t('app.master-data.drawings.type'),
         dataIndex: 'drawingType',
-        render: (_, r) => typeLabel(r.drawingType),
+        render: (_, r) =>
+          r.drawingType ? (
+            <DictionaryLabel
+              dictionaryCode={DRAWING_TYPE_DICTIONARY_CODE}
+              value={r.drawingType}
+              notFoundPlaceholder={typeLabel(r.drawingType)}
+            />
+          ) : (
+            '-'
+          ),
       },
       {
         title: t('app.master-data.drawings.securityLevel'),
@@ -1199,6 +1377,11 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           ) : (
             '-'
           ),
+      },
+      {
+        title: t('app.master-data.drawings.project'),
+        dataIndex: 'projectCode',
+        render: (_, r) => formatProjectRefLabel(r.projectCode, r.projectName) || '-',
       },
       {
         title: t('app.master-data.drawings.materials'),
@@ -1321,7 +1504,13 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         },
         render: (_, r) =>
           r.drawingType ? (
-            <MarkerTag color="processing">{t(`app.master-data.drawings.type.${r.drawingType}`)}</MarkerTag>
+            <MarkerTag color="processing">
+              <DictionaryLabel
+                dictionaryCode={DRAWING_TYPE_DICTIONARY_CODE}
+                value={r.drawingType}
+                notFoundPlaceholder={typeLabel(r.drawingType)}
+              />
+            </MarkerTag>
           ) : (
             '-'
           ),
@@ -1463,6 +1652,8 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       paneMode,
       navMode,
       listView,
+      catalogTab,
+      rdListViewScope,
       treeFilter.drawingType ?? '',
       treeFilter.status ?? '',
       treeFilter.materialUuid ?? '',
@@ -1470,7 +1661,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       treeFilter.folderUuid ?? '',
       treeFilter.unclassified ? '1' : '',
     ],
-    [paneMode, navMode, listView, treeFilter],
+    [paneMode, navMode, listView, catalogTab, rdListViewScope, treeFilter],
   );
 
   const tableScrollOffsetPx =
@@ -1495,12 +1686,20 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px`,
         }}
       >
+        {!canViewHistory && rdListViewScope === 'all' && listView === 'current' ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            title={t('app.master-data.drawings.messages.latestVersionOnlyHint')}
+          />
+        ) : null}
         <UniTable<EngineeringDrawing>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.drawings')}
           actionRef={actionRef}
           rowKey="uuid"
-          columnPersistenceId="apps.master-data.pages.process.drawings.folder-v3"
+          columnPersistenceId="apps.master-data.pages.process.drawings.folder-v4"
           permissionResource={DRAWING_PERMISSION}
           tanstackQuery={{ queryKeyPrefix: tableQueryKey }}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
@@ -1513,6 +1712,33 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
                   onClick={() => setLeftPanelCollapsed((v) => !v)}
                 />
               </Tooltip>
+              <ThemedSegmented
+                surfaceBackground
+                size="medium"
+                value={catalogTab}
+                onChange={(v) => {
+                  setCatalogTab(v as DrawingCatalogTab);
+                  setSelectedRowKeys([]);
+                  actionRef.current?.reload();
+                }}
+                options={[
+                  { label: t('app.master-data.drawings.catalogTab.engineering'), value: 'engineering' },
+                  { label: t('app.master-data.drawings.catalogTab.productSpec'), value: 'product_spec' },
+                ]}
+              />
+              <ThemedSegmented
+                surfaceBackground
+                size="medium"
+                value={rdListViewScope}
+                onChange={(v) => {
+                  setRdListViewScope(v as 'all' | 'production');
+                  actionRef.current?.reload();
+                }}
+                options={[
+                  { label: t('app.master-data.drawings.viewScope.all'), value: 'all' },
+                  { label: t('app.master-data.drawings.viewScope.production'), value: 'production' },
+                ]}
+              />
               <Segmented
                 value={listView}
                 options={[
@@ -1521,7 +1747,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
                 ]}
                 onChange={(value) => {
                   setListView(value as DrawingListView);
-    actionRef.current?.reload();
+                  actionRef.current?.reload();
                 }}
               />
             </>
@@ -1542,15 +1768,15 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
                 ]
               : []
           }
-          enableRowSelection={canDelete || canSubmit || canApprove}
+          enableRowSelection={canDelete || canSubmit || canApprove || canUpdate}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={canDelete}
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count })}
           onDelete={handleBatchDeleteDrawings}
-          toolBarActionsAfterDelete={
-            drawingBatchMenuItems.length > 0
+          toolBarActionsAfterDelete={[
+            ...(drawingBatchMenuItems.length > 0
               ? [
                   <UniBatchMenuButton
                     key="drawing-batch-menu"
@@ -1559,8 +1785,19 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
                     buttonText={t('app.master-data.drawings.batchActions')}
                   />,
                 ]
-              : []
-          }
+              : []),
+            ...(canUpdate
+              ? [
+                  <Button
+                    key="drawing-watermark-settings"
+                    icon={<SettingOutlined />}
+                    onClick={() => setWatermarkSettingsOpen(true)}
+                  >
+                    {t('app.master-data.drawings.watermark.settingsButton')}
+                  </Button>,
+                ]
+              : []),
+          ]}
           onTableDataChange={(rows) => {
             drawingRowsRef.current = rows;
           }}
@@ -1572,13 +1809,17 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
                 limit: params.pageSize || 20,
                 keyword: params.keyword as string | undefined,
                 status: (params.status as DrawingStatus | undefined) ?? tf.status,
-                drawingType: (params.drawingType as DrawingType | undefined) ?? tf.drawingType,
+                drawingType:
+                  fixedCatalogDrawingType ??
+                  ((params.drawingType as DrawingType | undefined) ?? tf.drawingType),
+                excludeDrawingTypes: excludeCatalogDrawingTypes,
                 securityLevel: params.securityLevel as DrawingSecurityLevel | undefined,
                 materialUuid: tf.materialUuid,
                 processRouteUuid: tf.processRouteUuid,
                 folderUuid: tf.folderUuid,
                 unclassified: tf.unclassified,
                 view: listView,
+                productionView: rdProductionView && listView === 'current',
               });
               const enriched = meta?.purpose === 'prefetch'
                 ? res.data ?? []
@@ -1615,6 +1856,12 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       selectedRowKeys,
       selectRowForPreview,
       listView,
+      catalogTab,
+      rdListViewScope,
+      canViewHistory,
+      fixedCatalogDrawingType,
+      excludeCatalogDrawingTypes,
+      rdProductionView,
     ],
   );
 
@@ -1650,22 +1897,27 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           tree: {
             treeData,
             selectedKeys: selectedTreeKeys,
+            expandedKeys,
+            onExpand: handleTreeExpand,
             onSelect: handleTreeSelect,
             showIcon: true,
             blockNode: true,
             loading: treeLoading,
             loadingTip: t('app.master-data.drawings.tree.loadingNav'),
             className: 'drawing-nav-tree',
+            titleRender: paneMode === 'vault' ? renderVaultFolderTitle : undefined,
             onRightClick: ({ event, node }) => {
               event.preventDefault();
               if (paneMode !== 'vault' || !(canUpdate || canDelete || canCreate)) return;
               const folderUuid = folderUuidFromTreeKey(String(node.key));
               if (!folderUuid) return;
+              const folder = findDrawingFolderByUuid(folders, folderUuid);
+              if (!folder) return;
               setFolderCtx({
                 x: event.clientX,
                 y: event.clientY,
-                uuid: folderUuid,
-                name: String(node.title ?? ''),
+                uuid: folder.uuid,
+                name: folder.name,
               });
             },
           },
@@ -1809,44 +2061,24 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
               canUpdate
                 ? {
                     key: 'rename',
-                    label: t('app.master-data.drawings.folder.rename'),
+                    label: t('common.edit'),
                     onClick: () => {
-                      setFolderForm({
-                        open: true,
-                        mode: 'rename',
-                        folderUuid: folderCtx.uuid,
-                        initialName: folderCtx.name,
-                      });
+                      openEditFolder(folderCtx);
                       setFolderCtx(null);
                     },
                   }
                 : null,
               canDelete
                 ? {
-                key: 'delete',
-                danger: true,
-                label: t('common.delete'),
-                onClick: () => {
-                  const target = folderCtx;
-                  setFolderCtx(null);
-                  getAntdModal().confirm({
-                    title: t('common.delete'),
-                    content: t('app.master-data.drawings.folder.deleteConfirm'),
-                    okButtonProps: { danger: true },
-                    onOk: async () => {
-                      await drawingFolderApi.delete(target.uuid);
-                      messageApi.success(t('common.deleteSuccess'));
-                      if (treeFilter.folderUuid === target.uuid) {
-                        setSelectedTreeKeys([DRAWING_TREE_ALL_KEY]);
-                        treeFilterRef.current = {};
-                        setTreeFilter({});
-    actionRef.current?.reload();
-                      }
-                      await loadFolders();
+                    key: 'delete',
+                    danger: true,
+                    label: t('common.delete'),
+                    onClick: () => {
+                      const target = folderCtx;
+                      setFolderCtx(null);
+                      confirmDeleteFolder(target);
                     },
-                  });
-                },
-              }
+                  }
                 : null,
             ],
           }}
@@ -1867,15 +2099,22 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         }}
       />
 
+      <DrawingWatermarkSettingsModal
+        open={watermarkSettingsOpen}
+        onClose={() => setWatermarkSettingsOpen(false)}
+      />
+
       <DrawingMoveFolderModal
         open={moveFolder.open}
-        drawingUuid={moveFolder.drawingUuid}
+        drawingUuids={moveFolder.drawingUuids}
         folders={folders}
         currentFolderUuid={moveFolder.currentFolderUuid}
-        onClose={() => setMoveFolder({ open: false, drawingUuid: null })}
+        onClose={() => setMoveFolder({ open: false, drawingUuids: [] })}
         onSuccess={() => {
-    actionRef.current?.reload();
-          if (detail?.uuid && detail.uuid === moveFolder.drawingUuid) {
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+          void loadFolders();
+          if (detail?.uuid && moveFolder.drawingUuids.includes(detail.uuid)) {
             void loadDetail(detail.uuid);
           }
         }}
@@ -1886,12 +2125,16 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         editUuid={editUuid}
         defaultFolderUuid={defaultCreateFolderUuid}
         folders={folders}
+        fixedDrawingType={fixedCatalogDrawingType}
+        requireChangeSummary={requireChangeSummaryOnEdit}
         onClose={() => {
           setModalVisible(false);
           setEditUuid(null);
+          setRequireChangeSummaryOnEdit(false);
         }}
         onSuccess={() => {
-    actionRef.current?.reload();
+          actionRef.current?.reload();
+          void loadFolders();
         }}
       />
 
@@ -1902,6 +2145,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         onClose={() => setBatchUploadOpen(false)}
         onSuccess={() => {
           actionRef.current?.reload();
+          void loadFolders();
         }}
       />
 

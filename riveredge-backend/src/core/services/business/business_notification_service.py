@@ -179,7 +179,46 @@ class BusinessNotificationService:
         except (TypeError, ValueError):
             entity_id_int = None
 
+        # IDEM：同一实体同一触发动作已成功发送则跳过。
+        # P2-20：可重复动作（质检失败/异常/驳回/触发类）不加永久去重，避免合法二次提醒被吞。
+        _REPEATABLE_ACTIONS = frozenset({
+            "abnormal_detected",
+            "rejected",
+            "triggered",
+            "failed",
+            "quality_failed",
+            "inspection_failed",
+            "alert",
+            "reminder",
+        })
+        if entity_id_int and entity_id_int > 0 and action not in _REPEATABLE_ACTIONS:
+            from core.models.message_log import MessageLog
+            from datetime import timedelta
+            from core.utils.timezone_utils import resolve_business_datetime
+
+            # created/approved 等：24h 窗口内成功记录去重
+            since = resolve_business_datetime() - timedelta(hours=24)
+            already = await MessageLog.filter(
+                tenant_id=tenant_id,
+                business_document=doc,
+                business_action=action,
+                entity_id=entity_id_int,
+                status="success",
+                deleted_at__isnull=True,
+                created_at__gte=since,
+            ).exists()
+            if already:
+                logger.info(
+                    "业务消息提醒幂等跳过 tenant={} doc={} action={} entity_id={}",
+                    tenant_id,
+                    doc,
+                    action,
+                    entity_id_int,
+                )
+                return 0
+
         sent = 0
+        dispatch_errors: list[str] = []
         for rule in rules:
             if rule.get("enabled") is False:
                 continue
@@ -207,7 +246,18 @@ class BusinessNotificationService:
                 continue
 
             if "message_category" not in vars_payload:
-                vars_payload["message_category"] = "process"
+                # 待审/驳回/催办/抄送/撤审 → 在线消息「审批」；其余为普通流程通知进「消息」
+                approval_actions = {
+                    "pending",
+                    "submitted",
+                    "rejected",
+                    "urge",
+                    "cc",
+                    "revoked",
+                }
+                vars_payload["message_category"] = (
+                    "approval" if action.lower() in approval_actions else "process"
+                )
 
             channels = await BusinessNotificationService._resolve_channels(tenant_id, rule)
             if not channels:
@@ -271,6 +321,8 @@ class BusinessNotificationService:
                         if result.success:
                             sent += 1
                         else:
+                            err = str(result.error or "send_failed")
+                            dispatch_errors.append(err)
                             logger.error(
                                 "业务消息提醒发送失败 tenant={} doc={} action={} user={} channel={} err={}",
                                 tenant_id,
@@ -281,6 +333,7 @@ class BusinessNotificationService:
                                 result.error,
                             )
                     except Exception as e:
+                        dispatch_errors.append(str(e))
                         logger.error(
                             "业务消息提醒发送异常 tenant={} doc={} action={} user={} channel={}: {}",
                             tenant_id,
@@ -290,6 +343,10 @@ class BusinessNotificationService:
                             channel_type,
                             e,
                         )
+        if sent == 0 and dispatch_errors:
+            raise RuntimeError(
+                f"业务消息提醒全部发送失败 doc={doc} action={action}: {dispatch_errors[0]}"
+            )
         return sent
 
     @staticmethod

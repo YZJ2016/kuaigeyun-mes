@@ -2904,6 +2904,101 @@ ensure_sensitive_lexicon_pack() {
     log_special_ok "敏感词 lexicon.pack 已就绪"
 }
 
+# update / migrate 后确保继电器行业包表存在（迁移 804；IF NOT EXISTS，可重复执行）
+ensure_ind_relay_tables_804() {
+    local out sql_file
+    sql_file="${BACKEND_DIR}/migrations/models/804_20260925093000_ind_relay_tables.py"
+    if [ ! -f "$sql_file" ]; then
+        return 0
+    fi
+    out="$(app_db_psql -tAc "SELECT CASE
+        WHEN to_regclass('public.apps_ind_relay_line_capacities') IS NOT NULL
+         AND to_regclass('public.apps_ind_relay_changeover_matrix') IS NOT NULL
+        THEN 1 ELSE 0 END" 2>/dev/null | tr -d '[:space:]')" || {
+        log_warn "无法校验 ind_relay 表（跳过 804 兜底）"
+        return 0
+    }
+    if [ "$out" = "1" ]; then
+        log_special_ok "ind_relay 表已就绪（迁移 804）"
+        return 0
+    fi
+    log_info "补建 ind_relay 表（迁移 804 兜底，aerich 后仍缺表）..."
+    if ! app_db_psql -v ON_ERROR_STOP=1 <<'SQL'
+        CREATE TABLE IF NOT EXISTS "apps_ind_relay_line_capacities" (
+            "id" SERIAL PRIMARY KEY,
+            "uuid" VARCHAR(36) NOT NULL,
+            "tenant_id" INT NOT NULL,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "created_by" INT,
+            "created_by_name" VARCHAR(100),
+            "updated_by" INT,
+            "updated_by_name" VARCHAR(100),
+            "production_line_id" INT NOT NULL,
+            "production_line_code" VARCHAR(50),
+            "production_line_name" VARCHAR(200),
+            "takt_seconds" NUMERIC(12,2) NOT NULL DEFAULT 0,
+            "daily_capacity_qty" NUMERIC(14,2) NOT NULL DEFAULT 0,
+            "changeover_minutes_default" NUMERIC(10,2) NOT NULL DEFAULT 0,
+            "is_active" BOOL NOT NULL DEFAULT TRUE,
+            "remarks" TEXT,
+            "deleted_at" TIMESTAMPTZ
+        );
+        CREATE INDEX IF NOT EXISTS "idx_ind_relay_line_cap_tenant"
+            ON "apps_ind_relay_line_capacities" ("tenant_id");
+        CREATE INDEX IF NOT EXISTS "idx_ind_relay_line_cap_line"
+            ON "apps_ind_relay_line_capacities" ("production_line_id");
+        CREATE INDEX IF NOT EXISTS "idx_ind_relay_line_cap_uuid"
+            ON "apps_ind_relay_line_capacities" ("uuid");
+        CREATE UNIQUE INDEX IF NOT EXISTS "uid_ind_relay_line_cap_active"
+            ON "apps_ind_relay_line_capacities" ("tenant_id", "production_line_id")
+            WHERE "deleted_at" IS NULL;
+        COMMENT ON TABLE "apps_ind_relay_line_capacities" IS '继电器行业 - 产线节拍产能';
+
+        CREATE TABLE IF NOT EXISTS "apps_ind_relay_changeover_matrix" (
+            "id" SERIAL PRIMARY KEY,
+            "uuid" VARCHAR(36) NOT NULL,
+            "tenant_id" INT NOT NULL,
+            "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "created_by" INT,
+            "created_by_name" VARCHAR(100),
+            "updated_by" INT,
+            "updated_by_name" VARCHAR(100),
+            "from_family" VARCHAR(100) NOT NULL,
+            "to_family" VARCHAR(100) NOT NULL,
+            "changeover_minutes" NUMERIC(10,2) NOT NULL DEFAULT 0,
+            "forbid_same_line" BOOL NOT NULL DEFAULT FALSE,
+            "remarks" TEXT,
+            "deleted_at" TIMESTAMPTZ
+        );
+        CREATE INDEX IF NOT EXISTS "idx_ind_relay_chg_tenant"
+            ON "apps_ind_relay_changeover_matrix" ("tenant_id");
+        CREATE INDEX IF NOT EXISTS "idx_ind_relay_chg_family"
+            ON "apps_ind_relay_changeover_matrix" ("from_family", "to_family");
+        CREATE INDEX IF NOT EXISTS "idx_ind_relay_chg_uuid"
+            ON "apps_ind_relay_changeover_matrix" ("uuid");
+        CREATE UNIQUE INDEX IF NOT EXISTS "uid_ind_relay_chg_active"
+            ON "apps_ind_relay_changeover_matrix" ("tenant_id", "from_family", "to_family")
+            WHERE "deleted_at" IS NULL;
+        COMMENT ON TABLE "apps_ind_relay_changeover_matrix" IS '继电器行业 - 换型矩阵';
+SQL
+    then
+        log_error "ind_relay 表兜底建表失败（迁移 804）"
+        return 1
+    fi
+    out="$(app_db_psql -tAc "SELECT CASE
+        WHEN to_regclass('public.apps_ind_relay_line_capacities') IS NOT NULL
+         AND to_regclass('public.apps_ind_relay_changeover_matrix') IS NOT NULL
+        THEN 1 ELSE 0 END" 2>/dev/null | tr -d '[:space:]')" || true
+    if [ "$out" != "1" ]; then
+        log_error "ind_relay 表仍未就绪（迁移 804）"
+        return 1
+    fi
+    log_ok "ind_relay 表已补建（迁移 804）"
+    return 0
+}
+
 cmd_migrate() {
     local _prev_quiet="${DEPLOY_SPECIAL_DEPS_QUIET:-}"
     DEPLOY_SPECIAL_DEPS_QUIET=1
@@ -2912,7 +3007,7 @@ cmd_migrate() {
     ensure_postgresql_pgvector || { log_error "pgvector 未就绪，无法执行依赖 vector 的迁移"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     ensure_vector_extension_created || { log_error "无法在应用库创建 vector 扩展（需要超级用户）"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
-    log_info "执行数据库迁移..."
+    log_info "执行数据库迁移（aerich upgrade，含 804 ind_relay）..."
     (
         cd "$BACKEND_DIR"
         export PYTHONPATH="$BACKEND_DIR/src"
@@ -2922,6 +3017,7 @@ cmd_migrate() {
         fi
         PYTHONUNBUFFERED=1 AERICH_MIGRATE=1 "$(resolve_uv)" run aerich upgrade
     ) || { log_error "数据库迁移失败"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    ensure_ind_relay_tables_804 || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
     log_ok "迁移完成"
 }
@@ -5462,7 +5558,8 @@ recompose_extension_apps_if_enabled() {
         log_warn "扩展仓同步失败，主仓更新继续。请用菜单 [4] 单独安装/更新专业包或定制包。"
         return 0
     fi
-    run_workspace_compose all || {
+    # 主仓更新不得交互询问定制项目（缺 CUSTOM_PROJECTS 时跳过组装，由菜单 [4] 配置）
+    COMPOSING_FROM_MAIN_UPDATE=1 run_workspace_compose all || {
         log_warn "扩展应用组装失败，主仓更新继续。请检查 CUSTOM_PROJECTS、私仓路径与 PyYAML，或菜单 [4] 重试。"
         return 0
     }
@@ -5741,7 +5838,8 @@ _read_custom_projects_from_workspace_yaml() {
 
 prompt_custom_projects_selection() {
     # 交互选择 registry 中的定制项目 → 写入 deploy.env；结果写入 REPLY
-    local custom_path="${1:-}" py gen pid desc choice picked n i
+    # 已有 CUSTOM_PROJECTS 时仍列出选项；回车默认保持当前（或仅一项时自动选中）
+    local custom_path="${1:-}" py gen pid desc choice picked n i cur default_choice
     REPLY=""
     custom_path="${custom_path:-$(read_deploy_env_value CUSTOM_REPO_PATH || true)}"
     [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
@@ -5767,6 +5865,7 @@ prompt_custom_projects_selection() {
         return 1
     fi
 
+    cur="$(read_deploy_env_value CUSTOM_PROJECTS || true)"
     if [ "$n" -eq 1 ]; then
         picked="${ids[0]}"
         set_deploy_env_value CUSTOM_PROJECTS "$picked"
@@ -5775,9 +5874,29 @@ prompt_custom_projects_selection() {
         return 0
     fi
 
+    default_choice="1"
+    if [ -n "$cur" ]; then
+        i=0
+        while [ "$i" -lt "$n" ]; do
+            if [ "${ids[$i]}" = "$cur" ]; then
+                default_choice="$((i + 1))"
+                break
+            fi
+            # 当前为逗号全装时，默认 A
+            if [ "$cur" = "$(IFS=,; echo "${ids[*]}")" ]; then
+                default_choice="A"
+                break
+            fi
+            i=$((i + 1))
+        done
+    fi
+
     {
         echo ""
         log_info "请选择本机要组装的定制项目（写入 deploy.env CUSTOM_PROJECTS）"
+        if [ -n "$cur" ]; then
+            printf '  当前已配置: %s（回车保持默认 %s）\n' "$cur" "$default_choice"
+        fi
         printf '  A) 全装（组装 %s）\n' "$(IFS=,; echo "${ids[*]}")"
         i=0
         while [ "$i" -lt "$n" ]; do
@@ -5785,8 +5904,8 @@ prompt_custom_projects_selection() {
             i=$((i + 1))
         done
     } >&2
-    read -rp "请选择 [A/1-${n}]（默认 1）: " choice || true
-    choice="${choice:-1}"
+    read -rp "请选择 [A/1-${n}]（默认 ${default_choice}）: " choice || true
+    choice="${choice:-$default_choice}"
     case "${choice^^}" in
         A)
             picked="$(IFS=,; echo "${ids[*]}")"
@@ -5836,6 +5955,12 @@ _ensure_custom_projects_for_compose() {
 
     custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
     [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
+    # 主程序 update 路径：禁止弹「选择定制项目」；缺配置则跳过，勿打断主仓更新
+    if [ "${COMPOSING_FROM_MAIN_UPDATE:-0}" = "1" ]; then
+        log_warn "CUSTOM_ENABLED=1 但未设置 CUSTOM_PROJECTS，跳过本次扩展组装"
+        log_warn "请在 deploy.env 写入 CUSTOM_PROJECTS，或用菜单 [4]→定制包 配置（与主程序更新无关）"
+        return 1
+    fi
     if [ -t 0 ]; then
         prompt_custom_projects_selection "$custom_path"
         return $?
@@ -6016,6 +6141,11 @@ cmd_install_extension_apps() {
         set_deploy_env_value CUSTOM_GIT_BRANCH "$custom_branch"
         sync_sibling_git_repo "kuaigeyun-custom" "$custom_url" "$custom_path" "$custom_branch" "$custom_token" || return 1
         set_deploy_env_value CUSTOM_ENABLED "1"
+        # 安装/更新定制包：同步完 registry 后必弹项目选择（交互终端）；禁止静默沿用导致「没法选」
+        # 主仓 update 路径不弹（COMPOSING_FROM_MAIN_UPDATE=1）
+        if [ -t 0 ] && [ "${COMPOSING_FROM_MAIN_UPDATE:-0}" != "1" ]; then
+            prompt_custom_projects_selection "$custom_path" || return 1
+        fi
     fi
 
     # compose 时保留「先前已启用、本次未改」的另一侧（scope=pro 时不因缺 CUSTOM_PROJECTS 阻断）

@@ -588,6 +588,18 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "code": "DRAWING_TYPE",
+        "name": "图纸类型",
+        "description": "工程图纸类型；可在数据字典中维护，表单支持快速新增",
+        "items": [
+            {"label": "零件图", "value": "part", "description": "零件图纸", "sort_order": 1},
+            {"label": "装配图", "value": "assembly", "description": "装配图纸", "sort_order": 2},
+            {"label": "工艺图", "value": "process", "description": "工艺图纸", "sort_order": 3},
+            {"label": "其他", "value": "other", "description": "其他图纸", "sort_order": 4},
+            {"label": "产品规格书", "value": "product_spec", "description": "产品规格书", "sort_order": 5},
+        ],
+    },
+    {
         "code": "DISPOSAL_METHOD",
         "name": "不合格处置方式",
         "description": "来料/过程/成品检验及不良品台账的处置方式（value 为英文码，与质检业务一致）",
@@ -622,6 +634,49 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "样品", "value": "样品", "description": "样品出库", "sort_order": 2},
             {"label": "报废", "value": "报废", "description": "报废出库", "sort_order": 3},
             {"label": "其他", "value": "其他", "description": "其他原因出库", "sort_order": 99},
+        ],
+    },
+    {
+        "code": "LAB_REQUEST_BUSINESS_TYPE",
+        "name": "实验委托类型",
+        "description": "快研发实验委托单的委托类型（IQC/研发/材料试验/整机例试/委外/通用）",
+        "items": [
+            {
+                "label": "IQC委托",
+                "value": "iqc",
+                "description": "IQC 来料委托实验",
+                "sort_order": 1,
+            },
+            {
+                "label": "研发委托",
+                "value": "rd",
+                "description": "研发电子等发起的委托实验（须经理审核）",
+                "sort_order": 2,
+            },
+            {
+                "label": "材料试验",
+                "value": "project_material",
+                "description": "项目侧材料试验委托",
+                "sort_order": 3,
+            },
+            {
+                "label": "整机例试",
+                "value": "project_product",
+                "description": "项目侧整机例试委托",
+                "sort_order": 4,
+            },
+            {
+                "label": "委外试验",
+                "value": "outsource",
+                "description": "委外试验（须采购填价后方可受理）",
+                "sort_order": 5,
+            },
+            {
+                "label": "通用委托",
+                "value": "general",
+                "description": "通用实验委托",
+                "sort_order": 6,
+            },
         ],
     },
 ]

@@ -25,6 +25,8 @@ export interface SchedulingConstraints {
   schedule_mode?: 'forward' | 'backward';
   material_hard_constraint?: boolean;
   bottleneck_work_center_ids?: number[];
+  resource_mode?: 'workstation' | 'production_line';
+  line_exclusive?: boolean;
 }
 
 export interface VisualSchedulingConflict {
@@ -181,6 +183,19 @@ export const outsourceWorkOrderApi = {
       data: rows,
       total: raw?.total ?? rows.length,
       success: raw?.success !== false,
+    };
+  },
+
+  /** 服务端聚合统计（避免 list limit=1000 封顶失真） */
+  statistics: async (): Promise<{ total: number; draft: number; in_progress: number }> => {
+    const raw = await apiRequest<Record<string, unknown>>(
+      '/apps/kuaizhizao/outsource-work-orders/statistics',
+      { method: 'GET' },
+    );
+    return {
+      total: Number(raw?.total ?? 0) || 0,
+      draft: Number(raw?.draft ?? 0) || 0,
+      in_progress: Number(raw?.in_progress ?? 0) || 0,
     };
   },
 
@@ -698,13 +713,22 @@ export const visualSchedulingApi = {
   },
   autoReschedule: async (data: {
     work_order_ids?: number[];
-    scope?: 'selected' | 'overdue' | 'unscheduled';
+    scope?: 'selected' | 'overdue' | 'unscheduled' | 'local';
     plan_date?: string;
+    local_window_hours?: number;
+    resource_ids?: number[];
   }) => {
     return apiRequest<{
       proposal: {
         summary?: string | null;
         warnings: string[];
+        reasons?: Array<{
+          code: string;
+          message: string;
+          work_order_id?: number | null;
+          operation_id?: number | null;
+          changeover_hours?: number | null;
+        }>;
         unfreezed?: number[];
         work_order_adjustments: Array<{
           work_order_id: number;

@@ -11,6 +11,7 @@ from decimal import Decimal
 
 from core.schemas.base import BaseSchema
 from apps.kuaizhizao.services.document_action_policy.types import ReportingRecordCapabilities
+from apps.kuaizhizao.schemas.defect_record import DefectRecordCreateFromReporting
 
 
 class ReportingRecordBase(BaseSchema):
@@ -48,6 +49,9 @@ class ReportingRecordBase(BaseSchema):
     sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式，存储报工时收集的SOP参数）")
     inbound_warehouse_id: Optional[int] = Field(None, description="末道工序入库仓库 ID")
     inbound_warehouse_name: Optional[str] = Field(None, description="末道工序入库仓库名称")
+    idempotency_key: Optional[str] = Field(
+        None, max_length=200, description="客户端幂等键（可选，防重复提交）"
+    )
 
 
 class ReportingRecordCreate(ReportingRecordBase):
@@ -55,7 +59,13 @@ class ReportingRecordCreate(ReportingRecordBase):
     报工记录创建Schema
 
     用于创建新报工记录的数据验证。须指定生产人员或工作小组。
+    C-02：可选嵌入 defect，与报工同事务创建不良品（避免报工成功、缺陷丢失）。
     """
+
+    defect: Optional[DefectRecordCreateFromReporting] = Field(
+        None,
+        description="可选：与报工同事务创建的不良品记录（有不合格数量时推荐）",
+    )
 
     @model_validator(mode="before")
     @classmethod

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from typing import Any, Iterable, Optional, Type
 
 from fastapi import HTTPException, status
@@ -35,6 +36,20 @@ from infra.models.user import User
 
 _BUILTIN_REGISTERED = False
 
+# 同一请求内（菜单徽章会对多资源反复 apply）复用角色/策略加载结果，禁止叠补丁式跳过鉴权。
+_DATA_SCOPE_REQUEST_MEMO: ContextVar[dict[str, Any] | None] = ContextVar(
+    "data_scope_request_memo",
+    default=None,
+)
+
+
+def _request_memo() -> dict[str, Any]:
+    memo = _DATA_SCOPE_REQUEST_MEMO.get()
+    if memo is None:
+        memo = {}
+        _DATA_SCOPE_REQUEST_MEMO.set(memo)
+    return memo
+
 
 class DataScopeService:
     @classmethod
@@ -46,7 +61,14 @@ class DataScopeService:
 
     @classmethod
     async def _admin_bypass(cls, user: User, tenant_id: int) -> bool:
-        return await UserPermissionService.is_admin_bypass(user, tenant_id)
+        memo = _request_memo()
+        cache_key = f"admin:{int(user.id)}:{int(tenant_id)}"
+        cached = memo.get(cache_key)
+        if cached is not None:
+            return bool(cached)
+        result = await UserPermissionService.is_admin_bypass(user, tenant_id)
+        memo[cache_key] = result
+        return result
 
     @classmethod
     async def _load_role_uuids(cls, user_id: int, tenant_id: int) -> list[str]:
@@ -63,14 +85,10 @@ class DataScopeService:
 
     @classmethod
     async def _load_active_roles(cls, user_id: int, tenant_id: int) -> list[Any]:
-        user_roles = await UserRole.filter(user_id=user_id).prefetch_related("role").all()
-        roles: list[Any] = []
-        for ur in user_roles:
-            role = ur.role
-            if not role or role.tenant_id != tenant_id or not role.is_active:
-                continue
-            roles.append(role)
-        return roles
+        from core.services.authorization.effective_access_service import EffectiveAccessService
+
+        access = await EffectiveAccessService.get(user_id, tenant_id)
+        return list(access.roles)
 
     @classmethod
     async def serialize_active_roles(cls, user_id: int, tenant_id: int | None) -> list[dict[str, Any]]:
@@ -129,24 +147,43 @@ class DataScopeService:
         if not role_uuids:
             return []
         resource_key = normalize_resource_key(resource)
+        memo = _request_memo()
+        uuids_key = ",".join(sorted({(u or "").strip() for u in role_uuids if (u or "").strip()}))
+        cache_key = f"policies:{int(tenant_id)}:{resource_key}:{uuids_key}"
+        cached = memo.get(cache_key)
+        if cached is not None:
+            return cached
+
         rows = await DataPermissionPolicy.filter(
             tenant_id=tenant_id,
             role_uuid__in=role_uuids,
             resource=resource_key,
             deleted_at__isnull=True,
         ).all()
-        return list(rows)
+        result = list(rows)
+        memo[cache_key] = result
+        return result
 
     @classmethod
     async def _department_context(cls, tenant_id: int, user: User) -> tuple[str | None, list[int]]:
+        memo = _request_memo()
+        cache_key = f"dept:{int(tenant_id)}:{int(user.id)}"
+        cached = memo.get(cache_key)
+        if cached is not None:
+            return cached
+
         await user.fetch_related("department")
         dept = getattr(user, "department", None)
         if not dept:
-            return None, [user.id]
+            result: tuple[str | None, list[int]] = (None, [user.id])
+            memo[cache_key] = result
+            return result
         dept_uuid = str(getattr(dept, "uuid", "") or "").strip() or None
         dept_id = getattr(user, "department_id", None)
         if dept_id is None:
-            return dept_uuid, [user.id]
+            result = (dept_uuid, [user.id])
+            memo[cache_key] = result
+            return result
         user_ids = await User.filter(
             tenant_id=tenant_id,
             department_id=dept_id,
@@ -154,7 +191,9 @@ class DataScopeService:
             is_active=True,
         ).values_list("id", flat=True)
         ids = [int(x) for x in user_ids] if user_ids else [user.id]
-        return dept_uuid, ids
+        result = (dept_uuid, ids)
+        memo[cache_key] = result
+        return result
 
     @classmethod
     async def _policy_to_q(
@@ -240,17 +279,25 @@ class DataScopeService:
     ) -> list[Any]:
         from core.services.authorization.permission_policy_service import PermissionPolicyService
 
-        granted: list[Any] = []
-        for role in roles:
-            role_uuid = (getattr(role, "uuid", None) or "").strip()
-            if not role_uuid:
-                continue
-            role_resources = await PermissionPolicyService._collect_role_granted_function_resources(
-                tenant_id,
-                role_uuid,
-            )
-            if resource_key in role_resources:
-                granted.append(role)
+        memo = _request_memo()
+        role_uuids = sorted(
+            {
+                (getattr(role, "uuid", None) or "").strip()
+                for role in roles
+                if (getattr(role, "uuid", None) or "").strip()
+            }
+        )
+        cache_key = f"grant:{int(tenant_id)}:{resource_key}:{','.join(role_uuids)}"
+        cached = memo.get(cache_key)
+        if cached is not None:
+            return cached
+
+        granted = await PermissionPolicyService.filter_roles_granting_resource(
+            tenant_id,
+            roles,
+            resource_key,
+        )
+        memo[cache_key] = granted
         return granted
 
     @classmethod
@@ -312,7 +359,8 @@ class DataScopeService:
                 part = await custom(ctx)
                 if part is not None:
                     return queryset.filter(part)
-        # 默认数据权限为“全部”：只有显式配置策略时才收敛数据范围。
+        # 无显式策略 = 全部（与矩阵「默认：全部」、_implicit_scope_for_resource、
+        # 多角色下「该角色无策略行」分支一致）。收紧须显式落库 SELF/部门/自定义。
         return queryset
 
     @classmethod
@@ -324,19 +372,29 @@ class DataScopeService:
         user: User,
         resource: str,
     ):
+        """
+        对 QuerySet 施加数据权限。
+
+        多角色唯一路径：EffectiveAccessService 先并集角色授权，再按授予该资源的角色
+        合并数据策略（任一 ALL / 无策略厂内 = 全部；否则 OR），禁止按角色循环扫权限表。
+        """
+        from core.services.authorization.effective_access_service import EffectiveAccessService
+
         cls._ensure_builtin_resolvers()
-        if await cls._admin_bypass(user, tenant_id):
+        access = await EffectiveAccessService.get(
+            user.id,
+            tenant_id,
+            user=user,
+        )
+        if access.is_admin_bypass:
             return queryset
 
         resource_key = normalize_resource_key(resource)
         profile = get_resource_profile(resource_key)
-        roles = await cls._load_active_roles(user.id, tenant_id)
-        granted_roles = await cls._filter_roles_with_function_resource(
-            tenant_id,
-            roles,
-            resource_key,
-        )
-        roles_for_scope = granted_roles if granted_roles else roles
+        roles_for_scope = access.roles_for_data_scope(resource_key)
+        if not roles_for_scope:
+            # 无角色授予该资源功能：拒绝行可见（禁止再走「无策略=全部」）
+            return queryset.filter(id=-1)
 
         granted_role_uuids = [
             (getattr(role, "uuid", None) or "").strip()

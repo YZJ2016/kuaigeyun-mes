@@ -27,7 +27,7 @@ export const API_BASE_URL = '/api/v1';
  *
  * @returns 组织ID 或 null
  */
-function getCurrentTenantId(): string | null {
+export function getCurrentTenantId(): string | null {
   try {
     // 优先从 localStorage 的 tenant_id 获取
     const tenantId = localStorage.getItem('tenant_id');
@@ -64,6 +64,46 @@ function getCurrentTenantId(): string | null {
   }
   
   return null;
+}
+
+/**
+ * P3-D-X：非 apiRequest 的 raw fetch 统一拼 Authorization + X-Tenant-ID + X-Client-Channel
+ *（禁止业务页/服务各自手写 localStorage 租户头；写接口缺渠道会被后端 403）
+ */
+export function buildAuthTenantHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    ...webClientChannelHeaders(),
+  };
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const tenantId = getCurrentTenantId();
+  if (tenantId) {
+    headers['X-Tenant-ID'] = tenantId;
+  }
+  return headers;
+}
+
+/** 写请求用的 raw fetch 头（渠道 + 鉴权 + 幂等键） */
+export function buildWriteAuthHeaders(
+  extra?: Record<string, string>,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...buildAuthTenantHeaders(),
+    ...extra,
+  };
+  const hasIdempotency = Object.keys(headers).some(
+    (k) => k.toLowerCase() === 'idempotency-key',
+  );
+  if (!hasIdempotency) {
+    headers['Idempotency-Key'] =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `idemp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+  return headers;
 }
 
 /**
@@ -238,6 +278,18 @@ export async function apiRequest<T = any>(
 
   // 客户端渠道（登录日志设备识别；PC / 工位由 VITE_CLIENT_CHANNEL 区分）
   Object.assign(headers, webClientChannelHeaders());
+
+  // 写请求自动带幂等键（后端可回放/去重；调用方已传则不覆盖）
+  const method = String(options?.method || 'GET').toUpperCase();
+  const isWriteMethod = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+  const hasIdempotency = Object.keys(headers).some((k) => k.toLowerCase() === 'idempotency-key');
+  if (isWriteMethod && !hasIdempotency && !isPublicEndpoint) {
+    const uuid =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `idemp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    headers['Idempotency-Key'] = uuid;
+  }
 
   // Authorization（公开接口不需要）
   if (token && !isPublicEndpoint) {

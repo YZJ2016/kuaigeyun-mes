@@ -66,6 +66,7 @@ import {
   buildSplitMenuRoots,
   computeSplitSecondaryOpenKeys,
   FLAT_SIDEBAR_WIDTH,
+  menuPathMatchesLocation,
   readSidebarMenuLayoutPref,
   SPLIT_SIDEBAR_WIDTH,
 } from './basicLayout/sidebarMenuLayout';
@@ -569,6 +570,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/infra/scheduled-tasks': ManufacturingIcons.clock,
       '/infra/admin': ManufacturingIcons.shield,
       '/infra/official-api-library': ManufacturingIcons.database,
+      '/infra/open-api': ManufacturingIcons.key,
       '/infra/client-releases': ManufacturingIcons.smartphone,
       '/infra/license-management': ManufacturingIcons.certificate,
     };
@@ -595,14 +597,18 @@ type PermissionMenuDataItem = MenuDataItem &
   };
 
 /** 根据当前路由计算侧栏应展开的分组 key（不含叶子节点 key） */
-function computeMenuOpenKeysForPath(items: MenuDataItem[], currentPath: string): string[] {
+function computeMenuOpenKeysForPath(
+  items: MenuDataItem[],
+  currentPath: string,
+  search = '',
+): string[] {
   const openKeys: string[] = [];
   const walk = (nodes: MenuDataItem[], ancestors: string[]): boolean => {
     for (const node of nodes) {
       const nodeKey = node.key ?? node.path;
       const keyStr = nodeKey ? String(nodeKey) : '';
       const nextAncestors = keyStr ? [...ancestors, keyStr] : ancestors;
-      if (node.path === currentPath) {
+      if (menuPathMatchesLocation(node.path, currentPath, search)) {
         openKeys.push(...ancestors);
         return true;
       }
@@ -763,6 +769,7 @@ const getMenuConfig = (
       { path: '/infra/scripts', name: t('menu.infra.scripts'), icon: getMenuIcon(t('menu.infra.scripts'), '/infra/scripts') },
       { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
       { path: '/infra/official-api-library', name: t('menu.infra.official-api-library'), icon: getMenuIcon(t('menu.infra.official-api-library'), '/infra/official-api-library') },
+      { path: '/infra/open-api', name: t('menu.infra.open-api'), icon: getMenuIcon(t('menu.infra.open-api'), '/infra/open-api') },
       { path: '/infra/client-releases', name: t('menu.infra.client-releases'), icon: getMenuIcon(t('menu.infra.client-releases'), '/infra/client-releases') },
       { path: '/infra/license-management', name: t('menu.infra.license-management'), icon: getMenuIcon(t('menu.infra.license-management'), '/infra/license-management') },
       ...(options?.showSensitiveWordBlacklist
@@ -2092,7 +2099,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }[] = [];
 
     // 查找当前路径对应的菜单项及其父级菜单
-    const findMenuPath = (items: MenuDataItem[] | undefined, targetPath: string, path: MenuDataItem[] = []): MenuDataItem[] | null => {
+    const findMenuPath = (
+      items: MenuDataItem[] | undefined,
+      targetPath: string,
+      path: MenuDataItem[] = [],
+      search = '',
+    ): MenuDataItem[] | null => {
       if (!items || !Array.isArray(items) || items.length === 0) {
         return null;
       }
@@ -2100,12 +2112,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       for (const item of items) {
         const currentPath = [...path, item];
 
-        if (item.path && item.path.replace(/\/$/, '') === targetPath.replace(/\/$/, '')) {
+        if (menuPathMatchesLocation(item.path, targetPath, search)) {
           return currentPath;
         }
 
         if (item.children) {
-          const found = findMenuPath(item.children, targetPath, currentPath);
+          const found = findMenuPath(item.children, targetPath, currentPath, search);
           if (found) return found;
         }
       }
@@ -2113,7 +2125,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
 
     // 统一的面包屑生成逻辑：使用 breadcrumbMenuData（保留完整层级），优先匹配菜单树，匹配不到时向上寻找最近的父级菜单
-    let menuPath = findMenuPath(breadcrumbMenuData, location.pathname);
+    let menuPath = findMenuPath(breadcrumbMenuData, location.pathname, [], location.search);
     
     // 如果直接匹配不到（不在菜单里的详情页/设计器），尝试向上寻找父级路径
     if (!menuPath) {
@@ -2259,51 +2271,45 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * @param currentPath - 当前路径
    * @returns 应该选中的菜单 key 数组
    */
-  const calculateSelectedKeys = React.useCallback((menuItems: MenuDataItem[], currentPath: string): string[] => {
-    const selectedKeys: string[] = [];
+  const calculateSelectedKeys = React.useCallback(
+    (menuItems: MenuDataItem[], currentPath: string, search = ''): string[] => {
+      const selectedKeys: string[] = [];
 
-    /**
-     * 递归查找精确匹配当前路径的菜单项
-     * 
-     * @param items - 菜单项数组
-     * @param path - 当前路径
-     * @returns 是否找到匹配的菜单项
-     */
-    const findExactMatch = (items: MenuDataItem[], path: string): boolean => {
-      for (const item of items) {
-        const itemKey = item.key || item.path;
-        if (!itemKey) continue;
+      const findExactMatch = (items: MenuDataItem[], path: string, locSearch: string): boolean => {
+        for (const item of items) {
+          const itemKey = item.key || item.path;
+          if (!itemKey) continue;
 
-        // 精确匹配：只有路径完全相等时才选中
-        if (item.path === path) {
-          selectedKeys.push(itemKey as string);
-          return true;
-        }
-
-        // 如果菜单项有子菜单，递归查找
-        if (item.children && item.children.length > 0) {
-          const hasMatch = findExactMatch(item.children, path);
-          if (hasMatch) {
+          if (menuPathMatchesLocation(item.path, path, locSearch)) {
+            selectedKeys.push(itemKey as string);
             return true;
           }
-        }
-      }
-      return false;
-    };
 
-    findExactMatch(menuItems, currentPath);
-    return selectedKeys;
-  }, []);
+          if (item.children && item.children.length > 0) {
+            const hasMatch = findExactMatch(item.children, path, locSearch);
+            if (hasMatch) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+
+      findExactMatch(menuItems, currentPath, search);
+      return selectedKeys;
+    },
+    [],
+  );
 
   const menuDataForSelection = useSplitSidebarMenu ? breadcrumbMenuData : filteredMenuData;
 
-  // 计算应该选中的菜单 key（只选中精确匹配的路径）
+  // 计算应该选中的菜单 key（只选中精确匹配的路径；含 query 的菜单项须对齐 search）
   const selectedKeys = useMemo(() => {
-    return calculateSelectedKeys(menuDataForSelection, location.pathname);
-  }, [menuDataForSelection, location.pathname, calculateSelectedKeys]);
+    return calculateSelectedKeys(menuDataForSelection, location.pathname, location.search);
+  }, [menuDataForSelection, location.pathname, location.search, calculateSelectedKeys]);
 
   const [sidebarOpenKeys, setSidebarOpenKeys] = useState<string[]>(() =>
-    computeMenuOpenKeysForPath(filteredMenuData, location.pathname)
+    computeMenuOpenKeysForPath(filteredMenuData, location.pathname, location.search),
   );
   const siderFooterRef = useRef<HTMLDivElement>(null);
 
@@ -2326,12 +2332,19 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (useSplitSidebarMenu) {
       setSidebarOpenKeys(
-        computeSplitSecondaryOpenKeys(splitMenuRoots, location.pathname, computeMenuOpenKeysForPath),
+        computeSplitSecondaryOpenKeys(
+          splitMenuRoots,
+          location.pathname,
+          computeMenuOpenKeysForPath,
+          location.search,
+        ),
       );
       return;
     }
-    setSidebarOpenKeys(computeMenuOpenKeysForPath(filteredMenuData, location.pathname));
-  }, [location.pathname, filteredMenuData, useSplitSidebarMenu, splitMenuRoots]);
+    setSidebarOpenKeys(
+      computeMenuOpenKeysForPath(filteredMenuData, location.pathname, location.search),
+    );
+  }, [location.pathname, location.search, filteredMenuData, useSplitSidebarMenu, splitMenuRoots]);
 
   useLayoutEffect(() => {
     const footerEl = siderFooterRef.current;
@@ -2593,6 +2606,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       <SplitSidebarMenu
         roots={splitMenuRoots}
         currentPath={location.pathname}
+        currentSearch={location.search}
         collapsed={false}
         selectedKeys={selectedKeys}
         openKeys={sidebarOpenKeys}
@@ -2604,6 +2618,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     [
       splitMenuRoots,
       location.pathname,
+      location.search,
       selectedKeys,
       sidebarOpenKeys,
       sidebarSearchExtra,

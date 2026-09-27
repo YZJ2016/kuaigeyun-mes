@@ -168,9 +168,11 @@ export default {
   'pages.login.wechatLoginFailed': '微信登录失败，请稍后重试',
   'pages.login.wecomSelectTenant': '请选择组织后再使用企业微信登录',
   'pages.login.wecomSelectTenantModalTitle': '选择组织',
-  'pages.login.wecomSelectTenantModalHint': '企业微信登录需先确定组织。可搜索组织名称或组织代码（如 default），也可在地址栏使用 /login?tenant_id=1',
+  'pages.login.wecomSelectTenantModalHint': '企业微信登录需先确定组织。可搜索组织名称或组织代码（如 default），也可在地址栏使用 /组织域名',
   'pages.login.wecomSelectTenantConfirm': '继续企业微信登录',
   'pages.login.wecomTenantDomainPlaceholder': '输入组织名称或组织代码搜索',
+  'pages.login.tenantDomainNotFound': '组织「{{domain}}」不存在',
+  'pages.login.tenantDomainCheckFailed': '无法校验组织「{{domain}}」，请检查网络后重试',
   'pages.login.wecomNotConfigured': '未配置企业微信连接器，请联系管理员在应用连接中启用 type=wecom',
   'pages.login.wecomRedirectFailed': '企业微信登录跳转失败，请稍后重试',
   'pages.login.wecomVerifyFailed': '企业微信登录验证失败，请重试',
@@ -179,6 +181,14 @@ export default {
   'pages.login.wecomQrLoginTitle': '企业微信扫码登录',
   'pages.login.wecomQrLoginHint': '请使用企业微信客户端扫码并确认登录',
   'common.cancel': '取消',
+
+  // 手机号后四位核验（与 zh-CN.ts 保持一致）
+  'components.phoneVerification.title': '验证手机号',
+  'components.phoneVerification.hint':
+    '检测到多个组织存在相同用户名与密码。请输入您绑定手机号的后四位以确认身份；若各组织均未绑定手机号或手机号相同，则无需此步骤。',
+  'components.phoneVerification.placeholder': '手机号后四位',
+  'components.phoneVerification.failed': '手机号后四位不正确，请重试',
+  'common.confirm': '确认',
 
   // 多组织选择弹窗（TenantSelectionModal，与 zh-CN.ts 保持一致）
   'components.tenantSelection.title': '选择组织',

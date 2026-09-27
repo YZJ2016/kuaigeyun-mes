@@ -55,6 +55,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   /** 备件编号（台账名/码叠列身份） */
   part_no: 10,
   name_code: 10,
+  /** 轻办公员工档案编号（须先于 phone，避免电话排第一） */
+  employee_code: 10,
   calculation_no: 10,
   order_code: 10,
   quotation_code: 10,
@@ -138,6 +140,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   forecast_name: 10.3,
   name: 10.4,
   title: 10.4,
+  /** 轻办公员工档案姓名 */
+  full_name: 10.45,
   shortName: 10.5,
   source_code: 10.6,
   /** 报工等：工单名称/编号叠列（列上须设 key=workOrderStacked） */
@@ -577,6 +581,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   source_type: 20.3,
   version_no: 20.5,
   version: 20.5,
+  /** 研发/项目单据业务日期（发布日、期望日等；列 key 统一 business_date） */
+  business_date: 20.52,
   change_version: 20.55,
   /** 报价单列表：明细物料名预览（版本后、总数量前） */
   quotation_line_materials: 30.5,
@@ -834,6 +840,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   computation_start_time: 65.1,
   computation_end_time: 65.2,
   started_at: 65.1,
+  expected_complete_at: 65.15,
   finished_at: 65.2,
   /** 需求变更：创建时间（非固定列末位，列用 key 避开全局 created_at=93） */
   task_created_at: 88,
@@ -876,13 +883,18 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   contact_person: 77,
   contactPerson: 77,
   contactTitle: 77.1,
+  /** 部门先于电话：员工档案等主数据更合理；联系人仍在 77 */
+  department_name: 77.15,
+  position_name: 77.18,
+  /** 员工档案：部门后用工/计薪，再电话与入职日 */
+  employment_type: 77.16,
+  pay_method: 77.17,
   phone: 77.2,
   contact_phone: 77.2,
   mobile: 77.3,
   email: 77.4,
   address: 77.5,
-  department_name: 78,
-  position_name: 78.1,
+  hire_date: 77.55,
   warehouse_name: 78.5,
   product_code: 79,
   product_name: 79.1,
@@ -1134,6 +1146,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   warranty_start_at: 14.08,
   warranty_end_at: 14.09,
   started_at: 14.12,
+  expected_complete_at: 14.14,
   checkin_at: 14.13,
   visited_at: 14.16,
   closed_at: 14.22,

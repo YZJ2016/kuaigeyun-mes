@@ -43,14 +43,20 @@ export const DRAWING_NAV_MODES: {
   { mode: 'route', icon: BranchesOutlined, labelKey: 'app.master-data.drawings.tree.byRoute' },
 ];
 
-const DRAWING_TYPES: DrawingType[] = ['part', 'assembly', 'process', 'other'];
+const DRAWING_TYPES: DrawingType[] = ['part', 'assembly', 'process', 'other', 'product_spec'];
+
+export interface DrawingTypeNavItem {
+  value: string;
+  label: string;
+}
 const DRAWING_STATUSES: DrawingStatus[] = ['Draft', 'Editing', 'Pending', 'Released', 'Obsolete'];
 
-const TYPE_ICONS: Record<DrawingType, React.ReactNode> = {
+const TYPE_ICONS: Record<string, React.ReactNode> = {
   part: <BlockOutlined />,
   assembly: <BuildOutlined />,
   process: <ToolOutlined />,
   other: <FileOutlined />,
+  product_spec: <FileOutlined />,
 };
 
 const STATUS_ICONS: Record<DrawingStatus, React.ReactNode> = {
@@ -65,6 +71,15 @@ function matchSearch(text: string, search: string): boolean {
   const q = search.trim().toLowerCase();
   if (!q) return true;
   return text.toLowerCase().includes(q);
+}
+
+export function withDrawingTreeCount(label: string, count?: number): string {
+  return typeof count === 'number' && Number.isFinite(count) ? `${label} (${count})` : label;
+}
+
+export interface DrawingVaultTreeSummary {
+  totalDrawingCount?: number;
+  unclassifiedDrawingCount?: number;
 }
 
 export function treeKeyBelongsToMode(key: string, mode: DrawingNavMode): boolean {
@@ -111,6 +126,7 @@ export function buildDrawingNavTree(
   materials: DrawingTreeNavItem[],
   routes: DrawingTreeNavItem[],
   search = '',
+  typeItems: DrawingTypeNavItem[] = [],
 ): DataNode[] {
   const allLabel = t('app.master-data.drawings.tree.all');
   const nodes: DataNode[] = [];
@@ -125,13 +141,18 @@ export function buildDrawingNavTree(
   }
 
   if (mode === 'type') {
-    DRAWING_TYPES.forEach((type) => {
-      const title = t(`app.master-data.drawings.type.${type}`);
-      if (!matchSearch(title, search)) return;
+    const items = typeItems.length
+      ? typeItems
+      : DRAWING_TYPES.map((type) => ({
+          value: type,
+          label: t(`app.master-data.drawings.type.${type}`),
+        }));
+    items.forEach((item) => {
+      if (!matchSearch(item.label, search)) return;
       nodes.push({
-        key: `type:${type}`,
-        title,
-        icon: TYPE_ICONS[type],
+        key: `type:${item.value}`,
+        title: item.label,
+        icon: TYPE_ICONS[item.value] ?? <FileOutlined />,
         isLeaf: true,
       });
     });
@@ -212,11 +233,12 @@ function mapFolderNodes(folders: DrawingFolder[], search: string): DataNode[] {
   return folders
     .map((folder) => {
       const children = mapFolderNodes(folder.children ?? [], search);
-      const selfMatch = matchSearch(folder.name, search);
+      const folderLabel = withDrawingTreeCount(folder.name, folder.drawingCount);
+      const selfMatch = matchSearch(folder.name, search) || matchSearch(folderLabel, search);
       if (!selfMatch && !children.length) return null;
       return {
         key: `folder:${folder.uuid}`,
-        title: folder.name,
+        title: folderLabel,
         icon: <FolderOutlined />,
         isLeaf: !children.length,
         children: children.length ? children : undefined,
@@ -229,9 +251,16 @@ export function buildDrawingVaultTree(
   t: TFunction,
   folders: DrawingFolder[],
   search = '',
+  summary?: DrawingVaultTreeSummary,
 ): DataNode[] {
-  const allLabel = t('app.master-data.drawings.tree.all');
-  const unclassifiedLabel = t('app.master-data.drawings.tree.unclassified');
+  const allLabel = withDrawingTreeCount(
+    t('app.master-data.drawings.tree.all'),
+    summary?.totalDrawingCount,
+  );
+  const unclassifiedLabel = withDrawingTreeCount(
+    t('app.master-data.drawings.tree.unclassified'),
+    summary?.unclassifiedDrawingCount,
+  );
   const nodes: DataNode[] = [];
 
   if (matchSearch(allLabel, search)) {
@@ -242,6 +271,7 @@ export function buildDrawingVaultTree(
       isLeaf: true,
     });
   }
+  nodes.push(...mapFolderNodes(folders, search));
   if (matchSearch(unclassifiedLabel, search)) {
     nodes.push({
       key: DRAWING_TREE_UNCLASSIFIED_KEY,
@@ -250,7 +280,6 @@ export function buildDrawingVaultTree(
       isLeaf: true,
     });
   }
-  nodes.push(...mapFolderNodes(folders, search));
   return nodes.length
     ? nodes
     : [

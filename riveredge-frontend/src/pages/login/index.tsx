@@ -49,6 +49,7 @@ import { resolvePostLoginNavigatePath } from '../../utils/tenantHomePath';
 import { buildTenantLoginPathForHistoryReplace, resolvePlatformAdminLoginPathFromUrl, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
 import { captureLoginEntryFromCurrentUrl } from '../../utils/loginEntry';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
+const PhoneVerificationModal = lazy(() => import('../../components/phone-verification-modal'));
 const TermsModal = lazy(() => import('../../components/terms-modal'));
 const LongPressVerify = lazy(() => import('../../components/long-press-verify'));
 import { Spin } from 'antd';
@@ -148,6 +149,29 @@ export default function LoginPage() {
       navigate(adminLoginPath, { replace: true });
     }
   }, [navigate]);
+
+  /** 组织入口 /{domain}：不存在则提示并清空路径回到 / */
+  useEffect(() => {
+    const domain = resolveTenantDomainFromUrl();
+    if (!domain) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const check = await checkTenantDomain(domain);
+        if (cancelled) return;
+        if (!check.exists) {
+          message.error(t('pages.login.tenantDomainNotFound', { domain }));
+          navigate('/', { replace: true });
+        }
+      } catch {
+        if (cancelled) return;
+        message.error(t('pages.login.tenantDomainCheckFailed', { domain }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, message, t]);
 
   /** 登录成功：先写 localStorage（会话真源）。主应用会话模块不得静态进入本页，否则登录 MPA 会打进整包 i18n。 */
   const syncUserStateAfterLogin = useCallback((userInfo: Parameters<typeof setUserInfo>[0]) => {
@@ -615,6 +639,9 @@ export default function LoginPage() {
   const [tenantSelectionVisible, setTenantSelectionVisible] = useState(false);
   const [loginResponse, setLoginResponse] = useState<LoginResponse | null>(null);
   const [loginCredentials, setLoginCredentials] = useState<LoginFormData | null>(null);
+  const [phoneVerificationVisible, setPhoneVerificationVisible] = useState(false);
+  const [phoneVerifySubmitting, setPhoneVerifySubmitting] = useState(false);
+  const [verifiedPhoneLast4, setVerifiedPhoneLast4] = useState<string | null>(null);
 
   // 条款弹窗状态
   const [termsModalVisible, setTermsModalVisible] = useState(false);
@@ -1002,6 +1029,14 @@ export default function LoginPage() {
    * @param credentials - 登录凭据（用于多组织选择后重新登录）
    */
   const handleLoginSuccess = (response: LoginResponse, credentials?: LoginFormData) => {
+    if (response?.requires_phone_verification) {
+      if (credentials) {
+        setLoginCredentials(credentials);
+      }
+      setPhoneVerificationVisible(true);
+      return;
+    }
+
     if (!response || !response.access_token) {
       message.error(t('pages.login.loginFailedCheck'));
       return;
@@ -1226,9 +1261,7 @@ export default function LoginPage() {
     if (storedTenantId && storedTenantId > 0) {
       return storedTenantId;
     }
-    const domainFromQuery = urlParams.get('tenant_domain')?.trim().toLowerCase();
-    const domainFromContext = resolveTenantDomainFromUrl();
-    const domain = domainFromQuery || domainFromContext;
+    const domain = resolveTenantDomainFromUrl();
     if (domain) {
       try {
         const check = await checkTenantDomain(domain);
@@ -1592,7 +1625,23 @@ export default function LoginPage() {
 
     try {
       setIsSubmitting(true);
-      const response = await login(values);
+      // 组织入口 /{domain}：锁定 tenant_id，非本组织账号由后端提示
+      let tenantId: number | undefined;
+      const domain = resolveTenantDomainFromUrl();
+      if (domain) {
+        const check = await checkTenantDomain(domain);
+        if (!check.exists || !check.tenant_id) {
+          message.error(t('pages.login.tenantDomainNotFound', { domain }));
+          navigate('/', { replace: true });
+          return;
+        }
+        tenantId = check.tenant_id;
+      }
+      const response = await login({
+        username: values.username,
+        password: values.password,
+        ...(tenantId != null ? { tenant_id: tenantId } : {}),
+      });
       // 登录成功，清除所有记录和验证状态
       setLoginFailTimes([]);
       setLoginFailCount(0);
@@ -1603,24 +1652,32 @@ export default function LoginPage() {
       localStorage.removeItem(VERIFIED_KEY);
       handleLoginSuccess(response, values);
     } catch (error: any) {
+      const httpStatus = error?.response?.status as number | undefined;
+      const isRateLimited = httpStatus === 429;
+
       // 登录失败，清除验证状态（验证后只允许一次尝试）
       if (isVerified) {
         setIsVerified(false);
         localStorage.removeItem(VERIFIED_KEY);
-        message.warning(t('pages.login.verifyRetry'));
+        if (!isRateLimited) {
+          message.warning(t('pages.login.verifyRetry'));
+        }
       }
-      
-      // 记录失败时间和次数
-      const now = Date.now();
-      const updatedFailTimes = [...loginFailTimes, now];
-      setLoginFailTimes(updatedFailTimes);
-      setLoginFailCount(prev => prev + 1);
-      
-      // 检查是否需要验证（使用更新后的失败时间数组）
-      const needVerify = checkRequireVerification(updatedFailTimes);
-      
+
+      // 服务端已限流：不计入本地 UX 失败次数
+      let needVerify = requireVerification;
+      if (!isRateLimited) {
+        const now = Date.now();
+        const updatedFailTimes = [...loginFailTimes, now];
+        setLoginFailTimes(updatedFailTimes);
+        setLoginFailCount(prev => prev + 1);
+        needVerify = checkRequireVerification(updatedFailTimes);
+      }
+
       // 提取错误信息（支持多种错误格式）
-      let errorMessage = t('pages.login.loginFailed');
+      let errorMessage = isRateLimited
+        ? t('pages.login.rateLimited')
+        : t('pages.login.loginFailed');
 
       if (error?.response?.data) {
         const errorData = error.response.data;
@@ -1729,6 +1786,34 @@ export default function LoginPage() {
   };
 
   /**
+   * 同名同密跨租户：核验手机号后四位后继续登录。
+   */
+  const handlePhoneVerificationSubmit = async (phoneLast4: string) => {
+    if (!loginCredentials) {
+      message.error(t('pages.login.loginFailedCheck'));
+      return;
+    }
+    try {
+      setPhoneVerifySubmitting(true);
+      const response = await login({
+        username: loginCredentials.username,
+        password: loginCredentials.password,
+        phone_last4: phoneLast4,
+      });
+      setVerifiedPhoneLast4(phoneLast4);
+      setPhoneVerificationVisible(false);
+      handleLoginSuccess(response, loginCredentials);
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      message.error(
+        typeof detail === 'string' ? detail : t('components.phoneVerification.failed'),
+      );
+    } finally {
+      setPhoneVerifySubmitting(false);
+    }
+  };
+
+  /**
    * 处理组织选择
    *
    * 用户选择组织后，使用选中的 tenant_id 重新登录以获取包含该组织的 Token
@@ -1747,6 +1832,7 @@ export default function LoginPage() {
             username: loginCredentials.username,
             password: loginCredentials.password,
             tenant_id: tenantId,
+            ...(verifiedPhoneLast4 ? { phone_last4: verifiedPhoneLast4 } : {}),
           })
         : await switchTenant(tenantId);
 
@@ -2578,6 +2664,21 @@ export default function LoginPage() {
           <Input placeholder={t('pages.login.wecomTenantDomainPlaceholder')} />
         </AutoComplete>
       </Modal>
+
+      {/* 手机号后四位核验（同名同密跨租户歧义） */}
+      <Suspense fallback={null}>
+        <PhoneVerificationModal
+          open={phoneVerificationVisible}
+          loading={phoneVerifySubmitting}
+          onSubmit={handlePhoneVerificationSubmit}
+          onCancel={() => {
+            setPhoneVerificationVisible(false);
+            setLoginCredentials(null);
+            setVerifiedPhoneLast4(null);
+            message.info(t('pages.login.pleaseLoginAgain'));
+          }}
+        />
+      </Suspense>
 
       {/* 组织选择弹窗 - 懒加载，仅多组织登录时加载 */}
       {loginResponse && (

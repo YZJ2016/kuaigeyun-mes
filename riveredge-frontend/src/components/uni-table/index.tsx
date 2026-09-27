@@ -1791,6 +1791,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         // 稳定 key：避免无 dataIndex 时用列下标，columnsState / sticky 右固定错位
         const operationColumnKey = String(rest.key ?? 'option')
         // 宽度真源是实测内容宽；页面自写的 pageWidth 已在此丢弃（禁止第二真源）
+        // 首帧预算只用默认槽位：页面 minPrimaryVisible 只管直出/折叠，勿灌进预算否则多直出页留白
         // 空表无动作条：用紧凑表头宽，禁止三槽最坏预算把右固定组撑出大块留白
         const resolvedWidth =
           measuredOperationWidths[operationColumnKey] ??
@@ -1798,7 +1799,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             ? resolveUniTableEmptyOperationColumnWidth()
             : resolveUniTableOperationColumnWidth({
                 fixed: rest.fixed,
-                uniActionRenderOptions,
               }))
         return {
           ...rest,
@@ -1869,10 +1869,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   // 全项目统一策略：结构化列保留页面 width；主文本列由布局引擎分配 primary flex；
   // 不启用拖拽改宽与本地列宽持久化，避免「代码 width」与 localStorage 双控制源竞争。
-  const tableId = columnPersistenceId ?? headerTitle
+  // 仅字符串可作为偏好 key；ReactNode headerTitle 不得回落为 tableId（否则 .match 崩溃）
+  const tableId =
+    typeof columnPersistenceId === 'string' && columnPersistenceId.trim()
+      ? columnPersistenceId.trim()
+      : typeof headerTitle === 'string' && headerTitle.trim()
+        ? headerTitle.trim()
+        : undefined
 
   React.useEffect(() => {
-    if (typeof tableId !== 'string' || !tableId.trim()) return
+    if (!tableId) return
     void ensureUniTablePreferenceMigrated(tableId)
   }, [tableId])
 

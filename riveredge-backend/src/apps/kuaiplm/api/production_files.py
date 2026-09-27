@@ -11,6 +11,7 @@ from apps.kuaiplm.schemas.production_file import (
     ProductionFileAccessLogResponse,
     ProductionFileAccessRequest,
     ProductionFileCreate,
+    ProductionFileDownloadResponse,
     ProductionFileIssueRequest,
     ProductionFileListResponse,
     ProductionFileResponse,
@@ -19,7 +20,7 @@ from apps.kuaiplm.schemas.production_file import (
     ProductionFileVersionListResponse,
 )
 from apps.kuaiplm.services.production_file_service import ProductionFileService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.user_permission_service import UserPermissionService
 from infra.api.deps.deps import get_current_user
@@ -60,13 +61,7 @@ async def list_production_files(
     project_id: Optional[int] = Query(None),
     production_view: bool = Query(False, description="生产使用视图：仅现行生效版"),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "read",
-            required_permissions=["kuaiplm:production-file:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -99,13 +94,7 @@ async def list_production_files(
 async def create_production_file(
     data: ProductionFileCreate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "create",
-            required_permissions=["kuaiplm:production-file:create"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:create")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -117,13 +106,7 @@ async def create_production_file(
 @router.get("/{file_id}", response_model=ProductionFileResponse, summary="Get production file")
 async def get_production_file(
     file_id: int,
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "read",
-            required_permissions=["kuaiplm:production-file:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -137,13 +120,7 @@ async def update_production_file(
     file_id: int,
     data: ProductionFileUpdate,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "update",
-            required_permissions=["kuaiplm:production-file:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -156,13 +133,7 @@ async def update_production_file(
 async def submit_production_file(
     file_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "submit",
-            required_permissions=["kuaiplm:production-file:submit"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:submit")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -175,13 +146,7 @@ async def submit_production_file(
 async def approve_production_file(
     file_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "approve",
-            required_permissions=["kuaiplm:production-file:approve"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:approve")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -194,13 +159,7 @@ async def approve_production_file(
 async def reject_production_file(
     file_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "reject",
-            required_permissions=["kuaiplm:production-file:reject"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:reject")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -214,13 +173,7 @@ async def revise_production_file(
     file_id: int,
     data: ProductionFileReviseRequest,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "update",
-            required_permissions=["kuaiplm:production-file:update"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -233,17 +186,38 @@ async def revise_production_file(
 async def obsolete_production_file(
     file_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "obsolete",
-            required_permissions=["kuaiplm:production-file:obsolete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:obsolete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
         return await service.obsolete(tenant_id, file_id, current_user)
+    except Exception as e:
+        raise _http(e)
+
+
+@router.get(
+    "/{file_id}/download",
+    response_model=ProductionFileDownloadResponse,
+    summary="Download production file",
+)
+async def download_production_file(
+    file_id: int,
+    version_id: Optional[int] = Query(None),
+    production_view: bool = Query(False, description="生产使用视图"),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        codes = await _permission_codes(current_user, tenant_id)
+        return await service.resolve_download(
+            tenant_id,
+            file_id,
+            current_user,
+            version_id=version_id,
+            permission_codes=codes,
+            production_view=production_view,
+        )
     except Exception as e:
         raise _http(e)
 
@@ -253,13 +227,7 @@ async def issue_production_file(
     file_id: int,
     data: ProductionFileIssueRequest,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "execute",
-            required_permissions=["kuaiplm:production-file:execute"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:execute")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -281,13 +249,7 @@ async def record_production_file_access(
     data: ProductionFileAccessRequest,
     current_user: User = Depends(get_current_user),
     production_view: bool = Query(False),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "read",
-            required_permissions=["kuaiplm:production-file:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -313,13 +275,7 @@ async def list_production_file_versions(
     file_id: int,
     production_view: bool = Query(False),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "read",
-            required_permissions=["kuaiplm:production-file:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -345,13 +301,7 @@ async def list_production_file_access_logs(
     action: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "read",
-            required_permissions=["kuaiplm:production-file:read"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -370,13 +320,7 @@ async def list_production_file_access_logs(
 async def delete_production_file(
     file_id: int,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(
-        require_access(
-            "kuaiplm.production-file",
-            "delete",
-            required_permissions=["kuaiplm:production-file:delete"],
-        )
-    ),
+    _auth=Depends(require_permission_codes("kuaiplm:production-file:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

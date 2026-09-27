@@ -141,7 +141,7 @@ import {
   renderPullQueryReviewStatus,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
-import { UniAuditBatchMenuButton, UniBatchButton, UniCapabilityBatchButton, runCapabilityBatchBulk, type UniBatchMenuItem } from '../../../../../components/uni-batch';
+import { UniAuditBatchMenuButton, UniBatchButton, UniCapabilityBatchButton, type UniBatchMenuItem } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
@@ -279,7 +279,7 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../s
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { useTranslation } from 'react-i18next';
-import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
+import { useNumericPrecision, getNumericAbsMax, buildNumericFormRules } from '../../../../../hooks/useNumericPrecision';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -553,6 +553,8 @@ const SalesOrderSalesmanField: React.FC<{ userList: User[]; loading: boolean }> 
 const SalesOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { quantity: quantityDecimals, price: priceDecimals, amount: amountDecimals } = useNumericPrecision();
+  const salesOrderQtyMax = getNumericAbsMax('quantity');
+  const salesOrderPriceMax = getNumericAbsMax('price');
   const { message: messageApi, modal: modalApi } = App.useApp();
   const kuaiaiAvailable = useKuaiaiEntryAvailable();
   const salesCommonFormLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
@@ -1411,11 +1413,23 @@ const SalesOrdersPage: React.FC = () => {
     }
     try {
       const res = await bulkDeleteSalesOrders(orderIds);
-      if (res.failed_count === 0) {
-        messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: res.success_count }));
+      const successCount = Number(res?.success_count ?? 0);
+      const failedCount = Number(res?.failed_count ?? 0);
+      if (failedCount === 0) {
+        messageApi.success(t('app.kuaizhizao.salesOrder.deleteSuccess', { count: successCount }));
       } else {
+        const firstReason = res?.failed_items?.[0]?.reason;
         messageApi.warning(
-          t('app.kuaizhizao.salesOrder.deletePartial', { success: res.success_count, failed: res.failed_count }),
+          firstReason
+            ? t('app.kuaizhizao.salesOrder.deletePartialWithReason', {
+                success: successCount,
+                failed: failedCount,
+                reason: firstReason,
+              })
+            : t('app.kuaizhizao.salesOrder.deletePartial', {
+                success: successCount,
+                failed: failedCount,
+              }),
         );
       }
       invalidateMenuBadge();
@@ -1548,6 +1562,14 @@ const SalesOrdersPage: React.FC = () => {
       values.order_date = toApiDateString(values.order_date);
       values.delivery_date = toApiDateString(values.delivery_date);
       values.currency_code = values.currency_code ?? defaultSalesOrderCurrency;
+      if (
+        values.order_date &&
+        values.delivery_date &&
+        String(values.delivery_date) < String(values.order_date)
+      ) {
+        messageApi.warning(t('app.kuaizhizao.salesOrder.deliveryDateBeforeOrderDate'));
+        return;
+      }
 
       const mainDeliveryStr = toApiDateString(values.delivery_date);
       values.items = validItems.map((it: SalesOrderItem) => {
@@ -1557,6 +1579,13 @@ const SalesOrdersPage: React.FC = () => {
         const material = materials.find((m) => m.id === Number((it as any).material_id));
         const conversionFactor = resolveSaleUnitConversionFactor(material, (it as any).material_unit);
         const deliveryDateStr = toApiDateString((it as any).delivery_date) ?? mainDeliveryStr;
+        if (
+          values.order_date &&
+          deliveryDateStr &&
+          String(deliveryDateStr) < String(values.order_date)
+        ) {
+          throw new Error(t('app.kuaizhizao.salesOrder.deliveryDateBeforeOrderDate'));
+        }
         const giftFields = mapGiftFieldsForSubmit(it as any);
         return {
           material_id: (it as any).material_id,
@@ -3236,6 +3265,11 @@ const SalesOrdersPage: React.FC = () => {
     setTableOrders(data);
   }, []);
 
+  /** 明细视图扁平行不含完整 capabilities；列表请求时始终缓存订单级数据供批量操作 */
+  const cacheListOrdersForBatch = useCallback((orders: SalesOrder[]) => {
+    setTableOrders(orders);
+  }, []);
+
   const selectedOrdersForBatch = useMemo(
     () => resolveSelectedOrders(selectedRowKeys),
     [resolveSelectedOrders, selectedRowKeys],
@@ -3250,21 +3284,47 @@ const SalesOrdersPage: React.FC = () => {
         disabled: !salesOrderBatchCloseAllowed(selectedOrdersForBatch, salesOrderPerms.canUpdate),
         requireConfirm: true,
         confirmTitle: t('app.kuaizhizao.salesOrder.batchCloseConfirmTitle'),
-        confirmDescription: (c) =>
-          t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', { count: c }),
-        onClick: async (keys) => {
-          await runCapabilityBatchBulk({
-            keys,
-            records: selectedOrdersForBatch,
-            capabilityKey: 'close',
-            permAllowed: salesOrderPerms.canUpdate,
-            resolveId: (key) => resolveSalesOrderBatchId(key),
-            notAllowedMessage: t('app.kuaizhizao.salesOrder.batchCloseNotAllowed'),
-            onRunBulk: bulkCloseSalesOrders,
-            onSuccess: handleBulkCapabilityBatchSuccess,
-            message: messageApi,
-            t,
-          });
+        confirmDescription: () =>
+          t('app.kuaizhizao.salesOrder.batchCloseConfirmDescription', {
+            count: selectedOrdersForBatch.filter((o) => o.capabilities?.close?.allowed === true)
+              .length,
+          }),
+        onClick: async (_keys) => {
+          const eligible = selectedOrdersForBatch.filter(
+            (o) =>
+              o.id != null &&
+              Number(o.id) > 0 &&
+              salesOrderPerms.canUpdate &&
+              o.capabilities?.close?.allowed === true,
+          );
+          const orderIds = [...new Set(eligible.map((o) => Number(o.id)))];
+          if (orderIds.length === 0) {
+            messageApi.warning(t('app.kuaizhizao.salesOrder.batchCloseNotAllowed'));
+            return;
+          }
+          try {
+            const res = await bulkCloseSalesOrders(orderIds);
+            const success = res.success_count ?? 0;
+            const failed = res.failed_count ?? 0;
+            if (failed === 0 && success > 0) {
+              messageApi.success(t('components.uniBatch.capability.success', { count: success }));
+            } else if (success > 0 || failed > 0) {
+              const reason = res.failed_items?.[0]?.reason;
+              messageApi.warning(
+                reason
+                  ? t('components.uniBatch.capability.partialWithReason', {
+                      success,
+                      failed,
+                      reason,
+                    })
+                  : t('components.uniBatch.capability.partial', { success, failed }),
+              );
+            }
+            handleBulkCapabilityBatchSuccess();
+          } catch (e: unknown) {
+            const err = e as { message?: string };
+            messageApi.error(err?.message || t('components.uniBatch.capability.failed'));
+          }
         },
       },
       {
@@ -3274,28 +3334,53 @@ const SalesOrdersPage: React.FC = () => {
         disabled: !salesOrderBatchReopenAllowed(selectedOrdersForBatch, salesOrderPerms.canUpdate),
         requireConfirm: true,
         confirmTitle: t('app.kuaizhizao.salesOrder.batchReopenConfirmTitle'),
-        confirmDescription: (c) =>
-          t('app.kuaizhizao.salesOrder.batchReopenConfirmDescription', { count: c }),
-        onClick: async (keys) => {
-          await runCapabilityBatchBulk({
-            keys,
-            records: selectedOrdersForBatch,
-            capabilityKey: 'reopen',
-            permAllowed: salesOrderPerms.canUpdate,
-            resolveId: (key) => resolveSalesOrderBatchId(key),
-            notAllowedMessage: t('app.kuaizhizao.salesOrder.batchReopenNotAllowed'),
-            onRunBulk: bulkReopenSalesOrders,
-            onSuccess: handleBulkCapabilityBatchSuccess,
-            message: messageApi,
-            t,
-          });
+        confirmDescription: () =>
+          t('app.kuaizhizao.salesOrder.batchReopenConfirmDescription', {
+            count: selectedOrdersForBatch.filter((o) => o.capabilities?.reopen?.allowed === true)
+              .length,
+          }),
+        onClick: async (_keys) => {
+          const eligible = selectedOrdersForBatch.filter(
+            (o) =>
+              o.id != null &&
+              Number(o.id) > 0 &&
+              salesOrderPerms.canUpdate &&
+              o.capabilities?.reopen?.allowed === true,
+          );
+          const orderIds = [...new Set(eligible.map((o) => Number(o.id)))];
+          if (orderIds.length === 0) {
+            messageApi.warning(t('app.kuaizhizao.salesOrder.batchReopenNotAllowed'));
+            return;
+          }
+          try {
+            const res = await bulkReopenSalesOrders(orderIds);
+            const success = res.success_count ?? 0;
+            const failed = res.failed_count ?? 0;
+            if (failed === 0 && success > 0) {
+              messageApi.success(t('components.uniBatch.capability.success', { count: success }));
+            } else if (success > 0 || failed > 0) {
+              const reason = res.failed_items?.[0]?.reason;
+              messageApi.warning(
+                reason
+                  ? t('components.uniBatch.capability.partialWithReason', {
+                      success,
+                      failed,
+                      reason,
+                    })
+                  : t('components.uniBatch.capability.partial', { success, failed }),
+              );
+            }
+            handleBulkCapabilityBatchSuccess();
+          } catch (e: unknown) {
+            const err = e as { message?: string };
+            messageApi.error(err?.message || t('components.uniBatch.capability.failed'));
+          }
         },
       },
     ],
     [
       handleBulkCapabilityBatchSuccess,
       messageApi,
-      resolveSalesOrderBatchId,
       salesOrderPerms.canUpdate,
       selectedOrdersForBatch,
       t,
@@ -4295,7 +4380,18 @@ const SalesOrdersPage: React.FC = () => {
             name="order_date"
             label={t('app.kuaizhizao.salesOrder.orderDate')}
             rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.orderDateRequired') }]}
-            fieldProps={{ style: { width: '100%' } }}
+            fieldProps={{
+              style: { width: '100%' },
+              onChange: (value: unknown) => {
+                const orderDay = coerceFormDate(value);
+                const deliveryDay = coerceFormDate(formRef.current?.getFieldValue('delivery_date'));
+                if (orderDay && deliveryDay && deliveryDay.isBefore(orderDay, 'day')) {
+                  formRef.current?.setFieldValue?.('delivery_date', orderDay);
+                  applyHeaderDeliveryToItemLines(orderDay);
+                }
+                formRef.current?.validateFields?.(['delivery_date']).catch(() => undefined);
+              },
+            }}
           />
         </Col>
       </Row>
@@ -4306,7 +4402,18 @@ const SalesOrdersPage: React.FC = () => {
           <ProFormDatePicker
             name="delivery_date"
             label={t('app.kuaizhizao.salesOrder.deliveryDate')}
-            rules={[{ required: true, message: t('app.kuaizhizao.salesOrder.deliveryDateRequired') }]}
+            rules={[
+              { required: true, message: t('app.kuaizhizao.salesOrder.deliveryDateRequired') },
+              {
+                validator: async (_, value) => {
+                  const deliveryDay = coerceFormDate(value);
+                  const orderDay = coerceFormDate(formRef.current?.getFieldValue('order_date'));
+                  if (deliveryDay && orderDay && deliveryDay.isBefore(orderDay, 'day')) {
+                    throw new Error(t('app.kuaizhizao.salesOrder.deliveryDateBeforeOrderDate'));
+                  }
+                },
+              },
+            ]}
             fieldProps={buildFutureDateShortcutFieldProps({
               getForm: () => formRef.current,
               fieldName: 'delivery_date',
@@ -4542,8 +4649,23 @@ const SalesOrdersPage: React.FC = () => {
                       width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
-                        <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') }]} style={{ margin: 0 }}>
-                          <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                        <AntForm.Item
+                          name={[index, 'required_quantity']}
+                          rules={buildNumericFormRules('quantity', t, {
+                            required: true,
+                            min: 0.01,
+                            minMessage: t('app.kuaizhizao.salesOrder.quantityMinHint'),
+                          })}
+                          style={{ margin: 0 }}
+                        >
+                          <InputNumber
+                            placeholder={t('common.quantity')}
+                            min={0}
+                            max={salesOrderQtyMax}
+                            precision={quantityDecimals}
+                            style={{ width: '100%' }}
+                            size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                          />
                         </AntForm.Item>
                       ),
                     },
@@ -4615,7 +4737,11 @@ const SalesOrdersPage: React.FC = () => {
                                 <AntForm.Item name={[index, 'item_amount']} hidden>
                                   <InputNumber />
                                 </AntForm.Item>
-                                <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                                <AntForm.Item
+                                  name={[index, 'unit_price']}
+                                  style={{ margin: 0 }}
+                                  rules={buildNumericFormRules('price', t)}
+                                >
                                   <LineUnitPriceWithTrendTrigger
                                     side="sales"
                                     materialId={row.material_id}
@@ -4626,6 +4752,7 @@ const SalesOrdersPage: React.FC = () => {
                                         : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
                                     }
                                     min={0}
+                                    max={salesOrderPriceMax}
                                     precision={priceDecimals}
                                     prefix="¥"
                                     size={DOCUMENT_DETAIL_CONTROL_SIZE}
@@ -4835,6 +4962,16 @@ const SalesOrdersPage: React.FC = () => {
                                 const headerDelivery = coerceFormDate(formRef.current?.getFieldValue('delivery_date'));
                                 if (coerceFormDate(value) != null || headerDelivery != null) return;
                                 throw new Error(t('common.required'));
+                              },
+                            },
+                            {
+                              validator: async (_, value) => {
+                                const deliveryDay = coerceFormDate(value);
+                                if (!deliveryDay) return;
+                                const orderDay = coerceFormDate(formRef.current?.getFieldValue('order_date'));
+                                if (orderDay && deliveryDay.isBefore(orderDay, 'day')) {
+                                  throw new Error(t('app.kuaizhizao.salesOrder.deliveryDateBeforeOrderDate'));
+                                }
                               },
                             },
                           ]}
@@ -5310,6 +5447,9 @@ const SalesOrdersPage: React.FC = () => {
                 ? response
                 : (response as any).data || [];
               const total: number = (response as any).total ?? orders.length;
+              if (!isPrefetch) {
+                cacheListOrdersForBatch(orders);
+              }
               return formatOrdersListResponse(orders, total);
             } catch (error: any) {
               messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.getListFailed'));

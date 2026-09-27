@@ -12,12 +12,12 @@ import { useTranslation } from 'react-i18next';
 import {
   useWarehouseTrackingFlags,
 } from '../shared/warehouseTrackingFlags';
-import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
+import { useNumericPrecisionPlaces, buildNumericInputNumberProps } from '../../../../../hooks/useNumericPrecision';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Row, Col, InputNumber, Descriptions, Typography } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Row, Col, InputNumber, Descriptions, Typography, Form } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, DatabaseOutlined, RollbackOutlined, SaveOutlined } from '@ant-design/icons';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
@@ -854,9 +854,7 @@ const StocktakingPage: React.FC = () => {
         return (
           <InputNumber
             size="small"
-            min={0}
-            precision={quantityDecimals}
-            style={{ width: '100%' }}
+            {...buildNumericInputNumberProps('quantity', quantityDecimals, { size: 'small' })}
             value={editingActualQty[itemId] ?? item.actual_quantity ?? item.book_quantity ?? 0}
             onChange={(val) => {
               setEditingActualQty((prev) => ({ ...prev, [itemId]: Number(val ?? 0) }));
@@ -1111,6 +1109,10 @@ const StocktakingPage: React.FC = () => {
           showQuickCreate
           showAdvancedSearch
         />
+        {/* validateFields 需已注册字段，才能带回 fillMapping 的物料编码/名称/单位 */}
+        <Form.Item name="material_code" hidden />
+        <Form.Item name="material_name" hidden />
+        <Form.Item name="material_unit" hidden />
         <ProFormDigit
           name="unit_price"
           label={t('app.kuaizhizao.warehouseCommon.colUnitPrice')}

@@ -7,6 +7,10 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, status
 
+from apps.master_data.schemas.drawing_watermark_schemas import (
+    DrawingWatermarkPolicyResponse,
+    DrawingWatermarkPolicyUpdate,
+)
 from apps.master_data.schemas.drawing_schemas import (
     DrawingStepBomImportRequest,
     DrawingStepBomImportResponse,
@@ -23,8 +27,10 @@ from apps.master_data.schemas.drawing_schemas import (
 )
 from apps.master_data.schemas.drawing_folder_schemas import DrawingMoveFolderRequest
 from apps.master_data.services.drawing_service import DrawingService
+from apps.master_data.services.drawing_watermark_service import DrawingWatermarkService
 from apps.master_data.services.drawing_step_bom_service import DrawingStepBomService
 from apps.master_data.api._master_data_route_access import require_master_data_module_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.services.authorization.user_permission_service import UserPermissionService
 from core.services.business.code_generation_service import CodeGenerationService
@@ -72,6 +78,35 @@ async def list_drawings_by_context(
     )
 
 
+@router.get(
+    "/watermark-policy",
+    response_model=DrawingWatermarkPolicyResponse,
+    response_model_by_alias=True,
+    summary="Get drawing print watermark policy",
+    dependencies=[Depends(require_permission_codes("master-data:process:drawing:read"))],
+)
+async def get_drawing_watermark_policy(tenant_id: Annotated[int, Depends(get_current_tenant)]):
+    return await DrawingWatermarkService.get_policy(tenant_id)
+
+
+@router.put(
+    "/watermark-policy",
+    response_model=DrawingWatermarkPolicyResponse,
+    response_model_by_alias=True,
+    summary="Update drawing print watermark policy",
+    dependencies=[Depends(require_permission_codes("master-data:process:drawing:update"))],
+)
+async def update_drawing_watermark_policy(
+    body: DrawingWatermarkPolicyUpdate,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return await DrawingWatermarkService.update_policy(tenant_id, body, current_user)
+    except ValidationError as e:
+        raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e), route="/process/drawings/watermark-policy")
+
+
 @router.get("", response_model=EngineeringDrawingListResponse, response_model_by_alias=True, summary="List engineering drawings")
 async def list_drawings(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -90,13 +125,23 @@ async def list_drawings(
     sort_by: Optional[str] = Query(None, alias="sortBy"),
     sort_order: Optional[str] = Query(None, alias="sortOrder"),
     view: str = Query("current", description="current=现行有效版, all=全部修订版"),
+    production_view: bool = Query(False, alias="productionView", description="生产下载：仅已发布现行版"),
+    exclude_drawing_types: Optional[str] = Query(
+        None, alias="excludeDrawingTypes", description="排除的图纸类型，逗号分隔"
+    ),
 ):
+    excluded = (
+        [t.strip() for t in exclude_drawing_types.split(",") if t.strip()]
+        if exclude_drawing_types
+        else None
+    )
     items, total = await DrawingService.list_drawings(
         tenant_id,
         skip=skip,
         limit=limit,
         status=status,
         drawing_type=drawing_type,
+        exclude_drawing_types=excluded,
         security_level=security_level,
         keyword=keyword,
         material_uuid=material_uuid,
@@ -107,6 +152,7 @@ async def list_drawings(
         sort_by=sort_by,
         sort_order=sort_order,
         view=view,
+        production_view=production_view,
         current_user=current_user,
     )
     return EngineeringDrawingListResponse(data=items, total=total)

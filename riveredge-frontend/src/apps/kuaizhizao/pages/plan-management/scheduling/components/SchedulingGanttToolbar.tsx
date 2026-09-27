@@ -66,6 +66,8 @@ interface SchedulingGanttToolbarProps {
   onAutoReschedule?: () => void;
   autoRescheduleConfirm?: SchedulingActionConfirm;
   autoRescheduleLoading?: boolean;
+  onLocalReschedule?: () => void;
+  localRescheduleConfirm?: SchedulingActionConfirm;
   onEditOperation?: () => void;
   canEditOperation?: boolean;
 }
@@ -155,6 +157,8 @@ function buildSchedulingGanttToolbar({
   onAutoReschedule,
   autoRescheduleConfirm,
   autoRescheduleLoading = false,
+  onLocalReschedule,
+  localRescheduleConfirm,
   onEditOperation,
   canEditOperation = false,
 }: SchedulingGanttToolbarProps): SchedulingGanttToolbarNodes {
@@ -233,14 +237,37 @@ function buildSchedulingGanttToolbar({
               {t('app.kuaizhizao.scheduling.ganttToolbar.autoReschedule')}
             </Button>
           )}
+          {localRescheduleConfirm ? (
+            <ActionConfirmPopconfirm
+              title={localRescheduleConfirm.title}
+              description={localRescheduleConfirm.description}
+              okText={localRescheduleConfirm.okText}
+              onConfirm={() => void onLocalReschedule?.()}
+            >
+              <Button
+                size="small"
+                disabled={selectedWorkOrderCount === 0}
+                loading={autoRescheduleLoading}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {t('app.kuaizhizao.scheduling.ganttToolbar.localReschedule')}
+              </Button>
+            </ActionConfirmPopconfirm>
+          ) : onLocalReschedule ? (
+            <Button
+              size="small"
+              disabled={selectedWorkOrderCount === 0}
+              loading={autoRescheduleLoading}
+              onClick={onLocalReschedule}
+            >
+              {t('app.kuaizhizao.scheduling.ganttToolbar.localReschedule')}
+            </Button>
+          ) : null}
           {canEditOperation ? (
             <Button size="small" onClick={onEditOperation}>
               {t('app.kuaizhizao.scheduling.ganttToolbar.editOperation')}
             </Button>
           ) : null}
-          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.settings')}>
-            <Button size="small" icon={<SettingOutlined />} aria-label={t('app.kuaizhizao.scheduling.ganttToolbar.settings')} onClick={onOpenConfig} />
-          </Tooltip>
           <Button
             size="small"
             icon={<LockOutlined />}
@@ -277,6 +304,33 @@ function buildSchedulingGanttToolbar({
               {t('app.kuaizhizao.scheduling.ganttToolbar.shiftSelected')}
             </Button>
           </Space.Compact>
+        </>
+      ) : null}
+      {ganttTaskLevel === 'station' || ganttTaskLevel === 'equipment' || ganttTaskLevel === 'worker' ? (
+        <>
+          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.pinManagerTip')}>
+            <Button
+              size="small"
+              icon={pinnedResourceCount > 0 ? <PushpinFilled /> : <PushpinOutlined />}
+              onClick={onOpenPinManager}
+            >
+              {t('app.kuaizhizao.scheduling.ganttToolbar.pinManager')}
+              {pinnedResourceCount > 0 ? ` (${pinnedResourceCount})` : ''}
+            </Button>
+          </Tooltip>
+          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.showPinnedOnlyTip')}>
+            <Space size={4} align="center">
+              <Switch
+                size="small"
+                checked={showPinnedOnly}
+                disabled={pinnedResourceCount === 0}
+                onChange={(checked) => onShowPinnedOnlyChange?.(checked)}
+              />
+              <Typography.Text type="secondary">
+                {t('app.kuaizhizao.scheduling.ganttToolbar.showPinnedOnly')}
+              </Typography.Text>
+            </Space>
+          </Tooltip>
         </>
       ) : null}
     </Space>
@@ -334,31 +388,6 @@ function buildSchedulingGanttToolbar({
           />
         </>
       ) : null}
-      {ganttTaskLevel === 'station' || ganttTaskLevel === 'equipment' || ganttTaskLevel === 'worker' ? (
-        <>
-          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.pinManagerTip')}>
-            <Button
-              size="small"
-              icon={pinnedResourceCount > 0 ? <PushpinFilled /> : <PushpinOutlined />}
-              onClick={onOpenPinManager}
-            >
-              {t('app.kuaizhizao.scheduling.ganttToolbar.pinManager')}
-              {pinnedResourceCount > 0 ? ` (${pinnedResourceCount})` : ''}
-            </Button>
-          </Tooltip>
-          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.showPinnedOnlyTip')}>
-            <Switch
-              size="small"
-              checked={showPinnedOnly}
-              disabled={pinnedResourceCount === 0}
-              onChange={(checked) => onShowPinnedOnlyChange?.(checked)}
-            />
-          </Tooltip>
-          <Typography.Text type="secondary">
-            {t('app.kuaizhizao.scheduling.ganttToolbar.showPinnedOnly')}
-          </Typography.Text>
-        </>
-      ) : null}
       {boardMainView === 'gantt' ? (
         <>
           <span className="scheduling-gantt-toolbar__label">{t('app.kuaizhizao.scheduling.ganttToolbar.viewLabel')}</span>
@@ -380,6 +409,16 @@ function buildSchedulingGanttToolbar({
       ) : boardMainView === 'loadTable' ? (
         <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.loadTableHint')}>
           <QuestionCircleOutlined className="scheduling-gantt-toolbar__help-icon" aria-label={t('app.kuaizhizao.scheduling.ganttToolbar.loadTableHint')} />
+        </Tooltip>
+      ) : null}
+      {canUpdate ? (
+        <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.settings')}>
+          <Button
+            size="small"
+            icon={<SettingOutlined />}
+            aria-label={t('app.kuaizhizao.scheduling.ganttToolbar.settings')}
+            onClick={onOpenConfig}
+          />
         </Tooltip>
       ) : null}
     </Space>

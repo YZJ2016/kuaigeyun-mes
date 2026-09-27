@@ -1123,7 +1123,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             setup_time = extra_data.get("setup_time")
 
             reporting_type = extra_data.get("reporting_type") or extra_data.get("reportingType") or "quantity"
-            allow_jump = False
+            allow_jump_raw = extra_data.get("allow_jump")
+            if allow_jump_raw is None:
+                allow_jump_raw = extra_data.get("allowJump")
+            if allow_jump_raw is None:
+                allow_jump = bool(getattr(operation, "allow_jump", False))
+            else:
+                allow_jump = bool(allow_jump_raw)
             is_node = extra_data.get("is_node_operation")
             if is_node is None:
                 is_node = extra_data.get("isNodeOperation")
@@ -1652,24 +1658,22 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 )
 
             resolved_operation_sequence: Optional[Any] = None
+            # 产品工艺优先：无论是否手工带工序，都解析产品工艺的「允许工序跳转」
             resolved_allow_jump = False
-            if process_route_resolved and not has_manual_ops:
-                resolved_operation_sequence, resolved_allow_jump = (
-                    await MaterialProductProcessService.resolve_sequence_for_material(
-                        tenant_id,
-                        product_id,
-                        process_route_resolved,
-                    )
+            pp_sequence, pp_allow_jump = (
+                await MaterialProductProcessService.resolve_sequence_for_material(
+                    tenant_id,
+                    product_id,
+                    process_route_resolved,
                 )
+            )
+            resolved_allow_jump = bool(pp_allow_jump)
+            if process_route_resolved and not has_manual_ops:
+                resolved_operation_sequence = pp_sequence
 
             wo_jump_req = getattr(work_order_data, "allow_operation_jump", None)
             if wo_jump_req is None:
-                if process_route_resolved and not has_manual_ops:
-                    wo_allow_jump = resolved_allow_jump
-                else:
-                    wo_allow_jump = bool(
-                        getattr(process_route_resolved, "allow_operation_jump", False)
-                    ) if process_route_resolved else False
+                wo_allow_jump = resolved_allow_jump
             else:
                 wo_allow_jump = bool(wo_jump_req)
 
@@ -1855,16 +1859,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             # 未维护工时：与开始同一时刻，不默认 +1 小时
                             planned_end_date = planned_start_date
                         
-                        # 创建工序单：报工类型可覆盖；跳转由工单级控制；节点仅来自开单传入
+                        # 创建工序单：报工类型可覆盖；跳转=工单级或工序行；开单未传则按「工单允许跳转且非节点」
                         rt = getattr(op_data, "reporting_type", None)
                         if rt is None:
                             rt = operation.reporting_type or "quantity"
-                        aj = False
                         ino = getattr(op_data, "is_node_operation", None)
                         if ino is not None:
                             ino = bool(ino)
                         else:
                             ino = False
+                        aj = getattr(op_data, "allow_jump", None)
+                        if aj is None:
+                            # 前端常显式传 false；以 model_fields_set 区分「未传」与「传 false」
+                            fs_aj = getattr(op_data, "model_fields_set", set()) or set()
+                            if "allow_jump" not in fs_aj:
+                                aj = bool(wo_allow_jump) and not ino
+                            else:
+                                aj = False
+                        else:
+                            aj = bool(aj)
 
                         fs = getattr(op_data, "model_fields_set", set()) or set()
                         line_explicit = bool(fs & {"over_report_mode", "over_report_value"})
@@ -1996,8 +2009,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     else:
                         logger.warning(f"工单 {work_order.code} 未找到匹配的工艺路线，未自动生成工序单")
                 except Exception as e:
-                    # 自动生成工序单失败不影响工单创建，记录日志
                     logger.error(f"为工单 {work_order.code} 自动生成工序单失败: {e}", exc_info=True)
+                    raise ValidationError(f"自动生成工序单失败: {str(e)}")
 
             serial_split_children: List[WorkOrder] = []
             if tracking_mode in (TRACKING_SERIAL, TRACKING_BOTH):
@@ -2528,6 +2541,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         include_readiness: bool = False,
         include_scores: bool = False,
         include_downstream_push_progress: bool = True,
+        column_filters: Optional[str] = None,
     ) -> Tuple[List[WorkOrderListResponse], int]:
         """
         获取工单列表
@@ -2550,6 +2564,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             planned_end_from/to: 计划结束日期范围
             order_by: 排序，如 code、-created_at
             include_readiness: 为 True 时强制重算当前页并写库；默认 False 时列表读 work_orders.readiness_rate 持久化字段
+            column_filters: 高级搜索列筛选 JSON
 
         Returns:
             Tuple[List[WorkOrderListResponse], int]: (工单列表, 总数)
@@ -2573,6 +2588,44 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             current_user=current_user,
             resource="kuaizhizao:work-order",
         )
+
+        # 高级搜索：先解析，关联字段（客户/组编码）抽出后与扁平参数合并
+        column_filter_rows: List[Dict[str, Any]] = []
+        if column_filters:
+            from apps.kuaizhizao.utils.column_filters import parse_column_filters_param
+
+            column_filter_rows = parse_column_filters_param(column_filters)
+            model_filters: List[Dict[str, Any]] = []
+            for flt in column_filter_rows:
+                field = str(flt.get("field") or "").strip()
+                if field == "customer_name" and not (customer_name and str(customer_name).strip()):
+                    val = flt.get("value")
+                    if val is not None and str(val).strip():
+                        customer_name = str(val).strip()
+                    continue
+                if field == "group_code":
+                    val = flt.get("value")
+                    op = str(flt.get("op") or "contains").strip()
+                    if val is not None and str(val).strip():
+                        from apps.kuaizhizao.models.work_order_group import WorkOrderGroup
+
+                        gq = WorkOrderGroup.filter(
+                            tenant_id=tenant_id,
+                            deleted_at__isnull=True,
+                        )
+                        text = str(val).strip()
+                        if op in ("eq", "equals", "exact"):
+                            gq = gq.filter(group_code=text)
+                        else:
+                            gq = gq.filter(group_code__icontains=text)
+                        group_ids = list(await gq.values_list("id", flat=True))
+                        if group_ids:
+                            query = query.filter(work_order_group_id__in=group_ids)
+                        else:
+                            query = query.filter(id__in=[])
+                    continue
+                model_filters.append(flt)
+            column_filter_rows = model_filters
 
         # 添加筛选条件
         if code:
@@ -2662,6 +2715,30 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 query = query.filter(planned_end_date__lte=dt)
             except (ValueError, TypeError):
                 pass
+
+        if column_filter_rows:
+            from apps.kuaizhizao.utils.column_filters import apply_column_filters_to_queryset
+
+            query = apply_column_filters_to_queryset(
+                query,
+                column_filter_rows,
+                allowed_fields={
+                    "code",
+                    "name",
+                    "product_name",
+                    "product_code",
+                    "status",
+                    "priority",
+                    "production_mode",
+                    "sales_order_code",
+                    "sales_order_name",
+                    "planned_start_date",
+                    "planned_end_date",
+                    "workshop_id",
+                    "work_center_id",
+                    "quantity",
+                },
+            )
 
         # 获取总数（用于分页）
         total = await query.count()
@@ -3143,16 +3220,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             await op.save(
                                 update_fields=["deleted_at", "sequence", "updated_at"]
                             )
+                        # 更换路线时优先产品工艺序列与允许跳转
+                        pp_seq, pp_jump = await MaterialProductProcessService.resolve_sequence_for_material(
+                            tenant_id,
+                            int(work_order.product_id),
+                            pr,
+                        )
                         await self._generate_work_order_operations_from_route(
                             tenant_id=tenant_id,
                             work_order=work_order,
                             process_route=pr,
                             created_by=updated_by,
-                            operation_sequence=pr.operation_sequence,
+                            operation_sequence=pp_seq if pp_seq is not None else pr.operation_sequence,
                         )
-                        update_data["allow_operation_jump"] = bool(
-                            getattr(pr, "allow_operation_jump", False)
-                        )
+                        update_data["allow_operation_jump"] = bool(pp_jump)
                     update_data["process_route_id"] = new_pr_id
                 else:
                     update_data["process_route_id"] = new_pr_id
@@ -4009,12 +4090,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             elif work_order.status not in ["draft", "cancelled"]:
                 raise ValidationError("只能删除草稿、已取消或未执行的工单")
 
-            # 检查是否有报工记录（包括待审核的）
+            # 检查是否有有效报工（已软删的不算；取消工单时常会级联软删草稿报工）
             reporting_count = await ReportingRecord.filter(
                 tenant_id=tenant_id,
-                work_order_id=work_order_id
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
             ).count()
-            
+
             if reporting_count > 0:
                 raise ValidationError("工单存在相关的报工记录，不允许删除")
 
@@ -4195,6 +4277,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             submitter_name = await self.get_user_name(submitted_by)
             await WorkOrder.filter(tenant_id=tenant_id, id=work_order_id).update(
                 review_status="已通过",
+                review_remarks=None,
                 reviewer_id=submitted_by,
                 reviewer_name=submitter_name,
                 review_time=resolve_business_datetime(),
@@ -4220,6 +4303,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
         await WorkOrder.filter(tenant_id=tenant_id, id=work_order_id).update(
             review_status="待审核",
+            review_remarks=None,
             updated_by=submitted_by,
         )
         from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
@@ -4708,6 +4792,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             - actual_end_date: 实际结束日期
             - delay_days: 延期天数
             - status: 工单状态
+            - planned_quantity: 计划数量（C-01）
+            - completed_quantity: 完成数量（C-01）
         """
         # 两侧必须同为站点墙钟 naive；不可把 UTC aware 的 resolve_business_datetime()
         # 直接与剥掉 tz 后的 planned_end 比较（会 TypeError → 500）。
@@ -4758,6 +4844,9 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 "delay_days": delay_days,
                 "status": wo.status,
                 "priority": wo.priority,
+                # C-01：补计划/完成数量，供移动端逾期卡展示（字段名与工单列表对齐）
+                "planned_quantity": float(wo.quantity or 0),
+                "completed_quantity": float(wo.completed_quantity or 0),
             })
 
         # 按延期天数降序排序
@@ -5534,6 +5623,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             resolve_process_inspection_link_id,
             sum_process_inspection_quality_quantities,
         )
+        from apps.kuaizhizao.services.operation_jump_rules import resolve_material_incoming_qty
         from apps.kuaizhizao.services.inspection_policy_service import get_quality_effective_config
 
         # 展开前并行拉辅助数据；完成态 sync / IPQC 补建仍串行（有写依赖）
@@ -5825,6 +5915,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 op_data["inspection_unqualified_quantity"] = None
 
             # 物料剩余：上道可转下道（首道为计划数）- 本道已消耗。
+            # 允许跳转时不卡紧邻上道转入，仅受计划/节点工序约束。
             completed = op.completed_quantity or Decimal("0")
             insp_q = Decimal(str(op_data.get("inspection_qualified_quantity") or 0))
             insp_u = Decimal(str(op_data.get("inspection_unqualified_quantity") or 0))
@@ -5835,8 +5926,19 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 qualified=qualified,
                 inspection_qualified=insp_q,
                 inspection_unqualified=insp_u,
+                scrap_qty=Decimal(str(scrap_by_op.get(op.operation_id) or 0)),
             )
-            material_remaining = prev_transfer - material_consumed
+            incoming = await resolve_material_incoming_qty(
+                tenant_id,
+                work_order,
+                op,
+                plan_qty=Decimal(str(plan_qty)),
+                adjacent_prev_transfer=prev_transfer,
+                ordered_operations=operations,
+                policy_cache=policy_cache,
+                inspections_by_op=inspections_by_op,
+            )
+            material_remaining = incoming - material_consumed
             if material_remaining < 0:
                 material_remaining = Decimal("0")
             op_data["material_remaining"] = material_remaining
@@ -6127,7 +6229,12 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         existing_op.reporting_type = op_data.reporting_type or "quantity"
                     elif op_id_changed and master_op:
                         existing_op.reporting_type = master_op.reporting_type or "quantity"
-                    existing_op.allow_jump = False
+                    if getattr(op_data, "allow_jump", None) is not None:
+                        existing_op.allow_jump = bool(op_data.allow_jump)
+                    elif op_id_changed and master_op:
+                        existing_op.allow_jump = bool(getattr(master_op, "allow_jump", False))
+                    elif op_id_changed:
+                        existing_op.allow_jump = False
                     if getattr(op_data, "is_node_operation", None) is not None:
                         existing_op.is_node_operation = bool(op_data.is_node_operation)
                     elif op_id_changed:
@@ -6165,7 +6272,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     reporting_type = op_data.reporting_type if getattr(op_data, "reporting_type", None) is not None else None
                     if reporting_type is None:
                         reporting_type = (master_op.reporting_type or "quantity") if master_op else "quantity"
-                    allow_jump_new = False
+                    if getattr(op_data, "allow_jump", None) is not None:
+                        allow_jump_new = bool(op_data.allow_jump)
+                    else:
+                        allow_jump_new = bool(getattr(master_op, "allow_jump", False)) if master_op else False
                     is_node_new = (
                         bool(op_data.is_node_operation)
                         if getattr(op_data, "is_node_operation", None) is not None
@@ -8061,34 +8171,28 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 await work_order.save()
 
             # 建立原工单→合并工单 的 DocumentRelation（支持单据追溯）
-            try:
-                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
 
-                rel_svc = DocumentRelationNewService()
-                for work_order in work_orders:
-                    try:
-                        await rel_svc.create_relation(
-                            tenant_id=tenant_id,
-                            relation_data=DocumentRelationCreate(
-                                source_type="work_order",
-                                source_id=work_order.id,
-                                source_code=work_order.code,
-                                source_name=work_order.name,
-                                target_type="work_order",
-                                target_id=merged_work_order.id,
-                                target_code=merged_work_order.code,
-                                target_name=merged_work_order.name,
-                                relation_type="source",
-                                relation_mode="push",
-                                relation_desc="工单合并",
-                            ),
-                            created_by=created_by,
-                        )
-                    except Exception as wo_rel_e:
-                        logger.warning("创建工单合并单据关联失败(工单%s): %s", work_order.code, wo_rel_e)
-            except Exception as e:
-                logger.warning("创建工单合并单据关联失败: %s", e)
+            rel_svc = DocumentRelationNewService()
+            for work_order in work_orders:
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="work_order",
+                        source_id=work_order.id,
+                        source_code=work_order.code,
+                        source_name=work_order.name,
+                        target_type="work_order",
+                        target_id=merged_work_order.id,
+                        target_code=merged_work_order.code,
+                        target_name=merged_work_order.name,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="工单合并",
+                    ),
+                    created_by=created_by,
+                )
 
             logger.info(f"成功合并 {len(work_orders)} 个工单（{', '.join(original_codes)}）为新工单 {merged_code}")
 
