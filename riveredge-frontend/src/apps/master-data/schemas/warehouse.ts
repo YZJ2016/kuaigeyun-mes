@@ -14,6 +14,7 @@ export const WAREHOUSE_TYPE_OPTIONS = [
   { labelKey: 'warehouse.type.consignment', value: 'consignment' },
   { labelKey: 'warehouse.type.vmi', value: 'vmi' },
   { labelKey: 'warehouse.type.defect', value: 'defect' },
+  { labelKey: 'warehouse.type.scrap', value: 'scrap' },
   { labelKey: 'warehouse.type.quarantine', value: 'quarantine' },
 ];
 

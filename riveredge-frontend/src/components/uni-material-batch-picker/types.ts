@@ -11,4 +11,6 @@ export interface UniMaterialBatchPickerProps {
   width?: number;
   /** 宿主 {app}:{module}，供隐式 display 鉴权 */
   hostResource?: string;
+  /** 限定为指定仓库内有库存的物料（即时库存汇总口径，与 UniMaterialSelect.warehouseId 一致） */
+  warehouseId?: number;
 }

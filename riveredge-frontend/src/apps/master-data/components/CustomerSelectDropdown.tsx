@@ -102,7 +102,8 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
       const res = await searchReferenceDisplay({
         resource: 'master-data:supply-chain:customer',
         hostResource,
-        pageSize: 200,
+        // 与 searchReferenceDisplay 默认一致；过大首屏会拖慢新建单据下拉
+        pageSize: 50,
       });
       const list = res.items.map(
         (item) => mapPartnerReferenceDisplayItem(item) as Customer,
@@ -335,7 +336,7 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
                 resource: 'master-data:supply-chain:customer',
                 hostResource,
                 keyword: values.keyword,
-                pageSize: 200,
+                pageSize: 50,
               });
               const mapped = res.items.map(
                 (item) => mapPartnerReferenceDisplayItem(item) as Customer,

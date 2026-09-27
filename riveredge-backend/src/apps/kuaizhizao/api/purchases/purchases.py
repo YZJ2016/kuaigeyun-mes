@@ -979,22 +979,38 @@ async def push_purchase_order_to_receipt_notice(
 @router.post("/purchase-orders/{order_id}/push-to-invoice", summary="Push to purchase invoice")
 async def push_purchase_order_to_invoice(
     order_id: int = Path(..., description="采购订单ID"),
+    body: Optional[Dict[str, Any]] = Body(None),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
     从采购单下推到采购发票
-    
-    自动生成采购发票（草稿，发票号码等待补全）
+
+    body.invoice_mode: remaining（可开票余额）| prepayment（按预付款）
+    body.total_amount: 可选，显式价税合计（不超过所选模式上限）
     """
+    from decimal import Decimal
+
     from fastapi import status
     from fastapi.responses import JSONResponse
+
+    invoice_mode = "remaining"
+    total_amount = None
+    if isinstance(body, dict):
+        raw_mode = body.get("invoice_mode")
+        if isinstance(raw_mode, str) and raw_mode.strip():
+            invoice_mode = raw_mode.strip()
+        raw_total = body.get("total_amount")
+        if raw_total is not None and raw_total != "":
+            total_amount = Decimal(str(raw_total))
 
     service = PurchaseService()
     result = await service.push_to_invoice(
         tenant_id=tenant_id,
         order_id=order_id,
         created_by=current_user.id,
+        invoice_mode=invoice_mode,
+        total_amount=total_amount,
     )
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 

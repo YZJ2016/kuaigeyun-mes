@@ -80,6 +80,8 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
             {"label": "欧元 (EUR)", "value": "EUR", "description": "欧盟欧元", "sort_order": 3},
             {"label": "日元 (JPY)", "value": "JPY", "description": "日本日元", "sort_order": 4},
             {"label": "英镑 (GBP)", "value": "GBP", "description": "英国英镑", "sort_order": 5},
+            {"label": "港币 (HKD)", "value": "HKD", "description": "香港港币", "sort_order": 6},
+            {"label": "新加坡元 (SGD)", "value": "SGD", "description": "新加坡元", "sort_order": 7},
         ],
     },
     {

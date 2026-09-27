@@ -37,9 +37,17 @@ export interface SalesReviewDeptOpinion {
   dept_code: string;
   result: string;
   opinion?: string | null;
+  assigned_reviewer_id?: number | null;
+  assigned_reviewer_name?: string | null;
   reviewed_by?: number | null;
   reviewed_by_name?: string | null;
   reviewed_at?: string | null;
+}
+
+export interface SalesReviewDeptPlanItem {
+  dept_code: string;
+  assigned_reviewer_id: number;
+  assigned_reviewer_name?: string | null;
 }
 
 export interface SalesReview {
@@ -82,6 +90,7 @@ export interface SalesReview {
   total_quantity?: number | string;
   total_amount?: number | string;
   items?: SalesReviewItem[];
+  review_dept_plan?: SalesReviewDeptPlanItem[];
   dept_opinions?: SalesReviewDeptOpinion[];
   created_at?: string;
   updated_at?: string;
@@ -178,6 +187,7 @@ export interface SalesReviewCreatePayload {
   salesman_id?: number | null;
   salesman_name?: string | null;
   items: SalesReviewItemInput[];
+  review_dept_plan?: SalesReviewDeptPlanItem[];
 }
 
 export type SalesReviewUpdatePayload = Partial<Omit<SalesReviewCreatePayload, 'items'>> & {

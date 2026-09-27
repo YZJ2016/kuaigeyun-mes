@@ -50,6 +50,7 @@ import {
   CreateDictionaryItemData,
   UpdateDictionaryItemData,
 } from '../../../../services/dataDictionary';
+import { clearDictionaryCache } from '../../../../services/dataDictionaryCache';
 import {
   resolveSystemDictionaryDescription,
   resolveSystemDictionaryItemDescription,
@@ -274,6 +275,7 @@ const DataDictionaryListPage: React.FC = () => {
       await deleteDictionaryItem(record.uuid);
       messageApi.success(t('common.deleteSuccess'));
       if (currentDictionaryForItems) {
+        clearDictionaryCache(currentDictionaryForItems.code);
         await loadItems(currentDictionaryForItems.uuid);
       }
     } catch (error: any) {
@@ -285,6 +287,7 @@ const DataDictionaryListPage: React.FC = () => {
     try {
       setInitializing(true);
       const result = await initializeSystemDictionaries();
+      clearDictionaryCache();
       messageApi.success(
         t('field.dataDictionary.loadSystemDictionariesSuccess', {
           dictCount: result.dictionaries_count,
@@ -334,6 +337,7 @@ const DataDictionaryListPage: React.FC = () => {
         await createDictionaryItem(currentDictionaryForItems.uuid, payload);
         messageApi.success(t('common.createSuccess'));
       }
+      clearDictionaryCache(currentDictionaryForItems.code);
       setItemModalVisible(false);
       await loadItems(currentDictionaryForItems.uuid);
     } catch (error: any) {

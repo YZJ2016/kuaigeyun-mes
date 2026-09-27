@@ -69,6 +69,7 @@ import {
 } from '../components/qualityDetailColumns';
 import {
   buildIncomingCustomerMaterialPullColumns,
+  buildIncomingPurchaseOrderPullColumns,
   buildIncomingPurchaseReceiptPullColumns,
   type QualityPullCandidateBase,
 } from '../components/qualityPullQueryColumns';
@@ -211,6 +212,7 @@ const IncomingInspectionPage: React.FC = () => {
   const pushToPurchaseReturnAction = resolveKuaizhizaoDocumentAction(t, 'purchase_return.pull_from_incoming_inspection');
   const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_incoming_inspection');
   const pullFromPurchaseReceiptAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_purchase_receipt');
+  const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_purchase_order');
   const pullFromCustomerMaterialAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_customer_material_registration');
   const urlListFiltersRef = useRef<{ purchase_receipt_id?: number }>({});
   const deepLinkOpenedRef = useRef(false);
@@ -758,9 +760,10 @@ const IncomingInspectionPage: React.FC = () => {
     }
   };
 
-  // 从采购入库单 / 代工来料单加载创建来料检验单
+  // 从采购订单 / 采购入库单 / 代工来料单加载创建来料检验单
   type PullSourceCandidate = QualityPullCandidateBase & {
     receipt_code?: string;
+    order_code?: string;
     purchase_order_code?: string;
     supplier_name?: string;
     registration_code?: string;
@@ -775,6 +778,10 @@ const IncomingInspectionPage: React.FC = () => {
     };
   };
 
+  const purchaseOrderPullColumns = useMemo(
+    () => buildIncomingPurchaseOrderPullColumns(t),
+    [t],
+  );
   const purchaseReceiptPullColumns = useMemo(
     () => buildIncomingPurchaseReceiptPullColumns(t),
     [t],
@@ -796,6 +803,63 @@ const IncomingInspectionPage: React.FC = () => {
     ],
     [t],
   );
+
+  const pullFromPurchaseOrderQuery = useUniPullQuery<PullSourceCandidate>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const trimmed = keyword.trim();
+        const res = await qualityApi.incomingInspection.listPurchaseOrderPullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          order_code: trimmed || undefined,
+        });
+        const rows = (res.data || []) as PullSourceCandidate[];
+        const filtered = isPullableScope(scope)
+          ? rows.filter((row) => isPullIncomingInspectionSelectable(row))
+          : rows;
+        return { data: filtered, total: Number(res.total ?? filtered.length) };
+      } catch {
+        messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadPurchaseOrderFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (row) => !isPullIncomingInspectionSelectable(row),
+    onConfirm: async (_keys, rows) => {
+      const selectedIds = rows
+        .filter((row) => isPullIncomingInspectionSelectable(row))
+        .map((row) => Number(row.id))
+        .filter((id) => id > 0);
+      if (!selectedIds.length) {
+        messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectPurchaseOrder'));
+        return;
+      }
+      try {
+        let count = 0;
+        for (const orderId of selectedIds) {
+          const created = await qualityApi.incomingInspection.createFromPurchaseOrder(orderId);
+          count += Array.isArray(created) ? created.length : 0;
+        }
+        if (!count) {
+          messageApi.warning(t('app.kuaizhizao.quality.incoming.messages.createFailed'));
+          return;
+        }
+        messageApi.success(
+          t('app.kuaizhizao.quality.incoming.messages.createFromPurchaseOrderSuccess', {
+            count,
+          }),
+        );
+        pullFromPurchaseOrderQuery.closeModal();
+        invalidateStats();
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
+      }
+    },
+  });
 
   const pullFromPurchaseReceiptQuery = useUniPullQuery<PullSourceCandidate>({
     rowKey: 'id',
@@ -1074,12 +1138,19 @@ const IncomingInspectionPage: React.FC = () => {
         label: pullFromCustomerMaterialAction.label,
         onClick: () => pullFromCustomerMaterialQuery.openModal(),
       },
+      {
+        key: 'from-purchase-order',
+        label: pullFromPurchaseOrderAction.label,
+        onClick: () => pullFromPurchaseOrderQuery.openModal(),
+      },
     ],
     [
       pullFromPurchaseReceiptAction.label,
       pullFromCustomerMaterialAction.label,
+      pullFromPurchaseOrderAction.label,
       pullFromPurchaseReceiptQuery.openModal,
       pullFromCustomerMaterialQuery.openModal,
+      pullFromPurchaseOrderQuery.openModal,
     ],
   );
 
@@ -1779,6 +1850,38 @@ const IncomingInspectionPage: React.FC = () => {
             }}
           />
         )}
+      />
+
+      <UniPullQueryModal<PullSourceCandidate>
+        open={pullFromPurchaseOrderQuery.open}
+        title={pullFromPurchaseOrderAction.label}
+        onCancel={pullFromPurchaseOrderQuery.closeModal}
+        onOk={pullFromPurchaseOrderQuery.handleConfirm}
+        rowKey="id"
+        columns={purchaseOrderPullColumns}
+        dataSource={pullFromPurchaseOrderQuery.dataSource}
+        loading={pullFromPurchaseOrderQuery.loading}
+        confirmLoading={pullFromPurchaseOrderQuery.confirmLoading}
+        selectionType={pullFromPurchaseOrderQuery.selectionType}
+        selectedRowKeys={pullFromPurchaseOrderQuery.selectedRowKeys}
+        selectedRows={pullFromPurchaseOrderQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromPurchaseOrderQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromPurchaseOrderQuery.isRowDisabled}
+        searchDraft={pullFromPurchaseOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromPurchaseOrderQuery.setSearchDraft}
+        onSearchApply={pullFromPurchaseOrderQuery.handleSearchApply}
+        onSearchClear={pullFromPurchaseOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromPurchaseOrderQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.quality.incoming.form.purchaseOrderCode')}
+        getRowLabel={(row) => row.order_code || row.purchase_order_code || String(row.id)}
+        okText={t('app.kuaizhizao.quality.incoming.pull.ok')}
+        page={pullFromPurchaseOrderQuery.page}
+        pageSize={pullFromPurchaseOrderQuery.pageSize}
+        total={pullFromPurchaseOrderQuery.total}
+        onPageChange={pullFromPurchaseOrderQuery.handlePageChange}
+        scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
+        scope={pullFromPurchaseOrderQuery.scope}
+        onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
       />
 
       <UniPullQueryModal<PullSourceCandidate>

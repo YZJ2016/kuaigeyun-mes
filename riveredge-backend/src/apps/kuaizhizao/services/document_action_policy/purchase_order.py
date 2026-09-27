@@ -221,7 +221,7 @@ def derive_purchase_order_capabilities(
         if not has_items:
             invoice_reason = "purchase_order.push_invoice.no_items"
         elif has_invoice:
-            invoice_reason = "purchase_order.push_invoice.already_exists"
+            invoice_reason = "purchase_order.push_invoice.already_fully_invoiced"
         else:
             invoice_allowed = True
             invoice_reason = None

@@ -218,6 +218,7 @@ async def _compute_operation_reportable_remaining(
     """本次可报上限：min(计划剩余, 物料剩余)，与拉源 reportable_quantity_max 一致。"""
     from apps.kuaizhizao.models.process_inspection import ProcessInspection
     from apps.kuaizhizao.services.over_report_rules import (
+        first_operation_material_incoming,
         remaining_completed_headroom,
         tuple_from_model,
     )
@@ -248,7 +249,7 @@ async def _compute_operation_reportable_remaining(
             break
 
     if op_index == 0:
-        adjacent_prev = plan_qty
+        adjacent_prev = first_operation_material_incoming(plan_qty, work_order_operation)
     else:
         adjacent_prev = await resolve_operation_transfer_qualified(
             tenant_id, int(work_order.id), ops[op_index - 1]
@@ -2078,7 +2079,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not wo_ops:
                 continue
 
-            prev_transfer = plan_qty
+            from apps.kuaizhizao.services.over_report_rules import first_operation_material_incoming
+
+            prev_transfer = first_operation_material_incoming(plan_qty, wo_ops[0])
             for op_index, op in enumerate(wo_ops):
                 master_id = int(op.operation_id) if op.operation_id is not None else 0
                 mode = "none"

@@ -81,6 +81,11 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   finance_settlement_credit_doc: 20.2,
   /** 轻财务往来对账期间 */
   finance_statement_period: 20.25,
+  /** 汇率设置：币种代码 → 名称 → 汇率 → 生效日 */
+  gl_fx_currency_code: 10,
+  gl_fx_currency_name: 10.4,
+  gl_fx_rate: 32,
+  gl_fx_effective_date: 37,
   /** 轻财务月结定价工作台列序 */
   finance_price_order_code: 10.1,
   finance_price_material_code: 20.5,
@@ -1311,6 +1316,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   payment_method: 52.2,
   settlement_type: 52.3,
   currency_code: 53,
+  exchange_rate: 53.2,
 
   price_type: 60,
   discount_amount: 61,

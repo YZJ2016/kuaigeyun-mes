@@ -800,6 +800,13 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         return;
       }
     }
+    if (record.outbound_type === 'production_picking') {
+      const operatorPayload = buildInboundConfirmReceiverPayload(operatorHook);
+      if (!operatorPayload.receiver_id && !operatorPayload.receiver_name) {
+        messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectPickerRequired'));
+        return;
+      }
+    }
     const vals = form.getFieldsValue(true);
     const negativeStockWarnings: string[] = [];
 
@@ -909,16 +916,32 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         record.outbound_type === 'sales_delivery' || record.outbound_type === 'production_picking'
           ? buildInboundConfirmReceiverPayload(operatorHook)
           : {};
-      const header =
-        record.outbound_type === 'sales_delivery' || record.outbound_type === 'production_picking'
-          ? {
-              ...(documentDate?.isValid()
-                ? { delivery_time: toApiBusinessDocumentDateTime(documentDate) }
-                : {}),
-              deliverer_id: operatorPayload.receiver_id,
-              deliverer_name: operatorPayload.receiver_name,
-            }
-          : undefined;
+      let header:
+        | {
+            delivery_time?: string;
+            deliverer_id?: number;
+            deliverer_name?: string;
+            picker_id?: number;
+            picker_name?: string;
+          }
+        | undefined;
+      if (record.outbound_type === 'sales_delivery') {
+        header = {
+          ...(documentDate?.isValid()
+            ? { delivery_time: toApiBusinessDocumentDateTime(documentDate) }
+            : {}),
+          deliverer_id: operatorPayload.receiver_id,
+          deliverer_name: operatorPayload.receiver_name,
+        };
+      } else if (record.outbound_type === 'production_picking') {
+        header = {
+          ...(documentDate?.isValid()
+            ? { delivery_time: toApiBusinessDocumentDateTime(documentDate) }
+            : {}),
+          picker_id: operatorPayload.receiver_id,
+          picker_name: operatorPayload.receiver_name,
+        };
+      }
       const payload = buildOutboundConfirmPayloadFromForm(
         record.outbound_type,
         activeLines,
@@ -1089,7 +1112,14 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={8}>
-              <OutboundEntryOperatorField hook={operatorHook} />
+              <OutboundEntryOperatorField
+                hook={operatorHook}
+                label={
+                  outboundType === 'production_picking'
+                    ? t('app.kuaizhizao.warehouseOutbound.field.picker')
+                    : undefined
+                }
+              />
             </Col>
           </Row>
         </Form>

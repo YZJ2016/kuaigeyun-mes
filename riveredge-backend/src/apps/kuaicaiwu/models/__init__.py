@@ -20,6 +20,7 @@ from .chart_of_account import ChartOfAccount
 from .voucher import Voucher
 from .voucher_line import VoucherLine
 from .gl_book_settings import GlBookSettings
+from .gl_exchange_rate import GlExchangeRate
 from .accounting_period import AccountingPeriod
 from .account_balance import AccountBalance
 from .voucher_summary import VoucherSummaryEntry
@@ -65,6 +66,7 @@ __all__ = [
     "Voucher",
     "VoucherLine",
     "GlBookSettings",
+    "GlExchangeRate",
     "AccountingPeriod",
     "AccountBalance",
     "VoucherSummaryEntry",

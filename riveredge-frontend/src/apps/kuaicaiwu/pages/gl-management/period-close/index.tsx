@@ -42,10 +42,21 @@ type PeriodStatus = {
   periods?: PeriodRow[];
 };
 
+type TrialTotals = {
+  opening_debit?: number;
+  opening_credit?: number;
+  period_debit?: number;
+  period_credit?: number;
+  ending_debit?: number;
+  ending_credit?: number;
+  balanced?: boolean;
+};
+
 type CheckResult = {
   ok?: boolean;
   errors?: string[];
   unposted_count?: number;
+  trial?: TrialTotals;
   checks?: Array<{
     name: string;
     business_balance?: number;
@@ -55,6 +66,10 @@ type CheckResult = {
   }>;
   message?: string;
 };
+
+function trialSideDiff(debit?: number, credit?: number): number {
+  return Number(debit ?? 0) - Number(credit ?? 0);
+}
 
 type TransferTemplateLine = {
   side?: string;
@@ -454,12 +469,85 @@ const PeriodClosePage: React.FC = () => {
                     : t(`${NS}.preCheckFail`, { defaultValue: '结账前检查未通过' })
                 }
                 description={
-                  (preCheck.errors || []).length
-                    ? (preCheck.errors || []).join('；')
-                    : t(`${NS}.unpostedCount`, {
-                        defaultValue: '未记账凭证 {{count}} 张',
-                        count: preCheck.unposted_count ?? 0,
-                      })
+                  <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+                    <Typography.Text>
+                      {(preCheck.errors || []).length
+                        ? (preCheck.errors || []).join('；')
+                        : t(`${NS}.unpostedCount`, {
+                            defaultValue: '未记账凭证 {{count}} 张',
+                            count: preCheck.unposted_count ?? 0,
+                          })}
+                    </Typography.Text>
+                    {preCheck.trial && preCheck.trial.balanced === false ? (
+                      <Descriptions
+                        size="small"
+                        bordered
+                        column={{ xs: 1, sm: 2, lg: 3 }}
+                        style={{ marginTop: 4 }}
+                      >
+                        <Descriptions.Item
+                          label={t(`${NS}.trial.openingDebit`, { defaultValue: '期初借方' })}
+                        >
+                          {formatAmount(preCheck.trial.opening_debit ?? 0)}
+                        </Descriptions.Item>
+                        <Descriptions.Item
+                          label={t(`${NS}.trial.openingCredit`, { defaultValue: '期初贷方' })}
+                        >
+                          {formatAmount(preCheck.trial.opening_credit ?? 0)}
+                        </Descriptions.Item>
+                        <Descriptions.Item
+                          label={t(`${NS}.trial.openingDiff`, { defaultValue: '期初差额(借-贷)' })}
+                        >
+                          {formatAmount(
+                            trialSideDiff(
+                              preCheck.trial.opening_debit,
+                              preCheck.trial.opening_credit,
+                            ),
+                          )}
+                        </Descriptions.Item>
+                        <Descriptions.Item
+                          label={t(`${NS}.trial.periodDebit`, { defaultValue: '本期借方' })}
+                        >
+                          {formatAmount(preCheck.trial.period_debit ?? 0)}
+                        </Descriptions.Item>
+                        <Descriptions.Item
+                          label={t(`${NS}.trial.periodCredit`, { defaultValue: '本期贷方' })}
+                        >
+                          {formatAmount(preCheck.trial.period_credit ?? 0)}
+                        </Descriptions.Item>
+                        <Descriptions.Item
+                          label={t(`${NS}.trial.periodDiff`, { defaultValue: '本期差额(借-贷)' })}
+                        >
+                          {formatAmount(
+                            trialSideDiff(
+                              preCheck.trial.period_debit,
+                              preCheck.trial.period_credit,
+                            ),
+                          )}
+                        </Descriptions.Item>
+                        <Descriptions.Item
+                          label={t(`${NS}.trial.endingDebit`, { defaultValue: '期末借方' })}
+                        >
+                          {formatAmount(preCheck.trial.ending_debit ?? 0)}
+                        </Descriptions.Item>
+                        <Descriptions.Item
+                          label={t(`${NS}.trial.endingCredit`, { defaultValue: '期末贷方' })}
+                        >
+                          {formatAmount(preCheck.trial.ending_credit ?? 0)}
+                        </Descriptions.Item>
+                        <Descriptions.Item
+                          label={t(`${NS}.trial.endingDiff`, { defaultValue: '期末差额(借-贷)' })}
+                        >
+                          {formatAmount(
+                            trialSideDiff(
+                              preCheck.trial.ending_debit,
+                              preCheck.trial.ending_credit,
+                            ),
+                          )}
+                        </Descriptions.Item>
+                      </Descriptions>
+                    ) : null}
+                  </Space>
                 }
               />
             ) : null}

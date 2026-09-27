@@ -56,6 +56,7 @@ const StandardCostsPage = lazy(() => import('./pages/cost-management/standard-co
 // 总账管理
 const GlChartOfAccountsPage = lazy(() => import('./pages/gl-management/chart-of-accounts'));
 const GlSettingsPage = lazy(() => import('./pages/gl-management/settings'));
+const GlExchangeRatesPage = lazy(() => import('./pages/gl-management/exchange-rates'));
 const GlOpeningBalancesPage = lazy(() => import('./pages/gl-management/opening-balances'));
 const GlVouchersPage = lazy(() => import('./pages/gl-management/vouchers'));
 const GlBooksPage = lazy(() => import('./pages/gl-management/books'));
@@ -151,6 +152,7 @@ const KuaicaiwuApp: React.FC = () => {
       {/* 总账管理路由 */}
       <Route path="gl-management/chart-of-accounts" element={withPageSuspense(GlChartOfAccountsPage)} />
       <Route path="gl-management/settings" element={withPageSuspense(GlSettingsPage)} />
+      <Route path="gl-management/exchange-rates" element={withPageSuspense(GlExchangeRatesPage)} />
       <Route path="gl-management/opening-balances" element={withPageSuspense(GlOpeningBalancesPage)} />
       <Route path="gl-management/vouchers" element={withPageSuspense(GlVouchersPage)} />
       <Route path="gl-management/books" element={withPageSuspense(GlBooksPage)} />

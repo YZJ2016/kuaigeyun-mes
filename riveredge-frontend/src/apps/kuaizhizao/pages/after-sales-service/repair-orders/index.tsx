@@ -316,25 +316,31 @@ const RepairOrdersPage: React.FC = () => {
             hideInSearch: true,
             valueType: 'option',
             render: (_, row) => [
-              rowActionKind('detail', {
-                key: 'detail',
-                onClick: () => openDetail(row),
-              }),
-              perms.canUpdate && row.status !== '已关闭'
-                ? rowActionKind('edit', {
-                    key: 'edit',
-                    onClick: () => {
-                      void openEdit(row);
-                    },
-                  })
-                : null,
+              <Button
+                {...rowActionKind('read')}
+                key="read"
+                onClick={() => openDetail(row)}
+              />,
+              perms.canUpdate && row.status !== '已关闭' ? (
+                <Button
+                  {...rowActionKind('update')}
+                  key="edit"
+                  onClick={() => {
+                    void openEdit(row);
+                  }}
+                />
+              ) : null,
               perms.canDelete && row.status === '待派工' ? (
                 <ActionConfirmPopconfirm
                   key="delete"
                   title={t('common.confirmDelete')}
                   onConfirm={() => executeconfirmDelete(row)}
                 >
-                  {rowActionKind('delete', { key: 'delete-trigger' })}
+                  <Button
+                    {...rowActionKind('delete')}
+                    key="delete"
+                    onClick={(e) => e.stopPropagation()}
+                  />
                 </ActionConfirmPopconfirm>
               ) : null,
             ],
@@ -352,7 +358,7 @@ const RepairOrdersPage: React.FC = () => {
         helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesRepair)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v7"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v8"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.repair-orders')}
         request={async (params) => {

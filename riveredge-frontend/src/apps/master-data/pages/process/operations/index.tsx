@@ -30,6 +30,7 @@ import {
 } from '../../../services/process';
 import { QRCodeGenerator } from '../../../../../components/qrcode';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { qrcodeApi } from '../../../../../services/qrcode';
 import type { Operation, DefectTypeMinimal } from '../../../types/process';
 import {

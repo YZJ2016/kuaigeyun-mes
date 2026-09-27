@@ -103,7 +103,7 @@ export function getPlanRemainingReportableQuantity(operation: any, workOrderQuan
   return Math.max(0, cap - done);
 }
 
-/** 物料可报（剩余）：上道合格转出尚未在本工序消耗的数量（首道则为计划剩余在制） */
+/** 物料可报（剩余）：上道合格转出尚未在本工序消耗的数量（首道为计划+超报抬高后的在制起点） */
 export function getMaterialRemainingReportableQuantity(operation: any): number | null {
   const raw = operation?.material_remaining ?? operation?.materialRemaining;
   if (raw == null || raw === '') return null;

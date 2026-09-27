@@ -13,7 +13,7 @@ import {
   ReferenceDisplayAccessError,
   searchReferenceDisplay,
 } from '../../utils/referenceDisplay';
-import { materialGroupApi } from '../../apps/master-data/services/material';
+import { materialGroupApi, materialApi } from '../../apps/master-data/services/material';
 import type { Material } from '../../apps/master-data/types/material';
 import { SecureImage } from '../secure-image';
 import { UniTableStackedPrimaryCell } from '../uni-table/stackedPrimaryColumn';
@@ -26,6 +26,7 @@ import {
   mapMaterialGroupTree,
   type MaterialGroupTreeNode,
 } from './utils';
+import { apiRequest } from '../../services/api';
 import {
   getMaterialSourceTypeLabel,
   getMaterialSourceTypeTagColor,
@@ -71,6 +72,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   zIndex,
   width = DEFAULT_WIDTH,
   hostResource,
+  warehouseId,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -90,6 +92,12 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   const [bomMap, setBomMap] = useState<Record<number, boolean>>({});
   const [inventoryMap, setInventoryMap] = useState<Record<number, number>>({});
   const [indicatorsLoading, setIndicatorsLoading] = useState(false);
+
+  const resolvedWarehouseId = useMemo(() => {
+    if (warehouseId == null) return undefined;
+    const n = Number(warehouseId);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }, [warehouseId]);
 
   const loadUnits = useCallback(async () => {
     try {
@@ -118,6 +126,50 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       const seq = ++fetchSeqRef.current;
       setLoading(true);
       try {
+        if (resolvedWarehouseId) {
+          const balanceRes: any = await apiRequest('/apps/kuaizhizao/reports/inventory/material-balances', {
+            method: 'GET',
+            params: {
+              warehouse_id: resolvedWarehouseId,
+              include_zero_stock: false,
+              keyword: kw.trim() || undefined,
+              current: p,
+              page_size: PAGE_SIZE,
+            },
+          });
+          if (seq !== fetchSeqRef.current) return;
+          const balanceRows = balanceRes?.items || balanceRes?.data || [];
+          const materialIds = [
+            ...new Set(
+              (Array.isArray(balanceRows) ? balanceRows : [])
+                .map((row: { material_id?: number }) => Number(row.material_id))
+                .filter((id: number) => Number.isFinite(id) && id > 0),
+            ),
+          ] as number[];
+          if (!materialIds.length) {
+            setList([]);
+            setTotalHint(Number(balanceRes?.total ?? 0) || 0);
+            return;
+          }
+          const matRes = await materialApi.list({
+            ids: materialIds,
+            keyword: kw.trim() || undefined,
+            isActive: true,
+            mastersOnly: true,
+            sourceType: st || undefined,
+            groupId: gid,
+            limit: materialIds.length,
+          });
+          if (seq !== fetchSeqRef.current) return;
+          const order = new Map(materialIds.map((id, idx) => [id, idx]));
+          const rows = [...(matRes.items ?? [])].sort(
+            (a, b) => (order.get(Number(a.id)) ?? 0) - (order.get(Number(b.id)) ?? 0),
+          );
+          setList(rows);
+          setTotalHint(Number(balanceRes?.total ?? rows.length) || rows.length);
+          return;
+        }
+
         const res = await searchReferenceDisplay({
           resource: 'master-data:material',
           hostResource,
@@ -129,10 +181,10 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         });
         if (seq !== fetchSeqRef.current) return;
         const arr: Material[] = res.items.map((item) => {
-          const rawImages = item.extra?.images
+          const rawImages = item.extra?.images;
           const images = Array.isArray(rawImages)
             ? (rawImages as Material['images'])
-            : undefined
+            : undefined;
           return {
             id: item.id as number,
             uuid: item.uuid ?? '',
@@ -144,7 +196,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
             sourceType: (item.extra?.source_type as string) ?? undefined,
             groupId: item.extra?.group_id as number | undefined,
             images,
-          } as Material
+          } as Material;
         });
         setList(arr);
         setTotalHint(res.total);
@@ -163,7 +215,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         }
       }
     },
-    [hostResource, message, t],
+    [hostResource, message, resolvedWarehouseId, t],
   );
 
   useEffect(() => {
@@ -209,14 +261,14 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
     setIndicatorsLoading(true);
     void Promise.all([
       fetchBatchMaterialHasBom(materialIds),
-      fetchBatchMaterialInventory(materialIds),
+      fetchBatchMaterialInventory(materialIds, resolvedWarehouseId),
     ]).then(([bom, inventory]) => {
       if (seq !== indicatorSeqRef.current) return;
       setBomMap(bom);
       setInventoryMap(inventory);
       setIndicatorsLoading(false);
     });
-  }, [open, list]);
+  }, [open, list, resolvedWarehouseId]);
 
   const selectedCount = selectedMap.size;
   const selectedRowKeys = useMemo(() => Array.from(selectedMap.keys()), [selectedMap]);

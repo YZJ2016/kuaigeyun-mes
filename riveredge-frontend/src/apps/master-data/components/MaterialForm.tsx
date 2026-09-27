@@ -4209,13 +4209,14 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                       <ProFormItem
                         name="sourceConfig.outsource_supplier_id"
                         label={t('app.master-data.source.outsourceSupplier')}
-                        rules={[{ required: true, message: t('app.master-data.source.selectOutsourceSupplier') }]}
+                        tooltip={t('app.master-data.source.outsourceSupplierOptionalHint')}
                       >
                         <UniDropdown
                           placeholder={t('app.master-data.source.selectOutsourceSupplier')}
                           options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
                           loading={suppliersLoading}
                           showSearch
+                          allowClear
                           style={{ width: '100%' }}
                           optionFilterProp="label"
                           quickCreate={
@@ -4233,13 +4234,14 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                       <ProFormItem
                         name="sourceConfig.outsource_operation"
                         label={t('app.master-data.source.outsourceOperation')}
-                        rules={[{ required: true, message: t('app.master-data.source.selectOutsourceOperation') }]}
+                        tooltip={t('app.master-data.source.outsourceOperationOptionalHint')}
                       >
                         <UniDropdown
                           placeholder={t('app.master-data.source.selectOutsourceOperation')}
                           options={operations.map((op) => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
                           loading={operationsLoading}
                           showSearch
+                          allowClear
                           style={{ width: '100%' }}
                           optionFilterProp="label"
                           quickCreate={

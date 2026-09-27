@@ -147,7 +147,10 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
           },
         },
         {
-          title: t('app.kuaizhizao.warehouseOutbound.col.operatorPerson'),
+          title:
+            effective.outbound_type === 'production_picking'
+              ? t('app.kuaizhizao.warehouseOutbound.field.picker')
+              : t('app.kuaizhizao.warehouseOutbound.col.operatorPerson'),
           dataIndex: 'operator_name',
           render: (_, record) => resolveOutboundHubOperator(record) || '-',
         },
@@ -175,7 +178,7 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
             ]
           : []),
       ] as ProDescriptionsItemProps<OutboundDetailRecord>[]),
-    [effective.customer_name, effective.work_order_code, notesEditor, showNotes, t],
+    [effective.customer_name, effective.outbound_type, effective.work_order_code, notesEditor, showNotes, t],
   );
 
   const items = (Array.isArray(effective.items) ? effective.items : []) as Array<Record<string, unknown>>;

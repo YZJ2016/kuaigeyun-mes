@@ -81,6 +81,52 @@ async def resolve_outbound_confirm_deliverer(
     return confirmed_by, confirmer_name
 
 
+class OutboundConfirmPickerPayload(Protocol):
+    picker_id: Optional[int]
+    picker_name: Optional[str]
+
+
+async def resolve_production_picking_confirm_picker(
+    *,
+    confirmed_by: int,
+    confirmation_data: Optional[OutboundConfirmPickerPayload],
+    get_user_name: Callable[[int], Awaitable[str]],
+    existing_picker_id: Optional[int] = None,
+    existing_picker_name: Optional[str] = None,
+) -> Tuple[int, str]:
+    """
+    确认生产领料时的业务领料人。
+
+    优先级：请求体 picker_id → 单据已有领料人 → 确认操作人。
+    """
+    if confirmation_data is not None:
+        pid = getattr(confirmation_data, "picker_id", None)
+        if pid is not None and int(pid) > 0:
+            picker_id = int(pid)
+            picker_name = str(getattr(confirmation_data, "picker_name", None) or "").strip()
+            if not picker_name:
+                picker_name = await get_user_name(picker_id)
+            return picker_id, picker_name
+        name_only = str(getattr(confirmation_data, "picker_name", None) or "").strip()
+        if name_only:
+            if existing_picker_id is not None and int(existing_picker_id) > 0:
+                return int(existing_picker_id), name_only
+            return confirmed_by, name_only
+
+    if existing_picker_id is not None and int(existing_picker_id) > 0:
+        name = str(existing_picker_name or "").strip()
+        if not name:
+            name = await get_user_name(int(existing_picker_id))
+        return int(existing_picker_id), name
+
+    existing_name = str(existing_picker_name or "").strip()
+    if existing_name:
+        return confirmed_by, existing_name
+
+    confirmer_name = await get_user_name(confirmed_by)
+    return confirmed_by, confirmer_name
+
+
 def resolve_inbound_confirm_business_time(
     confirmation_data: Optional[object],
     *,

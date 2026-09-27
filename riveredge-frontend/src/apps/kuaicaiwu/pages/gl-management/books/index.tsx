@@ -75,7 +75,10 @@ const GlBooksPage: React.FC = () => {
           apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', {
             params: { limit: 1000, is_active: true },
           }),
-          apiRequest<unknown>('/core/departments/tree', { method: 'GET' }),
+          apiRequest<unknown>('/core/departments/tree', {
+            method: 'GET',
+            params: { is_active: true },
+          }),
         ]);
         if (cancelled) return;
         setAccounts(asList<GlAccount>(accRes));
@@ -88,7 +91,10 @@ const GlBooksPage: React.FC = () => {
         setSupplierOptions(mapPartner(suppRes));
         const flattenDept = (nodes: any[], out: { label: string; value: number }[] = []) => {
           for (const n of nodes || []) {
-            if (n?.id) out.push({ label: String(n.name || n.title || n.id), value: Number(n.id) });
+            const deptId = Number(n?.id);
+            if (Number.isFinite(deptId) && deptId > 0) {
+              out.push({ label: String(n.name || n.code || deptId), value: deptId });
+            }
             if (n?.children) flattenDept(n.children, out);
           }
           return out;

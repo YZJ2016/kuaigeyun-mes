@@ -43,6 +43,7 @@ export {
   rowActionBalloonAnnotate,
   rowActionCopyCreate,
   rowActionCollectReceipt,
+  rowActionRunComputation,
   rowActionIssueInvoice,
   rowActionSettleVoucher,
   rowActionCreateRefund,

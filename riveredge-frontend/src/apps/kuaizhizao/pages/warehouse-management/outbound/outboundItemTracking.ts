@@ -36,6 +36,8 @@ export type OutboundConfirmationPayload = {
   delivery_time?: string;
   deliverer_id?: number;
   deliverer_name?: string;
+  picker_id?: number;
+  picker_name?: string;
   items?: OutboundConfirmationItemPayload[];
   item_batches?: { item_id: number; batch_no: string }[];
 };
@@ -50,6 +52,8 @@ export function buildOutboundConfirmPayloadFromForm(
     delivery_time?: string;
     deliverer_id?: number;
     deliverer_name?: string;
+    picker_id?: number;
+    picker_name?: string;
   },
 ): OutboundConfirmationPayload {
   const items: OutboundConfirmationItemPayload[] = lines
@@ -90,17 +94,16 @@ export function buildOutboundConfirmPayloadFromForm(
     })
     .filter(Boolean) as OutboundConfirmationItemPayload[];
 
-  const headerFields: Pick<
-    OutboundConfirmationPayload,
-    'delivery_time' | 'deliverer_id' | 'deliverer_name'
-  > = {};
-  if (header?.delivery_time) headerFields.delivery_time = header.delivery_time;
-  if (header?.deliverer_id != null && header.deliverer_id > 0) {
-    headerFields.deliverer_id = header.deliverer_id;
-  }
-  if (header?.deliverer_name) headerFields.deliverer_name = header.deliverer_name;
-
   if (outboundType === 'sales_delivery') {
+    const headerFields: Pick<
+      OutboundConfirmationPayload,
+      'delivery_time' | 'deliverer_id' | 'deliverer_name'
+    > = {};
+    if (header?.delivery_time) headerFields.delivery_time = header.delivery_time;
+    if (header?.deliverer_id != null && header.deliverer_id > 0) {
+      headerFields.deliverer_id = header.deliverer_id;
+    }
+    if (header?.deliverer_name) headerFields.deliverer_name = header.deliverer_name;
     const hasMultiBatch = items.some((it) => (it.batch_allocations?.length ?? 0) > 1);
     return {
       ...headerFields,
@@ -115,6 +118,34 @@ export function buildOutboundConfirmPayloadFromForm(
       items,
     };
   }
+
+  if (outboundType === 'production_picking') {
+    const headerFields: Pick<
+      OutboundConfirmationPayload,
+      'delivery_time' | 'picker_id' | 'picker_name'
+    > = {};
+    if (header?.delivery_time) headerFields.delivery_time = header.delivery_time;
+    if (header?.picker_id != null && header.picker_id > 0) {
+      headerFields.picker_id = header.picker_id;
+    }
+    if (header?.picker_name) headerFields.picker_name = header.picker_name;
+    return {
+      ...headerFields,
+      warehouse_id: warehouseId,
+      warehouse_name: warehouseName,
+      items,
+    };
+  }
+
+  const headerFields: Pick<
+    OutboundConfirmationPayload,
+    'delivery_time' | 'deliverer_id' | 'deliverer_name'
+  > = {};
+  if (header?.delivery_time) headerFields.delivery_time = header.delivery_time;
+  if (header?.deliverer_id != null && header.deliverer_id > 0) {
+    headerFields.deliverer_id = header.deliverer_id;
+  }
+  if (header?.deliverer_name) headerFields.deliverer_name = header.deliverer_name;
 
   return {
     ...headerFields,

@@ -3,6 +3,7 @@ import { apiRequest } from '../../services/api';
 /** 批量获取物料可用库存汇总 */
 export async function fetchBatchMaterialInventory(
   materialIds: number[],
+  warehouseId?: number,
 ): Promise<Record<number, number>> {
   if (materialIds.length === 0) return {};
   try {
@@ -14,6 +15,7 @@ export async function fetchBatchMaterialInventory(
           material_ids: materialIds,
           summary_only: true,
           include_expired: false,
+          ...(warehouseId != null && warehouseId > 0 ? { warehouse_id: warehouseId } : {}),
         },
       },
     );

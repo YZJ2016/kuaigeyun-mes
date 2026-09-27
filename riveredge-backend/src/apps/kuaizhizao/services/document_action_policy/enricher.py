@@ -379,6 +379,8 @@ def enrich_sales_order_capabilities_on_response(
     has_existing_delivery_project: bool = False,
     has_downstream_documents: bool = False,
     has_remaining_invoice_amount: bool = True,
+    has_purchasable_remaining: bool = False,
+    require_purchase_requisition: bool = False,
     require_audit_before_print: bool = False,
 ) -> T:
     caps = derive_sales_order_capabilities(
@@ -393,6 +395,8 @@ def enrich_sales_order_capabilities_on_response(
         has_existing_delivery_project=has_existing_delivery_project,
         has_downstream_documents=has_downstream_documents,
         has_remaining_invoice_amount=has_remaining_invoice_amount,
+        has_purchasable_remaining=has_purchasable_remaining,
+        require_purchase_requisition=require_purchase_requisition,
         require_audit_before_print=require_audit_before_print,
     )
     if hasattr(response, "model_copy"):
@@ -969,18 +973,28 @@ async def _purchase_order_receipt_notice_by_ids(tenant_id: int, order_ids: List[
 
 
 async def _purchase_order_invoice_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
-    from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+    """True = 可开票余额已用尽（阻断再下推发票）；与进项加载剩余口径一致。"""
+    from decimal import Decimal
+
+    from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 
     if not order_ids:
         return {}
-    result: dict[int, bool] = {oid: False for oid in order_ids}
-    invoice_order_ids = await PurchaseInvoice.filter(
-        tenant_id=tenant_id,
-        purchase_order_id__in=order_ids,
-        deleted_at__isnull=True,
-    ).values_list("purchase_order_id", flat=True)
-    for oid in invoice_order_ids:
-        result[int(oid)] = True
+    result: dict[int, bool] = {oid: True for oid in order_ids}
+    rows = await PurchaseOrder.filter(tenant_id=tenant_id, id__in=order_ids).values(
+        "id", "order_code", "total_amount"
+    )
+    if not rows:
+        return result
+    code_by_id = {int(r["id"]): str(r.get("order_code") or r["id"]) for r in rows}
+    totals = {int(r["id"]): Decimal(str(r.get("total_amount") or 0)) for r in rows}
+    pushed = await PurchaseInvoicePullService()._sum_pushed_totals_by_source(
+        tenant_id, "purchase_order", list(totals.keys()), code_by_id
+    )
+    for oid, total in totals.items():
+        remaining = total - pushed.get(oid, Decimal("0"))
+        result[oid] = remaining <= 0
     return result
 
 

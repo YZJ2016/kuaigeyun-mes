@@ -114,7 +114,9 @@ class MaterialHealthService:
         if m.source_type == SOURCE_TYPE_OUTSOURCE:
             source_config = m.source_config or {}
             if not source_config.get("outsource_supplier_id"):
-                findings.append(("warning", "sourceConfig.outsourceSupplierId", "委外件缺少委外供应商配置"))
+                findings.append(("warning", "sourceConfig.outsourceSupplierId", "委外件未配置默认委外供应商（可在委外工单中指定）"))
+            if not source_config.get("outsource_operation"):
+                findings.append(("warning", "sourceConfig.outsourceOperation", "委外件未配置默认委外工序（可在委外工单中指定）"))
 
         weight = getattr(m, "weight", None)
         if weight is not None and float(weight) < 0:

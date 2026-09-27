@@ -51,6 +51,8 @@ class SalesOrderCapabilities(BaseModel):
     push_invoice: ActionCapability
     push_sales_return: ActionCapability
     push_delivery_project: ActionCapability
+    push_purchase_requisition: ActionCapability
+    push_purchase_order: ActionCapability
     create_change_order: ActionCapability
     backfill_sales_contract: ActionCapability
 
@@ -455,6 +457,11 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_order.push_delivery_project.not_allowed": "当前状态不可下推交付项目",
     "sales_order.push_delivery_project.no_items": "销售订单无明细，无法下推交付项目",
     "sales_order.push_delivery_project.already_exists": "该销售订单已存在交付项目",
+    "sales_order.push_purchase_requisition.not_allowed": "当前状态不可下推采购申请",
+    "sales_order.push_purchase_requisition.no_buy_items": "销售订单明细无剩余可采购件，无法下推采购申请",
+    "sales_order.push_purchase_order.not_allowed": "当前状态不可下推采购订单",
+    "sales_order.push_purchase_order.no_buy_items": "销售订单明细无剩余可采购件，无法下推采购订单",
+    "sales_order.push_purchase_order.require_requisition": "当前组织要求先采购申请后下单，请下推采购申请",
     "sales_order.create_change.not_allowed": "当前状态不可新建销售变更单",
     "sales_order.backfill_contract.not_allowed": "当前状态不可补签销售合同",
     "sales_order.backfill_contract.already_linked": "销售订单已关联销售合同",
@@ -581,13 +588,16 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "delivery_notice.push_freight_order.not_allowed": "当前送货单不可下推发货管理单",
     "purchase_order.push_invoice.not_audited": "只有已审核或已确认的采购单才能下推采购发票",
     "purchase_order.push_invoice.no_items": "采购单没有明细，无法下推采购发票",
-    "purchase_order.push_invoice.already_exists": "该采购单已存在采购发票，不能重复下推",
+    "purchase_order.push_invoice.already_exists": "该采购单可开票金额已全部开票",
+    "purchase_order.push_invoice.already_fully_invoiced": "该采购单可开票金额已全部开票，删除未审核发票后可再次下推",
+    "purchase_order.push_invoice.no_prepayment": "采购单未填写预付款金额，无法按预付款开票",
+    "purchase_order.push_invoice.prepayment_exceeds_remaining": "预付款金额已超过可开票余额",
     "purchase_order.push_purchase_return.not_audited": "只有已审核或已确认的采购单才能下推采购退货",
     "purchase_order.push_purchase_return.no_received": "采购单尚无已入库数量，无法下推采购退货",
     "purchase_order.push_purchase_return.no_lines": "没有可退货的采购单明细",
     "purchase_order.push_incoming_inspection.not_audited": "只有已审核、已确认或执行中的采购单才能下推来料检验",
     "purchase_order.push_incoming_inspection.no_items": "采购单没有明细，无法下推来料检验",
-    "purchase_order.push_incoming_inspection.no_iqc_lines": "采购单无可检明细（物料未配置来料检验，或均已创建检验单）",
+    "purchase_order.push_incoming_inspection.no_iqc_lines": "采购单无可检明细（物料未配置来料检验，或可检数量已全部下推）",
     "purchase_order.create_change.not_allowed": "当前状态不可新建采购变更单",
     "purchase_order.create_change.not_audited": "只有已审核或已确认的采购单可创建变更单",
     "purchase_order.create_change.no_items": "采购单没有明细，无法创建变更单",
@@ -758,6 +768,9 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "incoming_inspection.pull_from_purchase_receipt.not_allowed": "当前状态的采购入库单不可加载来料检验",
     "incoming_inspection.pull_from_purchase_receipt.no_lines": "采购入库单无需要来料检验的明细",
     "incoming_inspection.pull_from_purchase_receipt.already_pulled": "相关物料均已存在来料检验单，删除后可再次加载",
+    "incoming_inspection.pull_from_purchase_order.not_allowed": "当前状态的采购订单不可加载来料检验",
+    "incoming_inspection.pull_from_purchase_order.no_lines": "采购订单无需要来料检验的明细",
+    "incoming_inspection.pull_from_purchase_order.already_pulled": "可检数量已全部下推，调整后可再次加载",
     "incoming_inspection.pull_from_customer_material_registration.not_allowed": "当前状态的代工来料单不可加载来料检验",
     "incoming_inspection.pull_from_customer_material_registration.no_lines": "代工来料单无需要来料检验的明细",
     "incoming_inspection.pull_from_customer_material_registration.already_pulled": "相关物料均已存在来料检验单，删除后可再次加载",

@@ -155,6 +155,7 @@ async def get_department_tree(
     def convert_to_tree_item(item: dict) -> DepartmentTreeItem:
         children = [convert_to_tree_item(child) for child in item.get("children", [])]
         return DepartmentTreeItem(
+            id=item["id"],
             uuid=item["uuid"],
             name=item["name"],
             code=item["code"],

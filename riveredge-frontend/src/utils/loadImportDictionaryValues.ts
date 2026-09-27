@@ -1,9 +1,6 @@
 import type { TFunction } from 'i18next';
 
-import {
-  getDataDictionaryByCode,
-  getDictionaryItemList,
-} from '../services/dataDictionary';
+import { getDictionaryItemsCached } from '../services/dataDictionaryCache';
 import { mapSystemDictionaryItemOptions } from './systemDictionaryI18n';
 
 /** 导入「是否启用」列常用选项（与 parseActive 中文分支一致） */
@@ -158,8 +155,7 @@ export async function loadImportDictionaryOptionPack(
   hostResource?: string,
 ): Promise<ImportDictionaryOptionPack> {
   const loadOpts = hostResource ? { hostResource } : undefined;
-  const dictionary = await getDataDictionaryByCode(dictionaryCode, loadOpts);
-  const items = await getDictionaryItemList(dictionary.uuid, true, loadOpts);
+  const items = await getDictionaryItemsCached(dictionaryCode, loadOpts);
   const mapped = mapSystemDictionaryItemOptions(dictionaryCode, items, t);
   const labelByCode: ImportCodeLabelMap = {};
   for (const item of mapped) {

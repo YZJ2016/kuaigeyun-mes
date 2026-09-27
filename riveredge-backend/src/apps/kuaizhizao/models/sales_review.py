@@ -39,6 +39,7 @@ class SalesReview(BaseModel):
     # draft / reviewing / rejected / passed / converted / cancelled
     status = fields.CharField(max_length=20, default="draft", description="状态")
     review_round = fields.IntField(default=0, description="下达轮次")
+    review_dept_plan = fields.JSONField(null=True, description="评审部门计划（下达前）")
 
     sales_opinion = fields.TextField(null=True, description="销售意见")
     final_conclusion = fields.TextField(null=True, description="最终结论")

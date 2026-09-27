@@ -56,6 +56,7 @@ export type RowActionVisualProfile =
   | 'balloon-annotate'
   | 'copy-create'
   | 'collect-receipt'
+  | 'run-computation'
   | 'issue-invoice'
   | 'settle-voucher'
   | 'create-refund'
@@ -272,9 +273,12 @@ export function rowActionCopyCreate(
   }
 }
 
-/** 应收下推收款：行内双字「收款」；RBAC 默认 execute */
+/**
+ * 应收下推收款：行内双字「收款」。
+ * 默认 skip：列表页资源是应收，真实门控在页面侧 `receipt:create`（跨资源，禁止用本页 execute 冒充）。
+ */
 export function rowActionCollectReceipt(
-  permission: 'skip' | 'execute' | 'create' = 'execute',
+  permission: 'skip' | 'create' | 'execute' = 'skip',
 ): {
   [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
   [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
@@ -282,6 +286,22 @@ export function rowActionCollectReceipt(
   return {
     [ROW_ACTION_KIND_ATTR]: permission,
     [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'collect-receipt',
+  }
+}
+
+/**
+ * 需求计算执行：行内「执行计算」。
+ * 默认 update：与 `/demand-computations/{id}/execute` 的 manifest 权限码一致（模块无 :execute）。
+ */
+export function rowActionRunComputation(
+  permission: 'skip' | 'update' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'run-computation',
   }
 }
 
@@ -337,9 +357,12 @@ export function rowActionFillInvoiceNumber(
   }
 }
 
-/** 应付下推付款：行内双字「付款」；RBAC 默认 execute */
+/**
+ * 应付下推付款：行内双字「付款」。
+ * 默认 skip：列表页资源是应付，真实门控在页面侧 `payment:create`（跨资源，禁止用本页 execute 冒充）。
+ */
 export function rowActionMakePayment(
-  permission: 'skip' | 'execute' | 'create' = 'execute',
+  permission: 'skip' | 'create' | 'execute' = 'skip',
 ): {
   [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
   [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
@@ -529,6 +552,7 @@ export function readActionVisualProfile(node: React.ReactNode): RowActionVisualP
     raw === 'balloon-annotate' ||
     raw === 'copy-create' ||
     raw === 'collect-receipt' ||
+    raw === 'run-computation' ||
     raw === 'issue-invoice' ||
     raw === 'settle-voucher' ||
     raw === 'create-refund' ||

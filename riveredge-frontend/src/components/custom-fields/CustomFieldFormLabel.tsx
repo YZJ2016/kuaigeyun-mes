@@ -16,8 +16,8 @@ export const CustomFieldFormLabel: React.FC<CustomFieldFormLabelProps> = ({ text
   const { t } = useTranslation();
 
   return (
-    <span>
-      {text}
+    <span className={CUSTOM_FIELD_FORM_CLASS_NAMES.label}>
+      <span>{text}</span>
       <MarkerTag color="blue" className={CUSTOM_FIELD_FORM_CLASS_NAMES.labelTag}>
         {t('app.master-data.customFields')}
       </MarkerTag>
