@@ -3383,8 +3383,8 @@ export default {
   'app.kuaioa.leave.endAt': '结束时间',
   'app.kuaioa.leave.days': '天数',
   'app.kuaioa.leave.leaveHours': '请假小时',
-  'app.kuaioa.leave.deductEnabled': '是否扣钱',
-  'app.kuaioa.leave.deductAmount': '扣钱金额',
+  'app.kuaioa.leave.deductEnabled': '是否扣款',
+  'app.kuaioa.leave.deductAmount': '扣款金额',
   'app.kuaioa.import.empty': '导入文件为空',
   'app.kuaioa.import.noRows': '没有可导入的数据行',
   'app.kuaioa.import.validationTitle': '导入校验未通过',
@@ -28860,14 +28860,18 @@ export default {
     '外贸销售行业插件补齐工作台与跟进',
   'pages.dashboard.updateLog.entries.ind-foreign-trade-full-plugin-r01.description':
     '行业包「外贸销售」下增加工作台、外贸客户、询盘导入、客户跟进四个入口；跟进与统计仅覆盖外贸客户，支持筛选导出与行内新建跟进。',
+  'pages.dashboard.updateLog.entries.official-api-library-submit-client-channel-r01.title':
+    '提交官方接口库携带客户端渠道',
+  'pages.dashboard.updateLog.entries.official-api-library-submit-client-channel-r01.description':
+    '向第三方官方库域名提交接口包时，服务端转发会带上 X-Client-Channel，避免被写门禁拦截后只显示笼统的「提交失败」；远端错误信息也会原样返回。',
   'pages.dashboard.updateLog.entries.kuaioa-hr-import-export-r01.title':
     '人事列表补齐导入导出',
   'pages.dashboard.updateLog.entries.kuaioa-hr-import-export-r01.description':
     '请假出差、月度考勤、生活费预支、奖励登记、岗位补贴、最低工资等列表接入与员工档案相同的导入导出；并补齐对应 import/export 权限码，导入按员工编号或姓名匹配档案。',
   'pages.dashboard.updateLog.entries.kuaioa-hr-leave-deduct-rest-menu-r01.title':
-    '人事请假扣钱与休息夜班入口补齐',
+    '请假扣款与休息夜班登记更易用',
   'pages.dashboard.updateLog.entries.kuaioa-hr-leave-deduct-rest-menu-r01.description':
-    '请假出差恢复是否扣钱与扣钱金额并参与结算；人事基础菜单挂出休息登记与夜班登记；员工档案产线及月度考勤/休息夜班的车间产线改自主数据下拉。',
+    '请假出差可勾选是否扣款并填写金额，审批通过后计入工资结算；人事基础新增休息登记、夜班登记入口；员工档案与考勤相关的车间、产线统一从主数据选择。',
   'pages.dashboard.updateLog.entries.kuaioa-leave-workshop-line-select-r01.title':
     '请假出差车间产线改为下拉选择',
   'pages.dashboard.updateLog.entries.kuaioa-leave-workshop-line-select-r01.description':
