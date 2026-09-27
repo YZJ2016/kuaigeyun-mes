@@ -117,10 +117,17 @@ build_web_verify_single_dist_commit() {
 
 build_web_push_with_lease() {
   local branch="${1:-$(git rev-parse --abbrev-ref HEAD)}"
+  local upstream remote
+  upstream="$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null || true)"
+  if [ -n "$upstream" ]; then
+    remote="${upstream%%/*}"
+  else
+    remote="origin"
+  fi
   if [ "${BUILD_WEB_SKIP_HISTORY_REWRITE:-0}" = "1" ]; then
-    git push origin "$branch"
+    git push "$remote" "$branch"
     return
   fi
-  echo "推送（--force-with-lease：历史已重写，仅 tip 含 dist）..."
-  git push --force-with-lease origin "$branch"
+  echo "推送（--force-with-lease → ${remote}/${branch}：历史已重写，仅 tip 含 dist）..."
+  git push --force-with-lease "$remote" "$branch"
 }
