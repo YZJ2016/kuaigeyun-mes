@@ -504,23 +504,23 @@ class TestDocumentListOutContract:
 # ------------------------------------------------------- 路由注册与权限码
 
 _EXPECTED_KB_ROUTES = {
-    ("GET", "/knowledge-bases"): {"kuaiai:knowledge:list"},
-    ("POST", "/knowledge-bases"): {"kuaiai:knowledge:add"},
-    ("GET", "/knowledge-bases/options"): {"kuaiai:knowledge:query"},
-    ("GET", "/knowledge-bases/{kb_id}"): {"kuaiai:knowledge:query"},
-    ("PUT", "/knowledge-bases/{kb_id}"): {"kuaiai:knowledge:edit"},
-    ("DELETE", "/knowledge-bases/{kb_id}"): {"kuaiai:knowledge:remove"},
-    ("GET", "/knowledge-bases/{kb_id}/documents"): {"kuaiai:knowledge:list"},
-    ("POST", "/knowledge-bases/{kb_id}/documents"): {"kuaiai:knowledge:add"},
-    ("GET", "/documents/{document_id}"): {"kuaiai:knowledge:query"},
-    ("DELETE", "/documents/{document_id}"): {"kuaiai:knowledge:remove"},
-    ("POST", "/documents/{document_id}/parse"): {"kuaiai:knowledge:edit"},
-    ("GET", "/documents/{document_id}/chunks"): {"kuaiai:knowledge:query"},
+    ("GET", "/knowledge-bases"): {"kuaiai:knowledge:display"},
+    ("POST", "/knowledge-bases"): {"kuaiai:knowledge:create"},
+    ("GET", "/knowledge-bases/options"): {"kuaiai:knowledge:read"},
+    ("GET", "/knowledge-bases/{kb_id}"): {"kuaiai:knowledge:read"},
+    ("PUT", "/knowledge-bases/{kb_id}"): {"kuaiai:knowledge:update"},
+    ("DELETE", "/knowledge-bases/{kb_id}"): {"kuaiai:knowledge:delete"},
+    ("GET", "/knowledge-bases/{kb_id}/documents"): {"kuaiai:knowledge:display"},
+    ("POST", "/knowledge-bases/{kb_id}/documents"): {"kuaiai:knowledge:create"},
+    ("GET", "/documents/{document_id}"): {"kuaiai:knowledge:read"},
+    ("DELETE", "/documents/{document_id}"): {"kuaiai:knowledge:delete"},
+    ("POST", "/documents/{document_id}/parse"): {"kuaiai:knowledge:update"},
+    ("GET", "/documents/{document_id}/chunks"): {"kuaiai:knowledge:read"},
 }
 
 
 def _required_permissions(route: APIRoute):
-    """从 require_access 依赖闭包中取出 required_permissions。"""
+    """从 require_permission_codes 依赖闭包中取出权限码。"""
     perms = set()
     for dep in route.dependencies or []:
         fn = getattr(dep, "dependency", None)
@@ -528,7 +528,7 @@ def _required_permissions(route: APIRoute):
         if fn is None or closure is None:
             continue
         for name, cell in zip(fn.__code__.co_freevars, closure):
-            if name == "required_permissions":
+            if name == "codes":
                 perms.update(cell.cell_contents or [])
     return perms
 

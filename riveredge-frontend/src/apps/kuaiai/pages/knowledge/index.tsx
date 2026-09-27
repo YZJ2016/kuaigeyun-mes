@@ -77,9 +77,9 @@ export default function KuaiaiKnowledgePage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const currentUser = useCurrentUser();
-  const canAdd = hasPermission(currentUser, 'kuaiai:knowledge:add');
-  const canEdit = hasPermission(currentUser, 'kuaiai:knowledge:edit');
-  const canRemove = hasPermission(currentUser, 'kuaiai:knowledge:remove');
+  const canAdd = hasPermission(currentUser, 'kuaiai:knowledge:create');
+  const canEdit = hasPermission(currentUser, 'kuaiai:knowledge:update');
+  const canRemove = hasPermission(currentUser, 'kuaiai:knowledge:delete');
 
   const actionRef = useRef<ActionType>(null);
   const queryClient = useQueryClient();
@@ -106,8 +106,8 @@ export default function KuaiaiKnowledgePage() {
   const { data: embedOptions } = useQuery({
     queryKey: KUAI_AI_OPTION_KEYS.embedModels,
     queryFn: () => listModelOptions('embed'),
-    // /llm-models/options 需 kuaiai:model:query；无权限不打 403，下拉恒空
-    enabled: hasPermission(currentUser, 'kuaiai:model:query'),
+    // /llm-models/options 需 kuaiai:model:read；无权限不打 403，下拉恒空
+    enabled: hasPermission(currentUser, 'kuaiai:model:read'),
     staleTime: 60_000,
   });
 

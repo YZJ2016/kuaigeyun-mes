@@ -506,17 +506,17 @@ class TestGuardOnSavePath:
 # ------------------------------------------------------- 路由注册与权限码
 
 _EXPECTED_MCP_ROUTES = {
-    ("GET", "/mcp-servers"): {"kuaiai:mcp:list"},
-    ("POST", "/mcp-servers"): {"kuaiai:mcp:add"},
-    ("GET", "/mcp-servers/options"): {"kuaiai:mcp:query"},
-    ("GET", "/mcp-servers/{server_id}"): {"kuaiai:mcp:query"},
-    ("PUT", "/mcp-servers/{server_id}"): {"kuaiai:mcp:edit"},
-    ("DELETE", "/mcp-servers/{server_id}"): {"kuaiai:mcp:remove"},
+    ("GET", "/mcp-servers"): {"kuaiai:mcp:display"},
+    ("POST", "/mcp-servers"): {"kuaiai:mcp:create"},
+    ("GET", "/mcp-servers/options"): {"kuaiai:mcp:read"},
+    ("GET", "/mcp-servers/{server_id}"): {"kuaiai:mcp:read"},
+    ("PUT", "/mcp-servers/{server_id}"): {"kuaiai:mcp:update"},
+    ("DELETE", "/mcp-servers/{server_id}"): {"kuaiai:mcp:delete"},
 }
 
 
 def _required_permissions(route: APIRoute):
-    """从 require_access 依赖闭包中取出 required_permissions。"""
+    """从 require_permission_codes 依赖闭包中取出权限码。"""
     perms = set()
     for dep in route.dependencies or []:
         fn = getattr(dep, "dependency", None)
@@ -524,13 +524,13 @@ def _required_permissions(route: APIRoute):
         if fn is None or closure is None:
             continue
         for name, cell in zip(fn.__code__.co_freevars, closure):
-            if name == "required_permissions":
+            if name == "codes":
                 perms.update(cell.cell_contents or [])
     return perms
 
 
 class TestMcpRouteRegistration:
-    """六条 S4 路由：路径/方法/权限码（契约 mcp:{list|query|add|edit|remove}）。"""
+    """六条 S4 路由：路径/方法/权限码（契约 mcp:{display|read|create|update|delete}）。"""
 
     def test_all_s4_routes_registered_with_permission_codes(self):
         table = {}
