@@ -1009,6 +1009,7 @@ class SalesOrderService:
         work_order_push_progress: Optional[float] = None,
         pushed_work_order_codes: Optional[List[str]] = None,
         audit_enabled: bool = False,
+        lifecycle_items: Optional[List[Any]] = None,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
@@ -1016,7 +1017,8 @@ class SalesOrderService:
 
         lifecycle = get_sales_order_lifecycle(
             order,
-            items=items,
+            # include_items=False 时 items 为 None，生命周期仍需用轻量明细判断 has_items/工单
+            items=lifecycle_items if lifecycle_items is not None else items,
             delivery_progress=delivery_progress,
             invoice_progress=invoice_progress,
             invoice_amount_progress=invoice_amount_progress,
@@ -1234,7 +1236,7 @@ class SalesOrderService:
     def _sales_order_capability_context(
         self,
         order: SalesOrder,
-        items: Optional[List[SalesOrderItem]],
+        items: Optional[List[Any]],
         demand: Optional[Demand],
         *,
         pushable_by_item: Optional[Dict[int, Decimal]] = None,
@@ -2108,19 +2110,40 @@ class SalesOrderService:
         if include_duration and demand:
             duration_info = getattr(demand, "duration_info", None)
 
+        # capabilities / 进度 / 可下推量：始终用明细（完整或轻量），勿依赖 include_items
         if items is not None:
-            items_for_progress: List[Any] = list(items)
+            capability_items: List[Any] = list(items)
         else:
             agg_rows = await SalesOrderItem.filter(
                 tenant_id=tenant_id, sales_order_id=sales_order_id
-            ).values_list("order_quantity", "delivered_quantity")
-            items_for_progress = [
-                type("_AggItem", (), {"order_quantity": q, "delivered_quantity": d})()
-                for q, d in agg_rows
+            ).values_list(
+                "id",
+                "sales_order_id",
+                "order_quantity",
+                "delivered_quantity",
+                "remaining_quantity",
+                "material_id",
+                "work_order_id",
+            )
+            capability_items = [
+                type(
+                    "_AggItem",
+                    (),
+                    {
+                        "id": iid,
+                        "sales_order_id": oid,
+                        "order_quantity": q,
+                        "delivered_quantity": d,
+                        "remaining_quantity": remaining,
+                        "material_id": mid,
+                        "work_order_id": work_order_id,
+                    },
+                )()
+                for iid, oid, q, d, remaining, mid, work_order_id in agg_rows
             ]
         shipped_by = await self._shipped_qty_by_sales_order(tenant_id, [sales_order_id])
         delivery_progress = self._merged_delivery_progress(
-            order, items_for_progress, shipped_by.get(sales_order_id, Decimal("0"))
+            order, capability_items, shipped_by.get(sales_order_id, Decimal("0"))
         )
         shippable_map = (
             await self._batch_shippable_by_order(tenant_id, [sales_order_id])
@@ -2145,7 +2168,7 @@ class SalesOrderService:
         from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
 
         pushable_by_item = await get_pushable_qty_for_order_items(
-            tenant_id, sales_order_id, items
+            tenant_id, sales_order_id, capability_items
         )
         has_existing_delivery_project = await self._order_has_delivery_project(
             tenant_id, sales_order_id
@@ -2153,9 +2176,9 @@ class SalesOrderService:
         pushed_wo = await self._pushed_work_orders_by_sales_order(tenant_id, [sales_order_id])
         pushed_wo_qty = Decimal(str((pushed_wo.get(sales_order_id) or {}).get("qty") or 0))
         order_total = Decimal(str(order.total_quantity or 0))
-        if order_total <= 0 and items:
+        if order_total <= 0 and capability_items:
             order_total = sum(
-                (Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in items),
+                (Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in capability_items),
                 Decimal("0"),
             )
         remaining_wo = order_total - pushed_wo_qty
@@ -2182,7 +2205,7 @@ class SalesOrderService:
         )
 
         purchasable_map = await batch_has_purchasable_remaining(
-            tenant_id, {int(order.id): items}
+            tenant_id, {int(order.id): capability_items}
         )
         resp = enrich_sales_order_capabilities_on_response(
             order,
@@ -2201,11 +2224,12 @@ class SalesOrderService:
                 collection_progress=finance.get("collection_progress", 0.0),
                 shippable_hint=shippable_map.get(sales_order_id),
                 audit_enabled=audit_enabled,
+                lifecycle_items=capability_items,
             ),
             require_audit_before_print=require_audit_before_print,
             has_downstream_documents=has_downstream_documents,
             **self._sales_order_capability_context(
-                order, items, demand, pushable_by_item=pushable_by_item,
+                order, capability_items, demand, pushable_by_item=pushable_by_item,
                 has_existing_delivery_project=has_existing_delivery_project,
                 has_remaining_work_order_qty=remaining_wo > 0,
                 has_remaining_invoice_amount=invoice_remainder > Decimal("0"),
@@ -2812,6 +2836,11 @@ class SalesOrderService:
             invoice_amount_progress_val = finance.get("invoice_amount_progress", 0.0)
             collection_progress_val = finance.get("collection_progress", 0.0)
             total_qty = Decimal(str(order.total_quantity or 0))
+            if total_qty <= 0 and items:
+                total_qty = sum(
+                    (Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in items),
+                    Decimal("0"),
+                )
             pushed_bucket = pushed_work_orders_by_order.get(order.id) or {
                 "qty": Decimal("0"),
                 "codes": [],
@@ -2846,6 +2875,7 @@ class SalesOrderService:
                         material_fallback=material_fallback_all.get(order.id) if include_items else None,
                         shippable_hint=shippable_map.get(order.id),
                         audit_enabled=audit_enabled,
+                        lifecycle_items=items,
                     ),
                     require_audit_before_print=require_audit_before_print,
                     has_downstream_documents=downstream_by_order.get(order.id, False),

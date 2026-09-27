@@ -1020,8 +1020,20 @@ async def submit_sales_order(
     except (BusinessLogicError, ValidationError) as e:
         raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/submit", tenant_id)
     except Exception as e:
-        logger.exception("提交销售订单失败: {}", e)
-        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "提交销售订单失败", "/sales-orders/{sales_order_id}/submit", tenant_id)
+        tid = uuid.uuid4().hex
+        logger.exception(
+            "提交销售订单失败 trace_id={} sales_order_id={} err={}",
+            tid,
+            sales_order_id,
+            e,
+        )
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "提交销售订单失败",
+            "/sales-orders/{sales_order_id}/submit",
+            tenant_id,
+            trace_id=tid,
+        )
 
 
 @router.post("/{sales_order_id}/approve", response_model=SalesOrderResponse, summary="Approve sales order")
