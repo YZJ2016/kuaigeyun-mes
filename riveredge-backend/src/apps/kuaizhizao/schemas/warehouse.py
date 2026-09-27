@@ -300,6 +300,7 @@ class ProductionReturnItemBase(BaseSchema):
     return_time: Optional[datetime] = Field(None, description="实际退料时间")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
     expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     notes: Optional[str] = Field(None, description="备注")
 
 
@@ -616,6 +617,7 @@ class SemiFinishedGoodsReceiptItemBase(BaseSchema):
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
     expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     quality_status: str = Field("合格", max_length=20, description="质量状态")
     quality_inspection_id: Optional[int] = Field(None, description="质量检验单ID")
     status: str = Field("待入库", max_length=20, description="入库状态")
@@ -1350,6 +1352,7 @@ class OtherInboundItemBase(BaseSchema):
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
     expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     status: str = Field("待入库", max_length=20, description="入库状态")
     receipt_time: Optional[datetime] = Field(None, description="实际入库时间")
     notes: Optional[str] = Field(None, description="备注")
@@ -1481,6 +1484,7 @@ class OtherOutboundItemBase(BaseSchema):
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
     expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     status: str = Field("待出库", max_length=20, description="出库状态")
     delivery_time: Optional[datetime] = Field(None, description="实际出库时间")
     notes: Optional[str] = Field(None, description="备注")
@@ -1601,6 +1605,7 @@ class MaterialBorrowItemBase(BaseSchema):
     borrow_time: Optional[datetime] = Field(None, description="实际借出时间")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
     expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     notes: Optional[str] = Field(None, description="备注")
 
 
@@ -1717,6 +1722,7 @@ class MaterialReturnItemBase(BaseSchema):
     return_time: Optional[datetime] = Field(None, description="实际归还时间")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
     expiry_date: Optional[datetime] = Field(None, description="到期日期")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     notes: Optional[str] = Field(None, description="备注")
 
 

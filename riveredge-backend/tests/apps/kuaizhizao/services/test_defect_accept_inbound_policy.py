@@ -65,7 +65,7 @@ def test_fqc_assert_still_blocks_when_no_concession():
     ), patch(
         "apps.kuaizhizao.services.inspection_policy_service.get_fqc_inbound_remaining_quantity",
         new=AsyncMock(return_value=Decimal("0")),
-    ), pytest.raises(Exception, match="超过可确认余量"):
+    ), pytest.raises(Exception, match="超过成品检验合格可入余量"):
         asyncio.run(assert_fqc_for_finished_goods_receipt(1, 99, 10, [item]))
 
 

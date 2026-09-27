@@ -6,6 +6,8 @@ from contextvars import ContextVar
 from functools import wraps
 from uuid import uuid4
 
+from loguru import logger
+
 from tortoise.transactions import in_transaction
 from tortoise import connections
 from tortoise.backends.base.client import BaseTransactionWrapper
@@ -50,15 +52,25 @@ async def _lock(conn, key: str) -> None:
 
 
 def idempotent_stock_change(func):
-    """先锁定幂等操作，再查流水；余额和全部拆批流水与此检查同事务提交。"""
+    """先锁定幂等操作，再查流水；余额和全部拆批流水与此检查同事务提交。
+
+    spec 141（KR-CL2）：幂等键失败关闭——空/缺 `idempotency_key` 直接拒绝，
+    禁止无键静默直跑（无键路径重试会双过账）。
+    """
     signature = inspect.signature(func)
 
     @wraps(func)
     async def wrapped(*args, **kwargs):
         bound = signature.bind(*args, **kwargs)
         key = bound.arguments.get("idempotency_key")
-        if not key:
-            return await func(*args, **kwargs)
+        if not key or not str(key).strip():
+            from infra.exceptions.exceptions import ValidationError
+
+            raise ValidationError(
+                f"库存过账缺少幂等键 idempotency_key: {getattr(func, '__name__', func)}"
+            )
+        bound.arguments["idempotency_key"] = str(key).strip()
+        key = bound.arguments["idempotency_key"]
         tenant_id = bound.arguments["tenant_id"]
         scope = _posting_scope.get()
         if scope:
@@ -77,6 +89,13 @@ def idempotent_stock_change(func):
                 & (Q(idempotency_key=key) | Q(idempotency_key__startswith=f"{key}#")),
             ).using_db(conn).values_list("idempotency_key", flat=True)
             if existing:
+                # 幂等命中须可观测：返回既有结果，不重复过账（便于对账）
+                logger.info(
+                    "stock posting idempotent hit: tenant={} key={} existing={}",
+                    tenant_id,
+                    key,
+                    list(existing),
+                )
                 return True
             return await func(*bound.args, **bound.kwargs)
 
@@ -104,6 +123,37 @@ def serialize_stock_document(document_type: str, id_parameter: str):
                     _posting_scope.reset(token)
         return wrapped
     return decorate
+
+
+@asynccontextmanager
+async def stock_document_guard(document_type: str, tenant_id: int, document_id):
+    """单据级串行边界 + 单次过账尝试隔离，供不能把整函数包进过账事务的路径使用。
+
+    与 `serialize_stock_document` 同语义但不接管事务边界——必须在已开启的
+    事务内作为第二个上下文使用：
+
+        async with in_transaction(), stock_document_guard("sales_return", tenant_id, return_id):
+            ...
+
+    - 咨询锁与装饰器同名 `stock-document:{type}:{tenant}:{id}`，同一单据的
+      确认/撤回互斥；随当前事务提交/回滚释放（含复用外层事务的调用）。
+    - `_posting_scope` 每次进入生成新 UUID，保证「确认→撤回→再确认」是新过账
+      尝试，明细幂等键带新后缀、不被流水查重吞掉。
+    """
+    conn = connections.get("default")
+    if not isinstance(conn, BaseTransactionWrapper):
+        # 失败关闭：锁落在非事务连接上随语句结束即释放，等同失去单据互斥
+        from infra.exceptions.exceptions import ValidationError
+
+        raise ValidationError(
+            f"stock_document_guard 必须在活动事务内使用: {document_type}:{document_id}"
+        )
+    await _lock(conn, f"stock-document:{document_type}:{tenant_id}:{document_id}")
+    token = _posting_scope.set(uuid4().hex)
+    try:
+        yield
+    finally:
+        _posting_scope.reset(token)
 
 
 def serialize_stock_create(document_type: str):

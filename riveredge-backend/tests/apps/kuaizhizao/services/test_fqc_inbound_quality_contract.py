@@ -78,6 +78,9 @@ def test_assert_fqc_rejects_receipt_over_qualified_remaining():
             }
         ),
     ), patch(
+        "apps.kuaizhizao.services.inspection_policy_service.sum_defect_accept_quantity_for_finished_goods_receipt",
+        new=AsyncMock(return_value=Decimal("0")),
+    ), patch(
         "apps.kuaizhizao.services.inspection_policy_service.resolve_inspection_policy",
         new=AsyncMock(return_value=("plan", 1, None)),
     ), patch(

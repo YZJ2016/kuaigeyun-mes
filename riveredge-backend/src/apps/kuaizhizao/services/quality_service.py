@@ -39,6 +39,7 @@ from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.services.inspection_policy_service import (
     iqc_inspection_passed_for_inbound,
     fqc_inspection_passed_for_inbound,
+    inbound_inspection_required,
     resolve_iqc_plan_label_for_material,
     resolve_fqc_plan_label_for_material,
     InspectionStage,
@@ -371,8 +372,20 @@ def _semi_finished_goods_receipt_allows_fqc_creation(receipt: Any) -> bool:
     return _finished_goods_receipt_allows_fqc_creation(receipt)
 
 
+def _inbound_line_qc_mode(eff: str, required: bool) -> Optional[str]:
+    """行级展示口径（spec 140 规则 10）：必检但无策略（default_none）时 mode 置 None 表示待配置；免检行仍为 "none"。"""
+    if eff != "none":
+        return eff
+    return None if required else "none"
+
+
 async def _collect_fqc_required_material_ids(tenant_id: int, lines: List[Any]) -> List[int]:
-    """成品入库明细中 fqc 策略≠none 且数量>0 的物料 ID（去重保序）。"""
+    """成品入库明细中 FQC 必检且数量>0 的物料 ID（去重保序）。
+
+    spec 140 / KR-CL1：与入库确认门禁同一判定——source=material 且 eff=none
+    （物料级显式免检）与 stage_disabled/module_disabled 不算必检；
+    default_none（无策略）与 simple/plan 必检。
+    """
     candidate_mids: List[int] = []
     for item in lines:
         mid = getattr(item, "material_id", None)
@@ -402,7 +415,8 @@ async def _collect_fqc_required_material_ids(tenant_id: int, lines: List[Any]) -
         mid_int = int(mid)
         if mid_int in seen:
             continue
-        if policy_cache.get(mid_int, ("none", None, ""))[0] == "none":
+        policy = policy_cache.get(mid_int, ("none", None, "default_none"))
+        if not inbound_inspection_required(policy[0], policy[2]):
             continue
         seen.add(mid_int)
         needs_qc_mids.append(mid_int)
@@ -446,7 +460,12 @@ async def _ensure_fqc_for_work_order(
 
 
 async def _collect_iqc_required_material_ids(tenant_id: int, lines: List[Any]) -> List[int]:
-    """采购入库明细中 iqc 策略≠none 且数量>0 的物料 ID（去重保序）。"""
+    """采购入库明细中 IQC 必检且数量>0 的物料 ID（去重保序）。
+
+    spec 140 / KR-CL1：与入库确认门禁同一判定——source=material 且 eff=none
+    （物料级显式免检）与 stage_disabled/module_disabled 不算必检；
+    default_none（无策略）与 simple/plan 必检。
+    """
     candidate_mids: List[int] = []
     for item in lines:
         mid = getattr(item, "material_id", None)
@@ -476,7 +495,8 @@ async def _collect_iqc_required_material_ids(tenant_id: int, lines: List[Any]) -
         mid_int = int(mid)
         if mid_int in seen:
             continue
-        if policy_cache.get(mid_int, ("none", None, ""))[0] == "none":
+        policy = policy_cache.get(mid_int, ("none", None, "default_none"))
+        if not inbound_inspection_required(policy[0], policy[2]):
             continue
         seen.add(mid_int)
         needs_qc_mids.append(mid_int)
@@ -2246,6 +2266,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
 
         cfg = await get_quality_effective_config(tenant_id)
+        # spec 140 / KR-CL1：开关不再参与放行，仅存值透传给前端只读展示
         gate_enabled = bool(cfg["gate"]["require_iqc_before_receipt_confirm"])
         iqc_can_create = bool(cfg["stage_enabled"]["iqc"] and cfg["module_enabled"]["incoming"])
 
@@ -2293,15 +2314,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             pending_inspections.append(IncomingInspectionResponse.model_validate(i))
 
         all_iqc_passed = (not requires_iqc) or all(passed_by_material.get(mid) for mid in needs_qc_mids)
-        # 门禁关闭：可确认入库（行上仍展示检验进度，便于对照）
-        can_confirm_inbound = (not gate_enabled) or all_iqc_passed
+        # spec 140 / KR-CL1：必检行未全部合格即不可确认入库，与开关存值无关
+        can_confirm_inbound = all_iqc_passed
         message: Optional[str] = None
-        if gate_enabled and requires_iqc and not all_iqc_passed:
+        if requires_iqc and not all_iqc_passed:
             if not inspections:
-                message = "已启用「收货前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
+                message = "相关物料须先创建并完成来料检验，检验合格后再确认入库"
             else:
                 message = (
-                    "已启用「收货前必须来料检验」，相关物料的来料检验须合格"
+                    "相关物料的来料检验须合格"
                     "（需审核时须审核通过）后才能确认入库"
                 )
 
@@ -2348,8 +2369,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             if qty_f <= 0:
                 continue
             mid_int = int(mid)
-            eff_mode = iqc_policy_cache.get(mid_int, ("none", None, ""))[0]
-            iqc_required = eff_mode != "none"
+            policy = iqc_policy_cache.get(mid_int, ("none", None, "default_none"))
+            eff_mode = policy[0]
+            # spec 140 / KR-CL1：与确认门禁同一判定（无策略 default_none 亦必检）
+            iqc_required = inbound_inspection_required(policy[0], policy[2])
             plan_label: Optional[str] = None
             if iqc_required:
                 if mid_int not in plan_label_cache:
@@ -2371,7 +2394,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     material_name=str(getattr(item, "material_name", "") or ""),
                     receipt_quantity=qty_f,
                     iqc_required=iqc_required,
-                    iqc_mode=eff_mode if iqc_required else "none",
+                    iqc_mode=_inbound_line_qc_mode(eff_mode, iqc_required),
                     plan_label=plan_label,
                     inspection_id=int(linked.id) if linked else None,
                     inspection_code=getattr(linked, "inspection_code", None) if linked else None,
@@ -2379,8 +2402,8 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     quality_status=getattr(linked, "quality_status", None) if linked else None,
                     review_status=getattr(linked, "review_status", None) if linked else None,
                     passed=passed,
-                    # 行「可入库」：门禁关闭时可确认；门禁开启须检验合格
-                    can_inbound=(not gate_enabled) or passed,
+                    # 行「可入库」：免检/环节未启用或已检验合格
+                    can_inbound=passed,
                 )
             )
 
@@ -2523,6 +2546,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         )
 
         cfg = await get_quality_effective_config(tenant_id)
+        # spec 140 / KR-CL1：开关不再参与放行，仅存值透传给前端只读展示
         gate_enabled = bool(cfg["gate"]["require_iqc_before_customer_material_confirm"])
         iqc_can_create = bool(cfg["stage_enabled"]["iqc"] and cfg["module_enabled"]["incoming"])
 
@@ -2569,14 +2593,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             pending_inspections.append(IncomingInspectionResponse.model_validate(i))
 
         all_iqc_passed = (not requires_iqc) or all(passed_by_material.get(mid) for mid in needs_qc_mids)
-        can_confirm_inbound = (not gate_enabled) or all_iqc_passed
+        # spec 140 / KR-CL1：必检行未全部合格即不可确认入库，与开关存值无关
+        can_confirm_inbound = all_iqc_passed
         message: Optional[str] = None
-        if gate_enabled and requires_iqc and not all_iqc_passed:
+        if requires_iqc and not all_iqc_passed:
             if not inspections:
-                message = "已启用「代工来料入库前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
+                message = "相关物料须先创建并完成来料检验，检验合格后再确认入库"
             else:
                 message = (
-                    "已启用「代工来料入库前必须来料检验」，相关物料的来料检验须合格"
+                    "相关物料的来料检验须合格"
                     "（需审核时须审核通过）后才能确认入库"
                 )
 
@@ -2614,8 +2639,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             if qty_f <= 0:
                 continue
             mid_int = int(mid)
-            eff_mode = iqc_policy_cache.get(mid_int, ("none", None, ""))[0]
-            iqc_required = eff_mode != "none"
+            policy = iqc_policy_cache.get(mid_int, ("none", None, "default_none"))
+            eff_mode = policy[0]
+            # spec 140 / KR-CL1：与确认门禁同一判定（无策略 default_none 亦必检）
+            iqc_required = inbound_inspection_required(policy[0], policy[2])
             plan_label: Optional[str] = None
             if iqc_required:
                 if mid_int not in plan_label_cache:
@@ -2638,7 +2665,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     material_name=str(getattr(item, "material_name", "") or ""),
                     receipt_quantity=qty_f,
                     iqc_required=iqc_required,
-                    iqc_mode=eff_mode if iqc_required else "none",
+                    iqc_mode=_inbound_line_qc_mode(eff_mode, iqc_required),
                     plan_label=plan_label,
                     inspection_id=int(linked.id) if linked else None,
                     inspection_code=getattr(linked, "inspection_code", None) if linked else None,
@@ -4276,6 +4303,10 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 work_order_operation=woo,
             )
             if eff == "none":
+                if _reason == "default_none":
+                    raise BusinessLogicError(
+                        "当前工单工序未配置过程检验策略，请先在工序或物料档案配置检验策略（或设置显式免检）后下推过程检验单"
+                    )
                 raise BusinessLogicError(
                     "当前工单工序未配置过程检验（工序/成品质检模式均为无质检），无需下推过程检验单"
                 )
@@ -6193,6 +6224,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         allow_auto_create: bool,
     ) -> EnsureFqcForFinishedGoodsReceiptResponse:
         cfg = await get_quality_effective_config(tenant_id)
+        # spec 140 / KR-CL1：开关不再参与放行，仅存值透传给前端只读展示
         gate_enabled = bool(cfg["gate"]["require_fqc_before_finished_goods_receipt"])
         fqc_can_create = bool(cfg["stage_enabled"]["fqc"] and cfg["module_enabled"]["finished"])
 
@@ -6244,18 +6276,12 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         message: Optional[str] = None
         if requires_fqc and not all_fqc_passed:
             if not inspections:
+                message = "请先创建并完成成品检验，检验合格后再确认入库"
+            else:
                 message = (
-                    "已启用「成品检验合格才入库」，请先创建并完成成品检验，检验合格后再确认入库"
-                    if gate_enabled
-                    else "请先创建并完成成品检验，检验合格后再确认入库"
-                )
-            elif gate_enabled:
-                message = (
-                    "已启用「成品检验合格才入库」，相关物料的成品检验须合格"
+                    "相关物料的成品检验须合格"
                     "（需审核时须审核通过）后才能确认入库"
                 )
-            else:
-                message = "相关物料须完成成品检验并合格后方可确认入库"
 
         inspection_by_material: Dict[int, FinishedGoodsInspection] = {}
         for inspection in inspections:
@@ -6291,8 +6317,10 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             if qty_f <= 0:
                 continue
             mid_int = int(mid)
-            eff_mode = fqc_policy_cache.get(mid_int, ("none", None, ""))[0]
-            fqc_required = eff_mode != "none"
+            policy = fqc_policy_cache.get(mid_int, ("none", None, "default_none"))
+            eff_mode = policy[0]
+            # spec 140 / KR-CL1：与确认门禁同一判定（无策略 default_none 亦必检）
+            fqc_required = inbound_inspection_required(policy[0], policy[2])
             plan_label: Optional[str] = None
             if fqc_required:
                 if mid_int not in plan_label_cache:
@@ -6314,7 +6342,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     material_name=str(getattr(item, "material_name", "") or ""),
                     receipt_quantity=qty_f,
                     fqc_required=fqc_required,
-                    fqc_mode=eff_mode if fqc_required else "none",
+                    fqc_mode=_inbound_line_qc_mode(eff_mode, fqc_required),
                     plan_label=plan_label,
                     inspection_id=int(linked.id) if linked else None,
                     inspection_code=getattr(linked, "inspection_code", None) if linked else None,
@@ -6683,12 +6711,16 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                     tenant_id=tenant_id, id=mid, deleted_at__isnull=True
                 )
 
-            eff, _, _ = await resolve_inspection_policy(
+            eff, _, fqc_source = await resolve_inspection_policy(
                 tenant_id,
                 "fqc",
                 material_id=mid,
             )
             if eff == "none":
+                if fqc_source == "default_none":
+                    raise BusinessLogicError(
+                        "当前成品物料未配置成品检验策略，请先在物料档案配置检验策略（或设置显式免检）后下推成品检验单"
+                    )
                 raise BusinessLogicError(
                     "当前成品物料未配置成品检验（质检模式为无质检），无需下推成品检验单"
                 )
