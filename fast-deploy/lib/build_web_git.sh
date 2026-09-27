@@ -15,7 +15,11 @@ build_web_assert_source_tree_committed() {
         [ -n "$line" ] || continue
         path="${line:3}"
         case "$path" in
-          riveredge-frontend/dist/*) continue ;;
+          riveredge-frontend/dist/*|riveredge-frontend/dist|\
+          riveredge-frontend/dist-blue/*|riveredge-frontend/dist-blue|\
+          riveredge-frontend/dist-green/*|riveredge-frontend/dist-green|\
+          riveredge-frontend/dist-live/*|riveredge-frontend/dist-live|\
+          riveredge-frontend/.perf/*|riveredge-frontend/.perf) continue ;;
         esac
         printf '%s\n' "$line"
       done
