@@ -4,6 +4,8 @@ import { resolve } from 'path'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { ProxyOptions } from 'vite'
+import viteCompression from 'vite-plugin-compression'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // 主入口配置
 // 统一使用 SaaS 模式
@@ -432,7 +434,29 @@ export default defineConfig({
       // ⚠️ 关键修复：使用经典的JSX运行时，确保兼容性
       jsxRuntime: 'automatic', // 使用自动JSX运行时，不需要显式导入React
     }),
-  ],
+    // P5-1：预压缩产物（.gz/.br），Caddy file_server precompressed 直出，弱网 Transfer Size 下降
+    viteCompression({
+      algorithm: 'gzip',
+      ext: '.gz',
+      threshold: 10240,
+      deleteOriginFile: false,
+    }),
+    viteCompression({
+      algorithm: 'brotliCompress',
+      ext: '.br',
+      threshold: 10240,
+      deleteOriginFile: false,
+    }),
+    // P5-8：ANALYZE=1 npm run build:analyze 出 dist/stats.html
+    process.env.ANALYZE === '1' &&
+      visualizer({
+        filename: resolve(__dirname, 'dist/stats.html'),
+        open: false,
+        gzipSize: true,
+        brotliSize: true,
+        template: 'treemap',
+      }),
+  ].filter(Boolean),
   resolve: {
     // workspace compose 用 junction/symlink 挂载 pro/custom 应用时：必须保留逻辑路径，
     // 否则相对导入 ../../../services/* 会按私有仓真实路径解析而失败。
