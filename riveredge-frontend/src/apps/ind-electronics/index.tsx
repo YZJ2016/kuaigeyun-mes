@@ -15,6 +15,7 @@ const EsdHubPage = lazy(() => import('./pages/esd/index'));
 const EsdInspectionPage = lazy(() => import('./pages/esd/inspection'));
 const EsdDashboardPage = lazy(() => import('./pages/esd/dashboard'));
 const LabelOemPage = lazy(() => import('./pages/label-oem/index'));
+const PackingAsnPage = lazy(() => import('./pages/packing-asn/index'));
 
 export default function IndElectronicsApp() {
   return (
@@ -24,6 +25,7 @@ export default function IndElectronicsApp() {
       <Route path="esd/inspection" element={withPageSuspense(EsdInspectionPage)} />
       <Route path="esd/dashboard" element={withPageSuspense(EsdDashboardPage)} />
       <Route path="label-oem" element={withPageSuspense(LabelOemPage)} />
+      <Route path="packing-asn" element={withPageSuspense(PackingAsnPage)} />
       <Route path="*" element={<Navigate to="esd/dashboard" replace />} />
     </Routes>
   );

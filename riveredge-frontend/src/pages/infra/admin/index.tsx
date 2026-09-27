@@ -27,6 +27,7 @@ import BuildProvenanceSummaryTab from './build-provenance-summary';
 import { getBuildProvenance } from '../../../services/platformSettings';
 import { canShowRegistrySummaryAdmin } from '../../../utils/officialRegistrySite';
 import { getAntdModal } from '../../../utils/antdAppApis';
+import InfraAdminPasswordPanel from './InfraAdminPasswordPanel';
 /**
  * 平台超级管理员管理页面组件
  */
@@ -160,6 +161,7 @@ export default function InfraSuperAdminPage() {
               ]}
             />
           )}
+          <InfraAdminPasswordPanel />
         </>
       ),
     });

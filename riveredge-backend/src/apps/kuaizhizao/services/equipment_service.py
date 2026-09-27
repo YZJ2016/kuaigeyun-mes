@@ -7,14 +7,24 @@ Author: Luigi Lu
 Date: 2026-01-05
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime
+from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime, date
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 
 from apps.kuaizhizao.models.equipment import Equipment, EquipmentCalibration
-from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusHistory
+from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusHistory, EquipmentStatusMonitor
 from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
-from apps.kuaizhizao.models.maintenance_plan import MaintenanceExecution
+from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan, MaintenanceExecution
+from apps.kuaizhizao.models.equipment_ops import (
+    EquipmentSpotCheck,
+    EquipmentRoutePatrol,
+    EquipmentRoutePatrolLine,
+    EquipmentScrapApplication,
+)
+from apps.kuaizhizao.models.spare_part import SparePartRequisition
+from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.models.equipment_point_inspection import EquipmentPointInspectionRecord
 from apps.kuaizhizao.schemas.equipment import (
     EquipmentCreate,
@@ -27,7 +37,35 @@ from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
-from core.utils.timezone_utils import resolve_business_datetime
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat, site_day_bounds_utc
+
+
+_EQUIPMENT_TRACE_WO_TERMINAL_STATUSES = frozenset(
+    {
+        "completed",
+        "已完成",
+        "COMPLETED",
+        "cancelled",
+        "已取消",
+        "CANCELLED",
+        "split",
+        "已拆分",
+        "SPLIT",
+    }
+)
+
+_TRACE_LIST_LIMIT = 50
+
+_DISPATCH_SNAPSHOT_CLOSED_STATUSES = frozenset(
+    {
+        "completed",
+        "已完成",
+        "closed",
+        "已关闭",
+        "cancelled",
+        "已取消",
+    }
+)
 
 
 class EquipmentService:
@@ -36,6 +74,45 @@ class EquipmentService:
     
     提供设备的 CRUD 操作。
     """
+
+    @staticmethod
+    async def _resolve_capable_operations(
+        tenant_id: int,
+        operation_ids: Optional[List[int]],
+    ) -> tuple[Optional[List[int]], Optional[List[Dict[str, Any]]]]:
+        """校验并生成可加工工序 ID 列表与展示快照。"""
+        if operation_ids is None:
+            return None, None
+        seen: set[int] = set()
+        ids: List[int] = []
+        for raw in operation_ids:
+            try:
+                oid = int(raw)
+            except (TypeError, ValueError):
+                raise ValidationError("关联工序ID非法")
+            if oid <= 0 or oid in seen:
+                continue
+            seen.add(oid)
+            ids.append(oid)
+        if not ids:
+            # 空列表落库为 NULL，表示未配置能力限制（派工筛选时仍可选）
+            return None, None
+        from apps.master_data.models.process import Operation
+
+        ops = await Operation.filter(
+            tenant_id=tenant_id,
+            id__in=ids,
+            deleted_at__isnull=True,
+        ).all()
+        by_id = {int(op.id): op for op in ops}
+        missing = [oid for oid in ids if oid not in by_id]
+        if missing:
+            raise ValidationError(f"关联工序不存在或已删除: {missing}")
+        snapshot = [
+            {"id": oid, "code": by_id[oid].code, "name": by_id[oid].name}
+            for oid in ids
+        ]
+        return ids, snapshot
     
     @staticmethod
     async def create_equipment(
@@ -67,9 +144,19 @@ class EquipmentService:
             bind = (data.qr_bind_code or "").strip() or None
             if bind:
                 await EquipmentService._assert_qr_bind_unique(tenant_id, bind)
+            dump = data.model_dump(exclude_none=True)
+            dump.pop("capable_operations", None)
+            if "capable_operation_ids" in data.model_fields_set:
+                capable_ids, capable_snap = await EquipmentService._resolve_capable_operations(
+                    tenant_id, data.capable_operation_ids
+                )
+                dump["capable_operation_ids"] = capable_ids
+                dump["capable_operations"] = capable_snap
+            else:
+                dump.pop("capable_operation_ids", None)
             equipment = Equipment(
                 tenant_id=tenant_id,
-                **{**data.model_dump(exclude_none=True), "qr_bind_code": bind},
+                **{**dump, "qr_bind_code": bind},
             )
             actor = None
             if created_by is not None:
@@ -200,6 +287,8 @@ class EquipmentService:
         workshop_id: Optional[int] = None,
         production_line_id: Optional[int] = None,
         workstation_id: Optional[int] = None,
+        capable_operation_id: Optional[int] = None,
+        include_equipment_id: Optional[int] = None,
         search: Optional[str] = None,
         keyword: Optional[str] = None,
         order_by: Optional[str] = None,
@@ -233,13 +322,31 @@ class EquipmentService:
         if status:
             query = query.filter(status=status)
         if is_active is not None:
-            query = query.filter(is_active=is_active)
+            if (
+                is_active is True
+                and include_equipment_id is not None
+                and int(include_equipment_id) > 0
+            ):
+                query = query.filter(
+                    Q(is_active=True) | Q(id=int(include_equipment_id))
+                )
+            else:
+                query = query.filter(is_active=is_active)
         if workshop_id is not None:
             query = query.filter(workshop_id=workshop_id)
         if production_line_id is not None:
             query = query.filter(production_line_id=production_line_id)
         if workstation_id:
             query = query.filter(workstation_id=workstation_id)
+        if capable_operation_id is not None:
+            opid = int(capable_operation_id)
+            # 已配置且包含该工序，或未配置（NULL）仍可选；已配置但不含该工序的排除
+            capable_q = Q(capable_operation_ids__contains=[opid]) | Q(
+                capable_operation_ids__isnull=True
+            )
+            if include_equipment_id is not None and int(include_equipment_id) > 0:
+                capable_q = capable_q | Q(id=int(include_equipment_id))
+            query = query.filter(capable_q)
         query = apply_equipment_keyword_filter(
             query,
             pick_search_keyword(keyword, search),
@@ -281,6 +388,7 @@ class EquipmentService:
         """更新设备"""
         equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
         update_data = data.model_dump(exclude_unset=True, exclude_none=True)
+        update_data.pop("capable_operations", None)
         # 允许清空设备负责人（exclude_none 会丢掉 null）
         if "responsible_person_id" in data.model_fields_set:
             update_data["responsible_person_id"] = data.responsible_person_id
@@ -290,6 +398,12 @@ class EquipmentService:
             update_data["spot_check_person_id"] = data.spot_check_person_id
         if "spot_check_person_name" in data.model_fields_set:
             update_data["spot_check_person_name"] = data.spot_check_person_name
+        if "capable_operation_ids" in data.model_fields_set:
+            capable_ids, capable_snap = await EquipmentService._resolve_capable_operations(
+                tenant_id, data.capable_operation_ids
+            )
+            update_data["capable_operation_ids"] = capable_ids
+            update_data["capable_operations"] = capable_snap
         if "last_calibration_date" in data.model_fields_set:
             update_data["last_calibration_date"] = data.last_calibration_date
         if "next_calibration_date" in data.model_fields_set:
@@ -762,3 +876,504 @@ class EquipmentService:
 
         logs.sort(key=lambda x: x["time"] if x["time"] else datetime.min, reverse=True)
         return logs[:limit]
+
+    @staticmethod
+    def _parse_equipment_trace_date_range(
+        date_from: Optional[str],
+        date_to: Optional[str],
+    ) -> Optional[Tuple[datetime, datetime]]:
+        from_raw = (date_from or "").strip()
+        to_raw = (date_to or "").strip()
+        if not from_raw and not to_raw:
+            return None
+        if not from_raw or not to_raw:
+            raise ValidationError("date_from 与 date_to 须同时提供")
+        start_day = date.fromisoformat(from_raw)
+        end_day = date.fromisoformat(to_raw)
+        if end_day < start_day:
+            raise ValidationError("date_to 不能早于 date_from")
+        range_start, _ = site_day_bounds_utc(start_day)
+        _, range_end = site_day_bounds_utc(end_day)
+        return range_start, range_end
+
+    @staticmethod
+    async def get_equipment_trace(
+        tenant_id: int,
+        equipment_uuid: str,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """设备追溯聚合；可选站点日历日区间筛选。"""
+        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, equipment_uuid)
+        date_range = EquipmentService._parse_equipment_trace_date_range(date_from, date_to)
+        range_start: Optional[datetime] = None
+        range_end: Optional[datetime] = None
+        if date_range:
+            range_start, range_end = date_range
+
+        def _in_range(field_name: str) -> Q:
+            assert range_start is not None and range_end is not None
+            return Q(**{f"{field_name}__gte": range_start, f"{field_name}__lt": range_end})
+
+        plan_q = MaintenancePlan.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        )
+        if date_range:
+            plan_q = plan_q.filter(
+                _in_range("planned_start_date")
+                | _in_range("planned_end_date")
+                | _in_range("created_at")
+            )
+        maintenance_plans = await plan_q.order_by("-created_at").limit(_TRACE_LIST_LIMIT)
+
+        exec_q = MaintenanceExecution.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        )
+        if date_range:
+            exec_q = exec_q.filter(_in_range("execution_date"))
+        maintenance_executions = await exec_q.order_by("-execution_date").limit(_TRACE_LIST_LIMIT)
+
+        fault_q = EquipmentFault.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        )
+        if date_range:
+            fault_q = fault_q.filter(_in_range("fault_date"))
+        equipment_faults = await fault_q.order_by("-fault_date").limit(_TRACE_LIST_LIMIT)
+
+        repair_q = EquipmentRepair.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        )
+        if date_range:
+            repair_q = repair_q.filter(_in_range("repair_date"))
+        equipment_repairs = await repair_q.order_by("-repair_date").limit(_TRACE_LIST_LIMIT)
+
+        calib_q = EquipmentCalibration.filter(
+            tenant_id=tenant_id,
+            equipment_id=equipment.id,
+            deleted_at__isnull=True,
+        )
+        if date_range:
+            calib_q = calib_q.filter(_in_range("calibration_date"))
+        equipment_calibrations = await calib_q.order_by("-calibration_date").limit(_TRACE_LIST_LIMIT)
+
+        spot_q = EquipmentSpotCheck.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        )
+        if date_range:
+            spot_q = spot_q.filter(_in_range("check_date"))
+        spot_checks = await spot_q.order_by("-check_date", "-created_at").limit(_TRACE_LIST_LIMIT)
+
+        patrol_line_ids = await EquipmentRoutePatrolLine.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        ).values_list("route_patrol_id", flat=True)
+        patrol_ids = list(dict.fromkeys(patrol_line_ids))
+        route_patrols: List[EquipmentRoutePatrol] = []
+        if patrol_ids:
+            patrol_q = EquipmentRoutePatrol.filter(
+                tenant_id=tenant_id,
+                id__in=patrol_ids,
+                deleted_at__isnull=True,
+            )
+            if date_range:
+                patrol_q = patrol_q.filter(_in_range("patrol_date"))
+            route_patrols = await patrol_q.order_by("-patrol_date", "-created_at").limit(_TRACE_LIST_LIMIT)
+
+        spare_q = SparePartRequisition.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        )
+        if date_range:
+            spare_q = spare_q.filter(_in_range("created_at"))
+        spare_part_requisitions = await spare_q.order_by("-created_at").limit(_TRACE_LIST_LIMIT)
+
+        scrap_q = EquipmentScrapApplication.filter(
+            tenant_id=tenant_id,
+            equipment_uuid=equipment.uuid,
+            deleted_at__isnull=True,
+        )
+        if date_range:
+            scrap_q = scrap_q.filter(_in_range("scrap_date") | _in_range("created_at"))
+        scrap_applications = await scrap_q.order_by("-created_at").limit(_TRACE_LIST_LIMIT)
+
+        op_q = WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            assigned_equipment_id=equipment.id,
+            deleted_at__isnull=True,
+        ).exclude(status__in=["completed", "cancelled"])
+        if date_range:
+            op_q = op_q.filter(
+                _in_range("planned_start_date")
+                | _in_range("updated_at")
+                | _in_range("assigned_at")
+            )
+        operations = await op_q.order_by("-updated_at", "-id").limit(_TRACE_LIST_LIMIT)
+
+        wo_ids = list({op.work_order_id for op in operations})
+        work_orders: List[WorkOrder] = []
+        if wo_ids:
+            work_orders = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                id__in=wo_ids,
+                deleted_at__isnull=True,
+            ).all()
+        wo_by_id = {wo.id: wo for wo in work_orders}
+
+        assigned_operations: List[Dict[str, Any]] = []
+        for op in operations:
+            wo = wo_by_id.get(op.work_order_id)
+            if wo is None:
+                continue
+            if wo.status in _EQUIPMENT_TRACE_WO_TERMINAL_STATUSES:
+                continue
+            assigned_operations.append(
+                {
+                    "work_order_id": wo.id,
+                    "work_order_code": wo.code,
+                    "product_name": wo.product_name,
+                    "work_order_status": wo.status,
+                    "operation_id": op.id,
+                    "operation_name": op.operation_name,
+                    "operation_status": op.status,
+                    "assigned_worker_name": op.assigned_worker_name,
+                    "planned_start_at": to_api_isoformat(op.planned_start_date)
+                    if op.planned_start_date
+                    else None,
+                    "planned_end_at": to_api_isoformat(op.planned_end_date)
+                    if op.planned_end_date
+                    else None,
+                    "updated_at": to_api_isoformat(op.updated_at),
+                }
+            )
+
+        return {
+            "equipment": {
+                "uuid": equipment.uuid,
+                "code": equipment.code,
+                "name": equipment.name,
+                "status": equipment.status,
+                "is_active": equipment.is_active,
+            },
+            "maintenance_plans": [
+                {
+                    "uuid": plan.uuid,
+                    "plan_no": plan.plan_no,
+                    "plan_name": plan.plan_name,
+                    "plan_type": plan.plan_type,
+                    "maintenance_type": plan.maintenance_type,
+                    "status": plan.status,
+                    "planned_start_date": to_api_isoformat(plan.planned_start_date)
+                    if plan.planned_start_date
+                    else None,
+                    "planned_end_date": to_api_isoformat(plan.planned_end_date)
+                    if plan.planned_end_date
+                    else None,
+                    "created_at": to_api_isoformat(plan.created_at),
+                }
+                for plan in maintenance_plans
+            ],
+            "maintenance_executions": [
+                {
+                    "uuid": exec.uuid,
+                    "execution_no": exec.execution_no,
+                    "execution_date": to_api_isoformat(exec.execution_date),
+                    "executor_name": exec.executor_name,
+                    "execution_result": exec.execution_result,
+                    "status": exec.status,
+                    "maintenance_cost": float(exec.maintenance_cost) if exec.maintenance_cost else None,
+                    "created_at": to_api_isoformat(exec.created_at),
+                }
+                for exec in maintenance_executions
+            ],
+            "equipment_faults": [
+                {
+                    "uuid": fault.uuid,
+                    "fault_no": fault.fault_no,
+                    "fault_date": to_api_isoformat(fault.fault_date),
+                    "fault_type": fault.fault_type,
+                    "fault_level": fault.fault_level,
+                    "status": fault.status,
+                    "repair_required": fault.repair_required,
+                    "created_at": to_api_isoformat(fault.created_at),
+                }
+                for fault in equipment_faults
+            ],
+            "equipment_repairs": [
+                {
+                    "uuid": repair.uuid,
+                    "repair_no": repair.repair_no,
+                    "repair_date": to_api_isoformat(repair.repair_date),
+                    "repair_type": repair.repair_type,
+                    "repairer_name": repair.repairer_name,
+                    "repair_duration": float(repair.repair_duration) if repair.repair_duration else None,
+                    "repair_cost": float(repair.repair_cost) if repair.repair_cost else None,
+                    "status": repair.status,
+                    "repair_result": repair.repair_result,
+                    "arrival_at": to_api_isoformat(repair.arrival_at) if repair.arrival_at else None,
+                    "arrival_by_name": repair.arrival_by_name,
+                    "fault_cause": repair.fault_cause,
+                    "repair_content": repair.repair_content,
+                    "completed_at": to_api_isoformat(repair.completed_at) if repair.completed_at else None,
+                    "created_at": to_api_isoformat(repair.created_at),
+                }
+                for repair in equipment_repairs
+            ],
+            "equipment_calibrations": [
+                {
+                    "uuid": calib.uuid,
+                    "calibration_date": to_api_isoformat(calib.calibration_date),
+                    "result": calib.result,
+                    "certificate_no": calib.certificate_no,
+                    "expiry_date": to_api_isoformat(calib.expiry_date) if calib.expiry_date else None,
+                    "remark": calib.remark,
+                    "created_at": to_api_isoformat(calib.created_at),
+                }
+                for calib in equipment_calibrations
+            ],
+            "spot_checks": [
+                {
+                    "id": row.id,
+                    "document_no": row.document_no,
+                    "check_date": to_api_isoformat(row.check_date) if row.check_date else None,
+                    "inspector_name": row.inspector_name,
+                    "status": row.status,
+                    "has_abnormality": row.has_abnormality,
+                    "abnormality_description": row.abnormality_description,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in spot_checks
+            ],
+            "route_patrols": [
+                {
+                    "id": row.id,
+                    "document_no": row.document_no,
+                    "route_code": row.route_code,
+                    "route_name": row.route_name,
+                    "patrol_date": to_api_isoformat(row.patrol_date) if row.patrol_date else None,
+                    "inspector_name": row.inspector_name,
+                    "status": row.status,
+                    "has_abnormality": row.has_abnormality,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in route_patrols
+            ],
+            "spare_part_requisitions": [
+                {
+                    "id": row.id,
+                    "requisition_no": row.requisition_no,
+                    "purpose": row.purpose,
+                    "applicant_name": row.applicant_name,
+                    "status": row.status,
+                    "approved_at": to_api_isoformat(row.approved_at) if row.approved_at else None,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in spare_part_requisitions
+            ],
+            "scrap_applications": [
+                {
+                    "id": row.id,
+                    "application_no": row.application_no,
+                    "reason": row.reason,
+                    "scrap_date": to_api_isoformat(row.scrap_date) if row.scrap_date else None,
+                    "applicant_name": row.applicant_name,
+                    "status": row.status,
+                    "approved_at": to_api_isoformat(row.approved_at) if row.approved_at else None,
+                    "created_at": to_api_isoformat(row.created_at),
+                }
+                for row in scrap_applications
+            ],
+            "assigned_operations": assigned_operations,
+        }
+
+    @staticmethod
+    async def get_equipment_dispatch_snapshots(
+        tenant_id: int,
+        equipment_ids: List[int],
+    ) -> Dict[str, Any]:
+        """工序派工选设备：批量卡片快照（最近点检/维修、在制派工占用）。"""
+        unique_ids = list(dict.fromkeys(int(i) for i in equipment_ids if int(i) > 0))
+        if not unique_ids:
+            raise ValidationError("equipment_ids 不能为空")
+        if len(unique_ids) > 300:
+            raise ValidationError("equipment_ids 最多 300 条")
+
+        equipment_rows = await Equipment.filter(
+            tenant_id=tenant_id,
+            id__in=unique_ids,
+            deleted_at__isnull=True,
+        ).all()
+        by_id = {row.id: row for row in equipment_rows}
+        uuid_by_id = {row.id: row.uuid for row in equipment_rows}
+        uuids = list(uuid_by_id.values())
+
+        monitor_by_uuid: Dict[str, EquipmentStatusMonitor] = {}
+        if uuids:
+            monitors = await EquipmentStatusMonitor.filter(
+                tenant_id=tenant_id,
+                equipment_uuid__in=uuids,
+                deleted_at__isnull=True,
+            ).order_by("-monitored_at")
+            for monitor in monitors:
+                if monitor.equipment_uuid not in monitor_by_uuid:
+                    monitor_by_uuid[monitor.equipment_uuid] = monitor
+
+        assigned_count: Dict[int, int] = {i: 0 for i in unique_ids}
+        assigned_codes: Dict[int, List[str]] = {i: [] for i in unique_ids}
+
+        op_rows = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            assigned_equipment_id__in=unique_ids,
+            deleted_at__isnull=True,
+        ).exclude(status__in=["completed", "cancelled"]).values(
+            "assigned_equipment_id",
+            "work_order_id",
+            "work_order_code",
+            "updated_at",
+        )
+        wo_ids = {int(row["work_order_id"]) for row in op_rows if row.get("work_order_id")}
+        wo_status_by_id: Dict[int, str] = {}
+        if wo_ids:
+            wo_rows = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                id__in=list(wo_ids),
+                deleted_at__isnull=True,
+            ).values("id", "status", "code")
+            wo_status_by_id = {int(r["id"]): str(r["status"]) for r in wo_rows}
+            wo_code_by_id = {int(r["id"]): str(r["code"]) for r in wo_rows}
+        else:
+            wo_code_by_id = {}
+
+        for row in op_rows:
+            eq_id = int(row["assigned_equipment_id"] or 0)
+            wo_id = int(row["work_order_id"] or 0)
+            if eq_id not in assigned_count:
+                continue
+            wo_status = wo_status_by_id.get(wo_id, "")
+            if wo_status in _EQUIPMENT_TRACE_WO_TERMINAL_STATUSES:
+                continue
+            assigned_count[eq_id] += 1
+            code = wo_code_by_id.get(wo_id) or str(row.get("work_order_code") or "")
+            if code and code not in assigned_codes[eq_id] and len(assigned_codes[eq_id]) < 3:
+                assigned_codes[eq_id].append(code)
+
+        open_fault_count: Dict[str, int] = {u: 0 for u in uuids}
+        if uuids:
+            fault_rows = await EquipmentFault.filter(
+                tenant_id=tenant_id,
+                equipment_uuid__in=uuids,
+                deleted_at__isnull=True,
+            ).exclude(status__in=list(_DISPATCH_SNAPSHOT_CLOSED_STATUSES)).values("equipment_uuid")
+            for row in fault_rows:
+                u = str(row["equipment_uuid"])
+                open_fault_count[u] = open_fault_count.get(u, 0) + 1
+
+        open_plan_count: Dict[str, int] = {u: 0 for u in uuids}
+        if uuids:
+            plan_rows = await MaintenancePlan.filter(
+                tenant_id=tenant_id,
+                equipment_uuid__in=uuids,
+                deleted_at__isnull=True,
+            ).exclude(status__in=list(_DISPATCH_SNAPSHOT_CLOSED_STATUSES)).values("equipment_uuid")
+            for row in plan_rows:
+                u = str(row["equipment_uuid"])
+                open_plan_count[u] = open_plan_count.get(u, 0) + 1
+
+        latest_spot_by_uuid: Dict[str, Dict[str, Any]] = {}
+        if uuids:
+            spot_rows = await EquipmentSpotCheck.filter(
+                tenant_id=tenant_id,
+                equipment_uuid__in=uuids,
+                deleted_at__isnull=True,
+            ).order_by("-check_date", "-created_at").values(
+                "equipment_uuid",
+                "check_date",
+                "document_no",
+                "has_abnormality",
+            )
+            for row in spot_rows:
+                u = str(row["equipment_uuid"])
+                if u not in latest_spot_by_uuid:
+                    latest_spot_by_uuid[u] = row
+
+        latest_repair_by_uuid: Dict[str, Dict[str, Any]] = {}
+        if uuids:
+            repair_rows = await EquipmentRepair.filter(
+                tenant_id=tenant_id,
+                equipment_uuid__in=uuids,
+                deleted_at__isnull=True,
+            ).order_by("-repair_date", "-created_at").values(
+                "equipment_uuid",
+                "repair_date",
+                "repair_no",
+                "status",
+            )
+            for row in repair_rows:
+                u = str(row["equipment_uuid"])
+                if u not in latest_repair_by_uuid:
+                    latest_repair_by_uuid[u] = row
+
+        items: List[Dict[str, Any]] = []
+        for eq_id in unique_ids:
+            eq = by_id.get(eq_id)
+            if eq is None:
+                continue
+            uuid = eq.uuid
+            monitor = monitor_by_uuid.get(uuid)
+            in_process_count = assigned_count.get(eq_id, 0)
+            latest_spot = latest_spot_by_uuid.get(uuid)
+            latest_repair = latest_repair_by_uuid.get(uuid)
+            spot_abnormal_flag = 0
+            if latest_spot and latest_spot.get("has_abnormality"):
+                spot_abnormal_flag = 1
+            spot_check_date = latest_spot.get("check_date") if latest_spot else None
+            repair_date_val = latest_repair.get("repair_date") if latest_repair else None
+            items.append(
+                {
+                    "equipment_id": eq.id,
+                    "equipment_uuid": uuid,
+                    "code": eq.code,
+                    "name": eq.name,
+                    "status": eq.status,
+                    "is_active": eq.is_active,
+                    "monitor_status": monitor.status if monitor else None,
+                    "monitor_is_online": monitor.is_online if monitor else None,
+                    "assigned_operation_count": in_process_count,
+                    "assigned_work_order_codes": assigned_codes.get(eq_id, []),
+                    "has_in_process_work_order": in_process_count > 0,
+                    "open_fault_count": open_fault_count.get(uuid, 0),
+                    "open_maintenance_plan_count": open_plan_count.get(uuid, 0),
+                    "spot_check_abnormality_count": spot_abnormal_flag,
+                    "latest_spot_check_date": spot_check_date.isoformat()
+                    if isinstance(spot_check_date, date)
+                    else (str(spot_check_date) if spot_check_date else None),
+                    "latest_spot_check_document_no": str(latest_spot.get("document_no"))
+                    if latest_spot and latest_spot.get("document_no")
+                    else None,
+                    "latest_spot_check_has_abnormality": bool(latest_spot.get("has_abnormality"))
+                    if latest_spot
+                    else None,
+                    "latest_repair_date": to_api_isoformat(repair_date_val)
+                    if repair_date_val
+                    else None,
+                    "latest_repair_no": str(latest_repair.get("repair_no"))
+                    if latest_repair and latest_repair.get("repair_no")
+                    else None,
+                    "latest_repair_status": str(latest_repair.get("status"))
+                    if latest_repair and latest_repair.get("status")
+                    else None,
+                }
+            )
+
+        return {"items": items}

@@ -1,5 +1,5 @@
 /**
- * 装箱绑定列表生命周期：绑定记录无审核流，展示「已绑定」完成态。
+ * 装箱绑定列表生命周期：bound → sealed。
  */
 
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
@@ -10,12 +10,19 @@ export function getPackingBindingLifecycle(
   if (!record) {
     return { percent: 0, stageName: '-', mainStages: [] };
   }
+  const seal = String(record.seal_status || 'bound').toLowerCase();
+  const sealed = seal === 'sealed';
   return {
-    percent: 100,
-    stageName: '已绑定',
-    status: 'success',
-    mainStages: [{ key: 'bound', label: '已绑定', status: 'done' }],
-    nextStepSuggestions: [],
+    percent: sealed ? 100 : 60,
+    stageName: sealed ? '已封箱' : '已绑定',
+    status: sealed ? 'success' : 'process',
+    mainStages: [
+      { key: 'bound', label: '已绑定', status: 'done' },
+      { key: 'sealed', label: '已封箱', status: sealed ? 'done' : 'wait' },
+    ],
+    nextStepSuggestions: sealed
+      ? []
+      : [{ key: 'seal', label: '封箱', action: 'seal' }],
   };
 }
 

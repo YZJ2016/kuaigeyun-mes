@@ -19,16 +19,32 @@ def _cap(allowed: bool, reason: Optional[str] = None) -> ActionCapability:
 
 def derive_packing_binding_capabilities(binding: Any) -> PackingBindingCapabilities:
     is_deleted = getattr(binding, "deleted_at", None) is not None
-    deny = _cap(False, "packing_binding.deleted")
+    seal_status = str(getattr(binding, "seal_status", None) or "bound").strip().lower()
+    is_sealed = seal_status == "sealed"
 
-    update_cap = deny if is_deleted else _cap(True)
-    delete_cap = deny if is_deleted else _cap(True)
-    print_cap = deny if is_deleted else _cap(True)
+    if is_deleted:
+        deny = _cap(False, "packing_binding.deleted")
+        return PackingBindingCapabilities(
+            update=deny,
+            delete=deny,
+            print=deny,
+            seal=deny,
+        )
+
+    if is_sealed:
+        sealed_deny = _cap(False, "packing_binding.sealed")
+        return PackingBindingCapabilities(
+            update=sealed_deny,
+            delete=sealed_deny,
+            print=_cap(True),
+            seal=sealed_deny,
+        )
 
     return PackingBindingCapabilities(
-        update=update_cap,
-        delete=delete_cap,
-        print=print_cap,
+        update=_cap(True),
+        delete=_cap(True),
+        print=_cap(True),
+        seal=_cap(True),
     )
 
 
@@ -38,6 +54,7 @@ def assert_packing_binding_capability(binding: Any, action: str) -> None:
         "update": caps.update,
         "delete": caps.delete,
         "print": caps.print,
+        "seal": caps.seal,
     }
     cap = cap_map.get(action)
     if cap is None:

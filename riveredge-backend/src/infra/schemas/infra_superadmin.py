@@ -98,6 +98,13 @@ class InfraSuperAdminResponse(InfraSuperAdminBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class InfraSuperAdminChangePasswordRequest(BaseModel):
+    """平台超级管理员修改登录密码（须验证当前密码）。"""
+
+    old_password: str = Field(..., min_length=1, description="当前密码")
+    new_password: str = Field(..., min_length=8, max_length=128, description="新密码（至少 8 个字符）")
+
+
 class InfraSuperAdminLoginRequest(BaseModel):
     """
     平台超级管理员登录请求 Schema

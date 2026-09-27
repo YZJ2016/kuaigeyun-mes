@@ -41,6 +41,8 @@ from apps.kuaizhizao.schemas.equipment import (
     MeasuringInstrumentCalibrationAlertReportResponse,
     MeasuringInstrumentCalibrationDetailReportItem,
     MeasuringInstrumentCalibrationDetailReportResponse,
+    EquipmentDispatchSnapshotRequest,
+    EquipmentDispatchSnapshotResponse,
 )
 from apps.kuaizhizao.schemas.equipment_oee import (
     EquipmentOEResponse,
@@ -112,6 +114,13 @@ async def list_equipment(
     workshop_id: Optional[int] = Query(None, description="车间ID（可选）"),
     production_line_id: Optional[int] = Query(None, description="产线ID（线组，可选）"),
     workstation_id: Optional[int] = Query(None, description="工位ID（可选）"),
+    capable_operation_id: Optional[int] = Query(
+        None, description="可加工工序ID（可选，仅返回具备该工序能力的设备）"
+    ),
+    include_equipment_id: Optional[int] = Query(
+        None,
+        description="与 capable_operation_id 联用时额外保留的设备ID（派工回显）",
+    ),
     search: Optional[str] = Query(None, description="搜索关键词（可选，搜索编码、名称）"),
     keyword: Optional[str] = Query(None, description="模糊搜索（与 search 等价）"),
     order_by: Optional[str] = Query(None, description="排序字段"),
@@ -135,6 +144,7 @@ async def list_equipment(
         status: 设备状态（可选）
         is_active: 是否启用（可选）
         workstation_id: 工位ID（可选）
+        capable_operation_id: 可加工工序ID（可选）
         search: 搜索关键词（可选，搜索编码、名称）
         current_user: 当前用户（依赖注入）
         tenant_id: 当前组织ID（依赖注入）
@@ -155,6 +165,8 @@ async def list_equipment(
         workshop_id=workshop_id,
         production_line_id=production_line_id,
         workstation_id=workstation_id,
+        capable_operation_id=capable_operation_id,
+        include_equipment_id=include_equipment_id,
         search=search,
         keyword=keyword,
         order_by=order_by,
@@ -654,6 +666,30 @@ async def resolve_equipment_by_scan(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
 
+@router.post(
+    "/dispatch-snapshots",
+    response_model=EquipmentDispatchSnapshotResponse,
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:read"))],
+)
+async def get_equipment_dispatch_snapshots(
+    body: EquipmentDispatchSnapshotRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """工序派工选设备：批量卡片决策快照。"""
+    try:
+        payload = await EquipmentService.get_equipment_dispatch_snapshots(
+            tenant_id,
+            body.equipment_ids,
+        )
+        return EquipmentDispatchSnapshotResponse.model_validate(payload)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
+
+
 @router.get("/{uuid}", response_model=EquipmentResponse)
 async def get_equipment(
     uuid: str,
@@ -757,235 +793,38 @@ async def delete_equipment(
         )
 
 
-@router.get("/{uuid}/trace")
+@router.get(
+    "/{uuid}/trace",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:read"))],
+)
 async def get_equipment_trace(
     uuid: str,
+    date_from: Optional[str] = Query(None, description="站点日历日起（YYYY-MM-DD，与 date_to 成对）"),
+    date_to: Optional[str] = Query(None, description="站点日历日止（YYYY-MM-DD，与 date_from 成对）"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """
     获取设备使用记录追溯
     
-    获取设备的使用历史、维护历史、故障历史。
-    
-    Args:
-        uuid: 设备UUID
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        dict: 设备追溯信息，包含使用历史、维护历史、故障历史
-        
-    Raises:
-        HTTPException: 当设备不存在时抛出
+    获取设备的使用历史、维护历史、故障历史；可选日期区间筛选。
     """
     try:
-        # 验证设备是否存在
-        equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
-        
-        # 获取维护计划历史
-        maintenance_plans = await MaintenancePlan.filter(
-            tenant_id=tenant_id,
-            equipment_uuid=equipment.uuid,
-            deleted_at__isnull=True
-        ).order_by("-created_at").limit(50)
-        
-        # 获取维护执行记录历史
-        maintenance_executions = await MaintenanceExecution.filter(
-            tenant_id=tenant_id,
-            equipment_uuid=equipment.uuid,
-            deleted_at__isnull=True
-        ).order_by("-execution_date").limit(50)
-        
-        # 获取故障记录历史
-        equipment_faults = await EquipmentFault.filter(
-            tenant_id=tenant_id,
-            equipment_uuid=equipment.uuid,
-            deleted_at__isnull=True
-        ).order_by("-fault_date").limit(50)
-        
-        # 获取维修记录历史
-        equipment_repairs = await EquipmentRepair.filter(
-            tenant_id=tenant_id,
-            equipment_uuid=equipment.uuid,
-            deleted_at__isnull=True
-        ).order_by("-repair_date").limit(50)
-        
-        # 获取校验记录历史
-        equipment_calibrations = await EquipmentCalibration.filter(
-            tenant_id=tenant_id,
-            equipment_id=equipment.id,
-            deleted_at__isnull=True
-        ).order_by("-calibration_date").limit(50)
-
-        spot_checks = await EquipmentSpotCheck.filter(
-            tenant_id=tenant_id,
-            equipment_uuid=equipment.uuid,
-            deleted_at__isnull=True,
-        ).order_by("-check_date", "-created_at").limit(50)
-
-        patrol_line_ids = await EquipmentRoutePatrolLine.filter(
-            tenant_id=tenant_id,
-            equipment_uuid=equipment.uuid,
-            deleted_at__isnull=True,
-        ).values_list("route_patrol_id", flat=True)
-        patrol_ids = list(dict.fromkeys(patrol_line_ids))
-        route_patrols: list[EquipmentRoutePatrol] = []
-        if patrol_ids:
-            route_patrols = await EquipmentRoutePatrol.filter(
-                tenant_id=tenant_id,
-                id__in=patrol_ids,
-                deleted_at__isnull=True,
-            ).order_by("-patrol_date", "-created_at").limit(50)
-
-        spare_part_requisitions = await SparePartRequisition.filter(
-            tenant_id=tenant_id,
-            equipment_uuid=equipment.uuid,
-            deleted_at__isnull=True,
-        ).order_by("-created_at").limit(50)
-
-        scrap_applications = await EquipmentScrapApplication.filter(
-            tenant_id=tenant_id,
-            equipment_uuid=equipment.uuid,
-            deleted_at__isnull=True,
-        ).order_by("-created_at").limit(50)
-
-        return {
-            "equipment": {
-                "uuid": equipment.uuid,
-                "code": equipment.code,
-                "name": equipment.name,
-                "status": equipment.status,
-            },
-            "maintenance_plans": [
-                {
-                    "uuid": plan.uuid,
-                    "plan_no": plan.plan_no,
-                    "plan_name": plan.plan_name,
-                    "plan_type": plan.plan_type,
-                    "maintenance_type": plan.maintenance_type,
-                    "status": plan.status,
-                    "planned_start_date": to_api_isoformat(plan.planned_start_date) if plan.planned_start_date else None,
-                    "planned_end_date": to_api_isoformat(plan.planned_end_date) if plan.planned_end_date else None,
-                    "created_at": to_api_isoformat(plan.created_at),
-                }
-                for plan in maintenance_plans
-            ],
-            "maintenance_executions": [
-                {
-                    "uuid": exec.uuid,
-                    "execution_no": exec.execution_no,
-                    "execution_date": to_api_isoformat(exec.execution_date),
-                    "executor_name": exec.executor_name,
-                    "execution_result": exec.execution_result,
-                    "status": exec.status,
-                    "maintenance_cost": float(exec.maintenance_cost) if exec.maintenance_cost else None,
-                    "created_at": to_api_isoformat(exec.created_at),
-                }
-                for exec in maintenance_executions
-            ],
-            "equipment_faults": [
-                {
-                    "uuid": fault.uuid,
-                    "fault_no": fault.fault_no,
-                    "fault_date": to_api_isoformat(fault.fault_date),
-                    "fault_type": fault.fault_type,
-                    "fault_level": fault.fault_level,
-                    "status": fault.status,
-                    "repair_required": fault.repair_required,
-                    "created_at": to_api_isoformat(fault.created_at),
-                }
-                for fault in equipment_faults
-            ],
-            "equipment_repairs": [
-                {
-                    "uuid": repair.uuid,
-                    "repair_no": repair.repair_no,
-                    "repair_date": to_api_isoformat(repair.repair_date),
-                    "repair_type": repair.repair_type,
-                    "repairer_name": repair.repairer_name,
-                    "repair_duration": float(repair.repair_duration) if repair.repair_duration else None,
-                    "repair_cost": float(repair.repair_cost) if repair.repair_cost else None,
-                    "status": repair.status,
-                    "repair_result": repair.repair_result,
-                    "arrival_at": to_api_isoformat(repair.arrival_at) if repair.arrival_at else None,
-                    "arrival_by_name": repair.arrival_by_name,
-                    "fault_cause": repair.fault_cause,
-                    "repair_content": repair.repair_content,
-                    "completed_at": to_api_isoformat(repair.completed_at) if repair.completed_at else None,
-                    "created_at": to_api_isoformat(repair.created_at),
-                }
-                for repair in equipment_repairs
-            ],
-            "equipment_calibrations": [
-                {
-                    "uuid": calib.uuid,
-                    "calibration_date": to_api_isoformat(calib.calibration_date),
-                    "result": calib.result,
-                    "certificate_no": calib.certificate_no,
-                    "expiry_date": to_api_isoformat(calib.expiry_date) if calib.expiry_date else None,
-                    "remark": calib.remark,
-                    "created_at": to_api_isoformat(calib.created_at),
-                }
-                for calib in equipment_calibrations
-            ],
-            "spot_checks": [
-                {
-                    "id": row.id,
-                    "document_no": row.document_no,
-                    "check_date": to_api_isoformat(row.check_date) if row.check_date else None,
-                    "inspector_name": row.inspector_name,
-                    "status": row.status,
-                    "has_abnormality": row.has_abnormality,
-                    "abnormality_description": row.abnormality_description,
-                    "created_at": to_api_isoformat(row.created_at),
-                }
-                for row in spot_checks
-            ],
-            "route_patrols": [
-                {
-                    "id": row.id,
-                    "document_no": row.document_no,
-                    "route_code": row.route_code,
-                    "route_name": row.route_name,
-                    "patrol_date": to_api_isoformat(row.patrol_date) if row.patrol_date else None,
-                    "inspector_name": row.inspector_name,
-                    "status": row.status,
-                    "has_abnormality": row.has_abnormality,
-                    "created_at": to_api_isoformat(row.created_at),
-                }
-                for row in route_patrols
-            ],
-            "spare_part_requisitions": [
-                {
-                    "id": row.id,
-                    "requisition_no": row.requisition_no,
-                    "purpose": row.purpose,
-                    "applicant_name": row.applicant_name,
-                    "status": row.status,
-                    "approved_at": to_api_isoformat(row.approved_at) if row.approved_at else None,
-                    "created_at": to_api_isoformat(row.created_at),
-                }
-                for row in spare_part_requisitions
-            ],
-            "scrap_applications": [
-                {
-                    "id": row.id,
-                    "application_no": row.application_no,
-                    "reason": row.reason,
-                    "scrap_date": to_api_isoformat(row.scrap_date) if row.scrap_date else None,
-                    "applicant_name": row.applicant_name,
-                    "status": row.status,
-                    "approved_at": to_api_isoformat(row.approved_at) if row.approved_at else None,
-                    "created_at": to_api_isoformat(row.created_at),
-                }
-                for row in scrap_applications
-            ],
-        }
+        return await EquipmentService.get_equipment_trace(
+            tenant_id,
+            uuid,
+            date_from=date_from,
+            date_to=date_to,
+        )
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
         )
 
 

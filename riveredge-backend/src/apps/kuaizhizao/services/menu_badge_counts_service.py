@@ -694,12 +694,14 @@ async def _section_misc_ops(ctx: BadgeScopeCtx, now: datetime, now_date) -> Badg
         mp.filter(status="执行中").exclude(planned_end_date__lt=now).count(),
         MaintenanceReminder.filter(tenant_id=tid, deleted_at__isnull=True, is_handled=False).count(),
     )
+    from apps.kuaizhizao.services.packing_binding_service import PackingBindingService
+
+    packing_pending = await PackingBindingService().count_pending_task_pool(tid)
     return {
         "customer_follow_up": {"overdue": cfu_od, "pending": 0, "in_progress": 0},
         "outsource_work_order": {"overdue": ow_od, "pending": ow_p, "in_progress": ow_x},
         "outsource_order": {"overdue": oo_od, "pending": oo_p, "in_progress": oo_x},
-        # 装箱绑定为已发生记录，无「待办」状态；不得把历史绑定总量当成徽章
-        "packing_binding": {"overdue": 0, "pending": 0, "in_progress": 0},
+        "packing_binding": {"overdue": 0, "pending": packing_pending, "in_progress": 0},
         "equipment_fault": {"overdue": 0, "pending": ef_p, "in_progress": ef_x},
         "maintenance_plan": {"overdue": mp_od, "pending": mp_p, "in_progress": mp_x},
         "maintenance_reminder": {"overdue": 0, "pending": mrem, "in_progress": 0},
