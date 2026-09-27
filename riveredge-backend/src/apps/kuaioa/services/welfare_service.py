@@ -5,6 +5,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Optional
 
+from tortoise.expressions import Q
+
 from apps.kuaioa.models.employee import KuaioaEmployeeProfile
 from apps.kuaioa.models.payroll import KuaioaPayrollSettlement, KuaioaPayrollSettlementLine
 from apps.kuaioa.models.welfare import KuaioaWelfareBatch, KuaioaWelfareBatchLine
@@ -45,6 +47,32 @@ def _parse_year(year: int) -> int:
     if year < 2000 or year > 2100:
         raise BusinessLogicError("年份无效")
     return year
+
+
+def _empty_annual_bucket(emp: KuaioaEmployeeProfile, year: int) -> dict[str, Any]:
+    return {
+        "employee_id": int(emp.id),
+        "employee_code": emp.employee_code,
+        "employee_name": emp.full_name,
+        "workshop_name": emp.workshop_name,
+        "year": year,
+        "wage_months": [ZERO] * 12,
+        "deduct_months": [ZERO] * 12,
+        "balance_months": [ZERO] * 12,
+        "living_months": [ZERO] * 12,
+        "insurance_months": [ZERO] * 12,
+        "rent_utility_total": ZERO,
+        "tax_total": ZERO,
+    }
+
+
+def _name_or_code_matches(bucket: dict[str, Any], term: str) -> bool:
+    needle = term.strip().lower()
+    if not needle:
+        return True
+    name = str(bucket.get("employee_name") or "").lower()
+    code = str(bucket.get("employee_code") or "").lower()
+    return needle in name or needle in code
 
 
 def _normalize_festival(festival_type: str) -> str:
@@ -277,16 +305,17 @@ class AnnualPayrollStatsService:
         if workshop_name:
             q = q.filter(workshop_name=workshop_name.strip())
         settlements = await q
-        if not settlements:
-            return []
-
         settlement_ids = [int(s.id) for s in settlements]
         ym_by_sid = {int(s.id): str(s.year_month) for s in settlements}
         workshop_by_sid = {int(s.id): s.workshop_name for s in settlements}
-        lines = await KuaioaPayrollSettlementLine.filter(
-            tenant_id=tenant_id,
-            settlement_id__in=settlement_ids,
-            deleted_at__isnull=True,
+        lines = (
+            await KuaioaPayrollSettlementLine.filter(
+                tenant_id=tenant_id,
+                settlement_id__in=settlement_ids,
+                deleted_at__isnull=True,
+            )
+            if settlement_ids
+            else []
         )
 
         buckets: dict[int, dict[str, Any]] = {}
@@ -344,14 +373,22 @@ class AnnualPayrollStatsService:
                 b["employee_name"] = emp.full_name
                 b["employee_code"] = emp.employee_code
 
+        term = (keyword or "").strip()
+        if term:
+            name_q = KuaioaEmployeeProfile.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).filter(Q(full_name__icontains=term) | Q(employee_code__icontains=term))
+            if workshop_name:
+                name_q = name_q.filter(workshop_name=workshop_name.strip())
+            for emp in await name_q:
+                eid = int(emp.id)
+                if eid not in buckets:
+                    buckets[eid] = _empty_annual_bucket(emp, y)
+
         rows: list[dict[str, Any]] = []
-        kw = (keyword or "").strip().lower()
         for eid, b in buckets.items():
-            if kw:
-                name = str(b.get("employee_name") or "").lower()
-                code = str(b.get("employee_code") or "").lower()
-                if kw not in name and kw not in code:
-                    continue
+            if term and not _name_or_code_matches(b, term):
+                continue
             wages = b["wage_months"]
             deducts = b["deduct_months"]
             balances = b["balance_months"]

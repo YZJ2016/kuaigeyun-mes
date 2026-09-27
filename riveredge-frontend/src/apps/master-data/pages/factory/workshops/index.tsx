@@ -11,6 +11,9 @@ import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pr
 import { App, Button, List, Modal, Popconfirm, Typography } from 'antd';
 import { downloadFile } from '../../../../../utils';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import {
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
@@ -572,15 +575,25 @@ const WorkshopsPage: React.FC = () => {
     }
   };
 
-  /** 优先使用接口带出的 plantCode/plantName，避免厂区字典尚未加载时闪烁 */
+  /** 厂区名/编码堆叠；优先接口带出字段，避免厂区字典尚未加载时闪烁 */
   const formatPlantDisplay = useCallback((record: Workshop): React.ReactNode => {
-    const code = record.plantCode ?? (record as any).plant_code;
-    const name = record.plantName ?? (record as any).plant_name;
-    if (code != null && String(code) !== '' && name != null && String(name) !== '') {
-      return `${code} - ${name}`;
+    let code = String(record.plantCode ?? (record as { plant_code?: string }).plant_code ?? '').trim();
+    let name = String(record.plantName ?? (record as { plant_name?: string }).plant_name ?? '').trim();
+    if (!code || !name) {
+      const plant = plants.find((p) => p.id === (record?.plantId ?? (record as { plant_id?: number }).plant_id));
+      if (plant) {
+        code = String(plant.code ?? '').trim();
+        name = String(plant.name ?? '').trim();
+      }
     }
-    const plant = plants.find(p => p.id === (record?.plantId ?? (record as any)?.plant_id));
-    return plant ? `${plant.code} - ${plant.name}` : <Typography.Text type="secondary">-</Typography.Text>;
+    return (
+      <UniTableStackedPrimaryCell
+        primary={name}
+        secondary={code}
+        primaryBold={false}
+        skipLinkedDocumentLink
+      />
+    );
   }, [plants]);
 
   /**
@@ -626,10 +639,12 @@ const WorkshopsPage: React.FC = () => {
         title: t('app.master-data.workshops.plantName'),
         key: 'master_ref_plant',
         dataIndex: 'plantId',
-        width: 180,
-        minWidth: 180,
+        // 厂区名/编码堆叠；KeepWidth，备注仍为唯一 RemainderFlex
+        width: 200,
+        minWidth: 200,
         uniTableKeepWidth: true,
         resizable: false,
+        ellipsis: false,
         order: 15,
         valueType: 'select' as const,
         valueEnum: plants.reduce((acc, plant) => {
@@ -737,7 +752,7 @@ const WorkshopsPage: React.FC = () => {
       <ListPageTemplate>
         {customFieldsLoaded ? (
         <UniTable<Workshop>
-        columnPersistenceId="apps.master-data.pages.factory.workshops.list-v3"
+        columnPersistenceId="apps.master-data.pages.factory.workshops.list-v5"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         viewTypes={['table', 'help']}

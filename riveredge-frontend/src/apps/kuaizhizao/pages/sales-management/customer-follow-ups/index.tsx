@@ -41,6 +41,7 @@ import {
   CustomerFollowUpFormModal,
   type CustomerFollowUpPreset,
 } from '../../../components/CustomerFollowUpFormModal';
+import { CustomerFollowUpAttachments } from '../../../components/CustomerFollowUpAttachments';
 import { getCustomerFollowUpLifecycle, isCustomerFollowUpRevisitOverdue } from '../../../utils/customerFollowUpLifecycle';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -770,9 +771,23 @@ const CustomerFollowUpsPage: React.FC = () => {
         linesTitle={t('app.kuaizhizao.customerFollowUp.colContent')}
         lines={
           detailRecord ? (
-            <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
-              {detailRecord.content?.trim() ? detailRecord.content : '—'}
-            </Typography.Paragraph>
+            <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+              <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
+                {detailRecord.content?.trim() ? detailRecord.content : '—'}
+              </Typography.Paragraph>
+              <div>
+                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>
+                  {t('app.kuaizhizao.customerFollowUp.fieldAttachments')}
+                </Typography.Text>
+                <CustomerFollowUpAttachments
+                  uuids={
+                    Array.isArray(detailRecord.attachment_uuids)
+                      ? detailRecord.attachment_uuids.map(String).filter(Boolean)
+                      : []
+                  }
+                />
+              </div>
+            </Space>
           ) : undefined
         }
         timelineTitle={t('app.kuaizhizao.customerFollowUp.recentSameCustomerTitle')}

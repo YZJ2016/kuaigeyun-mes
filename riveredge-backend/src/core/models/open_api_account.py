@@ -6,7 +6,7 @@ from .base import BaseModel
 
 
 class OpenApiAccount(BaseModel):
-    """租户级开放 API 账套（每租户一条）。"""
+    """租户级开放 API 账套（每租户一条有效记录；见部分唯一索引 uq_open_api_accounts_tenant_active）。"""
 
     id = fields.IntField(pk=True, description="主键")
     acct_id = fields.CharField(max_length=64, unique=True, description="对外账套号")

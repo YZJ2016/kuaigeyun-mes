@@ -114,6 +114,10 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "haoligo:molds-documents-outsource-maintenance:complete",
     ),
     # kuaizhizao — 销售管理
+    "customer_follow_up_attachments": (
+        "kuaizhizao:customer-follow-up:create",
+        "kuaizhizao:customer-follow-up:update",
+    ),
     "sales_contract_attachments": (
         "kuaizhizao:sales-contract:create",
         "kuaizhizao:sales-contract:update",

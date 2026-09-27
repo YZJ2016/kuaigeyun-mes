@@ -36,6 +36,24 @@ export function buildOaEmployeeStatusEnum(t: TFunction) {
   };
 }
 
+/** 员工档案用工类型（表单 / 导入 / 列表展示共用） */
+export function buildOaEmploymentTypeOptions(t: TFunction) {
+  return [
+    { label: t('app.kuaioa.employee.employmentType.formal'), value: 'formal' },
+    { label: t('app.kuaioa.employee.employmentType.temp'), value: 'temp' },
+    { label: t('app.kuaioa.employee.employmentType.labor'), value: 'labor' },
+  ];
+}
+
+export function resolveOaEmploymentTypeLabel(
+  value: string | null | undefined,
+  t: TFunction,
+): string {
+  const code = String(value ?? '').trim();
+  const hit = buildOaEmploymentTypeOptions(t).find((o) => o.value === code);
+  return hit?.label ?? (code || '—');
+}
+
 export function buildLicenseTypeOptions(t: TFunction) {
   return [
     { label: t('app.kuaioa.license.type.vehicle_group_insurance'), value: 'vehicle_group_insurance' },

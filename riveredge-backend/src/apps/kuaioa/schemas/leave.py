@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class LeaveRequestCreate(BaseModel):
     leave_type: str = Field(..., max_length=30)
-    title: str = Field(..., max_length=200)
+    title: Optional[str] = Field(None, max_length=200)
     start_at: str
     end_at: str
     days: Optional[Decimal] = None
@@ -23,7 +23,7 @@ class LeaveRequestCreate(BaseModel):
     department_name: Optional[str] = None
     notes: Optional[str] = None
 
-    @field_validator("leave_hours", "deduct_amount", mode="before")
+    @field_validator("title", "leave_hours", "deduct_amount", mode="before")
     @classmethod
     def empty_to_none(cls, v):
         if v is None or v == "":
@@ -48,7 +48,7 @@ class LeaveRequestUpdate(BaseModel):
     department_name: Optional[str] = None
     notes: Optional[str] = None
 
-    @field_validator("leave_hours", "deduct_amount", mode="before")
+    @field_validator("title", "leave_hours", "deduct_amount", mode="before")
     @classmethod
     def empty_to_none(cls, v):
         if v is None or v == "":

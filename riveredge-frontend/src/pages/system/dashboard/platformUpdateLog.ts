@@ -44,6 +44,169 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaioa-hr-import-export-r01',
+    date: '2026-09-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-hr-import-export-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-hr-import-export-r01.description',
+  },
+  {
+    id: 'workshops-plant-col-ellipsis-r01',
+    date: '2026-09-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.workshops-plant-col-ellipsis-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.workshops-plant-col-ellipsis-r01.description',
+  },
+  {
+    id: 'kuaioa-hr-leave-deduct-rest-menu-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-hr-leave-deduct-rest-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-hr-leave-deduct-rest-menu-r01.description',
+  },
+  {
+    id: 'kuaioa-leave-workshop-line-select-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-leave-workshop-line-select-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-leave-workshop-line-select-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-workshop-select-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-workshop-select-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-workshop-select-r01.description',
+  },
+  {
+    id: 'unmatched-app-route-tenant-redirect-r01',
+    date: '2026-09-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unmatched-app-route-tenant-redirect-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unmatched-app-route-tenant-redirect-r01.description',
+  },
+  {
+    id: 'customer-select-remote-search-r01',
+    date: '2026-09-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-select-remote-search-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-select-remote-search-r01.description',
+  },
+  {
+    id: 'kuaioa-wage-register-r01',
+    date: '2026-09-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-wage-register-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-wage-register-r01.description',
+  },
+  {
+    id: 'kuaioa-temp-register-r01',
+    date: '2026-09-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-temp-register-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-temp-register-r01.description',
+  },
+  {
+    id: 'ind-foreign-trade-full-plugin-r01',
+    date: '2026-09-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-foreign-trade-full-plugin-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ind-foreign-trade-full-plugin-r01.description',
+  },
+  {
+    id: 'kuaioa-annual-stats-name-r01',
+    date: '2026-09-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-annual-stats-name-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-annual-stats-name-r01.description',
+  },
+  {
+    id: 'kuaioa-living-payout-empty-r01',
+    date: '2026-09-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-living-payout-empty-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-living-payout-empty-r01.description',
+  },
+  {
+    id: 'kuaioa-payroll-guide-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-payroll-guide-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-payroll-guide-r01.description',
+  },
+  {
+    id: 'ind-foreign-trade-menu-rename-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.ind-foreign-trade-menu-rename-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ind-foreign-trade-menu-rename-r01.description',
+  },
+  {
+    id: 'customer-crm-follow-strengthen-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-crm-follow-strengthen-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-crm-follow-strengthen-r01.description',
+  },
+  {
+    id: 'kuaioa-leave-form-simplify-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-leave-form-simplify-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-leave-form-simplify-r01.description',
+  },
+  {
+    id: 'kuaioa-hire-leave-register-r01',
+    date: '2026-09-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-hire-leave-register-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-hire-leave-register-r01.description',
+  },
+  {
+    id: 'customer-crm-follow-foreign-trade-r01',
+    date: '2026-09-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-crm-follow-foreign-trade-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-crm-follow-foreign-trade-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-labor-type-r01',
+    date: '2026-09-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-labor-type-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-labor-type-r01.description',
+  },
+  {
+    id: 'infra-open-platform-tenant-select-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.infra-open-platform-tenant-select-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.infra-open-platform-tenant-select-r01.description',
+  },
+  {
+    id: 'infra-open-platform-menu-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.infra-open-platform-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.infra-open-platform-menu-r01.description',
+  },
+  {
     id: 'mobile-equip-upload-category-perm-r01',
     date: '2026-09-27',
     type: 'fix',

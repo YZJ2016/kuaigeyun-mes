@@ -64,6 +64,19 @@ export interface CustomerFormModalProps {
   /** 选人 display 宿主 {app}:{module} */
   hostResource?: string;
   /**
+   * 新建时预填并强制写入提交载荷（如外贸客户 marketScope=export）。
+   * 仅新建生效；编辑走详情回填。
+   */
+  createDefaults?: Partial<CustomerCreate>;
+  /**
+   * 覆盖默认 customerApi 读写（行业插件等走自身权限入口）。
+   */
+  persistApi?: {
+    get: (uuid: string) => Promise<Customer>;
+    create: (data: CustomerCreate) => Promise<Customer>;
+    update: (uuid: string, data: CustomerUpdate) => Promise<Customer>;
+  };
+  /**
    * 客户池协作人：传入后在「归属业务员」后展示多选，并在保存后同步协作人。
    * 主数据客户页可不传。
    */
@@ -83,9 +96,20 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   onSuccess,
   zIndex,
   hostResource = CUSTOMER_FORM_DEFAULT_HOST_RESOURCE,
+  createDefaults,
+  persistApi,
   collaboratorSupport,
 }) => {
   const { t } = useTranslation();
+  const customerPersist = useMemo(
+    () =>
+      persistApi ?? {
+        get: customerApi.get.bind(customerApi),
+        create: customerApi.create.bind(customerApi),
+        update: customerApi.update.bind(customerApi),
+      },
+    [persistApi],
+  );
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
@@ -186,6 +210,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       isPublic: true,
       salesmanId: undefined,
       collaboratorIds: [],
+      ...(createDefaults || {}),
     });
     setIsPublicMode(true);
     resetFieldValues();
@@ -199,6 +224,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
           setEffectiveAutoGenerate(autoGenerate);
           if (!autoGenerate) {
             setPreviewCode(null);
+            formRef.current?.setFieldsValue({ ...(createDefaults || {}) });
             return;
           }
           const res = await testGenerateCode({ rule_code: ruleCode });
@@ -216,6 +242,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
             isPublic: true,
             salesmanId: undefined,
             collaboratorIds: [],
+            ...(createDefaults || {}),
           });
         } catch (err: any) {
           if (cancelled) return;
@@ -232,7 +259,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
 
     setPreviewCode(null);
     setEffectiveRuleCode(null);
-    customerApi
+    customerPersist
       .get(editUuid)
       .then(async (detail) => {
         if (cancelled) return;
@@ -266,7 +293,16 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, editUuid, loadFieldValues, messageApi, resetFieldValues, t]);
+  }, [
+    open,
+    editUuid,
+    createDefaults,
+    customerPersist,
+    loadFieldValues,
+    messageApi,
+    resetFieldValues,
+    t,
+  ]);
 
   const customerBasicTailSchema = useMemo(() => {
     const source = isEdit ? customerFormSchemaBasicTailEdit : customerFormSchemaBasicTail;
@@ -307,6 +343,17 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         ...restValues,
         contacts: normalizeCustomerContactsForSubmit(standardValues.contacts ?? values.contacts),
       };
+      const contactsForCheck = (payload.contacts as Array<{ phone?: string; email?: string }>) || [];
+      const hasPhoneOrEmail =
+        Boolean(String(payload.phone || '').trim()) ||
+        Boolean(String(payload.email || '').trim()) ||
+        contactsForCheck.some(
+          (c) => Boolean(String(c?.phone || '').trim()) || Boolean(String(c?.email || '').trim()),
+        );
+      if (!hasPhoneOrEmail) {
+        messageApi.error(t('app.kuaizhizao.customerPool.phoneOrEmailRequired'));
+        throw new Error('phone or email required');
+      }
       if (standardValues.isPublic === true) {
         // 显式传 null，后端才能识别为“清空归属业务员”
         payload.salesmanId = null;
@@ -328,8 +375,8 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
 
       let saved: Customer;
       if (isEdit && editUuid) {
-        await customerApi.update(editUuid, payload as CustomerUpdate);
-        saved = await customerApi.get(editUuid);
+        await customerPersist.update(editUuid, payload as CustomerUpdate);
+        saved = await customerPersist.get(editUuid);
         await saveCustomFieldValues(saved.id, customData);
       } else {
         const ruleCodeToUse = effectiveRuleCode;
@@ -344,7 +391,10 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         if (payload.isActive === undefined) {
           payload.isActive = true;
         }
-        saved = await customerApi.create(payload as CustomerCreate);
+        if (createDefaults) {
+          Object.assign(payload, createDefaults);
+        }
+        saved = await customerPersist.create(payload as CustomerCreate);
         await saveCustomFieldValues(saved.id, customData);
       }
 

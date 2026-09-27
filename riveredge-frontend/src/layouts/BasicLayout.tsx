@@ -771,8 +771,8 @@ const getMenuConfig = (
       { path: '/infra/packages', name: t('menu.infra.packages'), icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages') },
       { path: '/infra/scripts', name: t('menu.infra.scripts'), icon: getMenuIcon(t('menu.infra.scripts'), '/infra/scripts') },
       { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
-      { path: '/infra/official-api-library', name: t('menu.infra.official-api-library'), icon: getMenuIcon(t('menu.infra.official-api-library'), '/infra/official-api-library') },
       { path: '/infra/open-api', name: t('menu.infra.open-api'), icon: getMenuIcon(t('menu.infra.open-api'), '/infra/open-api') },
+      { path: '/infra/official-api-library', name: t('menu.infra.official-api-library'), icon: getMenuIcon(t('menu.infra.official-api-library'), '/infra/official-api-library') },
       { path: '/infra/client-releases', name: t('menu.infra.client-releases'), icon: getMenuIcon(t('menu.infra.client-releases'), '/infra/client-releases') },
       { path: '/infra/license-management', name: t('menu.infra.license-management'), icon: getMenuIcon(t('menu.infra.license-management'), '/infra/license-management') },
       ...(options?.showSensitiveWordBlacklist
@@ -1429,7 +1429,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, []);
 
   const { data: installedApps } = useQuery({
-    queryKey: ['installedApplications', { is_active: true }],
+    queryKey: [
+      'installedApplications',
+      { is_active: true, tenantId: tenantIdStrForHome },
+    ],
     queryFn: () => getInstalledApplicationList({ is_active: true }),
     ...layoutShellQueryOptions,
     staleTime: 5 * 60 * 1000,

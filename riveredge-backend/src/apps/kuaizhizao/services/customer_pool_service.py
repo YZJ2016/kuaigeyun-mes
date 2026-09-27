@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Sequence
 
@@ -20,8 +21,10 @@ from apps.kuaizhizao.services.customer_pool_list_core import (
 )
 
 from apps.kuaizhizao.models.customer_collaborator import CustomerCollaborator
+from apps.kuaizhizao.models.customer_follow_up import CustomerFollowUp
 from apps.kuaizhizao.models.customer_pool_log import CustomerPoolLog
 from apps.kuaizhizao.models.customer_pool_rule import CustomerPoolRule
+from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 from apps.kuaizhizao.schemas.customer_pool import (
     CustomerPoolActionBody,
     CustomerPoolAssignBody,
@@ -56,10 +59,25 @@ async def list_collaborator_customer_ids(tenant_id: int, user_id: int) -> List[i
     return list(rows)
 
 
+def _is_inactive_7d(last_follow_up_at: Optional[datetime], *, now: Optional[datetime] = None) -> bool:
+    """连续 7 个站点日未新增跟进（含从未跟进）。"""
+    anchor = now or resolve_business_datetime()
+    today = to_site_date(anchor)
+    if last_follow_up_at is None:
+        return True
+    last_day = to_site_date(last_follow_up_at)
+    if last_day is None or today is None:
+        return True
+    return (today - last_day).days >= 7
+
+
 def _to_customer_pool_item(
     row: Customer,
     collaborators: Optional[Sequence[CustomerPoolCollaboratorItem]] = None,
     salesman_labels: Optional[Dict[int, str]] = None,
+    *,
+    follow_up_count: int = 0,
+    now: Optional[datetime] = None,
 ) -> CustomerPoolItem:
     """列表响应：显式映射字段，兼容 pool_status 历史脏数据。"""
     pool_status = resolve_customer_pool_status_display(
@@ -70,6 +88,7 @@ def _to_customer_pool_item(
     salesman_name = getattr(row, "salesman_name", None)
     if salesman_id and salesman_labels and salesman_id in salesman_labels:
         salesman_name = salesman_labels[salesman_id]
+    last_fu = getattr(row, "last_follow_up_at", None)
     return CustomerPoolItem(
         id=int(row.id),
         uuid=str(row.uuid),
@@ -78,12 +97,22 @@ def _to_customer_pool_item(
         short_name=getattr(row, "short_name", None),
         contact_person=getattr(row, "contact_person", None),
         phone=getattr(row, "phone", None),
+        email=getattr(row, "email", None),
         salesman_id=salesman_id,
         salesman_name=salesman_name,
         pool_status=pool_status,
         assigned_at=getattr(row, "assigned_at", None),
-        last_follow_up_at=getattr(row, "last_follow_up_at", None),
+        last_follow_up_at=last_fu,
         recycle_at=getattr(row, "recycle_at", None),
+        follow_status=getattr(row, "follow_status", None) or "pending",
+        project_description=getattr(row, "project_description", None),
+        intent_material_name=getattr(row, "intent_material_name", None),
+        region_text=getattr(row, "region_text", None),
+        market_scope=getattr(row, "market_scope", None) or "domestic",
+        country_code=getattr(row, "country_code", None),
+        customer_level_code=getattr(row, "customer_level_code", None),
+        follow_up_count=int(follow_up_count or 0),
+        inactive_7d=_is_inactive_7d(last_fu, now=now),
         created_by_name=getattr(row, "created_by_name", None),
         updated_by_name=getattr(row, "updated_by_name", None),
         created_at=row.created_at,
@@ -643,6 +672,13 @@ class CustomerPoolService:
         created_end_date: Optional[str] = None,
         updated_start_date: Optional[str] = None,
         updated_end_date: Optional[str] = None,
+        intent_material_name: Optional[str] = None,
+        customer_level_code: Optional[str] = None,
+        region_text: Optional[str] = None,
+        follow_status: Optional[str] = None,
+        market_scope: Optional[str] = None,
+        country_code: Optional[str] = None,
+        inactive_7d: Optional[bool] = None,
         order_by: Optional[str] = None,
     ) -> CustomerPoolListEnvelope:
         query = Customer.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -685,8 +721,18 @@ class CustomerPoolService:
             created_end_date=created_end_date,
             updated_start_date=updated_start_date,
             updated_end_date=updated_end_date,
+            intent_material_name=intent_material_name,
+            customer_level_code=customer_level_code,
+            region_text=region_text,
+            follow_status=follow_status,
+            market_scope=market_scope,
+            country_code=country_code,
             order_by=order_by,
         )
+
+        if inactive_7d is True:
+            cutoff = resolve_business_datetime() - timedelta(days=7)
+            query = query.filter(Q(last_follow_up_at__isnull=True) | Q(last_follow_up_at__lt=cutoff))
 
         query = await DataScopeService.apply(
             query,
@@ -702,11 +748,34 @@ class CustomerPoolService:
             user_ids={row.salesman_id for row in rows if row.salesman_id},
         )
         collab_map = await cls._load_collaborators_map(tenant_id, [row.id for row in rows])
+        count_map = await cls._customer_follow_up_counts(tenant_id, [row.id for row in rows])
+        now = resolve_business_datetime()
         items = [
-            _to_customer_pool_item(r, collab_map.get(r.id, []), salesman_labels)
+            _to_customer_pool_item(
+                r,
+                collab_map.get(r.id, []),
+                salesman_labels,
+                follow_up_count=count_map.get(int(r.id), 0),
+                now=now,
+            )
             for r in rows
         ]
         return CustomerPoolListEnvelope(items=items, total=total)
+
+    @staticmethod
+    async def _customer_follow_up_counts(
+        tenant_id: int,
+        customer_ids: List[int],
+    ) -> Dict[int, int]:
+        unique_ids = sorted({int(cid) for cid in customer_ids if cid is not None})
+        if not unique_ids:
+            return {}
+        id_rows = await CustomerFollowUp.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            customer_id__in=unique_ids,
+        ).values_list("customer_id", flat=True)
+        return {int(cid): int(cnt) for cid, cnt in Counter(id_rows).items()}
 
     @classmethod
     async def claim_customer(

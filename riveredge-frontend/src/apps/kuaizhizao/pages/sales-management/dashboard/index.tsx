@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { Table, Typography, Progress, Button, theme } from 'antd';
+import { Table, Typography, Progress, Button, Space, theme } from 'antd';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   FileTextOutlined,
@@ -149,6 +149,11 @@ const SalesDashboard: React.FC = () => {
   const pendingFollowUps = followUpStats?.items || [];
   const pendingFollowUpTotal = followUpStats?.pending_customers ?? 0;
   const overdueFollowUpCount = followUpStats?.overdue_customers ?? 0;
+  const inactive7dCustomers = followUpStats?.inactive_7d_customers ?? 0;
+  const followStatusPending = followUpStats?.follow_status_pending ?? 0;
+  const followStatusFollowed = followUpStats?.follow_status_followed ?? 0;
+  const followUpRecordsTotal = followUpStats?.follow_up_records_total ?? 0;
+  const levelCounts: Record<string, number> = followUpStats?.level_counts || {};
   const recentOrders = recentOrdersData?.data || [];
   const recentFollowUps = followUpsData?.items || [];
 
@@ -232,10 +237,16 @@ const SalesDashboard: React.FC = () => {
         gradient: 'linear-gradient(135deg, #fa8c16 0%, #ffc069 100%)',
         boxShadow: '0 4px 12px rgba(250, 140, 22, 0.15)',
         onClick: () => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups'),
-        sideMetrics: [{
-          label: t('app.kuaizhizao.salesDashboard.kpi.overdue'),
-          value: overdueFollowUpCount,
-        }],
+        sideMetrics: [
+          {
+            label: t('app.kuaizhizao.salesDashboard.kpi.overdue'),
+            value: overdueFollowUpCount,
+          },
+          {
+            label: t('app.kuaizhizao.salesDashboard.kpi.inactive7d'),
+            value: inactive7dCustomers,
+          },
+        ],
       },
       {
         key: 'quotations',
@@ -294,8 +305,22 @@ const SalesDashboard: React.FC = () => {
         ],
       },
     ],
-    [navigate, overdueFollowUpCount, pendingFollowUpTotal, s, showMoney, t],
+    [navigate, overdueFollowUpCount, inactive7dCustomers, pendingFollowUpTotal, s, showMoney, t],
   );
+
+  const crmLevelItems = useMemo(() => {
+    const entries = Object.entries(levelCounts).sort((a, b) => b[1] - a[1]);
+    return entries.map(([code, count]) => ({
+      id: code,
+      title:
+        code === '_unset'
+          ? t('app.kuaizhizao.salesDashboard.crm.levelUnset')
+          : code,
+      meta: (
+        <Text style={{ fontSize: 14, fontWeight: 600 }}>{count}</Text>
+      ),
+    }));
+  }, [levelCounts, t]);
 
   const moduleShortcuts: ModuleShortcutDef[] = useMemo(
     () => [
@@ -648,6 +673,49 @@ const SalesDashboard: React.FC = () => {
               }
             >
               <ModuleFeedList items={followUpTodayItems} emptyText={t('common.noData')} />
+            </ModuleActionPanel>
+          ) : null}
+
+          {showMasonryCard(
+            pendingFollowUpsLoading,
+            followUpRecordsTotal > 0 || followStatusPending > 0 || followStatusFollowed > 0,
+            masonryEmptyFallback,
+          ) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.salesDashboard.crm.statsTitle')}
+              loading={pendingFollowUpsLoading}
+              masonryWeight={masonryWeightFromRows(Math.max(crmLevelItems.length, 3))}
+              extra={
+                <a onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-pool')}>
+                  {t('app.kuaizhizao.salesDashboard.viewAll')}
+                </a>
+              }
+            >
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  <Text type="secondary">
+                    {t('app.kuaizhizao.salesDashboard.crm.recordsTotal')}：
+                    <Text strong>{followUpRecordsTotal}</Text>
+                  </Text>
+                  <Text type="secondary">
+                    {t('app.kuaizhizao.customerPool.followStatusPending')}：
+                    <Text strong>{followStatusPending}</Text>
+                  </Text>
+                  <Text type="secondary">
+                    {t('app.kuaizhizao.customerPool.followStatusFollowed')}：
+                    <Text strong>{followStatusFollowed}</Text>
+                  </Text>
+                  <Text type="secondary">
+                    {t('app.kuaizhizao.salesDashboard.kpi.inactive7d')}：
+                    <Text strong>{inactive7dCustomers}</Text>
+                  </Text>
+                </div>
+                <ModuleFeedList
+                  items={crmLevelItems}
+                  emptyText={t('app.kuaizhizao.salesDashboard.crm.levelEmpty')}
+                />
+              </Space>
             </ModuleActionPanel>
           ) : null}
 

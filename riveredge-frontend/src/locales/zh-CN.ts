@@ -224,7 +224,13 @@ export default {
   'menu.infra.packages': '套餐管理',
   'menu.infra.admin': '平台管理',
   'menu.infra.official-api-library': '接口库管理',
-  'menu.infra.open-api': '开放 API',
+  'menu.infra.open-api': '开放平台',
+  'pages.infra.openApi.orgContext': '组织上下文',
+  'pages.infra.openApi.orgLabel': '组织：',
+  'pages.infra.openApi.selectTenantPlaceholder': '请选择组织',
+  'pages.infra.openApi.selectTenantRequired': '请选择有效组织',
+  'pages.infra.openApi.tenantSwitched': '已切换到组织 {{id}}',
+  'pages.infra.openApi.orgContextHint': '平台超管须指定组织后管理该租户的开放凭证',
   'menu.infra.scripts': '脚本管理',
   'menu.infra.scheduled-tasks': '定时任务',
   'menu.infra.client-releases': '客户端发布',
@@ -3086,6 +3092,25 @@ export default {
   'app.industry-pack.name': '行业包',
   'app.industry-pack.short': '行业',
   'app.industry-pack.homeHint': '请从左侧菜单选择已启用的行业应用',
+  'app.ind-foreign-trade.name': '外贸销售',
+  'app.ind-foreign-trade.menu.dashboard': '工作台',
+  'app.ind-foreign-trade.menu.exportCustomers': '外贸客户',
+  'app.ind-foreign-trade.menu.inquiryImport': '询盘导入',
+  'app.ind-foreign-trade.menu.followUps': '客户跟进',
+  'app.ind-foreign-trade.field.country': '国家',
+  'app.ind-foreign-trade.field.countryPlaceholder': '按国家筛选，如 Vietnam',
+  'app.ind-foreign-trade.createExportCustomer': '新建外贸客户',
+  'app.ind-foreign-trade.dashboard.loadFailed': '外贸工作台加载失败',
+  'app.ind-foreign-trade.dashboard.inactiveHint': '连续7天未新增跟进',
+  'app.ind-foreign-trade.dashboard.recordsHint': '累计跟进 {{count}} 条',
+  'app.ind-foreign-trade.exportFileName': '外贸客户_{{date}}.csv',
+  'app.ind-foreign-trade.import.button': '导入询盘',
+  'app.ind-foreign-trade.import.title': '导入外贸询盘',
+  'app.ind-foreign-trade.import.hint':
+    '按固定 9 列粘贴（制表符或逗号分隔），首行可为英文列名。导入成功默认未跟进，归属当前用户。',
+  'app.ind-foreign-trade.import.empty': '请粘贴至少一行询盘数据',
+  'app.ind-foreign-trade.import.done': '导入完成：成功 {{success}}，失败 {{failed}}',
+  'app.ind-foreign-trade.import.failed': '询盘导入失败',
   'app.ind-mold.name': '模具机加',
   'app.ind-mold.menu.programSheets': '程序单',
   'app.ind-mold.menu.materialArrivals': '到料单',
@@ -3265,6 +3290,9 @@ export default {
   'app.kuaioa.menu.training-templates': '培训模板',
   'app.kuaioa.menu.leave': '请假出差',
   'app.kuaioa.menu.employees': '员工档案',
+  'app.kuaioa.menu.employee-hire': '入职登记',
+  'app.kuaioa.menu.employee-temp-register': '临时工登记',
+  'app.kuaioa.menu.employee-leave-register': '离职登记',
   'app.kuaioa.route.notFoundTitle': '页面不存在',
   'app.kuaioa.route.notFoundHint': '当前轻办公路径未注册，请检查菜单 path 是否指向已有页面。',
   'app.kuaioa.menu.attendance': '月度考勤',
@@ -3273,6 +3301,7 @@ export default {
   'app.kuaioa.menu.group.payroll': '薪酬管理',
   'app.kuaioa.menu.living-advances': '生活费预支',
   'app.kuaioa.menu.rewards': '奖励登记',
+  'app.kuaioa.menu.payroll-wage-register': '工资登记',
   'app.kuaioa.menu.payroll-settlements': '工资结算',
   'app.kuaioa.menu.living-payout': '生活费发放表',
   'app.kuaioa.menu.welfare-batches': '节日福利发放',
@@ -3349,13 +3378,43 @@ export default {
   'app.kuaioa.leave.entityName': '请假出差',
   'app.kuaioa.leave.code': '申请单号',
   'app.kuaioa.leave.type': '类型',
-  'app.kuaioa.leave.title': '标题',
+  'app.kuaioa.leave.title': '申请摘要',
   'app.kuaioa.leave.startAt': '开始时间',
   'app.kuaioa.leave.endAt': '结束时间',
   'app.kuaioa.leave.days': '天数',
   'app.kuaioa.leave.leaveHours': '请假小时',
   'app.kuaioa.leave.deductEnabled': '是否扣钱',
   'app.kuaioa.leave.deductAmount': '扣钱金额',
+  'app.kuaioa.import.empty': '导入文件为空',
+  'app.kuaioa.import.noRows': '没有可导入的数据行',
+  'app.kuaioa.import.validationTitle': '导入校验未通过',
+  'app.kuaioa.import.validationIntro': '请修正下列问题后重新导入：',
+  'app.kuaioa.import.partialTitle': '部分导入失败',
+  'app.kuaioa.import.partialIntro': '成功 {{success}} 条，失败 {{failure}} 条：',
+  'app.kuaioa.import.rowError': '第 {{row}} 行：{{message}}',
+  'app.kuaioa.import.success': '成功导入 {{count}} 条',
+  'app.kuaioa.import.employeeNotFound': '未找到员工（请填写员工编号或唯一姓名）',
+  'app.kuaioa.import.missingField': '缺少必填列：{{field}}',
+  'app.kuaioa.import.yearMonthInvalid': '月份格式须为 YYYY-MM',
+  'app.kuaioa.import.amountInvalid': '金额无效',
+  'app.kuaioa.leave.exportFileName': '请假出差',
+  'app.kuaioa.leave.importTitle': '导入请假出差',
+  'app.kuaioa.leave.importSuccess': '成功导入 {{count}} 条请假出差',
+  'app.kuaioa.leave.importExample.employeeCode': 'EMP001',
+  'app.kuaioa.leave.importExample.employeeName': '张三',
+  'app.kuaioa.attendance.exportFileName': '月度考勤单',
+  'app.kuaioa.reward.exportFileName': '奖励登记',
+  'app.kuaioa.reward.importTitle': '导入奖励登记',
+  'app.kuaioa.reward.importSuccess': '成功导入 {{count}} 条奖励登记',
+  'app.kuaioa.livingAdvance.exportFileName': '生活费预支',
+  'app.kuaioa.livingAdvance.importTitle': '导入生活费预支',
+  'app.kuaioa.livingAdvance.importSuccess': '成功导入 {{count}} 条生活费预支',
+  'app.kuaioa.postSubsidy.exportFileName': '岗位补贴',
+  'app.kuaioa.postSubsidy.importTitle': '导入岗位补贴',
+  'app.kuaioa.postSubsidy.importSuccess': '成功导入 {{count}} 条岗位补贴',
+  'app.kuaioa.minimumWage.exportFileName': '最低工资配置',
+  'app.kuaioa.minimumWage.importTitle': '导入最低工资配置',
+  'app.kuaioa.minimumWage.importSuccess': '成功导入 {{count}} 条最低工资配置',
   'app.kuaioa.leave.destination': '目的地',
   'app.kuaioa.leave.reason': '事由',
   'app.kuaioa.trainingPlan.code': '计划编号',
@@ -3402,6 +3461,7 @@ export default {
   'app.kuaioa.employee.employmentType': '用工类型',
   'app.kuaioa.employee.employmentType.formal': '正式工',
   'app.kuaioa.employee.employmentType.temp': '临时工',
+  'app.kuaioa.employee.employmentType.labor': '劳务工',
   'app.kuaioa.employee.payMethod': '计薪方式',
   'app.kuaioa.employee.payMethod.piece': '计件',
   'app.kuaioa.employee.payMethod.time': '计时',
@@ -3493,6 +3553,7 @@ export default {
   'app.kuaioa.reward.amount': '奖励金额',
   'app.kuaioa.reward.reason': '奖励原因',
   'app.kuaioa.payroll.createButton': '新建工资结算',
+  'app.kuaioa.payroll.registerButton': '工资登记',
   'app.kuaioa.payroll.code': '结算单号',
   'app.kuaioa.payroll.yearMonth': '年月',
   'app.kuaioa.payroll.yearMonthInvalid': '请输入正确年月，格式 YYYY-MM',
@@ -3505,14 +3566,25 @@ export default {
   'app.kuaioa.payroll.rebuild': '按考勤重建',
   'app.kuaioa.payroll.rebuilt': '已按考勤与档案重建明细',
   'app.kuaioa.payroll.detailTitle': '工资结算明细',
+  'app.kuaioa.payroll.listGuideTitle': '工资登记与结算怎么用',
+  'app.kuaioa.payroll.listGuideBody':
+    '工资登记＝按车间+月份开结算单并录入明细（与「奖励登记」同级入口）。① 人事基础维护员工档案（车间、小时单价、生活费等）；② 填写同车间月度考勤并提交；③ 按需登记生活费预支、奖励、岗位补贴；④ 点「工资登记」选择年月与车间，保存后进入结算明细核对（可导入基本工资/计件或手改），确认后锁定。计件还需绩效汇总已确认且档案关联系统用户。',
   'app.kuaioa.payroll.detailHint':
-    '计时来自已提交考勤×单价（加班×倍率）；计件来自已确认绩效汇总（需档案关联用户）；生活费扣除=标准+当月预支；奖励计入补助。确认后锁定。',
+    '计时=已提交考勤工时×档案小时单价（加班×本单加班倍率）；计件=已确认绩效汇总（档案须关联用户）；生活费扣除=档案生活费+当月已确认预支；奖励进补助奖励；岗位补贴按项目写入夜班/高温/岗位津贴。基本工资、个税、打卡金额等须手改或导入。改产线总产量/总工资后请点「按考勤重建」。确认后锁定。',
+  'app.kuaioa.payroll.emptyLinesTip':
+    '明细为空：该车间当月没有可结算的员工档案，请先在员工档案填写所属车间。',
+  'app.kuaioa.payroll.noAttendanceTip':
+    '未找到同车间同月已提交的考勤单，计时工资会为 0。请先在月度考勤填报并提交，再点「按考勤重建」。',
+  'app.kuaioa.payroll.zeroTimeWageTip':
+    '已有考勤但计时仍为 0：请检查员工档案是否维护了小时单价，或考勤日格是否记了正常/加班工时，改完后点「按考勤重建」。',
+  'app.kuaioa.payroll.lineShareHint':
+    '计薪方式为产线的员工：填产线总产量与产线总工资后须点「按考勤重建」才按工时分摊。',
   'app.kuaioa.payroll.timeWage': '计时工资',
   'app.kuaioa.payroll.pieceWage': '计件工资',
   'app.kuaioa.payroll.nightSubsidy': '夜班补贴',
   'app.kuaioa.payroll.allowance': '补助奖励',
   'app.kuaioa.payroll.earningSubtotal': '小计',
-  'app.kuaioa.payroll.livingDeduct': '专项支出',
+  'app.kuaioa.payroll.livingDeduct': '生活费扣除',
   'app.kuaioa.payroll.rentUtilityDeduct': '房租电费',
   'app.kuaioa.payroll.insuranceDeduct': '各项保险费',
   'app.kuaioa.payroll.leaveDeduct': '请假',
@@ -3530,6 +3602,7 @@ export default {
   'app.kuaioa.payroll.deductTotal': '扣除合计',
   'app.kuaioa.payroll.balanceTotal': '结余合计',
   'app.kuaioa.payroll.exportPdf': '导出PDF',
+  'app.kuaioa.payroll.print': '打印',
   'app.kuaioa.livingPayout.title': '生活费发放登记表',
   'app.kuaioa.livingPayout.sheetTitle': '{{year}}年{{month}}月份员工发放工资清单（生活费）',
   'app.kuaioa.livingPayout.unitYuan': '单位：元',
@@ -3542,6 +3615,13 @@ export default {
   'app.kuaioa.livingPayout.total': '合计：',
   'app.kuaioa.livingPayout.exportFileName': '生活费发放登记表',
   'app.kuaioa.livingPayout.hint': '按银行分块、同车间相邻；打卡金额=固定金额+预支金额。',
+  'app.kuaioa.livingPayout.guideTitle': '生活费发放表怎么出数',
+  'app.kuaioa.livingPayout.guideBody':
+    '本表列出在职员工（及本月有已确认预支的离职人员）。固定金额取自员工档案「生活费标准」，预支金额取自「生活费预支」当月已确认记录，打卡金额=固定金额+预支金额。请先维护档案生活费或登记预支后再打印/导出。',
+  'app.kuaioa.livingPayout.emptyTip':
+    '当前年月没有可列出的员工。请先在人事基础维护员工档案；若按车间筛选，请确认档案已填写所属车间。',
+  'app.kuaioa.livingPayout.zeroAmountTip':
+    '已列出员工，但固定金额与预支均为 0。请在员工档案填写生活费标准，或在生活费预支中登记并确认当月预支。',
   'app.kuaioa.welfare.createButton': '新建福利发放',
   'app.kuaioa.welfare.code': '发放单号',
   'app.kuaioa.welfare.year': '年份',
@@ -3564,7 +3644,12 @@ export default {
   'app.kuaioa.welfare.amountTotal': '金额合计',
   'app.kuaioa.annualStats.title': '年度工资统计',
   'app.kuaioa.annualStats.hint':
-    '按已确认工资结算汇总；月工资为应发小计，结余总工资为各月结余之和。',
+    '默认按当年已确认工资结算汇总。输入姓名或工号后点查询：有结算则显示全年金额，无结算也会列出该员工（金额为 0）。月工资为应发小计。',
+  'app.kuaioa.annualStats.namePlaceholder': '姓名或工号',
+  'app.kuaioa.annualStats.emptyYear':
+    '该年没有已确认的工资结算。请先完成工资结算并确认，或输入姓名查询员工档案。',
+  'app.kuaioa.annualStats.emptyName':
+    '没有匹配的员工姓名或工号，请核对档案后重试。',
   'app.kuaioa.annualStats.yearInvalid': '请输入有效年份',
   'app.kuaioa.annualStats.unit': '单位',
   'app.kuaioa.annualStats.seq': '序号',
@@ -3586,12 +3671,22 @@ export default {
   'app.kuaioa.personalPayroll.balance': '结余金额',
   'app.kuaioa.personalPayroll.exportFileName': '个人工资明细',
   'app.kuaioa.movement.title': '入离职明细',
-  'app.kuaioa.movement.hint': '按入职日或离职日落在所选月份统计。',
+  'app.kuaioa.movement.hint':
+    '按入职日或离职日落在所选月份统计。可在本页办理入职登记、临时工登记、离职登记。',
   'app.kuaioa.movement.typeLabel': '类型',
   'app.kuaioa.movement.type.hire': '入职',
   'app.kuaioa.movement.type.leave': '离职',
   'app.kuaioa.movement.date': '日期',
   'app.kuaioa.movement.exportFileName': '入离职明细',
+  'app.kuaioa.movement.registerHire': '入职登记',
+  'app.kuaioa.movement.registerTemp': '临时工登记',
+  'app.kuaioa.movement.registerLeave': '离职登记',
+  'app.kuaioa.movement.hireDateRequired': '请选择入职日期',
+  'app.kuaioa.movement.leaveDateRequired': '请选择离职日期',
+  'app.kuaioa.movement.employeeRequired': '请选择在职员工',
+  'app.kuaioa.movement.hireSuccess': '入职登记成功',
+  'app.kuaioa.movement.tempSuccess': '临时工登记成功',
+  'app.kuaioa.movement.leaveSuccess': '离职登记成功',
   'app.kuaioa.postSubsidy.createButton': '新建岗位补贴',
   'app.kuaioa.postSubsidy.code': '补贴单号',
   'app.kuaioa.postSubsidy.itemName': '补贴项目',
@@ -8018,6 +8113,17 @@ export default {
   'app.kuaizhizao.customerPool.scopePublic': '公共客户',
   'app.kuaizhizao.customerPool.scopePrivate': '私有客户',
   'app.kuaizhizao.customerPool.scopeAll': '全部客户',
+  'app.kuaizhizao.customerPool.followStatus': '跟进状态',
+  'app.kuaizhizao.customerPool.followStatusPending': '未跟进',
+  'app.kuaizhizao.customerPool.followStatusFollowed': '已跟进',
+  'app.kuaizhizao.customerPool.intentMaterial': '意向物料',
+  'app.kuaizhizao.customerPool.region': '客户地区',
+  'app.kuaizhizao.customerPool.followUpCount': '跟进次数',
+  'app.kuaizhizao.customerPool.inactive7d': '7天未联系',
+  'app.kuaizhizao.customerPool.inactive7dTag': '7天未联系',
+  'app.kuaizhizao.customerPool.inactive7dOnly': '仅看7天未联系',
+  'app.kuaizhizao.customerPool.projectDescription': '项目描述',
+  'app.kuaizhizao.customerPool.phoneOrEmailRequired': '手机号与邮箱至少填写一项',
   'app.kuaizhizao.customerPool.keyword': '关键词',
   'app.kuaizhizao.customerPool.claim': '领取',
   'app.kuaizhizao.customerPool.batchClaim': '批量领取',
@@ -9045,6 +9151,7 @@ export default {
   'app.kuaizhizao.customerFollowUp.fieldCustomer': '客户',
   'app.kuaizhizao.customerFollowUp.fieldActivityType': '跟进方式',
   'app.kuaizhizao.customerFollowUp.fieldContent': '跟进内容',
+  'app.kuaizhizao.customerFollowUp.fieldAttachments': '附件',
   'app.kuaizhizao.customerFollowUp.fieldOccurredAt': '跟进时间',
   'app.kuaizhizao.customerFollowUp.fieldNextFollowUp': '计划下次跟进',
   'app.kuaizhizao.customerFollowUp.fieldQuotationId': '关联报价单 ID',
@@ -9438,6 +9545,11 @@ export default {
   'app.kuaizhizao.salesDashboard.kpi.overdueShipmentsSubtitle': '含 {{count}} 单已逾期',
   'app.kuaizhizao.salesDashboard.kpi.allOnTime': '全部订单在交期内',
   'app.kuaizhizao.salesDashboard.kpi.overdue': '已逾期',
+  'app.kuaizhizao.salesDashboard.kpi.inactive7d': '7天未联系',
+  'app.kuaizhizao.salesDashboard.crm.statsTitle': '客户跟进经营',
+  'app.kuaizhizao.salesDashboard.crm.recordsTotal': '跟进记录',
+  'app.kuaizhizao.salesDashboard.crm.levelUnset': '未定级',
+  'app.kuaizhizao.salesDashboard.crm.levelEmpty': '暂无定级分布',
   'app.kuaizhizao.salesDashboard.kpi.monthlyRevenue': '本月销售额 (元)',
   'app.kuaizhizao.salesDashboard.kpi.lastMonth': '上月完成',
   'app.kuaizhizao.salesDashboard.kpi.achievementRate': '达成率',
@@ -28744,6 +28856,90 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-full-plugin-r01.title':
+    '外贸销售行业插件补齐工作台与跟进',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-full-plugin-r01.description':
+    '行业包「外贸销售」下增加工作台、外贸客户、询盘导入、客户跟进四个入口；跟进与统计仅覆盖外贸客户，支持筛选导出与行内新建跟进。',
+  'pages.dashboard.updateLog.entries.kuaioa-hr-import-export-r01.title':
+    '人事列表补齐导入导出',
+  'pages.dashboard.updateLog.entries.kuaioa-hr-import-export-r01.description':
+    '请假出差、月度考勤、生活费预支、奖励登记、岗位补贴、最低工资等列表接入与员工档案相同的导入导出；并补齐对应 import/export 权限码，导入按员工编号或姓名匹配档案。',
+  'pages.dashboard.updateLog.entries.kuaioa-hr-leave-deduct-rest-menu-r01.title':
+    '人事请假扣钱与休息夜班入口补齐',
+  'pages.dashboard.updateLog.entries.kuaioa-hr-leave-deduct-rest-menu-r01.description':
+    '请假出差恢复是否扣钱与扣钱金额并参与结算；人事基础菜单挂出休息登记与夜班登记；员工档案产线及月度考勤/休息夜班的车间产线改自主数据下拉。',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-workshop-line-select-r01.title':
+    '请假出差车间产线改为下拉选择',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-workshop-line-select-r01.description':
+    '请假出差表单的车间、产线改从主数据车间管理与产线管理下拉选择；选人后仍可回填员工档案中的车间产线。',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-workshop-select-r01.title':
+    '员工所属车间改自主数据车间管理选择',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-workshop-select-r01.description':
+    '员工档案与入职/临时工登记的「所属车间」改为从主数据车间管理拉取启用车间下拉，不再依赖员工档案里已有车间名汇总，避免空列表与手输不一致。',
+  'pages.dashboard.updateLog.entries.workshops-plant-col-ellipsis-r01.title':
+    '车间管理所属厂区改为名码堆叠',
+  'pages.dashboard.updateLog.entries.workshops-plant-col-ellipsis-r01.description':
+    '车间列表「所属厂区」改为厂区名称与编码上下堆叠展示，避免单行过长溢出覆盖备注列。',
+  'pages.dashboard.updateLog.entries.unmatched-app-route-tenant-redirect-r01.title':
+    '切换组织后未匹配应用路由自动回首页',
+  'pages.dashboard.updateLog.entries.unmatched-app-route-tenant-redirect-r01.description':
+    '切换组织、浏览器后退或旧标签深链停留在本组织未启用的应用路径时，不再长期卡在黄条告警；已启用应用列表按组织隔离缓存，并自动跳转到本组织首页。',
+  'pages.dashboard.updateLog.entries.customer-select-remote-search-r01.title':
+    '客户下拉支持按名称远程搜索',
+  'pages.dashboard.updateLog.entries.customer-select-remote-search-r01.description':
+    '订单跟踪等单据的客户选择改为输入关键词远端检索，不再受首页预加载条数限制，百名开外的客户也可搜到并选中。',
+  'pages.dashboard.updateLog.entries.kuaioa-wage-register-r01.title':
+    '薪酬管理增加工资登记入口',
+  'pages.dashboard.updateLog.entries.kuaioa-wage-register-r01.description':
+    '轻办公薪酬管理新增「工资登记」菜单：按车间与月份开结算单并进入明细录入，与工资结算共用同一真源，避免另建底稿。列表工具栏按钮同步改为「工资登记」。',
+  'pages.dashboard.updateLog.entries.kuaioa-temp-register-r01.title':
+    '人事基础增加临时工登记',
+  'pages.dashboard.updateLog.entries.kuaioa-temp-register-r01.description':
+    '轻办公人事基础新增临时工登记菜单与表单，用工类型固定为临时工并写入员工档案，与入职登记、入离职明细衔接。',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-name-r01.title':
+    '年度工资统计可按姓名查出员工',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-name-r01.description':
+    '年度工资统计输入姓名或工号后点查询即可列出匹配员工；无已确认结算时仍显示该人（金额为 0），不再因当年无结算单而整表空白。',
+  'pages.dashboard.updateLog.entries.kuaioa-living-payout-empty-r01.title':
+    '生活费发放表展示在职员工并说明取数',
+  'pages.dashboard.updateLog.entries.kuaioa-living-payout-empty-r01.description':
+    '生活费发放表不再因未填档案生活费标准而整表空白；列出在职员工及本月已确认预支人员，并提示固定金额与预支的数据来源。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-guide-r01.title':
+    '工资结算增加流程说明与零数据提示',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-guide-r01.description':
+    '薪酬管理工资结算列表展示操作步骤；新建后直接进入结算明细；无考勤或计时全零时给出原因提示；生活费扣除列名纠正；岗位补贴项目夜班/高温写入对应列；产线分摊说明更清晰。',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-form-simplify-r01.title':
+    '请假出差表单简化车间与摘要',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-form-simplify-r01.description':
+    '新建请假出差时车间改为手填并随所选员工带出；申请摘要由类型、员工与日期自动生成，不再要求手填标题；表单取消扣钱金额。',
+  'pages.dashboard.updateLog.entries.kuaioa-hire-leave-register-r01.title':
+    '人事基础支持入职登记与离职登记',
+  'pages.dashboard.updateLog.entries.kuaioa-hire-leave-register-r01.description':
+    '轻办公人事基础新增入职登记、离职登记菜单与表单；入职创建员工档案，离职选择在职员工填写离职日并更新状态，入离职明细可按月查询。',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-labor-type-r01.title':
+    '员工档案用工类型增加劳务工',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-labor-type-r01.description':
+    '轻办公员工档案表单、批量导入与异动展示支持用工类型「劳务工」；须具备员工导入权限方可使用批量导入。',
+  'pages.dashboard.updateLog.entries.infra-open-platform-tenant-select-r01.title':
+    '开放平台支持下拉切换组织',
+  'pages.dashboard.updateLog.entries.infra-open-platform-tenant-select-r01.description':
+    '平台超管在开放平台「组织上下文」改为从启用组织列表下拉选择并即时加载，不再手工输入组织 ID。',
+  'pages.dashboard.updateLog.entries.infra-open-platform-menu-r01.title':
+    '基础设施菜单「开放 API」更名为开放平台',
+  'pages.dashboard.updateLog.entries.infra-open-platform-menu-r01.description':
+    '平台基础设施侧栏将「开放 API」改为「开放平台」，并调整到「接口库管理」之前。',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-menu-rename-r01.title':
+    '行业包菜单「外贸客户」更名为外贸销售',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-menu-rename-r01.description':
+    '行业包侧栏与列表标题由「外贸客户」统一为「外贸销售」，与应用名称一致。',
+  'pages.dashboard.updateLog.entries.customer-crm-follow-strengthen-r01.title':
+    '客户跟进附件预览与销售中心经营卡',
+  'pages.dashboard.updateLog.entries.customer-crm-follow-strengthen-r01.description':
+    '跟进附件支持点击预览；销售中心展示7天未联系、跟进状态与定级分布；外贸客户可手填国家并按国家筛选，支持行业权限下新建编辑。',
+  'pages.dashboard.updateLog.entries.customer-crm-follow-foreign-trade-r01.title':
+    '客户跟进增强与外贸销售行业插件',
+  'pages.dashboard.updateLog.entries.customer-crm-follow-foreign-trade-r01.description':
+    '客户池补齐跟进状态、定级、意向物料、地区、跟进次数与7天未联系标识；新建客户须手机或邮箱至少一项；新增外贸销售行业插件支持询盘导入与外贸客户列表。',
   'pages.dashboard.updateLog.entries.mobile-equip-upload-category-perm-r01.title':
     '移动端设备点检与巡检照片上传权限修复',
   'pages.dashboard.updateLog.entries.mobile-equip-upload-category-perm-r01.description':
@@ -35546,7 +35742,8 @@ export default {
   'appRoutes.missingComponentHint': '已启用应用未导出可渲染入口。请强制刷新（Ctrl+F5）后重试；若仍失败请重新扫描并启用该应用。',
   'appRoutes.unmatchedAppPath': '未匹配到应用路由',
   'appRoutes.unmatchedAppPathHint':
-    '当前路径对应的应用可能未安装或未启用（例如定制壳菜单深链到轻办公人事，但轻办公未启用）。请到应用中心启用依赖应用后刷新。',
+    '当前路径对应的应用在本组织未安装或未启用（切换组织、浏览器后退或旧标签深链时常见）。系统将自动回到本组织首页；也可手动点下方按钮。',
+  'appRoutes.backToHome': '返回首页',
   'appRoutes.troubleshootTitle': '排查步骤',
   'appRoutes.troubleshoot1': '打开浏览器控制台（F12），查看是否有错误信息',
   'appRoutes.troubleshoot2': '访问"系统管理 → 应用管理"页面，点击"扫描应用"按钮，扫描并注册应用',

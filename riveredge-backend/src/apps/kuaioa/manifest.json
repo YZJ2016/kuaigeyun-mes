@@ -85,22 +85,40 @@
                 "sort_order": 0
               },
               {
+                "title": "app.kuaioa.menu.employee-hire",
+                "path": "/apps/kuaioa/hr/employee-movements?register=hire",
+                "permission": "kuaioa:employee:create",
+                "sort_order": 1
+              },
+              {
+                "title": "app.kuaioa.menu.employee-temp-register",
+                "path": "/apps/kuaioa/hr/employee-movements?register=temp",
+                "permission": "kuaioa:employee:create",
+                "sort_order": 2
+              },
+              {
+                "title": "app.kuaioa.menu.employee-leave-register",
+                "path": "/apps/kuaioa/hr/employee-movements?register=leave",
+                "permission": "kuaioa:employee:update",
+                "sort_order": 3
+              },
+              {
                 "title": "app.kuaioa.menu.employee-movements",
                 "path": "/apps/kuaioa/hr/employee-movements",
                 "permission": "kuaioa:employee:read",
-                "sort_order": 1
+                "sort_order": 4
               },
               {
                 "title": "app.kuaioa.menu.leave",
                 "path": "/apps/kuaioa/hr/leave",
                 "permission": "kuaioa:leave:read",
-                "sort_order": 2
+                "sort_order": 5
               },
               {
                 "title": "app.kuaioa.menu.attendance",
                 "path": "/apps/kuaioa/hr/attendance",
                 "permission": "kuaioa:attendance:read",
-                "sort_order": 3
+                "sort_order": 6
               },
               {
                 "title": "app.kuaioa.menu.attendance-rest",
@@ -146,34 +164,40 @@
                 "sort_order": 3
               },
               {
+                "title": "app.kuaioa.menu.payroll-wage-register",
+                "path": "/apps/kuaioa/hr/payroll-settlements?register=1",
+                "permission": "kuaioa:payroll:create",
+                "sort_order": 4
+              },
+              {
                 "title": "app.kuaioa.menu.payroll-settlements",
                 "path": "/apps/kuaioa/hr/payroll-settlements",
                 "permission": "kuaioa:payroll:read",
-                "sort_order": 4
+                "sort_order": 5
               },
               {
                 "title": "app.kuaioa.menu.welfare-batches",
                 "path": "/apps/kuaioa/hr/welfare-batches",
                 "permission": "kuaioa:welfare:read",
-                "sort_order": 5
+                "sort_order": 6
               },
               {
                 "title": "app.kuaioa.menu.living-payout",
                 "path": "/apps/kuaioa/hr/living-payout",
                 "permission": "kuaioa:living-advance:read",
-                "sort_order": 6
+                "sort_order": 7
               },
               {
                 "title": "app.kuaioa.menu.personal-payroll",
                 "path": "/apps/kuaioa/hr/personal-payroll",
                 "permission": "kuaioa:payroll:read",
-                "sort_order": 7
+                "sort_order": 8
               },
               {
                 "title": "app.kuaioa.menu.annual-payroll-stats",
                 "path": "/apps/kuaioa/hr/annual-payroll-stats",
                 "permission": "kuaioa:payroll:read",
-                "sort_order": 8
+                "sort_order": 9
               }
             ]
           },
@@ -415,6 +439,8 @@
     "kuaioa:leave:approve",
     "kuaioa:leave:reject",
     "kuaioa:leave:revoke",
+    "kuaioa:leave:export",
+    "kuaioa:leave:import",
     "kuaioa:employee:read",
     "kuaioa:employee:create",
     "kuaioa:employee:update",
@@ -432,10 +458,13 @@
     "kuaioa:living-advance:update",
     "kuaioa:living-advance:delete",
     "kuaioa:living-advance:export",
+    "kuaioa:living-advance:import",
     "kuaioa:reward:read",
     "kuaioa:reward:create",
     "kuaioa:reward:update",
     "kuaioa:reward:delete",
+    "kuaioa:reward:export",
+    "kuaioa:reward:import",
     "kuaioa:payroll:read",
     "kuaioa:payroll:create",
     "kuaioa:payroll:update",
@@ -452,10 +481,14 @@
     "kuaioa:post-subsidy:create",
     "kuaioa:post-subsidy:update",
     "kuaioa:post-subsidy:delete",
+    "kuaioa:post-subsidy:export",
+    "kuaioa:post-subsidy:import",
     "kuaioa:minimum-wage:read",
     "kuaioa:minimum-wage:create",
     "kuaioa:minimum-wage:update",
     "kuaioa:minimum-wage:delete",
+    "kuaioa:minimum-wage:export",
+    "kuaioa:minimum-wage:import",
     "kuaioa:license:read",
     "kuaioa:license:create",
     "kuaioa:license:update",

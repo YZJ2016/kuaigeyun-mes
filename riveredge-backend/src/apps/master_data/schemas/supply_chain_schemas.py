@@ -92,6 +92,22 @@ class CustomerCreate(PartnerInvoiceAndExtendedMixin):
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
     lead_source_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="leadSourceCode")
     credit_limit: Optional[Decimal] = Field(None, description="信用额度", alias="creditLimit")
+    project_description: Optional[str] = Field(None, description="项目描述", alias="projectDescription")
+    intent_material_name: Optional[str] = Field(
+        None, max_length=200, description="意向物料名称", alias="intentMaterialName"
+    )
+    region_text: Optional[str] = Field(None, max_length=100, description="客户地区", alias="regionText")
+    market_scope: Optional[str] = Field(
+        "domestic", max_length=20, description="市场范围：domestic/export", alias="marketScope"
+    )
+    country_code: Optional[str] = Field(None, max_length=50, description="国家/地区", alias="countryCode")
+    campaign_name: Optional[str] = Field(None, max_length=200, description="广告系列名称", alias="campaignName")
+    required_capacity_text: Optional[str] = Field(
+        None, max_length=200, description="所需生产能力", alias="requiredCapacityText"
+    )
+    follow_status: Optional[str] = Field(
+        None, max_length=20, description="跟进状态：pending/followed", alias="followStatus"
+    )
     revenue_recognition_override: Optional[str] = Field(
         None,
         max_length=32,
@@ -109,6 +125,24 @@ class CustomerCreate(PartnerInvoiceAndExtendedMixin):
         s = str(v).strip()
         if s not in ("on_shipment", "on_invoice", "manual"):
             raise ValueError("revenueRecognitionOverride 必须为 on_shipment、on_invoice、manual 或空")
+        return s
+
+    @validator("market_scope", pre=True)
+    def validate_market_scope_create(cls, v):
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return "domestic"
+        s = str(v).strip().lower()
+        if s not in ("domestic", "export"):
+            raise ValueError("marketScope 必须为 domestic 或 export")
+        return s
+
+    @validator("follow_status", pre=True)
+    def validate_follow_status_create(cls, v):
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        s = str(v).strip().lower()
+        if s not in ("pending", "followed"):
+            raise ValueError("followStatus 必须为 pending 或 followed")
         return s
 
     @validator("code")
@@ -154,6 +188,22 @@ class CustomerBase(PartnerInvoiceAndExtendedMixin):
     assigned_at: Optional[datetime] = Field(None, description="最近领取/分配时间", alias="assignedAt")
     last_follow_up_at: Optional[datetime] = Field(None, description="最近跟进时间", alias="lastFollowUpAt")
     recycle_at: Optional[datetime] = Field(None, description="计划回收时间", alias="recycleAt")
+    follow_status: Optional[str] = Field(
+        "pending", max_length=20, description="跟进状态：pending/followed", alias="followStatus"
+    )
+    project_description: Optional[str] = Field(None, description="项目描述", alias="projectDescription")
+    intent_material_name: Optional[str] = Field(
+        None, max_length=200, description="意向物料名称", alias="intentMaterialName"
+    )
+    region_text: Optional[str] = Field(None, max_length=100, description="客户地区", alias="regionText")
+    market_scope: Optional[str] = Field(
+        "domestic", max_length=20, description="市场范围：domestic/export", alias="marketScope"
+    )
+    country_code: Optional[str] = Field(None, max_length=50, description="国家/地区", alias="countryCode")
+    campaign_name: Optional[str] = Field(None, max_length=200, description="广告系列名称", alias="campaignName")
+    required_capacity_text: Optional[str] = Field(
+        None, max_length=200, description="所需生产能力", alias="requiredCapacityText"
+    )
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
     contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
@@ -191,6 +241,18 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
     lead_source_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="leadSourceCode")
     credit_limit: Optional[Decimal] = Field(None, description="信用额度", alias="creditLimit")
+    project_description: Optional[str] = Field(None, description="项目描述", alias="projectDescription")
+    intent_material_name: Optional[str] = Field(
+        None, max_length=200, description="意向物料名称", alias="intentMaterialName"
+    )
+    region_text: Optional[str] = Field(None, max_length=100, description="客户地区", alias="regionText")
+    market_scope: Optional[str] = Field(None, max_length=20, description="市场范围", alias="marketScope")
+    country_code: Optional[str] = Field(None, max_length=50, description="国家/地区", alias="countryCode")
+    campaign_name: Optional[str] = Field(None, max_length=200, description="广告系列名称", alias="campaignName")
+    required_capacity_text: Optional[str] = Field(
+        None, max_length=200, description="所需生产能力", alias="requiredCapacityText"
+    )
+    follow_status: Optional[str] = Field(None, max_length=20, description="跟进状态", alias="followStatus")
     revenue_recognition_override: Optional[str] = Field(
         None,
         max_length=32,
@@ -208,6 +270,24 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
         s = str(v).strip()
         if s not in ("on_shipment", "on_invoice", "manual"):
             raise ValueError("revenueRecognitionOverride 必须为 on_shipment、on_invoice、manual 或空")
+        return s
+
+    @validator("market_scope", pre=True)
+    def validate_market_scope_update(cls, v):
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        s = str(v).strip().lower()
+        if s not in ("domestic", "export"):
+            raise ValueError("marketScope 必须为 domestic 或 export")
+        return s
+
+    @validator("follow_status", pre=True)
+    def validate_follow_status_update(cls, v):
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        s = str(v).strip().lower()
+        if s not in ("pending", "followed"):
+            raise ValueError("followStatus 必须为 pending 或 followed")
         return s
 
     @validator("code")
