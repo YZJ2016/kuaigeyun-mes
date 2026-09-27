@@ -19,7 +19,7 @@ import {
 } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { useTranslation } from 'react-i18next';
-import { FlowGraph } from '@ant-design/graphs';
+import { GraphSuspense, LazyFlowGraph } from '../common/lazyAntGraphs';
 import { NodeEvent, type Graph, type NodeData } from '@antv/g6';
 import { CANVAS_FLOW_GRAPH_GRID_STYLE } from '../layout-templates/constants';
 import { getDocumentRelationTrace } from '../../services/documentRelations';
@@ -793,15 +793,17 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
               transition: traceViewportReady ? 'opacity 0.28s ease-out' : 'none',
             }}
           >
-            <FlowGraph
-              key={flowKey}
-              {...(graphConfig as object)}
-              {...(
-                compact || traceChartFullscreen
-                  ? { containerStyle: { flex: 1, minHeight: 0, height: '100%', width: '100%' } as React.CSSProperties }
-                  : {}
-              )}
-            />
+            <GraphSuspense>
+              <LazyFlowGraph
+                key={flowKey}
+                {...(graphConfig as object)}
+                {...(
+                  compact || traceChartFullscreen
+                    ? { containerStyle: { flex: 1, minHeight: 0, height: '100%', width: '100%' } as React.CSSProperties }
+                    : {}
+                )}
+              />
+            </GraphSuspense>
           </div>
         )}
       </div>

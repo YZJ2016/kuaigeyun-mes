@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { subscribeResizeBus } from '../../../../hooks/useResizeBus';
 
 export type ModuleChartMountDims = {
   width: number;
@@ -41,11 +42,11 @@ export function ModuleChartMount({ height, children }: ModuleChartMountProps) {
     measure();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
     ro?.observe(host);
-    window.addEventListener('resize', measure);
+    const unsubResize = subscribeResizeBus(measure);
     return () => {
       cancelAnimationFrame(raf);
       ro?.disconnect();
-      window.removeEventListener('resize', measure);
+      unsubResize();
     };
   }, [height]);
 

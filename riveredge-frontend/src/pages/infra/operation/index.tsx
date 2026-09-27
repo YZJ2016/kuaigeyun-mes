@@ -41,7 +41,7 @@ import {
   LoginOutlined,
   RocketOutlined,
 } from '@ant-design/icons';
-import { Column, Line, Pie } from '@ant-design/charts';
+import { ChartSuspense, LazyColumn, LazyLine, LazyPie } from '../../../components/common/lazyAntCharts';
 import { useQuery } from '@tanstack/react-query';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -427,14 +427,16 @@ export default function OperationsDashboard() {
             <Card title={<span><LineChartOutlined style={{ marginRight: 8 }} />{t('pages.infra.operation.board.trendTitle')}</span>} style={CARD_STYLE}>
               <div style={{ height: 320 }}>
                 {loading ? <Skeleton active /> : trendData.length > 0 ? (
-                  <Line
-                    data={trendData}
-                    xField="date"
-                    yField="value"
-                    seriesField="type"
-                    smooth
-                    animation={{ appear: { animation: 'path-in', duration: 1000 } }}
-                  />
+                  <ChartSuspense>
+                    <LazyLine
+                      data={trendData}
+                      xField="date"
+                      yField="value"
+                      seriesField="type"
+                      smooth
+                      animation={{ appear: { animation: 'path-in', duration: 1000 } }}
+                    />
+                  </ChartSuspense>
                 ) : <Empty />}
               </div>
             </Card>
@@ -447,14 +449,16 @@ export default function OperationsDashboard() {
             <Card title={<span><PieChartOutlined style={{ marginRight: 8 }} />{t('pages.infra.operation.statusDistribution')}</span>} style={CARD_STYLE}>
               <div style={{ height: CHART_HEIGHT }}>
                 {statusChartData.length > 0 ? (
-                  <Pie
-                    data={statusChartData}
-                    angleField="value"
-                    colorField="name"
-                    radius={0.8}
-                    innerRadius={0.6}
-                    label={{ type: 'inner', offset: '-50%', content: '{value}', style: { textAlign: 'center', fontSize: 14 } }}
-                  />
+                  <ChartSuspense>
+                    <LazyPie
+                      data={statusChartData}
+                      angleField="value"
+                      colorField="name"
+                      radius={0.8}
+                      innerRadius={0.6}
+                      label={{ type: 'inner', offset: '-50%', content: '{value}', style: { textAlign: 'center', fontSize: 14 } }}
+                    />
+                  </ChartSuspense>
                 ) : <Empty />}
               </div>
             </Card>
@@ -463,12 +467,14 @@ export default function OperationsDashboard() {
             <Card title={<span><BarChartOutlined style={{ marginRight: 8 }} />{t('pages.infra.operation.planDistribution')}</span>} style={CARD_STYLE}>
               <div style={{ height: CHART_HEIGHT }}>
                 {planChartData.length > 0 ? (
-                  <Column
-                    data={planChartData}
-                    xField="name"
-                    yField="value"
-                    label={{ position: 'center', style: { fill: '#FFFFFF', opacity: 0.6 } }}
-                  />
+                  <ChartSuspense>
+                    <LazyColumn
+                      data={planChartData}
+                      xField="name"
+                      yField="value"
+                      label={{ position: 'center', style: { fill: '#FFFFFF', opacity: 0.6 } }}
+                    />
+                  </ChartSuspense>
                 ) : <Empty />}
               </div>
             </Card>

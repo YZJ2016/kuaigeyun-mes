@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { Sankey } from '@ant-design/charts';
+import { ChartSuspense, LazySankey } from '../../../../../components/common/lazyAntCharts';
 import { Empty } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { TraceProfile } from '../../../services/traceability';
@@ -66,53 +66,55 @@ const TraceSankeyChart: React.FC<TraceSankeyChartProps> = ({ profile, height = 4
   }
 
   return (
-    <Sankey
-      data={{ links, nodes }}
-      colorField="documentType"
-      autoFit
-      height={height}
-      scale={{
-        color: TRACE_SANKEY_COLOR_SCALE,
-      }}
-      layout={{
-        nodeAlign: 'left',
-        nodePadding: 0.03,
-        nodeWidth: 0.018,
-        iterations: 32,
-        nodeDepth,
-      }}
-      style={{
-        labelFontSize: 11,
-        labelFill: '#1f2937',
-        labelText,
-        linkFillOpacity: 0.55,
-        nodeStroke: '#e8e8e8',
-        nodeLineWidth: 1,
-      }}
-      tooltip={{
-        nodeTitle: (datum: { key?: string }) => resolveLabel(String(datum?.key ?? '')),
-        nodeItems: [{ field: 'value', name: t('common.quantity') }],
-        linkTitle: (datum: { source?: unknown; target?: unknown }) => {
-          const src = resolveLabel(resolveSankeyEndpointId(datum?.source));
-          const tgt = resolveLabel(resolveSankeyEndpointId(datum?.target));
-          return src && tgt ? `${src} → ${tgt}` : src || tgt;
-        },
-        linkItems: [
-          (datum: { source?: unknown }) => ({
-            name: t('app.kuaizhizao.quality.traceability.sankeyLinkSource'),
-            value: resolveLabel(resolveSankeyEndpointId(datum?.source)),
-          }),
-          (datum: { target?: unknown }) => ({
-            name: t('app.kuaizhizao.quality.traceability.sankeyLinkTarget'),
-            value: resolveLabel(resolveSankeyEndpointId(datum?.target)),
-          }),
-          (datum: { value?: number }) => ({
-            name: t('common.quantity'),
-            value: datum?.value ?? '',
-          }),
-        ],
-      }}
-    />
+    <ChartSuspense>
+      <LazySankey
+        data={{ links, nodes }}
+        colorField="documentType"
+        autoFit
+        height={height}
+        scale={{
+          color: TRACE_SANKEY_COLOR_SCALE,
+        }}
+        layout={{
+          nodeAlign: 'left',
+          nodePadding: 0.03,
+          nodeWidth: 0.018,
+          iterations: 32,
+          nodeDepth,
+        }}
+        style={{
+          labelFontSize: 11,
+          labelFill: '#1f2937',
+          labelText,
+          linkFillOpacity: 0.55,
+          nodeStroke: '#e8e8e8',
+          nodeLineWidth: 1,
+        }}
+        tooltip={{
+          nodeTitle: (datum: { key?: string }) => resolveLabel(String(datum?.key ?? '')),
+          nodeItems: [{ field: 'value', name: t('common.quantity') }],
+          linkTitle: (datum: { source?: unknown; target?: unknown }) => {
+            const src = resolveLabel(resolveSankeyEndpointId(datum?.source));
+            const tgt = resolveLabel(resolveSankeyEndpointId(datum?.target));
+            return src && tgt ? `${src} → ${tgt}` : src || tgt;
+          },
+          linkItems: [
+            (datum: { source?: unknown }) => ({
+              name: t('app.kuaizhizao.quality.traceability.sankeyLinkSource'),
+              value: resolveLabel(resolveSankeyEndpointId(datum?.source)),
+            }),
+            (datum: { target?: unknown }) => ({
+              name: t('app.kuaizhizao.quality.traceability.sankeyLinkTarget'),
+              value: resolveLabel(resolveSankeyEndpointId(datum?.target)),
+            }),
+            (datum: { value?: number }) => ({
+              name: t('common.quantity'),
+              value: datum?.value ?? '',
+            }),
+          ],
+        }}
+      />
+    </ChartSuspense>
   );
 };
 
