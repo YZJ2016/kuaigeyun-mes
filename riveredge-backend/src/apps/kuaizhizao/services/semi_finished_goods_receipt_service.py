@@ -22,6 +22,9 @@ from core.utils.timezone_utils import resolve_business_datetime, to_site_date, t
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
 from apps.kuaizhizao.models.semi_finished_goods_receipt_item import SemiFinishedGoodsReceiptItem
+from apps.kuaizhizao.constants.work_order_inbound_status import (
+    WORK_ORDER_INBOUND_ALLOWED_STATUSES,
+)
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
 from apps.kuaizhizao.schemas.warehouse import (
@@ -365,13 +368,17 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                     item_serials = getattr(item, "serial_numbers", None)
                     if item_serials:
                         try:
-                            existing_serials = json.loads(item_serials)
+                            existing_serials = (
+                                json.loads(item_serials)
+                                if isinstance(item_serials, str)
+                                else item_serials
+                            )
                         except Exception:
                             pass
                     if len(existing_serials) < count:
                         serial_nos = await ensure_serial_nos_for_item(tenant_id, material, item, count)
                         if serial_nos and hasattr(item, "serial_numbers"):
-                            setattr(item, "serial_numbers", json.dumps(serial_nos))
+                            setattr(item, "serial_numbers", serial_nos)
                             await item.save()
 
             from apps.kuaizhizao.services.inspection_policy_service import assert_fqc_for_finished_goods_receipt
@@ -441,12 +448,20 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         from_unit=getattr(item, "material_unit", None),
                     )
                     wh_id = item.warehouse_id if getattr(item, "warehouse_id", None) else receipt.warehouse_id
+                    item_serials = getattr(item, "serial_numbers", None)
+                    serial_nos = None
+                    if item_serials:
+                        try:
+                            serial_nos = json.loads(item_serials) if isinstance(item_serials, str) else item_serials
+                        except Exception:
+                            serial_nos = None
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
                         **InventoryService.location_kwargs_from_line_item(item),
                         source_type="semi_finished_goods_receipt",
                         source_doc_id=receipt_id,
@@ -508,12 +523,20 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                         qty,
                         from_unit=getattr(item, "material_unit", None),
                     )
+                    item_serials = getattr(item, "serial_numbers", None)
+                    serial_nos = None
+                    if item_serials:
+                        try:
+                            serial_nos = json.loads(item_serials) if isinstance(item_serials, str) else item_serials
+                        except Exception:
+                            serial_nos = None
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
                         source_type="semi_finished_goods_receipt_revoke",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
@@ -684,7 +707,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id)
         if not work_order:
             raise NotFoundError(f"工单不存在: {work_order_id}")
-        if work_order.status not in ("in_progress", "completed", "进行中", "已完成"):
+        if work_order.status not in WORK_ORDER_INBOUND_ALLOWED_STATUSES:
             raise BusinessLogicError(f"工单状态为 {work_order.status}，无法预览入库明细")
 
         fg_svc = FinishedGoodsReceiptService()
@@ -754,7 +777,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
             work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id)
             if not work_order:
                 raise NotFoundError(f"工单不存在: {work_order_id}")
-            if work_order.status not in ("in_progress", "completed", "进行中", "已完成"):
+            if work_order.status not in WORK_ORDER_INBOUND_ALLOWED_STATUSES:
                 raise BusinessLogicError(f"工单状态为 {work_order.status}，无法创建入库单")
 
             if receipt_quantity is None:

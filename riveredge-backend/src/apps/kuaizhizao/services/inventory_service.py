@@ -16,6 +16,8 @@ Date: 2026-02-28
 
 from apps.kuaizhizao.utils.stock_posting import atomic_stock_change, idempotent_stock_change
 
+import hashlib
+from contextvars import ContextVar
 from decimal import Decimal
 from typing import Optional, Dict, Any
 from datetime import date
@@ -34,6 +36,28 @@ from infra.exceptions.exceptions import BusinessLogicError, ValidationError
 _BATCH_ORDER_ENFORCEMENT_EXEMPT_SOURCE_TYPES = frozenset({
     "purchase_return",
 })
+
+# 再确认放行映射（spec 141 review）：撤回曾冲减数量但未回冲序列号台账的存量单据，
+# 再确认入库时序列号仍停在 in_stock → 凭同单已存在的撤回流水放行，对齐台账。
+# 键 = 正向入库 source_type；值 = 对应撤回流水的 source_type。
+_RECONFIRM_TOLERANT_REVOKE_SOURCE_TYPES = {
+    "purchase_receipt": "purchase_receipt_revoke",
+    "finished_goods_receipt": "finished_goods_receipt_revoke",
+    "semi_finished_goods_receipt": "semi_finished_goods_receipt_revoke",
+    "sales_return": "sales_return_withdraw",
+    "customer_material_inbound": "customer_material_inbound_revoke",
+    # other_inbound 明细的 serial_numbers 字段系后补，字段落地前已确认/撤回的存量单据
+    # 序列号仍滞留 in_stock，其再确认必须容忍
+    "other_inbound": "other_inbound_revoke",
+    # production_return 明细的 serial_numbers 字段同为后补，存量已撤回单据同理须容忍
+    "production_return": "production_return_revoke",
+}
+
+# A 案包装层合成键的行内序号（spec 141 KR-CL2）：同一调用上下文（同一请求/事务内的
+# 批量过账）里，判别字段完全相同的明细行须拿到不同键；重试按相同顺序重放得到同一组键。
+_synth_stock_key_counter: ContextVar = ContextVar(
+    "inventory_synth_stock_key_seq", default=None
+)
 
 
 class InventoryService:
@@ -650,7 +674,17 @@ class InventoryService:
     ) -> bool:
         """
         增加库存（不开启独立事务）。
+
+        spec 141（KR-CL2）：``idempotency_key`` 在本入口签名级强制——缺失/空白即拒绝，
+        禁止无键静默过账；有键时 ``@idempotent_stock_change`` 负责 advisory lock + 流水查重。
         """
+        if not (idempotency_key and str(idempotency_key).strip()):
+            # 函数体内另有同名局部 import，必须用别名避免局部遮蔽
+            from infra.exceptions.exceptions import ValidationError as _ValidationError
+
+            raise _ValidationError(
+                "库存过账缺少幂等键 idempotency_key: _increase_stock_no_atomic"
+            )
         try:
             from apps.master_data.services.material_batch_service import MaterialBatchService
 
@@ -800,19 +834,27 @@ class InventoryService:
                     from apps.master_data.models.material_serial import MaterialSerial
                     from apps.kuaizhizao.models.material_stock_movement import MaterialStockMovement
 
-                    for s_no in serial_nos:
-                        existing = await MaterialSerial.filter(tenant_id=tenant_id, serial_no=s_no).first()
+                    # 锁序约定（spec 141 KR-CL2）：先批次行锁（上方
+                    # _find_in_stock_material_batch for_update），再按序列号排序
+                    # 逐条 select_for_update；序列号与批次在同一 DB 事务、同成败。
+                    # 全路径统一该锁序，避免并发互锁。查询沿用 tenant_id 过滤
+                    # （租户强制收口将被 spec 143 统一替换）。
+                    for s_no in sorted(serial_nos, key=lambda v: str(v or "")):
+                        existing = await MaterialSerial.filter(tenant_id=tenant_id, serial_no=s_no).select_for_update().first()
                         if existing:
                             if existing.status == "in_stock":
                                 if source_type and str(source_type).endswith("_withdraw"):
                                     continue
-                                # 同单撤回曾冲数量但未回冲序列号台账时，允许采购入库再确认对齐台账
+                                # 同单撤回曾冲数量但未回冲序列号台账时，允许再确认入库对齐台账
+                                _revoke_src = _RECONFIRM_TOLERANT_REVOKE_SOURCE_TYPES.get(
+                                    str(source_type or "")
+                                )
                                 if (
-                                    source_type == "purchase_receipt"
+                                    _revoke_src
                                     and source_doc_id
                                     and await MaterialStockMovement.filter(
                                         tenant_id=tenant_id,
-                                        source_type="purchase_receipt_revoke",
+                                        source_type=_revoke_src,
                                         source_doc_id=int(source_doc_id),
                                     ).exists()
                                 ):
@@ -918,6 +960,63 @@ class InventoryService:
             raise
 
     @staticmethod
+    def _synthesize_idempotency_key(
+        action: str,
+        *,
+        source_type: Optional[str],
+        source_doc_id: Optional[int],
+        material_id: Optional[int] = None,
+        batch_no: Optional[str] = None,
+        warehouse_id: Optional[int] = None,
+        from_warehouse_id: Optional[int] = None,
+        to_warehouse_id: Optional[int] = None,
+        quantity: Optional[Decimal] = None,
+        movement_type: Optional[str] = None,
+        work_order_id: Optional[int] = None,
+        serial_nos: Optional[list] = None,
+    ) -> str:
+        """
+        包装层缺键时的确定性幂等键（spec 141 KR-CL2，A 案）。
+
+        基键为 单据类型 + 单据ID + 动作 + 明细判别摘要（material/batch/warehouse/qty/
+        movement/serial）：同一单据多行明细各自过账需不同键，逐行循环调用方不能只靠
+        单据级键；判别字段完全相同的重复明细按本调用上下文内出现序号 ``#s{n}`` 区分，
+        重试按相同顺序重放得到同一组键 → 同键去重不加量。source_type/source_doc_id
+        任一缺失即拒绝（失败关闭）。
+        """
+        st = str(source_type or "").strip()
+        try:
+            doc_id = int(source_doc_id) if source_doc_id is not None else 0
+        except (TypeError, ValueError):
+            doc_id = 0
+        if not st or doc_id <= 0:
+            raise ValidationError(
+                f"无法合成库存幂等键：缺少 source_type/source_doc_id（action={action}）"
+            )
+        discriminator = "|".join(
+            [
+                str(material_id or ""),
+                str(batch_no or ""),
+                str(warehouse_id or ""),
+                str(from_warehouse_id or ""),
+                str(to_warehouse_id or ""),
+                str(quantity or ""),
+                str(movement_type or ""),
+                str(work_order_id or ""),
+                ",".join(str(s) for s in (serial_nos or [])),
+            ]
+        )
+        digest = hashlib.sha256(discriminator.encode()).hexdigest()[:16]
+        base = f"{st}:{doc_id}:{action}:{digest}"
+        seqs = _synth_stock_key_counter.get()
+        if seqs is None:
+            seqs = {}
+            _synth_stock_key_counter.set(seqs)
+        occurrence = seqs.get(base, 0)
+        seqs[base] = occurrence + 1
+        return base if occurrence == 0 else f"{base}#s{occurrence}"
+
+    @staticmethod
     @atomic_stock_change
     async def increase_stock(
         tenant_id: int,
@@ -951,7 +1050,26 @@ class InventoryService:
     ) -> bool:
         """
         增加库存（独立事务包装）。
+
+        调用方未传 ``idempotency_key`` 时按 A 案合成确定性键
+        （``source_type`` + ``source_doc_id`` + 动作 + 明细判别），
+        字段不足无法合成则拒绝；显式传键的调用方沿用原键。
         """
+        if not (idempotency_key and str(idempotency_key).strip()):
+            idempotency_key = InventoryService._synthesize_idempotency_key(
+                "increase",
+                source_type=source_type,
+                source_doc_id=source_doc_id,
+                material_id=material_id,
+                batch_no=batch_no,
+                warehouse_id=warehouse_id,
+                from_warehouse_id=from_warehouse_id,
+                to_warehouse_id=to_warehouse_id,
+                quantity=quantity,
+                movement_type=movement_type,
+                work_order_id=work_order_id,
+                serial_nos=serial_nos,
+            )
         return await InventoryService._increase_stock_no_atomic(
             tenant_id=tenant_id,
             material_id=material_id,
@@ -989,12 +1107,18 @@ class InventoryService:
         material_id: int,
         serial_nos: Optional[list[str]],
     ) -> None:
-        """出库扣减后同步序列号台账为已出库。"""
+        """出库扣减后同步序列号台账为已出库。
+
+        锁序约定（spec 141 KR-CL2）：与入库一致——先批次行锁（扣减分支已对批次
+        ``select_for_update``），再按序列号排序逐条 ``select_for_update``；
+        序列号与批次扣减在同一 DB 事务提交，任一侧失败全滚。
+        查询沿用 ``tenant_id`` 过滤（租户强制收口将被 spec 143 统一替换）。
+        """
         if not serial_nos:
             return
         from apps.master_data.models.material_serial import MaterialSerial
 
-        for s_no in serial_nos:
+        for s_no in sorted(serial_nos, key=lambda v: str(v or "")):
             sn = str(s_no or "").strip()
             if not sn:
                 continue
@@ -1002,7 +1126,7 @@ class InventoryService:
                 tenant_id=tenant_id,
                 serial_no=sn,
                 deleted_at__isnull=True,
-            ).first()
+            ).select_for_update().first()
             if not existing:
                 raise BusinessLogicError(f"序列号 {sn} 不存在，无法出库")
             if int(existing.material_id) != int(material_id):
@@ -1042,7 +1166,16 @@ class InventoryService:
     ) -> bool:
         """
         扣减库存（不开启独立事务）。见 `_increase_stock_no_atomic` 说明。
+
+        ``idempotency_key`` 在本入口签名级强制：缺失/空白即拒绝（spec 141 KR-CL2）。
         """
+        if not (idempotency_key and str(idempotency_key).strip()):
+            # 函数体内另有同名局部 import，必须用别名避免局部遮蔽
+            from infra.exceptions.exceptions import ValidationError as _ValidationError
+
+            raise _ValidationError(
+                "库存过账缺少幂等键 idempotency_key: _decrease_stock_no_atomic"
+            )
         try:
             from infra.exceptions.exceptions import BusinessLogicError
 
@@ -1671,7 +1804,23 @@ class InventoryService:
         扣减库存（独立事务包装）。
 
         若调用方已在 `in_transaction()` 内，请改用 `_decrease_stock_no_atomic`。
+        调用方未传 ``idempotency_key`` 时按 A 案合成确定性键，字段不足则拒绝。
         """
+        if not (idempotency_key and str(idempotency_key).strip()):
+            idempotency_key = InventoryService._synthesize_idempotency_key(
+                "decrease",
+                source_type=source_type,
+                source_doc_id=source_doc_id,
+                material_id=material_id,
+                batch_no=batch_no,
+                warehouse_id=warehouse_id,
+                from_warehouse_id=from_warehouse_id,
+                to_warehouse_id=to_warehouse_id,
+                quantity=quantity,
+                movement_type=movement_type,
+                work_order_id=work_order_id,
+                serial_nos=serial_nos,
+            )
         return await InventoryService._decrease_stock_no_atomic(
             tenant_id=tenant_id,
             material_id=material_id,

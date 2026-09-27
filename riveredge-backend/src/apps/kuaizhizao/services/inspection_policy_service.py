@@ -562,6 +562,14 @@ async def assert_master_data_inspection_stages_allowed(
 
     if material_stages:
         norm = normalize_material_inspection_stages(material_stages)
+        if isinstance(material_stages, dict) and all(
+            normalize_stage_policy(norm.get(key))["mode"] == "none"
+            for key in MATERIAL_INSPECTION_STAGE_KEYS
+        ):
+            raise ConflictError(
+                "检验配置不允许三个环节全部设为「无质检」（视同未配置，入库默认必检）；"
+                "如需清除配置请置空，如需某环节免检请先为其余环节配置简易/方案质检"
+            )
         checks = (
             ("iqc", "来料检验", cfg["stage_enabled"]["iqc"] and cfg["module_enabled"]["incoming"]),
             ("fqc", "成品检验", cfg["stage_enabled"]["fqc"] and cfg["module_enabled"]["finished"]),
@@ -862,11 +870,9 @@ async def resolve_inspection_policy(
         grp_stages = None
         if mat is not None and mat.group_id is not None:
             grp_stages = group_stages_by_id.get(int(mat.group_id))
-        eff_mode, plan_id, reason = resolve_material_stage_policy_from_rows(
-            cfg, stage, mat, grp_stages
-        )
-        if eff_mode != "none":
-            return eff_mode, plan_id, reason
+        # spec 140 / KR-CL1：eff 为 none 时也必须透传内层 source——
+        # material（物料级显式免检）与 default_none（无策略必检）不得再被收平。
+        return resolve_material_stage_policy_from_rows(cfg, stage, mat, grp_stages)
     elif material_inspection_mode is not None:
         leg = normalize_inspection_mode(material_inspection_mode)
         if leg != "none":
@@ -1210,21 +1216,41 @@ async def defect_accept_material_ids_for_purchase_receipt(
     return frozenset(int(row.product_id) for row in rows if row.product_id)
 
 
+# spec 140 / KR-CL1 入库门禁放行/跳过 source：
+# - material（eff 为 none）：物料级显式免检 → 放行
+# - stage_disabled / module_disabled：环节或模块未启用 → 跳过该行门禁（不当免检证据）
+# 其余一律必检：default_none（无策略）与 simple/plan 均不得跳过。
+_INBOUND_GATE_BYPASS_SOURCES = frozenset({"material", "stage_disabled", "module_disabled"})
+
+
+def inbound_inspection_required(eff: str, source: str) -> bool:
+    """入库确认门禁判定：True 表示该行必须检验合格后方可确认入库。
+
+    spec 140 / KR-CL1：仅 source=material 且 eff=none（物料级显式免检）
+    或 source=stage_disabled/module_disabled（环节/模块未启用）放行；
+    无策略（default_none）与已配置检验（simple/plan）一律必检，
+    与三个全局检验开关的存值无关（开关只读展示，不参与 skip）。
+    """
+    if eff == "none" and source in _INBOUND_GATE_BYPASS_SOURCES:
+        return False
+    return True
+
+
 async def assert_fqc_for_finished_goods_receipt(
     tenant_id: int,
     receipt_id: int,
     work_order_id: Optional[int],
     lines: List[Any],
 ) -> None:
-    """成品入库确认：fqc≠none 时须已审 FQC 且入库数量不超过合格数。"""
+    """成品入库确认：必检行须已审 FQC 且入库数量不超过合格数。
+
+    spec 140 / KR-CL1：按 source 判定——source=material 且 eff=none 免检放行；
+    stage_disabled/module_disabled 跳过；default_none（无策略）与 simple/plan 必检。
+    work_order_id 为空不得绕开门禁：必检行按 FQC 合格数 0 处理。
+    """
     from infra.exceptions.exceptions import BusinessLogicError
 
-    cfg = await get_quality_effective_config(tenant_id)
-    gate_enabled = bool(cfg["gate"]["require_fqc_before_finished_goods_receipt"])
-
-    if not work_order_id:
-        return
-
+    # 让步接收查询带 tenant_id，将被 spec 143 收口替换
     concession_allowance = await sum_defect_accept_quantity_for_finished_goods_receipt(
         tenant_id, receipt_id
     )
@@ -1240,29 +1266,36 @@ async def assert_fqc_for_finished_goods_receipt(
             continue
         if qty_dec <= 0:
             continue
-        eff, _, _ = await resolve_inspection_policy(tenant_id, "fqc", material_id=int(mid))
-        if eff == "none":
+        eff, _, source = await resolve_inspection_policy(tenant_id, "fqc", material_id=int(mid))
+        if not inbound_inspection_required(eff, source):
             continue
 
-        qualified_cap = await sum_fqc_inbound_qualified_quantity(
-            tenant_id, int(work_order_id), int(mid)
-        )
-        if gate_enabled and qualified_cap <= 0 and concession_allowance <= 0:
+        # 空工单无 FQC 合格数可取：必检行按合格数 0 处理，不得绕开门禁
+        if work_order_id:
+            qualified_cap = await sum_fqc_inbound_qualified_quantity(
+                tenant_id, int(work_order_id), int(mid)
+            )
+            remaining = await get_fqc_inbound_remaining_quantity(
+                tenant_id,
+                int(work_order_id),
+                int(mid),
+                exclude_receipt_id=receipt_id,
+            )
+        else:
+            qualified_cap = Decimal("0")
+            remaining = Decimal("0")
+
+        if qualified_cap <= 0 and concession_allowance <= 0:
             raise BusinessLogicError(
-                "已启用「需已审 FQC 且入库数量不超过合格数」，请先完成成品检验"
-                "（需审核时须审核通过）且存在合格数量后再确认成品入库"
+                "物料须先完成成品检验（FQC）且存在合格数量后方可确认入库"
+                "（需审核时须审核通过；物料级显式免检或环节未启用除外；"
+                "未配置检验策略的物料请先在物料档案配置检验策略或设置显式免检）"
             )
 
-        remaining = await get_fqc_inbound_remaining_quantity(
-            tenant_id,
-            int(work_order_id),
-            int(mid),
-            exclude_receipt_id=receipt_id,
-        )
         allowed = remaining + concession_allowance
         if qty_dec > allowed + Decimal("1e-9"):
             raise BusinessLogicError(
-                f"入库数量 {qty_dec} 超过可确认余量 {allowed}"
+                f"入库数量 {qty_dec} 超过成品检验合格可入余量 {allowed}"
                 f"（FQC 合格可入 {remaining}，让步接收 {concession_allowance}）"
             )
 
@@ -1292,14 +1325,14 @@ async def assert_iqc_for_purchase_receipt_lines(
     receipt_id: int,
     lines: List[Any],
 ) -> None:
-    """采购入库确认：门禁开启时，对 iqc≠none 的行要求来料检验合格（需审核时须审核通过）。"""
+    """采购入库确认：对 IQC 必检行要求来料检验合格（需审核时须审核通过）。
+
+    spec 140 / KR-CL1：按 source 判定——source=material 且 eff=none 免检放行；
+    stage_disabled/module_disabled 跳过；default_none（无策略）与 simple/plan 必检。
+    全局开关「收货前必须来料检验」只读展示，不再参与放行。
+    """
     from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
     from infra.exceptions.exceptions import BusinessLogicError
-
-    cfg = await get_quality_effective_config(tenant_id)
-    # 与代工来料一致：组织「收货前必须来料检验」关闭时不卡确认入库
-    if not cfg["gate"]["require_iqc_before_receipt_confirm"]:
-        return
 
     needs_qc_mids: List[int] = []
     for item in lines:
@@ -1312,13 +1345,14 @@ async def assert_iqc_for_purchase_receipt_lines(
                 continue
         except (TypeError, ValueError):
             continue
-        eff, _, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=int(mid))
-        if eff != "none":
+        eff, _, source = await resolve_inspection_policy(tenant_id, "iqc", material_id=int(mid))
+        if inbound_inspection_required(eff, source):
             needs_qc_mids.append(int(mid))
 
     if not needs_qc_mids:
         return
 
+    # 让步接收与检验单查询带 tenant_id，将被 spec 143 收口替换
     concession_mids = await defect_accept_material_ids_for_purchase_receipt(
         tenant_id, receipt_id
     )
@@ -1332,7 +1366,9 @@ async def assert_iqc_for_purchase_receipt_lines(
         if concession_mids and all(mid in concession_mids for mid in needs_qc_mids):
             return
         raise BusinessLogicError(
-            "已启用「收货前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
+            "相关物料须先创建并完成来料检验（IQC），检验合格后再确认入库"
+            "（物料级显式免检或环节未启用除外；"
+            "未配置检验策略的物料请先在物料档案配置检验策略或设置显式免检）"
         )
 
     passed_by_material: Dict[int, bool] = {}
@@ -1346,7 +1382,7 @@ async def assert_iqc_for_purchase_receipt_lines(
         if mid in concession_mids:
             continue
         raise BusinessLogicError(
-            "已启用「收货前必须来料检验」，相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"
+            "相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"
         )
 
 
@@ -1355,13 +1391,14 @@ async def assert_iqc_for_customer_material_registration_lines(
     registration_id: int,
     lines: List[Any],
 ) -> None:
-    """代工来料确认入库：门禁开启时，仅对 iqc≠none 的行要求合格 IQC。"""
+    """代工来料确认入库：对 IQC 必检行要求合格 IQC（与采购来料同一规则）。
+
+    spec 140 / KR-CL1：source=material 且 eff=none 免检放行；
+    stage_disabled/module_disabled 跳过；default_none（无策略）与 simple/plan 必检。
+    全局开关「代工来料入库前必须来料检验」只读展示，不再参与放行。
+    """
     from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
     from infra.exceptions.exceptions import BusinessLogicError
-
-    cfg = await get_quality_effective_config(tenant_id)
-    if not cfg["gate"]["require_iqc_before_customer_material_confirm"]:
-        return
 
     needs_qc_mids: List[int] = []
     for item in lines:
@@ -1374,13 +1411,14 @@ async def assert_iqc_for_customer_material_registration_lines(
                 continue
         except (TypeError, ValueError):
             continue
-        eff, _, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=int(mid))
-        if eff != "none":
+        eff, _, source = await resolve_inspection_policy(tenant_id, "iqc", material_id=int(mid))
+        if inbound_inspection_required(eff, source):
             needs_qc_mids.append(int(mid))
 
     if not needs_qc_mids:
         return
 
+    # 检验单查询带 tenant_id，将被 spec 143 收口替换
     inspections = await IncomingInspection.filter(
         tenant_id=tenant_id,
         customer_material_registration_id=registration_id,
@@ -1388,7 +1426,9 @@ async def assert_iqc_for_customer_material_registration_lines(
     ).all()
     if not inspections:
         raise BusinessLogicError(
-            "已启用「代工来料入库前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
+            "相关物料须先创建并完成来料检验（IQC），检验合格后再确认入库"
+            "（物料级显式免检或环节未启用除外；"
+            "未配置检验策略的物料请先在物料档案配置检验策略或设置显式免检）"
         )
 
     passed_by_material: Dict[int, bool] = {}
@@ -1400,7 +1440,7 @@ async def assert_iqc_for_customer_material_registration_lines(
     for mid in needs_qc_mids:
         if not passed_by_material.get(mid):
             raise BusinessLogicError(
-                "已启用「代工来料入库前必须来料检验」，相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"
+                "相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"
             )
 
 

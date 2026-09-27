@@ -24,6 +24,10 @@ class SemiFinishedGoodsReceiptItem(BaseModel):
 
     batch_number = fields.CharField(max_length=50, null=True, description="批次号")
     expiry_date = fields.DateField(null=True, description="到期日期")
+    serial_numbers = fields.JSONField(
+        null=True,
+        description="序列号列表（JSON格式，存储多个序列号）",
+    )
 
     quality_status = fields.CharField(max_length=20, default="合格", description="质量状态")
     quality_inspection_id = fields.IntField(null=True, description="质量检验单ID")

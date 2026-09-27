@@ -1,5 +1,6 @@
 """允许负库存出库：业务配置与扣减真源行为。"""
 
+from contextlib import asynccontextmanager
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -8,6 +9,21 @@ import pytest
 
 from apps.kuaizhizao.services.inventory_service import InventoryService
 from infra.exceptions.exceptions import BusinessLogicError
+
+
+@asynccontextmanager
+async def _noop_tx():
+    conn = MagicMock()
+    conn.execute_query = AsyncMock(return_value=None)
+    yield conn
+
+
+def _dedup_miss_queryset():
+    """spec 141：带键过账会先进事务+流水查重；纯 mock 环境下返回「无既有流水」。"""
+    qs = MagicMock()
+    qs.using_db = MagicMock(return_value=qs)
+    qs.values_list = AsyncMock(return_value=[])
+    return qs
 
 
 @pytest.mark.asyncio
@@ -79,6 +95,12 @@ async def test_decrease_stock_skips_assert_when_allow_negative():
     ), patch(
         "apps.kuaizhizao.services.work_order_readiness_service.notify_inventory_changed",
         return_value=None,
+    ), patch(
+        "apps.kuaizhizao.utils.stock_posting.reuse_or_begin_transaction",
+        _noop_tx,
+    ), patch(
+        "apps.kuaizhizao.models.material_stock_movement.MaterialStockMovement.filter",
+        MagicMock(return_value=_dedup_miss_queryset()),
     ):
         cfg_cls.return_value.get_business_config = AsyncMock(
             return_value={"parameters": {"warehouse": {"lifo": False, "fifo_mode": "batch_id"}}}
@@ -110,6 +132,7 @@ async def test_decrease_stock_skips_assert_when_allow_negative():
                 source_doc_id=1,
                 operator_id=1,
                 operator_name="tester",
+                idempotency_key="test:negative-outbound:1",
             )
 
     assert ok is True
@@ -134,6 +157,12 @@ async def test_decrease_stock_blocks_when_allow_negative_disabled():
     ), patch(
         "apps.kuaizhizao.utils.inventory_helper.assert_outbound_warehouse_stock_available",
         new=AsyncMock(side_effect=BusinessLogicError("库存不足")),
+    ), patch(
+        "apps.kuaizhizao.utils.stock_posting.reuse_or_begin_transaction",
+        _noop_tx,
+    ), patch(
+        "apps.kuaizhizao.models.material_stock_movement.MaterialStockMovement.filter",
+        MagicMock(return_value=_dedup_miss_queryset()),
     ):
         with pytest.raises(BusinessLogicError, match="库存不足"):
             await InventoryService._decrease_stock_no_atomic(
@@ -142,4 +171,5 @@ async def test_decrease_stock_blocks_when_allow_negative_disabled():
                 quantity=Decimal("5"),
                 warehouse_id=2,
                 movement_type="sales_delivery",
+                idempotency_key="test:negative-outbound:2",
             )

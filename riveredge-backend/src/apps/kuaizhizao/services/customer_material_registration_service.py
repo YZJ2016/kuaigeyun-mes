@@ -14,6 +14,8 @@ from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 from tortoise.timezone import now as tz_now
 
+from apps.kuaizhizao.utils.stock_posting import stock_document_guard
+
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 
 from apps.kuaizhizao.models.customer_material_registration import (
@@ -784,7 +786,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
         if not registration.warehouse_id:
             raise BusinessLogicError("确认入库前必须指定入库仓库")
 
-        for item in items:
+        for idx, item in enumerate(items):
             qty = Decimal(str(item.quantity or 0))
             if qty <= 0:
                 continue
@@ -835,6 +837,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 movement_type="other_inbound",
                 to_warehouse_id=registration.warehouse_id,
                 operator_id=operator_id,
+                idempotency_key=f"customer_material_inbound:{registration.id}:inc:{item.id if item.id is not None else f'line{idx}'}",
             )
 
     async def process_registration(
@@ -843,7 +846,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
         registration_id: int,
         processed_by: int,
     ) -> CustomerMaterialRegistrationResponse:
-        async with in_transaction():
+        async with in_transaction(), stock_document_guard("customer_material_registration", tenant_id, registration_id):
             registration = await CustomerMaterialRegistration.get_or_none(
                 id=registration_id, tenant_id=tenant_id, deleted_at__isnull=True
             )
@@ -896,7 +899,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
         registration_id: int,
         withdrawn_by: int,
     ) -> CustomerMaterialRegistrationResponse:
-        async with in_transaction():
+        async with in_transaction(), stock_document_guard("customer_material_registration", tenant_id, registration_id):
             registration = await CustomerMaterialRegistration.get_or_none(
                 id=registration_id, tenant_id=tenant_id, deleted_at__isnull=True
             )
@@ -912,16 +915,18 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             items = await self._effective_items(registration)
             from apps.kuaizhizao.services.inventory_service import InventoryService
 
-            for item in items:
+            for idx, item in enumerate(items):
                 qty = Decimal(str(item.quantity or 0))
                 if qty <= 0:
                     continue
+                serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                 await InventoryService._decrease_stock_no_atomic(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
                     quantity=qty,
                     warehouse_id=registration.warehouse_id,
                     batch_no=item.batch_number or None,
+                    serial_nos=serial_nos or None,
                     source_type="customer_material_inbound_revoke",
                     source_doc_id=registration.id,
                     source_doc_code=registration.registration_code,
@@ -930,6 +935,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                     movement_type="other_outbound",
                     from_warehouse_id=registration.warehouse_id,
                     operator_id=withdrawn_by,
+                    idempotency_key=f"customer_material_inbound:{registration.id}:withdraw:{item.id if item.id is not None else f'line{idx}'}",
                 )
 
             registration.status = "pending"

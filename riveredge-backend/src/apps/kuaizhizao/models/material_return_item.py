@@ -41,6 +41,7 @@ class MaterialReturnItem(BaseModel):
     return_time = fields.DatetimeField(null=True, description="实际归还时间")
 
     batch_number = fields.CharField(max_length=50, null=True, description="批次号")
+    serial_numbers = fields.JSONField(null=True, description="序列号列表（JSON格式，存储多个序列号）")
     expiry_date = fields.DateField(null=True, description="到期日期")
     notes = fields.TextField(null=True, description="备注")
 

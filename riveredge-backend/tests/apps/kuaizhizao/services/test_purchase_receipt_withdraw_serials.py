@@ -79,8 +79,16 @@ async def test_withdraw_receipt_passes_serial_nos_to_decrease():
             decrease,
         ),
         patch(
-            "apps.kuaizhizao.utils.stock_posting._stock_transaction",
+            "apps.kuaizhizao.utils.stock_posting.reuse_or_begin_transaction",
             _noop_tx,
+        ),
+        patch(
+            "apps.kuaicaiwu.services.finance_integration_hooks.cleanup_payables_for_purchase_receipt",
+            AsyncMock(return_value=None),
+        ),
+        patch(
+            "apps.kuaizhizao.services.receipt_notice_service.sync_receipt_notice_status_from_purchase_receipt",
+            AsyncMock(return_value=None),
         ),
         patch(
             "apps.kuaizhizao.services.warehouse_service.in_transaction",

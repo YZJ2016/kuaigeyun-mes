@@ -11,6 +11,7 @@ from apps.kuaizhizao.utils.stock_posting import (
     reuse_or_begin_transaction,
     serialize_stock_document,
     serialize_stock_create,
+    stock_document_guard,
 )
 from typing import List, Optional, Dict, Any, Tuple, Iterable
 from datetime import datetime, date, timedelta
@@ -22,6 +23,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
+from tortoise.timezone import now as tz_now
 from loguru import logger
 
 from core.utils.timezone_utils import (
@@ -32,6 +34,9 @@ from core.utils.timezone_utils import (
     to_api_isoformat,
 )
 from apps.common.audit_actor import audit_response_fields
+from apps.kuaizhizao.constants.work_order_inbound_status import (
+    WORK_ORDER_INBOUND_ALLOWED_STATUSES,
+)
 from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
 
 
@@ -4554,7 +4559,7 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                     count = int(item.return_quantity or 0)
                     serial_nos = await ensure_serial_nos_for_item(tenant_id, material, item, count)
                     if serial_nos and hasattr(item, "serial_numbers"):
-                        setattr(item, "serial_numbers", json.dumps(serial_nos))
+                        setattr(item, "serial_numbers", serial_nos)
                         await item.save()
 
             confirmer_name = await self.get_user_name(confirmed_by)
@@ -4608,6 +4613,7 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=_parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
                         **InventoryService.location_kwargs_from_line_item(item),
                         source_type="production_return",
                         source_doc_id=return_id,
@@ -4664,9 +4670,11 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=getattr(item, "batch_number", None) or None,
+                        serial_nos=_parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
                         source_type="production_return_revoke",
                         source_doc_id=return_id,
                         source_doc_code=ret_obj.return_code,
+                        idempotency_key=f"production_return:{return_id}:revoke:{item.id}",
                     movement_type="production_return",
                     operator_id=updated_by,
                     operator_name=None,
@@ -5294,12 +5302,14 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
                     )
+                    serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
                         source_type="finished_goods_receipt_revoke",
                         source_doc_id=receipt_id,
                         source_doc_code=receipt.receipt_code,
@@ -5581,13 +5591,14 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         fqc_qualified_remaining: Optional[float] = None
         from apps.kuaizhizao.services.inspection_policy_service import (
             get_fqc_inbound_remaining_quantity,
+            inbound_inspection_required,
             resolve_inspection_policy,
         )
 
-        eff, _, _ = await resolve_inspection_policy(
+        eff, _, src = await resolve_inspection_policy(
             tenant_id, "fqc", material_id=int(work_order.product_id)
         )
-        if eff != "none":
+        if inbound_inspection_required(eff, src):
             fqc_remaining = await get_fqc_inbound_remaining_quantity(
                 tenant_id,
                 work_order_id,
@@ -5656,6 +5667,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
         from apps.kuaizhizao.services.inspection_policy_service import (
             get_fqc_inbound_remaining_quantity,
+            inbound_inspection_required,
             resolve_inspection_policy,
             sum_fqc_inbound_qualified_quantity,
         )
@@ -5668,10 +5680,10 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
         )
         if work_order:
-            eff, _, _ = await resolve_inspection_policy(
+            eff, _, src = await resolve_inspection_policy(
                 tenant_id, "fqc", material_id=int(work_order.product_id)
             )
-            if eff != "none":
+            if inbound_inspection_required(eff, src):
                 fqc_total = await sum_fqc_inbound_qualified_quantity(
                     tenant_id, work_order_id, int(work_order.product_id)
                 )
@@ -5741,10 +5753,11 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         """
         解析工单入库预览数量。
 
-        - 启用 FQC 时：参考数量与可下推余量按检验合格数，而非工单计划数。
-        - 未启用 FQC 时：参考数量优先取建议合格数，否则为计划数。
+        - FQC 必检时：参考数量与可下推余量按检验合格数，而非工单计划数。
+        - 免检/环节未启用时：参考数量优先取建议合格数，否则为计划数。
         """
         from apps.kuaizhizao.services.inspection_policy_service import (
+            inbound_inspection_required,
             resolve_inspection_policy,
             sum_fqc_inbound_qualified_quantity,
         )
@@ -5754,10 +5767,10 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
         pending = float(quota["pending"])
         fqc_rem = quota.get("fqc_qualified_remaining")
 
-        eff, _, _ = await resolve_inspection_policy(
+        eff, _, src = await resolve_inspection_policy(
             tenant_id, "fqc", material_id=int(work_order.product_id)
         )
-        if eff != "none":
+        if inbound_inspection_required(eff, src):
             qualified_total = float(
                 await sum_fqc_inbound_qualified_quantity(
                     tenant_id,
@@ -5919,7 +5932,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             # 1. 获取工单信息（成品入库路径）
             
             # 检查工单状态（库内工单状态为英文枚举，兼容历史中文）
-            if work_order.status not in ("in_progress", "completed", "进行中", "已完成"):
+            if work_order.status not in WORK_ORDER_INBOUND_ALLOWED_STATUSES:
                 raise BusinessLogicError(f"工单状态为 {work_order.status}，无法创建入库单")
             
             # 2. 获取入库数量（优先从成品检验单获取合格数量）
@@ -12820,7 +12833,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         confirmation_data: Optional[InboundConfirmationRequest] = None,
     ) -> SalesReturnResponse:
         """确认退货。过账事务提交后再生成红字应收，避免嵌套事务回滚库存/状态却仍返回成功。"""
-        async with in_transaction():
+        # 单据守卫只覆盖过账事务：新尝试 scope 使再确认不被流水查重吞掉，红字应收仍在事务外
+        async with in_transaction(), stock_document_guard("sales_return", tenant_id, return_id):
             return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id)
             if not return_obj:
                 raise NotFoundError(f"销售退货单不存在: {return_id}")
@@ -12977,6 +12991,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                         movement_type="other_inbound",
                         operator_id=returner_id,
                         operator_name=returner_name,
+                        idempotency_key=f"sales_return:{return_id}:inc:{item.id}",
                     )
             except Exception as inv_e:
                 logger.error("销售退货确认-更新库存失败: %s", inv_e)
@@ -13252,7 +13267,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
 
     async def withdraw_confirmation(self, tenant_id: int, return_id: int, updated_by: int) -> SalesReturnResponse:
         """撤回退货确认（已退货 -> 待退货），并回滚库存增加。"""
-        async with in_transaction():
+        async with in_transaction(), stock_document_guard("sales_return", tenant_id, return_id):
             return_obj = await SalesReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
             if not return_obj:
                 raise NotFoundError(f"销售退货单不存在: {return_id}")
@@ -13277,18 +13292,21 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 qty = item.return_quantity or Decimal(0)
                 if qty <= 0:
                     continue
+                serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                 await InventoryService._decrease_stock_no_atomic(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
                     quantity=qty,
                     warehouse_id=return_obj.warehouse_id if return_obj.warehouse_id else None,
                     batch_no=item.batch_number or None,
+                    serial_nos=serial_nos or None,
                     source_type="sales_return_withdraw",
                     source_doc_id=return_id,
                     source_doc_code=return_obj.return_code,
                     movement_type="other_outbound",
                     operator_id=updated_by,
                     operator_name=None,
+                    idempotency_key=f"sales_return:{return_id}:withdraw:{item.id}",
                 )
 
             await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
@@ -14636,7 +14654,8 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
 
     async def confirm_return(self, tenant_id: int, return_id: int, confirmed_by: int) -> PurchaseReturnResponse:
         """确认退货。过账事务提交后再生成红字应付，避免嵌套事务回滚库存/状态却仍返回成功。"""
-        async with in_transaction():
+        # 单据守卫只覆盖过账事务：新尝试 scope 使再确认不被流水查重吞掉，红字应付仍在事务外
+        async with in_transaction(), stock_document_guard("purchase_return", tenant_id, return_id):
             return_obj = await PurchaseReturn.get_or_none(
                 tenant_id=tenant_id, id=return_id, deleted_at__isnull=True
             )
@@ -14698,12 +14717,14 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     qty = item.return_quantity or Decimal(0)
                     if qty <= 0:
                         continue
+                    serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
                         source_type="purchase_return",
                         source_doc_id=return_id,
                         source_doc_code=ret_obj.return_code,
@@ -14711,6 +14732,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                         movement_type="purchase_return",
                         operator_id=confirmed_by,
                         operator_name=None,
+                        idempotency_key=f"purchase_return:{return_id}:dec:{item.id}",
                     )
             except Exception as inv_e:
                 logger.error("采购退货确认-更新库存失败: %s", inv_e)
@@ -14941,7 +14963,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
 
     async def withdraw_confirmation(self, tenant_id: int, return_id: int, updated_by: int) -> PurchaseReturnResponse:
         """撤回采购退货确认（已退货 -> 待退货），并回滚库存扣减。"""
-        async with in_transaction():
+        async with in_transaction(), stock_document_guard("purchase_return", tenant_id, return_id):
             return_obj = await PurchaseReturn.get_or_none(tenant_id=tenant_id, id=return_id, deleted_at__isnull=True)
             if not return_obj:
                 raise NotFoundError(f"采购退货单不存在: {return_id}")
@@ -14975,12 +14997,14 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 qty = item.return_quantity or Decimal(0)
                 if qty <= 0:
                     continue
+                serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                 await InventoryService._increase_stock_no_atomic(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
                     quantity=qty,
                     warehouse_id=return_obj.warehouse_id if return_obj.warehouse_id else None,
                     batch_no=item.batch_number or None,
+                    serial_nos=serial_nos or None,
                     source_type="purchase_return_withdraw",
                     source_doc_id=return_id,
                     source_doc_code=return_obj.return_code,
@@ -14988,6 +15012,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     movement_type="purchase_return_withdraw",
                     operator_id=updated_by,
                     operator_name=None,
+                    idempotency_key=f"purchase_return:{return_id}:withdraw:{item.id}",
                 )
 
             await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
@@ -15256,7 +15281,8 @@ class OtherInboundService(AppBaseService[OtherInbound]):
 
         按明细执行与「撤回确认」相同的扣减逻辑，并将头状态改为「已取消」、明细回到待入库，避免重复执行。
         """
-        async with in_transaction():
+        # 与确认/撤回共用单据锁：防止与对已软删「已入库」单据的并发撤回跨键双扣
+        async with in_transaction(), stock_document_guard("other_inbound", tenant_id, inbound_id):
             inbound = await OtherInbound.get_or_none(tenant_id=tenant_id, id=inbound_id)
             if not inbound:
                 raise NotFoundError(f"其他入库单不存在: {inbound_id}")
@@ -15292,12 +15318,14 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     quantity=base_qty,
                     warehouse_id=wh_id,
                     batch_no=item.batch_number or None,
+                    serial_nos=_parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
                     source_type="other_inbound_delete_cleanup",
                     source_doc_id=inbound_id,
                     source_doc_code=inbound_obj.inbound_code,
                     movement_type="other_outbound",
                     operator_id=updated_by,
                     operator_name=None,
+                    idempotency_key=f"other_inbound:{inbound_id}:cleanup:{item.id}",
                 )
 
             suffix = "\n[库存修复] 已对软删已入库单冲减即时库存"
@@ -15330,7 +15358,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
     ) -> OtherInboundResponse:
         """确认入库"""
         # 可能被不合格台账让步接收外层事务调用：复用外层
-        async with reuse_or_begin_transaction():
+        async with reuse_or_begin_transaction(), stock_document_guard("other_inbound", tenant_id, inbound_id):
             inbound = await OtherInbound.get_or_none(tenant_id=tenant_id, id=inbound_id)
             if not inbound:
                 raise NotFoundError(f"其他入库单不存在: {inbound_id}")
@@ -15341,7 +15369,6 @@ class OtherInboundService(AppBaseService[OtherInbound]):
 
             assert_inbound_hub_capability(inbound, "confirm", receipt_type="other_inbound")
 
-            # OtherInboundItem 无 serial_numbers 字段，确认流程内用 dict 暂存行级序列号
             serial_nos_by_item_id: Dict[int, List[str]] = {}
 
             # 1. 更新确认数据
@@ -15412,6 +15439,9 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     serial_nos = await ensure_serial_nos_for_item(tenant_id, material, serial_source, count)
                     if serial_nos:
                         serial_nos_by_item_id[int(item.id)] = serial_nos
+                        # 持久化到明细行：撤回时据此回冲序列号台账（spec 141 补齐 serial_numbers 字段）
+                        item.serial_numbers = serial_nos
+                        await item.save()
 
             confirmer_name = await self.get_user_name(confirmed_by)
             from apps.kuaizhizao.utils.inbound_confirm_helper import (
@@ -15472,6 +15502,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         source_doc_code=inbound.inbound_code,
                         ledger_production_date=to_site_date(receipt_time) if receipt_time else None,
                         ledger_expiry_date=getattr(item, "expiry_date", None),
+                        idempotency_key=f"other_inbound:{inbound_id}:inc:{item.id}",
                     movement_type="other_inbound",
                     operator_id=receiver_id,
                     operator_name=receiver_name,
@@ -15525,7 +15556,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
         updated_by: int
     ) -> OtherInboundResponse:
         """撤回确认入库"""
-        async with in_transaction():
+        async with in_transaction(), stock_document_guard("other_inbound", tenant_id, inbound_id):
             inbound = await self.get_other_inbound_by_id(tenant_id, inbound_id)
             if inbound.status != "已入库":
                 raise BusinessLogicError("只有已入库状态的其他入库单才能撤回确认")
@@ -15552,12 +15583,14 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     )
                     
                     # 反向扣减库存（decrease_stock 内部会校验余量，如果已被领用，这里会报错拦截）
+                    serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
                         source_type="other_inbound_revoke",
                         source_doc_id=inbound_id,
                         source_doc_code=inbound_obj.inbound_code,
@@ -15905,6 +15938,14 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                 target_qty = Decimal(str(item.outbound_quantity or 0))
                 if target_qty <= 0:
                     raise ValidationError(f"物料 {item.material_code} 出库数量须大于 0")
+                from apps.master_data.models.material import Material
+
+                material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
+                if getattr(material, "serial_managed", False):
+                    raise ValidationError(
+                        f"物料 {item.material_code} 启用序列号管理，多批分摊无法映射序列号到批次，"
+                        "请按批次拆分明细行后再确认出库"
+                    )
                 await self._split_other_outbound_item_for_batch_allocations(
                     tenant_id=tenant_id,
                     outbound_id=outbound_id,
@@ -15920,6 +15961,9 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             elif item_data.batch_number:
                 item_update["batch_number"] = str(item_data.batch_number).strip() or None
 
+            if item_data.serial_numbers:
+                item_update["serial_numbers"] = _parse_serial_numbers(item_data.serial_numbers)
+
             if item_update:
                 await OtherOutboundItem.filter(
                     tenant_id=tenant_id, id=item_data.item_id, outbound_id=outbound_id
@@ -15933,7 +15977,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         confirmation_data: Optional[OutboundConfirmationRequest] = None,
     ) -> OtherOutboundResponse:
         """确认出库"""
-        async with in_transaction():
+        async with in_transaction(), stock_document_guard("other_outbound", tenant_id, outbound_id):
             outbound = await self.get_other_outbound_by_id(tenant_id, outbound_id)
 
             from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
@@ -16018,16 +16062,29 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
                     )
+                    mat = material_by_id.get(item.material_id)
+                    if mat:
+                        await _validate_batch_serial_policy(
+                            tenant_id=tenant_id,
+                            material=mat,
+                            batch_number=getattr(item, "batch_number", None),
+                            serial_numbers=getattr(item, "serial_numbers", None),
+                            quantity=qty,
+                            scene="其他出库确认",
+                        )
+                    serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
                         source_type="other_outbound",
                         source_doc_id=outbound_id,
                         source_doc_code=outbound_obj.outbound_code,
                         enforce_fifo=enforce_fifo,
+                        idempotency_key=f"other_outbound:{outbound_id}:dec:{item.id}",
                     movement_type="other_outbound",
                     operator_id=confirmed_by,
                     operator_name=None,
@@ -16086,7 +16143,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         updated_by: int,
     ) -> OtherOutboundResponse:
         """撤回确认出库"""
-        async with in_transaction():
+        async with in_transaction(), stock_document_guard("other_outbound", tenant_id, outbound_id):
             outbound = await self.get_other_outbound_by_id(tenant_id, outbound_id)
 
             from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
@@ -16116,12 +16173,17 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
                     )
+                    serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService.increase_stock(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
+                        ledger_production_date=to_site_date(
+                            getattr(outbound_obj, "delivery_time", None) or tz_now()
+                        ),
                         source_type="other_outbound_revoke",
                         source_doc_id=outbound_id,
                         source_doc_code=outbound_obj.outbound_code,
@@ -16432,6 +16494,14 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                 target_qty = Decimal(str(item.borrow_quantity or 0))
                 if target_qty <= 0:
                     raise ValidationError(f"物料 {item.material_code} 借出数量须大于 0")
+                from apps.master_data.models.material import Material
+
+                material = await Material.get_or_none(tenant_id=tenant_id, id=item.material_id)
+                if getattr(material, "serial_managed", False):
+                    raise ValidationError(
+                        f"物料 {item.material_code} 启用序列号管理，多批分摊无法映射序列号到批次，"
+                        "请按批次拆分明细行后再确认借出"
+                    )
                 await self._split_material_borrow_item_for_batch_allocations(
                     tenant_id=tenant_id,
                     borrow_id=borrow_id,
@@ -16447,6 +16517,9 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
             elif item_data.batch_number:
                 item_update["batch_number"] = str(item_data.batch_number).strip() or None
 
+            if item_data.serial_numbers:
+                item_update["serial_numbers"] = _parse_serial_numbers(item_data.serial_numbers)
+
             if item_update:
                 await MaterialBorrowItem.filter(
                     tenant_id=tenant_id, id=item_data.item_id, borrow_id=borrow_id
@@ -16460,7 +16533,7 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         confirmation_data: Optional[OutboundConfirmationRequest] = None,
     ) -> MaterialBorrowResponse:
         """确认借出"""
-        async with in_transaction():
+        async with in_transaction(), stock_document_guard("material_borrow", tenant_id, borrow_id):
             borrow = await self.get_material_borrow_by_id(tenant_id, borrow_id)
 
             from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
@@ -16543,16 +16616,29 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                         material=material_by_id.get(item.material_id),
                     )
                     wh_id = item.warehouse_id if item.warehouse_id else None
+                    mat = material_by_id.get(item.material_id)
+                    if mat:
+                        await _validate_batch_serial_policy(
+                            tenant_id=tenant_id,
+                            material=mat,
+                            batch_number=getattr(item, "batch_number", None),
+                            serial_numbers=getattr(item, "serial_numbers", None),
+                            quantity=qty,
+                            scene="借料确认",
+                        )
+                    serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService._decrease_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
                         source_type="material_borrow",
                         source_doc_id=borrow_id,
                         source_doc_code=borrow_obj.borrow_code,
                         enforce_fifo=enforce_fifo,
+                        idempotency_key=f"material_borrow:{borrow_id}:dec:{item.id}",
                     movement_type="other_outbound",
                     operator_id=confirmed_by,
                     operator_name=None,
@@ -16575,7 +16661,7 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         updated_by: int,
     ) -> MaterialBorrowResponse:
         """撤回借料确认（库存回冲并恢复待借出）。"""
-        async with in_transaction():
+        async with in_transaction(), stock_document_guard("material_borrow", tenant_id, borrow_id):
             borrow = await self.get_material_borrow_by_id(tenant_id, borrow_id)
 
             from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
@@ -16606,12 +16692,17 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                         material=material_by_id.get(item.material_id),
                     )
                     wh_id = item.warehouse_id if item.warehouse_id else None
+                    serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
                     await InventoryService.increase_stock(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
+                        ledger_production_date=to_site_date(
+                            getattr(borrow_obj, "borrow_time", None) or tz_now()
+                        ),
                         source_type="material_borrow_withdraw",
                         source_doc_id=borrow_id,
                         source_doc_code=borrow_obj.borrow_code,
@@ -16838,7 +16929,8 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
             resolve_inbound_confirm_receiver,
         )
 
-        async with in_transaction():
+        # 单据守卫串行并发确认：幂等键防重复过账，锁防 returned_quantity 读-改-写双累计
+        async with in_transaction(), stock_document_guard("material_return", tenant_id, return_id):
             return_obj = await self.get_material_return_by_id(tenant_id, return_id)
 
             from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
@@ -16876,13 +16968,24 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                 "returner_name": returner_name,
             }
             await MaterialReturn.filter(tenant_id=tenant_id, id=return_id).update(**update_fields)
+            # 确认入参携带的序列号持久化到明细行，供过账与后续撤回/回冲使用
+            confirm_serials = {
+                int(d.item_id): _parse_serial_numbers(d.serial_numbers)
+                for d in (confirmation_data.items or [])
+                if d.serial_numbers
+            } if confirmation_data else {}
             for item in return_obj.items:
+                item_update: Dict[str, Any] = {"status": "已归还", "return_time": return_time}
+                parsed_serials = confirm_serials.get(int(item.id))
+                if parsed_serials:
+                    item_update["serial_numbers"] = parsed_serials
                 await MaterialReturnItem.filter(
                     tenant_id=tenant_id,
                     id=item.id
-                ).update(status="已归还", return_time=return_time)
+                ).update(**item_update)
 
             # 更新借料单明细的已归还数量
+            borrow_serials_by_material: Dict[int, List[str]] = {}
             for item in return_obj.items:
                 borrow_item = await MaterialBorrowItem.get_or_none(
                     tenant_id=tenant_id,
@@ -16890,6 +16993,9 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                     material_id=item.material_id
                 )
                 if borrow_item:
+                    borrow_serials_by_material[int(item.material_id)] = _parse_serial_numbers(
+                        getattr(borrow_item, "serial_numbers", None)
+                    )
                     new_returned = (borrow_item.returned_quantity or Decimal(0)) + Decimal(str(item.return_quantity))
                     await MaterialBorrowItem.filter(tenant_id=tenant_id, id=borrow_item.id).update(
                         returned_quantity=new_returned
@@ -16912,17 +17018,24 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                         material=material_by_id.get(item.material_id),
                     )
                     wh_id = item.warehouse_id if item.warehouse_id else None
+                    serial_nos = (
+                        confirm_serials.get(int(item.id))
+                        or _parse_serial_numbers(getattr(item, "serial_numbers", None))
+                        or borrow_serials_by_material.get(int(item.material_id))
+                    )
                     await InventoryService._increase_stock_no_atomic(
                         tenant_id=tenant_id,
                         material_id=item.material_id,
                         quantity=base_qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos or None,
                         **InventoryService.location_kwargs_from_line_item(item),
                         source_type="material_return",
                         source_doc_id=return_id,
                         source_doc_code=return_entity.return_code,
                         ledger_production_date=to_site_date(return_time) if return_time else None,
+                        idempotency_key=f"material_return:{return_id}:inc:{item.id}",
                     movement_type="other_inbound",
                     operator_id=returner_id,
                     operator_name=returner_name,
