@@ -9,6 +9,7 @@ import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { Spin, theme } from 'antd';
 import { PageLoadingFullscreen } from '../components/page-loading-lottie';
+import { subscribeResizeBus } from '../hooks/useResizeBus';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import {
   LogoutOutlined,
@@ -52,7 +53,7 @@ import {
 import { resolveCustomPageTitle } from '../utils/customPageTitle';
 import { DEFAULT_THEME_BORDER_RADIUS } from '../utils/themeBorderRadius';
 import { prefetchPlugin } from '../utils/pluginLoader';
-import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
+import { prefetchKuaizhizaoRoute, schedulePrefetchKuaizhizaoTopRoutes } from '../apps/kuaizhizao/routePrefetch';
 import { prefetchMasterDataRoute } from '../apps/master-data/routePrefetch';
 import { prefetchSystemRoute, prefetchSystemRoutes } from '../routes/systemRoutePrefetch';
 import { PRO_APP_CODES } from '../pages/system/applications/proAppCatalog';
@@ -153,7 +154,6 @@ import { getChatIntegrationStatus } from '../services/deepseekChat';
 import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationStatus';
 import { hasPermission, resolveUserForMenuPermission } from '../utils/permission';
 import { AiAssistantHeaderButton } from './AiAssistantHeaderButton';
-import OnboardingGuide from '../components/onboarding-guide';
 import { HeaderQuickEntryPopover } from '../components/quick-entry';
 import { useConfigStore, resolveEffectiveHomePath } from '../stores/configStore';
 import TenantHomeRedirect from '../components/tenant-home-redirect';
@@ -438,6 +438,11 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       setCurrentUser(userData);
     }
   }, [userData, setCurrentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    schedulePrefetchKuaizhizaoTopRoutes();
+  }, [currentUser]);
 
   const publicPaths = ['/login', '/debug/'];
   const isInfraLoginPage = isPlatformAdminLoginPathname(location.pathname);
@@ -1907,12 +1912,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         checkBreadcrumbWrap();
       }, 120);
     };
-    window.addEventListener('resize', onResize, { passive: true });
+    const unsub = subscribeResizeBus(onResize);
 
     return () => {
       clearTimeout(timer);
       if (resizeThrottle) clearTimeout(resizeThrottle);
-      window.removeEventListener('resize', onResize);
+      unsub();
     };
   }, [location.pathname]);
 
@@ -3440,7 +3445,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       )}
 
       {/* 新手引导 */}
-      {/* <OnboardingGuide /> */}
+      {/* P5-19：OnboardingGuide（react-joyride）已从壳层静态依赖移除；需要时再 lazy 挂载 */}
 
       {/* 键盘快捷键帮助 */}
       <Modal

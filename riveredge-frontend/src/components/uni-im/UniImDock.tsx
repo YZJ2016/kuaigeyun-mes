@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { subscribeResizeBus } from '../../hooks/useResizeBus';
 import {
   AuditOutlined,
   BellOutlined,
@@ -289,8 +290,7 @@ export default function UniImPanel({
 
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth);
-    window.addEventListener('resize', onResize, { passive: true });
-    return () => window.removeEventListener('resize', onResize);
+    return subscribeResizeBus(onResize);
   }, []);
 
   const panelWidth = useMemo(() => {

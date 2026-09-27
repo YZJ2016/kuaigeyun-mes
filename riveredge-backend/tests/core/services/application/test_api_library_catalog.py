@@ -57,3 +57,19 @@ def test_kingdee_cosmic_mfg_presets_include_inventory_params_body():
     assert "params" in body
     assert "org" in (body.get("params") or {})
     assert body.get("pageSize") == 100
+
+
+def test_kingdee_cosmic_mfg_presets_include_production_aux_basedata():
+    from core.services.integration.kingdee_cosmic_mfg_api_presets import (
+        list_kingdee_cosmic_mfg_api_presets,
+    )
+
+    presets = list_kingdee_cosmic_mfg_api_presets()
+    paths = {p["path"] for p in presets}
+    assert "kapi/v2/basedata/bd_material/batchQuery" in paths
+    assert "kapi/v2/basedata/bd_multimeasureunit/batchQuery" in paths
+    assert "kapi/v2/basedata/bd_customer/query" in paths
+    assert "kapi/v2/basedata/bd_supplier/query" in paths
+    assert len([p for p in presets if "/basedata/" in p["path"]]) >= 12
+    multi = next(p for p in presets if p["path"].endswith("bd_multimeasureunit/batchQuery"))
+    assert "计量单位" in (multi.get("description") or "")

@@ -2,8 +2,150 @@
   "version": 1,
   "pack_id": "kingdee_cosmic_mfg",
   "title": "金蝶AI苍穹·制造链路",
-  "description": "销售订单→生产/车间→领料/入库/出库→即时库存，已在目标环境探活可用的 OpenAPI。",
+  "description": "销售订单→生产/车间→领料/入库/出库→即时库存，并含物料/多计量单位/客商等生产辅助主数据查询（已探活）。本环境未发布独立「计量单位」「仓库」主数据接口，单位见多计量单位，仓库字段见即时库存。",
   "presets": [
+    {
+      "code_suffix": "basedata_query_5",
+      "name": "苍穹查询供应商地址信息",
+      "description": "调用此API查询供应商地址信息。服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_address/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_address/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_queryAddress",
+      "name": "苍穹查询客户地址信息",
+      "description": "服务应用 appid=basedata，接口编码 queryAddress。开放平台 urlformat=/v2/basedata/bd_address/queryAddress。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_address/queryAddress",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "basedata_query",
+      "name": "苍穹查询客户信息",
+      "description": "服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_customer/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_customer/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_query_6",
+      "name": "苍穹客户分类查询",
+      "description": "服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_customergroup/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_customergroup/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "query_material",
+      "name": "苍穹查询物料",
+      "description": "基础资料API服务里的物料批量查询。请求地址 /v2/basedata/bd_material/batchQuery，完整地址为门户域名/kapi 加上该请求地址。筛选放在请求体的 data 内，字段与开放平台该 API 的请求体一致；均为非必填。",
+      "path": "kapi/v2/basedata/bd_material/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_query_7",
+      "name": "苍穹存货类别查询",
+      "description": "服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_materialcategory/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_materialcategory/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_batchQuery",
+      "name": "苍穹物料组织公共信息批量查询",
+      "description": "物料组织公共信息批量查询服务应用 appid=basedata，接口编码 batchQuery。开放平台 urlformat=/v2/basedata/bd_materialcommon/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_materialcommon/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "query_material_group",
+      "name": "苍穹查询物料分组",
+      "description": "基础资料API服务里的物料分组批量查询。请求地址 /v2/basedata/bd_materialgroup/batchQuery，请求体为 data、pageNo、pageSize。筛选字段放在 data 内。",
+      "path": "kapi/v2/basedata/bd_materialgroup/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_batchQuery_2",
+      "name": "苍穹物料多计量单位批量查询",
+      "description": "物料多计量单位批量查询（本环境开放平台未发布独立「计量单位」接口，单位编码/名称在此接口的 measureunitid_number/name 字段）。筛选放 data，pageNo/pageSize 分页。换票由连接器自动完成。",
+      "path": "kapi/v2/basedata/bd_multimeasureunit/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_getList_2",
+      "name": "苍穹项目基础资料查询",
+      "description": "服务应用 appid=basedata，接口编码 getList。开放平台 urlformat=/v2/basedata/bd_project/getList。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_project/getList",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_query_2",
+      "name": "苍穹查询供应商信息",
+      "description": "调用此API查询供应商信息。服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_supplier/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_supplier/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_query_4",
+      "name": "苍穹查询供应商分类信息",
+      "description": "调用此API查询供应商分类信息。服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_suppliergroup/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_suppliergroup/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
     {
       "code_suffix": "im_getInventoryDetail",
       "name": "苍穹即时库存明细查询",
@@ -721,7 +863,7 @@
       }
     },
     {
-      "code_suffix": "im_batchUnaudit_7",
+      "code_suffix": "im_batchUnaudit",
       "name": "苍穹销售出库单批量反审核",
       "description": "服务应用 appid=im，接口编码 batchUnaudit。开放平台 urlformat=/v2/im/im_saloutbill/batchUnaudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
       "path": "kapi/v2/im/im_saloutbill/batchUnaudit",
@@ -827,7 +969,7 @@
       }
     },
     {
-      "code_suffix": "im_batchUnAudit_7_2",
+      "code_suffix": "im_batchUnAudit_7",
       "name": "苍穹简单产品入库单--批量反审核",
       "description": "简单产品入库单--批量反审核服务应用 appid=im，接口编码 batchUnAudit。开放平台 urlformat=/v2/im/xkim_sp_mftinstkbill/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
       "path": "kapi/v2/im/xkim_sp_mftinstkbill/batchUnAudit",
@@ -1895,7 +2037,7 @@
       }
     },
     {
-      "code_suffix": "sm_batchUnaudit_2_2",
+      "code_suffix": "sm_batchUnaudit_2",
       "name": "苍穹销售退货申请单批量反审核",
       "description": "服务应用 appid=sm，接口编码 batchUnaudit。开放平台 urlformat=/v2/sm/sm_returnapply/batchUnaudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
       "path": "kapi/v2/sm/sm_returnapply/batchUnaudit",
@@ -1905,7 +2047,7 @@
       }
     },
     {
-      "code_suffix": "sm_batchUnsubmit_3_2",
+      "code_suffix": "sm_batchUnsubmit_3",
       "name": "苍穹销售退货申请单批量撤销",
       "description": "服务应用 appid=sm，接口编码 batchUnsubmit。开放平台 urlformat=/v2/sm/sm_returnapply/batchUnsubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
       "path": "kapi/v2/sm/sm_returnapply/batchUnsubmit",
@@ -2101,7 +2243,7 @@
       }
     },
     {
-      "code_suffix": "sm_batchUnsubmit_2_2",
+      "code_suffix": "sm_batchUnsubmit_2",
       "name": "苍穹委托代销清单批量撤销",
       "description": "服务应用 appid=sm，接口编码 batchUnsubmit。开放平台 urlformat=/v2/sm/sm_salesagency/batchUnsubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
       "path": "kapi/v2/sm/sm_salesagency/batchUnsubmit",
@@ -2161,7 +2303,7 @@
       }
     },
     {
-      "code_suffix": "sm_batchUnaudit_3_2",
+      "code_suffix": "sm_batchUnaudit_3",
       "name": "苍穹销售订单批量反审核",
       "description": "服务应用 appid=sm，接口编码 batchUnaudit。开放平台 urlformat=/v2/sm/sm_salorder/batchUnaudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
       "path": "kapi/v2/sm/sm_salorder/batchUnaudit",
@@ -2273,7 +2415,7 @@
       }
     },
     {
-      "code_suffix": "sm_batchUnAudit_5",
+      "code_suffix": "sm_batchUnAudit",
       "name": "苍穹销售订单变更单批量反审核",
       "description": "服务应用 appid=sm，接口编码 batchUnAudit。开放平台 urlformat=/v2/sm/sm_xssalorder/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
       "path": "kapi/v2/sm/sm_xssalorder/batchUnAudit",
@@ -2283,7 +2425,7 @@
       }
     },
     {
-      "code_suffix": "sm_batchUnSubmit_5",
+      "code_suffix": "sm_batchUnSubmit",
       "name": "苍穹销售订单变更单批量撤销提交",
       "description": "服务应用 appid=sm，接口编码 batchUnSubmit。开放平台 urlformat=/v2/sm/sm_xssalorder/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
       "path": "kapi/v2/sm/sm_xssalorder/batchUnSubmit",

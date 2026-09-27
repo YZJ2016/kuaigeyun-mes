@@ -19,7 +19,8 @@ export default function RelayLineCapacityPage() {
 
   useEffect(() => {
     void (async () => {
-      const res = await productionLineApi.list({ is_active: true, limit: 1000 });
+      // P5-17：大租户下拉默认收敛；超长用 Select showSearch 过滤，避免一次拉 1000 条卡顿
+      const res = await productionLineApi.list({ is_active: true, limit: 200 });
       const items = factoryListItems(res);
       setLineOptions(
         items
