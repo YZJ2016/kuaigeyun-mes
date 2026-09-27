@@ -213,7 +213,9 @@ class ReportingStatisticsTrendsResponse(BaseModel):
     """报工统计趋势数据。"""
 
     hours: list[float] = Field(default_factory=list, description="工时趋势")
-    wages: list[float] = Field(default_factory=list, description="工资趋势")
+    wages: list[Optional[float]] = Field(
+        default_factory=list, description="工资趋势（未配置预估工资基数时为 null）"
+    )
     efficiency: list[float] = Field(default_factory=list, description="效率趋势")
 
 
@@ -221,7 +223,12 @@ class ReportingOverviewStatisticsResponse(BaseModel):
     """报工概览统计（指标卡片）。"""
 
     cumulative_hours: float = Field(0, description="累计工时")
-    estimated_wages: float = Field(0, description="预估工资")
+    estimated_wages: Optional[float] = Field(
+        None, description="预估工资（缺 estimated_wage_rate 配置时为 null）"
+    )
+    estimated_wages_note: Optional[str] = Field(
+        None, description="预估工资标记：缺配置时为「未配置」"
+    )
     downtime_records: int = Field(0, description="停机记录数")
     exception_reports: int = Field(0, description="异常报工数")
     efficiency: float = Field(0, description="效率")
@@ -307,7 +314,12 @@ class ReportingDetailedStatisticsResponse(BaseModel):
     total_unqualified_quantity: float = Field(0, description="总不合格数量")
     total_work_hours: float = Field(0, description="总工时")
     cumulative_hours: float = Field(0, description="累计工时")
-    estimated_wages: float = Field(0, description="预估工资")
+    estimated_wages: Optional[float] = Field(
+        None, description="预估工资（缺 estimated_wage_rate 配置时为 null）"
+    )
+    estimated_wages_note: Optional[str] = Field(
+        None, description="预估工资标记：缺配置时为「未配置」"
+    )
     qualification_rate: float = Field(0, description="合格率")
     first_pass_yield_rate: float = Field(0, description="直通率（首次报工，不含返工后再合格）")
     first_pass_reported_quantity: float = Field(0, description="首次报工数量")

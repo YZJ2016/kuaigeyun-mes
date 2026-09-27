@@ -55,7 +55,7 @@ def test_build_draft_lines_from_fa_depreciation_event():
         account.aux_supplier = False
         account.aux_department = False
 
-    async def resolve_side_effect(_tenant_id, code):
+    async def resolve_side_effect(_tenant_id, code, **_kwargs):
         if code == "5101":
             return debit_account
         if code == "1702":

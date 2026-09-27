@@ -481,6 +481,35 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                 logger.error("半成品入库确认-更新库存失败: %s", inv_e)
                 raise
 
+            # 会计事件（spec 142）：生产入库与成品同一事件族；半成品无成本结转，记数量事件。
+            # 与过账同事务，失败即整单回滚。
+            from apps.kuaicaiwu.services.finance_integration_hooks import (
+                record_finance_accounting_event,
+            )
+
+            sfg_total_qty = Decimal("0")
+            for it in items:
+                sfg_total_qty += Decimal(str(it.receipt_quantity or it.qualified_quantity or 0))
+            await record_finance_accounting_event(
+                tenant_id=tenant_id,
+                event_type="FINISHED_GOODS_RECEIPT_TO_INVENTORY",
+                business_type="inventory",
+                source_doc_type="semi_finished_goods_receipt",
+                source_doc_id=receipt_id,
+                source_doc_code=receipt.receipt_code,
+                target_doc_type="semi_finished_goods_receipt",
+                target_doc_id=receipt_id,
+                target_doc_code=receipt.receipt_code,
+                amount=None,
+                operator_id=confirmed_by,
+                notes=f"半成品入库确认 {receipt.receipt_code}（生产入库）",
+                payload={
+                    "work_order_id": getattr(receipt, "work_order_id", None),
+                    "work_order_code": getattr(receipt, "work_order_code", None),
+                    "quantity": str(sfg_total_qty),
+                },
+            )
+
             return await self.get_semi_finished_goods_receipt_by_id(tenant_id, receipt_id)
 
     @serialize_stock_document("semi_finished_goods_receipt", "receipt_id")

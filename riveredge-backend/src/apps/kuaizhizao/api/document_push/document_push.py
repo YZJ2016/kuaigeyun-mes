@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from apps.kuaizhizao.services.document_push_service import DocumentPushService
@@ -63,6 +63,56 @@ async def get_document_push_slo(
     from core.services.integration.document_push_slo import document_push_slo
 
     return {"dimensions": ["category", "connector_type", "target_profile"], "rows": document_push_slo.snapshot()}
+
+
+@router.get("/status", summary="Latest external push status per target profile for a document")
+async def get_document_push_status(
+    source_type: str = Query(..., description="源单据类型，如 work_order / sales_order"),
+    source_id: int = Query(..., description="源单据 ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """按源单据查各 target_profile 最近一次外推结果（spec 142：失败须可见未推送）。
+
+    数据源为 core_sync_run_logs（entity_type=document_push）：status=failed 即
+    「已尝试但未推送成功」，无记录表示从未推送；重试走 POST /document-push。
+    """
+    _ = current_user
+    from core.models.sync_run_log import SyncRunLog
+
+    rows = await SyncRunLog.filter(
+        tenant_id=tenant_id,
+        entity_type="document_push",
+        source_type=str(source_type).strip(),
+        source_id=int(source_id),
+    ).order_by("-id").all()
+    latest: Dict[str, Any] = {}
+    for row in rows:
+        profile = str(getattr(row, "target_profile", None) or "")
+        if profile and profile not in latest:
+            latest[profile] = row
+    pushes = [
+        {
+            "target_profile": profile,
+            "status": row.status,
+            "pushed": row.status == "success",
+            "connector_type": getattr(row, "connector_type", None),
+            "category": getattr(row, "category", None),
+            "error_summary": getattr(row, "error_summary", None),
+            "duration_ms": getattr(row, "duration_ms", None),
+            "started_at": row.started_at.isoformat() if row.started_at else None,
+            "finished_at": row.finished_at.isoformat() if row.finished_at else None,
+        }
+        for profile, row in latest.items()
+    ]
+    return {
+        "source_type": str(source_type).strip(),
+        "source_id": int(source_id),
+        # 顶层汇总：pushed=所有目标均已成功（无记录视为未推送）；ever_pushed=任一目标成功过
+        "pushed": bool(pushes) and all(p["pushed"] for p in pushes),
+        "ever_pushed": any(p["pushed"] for p in pushes),
+        "pushes": pushes,
+    }
 
 
 @router.get("/profiles", summary="List supported external push profiles")
