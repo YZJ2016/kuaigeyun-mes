@@ -162,7 +162,13 @@ async def get_demand_statistics(
     from tortoise.functions import Sum
 
     today = date.today()
-    base = Demand.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    # 与列表默认 demand_type=demand_plan 对齐，避免历史 sales_* 行撑大统计
+    base = Demand.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        demand_type="demand_plan",
+        is_active=True,
+    )
     audited = ("AUDITED", "已审核", "CONFIRMED", "已确认", "audited", "已通过")
     pending_review = ("PENDING", "PENDING_REVIEW", "待审核", "pending_review")
 
