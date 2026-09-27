@@ -62,7 +62,9 @@ async def get_control_tower_summary(
     """获取管控塔核心指标汇总"""
     import asyncio
 
-    readiness_task = service.get_global_material_readiness(tenant_id)
+    from apps.kuaizhizao.models.demand_computation import DemandComputation
+
+    readiness_task = service.get_global_material_readiness(tenant_id, limit=80, concurrency=8)
     load_task = service.get_resource_load_analysis(tenant_id)
     risks_task = service.get_delivery_risk_orders(tenant_id)
     wip_count_task = WorkOrder.filter(
@@ -70,20 +72,24 @@ async def get_control_tower_summary(
         status__in=["released", "in_progress"],
         deleted_at__isnull=True,
     ).count()
-
-    readiness, load, risks, total_wip = await asyncio.gather(
-        readiness_task, load_task, risks_task, wip_count_task
-    )
-
-    from apps.kuaizhizao.models.demand_computation import DemandComputation
-
-    comp_total = await DemandComputation.filter(tenant_id=tenant_id).count()
-    comp_pending = await DemandComputation.filter(
+    comp_total_task = DemandComputation.filter(tenant_id=tenant_id).count()
+    comp_pending_task = DemandComputation.filter(
         tenant_id=tenant_id, computation_status="进行中"
     ).count()
-    comp_done = await DemandComputation.filter(
+    comp_done_task = DemandComputation.filter(
         tenant_id=tenant_id, computation_status="完成"
     ).count()
+
+    readiness, load, risks, total_wip, comp_total, comp_pending, comp_done = await asyncio.gather(
+        readiness_task,
+        load_task,
+        risks_task,
+        wip_count_task,
+        comp_total_task,
+        comp_pending_task,
+        comp_done_task,
+    )
+
     overdue_count = len(
         [
             r

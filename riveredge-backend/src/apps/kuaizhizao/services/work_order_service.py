@@ -281,6 +281,62 @@ def _parse_assigned_worker_ids(
     return out
 
 
+def _parse_assigned_equipment_ids(
+    raw_ids: Any,
+    fallback_equipment_id: Optional[int] = None,
+) -> List[int]:
+    """解析派工设备 ID 列表，去重并保持顺序。"""
+    out: List[int] = []
+    if isinstance(raw_ids, list):
+        for x in raw_ids:
+            try:
+                eid = int(x)
+            except (TypeError, ValueError):
+                continue
+            if eid > 0 and eid not in out:
+                out.append(eid)
+    if not out and fallback_equipment_id is not None:
+        try:
+            eid = int(fallback_equipment_id)
+        except (TypeError, ValueError):
+            eid = 0
+        if eid > 0:
+            out.append(eid)
+    return out
+
+
+async def _resolve_assigned_equipment_fields(
+    tenant_id: int,
+    equipment_ids: List[int],
+) -> Tuple[List[int], Optional[int], Optional[str]]:
+    """解析派工设备列表，返回 (ids, primary_id, joined_labels)。"""
+    if not equipment_ids:
+        return [], None, None
+    from apps.kuaizhizao.models.equipment import Equipment
+
+    rows = await Equipment.filter(
+        tenant_id=tenant_id,
+        id__in=equipment_ids,
+        deleted_at__isnull=True,
+    ).all()
+    by_id = {row.id: row for row in rows}
+    ordered_ids: List[int] = []
+    labels: List[str] = []
+    for eid in equipment_ids:
+        if eid in ordered_ids:
+            continue
+        eq = by_id.get(eid)
+        if not eq:
+            continue
+        ordered_ids.append(eid)
+        label = f"{eq.code} {eq.name}".strip()
+        if label:
+            labels.append(label)
+    if not ordered_ids:
+        return [], None, None
+    return ordered_ids, ordered_ids[0], ("、".join(labels) if labels else None)
+
+
 async def _resolve_assigned_worker_fields(
     tenant_id: int,
     worker_ids: List[int],
@@ -4208,12 +4264,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 "has_shortage": False,
                 "shortage_items": [],
                 "total_shortage_count": 0,
+                "checked_requirement_count": 0,
                 "work_order_id": work_order_id,
                 "work_order_code": work_order.code or "",
                 "work_order_name": work_order.name or "",
             }
 
         shortage_items = []
+        checked_requirement_count = 0
 
         # 检查每个物料的需求和库存
         # 下达缺料：服务/委外/虚拟件及发料 none 不校验厂内库存
@@ -4226,6 +4284,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 getattr(requirement, "component_type", None),
             ):
                 continue
+            checked_requirement_count += 1
             # 获取可用库存
             available_quantity = await get_material_available_quantity(
                 tenant_id=tenant_id,
@@ -4251,6 +4310,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             "has_shortage": len(shortage_items) > 0,
             "shortage_items": shortage_items,
             "total_shortage_count": len(shortage_items),
+            "checked_requirement_count": checked_requirement_count,
             "work_order_id": work_order_id,
             "work_order_code": work_order.code or "",
             "work_order_name": work_order.name or "",
@@ -6473,8 +6533,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             work_order_operation.assigned_team_name = dispatch_data.assigned_team_name
             work_order_operation.assigned_station_id = dispatch_data.assigned_station_id
             work_order_operation.assigned_station_name = dispatch_data.assigned_station_name
-            work_order_operation.assigned_equipment_id = dispatch_data.assigned_equipment_id
-            work_order_operation.assigned_equipment_name = dispatch_data.assigned_equipment_name
+            if (
+                "assigned_equipment_ids" in dispatch_patch
+                or "assigned_equipment_id" in dispatch_patch
+                or "assigned_equipment_name" in dispatch_patch
+            ):
+                if "assigned_equipment_ids" in dispatch_patch:
+                    equipment_ids = _parse_assigned_equipment_ids(dispatch_data.assigned_equipment_ids)
+                elif dispatch_data.assigned_equipment_id is not None:
+                    equipment_ids = _parse_assigned_equipment_ids(None, dispatch_data.assigned_equipment_id)
+                else:
+                    equipment_ids = []
+                (
+                    resolved_equipment_ids,
+                    primary_equipment_id,
+                    joined_equipment_name,
+                ) = await _resolve_assigned_equipment_fields(tenant_id, equipment_ids)
+                work_order_operation.assigned_equipment_ids = resolved_equipment_ids
+                work_order_operation.assigned_equipment_id = primary_equipment_id
+                work_order_operation.assigned_equipment_name = joined_equipment_name
             work_order_operation.assigned_mold_id = dispatch_data.assigned_mold_id
             work_order_operation.assigned_mold_name = dispatch_data.assigned_mold_name
             work_order_operation.assigned_tool_id = dispatch_data.assigned_tool_id

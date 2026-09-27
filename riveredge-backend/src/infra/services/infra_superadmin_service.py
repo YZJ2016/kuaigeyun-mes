@@ -138,6 +138,22 @@ class InfraSuperAdminService:
         
         logger.info(f"平台超级管理员更新成功: {admin.username} (ID: {admin.id})")
         return admin
+
+    async def change_infra_superadmin_password(
+        self,
+        admin: InfraSuperAdmin,
+        old_password: str,
+        new_password: str,
+    ) -> InfraSuperAdmin:
+        if not admin.verify_password(old_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="当前密码错误",
+            )
+        admin.password_hash = hash_password(new_password)
+        await admin.save()
+        logger.info(f"平台超级管理员密码已更新: {admin.username} (ID: {admin.id})")
+        return admin
     
     async def verify_infra_superadmin_credentials(
         self,

@@ -63,7 +63,7 @@ export function useDashboardRequest<TData, TParams extends unknown[]>(
   const cachedInitial = useMemo(() => readFreshDashboardCache<TData>(cacheKey), [cacheKey]);
 
   const options = useMemo(() => {
-    const { onSuccess, onError, onFinally, ...restExtra } = extraRef.current;
+    const { onSuccess, onError, onFinally, ready: _ready, ...restExtra } = extraRef.current;
     return {
       ...restExtra,
       manual: true,
@@ -94,7 +94,12 @@ export function useDashboardRequest<TData, TParams extends unknown[]>(
 
   const result = useRequest(service, options);
 
+  const ready = extra.ready !== false;
+
   useEffect(() => {
+    if (!ready) {
+      return undefined;
+    }
     const cacheEntry = readDashboardCacheEntry(cacheKey);
     const hasData =
       !!cacheEntry && Object.prototype.hasOwnProperty.call(cacheEntry, 'data');
@@ -112,7 +117,7 @@ export function useDashboardRequest<TData, TParams extends unknown[]>(
     return () => {
       result.cancel();
     };
-  }, [cacheKey, result.cancel, result.mutate, result.run]);
+  }, [cacheKey, ready, result.cancel, result.mutate, result.run]);
 
   const data = result.data !== undefined ? result.data : cachedInitial;
 

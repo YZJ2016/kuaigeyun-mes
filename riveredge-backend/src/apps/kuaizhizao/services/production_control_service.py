@@ -31,69 +31,69 @@ class ProductionControlService:
     def __init__(self):
         self.work_order_service = WorkOrderService()
 
-    async def get_global_material_readiness(self, tenant_id: int) -> List[Dict[str, Any]]:
+    async def get_global_material_readiness(
+        self,
+        tenant_id: int,
+        *,
+        limit: int = 80,
+        concurrency: int = 8,
+    ) -> List[Dict[str, Any]]:
         """
-        获取所有进行中/待执行工单的齐套性概览
+        获取进行中/待执行工单的齐套性概览。
+
+        看板场景限制样本数量与并发，避免全量工单双次 BOM 展开拖垮首屏。
         """
-        # 获取待执行和进行中的工单
-        target_statuses = ['draft', 'released', 'in_progress']
-        work_orders = await WorkOrder.filter(
-            tenant_id=tenant_id,
-            status__in=target_statuses,
-            deleted_at__isnull=True
-        ).all()
-        
         import asyncio
 
-        async def analyze_wo(wo):
-            try:
-                # 复用工单服务的缺料检查逻辑
-                shortage_info = await self.work_order_service.check_material_shortage(
-                    tenant_id=tenant_id,
-                    work_order_id=wo.id
-                )
-                
-                # 重新计算品种总数
-                variant_attrs = getattr(wo, "variant_attributes", None)
-                cfg_selections = getattr(wo, "configurable_selections", None)
-                try:
-                    requirements = await calculate_material_requirements_from_bom(
-                        tenant_id=tenant_id,
-                        material_id=wo.product_id,
-                        required_quantity=float(wo.quantity),
-                        only_approved=True,
-                        variant_attributes=variant_attrs,
-                        configurable_selections=cfg_selections,
-                    )
-                except Exception:
-                    requirements = []
-                
-                total_vars = len(requirements)
-                shortage_vars = shortage_info.get("total_shortage_count", 0)
-                ready_vars = total_vars - shortage_vars
-                
-                readiness_rate = (ready_vars / total_vars) if total_vars > 0 else 1.0
-                
-                return {
-                    "work_order_id": wo.id,
-                    "work_order_code": wo.code,
-                    "product_name": wo.product_name,
-                    "quantity": float(wo.quantity),
-                    "status": wo.status,
-                    "readiness_rate": round(readiness_rate * 100, 2),
-                    "shortage_count": shortage_vars,
-                    "planned_start_date": to_api_isoformat(wo.planned_start_date) if wo.planned_start_date else None,
-                }
-            except Exception as e:
-                logger.error(f"分析工单 {wo.id} 齐套性失败: {e}")
-                return None
+        sample_limit = max(1, min(int(limit or 80), 200))
+        worker_limit = max(1, min(int(concurrency or 8), 16))
+        target_statuses = ['draft', 'released', 'in_progress']
+        work_orders = (
+            await WorkOrder.filter(
+                tenant_id=tenant_id,
+                status__in=target_statuses,
+                deleted_at__isnull=True,
+            )
+            .order_by("planned_start_date", "id")
+            .limit(sample_limit)
+            .all()
+        )
 
-        # 并行执行分析
-        tasks = [analyze_wo(wo) for wo in work_orders]
-        results = await asyncio.gather(*tasks)
-        
-        # 过滤失败的任务
-        results = [r for r in results if r is not None]
+        semaphore = asyncio.Semaphore(worker_limit)
+
+        async def analyze_wo(wo):
+            async with semaphore:
+                try:
+                    shortage_info = await self.work_order_service.check_material_shortage(
+                        tenant_id=tenant_id,
+                        work_order_id=wo.id,
+                    )
+                    total_vars = int(shortage_info.get("checked_requirement_count") or 0)
+                    shortage_vars = int(shortage_info.get("total_shortage_count") or 0)
+                    ready_vars = max(0, total_vars - shortage_vars)
+                    readiness_rate = (ready_vars / total_vars) if total_vars > 0 else 1.0
+
+                    return {
+                        "work_order_id": wo.id,
+                        "work_order_code": wo.code,
+                        "product_name": wo.product_name,
+                        "quantity": float(wo.quantity),
+                        "status": wo.status,
+                        "readiness_rate": round(readiness_rate * 100, 2),
+                        "shortage_count": shortage_vars,
+                        "planned_start_date": to_api_isoformat(wo.planned_start_date)
+                        if wo.planned_start_date
+                        else None,
+                    }
+                except Exception as e:
+                    logger.error(f"分析工单 {wo.id} 齐套性失败: {e}")
+                    return None
+
+        results = [
+            r
+            for r in await asyncio.gather(*[analyze_wo(wo) for wo in work_orders])
+            if r is not None
+        ]
 
         if results:
             from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
@@ -101,15 +101,22 @@ class ProductionControlService:
             score_svc = WorkOrderScoreService()
             if await score_svc.is_score_enabled(tenant_id):
                 wo_ids = [int(r["work_order_id"]) for r in results]
+                kitting_rates = {
+                    int(r["work_order_id"]): float(r["readiness_rate"]) for r in results
+                }
                 score_map = await score_svc.batch_ensure_scores(
-                    tenant_id, wo_ids, "picking", include_kitting=True
+                    tenant_id,
+                    wo_ids,
+                    "picking",
+                    include_kitting=True,
+                    kitting_rates=kitting_rates,
                 )
                 for row in results:
                     cached = score_map.get(int(row["work_order_id"]))
                     if cached:
                         row["picking_score"] = cached.composite_score
                         row["picking_rank_band"] = cached.rank_band
-                
+
         return sorted(results, key=lambda x: x["readiness_rate"])
 
     async def get_resource_load_analysis(
@@ -128,7 +135,6 @@ class ProductionControlService:
         start_date = resolve_business_datetime()
         end_date = start_date + timedelta(days=days)
         
-        # 获取期间内的工序
         operations = await WorkOrderOperation.filter(
             tenant_id=tenant_id,
             status__in=['pending', 'in_progress'],
@@ -136,36 +142,43 @@ class ProductionControlService:
             planned_end_date__gte=start_date,
             deleted_at__isnull=True
         ).all()
-        
-        # 获取所有工作中心
+
         work_centers = await WorkCenter.filter(
             tenant_id=tenant_id,
             is_active=True,
             deleted_at__isnull=True
         ).all()
-        
+
         wc_map = {wc.id: {"name": wc.name, "total_load": Decimal(0)} for wc in work_centers}
-        
-        # 汇总负荷
+
+        wo_ids = list({int(op.work_order_id) for op in operations if op.work_order_id})
+        wo_qty_map: Dict[int, Decimal] = {}
+        if wo_ids:
+            work_orders = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                id__in=wo_ids,
+                deleted_at__isnull=True,
+            ).only("id", "quantity")
+            wo_qty_map = {
+                int(wo.id): Decimal(str(wo.quantity or 0)) for wo in work_orders
+            }
+
         for op in operations:
-            if op.work_center_id in wc_map:
-                # 获取关联工单的数量
-                wo = await WorkOrder.get_or_none(id=op.work_order_id)
-                qty = wo.quantity if wo else Decimal(0)
-                std_time = op.standard_time or Decimal(0)
-                load = std_time * qty
-                wc_map[op.work_center_id]["total_load"] += load
-        
-        # 转换为列表并计算负荷率
-        # 简化产能： 每天 8 小时 * 指定天数
+            if op.work_center_id not in wc_map:
+                continue
+            qty = wo_qty_map.get(int(op.work_order_id), Decimal(0))
+            std_time = op.standard_time or Decimal(0)
+            wc_map[op.work_center_id]["total_load"] += std_time * qty
+
+        # 简化产能：每天 8 小时 * 指定天数
         standard_capacity = Decimal(8) * Decimal(days)
-        
+
         results = []
         for wc_id, data in wc_map.items():
             load_hours = float(data["total_load"])
             cap_hours = float(standard_capacity)
             load_rate = (load_hours / cap_hours) if cap_hours > 0 else 0
-            
+
             results.append({
                 "work_center_id": wc_id,
                 "work_center_name": data["name"],
@@ -173,7 +186,7 @@ class ProductionControlService:
                 "capacity_hours": cap_hours,
                 "load_rate": round(load_rate * 100, 2)
             })
-            
+
         return sorted(results, key=lambda x: x["load_rate"], reverse=True)
 
     @staticmethod
@@ -212,8 +225,10 @@ class ProductionControlService:
         ).all()
         
         results = []
-        # 先把已明确延期的加进来
+        delayed_ids = set()
         for d in delayed_orders:
+            wo_id = int(d["work_order_id"])
+            delayed_ids.add(wo_id)
             results.append(
                 self._normalize_delivery_risk_row(
                     d,
@@ -221,37 +236,50 @@ class ProductionControlService:
                     risk_desc=f"已延期 {d['delay_days']} 天",
                 )
             )
-            
-        # 检查 MTO 连带有无逾期于销售订单
-        for wo in mto_orders:
-            if wo.sales_order_id and wo.planned_end_date:
-                # 这里假设销售订单项有对应 ID。实际链路可能更复杂，先根据 sales_order_code 辅助
-                so_items = await SalesOrderItem.filter(
-                    tenant_id=tenant_id,
-                    sales_order_id=wo.sales_order_id,
-                    material_id=wo.product_id
-                ).all()
-                
-                for soi in so_items:
-                    if soi.delivery_date and wo.planned_end_date.date() > soi.delivery_date:
-                        diff = (wo.planned_end_date.date() - soi.delivery_date).days
-                        # 避免重复加入
-                        if not any(r["work_order_id"] == wo.id for r in results):
-                            results.append(
-                                self._normalize_delivery_risk_row(
-                                    {
-                                        "work_order_id": wo.id,
-                                        "work_order_code": wo.code,
-                                        "product_name": wo.product_name,
-                                        "status": wo.status,
-                                        "planned_end_date": wo.planned_end_date,
-                                        "so_required_date": soi.delivery_date,
-                                        "delay_days": diff,
-                                    },
-                                    risk_type="delivery_clash",
-                                    risk_desc=f"晚于订单交付 {diff} 天",
-                                )
-                            )
+
+        mto_candidates = [
+            wo
+            for wo in mto_orders
+            if wo.sales_order_id and wo.planned_end_date and wo.id not in delayed_ids
+        ]
+        so_ids = list({int(wo.sales_order_id) for wo in mto_candidates})
+        product_ids = list({int(wo.product_id) for wo in mto_candidates if wo.product_id})
+        so_items = []
+        if so_ids and product_ids:
+            so_items = await SalesOrderItem.filter(
+                tenant_id=tenant_id,
+                sales_order_id__in=so_ids,
+                material_id__in=product_ids,
+            ).all()
+        so_item_map: Dict[tuple, list] = {}
+        for soi in so_items:
+            key = (int(soi.sales_order_id), int(soi.material_id))
+            so_item_map.setdefault(key, []).append(soi)
+
+        for wo in mto_candidates:
+            matched_items = so_item_map.get((int(wo.sales_order_id), int(wo.product_id)), [])
+            for soi in matched_items:
+                if not soi.delivery_date:
+                    continue
+                if wo.planned_end_date.date() <= soi.delivery_date:
+                    continue
+                diff = (wo.planned_end_date.date() - soi.delivery_date).days
+                results.append(
+                    self._normalize_delivery_risk_row(
+                        {
+                            "work_order_id": wo.id,
+                            "work_order_code": wo.code,
+                            "product_name": wo.product_name,
+                            "status": wo.status,
+                            "planned_end_date": wo.planned_end_date,
+                            "so_required_date": soi.delivery_date,
+                            "delay_days": diff,
+                        },
+                        risk_type="delivery_clash",
+                        risk_desc=f"晚于订单交付 {diff} 天",
+                    )
+                )
+                break
                             
         if results:
             from apps.kuaizhizao.services.work_order_score_service import WorkOrderScoreService
@@ -487,14 +515,15 @@ class ProductionControlService:
         }
 
     async def get_human_machine_efficiency(self, tenant_id: int, days: int = 7) -> Dict[str, Any]:
-        """人机效同屏：设备稼动趋势 + 人员报工工时排行。"""
+        """人机效同屏：设备稼动趋势 + 人员报工工时排行（单次报工扫描，禁止按日×设备反复算 OEE）。"""
         from apps.kuaizhizao.models.equipment import Equipment
-        from apps.kuaizhizao.services.equipment_oee_service import EquipmentOEEService
         from apps.kuaizhizao.utils.working_time import load_scheduling_work_context
 
         span_days = max(1, min(int(days or 7), 30))
         now = resolve_business_datetime()
-        start = (now - timedelta(days=span_days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start = (now - timedelta(days=span_days - 1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         end = now.replace(hour=23, minute=59, second=59, microsecond=0)
 
         _, work_hours, _ = await load_scheduling_work_context(
@@ -504,84 +533,89 @@ class ProductionControlService:
 
         equipment_rows = await Equipment.filter(
             tenant_id=tenant_id, deleted_at__isnull=True, is_active=True
-        ).only("id")
-        equipment_ids = [int(row.id) for row in equipment_rows if row.id is not None]
-        oee_service = EquipmentOEEService()
+        ).only("id", "code").limit(50)
+        equipment_ids = {int(row.id) for row in equipment_rows if row.id is not None}
+        equipment_code_to_id = {
+            str(row.code): int(row.id)
+            for row in equipment_rows
+            if row.id is not None and row.code
+        }
 
-        trend: List[Dict[str, Any]] = []
-        utilization_samples: List[float] = []
-        for offset in range(span_days):
-            day_start = (start + timedelta(days=offset)).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
-            day_end = day_start.replace(hour=23, minute=59, second=59, microsecond=999999)
-            planned_runtime = 0.0
-            actual_runtime = 0.0
-            for equipment_id in equipment_ids[:50]:
-                try:
-                    oee_data = await oee_service.calculate_equipment_oee(
-                        tenant_id=tenant_id,
-                        equipment_id=equipment_id,
-                        date_start=day_start,
-                        date_end=day_end,
-                    )
-                    metrics = oee_data.get("metrics") or {}
-                    planned_runtime += float(metrics.get("planned_runtime") or 0)
-                    actual_runtime += float(metrics.get("actual_runtime") or 0)
-                except Exception as exc:
-                    logger.warning(
-                        "human_machine_efficiency equipment {} day {} failed: {}",
-                        equipment_id,
-                        day_start.date(),
-                        exc,
-                    )
-            if planned_runtime <= 0:
-                equipment_utilization_rate = round(
-                    min(100.0, actual_runtime / daily_capacity * 100), 2
-                )
-            else:
-                equipment_utilization_rate = round(
-                    min(100.0, actual_runtime / planned_runtime * 100), 2
-                )
-            utilization_samples.append(equipment_utilization_rate)
-
-            worker_hours_rows = await ReportingRecord.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-                reported_at__gte=day_start,
-                reported_at__lte=day_end,
-            ).values("work_hours")
-            worker_report_hours = round(
-                sum(float(row.get("work_hours") or 0) for row in worker_hours_rows), 2
-            )
-            trend.append(
-                {
-                    "period": day_start.strftime("%Y-%m-%d"),
-                    "equipment_utilization_rate": equipment_utilization_rate,
-                    "worker_report_hours": worker_report_hours,
-                }
-            )
-
-        ranking_rows = await ReportingRecord.filter(
+        records = await ReportingRecord.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             reported_at__gte=start,
             reported_at__lte=end,
-        ).values("worker_id", "worker_name", "work_hours")
+        ).only(
+            "worker_id",
+            "worker_name",
+            "work_hours",
+            "reported_at",
+            "device_info",
+            "status",
+        )
+
+        day_equipment_hours: Dict[str, float] = {}
+        day_worker_hours: Dict[str, float] = {}
         ranking_map: Dict[int, Dict[str, Any]] = {}
-        for row in ranking_rows:
-            worker_id = int(row.get("worker_id") or 0)
-            if worker_id <= 0:
+
+        for record in records:
+            reported_at = record.reported_at
+            if not reported_at:
                 continue
-            bucket = ranking_map.setdefault(
-                worker_id,
-                {
-                    "worker_id": worker_id,
-                    "worker_name": row.get("worker_name") or f"员工{worker_id}",
-                    "report_hours": 0.0,
-                },
+            period = reported_at.strftime("%Y-%m-%d")
+            hours = float(record.work_hours or 0)
+            day_worker_hours[period] = day_worker_hours.get(period, 0.0) + hours
+
+            worker_id = int(record.worker_id or 0)
+            if worker_id > 0:
+                bucket = ranking_map.setdefault(
+                    worker_id,
+                    {
+                        "worker_id": worker_id,
+                        "worker_name": record.worker_name or f"员工{worker_id}",
+                        "report_hours": 0.0,
+                    },
+                )
+                bucket["report_hours"] += hours
+
+            if str(record.status or "").lower() != "approved":
+                continue
+            device_info = record.device_info if isinstance(record.device_info, dict) else None
+            if not device_info:
+                continue
+            device_id = device_info.get("equipment_id") or device_info.get("id")
+            device_code = device_info.get("equipment_code") or device_info.get("code")
+            matched_id = None
+            try:
+                if device_id is not None and int(device_id) in equipment_ids:
+                    matched_id = int(device_id)
+            except (TypeError, ValueError):
+                matched_id = None
+            if matched_id is None and device_code:
+                matched_id = equipment_code_to_id.get(str(device_code))
+            if matched_id is None:
+                continue
+            day_equipment_hours[period] = day_equipment_hours.get(period, 0.0) + hours
+
+        trend: List[Dict[str, Any]] = []
+        utilization_samples: List[float] = []
+        for offset in range(span_days):
+            day_start = start + timedelta(days=offset)
+            period = day_start.strftime("%Y-%m-%d")
+            actual_runtime = day_equipment_hours.get(period, 0.0)
+            equipment_utilization_rate = round(
+                min(100.0, actual_runtime / daily_capacity * 100), 2
             )
-            bucket["report_hours"] += float(row.get("work_hours") or 0)
+            utilization_samples.append(equipment_utilization_rate)
+            trend.append(
+                {
+                    "period": period,
+                    "equipment_utilization_rate": equipment_utilization_rate,
+                    "worker_report_hours": round(day_worker_hours.get(period, 0.0), 2),
+                }
+            )
+
         worker_ranking = sorted(
             [
                 {
@@ -593,9 +627,11 @@ class ProductionControlService:
             key=lambda item: (-item["report_hours"], item["worker_name"]),
         )[:10]
 
-        equipment_utilization_rate = round(
-            sum(utilization_samples) / len(utilization_samples), 2
-        ) if utilization_samples else 0.0
+        equipment_utilization_rate = (
+            round(sum(utilization_samples) / len(utilization_samples), 2)
+            if utilization_samples
+            else 0.0
+        )
         worker_report_hours = round(
             sum(point["worker_report_hours"] for point in trend), 2
         )

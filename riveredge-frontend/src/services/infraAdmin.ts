@@ -130,4 +130,14 @@ export async function updateInfraSuperAdmin(
   });
 }
 
+export async function changeInfraSuperAdminPassword(data: {
+  old_password: string;
+  new_password: string;
+}): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/infra/admin/change-password', {
+    method: 'POST',
+    data,
+  });
+}
+
 

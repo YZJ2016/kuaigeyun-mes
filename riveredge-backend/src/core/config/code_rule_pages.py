@@ -502,6 +502,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
     },
     {
+        "page_code": "kuaizhizao-production-packing-binding",
+        "page_name": "装箱绑定",
+        "page_path": "/apps/kuaizhizao/production-execution/packing-binding",
+        "code_field": "box_no",
+        "code_field_label": "箱号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "PACKING_BINDING_BOX_CODE",
+        "allow_manual_edit": True,
+    },
+    {
         "page_code": "kuaizhizao-rework-position-plan-template",
         "page_name": "返工排位策划模板",
         "page_path": "/apps/kuaizhizao/production-execution/rework-position-plan-templates",

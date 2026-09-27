@@ -176,6 +176,9 @@ async def get_mrp_exception_inbox(
     severity: Optional[str] = Query(None, description="严重级 error/warning/info"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    max_computations: Optional[int] = Query(
+        None, ge=1, le=100, description="最多扫描最近多少次已完成计算（看板摘要用）"
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -188,6 +191,7 @@ async def get_mrp_exception_inbox(
             severity=severity,
             skip=skip,
             limit=limit,
+            max_computations=max_computations,
         )
     except Exception as e:
         logger.exception("获取 MRP 例外收件箱失败")

@@ -299,6 +299,7 @@ class PackingBindingCapabilities(BaseModel):
     update: ActionCapability
     delete: ActionCapability
     print: ActionCapability
+    seal: ActionCapability = ActionCapability(allowed=True)
 
 
 class InboundHubCapabilities(BaseModel):
@@ -725,6 +726,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "reporting_record.revoke_approval.not_approved": "只有已审核通过的报工记录才可以撤回审核",
     "exception_process.cancel.already_finished": "该异常处理流程已结束，无法取消",
     "packing_binding.deleted": "装箱绑定记录已删除",
+    "packing_binding.sealed": "装箱已封箱，不可修改或删除",
     "inbound_hub.confirm.not_pending": "当前状态不可确认入库",
     "inbound_hub.confirm.use_single_preview": "委外退料/退货请使用单行确认预览",
     "inbound_hub.update.not_allowed": "当前状态不可编辑",

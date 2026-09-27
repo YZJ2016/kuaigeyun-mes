@@ -18,6 +18,7 @@ export interface PackingBindingListParams {
   product_serial_no?: string;
   packing_material_name?: string;
   binding_method?: string;
+  seal_status?: string;
   source_type?: string;
   bound_at_start_date?: string;
   bound_at_end_date?: string;
@@ -30,6 +31,36 @@ export interface PackingBindingListResult {
   data: Record<string, unknown>[];
   total: number;
   success: boolean;
+}
+
+export interface PackingSourceRemainingLine {
+  source_line_id: number;
+  product_id: number;
+  product_code: string;
+  product_name: string;
+  required_quantity: number | string;
+  packed_quantity: number | string;
+  remaining_quantity: number | string;
+  box_count: number;
+}
+
+export interface PackingSourceRemaining {
+  source_type: 'sales_delivery' | 'finished_goods_receipt';
+  source_id: number;
+  lines: PackingSourceRemainingLine[];
+  required_quantity: number | string;
+  packed_quantity: number | string;
+  remaining_quantity: number | string;
+  box_count: number;
+}
+
+export interface PackingAsnResult {
+  sales_delivery_id: number;
+  delivery_code: string;
+  customer_name: string;
+  box_count: number;
+  total_quantity: number | string;
+  lines: Array<Record<string, unknown>>;
 }
 
 export const packingBindingApi = {
@@ -58,12 +89,32 @@ export const packingBindingApi = {
     return apiRequest('/apps/kuaizhizao/packing-bindings/task-pool', { method: 'GET', params });
   },
 
+  sourceRemaining: async (params: {
+    source_type: 'sales_delivery' | 'finished_goods_receipt';
+    source_id: number;
+  }) => {
+    return apiRequest<PackingSourceRemaining>('/apps/kuaizhizao/packing-bindings/source-remaining', {
+      method: 'GET',
+      params,
+    });
+  },
+
+  getAsn: async (deliveryId: string | number) => {
+    return apiRequest<PackingAsnResult>(`/apps/kuaizhizao/sales-deliveries/${deliveryId}/packing-asn`, {
+      method: 'GET',
+    });
+  },
+
   get: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/packing-bindings/${id}`, { method: 'GET' });
   },
 
   update: async (id: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/packing-bindings/${id}`, { method: 'PUT', data });
+  },
+
+  seal: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/packing-bindings/${id}/seal`, { method: 'POST' });
   },
 
   delete: async (id: string) => {
@@ -93,15 +144,6 @@ export const packingBindingApi = {
   getByDelivery: async (deliveryId: string) => {
     return apiRequest(`/apps/kuaizhizao/sales-deliveries/${deliveryId}/packing-binding`, {
       method: 'GET',
-    });
-  },
-
-  generateQRCode: async (boxUuid: string, boxNo: string, productName?: string): Promise<any> => {
-    const { qrcodeApi } = await import('../../../services/qrcode');
-    return qrcodeApi.generateBox({
-      box_uuid: boxUuid,
-      box_code: boxNo,
-      material_codes: [],
     });
   },
 };

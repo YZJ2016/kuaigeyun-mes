@@ -2943,12 +2943,23 @@ export default {
   'app.ind-electronics.menu.esd': 'ESD 管理',
   'app.ind-electronics.menu.esdInspection': 'ESD 点检',
   'app.ind-electronics.menu.esdDashboard': 'ESD 看板',
+  'app.ind-electronics.menu.reworkPositionPlan': '返工策划',
+  'app.ind-electronics.menu.reworkOrders': '返工工单',
+  'app.ind-electronics.menu.packingAsn': '出货装箱 ASN',
   'app.ind-electronics.menu.labelOem': 'OEM 标签签样',
+  'app.ind-electronics.packingAsn.hintTitle': '出货装箱 ASN',
+  'app.ind-electronics.packingAsn.hintBody': '按销售出库单汇总箱托层级、箱号、数量与序列号，用于出货核对与 ASN 导出前预览。',
+  'app.ind-electronics.packingAsn.deliveryId': '销售出库单 ID',
+  'app.ind-electronics.packingAsn.deliveryIdPlaceholder': '输入出库单 ID',
+  'app.ind-electronics.packingAsn.needDeliveryId': '请先输入销售出库单 ID',
+  'app.ind-electronics.packingAsn.load': '加载 ASN',
+  'app.ind-electronics.packingAsn.fetchFailed': '加载装箱 ASN 失败',
+  'app.ind-electronics.packingAsn.summary': '出库单 {{code}} / {{customer}}：{{boxes}} 箱，合计数量 {{qty}}',
   'app.ind-electronics.home.intro':
     '本模块为电子制造行业包。启用后注入样品加工、BOM 分区等替代扩展，并提供 ESD 等独立功能入口。',
   'app.ind-electronics.home.replaceTitle': '替代扩展',
   'app.ind-electronics.home.replaceHint':
-    '样品加工（钢网/SMT/Gerber/PCB 文案）、BOM 协同分区名（电子/结构）、OEM 签样包（启用后自动替换「生产执行 → 标签工位」，不再单独挂行业包菜单）。日常建单仍在快研发 / 快制造原菜单。',
+    '样品加工（钢网/SMT/Gerber/PCB 文案）、BOM 协同分区名（电子/结构）、OEM 签样包（入口在行业包「OEM 标签签样」）。日常建单仍在快研发 / 快制造原菜单。',
   'app.ind-electronics.home.standaloneTitle': '独立功能',
   'app.ind-electronics.home.standaloneHint':
     'ESD 点检与看板仅出现在行业包侧栏；停用本模块后入口消失，通用产品菜单不变。',
@@ -3048,7 +3059,7 @@ export default {
   'app.ind-electronics.labelOem.placeholder':
     'OEM 签样包与周期唯一性已接入；须绑定书面签样打印模板 UUID，元数据不得含客户公司名常量。',
   'app.ind-electronics.labelOem.hostPathHint':
-    '唯一入口：快制造「生产执行 → 标签工位」（/apps/kuaizhizao/production-execution/label-station）；启用本包后由 documentReplacementRegistry 解析到本页并显示签样包 Tab。',
+    '入口：行业包「电子制造 → OEM 标签签样」（/apps/ind-electronics/label-oem）。通用快制造已下线「标签工位」菜单；书签仍可打开原宿主 path，启用本包时会解析到本页。',
   'app.ind-electronics.labelOem.tabPacks': '签样包',
   'app.ind-electronics.labelOem.packHintTitle': '抽象签样包',
   'app.ind-electronics.labelOem.packHintBody':
@@ -11571,20 +11582,31 @@ export default {
   'app.kuaizhizao.packingBinding.statTotal': '装箱绑定总数',
   'app.kuaizhizao.packingBinding.statScan': '扫码绑定',
   'app.kuaizhizao.packingBinding.statManual': '手动绑定',
-  'app.kuaizhizao.packingBinding.scopeAlert': '口径说明：本页"装箱绑定总数"仅统计已创建的装箱绑定记录；"待装箱任务池"统计来自销售出库单待审核/待出库任务。',
+  'app.kuaizhizao.packingBinding.scopeAlert': '口径说明：本页「装箱绑定总数」仅统计已创建的装箱绑定记录；「待装箱任务池」含销售出库（待审核/待出库）与成品入库待装箱任务，并展示已绑/剩余进度。',
   'app.kuaizhizao.packingBinding.colBoxNo': '箱号',
   'app.kuaizhizao.packingBinding.colProductCode': '产品编号',
   'app.kuaizhizao.packingBinding.colProductName': '产品名称',
   'app.kuaizhizao.packingBinding.colProductSerialNo': '产品序列号',
+  'app.kuaizhizao.packingBinding.colSerialNumbers': '箱内序列号',
+  'app.kuaizhizao.packingBinding.placeholderSerialNumbers': '多个序列号用逗号或空格分隔',
   'app.kuaizhizao.packingBinding.colPackingQty': '装箱数量',
   'app.kuaizhizao.packingBinding.colPackingMaterial': '包装物料',
   'app.kuaizhizao.packingBinding.colPackingMaterialCode': '包装物料编码',
   'app.kuaizhizao.packingBinding.colPackingMaterialName': '包装物料名称',
+  'app.kuaizhizao.packingBinding.placeholderPackingMaterial': '请选择包装物料',
   'app.kuaizhizao.packingBinding.colBindingMethod': '绑定方式',
+  'app.kuaizhizao.packingBinding.colSealStatus': '封箱状态',
+  'app.kuaizhizao.packingBinding.colPackingLevel': '包装层级',
+  'app.kuaizhizao.packingBinding.colParentBoxNo': '父箱号',
+  'app.kuaizhizao.packingBinding.colPalletNo': '托盘号',
+  'app.kuaizhizao.packingBinding.levelCarton': '外箱',
+  'app.kuaizhizao.packingBinding.levelInner': '内箱',
+  'app.kuaizhizao.packingBinding.levelPallet': '托盘',
   'app.kuaizhizao.packingBinding.colSource': '来源',
   'app.kuaizhizao.packingBinding.colBoundBy': '绑定人',
   'app.kuaizhizao.packingBinding.colBoundAt': '绑定时间',
   'app.kuaizhizao.packingBinding.colBarcode': '条码',
+  'app.kuaizhizao.packingBinding.placeholderBarcodeScan': '扫码填入后记为扫码绑定',
   'app.kuaizhizao.packingBinding.colFinishedGoodsReceiptId': '成品入库单ID',
   'app.kuaizhizao.packingBinding.colSalesDeliveryId': '销售出库单ID',
   'app.kuaizhizao.packingBinding.colLifecycle': '执行状态',
@@ -11594,6 +11616,18 @@ export default {
   'app.kuaizhizao.packingBinding.sourceFinishedGoodsReceipt': '成品入库',
   'app.kuaizhizao.packingBinding.sourceOther': '其他来源',
   'app.kuaizhizao.packingBinding.statusBound': '已绑定',
+  'app.kuaizhizao.packingBinding.statusSealed': '已封箱',
+  'app.kuaizhizao.packingBinding.seal': '封箱',
+  'app.kuaizhizao.packingBinding.confirmSeal': '确认封箱？封箱后不可修改数量与箱号。',
+  'app.kuaizhizao.packingBinding.sealSuccess': '封箱成功',
+  'app.kuaizhizao.packingBinding.sealFailed': '封箱失败',
+  'app.kuaizhizao.packingBinding.remainingQty': '可绑剩余',
+  'app.kuaizhizao.packingBinding.boxCount': '已绑箱数',
+  'app.kuaizhizao.packingBinding.createContinueHint': '本箱已绑定，可继续分箱',
+  'app.kuaizhizao.packingBinding.viewAsn': '装箱 ASN',
+  'app.kuaizhizao.packingBinding.asnTitle': '出货装箱 ASN',
+  'app.kuaizhizao.packingBinding.asnSummary': '出库单 {{code}} / {{customer}}：{{boxes}} 箱，合计数量 {{qty}}',
+  'app.kuaizhizao.packingBinding.asnFetchFailed': '加载装箱 ASN 失败',
   'app.kuaizhizao.packingBinding.fetchDetailFailed': '获取装箱绑定记录详情失败',
   'app.kuaizhizao.packingBinding.fetchListFailed': '获取装箱绑定列表失败',
   'app.kuaizhizao.packingBinding.fetchRecordFailed': '获取装箱记录失败',
@@ -11601,6 +11635,16 @@ export default {
   'app.kuaizhizao.packingBinding.selectToDelete': '请选择要删除的装箱绑定记录',
   'app.kuaizhizao.packingBinding.selectForQrcode': '请先选择要生成二维码的装箱记录',
   'app.kuaizhizao.packingBinding.qrcodeSuccess': '成功生成 {{count}} 个装箱二维码',
+  'app.kuaizhizao.packingBinding.qrcodePreviewTitle': '装箱二维码预览',
+  'app.kuaizhizao.packingBinding.qrcodePreviewHint': '可在此预览箱码图片；「下载全部」会按箱号分别保存 PNG 文件。',
+  'app.kuaizhizao.packingBinding.qrcodePreviewEmpty': '暂无可预览的二维码',
+  'app.kuaizhizao.packingBinding.qrcodeDownloadOne': '下载',
+  'app.kuaizhizao.packingBinding.qrcodeDownloadAll': '下载全部',
+  'app.kuaizhizao.packingBinding.qrcodeDownloadSuccess': '二维码已下载',
+  'app.kuaizhizao.packingBinding.qrcodeDownloadAllSuccess': '已开始下载 {{count}} 个二维码文件',
+  'app.kuaizhizao.packingBinding.qrcodeDownloadFailed': '下载二维码失败',
+  'app.kuaizhizao.packingBinding.qrcodeMissingBoxNo': '缺少箱号，无法生成二维码',
+  'app.kuaizhizao.packingBinding.detailBoxQrcode': '箱码',
   'app.kuaizhizao.packingBinding.qrcodePartial': '成功 {{success}} 条，失败 {{failed}} 条',
   'app.kuaizhizao.packingBinding.qrcodeBatchFailedTitle': '批量生成二维码存在失败项',
   'app.kuaizhizao.packingBinding.generateFailed': '生成失败',
@@ -11624,7 +11668,8 @@ export default {
   'app.kuaizhizao.packingBinding.taskPoolButton': '待装箱任务池',
   'app.kuaizhizao.packingBinding.batchGenerateQrcode': '批量生成二维码',
   'app.kuaizhizao.packingBinding.taskPoolTitle': '待装箱任务池',
-  'app.kuaizhizao.packingBinding.taskPoolSummary': '待审核 {{pendingReview}} / 待出库 {{pendingOutbound}} / 总计 {{total}}',
+  'app.kuaizhizao.packingBinding.taskPoolSummary': '待审核出库 {{pendingReview}} / 待出库 {{pendingOutbound}} / 待装箱入库 {{pendingReceipt}} / 总计 {{total}}',
+  'app.kuaizhizao.packingBinding.taskPoolColSource': '来源类型',
   'app.kuaizhizao.packingBinding.taskPoolFetchFailed': '获取待装箱任务池失败',
   'app.kuaizhizao.packingBinding.actionGoBind': '去绑定',
   'app.kuaizhizao.packingBinding.fieldSourceItem': '来源明细',
@@ -12135,6 +12180,83 @@ export default {
   'app.kuaizhizao.workOrder.detailKioskSopTab': '作业指导 SOP',
   'app.kuaizhizao.workOrder.emptyNoWip': '暂无在制工单',
   'app.kuaizhizao.workOrder.formAdvancedSearch': '高级搜索',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.title': '设备状态 - {{code}} {{name}}',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.assignEquipmentLabel': '分配设备',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.capableEquipmentTooltip':
+    '台账已绑定可加工工序时，与本工序匹配的设备排在列表前部；未配置关联工序的设备仍可选',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardCapableOperationMatch': '本工序',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.equipmentPlaceholder': '请选择执行设备',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.equipmentAdvancedSearch': '高级搜索设备',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.selectEquipmentFirst': '请先选择执行设备',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.openStatus': '设备状态',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.forbidden': '无设备查看权限，无法打开设备状态',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.equipmentNotFound': '未找到所选设备，请重新选择',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.openEquipmentDetail': '打开设备详情',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.tabOverview': '概况',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.tabMaintenance': '保养',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.tabSpotCheck': '点检',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.tabAssignedWorkOrders': '派工工单 ({{count}})',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.sectionMaintenancePlans': '保养计划',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.sectionMaintenanceExecutions': '保养执行',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.realtimeStatus': '实时状态',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.monitoredAt': '采集时间',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.noRealtimeStatus': '暂无实时状态记录',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.alertOpenFaults': '区间内有 {{count}} 条未关闭故障记录',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.alertOpenMaintenance': '区间内有 {{count}} 条进行中的保养计划',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.colWorkOrderCode': '工单号',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.colProductName': '产品',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.colWorkOrderStatus': '工单状态',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.colOperationName': '工序',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.colOperationStatus': '工序状态',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.colAssignedWorker': '派工人员',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.colPlannedStart': '计划开始',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.colPlannedEnd': '计划结束',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardPickerHint':
+    '以下为可选设备卡片，展示近 30 日状态摘要，点击卡片选中后点确定',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardPickerHintMulti':
+    '可多选设备卡片，支持按状态与占用筛选；卡片展示最近点检、最近维修与在制工单，选中后点确定',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.filterStatus': '台账状态',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.filterActiveAll': '全部启用状态',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.filterOccupancy': '占用与异常',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.filterNoAssigned': '无在制派工',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.filterHasAssigned': '有在制派工',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.filterHasFault': '有未关故障',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.filterHasMaintenance': '有进行中保养',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.filterHasSpotAbnormal': '有点检异常',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.selectedCount': '已选 {{count}} 台',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.selectModalTitle': '选择执行设备',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.openSelectModal': '选择执行设备',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.noEquipmentSelected': '尚未选择设备',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.clearSelection': '清空选择',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardSearchPlaceholder': '搜索设备编码或名称',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardSnapshotLoadFailed':
+    '设备状态摘要加载失败，仍可按台账状态选择设备',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardSnapshotUnavailable': '暂无状态摘要',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.noCapableEquipment': '暂无可用设备',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.snapshotReadonlyBasic':
+    '无设备查看权限时仅显示台账基本信息，无法展示保养点检与派工占用',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardMonitor': '实时 {{status}}',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardAssignedOps': '在制派工 {{count}} 条',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardNoAssignedOps': '近 30 日区间内无在制派工',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardOpenFaults': '未关闭故障 {{count}} 条',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardOpenMaintenance': '进行中保养计划 {{count}} 条',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardSpotAbnormal': '点检异常 {{count}} 次',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardLatestSpotCheck': '最近点检：',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.dispatchOperationPeriodHeader': '本工序计划：',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardLatestSpotCheckValue':
+    '{{date}} {{result}}',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardSpotCheckResultNormal': '正常',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardSpotCheckResultAbnormal': '有异常',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardLatestRepair': '最近维修：',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardLatestRepairValue':
+    '{{date}} {{status}}',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardDispatchOperationPeriod': '本工序计划：',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardNoPlannedPeriod': '未填写计划起止',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardInProcessWorkOrder': '在制工单：',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardInProcessYes': '是 {{codes}}',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardInProcessNo': '否',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.cardNoRecord': '无记录',
+  'app.kuaizhizao.workOrder.equipmentDispatchPreview.openDetail': '查看详情',
   'app.kuaizhizao.workOrder.formAtLeastOneMaterialRow': '至少保留一行物料',
   'app.kuaizhizao.workOrder.formBatchRule': '批号规则',
   'app.kuaizhizao.workOrder.formCallReason': '补料原因',
@@ -17645,6 +17767,11 @@ export default {
   'app.kuaizhizao.equipment.fieldSpotCheckPerson': '点检人',
   'app.kuaizhizao.equipment.fieldWorkstation': '关联工位',
   'app.kuaizhizao.equipment.fieldWorkCenter': '关联工作中心',
+  'app.kuaizhizao.equipment.fieldCapableOperations': '关联工序',
+  'app.kuaizhizao.equipment.tabBasic': '基本信息',
+  'app.kuaizhizao.equipment.tabFactory': '厂区与能力',
+  'app.kuaizhizao.equipment.tabPurchase': '采购与标识',
+  'app.kuaizhizao.equipment.tabAttachments': '附件与备注',
   'app.kuaizhizao.equipment.fieldStatus': '设备状态',
   'app.kuaizhizao.equipment.fieldIsActive': '是否启用',
   'app.kuaizhizao.equipment.phName': '请输入设备名称',
@@ -17661,6 +17788,10 @@ export default {
   'app.kuaizhizao.equipment.phProductionLine': '请选择产线（线组）（可选）',
   'app.kuaizhizao.equipment.phWorkstation': '请选择工位（可选）',
   'app.kuaizhizao.equipment.phWorkCenter': '请选择工作中心（可选）',
+  'app.kuaizhizao.equipment.phCapableOperations': '请选择此设备可加工的工序（可选，可多选）',
+  'app.kuaizhizao.equipment.tooltipCapableOperations':
+    '维护后，工序派工分配设备时优先筛选具备对应加工能力的设备；未配置则不限制',
+  'app.kuaizhizao.equipment.colCapableOperations': '关联工序',
   'app.kuaizhizao.equipment.phResponsiblePerson': '请选择设备负责人（可选）',
   'app.kuaizhizao.equipment.phSpotCheckPerson': '请选择点检人（可选）',
   'app.kuaizhizao.equipment.phStatus': '请选择设备状态',
@@ -28856,6 +28987,69 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-ledger-status-r07.title':
+    '选设备卡片状态与台账一致',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-ledger-status-r07.description':
+    '工序派工选择执行设备卡片的状态徽章改为只展示设备台账状态，与「台账状态」筛选一致，不再用可能滞后的实时采集覆盖为维修中等其它状态。',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-capable-sort-r06.title':
+    '选设备按工序能力优先排序',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-capable-sort-r06.description':
+    '工序派工选择执行设备时展示全部启用设备，台账已绑定且匹配当前工序的排在卡片列表最前，并标注本工序徽章。',
+  'pages.dashboard.updateLog.entries.infra-superadmin-change-password-r01.title':
+    '平台管理支持修改超管密码',
+  'pages.dashboard.updateLog.entries.infra-superadmin-change-password-r01.description':
+    '基础设施平台管理的管理员信息页增加修改登录密码，须验证当前密码，无需选择组织或进入个人中心。',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-card-snapshot-r05.title':
+    '派工选设备卡片展示点检维修与在制',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-card-snapshot-r05.description':
+    '选择执行设备弹窗卡片展示最近点检、最近维修与在制工单；本工序计划时段在弹窗头部统一展示，不再显示决策摘要或近 30 日汇总。',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-filter-multiselect-r04.title':
+    '选设备支持筛选与多选',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-filter-multiselect-r04.description':
+    '选择执行设备弹窗增加台账状态、启用与占用异常筛选，卡片可多选；派工提交写入多台设备列表并兼容首台为主设备。',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-select-modal-r03.title':
+    '工序派工设备选择独立弹窗',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-select-modal-r03.description':
+    '分配设备改为在派工弹窗内点击「选择执行设备」打开独立窗口，以卡片展示状态摘要并选定设备，派工表单仅保留已选设备摘要。',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-cards-r02.title':
+    '工序派工设备卡片化选择',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-cards-r02.description':
+    '工单工序派工改为卡片列表选设备，打开弹窗即可看到台账状态、实时状态、在制派工、故障与保养点检摘要；点击卡片选中，可进一步打开详情弹窗查看完整追溯。',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-preview-r01.title':
+    '工序派工可查看设备状态',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-preview-r01.description':
+    '工单工序派工在分配设备旁增加设备状态入口，选中设备后可查看台账与实时状态、保养点检及该设备在制派工工单，支持日期区间筛选，不离开派工弹窗。',
+  'pages.dashboard.updateLog.entries.packing-binding-qrcode-preview-r01.title':
+    '装箱绑定批量二维码可预览下载',
+  'pages.dashboard.updateLog.entries.packing-binding-qrcode-preview-r01.description':
+    '批量生成装箱二维码后自动打开预览弹窗，支持按箱下载 PNG 与一键下载全部；详情抽屉基本信息旁展示箱码并可下载。',
+  'pages.dashboard.updateLog.entries.packing-binding-capability-r01.title':
+    '装箱绑定分箱闭环与箱托 ASN',
+  'pages.dashboard.updateLog.entries.packing-binding-capability-r01.description':
+    '装箱绑定补齐来源行剩余量门禁与多次分箱、入库+出库任务池进度与角标、包装物料主数据选择、封箱状态与箱内序列号；箱号统一 PACKING_BINDING_BOX_CODE；电子制造增加出货装箱 ASN 与箱托层级展示；手机工位同步。',
+  'pages.dashboard.updateLog.entries.plan-dashboard-load-perf-r01.title':
+    '计划中心看板首屏加载加速',
+  'pages.dashboard.updateLog.entries.plan-dashboard-load-perf-r01.description':
+    '管控塔汇总改为限量并发齐套分析、批量查负荷与交期风险；人机效改为一次报工聚合；KPI 就绪后再加载协调面板与例外摘要，缩短计划中心首屏等待。',
+  'pages.dashboard.updateLog.entries.rework-menu-to-ind-electronics-r01.title':
+    '返工策划与返工工单迁入电子制造行业包',
+  'pages.dashboard.updateLog.entries.rework-menu-to-ind-electronics-r01.description':
+    '快制造生产执行侧栏不再挂返工策划、返工工单；启用电子制造后入口出现在行业包下，仍打开原宿主页面与权限。请同步快制造与行业包菜单。',
+  'pages.dashboard.updateLog.entries.label-station-menu-offline-r01.title':
+    '快制造下线通用「标签工位」菜单',
+  'pages.dashboard.updateLog.entries.label-station-menu-offline-r01.description':
+    '生产执行不再挂通用标签工位入口（能力已迁定制包/行业 OEM 签样）；同步快制造菜单后侧栏消失。路由与权限保留，书签与行业替代仍可用。',
+  'pages.dashboard.updateLog.entries.equipment-status-fixed-right-r01.title':
+    '设备台账状态列固定到右侧',
+  'pages.dashboard.updateLog.entries.equipment-status-fixed-right-r01.description':
+    '设备台账列表增加右固定设备状态列（实心徽章），横滚时状态与操作列始终可见。',
+  'pages.dashboard.updateLog.entries.equipment-form-tabs-r01.title': '设备台账新建编辑表单分 Tab 归类',
+  'pages.dashboard.updateLog.entries.equipment-form-tabs-r01.description':
+    '设备台账新建/编辑弹窗按基本信息、厂区与能力、采购与标识、附件与备注分 Tab，字段更易查找；Tab 内容常驻以便跨页校验。',
+  'pages.dashboard.updateLog.entries.equipment-capable-operations-r01.title':
+    '设备台账支持关联可加工工序',
+  'pages.dashboard.updateLog.entries.equipment-capable-operations-r01.description':
+    '设备台账可维护关联工序（此设备可加工的工序）；工序派工分配设备时按能力筛选，未配置关联工序的设备仍可选，已配置但不含当前工序的设备不再出现在下拉中。',
   'pages.dashboard.updateLog.entries.ind-foreign-trade-full-plugin-r01.title':
     '外贸销售行业插件补齐工作台与跟进',
   'pages.dashboard.updateLog.entries.ind-foreign-trade-full-plugin-r01.description':
@@ -34853,6 +35047,7 @@ export default {
   'pages.infra.admin.statusActive': '激活',
   'pages.infra.admin.statusInactive': '未激活',
   'pages.infra.admin.lastLogin': '最后登录时间',
+  'pages.infra.admin.changePasswordSectionTitle': '修改登录密码',
 
   'pages.infra.provenanceSummary.noticeTitle': '说明',
   'pages.infra.provenanceSummary.disclaimerFallback': 'git remote 为实例自述，可能被伪造，仅作调查线索。',

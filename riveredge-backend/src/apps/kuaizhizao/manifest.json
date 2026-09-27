@@ -513,26 +513,6 @@
             "permission": "kuaizhizao:inbound:read"
           },
           {
-            "title": "app.kuaizhizao.menu.production-execution.rework-orders",
-            "path": "/apps/kuaizhizao/production-execution/rework-orders",
-            "sort_order": 5,
-            "meta": {
-              "module": "production",
-              "node": "rework_order"
-            },
-            "permission": "kuaizhizao:rework-order:read"
-          },
-          {
-            "title": "app.kuaizhizao.menu.production-execution.rework-position-plan-templates",
-            "path": "/apps/kuaizhizao/production-execution/rework-position-plan-templates",
-            "sort_order": 5.5,
-            "meta": {
-              "module": "production",
-              "node": "rework_position_plan_template"
-            },
-            "permission": "kuaizhizao:rework-position-plan-template:read"
-          },
-          {
             "title": "app.kuaizhizao.menu.production-execution.packing-binding",
             "path": "/apps/kuaizhizao/production-execution/packing-binding",
             "sort_order": 6.5,
@@ -541,16 +521,6 @@
               "node": "work_order"
             },
             "permission": "kuaizhizao:production-execution-packing-binding:read"
-          },
-          {
-            "title": "app.kuaizhizao.menu.production-execution.label-station",
-            "path": "/apps/kuaizhizao/production-execution/label-station",
-            "sort_order": 6,
-            "meta": {
-              "module": "production",
-              "node": "label_station"
-            },
-            "permission": "kuaizhizao:label-station:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.production-daily-templates",
@@ -4029,6 +3999,18 @@
       "module_icon": "tool",
       "auto_generate": true,
       "rule_code": "WORK_ORDER_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-production-packing-binding",
+      "page_name": "装箱绑定",
+      "page_path": "/apps/kuaizhizao/production-execution/packing-binding",
+      "code_field": "box_no",
+      "code_field_label": "箱号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "PACKING_BINDING_BOX_CODE",
       "allow_manual_edit": true
     },
     {

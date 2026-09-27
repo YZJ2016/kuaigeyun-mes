@@ -44,6 +44,124 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'work-order-equipment-dispatch-ledger-status-r07',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-ledger-status-r07.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-ledger-status-r07.description',
+  },
+  {
+    id: 'work-order-equipment-dispatch-capable-sort-r06',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-capable-sort-r06.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-capable-sort-r06.description',
+  },
+  {
+    id: 'infra-superadmin-change-password-r01',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.infra-superadmin-change-password-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.infra-superadmin-change-password-r01.description',
+  },
+  {
+    id: 'work-order-equipment-dispatch-card-snapshot-r05',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-card-snapshot-r05.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-card-snapshot-r05.description',
+  },
+  {
+    id: 'work-order-equipment-dispatch-filter-multiselect-r04',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-filter-multiselect-r04.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-filter-multiselect-r04.description',
+  },
+  {
+    id: 'work-order-equipment-dispatch-select-modal-r03',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-select-modal-r03.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-select-modal-r03.description',
+  },
+  {
+    id: 'work-order-equipment-dispatch-cards-r02',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-cards-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-cards-r02.description',
+  },
+  {
+    id: 'packing-binding-qrcode-preview-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.packing-binding-qrcode-preview-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.packing-binding-qrcode-preview-r01.description',
+  },
+  {
+    id: 'packing-binding-capability-r01',
+    date: '2026-09-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.packing-binding-capability-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.packing-binding-capability-r01.description',
+  },
+  {
+    id: 'plan-dashboard-load-perf-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.plan-dashboard-load-perf-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.plan-dashboard-load-perf-r01.description',
+  },
+  {
+    id: 'rework-menu-to-ind-electronics-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.rework-menu-to-ind-electronics-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rework-menu-to-ind-electronics-r01.description',
+  },
+  {
+    id: 'label-station-menu-offline-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.label-station-menu-offline-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.label-station-menu-offline-r01.description',
+  },
+  {
+    id: 'equipment-status-fixed-right-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-status-fixed-right-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equipment-status-fixed-right-r01.description',
+  },
+  {
+    id: 'equipment-form-tabs-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-form-tabs-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.equipment-form-tabs-r01.description',
+  },
+  {
+    id: 'equipment-capable-operations-r01',
+    date: '2026-09-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-capable-operations-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equipment-capable-operations-r01.description',
+  },
+  {
     id: 'official-api-library-third-party-catalog-r01',
     date: '2026-09-27',
     type: 'fix',

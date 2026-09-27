@@ -257,6 +257,11 @@ const LazyWorkOrderReadinessModal = lazy(() =>
   import('./components/WorkOrderReadinessPopover').then((m) => ({ default: m.WorkOrderReadinessModal })),
 )
 import { WorkOrderOperationStepsStrip } from './components/WorkOrderOperationStepsStrip'
+import EquipmentDispatchPreviewModal from './components/EquipmentDispatchPreviewModal'
+import { type EquipmentDispatchSnapshot } from './components/EquipmentDispatchCardPicker'
+import EquipmentDispatchSelectModal from './components/EquipmentDispatchSelectModal'
+import EquipmentDispatchFieldTrigger from './components/EquipmentDispatchFieldTrigger'
+import { equipmentApi } from '../../../services/equipment'
 import {
   WorkOrderDetailDrawer,
   WORK_ORDER_WORKFLOW_PROPS,
@@ -668,6 +673,21 @@ function getOperationAssignedWorkerIds(operation?: any): number[] {
     if (ids.length > 0) return ids
   }
   const single = Number(operation?.assigned_worker_id)
+  return Number.isInteger(single) && single > 0 ? [single] : []
+}
+
+/** 解析工序已派工设备 ID（兼容旧单设备字段） */
+function getOperationAssignedEquipmentIds(operation?: any): number[] {
+  const raw = operation?.assigned_equipment_ids
+  if (Array.isArray(raw) && raw.length > 0) {
+    const ids = raw
+      .map((id: unknown) => Number(id))
+      .filter((id: number) => Number.isInteger(id) && id > 0)
+    if (ids.length > 0) {
+      return ids
+    }
+  }
+  const single = Number(operation?.assigned_equipment_id)
   return Number.isInteger(single) && single > 0 ? [single] : []
 }
 
@@ -1450,6 +1470,7 @@ const WorkOrdersPage: React.FC = () => {
   const quantityDecimals = useNumericPrecisionPlaces('quantity')
   const { message: messageApi } = App.useApp()
   const workOrderPerms = useResourcePermissions(WORK_ORDER_RESOURCE)
+  const equipmentReadPerms = useResourcePermissions('kuaizhizao:equipment-management-equipment')
   const toolbarSyncPush = useToolbarSyncPushFlags('work_order')
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound')
   const workOrderAuditEnabled = useAuditRequired('work_order', false)
@@ -2388,6 +2409,17 @@ const WorkOrdersPage: React.FC = () => {
   // 派工相关状态
   const [dispatchModalVisible, setDispatchModalVisible] = useState(false)
   const [currentOperationForDispatch, setCurrentOperationForDispatch] = useState<any>(null)
+  const [equipmentDispatchPreviewOpen, setEquipmentDispatchPreviewOpen] = useState(false)
+  const [equipmentDispatchPreviewUuid, setEquipmentDispatchPreviewUuid] = useState<string | null>(null)
+  const [equipmentDispatchPreviewMeta, setEquipmentDispatchPreviewMeta] = useState<{ code: string; name: string }>({
+    code: '',
+    name: '',
+  })
+  const [equipmentDispatchSnapshotsById, setEquipmentDispatchSnapshotsById] = useState<
+    Record<number, EquipmentDispatchSnapshot>
+  >({})
+  const [equipmentDispatchSnapshotsLoading, setEquipmentDispatchSnapshotsLoading] = useState(false)
+  const [equipmentDispatchSelectOpen, setEquipmentDispatchSelectOpen] = useState(false)
   const [currentWorkOrderForDispatch, setCurrentWorkOrderForDispatch] = useState<WorkOrder | null>(
     null
   )
@@ -2597,14 +2629,23 @@ const WorkOrdersPage: React.FC = () => {
   useEffect(() => {
     if (!dispatchModalVisible) return
     let cancelled = false
+    const assignedEquipmentId = Number(currentOperationForDispatch?.assigned_equipment_id ?? 0)
     const load = async () => {
       setDispatchPickListsLoading(true)
       try {
+        const equipmentParams: {
+          is_active: boolean
+          limit: number
+          include_equipment_id?: number
+        } = { is_active: true, limit: 300 }
+        if (Number.isInteger(assignedEquipmentId) && assignedEquipmentId > 0) {
+          equipmentParams.include_equipment_id = assignedEquipmentId
+        }
         const [users, teams, stations, equipment, molds, tools, workshops, workCenters] = await Promise.all([
           searchUserDisplay({ is_active: true, page_size: 200 }).catch(() => ({ items: [] })),
           workGroupApi.list({ is_active: true, limit: 500 }).catch(() => ({ items: [], total: 0 })),
           workstationApi.list({ is_active: true, limit: 1000 }).catch(() => ({ items: [], total: 0 })),
-          getEquipmentList({ is_active: true, limit: 300 }).catch(() => ({ items: [] })),
+          getEquipmentList(equipmentParams).catch(() => ({ items: [] })),
           getMoldList({ is_active: true, limit: 300 }).catch(() => ({ items: [] })),
           toolApi.list({ limit: 300 }).catch(() => ({ items: [] })),
           workshopApi.list({ is_active: true, limit: 500 }).catch(() => ({ items: [], total: 0 })),
@@ -2638,6 +2679,57 @@ const WorkOrdersPage: React.FC = () => {
     load()
     return () => {
       cancelled = true
+    }
+  }, [dispatchModalVisible, currentOperationForDispatch])
+
+  useEffect(() => {
+    if (!equipmentDispatchSelectOpen) {
+      return
+    }
+    if (!equipmentReadPerms.canRead) {
+      return
+    }
+    const ids = equipmentList.map((row) => Number(row.id)).filter((id) => Number.isInteger(id) && id > 0)
+    if (!ids.length) {
+      setEquipmentDispatchSnapshotsById({})
+      return
+    }
+    let cancelled = false
+    const loadSnapshots = async () => {
+      setEquipmentDispatchSnapshotsLoading(true)
+      try {
+        const res = await equipmentApi.getDispatchSnapshots({
+          equipment_ids: ids,
+        })
+        if (cancelled) {
+          return
+        }
+        const next: Record<number, EquipmentDispatchSnapshot> = {}
+        for (const item of res?.items ?? []) {
+          next[item.equipment_id] = item as EquipmentDispatchSnapshot
+        }
+        setEquipmentDispatchSnapshotsById(next)
+      } catch {
+        if (!cancelled) {
+          setEquipmentDispatchSnapshotsById({})
+          messageApi.warning(t('app.kuaizhizao.workOrder.equipmentDispatchPreview.cardSnapshotLoadFailed'))
+        }
+      } finally {
+        if (!cancelled) {
+          setEquipmentDispatchSnapshotsLoading(false)
+        }
+      }
+    }
+    void loadSnapshots()
+    return () => {
+      cancelled = true
+    }
+  }, [equipmentDispatchSelectOpen, equipmentList, equipmentReadPerms.canRead, messageApi, t])
+
+  useEffect(() => {
+    if (!dispatchModalVisible) {
+      setEquipmentDispatchSelectOpen(false)
+      setEquipmentDispatchSnapshotsById({})
     }
   }, [dispatchModalVisible])
 
@@ -3501,7 +3593,7 @@ const WorkOrdersPage: React.FC = () => {
           workshop_id: operation.workshop_id ?? operation.workshopId,
           assigned_personnel: combinedPersonnelValues.length > 0 ? combinedPersonnelValues : undefined,
           assigned_resource: combinedResourceValues.length > 0 ? combinedResourceValues : undefined,
-          assigned_equipment_id: operation.assigned_equipment_id,
+          assigned_equipment_ids: getOperationAssignedEquipmentIds(operation),
           assigned_mold_id: operation.assigned_mold_id,
           assigned_tool_id: operation.assigned_tool_id,
           remarks: operation.remarks,
@@ -3509,6 +3601,19 @@ const WorkOrdersPage: React.FC = () => {
       }
     }, 100)
   }
+
+  const handleOpenEquipmentDispatchPreviewFromSnapshot = useCallback(
+    (snapshot: EquipmentDispatchSnapshot) => {
+      if (!equipmentReadPerms.canRead) {
+        messageApi.error(t('app.kuaizhizao.workOrder.equipmentDispatchPreview.forbidden'))
+        return
+      }
+      setEquipmentDispatchPreviewUuid(snapshot.equipment_uuid)
+      setEquipmentDispatchPreviewMeta({ code: snapshot.code, name: snapshot.name })
+      setEquipmentDispatchPreviewOpen(true)
+    },
+    [equipmentReadPerms.canRead, messageApi, t],
+  )
 
   /**
    * 处理派工
@@ -3546,7 +3651,22 @@ const WorkOrdersPage: React.FC = () => {
 
       const worker = workerList.find((w) => Number(w.id) === Number(assigned_worker_id))
       const team = teamList.find((t) => Number(t.id) === Number(assigned_team_id))
-      const equipment = equipmentList.find((e) => Number(e.id) === Number(values.assigned_equipment_id))
+      const assigned_equipment_ids = Array.isArray(values.assigned_equipment_ids)
+        ? values.assigned_equipment_ids
+            .map((id: unknown) => Number(id))
+            .filter((id: number) => Number.isInteger(id) && id > 0)
+        : []
+      const assigned_equipment_id = assigned_equipment_ids[0] ?? null
+      const assigned_equipment_name = assigned_equipment_ids
+        .map((equipmentId: number) => {
+          const matched = equipmentList.find((e) => Number(e.id) === equipmentId)
+          if (!matched) {
+            return ''
+          }
+          return `${matched.code ?? ''} ${matched.name ?? ''}`.trim()
+        })
+        .filter(Boolean)
+        .join('、') || null
       const mold = moldList.find((m) => Number(m.id) === Number(values.assigned_mold_id))
       const tool = toolList.find((t) => Number(t.id) === Number(values.assigned_tool_id))
       const station = stationList.find((s) => Number(s.id) === Number(assigned_station_id))
@@ -3578,8 +3698,9 @@ const WorkOrdersPage: React.FC = () => {
           workerNames.join('、') || worker?.full_name || worker?.username || null,
         assigned_team_id: assigned_team_id ?? null,
         assigned_team_name: team?.name || teamNameFromOption || null,
-        assigned_equipment_id: values.assigned_equipment_id ?? null,
-        assigned_equipment_name: equipment?.name || null,
+        assigned_equipment_id,
+        assigned_equipment_ids,
+        assigned_equipment_name,
         assigned_mold_id: values.assigned_mold_id ?? null,
         assigned_mold_name: mold?.name || null,
         assigned_tool_id: values.assigned_tool_id ?? null,
@@ -10629,36 +10750,19 @@ const WorkOrdersPage: React.FC = () => {
 
               <Col xs={24} sm={12}>
             <ProFormItem
-              name="assigned_equipment_id"
-              label="分配设备"
+              name="assigned_equipment_ids"
+              label={t('app.kuaizhizao.workOrder.equipmentDispatchPreview.assignEquipmentLabel')}
+              tooltip={
+                Number(currentOperationForDispatch?.operation_id ?? currentOperationForDispatch?.operationId ?? 0) > 0
+                  ? t('app.kuaizhizao.workOrder.equipmentDispatchPreview.capableEquipmentTooltip')
+                  : undefined
+              }
+              trigger="onChange"
             >
-              <UniDropdown
-                placeholder="请选择执行设备"
-                allowClear
-                showSearch
-                options={equipmentList.map((item: any) => ({
-                  label: `${item.code} - ${item.name}`,
-                  value: item.id,
-                }))}
-                advancedSearch={{
-                  label: '高级搜索设备',
-                  fields: [
-                    { name: 'code', label: '设备编号', type: 'text' },
-                    { name: 'name', label: '设备名称', type: 'text' },
-                  ],
-                  onSearch: async (params: Record<string, string>) => {
-                    const res = await getEquipmentList({
-                      is_active: true,
-                      limit: 300,
-                      search: params?.code || params?.name || undefined,
-                    }).catch(() => ({ items: [] }))
-                    const items = res?.items ?? []
-                    return items.map((e: any) => ({
-                      value: e.id,
-                      label: `${e.code} - ${e.name}`,
-                    }))
-                  },
-                }}
+              <EquipmentDispatchFieldTrigger
+                equipmentList={equipmentList}
+                snapshotsById={equipmentDispatchSnapshotsById}
+                onOpenSelect={() => setEquipmentDispatchSelectOpen(true)}
               />
             </ProFormItem>
               </Col>
@@ -10759,9 +10863,45 @@ const WorkOrdersPage: React.FC = () => {
                 />
               </Col>
             </Row>
+            <ProFormDependency name={['assigned_equipment_ids']}>
+              {({ assigned_equipment_ids: assignedEquipmentIds }) => (
+                <EquipmentDispatchSelectModal
+                  open={equipmentDispatchSelectOpen}
+                  onClose={() => setEquipmentDispatchSelectOpen(false)}
+                  value={Array.isArray(assignedEquipmentIds) ? assignedEquipmentIds : []}
+                  onConfirm={(equipmentIds) => {
+                    dispatchFormRef.current?.setFieldsValue?.({ assigned_equipment_ids: equipmentIds })
+                  }}
+                  equipmentList={equipmentList}
+                  snapshotsById={equipmentDispatchSnapshotsById}
+                  listLoading={dispatchPickListsLoading}
+                  snapshotsLoading={equipmentDispatchSnapshotsLoading}
+                  canReadSnapshots={equipmentReadPerms.canRead}
+                  onOpenDetail={handleOpenEquipmentDispatchPreviewFromSnapshot}
+                  dispatchOperationPlannedStart={currentOperationForDispatch?.planned_start_date}
+                  dispatchOperationPlannedEnd={currentOperationForDispatch?.planned_end_date}
+                  dispatchOperationId={Number(
+                    currentOperationForDispatch?.operation_id ??
+                      currentOperationForDispatch?.operationId ??
+                      0,
+                  )}
+                />
+              )}
+            </ProFormDependency>
           </>
         )}
       </FormModalTemplate>
+
+      <EquipmentDispatchPreviewModal
+        open={equipmentDispatchPreviewOpen}
+        onClose={() => {
+          setEquipmentDispatchPreviewOpen(false)
+          setEquipmentDispatchPreviewUuid(null)
+        }}
+        equipmentUuid={equipmentDispatchPreviewUuid}
+        equipmentCode={equipmentDispatchPreviewMeta.code}
+        equipmentName={equipmentDispatchPreviewMeta.name}
+      />
 
       {/* 拆分工单Modal */}
       <Modal

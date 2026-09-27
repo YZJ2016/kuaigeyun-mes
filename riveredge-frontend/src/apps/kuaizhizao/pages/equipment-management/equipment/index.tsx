@@ -22,6 +22,7 @@ import {
   ProFormTextArea,
   ProFormSwitch,
   ProFormUploadButton,
+  ProFormSelect,
 } from '@ant-design/pro-components';
 import {
   App,
@@ -29,6 +30,7 @@ import {
   Modal,
   Row,
   Col,
+  Tabs,
   Typography,
   Upload,
 } from 'antd';
@@ -60,6 +62,7 @@ import {
   workstationApi,
   workshopApi,
 } from '../../../../master-data/services/factory';
+import { operationApi, unwrapProcessPagedList } from '../../../../master-data/services/process';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
@@ -97,8 +100,27 @@ import {
 } from '../../../utils/equipmentListCore';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { StatusTag } from '../../../../../constants/statusBadges';
+import type { TFunction } from 'i18next';
 
 const EQUIPMENT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_equipment';
+
+function equipmentListStatusTag(
+  status: string | undefined,
+  t: TFunction,
+): { text: string; color: string } {
+  const statusMap: Record<string, { text: string; color: string }> = {
+    正常: { text: t('app.kuaizhizao.equipment.statusNormal'), color: 'success' },
+    运行中: { text: t('app.kuaizhizao.equipment.statusRunning'), color: 'processing' },
+    待机: { text: t('app.kuaizhizao.equipment.statusStandby'), color: 'default' },
+    故障: { text: t('app.kuaizhizao.equipment.statusFault'), color: 'error' },
+    维修中: { text: t('app.kuaizhizao.equipment.statusRepairing'), color: 'warning' },
+    停用: { text: t('app.kuaizhizao.equipment.statusDisabled'), color: 'default' },
+    校验中: { text: t('app.kuaizhizao.equipment.statusCalibrating'), color: 'processing' },
+    报废: { text: t('app.kuaizhizao.equipment.statusScrapped'), color: 'error' },
+  };
+  return statusMap[status ?? ''] ?? { text: status ?? '-', color: 'default' };
+}
 
 interface Equipment {
   id?: number;
@@ -130,6 +152,8 @@ interface Equipment {
   work_center_id?: number;
   work_center_code?: string;
   work_center_name?: string;
+  capable_operation_ids?: number[] | null;
+  capable_operations?: Array<{ id?: number; code?: string; name?: string }> | null;
   responsible_person_id?: number;
   responsible_person_name?: string;
   spot_check_person_id?: number;
@@ -317,10 +341,17 @@ const EquipmentPage: React.FC = () => {
   // Modal 相关状态（创建/编辑设备）
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
+  const [formActiveTab, setFormActiveTab] = useState('basic');
   const [currentEquipment, setCurrentEquipment] = useState<Equipment | null>(null);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [createCodeSessionKey, setCreateCodeSessionKey] = useState(0);
   const formRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (modalVisible) {
+      setFormActiveTab('basic');
+    }
+  }, [modalVisible]);
 
   const {
     customFields: equipmentFormCustomFields,
@@ -424,6 +455,13 @@ const EquipmentPage: React.FC = () => {
         work_center_id: detail.work_center_id,
         work_center_code: detail.work_center_code,
         work_center_name: detail.work_center_name,
+        capable_operation_ids: Array.isArray(detail.capable_operation_ids)
+          ? detail.capable_operation_ids
+          : Array.isArray(detail.capable_operations)
+            ? detail.capable_operations
+                .map((op) => Number(op?.id))
+                .filter((id) => Number.isInteger(id) && id > 0)
+            : [],
         responsible_person_uuid: responsiblePersonUuid,
         responsible_person_id: detail.responsible_person_id,
         responsible_person_name: detail.responsible_person_name,
@@ -528,6 +566,11 @@ const EquipmentPage: React.FC = () => {
         responsible_person_name: standardValues.responsible_person_name ?? null,
         spot_check_person_id: standardValues.spot_check_person_id ?? null,
         spot_check_person_name: standardValues.spot_check_person_name ?? null,
+        capable_operation_ids: Array.isArray(standardValues.capable_operation_ids)
+          ? standardValues.capable_operation_ids
+              .map((id: unknown) => Number(id))
+              .filter((id: number) => Number.isInteger(id) && id > 0)
+          : [],
         photo_file_uuid: uploadListToPhotoUuid(standardValues.photo),
         attachments: normalizeDocumentAttachments(standardValues.attachments),
         qr_bind_code:
@@ -905,8 +948,39 @@ const EquipmentPage: React.FC = () => {
       width: 150,
       hideInSearch: true,
     }),
+    {
+      ...buildKeepWidthColumn<Equipment>(
+        t('app.kuaizhizao.equipment.colCapableOperations'),
+        'capable_operations',
+        { width: 180, hideInSearch: true },
+      ),
+      render: (_, r) => {
+        const ops = Array.isArray(r.capable_operations) ? r.capable_operations : [];
+        if (ops.length === 0) return '-';
+        const text = ops
+          .map((op) => (op?.name || op?.code || '').trim())
+          .filter(Boolean)
+          .join('、');
+        return (
+          <Typography.Text ellipsis={{ tooltip: text }}>
+            {text || '-'}
+          </Typography.Text>
+        );
+      },
+    },
     ...buildDocumentAuditColumns<Record<string, unknown>>(t),
     ...customFieldColumns,
+    {
+      title: t('common.status'),
+      key: 'lifecycle',
+      dataIndex: 'status',
+      hideInSearch: true,
+      fixed: 'right',
+      render: (_, r) => {
+        const mapped = equipmentListStatusTag(r.status, t);
+        return <StatusTag color={mapped.color}>{mapped.text}</StatusTag>;
+      },
+    },
     {
       title: t('common.actions'),
       key: 'option',
@@ -943,7 +1017,7 @@ const EquipmentPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.equipmentLedger')}
           headerTitle={t('app.kuaizhizao.equipment.title')}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-spot-check-person-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-status-fixed-v1"
           actionRef={actionRef}
           formRef={searchFormRef}
           rowKey="uuid"
@@ -1205,7 +1279,7 @@ const EquipmentPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {/* 创建/编辑设备 Modal */}
+      {/* 创建/编辑设备 Modal（字段分 Tab，与客商/供应商表单一致：destroyOnHidden=false 保证跨 Tab 校验） */}
       <FormModalTemplate
         title={isEdit ? t('app.kuaizhizao.equipment.edit') : t('app.kuaizhizao.equipment.create')}
         open={modalVisible}
@@ -1221,202 +1295,287 @@ const EquipmentPage: React.FC = () => {
         initialValues={formInitialValues}
         grid={false}
       >
-        <Row gutter={16}>
-          <Col span={12}>
-            <CodeField
-              key={isEdit ? `equipment-code-edit-${currentEquipment?.id ?? 'none'}` : `equipment-code-create-${createCodeSessionKey}`}
-              pageCode="kuaizhizao-equipment-management-equipment"
-              name="code"
-              label={t('app.kuaizhizao.equipment.fieldCode')}
-              required={false}
-              autoGenerateOnCreate={!isEdit}
-              showGenerateButton={false}
-              documentId={isEdit ? currentEquipment?.id : undefined}
-              formRef={formRef}
-              generateSessionKey={createCodeSessionKey}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormText
-              name="name"
-              label={t('app.kuaizhizao.equipment.fieldName')}
-              placeholder={t('app.kuaizhizao.equipment.phName')}
-              rules={[{ required: true, message: t('app.kuaizhizao.equipment.ruleNameRequired') }]}
-            />
-          </Col>
-          <Col span={12}>
-            <DictionarySelect
-              dictionaryCode="EQUIPMENT_TYPE"
-              name="type"
-              label={t('app.kuaizhizao.equipment.fieldType')}
-              placeholder={t('common.selectField', { field: t('app.kuaizhizao.equipment.fieldType') })}
-              formRef={formRef}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormText
-              name="category"
-              label={t('app.kuaizhizao.equipment.fieldCategory')}
-              placeholder={t('app.kuaizhizao.equipment.phCategory')}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormText name="brand" label={t('app.kuaizhizao.equipment.fieldBrand')} placeholder={t('app.kuaizhizao.equipment.phBrand')} />
-          </Col>
-          <Col span={12}>
-            <ProFormText name="model" label={t('app.kuaizhizao.equipment.fieldModel')} placeholder={t('app.kuaizhizao.equipment.phModel')} />
-          </Col>
-          <Col span={12}>
-            <ProFormText name="serial_number" label={t('app.kuaizhizao.equipment.fieldSerialNumber')} placeholder={t('app.kuaizhizao.equipment.phSerialNumber')} />
-          </Col>
-          <Col span={12}>
-            <ProFormText name="manufacturer" label={t('app.kuaizhizao.equipment.fieldManufacturer')} placeholder={t('app.kuaizhizao.equipment.phManufacturer')} />
-          </Col>
-          <Col span={12}>
-            <ProFormText name="supplier" label={t('app.kuaizhizao.equipment.fieldSupplier')} placeholder={t('app.kuaizhizao.equipment.phSupplier')} />
-          </Col>
-          <Col span={24}>
-            <ProFormText
-              name="qr_bind_code"
-              label={t('app.kuaizhizao.equipment.fieldQrBindCode')}
-              placeholder={t('app.kuaizhizao.equipment.phQrBindCode')}
-              extra={t('app.kuaizhizao.equipment.fieldQrBindCodeHint')}
-              fieldProps={{
-                addonAfter: (
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => {
-                      const code = formRef.current?.getFieldValue?.('code');
-                      if (code) {
-                        formRef.current?.setFieldsValue?.({ qr_bind_code: String(code) });
-                      }
-                    }}
-                  >
-                    {t('app.kuaizhizao.equipment.fillQrBindFromCode')}
-                  </Button>
-                ),
-              }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormDatePicker
-              name="purchase_date"
-              label={t('app.kuaizhizao.equipment.fieldPurchaseDate')}
-              placeholder={t('app.kuaizhizao.equipment.phPurchaseDate')}
-              formItemProps={formDateFormItemProps}
-              fieldProps={{ style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormDatePicker
-              name="installation_date"
-              label={t('app.kuaizhizao.equipment.fieldInstallationDate')}
-              placeholder={t('app.kuaizhizao.equipment.phInstallationDate')}
-              formItemProps={formDateFormItemProps}
-              fieldProps={{ style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormDigit
-              name="warranty_period"
-              label={t('app.kuaizhizao.equipment.fieldWarrantyPeriod')}
-              placeholder={t('app.kuaizhizao.equipment.phWarrantyPeriod')}
-              min={0}
-            />
-          </Col>
-          <Col span={12}>
-            <DictionarySelect
-              dictionaryCode="EQUIPMENT_NATURE"
-              name="equipment_nature"
-              label={t('app.kuaizhizao.equipment.fieldEquipmentNature')}
-              placeholder={t('common.selectField', { field: t('app.kuaizhizao.equipment.fieldEquipmentNature') })}
-              formRef={formRef}
-            />
-          </Col>
-          <Col span={12}>
-            <EquipmentPersonSelect
-              uuidFieldName="responsible_person_uuid"
-              idFieldName="responsible_person_id"
-              nameFieldName="responsible_person_name"
-              label={t('app.kuaizhizao.equipment.fieldResponsiblePerson')}
-              placeholder={t('app.kuaizhizao.equipment.phResponsiblePerson')}
-              formRef={formRef}
-            />
-          </Col>
-          <Col span={12}>
-            <EquipmentPersonSelect
-              uuidFieldName="spot_check_person_uuid"
-              idFieldName="spot_check_person_id"
-              nameFieldName="spot_check_person_name"
-              label={t('app.kuaizhizao.equipment.fieldSpotCheckPerson')}
-              placeholder={t('app.kuaizhizao.equipment.phSpotCheckPerson')}
-              formRef={formRef}
-            />
-          </Col>
-          <EquipmentFactoryBindingFields formRef={formRef} embedInParentRow />
-          <Col span={12}>
-            <DictionarySelect
-              dictionaryCode="EQUIPMENT_STATUS"
-              name="status"
-              label={t('app.kuaizhizao.equipment.fieldStatus')}
-              placeholder={t('app.kuaizhizao.equipment.phStatus')}
-              required={true}
-              rules={[{ required: true, message: t('app.kuaizhizao.equipment.ruleStatusRequired') }]}
-              formRef={formRef}
-            />
-          </Col>
-          <CustomFieldsFormSection
-            customFields={equipmentFormCustomFields}
-            customFieldValues={equipmentFormCustomFieldValues}
-            gridColumns={2}
-            embedInParentRow
-          />
-          <Col span={24}>
-            <ProFormUploadButton
-              name="photo"
-              label={t('app.kuaizhizao.equipment.fieldPhoto')}
-              max={1}
-              extra={t('app.kuaizhizao.equipment.fieldPhotoHint')}
-              fieldProps={{
-                listType: 'picture-card',
-                accept: '.jpg,.jpeg,.png,.gif,.webp',
-                beforeUpload: (file) => {
-                  const isLt20M = (file.size ?? 0) / 1024 / 1024 < 20;
-                  if (!isLt20M) {
-                    messageApi.error(t('app.kuaizhizao.equipment.photoSizeLimit'));
-                    return Upload.LIST_IGNORE;
-                  }
-                  return true;
-                },
-                customRequest: async (options) => {
-                  try {
-                    const res = await uploadMultipleFiles([options.file as File], {
-                      category: 'equipment_photo',
-                    });
-                    options.onSuccess?.(res[0], options.file as any);
-                  } catch (err) {
-                    options.onError?.(err as Error);
-                  }
-                },
-              }}
-            />
-          </Col>
-          <Col span={24}>
-            <DocumentAttachmentsField category="equipment_attachments" />
-          </Col>
-          <Col span={24}>
-            <ProFormTextArea
-              name="description"
-              label={t('common.remark')}
-              placeholder={t('app.kuaizhizao.equipment.phDescription')}
-              fieldProps={{ rows: 3 }}
-            />
-          </Col>
-          <Col span={24}>
-            <ProFormSwitch name="is_active" label={t('app.kuaizhizao.equipment.fieldIsActive')} />
-          </Col>
-        </Row>
+        <Tabs
+          activeKey={formActiveTab}
+          onChange={setFormActiveTab}
+          destroyOnHidden={false}
+          style={{ width: '100%' }}
+          items={[
+            {
+              key: 'basic',
+              label: t('app.kuaizhizao.equipment.tabBasic'),
+              children: (
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <CodeField
+                      key={isEdit ? `equipment-code-edit-${currentEquipment?.id ?? 'none'}` : `equipment-code-create-${createCodeSessionKey}`}
+                      pageCode="kuaizhizao-equipment-management-equipment"
+                      name="code"
+                      label={t('app.kuaizhizao.equipment.fieldCode')}
+                      required={false}
+                      autoGenerateOnCreate={!isEdit}
+                      showGenerateButton={false}
+                      documentId={isEdit ? currentEquipment?.id : undefined}
+                      formRef={formRef}
+                      generateSessionKey={createCodeSessionKey}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormText
+                      name="name"
+                      label={t('app.kuaizhizao.equipment.fieldName')}
+                      placeholder={t('app.kuaizhizao.equipment.phName')}
+                      rules={[{ required: true, message: t('app.kuaizhizao.equipment.ruleNameRequired') }]}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <DictionarySelect
+                      dictionaryCode="EQUIPMENT_TYPE"
+                      name="type"
+                      label={t('app.kuaizhizao.equipment.fieldType')}
+                      placeholder={t('common.selectField', { field: t('app.kuaizhizao.equipment.fieldType') })}
+                      formRef={formRef}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormText
+                      name="category"
+                      label={t('app.kuaizhizao.equipment.fieldCategory')}
+                      placeholder={t('app.kuaizhizao.equipment.phCategory')}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormText
+                      name="brand"
+                      label={t('app.kuaizhizao.equipment.fieldBrand')}
+                      placeholder={t('app.kuaizhizao.equipment.phBrand')}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormText
+                      name="model"
+                      label={t('app.kuaizhizao.equipment.fieldModel')}
+                      placeholder={t('app.kuaizhizao.equipment.phModel')}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormText
+                      name="serial_number"
+                      label={t('app.kuaizhizao.equipment.fieldSerialNumber')}
+                      placeholder={t('app.kuaizhizao.equipment.phSerialNumber')}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormText
+                      name="manufacturer"
+                      label={t('app.kuaizhizao.equipment.fieldManufacturer')}
+                      placeholder={t('app.kuaizhizao.equipment.phManufacturer')}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormText
+                      name="supplier"
+                      label={t('app.kuaizhizao.equipment.fieldSupplier')}
+                      placeholder={t('app.kuaizhizao.equipment.phSupplier')}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <DictionarySelect
+                      dictionaryCode="EQUIPMENT_NATURE"
+                      name="equipment_nature"
+                      label={t('app.kuaizhizao.equipment.fieldEquipmentNature')}
+                      placeholder={t('common.selectField', {
+                        field: t('app.kuaizhizao.equipment.fieldEquipmentNature'),
+                      })}
+                      formRef={formRef}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <DictionarySelect
+                      dictionaryCode="EQUIPMENT_STATUS"
+                      name="status"
+                      label={t('app.kuaizhizao.equipment.fieldStatus')}
+                      placeholder={t('app.kuaizhizao.equipment.phStatus')}
+                      required={true}
+                      rules={[{ required: true, message: t('app.kuaizhizao.equipment.ruleStatusRequired') }]}
+                      formRef={formRef}
+                    />
+                  </Col>
+                </Row>
+              ),
+            },
+            {
+              key: 'factory',
+              label: t('app.kuaizhizao.equipment.tabFactory'),
+              children: (
+                <Row gutter={16}>
+                  <EquipmentFactoryBindingFields formRef={formRef} embedInParentRow />
+                  <Col span={24}>
+                    <ProFormSelect
+                      name="capable_operation_ids"
+                      label={t('app.kuaizhizao.equipment.fieldCapableOperations')}
+                      placeholder={t('app.kuaizhizao.equipment.phCapableOperations')}
+                      tooltip={t('app.kuaizhizao.equipment.tooltipCapableOperations')}
+                      mode="multiple"
+                      showSearch
+                      request={async () => {
+                        const ops = unwrapProcessPagedList(
+                          await operationApi.list({ isActive: true, limit: 1000 }),
+                        );
+                        return ops.map((op: { id?: number; code?: string; name?: string }) => ({
+                          label: `${op.code || ''} - ${op.name || ''}`.replace(/^\s*-\s*/, '').trim(),
+                          value: op.id,
+                        }));
+                      }}
+                      fieldProps={{
+                        style: { width: '100%' },
+                        allowClear: true,
+                        optionFilterProp: 'label',
+                        maxTagCount: 'responsive',
+                      }}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <EquipmentPersonSelect
+                      uuidFieldName="responsible_person_uuid"
+                      idFieldName="responsible_person_id"
+                      nameFieldName="responsible_person_name"
+                      label={t('app.kuaizhizao.equipment.fieldResponsiblePerson')}
+                      placeholder={t('app.kuaizhizao.equipment.phResponsiblePerson')}
+                      formRef={formRef}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <EquipmentPersonSelect
+                      uuidFieldName="spot_check_person_uuid"
+                      idFieldName="spot_check_person_id"
+                      nameFieldName="spot_check_person_name"
+                      label={t('app.kuaizhizao.equipment.fieldSpotCheckPerson')}
+                      placeholder={t('app.kuaizhizao.equipment.phSpotCheckPerson')}
+                      formRef={formRef}
+                    />
+                  </Col>
+                </Row>
+              ),
+            },
+            {
+              key: 'purchase',
+              label: t('app.kuaizhizao.equipment.tabPurchase'),
+              children: (
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <ProFormDatePicker
+                      name="purchase_date"
+                      label={t('app.kuaizhizao.equipment.fieldPurchaseDate')}
+                      placeholder={t('app.kuaizhizao.equipment.phPurchaseDate')}
+                      formItemProps={formDateFormItemProps}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormDatePicker
+                      name="installation_date"
+                      label={t('app.kuaizhizao.equipment.fieldInstallationDate')}
+                      placeholder={t('app.kuaizhizao.equipment.phInstallationDate')}
+                      formItemProps={formDateFormItemProps}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <ProFormDigit
+                      name="warranty_period"
+                      label={t('app.kuaizhizao.equipment.fieldWarrantyPeriod')}
+                      placeholder={t('app.kuaizhizao.equipment.phWarrantyPeriod')}
+                      min={0}
+                    />
+                  </Col>
+                  <Col span={24}>
+                    <ProFormText
+                      name="qr_bind_code"
+                      label={t('app.kuaizhizao.equipment.fieldQrBindCode')}
+                      placeholder={t('app.kuaizhizao.equipment.phQrBindCode')}
+                      extra={t('app.kuaizhizao.equipment.fieldQrBindCodeHint')}
+                      fieldProps={{
+                        addonAfter: (
+                          <Button
+                            type="link"
+                            size="small"
+                            onClick={() => {
+                              const code = formRef.current?.getFieldValue?.('code');
+                              if (code) {
+                                formRef.current?.setFieldsValue?.({ qr_bind_code: String(code) });
+                              }
+                            }}
+                          >
+                            {t('app.kuaizhizao.equipment.fillQrBindFromCode')}
+                          </Button>
+                        ),
+                      }}
+                    />
+                  </Col>
+                </Row>
+              ),
+            },
+            {
+              key: 'attachments',
+              label: t('app.kuaizhizao.equipment.tabAttachments'),
+              children: (
+                <Row gutter={16}>
+                  <CustomFieldsFormSection
+                    customFields={equipmentFormCustomFields}
+                    customFieldValues={equipmentFormCustomFieldValues}
+                    gridColumns={2}
+                    embedInParentRow
+                  />
+                  <Col span={24}>
+                    <ProFormUploadButton
+                      name="photo"
+                      label={t('app.kuaizhizao.equipment.fieldPhoto')}
+                      max={1}
+                      extra={t('app.kuaizhizao.equipment.fieldPhotoHint')}
+                      fieldProps={{
+                        listType: 'picture-card',
+                        accept: '.jpg,.jpeg,.png,.gif,.webp',
+                        beforeUpload: (file) => {
+                          const isLt20M = (file.size ?? 0) / 1024 / 1024 < 20;
+                          if (!isLt20M) {
+                            messageApi.error(t('app.kuaizhizao.equipment.photoSizeLimit'));
+                            return Upload.LIST_IGNORE;
+                          }
+                          return true;
+                        },
+                        customRequest: async (options) => {
+                          try {
+                            const res = await uploadMultipleFiles([options.file as File], {
+                              category: 'equipment_photo',
+                            });
+                            options.onSuccess?.(res[0], options.file as any);
+                          } catch (err) {
+                            options.onError?.(err as Error);
+                          }
+                        },
+                      }}
+                    />
+                  </Col>
+                  <Col span={24}>
+                    <DocumentAttachmentsField category="equipment_attachments" />
+                  </Col>
+                  <Col span={24}>
+                    <ProFormTextArea
+                      name="description"
+                      label={t('common.remark')}
+                      placeholder={t('app.kuaizhizao.equipment.phDescription')}
+                      fieldProps={{ rows: 3 }}
+                    />
+                  </Col>
+                  <Col span={24}>
+                    <ProFormSwitch name="is_active" label={t('app.kuaizhizao.equipment.fieldIsActive')} />
+                  </Col>
+                </Row>
+              ),
+            },
+          ]}
+        />
       </FormModalTemplate>
 
       {PrintModal}
