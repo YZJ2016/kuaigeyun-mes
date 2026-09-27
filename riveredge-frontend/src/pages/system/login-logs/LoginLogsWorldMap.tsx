@@ -13,6 +13,7 @@ import {
   LoginLogMapPointsResponse,
 } from '../../../services/loginLog';
 import { formatDateTimeBySiteSetting } from '../../../utils/format';
+import { useEchartsInstance } from '../../../hooks/useEchartsInstance';
 
 echarts.use([
   MapChart,
@@ -108,9 +109,9 @@ export const LoginLogsWorldMap: React.FC<LoginLogsWorldMapProps> = ({
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<echarts.ECharts | null>(null);
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState<LoginLogMapPointsResponse | null>(null);
+  const { getOrCreate } = useEchartsInstance(containerRef, Boolean(payload?.items.length));
 
   useEffect(() => {
     let cancelled = false;
@@ -237,28 +238,11 @@ export const LoginLogsWorldMap: React.FC<LoginLogsWorldMapProps> = ({
   useLayoutEffect(() => {
     if (!containerRef.current || !payload?.items.length) return;
     ensureWorldMapRegistered();
-    const el = containerRef.current;
-    if (!chartRef.current) {
-      chartRef.current = echarts.init(el);
-    }
-    chartRef.current.setOption(option, true);
-    chartRef.current.resize();
-
-    const ro = new ResizeObserver(() => {
-      chartRef.current?.resize();
-    });
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-    };
-  }, [option, payload?.items.length]);
-
-  useEffect(() => {
-    return () => {
-      chartRef.current?.dispose();
-      chartRef.current = null;
-    };
-  }, []);
+    const chart = getOrCreate();
+    if (!chart) return;
+    chart.setOption(option, true);
+    chart.resize();
+  }, [option, payload?.items.length, getOrCreate]);
 
   if (loading) {
     return (

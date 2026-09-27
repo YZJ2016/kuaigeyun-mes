@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Empty, Modal, Result, Space, Spin, Table, Typography } from 'antd';
-import { Line } from '@ant-design/charts';
+import { ChartSuspense, LazyLine } from '../../../../components/common/lazyAntCharts';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { formatDateBySiteSetting, formatCurrencyPrice } from '../../../../utils/format';
@@ -172,21 +172,23 @@ export const PartnerMaterialPriceTrendModal: React.FC<PartnerMaterialPriceTrendM
 
           {chartData.length > 0 ? (
             <div style={{ height: 220, marginBottom: 16 }}>
-              <Line
-                data={chartData}
-                xField="date"
-                yField="price"
-                shapeField="smooth"
-                axis={{
-                  x: { title: false },
-                  y: { title: false, labelFormatter: (value: number) => formatCurrencyPrice(value) },
-                }}
-                tooltip={{
-                  title: (datum: { date?: string; order_code?: string }) =>
-                    datum.order_code ? `${datum.date} ${datum.order_code}` : datum.date,
-                }}
-                autoFit
-              />
+              <ChartSuspense>
+                <LazyLine
+                  data={chartData}
+                  xField="date"
+                  yField="price"
+                  shapeField="smooth"
+                  axis={{
+                    x: { title: false },
+                    y: { title: false, labelFormatter: (value: number) => formatCurrencyPrice(value) },
+                  }}
+                  tooltip={{
+                    title: (datum: { date?: string; order_code?: string }) =>
+                      datum.order_code ? `${datum.date} ${datum.order_code}` : datum.date,
+                  }}
+                  autoFit
+                />
+              </ChartSuspense>
             </div>
           ) : null}
 

@@ -25,7 +25,7 @@ import {
 import { WarningOutlined, CheckCircleOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
-import { Column } from '@ant-design/charts';
+import { ChartSuspense, LazyColumn } from '../../../../../components/common/lazyAntCharts';
 import { apiRequest } from '../../../../../services/api';
 import dayjs, { Dayjs } from 'dayjs';
 import { formatDateTime, todaySiteDateString } from '../../../../../utils/format';
@@ -320,7 +320,9 @@ const DocumentEfficiencyPage: React.FC = () => {
                     {t('app.kuaireport.analysis.efficiency.nodeChart', { defaultValue: '节点耗时统计' })}
                   </Typography.Title>
                   <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-                    <Column {...nodeStatsConfig} height={300} />
+                    <ChartSuspense>
+                      <LazyColumn {...nodeStatsConfig} height={300} />
+                    </ChartSuspense>
                   </div>
                 </>
               )}

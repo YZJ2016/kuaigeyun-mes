@@ -180,7 +180,7 @@ import {
 } from '../../../utils/giftLineUi';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../constants/fieldPermissionResources';
-import { Area } from '@ant-design/charts';
+import { ChartSuspense, LazyArea } from '../../../../../components/common/lazyAntCharts';
 import {
   listSalesOrders,
   getSalesOrder,
@@ -4363,22 +4363,24 @@ const SalesOrdersPage: React.FC = () => {
   const renderTrendChart = (data: { date: string; value: number }[] = [], color: string) => {
     if (!data || data.length === 0) return null;
     return (
-      <Area
-        data={data}
-        xField="date"
-        yField="value"
-        padding={0}
-        axis={false}
-        colorField={() => color}
-        shapeField="smooth"
-        style={{
-          fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
-          fillOpacity: 0.1,
-          stroke: strokeColorWithAlpha(color),
-          lineWidth: 1,
-        }}
-        autoFit
-      />
+      <ChartSuspense>
+        <LazyArea
+          data={data}
+          xField="date"
+          yField="value"
+          padding={0}
+          axis={false}
+          colorField={() => color}
+          shapeField="smooth"
+          style={{
+            fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
+            fillOpacity: 0.1,
+            stroke: strokeColorWithAlpha(color),
+            lineWidth: 1,
+          }}
+          autoFit
+        />
+      </ChartSuspense>
     );
   };
 

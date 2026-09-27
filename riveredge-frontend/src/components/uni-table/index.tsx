@@ -79,149 +79,6 @@ import { UniTableDataActionIconOnlyContext } from './dataActionIconOnlyContext'
 // 懒加载：UniImport 内含 UniverJS（约 2MB+），仅在用户点击导入时加载
 const LazyUniImport = lazy(() => import('../uni-import'))
 
-/** 工具栏 DOM 尚未就绪时的回退：整表宽度低于此值则打印/导入/导出/同步仅图标 */
-const DATA_ACTION_ICON_ONLY_MAX_WIDTH = 1280
-
-/** 工具栏左簇 / 数据能力 / 设定图标之间的间距预算 */
-const TOOLBAR_CLUSTER_GAP = 16
-
-/**
- * rc-table 的粘性 left/right 来自测宽行的一次性记录。
- * 操作列和托盘宽度在那次记录之后才提交，首帧固定列会按旧偏移画出，
- * 绘制后再被 ResizeObserver 挪到新位置。中间列只用 col 宽，所以不动。
- * 这里在绘制前按当前测宽行写回表头 col 与固定列偏移，与随后的实测一致。
- */
-function syncFixedColumnStickyOffsets(root: HTMLElement): void {
-  const container = root.querySelector<HTMLElement>('.uni-table-pro-table .ant-table-wrapper .ant-table-container')
-  if (!container) return
-  const measureRow = container.querySelector<HTMLElement>('tr.ant-table-measure-row')
-  if (!measureRow || measureRow.children.length === 0) return
-  const widths = Array.from(measureRow.children, (cell) => (cell as HTMLElement).offsetWidth)
-  if (widths.every((width) => width <= 0)) return
-
-  const gutter = root.classList.contains('uni-table-scroll-y-mode')
-    ? getUniTableVerticalScrollbarWidth()
-    : 0
-  const holders = [
-    container.querySelector<HTMLElement>(':scope > .ant-table-header'),
-    container.querySelector<HTMLElement>(':scope > .ant-table-body'),
-    container.querySelector<HTMLElement>(':scope > .ant-table-summary'),
-    container.querySelector<HTMLElement>(':scope > .ant-table-content'),
-  ].filter((holder): holder is HTMLElement => holder != null)
-
-  holders.forEach((holder) => {
-    const table = holder.firstElementChild
-    if (!(table instanceof HTMLTableElement)) return
-    const withGutter =
-      gutter > 0 &&
-      (holder.classList.contains('ant-table-header') || holder.classList.contains('ant-table-summary'))
-    const colgroup = Array.from(table.children).find((el) => el.tagName === 'COLGROUP')
-    const cols = colgroup
-      ? (Array.from(colgroup.children).filter((el) => el.tagName === 'COL') as HTMLElement[])
-      : []
-    const dataColCount =
-      withGutter && cols.length === widths.length + 1 ? widths.length : Math.min(widths.length, cols.length)
-    const indexRow = Array.from(table.rows).find((row) => {
-      if (row.classList.contains('ant-table-measure-row')) return false
-      const dataCells = Array.from(row.cells).filter(
-        (cell) => !cell.classList.contains('ant-table-cell-scrollbar'),
-      )
-      return dataCells.length === widths.length
-    })
-    const indexCells = indexRow
-      ? Array.from(indexRow.cells).filter((cell) => !cell.classList.contains('ant-table-cell-scrollbar'))
-      : []
-    for (let i = 0; i < dataColCount; i += 1) {
-      const cell = indexCells[i]
-      const col = cols[i]
-      if (!cell || !col) continue
-      const fixed =
-        cell.classList.contains('ant-table-cell-fix-left') ||
-        cell.classList.contains('ant-table-cell-fix-right')
-      if (!fixed) continue
-      const width = widths[i]
-      if (!(width > 0)) continue
-      const next = `${width}px`
-      if (col.style.width !== next) col.style.width = next
-    }
-
-    const rightGutter = withGutter ? gutter : 0
-    for (const row of table.rows) {
-      if (row.classList.contains('ant-table-measure-row')) continue
-      applyFixedRowOffsets(row, widths, rightGutter)
-    }
-  })
-}
-
-function applyFixedRowOffsets(row: HTMLElement, widths: number[], rightGutter: number): void {
-  const cells: HTMLElement[] = []
-  for (let i = 0; i < row.children.length; i += 1) {
-    const cell = row.children[i] as HTMLElement
-    if (cell.classList.contains('ant-table-cell-scrollbar')) continue
-    cells.push(cell)
-  }
-  const useMeasure = cells.length === widths.length
-  let left = 0
-  const rightIndexes: number[] = []
-  for (let i = 0; i < cells.length; i += 1) {
-    const cell = cells[i]
-    const width = useMeasure ? widths[i] : cell.offsetWidth
-    if (cell.classList.contains('ant-table-cell-fix-left')) {
-      const next = `${left}px`
-      if (cell.style.left !== next) cell.style.left = next
-      left += width
-    }
-    if (cell.classList.contains('ant-table-cell-fix-right')) rightIndexes.push(i)
-  }
-  let right = rightGutter
-  for (let k = rightIndexes.length - 1; k >= 0; k -= 1) {
-    const index = rightIndexes[k]
-    const cell = cells[index]
-    const next = `${right}px`
-    if (cell.style.right !== next) cell.style.right = next
-    right += useMeasure ? widths[index] : cell.offsetWidth
-  }
-}
-
-/**
- * 列宽预算用表格托盘的内容宽，不读 `.ant-table-body` / `.ant-table-content`。
- * 滚动口宽度会随刚设上的列宽变化，读它会在首帧之后再改一版标题列宽。
- */
-function readStableTableBudgetWidth(root: HTMLElement): number {
-  const wrapper = root.querySelector('.uni-table-pro-table .ant-table-wrapper') as HTMLElement | null
-  const host = wrapper ?? root
-  const tableContainer = host.querySelector('.ant-table-container') as HTMLElement | null
-  let borderX = 0
-  if (tableContainer) {
-    const style = getComputedStyle(tableContainer)
-    borderX = (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.borderRightWidth) || 0)
-  }
-  return Math.max(0, Math.round(host.clientWidth - borderX))
-}
-
-/**
- * 测量元素「内容实际占用」宽度。
- * ProTable 工具栏 left/right 常带 flex:1，直接读 scrollWidth 会被撑满，导致永远判定为仅图标。
- */
-
-function measureOccupiedWidth(el: HTMLElement | null | undefined): number {
-  if (!el) return 0
-  const kids = Array.from(el.children) as HTMLElement[]
-  if (kids.length === 0) return 0
-  let minL = Infinity
-  let maxR = -Infinity
-  for (const kid of kids) {
-    const r = kid.getBoundingClientRect()
-    if (r.width <= 0) continue
-    minL = Math.min(minL, r.left)
-    maxR = Math.max(maxR, r.right)
-  }
-  if (!Number.isFinite(minL) || !Number.isFinite(maxR) || maxR <= minL) {
-    return Math.ceil(el.scrollWidth) || 0
-  }
-  return Math.ceil(maxR - minL)
-}
-
 /** 行选中 key 按内容比较（避免 `[]` 新引用误触发受控同步） */
 function areRowKeysEqual(a: React.Key[], b: React.Key[]): boolean {
   return a.length === b.length && a.every((key, index) => key === b[index])
@@ -288,16 +145,12 @@ import {
 } from '../uni-action'
 import { UNI_TABLE_STACKED_IDENTITY_CLASS } from './stackedPrimaryColumn'
 import { LIST_PAGE_TABLE_SCROLL, getViewportHeightExpr } from '../layout-templates/constants'
-import {
-  shouldEnableUniTableBodyScrollY,
-  measureTableBodyOverflowsViewport,
-  measureFillViewportTableBodyScrollY,
-} from './uniTableScrollPolicy'
-import { resolveUniReportTableBodyScrollY } from '../uni-report/uniReportScrollPolicy'
+import { shouldEnableUniTableBodyScrollY } from './uniTableScrollPolicy'
+import { useUniTableLayoutEffects } from './useUniTableLayoutEffects'
+import { syncFixedColumnStickyOffsets } from './uniTableDomMeasure'
 import {
   buildUniTableFillerColumn,
   getUniTableLifecycleCellClassName,
-  getUniTableVerticalScrollbarWidth,
   isUniTableAuditPhaseColumn,
   isUniTableAuditStackedColumn,
   isUniTableDetailProgressColumn,
@@ -3397,180 +3250,34 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     statCardsCtx?.tableScrollOffsetPx,
   ])
 
-  React.useLayoutEffect(() => {
-    if (!fillViewportBody || !proTableBodyScrollYEnabled) {
-      setFillViewportMeasuredScrollY(undefined)
-      return
-    }
-    const root = containerRef.current
-    if (!root) return
-
-    const measure = () => {
-      const next = measureFillViewportTableBodyScrollY(root)
-      if (next == null) return
-      setFillViewportMeasuredScrollY((prev) => (prev === next ? prev : next))
-    }
-
-    measure()
-    const ro =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null
-    ro?.observe(root)
-    const wrapper = root.querySelector('.ant-table-wrapper')
-    if (ro && wrapper) ro.observe(wrapper)
-    const summaryEl = root.querySelector('.ant-table-summary')
-    if (ro && summaryEl) ro.observe(summaryEl)
-    const pager = root.querySelector('.ant-table-pagination')
-    if (ro && pager) ro.observe(pager)
-    window.addEventListener('resize', measure)
-    return () => {
-      ro?.disconnect()
-      window.removeEventListener('resize', measure)
-    }
-  }, [
+  useUniTableLayoutEffects({
+    containerRef,
+    tableBodyPaneRef,
     fillViewportBody,
     proTableBodyScrollYEnabled,
-    tableData.length,
-    showDelayedLoading,
-    columnStructureSig,
-    tableSummaryProp,
-    currentViewType,
-  ])
-
-  React.useLayoutEffect(() => {
-    if (!reportLayout) {
-      reportMeasuredScrollYRef.current = undefined
-      setReportMeasuredScrollY(undefined)
-      return
-    }
-    if (currentViewType !== 'table' && currentViewType !== 'detailTable') {
-      reportMeasuredScrollYRef.current = undefined
-      setReportMeasuredScrollY(undefined)
-      return
-    }
-
-    const root = containerRef.current
-    if (!root) return
-
-    const allowTurnOff = viewportRemeasureKeyRef.current !== viewportRemeasureKey
-    viewportRemeasureKeyRef.current = viewportRemeasureKey
-
-    const applyMeasure = (canTurnOff: boolean) => {
-      const next = resolveUniReportTableBodyScrollY(root, reportHasFixedSummary)
-      setReportMeasuredScrollY((prev) => {
-        if (next == null) {
-          if (prev == null) return prev
-          if (canTurnOff) {
-            reportMeasuredScrollYRef.current = undefined
-            return undefined
-          }
-          return prev
-        }
-        if (prev === next) return prev
-        reportMeasuredScrollYRef.current = next
-        return next
-      })
-    }
-
-    applyMeasure(allowTurnOff)
-    const ro =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => applyMeasure(false))
-        : null
-    ro?.observe(root)
-    const wrapper = root.querySelector('.ant-table-wrapper')
-    if (ro && wrapper) ro.observe(wrapper)
-    const summaryEl = root.querySelector('.ant-table-summary')
-    if (ro && summaryEl) ro.observe(summaryEl)
-    const pager = root.querySelector('.ant-table-pagination')
-    if (ro && pager) ro.observe(pager)
-    const scrollBody = root.querySelector('.ant-table-body')
-    if (ro && scrollBody) ro.observe(scrollBody)
-    const onWindowResize = () => applyMeasure(true)
-    window.addEventListener('resize', onWindowResize)
-    return () => {
-      ro?.disconnect()
-      window.removeEventListener('resize', onWindowResize)
-    }
-  }, [
+    setFillViewportMeasuredScrollY,
     reportLayout,
     reportHasFixedSummary,
+    reportMeasuredScrollYRef,
+    setReportMeasuredScrollY,
+    policyScrollYEnabled,
+    setViewportScrollForced,
     viewportRemeasureKey,
+    viewportRemeasureKeyRef,
     currentViewType,
     columnStructureSig,
     showDelayedLoading,
     tableSummaryProp,
-  ])
-
-  React.useLayoutEffect(() => {
-    const turnOffForced = () => setViewportScrollForced((prev) => (prev ? false : prev))
-    const turnOnForced = () => setViewportScrollForced((prev) => (prev ? prev : true))
-
-    if (reportLayout) {
-      turnOffForced()
-      return
-    }
-
-    if (policyScrollYEnabled) {
-      viewportRemeasureKeyRef.current = viewportRemeasureKey
-      turnOffForced()
-      return
-    }
-    if (tableData.length === 0) {
-      viewportRemeasureKeyRef.current = viewportRemeasureKey
-      turnOffForced()
-      return
-    }
-    if (currentViewType !== 'table' && currentViewType !== 'detailTable') {
-      viewportRemeasureKeyRef.current = viewportRemeasureKey
-      turnOffForced()
-      return
-    }
-
-    const root = containerRef.current
-    if (!root) return
-
-    // 数据/分页/视图变化才允许关回。列宽、loading、拆表后的二次测量只能开不能关，
-    // 否则 natural ↔ scroll.y 在 useLayoutEffect 里同步振荡（生产 React #185）。
-    const allowTurnOff = viewportRemeasureKeyRef.current !== viewportRemeasureKey
-    viewportRemeasureKeyRef.current = viewportRemeasureKey
-    const overflows = measureTableBodyOverflowsViewport(root)
-    if (overflows) {
-      turnOnForced()
-    } else if (allowTurnOff) {
-      turnOffForced()
-    }
-
-    const observeOverflowOn = () => {
-      if (!measureTableBodyOverflowsViewport(root)) return
-      turnOnForced()
-    }
-
-    const ro =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => observeOverflowOn())
-        : null
-    const scrollBody = root.querySelector('.ant-table-body')
-    const tbody = (scrollBody?.querySelector('.ant-table-tbody') ??
-      root.querySelector('.ant-table-tbody')) as Element | null
-    if (ro && tbody) ro.observe(tbody)
-    if (ro && scrollBody) ro.observe(scrollBody)
-    const tableWrapper = root.querySelector('.ant-table-wrapper')
-    if (ro && tableWrapper) ro.observe(tableWrapper)
-    window.addEventListener('resize', observeOverflowOn)
-    return () => {
-      ro?.disconnect()
-      window.removeEventListener('resize', observeOverflowOn)
-    }
-    // 依赖列结构签名而非 effectiveTableColumns：实测会改列宽并生成新 columns 引用，
-    // 若再依赖 columns 会在树表展开时 useLayoutEffect → setState → 同步死循环。
-  }, [
-    policyScrollYEnabled,
-    viewportRemeasureKey,
-    currentViewType,
-    columnStructureSig,
-    showDelayedLoading,
-    reportLayout,
-  ])
+    tableDataLength: tableData.length,
+    setContainerLayoutWidth,
+    setDataActionIconOnly,
+    dataActionIconOnlyRef,
+    labeledDataActionsWidthRef,
+    enableRowSelection,
+    selectedRowKeysLength: selectedRowKeys.length,
+    isMobile,
+    setSelectionAlertLayout,
+  })
 
   /**
    * 操作列宽度实测：动作条是 max-content，量到的是内容固有宽度，不随列宽变化，
@@ -3650,104 +3357,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     showDelayedLoading,
     layoutPlan.mode,
   ])
-
-  React.useLayoutEffect(() => {
-    const root = containerRef.current
-    if (!root) return
-
-    const syncContainerLayout = () => {
-      // 只用托盘宽度。纵向滚动条由布局引擎按 scroll.y 扣除，不再改读滚动口。
-      const width = readStableTableBudgetWidth(root)
-      if (width > 0) {
-        setContainerLayoutWidth((prev) => (prev === width ? prev : width))
-      }
-
-      const toolbar = root.querySelector(
-        '.ant-pro-table-list-toolbar-container',
-      ) as HTMLElement | null
-      if (!toolbar) {
-        const next = width > 0 && width < DATA_ACTION_ICON_ONLY_MAX_WIDTH
-        setDataActionIconOnly((prev) => (prev === next ? prev : next))
-        return
-      }
-
-      const left = toolbar.querySelector('.ant-pro-table-list-toolbar-left') as HTMLElement | null
-      const dataActions = toolbar.querySelector('.uni-table-data-actions') as HTMLElement | null
-      const settings = toolbar.querySelector(
-        '.ant-pro-table-list-toolbar-setting-items',
-      ) as HTMLElement | null
-
-      // 仅在「带文案」时刷新基准宽，icon-only 时继续用该值判断是否恢复文案（防振荡）
-      if (dataActions && !dataActionIconOnlyRef.current) {
-        labeledDataActionsWidthRef.current = measureOccupiedWidth(dataActions)
-      }
-      const labeledNeed =
-        labeledDataActionsWidthRef.current || measureOccupiedWidth(dataActions)
-
-      const leftNeed = measureOccupiedWidth(left)
-      const optionsWidth = measureOccupiedWidth(settings)
-
-      // 剩余给「打印/导入/导出/同步」的宽度；够放文案则显示文字，否则仅图标
-      const available = toolbar.clientWidth - leftNeed - optionsWidth - TOOLBAR_CLUSTER_GAP
-      const next = labeledNeed > 0 && available < labeledNeed
-      setDataActionIconOnly((prev) => (prev === next ? prev : next))
-    }
-
-    syncContainerLayout()
-    const ro =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => syncContainerLayout()) : null
-    ro?.observe(root)
-    const toolbar = root.querySelector('.ant-pro-table-list-toolbar-container')
-    if (ro && toolbar) ro.observe(toolbar)
-    const left = root.querySelector('.ant-pro-table-list-toolbar-left')
-    const right = root.querySelector('.ant-pro-table-list-toolbar-right')
-    const dataActionsEl = root.querySelector('.uni-table-data-actions')
-    const settingsEl = root.querySelector('.ant-pro-table-list-toolbar-setting-items')
-    if (ro && left) ro.observe(left)
-    if (ro && right) ro.observe(right)
-    if (ro && dataActionsEl) ro.observe(dataActionsEl)
-    if (ro && settingsEl) ro.observe(settingsEl)
-    window.addEventListener('resize', syncContainerLayout)
-    return () => {
-      ro?.disconnect()
-      window.removeEventListener('resize', syncContainerLayout)
-    }
-  }, [currentViewType])
-
-  React.useLayoutEffect(() => {
-    if (!enableRowSelection || selectedRowKeys.length === 0) return
-    const host = tableBodyPaneRef.current
-    if (!host) return
-
-    const syncLayout = () => {
-      const pager = host.querySelector('.ant-table-wrapper .ant-table-pagination') as HTMLElement | null
-      if (!pager) return
-      const hostRect = host.getBoundingClientRect()
-      const pagerRect = pager.getBoundingClientRect()
-      const next = {
-        top: Math.max(0, pagerRect.top - hostRect.top),
-        height: Math.max(1, pagerRect.height),
-      }
-      setSelectionAlertLayout((prev) => {
-        if (!prev) return next
-        if (Math.abs(prev.top - next.top) < 0.5 && Math.abs(prev.height - next.height) < 0.5) return prev
-        return next
-      })
-    }
-
-    syncLayout()
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => syncLayout()) : null
-    if (ro) {
-      ro.observe(host)
-      const pager = host.querySelector('.ant-table-wrapper .ant-table-pagination') as HTMLElement | null
-      if (pager) ro.observe(pager)
-    }
-    window.addEventListener('resize', syncLayout)
-    return () => {
-      window.removeEventListener('resize', syncLayout)
-      ro?.disconnect()
-    }
-  }, [enableRowSelection, selectedRowKeys.length, currentViewType, isMobile])
 
   const showViewSwitcher = !isMobile && Boolean(viewTypes && viewTypes.length > 1)
   const showSearchToolbarRow =
