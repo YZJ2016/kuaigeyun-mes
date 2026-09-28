@@ -49,6 +49,7 @@ class SalesOrderCapabilities(BaseModel):
     push_shipment_notice: ActionCapability
     push_sales_delivery: ActionCapability
     push_invoice: ActionCapability
+    push_prepayment: ActionCapability
     push_sales_return: ActionCapability
     push_delivery_project: ActionCapability
     push_purchase_requisition: ActionCapability
@@ -197,6 +198,7 @@ class PurchaseOrderCapabilities(BaseModel):
     push_receipt_notice: ActionCapability
     push_receipt: ActionCapability
     push_invoice: ActionCapability
+    push_prepayment: ActionCapability
     push_purchase_return: ActionCapability
     push_incoming_inspection: ActionCapability
     create_change_order: ActionCapability
@@ -593,6 +595,12 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_order.push_invoice.already_fully_invoiced": "该采购单可开票金额已全部开票，删除未审核发票后可再次下推",
     "purchase_order.push_invoice.no_prepayment": "采购单未填写预付款金额，无法按预付款开票",
     "purchase_order.push_invoice.prepayment_exceeds_remaining": "预付款金额已超过可开票余额",
+    "purchase_order.push_prepayment.not_audited": "只有已审核或已确认的采购单才能下推预付付款单",
+    "purchase_order.push_prepayment.no_amount": "采购单未填写预付款金额，无法下推预付付款单",
+    "purchase_order.push_prepayment.already_exists": "该采购订单已关联预付付款单",
+    "sales_order.push_prepayment.not_audited": "只有已审核或已确认的销售订单才能下推预收收款单",
+    "sales_order.push_prepayment.no_amount": "销售订单未填写预收款金额，无法下推预收收款单",
+    "sales_order.push_prepayment.already_exists": "该销售订单已关联预收收款单",
     "purchase_order.push_purchase_return.not_audited": "只有已审核或已确认的采购单才能下推采购退货",
     "purchase_order.push_purchase_return.no_received": "采购单尚无已入库数量，无法下推采购退货",
     "purchase_order.push_purchase_return.no_lines": "没有可退货的采购单明细",

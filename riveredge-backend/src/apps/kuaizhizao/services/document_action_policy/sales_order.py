@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
@@ -144,6 +145,7 @@ def derive_sales_order_capabilities(
     has_purchasable_remaining: bool = False,
     require_purchase_requisition: bool = False,
     require_audit_before_print: bool = False,
+    has_prepayment_receipt: bool = False,
 ) -> SalesOrderCapabilities:
     status = getattr(order, "status", None)
     review_status = getattr(order, "review_status", None)
@@ -331,6 +333,22 @@ def derive_sales_order_capabilities(
         push_invoice_reason if not push_invoice_allowed else None,
     )
 
+    prepay_allowed = False
+    prepay_reason = push_reason or "sales_order.push_prepayment.not_audited"
+    prepay_amount = Decimal(str(getattr(order, "prepayment_amount", 0) or 0))
+    if push_ok:
+        if prepay_amount <= 0:
+            prepay_reason = "sales_order.push_prepayment.no_amount"
+        elif has_prepayment_receipt:
+            prepay_reason = "sales_order.push_prepayment.already_exists"
+        else:
+            prepay_allowed = True
+            prepay_reason = None
+    push_prepayment_cap = _cap(
+        prepay_allowed,
+        prepay_reason if not prepay_allowed else None,
+    )
+
     # push_sales_return — 须已审核且有已交货数量
     push_return_allowed = False
     push_return_reason = push_reason or "sales_order.push_return.not_allowed"
@@ -433,6 +451,7 @@ def derive_sales_order_capabilities(
         push_shipment_notice=push_shipment_cap,
         push_sales_delivery=push_delivery_cap,
         push_invoice=push_invoice_cap,
+        push_prepayment=push_prepayment_cap,
         push_sales_return=push_return_cap,
         push_delivery_project=push_delivery_project_cap,
         push_purchase_requisition=push_pr_cap,
@@ -459,6 +478,7 @@ def assert_sales_order_capability(
     has_purchasable_remaining: bool = False,
     require_purchase_requisition: bool = False,
     require_audit_before_print: bool = False,
+    has_prepayment_receipt: bool = False,
 ) -> None:
     caps = derive_sales_order_capabilities(
         order,
@@ -475,6 +495,7 @@ def assert_sales_order_capability(
         has_purchasable_remaining=has_purchasable_remaining,
         require_purchase_requisition=require_purchase_requisition,
         require_audit_before_print=require_audit_before_print,
+        has_prepayment_receipt=has_prepayment_receipt,
     )
     cap_map = {
         "update": caps.update,
@@ -492,6 +513,7 @@ def assert_sales_order_capability(
         "push_shipment_notice": caps.push_shipment_notice,
         "push_sales_delivery": caps.push_sales_delivery,
         "push_invoice": caps.push_invoice,
+        "push_prepayment": caps.push_prepayment,
         "push_sales_return": caps.push_sales_return,
         "push_delivery_project": caps.push_delivery_project,
         "push_purchase_requisition": caps.push_purchase_requisition,

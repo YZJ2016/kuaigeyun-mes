@@ -31,6 +31,7 @@ export interface PurchaseOrderCapabilities {
   push_receipt_notice?: ActionCapability;
   push_receipt?: ActionCapability;
   push_invoice?: ActionCapability;
+  push_prepayment?: ActionCapability;
   push_purchase_return?: ActionCapability;
   push_incoming_inspection?: ActionCapability;
   create_change_order?: ActionCapability;
@@ -85,6 +86,20 @@ export interface PushToInvoiceRequest {
   total_amount?: number;
   /** 票面发票代码/号码；空则后端仍写「待补全」 */
   invoice_number?: string;
+}
+
+export interface PushToPrepaymentRequest {
+  amount?: number;
+  bank_account_id?: number;
+  notes?: string;
+}
+
+export interface PushToPrepaymentResponse {
+  order_id?: number;
+  order_code?: string;
+  payment_id?: number;
+  payment_code?: string;
+  total_amount?: number;
 }
 
 export interface PushToReceiptNoticeRequest {
@@ -427,6 +442,16 @@ export async function previewPushToInvoice(orderId: number): Promise<DocumentPus
 }
 
 /**
+ * 下推预付付款单预览
+ */
+export async function previewPushToPrepayment(orderId: number): Promise<DocumentPushPreview> {
+  return apiRequest<DocumentPushPreview>(
+    `/apps/kuaizhizao/purchase-orders/${orderId}/push-to-prepayment/preview`,
+    { method: 'GET' },
+  );
+}
+
+/**
  * 下推采购退货预览
  */
 export async function previewPushToPurchaseReturn(orderId: number): Promise<DocumentPushPreview> {
@@ -588,6 +613,22 @@ export async function pushPurchaseOrderToInvoice(
     method: 'POST',
     data: data ?? {},
   });
+}
+
+/**
+ * 下推到预付付款单
+ */
+export async function pushPurchaseOrderToPrepayment(
+  id: number,
+  data?: PushToPrepaymentRequest,
+): Promise<PushToPrepaymentResponse> {
+  return apiRequest<PushToPrepaymentResponse>(
+    `/apps/kuaizhizao/purchase-orders/${id}/push-to-prepayment`,
+    {
+      method: 'POST',
+      data: data ?? {},
+    },
+  );
 }
 
 export async function pushPurchaseOrderToPurchaseReturn(data: {

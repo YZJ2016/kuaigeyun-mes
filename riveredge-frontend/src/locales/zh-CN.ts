@@ -10433,6 +10433,9 @@ export default {
   'app.kuaizhizao.salesOrder.pushToInvoiceConfirm': '确定要将该销售订单下推到销售发票吗？',
   'app.kuaizhizao.salesOrder.invoicePushRequiresAllLines': '销售发票须按全部订单明细下推，请确认全部可下推行',
   'app.kuaizhizao.salesOrder.invoiceCreated': '已生成销售发票',
+  'app.kuaizhizao.salesOrder.pushPrepaymentAmount': '预收金额',
+  'app.kuaizhizao.salesOrder.pushPrepaymentAmountInvalid': '请填写大于 0 的预收金额',
+  'app.kuaizhizao.salesOrder.pushPrepaymentSuccess': '成功生成预收收款单：{{code}}',
   'app.kuaizhizao.salesOrder.backfillSalesContractSuccess': '已补签框架合同 {{code}}',
   'app.kuaizhizao.salesOrder.reminderSent': '提醒已发送',
   'app.kuaizhizao.salesOrder.sendFailed': '发送失败',
@@ -10781,6 +10784,10 @@ export default {
   'app.kuaizhizao.purchaseOrder.pushInvoicePrepayment': '预付款金额',
   'app.kuaizhizao.purchaseOrder.pushInvoiceAmountInvalid': '请填写大于 0 的开票金额',
   'app.kuaizhizao.purchaseOrder.pushInvoiceFailed': '下推采购发票失败',
+  'app.kuaizhizao.purchaseOrder.pushPrepaymentAmount': '预付金额',
+  'app.kuaizhizao.purchaseOrder.pushPrepaymentAmountInvalid': '请填写大于 0 的预付金额',
+  'app.kuaizhizao.purchaseOrder.pushPrepaymentSuccess': '成功生成预付付款单：{{code}}',
+  'app.kuaizhizao.purchaseOrder.pushPrepaymentFailed': '下推预付付款单失败',
   'app.kuaizhizao.purchaseOrder.noReturnableQty': '采购单暂无可退货数量（已到货数量为 0）',
   'app.kuaizhizao.purchaseOrder.returnWarehouseRequired': '请选择退货仓库',
   'app.kuaizhizao.purchaseOrder.pushReturnSuccess': '成功生成采购退货单：{{code}}',
@@ -10978,6 +10985,12 @@ export default {
     '该采购单可开票金额已全部开票，删除未审核发票后可再次下推',
   'app.kuaizhizao.purchaseOrder.capability.purchase_order.push_invoice.no_prepayment':
     '采购单未填写预付款金额，无法按预付款开票',
+  'app.kuaizhizao.purchaseOrder.capability.purchase_order.push_prepayment.not_audited':
+    '只有已审核或已确认的采购单才能下推预付付款单',
+  'app.kuaizhizao.purchaseOrder.capability.purchase_order.push_prepayment.no_amount':
+    '采购单未填写预付款金额，无法下推预付付款单',
+  'app.kuaizhizao.purchaseOrder.capability.purchase_order.push_prepayment.already_exists':
+    '该采购订单已关联预付付款单',
   'app.kuaizhizao.purchaseOrder.capability.purchase_order.push_invoice.prepayment_exceeds_remaining':
     '预付款金额已超过可开票余额',
   'app.kuaizhizao.purchaseOrder.capability.purchase_order.push_purchase_return.not_audited': '只有已审核或已确认的采购单才能下推采购退货',
@@ -13190,6 +13203,12 @@ export default {
     '计算结果无建议下推数量，无需下推工单或采购',
   'app.kuaizhizao.salesOrder.capability.sales_order.push_invoice.already_fully_invoiced':
     '销售订单可开票金额已全部开票，删除未审核发票后可再次下推',
+  'app.kuaizhizao.salesOrder.capability.sales_order.push_prepayment.not_audited':
+    '只有已审核或已确认的销售订单才能下推预收收款单',
+  'app.kuaizhizao.salesOrder.capability.sales_order.push_prepayment.no_amount':
+    '销售订单未填写预收款金额，无法下推预收收款单',
+  'app.kuaizhizao.salesOrder.capability.sales_order.push_prepayment.already_exists':
+    '该销售订单已关联预收收款单',
   'app.kuaizhizao.salesOrder.capability.sales_order.push_work_order.computation_pushed':
     '销售订单已下推需求计算，不可再直推工单；请到需求计算下推工单，或先撤回计算',
   'app.kuaizhizao.salesOrder.capability.sales_order.push_work_order.no_remaining':
@@ -14322,6 +14341,12 @@ export default {
   'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_order.label': '从采购订单创建采购发票',
   'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_order.source': '采购订单',
   'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_order.target': '采购发票',
+  'app.kuaizhizao.documentAction.payment.pull_from_purchase_order.label': '从采购订单创建预付付款单',
+  'app.kuaizhizao.documentAction.payment.pull_from_purchase_order.source': '采购订单',
+  'app.kuaizhizao.documentAction.payment.pull_from_purchase_order.target': '预付付款单',
+  'app.kuaizhizao.documentAction.receipt.pull_from_sales_order.label': '从销售订单创建预收收款单',
+  'app.kuaizhizao.documentAction.receipt.pull_from_sales_order.source': '销售订单',
+  'app.kuaizhizao.documentAction.receipt.pull_from_sales_order.target': '预收收款单',
   'app.kuaizhizao.documentAction.purchase_return.pull_from_purchase_order.label': '从采购订单创建采购退货单',
   'app.kuaizhizao.documentAction.purchase_return.pull_from_purchase_order.source': '采购订单',
   'app.kuaizhizao.documentAction.purchase_return.pull_from_purchase_order.target': '采购退货单',
@@ -29058,6 +29083,22 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.material-form-process-route-perm-r01.title':
+    '编辑物料时无工艺权限不再弹「权限不足」',
+  'pages.dashboard.updateLog.entries.material-form-process-route-perm-r01.description':
+    '物料表单仅在具备工艺路线/工序/供应商读取权限时再拉列表；无权限时用物料详情中的路线名称回显，避免误报权限不足与下拉只显示 UUID。',
+  'pages.dashboard.updateLog.entries.file-preview-notfound-import-r01.title':
+    '修复文件缩略图预览接口 500',
+  'pages.dashboard.updateLog.entries.file-preview-notfound-import-r01.description':
+    '文件内容缺失时预览接口因未导入 NotFoundError 误报服务器内部错误；现正确返回不存在提示。',
+  'pages.dashboard.updateLog.entries.role-permission-version-null-unique-r01.title':
+    '修复保存角色权限时报 MultipleObjectsReturned',
+  'pages.dashboard.updateLog.entries.role-permission-version-null-unique-r01.description':
+    '权限版本表租户级记录（user_id 为空）在 PostgreSQL 下可重复，导致 bump 版本时 500。已去重、补部分唯一索引，并修正版本读写路径。',
+  'pages.dashboard.updateLog.entries.order-push-prepayment-receipt-r01.title':
+    '采购/销售订单可下推预付付款单与预收收款单',
+  'pages.dashboard.updateLog.entries.order-push-prepayment-receipt-r01.description':
+    '已审核且填写了预付/预收金额的采购订单、销售订单，可在下推菜单生成对应预付付款单或预收收款单；已关联过的单据不可重复下推，金额可在确认前调整。',
   'pages.dashboard.updateLog.entries.bank-account-statement-uniimport-r01.title':
     '银行账户导入对账单改为表单明细并可 UniImport',
   'pages.dashboard.updateLog.entries.bank-account-statement-uniimport-r01.description':
