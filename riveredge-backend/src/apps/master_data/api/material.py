@@ -194,7 +194,7 @@ def _material_group_sync_service():
     "/groups/sync-binding",
     response_model=MasterDataSyncBindingOut,
     summary="物料分组同步绑定配置",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def get_material_group_sync_binding(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -206,7 +206,7 @@ async def get_material_group_sync_binding(
     "/groups/sync-binding",
     response_model=MasterDataSyncBindingOut,
     summary="保存物料分组同步绑定配置",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def put_material_group_sync_binding(
     body: MasterDataSyncBindingUpsert,
@@ -222,7 +222,7 @@ async def put_material_group_sync_binding(
     "/groups/sync-from-source",
     response_model=MasterDataSyncFromSourceOut,
     summary="从数据接口或数据集同步物料分组",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def sync_material_groups_from_source(
     body: MasterDataSyncFromSourceRequest,
@@ -1701,7 +1701,7 @@ def _material_sync_service():
     "/sync-binding",
     response_model=MasterDataSyncBindingOut,
     summary="物料同步绑定配置",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def get_material_sync_binding(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1713,7 +1713,7 @@ async def get_material_sync_binding(
     "/sync-binding",
     response_model=MasterDataSyncBindingOut,
     summary="保存物料同步绑定配置",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def put_material_sync_binding(
     body: MasterDataSyncBindingUpsert,
@@ -1729,7 +1729,7 @@ async def put_material_sync_binding(
     "/sync-from-source",
     response_model=MasterDataSyncFromSourceOut,
     summary="从数据接口或数据集同步物料",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def sync_materials_from_source(
     body: MasterDataSyncFromSourceRequest,

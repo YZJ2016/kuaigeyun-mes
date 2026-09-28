@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'material-sync-binding-bom-perm-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-sync-binding-bom-perm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-sync-binding-bom-perm-r01.description',
+  },
+  {
     id: 'material-form-process-route-perm-r01',
     date: '2026-09-28',
     type: 'fix',
