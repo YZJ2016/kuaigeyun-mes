@@ -1,0 +1,39 @@
+{
+  "code": "kuaiiot",
+  "name": "星数采",
+  "version": "1.0.0",
+  "is_pro": true,
+  "market_category": "pro",
+  "description": "登记连接、IoT 设备与点位，收下 HTTP 入站并查看最新快照",
+  "icon": "api",
+  "author": "StarTech",
+  "entry_point": "../apps/kuaiiot/index.tsx",
+  "route_path": "/apps/kuaiiot",
+  "sort_order": 360,
+  "menu_config": {
+    "title": "星数采",
+    "icon": "api",
+    "path": "/apps/kuaiiot",
+    "permission": "kuaiiot:registry:display"
+  },
+  "permissions": [
+    "kuaiiot:registry:display",
+    "kuaiiot:connection:display",
+    "kuaiiot:connection:create",
+    "kuaiiot:device:display",
+    "kuaiiot:device:create",
+    "kuaiiot:device:update",
+    "kuaiiot:tag:create",
+    "kuaiiot:snapshot:read",
+    "kuaiiot:template:display",
+    "kuaiiot:template:create",
+    "kuaiiot:alert:display",
+    "kuaiiot:alert:create",
+    "kuaiiot:fill:read",
+    "kuaiiot:analytics:read"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
+}
