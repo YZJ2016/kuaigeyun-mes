@@ -9,6 +9,16 @@ export type UseUniReportPrintOptions = {
   filterSummary?: string;
 };
 
+/** 打印页用 document.write 拼 HTML，所有插值先转义防 XSS */
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function buildPrintHtml(options: {
   title: string;
   subtitle?: string;
@@ -20,14 +30,14 @@ function buildPrintHtml(options: {
   labels: { printedAt: string; filters: string };
 }): string {
   const { title, subtitle, filterSummary, printedAt, headers, keys, rows, labels } = options;
-  const headCells = headers.map((h) => `<th>${h}</th>`).join('');
+  const headCells = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('');
   const bodyRows = rows
     .map(
       (row) =>
-        `<tr>${keys.map((k) => `<td>${row[k] ?? ''}</td>`).join('')}</tr>`,
+        `<tr>${keys.map((k) => `<td>${escapeHtml(row[k])}</td>`).join('')}</tr>`,
     )
     .join('');
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${title}</title>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${escapeHtml(title)}</title>
 <style>
   body { font-family: "Microsoft YaHei", sans-serif; padding: 24px; color: #333; }
   h1 { text-align: center; font-size: 18px; margin: 0 0 8px; }
@@ -37,8 +47,8 @@ function buildPrintHtml(options: {
   th { background: #fafafa; }
   @media print { body { padding: 0; } }
 </style></head><body>
-<h1>${title}</h1>
-<div class="meta">${subtitle ? `<div>${subtitle}</div>` : ''}${filterSummary ? `<div>${labels.filters}: ${filterSummary}</div>` : ''}<div>${labels.printedAt}: ${printedAt}</div></div>
+<h1>${escapeHtml(title)}</h1>
+<div class="meta">${subtitle ? `<div>${escapeHtml(subtitle)}</div>` : ''}${filterSummary ? `<div>${escapeHtml(labels.filters)}: ${escapeHtml(filterSummary)}</div>` : ''}<div>${escapeHtml(labels.printedAt)}: ${escapeHtml(printedAt)}</div></div>
 <table><thead><tr>${headCells}</tr></thead><tbody>${bodyRows}</tbody></table>
 </body></html>`;
 }

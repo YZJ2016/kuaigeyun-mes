@@ -997,6 +997,36 @@ class DatasetService:
             "error": f"写入执行失败: {last_exc}",
         }
 
+    @staticmethod
+    def _build_count_sql(sql: str) -> Optional[str]:
+        """把 SELECT 包一层求全集 COUNT(*)。去末尾分号；空语句返回 None。"""
+        text = sql.strip()
+        while text.endswith(";"):
+            text = text[:-1].rstrip()
+        if not text:
+            return None
+        return f"SELECT COUNT(*) AS total FROM (\n{text}\n) AS dataset_count_q"
+
+    @staticmethod
+    async def _fetch_count(conn: Any, count_sql: Optional[str], count_args: list) -> Optional[int]:
+        """在同一连接上执行 COUNT 查询；失败返回 None 由调用方回退。"""
+        if not count_sql:
+            return None
+        try:
+            row = (
+                await conn.fetchrow(count_sql, *count_args)
+                if count_args
+                else await conn.fetchrow(count_sql)
+            )
+        except Exception:
+            return None
+        if row is None:
+            return None
+        try:
+            return int(row["total"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
     async def _execute_sql_query(
         self,
         tenant_id: int,
@@ -1077,6 +1107,9 @@ class DatasetService:
             )
 
             if db_type == "postgresql":
+                # 在追加分页前的 SQL 上外包 COUNT 求全集行数；计数失败回退当页长度，不阻断主查询
+                count_sql = self._build_count_sql(sql)
+
                 # 添加 LIMIT 和 OFFSET
                 sql_upper2 = sql.upper()
                 if "LIMIT" not in sql_upper2:
@@ -1084,6 +1117,11 @@ class DatasetService:
 
                 # 将 :param 占位符转为 asyncpg 的 $1,$2 格式
                 sql, args = self._convert_named_params_to_positional(sql, query_params)
+                count_exec, count_args = (
+                    self._convert_named_params_to_positional(count_sql, query_params)
+                    if count_sql
+                    else (None, [])
+                )
 
                 # 使用 asyncpg 直接连接执行（系统默认数据源密码从 ENV 读取）
                 import asyncpg
@@ -1105,13 +1143,14 @@ class DatasetService:
                     rows = await conn.fetch(sql, *args) if args else await conn.fetch(sql)
                     columns = list(rows[0].keys()) if rows else []
                     data = [dict(row) for row in rows]
+                    total = await self._fetch_count(conn, count_exec, count_args)
                 finally:
                     await conn.close()
 
                 return {
                     "success": True,
                     "data": data,
-                    "total": len(data),  # 简化实现，实际应该执行 COUNT 查询
+                    "total": total if total is not None else len(data),
                     "columns": columns,
                 }
 
@@ -1125,16 +1164,37 @@ class DatasetService:
                     "columns": None,
                     "error": "SQL Server 不支持 LIMIT 语法，请从 SQL 中移除 LIMIT；预览行数由系统自动施加 TOP 或行号分页。",
                 }
+            cfg = integration_config.get_config()
+            count_total: Optional[int] = None
             if self._sqlserver_should_wrap_paging(sql):
+                # 外包分页前先对未分页语句求全集行数；失败回退返回行长度
+                count_sql = self._build_count_sql(sql)
+                if count_sql:
+                    count_exec, count_args = self._convert_named_params_to_pymssql(
+                        count_sql, query_params
+                    )
+                    count_res = await asyncio.to_thread(
+                        DatasetService._execute_sqlserver_query_sync,
+                        cfg,
+                        count_exec,
+                        count_args,
+                    )
+                    if count_res.get("success") and count_res.get("data"):
+                        try:
+                            count_total = int(count_res["data"][0].get("total"))
+                        except (TypeError, ValueError, AttributeError):
+                            count_total = None
                 sql = self._wrap_sqlserver_paged_sql(sql, limit, offset)
             sql, args = self._convert_named_params_to_pymssql(sql, query_params)
-            cfg = integration_config.get_config()
-            return await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 DatasetService._execute_sqlserver_query_sync,
                 cfg,
                 sql,
                 args,
             )
+            if result.get("success") and count_total is not None:
+                result["total"] = count_total
+            return result
         except Exception as e:
             return {
                 'success': False,
@@ -1239,12 +1299,13 @@ class DatasetService:
                     data = [response_data]
             else:
                 data = []
+            total = len(data)
             data = data[offset : offset + limit]
             columns = list(data[0].keys()) if data and isinstance(data[0], dict) else []
             return {
                 "success": True,
                 "data": data,
-                "total": len(data),
+                "total": total,
                 "columns": columns,
             }
         except httpx.TimeoutException:
@@ -1455,13 +1516,14 @@ class DatasetService:
             else:
                 data = []
 
+            total = len(data)
             data = data[offset:offset + limit]
             columns = list(data[0].keys()) if data and isinstance(data[0], dict) else []
 
             return {
                 'success': True,
                 'data': data,
-                'total': len(data),
+                'total': total,
                 'columns': columns,
             }
         except httpx.TimeoutException:

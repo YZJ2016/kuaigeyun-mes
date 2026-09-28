@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alert, Button, Form, Input, Spin } from 'antd';
 import { apiRequest } from '../../../services/api';
@@ -9,45 +9,85 @@ type SharedDashboard = {
   widgets_config?: DashboardWidget[];
 };
 
-function deniedReason(error: unknown): string {
-  const data = (error as { response?: { data?: { detail?: { reason?: string } } } })?.response?.data;
-  return data?.detail?.reason || (error as Error)?.message || '分享打不开';
+/** detail.reason 后端原因码 → 中文提示 */
+const DENIED_REASON_MESSAGES: Record<string, string> = {
+  password_required: '请输入访问口令',
+  password_mismatch: '访问口令错误，请重试',
+  expired: '分享链接已过期',
+  ip_denied: '当前 IP 不在允许访问名单内',
+  missing: '分享链接无效或已关闭',
+};
+
+function deniedReason(error: unknown): { reason: string; message: string } {
+  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    const reason = (detail as { reason?: unknown }).reason;
+    const message = (detail as { message?: unknown }).message;
+    if (typeof reason === 'string' && reason) {
+      return {
+        reason,
+        message:
+          DENIED_REASON_MESSAGES[reason] ??
+          (typeof message === 'string' && message ? message : '分享打不开'),
+      };
+    }
+    if (typeof message === 'string' && message) return { reason: '', message };
+  }
+  if (typeof detail === 'string' && detail) return { reason: '', message: detail };
+  const fallback = (error as Error)?.message;
+  return { reason: '', message: fallback || '分享打不开' };
 }
 
 export default function DashboardSharedView() {
   const [search] = useSearchParams();
   const token = search.get('token') || '';
-  const [password, setPassword] = useState('');
   const [board, setBoard] = useState<SharedDashboard | null>(null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [needsPassword, setNeedsPassword] = useState(false);
 
-  const openBoard = async (nextPassword: string) => {
-    setLoading(true);
-    setError('');
-    try {
-      const body = await apiRequest<SharedDashboard>(
-        `/apps/kuaireport/dashboards/shared?token=${encodeURIComponent(token)}`,
-        {
-          method: 'GET',
-          headers: nextPassword ? { 'X-Share-Password': nextPassword } : {},
-        },
-      );
-      setBoard(body);
-      setPassword(nextPassword);
-    } catch (err) {
-      setBoard(null);
-      setError(deniedReason(err));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const openBoard = useCallback(
+    async (sharePassword?: string) => {
+      setLoading(true);
+      setError('');
+      try {
+        const body = await apiRequest<SharedDashboard>(
+          `/apps/kuaireport/dashboards/shared?token=${encodeURIComponent(token)}`,
+          {
+            method: 'GET',
+            headers: sharePassword ? { 'X-Share-Password': sharePassword } : {},
+          },
+        );
+        setBoard(body);
+      } catch (err) {
+        setBoard(null);
+        const denied = deniedReason(err);
+        setError(denied.message);
+        setNeedsPassword(
+          denied.reason === 'password_required' || denied.reason === 'password_mismatch',
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [token],
+  );
+
+  // 挂载时不带口令先探一次：8h 解锁 cookie 有效时后端直接放行
+  useEffect(() => {
+    if (token) void openBoard();
+  }, [token, openBoard]);
 
   if (!token) return <Alert type="error" message="缺少分享参数" />;
 
   return (
     <div style={{ minHeight: '100vh', padding: 24, background: '#001529' }}>
-      {!board ? (
+      {board ? (
+        <>
+          <h1 style={{ color: '#fff' }}>{board.name}</h1>
+          <DashboardWidgets widgets={board.widgets_config || []} shareToken={token} />
+        </>
+      ) : needsPassword ? (
         <Form
           layout="vertical"
           style={{ maxWidth: 360, margin: '15vh auto', background: '#fff', padding: 24 }}
@@ -64,10 +104,7 @@ export default function DashboardSharedView() {
       ) : loading ? (
         <Spin />
       ) : (
-        <>
-          <h1 style={{ color: '#fff' }}>{board.name}</h1>
-          <DashboardWidgets widgets={board.widgets_config || []} shareToken={token} />
-        </>
+        <Alert type="error" message={error || '分享打不开'} />
       )}
     </div>
   );

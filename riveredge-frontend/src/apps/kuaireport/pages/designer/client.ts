@@ -15,6 +15,8 @@ export interface DesignerFilterInput {
   operator?: string;
   default_value?: unknown;
   required?: boolean;
+  control?: string;
+  options?: Array<{ label: string; value: string | number }>;
 }
 
 export interface DesignerSaveBody {

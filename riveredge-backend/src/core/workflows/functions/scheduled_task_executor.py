@@ -175,9 +175,13 @@ async def _execute_kuaireport_subscription_task(
     if not subscription_id:
         return {"success": False, "error": "缺少 subscription_id"}
     try:
-        from apps.kuaireport.services.subscription_service import SubscriptionService
+        from apps.kuaireport.services.subscription_service import (
+            SubscriptionService,
+            public_error,
+        )
 
         return await SubscriptionService().execute_subscription(tenant_id, int(subscription_id))
     except Exception as e:
-        return {"success": False, "error": f"快报表订阅执行失败: {str(e)}"}
+        # 落库 last_error 前过 public_error 级脱敏，不带口令、哈希或内部路径
+        return {"success": False, "error": public_error(f"快报表订阅执行失败: {e}")}
 

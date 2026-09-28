@@ -9,7 +9,6 @@ from copy import deepcopy
 import pytest
 from tortoise.exceptions import IntegrityError
 
-from apps.kuaireport.schemas.execute import ExecuteReportResult
 from apps.kuaireport.slices import s147_designer as designer
 from infra.domain.tenant_context import clear_tenant_context, set_current_tenant_id
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -192,6 +191,44 @@ def test_sql_in_column_is_rejected():
             filters=[],
             summary_fields=[],
         )
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "select * from t",
+        "1; drop table apps_kuaireport_reports",
+        "a union select b",
+        "x' or delete from t",
+        "insert into t values (1)",
+        "alter table t add c int",
+        "truncate table t",
+        "exec sp_help(",
+    ],
+)
+def test_sql_statement_shapes_are_still_rejected(label):
+    with pytest.raises(ValidationError):
+        designer.build_report_config(
+            page_size=10,
+            fields=[{"field": "qty", "label": label}],
+            filters=[],
+            summary_fields=[],
+        )
+
+
+def test_sql_like_words_in_names_are_allowed():
+    """字段名 / 文案含 select、update、sql 字样不再是拒绝理由。"""
+    config = designer.build_report_config(
+        page_size=10,
+        fields=[
+            {"field": "selected_qty", "label": "已选数量"},
+            {"field": "sql_text", "label": "SQL 备注"},
+        ],
+        filters=[{"field": "updated_at", "label": "更新时间", "operator": "between"}],
+        summary_fields=["selected_qty"],
+    )
+    assert config["fields"][1]["field"] == "sql_text"
+    assert config["filters"][0]["field"] == "updated_at"
 
 
 @pytest.mark.asyncio
@@ -394,20 +431,21 @@ async def test_duplicate_code_does_not_keep_a_new_version(monkeypatch, tenant_id
 
 
 @pytest.mark.asyncio
-async def test_preview_calls_execute_report(monkeypatch, tenant_id):
-    seen = {}
+async def test_update_rejects_code_change(monkeypatch, tenant_id):
+    """code 是租户内唯一列：更新时传不同 code 明确报错，不静默忽略。"""
+    state = _State()
+    _source(state)
+    _install(monkeypatch, state)
 
-    async def execute(report_id, filters):
-        seen["report_id"] = report_id
-        seen["filters"] = filters
-        return ExecuteReportResult(data=[{"qty": 2}], total=1, summary={"qty": 2})
+    first = await designer.save_custom_report(**_payload())
 
-    result = await designer.preview_saved_report(11, {"limit": 20, "offset": 0}, execute)
+    with pytest.raises(ValidationError, match="编码"):
+        await designer.save_custom_report(
+            **_payload(report_id=first["report_id"], code="other_code")
+        )
 
-    assert seen == {"report_id": 11, "filters": {"limit": 20, "offset": 0}}
-    assert result["data"] == [{"qty": 2}]
-    assert result["total"] == 1
-    assert result["summary"] == {"qty": 2}
+    assert state.reports[0]["code"] == "custom_qty"
+    assert len(state.versions) == 1
 
 
 def test_router_has_no_restore_share_or_dashboard():

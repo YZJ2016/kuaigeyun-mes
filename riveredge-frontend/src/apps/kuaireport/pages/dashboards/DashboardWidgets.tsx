@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Table } from 'antd';
+import * as echarts from 'echarts';
 import { SecureImage } from '../../../../components/secure-image';
 
 export type WidgetResult = {
@@ -28,6 +29,14 @@ const frameStyle: React.CSSProperties = {
   color: '#e6f7ff',
 };
 
+const ALLOWED_URL_RE = /^https?:\/\//i;
+
+/** web/video 的 options.url 只渲染 http(s)，其它 scheme 不渲染 */
+function safeHttpUrl(value: unknown): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return ALLOWED_URL_RE.test(text) ? text : '';
+}
+
 function ClockWidget({ refreshSeconds }: { refreshSeconds: number }) {
   const [text, setText] = useState(() => new Date().toLocaleString());
   useEffect(() => {
@@ -37,23 +46,81 @@ function ClockWidget({ refreshSeconds }: { refreshSeconds: number }) {
   return <div style={{ fontSize: 28 }}>{text}</div>;
 }
 
-function ChartWidget({ result }: { result?: WidgetResult }) {
+/** 图表组件：echarts 最小实现。x 轴取 options.x_field 或首列，数值取 options.y_field 或首个数值列 */
+function ChartWidget({ result, options }: { result?: WidgetResult; options?: Record<string, unknown> }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<echarts.ECharts | null>(null);
   const rows = result?.data || [];
-  return (
-    <div>
-      {rows.length === 0 ? <span>暂无数据</span> : null}
-      {rows.map((row, index) => {
-        const value = Number(Object.values(row)[0] ?? 0);
-        const width = Math.max(8, Math.min(100, Number.isFinite(value) ? value : 8));
-        return (
-          <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-            <div style={{ width: `${width}%`, height: 12, background: '#00d4ff' }} />
-            <span>{JSON.stringify(row)}</span>
-          </div>
-        );
-      })}
-    </div>
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    if (!chartRef.current) {
+      chartRef.current = echarts.init(host);
+    }
+    const chart = chartRef.current;
+    const keys = rows.length ? Object.keys(rows[0]) : [];
+    const xField =
+      (typeof options?.x_field === 'string' && options.x_field) || keys[0] || '';
+    const yField =
+      (typeof options?.y_field === 'string' && options.y_field) ||
+      keys.find((key) => typeof rows[0][key] === 'number') ||
+      keys[1] ||
+      keys[0] ||
+      '';
+    const kind = options?.chart_type === 'line' ? 'line' : 'bar';
+    chart.setOption({
+      grid: { left: 40, right: 12, top: 12, bottom: 24 },
+      xAxis: {
+        type: 'category',
+        data: rows.map((row) => String(row[xField] ?? '')),
+        axisLabel: { color: '#e6f7ff' },
+      },
+      yAxis: { type: 'value', axisLabel: { color: '#e6f7ff' }, splitLine: { lineStyle: { color: 'rgba(230,247,255,0.15)' } } },
+      series: [
+        {
+          type: kind,
+          data: rows.map((row) => Number(row[yField] ?? 0)),
+          itemStyle: { color: '#00d4ff' },
+        },
+      ],
+    });
+    const onResize = () => chart.resize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [rows, options]);
+
+  useEffect(
+    () => () => {
+      chartRef.current?.dispose();
+      chartRef.current = null;
+    },
+    [],
   );
+
+  if (!rows.length) return <span>暂无数据</span>;
+  return <div ref={hostRef} style={{ width: '100%', height: 180 }} />;
+}
+
+/** layout 对齐 12 栅格：x/y 为起始格（0 基），w 为列跨度，h 为行高（每单位 24px） */
+function layoutStyle(layout?: DashboardWidget['layout']): React.CSSProperties {
+  const style: React.CSSProperties = {};
+  if (!layout) return style;
+  if (typeof layout.x === 'number' && layout.x >= 0) {
+    style.gridColumnStart = Math.min(12, Math.trunc(layout.x) + 1);
+  }
+  if (typeof layout.y === 'number' && layout.y >= 0) {
+    style.gridRowStart = Math.trunc(layout.y) + 1;
+  }
+  if (typeof layout.w === 'number' && layout.w > 0) {
+    const span = Math.min(12, Math.max(1, Math.trunc(layout.w)));
+    style.gridColumnEnd = `span ${span}`;
+    if (!style.gridColumnStart) style.gridColumn = `span ${span}`;
+  }
+  if (typeof layout.h === 'number' && layout.h > 0) {
+    style.minHeight = Math.trunc(layout.h) * 24;
+  }
+  return style;
 }
 
 export function DashboardWidgets({
@@ -64,15 +131,19 @@ export function DashboardWidgets({
   shareToken?: string;
 }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 12 }}>
       {widgets.map((widget) => {
         const title = widget.title || widget.type;
         const options = widget.options || {};
         let body: React.ReactNode = null;
         if (widget.type === 'metric') {
           const summary = widget.result?.summary || {};
-          const first = Object.values(summary)[0];
-          body = <div style={{ fontSize: 36 }}>{first ?? widget.result?.total ?? '—'}</div>;
+          const preferred = typeof options.field === 'string' ? options.field : '';
+          const value =
+            preferred && preferred in summary
+              ? summary[preferred]
+              : Object.values(summary)[0];
+          body = <div style={{ fontSize: 36 }}>{value ?? widget.result?.total ?? '—'}</div>;
         } else if (widget.type === 'table') {
           const rows = widget.result?.data || [];
           const columns = Object.keys(rows[0] || { value: 'value' }).map((key) => ({
@@ -89,7 +160,7 @@ export function DashboardWidgets({
             />
           );
         } else if (widget.type === 'chart') {
-          body = <ChartWidget result={widget.result} />;
+          body = <ChartWidget result={widget.result} options={options} />;
         } else if (widget.type === 'border') {
           body = <div style={{ border: '2px solid #00d4ff', minHeight: 48 }}>{title}</div>;
         } else if (widget.type === 'title') {
@@ -107,10 +178,10 @@ export function DashboardWidgets({
             <span>{title}</span>
           );
         } else if (widget.type === 'video') {
-          const src = typeof options.url === 'string' ? options.url : '';
+          const src = safeHttpUrl(options.url);
           body = src ? <video src={src} controls style={{ maxWidth: '100%' }} /> : <span>{title}</span>;
         } else if (widget.type === 'web') {
-          const src = typeof options.url === 'string' ? options.url : '';
+          const src = safeHttpUrl(options.url);
           body = src ? (
             <iframe title={title} src={src} style={{ width: '100%', height: 160, border: 0 }} />
           ) : (
@@ -118,7 +189,11 @@ export function DashboardWidgets({
           );
         }
         return (
-          <section key={widget.id} style={frameStyle} data-widget-type={widget.type}>
+          <section
+            key={widget.id}
+            style={{ ...frameStyle, gridColumn: 'span 4', ...layoutStyle(widget.layout) }}
+            data-widget-type={widget.type}
+          >
             <div style={{ opacity: 0.75, marginBottom: 8 }}>
               {title} · {widget.refresh_seconds}s · 源 {widget.data_source_id}
             </div>

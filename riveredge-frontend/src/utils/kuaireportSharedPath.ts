@@ -16,10 +16,15 @@ export function isKuaireportSharedBrowsePath(pathname?: string): boolean {
   return path === SHARED_DASHBOARD_PATH || path === SHARED_REPORT_PATH;
 }
 
+/** 精确路径或 path + '/' / '?' 边界，避免 /sharedXxx 之类前缀误命中 */
+function matchesSharedApiPath(url: string, base: string): boolean {
+  return url === base || url.startsWith(`${base}/`) || url.startsWith(`${base}?`);
+}
+
 /** apiRequest 中视为公开、不携带会话 Token 的 kuaireport 分享接口 */
 export function isKuaireportSharedApiPath(url: string): boolean {
   return (
-    url.startsWith('/apps/kuaireport/dashboards/shared') ||
-    url.startsWith('/apps/kuaireport/reports/shared')
+    matchesSharedApiPath(url, SHARED_DASHBOARD_PATH) ||
+    matchesSharedApiPath(url, SHARED_REPORT_PATH)
   );
 }

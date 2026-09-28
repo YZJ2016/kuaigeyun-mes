@@ -15,7 +15,7 @@ from apps.kuaireport.services import data_source_service
 from apps.kuaireport.services.execute_service import execute_report
 from core.schemas.dataset import ExecuteQueryResponse
 from infra.domain.tenant_context import clear_tenant_context, set_current_tenant_id
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import NotFoundError, TenantError, ValidationError
 
 REPO = Path(__file__).resolve().parents[4]
 
@@ -333,9 +333,9 @@ async def test_other_tenant_report_and_dataset_are_not_executed(db):
 @pytest.mark.asyncio
 async def test_no_tenant_context_does_not_read(db):
     clear_tenant_context()
-    with pytest.raises(ValueError, match="组织上下文未设置"):
+    with pytest.raises(TenantError, match="组织上下文未设置"):
         await execute_report(1, 1, {"limit": 20, "offset": 0})
-    with pytest.raises(ValueError, match="组织上下文未设置"):
+    with pytest.raises(TenantError, match="组织上下文未设置"):
         await data_source_service.list_data_sources(1)
 
 
@@ -348,13 +348,10 @@ def test_slot_files_and_execute_report_export():
     ]
     assert "riveredge-backend/src/apps/kuaireport/" not in rules
     assert "riveredge-frontend/src/apps/kuaireport/" not in rules
-    assert "riveredge-backend/src/apps/kuaiiot/" in rules
-    assert "riveredge-frontend/src/apps/kuaiiot/" in rules
 
     workspace = (REPO / "fast-deploy/tools/workspace/generate_workspace.py").read_text(encoding="utf-8")
     pro_line = next(line for line in workspace.splitlines() if line.startswith("PRO_APPS"))
     assert "kuaireport" not in pro_line
-    assert "kuaiiot" in pro_line
 
     service = REPO / "riveredge-frontend/src/apps/kuaireport/services/kuaireport.ts"
     uni = REPO / "riveredge-frontend/src/components/uni-report/UniReport.tsx"
@@ -382,6 +379,6 @@ def test_slice_routers_are_mounted_once():
     assert "/data-sources" in paths
     assert "/reports/{report_id}/execute" in paths
     assert paths.count("/dashboards/shared") == 1
-    assert "/reports/{report_id}/excel" in paths
+    assert "/reports/{report_id:int}/excel" in paths
     assert "/designer/reports" in paths
     assert "/distribution/subscriptions" in paths

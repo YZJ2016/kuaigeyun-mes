@@ -35,6 +35,33 @@ export function getReport(reportId: number): Promise<ReportCenterRow> {
   return apiRequest<ReportCenterRow>(`${REPORTS_BASE}/${reportId}`);
 }
 
+export function publishReport(reportId: number): Promise<ReportCenterRow> {
+  return apiRequest<ReportCenterRow>(`${REPORTS_BASE}/${reportId}/publish`, {
+    method: 'POST',
+  });
+}
+
+/** 分享响应只回路径与过期时间，不回口令或哈希 */
+export interface ShareResult {
+  is_shared: boolean;
+  share_path: string;
+  expires_at?: string;
+}
+
+export function shareReport(
+  reportId: number,
+  body: { password: string; expires_at: string; allow_ip_cidrs?: string[] },
+): Promise<ShareResult> {
+  return apiRequest<ShareResult>(`${REPORTS_BASE}/${reportId}/share`, {
+    method: 'POST',
+    data: body,
+  });
+}
+
+export function closeReportShare(reportId: number): Promise<unknown> {
+  return apiRequest(`${REPORTS_BASE}/${reportId}/share`, { method: 'DELETE' });
+}
+
 export async function downloadFullExcel(
   reportId: number,
   filters: Record<string, unknown>,

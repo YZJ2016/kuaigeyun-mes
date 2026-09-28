@@ -24,15 +24,16 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 HttpGet = Callable[[str], Awaitable[Any]]
 
 
-def _reject_sql_keys(payload: dict[str, Any]) -> None:
-    for key in payload:
-        if key in FORBIDDEN_CONFIG_KEYS:
-            raise ValidationError("报表配置不能存放 SQL")
-    extra = payload.get("extra")
-    if isinstance(extra, dict):
-        for key in extra:
+def _reject_sql_keys(node: Any) -> None:
+    """递归扫 report_config 全部嵌套层，任何深度出现禁用键即拒绝。"""
+    if isinstance(node, dict):
+        for key, value in node.items():
             if key in FORBIDDEN_CONFIG_KEYS:
                 raise ValidationError("报表配置不能存放 SQL")
+            _reject_sql_keys(value)
+    elif isinstance(node, list):
+        for item in node:
+            _reject_sql_keys(item)
 
 
 def _report_lookup(report_id: str | int) -> dict[str, Any]:
@@ -188,9 +189,39 @@ def _project(rows: list[dict[str, Any]], report_config: dict[str, Any]) -> list[
     return [{name: row.get(name) for name in names} for row in rows]
 
 
-def _parameters(filters: dict[str, Any]) -> Optional[dict[str, Any]]:
+def _declared_parameter_keys(report_config: dict[str, Any]) -> set[str]:
+    """report_config.filters 声明的字段收敛出的数据集参数键。
+
+    between 写成 ``字段_start`` / ``字段_end``；其余操作符用字段名本身。
+    """
+    allowed: set[str] = set()
+    specs = report_config.get("filters")
+    if not isinstance(specs, list):
+        return allowed
+    for spec in specs:
+        if not isinstance(spec, dict):
+            continue
+        field = spec.get("field")
+        if not isinstance(field, str) or not field:
+            continue
+        if spec.get("operator") == "between":
+            allowed.add(f"{field}_start")
+            allowed.add(f"{field}_end")
+        else:
+            allowed.add(field)
+    return allowed
+
+
+def _parameters(
+    filters: dict[str, Any], report_config: dict[str, Any]
+) -> Optional[dict[str, Any]]:
     skipped = PAGINATION_KEYS | HTTP_ADDRESS_OVERRIDE_KEYS
-    params = {key: value for key, value in filters.items() if key not in skipped}
+    allowed = _declared_parameter_keys(report_config)
+    params = {
+        key: value
+        for key, value in filters.items()
+        if key not in skipped and key in allowed
+    }
     return params or None
 
 
@@ -240,8 +271,8 @@ def _rows_from_http(payload: Any) -> list[dict[str, Any]]:
     return rows
 
 
-async def _assert_registered_http_url(url: str) -> None:
-    rows = await KuaireportDataSource.filter(type="http").all()
+async def _assert_registered_http_url(url: str, tenant_id: int) -> None:
+    rows = await KuaireportDataSource.filter(type="http", tenant_id=tenant_id).all()
     for row in rows:
         config = row.config if isinstance(row.config, dict) else {}
         if config.get(HTTP_URL_KEY) == url:
@@ -282,7 +313,7 @@ async def _load_rows(
 
         limit, offset = _page(filters, report_config)
         request = ExecuteQueryRequest(
-            parameters=_parameters(filters),
+            parameters=_parameters(filters, report_config),
             limit=limit,
             offset=offset,
         )
@@ -296,7 +327,7 @@ async def _load_rows(
         if not isinstance(url, str) or not url:
             raise ValidationError("http 配置必须包含地址")
         _reject_address_override(filters, url)
-        await _assert_registered_http_url(url)
+        await _assert_registered_http_url(url, tenant_id)
         payload = await http_get(url)
         return _rows_from_http(payload), None, False
     raise ValidationError("数据源类型仅允许 static、dataset、http")

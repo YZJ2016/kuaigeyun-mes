@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Any, Optional
+from urllib.parse import urlparse
 from uuid import UUID
 
 from apps.kuaireport.constants import (
@@ -15,17 +17,57 @@ from apps.kuaireport.constants import (
     HTTP_URL_KEY,
     STATIC_CONFIG_KEYS,
     STATIC_ROWS_KEY,
+    REPORT_DATA_SOURCE_UUID,
 )
 from apps.kuaireport.models.data_source import KuaireportDataSource
+from apps.kuaireport.models.report import KuaireportReport
 from apps.kuaireport.schemas.data_source import DataSourceCreate, DataSourceUpdate
 from infra.domain.tenant_context import require_tenant_context
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import (
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+    tenant_context_missing,
+)
+
+_LOCAL_HOSTNAMES = frozenset({"localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback"})
 
 
 def _reject_sql_keys(payload: dict[str, Any]) -> None:
     for key in payload:
         if key in FORBIDDEN_CONFIG_KEYS:
             raise ValidationError("配置不能存放 SQL")
+
+
+def _reject_internal_http_address(url: str) -> None:
+    """拒绝明显内网/环回/链路本地地址，只允许 http/https 公网地址。"""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValidationError("http 地址无效")
+    host = (parsed.hostname or "").strip().lower()
+    if not host:
+        raise ValidationError("http 地址无效")
+    if host in _LOCAL_HOSTNAMES or host.endswith(".localhost"):
+        raise ValidationError("http 地址不允许指向本机或内网")
+    ip = None
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        # 十进制整数写法（如 2130706433 = 127.0.0.1）也按 IPv4 解释
+        if host.isdigit():
+            try:
+                ip = ipaddress.ip_address(int(host))
+            except ValueError:
+                ip = None
+    if ip is not None and (
+        ip.is_loopback
+        or ip.is_private
+        or ip.is_link_local
+        or ip.is_unspecified
+        or ip.is_reserved
+        or ip.is_multicast
+    ):
+        raise ValidationError("http 地址不允许指向本机或内网")
 
 
 def validate_data_source_config(source_type: str, config: Optional[dict[str, Any]]) -> dict[str, Any]:
@@ -67,13 +109,15 @@ def validate_data_source_config(source_type: str, config: Optional[dict[str, Any
     if not isinstance(url, str) or not url.strip():
         raise ValidationError("http 配置必须包含地址")
     cleaned_url = url.strip()
-    if not (cleaned_url.startswith("http://") or cleaned_url.startswith("https://")):
-        raise ValidationError("http 地址无效")
+    _reject_internal_http_address(cleaned_url)
     return {HTTP_URL_KEY: cleaned_url}
 
 
 async def _tenant_id(explicit: int) -> int:
-    current = await require_tenant_context()
+    try:
+        current = await require_tenant_context()
+    except ValueError:
+        raise tenant_context_missing() from None
     if current != explicit:
         raise ValidationError("租户上下文不匹配")
     return current
@@ -94,7 +138,6 @@ async def create_data_source(
         config=config,
         description=payload.description,
         is_default=payload.is_default,
-        is_system=payload.is_system,
         created_by=user_id,
         updated_by=user_id,
     )
@@ -132,13 +175,24 @@ async def update_data_source(
         row.description = data["description"]
     if "is_default" in data and data["is_default"] is not None:
         row.is_default = data["is_default"]
-    if "is_system" in data and data["is_system"] is not None:
-        row.is_system = data["is_system"]
     row.updated_by = user_id
     await row.save()
     return row
 
 
+def _report_binds_source(report_config: Any, source_uuid: str) -> bool:
+    if not isinstance(report_config, dict):
+        return False
+    extra = report_config.get("extra")
+    if not isinstance(extra, dict):
+        return False
+    bound = extra.get(REPORT_DATA_SOURCE_UUID)
+    return isinstance(bound, str) and bound == source_uuid
+
+
 async def delete_data_source(tenant_id: int, source_id: int) -> None:
     row = await get_data_source(tenant_id, source_id)
+    reports = await KuaireportReport.filter(tenant_id=row.tenant_id).all()
+    if any(_report_binds_source(report.report_config, row.uuid) for report in reports):
+        raise ConflictError("数据源仍被报表引用，不能删除")
     await row.delete()

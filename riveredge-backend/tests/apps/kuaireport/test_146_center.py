@@ -32,6 +32,25 @@ class MemoryStore:
         self.fail_on_insert: int | None = None
         self.inserts = 0
         self.next_id = 1
+        # 模拟本租户已登记的 dataset 数据源 uuid；None 表示没有可用数据集源
+        self.dataset_uuid: str | None = None
+        self.binds = 0
+
+    async def registered_dataset_uuid(self, tenant_id):
+        return self.dataset_uuid
+
+    async def bind_data_source(self, tenant_id, report_id, source_uuid):
+        self.binds += 1
+        for bucket in (self._pending or [], self.rows):
+            for row in bucket:
+                if row["tenant_id"] == tenant_id and row["id"] == report_id:
+                    config = dict(row.get("report_config") or {})
+                    extra = dict(config.get("extra") or {})
+                    extra["data_source_uuid"] = source_uuid
+                    config["extra"] = extra
+                    row["report_config"] = config
+                    return center._public_row(row)
+        return None
 
     def _visible(self) -> list[dict]:
         if self._pending is None:
@@ -286,6 +305,237 @@ async def test_publish_writes_published_status(store: MemoryStore):
 async def test_lifecycle_seed_skips_without_tenant_context():
     clear_tenant_context()
     assert await center.seed_system_reports_on_lifecycle(TENANT) == []
+
+
+@pytest.mark.asyncio
+async def test_list_rebinds_unbound_system_reports(store: MemoryStore):
+    """种入时无数据源的空绑定，在列表路径幂等回绑本租户第一条 dataset 源。"""
+    await center.seed_system_reports()
+    assert all(
+        row["report_config"]["extra"]["data_source_uuid"] is None
+        for row in store.rows
+    )
+    store.dataset_uuid = "ds-uuid-1"
+    rows = await center.list_reports()
+    assert len(rows) == 10
+    assert all(
+        row["report_config"]["extra"]["data_source_uuid"] == "ds-uuid-1"
+        for row in rows
+    )
+    assert store.binds == 10
+    # 已绑定的行不再重复回写
+    assert (await center.list_reports()) == rows
+    assert store.binds == 10
+
+
+@pytest.mark.asyncio
+async def test_list_keeps_unbound_when_no_dataset_source(store: MemoryStore):
+    await center.seed_system_reports()
+    rows = await center.list_reports()
+    assert all(
+        row["report_config"]["extra"]["data_source_uuid"] is None
+        for row in rows
+    )
+    assert store.binds == 0
+
+
+@pytest.mark.asyncio
+async def test_full_excel_pages_until_short_page_even_when_total_lies(
+    store: MemoryStore, monkeypatch
+):
+    """total 不可信时（上报恒 0 或夸大）仍翻页到短页为止，保证全量导出完整。"""
+    await center.seed_system_reports()
+    report = next(row for row in store.rows if row["code"] == "inv_ledger")
+    calls: list[int] = []
+
+    class _Page:
+        def __init__(self, data):
+            self.data = data
+            self.total = 0  # 上游 total 失真场景
+            self.summary = {}
+
+        def model_dump(self):
+            return {"data": self.data, "total": self.total, "summary": self.summary}
+
+    async def fake_execute(tenant_id, report_id, filters):
+        calls.append(filters["offset"])
+        all_rows = [{"qty": index} for index in range(5)]
+        return _Page(all_rows[filters["offset"] : filters["offset"] + filters["limit"]])
+
+    monkeypatch.setattr(center, "FULL_EXPORT_PAGE_SIZE", 2)
+    monkeypatch.setattr(center, "resolve_execute_report", lambda: fake_execute)
+    content, _filename = await center.export_full_excel(report["id"], {})
+    assert calls == [0, 2, 4]
+    sheet = load_workbook(BytesIO(content)).active
+    values = [row[0].value for row in sheet.iter_rows(min_row=2)]
+    assert values == [0, 1, 2, 3, 4]
+
+
+@pytest.mark.asyncio
+async def test_full_excel_stops_on_exact_page_boundary(
+    store: MemoryStore, monkeypatch
+):
+    await center.seed_system_reports()
+    report = next(row for row in store.rows if row["code"] == "inv_ledger")
+
+    class _Page:
+        def __init__(self, data):
+            self.data = data
+            self.total = 4
+            self.summary = {}
+
+    async def fake_execute(tenant_id, report_id, filters):
+        all_rows = [{"qty": index} for index in range(4)]
+        return _Page(all_rows[filters["offset"] : filters["offset"] + filters["limit"]])
+
+    monkeypatch.setattr(center, "FULL_EXPORT_PAGE_SIZE", 2)
+    monkeypatch.setattr(center, "resolve_execute_report", lambda: fake_execute)
+    content, _ = await center.export_full_excel(report["id"], {})
+    sheet = load_workbook(BytesIO(content)).active
+    assert [row[0].value for row in sheet.iter_rows(min_row=2)] == [0, 1, 2, 3]
+
+
+def test_safe_filename_strips_quotes_crlf_and_non_ascii():
+    assert center._safe_filename("inv_ledger") == "inv_ledger.xlsx"
+    name = center._safe_filename('a"b\r\nc:\\报表.xlsx')
+    assert '"' not in name and "\r" not in name and "\n" not in name
+    assert name.isascii() and name.endswith(".xlsx")
+    assert center._safe_filename("") == "report.xlsx"
+    assert center._safe_filename("报表") == "report.xlsx"
+
+
+def test_safe_cell_blocks_excel_formula_injection():
+    assert center._safe_cell("=SUM(A1:A9)") == "'=SUM(A1:A9)"
+    assert center._safe_cell("+1+1") == "'+1+1"
+    assert center._safe_cell("-2") == "'-2"
+    assert center._safe_cell("@cmd") == "'@cmd"
+    assert center._safe_cell("normal") == "normal"
+    assert center._safe_cell(42) == 42
+    # 密钥/路径掩码优先级不变
+    assert center._safe_cell("password=abc") is None
+
+
+def _http_app(store: MemoryStore, monkeypatch, *, authed: bool = True):
+    """带真实路由与依赖的 ASGI app；认证、权限、数据源查询全部打桩。"""
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+
+    from apps.kuaireport.api.router import router as api_router
+
+    app = FastAPI()
+    app.include_router(api_router)
+    if authed:
+        user = SimpleNamespace(
+            id=1, tenant_id=TENANT, is_infra_admin=False, is_tenant_admin=False
+        )
+        from infra.api.deps import deps as soil_deps
+
+        app.dependency_overrides[soil_deps.get_current_user] = lambda: user
+
+        def _tenant() -> int:
+            set_current_tenant_id(TENANT)
+            return TENANT
+
+        from core.api.deps import deps as core_deps
+
+        app.dependency_overrides[core_deps.get_current_tenant] = _tenant
+
+        from core.services.authorization.access_control_service import (
+            AccessControlService,
+        )
+
+        async def _allow(*args, **kwargs):
+            return SimpleNamespace(allowed=True, reason="test")
+
+        monkeypatch.setattr(AccessControlService, "check_access", _allow)
+    return app
+
+
+@pytest.mark.asyncio
+async def test_s146_endpoints_require_authentication(store: MemoryStore):
+    import httpx
+
+    app = _http_app(store, None, authed=False)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://fixture"
+    ) as client:
+        assert (await client.get("/reports")).status_code == 401
+        assert (await client.get("/reports/1")).status_code == 401
+        assert (await client.post("/reports/1/publish")).status_code == 401
+        assert (
+            await client.post("/reports/1/excel", json={"filters": {}})
+        ).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_s146_endpoints_route_with_tenant_context(
+    store: MemoryStore, monkeypatch
+):
+    """带租户依赖时四端点可路由到服务层，不再恒 500。"""
+    import httpx
+
+    await center.seed_system_reports()
+    app = _http_app(store, monkeypatch)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://fixture"
+    ) as client:
+        listed = await client.get("/reports")
+        assert listed.status_code == 200
+        assert len(listed.json()) == 10
+        report_id = next(row["id"] for row in store.rows if row["code"] == "inv_ledger")
+        detail = await client.get(f"/reports/{report_id}")
+        assert detail.status_code == 200
+        assert detail.json()["code"] == "inv_ledger"
+        published = await client.post(f"/reports/{report_id}/publish")
+        assert published.status_code == 200
+        assert published.json()["status"] == "PUBLISHED"
+
+        class _Page:
+            def __init__(self):
+                self.data = [{"qty": 1}]
+                self.total = 1
+                self.summary = {"qty": 1}
+
+        async def fake_execute(tenant_id, rid, filters):
+            assert tenant_id == TENANT
+            return _Page()
+
+        monkeypatch.setattr(center, "resolve_execute_report", lambda: fake_execute)
+        exported = await client.post(f"/reports/{report_id}/excel", json={"filters": {}})
+        assert exported.status_code == 200
+        assert exported.content[:2] == b"PK"
+        disposition = exported.headers["content-disposition"]
+        assert "inv_ledger.xlsx" in disposition
+
+
+def test_reports_shared_route_not_shadowed_by_report_id():
+    """GET /reports/shared 必须落到 s148 的分享路由，不被 /reports/{report_id} 吞掉。"""
+    from starlette.routing import Match
+
+    from apps.kuaireport.api.router import router
+
+    def first_match(path: str, method: str = "GET"):
+        scope = {
+            "type": "http",
+            "method": method,
+            "path": path,
+            "headers": [],
+            "query_string": b"",
+            "path_params": {},
+            "route_path": path,
+        }
+        for route in router.routes:
+            match, _child = route.matches(scope)
+            if match == Match.FULL:
+                return getattr(route, "path", "")
+        return None
+
+    assert first_match("/reports/shared") == "/reports/shared"
+    assert first_match("/reports/42") == "/reports/{report_id:int}"
+    assert first_match("/reports/abc") != "/reports/{report_id:int}"
 
 
 def test_slice_does_not_implement_a_second_executor():
