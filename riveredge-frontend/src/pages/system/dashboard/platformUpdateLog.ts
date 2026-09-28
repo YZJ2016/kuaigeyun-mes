@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'bank-account-statement-uniimport-r01',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.bank-account-statement-uniimport-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.bank-account-statement-uniimport-r01.description',
+  },
+  {
     id: 'finance-invoice-fill-number-approved-r01',
     date: '2026-09-28',
     type: 'fix',
