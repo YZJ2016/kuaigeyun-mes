@@ -151,6 +151,31 @@ class UserMessageService:
             raise NotFoundError("消息不存在")
         
         return UserMessageResponse.model_validate(message)
+
+    @staticmethod
+    async def get_user_message_attachment(
+        tenant_id: int,
+        user_id: int,
+        message_uuid: str,
+    ) -> tuple[bytes, str]:
+        """收件人下载本条消息的附件。列表和详情只给文件名，字节不进响应正文。"""
+        user = await User.get_or_none(id=user_id, tenant_id=tenant_id)
+        if not user:
+            raise NotFoundError("用户不存在")
+
+        recipient_conditions = [str(user_id)]
+        if user.email:
+            recipient_conditions.append(user.email)
+
+        message = await MessageLog.filter(
+            uuid=message_uuid,
+            tenant_id=tenant_id,
+            recipient__in=recipient_conditions,
+            deleted_at__isnull=True,
+        ).first()
+        if not message or not message.attachment_name or message.attachment_content is None:
+            raise NotFoundError("附件不存在")
+        return bytes(message.attachment_content), str(message.attachment_name)
     
     @staticmethod
     async def mark_messages_read(

@@ -1,0 +1,27 @@
+{
+  "code": "kuaireport",
+  "name": "星报表",
+  "version": "1.0.0",
+  "is_pro": true,
+  "market_category": "pro",
+  "description": "登记数据源，并按报表配置执行筛选、分页与合计",
+  "icon": "barChart",
+  "author": "StarTech",
+  "entry_point": "../apps/kuaireport/index.tsx",
+  "route_path": "/apps/kuaireport",
+  "sort_order": 340,
+  "menu_config": {
+    "title": "app.kuaireport.name",
+    "icon": "barChart",
+    "path": "/apps/kuaireport",
+    "permission": "kuaireport:data-source:display"
+  },
+  "permissions": [
+    "kuaireport:data-source:display",
+    "kuaireport:data-source:read",
+    "kuaireport:data-source:create",
+    "kuaireport:data-source:update",
+    "kuaireport:data-source:delete",
+    "kuaireport:report:execute"
+  ]
+}

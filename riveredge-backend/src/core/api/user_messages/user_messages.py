@@ -4,7 +4,10 @@
 提供用户消息的查询、标记已读等功能。
 """
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import Response
 from typing import Dict
 
 from core.schemas.user_message import (
@@ -101,6 +104,34 @@ async def get_user_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+
+
+@router.get("/{message_uuid}/attachment")
+async def download_user_message_attachment(
+    message_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """下载当前用户某条消息的附件。响应体是文件，不写入访问日志正文。"""
+    try:
+        content, filename = await UserMessageService.get_user_message_attachment(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            message_uuid=message_uuid,
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    media_type = "application/octet-stream"
+    if filename.lower().endswith(".xlsx"):
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
 
 
 @router.post("/mark-read", response_model=Dict[str, int])

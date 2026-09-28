@@ -755,6 +755,8 @@ export default {
   'pages.personal.messages.categoryProcess': 'Quy trình',
   'pages.personal.messages.categorySystem': 'Hệ thống',
   'pages.personal.messages.openRelated': 'Mở liên quan',
+  'pages.personal.messages.downloadAttachment': 'Tải xuống {{name}}',
+  'pages.personal.messages.downloadFailed': 'Tải xuống không thành công',
   'pages.personal.messages.selectToView': 'Chọn tin nhắn bên trái để xem chi tiết',
   'pages.personal.messages.filterAll': 'Tất cả',
   'pages.personal.messages.filterUnread': 'Chưa đọc',

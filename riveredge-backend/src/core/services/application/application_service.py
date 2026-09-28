@@ -839,6 +839,11 @@ class ApplicationService:
                 is_active=application.get("is_active", False),
             )
 
+        if app_code == "kuaireport":
+            from apps.kuaireport.slices.s146_center import seed_system_reports_on_lifecycle
+
+            await seed_system_reports_on_lifecycle(tenant_id)
+
         return application
     
     @staticmethod
@@ -1053,6 +1058,10 @@ class ApplicationService:
             )
 
             await ScheduledJobPresetService.sync_presets_for_tenant(tenant_id)
+        elif app_code == "kuaireport":
+            from apps.kuaireport.slices.s146_center import seed_system_reports_on_lifecycle
+
+            await seed_system_reports_on_lifecycle(tenant_id)
         if application.get('is_installed') and application.get('menu_config') and not is_industry_module_app_code(app_code) and not is_industry_pack_shell_code(app_code):
             from core.services.system.menu_service import MenuService
             # 重新同步菜单，确保菜单状态与应用状态一致

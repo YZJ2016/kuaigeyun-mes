@@ -15,7 +15,7 @@ except ImportError as exc:  # pragma: no cover
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_REGISTRY = "projects/registry.yaml"
-PRO_APPS = ["kuaiai", "kuaireport", "kuaiiot"]
+PRO_APPS = ["kuaiai", "kuaiiot"]
 
 
 def _relpath(from_root: Path, target: Path) -> str:

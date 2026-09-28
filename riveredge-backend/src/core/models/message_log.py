@@ -42,6 +42,8 @@ class MessageLog(BaseModel):
     entity_type = fields.CharField(max_length=100, null=True, description="业务实体类型")
     entity_id = fields.IntField(null=True, description="业务实体ID")
     entity_uuid = fields.CharField(max_length=36, null=True, description="业务实体UUID")
+    attachment_name = fields.CharField(max_length=255, null=True, description="可选附件文件名")
+    attachment_content = fields.BinaryField(null=True, description="可选附件内容")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

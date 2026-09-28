@@ -758,6 +758,8 @@ export default {
   'pages.personal.messages.categoryProcess': '流程',
   'pages.personal.messages.categorySystem': '系統',
   'pages.personal.messages.openRelated': '開啟相關單據',
+  'pages.personal.messages.downloadAttachment': '下載 {{name}}',
+  'pages.personal.messages.downloadFailed': '下載附件失敗',
   'pages.personal.messages.selectToView': '請從左側選擇一條訊息檢視詳情',
   'pages.personal.messages.filterAll': '全部',
   'pages.personal.messages.filterUnread': '未讀',
