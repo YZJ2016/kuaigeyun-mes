@@ -264,8 +264,12 @@ async def run_init(tenant_ids: list[int] | None = None) -> int:
             logger.warning("未找到任何租户")
             return 0
         total_created = 0
+        # spec 143：脚本无 ambient 上下文——逐组织进入显式 with_tenant scope
+        from infra.domain.tenant_context import with_tenant
+
         for t in tenants:
-            n = await seed_system_menus(t.id)
+            async with with_tenant(t.id, reason="系统菜单初始化脚本按组织执行"):
+                n = await seed_system_menus(t.id)
             total_created += n
             logger.info(f"租户 {t.id} 系统菜单初始化完成，新增 {n} 条")
         return total_created

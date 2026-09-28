@@ -369,7 +369,9 @@ async def _lookup_geo_from_login_logs(
         if row and row.login_latitude is not None and row.login_longitude is not None:
             return float(row.login_latitude), float(row.login_longitude)
     except Exception as e:
-        logger.debug(f"从登录日志回查坐标失败: {ip}, {e}")
+        # spec 143：无组织上下文时此处会抛 TenantContextError，geo 回查被跳过——
+        # 必须 warning 级留痕，不能静默吞掉
+        logger.warning(f"从登录日志回查坐标失败: {ip}, {e}")
     return None, None
 
 
@@ -402,7 +404,9 @@ async def _lookup_paired_geo_location_from_login_logs(
                     location = normalize_login_location_label(label)
             return location, float(row.login_latitude), float(row.login_longitude)
     except Exception as e:
-        logger.debug(f"从登录日志成对回查地理信息失败: {ip}, {e}")
+        # spec 143：无组织上下文时此处会抛 TenantContextError，geo 回查被跳过——
+        # 必须 warning 级留痕，不能静默吞掉
+        logger.warning(f"从登录日志成对回查地理信息失败: {ip}, {e}")
     return None, None, None
 
 
@@ -425,7 +429,9 @@ async def _lookup_location_from_login_logs(ip: str) -> Optional[str]:
             if label and not label.startswith("中国-"):
                 return normalize_login_location_label(label)
     except Exception as e:
-        logger.debug(f"从登录日志回查地点失败: {ip}, {e}")
+        # spec 143：无组织上下文时此处会抛 TenantContextError，geo 回查被跳过——
+        # 必须 warning 级留痕，不能静默吞掉
+        logger.warning(f"从登录日志回查地点失败: {ip}, {e}")
     return None
 
 

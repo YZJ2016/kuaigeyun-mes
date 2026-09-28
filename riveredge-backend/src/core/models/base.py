@@ -10,6 +10,7 @@ from tortoise import fields
 from tortoise.models import Model
 
 from infra.models.base import BaseModel as SoilBaseModel
+from infra.domain.tenant_isolation import TenantIsolationMixin
 
 
 def _generate_uuid() -> str:
@@ -17,7 +18,7 @@ def _generate_uuid() -> str:
     return str(uuid_module.uuid4())
 
 
-class LogBaseModel(Model):
+class LogBaseModel(TenantIsolationMixin, Model):
     """
     日志类模型基类（无 updated_at）
 

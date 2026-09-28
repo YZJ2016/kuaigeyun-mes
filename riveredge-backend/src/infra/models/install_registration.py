@@ -14,6 +14,8 @@ class InstallRegistration(BaseModel):
 
     class Meta:
         table = "infra_install_registrations"
+        # spec 143：实例登记为平台级遥测（tenant_id 恒为 NULL），退出强制隔离
+        tenant_isolation = "platform"
         indexes = [
             ("build_git_remote",),
             ("build_git_remote_is_official",),

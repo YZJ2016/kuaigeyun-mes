@@ -15,7 +15,7 @@ from infra.api.deps.deps import (
     oauth2_scheme,
 )
 from infra.models.user import User
-from infra.domain.tenant_context import set_current_tenant_id
+from infra.domain.tenant_context import set_current_tenant_id, with_tenant
 
 
 async def get_current_user(
@@ -85,6 +85,14 @@ async def get_current_tenant(
 
     if not is_infra_superadmin:
         await require_operational_tenant_by_id(tenant_id)
+    else:
+        # spec 143：平台超管经 X-Tenant-ID 显式选择目标组织——进入/退出一次
+        # with_tenant scope 以在激活点写入结构化日志 + core_operation_logs
+        # 审计记录（请求态操作者已在 get_current_user 登记）。
+        async with with_tenant(
+            tenant_id, reason="平台超管经 X-Tenant-ID 显式选择目标组织"
+        ):
+            pass
     set_current_tenant_id(tenant_id)
     return tenant_id
 

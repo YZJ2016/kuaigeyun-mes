@@ -16,7 +16,12 @@ from infra.domain.security.security import get_token_payload
 from infra.domain.security.infra_superadmin_security import (
     get_infra_superadmin_token_payload
 )
-from infra.domain.tenant_context import set_current_tenant_id
+from infra.domain.tenant_context import (
+    set_current_tenant_id,
+    set_request_actor,
+    unscoped,
+    with_tenant,
+)
 from infra.services.auth_service import AuthService
 
 # OAuth2 密码流（用于从请求头获取 Token）
@@ -124,7 +129,10 @@ async def get_current_user(
             request.state.is_infra_superadmin = True
         except Exception:
             pass
-        
+
+        # spec 143：登记请求态操作者，供跨组织 scope 激活点写审计
+        set_request_actor("infra_superadmin", admin_id, 0)
+
         # 确保 id 属性可以直接访问
         if not hasattr(virtual_user, 'id') or virtual_user.id is None:
             virtual_user.id = admin_id
@@ -177,6 +185,7 @@ async def get_current_user(
             pass
 
         set_current_tenant_id(int(tid))
+        set_request_actor("open_api", virtual_uid, int(tid))
         return virtual_user
 
     # 验证普通用户 Token
@@ -211,9 +220,33 @@ async def get_current_user(
         # state 写入失败不影响主流程
         pass
 
+    # spec 143：组织上下文先于用户查询建立——User 为租户模型，
+    # 强制隔离机制要求查询时已有组织上下文（或显式 scope）。
+    tid = int(tenant_id) if tenant_id is not None else None
+    if tid is not None:
+        set_current_tenant_id(tid)
+        set_request_actor("user", user_id, tid)
+
     # 获取用户（排除已软删除的用户，避免已删除用户通过旧 Token 继续访问）
-    user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
+    if tid is not None:
+        user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
+    else:
+        # Token 无组织声明：按主键的内部核验（随后仍需组织一致性校验）
+        async with unscoped(reason="JWT 无组织声明时的用户主键内部核验"):
+            user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
     if not user:
+        if tid is not None:
+            # 区分「不存在/已删」与「会话组织失配」：显式内部核验，保持原错误语义
+            async with unscoped(reason="认证用户核验：区分用户不存在与会话组织失配"):
+                exists_elsewhere = await User.get_or_none(
+                    id=user_id, deleted_at__isnull=True
+                )
+            if exists_elsewhere is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="会话组织已失效，请重新登录",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
         logger.warning(f"用户不存在或已被软删除，user_id={user_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -229,10 +262,9 @@ async def get_current_user(
         )
 
     # JWT 中的组织必须可用（含到期时间），且与当前用户记录一致
-    if tenant_id is not None and not getattr(user, "_is_infra_superadmin", False):
+    if tid is not None and not getattr(user, "_is_infra_superadmin", False):
         from infra.domain.tenant.tenant_access import require_operational_tenant_for_session
 
-        tid = int(tenant_id)
         await require_operational_tenant_for_session(tid)
         if user.tenant_id is not None and user.tenant_id != tid:
             raise HTTPException(
@@ -240,10 +272,8 @@ async def get_current_user(
                 detail="会话组织已失效，请重新登录",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        set_current_tenant_id(tid)
-    elif tenant_id:
-        set_current_tenant_id(int(tenant_id))
 
+    set_request_actor("user", user.id, user.tenant_id if user.tenant_id is not None else tid)
     return user
 
 
@@ -348,5 +378,7 @@ async def get_current_infra_superadmin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="平台超级管理员未激活"
         )
-    
+
+    # spec 143：登记请求态操作者，供跨组织 scope 激活点写审计
+    set_request_actor("infra_superadmin", admin.id, 0)
     return admin

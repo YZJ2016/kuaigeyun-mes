@@ -258,7 +258,11 @@ async def lifespan(app: FastAPI):
     try:
         from core.services.application.application_service import ApplicationService
         from infra.models.tenant import Tenant
-        total_count = await ApplicationService.count_applications(deleted_at_is_null=True)
+        from infra.domain.tenant_context import unscoped, with_tenant
+
+        # spec 143：Application 为租户模型——启动期判定走显式 unscoped 内部路径
+        async with unscoped(reason="启动期判定应用注册表是否为空"):
+            total_count = await ApplicationService.count_applications(deleted_at_is_null=True)
         if total_count == 0:
             logger.info("📋 数据库无应用记录，自动扫描并注册应用...")
             plugins_dir = ApplicationService._get_plugins_directory()
@@ -266,10 +270,12 @@ async def lifespan(app: FastAPI):
                 logger.warning(f"⚠️ 应用 manifest 目录不存在: {plugins_dir}，请设置 APPS_MANIFEST_DIR")
             else:
                 # 为所有租户扫描注册（解决非 tenant_id=1 的组织应用中心为空）
+                # spec 143：逐组织执行，每组织进入显式 with_tenant scope
                 tenants = await Tenant.all()
                 tenant_ids = [t.id for t in tenants] if tenants else [1]
                 for tid in tenant_ids:
-                    await ApplicationService.scan_and_register_plugins(tenant_id=tid)
+                    async with with_tenant(tid, reason="启动期逐组织扫描注册应用"):
+                        await ApplicationService.scan_and_register_plugins(tenant_id=tid)
                 logger.info(f"✅ 应用自动注册完成，已为 {len(tenant_ids)} 个组织注册")
     except Exception as e:
         logger.warning(f"⚠️ 应用自动扫描失败（可稍后在应用中心手动扫描）: {e}")
@@ -521,7 +527,11 @@ except Exception as _client_static_err:
 async def debug_batches():
     try:
         from apps.master_data.models.material_batch import MaterialBatch
-        batches = await MaterialBatch.all().values("id", "material_id", "batch_no", "quantity", "status", "deleted_at")
+        from infra.domain.tenant_context import unscoped
+
+        # spec 143：调试端点跨组织查看——显式 unscoped（激活点写结构化日志）
+        async with unscoped(reason="调试端点跨组织查看物料批次"):
+            batches = await MaterialBatch.all().values("id", "material_id", "batch_no", "quantity", "status", "deleted_at")
         return {"batches": batches}
     except Exception as e:
         return {"error": str(e)}
@@ -530,7 +540,11 @@ async def debug_batches():
 async def debug_materials():
     try:
         from apps.master_data.models.material import Material
-        mats = await Material.all().values("id", "uuid", "name", "code", "deleted_at")
+        from infra.domain.tenant_context import unscoped
+
+        # spec 143：调试端点跨组织查看——显式 unscoped（激活点写结构化日志）
+        async with unscoped(reason="调试端点跨组织查看物料"):
+            mats = await Material.all().values("id", "uuid", "name", "code", "deleted_at")
         return {"materials": mats}
     except Exception as e:
         return {"error": str(e)}
@@ -717,7 +731,11 @@ if _is_debug_allowed():
 
         try:
             tenant_id = 1
-            apps = await ApplicationService.scan_and_register_plugins(tenant_id)
+            # spec 143：调试端点按组织 1 执行——显式 with_tenant scope
+            from infra.domain.tenant_context import with_tenant
+
+            async with with_tenant(tenant_id, reason="调试端点按组织1扫描注册应用"):
+                apps = await ApplicationService.scan_and_register_plugins(tenant_id)
             await ApplicationRegistryService.reload_apps()
             return {
                 "status": "success",
@@ -809,13 +827,16 @@ async def debug_fastapi_routes():
 async def debug_db_apps():
     """检查数据库中的应用记录（调试用）"""
     from core.models.application import Application
+    from infra.domain.tenant_context import with_tenant
 
     try:
-        rows = (
-            await Application.filter(tenant_id=1, deleted_at__isnull=True)
-            .order_by("code")
-            .values("code", "name", "is_active", "is_installed")
-        )
+        # spec 143：调试端点按组织 1 查询——显式 with_tenant scope
+        async with with_tenant(1, reason="调试端点查询组织1应用记录"):
+            rows = (
+                await Application.filter(tenant_id=1, deleted_at__isnull=True)
+                .order_by("code")
+                .values("code", "name", "is_active", "is_installed")
+            )
         return {"status": "success", "apps": rows, "count": len(rows)}
     except Exception as e:  # noqa: BLE001
         return {"status": "error", "message": f"数据库查询失败: {e}"}

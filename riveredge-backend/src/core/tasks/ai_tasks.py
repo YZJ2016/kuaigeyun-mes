@@ -21,13 +21,17 @@ async def run_ai_job(
     """执行 AI 长任务（OCR / RAG 索引等）。"""
     payload = payload or {}
     AiJobService.update_job(job_id, status="running", progress=10)
+    # spec 143：Taskiq worker 无请求上下文——以任务组织身份进入显式 scope
+    from infra.domain.tenant_context import with_tenant
+
     try:
-        if job_type == "ocr_extract":
-            result = await _run_ocr_extract(tenant_id, payload)
-        elif job_type == "rag_reindex":
-            result = await _run_rag_reindex(tenant_id, payload)
-        else:
-            raise ValueError(f"未知 job_type: {job_type}")
+        async with with_tenant(tenant_id, reason="AI 异步任务按任务组织执行"):
+            if job_type == "ocr_extract":
+                result = await _run_ocr_extract(tenant_id, payload)
+            elif job_type == "rag_reindex":
+                result = await _run_rag_reindex(tenant_id, payload)
+            else:
+                raise ValueError(f"未知 job_type: {job_type}")
 
         AiJobService.update_job(job_id, status="completed", result=result, progress=100)
         return {"job_id": job_id, "status": "completed", "result": result}

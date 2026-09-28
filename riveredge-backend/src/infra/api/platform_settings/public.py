@@ -73,7 +73,13 @@ async def get_platform_settings_public(
             else:
                 tenant = None
             if tenant:
-                site_settings = await SiteSettingService.get_settings_with_platform_fallback(tenant.id)
+                # spec 143：公开登录页按域名叠加组织皮肤——以该组织身份显式 scope
+                from infra.domain.tenant_context import with_tenant
+
+                async with with_tenant(
+                    tenant.id, reason="公开登录页按域名读取组织皮肤设置"
+                ):
+                    site_settings = await SiteSettingService.get_settings_with_platform_fallback(tenant.id)
                 merged = settings.model_dump()
                 merged.update(
                     {

@@ -1958,16 +1958,20 @@ class DemandComputationService(AppBaseService):
         因此进程启动时不可能有正在运算的计算单；此时仍为「计算中」的只能是上次
         进程被强杀 / 断电导致的残留。运算明细写在已回滚的事务里，不会有半成品。
         """
-        stale = await DemandComputation.filter(
-            computation_status=DEMAND_COMPUTATION_STATUS_COMPUTING,
-        ).values_list("id", "computation_code")
-        if not stale:
-            return 0
+        # spec 143：启动对账需跨组织扫描滞留计算单——显式 unscoped 内部路径
+        from infra.domain.tenant_context import unscoped
 
-        now = resolve_business_datetime()
-        await DemandComputation.filter(
-            computation_status=DEMAND_COMPUTATION_STATUS_COMPUTING,
-        ).update(
+        async with unscoped(reason="启动对账：跨组织回正滞留的需求计算单"):
+            stale = await DemandComputation.filter(
+                computation_status=DEMAND_COMPUTATION_STATUS_COMPUTING,
+            ).values_list("id", "computation_code")
+            if not stale:
+                return 0
+
+            now = resolve_business_datetime()
+            await DemandComputation.filter(
+                computation_status=DEMAND_COMPUTATION_STATUS_COMPUTING,
+            ).update(
             computation_status=DEMAND_COMPUTATION_STATUS_FAILED,
             computation_end_time=now,
             error_message=INTERRUPTED_COMPUTATION_ERROR_MESSAGE,

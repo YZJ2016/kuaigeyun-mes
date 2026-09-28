@@ -61,29 +61,32 @@ async def fix_rules():
     await Tortoise.init(config=TORTOISE_ORM)
     try:
         from core.models.code_rule import CodeRule
+        from infra.domain.tenant_context import unscoped
 
-        # 先列出所有相关规则
-        all_target_rules = await CodeRule.filter(
-            code__in=[u["code"] for u in RULE_UPDATES],
-            deleted_at__isnull=True,
-        ).all()
-        logger.info(f"找到 {len(all_target_rules)} 条待修复规则: {[r.code for r in all_target_rules]}")
-
-        updated_count = 0
-        for update in RULE_UPDATES:
-            rules = await CodeRule.filter(
-                code=update["code"],
+        # spec 143：运维脚本无 ambient 上下文——跨组织规则修复为显式 unscoped
+        async with unscoped(reason="运维脚本跨组织修复编码规则"):
+            # 先列出所有相关规则
+            all_target_rules = await CodeRule.filter(
+                code__in=[u["code"] for u in RULE_UPDATES],
                 deleted_at__isnull=True,
             ).all()
-            for rule in rules:
-                rule.rule_components = update["rule_components"]
-                rule.seq_reset_rule = "never"
-                rule.description = update["description"]
-                await rule.save()
-                updated_count += 1
-                logger.info(f"已更新租户 {rule.tenant_id} 的 {update['code']} 规则")
-        logger.info(f"共更新 {updated_count} 条编码规则")
-        return updated_count
+            logger.info(f"找到 {len(all_target_rules)} 条待修复规则: {[r.code for r in all_target_rules]}")
+
+            updated_count = 0
+            for update in RULE_UPDATES:
+                rules = await CodeRule.filter(
+                    code=update["code"],
+                    deleted_at__isnull=True,
+                ).all()
+                for rule in rules:
+                    rule.rule_components = update["rule_components"]
+                    rule.seq_reset_rule = "never"
+                    rule.description = update["description"]
+                    await rule.save()
+                    updated_count += 1
+                    logger.info(f"已更新租户 {rule.tenant_id} 的 {update['code']} 规则")
+            logger.info(f"共更新 {updated_count} 条编码规则")
+            return updated_count
     finally:
         await Tortoise.close_connections()
 

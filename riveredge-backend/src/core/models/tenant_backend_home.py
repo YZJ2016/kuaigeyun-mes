@@ -7,8 +7,10 @@
 from tortoise import fields
 from tortoise.models import Model
 
+from infra.domain.tenant_isolation import TenantIsolationMixin
 
-class TenantBackendHome(Model):
+
+class TenantBackendHome(TenantIsolationMixin, Model):
     """
     租户级「后台首页」指针，指向 core_menus.uuid 的一条菜单。
 

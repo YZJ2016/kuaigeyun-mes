@@ -136,21 +136,27 @@ class ReminderDispatchService:
         _ensure_domain_handlers()
         await _run_preparers()
         now = resolve_business_datetime()
-        tenant_ids = (
-            await ReminderEvent.filter(
-                status__in=["pending", "failed"],
-                planned_at__lte=now,
-                deleted_at__isnull=True,
+        # spec 143：提醒派发 tick 跨组织扫描到期事件——显式 unscoped 内部路径；
+        # 逐租户派发限定在该租户
+        from infra.domain.tenant_context import unscoped, with_tenant
+
+        async with unscoped(reason="提醒派发 tick 跨组织扫描到期事件"):
+            tenant_ids = (
+                await ReminderEvent.filter(
+                    status__in=["pending", "failed"],
+                    planned_at__lte=now,
+                    deleted_at__isnull=True,
+                )
+                .distinct()
+                .values_list("tenant_id", flat=True)
             )
-            .distinct()
-            .values_list("tenant_id", flat=True)
-        )
         results = []
         totals = {"sent": 0, "stopped": 0, "failed": 0, "skipped": 0, "checked": 0}
         for tenant_id in tenant_ids:
-            one = await ReminderDispatchService.process_due_for_tenant(
-                int(tenant_id), limit=limit_per_tenant
-            )
+            async with with_tenant(int(tenant_id), reason="提醒派发按事件组织执行"):
+                one = await ReminderDispatchService.process_due_for_tenant(
+                    int(tenant_id), limit=limit_per_tenant
+                )
             results.append(one)
             for key in totals:
                 totals[key] += int(one.get(key) or 0)

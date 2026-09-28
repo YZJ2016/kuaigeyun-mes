@@ -139,13 +139,17 @@ class ApplicationDedicatedBindingService:
 
         # 租户侧必须有 core_applications 行，否则列表查询 tenant_id=? 永远拿不到该应用
         from core.services.application.application_service import ApplicationService
+        from infra.domain.tenant_context import with_tenant
 
-        await ApplicationService.ensure_application_registered_from_manifest(tenant_id, code)
+        async with with_tenant(
+            tenant_id, reason="平台管理员绑定专用应用到目标组织"
+        ):
+            await ApplicationService.ensure_application_registered_from_manifest(tenant_id, code)
 
-        # 绑定改变了该租户专用应用的可见性，失效菜单缓存以即时反映（菜单树命中直出依赖此处失效）
-        from core.services.system.menu_service import MenuService
+            # 绑定改变了该租户专用应用的可见性，失效菜单缓存以即时反映（菜单树命中直出依赖此处失效）
+            from core.services.system.menu_service import MenuService
 
-        await MenuService._clear_menu_cache(tenant_id)
+            await MenuService._clear_menu_cache(tenant_id)
 
     @staticmethod
     async def unbind(app_code: str, tenant_id: int) -> None:
@@ -166,6 +170,10 @@ class ApplicationDedicatedBindingService:
         # 解绑后恢复宿主侧栏，并失效菜单缓存
         from core.services.system.menu_takeover_service import MenuTakeoverService
         from core.services.system.menu_service import MenuService
+        from infra.domain.tenant_context import with_tenant
 
-        await MenuTakeoverService.revert_dedicated_shell_hide(tenant_id, code)
-        await MenuService._clear_menu_cache(tenant_id)
+        async with with_tenant(
+            tenant_id, reason="平台管理员解绑目标组织专用应用"
+        ):
+            await MenuTakeoverService.revert_dedicated_shell_hide(tenant_id, code)
+            await MenuService._clear_menu_cache(tenant_id)

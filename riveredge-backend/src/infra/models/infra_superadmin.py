@@ -110,6 +110,8 @@ class InfraSuperAdmin(BaseModel):
         模型元数据
         """
         table = "infra_superadmin"  # 表名必须包含模块前缀（infra_ - 平台级后端）
+        # spec 143：平台超管为平台级身份（tenant_id 恒为 NULL），退出强制隔离
+        tenant_isolation = "platform"
         indexes = [
             ("username",),  # 用户名索引（已通过 unique=True 保证唯一性）
         ]

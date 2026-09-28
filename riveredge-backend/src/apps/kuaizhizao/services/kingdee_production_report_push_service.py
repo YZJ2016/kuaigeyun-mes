@@ -336,21 +336,27 @@ class KingdeeProductionReportPushService:
     async def retry_due_pushes(self, *, batch_limit: int = 50) -> Dict[str, Any]:
         """扫描到期待重推的失败推送并重推（taskiq 分钟级 tick 调用）。"""
         now = resolve_business_datetime()
-        records = await ReportingRecord.filter(
-            status="approved",
-            kingdee_push_status="failed",
-            kingdee_push_next_at__lte=now,
-            deleted_at__isnull=True,
-        ).order_by("kingdee_push_next_at").limit(batch_limit).all()
+        # spec 143：定时 tick 跨组织扫描待重推记录——显式 unscoped 内部路径；
+        # 逐条重推限定在该记录所属组织
+        from infra.domain.tenant_context import unscoped, with_tenant
+
+        async with unscoped(reason="金蝶汇报重推 tick 跨组织扫描到期记录"):
+            records = await ReportingRecord.filter(
+                status="approved",
+                kingdee_push_status="failed",
+                kingdee_push_next_at__lte=now,
+                deleted_at__isnull=True,
+            ).order_by("kingdee_push_next_at").limit(batch_limit).all()
 
         summary = {"scanned": len(records), "succeeded": 0, "failed": 0, "dead": 0, "skipped": 0}
         for record in records:
             try:
-                result = await self.push_after_reporting_approved(
-                    tenant_id=int(record.tenant_id),
-                    record_id=int(record.id),
-                    acting_user_id=int(record.approved_by or record.recorded_by or 0),
-                )
+                async with with_tenant(int(record.tenant_id), reason="金蝶重推按记录组织执行"):
+                    result = await self.push_after_reporting_approved(
+                        tenant_id=int(record.tenant_id),
+                        record_id=int(record.id),
+                        acting_user_id=int(record.approved_by or record.recorded_by or 0),
+                    )
             except Exception as exc:
                 logger.warning(
                     "金蝶生产汇报单定时重推异常 tenant_id={} record_id={} err={}",
@@ -362,15 +368,17 @@ class KingdeeProductionReportPushService:
                 continue
             if result is None:
                 # 配置已禁用或记录不再满足推送条件：清除重试状态，避免每分钟空扫
-                await ReportingRecord.filter(id=record.id).update(
-                    kingdee_push_status=None,
-                    kingdee_push_next_at=None,
-                )
+                async with with_tenant(int(record.tenant_id), reason="金蝶重推状态回写按记录组织执行"):
+                    await ReportingRecord.filter(id=record.id).update(
+                        kingdee_push_status=None,
+                        kingdee_push_next_at=None,
+                    )
                 summary["skipped"] += 1
                 continue
-            fresh = await ReportingRecord.get_or_none(
-                id=record.id, deleted_at__isnull=True
-            )
+            async with with_tenant(int(record.tenant_id), reason="金蝶重推结果回读按记录组织执行"):
+                fresh = await ReportingRecord.get_or_none(
+                    id=record.id, deleted_at__isnull=True
+                )
             status = getattr(fresh, "kingdee_push_status", None)
             if status == "dead":
                 summary["dead"] += 1

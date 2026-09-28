@@ -29,16 +29,20 @@ PUBLIC_BRANDING_CATEGORY_ALIASES: dict[str, list[str]] = {
 
 async def _resolve_public_branding_file(uuid: str, category: str):
     from core.models.file import File
+    from infra.domain.tenant_context import unscoped
 
     categories = PUBLIC_BRANDING_CATEGORY_ALIASES.get(category, [category])
-    for cat in categories:
-        file = await File.filter(
-            uuid=uuid,
-            category=cat,
-            deleted_at__isnull=True,
-        ).first()
-        if file:
-            return file
+    # spec 143：未认证公开入口——按 uuid+分类白名单显式 unscoped 解析
+    # （uuid 不可枚举、分类白名单约束暴露面；无请求态操作者，仅结构化日志）
+    async with unscoped(reason="公开品牌资源按 uuid+分类白名单解析"):
+        for cat in categories:
+            file = await File.filter(
+                uuid=uuid,
+                category=cat,
+                deleted_at__isnull=True,
+            ).first()
+            if file:
+                return file
     return None
 
 
@@ -91,14 +95,18 @@ async def get_file_preview_public(
             except Exception:
                 tenant_id = 1
 
-        if not await FileService.file_content_available(tenant_id, file):
-            raise NotFoundError("文件内容不存在，请重新上传")
+        # spec 143：资源归属组织已解析——以其组织身份读取内容/预览
+        from infra.domain.tenant_context import with_tenant
 
-        preview_info = await FilePreviewService.get_preview_info(
-            file_uuid=uuid,
-            tenant_id=tenant_id,
-            thumbnail_size=size,
-        )
+        async with with_tenant(tenant_id, reason="公开品牌资源按归属组织读取预览"):
+            if not await FileService.file_content_available(tenant_id, file):
+                raise NotFoundError("文件内容不存在，请重新上传")
+
+            preview_info = await FilePreviewService.get_preview_info(
+                file_uuid=uuid,
+                tenant_id=tenant_id,
+                thumbnail_size=size,
+            )
 
         return FilePreviewResponse(**preview_info)
 
