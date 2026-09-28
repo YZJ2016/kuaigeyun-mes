@@ -13,11 +13,12 @@ import { Input, Form, App, Col } from 'antd';
 import { ProForm, ProFormSelect } from '@ant-design/pro-components';
 import { UniDropdown, QuickCreateModal } from '../uni-dropdown';
 import { useProFormReadonlyMode } from '../../utils/proFormReadonly';
+import { createDictionaryItem } from '../../services/dataDictionary';
 import {
-  getDataDictionaryByCode,
-  getDictionaryItemList,
-  createDictionaryItem,
-} from '../../services/dataDictionary';
+  clearDictionaryCache,
+  getDictionaryBundleCached,
+  getDictionaryItemsSync,
+} from '../../services/dataDictionaryCache';
 import { mapSystemDictionaryItemOptions } from '../../utils/systemDictionaryI18n';
 import {
   dictionaryItemValueContainsStorageDelimiter,
@@ -175,8 +176,23 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const isReadonlyMode = useProFormReadonlyMode(readonly);
-  const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [loading, setLoading] = useState(false);
+  const mapItemsToOptions = useCallback(
+    (items: Parameters<typeof mapSystemDictionaryItemOptions>[1]) =>
+      dedupeDictionaryOptionsByValue(
+        mapSystemDictionaryItemOptions(dictionaryCode, items, t).sort((a, b) => {
+          const orderA = items.find((i) => i.value === a.value)?.sort_order ?? 0;
+          const orderB = items.find((i) => i.value === b.value)?.sort_order ?? 0;
+          return orderA - orderB;
+        }),
+      ),
+    [dictionaryCode, t],
+  );
+
+  const cachedItems = getDictionaryItemsSync(dictionaryCode);
+  const [options, setOptions] = useState<Array<{ label: string; value: string }>>(() =>
+    cachedItems ? mapItemsToOptions(cachedItems) : [],
+  );
+  const [loading, setLoading] = useState(() => !cachedItems);
   const resolvePendingLabel = useCallback(
     (strVal: string) => resolveSystemDictionaryValueLabel(dictionaryCode, strVal, t),
     [dictionaryCode, t],
@@ -187,34 +203,27 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   const [dictionaryUuid, setDictionaryUuid] = useState<string>('');
 
   /**
-   * 加载字典项列表
+   * 加载字典项列表（TTL 缓存 + 并发去重，避免同页多枚 DictionarySelect 重复打接口）
    */
-  const loadDictionaryItems = async () => {
+  const loadDictionaryItems = useCallback(async () => {
     try {
-      setLoading(true);
+      const syncHit = getDictionaryItemsSync(dictionaryCode);
+      if (!syncHit) setLoading(true);
       const loadOpts = hostResource ? { hostResource } : undefined;
-      const dictionary = await getDataDictionaryByCode(dictionaryCode, loadOpts);
+      const { dictionary, items } = await getDictionaryBundleCached(dictionaryCode, loadOpts);
       setDictionaryUuid(dictionary.uuid);
-      const items = await getDictionaryItemList(dictionary.uuid, true, loadOpts);
-      const optionsList = dedupeDictionaryOptionsByValue(
-        mapSystemDictionaryItemOptions(dictionaryCode, items, t).sort((a, b) => {
-          const orderA = items.find((i) => i.value === a.value)?.sort_order ?? 0;
-          const orderB = items.find((i) => i.value === b.value)?.sort_order ?? 0;
-          return orderA - orderB;
-        }),
-      );
-      setOptions(optionsList);
+      setOptions(mapItemsToOptions(items));
     } catch (error: any) {
       console.error(`加载字典项失败 (${dictionaryCode}):`, error);
       messageApi.error(t('components.dictionarySelect.loadOptionsFailed', { label }));
     } finally {
       setLoading(false);
     }
-  };
+  }, [dictionaryCode, hostResource, label, mapItemsToOptions, messageApi, t]);
 
   useEffect(() => {
-    loadDictionaryItems();
-  }, [dictionaryCode, hostResource, i18n.language]);
+    void loadDictionaryItems();
+  }, [loadDictionaryItems, i18n.language]);
 
   /**
    * 处理创建新项
@@ -278,6 +287,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       setCreateModalOpen(false);
       createForm.resetFields();
 
+      clearDictionaryCache(dictionaryCode);
       await loadDictionaryItems();
 
       const newValue = newItem.value;

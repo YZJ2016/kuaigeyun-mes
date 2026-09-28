@@ -3635,9 +3635,13 @@ code {
     color: #ff7875;
   }
 
-  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__head-name,
+  /* 简约色彩：header 进度条为主色实底，标题/进度文案须用白字，勿再套主色（会与填充同色不可见） */
+  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__head-name {
+    color: rgba(255, 255, 255, 0.95);
+  }
+
   .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__head-progress {
-    color: var(--ant-color-primary, #1677ff);
+    color: rgba(255, 255, 255, 0.82);
   }
 }
 

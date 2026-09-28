@@ -17,10 +17,20 @@ WAREHOUSE_TYPE_CHOICES = (
     "consignment",  # 寄售仓
     "vmi",          # VMI仓
     "defect",       # 不良品仓
+    "scrap",        # 报废品仓
     "quarantine",   # 待检仓
 )
-WarehouseType = Literal["normal", "line_side", "wip", "outsourcing", "consignment", "vmi", "defect", "quarantine"]
-
+WarehouseType = Literal[
+    "normal",
+    "line_side",
+    "wip",
+    "outsourcing",
+    "consignment",
+    "vmi",
+    "defect",
+    "scrap",
+    "quarantine",
+]
 
 class WarehouseBase(BaseModel):
     """仓库基础 Schema"""

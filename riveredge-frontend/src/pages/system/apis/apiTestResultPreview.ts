@@ -65,13 +65,28 @@ function buildColumns(headers: string[]): ApiTestTableColumn[] {
   }));
 }
 
+/** Table 单元格只能渲染原始值；嵌套对象/数组需序列化，否则 React 会报 invalid child。 */
+function formatCellValue(value: unknown): string | number | boolean {
+  if (value == null) {
+    return '';
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function buildRowsFromMatrix(rows: unknown[][], headers: string[]): ApiTestTablePreview {
   const columns = buildColumns(headers);
   const dataSource = rows.map((row, rowIndex) => {
     const record: Record<string, unknown> = { key: String(rowIndex) };
     columns.forEach((column, columnIndex) => {
       const cell = Array.isArray(row) ? row[columnIndex] : undefined;
-      record[column.dataIndex] = cell ?? '';
+      record[column.dataIndex] = formatCellValue(cell);
     });
     return record;
   });
@@ -90,10 +105,13 @@ function buildRowsFromObjects(rows: Record<string, unknown>[]): ApiTestTablePrev
     key: field,
     ellipsis: true,
   }));
-  const dataSource = rows.map((row, index) => ({
-    key: String(row.key ?? index),
-    ...row,
-  }));
+  const dataSource = rows.map((row, index) => {
+    const record: Record<string, unknown> = { key: String(row.key ?? index) };
+    fields.forEach((field) => {
+      record[field] = formatCellValue(row[field]);
+    });
+    return record;
+  });
   return { columns, dataSource };
 }
 

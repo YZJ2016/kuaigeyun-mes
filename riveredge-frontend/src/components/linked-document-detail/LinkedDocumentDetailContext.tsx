@@ -4,29 +4,68 @@
  * 内容：各单据原版 DetailDrawerTemplate 插槽壳（禁止 Brief / plainBody 另写）。
  */
 
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, lazy, Suspense, useCallback, useContext, useMemo, useState } from 'react';
 import type { DrawerProps } from 'antd';
-import { theme } from 'antd';
+import { Spin, theme } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
   canOpenLinkedDocumentDetail,
   normalizeLinkedDocumentType,
 } from '../../apps/kuaizhizao/utils/linkedDocumentDetail';
 import { DetailDrawerChromeProvider } from '../layout-templates';
-import { SalesOrderLinkedDetailDrawer } from './drawers/SalesOrderLinkedDetailDrawer';
-import { PurchaseOrderLinkedDetailDrawer } from './drawers/PurchaseOrderLinkedDetailDrawer';
-import { QuotationLinkedDetailDrawer } from './drawers/QuotationLinkedDetailDrawer';
-import { SalesDeliveryLinkedDetailDrawer } from './drawers/SalesDeliveryLinkedDetailDrawer';
-import { PurchaseReceiptLinkedDetailDrawer } from './drawers/PurchaseReceiptLinkedDetailDrawer';
-import { SalesForecastLinkedDetailDrawer } from './drawers/SalesForecastLinkedDetailDrawer';
-import { DemandLinkedDetailDrawer } from './drawers/DemandLinkedDetailDrawer';
-import { PurchaseRequisitionLinkedDetailDrawer } from './drawers/PurchaseRequisitionLinkedDetailDrawer';
-import { DemandComputationLinkedDetailDrawer } from './drawers/DemandComputationLinkedDetailDrawer';
-import { WorkOrderLinkedDetailDrawer } from './drawers/WorkOrderLinkedDetailDrawer';
-import { FreightOrderLinkedDetailDrawer } from './drawers/FreightOrderLinkedDetailDrawer';
-import { ReportingRecordLinkedDetailDrawer } from './drawers/ReportingRecordLinkedDetailDrawer';
-import { PerformanceSummaryLinkedDetailDrawer } from './drawers/PerformanceSummaryLinkedDetailDrawer';
-import { AfterSalesLinkedDetailDrawer } from './drawers/AfterSalesLinkedDetailDrawer';
+
+const SalesOrderLinkedDetailDrawer = lazy(() =>
+  import('./drawers/SalesOrderLinkedDetailDrawer').then((m) => ({ default: m.SalesOrderLinkedDetailDrawer })),
+);
+const PurchaseOrderLinkedDetailDrawer = lazy(() =>
+  import('./drawers/PurchaseOrderLinkedDetailDrawer').then((m) => ({ default: m.PurchaseOrderLinkedDetailDrawer })),
+);
+const QuotationLinkedDetailDrawer = lazy(() =>
+  import('./drawers/QuotationLinkedDetailDrawer').then((m) => ({ default: m.QuotationLinkedDetailDrawer })),
+);
+const SalesDeliveryLinkedDetailDrawer = lazy(() =>
+  import('./drawers/SalesDeliveryLinkedDetailDrawer').then((m) => ({ default: m.SalesDeliveryLinkedDetailDrawer })),
+);
+const PurchaseReceiptLinkedDetailDrawer = lazy(() =>
+  import('./drawers/PurchaseReceiptLinkedDetailDrawer').then((m) => ({
+    default: m.PurchaseReceiptLinkedDetailDrawer,
+  })),
+);
+const SalesForecastLinkedDetailDrawer = lazy(() =>
+  import('./drawers/SalesForecastLinkedDetailDrawer').then((m) => ({ default: m.SalesForecastLinkedDetailDrawer })),
+);
+const DemandLinkedDetailDrawer = lazy(() =>
+  import('./drawers/DemandLinkedDetailDrawer').then((m) => ({ default: m.DemandLinkedDetailDrawer })),
+);
+const PurchaseRequisitionLinkedDetailDrawer = lazy(() =>
+  import('./drawers/PurchaseRequisitionLinkedDetailDrawer').then((m) => ({
+    default: m.PurchaseRequisitionLinkedDetailDrawer,
+  })),
+);
+const DemandComputationLinkedDetailDrawer = lazy(() =>
+  import('./drawers/DemandComputationLinkedDetailDrawer').then((m) => ({
+    default: m.DemandComputationLinkedDetailDrawer,
+  })),
+);
+const WorkOrderLinkedDetailDrawer = lazy(() =>
+  import('./drawers/WorkOrderLinkedDetailDrawer').then((m) => ({ default: m.WorkOrderLinkedDetailDrawer })),
+);
+const FreightOrderLinkedDetailDrawer = lazy(() =>
+  import('./drawers/FreightOrderLinkedDetailDrawer').then((m) => ({ default: m.FreightOrderLinkedDetailDrawer })),
+);
+const ReportingRecordLinkedDetailDrawer = lazy(() =>
+  import('./drawers/ReportingRecordLinkedDetailDrawer').then((m) => ({
+    default: m.ReportingRecordLinkedDetailDrawer,
+  })),
+);
+const PerformanceSummaryLinkedDetailDrawer = lazy(() =>
+  import('./drawers/PerformanceSummaryLinkedDetailDrawer').then((m) => ({
+    default: m.PerformanceSummaryLinkedDetailDrawer,
+  })),
+);
+const AfterSalesLinkedDetailDrawer = lazy(() =>
+  import('./drawers/AfterSalesLinkedDetailDrawer').then((m) => ({ default: m.AfterSalesLinkedDetailDrawer })),
+);
 
 /** 高于列表详情抽屉、报价内嵌关联，以及在线消息壳（z-index 1050） */
 const LINKED_DRAWER_Z_OFFSET = 80;
@@ -248,7 +287,29 @@ function LinkedDocumentDetailHost({
       return null;
   }
 
-  return <DetailDrawerChromeProvider value={chrome}>{drawer}</DetailDrawerChromeProvider>;
+  return (
+    <DetailDrawerChromeProvider value={chrome}>
+      <Suspense
+        fallback={
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+            }}
+          >
+            <Spin size="large" />
+          </div>
+        }
+      >
+        {drawer}
+      </Suspense>
+    </DetailDrawerChromeProvider>
+  );
 }
 
 export function LinkedDocumentDetailProvider({ children }: { children: React.ReactNode }) {

@@ -141,6 +141,8 @@ def derive_sales_order_capabilities(
     has_existing_delivery_project: bool = False,
     has_downstream_documents: bool = False,
     has_remaining_invoice_amount: bool = True,
+    has_purchasable_remaining: bool = False,
+    require_purchase_requisition: bool = False,
     require_audit_before_print: bool = False,
 ) -> SalesOrderCapabilities:
     status = getattr(order, "status", None)
@@ -360,6 +362,33 @@ def derive_sales_order_capabilities(
         push_delivery_project_reason if not push_delivery_project_allowed else None,
     )
 
+    # push_purchase_requisition / push_purchase_order — 明细含剩余可采购件（Buy）
+    push_pr_allowed = False
+    push_pr_reason = push_reason or "sales_order.push_purchase_requisition.not_allowed"
+    if push_ok:
+        if not has_items:
+            push_pr_reason = "sales_order.push.no_items"
+        elif not has_purchasable_remaining:
+            push_pr_reason = "sales_order.push_purchase_requisition.no_buy_items"
+        else:
+            push_pr_allowed = True
+            push_pr_reason = None
+    push_pr_cap = _cap(push_pr_allowed, push_pr_reason if not push_pr_allowed else None)
+
+    push_po_allowed = False
+    push_po_reason = push_reason or "sales_order.push_purchase_order.not_allowed"
+    if push_ok:
+        if require_purchase_requisition:
+            push_po_reason = "sales_order.push_purchase_order.require_requisition"
+        elif not has_items:
+            push_po_reason = "sales_order.push.no_items"
+        elif not has_purchasable_remaining:
+            push_po_reason = "sales_order.push_purchase_order.no_buy_items"
+        else:
+            push_po_allowed = True
+            push_po_reason = None
+    push_po_cap = _cap(push_po_allowed, push_po_reason if not push_po_allowed else None)
+
     # create_change_order — 不可直接改单且已审核可执行
     create_change_allowed = (
         not update_allowed
@@ -406,6 +435,8 @@ def derive_sales_order_capabilities(
         push_invoice=push_invoice_cap,
         push_sales_return=push_return_cap,
         push_delivery_project=push_delivery_project_cap,
+        push_purchase_requisition=push_pr_cap,
+        push_purchase_order=push_po_cap,
         create_change_order=create_change_cap,
         backfill_sales_contract=backfill_contract_cap,
     )
@@ -425,6 +456,8 @@ def assert_sales_order_capability(
     has_existing_delivery_project: bool = False,
     has_downstream_documents: bool = False,
     has_remaining_invoice_amount: bool = True,
+    has_purchasable_remaining: bool = False,
+    require_purchase_requisition: bool = False,
     require_audit_before_print: bool = False,
 ) -> None:
     caps = derive_sales_order_capabilities(
@@ -439,6 +472,8 @@ def assert_sales_order_capability(
         has_existing_delivery_project=has_existing_delivery_project,
         has_downstream_documents=has_downstream_documents,
         has_remaining_invoice_amount=has_remaining_invoice_amount,
+        has_purchasable_remaining=has_purchasable_remaining,
+        require_purchase_requisition=require_purchase_requisition,
         require_audit_before_print=require_audit_before_print,
     )
     cap_map = {
@@ -459,6 +494,8 @@ def assert_sales_order_capability(
         "push_invoice": caps.push_invoice,
         "push_sales_return": caps.push_sales_return,
         "push_delivery_project": caps.push_delivery_project,
+        "push_purchase_requisition": caps.push_purchase_requisition,
+        "push_purchase_order": caps.push_purchase_order,
         "create_change_order": caps.create_change_order,
         "backfill_sales_contract": caps.backfill_sales_contract,
     }

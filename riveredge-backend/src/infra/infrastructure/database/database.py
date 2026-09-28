@@ -346,6 +346,7 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.voucher",  # 记账凭证
                 "apps.kuaicaiwu.models.voucher_line",  # 凭证分录
                 "apps.kuaicaiwu.models.gl_book_settings",  # 总账账套参数
+                "apps.kuaicaiwu.models.gl_exchange_rate",  # 汇率设置
                 "apps.kuaicaiwu.models.accounting_period",  # 会计期间
                 "apps.kuaicaiwu.models.account_balance",  # 科目余额
                 "apps.kuaicaiwu.models.voucher_summary",  # 摘要库
@@ -504,10 +505,127 @@ async def _finalize_tortoise_config(config: dict) -> dict:
 
 
 async def _reset_tortoise_for_reinit() -> None:
+    """关闭连接并清空 Tortoise 应用注册，使模型可再次 ``init``。
+
+    Tortoise 真源属性是 ``apps`` / ``_reset_apps``（会把各模型
+    ``default_connection`` 置为 None）。历史上误写不存在的 ``_apps``，
+    导致重建时旧模型连接状态与注册表不一致。
+    """
     await Tortoise.close_connections()
     Tortoise._inited = False
-    if hasattr(Tortoise, "_apps") and isinstance(Tortoise._apps, dict):
-        Tortoise._apps.clear()
+    await Tortoise._reset_apps()
+
+
+def _tortoise_has_unbound_models() -> bool:
+    """任一已登记模型丢失 default_connection，或已 init 却无应用表，视为 ORM 损坏。"""
+    if Tortoise._inited and not Tortoise.apps:
+        return True
+    for app_models in Tortoise.apps.values():
+        for model in app_models.values():
+            meta = getattr(model, "_meta", None)
+            if meta is not None and getattr(meta, "default_connection", None) is None:
+                return True
+    return False
+
+
+# 上次成功 init 的运行时模型模块列表（用于启用应用后增量重建）
+_last_runtime_model_modules: tuple[str, ...] | None = None
+_tortoise_reload_lock: asyncio.Lock | None = None
+
+
+def _get_tortoise_reload_lock() -> asyncio.Lock:
+    global _tortoise_reload_lock
+    if _tortoise_reload_lock is None:
+        _tortoise_reload_lock = asyncio.Lock()
+    return _tortoise_reload_lock
+
+
+async def reload_tortoise_for_enabled_apps() -> bool:
+    """按应用中心当前启用集重建 Tortoise ORM。
+
+    启动时只加载已启用应用的模型；应用中心事后启用（如 ind-relay）会挂上路由，
+    但模型仍未注册会导致 ``default_connection ... cannot be None``。
+    启用/动态注册应用后须调用本函数。启用集未变且模型均已绑连接则跳过。
+
+    Returns:
+        bool: 是否执行了重建
+    """
+    global _last_runtime_model_modules
+
+    from core.services.application.enabled_apps import (
+        clear_enabled_apps_cache,
+        resolve_enabled_app_codes,
+    )
+    from infra.config.infra_config import setup_tortoise_timezone_env
+
+    async with _get_tortoise_reload_lock():
+        clear_enabled_apps_cache()
+        enabled_codes = await resolve_enabled_app_codes()
+        runtime_config = await get_dynamic_tortoise_config(enabled_codes=enabled_codes)
+        runtime_config = await _finalize_tortoise_config(runtime_config)
+        runtime_models = tuple(runtime_config["apps"]["models"]["models"])
+
+        modules_unchanged = (
+            Tortoise._inited and _last_runtime_model_modules == runtime_models
+        )
+        if modules_unchanged and not _tortoise_has_unbound_models():
+            logger.debug("Tortoise ORM 已与启用集一致，跳过重建")
+            return False
+        if modules_unchanged and _tortoise_has_unbound_models():
+            logger.warning(
+                "Tortoise 启用集未变但存在 default_connection 为 None 的模型，强制重建"
+            )
+
+        setup_tortoise_timezone_env()
+        logger.info(
+            "🔧 按启用集重建 Tortoise ORM（{} → {} 个模型模块）",
+            len(_last_runtime_model_modules or ()),
+            len(runtime_models),
+        )
+        try:
+            if Tortoise._inited or Tortoise.apps:
+                await _reset_tortoise_for_reinit()
+            await Tortoise.init(config=runtime_config)
+        except Exception:
+            logger.exception("Tortoise ORM 按启用集重建失败，尝试再次 init 恢复")
+            try:
+                if Tortoise._inited or Tortoise.apps:
+                    await _reset_tortoise_for_reinit()
+                await Tortoise.init(config=runtime_config)
+            except Exception:
+                logger.exception(
+                    "Tortoise ORM 恢复 init 仍失败；进程内模型可能 default_connection "
+                    "为 None，须重启后端"
+                )
+                raise
+        _last_runtime_model_modules = runtime_models
+        logger.info("Tortoise ORM 已按启用集重建完成")
+        return True
+
+
+async def _verify_tortoise_connection() -> None:
+    from tortoise import connections
+
+    try:
+        connections.get("default")
+        logger.debug("Tortoise ORM 连接验证成功")
+
+        if hasattr(Tortoise, "_router") and Tortoise._router is not None:
+            if hasattr(Tortoise._router, "_routers"):
+                routers = Tortoise._router._routers
+                if routers is None:
+                    logger.warning("⚠️ Tortoise ORM router._routers 是 None，尝试修复...")
+                    Tortoise._router._routers = []
+                    logger.info("✅ Tortoise ORM router._routers 已修复为空列表")
+                else:
+                    logger.debug(f"Tortoise ORM router._routers 正确设置: {type(routers)}")
+            else:
+                logger.warning("⚠️ Tortoise ORM router 没有 _routers 属性")
+        else:
+            logger.warning("⚠️ Tortoise ORM 没有 _router 属性或 _router 是 None")
+
+    except Exception as conn_error:
+        logger.warning(f"Tortoise ORM 连接验证失败: {conn_error}")
 
 
 async def init_tortoise_dynamic() -> None:
@@ -516,7 +634,20 @@ async def init_tortoise_dynamic() -> None:
 
     两阶段：先以平台基线模型连库并查应用中心，再按启用集加载完整 ORM。
     """
+    global _last_runtime_model_modules
+
     if Tortoise._inited:
+        from core.services.application.enabled_apps import resolve_enabled_app_codes
+
+        enabled_codes = await resolve_enabled_app_codes()
+        runtime_config = await get_dynamic_tortoise_config(enabled_codes=enabled_codes)
+        runtime_models = tuple(runtime_config["apps"]["models"]["models"])
+        needs_reload = _tortoise_has_unbound_models() or _last_runtime_model_modules != runtime_models
+        if needs_reload:
+            logger.warning(
+                "Tortoise 已初始化但 ORM 声明已变化或存在未绑定模型，按启用集重建"
+            )
+            await reload_tortoise_for_enabled_apps()
         return
 
     from infra.config.infra_config import setup_tortoise_timezone_env
@@ -548,34 +679,14 @@ async def init_tortoise_dynamic() -> None:
     else:
         logger.info("🔧 启用集无额外应用 ORM，保持平台基线 Tortoise 配置")
 
+    _last_runtime_model_modules = tuple(runtime_models)
+
     logger.debug(
         f"Tortoise ORM 配置: routers={runtime_config.get('routers')}, "
         f"use_tz={runtime_config.get('use_tz')}, timezone={runtime_config.get('timezone')}"
     )
     logger.info("Tortoise ORM 初始化完成")
-
-    from tortoise import connections
-
-    try:
-        connections.get("default")
-        logger.debug("Tortoise ORM 连接验证成功")
-
-        if hasattr(Tortoise, "_router") and Tortoise._router is not None:
-            if hasattr(Tortoise._router, "_routers"):
-                routers = Tortoise._router._routers
-                if routers is None:
-                    logger.warning("⚠️ Tortoise ORM router._routers 是 None，尝试修复...")
-                    Tortoise._router._routers = []
-                    logger.info("✅ Tortoise ORM router._routers 已修复为空列表")
-                else:
-                    logger.debug(f"Tortoise ORM router._routers 正确设置: {type(routers)}")
-            else:
-                logger.warning("⚠️ Tortoise ORM router 没有 _routers 属性")
-        else:
-            logger.warning("⚠️ Tortoise ORM 没有 _router 属性或 _router 是 None")
-
-    except Exception as conn_error:
-        logger.warning(f"Tortoise ORM 连接验证失败: {conn_error}")
+    await _verify_tortoise_connection()
 
 
 async def init_tortoise_for_worker_process() -> None:

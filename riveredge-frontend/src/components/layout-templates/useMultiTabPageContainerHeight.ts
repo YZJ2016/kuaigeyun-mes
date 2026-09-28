@@ -4,6 +4,7 @@
  */
 
 import { useLayoutEffect, useRef, useState, type DependencyList } from 'react';
+import { subscribeResizeBus } from '../../hooks/useResizeBus';
 import { MULTI_TAB_PAGE_CONTAINER } from './constants';
 
 /** 参与 UniTabs 视口高度链的祖先（跳过 ant-form 等内容撑高中间层） */
@@ -64,9 +65,9 @@ export function useMultiTabPageContainerHeight(deps: DependencyList = []) {
         : undefined;
     ro?.observe(anchor);
 
-    window.addEventListener('resize', updateHeight);
+    const unsubResize = subscribeResizeBus(updateHeight);
     return () => {
-      window.removeEventListener('resize', updateHeight);
+      unsubResize();
       ro?.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 由调用方传入 Tab 切换等需重算高度的依赖

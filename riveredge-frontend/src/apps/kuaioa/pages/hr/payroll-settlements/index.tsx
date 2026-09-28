@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { App } from 'antd';
+import { Alert, App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { runKuaioaListExport } from '../../../utils/kuaioaListExport';
 import { loadOaWorkshopNameOptions } from '../../../utils/oaWorkshopOptions';
@@ -78,7 +78,7 @@ const PayrollSettlementsPage: React.FC = () => {
 
   return (
     <KuaioaCrudListPage
-      createButtonKey="app.kuaioa.payroll.createButton"
+      createButtonKey="app.kuaioa.payroll.registerButton"
       resource="kuaioa:payroll"
       codeField="settlement_code"
       nameField="workshop_name"
@@ -86,12 +86,28 @@ const PayrollSettlementsPage: React.FC = () => {
       statusPresentation="marker"
       detailVariant="master"
       getDetailFn={getPayrollSettlement}
-      columnPersistenceId="apps.kuaioa.payroll.list-v1"
+      columnPersistenceId="apps.kuaioa.payroll.list-v3"
+      autoOpenCreateQuery="register"
+      listBanner={
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaioa.payroll.listGuideTitle')}
+          description={t('app.kuaioa.payroll.listGuideBody')}
+        />
+      }
       fields={fields}
       listFn={listPayrollSettlements}
       createFn={createPayrollSettlement}
       updateFn={updatePayrollSettlement}
       deleteFn={deletePayrollSettlement}
+      onCreateSuccess={(record) => {
+        const id = Number(record.id);
+        if (Number.isFinite(id) && id > 0) {
+          navigate(`/apps/kuaioa/hr/payroll-settlements/${id}`);
+        }
+      }}
       showExportButton
       onExport={async (type, keys, pageData) => {
         await runKuaioaListExport({

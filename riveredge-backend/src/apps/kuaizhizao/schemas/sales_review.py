@@ -14,6 +14,12 @@ from core.schemas.base import BaseSchema
 SALES_REVIEW_DEPT_CODES = ("tech", "process", "purchase", "production", "quality")
 
 
+class SalesReviewDeptPlanItem(BaseSchema):
+    dept_code: str = Field(..., max_length=32, description="部门槽位编码")
+    assigned_reviewer_id: int = Field(..., description="指定评审人用户ID")
+    assigned_reviewer_name: Optional[str] = Field(None, max_length=100)
+
+
 class SalesReviewItemBase(BaseSchema):
     material_id: Optional[int] = Field(None, description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
@@ -49,6 +55,8 @@ class SalesReviewDeptOpinionResponse(BaseSchema):
     dept_code: str
     result: str
     opinion: Optional[str] = None
+    assigned_reviewer_id: Optional[int] = None
+    assigned_reviewer_name: Optional[str] = None
     reviewed_by: Optional[int] = None
     reviewed_by_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
@@ -111,6 +119,10 @@ class SalesReviewBase(BaseSchema):
 class SalesReviewCreate(SalesReviewBase):
     review_code: Optional[str] = Field(None, description="手工单号；空则按规则生成")
     items: List[SalesReviewItemCreate] = Field(default_factory=list)
+    review_dept_plan: List[SalesReviewDeptPlanItem] = Field(
+        default_factory=list,
+        description="评审部门与指定评审人；下达前必填至少一项",
+    )
 
     @model_validator(mode="after")
     def _require_items(self):
@@ -149,6 +161,7 @@ class SalesReviewUpdate(BaseSchema):
     salesman_id: Optional[int] = None
     salesman_name: Optional[str] = None
     items: Optional[List[SalesReviewItemCreate]] = None
+    review_dept_plan: Optional[List[SalesReviewDeptPlanItem]] = None
 
 
 class SalesReviewResponse(SalesReviewBase):
@@ -163,6 +176,7 @@ class SalesReviewResponse(SalesReviewBase):
     total_quantity: Decimal = Decimal("0")
     total_amount: Decimal = Decimal("0")
     items: List[SalesReviewItemResponse] = Field(default_factory=list)
+    review_dept_plan: List[SalesReviewDeptPlanItem] = Field(default_factory=list)
     dept_opinions: List[SalesReviewDeptOpinionResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime

@@ -853,10 +853,14 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           color: #d48806;
           border: 1px solid color-mix(in srgb, #d48806 35%, transparent);
         }
-        /* 应用分组标题（含 PRO）：避免被菜单项溢出裁切 */
+        /* 应用分组标题（含 PRO）：避免被菜单项/子菜单标题 overflow 裁切 */
         .ant-menu-item.menu-group-title-app .ant-menu-title-content,
-        .ant-menu-item[class*='menu-group-title-app'] .ant-menu-title-content {
+        .ant-menu-item[class*='menu-group-title-app'] .ant-menu-title-content,
+        .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app > .ant-menu-submenu-title .ant-menu-title-content,
+        .ant-pro-sider-menu .ant-menu-submenu.menu-group-title-app .menu-group-title-app-label {
           overflow: visible !important;
+          text-overflow: clip !important;
+          max-width: none !important;
         }
         .menu-item-badge-count.ant-badge .ant-badge-count {
           font-size: 10px;
@@ -864,23 +868,44 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           min-width: 14px;
           height: 14px;
           padding: 0 2px;
+          /* 避免选中态把角标数字染成与底同色 */
+          color: #fff !important;
         }
         .menu-item-badge-count {
           flex-shrink: 0;
-          margin-right: 4px;
+          line-height: 0;
         }
         .menu-item-badge-count-wrap {
           display: inline-flex;
           flex-shrink: 0;
+          align-items: center;
           line-height: 0;
+          margin-inline-end: 2px;
         }
-        /* 菜单项含数字徽标时：增加右侧留白，避免徽标右边被遮挡 */
-        .ant-pro-sider-menu .ant-menu-item:has(.menu-item-badge-count) {
-          padding-right: 22px !important;
-          overflow: visible !important;
+        /* 有角标时：文字截断、角标不收缩；盖过下方嵌套菜单 overflow:hidden */
+        .menu-item-badge-link {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          gap: 6px !important;
+          overflow: hidden !important;
         }
-        .ant-pro-sider-menu .ant-menu-item:has(.menu-item-badge-count) .ant-menu-title-content {
-          overflow: visible !important;
+        .menu-item-badge-label {
+          display: inline-flex !important;
+          align-items: center !important;
+          min-width: 0 !important;
+          flex: 1 1 auto !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+        .menu-item-badge-label .ant-pro-base-menu-inline-item-text,
+        .menu-item-badge-label .ant-menu-title-content {
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
         }
         /* 使用 ProLayout 原生收起按钮，保持原生行为 */
         /* 不再隐藏原生收起按钮，让 ProLayout 自己处理收起展开逻辑 */
@@ -1524,6 +1549,26 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
         html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-sub > .ant-menu-item,
         html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) > .ant-menu-submenu > .ant-menu-sub > .ant-menu-submenu > .ant-menu-submenu-title {
           padding-inline-start: 32px !important;
+        }
+        /* 有数字角标的菜单项：在 overflow:hidden 行内用 flex 保角标可见（须写在嵌套 overflow 规则之后） */
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item:has(.menu-item-badge-count) .ant-menu-title-content,
+        html[data-sidebar-menu-layout="flat"] .ant-pro-layout .ant-pro-sider-menu.ant-menu:not(.ant-menu-inline-collapsed) .ant-menu-sub .ant-menu-item:has(.menu-item-badge-count) .ant-menu-title-content,
+        html[data-sidebar-menu-layout="split"] .ant-pro-layout .ant-pro-sider-menu .ant-menu-item:has(.menu-item-badge-count) .ant-menu-title-content {
+          display: flex !important;
+          align-items: center !important;
+          min-width: 0 !important;
+          overflow: hidden !important;
+          text-overflow: clip !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item:has(.menu-item-badge-count) .ant-menu-title-content > .menu-item-badge-host,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item:has(.menu-item-badge-count) .ant-menu-title-content > a.menu-item-badge-link {
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+        }
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .menu-item-badge-count .ant-badge-count,
+        .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected .menu-item-badge-count .ant-badge-count span {
+          color: #fff !important;
         }
         /* 激活菜单统一主题色背景（明暗模式、平铺/双列一致） */
         .ant-pro-layout .ant-pro-sider-menu .ant-menu-item.ant-menu-item-selected,

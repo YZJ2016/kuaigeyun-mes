@@ -24,6 +24,7 @@ from apps.kuaizhizao.models.sales_review_item import SalesReviewItem
 from apps.kuaizhizao.schemas.sales_review import (
     SALES_REVIEW_DEPT_CODES,
     SalesReviewCreate,
+    SalesReviewDeptPlanItem,
     SalesReviewDeptOpinionResponse,
     SalesReviewDeptOpinionSubmit,
     SalesReviewItemCreate,
@@ -71,6 +72,85 @@ def _audit_update_kwargs(user: User) -> Dict[str, Any]:
 
 
 class SalesReviewService(AppBaseService):
+    @staticmethod
+    def _dept_display_order(code: str) -> int:
+        try:
+            return SALES_REVIEW_DEPT_CODES.index(code)
+        except ValueError:
+            return len(SALES_REVIEW_DEPT_CODES) + 1
+
+    async def _normalize_review_dept_plan(
+        self,
+        tenant_id: int,
+        raw_plan: Optional[List[Any]],
+        *,
+        require_non_empty: bool,
+    ) -> List[Dict[str, Any]]:
+        if not raw_plan:
+            if require_non_empty:
+                raise ValidationError("须至少指定一个评审部门及评审人")
+            return []
+        seen: set[str] = set()
+        normalized: List[Dict[str, Any]] = []
+        for entry in raw_plan:
+            if isinstance(entry, SalesReviewDeptPlanItem):
+                code = (entry.dept_code or "").strip().lower()
+                reviewer_id = int(entry.assigned_reviewer_id)
+                reviewer_name = (entry.assigned_reviewer_name or "").strip() or None
+            elif isinstance(entry, dict):
+                code = str(entry.get("dept_code") or "").strip().lower()
+                reviewer_id = int(entry.get("assigned_reviewer_id") or 0)
+                reviewer_name = str(entry.get("assigned_reviewer_name") or "").strip() or None
+            else:
+                raise ValidationError("评审部门计划格式无效")
+            if not code:
+                raise ValidationError("评审部门不能为空")
+            if code not in SALES_REVIEW_DEPT_CODES:
+                raise ValidationError(f"未知评审部门: {code}")
+            if code in seen:
+                raise ValidationError(f"评审部门重复: {code}")
+            seen.add(code)
+            if reviewer_id <= 0:
+                raise ValidationError(f"部门「{code}」须指定评审人")
+            reviewer = await User.get_or_none(
+                id=reviewer_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if not reviewer:
+                raise ValidationError(f"部门「{code}」指定评审人不存在")
+            name = reviewer_name or await self.get_user_name(reviewer_id)
+            normalized.append(
+                {
+                    "dept_code": code,
+                    "assigned_reviewer_id": reviewer_id,
+                    "assigned_reviewer_name": name,
+                }
+            )
+        normalized.sort(key=lambda x: self._dept_display_order(x["dept_code"]))
+        if require_non_empty and not normalized:
+            raise ValidationError("须至少指定一个评审部门及评审人")
+        return normalized
+
+    def _parse_stored_dept_plan(self, raw: Any) -> List[SalesReviewDeptPlanItem]:
+        if not raw or not isinstance(raw, list):
+            return []
+        out: List[SalesReviewDeptPlanItem] = []
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            code = str(entry.get("dept_code") or "").strip().lower()
+            rid = entry.get("assigned_reviewer_id")
+            if not code or rid is None:
+                continue
+            out.append(
+                SalesReviewDeptPlanItem(
+                    dept_code=code,
+                    assigned_reviewer_id=int(rid),
+                    assigned_reviewer_name=entry.get("assigned_reviewer_name"),
+                )
+            )
+        out.sort(key=lambda x: self._dept_display_order(x.dept_code))
+        return out
+
     async def _generate_review_code(self, tenant_id: int, review_date: Optional[date]) -> str:
         from core.config.code_rule_pages import get_canonical_rule_code
         from core.services.business.code_generation_service import CodeGenerationService
@@ -164,6 +244,7 @@ class SalesReviewService(AppBaseService):
             sales_review_id=review_id,
             review_round=review_round,
         ).order_by("id")
+        ordered = sorted(rows, key=lambda r: self._dept_display_order(str(r.dept_code or "")))
         return [
             SalesReviewDeptOpinionResponse(
                 id=r.id,
@@ -172,11 +253,13 @@ class SalesReviewService(AppBaseService):
                 dept_code=r.dept_code,
                 result=r.result,
                 opinion=r.opinion,
+                assigned_reviewer_id=r.assigned_reviewer_id,
+                assigned_reviewer_name=r.assigned_reviewer_name,
                 reviewed_by=r.reviewed_by,
                 reviewed_by_name=r.reviewed_by_name,
                 reviewed_at=r.reviewed_at,
             )
-            for r in rows
+            for r in ordered
         ]
 
     def _to_response(
@@ -225,6 +308,7 @@ class SalesReviewService(AppBaseService):
             total_quantity=row.total_quantity or Decimal("0"),
             total_amount=row.total_amount or Decimal("0"),
             items=items,
+            review_dept_plan=self._parse_stored_dept_plan(row.review_dept_plan),
             dept_opinions=opinions,
             created_at=row.created_at,
             updated_at=row.updated_at,
@@ -361,6 +445,9 @@ class SalesReviewService(AppBaseService):
 
         salesman_id = data.salesman_id or current_user.id
         salesman_name = data.salesman_name or await self.get_user_name(salesman_id)
+        dept_plan = await self._normalize_review_dept_plan(
+            tenant_id, data.review_dept_plan, require_non_empty=False
+        )
 
         async with in_transaction():
             create_payload: Dict[str, Any] = dict(
@@ -396,6 +483,7 @@ class SalesReviewService(AppBaseService):
                 salesman_name=salesman_name,
                 status="draft",
                 review_round=0,
+                review_dept_plan=dept_plan or None,
             )
             apply_create_audit(create_payload, current_user)
             row = await SalesReview.create(**create_payload)
@@ -429,8 +517,16 @@ class SalesReviewService(AppBaseService):
 
         payload = data.model_dump(exclude_unset=True)
         items = payload.pop("items", None)
+        dept_plan_raw = payload.pop("review_dept_plan", None)
         for k, v in payload.items():
             setattr(row, k, v)
+        if dept_plan_raw is not None:
+            row.review_dept_plan = (
+                await self._normalize_review_dept_plan(
+                    tenant_id, dept_plan_raw, require_non_empty=False
+                )
+                or None
+            )
         apply_update_audit(row, current_user)
         async with in_transaction():
             if items is not None:
@@ -503,15 +599,22 @@ class SalesReviewService(AppBaseService):
         }
 
     async def _seed_dept_opinions(
-        self, tenant_id: int, review_id: int, review_round: int, created_by: int
+        self,
+        tenant_id: int,
+        review_id: int,
+        review_round: int,
+        plan: List[Dict[str, Any]],
+        created_by: int,
     ) -> None:
-        for code in SALES_REVIEW_DEPT_CODES:
+        for entry in plan:
             await SalesReviewDeptOpinion.create(
                 tenant_id=tenant_id,
                 sales_review_id=review_id,
                 review_round=review_round,
-                dept_code=code,
+                dept_code=entry["dept_code"],
                 result="pending",
+                assigned_reviewer_id=entry["assigned_reviewer_id"],
+                assigned_reviewer_name=entry.get("assigned_reviewer_name"),
                 created_by=created_by,
             )
 
@@ -561,10 +664,15 @@ class SalesReviewService(AppBaseService):
         items = await SalesReviewItem.filter(tenant_id=tenant_id, sales_review_id=review_id).count()
         if items <= 0:
             raise BusinessLogicError("无明细，无法下达评审")
+        plan = await self._normalize_review_dept_plan(
+            tenant_id, row.review_dept_plan, require_non_empty=True
+        )
 
         new_round = int(row.review_round or 0) + 1
         async with in_transaction():
-            await self._seed_dept_opinions(tenant_id, review_id, new_round, current_user.id)
+            await self._seed_dept_opinions(
+                tenant_id, review_id, new_round, plan, current_user.id
+            )
             await SalesReview.filter(id=review_id).update(
                 status="reviewing",
                 review_round=new_round,
@@ -649,8 +757,6 @@ class SalesReviewService(AppBaseService):
         current_user: User,
     ) -> SalesReviewResponse:
         code = (dept_code or "").strip().lower()
-        if code not in SALES_REVIEW_DEPT_CODES:
-            raise ValidationError(f"未知部门槽位: {dept_code}")
         row = await SalesReview.get_or_none(
             tenant_id=tenant_id, id=review_id, deleted_at__isnull=True
         )
@@ -669,9 +775,15 @@ class SalesReviewService(AppBaseService):
         )
         if not opinion:
             raise BusinessLogicError("本轮部门意见槽位不存在，请重新下达")
+        if code != (opinion.dept_code or "").strip().lower():
+            raise ValidationError(f"未知部门槽位: {dept_code}")
 
         now = resolve_business_datetime()
         reviewer_id = int(body.reviewed_by) if body.reviewed_by else int(current_user.id)
+        assigned_id = opinion.assigned_reviewer_id
+        if assigned_id is not None and int(assigned_id) > 0:
+            if reviewer_id != int(assigned_id):
+                raise ValidationError("须由下达时指定的评审人提交该部门意见")
         reviewer = await User.get_or_none(
             id=reviewer_id, tenant_id=tenant_id, deleted_at__isnull=True
         )

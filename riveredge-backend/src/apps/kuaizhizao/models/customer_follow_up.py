@@ -31,6 +31,7 @@ class CustomerFollowUp(BaseModel):
     opportunity_id = fields.IntField(null=True, description="关联销售商机ID")
     stage_code_before = fields.CharField(max_length=50, null=True, description="跟进时商机阶段（变更前）")
     stage_code_after = fields.CharField(max_length=50, null=True, description="跟进后商机阶段（变更后）")
+    attachment_uuids = fields.JSONField(default=list, description="跟进附件 UUID 列表")
 
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
 

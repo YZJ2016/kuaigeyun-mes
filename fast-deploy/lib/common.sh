@@ -3078,6 +3078,7 @@ cmd_build() {
     (
         cd "$FRONTEND_DIR"
         export NODE_OPTIONS="--max-old-space-size=${NODE_BUILD_MEM}"
+        npm run sync:libredwg
         npm run build
     ) || { log_error "前端构建失败"; exit 1; }
     [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 dist/index.html"; exit 1; }
@@ -4959,18 +4960,41 @@ install_python_rhel() {
 }
 
 install_uv_shell() {
+    # 优先国内 PyPI（不依赖 GitHub）；再官方 install.sh；最后 GitHub 加速拉脚本
+    local py=""
+    if command -v python3 >/dev/null 2>&1; then
+        py="python3"
+    elif command -v python >/dev/null 2>&1; then
+        py="python"
+    fi
+    if [ -n "$py" ]; then
+        local idx
+        for idx in \
+            "https://mirrors.aliyun.com/pypi/simple/" \
+            "https://pypi.tuna.tsinghua.edu.cn/simple/"; do
+            log_info "pip install uv: $idx"
+            if "$py" -m pip install --user uv -i "$idx" 2>/dev/null; then
+                ensure_uv_path
+                if [ "$(check_uv)" = "ok" ]; then
+                    log_ok "uv 已安装: $(resolve_uv)"
+                    return 0
+                fi
+            fi
+        done
+    fi
     local urls
     if [ "${USE_MIRROR}" = "1" ]; then
         urls=(
-            "https://ghproxy.net/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh"
-            "https://mirror.ghproxy.com/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh"
             "https://astral.sh/uv/install.sh"
+            "https://gh-proxy.com/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh"
+            "https://gh.llkk.cc/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh"
+            "https://ghproxy.net/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh"
         )
     else
         urls=(
             "https://astral.sh/uv/install.sh"
+            "https://gh-proxy.com/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh"
             "https://ghproxy.net/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh"
-            "https://mirror.ghproxy.com/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh"
         )
     fi
     local url

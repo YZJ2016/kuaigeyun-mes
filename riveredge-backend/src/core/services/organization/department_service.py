@@ -93,6 +93,7 @@ class DepartmentService:
             [department.manager_id] if department.manager_id else [],
         )
         item: Dict[str, Any] = {
+            "id": department.id,
             "uuid": department.uuid,
             "name": department.name,
             "code": department.code,

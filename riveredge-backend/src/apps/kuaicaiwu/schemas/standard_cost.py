@@ -4,10 +4,11 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from apps.kuaicaiwu.utils.calendar_date_coerce import coerce_api_calendar_date
 from core.schemas.base import BaseSchema
 
 
@@ -26,6 +27,11 @@ class StandardCostBase(BaseSchema):
     is_active: bool = Field(True, description="是否启用")
     description: Optional[str] = Field(None, description="描述")
 
+    @field_validator("effective_date", "expiry_date", mode="before")
+    @classmethod
+    def coerce_calendar_dates(cls, value: Any) -> Any:
+        return coerce_api_calendar_date(value)
+
 
 class StandardCostCreate(StandardCostBase):
     pass
@@ -43,6 +49,11 @@ class StandardCostUpdate(BaseModel):
     expiry_date: Optional[date] = None
     is_active: Optional[bool] = None
     description: Optional[str] = None
+
+    @field_validator("effective_date", "expiry_date", mode="before")
+    @classmethod
+    def coerce_calendar_dates(cls, value: Any) -> Any:
+        return coerce_api_calendar_date(value)
 
 
 class StandardCostResponse(StandardCostBase):

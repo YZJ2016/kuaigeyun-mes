@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { subscribeResizeBus } from '../../hooks/useResizeBus';
 import {
   AuditOutlined,
   BellOutlined,
@@ -46,6 +47,10 @@ import {
 import { formatDateTime } from '../../utils/format';
 import { hasPermission } from '../../utils/permission';
 import { ReferenceDisplayAccessError } from '../../services/displayContract';
+import {
+  formatImMessageTimeDivider,
+  shouldShowImMessageTimeDivider,
+} from './uniImMessageTime';
 import {
   createDirectImConversation,
   IM_BOT_SENDER_ID,
@@ -285,8 +290,7 @@ export default function UniImPanel({
 
   useEffect(() => {
     const onResize = () => setViewportWidth(window.innerWidth);
-    window.addEventListener('resize', onResize, { passive: true });
-    return () => window.removeEventListener('resize', onResize);
+    return subscribeResizeBus(onResize);
   }, []);
 
   const panelWidth = useMemo(() => {
@@ -1947,97 +1951,113 @@ export default function UniImPanel({
                     ) : messageItems.length === 0 ? (
                       <div className={styles.emptyChat}>{t('pages.personal.im.noMessages')}</div>
                     ) : (
-                      messageItems.map((item: ImMessage) => {
+                      messageItems.map((item: ImMessage, index: number) => {
                         const sender = resolveMessageSender(item);
+                        const prevCreatedAt =
+                          index > 0 ? messageItems[index - 1]?.created_at : undefined;
+                        const showTimeDivider = shouldShowImMessageTimeDivider(
+                          prevCreatedAt,
+                          item.created_at,
+                        );
+                        const timeDividerText = showTimeDivider
+                          ? formatImMessageTimeDivider(
+                              item.created_at,
+                              t('components.uniIm.yesterday'),
+                            )
+                          : '';
                         return (
-                          <div
-                            key={item.uuid}
-                            className={`${styles.messageRow} ${sender.isSelf ? styles.messageRowSelf : ''}`}
-                          >
-                            {sender.isAi ? (
-                              <span
-                                className={`${styles.imAvatar} ${styles.kuAiListAvatar}`}
-                                style={{ width: 36, height: 36 }}
-                                aria-hidden
-                              >
-                                <KuAiLottieMark size={36} />
-                              </span>
-                            ) : (
-                              renderMessageAvatar(
-                                sender.fullName,
-                                sender.username,
-                                sender.isSelf,
-                                sender.imageSrc,
-                                sender.useTextAvatar,
-                                sender.onImageError,
-                              )
-                            )}
-                            <div className={styles.bubbleWrap}>
-                              {selectedConversation?.kind === 'group' && !sender.isSelf ? (
-                                <div className={styles.senderName}>
-                                  {sender.fullName || sender.username}
-                                </div>
-                              ) : null}
-                              <div
-                                className={`${styles.bubble} ${sender.isSelf ? styles.bubbleSelf : ''} ${sender.isBot ? styles.bubbleBot : ''}`}
-                              >
-                                {renderMessageBody(item)}
-                              </div>
-                              {(() => {
-                                const showTaskActions =
-                                  canUpdateTasks && !!item.body.trim();
-                                const showRecall = canRecallImMessage(
-                                  item,
-                                  currentUser?.id,
-                                );
-                                if (!showTaskActions && !showRecall) {
-                                  return null;
-                                }
-                                return (
-                                  <div className={styles.bubbleActions}>
-                                    {showTaskActions ? (
-                                      <>
-                                        <Tooltip title={t('components.uniIm.addToTodo')}>
-                                          <Button
-                                            type="text"
-                                            size="small"
-                                            className={styles.bubbleActionBtn}
-                                            icon={<CheckSquareOutlined />}
-                                            loading={addingTodoMessageUuid === item.uuid}
-                                            aria-label={t('components.uniIm.addToTodo')}
-                                            onClick={() => void onAddMessageToTodo(item)}
-                                          />
-                                        </Tooltip>
-                                        <Tooltip title={t('components.uniIm.addToReminder')}>
-                                          <Button
-                                            type="text"
-                                            size="small"
-                                            className={styles.bubbleActionBtn}
-                                            icon={<BellOutlined />}
-                                            aria-label={t('components.uniIm.addToReminder')}
-                                            onClick={() => onOpenAddReminder(item)}
-                                          />
-                                        </Tooltip>
-                                      </>
-                                    ) : null}
-                                    {showRecall ? (
-                                      <Tooltip title={t('components.uniIm.recall')}>
-                                        <Button
-                                          type="text"
-                                          size="small"
-                                          className={`${styles.bubbleActionBtn} ${styles.bubbleActionBtnDanger}`}
-                                          icon={<RollbackOutlined />}
-                                          loading={recallingMessageUuid === item.uuid}
-                                          aria-label={t('components.uniIm.recall')}
-                                          onClick={() => void onRecallMessage(item)}
-                                        />
-                                      </Tooltip>
-                                    ) : null}
+                          <React.Fragment key={item.uuid}>
+                            {timeDividerText ? (
+                              <div className={styles.messageTimeDivider}>{timeDividerText}</div>
+                            ) : null}
+                            <div
+                              className={`${styles.messageRow} ${sender.isSelf ? styles.messageRowSelf : ''}`}
+                            >
+                              {sender.isAi ? (
+                                <span
+                                  className={`${styles.imAvatar} ${styles.kuAiListAvatar}`}
+                                  style={{ width: 36, height: 36 }}
+                                  aria-hidden
+                                >
+                                  <KuAiLottieMark size={36} />
+                                </span>
+                              ) : (
+                                renderMessageAvatar(
+                                  sender.fullName,
+                                  sender.username,
+                                  sender.isSelf,
+                                  sender.imageSrc,
+                                  sender.useTextAvatar,
+                                  sender.onImageError,
+                                )
+                              )}
+                              <div className={styles.bubbleWrap}>
+                                {selectedConversation?.kind === 'group' && !sender.isSelf ? (
+                                  <div className={styles.senderName}>
+                                    {sender.fullName || sender.username}
                                   </div>
-                                );
-                              })()}
+                                ) : null}
+                                <div
+                                  className={`${styles.bubble} ${sender.isSelf ? styles.bubbleSelf : ''} ${sender.isBot ? styles.bubbleBot : ''}`}
+                                >
+                                  {renderMessageBody(item)}
+                                </div>
+                                {(() => {
+                                  const showTaskActions =
+                                    canUpdateTasks && !!item.body.trim();
+                                  const showRecall = canRecallImMessage(
+                                    item,
+                                    currentUser?.id,
+                                  );
+                                  if (!showTaskActions && !showRecall) {
+                                    return null;
+                                  }
+                                  return (
+                                    <div className={styles.bubbleActions}>
+                                      {showTaskActions ? (
+                                        <>
+                                          <Tooltip title={t('components.uniIm.addToTodo')}>
+                                            <Button
+                                              type="text"
+                                              size="small"
+                                              className={styles.bubbleActionBtn}
+                                              icon={<CheckSquareOutlined />}
+                                              loading={addingTodoMessageUuid === item.uuid}
+                                              aria-label={t('components.uniIm.addToTodo')}
+                                              onClick={() => void onAddMessageToTodo(item)}
+                                            />
+                                          </Tooltip>
+                                          <Tooltip title={t('components.uniIm.addToReminder')}>
+                                            <Button
+                                              type="text"
+                                              size="small"
+                                              className={styles.bubbleActionBtn}
+                                              icon={<BellOutlined />}
+                                              aria-label={t('components.uniIm.addToReminder')}
+                                              onClick={() => onOpenAddReminder(item)}
+                                            />
+                                          </Tooltip>
+                                        </>
+                                      ) : null}
+                                      {showRecall ? (
+                                        <Tooltip title={t('components.uniIm.recall')}>
+                                          <Button
+                                            type="text"
+                                            size="small"
+                                            className={`${styles.bubbleActionBtn} ${styles.bubbleActionBtnDanger}`}
+                                            icon={<RollbackOutlined />}
+                                            loading={recallingMessageUuid === item.uuid}
+                                            aria-label={t('components.uniIm.recall')}
+                                            onClick={() => void onRecallMessage(item)}
+                                          />
+                                        </Tooltip>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
                             </div>
-                          </div>
+                          </React.Fragment>
                         );
                       })
                     )}

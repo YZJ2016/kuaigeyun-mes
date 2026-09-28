@@ -79,34 +79,6 @@ import { UniTableDataActionIconOnlyContext } from './dataActionIconOnlyContext'
 // 懒加载：UniImport 内含 UniverJS（约 2MB+），仅在用户点击导入时加载
 const LazyUniImport = lazy(() => import('../uni-import'))
 
-/** 工具栏 DOM 尚未就绪时的回退：整表宽度低于此值则打印/导入/导出/同步仅图标 */
-const DATA_ACTION_ICON_ONLY_MAX_WIDTH = 1280
-
-/** 工具栏左簇 / 数据能力 / 设定图标之间的间距预算 */
-const TOOLBAR_CLUSTER_GAP = 16
-
-/**
- * 测量元素「内容实际占用」宽度。
- * ProTable 工具栏 left/right 常带 flex:1，直接读 scrollWidth 会被撑满，导致永远判定为仅图标。
- */
-function measureOccupiedWidth(el: HTMLElement | null | undefined): number {
-  if (!el) return 0
-  const kids = Array.from(el.children) as HTMLElement[]
-  if (kids.length === 0) return 0
-  let minL = Infinity
-  let maxR = -Infinity
-  for (const kid of kids) {
-    const r = kid.getBoundingClientRect()
-    if (r.width <= 0) continue
-    minL = Math.min(minL, r.left)
-    maxR = Math.max(maxR, r.right)
-  }
-  if (!Number.isFinite(minL) || !Number.isFinite(maxR) || maxR <= minL) {
-    return Math.ceil(el.scrollWidth) || 0
-  }
-  return Math.ceil(maxR - minL)
-}
-
 /** 行选中 key 按内容比较（避免 `[]` 新引用误触发受控同步） */
 function areRowKeysEqual(a: React.Key[], b: React.Key[]): boolean {
   return a.length === b.length && a.every((key, index) => key === b[index])
@@ -173,12 +145,9 @@ import {
 } from '../uni-action'
 import { UNI_TABLE_STACKED_IDENTITY_CLASS } from './stackedPrimaryColumn'
 import { LIST_PAGE_TABLE_SCROLL, getViewportHeightExpr } from '../layout-templates/constants'
-import {
-  shouldEnableUniTableBodyScrollY,
-  measureTableBodyOverflowsViewport,
-  measureFillViewportTableBodyScrollY,
-} from './uniTableScrollPolicy'
-import { resolveUniReportTableBodyScrollY } from '../uni-report/uniReportScrollPolicy'
+import { shouldEnableUniTableBodyScrollY } from './uniTableScrollPolicy'
+import { useUniTableLayoutEffects } from './useUniTableLayoutEffects'
+import { syncFixedColumnStickyOffsets } from './uniTableDomMeasure'
 import {
   buildUniTableFillerColumn,
   getUniTableLifecycleCellClassName,
@@ -1370,8 +1339,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const [tableData, setTableData] = useState<T[]>([])
   const [requestInFlight, setRequestInFlight] = useState(true)
   const [containerLayoutWidth, setContainerLayoutWidth] = useState(0)
-  /** containerLayoutWidth 是否已取自表体滚动口（clientWidth 已含纵向滚动条扣除） */
-  const [layoutWidthIsScrollHost, setLayoutWidthIsScrollHost] = useState(false)
   const [fillViewportMeasuredScrollY, setFillViewportMeasuredScrollY] = useState<number | undefined>()
   const [reportMeasuredScrollY, setReportMeasuredScrollY] = useState<number | undefined>()
   const reportMeasuredScrollYRef = React.useRef<number | undefined>(undefined)
@@ -3144,7 +3111,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         includeSelection: tableHasRowSelection,
         includeExpandable: tableHasExpandable,
         scrollYEnabled: proTableBodyScrollYEnabled,
-        layoutWidthIsScrollHost,
       }),
     [
       columnsForLayoutPlan,
@@ -3152,7 +3118,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       tableHasRowSelection,
       tableHasExpandable,
       proTableBodyScrollYEnabled,
-      layoutWidthIsScrollHost,
     ],
   )
 
@@ -3285,180 +3250,34 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     statCardsCtx?.tableScrollOffsetPx,
   ])
 
-  React.useLayoutEffect(() => {
-    if (!fillViewportBody || !proTableBodyScrollYEnabled) {
-      setFillViewportMeasuredScrollY(undefined)
-      return
-    }
-    const root = containerRef.current
-    if (!root) return
-
-    const measure = () => {
-      const next = measureFillViewportTableBodyScrollY(root)
-      if (next == null) return
-      setFillViewportMeasuredScrollY((prev) => (prev === next ? prev : next))
-    }
-
-    measure()
-    const ro =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null
-    ro?.observe(root)
-    const wrapper = root.querySelector('.ant-table-wrapper')
-    if (ro && wrapper) ro.observe(wrapper)
-    const summaryEl = root.querySelector('.ant-table-summary')
-    if (ro && summaryEl) ro.observe(summaryEl)
-    const pager = root.querySelector('.ant-table-pagination')
-    if (ro && pager) ro.observe(pager)
-    window.addEventListener('resize', measure)
-    return () => {
-      ro?.disconnect()
-      window.removeEventListener('resize', measure)
-    }
-  }, [
+  useUniTableLayoutEffects({
+    containerRef,
+    tableBodyPaneRef,
     fillViewportBody,
     proTableBodyScrollYEnabled,
-    tableData.length,
-    showDelayedLoading,
-    columnStructureSig,
-    tableSummaryProp,
-    currentViewType,
-  ])
-
-  React.useLayoutEffect(() => {
-    if (!reportLayout) {
-      reportMeasuredScrollYRef.current = undefined
-      setReportMeasuredScrollY(undefined)
-      return
-    }
-    if (currentViewType !== 'table' && currentViewType !== 'detailTable') {
-      reportMeasuredScrollYRef.current = undefined
-      setReportMeasuredScrollY(undefined)
-      return
-    }
-
-    const root = containerRef.current
-    if (!root) return
-
-    const allowTurnOff = viewportRemeasureKeyRef.current !== viewportRemeasureKey
-    viewportRemeasureKeyRef.current = viewportRemeasureKey
-
-    const applyMeasure = (canTurnOff: boolean) => {
-      const next = resolveUniReportTableBodyScrollY(root, reportHasFixedSummary)
-      setReportMeasuredScrollY((prev) => {
-        if (next == null) {
-          if (prev == null) return prev
-          if (canTurnOff) {
-            reportMeasuredScrollYRef.current = undefined
-            return undefined
-          }
-          return prev
-        }
-        if (prev === next) return prev
-        reportMeasuredScrollYRef.current = next
-        return next
-      })
-    }
-
-    applyMeasure(allowTurnOff)
-    const ro =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => applyMeasure(false))
-        : null
-    ro?.observe(root)
-    const wrapper = root.querySelector('.ant-table-wrapper')
-    if (ro && wrapper) ro.observe(wrapper)
-    const summaryEl = root.querySelector('.ant-table-summary')
-    if (ro && summaryEl) ro.observe(summaryEl)
-    const pager = root.querySelector('.ant-table-pagination')
-    if (ro && pager) ro.observe(pager)
-    const scrollBody = root.querySelector('.ant-table-body')
-    if (ro && scrollBody) ro.observe(scrollBody)
-    const onWindowResize = () => applyMeasure(true)
-    window.addEventListener('resize', onWindowResize)
-    return () => {
-      ro?.disconnect()
-      window.removeEventListener('resize', onWindowResize)
-    }
-  }, [
+    setFillViewportMeasuredScrollY,
     reportLayout,
     reportHasFixedSummary,
+    reportMeasuredScrollYRef,
+    setReportMeasuredScrollY,
+    policyScrollYEnabled,
+    setViewportScrollForced,
     viewportRemeasureKey,
+    viewportRemeasureKeyRef,
     currentViewType,
     columnStructureSig,
     showDelayedLoading,
     tableSummaryProp,
-  ])
-
-  React.useLayoutEffect(() => {
-    const turnOffForced = () => setViewportScrollForced((prev) => (prev ? false : prev))
-    const turnOnForced = () => setViewportScrollForced((prev) => (prev ? prev : true))
-
-    if (reportLayout) {
-      turnOffForced()
-      return
-    }
-
-    if (policyScrollYEnabled) {
-      viewportRemeasureKeyRef.current = viewportRemeasureKey
-      turnOffForced()
-      return
-    }
-    if (tableData.length === 0) {
-      viewportRemeasureKeyRef.current = viewportRemeasureKey
-      turnOffForced()
-      return
-    }
-    if (currentViewType !== 'table' && currentViewType !== 'detailTable') {
-      viewportRemeasureKeyRef.current = viewportRemeasureKey
-      turnOffForced()
-      return
-    }
-
-    const root = containerRef.current
-    if (!root) return
-
-    // 数据/分页/视图变化才允许关回。列宽、loading、拆表后的二次测量只能开不能关，
-    // 否则 natural ↔ scroll.y 在 useLayoutEffect 里同步振荡（生产 React #185）。
-    const allowTurnOff = viewportRemeasureKeyRef.current !== viewportRemeasureKey
-    viewportRemeasureKeyRef.current = viewportRemeasureKey
-    const overflows = measureTableBodyOverflowsViewport(root)
-    if (overflows) {
-      turnOnForced()
-    } else if (allowTurnOff) {
-      turnOffForced()
-    }
-
-    const observeOverflowOn = () => {
-      if (!measureTableBodyOverflowsViewport(root)) return
-      turnOnForced()
-    }
-
-    const ro =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => observeOverflowOn())
-        : null
-    const scrollBody = root.querySelector('.ant-table-body')
-    const tbody = (scrollBody?.querySelector('.ant-table-tbody') ??
-      root.querySelector('.ant-table-tbody')) as Element | null
-    if (ro && tbody) ro.observe(tbody)
-    if (ro && scrollBody) ro.observe(scrollBody)
-    const tableWrapper = root.querySelector('.ant-table-wrapper')
-    if (ro && tableWrapper) ro.observe(tableWrapper)
-    window.addEventListener('resize', observeOverflowOn)
-    return () => {
-      ro?.disconnect()
-      window.removeEventListener('resize', observeOverflowOn)
-    }
-    // 依赖列结构签名而非 effectiveTableColumns：实测会改列宽并生成新 columns 引用，
-    // 若再依赖 columns 会在树表展开时 useLayoutEffect → setState → 同步死循环。
-  }, [
-    policyScrollYEnabled,
-    viewportRemeasureKey,
-    currentViewType,
-    columnStructureSig,
-    showDelayedLoading,
-    reportLayout,
-  ])
+    tableDataLength: tableData.length,
+    setContainerLayoutWidth,
+    setDataActionIconOnly,
+    dataActionIconOnlyRef,
+    labeledDataActionsWidthRef,
+    enableRowSelection,
+    selectedRowKeysLength: selectedRowKeys.length,
+    isMobile,
+    setSelectionAlertLayout,
+  })
 
   /**
    * 操作列宽度实测：动作条是 max-content，量到的是内容固有宽度，不随列宽变化，
@@ -3517,118 +3336,27 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     measure()
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null
-    const tbody = root.querySelector('.ant-table-tbody')
-    if (ro && tbody) ro.observe(tbody)
-    return () => ro?.disconnect()
+    // 不监听 tbody：列宽一变 tbody 就变，观察它会在首帧之后再改一版标题列宽。
+    // 行数据与列结构变化已在依赖里，绘制前完成实测。
     // 同 viewport 实测：不可依赖 effectiveTableColumns（实测改宽会换新引用 → 同步死循环）
   }, [tableData, columnStructureSig, currentViewType, showDelayedLoading])
 
   React.useLayoutEffect(() => {
     const root = containerRef.current
     if (!root) return
-
-    const syncContainerLayout = () => {
-      // 列宽预算必须用横向滚动口 clientWidth，禁止用外层 container 宽：
-      // 外层常比 .ant-table-body/.ant-table-content 宽几～十几 px，会把 scroll.x 撑出假横滚。
-      const scrollHost = (root.querySelector('.ant-table-body') ||
-        root.querySelector('.ant-table-content')) as HTMLElement | null
-      const hostWidth = scrollHost?.clientWidth ?? 0
-      const fromScrollHost = hostWidth > 0
-      const width = fromScrollHost ? hostWidth : root.clientWidth
-      if (width > 0) {
-        setContainerLayoutWidth((prev) => (prev === width ? prev : width))
-      }
-      setLayoutWidthIsScrollHost((prev) => (prev === fromScrollHost ? prev : fromScrollHost))
-
-      const toolbar = root.querySelector(
-        '.ant-pro-table-list-toolbar-container',
-      ) as HTMLElement | null
-      if (!toolbar) {
-        const next = width > 0 && width < DATA_ACTION_ICON_ONLY_MAX_WIDTH
-        setDataActionIconOnly((prev) => (prev === next ? prev : next))
-        return
-      }
-
-      const left = toolbar.querySelector('.ant-pro-table-list-toolbar-left') as HTMLElement | null
-      const dataActions = toolbar.querySelector('.uni-table-data-actions') as HTMLElement | null
-      const settings = toolbar.querySelector(
-        '.ant-pro-table-list-toolbar-setting-items',
-      ) as HTMLElement | null
-
-      // 仅在「带文案」时刷新基准宽，icon-only 时继续用该值判断是否恢复文案（防振荡）
-      if (dataActions && !dataActionIconOnlyRef.current) {
-        labeledDataActionsWidthRef.current = measureOccupiedWidth(dataActions)
-      }
-      const labeledNeed =
-        labeledDataActionsWidthRef.current || measureOccupiedWidth(dataActions)
-
-      const leftNeed = measureOccupiedWidth(left)
-      const optionsWidth = measureOccupiedWidth(settings)
-
-      // 剩余给「打印/导入/导出/同步」的宽度；够放文案则显示文字，否则仅图标
-      const available = toolbar.clientWidth - leftNeed - optionsWidth - TOOLBAR_CLUSTER_GAP
-      const next = labeledNeed > 0 && available < labeledNeed
-      setDataActionIconOnly((prev) => (prev === next ? prev : next))
-    }
-
-    syncContainerLayout()
-    const ro =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => syncContainerLayout()) : null
-    ro?.observe(root)
-    const scrollHost = root.querySelector('.ant-table-body') || root.querySelector('.ant-table-content')
-    if (ro && scrollHost) ro.observe(scrollHost)
-    const toolbar = root.querySelector('.ant-pro-table-list-toolbar-container')
-    if (ro && toolbar) ro.observe(toolbar)
-    const left = root.querySelector('.ant-pro-table-list-toolbar-left')
-    const right = root.querySelector('.ant-pro-table-list-toolbar-right')
-    const dataActionsEl = root.querySelector('.uni-table-data-actions')
-    const settingsEl = root.querySelector('.ant-pro-table-list-toolbar-setting-items')
-    if (ro && left) ro.observe(left)
-    if (ro && right) ro.observe(right)
-    if (ro && dataActionsEl) ro.observe(dataActionsEl)
-    if (ro && settingsEl) ro.observe(settingsEl)
-    window.addEventListener('resize', syncContainerLayout)
-    return () => {
-      ro?.disconnect()
-      window.removeEventListener('resize', syncContainerLayout)
-    }
-  }, [currentViewType])
-
-  React.useLayoutEffect(() => {
-    if (!enableRowSelection || selectedRowKeys.length === 0) return
-    const host = tableBodyPaneRef.current
-    if (!host) return
-
-    const syncLayout = () => {
-      const pager = host.querySelector('.ant-table-wrapper .ant-table-pagination') as HTMLElement | null
-      if (!pager) return
-      const hostRect = host.getBoundingClientRect()
-      const pagerRect = pager.getBoundingClientRect()
-      const next = {
-        top: Math.max(0, pagerRect.top - hostRect.top),
-        height: Math.max(1, pagerRect.height),
-      }
-      setSelectionAlertLayout((prev) => {
-        if (!prev) return next
-        if (Math.abs(prev.top - next.top) < 0.5 && Math.abs(prev.height - next.height) < 0.5) return prev
-        return next
-      })
-    }
-
-    syncLayout()
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => syncLayout()) : null
-    if (ro) {
-      ro.observe(host)
-      const pager = host.querySelector('.ant-table-wrapper .ant-table-pagination') as HTMLElement | null
-      if (pager) ro.observe(pager)
-    }
-    window.addEventListener('resize', syncLayout)
-    return () => {
-      window.removeEventListener('resize', syncLayout)
-      ro?.disconnect()
-    }
-  }, [enableRowSelection, selectedRowKeys.length, currentViewType, isMobile])
+    // 列宽 state 提交后的这一帧：测宽行已是最终 col 宽，固定列偏移仍是上一轮记录。
+    // 绘制前写回，避免左右固定列在首帧之后再挪一次。
+    syncFixedColumnStickyOffsets(root)
+  }, [
+    containerLayoutWidth,
+    measuredOperationWidths,
+    measuredPrimaryFlexWidths,
+    tableData,
+    columnStructureSig,
+    currentViewType,
+    showDelayedLoading,
+    layoutPlan.mode,
+  ])
 
   const showViewSwitcher = !isMobile && Boolean(viewTypes && viewTypes.length > 1)
   const showSearchToolbarRow =

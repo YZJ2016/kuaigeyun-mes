@@ -52,7 +52,7 @@ export default function RelayChangeoverPage() {
           </Tag>
         ),
       },
-      { title: t('common.remarks'), dataIndex: 'remarks', ellipsis: true },
+      { title: t('common.remark'), dataIndex: 'remarks', ellipsis: true },
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -151,7 +151,7 @@ export default function RelayChangeoverPage() {
           <Form.Item name="forbid_same_line" label={t('app.ind-relay.changeover.forbidSameLine')} valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="remarks" label={t('common.remarks')}>
+          <Form.Item name="remarks" label={t('common.remark')}>
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>

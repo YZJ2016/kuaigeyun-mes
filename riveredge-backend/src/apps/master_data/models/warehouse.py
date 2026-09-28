@@ -54,7 +54,7 @@ class Warehouse(BaseModel):
     warehouse_type = fields.CharField(
         max_length=20,
         default="normal",
-        description="仓库类型（normal=普通仓, line_side=线边仓, wip=在制品仓, outsourcing=委外仓, consignment=寄售仓, vmi=VMI仓, defect=不良品仓, quarantine=待检仓）"
+        description="仓库类型（normal=普通仓, line_side=线边仓, wip=在制品仓, outsourcing=委外仓, consignment=寄售仓, vmi=VMI仓, defect=不良品仓, scrap=报废品仓, quarantine=待检仓）"
     )
     
     # 关联车间（线边仓专用）

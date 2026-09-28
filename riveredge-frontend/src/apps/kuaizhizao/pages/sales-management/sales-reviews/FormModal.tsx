@@ -46,6 +46,11 @@ import {
   type SalesReviewItemInput,
 } from '../../../services/sales-review';
 import { formatAmount } from '../../../../../utils/format';
+import {
+  buildReviewDeptPlanFormRows,
+  ReviewDeptPlanFormItem,
+  reviewDeptPlanRowsToPayload,
+} from './ReviewDeptPlanFields';
 
 const getCustomerId = (c: any): number | null => {
   const id = Number(c?.id ?? c?.customer_id);
@@ -166,6 +171,7 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
         settlement_method: editing.settlement_method,
         payment_cycle: editing.payment_cycle,
         remarks: editing.remarks,
+        review_dept_plan_rows: buildReviewDeptPlanFormRows(editing.review_dept_plan),
         items: (editing.items || []).map((it) => ({
           material_id: it.material_id ?? undefined,
           material_code: it.material_code,
@@ -183,6 +189,7 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
       urgency: 'normal',
       risk_level: 'medium',
       review_date: dayjs(),
+      review_dept_plan_rows: buildReviewDeptPlanFormRows(null),
       items: [
         {
           material_id: undefined,
@@ -229,6 +236,17 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
       message.error(t('app.kuaizhizao.salesReview.itemsRequired'));
       return;
     }
+    const reviewDeptPlan = reviewDeptPlanRowsToPayload(values.review_dept_plan_rows || []);
+    if (!reviewDeptPlan.length) {
+      message.error(t('app.kuaizhizao.salesReview.deptPlanRequired'));
+      return;
+    }
+    for (const row of values.review_dept_plan_rows || []) {
+      if (row?.enabled && !row.assigned_reviewer_id) {
+        message.error(t('app.kuaizhizao.salesReview.reviewerRequired'));
+        return;
+      }
+    }
     const customerOpt = customerOptions.find((o) => o.value === Number(values.customer_id));
     const payload: SalesReviewCreatePayload = {
       customer_id: Number(values.customer_id),
@@ -245,6 +263,7 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
       payment_cycle: values.payment_cycle || null,
       remarks: values.remarks || null,
       items,
+      review_dept_plan: reviewDeptPlan,
     };
     if (!payload.customer_name) {
       message.error(t('app.kuaizhizao.salesReview.customerRequired'));
@@ -403,6 +422,8 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
           </Form.Item>
         </Col>
       </Row>
+
+      <ReviewDeptPlanFormItem />
 
       <DocumentDetailTableStyles />
       <UniTableDetail

@@ -159,6 +159,13 @@ type Props = {
   onCreateSuccess?: (record: Record<string, unknown>) => void;
   /** 新建弹窗打开时的默认字段值 */
   createFormDefaults?: Record<string, unknown>;
+  /**
+   * URL 查询参数名。参数存在时自动打开新建弹窗一次（如工资登记 ?register=1）。
+   * 关闭弹窗时会清掉该查询参数。
+   */
+  autoOpenCreateQuery?: string;
+  /** 列表表上方说明（流程提示等） */
+  listBanner?: React.ReactNode;
   /** 工具栏新建按钮左侧追加节点（如行业包一键生成） */
   toolBarActionsBeforeCreate?: React.ReactNode[];
   /** 列表导出（须 manifest export 权限） */
@@ -221,6 +228,8 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   expiringListFn,
   onCreateSuccess,
   createFormDefaults,
+  autoOpenCreateQuery,
+  listBanner,
   toolBarActionsBeforeCreate,
   showExportButton = false,
   onExport,
@@ -234,7 +243,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
 }) => {
   const { t } = useTranslation();
   const currentUser = useCurrentUser();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const initialScope: KuaioaListScope =
     expiringListFn && searchParams.get('scope') === 'expiring' ? 'expiring' : 'all';
   const { message: messageApi } = App.useApp();
@@ -250,6 +259,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   const [listScope, setListScope] = useState<KuaioaListScope>(initialScope);
   const [form] = Form.useForm();
   const deepLinkHandledRef = useRef<string | null>(null);
+  const createDeepLinkHandledRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (expiringListFn && searchParams.get('scope') === 'expiring') {
@@ -321,7 +331,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
       });
   };
 
-  const openCreate = () => {
+  const openCreate = useCallback(() => {
     setEditing(null);
     form.resetFields();
     const defaults: Record<string, unknown> = {};
@@ -343,7 +353,34 @@ const KuaioaCrudListPage: React.FC<Props> = ({
       form.setFieldsValue(defaults);
     }
     setModalOpen(true);
-  };
+  }, [createFormDefaults, currentUser, fields, form]);
+
+  const clearCreateDeepLink = useCallback(() => {
+    if (!autoOpenCreateQuery || !searchParams.has(autoOpenCreateQuery)) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete(autoOpenCreateQuery);
+    setSearchParams(next, { replace: true });
+    createDeepLinkHandledRef.current = null;
+  }, [autoOpenCreateQuery, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!autoOpenCreateQuery || !createFn) return;
+    const raw = searchParams.get(autoOpenCreateQuery);
+    if (raw == null) {
+      createDeepLinkHandledRef.current = null;
+      return;
+    }
+    const key = `${autoOpenCreateQuery}=${raw}`;
+    if (createDeepLinkHandledRef.current === key) return;
+    if (!perms.canCreate) return;
+    createDeepLinkHandledRef.current = key;
+    openCreate();
+  }, [autoOpenCreateQuery, createFn, openCreate, perms.canCreate, searchParams]);
+
+  const closeModal = useCallback(() => {
+    setModalOpen(false);
+    clearCreateDeepLink();
+  }, [clearCreateDeepLink]);
 
   const openDetail = useCallback(
     async (record: Record<string, unknown>) => {
@@ -390,6 +427,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         }
       }
       setModalOpen(false);
+      clearCreateDeepLink();
       reloadTable();
     } catch (error: any) {
       messageApi.error(error?.message || t('common.operationFailed'));
@@ -680,6 +718,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
 
   return (
     <ListPageTemplate>
+      {listBanner}
       <UniTable<Record<string, unknown>>
         actionRef={actionRef}
         rowKey={rowKey}
@@ -758,7 +797,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
       <FormModalTemplate
         open={modalOpen}
         title={editing ? t('common.edit') : t(createButtonKey)}
-        onClose={() => setModalOpen(false)}
+        onClose={closeModal}
         onFinish={handleSubmit}
         isEdit={Boolean(editing)}
         form={form}

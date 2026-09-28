@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import Field
 
@@ -28,6 +28,7 @@ class CustomerFollowUpBase(BaseSchema):
     opportunity_id: Optional[int] = Field(None, description="关联销售商机ID")
     stage_code_before: Optional[str] = Field(None, max_length=50, description="跟进时商机阶段（变更前）")
     stage_code_after: Optional[str] = Field(None, max_length=50, description="跟进后商机阶段（变更后）")
+    attachment_uuids: Optional[List[str]] = Field(None, description="跟进附件 UUID 列表")
 
 
 class CustomerFollowUpCreate(BaseSchema):
@@ -42,6 +43,7 @@ class CustomerFollowUpCreate(BaseSchema):
     sales_order_id: Optional[int] = Field(None, description="关联销售订单ID")
     opportunity_id: Optional[int] = Field(None, description="关联销售商机ID")
     stage_code_after: Optional[str] = Field(None, max_length=50, description="跟进后目标阶段（变更时提交）")
+    attachment_uuids: Optional[List[str]] = Field(None, description="跟进附件 UUID 列表")
 
 
 class CustomerFollowUpUpdate(BaseSchema):
@@ -56,6 +58,7 @@ class CustomerFollowUpUpdate(BaseSchema):
     sales_order_id: Optional[int] = Field(None, description="关联销售订单ID")
     opportunity_id: Optional[int] = Field(None, description="关联销售商机ID")
     stage_code_after: Optional[str] = Field(None, max_length=50, description="跟进后目标阶段（变更时提交）")
+    attachment_uuids: Optional[List[str]] = Field(None, description="跟进附件 UUID 列表")
 
 
 class CustomerFollowUpResponse(CustomerFollowUpBase):
@@ -86,11 +89,19 @@ class CustomerFollowUpListEnvelope(BaseSchema):
 
 
 class CustomerFollowUpDashboardSnapshot(BaseSchema):
-    """销售中心待跟进 KPI（按客户最新一条跟进计划统计）"""
+    """销售中心待跟进 KPI（按客户最新一条跟进计划统计）+ CRM 经营快照"""
 
     pending_customers: int = Field(0, description="待跟进客户数（计划跟进日已到或逾期）")
     overdue_customers: int = Field(0, description="已逾期客户数（计划跟进时刻已过）")
     items: List[CustomerFollowUpListResponse] = Field(
         default_factory=list,
         description="待跟进预览（按下次跟进时间升序）",
+    )
+    inactive_7d_customers: int = Field(0, description="7天未联系客户数")
+    follow_status_pending: int = Field(0, description="跟进状态=未跟进客户数")
+    follow_status_followed: int = Field(0, description="跟进状态=已跟进客户数")
+    follow_up_records_total: int = Field(0, description="跟进记录总条数（数据范围内）")
+    level_counts: Dict[str, int] = Field(
+        default_factory=dict,
+        description="客户定级分布（字典码→数量；空码为 _unset）",
     )

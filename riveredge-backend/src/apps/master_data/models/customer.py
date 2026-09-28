@@ -73,6 +73,18 @@ class Customer(BaseModel):
     assigned_at = fields.DatetimeField(null=True, description="最近领取/分配时间")
     last_follow_up_at = fields.DatetimeField(null=True, description="最近跟进时间")
     recycle_at = fields.DatetimeField(null=True, description="计划回收时间")
+    follow_status = fields.CharField(
+        max_length=20, default="pending", description="跟进状态：pending=未跟进，followed=已跟进"
+    )
+    project_description = fields.TextField(null=True, description="项目描述")
+    intent_material_name = fields.CharField(max_length=200, null=True, description="意向物料名称")
+    region_text = fields.CharField(max_length=100, null=True, description="客户地区（自由文本）")
+    market_scope = fields.CharField(
+        max_length=20, default="domestic", description="市场范围：domestic=内贸，export=外贸"
+    )
+    country_code = fields.CharField(max_length=50, null=True, description="国家/地区")
+    campaign_name = fields.CharField(max_length=200, null=True, description="广告系列名称")
+    required_capacity_text = fields.CharField(max_length=200, null=True, description="所需生产能力")
 
     # 扩展业务信息（字典项存 value）
     contact_title = fields.CharField(max_length=100, null=True, description="联系人职位")

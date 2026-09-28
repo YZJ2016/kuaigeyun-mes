@@ -2109,23 +2109,36 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         tenant_id: int,
         order_id: int,
     ) -> Dict[str, Any]:
-        from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+        from decimal import Decimal
+
+        from apps.kuaicaiwu.services.finance_tax import money_to_json_float, quantize_money
+        from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
 
         order_model = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
         if not order_model:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
         order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
-        has_invoice = await PurchaseInvoice.filter(
-            tenant_id=tenant_id,
-            purchase_order_id=order_id,
-            deleted_at__isnull=True,
-        ).exists()
+        pull_svc = PurchaseInvoicePullService()
+        oid = int(order_model.id)
+        code = str(order_model.order_code or oid)
+        order_total = quantize_money(Decimal(str(order_model.total_amount or 0)))
+        pushed_map = await pull_svc._sum_pushed_totals_by_source(
+            tenant_id, "purchase_order", [oid], {oid: code}
+        )
+        invoiced_total = quantize_money(pushed_map.get(oid, Decimal("0")))
+        remaining_total = quantize_money(max(Decimal("0"), order_total - invoiced_total))
+        fully_invoiced = remaining_total <= 0
         assert_purchase_order_capability(
             order_model,
             "push_invoice",
             has_items=bool(order_items),
-            has_invoice=has_invoice,
+            has_invoice=fully_invoiced,
+        )
+
+        prepayment_amount = quantize_money(Decimal(str(order_model.prepayment_amount or 0)))
+        prepayment_pushable = quantize_money(
+            min(prepayment_amount, remaining_total) if prepayment_amount > 0 else Decimal("0")
         )
 
         preview_items: List[Dict[str, Any]] = []
@@ -2152,23 +2165,49 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 }
             )
 
-        has_blocking = has_invoice
+        has_blocking = fully_invoiced
         blocking_reason = (
-            "purchase_order.push_invoice.already_exists" if has_blocking else None
+            "purchase_order.push_invoice.already_fully_invoiced" if has_blocking else None
         )
         return {
             "target_type": "purchase_invoice",
             "order_id": order_id,
             "order_code": order_model.order_code,
             "summary": (
-                f"将按采购订单 {order_model.order_code} 生成采购发票草稿（{len(preview_items)} 行明细）"
+                f"将按采购订单 {order_model.order_code} 生成采购发票草稿（可开票余额 {money_to_json_float(remaining_total)}）"
                 if not has_blocking
-                else "该采购单已存在采购发票，不能重复下推"
+                else "该采购单可开票金额已全部开票"
             ),
             "items": preview_items,
             "has_blocking_issues": has_blocking,
             "blocking_reason": blocking_reason,
-            "tip": "发票号码等信息可在财务管理中补全。",
+            "tip": "可选按可开票余额或按预付款开票；发票号码等信息可在财务管理中补全。",
+            "order_total": money_to_json_float(order_total),
+            "invoiced_total": money_to_json_float(invoiced_total),
+            "remaining_total": money_to_json_float(remaining_total),
+            "prepayment_amount": money_to_json_float(prepayment_amount),
+            "prepayment_pushable": money_to_json_float(prepayment_pushable),
+            "invoice_modes": [
+                {
+                    "key": "remaining",
+                    "amount": money_to_json_float(remaining_total),
+                    "allowed": remaining_total > 0,
+                },
+                {
+                    "key": "prepayment",
+                    "amount": money_to_json_float(prepayment_pushable),
+                    "allowed": prepayment_pushable > 0,
+                    "blocking_reason": (
+                        None
+                        if prepayment_pushable > 0
+                        else (
+                            "purchase_order.push_invoice.no_prepayment"
+                            if prepayment_amount <= 0
+                            else "purchase_order.push_invoice.prepayment_exceeds_remaining"
+                        )
+                    ),
+                },
+            ],
         }
 
     async def preview_push_to_purchase_return(
@@ -3178,51 +3217,88 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         self,
         tenant_id: int,
         order_id: int,
-        created_by: int
+        created_by: int,
+        *,
+        invoice_mode: str = "remaining",
+        total_amount: Optional[Decimal] = None,
     ) -> Dict[str, Any]:
         """
         下推到采购发票
 
-        从采购单下推，自动生成采购发票（草稿，待补全发票号码等）。
-
-        Args:
-            tenant_id: 租户ID
-            order_id: 采购单ID
-            created_by: 创建人ID
-
-        Returns:
-            Dict: 包含创建的采购发票信息
+        invoice_mode:
+          - remaining: 按可开票余额（订单价税合计 − 已开票）
+          - prepayment: 按预付款金额（不超过可开票余额）
+        total_amount: 可选，显式指定价税合计（不得超过所选模式上限）
         """
-        from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
+        from decimal import Decimal
+
         from apps.kuaicaiwu.schemas.finance import PurchaseInvoiceCreate
+        from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
+        from apps.kuaicaiwu.services.finance_tax import (
+            money_exceeds_max,
+            quantize_money,
+            resolve_invoice_amounts_for_create,
+        )
+        from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
 
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
         order_items = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).all()
-        from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
 
-        has_invoice = await PurchaseInvoice.filter(
-            tenant_id=tenant_id,
-            purchase_order_id=order_id,
-            deleted_at__isnull=True,
-        ).exists()
+        pull_svc = PurchaseInvoicePullService()
+        oid = int(order.id)
+        code = str(order.order_code or oid)
+        order_total = quantize_money(Decimal(str(order.total_amount or 0)))
+        pushed_map = await pull_svc._sum_pushed_totals_by_source(
+            tenant_id, "purchase_order", [oid], {oid: code}
+        )
+        invoiced_total = quantize_money(pushed_map.get(oid, Decimal("0")))
+        remaining_total = quantize_money(max(Decimal("0"), order_total - invoiced_total))
+        fully_invoiced = remaining_total <= 0
         assert_purchase_order_capability(
             order,
             "push_invoice",
             has_items=bool(order_items),
-            has_invoice=has_invoice,
+            has_invoice=fully_invoiced,
+        )
+
+        mode = str(invoice_mode or "remaining").strip().lower()
+        prepayment_amount = quantize_money(Decimal(str(order.prepayment_amount or 0)))
+        if mode == "prepayment":
+            if prepayment_amount <= 0:
+                raise BusinessLogicError("采购单未填写预付款金额，无法按预付款开票")
+            mode_cap = quantize_money(min(prepayment_amount, remaining_total))
+            if mode_cap <= 0:
+                raise BusinessLogicError("预付款金额已超过可开票余额")
+            default_total = mode_cap
+            notes = f"从采购订单 {order.order_code} 按预付款下推"
+        elif mode == "remaining":
+            mode_cap = remaining_total
+            default_total = remaining_total
+            notes = f"从采购订单 {order.order_code} 下推"
+        else:
+            raise BusinessLogicError(f"不支持的开票模式: {invoice_mode}")
+
+        if total_amount is not None:
+            chosen = quantize_money(Decimal(str(total_amount)))
+            if chosen <= 0:
+                raise BusinessLogicError("开票金额须大于 0")
+            if money_exceeds_max(chosen, mode_cap):
+                raise BusinessLogicError(
+                    f"开票价税合计 {chosen} 超过本模式可开票上限 {mode_cap}"
+                )
+        else:
+            chosen = default_total
+
+        tax_rate = Decimal(str(order.tax_rate or 0))
+        invoice_amount, tax_amount, total_with_tax = resolve_invoice_amounts_for_create(
+            chosen, tax_rate, chosen
         )
 
         today = today_site_str()
         invoice_code = await self.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today}")
 
-        total_amount = float(order.total_amount or 0)
-        tax_rate = float(order.tax_rate or 0)
-        tax_amount = total_amount * tax_rate if tax_rate else 0
-        invoice_amount = total_amount
-        total_with_tax = total_amount + tax_amount
-
+        # 编码只经 create_purchase_invoice(invoice_code=…) 传入；与进项加载一致跳过入库金额门禁
         invoice_data = PurchaseInvoiceCreate(
-            invoice_code=invoice_code,
             purchase_order_id=order_id,
             purchase_order_code=order.order_code,
             supplier_id=order.supplier_id,
@@ -3236,14 +3312,22 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             total_amount=total_with_tax,
             status="未审核",
             review_status="待审核",
-            notes=f"从采购订单 {order.order_code} 下推",
+            notes=notes,
         )
         invoice_service = PurchaseInvoiceService()
-        invoice = await invoice_service.create_purchase_invoice(tenant_id=tenant_id, invoice_data=invoice_data, created_by=created_by)
+        invoice = await invoice_service.create_purchase_invoice(
+            tenant_id=tenant_id,
+            invoice_data=invoice_data,
+            created_by=created_by,
+            invoice_code=invoice_code,
+            skip_legacy_amount_gate=True,
+        )
         return {
             "order_id": order_id,
             "order_code": order.order_code,
             "invoice_id": invoice.id,
             "invoice_code": invoice.invoice_code,
+            "invoice_mode": mode,
+            "total_amount": float(total_with_tax),
             "message": "采购发票创建成功",
         }

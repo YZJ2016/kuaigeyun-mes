@@ -98,9 +98,8 @@ class PostingService:
                 )
             debit = _d(raw.get("debit_amount"))
             credit = _d(raw.get("credit_amount"))
-            if debit < 0 or credit < 0:
-                raise ValidationError("金额不能为负")
-            if (debit > 0 and credit > 0) or (debit == 0 and credit == 0):
+            # 允许红字冲销（同向负金额）；禁止同行借贷同时有数或两侧皆空
+            if (debit != 0 and credit != 0) or (debit == 0 and credit == 0):
                 raise ValidationError(f"第{idx}行借贷只能一侧有金额")
             # 辅助核算：手工制单默认必填；从业务事件生成时非必填（界面无处录入，有则写入）
             if require_aux:

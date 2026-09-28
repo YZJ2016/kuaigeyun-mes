@@ -25,12 +25,22 @@ class CustomerPoolItem(BaseModel):
     short_name: Optional[str] = None
     contact_person: Optional[str] = None
     phone: Optional[str] = None
+    email: Optional[str] = None
     salesman_id: Optional[int] = None
     salesman_name: Optional[str] = None
     pool_status: str
     assigned_at: Optional[datetime] = None
     last_follow_up_at: Optional[datetime] = None
     recycle_at: Optional[datetime] = None
+    follow_status: Optional[str] = "pending"
+    project_description: Optional[str] = None
+    intent_material_name: Optional[str] = None
+    region_text: Optional[str] = None
+    market_scope: Optional[str] = "domestic"
+    country_code: Optional[str] = None
+    customer_level_code: Optional[str] = None
+    follow_up_count: int = 0
+    inactive_7d: bool = False
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
     created_at: datetime

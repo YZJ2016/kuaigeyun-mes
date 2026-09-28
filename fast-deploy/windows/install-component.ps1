@@ -8,6 +8,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+} catch {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+}
 
 if (-not $FastDeployDir) {
     $FastDeployDir = Split-Path $PSScriptRoot -Parent
@@ -38,12 +43,43 @@ function Get-UniqueUrls([string[]]$Urls) {
     return $result
 }
 
+# GitHub 直连与旧 ghproxy 在国内常失败；优先可用的公开加速（与 install-pgvector.ps1 对齐）
+function Get-GhProxyUrls([string]$Url) {
+    $proxied = @(
+        "https://gh-proxy.com/$Url",
+        "https://gh.llkk.cc/$Url",
+        "https://hub.gitmirror.com/$Url",
+        "https://ghfast.top/$Url",
+        "https://ghproxy.net/$Url"
+    )
+    if ($UseMirror -eq '1') {
+        return Get-UniqueUrls ($proxied + @($Url))
+    }
+    return Get-UniqueUrls (@($Url) + $proxied)
+}
+
+function Invoke-CurlDownload([string]$Url, [string]$Dest) {
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if (-not $curl) { return $false }
+    $args = @(
+        '-fsSL', '--connect-timeout', '15', '--max-time', '600',
+        '-A', 'riveredge-fast-deploy',
+        '-L', '-o', $Dest, $Url
+    )
+    & $curl.Source @args
+    if ($LASTEXITCODE -ne 0) { return $false }
+    if (-not (Test-Path $Dest)) { return $false }
+    return ((Get-Item $Dest).Length -gt 0)
+}
+
 function Invoke-DownloadWithFallback([string[]]$Urls, [string]$Dest) {
     foreach ($url in (Get-UniqueUrls $Urls)) {
         try {
             Write-Info "download: $url"
-            Invoke-WebRequest -Uri $url -OutFile $Dest -UseBasicParsing
-            return $true
+            if (Test-Path $Dest) { Remove-Item $Dest -Force -ErrorAction SilentlyContinue }
+            if (Invoke-CurlDownload $url $Dest) { return $true }
+            Invoke-WebRequest -Uri $url -OutFile $Dest -UseBasicParsing -TimeoutSec 600 -UserAgent 'riveredge-fast-deploy'
+            if ((Test-Path $Dest) -and ((Get-Item $Dest).Length -gt 0)) { return $true }
         } catch {
             Write-Info "download failed ($url): $($_.Exception.Message)"
         }
@@ -58,7 +94,7 @@ function Invoke-RestWithFallback([string[]]$Urls, [hashtable]$Headers = @{}) {
     foreach ($url in (Get-UniqueUrls $Urls)) {
         try {
             Write-Info "fetch: $url"
-            return Invoke-RestMethod -Uri $url -UseBasicParsing -Headers $Headers
+            return Invoke-RestMethod -Uri $url -UseBasicParsing -Headers $Headers -TimeoutSec 60
         } catch {
             Write-Info "fetch failed ($url): $($_.Exception.Message)"
         }
@@ -112,14 +148,13 @@ function Invoke-WingetInstall([string[]]$WingetArgs) {
 }
 
 function Invoke-WingetInstallVerified([string[]]$WingetArgs, [scriptblock]$VerifyFn) {
+    # USTC/BFSU/清华 winget 源常 404 或不可达；华为云目前可用
     $backupSources = @(
-        @{ Name = 'winget-ustc'; Url = 'https://mirrors.ustc.edu.cn/winget-source' },
-        @{ Name = 'winget-bfsu'; Url = 'https://mirrors.bfsu.edu.cn/winget-source' }
+        @{ Name = 'winget-huawei'; Url = 'https://mirrors.huaweicloud.com/winget-source' }
     )
 
     $ordered = @()
     if ($UseMirror -eq '1') {
-        # 国内优先：先 USTC/BFSU，再默认 winget 源
         $ordered += $backupSources
         $ordered += @{ Name = ''; Url = '' }
     } else {
@@ -217,8 +252,11 @@ function Test-CaddyReady {
 function Get-NodeDistBases([bool]$Mirror) {
     $official = 'https://nodejs.org/dist'
     $cn = @(
+        'https://cdn.npmmirror.com/binaries/node',
         'https://npmmirror.com/mirrors/node',
+        'https://registry.npmmirror.com/-/binary/node',
         'https://mirrors.huaweicloud.com/nodejs',
+        'https://mirrors.cloud.tencent.com/nodejs-release',
         'https://mirrors.tuna.tsinghua.edu.cn/nodejs-release'
     )
     if ($Mirror) {
@@ -322,28 +360,50 @@ function Install-NodePortable([string]$Ver, [bool]$Mirror) {
 }
 
 function Install-Node {
+    $mirror = ($UseMirror -eq '1')
+    $ver = Get-NodeReleaseVersion $mirror
+
+    # 国内：直连 MSI/便携包优先（winget 源常挂），再试 winget
+    if ($mirror) {
+        Write-Info "installing Node.js $ver via CN mirrors..."
+        if (Install-NodeMsi $ver $mirror) {
+            Write-Ok "Node.js $ver installed via MSI (reopen terminal to refresh PATH)"
+            return
+        }
+        Write-Info 'MSI failed, installing portable Node.js (no admin required)...'
+        try {
+            Install-NodePortable $ver $mirror
+            $nodeExe = Join-Path (Join-Path $FastDeployDir '.tools\node') 'node.exe'
+            Write-Ok "Node.js $ver portable: $nodeExe"
+            return
+        } catch {
+            Write-Info "portable Node failed: $($_.Exception.Message); trying winget..."
+        }
+    }
+
     if (Invoke-WingetInstallVerified @('-e', '--id', 'OpenJS.NodeJS.LTS', '--accept-package-agreements', '--accept-source-agreements') { Test-NodeReady }) {
         Write-Ok 'Node.js installed via winget'
         return
     }
 
-    $mirror = ($UseMirror -eq '1')
-    $ver = Get-NodeReleaseVersion $mirror
-
-    Write-Info "winget unavailable or incomplete, installing Node.js $ver ..."
-    if (Install-NodeMsi $ver $mirror) {
-        Write-Ok "Node.js $ver installed via MSI (reopen terminal to refresh PATH)"
+    if (-not $mirror) {
+        Write-Info "winget unavailable or incomplete, installing Node.js $ver ..."
+        if (Install-NodeMsi $ver $mirror) {
+            Write-Ok "Node.js $ver installed via MSI (reopen terminal to refresh PATH)"
+            return
+        }
+        Write-Info 'MSI failed, installing portable Node.js (no admin required)...'
+        try {
+            Install-NodePortable $ver $mirror
+        } catch {
+            Write-Err "Node.js install failed: $($_.Exception.Message). Manual: https://nodejs.org/"
+        }
+        $nodeExe = Join-Path (Join-Path $FastDeployDir '.tools\node') 'node.exe'
+        Write-Ok "Node.js $ver portable: $nodeExe"
         return
     }
 
-    Write-Info 'MSI failed, installing portable Node.js (no admin required)...'
-    try {
-        Install-NodePortable $ver $mirror
-    } catch {
-        Write-Err "Node.js install failed: $($_.Exception.Message). Manual: https://nodejs.org/"
-    }
-    $nodeExe = Join-Path (Join-Path $FastDeployDir '.tools\node') 'node.exe'
-    Write-Ok "Node.js $ver portable: $nodeExe"
+    Write-Err "Node.js install failed. Manual: https://nodejs.org/ 或 https://npmmirror.com/mirrors/node"
 }
 
 function Get-PythonInstallerUrls([bool]$Mirror, [string]$Version = '3.12.9') {
@@ -361,46 +421,111 @@ function Get-PythonInstallerUrls([bool]$Mirror, [string]$Version = '3.12.9') {
 }
 
 function Install-Python {
-    if (Invoke-WingetInstallVerified @('-e', '--id', 'Python.Python.3.12', '--accept-package-agreements', '--accept-source-agreements') { Test-PythonReady }) {
-        Write-Ok 'Python 3.12 installed via winget'
-        return
-    }
-
-    Write-Info 'winget unavailable or incomplete, installing Python 3.12 via official installer...'
     $mirror = ($UseMirror -eq '1')
     $urls = Get-PythonInstallerUrls $mirror
     $file = ([uri]($urls[0])).Segments[-1]
     $tmpdir = Get-InstallTempDir
     $exe = Join-Path $tmpdir $file
 
-    if (-not (Invoke-DownloadWithFallback $urls $exe)) {
-        Write-Err "Python download failed from all sources. Manual: $($urls[0])"
+    if ($mirror) {
+        Write-Info 'installing Python 3.12 via CN mirrors...'
+        if (Invoke-DownloadWithFallback $urls $exe) {
+            Write-Info 'silent Python install...'
+            $proc = Start-Process -FilePath $exe -ArgumentList @(
+                '/quiet', 'InstallAllUsers=0', 'PrependPath=1', 'Include_test=0'
+            ) -Wait -PassThru
+            if ($proc.ExitCode -eq 0) {
+                Write-Ok 'Python 3.12 installed (reopen terminal to refresh PATH)'
+                return
+            }
+            Write-Info "Python installer exit $($proc.ExitCode); trying winget..."
+        } else {
+            Write-Info 'Python mirror download failed; trying winget...'
+        }
     }
 
-    Write-Info 'silent Python install...'
-    $proc = Start-Process -FilePath $exe -ArgumentList @(
-        '/quiet', 'InstallAllUsers=0', 'PrependPath=1', 'Include_test=0'
-    ) -Wait -PassThru
-    if ($proc.ExitCode -ne 0) {
-        Write-Err "Python install failed (exit $($proc.ExitCode)). Manual: $($urls[0])"
+    if (Invoke-WingetInstallVerified @('-e', '--id', 'Python.Python.3.12', '--accept-package-agreements', '--accept-source-agreements') { Test-PythonReady }) {
+        Write-Ok 'Python 3.12 installed via winget'
+        return
     }
-    Write-Ok 'Python 3.12 installed (reopen terminal to refresh PATH)'
+
+    if (-not $mirror) {
+        Write-Info 'winget unavailable or incomplete, installing Python 3.12 via official installer...'
+        if (-not (Invoke-DownloadWithFallback $urls $exe)) {
+            Write-Err "Python download failed from all sources. Manual: $($urls[0])"
+        }
+        Write-Info 'silent Python install...'
+        $proc = Start-Process -FilePath $exe -ArgumentList @(
+            '/quiet', 'InstallAllUsers=0', 'PrependPath=1', 'Include_test=0'
+        ) -Wait -PassThru
+        if ($proc.ExitCode -ne 0) {
+            Write-Err "Python install failed (exit $($proc.ExitCode)). Manual: $($urls[0])"
+        }
+        Write-Ok 'Python 3.12 installed (reopen terminal to refresh PATH)'
+        return
+    }
+
+    Write-Err "Python download/install failed. Manual: https://www.python.org/downloads/"
+}
+
+function Install-UvFromPip {
+    foreach ($py in @('python', 'python3', 'py')) {
+        if (-not (Get-Command $py -ErrorAction SilentlyContinue)) { continue }
+        $pyArgs = if ($py -eq 'py') { @('-3.12', '-m', 'pip') } else { @('-m', 'pip') }
+        $indexes = @(
+            'https://mirrors.aliyun.com/pypi/simple/',
+            'https://pypi.tuna.tsinghua.edu.cn/simple/',
+            'https://pypi.org/simple/'
+        )
+        foreach ($index in $indexes) {
+            try {
+                Write-Info "pip install uv ($py) index=$index"
+                & $py @pyArgs install --user uv -i $index --trusted-host mirrors.aliyun.com --trusted-host pypi.tuna.tsinghua.edu.cn
+                if (Test-UvReady) { return $true }
+            } catch {
+                Write-Info "pip uv failed ($py / $index): $($_.Exception.Message)"
+            }
+        }
+    }
+    return $false
+}
+
+function Install-UvPortable {
+    # 固定版本 zip，经 GitHub 加速下载；避免 install.ps1 再去拉 GitHub
+    $ver = '0.6.14'
+    $file = 'uv-x86_64-pc-windows-msvc.zip'
+    $official = "https://github.com/astral-sh/uv/releases/download/$ver/$file"
+    $urls = Get-GhProxyUrls $official
+    $tmpdir = Get-InstallTempDir
+    $zip = Join-Path $tmpdir $file
+    if (-not (Invoke-DownloadWithFallback $urls $zip)) { return $false }
+
+    $extract = Join-Path $tmpdir 'uv-extract'
+    if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
+    Expand-Archive -Path $zip -DestinationPath $extract -Force
+
+    $uvExe = Get-ChildItem $extract -Filter 'uv.exe' -Recurse | Select-Object -First 1
+    if (-not $uvExe) { return $false }
+
+    $destDir = Join-Path $env:USERPROFILE '.local\bin'
+    New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+    Copy-Item $uvExe.FullName (Join-Path $destDir 'uv.exe') -Force
+    return (Test-UvReady)
 }
 
 function Install-Uv {
-    $scripts = if ($UseMirror -eq '1') {
-        Get-UniqueUrls @(
-            'https://ghproxy.net/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.ps1',
-            'https://mirror.ghproxy.com/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.ps1',
-            'https://astral.sh/uv/install.ps1'
-        )
-    } else {
-        Get-UniqueUrls @(
-            'https://astral.sh/uv/install.ps1',
-            'https://ghproxy.net/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.ps1',
-            'https://mirror.ghproxy.com/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.ps1'
-        )
+    if (Install-UvFromPip) {
+        Write-Ok 'uv installed via pip (CN PyPI mirror)'
+        return
     }
+    if (Install-UvPortable) {
+        Write-Ok 'uv portable installed'
+        return
+    }
+
+    $scripts = Get-UniqueUrls @(
+        'https://astral.sh/uv/install.ps1'
+    )
     foreach ($url in $scripts) {
         try {
             Write-Info "installing uv via $url"
@@ -441,11 +566,24 @@ function Get-PostgresqlInstallerInfo([int]$Major = 16) {
 }
 
 function Get-PostgresqlInstallerUrls([int]$Major = 16) {
-    $file, $verTag = Get-PostgresqlInstallerInfo $Major
-    return Get-UniqueUrls @(
-        "https://get.enterprisedb.com/postgresql/$file",
-        "https://ftp.postgresql.org/pub/binary/v$($verTag.Split('-')[0])/windows/$file"
+    # EDB 官方是 Windows 安装包真源；ftp.postgresql.org 上已无同名 windows 安装器（404）
+    $candidates = @(
+        @{ Major = 16; Ver = '16.8-1'; File = 'postgresql-16.8-1-windows-x64.exe' },
+        @{ Major = 16; Ver = '16.9-1'; File = 'postgresql-16.9-1-windows-x64.exe' },
+        @{ Major = 16; Ver = '16.10-1'; File = 'postgresql-16.10-1-windows-x64.exe' },
+        @{ Major = 17; Ver = '17.4-1'; File = 'postgresql-17.4-1-windows-x64.exe' },
+        @{ Major = 17; Ver = '17.5-1'; File = 'postgresql-17.5-1-windows-x64.exe' }
     )
+    $urls = @()
+    foreach ($c in $candidates) {
+        if ($c.Major -ne $Major -and $Major -ne 0) { continue }
+        $urls += "https://get.enterprisedb.com/postgresql/$($c.File)"
+    }
+    if ($urls.Count -eq 0) {
+        $file, $verTag = Get-PostgresqlInstallerInfo $Major
+        $urls += "https://get.enterprisedb.com/postgresql/$file"
+    }
+    return Get-UniqueUrls $urls
 }
 
 function Start-PostgresqlWindowsService {
@@ -468,12 +606,18 @@ function Install-PostgresqlEdb {
     $port = Read-BackendEnvValue 'DB_PORT' '5432'
 
     $urls = Get-PostgresqlInstallerUrls 16
-    $file = ([uri]($urls[0])).Segments[-1]
     $tmpdir = Get-InstallTempDir
-    $exe = Join-Path $tmpdir $file
-
-    if (-not (Invoke-DownloadWithFallback $urls $exe)) {
-        throw 'PostgreSQL installer download failed from all sources'
+    $exe = $null
+    foreach ($url in $urls) {
+        $file = ([uri]$url).Segments[-1]
+        $candidate = Join-Path $tmpdir $file
+        if (Invoke-DownloadWithFallback @($url) $candidate) {
+            $exe = $candidate
+            break
+        }
+    }
+    if (-not $exe) {
+        throw 'PostgreSQL installer download failed from all EDB sources (no CN mirror for Windows installer; need reach get.enterprisedb.com or choose remote DB)'
     }
 
     Write-Info "silent PostgreSQL install (port $port)..."
@@ -493,6 +637,27 @@ function Install-PostgresqlEdb {
 }
 
 function Install-Postgresql {
+    # 国内：EDB 直下优先（winget 默认 CDN 常慢/失败）
+    if ($UseMirror -eq '1') {
+        Write-Info 'installing PostgreSQL 16 via EDB installer (CN path: direct download first)...'
+        try {
+            Install-PostgresqlEdb
+            Write-Ok 'PostgreSQL installed via EDB installer (reopen terminal to refresh PATH)'
+            try {
+                $pgv = Join-Path $FastDeployDir 'windows\install-pgvector.ps1'
+                if (Test-Path $pgv) {
+                    Write-Info 'installing pgvector for PostgreSQL...'
+                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $pgv -FastDeployDir $FastDeployDir -UseMirror $UseMirror
+                }
+            } catch {
+                Write-Info "pgvector install skipped: $($_.Exception.Message)"
+            }
+            return
+        } catch {
+            Write-Info "EDB install failed: $($_.Exception.Message); trying winget..."
+        }
+    }
+
     if (Invoke-WingetInstallVerified @('-e', '--id', 'PostgreSQL.PostgreSQL', '--accept-package-agreements', '--accept-source-agreements') { Test-PostgresqlReady }) {
         Start-PostgresqlWindowsService
         Write-Ok 'PostgreSQL installed via winget'
@@ -508,52 +673,43 @@ function Install-Postgresql {
         return
     }
 
-    Write-Info 'winget unavailable or incomplete, installing PostgreSQL 16 via EDB installer...'
-    try {
-        Install-PostgresqlEdb
-    } catch {
-        Write-Err @(
-            "PostgreSQL install failed: $($_.Exception.Message)",
-            'Options:',
-            '  1) Run Git Bash as Administrator and retry',
-            '  2) Download from https://www.postgresql.org/download/windows/',
-            '  3) Choose remote database in wizard stage 2 to skip local PG'
-        ) -join [Environment]::NewLine
-    }
-    Write-Ok 'PostgreSQL installed via EDB installer (reopen terminal to refresh PATH)'
-    try {
-        $pgv = Join-Path $FastDeployDir 'windows\install-pgvector.ps1'
-        if (Test-Path $pgv) {
-            Write-Info 'installing pgvector for PostgreSQL...'
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $pgv -FastDeployDir $FastDeployDir -UseMirror $UseMirror
+    if ($UseMirror -ne '1') {
+        Write-Info 'winget unavailable or incomplete, installing PostgreSQL 16 via EDB installer...'
+        try {
+            Install-PostgresqlEdb
+        } catch {
+            Write-Err @(
+                "PostgreSQL install failed: $($_.Exception.Message)",
+                'Options:',
+                '  1) Run Git Bash as Administrator and retry',
+                '  2) Download from https://www.postgresql.org/download/windows/',
+                '  3) Choose remote database in wizard stage 2 to skip local PG'
+            ) -join [Environment]::NewLine
         }
-    } catch {
-        Write-Info "pgvector install skipped: $($_.Exception.Message)"
+        Write-Ok 'PostgreSQL installed via EDB installer (reopen terminal to refresh PATH)'
+        try {
+            $pgv = Join-Path $FastDeployDir 'windows\install-pgvector.ps1'
+            if (Test-Path $pgv) {
+                Write-Info 'installing pgvector for PostgreSQL...'
+                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $pgv -FastDeployDir $FastDeployDir -UseMirror $UseMirror
+            }
+        } catch {
+            Write-Info "pgvector install skipped: $($_.Exception.Message)"
+        }
+        return
     }
-}
 
-function Get-GhProxyUrls([string]$Url) {
-    if ($UseMirror -eq '1') {
-        return Get-UniqueUrls @(
-            "https://ghproxy.net/$Url",
-            "https://mirror.ghproxy.com/$Url",
-            $Url
-        )
-    }
-    return Get-UniqueUrls @(
-        $Url,
-        "https://ghproxy.net/$Url",
-        "https://mirror.ghproxy.com/$Url"
-    )
+    Write-Err @(
+        'PostgreSQL install failed.',
+        'Options:',
+        '  1) Run Git Bash as Administrator and retry',
+        '  2) Download from https://www.postgresql.org/download/windows/',
+        '  3) Choose remote database in wizard stage 2 to skip local PG'
+    ) -join [Environment]::NewLine
 }
 
 function Get-CaddyDownloadUrl {
-    $apiUrls = Get-GhProxyUrls 'https://api.github.com/repos/caddyserver/caddy/releases/latest'
-    $release = Invoke-RestWithFallback $apiUrls
-    if ($release) {
-        $asset = $release.assets | Where-Object { $_.name -match 'windows_amd64\.zip$' } | Select-Object -First 1
-        if ($asset) { return $asset.browser_download_url }
-    }
+    # api.github.com 经多数代理不可用；固定已知版本 zip，再走加速
     return 'https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_windows_amd64.zip'
 }
 
@@ -579,6 +735,16 @@ function Install-CaddyPortable {
 }
 
 function Install-Caddy {
+    if ($UseMirror -eq '1') {
+        Write-Info 'downloading portable Caddy via GitHub proxies...'
+        try {
+            Install-CaddyPortable
+            return
+        } catch {
+            Write-Info "portable Caddy failed: $($_.Exception.Message); trying winget..."
+        }
+    }
+
     if (Invoke-WingetInstallVerified @('-e', '--id', 'CaddyServer.Caddy', '--accept-package-agreements', '--accept-source-agreements') { Test-CaddyReady }) {
         Write-Ok 'Caddy installed via winget'
         return

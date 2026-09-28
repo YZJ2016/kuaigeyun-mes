@@ -11,6 +11,8 @@ import { apiRequest } from './api';
  * 部门信息接口
  */
 export interface Department {
+  /** 自增主键，凭证辅助核算等内部 FK 使用 */
+  id: number;
   uuid: string;
   name: string;
   code?: string;

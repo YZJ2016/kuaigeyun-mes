@@ -6,6 +6,8 @@ const CURRENCY_VALUE_I18N: Record<string, string> = {
   EUR: 'pages.system.siteSettings.currencyEUR',
   JPY: 'pages.system.siteSettings.currencyJPY',
   GBP: 'pages.system.siteSettings.currencyGBP',
+  HKD: 'pages.system.siteSettings.currencyHKD',
+  SGD: 'pages.system.siteSettings.currencySGD',
 };
 
 export function timezoneValueToI18nKey(value: string): string {

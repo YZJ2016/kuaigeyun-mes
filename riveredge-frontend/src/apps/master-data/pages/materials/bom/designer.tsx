@@ -14,10 +14,12 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
 import { Button, Space, Form, Select, InputNumber, Input, Switch, Tag, Modal, theme, Row, Col, List, Descriptions, Spin, App, Alert } from 'antd';
 import { EditOutlined, LeftOutlined, SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, DragOutlined, CloseCircleOutlined, SettingOutlined, ClusterOutlined, ReloadOutlined, CopyOutlined, DiffOutlined, FileAddOutlined } from '@ant-design/icons';
-import { MindMap, RCNode, getNodeSide } from '@ant-design/graphs';
+import {
+  GraphSuspense,
+  LazyMindMap,
+  useAntGraphsApi,
+} from '../../../../../components/common/lazyAntGraphs';
 import { formatQuantity } from '../../../../../utils/format';
-
-const { TextNode: G6TextNode } = RCNode;
 
 const DEFAULT_EXPAND_LEVEL = 5;
 
@@ -213,8 +215,11 @@ function bomHierarchyWidthFromGraphData(data: Record<string, unknown>): number {
 }
 
 /** 与 @ant-design/graphs MindMap 默认 LR 一致：右侧子节点 dx=0，根 dx=-width/2 */
-function bomNodeDxFromGraphData(graph: Parameters<typeof getNodeSide>[0], data: Record<string, unknown>): number {
-  const side = getNodeSide(graph, data as Parameters<typeof getNodeSide>[1]);
+/** 由 useAntGraphsApi 挂载后注入；未就绪时回退 right */
+let getNodeSideImpl: ((graph: any, data: any) => string) | null = null;
+
+function bomNodeDxFromGraphData(graph: any, data: Record<string, unknown>): number {
+  const side = getNodeSideImpl ? getNodeSideImpl(graph, data) : 'right';
   const width = bomLayoutWidthFromGraphData(data);
   return side === 'left' ? -width : side === 'center' ? -width / 2 : 0;
 }
@@ -322,7 +327,11 @@ const KBD_STYLE: React.CSSProperties = {
 const MemoizedMindMap = memo((props: { config: Record<string, unknown> | null }) => {
   const { config } = props;
   if (!config) return null;
-  return <MindMap {...(config as any)} />;
+  return (
+    <GraphSuspense>
+      <LazyMindMap {...(config as any)} />
+    </GraphSuspense>
+  );
 });
 MemoizedMindMap.displayName = 'MemoizedMindMap';
 
@@ -345,6 +354,10 @@ const SOURCE_TYPE_I18N_KEYS: Record<string, string> = {
 const BOMDesignerPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const graphsApi = useAntGraphsApi();
+  useEffect(() => {
+    if (graphsApi) getNodeSideImpl = graphsApi.getNodeSide;
+  }, [graphsApi]);
   const bomPerms = useResourcePermissions(BOM_RESOURCE);
   const getSourceTypeLabel = (key: string) => (SOURCE_TYPE_I18N_KEYS[key] ? t(SOURCE_TYPE_I18N_KEYS[key]) : key);
   const issueMethodOptions = useMemo(
@@ -2592,7 +2605,7 @@ const BOMDesignerPage: React.FC = () => {
             const height = measureBomNodeHeightFromGraphData(data);
             return [width, height];
           },
-          dx: function (this: Parameters<typeof getNodeSide>[0], data: Record<string, unknown>) {
+          dx: function (this: any, data: Record<string, unknown>) {
             return bomNodeDxFromGraphData(this, data);
           },
           // 使用相对坐标 [x, y] 指定侧面垂直中心：左侧 [0, 0.5]、右侧 [1, 0.5]，确保连线始终从中心点连接
@@ -3278,7 +3291,15 @@ const BOMDesignerPage: React.FC = () => {
           </div>
 
           {mindMapConfig ? (
-            <MindMap {...(mindMapConfig as any)} />
+            graphsApi ? (
+              <GraphSuspense>
+                <LazyMindMap {...(mindMapConfig as any)} />
+              </GraphSuspense>
+            ) : (
+              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Spin />
+              </div>
+            )
           ) : (
             <div style={{
               width: '100%',

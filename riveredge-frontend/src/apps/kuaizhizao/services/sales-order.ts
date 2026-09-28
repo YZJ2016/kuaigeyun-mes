@@ -67,6 +67,8 @@ export interface SalesOrder {
   payment_terms?: string;
   /** 币种代码（默认 CNY） */
   currency_code?: string;
+  /** 汇率（1 外币 = N 本位币） */
+  exchange_rate?: number;
   pushed_to_computation?: boolean;
   computation_id?: number;
   computation_code?: string;
@@ -139,6 +141,8 @@ export interface SalesOrderCapabilities {
   push_computation?: ActionCapability;
   withdraw_computation?: ActionCapability;
   push_work_order?: ActionCapability;
+  push_purchase_requisition?: ActionCapability;
+  push_purchase_order?: ActionCapability;
   push_shipment_notice?: ActionCapability;
   push_sales_delivery?: ActionCapability;
   push_invoice?: ActionCapability;
@@ -483,6 +487,7 @@ export interface PushPreviewResponse {
     net_available_quantity?: number;
     suggested_make_quantity?: number;
     delivery_date?: string;
+    required_date?: string;
     suggested_action?: string;
     warehouse_id?: number;
     warehouse_name?: string;
@@ -819,6 +824,57 @@ export async function pushSalesOrderToWorkOrder(
     method: 'POST',
     data,
   });
+}
+
+/** 销售订单直推采购申请/采购订单（明细采购件） */
+export interface PushSalesOrderToPurchaseRequest {
+  selected_item_ids?: number[];
+  selected_quantities?: Record<number, number>;
+}
+
+export interface PushSalesOrderToPurchaseResponse {
+  success: boolean;
+  message: string;
+  target_document?: { type: string; id: number; code: string };
+  target_documents?: { type: string; id: number; code: string }[];
+}
+
+export async function previewPushSalesOrderToPurchaseRequisition(
+  salesOrderId: number,
+): Promise<PushPreviewResponse> {
+  return apiRequest<PushPreviewResponse>(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-purchase-requisition/preview`,
+    { method: 'GET' },
+  );
+}
+
+export async function pushSalesOrderToPurchaseRequisition(
+  salesOrderId: number,
+  data?: PushSalesOrderToPurchaseRequest,
+): Promise<PushSalesOrderToPurchaseResponse> {
+  return apiRequest<PushSalesOrderToPurchaseResponse>(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-purchase-requisition`,
+    { method: 'POST', data },
+  );
+}
+
+export async function previewPushSalesOrderToPurchaseOrder(
+  salesOrderId: number,
+): Promise<PushPreviewResponse> {
+  return apiRequest<PushPreviewResponse>(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-purchase-order/preview`,
+    { method: 'GET' },
+  );
+}
+
+export async function pushSalesOrderToPurchaseOrder(
+  salesOrderId: number,
+  data?: PushSalesOrderToPurchaseRequest,
+): Promise<PushSalesOrderToPurchaseResponse> {
+  return apiRequest<PushSalesOrderToPurchaseResponse>(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-purchase-order`,
+    { method: 'POST', data },
+  );
 }
 
 /**

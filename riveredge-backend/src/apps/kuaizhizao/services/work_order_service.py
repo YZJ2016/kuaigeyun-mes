@@ -1601,7 +1601,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             logger.warning(f"工单创建失败 - {error_msg}")
                             raise ValidationError(error_msg)
                     elif source_type == SOURCE_TYPE_OUTSOURCE:
-                        # 委外件：必须有委外供应商和委外工序（验证失败时不允许创建工单）
+                        # 委外件档案不要求默认供应商/工序；此处仅拦截其它来源校验错误
                         if not validation_passed:
                             error_msg = f"委外件物料来源验证失败，无法创建工单：\n" + "\n".join(validation_errors)
                             logger.warning(f"工单创建失败 - {error_msg}")
@@ -5810,7 +5810,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     continue
                 team_member_names.setdefault(int(row.work_group_id), []).append(name)
 
-        prev_transfer = Decimal(str(plan_qty))
+        # 物料剩余：上道可转下道（首道为计划数+本道超报）- 本道已消耗。
+        from apps.kuaizhizao.services.over_report_rules import first_operation_material_incoming
+
+        prev_transfer = (
+            first_operation_material_incoming(Decimal(str(plan_qty)), operations[0])
+            if operations
+            else Decimal(str(plan_qty))
+        )
         result = []
         for idx, op in enumerate(operations):
             defect_types_raw = defect_by_master_op.get(op.operation_id, [])
@@ -5914,8 +5921,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 op_data["inspection_qualified_quantity"] = None
                 op_data["inspection_unqualified_quantity"] = None
 
-            # 物料剩余：上道可转下道（首道为计划数）- 本道已消耗。
-            # 允许跳转时不卡紧邻上道转入，仅受计划/节点工序约束。
+            # 物料剩余：上道可转下道（首道为计划数 + 本道超报抬高）- 本道已消耗。
+            # 允许跳转时不卡紧邻上道转入，仅受计划/超报/节点工序约束。
             completed = op.completed_quantity or Decimal("0")
             insp_q = Decimal(str(op_data.get("inspection_qualified_quantity") or 0))
             insp_u = Decimal(str(op_data.get("inspection_unqualified_quantity") or 0))
@@ -6212,9 +6219,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     existing_op.work_center_name = op_data.work_center_name
                     fs_plan = getattr(op_data, "model_fields_set", set()) or set()
                     if "planned_start_date" in fs_plan:
-                        existing_op.planned_start_date = op_data.planned_start_date
+                        existing_op.planned_start_date = (
+                            coerce_business_datetime_to_utc(op_data.planned_start_date)
+                            if op_data.planned_start_date is not None
+                            else None
+                        )
                     if "planned_end_date" in fs_plan:
-                        existing_op.planned_end_date = op_data.planned_end_date
+                        existing_op.planned_end_date = (
+                            coerce_business_datetime_to_utc(op_data.planned_end_date)
+                            if op_data.planned_end_date is not None
+                            else None
+                        )
                     existing_op.standard_time = op_data.standard_time
                     existing_op.setup_time = op_data.setup_time
                     existing_op.remarks = op_data.remarks
@@ -6335,8 +6350,16 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         assigned_station_name=assignment["assigned_station_name"],
                         assigned_equipment_id=assignment["assigned_equipment_id"],
                         assigned_equipment_name=assignment["assigned_equipment_name"],
-                        planned_start_date=op_data.planned_start_date,
-                        planned_end_date=op_data.planned_end_date,
+                        planned_start_date=(
+                            coerce_business_datetime_to_utc(op_data.planned_start_date)
+                            if op_data.planned_start_date is not None
+                            else None
+                        ),
+                        planned_end_date=(
+                            coerce_business_datetime_to_utc(op_data.planned_end_date)
+                            if op_data.planned_end_date is not None
+                            else None
+                        ),
                         standard_time=op_data.standard_time,
                         setup_time=op_data.setup_time,
                         reporting_type=reporting_type,
@@ -6355,12 +6378,21 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             # 若此处用工序计划结束覆盖头表，编辑工单计划时间后会被旧工序时间冲掉。
 
             # 编辑工单表单常把打开时的旧工序计划时刻一并回写；若已落在头表窗口外则按窗口重算。
-            await self.resync_operations_to_work_order_planned_window(
-                tenant_id,
-                work_order,
-                updated_by=updated_by,
-                force=False,
+            # 详情「编辑工序」显式传入计划起止时不得再整单继承窗口，否则会冲掉用户刚改的工序时间。
+            explicit_operation_plan = any(
+                bool(
+                    (getattr(op_data, "model_fields_set", set()) or set())
+                    & {"planned_start_date", "planned_end_date"}
+                )
+                for op_data, _existing, _seq in matched_rows
             )
+            if not explicit_operation_plan:
+                await self.resync_operations_to_work_order_planned_window(
+                    tenant_id,
+                    work_order,
+                    updated_by=updated_by,
+                    force=False,
+                )
 
             logger.info(f"工单 {work_order.code} 的工序已更新")
 

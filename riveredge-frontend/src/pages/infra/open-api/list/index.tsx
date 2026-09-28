@@ -45,9 +45,11 @@ import {
   rotateOpenApiAcctId,
   updateOpenApiApp,
 } from '../../../../services/openApi';
+import { getTenantList, TenantStatus } from '../../../../services/tenant';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { getTenantId, setTenantId } from '../../../../utils/auth';
 import { resolveIsInfraSuperAdminSession } from '../../../../utils/infraSuperAdminSession';
+import { useTranslation } from 'react-i18next';
 
 const codeBlockStyle: React.CSSProperties = {
   fontFamily: CODE_FONT_FAMILY,
@@ -186,15 +188,19 @@ const PermissionCodesPicker: React.FC<{
 };
 
 const OpenApiPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const isInfraSuperAdmin = resolveIsInfraSuperAdminSession();
   const { canAction } = useResourcePermissions('system:open-api');
   const canManage = isInfraSuperAdmin || Boolean(canAction?.('manage'));
 
-  const [tenantInput, setTenantInput] = useState<string>(() => {
+  const [selectedTenantId, setSelectedTenantId] = useState<number | undefined>(() => {
     const tid = getTenantId();
-    return tid != null ? String(tid) : '';
+    const n = tid != null ? Number(tid) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : undefined;
   });
+  const [tenantOptions, setTenantOptions] = useState<Array<{ value: number; label: string }>>([]);
+  const [tenantsLoading, setTenantsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [account, setAccount] = useState<OpenApiAccount | null>(null);
   const [apps, setApps] = useState<OpenApiApp[]>([]);
@@ -241,14 +247,50 @@ const OpenApiPage: React.FC = () => {
     void loadAll();
   }, [loadAll]);
 
-  const handleApplyTenant = () => {
-    const n = Number(String(tenantInput || '').trim());
-    if (!Number.isFinite(n) || n <= 0) {
-      messageApi.warning('请输入有效的组织 ID');
+  useEffect(() => {
+    if (!isInfraSuperAdmin) return;
+    let cancelled = false;
+    setTenantsLoading(true);
+    void getTenantList(
+      {
+        page: 1,
+        page_size: 100,
+        status: TenantStatus.ACTIVE,
+        sort: 'id',
+        order: 'asc',
+      },
+      true,
+    )
+      .then((resp) => {
+        if (cancelled) return;
+        setTenantOptions(
+          (resp.items ?? []).map((tenant) => ({
+            value: Number(tenant.id),
+            label: `${tenant.name} (#${tenant.id})`,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          messageApi.error(t('ui.message.tenantOptionsLoadFailed'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setTenantsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isInfraSuperAdmin, messageApi, t]);
+
+  const handleTenantChange = (tenantId: number) => {
+    if (!Number.isFinite(tenantId) || tenantId <= 0) {
+      messageApi.warning(t('pages.infra.openApi.selectTenantRequired'));
       return;
     }
-    setTenantId(n);
-    messageApi.success(`已切换到组织 ${n}`);
+    setSelectedTenantId(tenantId);
+    setTenantId(tenantId);
+    messageApi.success(t('pages.infra.openApi.tenantSwitched', { id: tenantId }));
     void loadAll();
   };
 
@@ -868,7 +910,6 @@ const OpenApiPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title="开放 API"
       toolbarExtra={
         <Space>
           <Button icon={<ReloadOutlined />} onClick={() => void loadAll()} loading={loading}>
@@ -898,20 +939,21 @@ const OpenApiPage: React.FC = () => {
         />
 
         {isInfraSuperAdmin && (
-          <Card title="组织上下文" size="small">
+          <Card title={t('pages.infra.openApi.orgContext')} size="small">
             <Space wrap>
-              <Typography.Text>组织 ID：</Typography.Text>
-              <Input
-                style={{ width: 160 }}
-                value={tenantInput}
-                onChange={(e) => setTenantInput(e.target.value)}
-                placeholder="X-Tenant-ID"
+              <Typography.Text>{t('pages.infra.openApi.orgLabel')}</Typography.Text>
+              <Select
+                style={{ width: 280 }}
+                showSearch
+                loading={tenantsLoading}
+                placeholder={t('pages.infra.openApi.selectTenantPlaceholder')}
+                optionFilterProp="label"
+                value={selectedTenantId}
+                options={tenantOptions}
+                onChange={handleTenantChange}
               />
-              <Button type="primary" onClick={handleApplyTenant}>
-                切换并加载
-              </Button>
               <Typography.Text type="secondary">
-                平台超管须指定组织后管理该租户的开放凭证
+                {t('pages.infra.openApi.orgContextHint')}
               </Typography.Text>
             </Space>
           </Card>

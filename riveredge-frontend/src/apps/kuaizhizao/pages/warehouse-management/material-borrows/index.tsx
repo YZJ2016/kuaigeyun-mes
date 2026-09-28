@@ -794,7 +794,19 @@ const MaterialBorrowsPage: React.FC = () => {
               required
               onChange={(val, wh) => {
                 updateSelectedWarehouseId(val);
-                formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' });
+                const items = formRef.current?.getFieldValue('items') || [];
+                formRef.current?.setFieldsValue({
+                  warehouse_name: wh?.name ?? '',
+                  // 换仓后明细必须重选本仓物料/库位，禁止保留他仓选中项
+                  items: (Array.isArray(items) ? items : []).map((row: Record<string, unknown>) => ({
+                    ...row,
+                    material_id: undefined,
+                    material_code: '',
+                    material_name: '',
+                    material_unit: '',
+                    location_code: undefined,
+                  })),
+                });
               }}
             />
           </Col>
@@ -871,9 +883,15 @@ const MaterialBorrowsPage: React.FC = () => {
                               <UniMaterialSelect
                                 name={[index, 'material_id']}
                                 label=""
-                                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectMaterial')}
+                                placeholder={
+                                  selectedWarehouseId
+                                    ? t('app.kuaizhizao.warehouseOutbound.field.selectMaterial')
+                                    : t('app.kuaizhizao.warehouseOutbound.field.selectWarehouseFirst')
+                                }
                                 required
                                 size="small"
+                                disabled={!selectedWarehouseId}
+                                warehouseId={selectedWarehouseId}
                                 listFieldKey={index}
                                 listFieldName="items"
                                 fillMapping={{
@@ -979,7 +997,14 @@ const MaterialBorrowsPage: React.FC = () => {
                               type="default"
                               icon={<ShoppingOutlined />}
                               style={{ flex: 1, minWidth: 120 }}
-                              onClick={() => setMaterialPickerOpen(true)}
+                              disabled={!selectedWarehouseId}
+                              onClick={() => {
+                                if (!selectedWarehouseId) {
+                                  messageApi.warning(t('app.kuaizhizao.warehouseOutbound.field.selectWarehouseFirst'));
+                                  return;
+                                }
+                                setMaterialPickerOpen(true);
+                              }}
                             >
                               {t('app.kuaizhizao.common.materialBatchSelect')}
                             </Button>
@@ -1008,6 +1033,7 @@ const MaterialBorrowsPage: React.FC = () => {
         open={materialPickerOpen}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendBorrowItemsFromMaterials}
+        warehouseId={selectedWarehouseId}
       />
       {PrintModal}
     </>

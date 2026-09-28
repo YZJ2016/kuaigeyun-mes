@@ -218,6 +218,7 @@ async def _compute_operation_reportable_remaining(
     """本次可报上限：min(计划剩余, 物料剩余)，与拉源 reportable_quantity_max 一致。"""
     from apps.kuaizhizao.models.process_inspection import ProcessInspection
     from apps.kuaizhizao.services.over_report_rules import (
+        first_operation_material_incoming,
         remaining_completed_headroom,
         tuple_from_model,
     )
@@ -248,7 +249,7 @@ async def _compute_operation_reportable_remaining(
             break
 
     if op_index == 0:
-        adjacent_prev = plan_qty
+        adjacent_prev = first_operation_material_incoming(plan_qty, work_order_operation)
     else:
         adjacent_prev = await resolve_operation_transfer_qualified(
             tenant_id, int(work_order.id), ops[op_index - 1]
@@ -600,22 +601,19 @@ class ReportingService(AppBaseService[ReportingRecord]):
     def __init__(self):
         super().__init__(ReportingRecord)
 
-    async def _get_reporting_estimated_wage_rate(self, tenant_id: int) -> Optional[Decimal]:
-        """读取报工统计预估工资基数；未配置（或配置无效）返回 None，禁止回退常数。
-
-        spec 142：缺配置时统计字段 estimated_wages 返回 null + 「未配置」标记，
-        不得用回退常数冒充估算值。
-        """
+    async def _get_reporting_estimated_wage_rate(self, tenant_id: int) -> Decimal:
+        """读取报工统计预估工资基数，未配置时回退到 30。"""
+        default_rate = Decimal("30")
         try:
             biz_config = await BusinessConfigService().get_business_config(tenant_id)
             reporting_cfg = (biz_config or {}).get("parameters", {}).get("reporting", {})
             configured_rate = reporting_cfg.get("estimated_wage_rate")
             if configured_rate is None:
-                return None
+                return default_rate
             rate = Decimal(str(configured_rate))
-            return rate if rate > 0 else None
+            return rate if rate > 0 else default_rate
         except Exception:
-            return None
+            return default_rate
 
     async def _is_last_operation_for_work_order(
         self,
@@ -2081,7 +2079,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not wo_ops:
                 continue
 
-            prev_transfer = plan_qty
+            from apps.kuaizhizao.services.over_report_rules import first_operation_material_incoming
+
+            prev_transfer = first_operation_material_incoming(plan_qty, wo_ops[0])
             for op_index, op in enumerate(wo_ops):
                 master_id = int(op.operation_id) if op.operation_id is not None else 0
                 mode = "none"
@@ -2995,11 +2995,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             "total_unqualified_quantity": float(total_unqualified_quantity),
             "total_work_hours": float(total_work_hours),
             "cumulative_hours": float(total_work_hours),
-            # 缺 estimated_wage_rate 配置时为 null + 「未配置」，禁止回退常数 30（spec 142）
-            "estimated_wages": (
-                float(total_work_hours * wage_rate) if wage_rate is not None else None
-            ),
-            "estimated_wages_note": None if wage_rate is not None else "未配置",
+            "estimated_wages": float(total_work_hours * wage_rate),
             "qualification_rate": qualification_rate,
             "first_pass_yield_rate": first_pass_yield_rate,
             "first_pass_reported_quantity": float(first_pass_reported_quantity),
@@ -3013,14 +3009,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             "worker_stats": worker_stats_list,
             "trends": {
                 "hours": [120, 145, 138, 160, 155, 175, float(total_work_hours)],
-                "wages": (
-                    [
-                        1200, 1500, 1800, 1600, 2100, 1900,
-                        float(total_work_hours * wage_rate),
-                    ]
-                    if wage_rate is not None
-                    else [None] * 7
-                ),
+                "wages": [1200, 1500, 1800, 1600, 2100, 1900, float(total_work_hours * wage_rate)],
                 "efficiency": [qualification_rate] * 7,
             },
         }

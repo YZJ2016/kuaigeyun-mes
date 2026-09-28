@@ -17,6 +17,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
+from decimal import Decimal
 from loguru import logger
 import asyncio
 import uuid as _uuid
@@ -1910,6 +1911,7 @@ class DocumentPrintService:
             order.tenant_id, "PAYMENT_TERMS", getattr(order, "payment_terms", None)
         )
         currency_code = getattr(order, "currency_code", None) or "CNY"
+        exchange_rate = getattr(order, "exchange_rate", None) or Decimal("1")
         customer_invoice_fields = await _resolve_customer_invoice_print_fields(
             order.tenant_id, getattr(order, "customer_id", None)
         )
@@ -1934,6 +1936,7 @@ class DocumentPrintService:
             "shipping_method": shipping_method_label,
             "payment_terms": payment_terms_label,
             "currency_code": currency_code,
+            "exchange_rate": str(exchange_rate),
             "price_type": getattr(order, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
             "notes": getattr(order, "notes", None),
             # 销售合同模板别名：单据号/日期用订单真源；关联框架合同编码单独保留

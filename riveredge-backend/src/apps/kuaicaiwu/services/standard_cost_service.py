@@ -18,12 +18,36 @@ from apps.kuaicaiwu.schemas.standard_cost import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.utils.timezone_utils import resolve_business_datetime
 
+# 写库仅允许 ORM 业务列；禁止 id/audit/tenant 等响应或主键字段进入 Tortoise
+_STANDARD_COST_WRITE_FIELDS = frozenset(
+    {
+        "target_type",
+        "target_id",
+        "target_code",
+        "target_name",
+        "cost_item_type",
+        "standard_value",
+        "currency",
+        "unit",
+        "version",
+        "effective_date",
+        "expiry_date",
+        "is_active",
+        "description",
+    }
+)
+
 
 def standard_cost_effective_q(ref_date: date) -> Q:
     """生效/失效窗口：未填生效日视为已生效；未填失效日视为长期有效。"""
     return (Q(effective_date__isnull=True) | Q(effective_date__lte=ref_date)) & (
         Q(expiry_date__isnull=True) | Q(expiry_date__gte=ref_date)
     )
+
+
+def _standard_cost_write_payload(data: StandardCostCreate | StandardCostUpdate) -> dict:
+    dumped = data.model_dump(exclude_unset=True)
+    return {k: v for k, v in dumped.items() if k in _STANDARD_COST_WRITE_FIELDS}
 
 
 class StandardCostService(AppBaseService[StandardCost]):
@@ -59,8 +83,7 @@ class StandardCostService(AppBaseService[StandardCost]):
                 created_by_name=user_info["name"],
                 updated_by=created_by,
                 updated_by_name=user_info["name"],
-                # BaseSchema.audit 为响应派生字段，不得写入 ORM
-                **data.model_dump(exclude_unset=True, exclude={"audit"}),
+                **_standard_cost_write_payload(data),
             )
             return StandardCostResponse.model_validate(row)
 
@@ -136,7 +159,7 @@ class StandardCostService(AppBaseService[StandardCost]):
             if not row:
                 raise NotFoundError(f"标准成本不存在: {standard_cost_id}")
 
-            update_data = data.model_dump(exclude_unset=True, exclude={"audit"})
+            update_data = _standard_cost_write_payload(data)
             if updated_by is not None:
                 user_info = await self.get_user_info(updated_by)
                 update_data["updated_by"] = updated_by

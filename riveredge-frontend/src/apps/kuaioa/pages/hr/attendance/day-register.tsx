@@ -16,6 +16,10 @@ import {
   listAttendanceSheets,
   refreshAttendanceRoster,
 } from '../../../services/attendance';
+import {
+  loadOaProductionLineNameOptions,
+  loadOaWorkshopNameOptions,
+} from '../../../utils/oaWorkshopOptions';
 
 type Mode = 'rest' | 'night';
 
@@ -27,24 +31,34 @@ const AttendanceDayRegisterPage: React.FC = () => {
   const perms = useResourcePermissions('kuaioa:attendance');
 
   const [yearMonth, setYearMonth] = useState(dayjs().format('YYYY-MM'));
-  const [workshop, setWorkshop] = useState('');
-  const [productionLine, setProductionLine] = useState('');
+  const [workshop, setWorkshop] = useState<string | undefined>();
+  const [productionLine, setProductionLine] = useState<string | undefined>();
   const [workDate, setWorkDate] = useState<Dayjs | null>(dayjs());
   const [employeeIds, setEmployeeIds] = useState<number[]>([]);
   const [employeeOptions, setEmployeeOptions] = useState<Array<{ label: string; value: number }>>(
     [],
   );
+  const [workshopOptions, setWorkshopOptions] = useState<Array<{ label: string; value: string }>>(
+    [],
+  );
+  const [lineOptions, setLineOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     void (async () => {
-      const res = await listEmployees({ status: 'active' });
+      const [emps, workshops, lines] = await Promise.all([
+        listEmployees({ status: 'active' }),
+        loadOaWorkshopNameOptions(),
+        loadOaProductionLineNameOptions(),
+      ]);
       setEmployeeOptions(
-        res.items.map((e) => ({
+        emps.items.map((e) => ({
           label: `${e.employee_code || ''} ${e.full_name}`.trim(),
           value: Number(e.id),
         })),
       );
+      setWorkshopOptions(workshops);
+      setLineOptions(lines.map(({ label, value }) => ({ label, value })));
     })();
   }, []);
 
@@ -65,7 +79,8 @@ const AttendanceDayRegisterPage: React.FC = () => {
       message.error(t('app.kuaioa.payroll.yearMonthInvalid'));
       return;
     }
-    if (!workshop.trim()) {
+    const workshopName = String(workshop || '').trim();
+    if (!workshopName) {
       message.error(t('app.kuaioa.attendance.workshopRequired'));
       return;
     }
@@ -79,19 +94,18 @@ const AttendanceDayRegisterPage: React.FC = () => {
       return;
     }
 
+    const lineName = String(productionLine || '').trim();
     setSubmitting(true);
     try {
       const list = await listAttendanceSheets({
         year_month: yearMonth.trim(),
-        workshop_name: workshop.trim(),
+        workshop_name: workshopName,
         status: 'draft',
       });
       let sheet =
         list.items.find((s) => {
           const line = String(s.production_line_name || '');
-          const lineMatch = productionLine.trim()
-            ? line === productionLine.trim()
-            : !line;
+          const lineMatch = lineName ? line === lineName : !line;
           if (!lineMatch) return false;
           if (mode === 'night') return Boolean(s.has_night);
           return true;
@@ -103,10 +117,10 @@ const AttendanceDayRegisterPage: React.FC = () => {
       if (!sheet) {
         sheet = await createAttendanceSheet({
           year_month: yearMonth.trim(),
-          workshop_name: workshop.trim(),
-          production_line_name: productionLine.trim() || null,
+          workshop_name: workshopName,
+          production_line_name: lineName || null,
           has_night: mode === 'night',
-          standard_hours: mode === 'night' ? 8 : 8,
+          standard_hours: 8,
         });
       } else if (mode === 'night' && !sheet.has_night) {
         message.error(t('app.kuaioa.attendance.nightTemplateRequired'));
@@ -153,16 +167,25 @@ const AttendanceDayRegisterPage: React.FC = () => {
           onChange={(e) => setYearMonth(e.target.value)}
           placeholder="YYYY-MM"
         />
-        <Input
-          addonBefore={t('app.kuaioa.attendance.workshop')}
+        <Select
+          showSearch
+          allowClear
+          optionFilterProp="label"
+          placeholder={t('app.kuaioa.attendance.workshop')}
+          options={workshopOptions}
           value={workshop}
-          onChange={(e) => setWorkshop(e.target.value)}
+          onChange={setWorkshop}
+          style={{ width: '100%' }}
         />
-        <Input
-          addonBefore={t('app.kuaioa.attendance.productionLine')}
-          value={productionLine}
-          onChange={(e) => setProductionLine(e.target.value)}
+        <Select
+          showSearch
+          allowClear
+          optionFilterProp="label"
           placeholder={t('app.kuaioa.attendance.productionLineOptional')}
+          options={lineOptions}
+          value={productionLine}
+          onChange={setProductionLine}
+          style={{ width: '100%' }}
         />
         <DatePicker
           value={workDate}

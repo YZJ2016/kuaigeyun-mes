@@ -18,7 +18,7 @@ import { FilePdfOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FlowGraph } from '@ant-design/graphs';
+import { GraphSuspense, LazyFlowGraph } from '../../../../../components/common/lazyAntGraphs';
 import { NodeEvent, type Graph } from '@antv/g6';
 import {
   CANVAS_FLOW_GRAPH_GRID_STYLE,
@@ -526,11 +526,13 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
                 transition: graphViewportReady ? 'opacity 0.28s ease-out' : 'none',
               }}
             >
-              <FlowGraph
-                key={graphBundle.flowKey}
-                {...(graphBundle.config as object)}
-                containerStyle={{ height: '100%', width: '100%' }}
-              />
+              <GraphSuspense>
+                <LazyFlowGraph
+                  key={graphBundle.flowKey}
+                  {...(graphBundle.config as object)}
+                  containerStyle={{ height: '100%', width: '100%' }}
+                />
+              </GraphSuspense>
             </div>
           )}
         </div>

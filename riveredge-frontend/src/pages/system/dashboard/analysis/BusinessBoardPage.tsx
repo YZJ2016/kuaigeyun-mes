@@ -11,7 +11,7 @@ import {
   PlusOutlined,
 } from '@ant-design/icons';
 import { Check, X } from 'lucide-react';
-import { Column, Area, Chart } from '@ant-design/charts';
+import { ChartSuspense, LazyColumn } from '../../../../components/common/lazyAntCharts';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -1969,7 +1969,8 @@ const BusinessBoardPage: React.FC = () => {
 
               return (
                 <div style={{ width: '100%', height: chartHeight, position: 'relative', overflow: 'visible', flexShrink: 0 }}>
-                  <Column
+                  <ChartSuspense>
+                  <LazyColumn
                     key={`logistics-grouped-column-${isFullscreen ? 'fs' : 'nm'}`}
                     autoFit
                     appendPadding={4}
@@ -2027,6 +2028,7 @@ const BusinessBoardPage: React.FC = () => {
                     interaction={{ tooltip: { shared: true } }}
                     legend={false}
                   />
+                  </ChartSuspense>
                 </div>
               );
             })()}

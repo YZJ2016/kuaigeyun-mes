@@ -17,6 +17,7 @@ import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSavedSearchList, createSavedSearch, deleteSavedSearchByUuid, updateSavedSearchByUuid, SavedSearch } from '../../services/savedSearch';
 import { getToken } from '../../utils/auth';
+import { subscribeResizeBus } from '../../hooks/useResizeBus';
 import { useGlobalStore, useSavedSearchVersionStore } from '../../stores';
 import { getSavedSearchOrder, setSavedSearchOrder } from '../../stores/savedSearchOrderStorage';
 import { QuickFilters } from './QuickFilters';
@@ -3077,10 +3078,10 @@ export const QuerySearchButton: React.FC<QuerySearchButtonProps> = ({
       const handleResize = () => {
         calculateModalPosition();
       };
-      window.addEventListener('resize', handleResize);
+      const unsubResize = subscribeResizeBus(handleResize);
       window.addEventListener('scroll', handleResize, true);
       return () => {
-        window.removeEventListener('resize', handleResize);
+        unsubResize();
         window.removeEventListener('scroll', handleResize, true);
       };
     }
