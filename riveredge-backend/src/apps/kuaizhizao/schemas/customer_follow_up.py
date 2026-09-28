@@ -97,7 +97,8 @@ class CustomerFollowUpDashboardSnapshot(BaseSchema):
         default_factory=list,
         description="待跟进预览（按下次跟进时间升序）",
     )
-    inactive_7d_customers: int = Field(0, description="7天未联系客户数")
+    inactive_customers: int = Field(0, description="未联系客户数（按客户池规则未联系提醒天数）")
+    inactive_alert_days: int = Field(7, description="未联系提醒天数（来自客户池规则）")
     follow_status_pending: int = Field(0, description="跟进状态=未跟进客户数")
     follow_status_followed: int = Field(0, description="跟进状态=已跟进客户数")
     follow_up_records_total: int = Field(0, description="跟进记录总条数（数据范围内）")

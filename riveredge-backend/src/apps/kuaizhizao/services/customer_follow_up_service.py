@@ -646,15 +646,22 @@ class CustomerFollowUpService:
                 resource="kuaizhizao:customer-pool",
             )
         customers = await customer_query.all()
-        inactive_7d_customers = 0
+        rule = await CustomerPoolRule.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        inactive_alert_days = 7 if rule is None else max(1, min(int(rule.inactive_alert_days), 365))
+        inactive_customers = 0
         follow_status_pending = 0
         follow_status_followed = 0
         level_counter: Counter = Counter()
         for cust in customers:
             last_fu = getattr(cust, "last_follow_up_at", None)
             last_day = to_site_date(last_fu) if last_fu is not None else None
-            if last_day is None or (now_date is not None and (now_date - last_day).days >= 7):
-                inactive_7d_customers += 1
+            if last_day is None or (
+                now_date is not None and (now_date - last_day).days >= inactive_alert_days
+            ):
+                inactive_customers += 1
             status = str(getattr(cust, "follow_status", None) or "pending").strip().lower()
             if status == "followed":
                 follow_status_followed += 1
@@ -667,7 +674,8 @@ class CustomerFollowUpService:
             pending_customers=pending_customers,
             overdue_customers=overdue_customers,
             items=items,
-            inactive_7d_customers=inactive_7d_customers,
+            inactive_customers=inactive_customers,
+            inactive_alert_days=inactive_alert_days,
             follow_status_pending=follow_status_pending,
             follow_status_followed=follow_status_followed,
             follow_up_records_total=follow_up_records_total,

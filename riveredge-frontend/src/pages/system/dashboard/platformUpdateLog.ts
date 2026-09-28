@@ -44,6 +44,36 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'customer-pool-inactive-alert-days-r01',
+    date: '2026-09-28',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-pool-inactive-alert-days-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-pool-inactive-alert-days-r01.description',
+  },
+  {
+    id: 'customer-pool-level-badge-i18n-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-pool-level-badge-i18n-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.customer-pool-level-badge-i18n-r01.description',
+  },
+  {
+    id: 'sales-review-form-code-field-order-r01',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-review-form-code-field-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-review-form-code-field-order-r01.description',
+  },
+  {
+    id: 'sales-review-dept-plan-table-r01',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-review-dept-plan-table-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-review-dept-plan-table-r01.description',
+  },
+  {
     id: 'work-order-equipment-dispatch-ledger-status-r07',
     date: '2026-09-28',
     type: 'fix',
