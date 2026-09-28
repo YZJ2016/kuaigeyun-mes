@@ -58,6 +58,20 @@ class MessageTemplateResponse(MessageTemplateBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class MessageAttachment(BaseModel):
+    """可选附件。内容只随消息落库，不写入日志。"""
+    filename: str = Field(..., max_length=255, description="附件文件名")
+    content: bytes = Field(..., description="附件内容", repr=False)
+
+    @field_validator("filename")
+    @classmethod
+    def validate_filename(cls, value: str) -> str:
+        name = str(value or "").replace("\\", "/").rsplit("/", 1)[-1].strip()
+        if not name or name in {".", ".."}:
+            raise ValueError("附件文件名无效")
+        return name
+
+
 class SendMessageRequest(BaseModel):
     """发送消息请求 Schema"""
     template_uuid: Optional[UUID] = Field(None, description="模板UUID（可选）")
@@ -73,6 +87,7 @@ class SendMessageRequest(BaseModel):
     entity_type: Optional[str] = Field(None, max_length=100, description="业务实体类型")
     entity_id: Optional[int] = Field(None, description="业务实体ID")
     entity_uuid: Optional[str] = Field(None, max_length=36, description="业务实体UUID")
+    attachment: Optional[MessageAttachment] = Field(None, description="可选附件；不传则与原来一样")
 
 
 class SendMessageResponse(BaseModel):

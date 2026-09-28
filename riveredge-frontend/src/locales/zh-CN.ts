@@ -880,6 +880,8 @@ export default {
   'pages.personal.messages.categoryProcess': '流程',
   'pages.personal.messages.categorySystem': '系统',
   'pages.personal.messages.openRelated': '打开相关单据',
+  'pages.personal.messages.downloadAttachment': '下载 {{name}}',
+  'pages.personal.messages.downloadFailed': '下载附件失败',
   'pages.personal.messages.selectToView': '请从左侧选择一条消息查看详情',
   'pages.personal.messages.filterAll': '全部',
   'pages.personal.messages.filterUnread': '未读',

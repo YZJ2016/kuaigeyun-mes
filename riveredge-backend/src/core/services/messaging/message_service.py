@@ -19,6 +19,17 @@ from core.services.messaging.message_template_service import MessageTemplateServ
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
+def _attachment_columns(request: SendMessageRequest) -> dict:
+    """不传附件时不写这两列，落库与原来一致。内容不进日志。"""
+    attachment = request.attachment
+    if attachment is None:
+        return {}
+    return {
+        "attachment_name": attachment.filename,
+        "attachment_content": attachment.content,
+    }
+
+
 class MessageService:
     """
     消息发送服务类
@@ -98,6 +109,7 @@ class MessageService:
             entity_type=request.entity_type,
             entity_id=request.entity_id,
             entity_uuid=request.entity_uuid,
+            **_attachment_columns(request),
         )
 
         # 站内信无需外部通道，同步标记成功即可（不依赖 Taskiq worker）

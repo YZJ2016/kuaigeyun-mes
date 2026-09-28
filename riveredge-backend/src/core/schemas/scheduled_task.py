@@ -15,7 +15,7 @@ class ScheduledTaskBase(BaseModel):
     name: str = Field(..., max_length=100, description="任务名称")
     code: str = Field(..., max_length=50, description="任务代码")
     description: Optional[str] = Field(None, description="任务描述")
-    type: str = Field(..., max_length=20, description="任务类型")
+    type: str = Field(..., max_length=64, description="任务类型")
     trigger_type: str = Field(..., max_length=20, description="触发器类型")
     trigger_config: Dict[str, Any] = Field(..., description="触发器配置")
     task_config: Dict[str, Any] = Field(..., description="任务配置")

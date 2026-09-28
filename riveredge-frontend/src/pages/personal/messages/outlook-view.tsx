@@ -22,6 +22,7 @@ import {
 import {
   CheckOutlined,
   ClearOutlined,
+  DownloadOutlined,
   LinkOutlined,
   MailOutlined,
   ReloadOutlined,
@@ -33,6 +34,7 @@ import { TwoColumnLayoutResizer } from '../../../components/layout-templates/Two
 import { useResizableLeftPanelWidth } from '../../../components/layout-templates/useResizableLeftPanelWidth';
 import { formatDateTime } from '../../../utils/format';
 import {
+  downloadUserMessageAttachment,
   getUserMessages,
   getUserMessageStats,
   markMessagesRead,
@@ -201,6 +203,7 @@ const OutlookMessagesView: React.FC = () => {
 
   const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<UserMessage | null>(null);
+  const [downloadingUuid, setDownloadingUuid] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
     try {
@@ -286,6 +289,21 @@ const OutlookMessagesView: React.FC = () => {
       } catch {
         /* 标记失败不影响查看 */
       }
+    }
+  };
+
+  const handleDownloadAttachment = async () => {
+    const name = selectedMessage?.attachment_name?.trim() || '';
+    if (!selectedMessage || !name || downloadingUuid) return;
+    const messageUuid = selectedMessage.uuid;
+    setDownloadingUuid(messageUuid);
+    try {
+      await downloadUserMessageAttachment(messageUuid, name);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : '';
+      messageApi.error(detail || t('pages.personal.messages.downloadFailed'));
+    } finally {
+      setDownloadingUuid((current) => (current === messageUuid ? null : current));
     }
   };
 
@@ -649,6 +667,19 @@ const OutlookMessagesView: React.FC = () => {
                     {selectedMessage.subject || t('common.noSubject')}
                   </Title>
                   <Space size={8}>
+                    {selectedMessage.attachment_name?.trim() ? (
+                      <Button
+                        type="default"
+                        size="small"
+                        icon={<DownloadOutlined />}
+                        loading={downloadingUuid === selectedMessage.uuid}
+                        onClick={() => void handleDownloadAttachment()}
+                      >
+                        {t('pages.personal.messages.downloadAttachment', {
+                          name: selectedMessage.attachment_name.trim(),
+                        })}
+                      </Button>
+                    ) : null}
                     {resolveDetailPath(selectedMessage) ? (
                       <Button
                         type="default"

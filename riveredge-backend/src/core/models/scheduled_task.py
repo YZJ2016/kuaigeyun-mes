@@ -25,7 +25,7 @@ class ScheduledTask(BaseModel):
     name = fields.CharField(max_length=100, description="任务名称")
     code = fields.CharField(max_length=50, description="任务代码（唯一，用于程序识别）")
     description = fields.TextField(null=True, description="任务描述")
-    type = fields.CharField(max_length=20, description="任务类型（python_script、api_call等）")
+    type = fields.CharField(max_length=64, description="任务类型（python_script、api_call等）")
     
     trigger_type = fields.CharField(max_length=20, description="触发器类型（cron、interval、date）")
     trigger_config = fields.JSONField(description="触发器配置（JSON格式）")

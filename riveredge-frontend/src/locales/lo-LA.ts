@@ -756,6 +756,8 @@ export default {
   'pages.personal.messages.categoryProcess': 'ຂະບວນການ',
   'pages.personal.messages.categorySystem': 'ລະບົບ',
   'pages.personal.messages.openRelated': 'ເປີດທີ່ກ່ຽວຂ້ອງ',
+  'pages.personal.messages.downloadAttachment': 'ດາວໂຫຼດ {{name}}',
+  'pages.personal.messages.downloadFailed': 'ການດາວໂຫຼດລົ້ມເຫລວ',
   'pages.personal.messages.selectToView': 'ເລືອກຂໍ້ຄວາມທາງຊ້າຍເພື່ອເບິ່ງລາຍລະອຽດ',
   'pages.personal.messages.filterAll': 'ທັງໝົດ',
   'pages.personal.messages.filterUnread': 'ຍັງບໍ່ໄດ້ອ່ານ',

@@ -28,6 +28,7 @@ class UserMessageResponse(BaseModel):
     sent_at: Optional[datetime] = Field(None, description="发送时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    attachment_name: Optional[str] = Field(None, description="可选附件文件名；内容走附件下载")
     
     model_config = ConfigDict(from_attributes=True)
 

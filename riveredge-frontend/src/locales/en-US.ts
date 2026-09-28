@@ -756,6 +756,8 @@ export default {
   'pages.personal.messages.categoryProcess': 'Process',
   'pages.personal.messages.categorySystem': 'System',
   'pages.personal.messages.openRelated': 'Open related',
+  'pages.personal.messages.downloadAttachment': 'Download {{name}}',
+  'pages.personal.messages.downloadFailed': 'Failed to download attachment',
   'pages.personal.messages.selectToView': 'Select a message on the left to view details',
   'pages.personal.messages.filterAll': 'All',
   'pages.personal.messages.filterUnread': 'Unread',

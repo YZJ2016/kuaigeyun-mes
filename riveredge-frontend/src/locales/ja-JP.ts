@@ -755,6 +755,8 @@ export default {
   'pages.personal.messages.categoryProcess': '業務',
   'pages.personal.messages.categorySystem': 'システム',
   'pages.personal.messages.openRelated': '関連を開く',
+  'pages.personal.messages.downloadAttachment': '{{name}} をダウンロード',
+  'pages.personal.messages.downloadFailed': '添付ファイルのダウンロードに失敗しました',
   'pages.personal.messages.selectToView': '左側のメッセージを選択して詳細を表示します',
   'pages.personal.messages.filterAll': '全て',
   'pages.personal.messages.filterUnread': '未読',
