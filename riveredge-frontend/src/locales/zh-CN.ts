@@ -29083,6 +29083,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.material-sync-binding-bom-perm-r01.title':
+    '修复物料同步配置与默认 BOM 版本误报权限不足',
+  'pages.dashboard.updateLog.entries.material-sync-binding-bom-perm-r01.description':
+    '物料/分组 sync-binding 误拼权限码导致有物料权限仍 403；编辑物料拉取 BOM 版本列表改为物料读或工程 BOM 读任一即可。',
   'pages.dashboard.updateLog.entries.material-form-process-route-perm-r01.title':
     '编辑物料时无工艺权限不再弹「权限不足」',
   'pages.dashboard.updateLog.entries.material-form-process-route-perm-r01.description':
