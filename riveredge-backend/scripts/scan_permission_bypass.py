@@ -142,6 +142,30 @@ RESOURCE_PERMISSIONS_FAIL_OPEN = re.compile(
     r"ALL_ALLOWED|保持历史页面行为",
 )
 
+# require_*_module_access 误传 app 前缀（双前缀权限码）
+DOUBLE_PREFIX_MODULE_ACCESS = re.compile(
+    r'require_(?:master_data|kuaizhizao|kuaicaiwu|haoligo)_module_access\s*\(\s*["\']'
+    r"(?:master-data|kuaizhizao|kuaicaiwu|haoligo):",
+)
+
+# route_access 内联多码 OR（应走 affiliate_read_allowlist）
+INLINE_AFFILIATE_OR_IN_ROUTE_ACCESS = re.compile(
+    r"def resolve_\w+required_codes[\s\S]{0,1200}?return\s*\[[^\]]*build_permission_code[^\]]*build_permission_code",
+    re.MULTILINE,
+)
+
+# 物料宿主页次要 list API 与 resource 门控（启发式）
+_MATERIAL_HOST_FILES = (
+    FRONTEND_SRC / "apps" / "master-data" / "pages" / "materials" / "management.tsx",
+    FRONTEND_SRC / "apps" / "master-data" / "components" / "MaterialForm.tsx",
+)
+_MATERIAL_SECONDARY_API_GATE: tuple[tuple[str, str], ...] = (
+    ("drawingApi", "master-data:process:drawing"),
+    ("processRouteApi", "master-data:process:route"),
+    ("warehouseApi", "master-data:warehouse:warehouse"),
+    ("customerApi", "master-data:supply-chain:customer"),
+)
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -270,6 +294,33 @@ def scan_backend_apps() -> list[Finding]:
                         line=line,
                         message="快智造 API 使用 require_module_access（core 路径推断），应 require_kuaizhizao_module_access",
                         snippet=_line_snippet(text, line),
+                    )
+                )
+
+        for match in DOUBLE_PREFIX_MODULE_ACCESS.finditer(text):
+            line = text[: match.start()].count("\n") + 1
+            findings.append(
+                Finding(
+                    rule_id="backend_double_prefix_module_access",
+                    severity="high",
+                    path=rel,
+                    line=line,
+                    message="require_*_module_access 误传 app 前缀 module，应传裸 module（如 material）",
+                    snippet=_line_snippet(text, line),
+                )
+            )
+
+        if rel.endswith("_route_access.py") and "affiliate_read_allowlist" not in text:
+            for match in INLINE_AFFILIATE_OR_IN_ROUTE_ACCESS.finditer(text):
+                line = text[: match.start()].count("\n") + 1
+                findings.append(
+                    Finding(
+                        rule_id="backend_inline_affiliate_or",
+                        severity="high",
+                        path=rel,
+                        line=line,
+                        message="route_access 内联多码 OR，应登记 affiliate_read_allowlist 后引用",
+                        snippet=_line_snippet(text, line, radius=2),
                     )
                 )
 
@@ -858,10 +909,42 @@ def scan_service_row_filter_bypass() -> list[Finding]:
     return findings
 
 
+def scan_material_host_secondary_gates() -> list[Finding]:
+    """物料宿主页：次要 list API 须有对应 useResourcePermissions 门控（试点）。"""
+    findings: list[Finding] = []
+    for path in _MATERIAL_HOST_FILES:
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        rel = _rel(path)
+        for api_token, resource in _MATERIAL_SECONDARY_API_GATE:
+            if api_token not in text:
+                continue
+            resource_literal = f"useResourcePermissions('{resource}')"
+            resource_alt = f'useResourcePermissions("{resource}")'
+            if resource_literal not in text and resource_alt not in text:
+                line = 1
+                idx = text.find(api_token)
+                if idx >= 0:
+                    line = text[:idx].count("\n") + 1
+                findings.append(
+                    Finding(
+                        rule_id="frontend_material_secondary_api_ungated",
+                        severity="high",
+                        path=rel,
+                        line=line,
+                        message=f"物料宿主页调用 {api_token} 缺少 useResourcePermissions({resource!r}) 门控",
+                        snippet=_line_snippet(text, line),
+                    )
+                )
+    return findings
+
+
 def run_scan() -> list[Finding]:
     return (
         scan_backend_apps()
         + scan_frontend()
+        + scan_material_host_secondary_gates()
         + scan_mobile()
         + scan_manifest_reference_integrity()
         + scan_custom_field_table_reference_mapping()

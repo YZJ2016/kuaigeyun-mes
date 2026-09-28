@@ -29083,6 +29083,14 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.permission-governance-affiliate-r01.title':
+    '权限治理：附属只读白名单与物料复合页门控',
+  'pages.dashboard.updateLog.entries.permission-governance-affiliate-r01.description':
+    '补齐权限契约文档与附属只读白名单注册表；物料表单与列表对客户、仓库、批量改路线等跨模块读按模块权限门控，次要接口失败不再冒充整页权限不足。',
+  'pages.dashboard.updateLog.entries.material-detail-drawing-perm-r01.title':
+    '打开物料详情不再因无图纸权限误报权限不足',
+  'pages.dashboard.updateLog.entries.material-detail-drawing-perm-r01.description':
+    '物料详情抽屉仅在具备工程图纸读取权限时再拉关联图纸；无权限或图纸接口失败时仍展示物料基本信息，不再整页显示权限不足。',
   'pages.dashboard.updateLog.entries.material-sync-binding-bom-perm-r01.title':
     '修复物料同步配置与默认 BOM 版本误报权限不足',
   'pages.dashboard.updateLog.entries.material-sync-binding-bom-perm-r01.description':

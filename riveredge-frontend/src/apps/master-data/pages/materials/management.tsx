@@ -646,6 +646,10 @@ const MaterialsManagementPage: React.FC = () => {
   const [formPageError, setFormPageError] = useState<string | null>(null)
   const pagePermissionResource = usePagePermissionResource(location.pathname)
   const { canImport, canCreate } = useResourcePermissions(pagePermissionResource)
+  const drawingPerms = useResourcePermissions('master-data:process:drawing')
+  const processRoutePerms = useResourcePermissions('master-data:process:route')
+  const customerPerms = useResourcePermissions('master-data:supply-chain:customer')
+  const warehousePerms = useResourcePermissions('master-data:warehouse:warehouse')
 
   // 左侧分组树状态
   const [groupTreeData, setGroupTreeData] = useState<DataNode[]>([])
@@ -1041,23 +1045,37 @@ const MaterialsManagementPage: React.FC = () => {
     async (uuid: string) => {
       setMaterialDetailLoading(true)
       setMaterialDetailError(null)
-      setLinkedDrawingsLoading(true)
+      setLinkedDrawings([])
+      setLinkedDrawingsLoading(false)
       try {
         const detail = await materialApi.get(uuid)
         setCurrentMaterial(detail)
-        await loadFieldValuesForDetail(detail.id)
-        const drawings = await drawingApi.listByContext({ materialUuid: uuid })
-        setLinkedDrawings(drawings)
+        try {
+          await loadFieldValuesForDetail(detail.id)
+        } catch (fieldErr) {
+          console.error('load material custom fields failed', fieldErr)
+        }
+        if (drawingPerms.canRead) {
+          setLinkedDrawingsLoading(true)
+          try {
+            const drawings = await drawingApi.listByContext({ materialUuid: uuid })
+            setLinkedDrawings(drawings)
+          } catch (drawErr) {
+            console.error('load linked drawings failed', drawErr)
+            setLinkedDrawings([])
+          } finally {
+            setLinkedDrawingsLoading(false)
+          }
+        }
       } catch (error) {
         setCurrentMaterial(null)
         setLinkedDrawings([])
         setMaterialDetailError(getApiErrorMessage(error, t('app.master-data.materials.getDetailFailed')))
       } finally {
         setMaterialDetailLoading(false)
-        setLinkedDrawingsLoading(false)
       }
     },
-    [loadFieldValuesForDetail, t],
+    [drawingPerms.canRead, loadFieldValuesForDetail, t],
   )
 
   const handleViewMaterial = useCallback(
@@ -1839,6 +1857,11 @@ const MaterialsManagementPage: React.FC = () => {
     }
     setBatchProcessRouteId(undefined)
     setBatchProcessRouteOpen(true)
+    if (!processRoutePerms.canRead) {
+      setProcessRoutesForBulk([])
+      setProcessRoutesForBulkLoading(false)
+      return
+    }
     setProcessRoutesForBulkLoading(true)
     processRouteApi
       .list({ limit: 1000, isActive: true })
@@ -1851,7 +1874,7 @@ const MaterialsManagementPage: React.FC = () => {
         setProcessRoutesForBulk([])
       })
       .finally(() => setProcessRoutesForBulkLoading(false))
-  }, [selectedRowKeys, messageApi, t])
+  }, [processRoutePerms.canRead, selectedRowKeys, messageApi, t])
 
   const handleConfirmBatchProcessRoute = useCallback(async () => {
     if (selectedRowKeys.length === 0) {
@@ -1943,6 +1966,11 @@ const MaterialsManagementPage: React.FC = () => {
     setBatchDefaultsApplyMaxStock(false)
     setBatchDefaultsMaxStock(undefined)
     setBatchDefaultsOpen(true)
+    if (!warehousePerms.canRead) {
+      setWarehousesForBulk([])
+      setWarehousesForBulkLoading(false)
+      return
+    }
     setWarehousesForBulkLoading(true)
     warehouseApi
       .list({ limit: 1000, is_active: true })
@@ -1954,7 +1982,7 @@ const MaterialsManagementPage: React.FC = () => {
         setWarehousesForBulk([])
       })
       .finally(() => setWarehousesForBulkLoading(false))
-  }, [selectedRowKeys, messageApi, t])
+  }, [warehousePerms.canRead, selectedRowKeys, messageApi, t])
 
   const handleConfirmBatchDefaults = useCallback(async () => {
     if (selectedRowKeys.length === 0) {
@@ -3085,12 +3113,14 @@ const MaterialsManagementPage: React.FC = () => {
     }
 
     let customers: Customer[] = []
-    try {
-      const result = await customerApi.list({ limit: 1000, isActive: true })
-      customers = unwrapSupplyPagedList(result)
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.master-data.materialForm.fetchCustomersFailed'))
-      return
+    if (customerPerms.canRead) {
+      try {
+        const result = await customerApi.list({ limit: 1000, isActive: true })
+        customers = unwrapSupplyPagedList(result)
+      } catch (error: any) {
+        messageApi.error(error?.message || t('app.master-data.materialForm.fetchCustomersFailed'))
+        return
+      }
     }
 
     const { groups, errors } = parseMaterialCustomerCodeImportRows(rows, idx, customers, 3, t)
@@ -3191,12 +3221,14 @@ const MaterialsManagementPage: React.FC = () => {
     }
 
     let warehouses: Warehouse[] = []
-    try {
-      const result = await warehouseApi.list({ limit: 1000, is_active: true })
-      warehouses = result.items ?? []
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.master-data.materialForm.fetchWarehousesFailed'))
-      return
+    if (warehousePerms.canRead) {
+      try {
+        const result = await warehouseApi.list({ limit: 1000, is_active: true })
+        warehouses = result.items ?? []
+      } catch (error: any) {
+        messageApi.error(error?.message || t('app.master-data.materialForm.fetchWarehousesFailed'))
+        return
+      }
     }
 
     const { items, errors } = parseMaterialDefaultsImportRows(rows, idx, warehouses, 3, t)
@@ -3543,13 +3575,15 @@ const MaterialsManagementPage: React.FC = () => {
           }
         }
         let customers: Customer[] = []
-        try {
-          const result = await customerApi.list({ limit: 1000, isActive: true })
-          customers = unwrapSupplyPagedList(result)
-        } catch (error: any) {
-          return {
-            canImport: false,
-            errors: [error?.message || t('app.master-data.materialForm.fetchCustomersFailed')],
+        if (customerPerms.canRead) {
+          try {
+            const result = await customerApi.list({ limit: 1000, isActive: true })
+            customers = unwrapSupplyPagedList(result)
+          } catch (error: any) {
+            return {
+              canImport: false,
+              errors: [error?.message || t('app.master-data.materialForm.fetchCustomersFailed')],
+            }
           }
         }
         const { groups, errors } = parseMaterialCustomerCodeImportRows(rows, idx, customers, 3, t)
@@ -3577,13 +3611,15 @@ const MaterialsManagementPage: React.FC = () => {
           }
         }
         let warehouses: Warehouse[] = []
-        try {
-          const result = await warehouseApi.list({ limit: 1000, is_active: true })
-          warehouses = result.items ?? []
-        } catch (error: any) {
-          return {
-            canImport: false,
-            errors: [error?.message || t('app.master-data.materialForm.fetchWarehousesFailed')],
+        if (warehousePerms.canRead) {
+          try {
+            const result = await warehouseApi.list({ limit: 1000, is_active: true })
+            warehouses = result.items ?? []
+          } catch (error: any) {
+            return {
+              canImport: false,
+              errors: [error?.message || t('app.master-data.materialForm.fetchWarehousesFailed')],
+            }
           }
         }
         const { items, errors } = parseMaterialDefaultsImportRows(rows, idx, warehouses, 3, t)
@@ -5550,9 +5586,11 @@ const MaterialsManagementPage: React.FC = () => {
           ) : undefined
         }
         linesTitle={t('app.master-data.materials.variantSkusSection', '属性 SKU（预组合）')}
-        supplementaryTitle={t('app.master-data.materials.linkedDrawings')}
+        supplementaryTitle={
+          drawingPerms.canRead ? t('app.master-data.materials.linkedDrawings') : undefined
+        }
         supplementary={
-          currentMaterial ? (
+          currentMaterial && drawingPerms.canRead ? (
             linkedDrawingsLoading ? (
               <Skeleton active paragraph={{ rows: 3 }} />
             ) : linkedDrawings.length ? (

@@ -29,15 +29,15 @@ from apps.master_data.schemas.master_data_sync import (
     MasterDataSyncFromSourceRequest,
 )
 from core.api.deps.access import require_permission_codes
+from core.config.affiliate_read_allowlist import permission_codes_for_entry_id
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
-# 下拉/展示：物料编辑或单位管理均可读；CRUD 仍走 material-unit
+# 下拉/展示：登记 affiliate_read_allowlist；CRUD 仍走 material-unit
 _UNIT_CATALOG_READ = Depends(
     require_permission_codes(
-        "master-data:material-unit:read",
-        "master-data:material:read",
+        *permission_codes_for_entry_id("master_data_unit_catalog_read"),
         require_all=False,
     )
 )
