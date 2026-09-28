@@ -42,6 +42,7 @@ export default function ExportCustomersPage() {
   const perms = useResourcePermissions('ind-foreign-trade:export-customer');
   const followPerms = useResourcePermissions('ind-foreign-trade:follow-up');
   const poolDictOptions = useImportDictionaryOptions(['CUSTOMER_LEVEL']);
+  const [inactiveAlertDays, setInactiveAlertDays] = useState(7);
 
   useEffect(() => {
     getUserOptions('ind-foreign-trade:export-customer')
@@ -192,24 +193,28 @@ export default function ExportCustomersPage() {
         render: (_, row) => String(row.follow_up_count ?? 0),
       },
       {
-        title: t('app.kuaizhizao.customerPool.inactive7d'),
-        dataIndex: 'inactive_7d',
+        title: t('app.kuaizhizao.customerPool.inactiveDays', { days: inactiveAlertDays }),
+        dataIndex: 'inactive',
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         render: (_, row) =>
-          row.inactive_7d ? (
-            <MarkerTag color="error">{t('app.kuaizhizao.customerPool.inactive7dTag')}</MarkerTag>
+          row.inactive ? (
+            <MarkerTag color="error">
+              {t('app.kuaizhizao.customerPool.inactiveDaysTag', { days: inactiveAlertDays })}
+            </MarkerTag>
           ) : (
             '—'
           ),
       },
       {
-        title: t('app.kuaizhizao.customerPool.inactive7d'),
-        dataIndex: 'inactive_7d',
+        title: t('app.kuaizhizao.customerPool.inactiveDays', { days: inactiveAlertDays }),
+        dataIndex: 'inactive',
         hideInTable: true,
         valueType: 'select',
         valueEnum: {
-          true: { text: t('app.kuaizhizao.customerPool.inactive7dOnly') },
+          true: {
+            text: t('app.kuaizhizao.customerPool.inactiveDaysOnly', { days: inactiveAlertDays }),
+          },
         },
         fieldProps: { allowClear: true },
       },
@@ -270,7 +275,14 @@ export default function ExportCustomersPage() {
         },
       },
     ],
-    [followPerms.canCreate, perms.canUpdate, poolDictOptions.CUSTOMER_LEVEL, salesmanOptions, t],
+    [
+      followPerms.canCreate,
+      inactiveAlertDays,
+      perms.canUpdate,
+      poolDictOptions.CUSTOMER_LEVEL,
+      salesmanOptions,
+      t,
+    ],
   );
 
   const openCreate = useCallback(() => {
@@ -391,7 +403,7 @@ export default function ExportCustomersPage() {
             keyword: params.keyword || core.keyword,
             salesmanId: core.salesmanId,
             followStatus: core.followStatus,
-            inactive7d: core.inactive7d,
+            inactive: core.inactive,
             customerLevelCode: core.customerLevelCode,
             intentMaterialName: core.intentMaterialName,
             countryCode: typeof search?.countryCode === 'string' ? search.countryCode.trim() : undefined,
@@ -405,7 +417,7 @@ export default function ExportCustomersPage() {
             keyword: listParams.keyword,
             salesmanId: listParams.salesmanId,
             followStatus: listParams.followStatus,
-            inactive7d: listParams.inactive7d,
+            inactive: listParams.inactive,
             customerLevelCode: listParams.customerLevelCode,
             intentMaterialName: listParams.intentMaterialName,
             countryCode: listParams.countryCode,
@@ -416,6 +428,9 @@ export default function ExportCustomersPage() {
             order_by: listParams.order_by,
           };
           const res = await foreignTradeApi.listExportCustomers(listParams);
+          if (typeof res.inactive_alert_days === 'number' && res.inactive_alert_days >= 1) {
+            setInactiveAlertDays(res.inactive_alert_days);
+          }
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
       />

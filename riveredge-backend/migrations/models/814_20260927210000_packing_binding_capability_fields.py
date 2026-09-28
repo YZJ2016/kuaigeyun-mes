@@ -35,6 +35,22 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         CREATE INDEX IF NOT EXISTS "idx_packing_bindings_pallet_no"
             ON "apps_kuaizhizao_packing_bindings" ("pallet_no");
 
+        UPDATE "apps_kuaizhizao_packing_bindings" AS pb
+        SET "deleted_at" = CURRENT_TIMESTAMP
+        FROM (
+            SELECT id,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY tenant_id, box_no
+                       ORDER BY updated_at DESC NULLS LAST, id DESC
+                   ) AS rn
+            FROM "apps_kuaizhizao_packing_bindings"
+            WHERE "deleted_at" IS NULL
+              AND "box_no" IS NOT NULL
+              AND "box_no" <> ''
+        ) ranked
+        WHERE pb.id = ranked.id
+          AND ranked.rn > 1;
+
         CREATE UNIQUE INDEX IF NOT EXISTS "uidx_packing_bindings_tenant_box_no_alive"
             ON "apps_kuaizhizao_packing_bindings" ("tenant_id", "box_no")
             WHERE "deleted_at" IS NULL AND "box_no" IS NOT NULL AND "box_no" <> '';

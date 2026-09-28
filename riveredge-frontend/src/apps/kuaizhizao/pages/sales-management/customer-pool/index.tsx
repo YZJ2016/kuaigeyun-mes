@@ -75,8 +75,18 @@ import {
   parsePartnerSettlementMethodImport,
   parsePartnerTaxpayerTypeImport,
 } from '../../../../master-data/utils/partner-static-labels';
-import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
+import {
+  IMPORT_YES_NO_OPTIONS,
+  resolveDictionaryDisplayLabel,
+} from '../../../../../utils/loadImportDictionaryValues';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
+
+const CUSTOMER_LEVEL_MARKER_COLOR: Record<string, string> = {
+  STRATEGIC: 'purple',
+  A: 'gold',
+  B: 'processing',
+  C: 'default',
+};
 import type { CustomerCreate } from '../../../../master-data/types/supply-chain';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
@@ -195,10 +205,14 @@ const CustomerPoolPage: React.FC = () => {
     [t, i18n.language, poolDictOptions],
   );
 
+  const [inactiveAlertDays, setInactiveAlertDays] = useState(7);
+
   const loadRules = async () => {
     const data = await customerPoolApi.getRules();
     setRules(data);
+    setInactiveAlertDays(Math.max(1, Number(data.inactive_alert_days)));
     rulesForm.setFieldsValue(data);
+    return data;
   };
 
   const openRules = async () => {
@@ -623,11 +637,19 @@ const CustomerPoolPage: React.FC = () => {
       {
         title: t('field.customer.level'),
         dataIndex: 'customer_level_code',
-        width: 88,
-        minWidth: 88,
-        uniTableKeepWidth: true,
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
-        render: (_, row) => row.customer_level_code || '—',
+        render: (_, row) => {
+          const code = String(row.customer_level_code || '').trim();
+          if (!code) return '—';
+          const label = resolveDictionaryDisplayLabel(
+            poolDictOptions.packs.CUSTOMER_LEVEL?.labelByCode,
+            code,
+          );
+          return (
+            <MarkerTag color={CUSTOMER_LEVEL_MARKER_COLOR[code] || 'default'}>{label}</MarkerTag>
+          );
+        },
       },
       {
         title: t('field.customer.level'),
@@ -636,9 +658,16 @@ const CustomerPoolPage: React.FC = () => {
         order: 23,
         valueType: 'select',
         valueEnum: Object.fromEntries(
-          (poolDictOptions.CUSTOMER_LEVEL || []).map((o) => [String(o.value), { text: o.label }]),
+          Object.entries(poolDictOptions.packs.CUSTOMER_LEVEL?.labelByCode || {}).map(
+            ([value, label]) => [value, { text: label }],
+          ),
         ),
-        fieldProps: { allowClear: true, options: poolDictOptions.CUSTOMER_LEVEL },
+        fieldProps: {
+          allowClear: true,
+          options: Object.entries(poolDictOptions.packs.CUSTOMER_LEVEL?.labelByCode || {}).map(
+            ([value, label]) => ({ value, label }),
+          ),
+        },
       },
       {
         title: t('app.kuaizhizao.customerPool.intentMaterial'),
@@ -683,25 +712,29 @@ const CustomerPoolPage: React.FC = () => {
         render: (_, row) => (row.follow_up_count != null ? String(row.follow_up_count) : '0'),
       },
       {
-        title: t('app.kuaizhizao.customerPool.inactive7d'),
-        dataIndex: 'inactive_7d',
+        title: t('app.kuaizhizao.customerPool.inactiveDays', { days: inactiveAlertDays }),
+        dataIndex: 'inactive',
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         hideInSearch: true,
         render: (_, row) =>
-          row.inactive_7d ? (
-            <MarkerTag color="error">{t('app.kuaizhizao.customerPool.inactive7dTag')}</MarkerTag>
+          row.inactive ? (
+            <MarkerTag color="error">
+              {t('app.kuaizhizao.customerPool.inactiveDaysTag', { days: inactiveAlertDays })}
+            </MarkerTag>
           ) : (
             '—'
           ),
       },
       {
-        title: t('app.kuaizhizao.customerPool.inactive7d'),
-        dataIndex: 'inactive_7d',
+        title: t('app.kuaizhizao.customerPool.inactiveDays', { days: inactiveAlertDays }),
+        dataIndex: 'inactive',
         hideInTable: true,
         order: 26,
         valueType: 'select',
         valueEnum: {
-          true: { text: t('app.kuaizhizao.customerPool.inactive7dOnly') },
+          true: {
+            text: t('app.kuaizhizao.customerPool.inactiveDaysOnly', { days: inactiveAlertDays }),
+          },
         },
         fieldProps: { allowClear: true },
       },
@@ -1045,7 +1078,8 @@ const CustomerPoolPage: React.FC = () => {
       handleDeleteCustomer,
       openCollaboratorsModal,
       openPoolLogsModal,
-      poolDictOptions.CUSTOMER_LEVEL,
+      inactiveAlertDays,
+      poolDictOptions.packs.CUSTOMER_LEVEL,
       poolStatusValueEnum,
       renderCollaboratorsCell,
       salesmanOptions,
@@ -1293,7 +1327,7 @@ const CustomerPoolPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.menu.sales-management.customer-pool')}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool-crm-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool-crm-v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerPool')}
           params={{ scope }}
@@ -1333,6 +1367,9 @@ const CustomerPoolPage: React.FC = () => {
                 limit: params.pageSize || 20,
                 ...listParams,
               });
+              if (typeof res.inactive_alert_days === 'number' && res.inactive_alert_days >= 1) {
+                setInactiveAlertDays(res.inactive_alert_days);
+              }
               return { data: res.items || [], total: res.total || 0, success: true };
             } catch {
               message.error(t('app.kuaizhizao.customerPool.loadFailed'));
@@ -1517,8 +1554,10 @@ const CustomerPoolPage: React.FC = () => {
                 setRulesSaving(true);
                 const saved = await customerPoolApi.updateRules(values);
                 setRules(saved);
+                setInactiveAlertDays(Math.max(1, Number(saved.inactive_alert_days)));
                 message.success(t('app.kuaizhizao.customerPool.rulesSaved'));
                 setRulesOpen(false);
+                actionRef.current?.reload();
               } catch (error: any) {
                 if (!error?.errorFields) message.error(error?.message || t('app.kuaizhizao.customerPool.rulesSaveFailed'));
               } finally {
@@ -1531,6 +1570,17 @@ const CustomerPoolPage: React.FC = () => {
         }
         basic={
           <Form form={rulesForm} layout="vertical" initialValues={rules || undefined}>
+            <Form.Item
+              name="inactive_alert_days"
+              label={t('app.kuaizhizao.customerPool.inactiveAlertDays')}
+              extra={t('app.kuaizhizao.customerPool.inactiveAlertDaysExtra')}
+              initialValue={7}
+              rules={[
+                { required: true, message: t('app.kuaizhizao.customerPool.inactiveAlertDaysRequired') },
+              ]}
+            >
+              <InputNumber min={1} max={365} style={{ width: '100%' }} />
+            </Form.Item>
             <Form.Item name="recycle_enabled" label={t('app.kuaizhizao.customerPool.autoRecycleEnabled')} valuePropName="checked">
               <Switch />
             </Form.Item>

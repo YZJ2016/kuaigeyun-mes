@@ -60,7 +60,7 @@ export function resolveCustomerPoolListParams(
     poolStatusRaw === 'pool' || poolStatusRaw === 'owned' ? poolStatusRaw : undefined;
   const followStatusRaw = pickString(s, 'follow_status') || pickString(s, 'followStatus');
   const marketScopeRaw = pickString(s, 'market_scope') || pickString(s, 'marketScope') || 'domestic';
-  const inactive7dRaw = s.inactive_7d ?? s.inactive7d;
+  const inactiveRaw = s.inactive;
 
   const params: Record<string, string | number | boolean | undefined> = {
     order_by: resolveOrderBy(sort),
@@ -72,7 +72,7 @@ export function resolveCustomerPoolListParams(
     intentMaterialName: pickString(s, 'intent_material_name') || pickString(s, 'intentMaterialName'),
     customerLevelCode: pickString(s, 'customer_level_code') || pickString(s, 'customerLevelCode'),
     regionText: pickString(s, 'region_text') || pickString(s, 'regionText'),
-    inactive7d: inactive7dRaw === true || inactive7dRaw === 'true' ? true : undefined,
+    inactive: inactiveRaw === true || inactiveRaw === 'true' ? true : undefined,
     last_follow_up_from: lastFollowUpRange.from,
     last_follow_up_to: lastFollowUpRange.to,
     recycle_from: recycleRange.from,
