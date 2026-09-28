@@ -52,7 +52,7 @@ async def activate_all():
         # spec 143：运维脚本无 ambient 上下文——跨组织批量启用为显式 unscoped
         from infra.domain.tenant_context import unscoped
 
-        async with unscoped(reason="运维脚本跨组织批量启用客户与供应商"):
+        async with unscoped(reason="运维脚本跨组织批量启用客户与供应商", resource="Customer"):
             customers = await Customer.filter(is_active=False).all()
             suppliers = await Supplier.filter(is_active=False).all()
         for c in customers:

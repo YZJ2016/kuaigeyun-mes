@@ -232,12 +232,12 @@ async def get_current_user(
         user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
     else:
         # Token 无组织声明：按主键的内部核验（随后仍需组织一致性校验）
-        async with unscoped(reason="JWT 无组织声明时的用户主键内部核验"):
+        async with unscoped(reason="JWT 无组织声明时的用户主键内部核验", resource="User"):
             user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
     if not user:
         if tid is not None:
             # 区分「不存在/已删」与「会话组织失配」：显式内部核验，保持原错误语义
-            async with unscoped(reason="认证用户核验：区分用户不存在与会话组织失配"):
+            async with unscoped(reason="认证用户核验：区分用户不存在与会话组织失配", resource="User"):
                 exists_elsewhere = await User.get_or_none(
                     id=user_id, deleted_at__isnull=True
                 )

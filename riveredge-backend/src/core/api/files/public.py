@@ -32,9 +32,9 @@ async def _resolve_public_branding_file(uuid: str, category: str):
     from infra.domain.tenant_context import unscoped
 
     categories = PUBLIC_BRANDING_CATEGORY_ALIASES.get(category, [category])
-    # spec 143：未认证公开入口——按 uuid+分类白名单显式 unscoped 解析
-    # （uuid 不可枚举、分类白名单约束暴露面；无请求态操作者，仅结构化日志）
-    async with unscoped(reason="公开品牌资源按 uuid+分类白名单解析"):
+    # spec 143：未认证公开入口——按 uuid+分类白名单显式 unscoped 解析。
+    # 无请求用户时仍写审计行，resource 为 File:<uuid>。
+    async with unscoped(reason="公开品牌资源按 uuid+分类白名单解析", resource=f"File:{uuid}"):
         for cat in categories:
             file = await File.filter(
                 uuid=uuid,

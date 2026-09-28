@@ -356,6 +356,34 @@ class WorkOrderTrackingService:
             )
             children.append(child)
 
+        # 追溯关系：父→子每单一行（spec 144 单一入口）。
+        # relation_desc="序列号拆分" 与手工拆分「工单拆分」区分；
+        # 本方法在 create_work_order 的 in_transaction 内执行，写失败上抛整单回滚。
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
+
+        rel_svc = DocumentRelationNewService()
+        for child in children:
+            await rel_svc.create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="work_order",
+                    source_id=parent_work_order.id,
+                    source_code=parent_work_order.code,
+                    source_name=parent_work_order.name,
+                    target_type="work_order",
+                    target_id=child.id,
+                    target_code=child.code,
+                    target_name=child.name,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="序列号拆分",
+                ),
+                created_by=created_by,
+            )
+
         await work_order_service._provision_split_work_order_operations(
             tenant_id,
             parent_work_order=parent_work_order,

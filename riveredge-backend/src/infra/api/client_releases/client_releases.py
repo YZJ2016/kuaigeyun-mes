@@ -170,7 +170,7 @@ async def _resolve_miniprogram_qr_image_url(file_uuid: str | None) -> str | None
 
     # spec 143：平台端（超管）调用时无组织上下文——按 uuid+分类显式
     # unscoped 定位；归属组织解析后以该组织身份读预览
-    async with unscoped(reason="小程序码公开资源按 uuid+分类解析"):
+    async with unscoped(reason="小程序码公开资源按 uuid+分类解析", resource=f"File:{uuid}"):
         file_row = await FileModel.get_or_none(uuid=uuid, category="miniprogram-qr")
     if not file_row:
         return None

@@ -1961,7 +1961,7 @@ class DemandComputationService(AppBaseService):
         # spec 143：启动对账需跨组织扫描滞留计算单——显式 unscoped 内部路径
         from infra.domain.tenant_context import unscoped
 
-        async with unscoped(reason="启动对账：跨组织回正滞留的需求计算单"):
+        async with unscoped(reason="启动对账：跨组织回正滞留的需求计算单", resource="DemandComputation"):
             stale = await DemandComputation.filter(
                 computation_status=DEMAND_COMPUTATION_STATUS_COMPUTING,
             ).values_list("id", "computation_code")
@@ -4153,6 +4153,8 @@ class DemandComputationService(AppBaseService):
                 )
                 await relation_service.create_relation(tenant_id=tenant_id, relation_data=rel_data, created_by=created_by)
             except BusinessLogicError as e:
+                # 显式幂等策略（spec 144 写死）：重复下推时「关联关系已存在」按成功放行——
+                # 关系已建即追溯已闭环；其余 BusinessLogicError 一律上抛，不得静默。
                 if "关联关系已存在" not in str(e):
                     raise
         for wo in outsource_work_orders:
@@ -4176,6 +4178,8 @@ class DemandComputationService(AppBaseService):
                 )
                 await relation_service.create_relation(tenant_id=tenant_id, relation_data=rel_data, created_by=created_by)
             except BusinessLogicError as e:
+                # 显式幂等策略（spec 144 写死）：「关联关系已存在」按成功放行（同上工单段）；
+                # 其余 BusinessLogicError 一律上抛。
                 if "关联关系已存在" not in str(e):
                     raise
         
@@ -4223,6 +4227,8 @@ class DemandComputationService(AppBaseService):
                 )
                 await relation_service.create_relation(tenant_id=tenant_id, relation_data=rel_data, created_by=created_by)
             except BusinessLogicError as e:
+                # 显式幂等策略（spec 144 写死）：「关联关系已存在」按成功放行（同上工单段）；
+                # 其余 BusinessLogicError 一律上抛。
                 if "关联关系已存在" not in str(e):
                     raise
         

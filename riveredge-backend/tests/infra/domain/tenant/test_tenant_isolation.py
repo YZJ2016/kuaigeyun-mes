@@ -200,15 +200,15 @@ async def test_with_tenant_switches_and_nests(tortoise_db):
 async def test_unscoped_sees_all_and_audits(tortoise_db, monkeypatch):
     audits = []
 
-    async def fake_audit(actor, kind, reason, target_tenant_id):
-        audits.append((actor, kind, reason, target_tenant_id))
+    async def fake_audit(actor, kind, reason, target_tenant_id, resource=""):
+        audits.append((actor, kind, reason, target_tenant_id, resource))
 
     monkeypatch.setattr(tenant_context, "_write_scope_audit_row", fake_audit)
     records = []
     sink_id = logger.add(lambda m: records.append(str(m)), level="WARNING")
     try:
         set_request_actor("user", 7, 1)
-        async with unscoped(reason="test-cross-tenant"):
+        async with unscoped(reason="test-cross-tenant", resource="IsoWidget"):
             # 跨组织可见：能看到两个组织的全部行（前置测试已删 w1-b、改名 w1-a）
             assert {r.name for r in await IsoWidget.all()} == {"w1-a2", "w2-a"}
         # create_task 调度的审计协程需要让出一次事件循环
@@ -217,27 +217,59 @@ async def test_unscoped_sees_all_and_audits(tortoise_db, monkeypatch):
         clear_request_actor()
         logger.remove(sink_id)
     assert audits and audits[0][1] == "unscoped" and audits[0][2] == "test-cross-tenant"
+    assert audits[0][4] == "IsoWidget"
     assert any("tenant_scope_unscoped" in r and "test-cross-tenant" in r for r in records)
 
 
 @pytest.mark.asyncio
 async def test_unscoped_internal_no_audit_row(tortoise_db, monkeypatch):
+    """无请求操作者时仍写审计行，字段含 reason 与资源。"""
     audits = []
+    real_write = tenant_context._write_scope_audit_row
 
-    async def fake_audit(actor, kind, reason, target_tenant_id):
-        audits.append(reason)
+    async def fake_audit(actor, kind, reason, target_tenant_id, resource=""):
+        audits.append(
+            {"actor": actor, "kind": kind, "reason": reason, "resource": resource}
+        )
 
     monkeypatch.setattr(tenant_context, "_write_scope_audit_row", fake_audit)
-    async with unscoped(reason="internal-startup"):
+    async with unscoped(reason="internal-startup", resource="startup-scan"):
         pass
     await asyncio.sleep(0)
-    assert audits == []
+    assert audits
+    assert audits[0]["reason"] == "internal-startup"
+    assert audits[0]["resource"] == "startup-scan"
+    assert audits[0]["actor"][0] == "system"
+
+    created = []
+
+    async def fake_create(**kwargs):
+        created.append(kwargs)
+
+    from core.models.operation_log import OperationLog
+
+    monkeypatch.setattr(OperationLog, "create", fake_create)
+    await real_write(
+        ("system", 0, 0),
+        "unscoped",
+        "internal-startup",
+        None,
+        "startup-scan",
+    )
+    assert created[0]["operation_object_type"] == "startup-scan"
+    assert created[0]["user_id"] == 0
+    assert created[0]["tenant_id"] == 0
+    assert "reason=internal-startup" in created[0]["operation_content"]
+    assert "resource=startup-scan" in created[0]["operation_content"]
+    assert "actor=system:startup-scan" in created[0]["operation_content"]
 
 
 @pytest.mark.asyncio
 async def test_unscoped_requires_reason(tortoise_db):
     with pytest.raises(ValueError):
-        unscoped(reason="")
+        unscoped(reason="", resource="IsoWidget")
+    with pytest.raises(ValueError):
+        unscoped(reason="ok", resource="")
 
 
 @pytest.mark.asyncio
@@ -270,12 +302,41 @@ async def test_datascope_style_filter_does_not_bypass_isolation(tortoise_db):
 
 
 @pytest.mark.asyncio
-async def test_get_tenant_queryset_facade(tortoise_db):
+async def test_get_tenant_queryset_facade(tortoise_db, monkeypatch):
     async with with_tenant(1):
         qs = get_tenant_queryset(IsoWidget)
         assert await qs.count() == 1
-        assert await get_tenant_queryset(IsoWidget, tenant_id=2).count() == 1
+        with pytest.raises(TenantContextError):
+            await get_tenant_queryset(IsoWidget, tenant_id=2).count()
+        assert await get_tenant_queryset(IsoWidget, tenant_id=1).count() == 1
+
+        def fail_audit(*args, **kwargs):
+            raise RuntimeError("audit-required")
+
+        monkeypatch.setattr(
+            "infra.domain.tenant_isolation._emit_scope_audit", fail_audit
+        )
+        with pytest.raises(RuntimeError):
+            await get_tenant_queryset(IsoWidget, skip_tenant_filter=True).count()
+
+    recorded = []
+
+    def spy(kind, reason, target_tenant_id, resource=""):
+        recorded.append((kind, reason, resource))
+        return True
+
+    monkeypatch.setattr("infra.domain.tenant_isolation._emit_scope_audit", spy)
+    async with with_tenant(1):
         assert await get_tenant_queryset(IsoWidget, skip_tenant_filter=True).count() == 2
+    assert any(
+        item[0] == "skip_tenant_filter" and item[2] == "IsoWidget" for item in recorded
+    )
+
+    # 无当前组织、仅显式 tenant_id：限定到该组织并审计，不失败关闭。
+    clear_tenant_context()
+    recorded.clear()
+    assert await get_tenant_queryset(IsoWidget, tenant_id=2).count() == 1
+    assert any(item[0] == "explicit_tenant" and item[2] == "IsoWidget" for item in recorded)
 
 
 @pytest.mark.asyncio
@@ -296,7 +357,7 @@ async def test_bulk_update_inherits_tenant_condition(tortoise_db):
     """spec 143 F3 实测：Tortoise 0.21.1 ``BulkUpdateQuery._make_query`` 将
     queryset ``_q_objects`` 并入 WHERE（``resolve_filters``）——注入的组织
     条件对 bulk_update 生效，他组织对象不会被命中。"""
-    async with unscoped(reason="test-seed"):
+    async with unscoped(reason="test-seed", resource="IsoWidget"):
         t1 = await IsoWidget.create(tenant_id=1, name="bulk-t1")
         t2 = await IsoWidget.create(tenant_id=2, name="bulk-t2")
     try:
@@ -311,10 +372,10 @@ async def test_bulk_update_inherits_tenant_condition(tortoise_db):
             await IsoWidget.all().bulk_update([t2], fields=["name"])
             assert await IsoWidget.filter(name="bulk-t1x").count() == 1
             assert await IsoWidget.filter(name="bulk-t2x").count() == 0
-        async with unscoped(reason="test-verify"):
+        async with unscoped(reason="test-verify", resource="IsoWidget"):
             assert (await IsoWidget.get(id=t2.id)).name == "bulk-t2"
     finally:
-        async with unscoped(reason="test-cleanup"):
+        async with unscoped(reason="test-cleanup", resource="IsoWidget"):
             await IsoWidget.filter(id__in=[t1.id, t2.id]).delete()
 
 
@@ -341,7 +402,7 @@ async def test_facade_create_rejects_ambiguous_tenant(tortoise_db):
         # 显式单值 pin 仍可正常创建
         obj = await get_tenant_queryset(IsoWidget, tenant_id=1).create(name="facade-ok")
         assert obj.tenant_id == 1
-        async with unscoped(reason="test-cleanup"):
+        async with unscoped(reason="test-cleanup", resource="IsoWidget"):
             await IsoWidget.filter(id=obj.id).delete()
 
 

@@ -302,7 +302,7 @@ class OnlineUserService:
             from infra.domain.tenant_context import unscoped
 
             now = now_utc()
-            async with unscoped(reason="定时清理跨组织过期在线活动记录"):
+            async with unscoped(reason="定时清理跨组织过期在线活动记录", resource="UserActivity"):
                 deleted_count = await UserActivity.filter(expires_at__lt=now).delete()
             if deleted_count > 0:
                 logger.info(f"🧹 在线用户清理任务：已清理 {deleted_count} 条过期记录")

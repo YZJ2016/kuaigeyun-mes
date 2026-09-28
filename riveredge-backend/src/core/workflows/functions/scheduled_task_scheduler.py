@@ -45,7 +45,7 @@ async def run_scheduled_task_scheduler_tick() -> Dict[str, Any]:
 
     try:
         # spec 143：调度器按分钟跨组织扫描启用任务——显式 unscoped 内部路径
-        async with unscoped(reason="定时任务调度器跨组织扫描启用任务"):
+        async with unscoped(reason="定时任务调度器跨组织扫描启用任务", resource="ScheduledTask"):
             active_tasks = await ScheduledTask.filter(
                 is_active=True,
                 deleted_at__isnull=True,

@@ -20,7 +20,7 @@ class ApprovalTimeoutService:
         now = resolve_business_datetime()
         # spec 143：后台扫描循环无 ambient 上下文——跨组织扫描走显式
         # unscoped 内部路径；每条任务的读写限定在该任务所属组织
-        async with unscoped(reason="审批超时扫描跨组织定位到期任务"):
+        async with unscoped(reason="审批超时扫描跨组织定位到期任务", resource="ApprovalTask"):
             tasks = (
                 await ApprovalTask.filter(
                     status="pending",

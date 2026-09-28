@@ -140,7 +140,7 @@ class ReminderDispatchService:
         # 逐租户派发限定在该租户
         from infra.domain.tenant_context import unscoped, with_tenant
 
-        async with unscoped(reason="提醒派发 tick 跨组织扫描到期事件"):
+        async with unscoped(reason="提醒派发 tick 跨组织扫描到期事件", resource="ReminderEvent"):
             tenant_ids = (
                 await ReminderEvent.filter(
                     status__in=["pending", "failed"],

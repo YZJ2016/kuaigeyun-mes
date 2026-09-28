@@ -121,7 +121,7 @@ class OpenApiAuthService:
         # unscoped 内部路径定位（组织归属来自凭据记录本身，仅结构化日志）
         from infra.domain.tenant_context import unscoped, with_tenant
 
-        async with unscoped(reason="开放 API 换票按账套/应用凭据内部核验"):
+        async with unscoped(reason="开放 API 换票按账套/应用凭据内部核验", resource="OpenApiAccount"):
             account = await OpenApiAccount.get_or_none(
                 acct_id=acct_id,
                 deleted_at__isnull=True,
@@ -132,7 +132,7 @@ class OpenApiAuthService:
                 detail="账套无效或已停用",
             )
 
-        async with unscoped(reason="开放 API 换票按应用凭据内部核验"):
+        async with unscoped(reason="开放 API 换票按应用凭据内部核验", resource="OpenApiApp"):
             app = await OpenApiApp.get_or_none(
                 app_id=app_id,
                 deleted_at__isnull=True,

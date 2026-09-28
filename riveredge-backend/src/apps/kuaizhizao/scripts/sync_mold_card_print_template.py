@@ -32,7 +32,7 @@ async def sync() -> int:
         # spec 143：运维脚本无 ambient 上下文——跨组织模板同步为显式 unscoped
         from infra.domain.tenant_context import unscoped
 
-        async with unscoped(reason="运维脚本跨组织同步模具卡打印模板"):
+        async with unscoped(reason="运维脚本跨组织同步模具卡打印模板", resource="PrintTemplate"):
             rows = await PrintTemplate.filter(deleted_at__isnull=True).all()
         updated = 0
         for row in rows:

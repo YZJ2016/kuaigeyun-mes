@@ -35,6 +35,7 @@ from tortoise.queryset import Q, QuerySet
 from infra.domain.tenant_context import (
     UNSCOPED,
     TenantContextError,
+    _emit_scope_audit,
     resolve_tenant_for_query,
 )
 
@@ -42,6 +43,24 @@ MODEL = TypeVar("MODEL", bound=Model)
 
 # 平台级 opt-out 标记：class Meta: tenant_isolation = "platform"
 TENANT_ISOLATION_PLATFORM = "platform"
+
+
+def _override_id_set(override: Any) -> set[int]:
+    if isinstance(override, (list, tuple, set, frozenset)):
+        return {int(item) for item in override}
+    return {int(override)}
+
+
+def _override_targets_other(override: Any, current: int) -> bool:
+    """钉住值是否指向当前组织以外的组织（含「当前组织 + 其他组织」的集合）。"""
+    return _override_id_set(override) != {int(current)}
+
+
+def _apply_tenant_override(queryset: QuerySet, override: Any) -> None:
+    if isinstance(override, (list, tuple, set, frozenset)):
+        queryset._q_objects.append(Q(tenant_id__in=list(override)))
+    else:
+        queryset._q_objects.append(Q(tenant_id=override))
 
 
 def model_is_tenant_scoped(model: type[Model]) -> bool:
@@ -77,19 +96,43 @@ class TenantEnforcedQuerySet(QuerySet[MODEL]):
 
         # 兼容门面可钉住单链的过滤态（见 query_filter.TenantQuerySet）
         override = getattr(self, "_tenant_override", None)
+        state = resolve_tenant_for_query()
         if override is UNSCOPED:
+            # 业务模型 skip 必须先排队审计（资源=模型名），然后才不按当前组织过滤。
+            if not _emit_scope_audit(
+                "skip_tenant_filter",
+                "skip_tenant_filter",
+                None,
+                resource=self.model.__name__,
+            ):
+                raise TenantContextError(
+                    f"skip_tenant_filter 审计未能写入，已拒绝放行查询 {self.model.__name__}"
+                )
             self._tenant_filter_done = True
             return
         if override is not None:
-            # 钉住值支持集合（限定到指定组织集合，如主+子组织共享池配额）
-            if isinstance(override, (list, tuple, set, frozenset)):
-                self._q_objects.append(Q(tenant_id__in=list(override)))
-            else:
-                self._q_objects.append(Q(tenant_id=override))
+            # 已有当前组织时，钉住到其他组织（含集合里夹带其他组织）即拒绝。
+            if isinstance(state, int) and _override_targets_other(override, state):
+                raise TenantContextError(
+                    f"当前组织上下文为 {state}，拒绝查询其他组织的 {self.model.__name__}"
+                )
+            if state is None:
+                ids = _override_id_set(override)
+                target_id = next(iter(ids)) if len(ids) == 1 else None
+                id_text = ",".join(str(item) for item in sorted(ids))
+                if not _emit_scope_audit(
+                    "explicit_tenant",
+                    f"explicit_tenant_scope ids={id_text}",
+                    target_id,
+                    resource=self.model.__name__,
+                ):
+                    raise TenantContextError(
+                        f"显式组织范围审计未能写入，已拒绝查询 {self.model.__name__}"
+                    )
+            _apply_tenant_override(self, override)
             self._tenant_filter_done = True
             return
 
-        state = resolve_tenant_for_query()
         if state is UNSCOPED:
             self._tenant_filter_done = True
             return

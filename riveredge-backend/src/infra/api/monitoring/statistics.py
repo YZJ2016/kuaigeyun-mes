@@ -265,7 +265,7 @@ async def get_users_statistics(
         # scope 激活点写 core_operation_logs，操作者已登记为 infra_superadmin）
         from infra.domain.tenant_context import unscoped
 
-        async with unscoped(reason="平台超管跨组织用户注册统计"):
+        async with unscoped(reason="平台超管跨组织用户注册统计", resource="User"):
             total_users = await User.filter(base_q).count()
 
         now = resolve_business_datetime()
@@ -273,7 +273,7 @@ async def get_users_statistics(
         week_start = today_start - timedelta(days=today_start.weekday())
         month_start = today_start.replace(day=1)
 
-        async with unscoped(reason="平台超管跨组织用户注册统计"):
+        async with unscoped(reason="平台超管跨组织用户注册统计", resource="User"):
             new_today = await User.filter(base_q & Q(created_at__gte=today_start)).count()
             new_week = await User.filter(base_q & Q(created_at__gte=week_start)).count()
             new_month = await User.filter(base_q & Q(created_at__gte=month_start)).count()
@@ -370,7 +370,7 @@ async def get_access_statistics(
         # scope 激活点写 core_operation_logs）
         from infra.domain.tenant_context import unscoped
 
-        async with unscoped(reason="平台超管跨组织登录访问统计"):
+        async with unscoped(reason="平台超管跨组织登录访问统计", resource="LoginLog"):
             total_logins = await LoginLog.filter(base_q).count()
             success_count = await LoginLog.filter(base_q & Q(login_status="success")).count()
             failed_count = await LoginLog.filter(base_q & Q(login_status="failed")).count()
@@ -393,7 +393,7 @@ async def get_access_statistics(
                 today_start = today_start.replace(tzinfo=timezone.utc)
                 today_end = today_end.replace(tzinfo=timezone.utc)
         today_q = base_q & Q(created_at__gte=today_start) & Q(created_at__lte=today_end)
-        async with unscoped(reason="平台超管跨组织登录访问统计"):
+        async with unscoped(reason="平台超管跨组织登录访问统计", resource="LoginLog"):
             logins_today = await LoginLog.filter(today_q).count()
         conn = Tortoise.get_connection("default")
         dau_sql = """
