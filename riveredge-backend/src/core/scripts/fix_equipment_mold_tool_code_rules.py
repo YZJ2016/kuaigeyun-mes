@@ -64,7 +64,7 @@ async def fix_rules():
         from infra.domain.tenant_context import unscoped
 
         # spec 143：运维脚本无 ambient 上下文——跨组织规则修复为显式 unscoped
-        async with unscoped(reason="运维脚本跨组织修复编码规则"):
+        async with unscoped(reason="运维脚本跨组织修复编码规则", resource="CodeRule"):
             # 先列出所有相关规则
             all_target_rules = await CodeRule.filter(
                 code__in=[u["code"] for u in RULE_UPDATES],

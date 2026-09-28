@@ -399,7 +399,11 @@ class DocumentRelationNewService:
         created_by: int = None
     ) -> List[DocumentRelationResponse]:
         """
-        批量创建关联关系
+        批量创建关联关系（逐条 best-effort）。
+
+        语义写死：单条创建失败只记 warning 并跳过该条，**不**让整批失败、不回滚已写入行；
+        返回值仅含成功创建的关系。调用方需要「同成败」语义时不得用本函数，
+        应在自身事务内逐条调用 create_relation 并让异常上抛。
         
         Args:
             tenant_id: 租户ID
@@ -449,24 +453,57 @@ class DocumentRelationNewService:
     async def delete_relation(
         self,
         tenant_id: int,
-        relation_id: int
-    ) -> None:
+        relation_id: Optional[int] = None,
+        *,
+        source_type: Optional[str] = None,
+        source_id: Optional[int] = None,
+        target_type: Optional[str] = None,
+        target_id: Optional[int] = None,
+        relation_type: Optional[str] = None,
+    ) -> int:
         """
-        删除关联关系（软删除）
-        
+        删除关联关系（硬删除；DocumentRelation 无 deleted_at 软删除字段）。
+
+        两种用法（二选一）：
+        - 按主键：delete_relation(tenant_id, relation_id)，未找到抛 NotFoundError；
+        - 按业务键：delete_relation(tenant_id, source_type=..., source_id=...,
+          target_type=..., target_id=...)，可选 relation_type 收窄匹配。
+          业务键删除按 (tenant_id, source_type, source_id, target_type, target_id[, relation_type])
+          过滤，正常至多一条（唯一约束），可能返回删除 0 行。
+
         Args:
             tenant_id: 租户ID
-            relation_id: 关联关系ID
+            relation_id: 关联关系ID（按主键删除）
+            source_type/source_id/target_type/target_id: 业务键（须四个齐全）
+            relation_type: 可选，进一步收窄业务键匹配
+
+        Returns:
+            int: 实际删除的行数
         """
-        relation = await DocumentRelation.get_or_none(
-            tenant_id=tenant_id,
-            id=relation_id,
-        )
-        
-        if not relation:
-            raise NotFoundError(f"关联关系不存在: {relation_id}")
-        
-        await relation.delete()
+        if relation_id is not None:
+            relation = await DocumentRelation.get_or_none(
+                tenant_id=tenant_id,
+                id=relation_id,
+            )
+            if not relation:
+                raise NotFoundError(f"关联关系不存在: {relation_id}")
+            await relation.delete()
+            return 1
+
+        key_fields = {
+            "source_type": source_type,
+            "source_id": source_id,
+            "target_type": target_type,
+            "target_id": target_id,
+        }
+        if any(v is None for v in key_fields.values()):
+            raise ValidationError(
+                "删除关联关系须传 relation_id，或完整 source_type/source_id/target_type/target_id 业务键"
+            )
+        filters: Dict[str, Any] = {"tenant_id": tenant_id, **key_fields}
+        if relation_type:
+            filters["relation_type"] = relation_type
+        return await DocumentRelation.filter(**filters).delete()
     
     async def get_relation_by_id(
         self,

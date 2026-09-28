@@ -74,7 +74,7 @@ class SensitiveWordBlacklistService:
         # 跨组织封禁视图为显式 unscoped（激活点写审计）
         from infra.domain.tenant_context import unscoped
 
-        async with unscoped(reason="平台超管敏感词封禁跨组织治理视图"):
+        async with unscoped(reason="平台超管敏感词封禁跨组织治理视图", resource="SensitiveWordBan"):
             query = SensitiveWordBan.filter(tenant_id__in=enabled_ids)
             if tenant_id is not None:
                 query = query.filter(tenant_id=tenant_id)
@@ -107,7 +107,7 @@ class SensitiveWordBlacklistService:
         # spec 143：仅平台超管路由可达——按主键解封为显式 unscoped
         from infra.domain.tenant_context import unscoped
 
-        async with unscoped(reason="平台超管敏感词封禁解封按主键定位"):
+        async with unscoped(reason="平台超管敏感词封禁解封按主键定位", resource="SensitiveWordBan"):
             ban = await SensitiveWordBan.get_or_none(id=ban_id)
         if ban is None:
             raise ValueError("封禁记录不存在")
@@ -196,7 +196,7 @@ class SensitiveWordBlacklistService:
         # spec 143：仅平台超管路由可达——按主键删除为显式 unscoped
         from infra.domain.tenant_context import unscoped
 
-        async with unscoped(reason="平台超管删除敏感词放行词按主键定位"):
+        async with unscoped(reason="平台超管删除敏感词放行词按主键定位", resource="TenantSensitiveWordAllowlist"):
             row = await TenantSensitiveWordAllowlist.get_or_none(id=allowlist_id)
         if row is None:
             raise ValueError("放行记录不存在")

@@ -20,6 +20,7 @@ from infra.models.tenant_config import TenantConfig
 from infra.models.tenant_activity_log import TenantActivityLog
 from infra.schemas.tenant import TenantCreate, TenantUpdate
 from infra.domain.query_filter import get_tenant_queryset
+from infra.domain.tenant_context import unscoped
 from infra.services.package_service import PackageService
 from infra.exceptions.exceptions import tenant_name_already_exists, TenantError, ValidationError
 
@@ -377,13 +378,13 @@ class TenantService:
         if not tenant_ids:
             return {}
 
-        # spec 143：按给定组织集合聚合——钉住到该集合（限定集合，非旁路），
-        # 避免 ambient 上下文再叠加过滤导致少计/失败关闭
-        rows = await get_tenant_queryset(LoginLog, tenant_id=tenant_ids).filter(
-            login_status="success",
-        ).group_by("tenant_id").annotate(last_login_at=Max("created_at")).values(
-            "tenant_id", "last_login_at"
-        )
+        # 组织集合汇总：在 unscoped 内再钉住 tenant_id 集合，避免当前组织上下文把其他组织拒掉。
+        async with unscoped(reason="组织列表按给定组织集合汇总最后登录", resource="LoginLog"):
+            rows = await get_tenant_queryset(LoginLog, tenant_id=tenant_ids).filter(
+                login_status="success",
+            ).group_by("tenant_id").annotate(last_login_at=Max("created_at")).values(
+                "tenant_id", "last_login_at"
+            )
 
         return {row["tenant_id"]: row["last_login_at"] for row in rows}
 
@@ -392,12 +393,12 @@ class TenantService:
         if not tenant_ids:
             return {}
 
-        # spec 143：按给定组织集合聚合——钉住到该集合（限定集合，非旁路）
-        rows = await get_tenant_queryset(User, tenant_id=tenant_ids).filter(
-            deleted_at__isnull=True,
-        ).group_by("tenant_id").annotate(user_count=Count("id")).values(
-            "tenant_id", "user_count"
-        )
+        async with unscoped(reason="组织列表按给定组织集合汇总用户数", resource="User"):
+            rows = await get_tenant_queryset(User, tenant_id=tenant_ids).filter(
+                deleted_at__isnull=True,
+            ).group_by("tenant_id").annotate(user_count=Count("id")).values(
+                "tenant_id", "user_count"
+            )
 
         return {row["tenant_id"]: row["user_count"] for row in rows}
 
@@ -435,11 +436,11 @@ class TenantService:
         tenant_list = [root_tenant, *subtenants]
         tenant_ids = [t.id for t in tenant_list]
 
-        # spec 143：主/子组织共享池统计——钉住到组织树集合（限定集合，非旁路）
-        rows = await get_tenant_queryset(User, tenant_id=tenant_ids).filter(
-            deleted_at__isnull=True,
-            is_active=True,
-        ).group_by("tenant_id").annotate(user_count=Count("id")).values("tenant_id", "user_count")
+        async with unscoped(reason="共享用户池按组织树汇总", resource="User"):
+            rows = await get_tenant_queryset(User, tenant_id=tenant_ids).filter(
+                deleted_at__isnull=True,
+                is_active=True,
+            ).group_by("tenant_id").annotate(user_count=Count("id")).values("tenant_id", "user_count")
         count_map = {row["tenant_id"]: row["user_count"] for row in rows}
 
         tenants_usage = []
@@ -566,15 +567,14 @@ class TenantService:
         subtenants = await subtenant_query.all()
         tenant_ids = [root_tenant.id, *[item.id for item in subtenants]]
 
-        # spec 143：共享用户池配额跨主/子组织计数——钉住到组织树集合
-        # （限定集合，非旁路），避免 ambient 上下文再叠加过滤导致少计
         user_query = get_tenant_queryset(User, tenant_id=tenant_ids).filter(
             deleted_at__isnull=True,
             is_active=True,
         )
         if using_db is not None:
             user_query = user_query.using_db(using_db)
-        used_users = int(await user_query.count())
+        async with unscoped(reason="共享用户池按组织树计数", resource="User"):
+            used_users = int(await user_query.count())
         max_users = int(root_tenant.max_users or 0)
         after_used = used_users + increment
         if after_used <= max_users:

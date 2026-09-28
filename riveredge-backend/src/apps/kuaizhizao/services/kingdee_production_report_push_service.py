@@ -340,7 +340,7 @@ class KingdeeProductionReportPushService:
         # 逐条重推限定在该记录所属组织
         from infra.domain.tenant_context import unscoped, with_tenant
 
-        async with unscoped(reason="金蝶汇报重推 tick 跨组织扫描到期记录"):
+        async with unscoped(reason="金蝶汇报重推 tick 跨组织扫描到期记录", resource="ReportingRecord"):
             records = await ReportingRecord.filter(
                 status="approved",
                 kingdee_push_status="failed",
@@ -497,25 +497,44 @@ class KingdeeProductionReportPushService:
         )
 
         async def _persist(result: Dict[str, Any]) -> None:
-            await DocumentRelation.create(
-                tenant_id=tenant_id,
-                source_type=str(result.get("source_type") or SOURCE_TYPE),
-                source_id=int(result.get("source_id") or record.id),
-                source_code=result.get("source_code") or record.work_order_code,
-                source_name=result.get("source_name")
-                or f"{record.operation_name or ''} 报工".strip(),
-                target_type=str(result.get("target_type") or TARGET_TYPE),
-                target_id=int(result.get("bill_id") or 0),
-                target_code=(result.get("bill_no") or None),
-                target_name=str(result.get("target_name") or "金蝶生产汇报单"),
-                relation_type="source",
-                relation_mode="push",
-                relation_desc=str(
-                    result.get("relation_desc") or "报工审核通过推送金蝶生产汇报单"
-                ),
-                notes=to_api_isoformat(datetime.utcnow()),
-                created_by=acting_user_id,
+            # 关系写唯一入口 create_relation：冲突抛 BusinessLogicError("关联关系已存在")，
+            # 不再裸 create 撞唯一约束抛 IntegrityError。
+            # 显式幂等策略（写死，spec 144）：「已存在」按成功处理——重推场景下前次推送已
+            # 写入同一业务键关系，推送本身已成功，重推不得因此判失败；其它异常照常上抛。
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+            from apps.kuaizhizao.services.document_relation_new_service import (
+                DocumentRelationNewService,
             )
+
+            try:
+                await DocumentRelationNewService().create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type=str(result.get("source_type") or SOURCE_TYPE),
+                        source_id=int(result.get("source_id") or record.id),
+                        source_code=result.get("source_code") or record.work_order_code,
+                        source_name=result.get("source_name")
+                        or f"{record.operation_name or ''} 报工".strip(),
+                        target_type=str(result.get("target_type") or TARGET_TYPE),
+                        target_id=int(result.get("bill_id") or 0),
+                        target_code=(result.get("bill_no") or None),
+                        target_name=str(result.get("target_name") or "金蝶生产汇报单"),
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc=str(
+                            result.get("relation_desc") or "报工审核通过推送金蝶生产汇报单"
+                        ),
+                        notes=to_api_isoformat(datetime.utcnow()),
+                    ),
+                    created_by=acting_user_id,
+                )
+            except BusinessLogicError as exc:
+                if "关联关系已存在" not in str(exc):
+                    raise
+                logger.info(
+                    "金蝶生产汇报单关系已存在，按显式幂等成功处理（重推不判失败）: {}",
+                    exc,
+                )
 
         return await DocumentPushPipeline().push(
             tenant_id=tenant_id,

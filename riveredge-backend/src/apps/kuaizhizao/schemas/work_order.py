@@ -615,10 +615,19 @@ class WorkOrderRemindBatchingResponse(BaseModel):
 
 class WorkOrderSplitRequest(BaseModel):
     """工单拆分请求Schema"""
-    split_type: str = Field(..., description="拆分类型：quantity（按数量拆分）或operation（按工序拆分）")
+    split_type: str = Field(
+        ...,
+        description=(
+            "拆分类型：仅 quantity（按数量拆分）可成功。"
+            "operation（按工序拆分）为 Deprecated-never，不在可成功契约内，服务端拒绝且本期不实现。"
+        ),
+    )
     split_quantities: Optional[list[Decimal]] = Field(None, description="按数量拆分：每个拆分工单的数量列表")
     split_count: Optional[int] = Field(None, description="按数量拆分：拆分成几个工单（等量拆分）")
-    operation_ids: Optional[list[int]] = Field(None, description="按工序拆分：要拆分到新工单的工序ID列表")
+    operation_ids: Optional[list[int]] = Field(
+        None,
+        description="Deprecated-never：按工序拆分不在可成功契约内，本字段不参与拆分。",
+    )
     remarks: Optional[str] = Field(None, description="拆分备注")
 
 

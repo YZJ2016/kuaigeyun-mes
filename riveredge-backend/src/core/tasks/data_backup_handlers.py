@@ -95,7 +95,7 @@ async def _mark_restore_status(
         return
     try:
         # spec 143：按全局唯一 uuid 的内部状态回写（记录归属组织可能为 NULL）
-        async with unscoped(reason="恢复任务状态回写按 uuid 内部定位"):
+        async with unscoped(reason="恢复任务状态回写按 uuid 内部定位", resource=f"DataBackup:{backup_uuid}"):
             backup = await DataBackup.get(uuid=backup_uuid)
         backup.restore_status = status
         if mark_started:
@@ -124,7 +124,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
         # spec 143：归属组织探测失败必须失败关闭——不得回退到 unscoped
         # 全库执行域（错误路径权限反而更宽）。
         try:
-            async with unscoped(reason="备份任务按 uuid 恢复记录归属组织"):
+            async with unscoped(reason="备份任务按 uuid 恢复记录归属组织", resource=f"DataBackup:{event_data.get('backup_uuid')}"):
                 probe = await DataBackup.get_or_none(uuid=event_data.get("backup_uuid"))
         except Exception as e:
             logger.error(
@@ -141,7 +141,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
     scope = (
         with_tenant(int(tenant_id), reason="租户级备份任务按任务组织执行")
         if tenant_id is not None
-        else unscoped(reason="全库备份任务（平台级，无组织归属）")
+        else unscoped(reason="全库备份任务（平台级，无组织归属）", resource="DataBackup")
     )
     async with scope:
         await _handle_database_backup_requested_body(ctx, step)
@@ -287,7 +287,7 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
         # spec 143：归属组织探测失败必须失败关闭——不得回退到 unscoped
         # 全库执行域（错误路径权限反而更宽）。
         try:
-            async with unscoped(reason="恢复任务按 uuid 恢复记录归属组织"):
+            async with unscoped(reason="恢复任务按 uuid 恢复记录归属组织", resource=f"DataBackup:{event_data.get('backup_uuid')}"):
                 probe = await DataBackup.get_or_none(uuid=event_data.get("backup_uuid"))
         except Exception as e:
             logger.error(
@@ -304,7 +304,7 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
     scope = (
         with_tenant(int(tenant_id), reason="租户级恢复任务按目标组织执行")
         if tenant_id is not None
-        else unscoped(reason="全库恢复任务（平台级，需平台管理员授权）")
+        else unscoped(reason="全库恢复任务（平台级，需平台管理员授权）", resource="DataBackup")
     )
     async with scope:
         await _handle_database_restore_requested_body(ctx, step)

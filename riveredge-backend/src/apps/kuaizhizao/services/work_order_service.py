@@ -5094,7 +5094,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     raise ValidationError("按数量拆分时必须提供split_quantities或split_count")
             
             elif split_data.split_type == 'operation':
-                # 按工序拆分（TODO: 需要工序模型支持，暂时返回错误）
+                # Deprecated-never：按工序拆分不在可成功契约内，本期不实现。
                 raise ValidationError("按工序拆分功能暂未实现，请使用按数量拆分")
             else:
                 raise ValidationError(f"不支持的拆分类型：{split_data.split_type}")
@@ -5114,35 +5114,30 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             original_work_order.updated_by_name = user_info["name"]
             await original_work_order.save()
 
-            # 建立原工单→拆分工单的 DocumentRelation（支持单据追溯）
-            try:
-                from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-                from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+            # 关联与拆分同一事务。任何写入失败（含「关联关系已存在」）都上抛，
+            # 由外层 in_transaction 整单回滚。禁止忽略已存在或记日志后当拆分成功。
+            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
 
-                rel_svc = DocumentRelationNewService()
-                for split_wo in split_work_orders:
-                    try:
-                        await rel_svc.create_relation(
-                            tenant_id=tenant_id,
-                            relation_data=DocumentRelationCreate(
-                                source_type="work_order",
-                                source_id=original_work_order.id,
-                                source_code=original_work_order.code,
-                                source_name=original_work_order.name,
-                                target_type="work_order",
-                                target_id=split_wo.id,
-                                target_code=split_wo.code,
-                                target_name=split_wo.name,
-                                relation_type="source",
-                                relation_mode="push",
-                                relation_desc="工单拆分",
-                            ),
-                            created_by=created_by,
-                        )
-                    except BusinessLogicError:
-                        pass  # 关联已存在，忽略
-            except Exception as e:
-                logger.warning("建立工单拆分关联失败: %s", e)
+            rel_svc = DocumentRelationNewService()
+            for split_wo in split_work_orders:
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="work_order",
+                        source_id=original_work_order.id,
+                        source_code=original_work_order.code,
+                        source_name=original_work_order.name,
+                        target_type="work_order",
+                        target_id=split_wo.id,
+                        target_code=split_wo.code,
+                        target_name=split_wo.name,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="工单拆分",
+                    ),
+                    created_by=created_by,
+                )
 
             logger.info(f"工单 {original_work_order.code} 拆分为 {len(split_work_orders)} 个工单")
 
@@ -5375,16 +5370,24 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         parent_id: int,
         child_id: int,
     ) -> None:
-        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        """撤销拆分/删除拆分子工单时移除父→子关系。
 
-        await DocumentRelation.filter(
-            tenant_id=tenant_id,
+        经 delete_relation 单一入口按业务键（source=父、target=子、relation_type=source）
+        删除，不再按 relation_desc 文案匹配——拆分写入口（split_work_order）固定写
+        relation_type="source"，键与该处写入字段一一对应。
+        """
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
+
+        await DocumentRelationNewService().delete_relation(
+            tenant_id,
             source_type="work_order",
             source_id=parent_id,
             target_type="work_order",
             target_id=child_id,
-            relation_desc="工单拆分",
-        ).delete()
+            relation_type="source",
+        )
 
     async def _assert_split_child_revocable(self, tenant_id: int, child: WorkOrder) -> None:
         if child.id is None:
@@ -8783,30 +8786,31 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             created_by=created_by,
         )
 
-        try:
-            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        # 同成败：关系写失败上抛，不得记日志后返回「下推成功」造成追溯断链的假成功。
+        # 一致性边界（写死）：本方法未包整单 in_transaction——采购申请已由
+        # create_requisition 落库；关系失败上抛后下推单据仍在库中，由上游告警/重试
+        # 或运维核对，不在此再造大事务重构。
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
 
-            rel_svc = DocumentRelationNewService()
-            await rel_svc.create_relation(
-                tenant_id=tenant_id,
-                relation_data=DocumentRelationCreate(
-                    source_type="work_order",
-                    source_id=work_order_id,
-                    source_code=wo.code,
-                    source_name=wo.name,
-                    target_type="purchase_requisition",
-                    target_id=req.id,
-                    target_code=req.requisition_code,
-                    target_name=req.requisition_name,
-                    relation_type="source",
-                    relation_mode="push",
-                    relation_desc="工单齐套缺料下推采购申请",
-                ),
-                created_by=created_by,
-            )
-        except Exception as exc:
-            logger.warning("建立工单→采购申请单据关联失败: %s", exc)
+        rel_svc = DocumentRelationNewService()
+        await rel_svc.create_relation(
+            tenant_id=tenant_id,
+            relation_data=DocumentRelationCreate(
+                source_type="work_order",
+                source_id=work_order_id,
+                source_code=wo.code,
+                source_name=wo.name,
+                target_type="purchase_requisition",
+                target_id=req.id,
+                target_code=req.requisition_code,
+                target_name=req.requisition_name,
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="工单齐套缺料下推采购申请",
+            ),
+            created_by=created_by,
+        )
 
         return {
             "success": True,

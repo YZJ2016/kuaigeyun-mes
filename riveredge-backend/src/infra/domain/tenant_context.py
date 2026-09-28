@@ -8,8 +8,8 @@
 - 租户 id（``set_current_tenant_id`` 注入或 ``with_tenant(tid)`` scope）：
   租户模型查询自动附加 ``tenant_id=<ctx>``。
 - 显式 scope：``with_tenant(tid)`` 视同以指定组织身份执行（仍被过滤到该组织）；
-  ``unscoped(reason=...)`` 全放行（跨组织旁路，激活时写结构化日志；
-  若发生在请求态且有已认证操作者，额外写 ``core_operation_logs`` 审计记录）。
+  ``unscoped(reason=..., resource=...)`` 全放行（跨组织旁路）。激活时写审计行：
+  有请求操作者记操作者，否则记 ``actor=system:<resource>``。
 - 无上下文且不在 scope 内：查询租户模型即失败关闭（``TenantContextError``），
   不返回空集、不静默放行。
 
@@ -174,46 +174,78 @@ def clear_request_actor() -> None:
     _request_actor.set(None)
 
 
-async def _write_scope_audit_row(actor: tuple, kind: str, reason: str, target_tenant_id: Optional[int]) -> None:
-    """
-    「请求态用户显式跨组织」审计：复用 core_operation_logs 专用 operation_type。
+_AUDIT_REQUIRED_KINDS = frozenset({_SCOPE_UNSCOPED, "skip_tenant_filter", "explicit_tenant"})
 
-    注意：OperationLogMiddleware 只记非 GET 请求，跨组织读的审计只能落在
-    scope 激活点。失败不阻断业务（降级为结构化日志）。
+
+async def _write_scope_audit_row(
+    actor: tuple,
+    kind: str,
+    reason: str,
+    target_tenant_id: Optional[int],
+    resource: str = "",
+) -> None:
+    """
+    跨组织 scope 审计：复用 core_operation_logs。
+
+    user_id 是普通整型列（无数据库外键），系统身份写 user_id=0、tenant_id=0，
+    正文 ``actor=system:<resource>``。资源名写入 operation_object_type。
+    失败不阻断已排队的业务（降级为结构化日志）。
     """
     actor_kind, actor_id, actor_tenant_id = actor
+    resource_text = (resource or "").strip()
+    if actor_kind == "system":
+        actor_label = f"system:{resource_text or 'internal'}"
+    else:
+        actor_label = f"{actor_kind}:{actor_id}"
     try:
         from core.models.operation_log import OperationLog
 
         await OperationLog.create(
-            tenant_id=actor_tenant_id or 0,
-            user_id=actor_id or 0,
+            tenant_id=int(actor_tenant_id or 0),
+            user_id=int(actor_id or 0),
             operation_type="tenant_scope_bypass",
             operation_module="tenant_isolation",
-            operation_object_type="tenant_scope",
+            operation_object_type=(resource_text or "tenant_scope")[:100],
             operation_object_id=target_tenant_id,
             operation_content=(
-                f"scope={kind}; reason={reason}; "
-                f"actor_kind={actor_kind}; actor_tenant_id={actor_tenant_id}"
+                f"scope={kind}; reason={reason}; resource={resource_text}; "
+                f"actor={actor_label}"
             ),
         )
     except Exception as e:  # noqa: BLE001 - 审计写库失败不得阻断 scope
         logger.warning("租户 scope 审计写入失败（已降级为结构化日志）: {}", e)
 
 
-def _emit_scope_audit(kind: str, reason: str, target_tenant_id: Optional[int]) -> None:
+def _emit_scope_audit(
+    kind: str,
+    reason: str,
+    target_tenant_id: Optional[int],
+    resource: str = "",
+) -> bool:
     """
-    scope 激活点统一审计：
+    scope 激活点统一审计。
 
-    - 始终写 loguru 结构化日志（unscoped 为安全事件级别 warning）。
-    - 请求态操作者存在且确属跨组织可见（unscoped，或 with_tenant 目标组织
-      与操作者组织不同）时，异步写 core_operation_logs 专用记录。
+    返回 True 表示审计行已排队，或不需要审计行。
+    unscoped / skip_tenant_filter / 无上下文的显式组织范围必须排队审计行
+    （无请求操作者时 actor=system:<resource>）。排队失败返回 False，
+    调用方不得放行该次跨组织查询。
     """
     actor = _request_actor.get()
-    if kind == _SCOPE_UNSCOPED:
+    resource_text = (resource or "").strip()
+    if kind in (_SCOPE_UNSCOPED, "skip_tenant_filter"):
         logger.warning(
-            "tenant_scope_unscoped reason={} actor={}",
+            "tenant_scope_unscoped kind={} reason={} resource={} actor={}",
+            kind,
             reason,
+            resource_text,
+            actor,
+        )
+    elif kind == "explicit_tenant":
+        logger.warning(
+            "tenant_scope_explicit target_tenant_id={} reason={} resource={} actor={}",
+            target_tenant_id,
+            reason,
+            resource_text,
             actor,
         )
     else:
@@ -224,21 +256,33 @@ def _emit_scope_audit(kind: str, reason: str, target_tenant_id: Optional[int]) -
             actor,
         )
 
+    required = kind in _AUDIT_REQUIRED_KINDS
     need_audit_row = False
+    write_actor = actor
     if actor is not None:
         actor_tenant_id = actor[2]
-        if kind == _SCOPE_UNSCOPED:
+        if required or actor_tenant_id != target_tenant_id:
             need_audit_row = True
-        elif actor_tenant_id != target_tenant_id:
-            need_audit_row = True
+    elif required:
+        need_audit_row = True
+        write_actor = ("system", 0, 0)
 
     if not need_audit_row:
-        return
+        return True
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        return
-    loop.create_task(_write_scope_audit_row(actor, kind, reason, target_tenant_id))
+        logger.warning(
+            "租户 scope 审计无事件循环，未能写入 kind={} reason={} resource={}",
+            kind,
+            reason,
+            resource_text,
+        )
+        return False
+    loop.create_task(
+        _write_scope_audit_row(write_actor, kind, reason, target_tenant_id, resource_text)
+    )
+    return True
 
 
 class TenantScope:
@@ -246,20 +290,36 @@ class TenantScope:
     显式租户 scope（同步/异步上下文管理器两用）。
 
     - ``with_tenant(tid)``：以指定组织身份执行，查询仍被过滤到该组织。
-    - ``unscoped(reason=...)``：全放行旁路，reason 必填，激活时审计。
+    - ``unscoped(reason=..., resource=...)``：全放行旁路，reason 与 resource 必填，激活时审计。
 
     嵌套安全：ContextVar 栈 + token 还原，内层覆盖外层。
     """
 
-    def __init__(self, kind: str, reason: str, target_tenant_id: Optional[int] = None):
+    def __init__(
+        self,
+        kind: str,
+        reason: str,
+        target_tenant_id: Optional[int] = None,
+        resource: str = "",
+    ):
         self._entry = (kind, target_tenant_id if kind == _SCOPE_TENANT else (reason,))
         self._reason = reason
         self._target_tenant_id = target_tenant_id
+        self._resource = resource
         self._token = None
 
     def __enter__(self) -> "TenantScope":
         self._token = _scope_stack.set(_scope_stack.get() + (self._entry,))
-        _emit_scope_audit(self._entry[0], self._reason, self._target_tenant_id)
+        queued = _emit_scope_audit(
+            self._entry[0],
+            self._reason,
+            self._target_tenant_id,
+            self._resource,
+        )
+        if self._entry[0] == _SCOPE_UNSCOPED and not queued:
+            _scope_stack.reset(self._token)
+            self._token = None
+            raise TenantContextError("unscoped 审计未能写入，已拒绝放行")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
@@ -290,17 +350,28 @@ def with_tenant(tenant_id: int, *, reason: str = "") -> TenantScope:
     return TenantScope(_SCOPE_TENANT, reason or "with_tenant", int(tenant_id))
 
 
-def unscoped(*, reason: str) -> TenantScope:
+def unscoped(*, reason: str, resource: str) -> TenantScope:
     """
     放开租户过滤的显式旁路（跨组织）。
 
+    HTTP 上的跨组织业务读只应由平台超级管理员触发（路由 Depends）。
+    进程内部入口（登录找用户、定时任务、启动对账/扫描、公开品牌文件）
+    仍可调用，但必须带 resource，且无请求用户时也写审计行。
+
     Args:
-        reason: 必填；写结构化日志与（请求态）core_operation_logs 审计记录。
+        reason: 必填；写入审计正文。
+        resource: 必填；模型名、文件 uuid 或任务名，写入 operation_object_type。
 
     Example:
-        >>> async with unscoped(reason="登录前按账号跨组织解析候选用户"):
+        >>> async with unscoped(reason="登录前按账号跨组织解析候选用户", resource="User"):
         ...     users = await User.filter(...).all()
     """
     if not reason or not str(reason).strip():
         raise ValueError("unscoped 必须提供 reason")
-    return TenantScope(_SCOPE_UNSCOPED, str(reason).strip())
+    if not resource or not str(resource).strip():
+        raise ValueError("unscoped 必须提供 resource")
+    return TenantScope(
+        _SCOPE_UNSCOPED,
+        str(reason).strip(),
+        resource=str(resource).strip(),
+    )

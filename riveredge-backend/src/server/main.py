@@ -10,7 +10,7 @@ import asyncio
 import uuid
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, APIRouter, Request, Response
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from loguru import logger
@@ -261,7 +261,7 @@ async def lifespan(app: FastAPI):
         from infra.domain.tenant_context import unscoped, with_tenant
 
         # spec 143：Application 为租户模型——启动期判定走显式 unscoped 内部路径
-        async with unscoped(reason="启动期判定应用注册表是否为空"):
+        async with unscoped(reason="启动期判定应用注册表是否为空", resource="Application"):
             total_count = await ApplicationService.count_applications(deleted_at_is_null=True)
         if total_count == 0:
             logger.info("📋 数据库无应用记录，自动扫描并注册应用...")
@@ -523,30 +523,89 @@ except Exception as _client_static_err:
     logger.warning("客户端静态目录挂载跳过: {}", _client_static_err)
 
 
+_DEBUG_ENVIRONMENTS = frozenset({"development", "dev", "local"})
+
+
+def _is_debug_allowed() -> bool:
+    """调试开关：ENVIRONMENT 未设置或空白时关闭。只在显式允许值时打开。"""
+    raw = os.environ.get("ENVIRONMENT")
+    if raw is None or not str(raw).strip():
+        return False
+    return str(raw).strip().lower() in _DEBUG_ENVIRONMENTS
+
+
+async def _debug_require_superadmin(request: Request):
+    """调试接口门禁：开关 + 已登录平台超级管理员。
+
+    不要求 X-Tenant-ID——供不读租户数据的调试写/状态端点使用；
+    读租户数据的端点请用 _debug_superadmin_tenant_id。
+    """
+    if not _is_debug_allowed():
+        raise HTTPException(status_code=404, detail="Not Found")
+    authorization = request.headers.get("authorization")
+    token = None
+    if authorization:
+        scheme, _, value = authorization.partition(" ")
+        if scheme.lower() == "bearer" and value.strip():
+            token = value.strip()
+    from infra.api.deps.deps import get_current_user
+
+    user = await get_current_user(request=request, token=token)
+    if not getattr(user, "_is_infra_superadmin", False):
+        raise HTTPException(status_code=403, detail="需要平台超级管理员")
+    return user
+
+
+async def _debug_superadmin_tenant_id(request: Request) -> int:
+    """调试数据接口门禁：开关、已登录超级管理员、显式 X-Tenant-ID。"""
+    await _debug_require_superadmin(request)
+    raw_tenant = request.headers.get("x-tenant-id")
+    if raw_tenant is None or not str(raw_tenant).strip():
+        raise HTTPException(
+            status_code=400,
+            detail="平台超级管理员访问租户资源时，必须通过 X-Tenant-ID 指定租户ID",
+        )
+    try:
+        tenant_id = int(str(raw_tenant).strip())
+        if tenant_id <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="无效的组织ID")
+    return tenant_id
+
+
 @app.get("/api/debug/batches")
-async def debug_batches():
+async def debug_batches(request: Request):
+    tenant_id = await _debug_superadmin_tenant_id(request)
     try:
         from apps.master_data.models.material_batch import MaterialBatch
-        from infra.domain.tenant_context import unscoped
+        from infra.domain.tenant_context import with_tenant
 
-        # spec 143：调试端点跨组织查看——显式 unscoped（激活点写结构化日志）
-        async with unscoped(reason="调试端点跨组织查看物料批次"):
-            batches = await MaterialBatch.all().values("id", "material_id", "batch_no", "quantity", "status", "deleted_at")
+        async with with_tenant(tenant_id, reason="调试端点按显式组织查看物料批次"):
+            batches = await MaterialBatch.all().values(
+                "id", "material_id", "batch_no", "quantity", "status", "deleted_at"
+            )
         return {"batches": batches}
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error("调试批次查询失败: {}", e)
         return {"error": str(e)}
 
 @app.get("/api/debug/materials")
-async def debug_materials():
+async def debug_materials(request: Request):
+    tenant_id = await _debug_superadmin_tenant_id(request)
     try:
         from apps.master_data.models.material import Material
-        from infra.domain.tenant_context import unscoped
+        from infra.domain.tenant_context import with_tenant
 
-        # spec 143：调试端点跨组织查看——显式 unscoped（激活点写结构化日志）
-        async with unscoped(reason="调试端点跨组织查看物料"):
+        async with with_tenant(tenant_id, reason="调试端点按显式组织查看物料"):
             mats = await Material.all().values("id", "uuid", "name", "code", "deleted_at")
         return {"materials": mats}
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error("调试物料查询失败: {}", e)
         return {"error": str(e)}
 
 # 配置CORS（从配置文件读取）
@@ -703,13 +762,7 @@ async def health_check():
         "service": "riveredge-backend"
     }
 
-# 调试端点：仅开发环境可用，生产环境不注册
-def _is_debug_allowed() -> bool:
-    env = os.getenv("ENVIRONMENT", "development")
-    debug = os.getenv("DEBUG", "false").lower() == "true"
-    return env == "development" or debug
-
-
+# 调试端点：与 _is_debug_allowed 同一开关。ENVIRONMENT 未设置或空白时不注册。
 if _is_debug_allowed():
     @app.post("/debug/reload-apps")
     async def debug_reload_apps():
@@ -745,130 +798,133 @@ if _is_debug_allowed():
         except Exception as e:
             return {"status": "error", "message": f"应用初始化失败: {str(e)}"}
 
+    # 测试路由注册（调试用）。写端点：改运行时路由状态，额外要求平台超管认证
+    # （不读租户数据，不要求 X-Tenant-ID）。
+    @app.post("/debug/test-route-registration")
+    async def debug_test_route_registration(request: Request):
+        """
+        测试路由注册功能（调试用）
+        """
+        await _debug_require_superadmin(request)
+        from core.services.application.application_registry_service import ApplicationRegistryService
+        from core.services.application.application_route_manager import get_route_manager
 
+        try:
+            # 手动注册master-data应用
+            success = await ApplicationRegistryService.register_single_app("master-data")
+            route_manager = get_route_manager()
 
+            return {
+                "status": "success",
+                "message": f"master-data注册结果: {success}",
+                "route_manager": route_manager is not None,
+                "registered_apps": list(ApplicationRegistryService._registered_apps.keys()),
+                "registered_routes": list(ApplicationRegistryService._registered_routes.keys()),
+                "route_manager_registered_routes": list(route_manager._registered_routes.keys()) if route_manager else [],
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"路由注册测试失败: {str(e)}",
+            }
 
+    # 检查路由管理器状态（调试用）
+    @app.get("/debug/route-manager-status")
+    async def debug_route_manager_status():
+        """
+        检查路由管理器状态（调试用）
+        """
+        from core.services.application.application_route_manager import get_route_manager
 
-# 测试路由注册（调试用）
-@app.post("/debug/test-route-registration")
-async def debug_test_route_registration():
-    """
-    测试路由注册功能（调试用）
-    """
-    from core.services.application.application_registry_service import ApplicationRegistryService
-    from core.services.application.application_route_manager import get_route_manager
-
-    try:
-        # 手动注册master-data应用
-        success = await ApplicationRegistryService.register_single_app("master-data")
         route_manager = get_route_manager()
+        if not route_manager:
+            return {"status": "error", "message": "路由管理器未初始化"}
 
         return {
             "status": "success",
-            "message": f"master-data注册结果: {success}",
-            "route_manager": route_manager is not None,
-            "registered_apps": list(ApplicationRegistryService._registered_apps.keys()),
-            "registered_routes": list(ApplicationRegistryService._registered_routes.keys()),
-            "route_manager_registered_routes": list(route_manager._registered_routes.keys()) if route_manager else [],
+            "route_manager_id": id(route_manager),
+            "app_id": id(route_manager.app),
+            "registered_routes_count": {app_code: len(routers) for app_code, routers in route_manager._registered_routes.items()},
+            "total_fastapi_routes": len(route_manager.app.routes),
         }
-    except Exception as e:
+
+    # 查看FastAPI路由表（调试用）
+    @app.get("/debug/fastapi-routes")
+    async def debug_fastapi_routes():
+        """
+        查看FastAPI路由表（调试用）
+        """
+        routes = []
+        for route in app.routes:
+            if hasattr(route, 'path'):
+                routes.append({
+                    "path": route.path,
+                    "methods": getattr(route, 'methods', []),
+                    "name": getattr(route, 'name', ''),
+                })
+
+        # 过滤出应用路由
+        app_routes = [r for r in routes if '/apps/' in r['path']]
+
         return {
-            "status": "error",
-            "message": f"路由注册测试失败: {str(e)}",
+            "total_routes": len(routes),
+            "app_routes": len(app_routes),
+            "sample_app_routes": app_routes[:10] if app_routes else [],
+            "all_app_route_paths": [r['path'] for r in app_routes]
         }
 
-# 检查路由管理器状态（调试用）
-@app.get("/debug/route-manager-status")
-async def debug_route_manager_status():
-    """
-    检查路由管理器状态（调试用）
-    """
-    from core.services.application.application_route_manager import get_route_manager
+    # 查看已注册的应用和路由（调试用，简化输出）
+    @app.get("/debug/registered-routes")
+    async def debug_registered_routes():
+        """
+        查看已注册的应用和路由（调试用）
 
-    route_manager = get_route_manager()
-    if not route_manager:
-        return {"status": "error", "message": "路由管理器未初始化"}
+        返回已注册的应用列表和路由数量。
+        """
+        from core.services.application.application_registry_service import ApplicationRegistryService
+        from core.services.application.application_route_manager import get_route_manager
 
-    return {
-        "status": "success",
-        "route_manager_id": id(route_manager),
-        "app_id": id(route_manager.app),
-        "registered_routes_count": {app_code: len(routers) for app_code, routers in route_manager._registered_routes.items()},
-        "total_fastapi_routes": len(route_manager.app.routes),
-    }
+        try:
+            registered_routes = ApplicationRegistryService.get_registered_routes()
+            route_manager = get_route_manager()
+            registered_apps = ApplicationRegistryService._registered_apps
 
-# 查看FastAPI路由表（调试用）
-@app.get("/debug/fastapi-routes")
-async def debug_fastapi_routes():
-    """
-    查看FastAPI路由表（调试用）
-    """
-    routes = []
-    for route in app.routes:
-        if hasattr(route, 'path'):
-            routes.append({
-                "path": route.path,
-                "methods": getattr(route, 'methods', []),
-                "name": getattr(route, 'name', ''),
-            })
+            return {
+                "status": "success",
+                "registered_apps": list(registered_apps.keys()),
+                "registered_routes_count": {app_code: len(routers) for app_code, routers in registered_routes.items()},
+                "route_manager_initialized": route_manager is not None,
+            }
+        except Exception as e:
+            logger.error(f"获取已注册路由失败: {e}")
+            return {
+                "status": "error",
+                "message": f"获取已注册路由失败: {str(e)}",
+            }
 
-    # 过滤出应用路由
-    app_routes = [r for r in routes if '/apps/' in r['path']]
 
-    return {
-        "total_routes": len(routes),
-        "app_routes": len(app_routes),
-        "sample_app_routes": app_routes[:10] if app_routes else [],
-        "all_app_route_paths": [r['path'] for r in app_routes]
-    }
 
 # 检查数据库中的应用（调试用）
 @app.get("/debug/db-apps")
-async def debug_db_apps():
-    """检查数据库中的应用记录（调试用）"""
+async def debug_db_apps(request: Request):
+    """检查数据库中的应用记录（调试用，仅显式组织）。"""
+    tenant_id = await _debug_superadmin_tenant_id(request)
     from core.models.application import Application
     from infra.domain.tenant_context import with_tenant
 
     try:
-        # spec 143：调试端点按组织 1 查询——显式 with_tenant scope
-        async with with_tenant(1, reason="调试端点查询组织1应用记录"):
+        async with with_tenant(tenant_id, reason="调试端点按显式组织查询应用记录"):
             rows = (
-                await Application.filter(tenant_id=1, deleted_at__isnull=True)
+                await Application.filter(deleted_at__isnull=True)
                 .order_by("code")
                 .values("code", "name", "is_active", "is_installed")
             )
         return {"status": "success", "apps": rows, "count": len(rows)}
+    except HTTPException:
+        raise
     except Exception as e:  # noqa: BLE001
+        logger.error("调试应用查询失败: {}", e)
         return {"status": "error", "message": f"数据库查询失败: {e}"}
-
-# 查看已注册的应用和路由（调试用，简化输出）
-@app.get("/debug/registered-routes")
-async def debug_registered_routes():
-    """
-    查看已注册的应用和路由（调试用）
-
-    返回已注册的应用列表和路由数量。
-    """
-    from core.services.application.application_registry_service import ApplicationRegistryService
-    from core.services.application.application_route_manager import get_route_manager
-    
-    try:
-        registered_routes = ApplicationRegistryService.get_registered_routes()
-        route_manager = get_route_manager()
-        registered_apps = ApplicationRegistryService._registered_apps
-        
-        return {
-            "status": "success",
-            "registered_apps": list(registered_apps.keys()),
-            "registered_routes_count": {app_code: len(routers) for app_code, routers in registered_routes.items()},
-            "route_manager_initialized": route_manager is not None,
-        }
-    except Exception as e:
-        logger.error(f"获取已注册路由失败: {e}")
-        return {
-            "status": "error",
-            "message": f"获取已注册路由失败: {str(e)}",
-        }
 
 # ⚠️ 第二阶段改进：服务健康检查端点
 @app.get("/health/services")

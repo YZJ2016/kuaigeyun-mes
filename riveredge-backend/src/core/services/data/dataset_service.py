@@ -36,6 +36,13 @@ from core.utils.timezone_utils import resolve_business_datetime
 from core.services.resource.resource_category_service import ResourceCategoryService
 
 
+# execute_query 请求级 query_config override 白名单：仅参数类键允许本次执行覆盖。
+# sql / endpoint / method / headers / api_uuid / api_code / tenant_isolation 等引擎键
+# 一律以数据集已保存配置为准——否则调用方可注入 tenant_isolation=false 把第三方连接
+# 的显式隔离降级绕过，或直接替换 SQL。
+_QUERY_CONFIG_OVERRIDE_WHITELIST = frozenset({"parameters", "params", "body"})
+
+
 class DatasetService:
     """
     数据集管理服务类
@@ -440,7 +447,12 @@ class DatasetService:
         
         stored_qc = dataset.query_config or {}
         override_qc = execute_request.query_config or {}
-        effective_qc = {**stored_qc, **override_qc}
+        # 请求级 override 只放行白名单参数类键；引擎键（含 tenant_isolation、sql）
+        # 以已保存配置为准，防止隔离降级/任意 SQL 注入（spec 144 F6）。
+        effective_qc = {
+            **stored_qc,
+            **{k: v for k, v in override_qc.items() if k in _QUERY_CONFIG_OVERRIDE_WHITELIST},
+        }
 
         try:
             # 应用连接器类型：使用 REST 拉取（query_config 含 endpoint、method）
@@ -615,12 +627,14 @@ class DatasetService:
         tenant_id: int,
         apply_tenant_isolation: bool,
         fill_missing_sql_parameters: bool,
+        tenant_param_name: str = "tenant_id",
     ) -> Dict[str, Any]:
         query_params = dict(query_config.get("parameters", {}))
         if parameters:
             query_params.update(parameters)
         if apply_tenant_isolation:
-            query_params["tenant_id"] = tenant_id
+            # 放在用户参数之后，避免调用方用同名参数覆盖组织条件。
+            query_params[tenant_param_name] = tenant_id
         # SQL 手写 :tenant_id 且关闭自动注入时，仍须绑定当前租户，否则占位符残留导致 PG 语法错误
         named = DatasetService._list_sql_named_parameters(sql)
         if "tenant_id" in named and "tenant_id" not in query_params:
@@ -768,49 +782,54 @@ class DatasetService:
         query_config: Dict[str, Any],
     ) -> bool:
         """
-        是否对本次 SQL 注入 tenant_id 条件并绑定参数。
+        是否对本次 SQL 外包 tenant_id 条件并绑定参数。
 
-        - query_config 显式含 tenant_isolation 时以布尔值为准（第三方库可设 false，多租户共享库可设 true）。
-        - 未配置时：仅系统默认（本地应用）数据源默认开启；第三方 ERP/SQL Server 等不注入，避免无 tenant_id 列报错。
+        系统默认（本地应用）数据源是租户数据集：忽略 query_config.tenant_isolation=false，
+        执行时仍然注入。显式 true 仍可为第三方共享库打开隔离。
+        未标记系统默认、且未显式 true 的第三方连接不注入——那些库通常没有 tenant_id 列。
         """
         from core.services.integration.integration_config_service import SYSTEM_DEFAULT_CODE
 
-        if "tenant_isolation" in query_config:
-            return bool(query_config.get("tenant_isolation"))
+        explicit = query_config.get("tenant_isolation") if "tenant_isolation" in query_config else None
         cfg = integration_config.get_config() or {}
-        if cfg.get("_system_default"):
+        default_on = bool(cfg.get("_system_default")) or integration_config.code == SYSTEM_DEFAULT_CODE
+        if explicit is True:
             return True
-        return integration_config.code == SYSTEM_DEFAULT_CODE
+        return default_on
 
     @staticmethod
-    def _inject_tenant_filter_sql(sql: str) -> str:
+    def _tenant_filter_param_name(sql: str) -> str:
+        """外层组织条件的绑定名。与用户 SQL 里已有的 :name 冲突时换名。"""
+        used = set(DatasetService._list_sql_named_parameters(sql))
+        if "tenant_id" not in used:
+            return "tenant_id"
+        name = "dataset_tenant_id"
+        suffix = 2
+        while name in used:
+            name = f"dataset_tenant_id_{suffix}"
+            suffix += 1
+        return name
+
+    @staticmethod
+    def _inject_tenant_filter_sql(sql: str, *, param_name: str = "tenant_id") -> str:
         """
-        共享库租户隔离：自动在 SQL 中注入 tenant_id = :tenant_id 条件。
-        tenant_id 由系统自动注入，用户无需在 SQL 中指定，也不允许被覆盖。
-        注意：多表 JOIN 时若多表均有 tenant_id 列，可能产生列歧义，可设置 tenant_isolation=false 后手动添加带表别名的条件。
-        默认仅对系统默认数据源启用隔离，见 DatasetService._should_apply_sql_tenant_isolation。
+        把用户 SQL 包进子查询，外层再用当前组织限制。
+
+        用户 SQL 里的 OR / ORDER BY / LIMIT 留在子查询内，不能绕过外层 tenant_id。
+        去掉末尾分号后再包裹。结果集没有 tenant_id 列时，数据库执行会报错（失败关闭），
+        不退回无条件执行。
         """
-        sql = sql.strip()
-        sql_upper = sql.upper()
-        tenant_condition = f"tenant_id = :tenant_id"
-        if "WHERE" in sql_upper:
-            # 已有 WHERE，在 WHERE 后追加 AND tenant_id = :tenant_id
-            sql = re.sub(
-                r"(\bWHERE\b)(\s+)",
-                r"\1 " + tenant_condition + r" AND \2",
-                sql,
-                count=1,
-                flags=re.IGNORECASE,
-            )
-        else:
-            # 无 WHERE，在 FROM 子句后、GROUP BY/ORDER BY/LIMIT 前添加
-            match = re.search(r"\b(GROUP BY|ORDER BY|LIMIT)\b", sql_upper)
-            if match:
-                insert_pos = match.start()
-                sql = sql[:insert_pos].rstrip() + " WHERE " + tenant_condition + " " + sql[insert_pos:]
-            else:
-                sql = sql.rstrip().rstrip(";") + " WHERE " + tenant_condition
-        return sql
+        text = sql.strip()
+        while text.endswith(";"):
+            text = text[:-1].rstrip()
+        if not text:
+            raise ValueError("SQL 语句不能为空")
+        return (
+            "SELECT * FROM (\n"
+            f"{text}\n"
+            ") AS dataset_q\n"
+            f"WHERE dataset_q.tenant_id = :{param_name}"
+        )
 
     @staticmethod
     def _normalize_single_write_sql(sql: str) -> str:
@@ -991,8 +1010,8 @@ class DatasetService:
         """
         执行 SQL 查询
 
-        数据隔离：仅对系统默认（本地应用）数据源默认注入 tenant_id；第三方连接不注入，除非在 query_config 中设置 tenant_isolation: true。
-        若业务表含 tenant_id 列且需隔离，请在 WHERE 中使用 tenant_id = :tenant_id，并开启 tenant_isolation。
+        数据隔离：系统默认（本地应用）数据源始终外包 tenant_id，忽略 query_config.tenant_isolation=false。
+        第三方连接默认不注入（通常没有 tenant_id 列）；显式 tenant_isolation=true 时同样外包。
         支持 PostgreSQL（asyncpg）与 SQL Server（优先 pyodbc，失败再 pymssql；与数据源「测试连接」策略一致）。
 
         Args:
@@ -1042,8 +1061,10 @@ class DatasetService:
             apply_tenant_isolation = self._should_apply_sql_tenant_isolation(
                 integration_config, query_config
             )
+            tenant_param_name = "tenant_id"
             if apply_tenant_isolation:
-                sql = self._inject_tenant_filter_sql(sql)
+                tenant_param_name = self._tenant_filter_param_name(sql)
+                sql = self._inject_tenant_filter_sql(sql, param_name=tenant_param_name)
 
             query_params = self._build_sql_query_parameters(
                 sql,
@@ -1052,6 +1073,7 @@ class DatasetService:
                 tenant_id=tenant_id,
                 apply_tenant_isolation=apply_tenant_isolation,
                 fill_missing_sql_parameters=fill_missing_sql_parameters,
+                tenant_param_name=tenant_param_name,
             )
 
             if db_type == "postgresql":

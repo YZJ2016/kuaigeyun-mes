@@ -8,15 +8,14 @@
 不再自行拼接 tenant_id 条件，也不再提供静默旁路：
 
 - ``tenant_id=tid``：该链固定查询指定组织（等价单链版 ``with_tenant``）。
-- ``skip_tenant_filter=True``：该链固定为 unscoped（等价单链版 ``unscoped``），
-  每次调用写结构化警告日志；新代码应改用
-  ``unscoped(reason=...)`` 显式 scope（激活点统一审计）。
+- ``skip_tenant_filter=True``：该链固定为不按当前组织过滤。业务租户模型在
+  执行前写入与 unscoped 相同的审计行（系统身份或请求操作者 + reason + 资源=模型名）。
+  平台 opt-out 模型不写这条审计。已有当前组织时，``tenant_id`` 指向其他组织则拒绝。
 - 两者都不传：完全交给强制机制按三态上下文求值（无上下文则失败关闭）。
 """
 
 from typing import Optional, TypeVar, Generic
 
-from loguru import logger
 from tortoise.models import Model
 from tortoise.queryset import QuerySet
 
@@ -70,11 +69,8 @@ class TenantQuerySet(Generic[T]):
             # pin 无意义——忽略且不产生告警噪音（F5）。
             return query
         if self.skip_tenant_filter:
-            logger.warning(
-                "TenantQuerySet(skip_tenant_filter=True) 兼容旁路被调用 model={}，"
-                "新代码应改用 unscoped(reason=...) 显式 scope",
-                self.model.__name__,
-            )
+            # 审计在查询物化时由 TenantEnforcedQuerySet 写入（资源=模型名），
+            # 通过后才把该链标成不按当前组织过滤。
             query._tenant_override = UNSCOPED
         elif self.tenant_id is not None:
             if isinstance(self.tenant_id, (list, tuple, set, frozenset)):
