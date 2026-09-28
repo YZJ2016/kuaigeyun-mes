@@ -4,6 +4,8 @@ import { resolve } from 'path'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { ProxyOptions } from 'vite'
+import viteCompression from 'vite-plugin-compression'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // 主入口配置
 // 统一使用 SaaS 模式
@@ -274,6 +276,10 @@ export default defineConfig({
         manualChunks: (id) => {
           const norm = id.replace(/\\/g, '/');
           if (id.includes('node_modules') || id.includes('\0') || /\/_virtual\//.test(norm)) {
+            // lodash 与 @mlightcad 共用。若留在 CAD chunk，壳上的 merge 会静态拉起
+            // 整包 libredwg + three（约 3MB），每个页面启动都要先下图纸引擎。
+            // 必须写在 @mlightcad 判断之前：嵌套在其 node_modules 里的 lodash 也归到 vendor。
+            if (/\/node_modules\/lodash(-es)?\//.test(norm)) return 'vendor';
             // 巨型/按需栈单独拆出，避免进首屏
             if (id.includes('@univerjs')) return 'vendor-univerjs';
             if (id.includes('monaco-editor') || id.includes('@monaco-editor')) return 'vendor-monaco';
@@ -428,7 +434,29 @@ export default defineConfig({
       // ⚠️ 关键修复：使用经典的JSX运行时，确保兼容性
       jsxRuntime: 'automatic', // 使用自动JSX运行时，不需要显式导入React
     }),
-  ],
+    // P5-1：预压缩产物（.gz/.br），Caddy file_server precompressed 直出，弱网 Transfer Size 下降
+    viteCompression({
+      algorithm: 'gzip',
+      ext: '.gz',
+      threshold: 10240,
+      deleteOriginFile: false,
+    }),
+    viteCompression({
+      algorithm: 'brotliCompress',
+      ext: '.br',
+      threshold: 10240,
+      deleteOriginFile: false,
+    }),
+    // P5-8：ANALYZE=1 npm run build:analyze 出 dist/stats.html
+    process.env.ANALYZE === '1' &&
+      visualizer({
+        filename: resolve(__dirname, 'dist/stats.html'),
+        open: false,
+        gzipSize: true,
+        brotliSize: true,
+        template: 'treemap',
+      }),
+  ].filter(Boolean),
   resolve: {
     // workspace compose 用 junction/symlink 挂载 pro/custom 应用时：必须保留逻辑路径，
     // 否则相对导入 ../../../services/* 会按私有仓真实路径解析而失败。

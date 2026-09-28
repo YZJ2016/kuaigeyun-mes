@@ -32,6 +32,42 @@ _SVC = KuaioaApprovalDocService(_CONFIG)
 
 _STANDARD_DAY_HOURS = Decimal("8")
 
+_LEAVE_TYPE_LABELS = {
+    "personal": "事假",
+    "sick": "病假",
+    "wedding": "婚假",
+    "funeral": "丧假",
+    "maternity": "产假",
+    "paternity": "陪产假",
+    "annual": "年假",
+    "business_trip": "出差",
+}
+
+
+def _build_leave_title(payload: dict[str, Any]) -> str:
+    """由类型、员工、日期拼申请摘要，避免用户手填无意义「标题」。"""
+    type_code = str(payload.get("leave_type") or "").strip()
+    type_label = _LEAVE_TYPE_LABELS.get(type_code, type_code or "请假出差")
+    name = str(payload.get("employee_name") or "").strip()
+    date_part = ""
+    start_at = payload.get("start_at")
+    end_at = payload.get("end_at")
+    if start_at and end_at:
+        sd = to_site_date(start_at).isoformat()
+        ed = to_site_date(end_at).isoformat()
+        date_part = sd if sd == ed else f"{sd}~{ed}"
+    title = " ".join(part for part in (type_label, name, date_part) if part).strip()
+    return (title or "请假出差")[:200]
+
+
+def _ensure_leave_title(payload: dict[str, Any]) -> dict[str, Any]:
+    existing = str(payload.get("title") or "").strip()
+    if existing:
+        payload["title"] = existing[:200]
+        return payload
+    payload["title"] = _build_leave_title(payload)
+    return payload
+
 
 def _calc_inclusive_days(start_at: Any, end_at: Any) -> Decimal:
     if not start_at or not end_at:
@@ -96,13 +132,14 @@ def _normalize_leave_payload(payload: dict[str, Any], *, partial: bool = False) 
 def _payload_from_create(data: LeaveRequestCreate) -> dict[str, Any]:
     payload = {
         "leave_type": data.leave_type,
-        "title": data.title,
+        "title": (data.title or "").strip() or None,
         "start_at": parse_business_datetime(data.start_at),
         "end_at": parse_business_datetime(data.end_at),
         "days": data.days,
         "leave_hours": data.leave_hours,
-        "deduct_enabled": bool(data.deduct_enabled),
-        "deduct_amount": data.deduct_amount,
+        # 新建表单已取消扣钱金额；写路径固定不扣
+        "deduct_enabled": False,
+        "deduct_amount": None,
         "workshop_name": (data.workshop_name or "").strip() or None,
         "production_line_name": (data.production_line_name or "").strip() or None,
         "employee_id": data.employee_id,
@@ -191,6 +228,7 @@ class LeaveRequestService:
         self, tenant_id: int, data: LeaveRequestCreate, user: User
     ) -> dict[str, Any]:
         payload = await _attach_employee_snapshot(tenant_id, _payload_from_create(data))
+        payload = _ensure_leave_title(payload)
         return await _SVC.create_row(tenant_id, payload, user)
 
     async def update_request(
@@ -199,6 +237,32 @@ class LeaveRequestService:
         payload = _payload_from_update(data)
         if "employee_id" in payload or "workshop_name" in payload:
             payload = await _attach_employee_snapshot(tenant_id, payload)
+        unset = data.model_dump(exclude_unset=True)
+        touch_summary = any(
+            key in payload
+            for key in ("leave_type", "employee_id", "employee_name", "start_at", "end_at")
+        )
+        explicit_title = "title" in unset
+        if explicit_title:
+            title = str(unset.get("title") or "").strip()
+            if title:
+                payload["title"] = title[:200]
+            else:
+                touch_summary = True
+                payload.pop("title", None)
+        if touch_summary and (not explicit_title or not str(unset.get("title") or "").strip()):
+            row = await KuaioaLeaveRequest.get_or_none(
+                id=request_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if row:
+                payload["title"] = _build_leave_title(
+                    {
+                        "leave_type": payload.get("leave_type", row.leave_type),
+                        "employee_name": payload.get("employee_name", row.employee_name),
+                        "start_at": payload.get("start_at", row.start_at),
+                        "end_at": payload.get("end_at", row.end_at),
+                    }
+                )
         return await _SVC.update_row(tenant_id, request_id, payload, user.id)
 
     async def delete_request(self, tenant_id: int, request_id: int, user: User) -> None:

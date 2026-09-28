@@ -11,6 +11,7 @@ from infra.constants.official_registry import (
     normalize_official_api_library_host_input,
     normalize_registry_host,
     official_api_library_host_candidates,
+    should_use_local_official_api_library_catalog,
 )
 
 
@@ -76,6 +77,44 @@ def test_is_official_api_library_public_host_allows_configured_domain(monkeypatc
         assert not await is_official_api_library_public_host("other.example.com")
 
     asyncio.run(_run())
+
+
+def test_should_use_local_catalog_respects_third_party_host():
+    # 本机可写（开发/SaaS），但配置指向第三方 → 目录须远程，禁止本地表冒充来源
+    assert (
+        should_use_local_official_api_library_catalog(
+            request_host="kuaigeyun.com",
+            configured_host="kg.xob.de5.net",
+            local_writable=True,
+        )
+        is False
+    )
+    assert (
+        should_use_local_official_api_library_catalog(
+            request_host="localhost:8200",
+            configured_host="kg.xob.de5.net",
+            local_writable=True,
+        )
+        is False
+    )
+    # 请求正落在第三方官方库域名 → 读该机本地真源
+    assert (
+        should_use_local_official_api_library_catalog(
+            request_host="kg.xob.de5.net",
+            configured_host="kg.xob.de5.net",
+            local_writable=False,
+        )
+        is True
+    )
+    # 配置仍为默认官方域 + 本机可写 → 本地
+    assert (
+        should_use_local_official_api_library_catalog(
+            request_host="localhost",
+            configured_host=DEFAULT_OFFICIAL_API_LIBRARY_HOST,
+            local_writable=True,
+        )
+        is True
+    )
 
 
 def test_local_official_api_library_host_in_development(monkeypatch):

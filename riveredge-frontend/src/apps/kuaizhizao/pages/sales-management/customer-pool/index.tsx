@@ -597,6 +597,115 @@ const CustomerPoolPage: React.FC = () => {
           ),
       },
       {
+        title: t('app.kuaizhizao.customerPool.followStatus'),
+        dataIndex: 'follow_status',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        hideInSearch: true,
+        render: (_, row) =>
+          row.follow_status === 'followed' ? (
+            <MarkerTag color="success">{t('app.kuaizhizao.customerPool.followStatusFollowed')}</MarkerTag>
+          ) : (
+            <MarkerTag color="warning">{t('app.kuaizhizao.customerPool.followStatusPending')}</MarkerTag>
+          ),
+      },
+      {
+        title: t('app.kuaizhizao.customerPool.followStatus'),
+        dataIndex: 'follow_status',
+        hideInTable: true,
+        order: 22,
+        valueType: 'select',
+        valueEnum: {
+          pending: { text: t('app.kuaizhizao.customerPool.followStatusPending') },
+          followed: { text: t('app.kuaizhizao.customerPool.followStatusFollowed') },
+        },
+        fieldProps: { allowClear: true },
+      },
+      {
+        title: t('field.customer.level'),
+        dataIndex: 'customer_level_code',
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, row) => row.customer_level_code || '—',
+      },
+      {
+        title: t('field.customer.level'),
+        dataIndex: 'customerLevelCode',
+        hideInTable: true,
+        order: 23,
+        valueType: 'select',
+        valueEnum: Object.fromEntries(
+          (poolDictOptions.CUSTOMER_LEVEL || []).map((o) => [String(o.value), { text: o.label }]),
+        ),
+        fieldProps: { allowClear: true, options: poolDictOptions.CUSTOMER_LEVEL },
+      },
+      {
+        title: t('app.kuaizhizao.customerPool.intentMaterial'),
+        dataIndex: 'intent_material_name',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, row) => row.intent_material_name || '—',
+      },
+      {
+        title: t('app.kuaizhizao.customerPool.intentMaterial'),
+        dataIndex: 'intent_material_name',
+        hideInTable: true,
+        order: 24,
+        fieldProps: { allowClear: true },
+      },
+      {
+        title: t('app.kuaizhizao.customerPool.region'),
+        dataIndex: 'region_text',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, row) => row.region_text || '—',
+      },
+      {
+        title: t('app.kuaizhizao.customerPool.region'),
+        dataIndex: 'region_text',
+        hideInTable: true,
+        order: 25,
+        fieldProps: { allowClear: true },
+      },
+      {
+        title: t('app.kuaizhizao.customerPool.followUpCount'),
+        dataIndex: 'follow_up_count',
+        width: 88,
+        minWidth: 88,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, row) => (row.follow_up_count != null ? String(row.follow_up_count) : '0'),
+      },
+      {
+        title: t('app.kuaizhizao.customerPool.inactive7d'),
+        dataIndex: 'inactive_7d',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        hideInSearch: true,
+        render: (_, row) =>
+          row.inactive_7d ? (
+            <MarkerTag color="error">{t('app.kuaizhizao.customerPool.inactive7dTag')}</MarkerTag>
+          ) : (
+            '—'
+          ),
+      },
+      {
+        title: t('app.kuaizhizao.customerPool.inactive7d'),
+        dataIndex: 'inactive_7d',
+        hideInTable: true,
+        order: 26,
+        valueType: 'select',
+        valueEnum: {
+          true: { text: t('app.kuaizhizao.customerPool.inactive7dOnly') },
+        },
+        fieldProps: { allowClear: true },
+      },
+      {
         title: t('field.customer.lastFollowUpAt'),
         dataIndex: 'last_follow_up_at',
         width: 132,
@@ -936,6 +1045,7 @@ const CustomerPoolPage: React.FC = () => {
       handleDeleteCustomer,
       openCollaboratorsModal,
       openPoolLogsModal,
+      poolDictOptions.CUSTOMER_LEVEL,
       poolStatusValueEnum,
       renderCollaboratorsCell,
       salesmanOptions,
@@ -1183,7 +1293,7 @@ const CustomerPoolPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.menu.sales-management.customer-pool')}
           showAdvancedSearch
           skipFuzzyPinyinClientFilter
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool-crm-v1"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerPool')}
           params={{ scope }}

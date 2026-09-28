@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Line } from '@ant-design/charts';
+import { ChartSuspense, LazyLine } from '../../../../../components/common/lazyAntCharts';
 
 export interface SpcImrChartPoint {
   sample_value: number;
@@ -52,7 +52,9 @@ const SpcImrChart: React.FC<SpcImrChartProps> = ({ points, mean, ucl, lcl, heigh
 
   return (
     <div style={{ width: '100%', minWidth: 0, height }}>
-      <Line {...config} />
+      <ChartSuspense>
+        <LazyLine {...config} />
+      </ChartSuspense>
     </div>
   );
 };

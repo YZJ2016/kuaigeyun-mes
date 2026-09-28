@@ -10969,17 +10969,22 @@ const WorkOrdersPage: React.FC = () => {
               planned_end_date: toApiDateTimeString(mergedValues.planned_end_date),
             }
 
-            // 获取当前工序列表
-            const currentOperations = await workOrderApi.getOperations(
+            const operationsRaw = await workOrderApi.getOperations(
               workOrderDetail.id.toString()
             )
+            const currentOperations = Array.isArray(operationsRaw)
+              ? operationsRaw
+              : Array.isArray((operationsRaw as { operations?: unknown })?.operations)
+                ? ((operationsRaw as { operations: any[] }).operations)
+                : []
 
             // 如果是编辑，更新对应工序；如果是新增，添加到列表
             let updatedOperations: any[]
             if (currentOperation) {
-              // 编辑：更新对应sequence的工序
+              const editingOpId = Number(currentOperation.id)
+              // 编辑：更新对应工序（id 须 Number 比较，避免 string/number 严格相等漏改）
               updatedOperations = currentOperations.map((op: any) => {
-                if (op.id === currentOperation.id) {
+                if (Number(op.id) === editingOpId) {
                   return {
                     ...op,
                     ...operationPayload,
@@ -10988,6 +10993,12 @@ const WorkOrdersPage: React.FC = () => {
                 }
                 return op
               })
+              if (
+                Number.isFinite(editingOpId) &&
+                !updatedOperations.some((op: any) => Number(op.id) === editingOpId)
+              ) {
+                throw new Error('未找到要更新的工序，请关闭后重试')
+              }
             } else {
               // 新增：计算新的sequence
               const maxSequence =

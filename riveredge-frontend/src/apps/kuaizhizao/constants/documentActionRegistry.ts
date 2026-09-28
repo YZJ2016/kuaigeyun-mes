@@ -39,11 +39,13 @@ export type KuaizhizaoDocumentActionKey =
   | 'rework_order.pull_from_work_order'
   | 'purchase_requisition.pull_from_demand_computation'
   | 'purchase_requisition.pull_from_replenishment_suggestion'
+  | 'purchase_requisition.pull_from_sales_order'
   | 'demand_computation.pull_from_sales_forecast'
   | 'demand_computation.pull_from_demand'
   | 'demand_computation.pull_from_sales_order'
   | 'work_order.pull_from_demand_computation'
   | 'work_order.pull_from_sales_order'
+  | 'purchase_order.pull_from_sales_order'
   | 'outbound.pull_from_work_order'
   | 'outbound.pull_from_sales_order'
   | 'sales_delivery.pull_from_shipment_notice'
@@ -398,6 +400,22 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('purchase_requisition.pull_from_replenishment_suggestion', 'label'),
     sourceLabelKey: documentActionI18n('purchase_requisition.pull_from_replenishment_suggestion', 'source'),
     targetLabelKey: documentActionI18n('purchase_requisition.pull_from_replenishment_suggestion', 'target'),
+  },
+  'purchase_requisition.pull_from_sales_order': {
+    key: 'purchase_requisition.pull_from_sales_order',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('purchase_requisition.pull_from_sales_order', 'label'),
+    sourceLabelKey: documentActionI18n('purchase_requisition.pull_from_sales_order', 'source'),
+    targetLabelKey: documentActionI18n('purchase_requisition.pull_from_sales_order', 'target'),
+  },
+  'purchase_order.pull_from_sales_order': {
+    key: 'purchase_order.pull_from_sales_order',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('purchase_order.pull_from_sales_order', 'label'),
+    sourceLabelKey: documentActionI18n('purchase_order.pull_from_sales_order', 'source'),
+    targetLabelKey: documentActionI18n('purchase_order.pull_from_sales_order', 'target'),
   },
   'demand_computation.pull_from_sales_forecast': {
     key: 'demand_computation.pull_from_sales_forecast',

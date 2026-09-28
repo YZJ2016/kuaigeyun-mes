@@ -13,7 +13,16 @@ from infra.exceptions.exceptions import ValidationError
 # 交付物类型 → 命名规则 profile key
 PART_SPEC_TYPES = frozenset({"part_spec", "component_spec"})
 SOFTWARE_SPEC_TYPES = frozenset({"software_spec", "sw_spec"})
-SCHEMATIC_GERBER_TYPES = frozenset({"schematic", "gerber", "schematic_gerber"})
+SCHEMATIC_GERBER_TYPES = frozenset(
+    {
+        "schematic",
+        "gerber",
+        "schematic_gerber",
+        "layout",
+        "panelization",
+        "panel",
+    }
+)
 DRAWING_3D_TYPES = frozenset({"drawing_3d", "3d_drawing"})
 DRAWING_2D_TYPES = frozenset({"drawing_2d", "2d_drawing", "drawing_cad", "drawing_pdf"})
 TEST_REPORT_TYPES = frozenset({"test_report", "test"})
@@ -22,6 +31,48 @@ _VERSION_SUFFIX_RE = re.compile(
     r"[_\-\s]?[vV]?([A-Z]\d{1,2}|[Rr]\d{1,3}|\d+\.\d+)\s*$"
 )
 _MATERIAL_CODE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-\.]{2,79}$")
+# 版本段：A1 / R02 / 1.0 / V1.05
+_VERSION_TOKEN_RE = re.compile(
+    r"^[Vv]?([A-Z]\d{1,2}|[Rr]\d{1,3}|\d+(?:\.\d+)*)$",
+    re.IGNORECASE,
+)
+_DATE_TOKEN_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}|\d{8})$")
+
+
+def is_part_spec_type(
+    deliverable_type: Optional[str],
+    naming_rules: Optional[Dict[str, Any]] = None,
+) -> bool:
+    dtype = (deliverable_type or "").strip().lower()
+    if not dtype:
+        return False
+    rules = naming_rules or {}
+    extra = rules.get("part_spec_types") if isinstance(rules, dict) else None
+    return dtype in PART_SPEC_TYPES or dtype in (extra or [])
+
+
+def is_software_spec_type(
+    deliverable_type: Optional[str],
+    naming_rules: Optional[Dict[str, Any]] = None,
+) -> bool:
+    dtype = (deliverable_type or "").strip().lower()
+    if not dtype:
+        return False
+    rules = naming_rules or {}
+    extra = rules.get("software_spec_types") if isinstance(rules, dict) else None
+    return dtype in SOFTWARE_SPEC_TYPES or dtype in (extra or [])
+
+
+def is_schematic_gerber_type(
+    deliverable_type: Optional[str],
+    naming_rules: Optional[Dict[str, Any]] = None,
+) -> bool:
+    dtype = (deliverable_type or "").strip().lower()
+    if not dtype:
+        return False
+    rules = naming_rules or {}
+    extra = rules.get("schematic_gerber_types") if isinstance(rules, dict) else None
+    return dtype in SCHEMATIC_GERBER_TYPES or dtype in (extra or [])
 
 
 def _require_material_code(material_code: Optional[str], *, label: str) -> str:
@@ -40,6 +91,70 @@ def _require_version_suffix(file_name: Optional[str], *, label: str) -> None:
     base = name.rsplit(".", 1)[0] if "." in name else name
     if not _VERSION_SUFFIX_RE.search(base):
         raise ValidationError(f"{label}文件名须带版本后缀（如 _A1 / _R02 / _1.0）: {name}")
+
+
+def _require_prefix_version_date_filename(
+    file_name: Optional[str],
+    *,
+    prefix: Optional[str],
+    label: str,
+    prefix_label: str,
+) -> None:
+    """「前缀_版本号_更新日期」（例：PCB001_A1_20260926.zip）。"""
+    name = (file_name or "").strip()
+    if not name:
+        raise ValidationError(f"{label}须上传文件并填写文件名")
+    code = (prefix or "").strip()
+    if not code:
+        raise ValidationError(f"{label}须填写{prefix_label}")
+    if not name.startswith(code):
+        raise ValidationError(f"{label}文件名须以{prefix_label} {code} 开头")
+    base = name.rsplit(".", 1)[0] if "." in name else name
+    remainder = base[len(code) :]
+    example = f"{code}_A1_20260926"
+    if not remainder.startswith("_"):
+        raise ValidationError(
+            f"{label}文件名须为「{prefix_label}_版本号_更新日期」格式（例：{example}.pdf）"
+        )
+    parts = [p for p in remainder.lstrip("_").split("_") if p]
+    if len(parts) < 2:
+        raise ValidationError(
+            f"{label}文件名须为「{prefix_label}_版本号_更新日期」格式（例：{example}.pdf）"
+        )
+    version_token = parts[0]
+    date_token = parts[-1]
+    if not _VERSION_TOKEN_RE.match(version_token):
+        raise ValidationError(f"{label}版本段不合法（如 A1 / R02 / 1.0）: {version_token}")
+    if not _DATE_TOKEN_RE.match(date_token):
+        raise ValidationError(
+            f"{label}更新日期须为 YYYYMMDD 或 YYYY-MM-DD: {date_token}"
+        )
+
+
+def _require_software_spec_filename(
+    file_name: Optional[str],
+    *,
+    project_code: Optional[str],
+) -> None:
+    _require_prefix_version_date_filename(
+        file_name,
+        prefix=project_code,
+        label="软件规格书",
+        prefix_label="项目代号",
+    )
+
+
+def _require_schematic_gerber_filename(
+    file_name: Optional[str],
+    *,
+    pcb_code: Optional[str],
+) -> None:
+    _require_prefix_version_date_filename(
+        file_name,
+        prefix=pcb_code,
+        label="原理图/Layout/Gerber",
+        prefix_label="PCB料号",
+    )
 
 
 def validate_deliverable_catalog(
@@ -78,22 +193,16 @@ def validate_deliverable_catalog(
         return
 
     if dtype in SOFTWARE_SPEC_TYPES or dtype in rules.get("software_spec_types", []):
-        _require_version_suffix(file_name, label="软件规格书")
-        pcode = (project_code or "").strip()
-        if pcode and file_name and not file_name.startswith(pcode):
-            raise ValidationError(f"软件规格书文件名须以项目代号 {pcode} 开头")
+        if file_name:
+            _require_software_spec_filename(file_name, project_code=project_code)
+        elif not (project_code or "").strip():
+            raise ValidationError("软件规格书须关联有项目代号的研发项目")
         return
 
     if dtype in SCHEMATIC_GERBER_TYPES or dtype in rules.get("schematic_gerber_types", []):
-        _require_version_suffix(file_name, label="原理图/Gerber")
-        if material_code:
-            code = material_code.strip()
-            if file_name and code not in file_name:
-                raise ValidationError(f"原理图/Gerber 文件名须包含 PCB 料号 {code}")
-        elif project_code:
-            pcode = project_code.strip()
-            if file_name and not file_name.startswith(pcode):
-                raise ValidationError(f"原理图/Gerber 文件名须以项目代号 {pcode} 开头")
+        pcb = _require_material_code(material_code, label="原理图/Layout/Gerber（PCB料号）")
+        if file_name:
+            _require_schematic_gerber_filename(file_name, pcb_code=pcb)
         return
 
     if dtype in DRAWING_3D_TYPES or dtype in DRAWING_2D_TYPES:

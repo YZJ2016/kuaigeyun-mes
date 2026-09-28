@@ -8,6 +8,7 @@ from datetime import timedelta
 from typing import Any, Optional
 
 from fastapi import HTTPException, status
+from tortoise.exceptions import IntegrityError
 
 from core.config.open_api_module_catalog import module_keys_from_codes
 from core.models.open_api_account import OpenApiAccount, OpenApiApp, OpenApiAppGrant
@@ -46,15 +47,34 @@ def default_acct_id(tenant_id: int) -> str:
     return f"KG{int(tenant_id):06d}"
 
 
+async def _coalesce_active_accounts(rows: list[OpenApiAccount]) -> OpenApiAccount:
+    """保留最早一条有效账套；重复行软删，其下应用改挂到保留账套。"""
+    primary = rows[0]
+    if len(rows) == 1:
+        return primary
+    now = now_utc()
+    dup_ids = [row.id for row in rows[1:]]
+    await OpenApiApp.filter(
+        account_id__in=dup_ids,
+        deleted_at__isnull=True,
+    ).update(account_id=primary.id, updated_at=now)
+    await OpenApiAccount.filter(id__in=dup_ids).update(
+        deleted_at=now,
+        updated_at=now,
+    )
+    return primary
+
+
 class OpenApiAuthService:
     @staticmethod
     async def ensure_account(tenant_id: int, *, name: str = "默认账套") -> OpenApiAccount:
-        acct = await OpenApiAccount.get_or_none(
+        """每租户仅一条有效账套；若历史重复则保留最早一条并软删其余。"""
+        rows = await OpenApiAccount.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
-        )
-        if acct:
-            return acct
+        ).order_by("id")
+        if rows:
+            return await _coalesce_active_accounts(list(rows))
         # 冲突时追加后缀
         base = default_acct_id(tenant_id)
         acct_id = base
@@ -63,14 +83,23 @@ class OpenApiAuthService:
             if not exists:
                 break
             acct_id = f"{base}_{i}"
-        acct = await OpenApiAccount.create(
-            tenant_id=tenant_id,
-            uuid=str(uuid.uuid4()),
-            acct_id=acct_id,
-            name=name or "默认账套",
-            status="active",
-        )
-        return acct
+        try:
+            return await OpenApiAccount.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                acct_id=acct_id,
+                name=name or "默认账套",
+                status="active",
+            )
+        except IntegrityError:
+            # 并发创建或唯一索引冲突：再读并合并重复行
+            again = await OpenApiAccount.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).order_by("id")
+            if not again:
+                raise
+            return await _coalesce_active_accounts(list(again))
 
     @staticmethod
     async def issue_token(

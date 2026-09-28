@@ -167,6 +167,7 @@ class SalesOrderBase(BaseSchema):
     contract_code: Optional[str] = Field(None, max_length=50, description="关联销售合同编码")
     is_release_order: bool = Field(False, description="是否为框架合同释放单")
     currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码（默认 CNY）")
+    exchange_rate: Decimal = Field(default=Decimal("1"), gt=0, description="汇率（1 外币 = N 本位币）")
     
     prepayment_amount: Optional[Decimal] = Field(None, ge=0, description="预收款金额")
     prepayment_bank_account_id: Optional[int] = Field(None, description="预收款银行账户ID")
@@ -225,6 +226,7 @@ class SalesOrderUpdate(BaseSchema):
     shipping_method: Optional[str] = Field(None, max_length=50)
     payment_terms: Optional[str] = Field(None, max_length=100)
     currency_code: Optional[str] = Field(None, max_length=20)
+    exchange_rate: Optional[Decimal] = Field(None, gt=0)
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
     fee_details: Optional[List[dict]] = None

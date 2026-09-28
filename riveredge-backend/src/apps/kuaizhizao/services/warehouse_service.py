@@ -15,7 +15,7 @@ from apps.kuaizhizao.utils.stock_posting import (
 )
 from typing import List, Optional, Dict, Any, Tuple, Iterable
 from datetime import datetime, date, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import json
 import time
 import uuid
@@ -1792,10 +1792,16 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
     async def list_production_pickings(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters):
         """获取生产领料单列表"""
+        from tortoise.expressions import Q
+
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
         from apps.kuaizhizao.services.warehouse_list_core import (
             PRODUCTION_PICKING_KEYWORD_FIELDS,
             PRODUCTION_PICKING_SORTABLE_FIELDS,
             apply_warehouse_doc_list_filters,
+        )
+        from apps.kuaizhizao.utils.list_item_material_keyword import (
+            header_ids_matching_item_material,
         )
 
         query = ProductionPicking.filter(tenant_id=tenant_id, deleted_at__isnull=True)
@@ -1804,8 +1810,6 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         if filters.get('status'):
             query = query.filter(status=filters['status'])
         if filters.get('work_order_id'):
-            from tortoise.expressions import Q
-
             wo_filter_id = int(filters["work_order_id"])
             item_picking_ids = await ProductionPickingItem.filter(
                 tenant_id=tenant_id,
@@ -1830,10 +1834,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             ).values_list("picking_id", flat=True)
             query = query.filter(id__in=list({int(x) for x in wh_picking_ids}))
 
+        # 模糊搜索含明细物料（编码/名称/规格），与销退列表同契约；表头字段仍走 keyword_fields
+        kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
             query,
-            keyword=filters.get("keyword"),
-            search=filters.get("search"),
+            keyword=None,
+            search=None,
             order_by=filters.get("order_by"),
             allowed_fields=PRODUCTION_PICKING_SORTABLE_FIELDS,
             default_order="-created_at",
@@ -1846,6 +1852,17 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        if kw:
+            material_picking_ids = await header_ids_matching_item_material(
+                tenant_id,
+                ProductionPickingItem,
+                "picking_id",
+                kw,
+            )
+            header_cond = Q()
+            for field in PRODUCTION_PICKING_KEYWORD_FIELDS:
+                header_cond |= Q(**{f"{field}__icontains": kw})
+            query = query.filter(header_cond | Q(id__in=material_picking_ids))
         total = await query.count()
         pickings = await query.offset(skip).limit(limit).order_by(order_clause)
         from tortoise.functions import Count, Sum
@@ -2604,7 +2621,17 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         items=confirmation_data.items,
                     )
 
-            confirmer_name = await self.get_user_name(confirmed_by)
+            from apps.kuaizhizao.utils.inbound_confirm_helper import (
+                resolve_production_picking_confirm_picker,
+            )
+
+            picker_id, picker_name = await resolve_production_picking_confirm_picker(
+                confirmed_by=confirmed_by,
+                confirmation_data=confirmation_data,
+                get_user_name=self.get_user_name,
+                existing_picker_id=getattr(picking, "picker_id", None),
+                existing_picker_name=getattr(picking, "picker_name", None),
+            )
             picking_time = coerce_business_datetime_to_utc(
                 confirmation_data.delivery_time
                 if confirmation_data and confirmation_data.delivery_time
@@ -2619,6 +2646,8 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     filter_gi_picking_ids,
                     format_pick_limit_qty,
                     is_staging_transfer_picking_notes,
+                    load_work_order_material_call_extra_map,
+                    resolve_work_order_pick_cap,
                     resolve_work_order_pick_limit,
                 )
                 from apps.kuaizhizao.utils.over_qty_tolerance import OverQtyToleranceResolver
@@ -2727,37 +2756,64 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
                             mat_ids_for_tol = list(current_map.keys())
                             await tolerance_resolver.preload_materials(mat_ids_for_tol)
+                            call_extra_map = await load_work_order_material_call_extra_map(
+                                tenant_id,
+                                wo_id,
+                                mat_ids_for_tol,
+                            )
                             for mat_id, current_qty in current_map.items():
                                 past_qty = past_map.get(mat_id, Decimal(0))
                                 total_attempt = past_qty + current_qty
-                                allowed_bom = limit_map.get(mat_id)
-                                if allowed_bom is not None:
-                                    over_issue_ratio = await tolerance_resolver.resolve_over_issue_ratio(
-                                        mat_id
-                                    )
-                                    allowed = resolve_work_order_pick_limit(
+                                # 不在 BOM 中的物料：配方上限为 0，仅补料申请额度可放行
+                                allowed_bom = limit_map.get(mat_id, Decimal(0))
+                                over_issue_ratio = await tolerance_resolver.resolve_over_issue_ratio(
+                                    mat_id
+                                )
+                                call_extra = call_extra_map.get(mat_id, Decimal(0))
+                                allowed = resolve_work_order_pick_cap(
+                                    allowed_bom,
+                                    over_issue_ratio,
+                                    call_extra,
+                                )
+                                if exceeds_work_order_pick_limit(total_attempt, allowed):
+                                    cap_text = format_pick_limit_qty(allowed)
+                                    bom_text = format_pick_limit_qty(allowed_bom)
+                                    bom_cap = resolve_work_order_pick_limit(
                                         allowed_bom, over_issue_ratio
                                     )
-                                    if exceeds_work_order_pick_limit(total_attempt, allowed):
-                                        cap_text = format_pick_limit_qty(allowed)
-                                        bom_text = format_pick_limit_qty(allowed_bom)
-                                        if over_issue_ratio > 0:
-                                            pct = int(over_issue_ratio * 100)
-                                            detail = (
-                                                f"含超发比例后的上限({cap_text}，BOM配方 {bom_text} + {pct}%)"
-                                            )
-                                        else:
-                                            detail = f"当前工单配方上限额度({cap_text})"
-                                        raise BusinessLogicError(
-                                            f"防超发拦截生效：工单 {wo.code} 物料[ID:{mat_id}]试图总领用量({format_pick_limit_qty(total_attempt)}) "
-                                            f"超出了{detail}，禁止强行出库！"
+                                    if call_extra > 0 and over_issue_ratio > 0:
+                                        pct = int(over_issue_ratio * 100)
+                                        detail = (
+                                            f"含超发比例与补料申请后的上限({cap_text}，"
+                                            f"BOM配方 {bom_text} + {pct}% + 补料 {format_pick_limit_qty(call_extra)})"
                                         )
+                                    elif call_extra > 0:
+                                        detail = (
+                                            f"含补料申请后的上限({cap_text}，"
+                                            f"BOM配方 {format_pick_limit_qty(bom_cap)}"
+                                            f" + 补料 {format_pick_limit_qty(call_extra)})"
+                                        )
+                                    elif over_issue_ratio > 0:
+                                        pct = int(over_issue_ratio * 100)
+                                        detail = (
+                                            f"含超发比例后的上限({cap_text}，BOM配方 {bom_text} + {pct}%)"
+                                        )
+                                    else:
+                                        detail = f"当前工单配方上限额度({cap_text})"
+                                    raise BusinessLogicError(
+                                        f"防超发拦截生效：工单 {wo.code} 物料[ID:{mat_id}]试图总领用量({format_pick_limit_qty(total_attempt)}) "
+                                        f"超出了{detail}，禁止强行出库！"
+                                    )
                         except BusinessLogicError:
                             raise
                         except Exception as calc_e:
-                            logger.warning(
-                                f"防超发校验过程发生错误（工单 {wo_id}），可能是缺少BOM，跳过强制拦截: {calc_e}"
+                            logger.exception(
+                                "防超发校验失败（工单 %s）：%s", wo_id, calc_e
                             )
+                            raise BusinessLogicError(
+                                f"防超发校验失败（工单 {wo.code if wo else wo_id}）："
+                                f"无法按 BOM 计算可领上限，禁止确认出库。详情：{calc_e}"
+                            ) from calc_e
 
                 picking = await ProductionPicking.get(tenant_id=tenant_id, id=picking_id)
                 biz_config = await BusinessConfigService().get_business_config(tenant_id)
@@ -2814,8 +2870,8 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         movement_type="production_issue",
                         from_warehouse_id=wh_id,
                         idempotency_key=f"production_picking:{picking_id}:dec:{item.id}",
-                    operator_id=confirmed_by,
-                    operator_name=confirmer_name,
+                    operator_id=picker_id,
+                    operator_name=picker_name,
                 )
                     required = item.required_quantity or Decimal(0)
                     remaining = required - qty
@@ -2830,15 +2886,14 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         picking_time=picking_time,
                     )
 
-                # 出库人/领料人是建单时选定的业务人；确认人只写入 updated_by
+                # 领料人写业务真源；确认操作人只写入 updated_by
                 header_update: Dict[str, Any] = {
                     "status": "已领料",
                     "picking_time": picking_time,
+                    "picker_id": picker_id,
+                    "picker_name": picker_name,
                     "updated_by": confirmed_by,
                 }
-                if not picking.picker_id and not str(picking.picker_name or "").strip():
-                    header_update["picker_id"] = confirmed_by
-                    header_update["picker_name"] = confirmer_name
                 await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(**header_update)
             except Exception as inv_e:
                 logger.error("生产领料确认-更新库存失败: %s", inv_e)
@@ -7517,8 +7572,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         tenant_id: int,
         item_ids: List[int],
         created_by: int,
+        delivery_quantities: Optional[Dict[int, float]] = None,
     ) -> Dict[str, Any]:
-        """按销售订单行 id 建销售出库单，可跨多张订单；同客户同默认仓合并一张。"""
+        """按销售订单行 id 建销售出库单，可跨多张订单；同客户同默认仓合并一张。
+
+        delivery_quantities: 可选 {item_id: qty}，与单头下推 pull_from_sales_order 同契约；
+        未传则按可下推剩余全量出库。
+        """
         from apps.kuaizhizao.models.sales_order import SalesOrder
         from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
@@ -7550,10 +7610,29 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             )
         pushable = await batch_pushable_qty_by_order_item(tenant_id, items)
 
+        qty_override: Dict[int, Decimal] = {}
+        if delivery_quantities:
+            for k, v in delivery_quantities.items():
+                try:
+                    qty = Decimal(str(v or 0))
+                except (InvalidOperation, TypeError, ValueError):
+                    continue
+                if qty > 0:
+                    qty_override[int(k)] = qty
+
         prepared: List[tuple[SalesOrderItem, Decimal, int, str]] = []
         for item in items:
             remaining = pushable.get(int(item.sales_order_id), {}).get(int(item.id), Decimal("0"))
-            qty = max(Decimal("0"), Decimal(str(remaining)))
+            remaining = max(Decimal("0"), Decimal(str(remaining)))
+            if int(item.id) in qty_override:
+                qty = qty_override[int(item.id)]
+                if qty > remaining:
+                    raise BusinessLogicError(
+                        f"物料 {item.material_code or item.material_name or item.id} "
+                        f"的出库数量 {float(qty)} 超过可下推数量 {float(remaining)}"
+                    )
+            else:
+                qty = remaining
             if qty <= 0:
                 continue
             if not item.material_id:
@@ -16332,17 +16411,35 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         borrow_data: MaterialBorrowCreate,
         created_by: int
     ) -> MaterialBorrowResponse:
-        """创建借料单"""
+        """创建借料单。
+
+        开启「自动出库」时，建单与确认借出必须同事务：确认失败须整单回滚，
+        禁止留下待借出单据占用单号，导致改仓后再保存撞唯一约束 500。
+        """
         location_required, auto_outbound_enabled = await _get_warehouse_policy_flags(tenant_id)
-        created_borrow_id: Optional[int] = None
-        async with in_transaction():
-            user_info = await self.get_user_info(created_by)
+
+        # 发号在业务事务外：generate_code 自带 FOR UPDATE，与确认同事务嵌套易挂起
+        if borrow_data.borrow_code:
+            code = borrow_data.borrow_code
+        else:
             today = today_site_str()
             code = await self.generate_code(tenant_id, "MATERIAL_BORROW_CODE", prefix=f"MB{today}")
 
+        existing = await MaterialBorrow.filter(
+            tenant_id=tenant_id,
+            borrow_code=code,
+            deleted_at__isnull=True,
+        ).exists()
+        if existing:
+            raise ValidationError(
+                f"借料单号已存在：{code}。若上次保存已建单但出库失败，请删除该待借出单据，"
+                f"或清空编号后重新打开新建以获取新单号"
+            )
+
+        async with in_transaction():
+            user_info = await self.get_user_info(created_by)
+
             dump = borrow_data.model_dump(exclude_unset=True, exclude={"items", "borrow_code"})
-            if borrow_data.borrow_code:
-                code = borrow_data.borrow_code
 
             borrow = await MaterialBorrow.create(
                 tenant_id=tenant_id,
@@ -16365,29 +16462,34 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                     scene="借料",
                     material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
                 )
+                item_dump = item_data.model_dump(
+                    exclude_unset=True, exclude={"borrow_quantity", "returned_quantity"}
+                )
+                # 明细仓与表头一致：未显式带仓时写入表头仓，避免过账落到物料默认仓
+                if not item_dump.get("warehouse_id"):
+                    item_dump["warehouse_id"] = borrow.warehouse_id
+                    item_dump["warehouse_name"] = borrow.warehouse_name
                 await MaterialBorrowItem.create(
                     tenant_id=tenant_id,
                     borrow_id=borrow.id,
                     borrow_quantity=qty,
                     returned_quantity=Decimal(0),
-                    **item_data.model_dump(exclude_unset=True, exclude={"borrow_quantity", "returned_quantity"})
+                    **item_dump,
                 )
                 total_quantity += qty
 
             await MaterialBorrow.filter(tenant_id=tenant_id, id=borrow.id).update(total_quantity=total_quantity)
-            created_borrow_id = borrow.id
 
-        if auto_outbound_enabled and created_borrow_id:
-            borrow_obj = await MaterialBorrow.get_or_none(tenant_id=tenant_id, id=created_borrow_id, deleted_at__isnull=True)
-            if borrow_obj and borrow_obj.status == "待借出":
+            if auto_outbound_enabled and (getattr(borrow, "status", None) or "待借出") == "待借出":
                 return await self.confirm_borrow(
                     tenant_id=tenant_id,
-                    borrow_id=created_borrow_id,
+                    borrow_id=borrow.id,
                     confirmed_by=created_by,
                 )
-        return MaterialBorrowResponse.model_validate(
-            await MaterialBorrow.get(tenant_id=tenant_id, id=created_borrow_id)
-        )
+
+            return MaterialBorrowResponse.model_validate(
+                await MaterialBorrow.get(tenant_id=tenant_id, id=borrow.id)
+            )
 
     async def get_material_borrow_by_id(
         self,
@@ -16639,8 +16741,12 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
         confirmed_by: int,
         confirmation_data: Optional[OutboundConfirmationRequest] = None,
     ) -> MaterialBorrowResponse:
-        """确认借出"""
-        async with in_transaction(), stock_document_guard("material_borrow", tenant_id, borrow_id):
+        """确认借出。
+
+        使用 reuse_or_begin_transaction：可被 create 外层事务复用，
+        使「建单+自动出库」失败时整单回滚。
+        """
+        async with reuse_or_begin_transaction(), stock_document_guard("material_borrow", tenant_id, borrow_id):
             borrow = await self.get_material_borrow_by_id(tenant_id, borrow_id)
 
             from apps.kuaizhizao.services.document_action_policy.warehouse_outbound_hub import (
@@ -16722,7 +16828,12 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
                     )
-                    wh_id = item.warehouse_id if item.warehouse_id else None
+                    # 明细仓优先；缺省用表头借出仓（禁止回落到物料默认仓导致错仓过账）
+                    wh_id = item.warehouse_id or borrow_obj.warehouse_id
+                    if not wh_id:
+                        raise ValidationError(
+                            f"借料单 {borrow_obj.borrow_code} 缺少借出仓库，无法确认借出"
+                        )
                     mat = material_by_id.get(item.material_id)
                     if mat:
                         await _validate_batch_serial_policy(
@@ -16746,10 +16857,10 @@ class MaterialBorrowService(AppBaseService[MaterialBorrow]):
                         source_doc_code=borrow_obj.borrow_code,
                         enforce_fifo=enforce_fifo,
                         idempotency_key=f"material_borrow:{borrow_id}:dec:{item.id}",
-                    movement_type="other_outbound",
-                    operator_id=confirmed_by,
-                    operator_name=None,
-                )
+                        movement_type="other_outbound",
+                        operator_id=confirmed_by,
+                        operator_name=None,
+                    )
             except ValueError as inv_e:
                 logger.error("借料确认-更新库存失败: %s", inv_e)
                 raise BusinessLogicError(str(inv_e) or "库存不足，无法借出")
@@ -16849,23 +16960,44 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
         self,
         tenant_id: int,
         return_data: MaterialReturnCreate,
-        created_by: int
+        created_by: int,
+        *,
+        auto_confirm: bool = False,
     ) -> MaterialReturnResponse:
-        """创建还料单"""
-        async with in_transaction():
-            borrow = await MaterialBorrow.get_or_none(tenant_id=tenant_id, id=return_data.borrow_id, deleted_at__isnull=True)
-            if not borrow:
-                raise NotFoundError(f"借料单不存在: {return_data.borrow_id}")
+        """创建还料单。
 
+        auto_confirm=True 时建单与确认归还同事务：确认失败整单回滚，
+        禁止留下待归还单据占用单号导致再次保存撞唯一约束。
+        """
+        borrow = await MaterialBorrow.get_or_none(
+            tenant_id=tenant_id, id=return_data.borrow_id, deleted_at__isnull=True
+        )
+        if not borrow:
+            raise NotFoundError(f"借料单不存在: {return_data.borrow_id}")
+
+        # 发号在业务事务外，避免与确认同事务嵌套 FOR UPDATE 挂起
+        if return_data.return_code:
+            code = return_data.return_code
+        else:
             today = today_site_str()
             code = await self.generate_code(tenant_id, "MATERIAL_RETURN_CODE", prefix=f"MR{today}")
 
+        existing = await MaterialReturn.filter(
+            tenant_id=tenant_id,
+            return_code=code,
+            deleted_at__isnull=True,
+        ).exists()
+        if existing:
+            raise ValidationError(
+                f"还料单号已存在：{code}。若上次保存已建单但确认归还失败，请删除该待归还单据，"
+                f"或清空编号后重新打开新建以获取新单号"
+            )
+
+        async with in_transaction():
             dump = return_data.model_dump(
                 exclude_unset=True,
-                exclude={"items", "return_code", "borrow_id", "borrow_code"},
+                exclude={"items", "return_code", "borrow_id", "borrow_code", "audit"},
             )
-            if return_data.return_code:
-                code = return_data.return_code
 
             user_info = await self.get_user_info(created_by)
             return_obj = await MaterialReturn.create(
@@ -16884,17 +17016,61 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
             total_quantity = Decimal(0)
             for item_data in items:
                 qty = Decimal(str(item_data.return_quantity))
+                item_dump = item_data.model_dump(
+                    exclude_unset=True, exclude={"return_quantity", "audit"}
+                )
+                # 从借料明细继承批号/库位/到期日，归还回原批次，禁止用户手填旁路
+                borrow_item_id = item_dump.get("borrow_item_id") or getattr(item_data, "borrow_item_id", None)
+                borrow_item = None
+                if borrow_item_id:
+                    borrow_item = await MaterialBorrowItem.get_or_none(
+                        tenant_id=tenant_id,
+                        id=int(borrow_item_id),
+                        borrow_id=borrow.id,
+                    )
+                if borrow_item is None and item_dump.get("material_id"):
+                    borrow_item = await MaterialBorrowItem.get_or_none(
+                        tenant_id=tenant_id,
+                        borrow_id=borrow.id,
+                        material_id=int(item_dump["material_id"]),
+                    )
+                if borrow_item:
+                    if not item_dump.get("batch_number") and borrow_item.batch_number:
+                        item_dump["batch_number"] = borrow_item.batch_number
+                    if not item_dump.get("expiry_date") and borrow_item.expiry_date:
+                        item_dump["expiry_date"] = borrow_item.expiry_date
+                    if not item_dump.get("location_id") and borrow_item.location_id:
+                        item_dump["location_id"] = borrow_item.location_id
+                    if not item_dump.get("location_code") and borrow_item.location_code:
+                        item_dump["location_code"] = borrow_item.location_code
+                    if not item_dump.get("borrow_item_id"):
+                        item_dump["borrow_item_id"] = borrow_item.id
+                if not item_dump.get("warehouse_id"):
+                    item_dump["warehouse_id"] = return_obj.warehouse_id or borrow.warehouse_id
+                    item_dump["warehouse_name"] = return_obj.warehouse_name or borrow.warehouse_name
+
                 await MaterialReturnItem.create(
                     tenant_id=tenant_id,
                     return_id=return_obj.id,
                     return_quantity=qty,
-                    **item_data.model_dump(exclude_unset=True, exclude={"return_quantity"})
+                    **item_dump,
                 )
                 total_quantity += qty
 
-            await MaterialReturn.filter(tenant_id=tenant_id, id=return_obj.id).update(total_quantity=total_quantity)
-            return_obj = await MaterialReturn.get(tenant_id=tenant_id, id=return_obj.id)
-            return MaterialReturnResponse.model_validate(return_obj)
+            await MaterialReturn.filter(tenant_id=tenant_id, id=return_obj.id).update(
+                total_quantity=total_quantity
+            )
+
+            if auto_confirm:
+                return await self.confirm_return(
+                    tenant_id=tenant_id,
+                    return_id=return_obj.id,
+                    confirmed_by=created_by,
+                )
+
+            return MaterialReturnResponse.model_validate(
+                await MaterialReturn.get(tenant_id=tenant_id, id=return_obj.id)
+            )
 
     async def get_material_return_by_id(
         self,
@@ -17030,14 +17206,18 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
         confirmed_by: int,
         confirmation_data: Optional[InboundConfirmationRequest] = None,
     ) -> MaterialReturnResponse:
-        """确认归还"""
+        """确认归还。
+
+        使用 reuse_or_begin_transaction：可被 create(auto_confirm) 外层事务复用。
+        归还时刻：请求体/单据已有 → 否则取确认时的业务墙钟（确认动作本身即归还业务时）。
+        """
         from apps.kuaizhizao.utils.inbound_confirm_helper import (
             resolve_inbound_confirm_business_time,
             resolve_inbound_confirm_receiver,
         )
 
         # 单据守卫串行并发确认：幂等键防重复过账，锁防 returned_quantity 读-改-写双累计
-        async with in_transaction(), stock_document_guard("material_return", tenant_id, return_id):
+        async with reuse_or_begin_transaction(), stock_document_guard("material_return", tenant_id, return_id):
             return_obj = await self.get_material_return_by_id(tenant_id, return_id)
 
             from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
@@ -17051,6 +17231,9 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                 confirmation_data,
                 existing_time=getattr(return_obj, "return_time", None),
             )
+            if return_time is None:
+                # 确认归还动作即业务归还时刻；禁止缺时刻导致批号入库缺 ledger 日期
+                return_time = resolve_business_datetime()
             if confirmation_data is not None and confirmation_data.receiver_id:
                 returner_id, returner_name = await resolve_inbound_confirm_receiver(
                     confirmed_by=confirmed_by,
@@ -17091,14 +17274,22 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                     id=item.id
                 ).update(**item_update)
 
-            # 更新借料单明细的已归还数量
+            # 更新借料单明细的已归还数量（优先 borrow_item_id）
             borrow_serials_by_material: Dict[int, List[str]] = {}
             for item in return_obj.items:
-                borrow_item = await MaterialBorrowItem.get_or_none(
-                    tenant_id=tenant_id,
-                    borrow_id=return_obj.borrow_id,
-                    material_id=item.material_id
-                )
+                borrow_item = None
+                if getattr(item, "borrow_item_id", None):
+                    borrow_item = await MaterialBorrowItem.get_or_none(
+                        tenant_id=tenant_id,
+                        id=int(item.borrow_item_id),
+                        borrow_id=return_obj.borrow_id,
+                    )
+                if borrow_item is None:
+                    borrow_item = await MaterialBorrowItem.get_or_none(
+                        tenant_id=tenant_id,
+                        borrow_id=return_obj.borrow_id,
+                        material_id=item.material_id,
+                    )
                 if borrow_item:
                     borrow_serials_by_material[int(item.material_id)] = _parse_serial_numbers(
                         getattr(borrow_item, "serial_numbers", None)
@@ -17115,6 +17306,7 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                 return_entity = await MaterialReturn.get(tenant_id=tenant_id, id=return_id)
                 material_ids = list({int(it.material_id) for it in return_obj.items if getattr(it, "material_id", None)})
                 material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
+                ledger_date = to_site_date(return_time)
                 for item in return_obj.items:
                     qty = item.return_quantity or Decimal(0)
                     if qty <= 0:
@@ -17124,7 +17316,11 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                         material_unit=getattr(item, "material_unit", None),
                         material=material_by_id.get(item.material_id),
                     )
-                    wh_id = item.warehouse_id if item.warehouse_id else None
+                    wh_id = item.warehouse_id or return_entity.warehouse_id
+                    if not wh_id:
+                        raise ValidationError(
+                            f"还料单 {return_entity.return_code} 缺少归还仓库，无法确认入库"
+                        )
                     serial_nos = (
                         confirm_serials.get(int(item.id))
                         or _parse_serial_numbers(getattr(item, "serial_numbers", None))
@@ -17141,12 +17337,13 @@ class MaterialReturnService(AppBaseService[MaterialReturn]):
                         source_type="material_return",
                         source_doc_id=return_id,
                         source_doc_code=return_entity.return_code,
-                        ledger_production_date=to_site_date(return_time) if return_time else None,
+                        ledger_production_date=ledger_date,
+                        ledger_expiry_date=getattr(item, "expiry_date", None),
                         idempotency_key=f"material_return:{return_id}:inc:{item.id}",
-                    movement_type="other_inbound",
-                    operator_id=returner_id,
-                    operator_name=returner_name,
-                )
+                        movement_type="other_inbound",
+                        operator_id=returner_id,
+                        operator_name=returner_name,
+                    )
             except Exception as inv_e:
                 logger.error("还料确认-更新库存失败: %s", inv_e)
                 raise

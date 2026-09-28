@@ -110,6 +110,14 @@
       "GBP": {
         "label": "British Pound (GBP)",
         "desc": "British Pound Sterling"
+      },
+      "HKD": {
+        "label": "Hong Kong Dollar (HKD)",
+        "desc": "Hong Kong Dollar"
+      },
+      "SGD": {
+        "label": "Singapore Dollar (SGD)",
+        "desc": "Singapore Dollar"
       }
     }
   },

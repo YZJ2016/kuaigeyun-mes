@@ -15,6 +15,8 @@ class SalesReviewDeptOpinion(BaseModel):
     # pending / pass / fail
     result = fields.CharField(max_length=20, default="pending", description="评审结果")
     opinion = fields.TextField(null=True, description="评审意见")
+    assigned_reviewer_id = fields.IntField(null=True, description="指定评审人ID（下达时）")
+    assigned_reviewer_name = fields.CharField(max_length=100, null=True, description="指定评审人姓名")
     reviewed_by = fields.IntField(null=True, description="评审人ID")
     reviewed_by_name = fields.CharField(max_length=100, null=True, description="评审人姓名")
     reviewed_at = fields.DatetimeField(null=True, description="评审时间")

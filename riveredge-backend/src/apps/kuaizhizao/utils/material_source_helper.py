@@ -373,16 +373,9 @@ async def validate_material_source_config(
                         errors.append(f"虚拟件的下层物料必须是虚拟件或可展开的物料，子物料: {component.main_code} ({component.name})")
                         
     elif source_type == SOURCE_TYPE_OUTSOURCE:
-        # 委外件必须有委外供应商和委外工序
-        outsource_supplier_id = source_config.get("outsource_supplier_id")
-        outsource_operation = source_config.get("outsource_operation")
-        
-        if not outsource_supplier_id:
-            errors.append(f"委外件必须有委外供应商配置，物料: {material.main_code} ({material.name})")
-            
-        if not outsource_operation:
-            errors.append(f"委外件必须有委外工序配置，物料: {material.main_code} ({material.name})")
-            
+        # 委外件档案可不维护默认供应商/工序（多供应商、按单指定）；创建委外工单时再校验
+        pass
+
     elif source_type == SOURCE_TYPE_CONFIGURE:
         # 配置件必须有属性和BOM配置
         variant_attributes = material.variant_attributes

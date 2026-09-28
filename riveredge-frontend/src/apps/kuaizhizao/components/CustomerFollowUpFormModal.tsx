@@ -14,6 +14,7 @@ import { UniDropdown } from '../../../components/uni-dropdown';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { customerFollowUpApi, type CustomerFollowUp } from '../services/customer-follow-up';
+import { CustomerFollowUpAttachments } from './CustomerFollowUpAttachments';
 import { salesOpportunityApi, type SalesOpportunity } from '../services/sales-opportunity';
 import { listQuotations, type Quotation } from '../services/quotation';
 import { listSalesOrders, type SalesOrder } from '../services/sales-order';
@@ -62,6 +63,14 @@ export interface CustomerFollowUpFormModalProps {
   preset?: CustomerFollowUpPreset | null;
   /** 与详情抽屉、追溯浮层同屏时抬高 */
   zIndex?: number;
+  /** 行业插件等走自身权限入口 */
+  persistApi?: {
+    list: typeof customerFollowUpApi.list;
+    create: typeof customerFollowUpApi.create;
+    update: typeof customerFollowUpApi.update;
+  };
+  /** 覆盖默认客户下拉（如仅外贸客户） */
+  customerLoader?: () => Promise<Customer[]>;
 }
 
 export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps> = ({
@@ -71,7 +80,10 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
   editing = null,
   preset = null,
   zIndex,
+  persistApi,
+  customerLoader,
 }) => {
+  const followUpApi = persistApi ?? customerFollowUpApi;
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const { message } = App.useApp();
@@ -93,6 +105,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
   const [stageOptions, setStageOptions] = useState<{ label: string; value: string }[]>([]);
   const [targetStageCode, setTargetStageCode] = useState<string | null>(null);
   const [resolvingOpportunity, setResolvingOpportunity] = useState(false);
+  const [attachmentUuids, setAttachmentUuids] = useState<string[]>([]);
 
   const selectedOpportunity = useMemo(
     () => opportunities[0] ?? null,
@@ -136,7 +149,9 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
 
   const loadDictAndCustomers = async () => {
     const [custRes, dictRes] = await Promise.allSettled([
-      loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.customerFollowUp),
+      customerLoader
+        ? customerLoader()
+        : loadCustomerFormReferenceList(KUAIZHIZAO_DOC_HOST.customerFollowUp),
       getDictionaryOptions(DICT_CODE),
     ]);
 
@@ -155,7 +170,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
 
   useEffect(() => {
     loadDictAndCustomers();
-  }, []);
+  }, [customerLoader]);
 
   useEffect(() => {
     if (open) loadStageOptions();
@@ -237,10 +252,16 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
         sales_order_id: editing.sales_order_id ?? undefined,
         opportunity_id: editing.quotation_id ? editing.opportunity_id ?? undefined : undefined,
       });
+      setAttachmentUuids(
+        Array.isArray(editing.attachment_uuids)
+          ? editing.attachment_uuids.map(String).filter(Boolean)
+          : [],
+      );
       setTimeout(() => contentInputRef.current?.focus(), 100);
       return;
     }
     form.resetFields();
+    setAttachmentUuids([]);
     if (preset) {
       form.setFieldsValue({
         customer_id: preset.customer_id,
@@ -316,7 +337,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
     setRelatedFollowUpsLoading(true);
     (async () => {
       try {
-        const res = await customerFollowUpApi.list({
+        const res = await followUpApi.list({
           customer_id: Number(modalCustomerId),
           limit: 200,
           skip: 0,
@@ -391,7 +412,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
       const opportunityId =
         hasQuotation && v.opportunity_id != null ? Number(v.opportunity_id) : undefined;
       if (editing) {
-        await customerFollowUpApi.update(editing.id, {
+        await followUpApi.update(editing.id, {
           customer_name: (customer as any).name ?? (customer as any).customer_name ?? '',
           activity_type_code: v.activity_type_code,
           content: v.content,
@@ -401,10 +422,11 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           sales_order_id: v.sales_order_id ?? null,
           opportunity_id: opportunityId ?? null,
           stage_code_after: stageAfter,
+          attachment_uuids: attachmentUuids,
         });
         message.success(t('common.saveSuccess'));
       } else {
-        await customerFollowUpApi.create({
+        await followUpApi.create({
           customer_id: customerId,
           activity_type_code: v.activity_type_code,
           content: v.content,
@@ -412,6 +434,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           next_follow_up_at: next,
           quotation_id: v.quotation_id ?? null,
           sales_order_id: v.sales_order_id ?? null,
+          attachment_uuids: attachmentUuids,
           ...(hasQuotation
             ? { opportunity_id: opportunityId, stage_code_after: stageAfter }
             : {}),
@@ -573,6 +596,13 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                 maxLength={2000}
                 placeholder={t('app.kuaizhizao.customerFollowUp.contentPlaceholder')}
                 style={{ resize: 'vertical' }}
+              />
+            </Form.Item>
+            <Form.Item label={t('app.kuaizhizao.customerFollowUp.fieldAttachments')}>
+              <CustomerFollowUpAttachments
+                uuids={attachmentUuids}
+                editable
+                onChange={setAttachmentUuids}
               />
             </Form.Item>
             {hasLinkedQuotation ? (

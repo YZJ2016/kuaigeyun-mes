@@ -1,14 +1,15 @@
 /**
  * 客户选择下拉：快速新建 / 快速编辑 / 高级搜索（与报价单一致）
+ * 输入关键词走远端 display-search，避免仅预加载首页导致百名开外选不到。
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { App, Form } from 'antd';
 import { UniDropdown, type UniDropdownProps } from '../../../components/uni-dropdown';
 import type { Customer } from '../types/supply-chain';
 import { CustomerFormModal } from './CustomerFormModal';
-import { useGlobalStore } from '../../../stores/globalStore';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import {
+  REFERENCE_DISPLAY_MAX_PAGE_SIZE,
   ReferenceDisplayAccessError,
   canReadReferenceResource,
   mapPartnerReferenceDisplayItem,
@@ -16,6 +17,10 @@ import {
   resolveReferenceDisplay,
   searchReferenceDisplay,
 } from '../../../utils/referenceDisplay';
+
+const INITIAL_PAGE_SIZE = 50;
+const SEARCH_PAGE_SIZE = 100;
+const SEARCH_DEBOUNCE_MS = 300;
 
 function formatCustomerLabel(c: Customer | Record<string, unknown>): string {
   const row = c as Record<string, unknown>;
@@ -74,13 +79,16 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
       : Form.useWatch(snapshotNameField, form);
   const [internalCustomers, setInternalCustomers] = useState<Customer[]>([]);
   const [internalLoading, setInternalLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [resolvedById, setResolvedById] = useState<Map<number, Customer>>(new Map());
   const [resolvingId, setResolvingId] = useState<number | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchSeqRef = useRef(0);
 
   const customers = customersProp ?? internalCustomers;
-  const loading = loadingProp ?? internalLoading;
+  const loading = (loadingProp ?? internalLoading) || searchLoading;
 
   const mergeCustomerList = useCallback(
     (prev: Customer[], customer: Customer) => {
@@ -96,21 +104,34 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
     [],
   );
 
-  const refreshCustomers = useCallback(async () => {
-    setInternalLoading(true);
-    try {
-      const res = await searchReferenceDisplay({
-        resource: 'master-data:supply-chain:customer',
-        hostResource,
-        pageSize: 200,
-      });
-      const list = res.items.map(
-        (item) => mapPartnerReferenceDisplayItem(item) as Customer,
-      );
+  const applyCustomerList = useCallback(
+    (list: Customer[]) => {
       if (customersProp == null) {
         setInternalCustomers(list);
       }
       onCustomersChange?.(list);
+    },
+    [customersProp, onCustomersChange],
+  );
+
+  const fetchCustomers = useCallback(
+    async (keyword?: string, pageSize = INITIAL_PAGE_SIZE) => {
+      const res = await searchReferenceDisplay({
+        resource: 'master-data:supply-chain:customer',
+        hostResource,
+        keyword: keyword?.trim() || undefined,
+        pageSize,
+      });
+      return res.items.map((item) => mapPartnerReferenceDisplayItem(item) as Customer);
+    },
+    [hostResource],
+  );
+
+  const refreshCustomers = useCallback(async () => {
+    setInternalLoading(true);
+    try {
+      const list = await fetchCustomers(undefined, INITIAL_PAGE_SIZE);
+      applyCustomerList(list);
       return list;
     } catch (err) {
       if (err instanceof ReferenceDisplayAccessError) {
@@ -120,13 +141,55 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
     } finally {
       setInternalLoading(false);
     }
-  }, [customersProp, hostResource, messageApi, onCustomersChange]);
+  }, [applyCustomerList, fetchCustomers, messageApi]);
 
   useEffect(() => {
     if (autoLoad && customersProp == null) {
       void refreshCustomers();
     }
   }, [autoLoad, customersProp, refreshCustomers]);
+
+  useEffect(
+    () => () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const handleRemoteSearch = useCallback(
+    (raw: string) => {
+      if (customersProp != null) return;
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+      const keyword = (raw || '').trim();
+      searchTimerRef.current = setTimeout(() => {
+        const seq = ++searchSeqRef.current;
+        void (async () => {
+          setSearchLoading(true);
+          try {
+            const list = keyword
+              ? await fetchCustomers(keyword, SEARCH_PAGE_SIZE)
+              : await fetchCustomers(undefined, INITIAL_PAGE_SIZE);
+            if (seq !== searchSeqRef.current) return;
+            applyCustomerList(list);
+          } catch (err) {
+            if (seq !== searchSeqRef.current) return;
+            if (err instanceof ReferenceDisplayAccessError) {
+              messageApi.warning(err.message);
+            }
+          } finally {
+            if (seq === searchSeqRef.current) {
+              setSearchLoading(false);
+            }
+          }
+        })();
+      }, SEARCH_DEBOUNCE_MS);
+    },
+    [applyCustomerList, customersProp, fetchCustomers, messageApi],
+  );
 
   const selectedId = value != null && value !== '' ? Number(value) : NaN;
 
@@ -305,6 +368,8 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
         value={value}
         showSearch
         allowClear
+        filterOption={false}
+        onSearch={handleRemoteSearch}
         loading={loading || (optionPending && resolvingId === selectedId)}
         options={options}
         onChange={handleChange}
@@ -326,16 +391,14 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
         }
         advancedSearch={{
           label: '高级搜索',
-          fields: [
-            { name: 'keyword', label: '关键词' },
-          ],
+          fields: [{ name: 'keyword', label: '关键词' }],
           onSearch: async (values) => {
             try {
               const res = await searchReferenceDisplay({
                 resource: 'master-data:supply-chain:customer',
                 hostResource,
                 keyword: values.keyword,
-                pageSize: 200,
+                pageSize: REFERENCE_DISPLAY_MAX_PAGE_SIZE,
               });
               const mapped = res.items.map(
                 (item) => mapPartnerReferenceDisplayItem(item) as Customer,
@@ -345,9 +408,9 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
                 next = mergeCustomerList(next, c);
               }
               if (customersProp == null) {
-                setInternalCustomers(next);
+                setInternalCustomers(mapped.length ? mapped : next);
               }
-              onCustomersChange?.(next);
+              onCustomersChange?.(mapped.length ? mapped : next);
               return referenceDisplayToIdOptions(res.items);
             } catch (err) {
               if (err instanceof ReferenceDisplayAccessError) {

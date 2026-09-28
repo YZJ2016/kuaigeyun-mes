@@ -575,17 +575,51 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
               ],
               onSearch: async (values) => {
                 const kw = [values.mainCode, values.name, values.specification].filter(Boolean).join(' ').trim();
-                const list = await materialApi.list({
-                  limit: 200,
-                  isActive: activeOnly ? true : undefined,
-                  mastersOnly: mastersOnly ? true : undefined,
-                  sourceType: sourceType || undefined,
-                  groupId: resolvedGroupId,
-                  ...(kw && { keyword: kw }),
-                });
-                const raw = list as { items?: Material[]; data?: Material[] } | Material[];
-                const rows = Array.isArray(raw) ? raw : raw?.items ?? raw?.data ?? [];
-                const items = filterSelectableMaterials(Array.isArray(rows) ? rows : [], mastersOnly);
+                let items: Material[] = [];
+                if (resolvedWarehouseId) {
+                  const balanceRes: any = await apiRequest('/apps/kuaizhizao/reports/inventory/material-balances', {
+                    method: 'GET',
+                    params: {
+                      warehouse_id: resolvedWarehouseId,
+                      include_zero_stock: false,
+                      keyword: kw || undefined,
+                      current: 1,
+                      page_size: 200,
+                    },
+                  });
+                  const balanceRows = balanceRes?.items || balanceRes?.data || [];
+                  const materialIds = [
+                    ...new Set(
+                      (Array.isArray(balanceRows) ? balanceRows : [])
+                        .map((row: { material_id?: number }) => Number(row.material_id))
+                        .filter((id: number) => Number.isFinite(id) && id > 0),
+                    ),
+                  ] as number[];
+                  if (materialIds.length) {
+                    const matRes = await materialApi.list({
+                      ids: materialIds,
+                      keyword: kw || undefined,
+                      isActive: activeOnly ? true : undefined,
+                      mastersOnly: mastersOnly ? true : undefined,
+                      sourceType: sourceType || undefined,
+                      groupId: resolvedGroupId,
+                      limit: materialIds.length,
+                    });
+                    items = filterSelectableMaterials(matRes.items ?? [], mastersOnly);
+                  }
+                } else {
+                  const list = await materialApi.list({
+                    limit: 200,
+                    isActive: activeOnly ? true : undefined,
+                    mastersOnly: mastersOnly ? true : undefined,
+                    sourceType: sourceType || undefined,
+                    groupId: resolvedGroupId,
+                    ...(kw && { keyword: kw }),
+                  });
+                  const raw = list as { items?: Material[]; data?: Material[] } | Material[];
+                  const rows = Array.isArray(raw) ? raw : raw?.items ?? raw?.data ?? [];
+                  items = filterSelectableMaterials(Array.isArray(rows) ? rows : [], mastersOnly);
+                }
                 mergeMaterialsIntoData(items);
                 return items.map((m) => {
                   const rawId = (m as any).id;

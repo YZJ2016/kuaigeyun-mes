@@ -1024,7 +1024,10 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <OutboundEntryOperatorField hook={operatorHook} />
+                  <OutboundEntryOperatorField
+                    hook={operatorHook}
+                    label={t('app.kuaizhizao.warehouseOutbound.field.picker')}
+                  />
                 </Col>
               </Row>
             </Form>

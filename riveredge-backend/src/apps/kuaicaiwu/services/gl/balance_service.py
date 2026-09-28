@@ -19,6 +19,48 @@ def _d(v: Any) -> Decimal:
     return Decimal(str(v or 0))
 
 
+def _fmt_money(v: Decimal) -> str:
+    text = format(v.quantize(Decimal("0.01")), "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def format_trial_imbalance_detail(trial: Dict[str, Any], *, prefix: str = "试算不平衡") -> str:
+    """根据 trial_balance 汇总真源，说明期初/本期/期末哪一段借贷不平及差额。"""
+    parts: List[str] = []
+    for label, debit_key, credit_key in (
+        ("期初", "opening_debit", "opening_credit"),
+        ("本期发生", "period_debit", "period_credit"),
+        ("期末", "ending_debit", "ending_credit"),
+    ):
+        debit = _d(trial.get(debit_key))
+        credit = _d(trial.get(credit_key))
+        if debit == credit:
+            continue
+        diff = debit - credit
+        if diff > 0:
+            parts.append(f"{label}借{_fmt_money(debit)}、贷{_fmt_money(credit)}，借方多{_fmt_money(diff)}")
+        else:
+            parts.append(f"{label}借{_fmt_money(debit)}、贷{_fmt_money(credit)}，贷方多{_fmt_money(-diff)}")
+    if not parts:
+        return prefix
+    return f"{prefix}：{'；'.join(parts)}"
+
+
+def trial_totals_snapshot(trial: Dict[str, Any]) -> Dict[str, Any]:
+    """结账检查用：返回试算汇总，不含科目明细行。"""
+    return {
+        "opening_debit": float(_d(trial.get("opening_debit"))),
+        "opening_credit": float(_d(trial.get("opening_credit"))),
+        "period_debit": float(_d(trial.get("period_debit"))),
+        "period_credit": float(_d(trial.get("period_credit"))),
+        "ending_debit": float(_d(trial.get("ending_debit"))),
+        "ending_credit": float(_d(trial.get("ending_credit"))),
+        "balanced": bool(trial.get("balanced")),
+    }
+
+
 def _aux_key(
     customer_id: Optional[int] = None,
     supplier_id: Optional[int] = None,

@@ -37,3 +37,21 @@ def test_remaining_headroom_allows_up_to_cap():
         Decimal("0"),
     )
     assert headroom == Decimal("50")
+
+
+def test_first_operation_material_incoming_includes_fixed_over_report():
+    from types import SimpleNamespace
+
+    from apps.kuaizhizao.services.over_report_rules import first_operation_material_incoming
+
+    op = SimpleNamespace(over_report_mode="fixed", over_report_value=Decimal("1000"))
+    assert first_operation_material_incoming(Decimal("1000"), op) == Decimal("2000")
+
+
+def test_first_operation_material_incoming_none_stays_plan():
+    from types import SimpleNamespace
+
+    from apps.kuaizhizao.services.over_report_rules import first_operation_material_incoming
+
+    op = SimpleNamespace(over_report_mode="none", over_report_value=Decimal("1000"))
+    assert first_operation_material_incoming(Decimal("1000"), op) == Decimal("1000")

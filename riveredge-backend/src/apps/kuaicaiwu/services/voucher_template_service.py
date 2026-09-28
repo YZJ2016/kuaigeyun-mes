@@ -55,6 +55,9 @@ class VoucherTemplateService:
         "FIXED_ASSET_IMPAIRMENT": "fa_impairment",
     }
 
+    # 退款类：分录方向与正向业务相同，金额取负（红字冲销）
+    RED_INK_TEMPLATE_KEYS = frozenset({"receipt_refund", "payment_refund"})
+
     DEFAULT_TEMPLATES: Dict[str, List[Dict[str, str]]] = {
         "sales_delivery_confirmed": [
             {"side": "debit", "account_code": "1122", "summary": "应收账款", "aux": "customer"},
@@ -84,17 +87,19 @@ class VoucherTemplateService:
             {"side": "debit", "account_code": "1002", "summary": "银行存款"},
             {"side": "credit", "account_code": "1122", "summary": "应收账款", "aux": "customer"},
         ],
+        # 收款退款：与收款同向分录 + 红字金额（禁止相反分录虚增发生额）
         "receipt_refund": [
-            {"side": "debit", "account_code": "1122", "summary": "应收账款退款", "aux": "customer"},
-            {"side": "credit", "account_code": "1002", "summary": "银行存款退款"},
+            {"side": "debit", "account_code": "1002", "summary": "银行存款红字冲销"},
+            {"side": "credit", "account_code": "1122", "summary": "应收账款红字冲销", "aux": "customer"},
         ],
         "payment_confirmed": [
             {"side": "debit", "account_code": "2202", "summary": "应付账款", "aux": "supplier"},
             {"side": "credit", "account_code": "1002", "summary": "银行存款"},
         ],
+        # 付款退款：与付款同向分录 + 红字金额（禁止相反分录虚增发生额）
         "payment_refund": [
-            {"side": "debit", "account_code": "1002", "summary": "银行存款退款"},
-            {"side": "credit", "account_code": "2202", "summary": "应付账款退款", "aux": "supplier"},
+            {"side": "debit", "account_code": "2202", "summary": "应付账款红字冲销", "aux": "supplier"},
+            {"side": "credit", "account_code": "1002", "summary": "银行存款红字冲销"},
         ],
         "customer_prepayment": [
             {"side": "debit", "account_code": "1002", "summary": "银行存款"},
@@ -376,6 +381,8 @@ class VoucherTemplateService:
         amount = Decimal(str(event.amount or 0))
         if amount <= 0:
             return []
+        # 事件金额仍用正数绝对值；红字模板落账为同向负金额
+        signed_amount = -amount if template_key in self.RED_INK_TEMPLATE_KEYS else amount
 
         partner = await self._resolve_partner_from_event(tenant_id, event)
         from apps.kuaicaiwu.services.gl.cash_flow_classify import (
@@ -407,8 +414,8 @@ class VoucherTemplateService:
                 "account_code": account.account_code,
                 "account_name": account.account_name,
                 "summary": row.get("summary") or event.notes,
-                "debit_amount": amount if is_debit else Decimal("0"),
-                "credit_amount": Decimal("0") if is_debit else amount,
+                "debit_amount": signed_amount if is_debit else Decimal("0"),
+                "credit_amount": Decimal("0") if is_debit else signed_amount,
             }
             aux = row.get("aux")
             if aux == "customer" or account.aux_customer:

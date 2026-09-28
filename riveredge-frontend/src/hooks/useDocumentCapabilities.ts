@@ -244,6 +244,11 @@ export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'sales_order.push_work_order.not_allowed': '当前状态不可直推工单',
   'sales_order.push_work_order.no_items': '销售订单无明细，无法直推工单',
   'sales_order.push_work_order.computation_pushed': '销售订单已下推需求计算，不可再直推工单；请到需求计算下推工单，或先撤回计算',
+  'sales_order.push_purchase_requisition.not_allowed': '当前状态不可下推采购申请',
+  'sales_order.push_purchase_requisition.no_buy_items': '销售订单无可下推采购件（外购件且仍有剩余可采购数量）',
+  'sales_order.push_purchase_order.not_allowed': '当前状态不可下推采购订单',
+  'sales_order.push_purchase_order.no_buy_items': '销售订单无可下推采购件（外购件且仍有剩余可采购数量）',
+  'sales_order.push_purchase_order.require_requisition': '当前组织要求先采购申请后下单，请下推采购申请',
   'sales_order.push_shipment.not_allowed': '当前状态不可下推发货通知单',
   'sales_order.push_shipment.no_backorder': '销售订单无欠发数量，无法下推发货通知单',
   'sales_order.push_delivery.not_allowed': '当前状态不可下推销售出库',
@@ -345,6 +350,18 @@ export function useSalesOrderCapabilities(
         t,
       ),
       pushWorkOrder: capView(caps?.push_work_order, salesOrderPerms.canUpdate, permDeniedTitle, t),
+      pushPurchaseRequisition: capView(
+        caps?.push_purchase_requisition,
+        salesOrderPerms.canUpdate,
+        permDeniedTitle,
+        t,
+      ),
+      pushPurchaseOrder: capView(
+        caps?.push_purchase_order,
+        salesOrderPerms.canUpdate,
+        permDeniedTitle,
+        t,
+      ),
       pushShipmentNotice: capView(caps?.push_shipment_notice, salesOrderPerms.canUpdate, permDeniedTitle, t),
       pushSalesDelivery: capView(caps?.push_sales_delivery, salesOrderPerms.canUpdate, permDeniedTitle, t),
       pushInvoice: capView(caps?.push_invoice, salesOrderPerms.canUpdate, permDeniedTitle, t),
@@ -381,6 +398,8 @@ export function salesOrderHasToolbarPushActions(record: SalesOrder): boolean {
   return (
     c.push_computation?.allowed ||
     c.push_work_order?.allowed ||
+    c.push_purchase_requisition?.allowed ||
+    c.push_purchase_order?.allowed ||
     c.push_shipment_notice?.allowed ||
     c.push_sales_delivery?.allowed ||
     c.push_invoice?.allowed ||
@@ -802,7 +821,10 @@ export const PURCHASE_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> =
   'purchase_order.push_receipt.qty_occupied': '该采购单存在未完成的采购入库单，请处理后再下推',
   'purchase_order.push_invoice.not_audited': '只有已审核或已确认的采购单才能下推采购发票',
   'purchase_order.push_invoice.no_items': '采购单没有明细，无法下推采购发票',
-  'purchase_order.push_invoice.already_exists': '该采购单已存在采购发票，不能重复下推',
+  'purchase_order.push_invoice.already_exists': '该采购单可开票金额已全部开票',
+  'purchase_order.push_invoice.already_fully_invoiced': '该采购单可开票金额已全部开票，删除未审核发票后可再次下推',
+  'purchase_order.push_invoice.no_prepayment': '采购单未填写预付款金额，无法按预付款开票',
+  'purchase_order.push_invoice.prepayment_exceeds_remaining': '预付款金额已超过可开票余额',
   'purchase_order.push_receipt_notice.already_exists': '该采购单已存在收货通知单，不能重复下推',
   'purchase_order.push_receipt_notice.qty_occupied': '可通知数量已被现有收货通知占用，请调整通知单后再下推',
   'purchase_order.push_purchase_return.not_audited': '只有已审核或已确认的采购单才能下推采购退货',
@@ -812,7 +834,7 @@ export const PURCHASE_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> =
     '只有已审核、已确认或执行中的采购单才能下推来料检验',
   'purchase_order.push_incoming_inspection.no_items': '采购单没有明细，无法下推来料检验',
   'purchase_order.push_incoming_inspection.no_iqc_lines':
-    '采购单无可检明细（物料未配置来料检验，或均已创建检验单）',
+    '采购单无可检明细（物料未配置来料检验，或可检数量已全部下推）',
   'purchase_order.create_change.not_allowed': '当前状态不可新建采购变更单',
   'purchase_order.create_change.not_audited': '只有已审核或已确认的采购单可创建变更单',
   'purchase_order.create_change.no_items': '采购单没有明细，无法创建变更单',
@@ -1372,6 +1394,9 @@ export const QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'incoming_inspection.pull_from_purchase_receipt.not_allowed': '当前状态的采购入库单不可加载来料检验',
   'incoming_inspection.pull_from_purchase_receipt.no_lines': '采购入库单无需要来料检验的明细',
   'incoming_inspection.pull_from_purchase_receipt.already_pulled': '相关物料均已存在来料检验单，删除后可再次加载',
+  'incoming_inspection.pull_from_purchase_order.not_allowed': '当前状态的采购订单不可加载来料检验',
+  'incoming_inspection.pull_from_purchase_order.no_lines': '采购订单无需要来料检验的明细',
+  'incoming_inspection.pull_from_purchase_order.already_pulled': '可检数量已全部下推，调整后可再次加载',
   'incoming_inspection.pull_from_customer_material_registration.not_allowed': '当前状态的代工来料单不可加载来料检验',
   'incoming_inspection.pull_from_customer_material_registration.no_lines': '代工来料单无需要来料检验的明细',
   'incoming_inspection.pull_from_customer_material_registration.already_pulled': '相关物料均已存在来料检验单，删除后可再次加载',
@@ -1448,7 +1473,16 @@ function qualityCapView(
   reasonMessages?: Record<string, string>,
   i18nPrefix?: string,
 ): CapabilityActionView {
-  return capView(cap, permAllowed, permDeniedTitle, t, reasonMessages, i18nPrefix);
+  const bizAllowed = cap?.allowed === true;
+  const allowed = bizAllowed && permAllowed;
+  const disabled = !bizAllowed || !permAllowed;
+  let title: string | undefined;
+  if (!permAllowed) {
+    title = permDeniedTitle;
+  } else if (!bizAllowed) {
+    title = salesOrderCapabilityReasonMessage(cap?.reason, t, reasonMessages, i18nPrefix);
+  }
+  return { allowed, disabled, title };
 }
 
 export interface QualityInspectionCapabilitiesShape {

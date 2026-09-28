@@ -171,13 +171,23 @@ class GlPeriodService:
         if unposted:
             errors.append(f"存在 {unposted} 张未记账凭证")
 
-        from apps.kuaicaiwu.services.gl.balance_service import BalanceService
+        from apps.kuaicaiwu.services.gl.balance_service import (
+            BalanceService,
+            format_trial_imbalance_detail,
+            trial_totals_snapshot,
+        )
 
         trial = await BalanceService().trial_balance(tenant_id, year, month, include_unposted=False)
+        trial_snapshot = trial_totals_snapshot(trial)
         if not trial.get("balanced"):
-            errors.append("试算不平衡")
+            errors.append(format_trial_imbalance_detail(trial))
 
-        return {"ok": len(errors) == 0, "errors": errors, "unposted_count": unposted}
+        return {
+            "ok": len(errors) == 0,
+            "errors": errors,
+            "unposted_count": unposted,
+            "trial": trial_snapshot,
+        }
 
     async def get_status(self, tenant_id: int) -> Dict[str, Any]:
         settings = await GlSettingsService().get_or_create(tenant_id)

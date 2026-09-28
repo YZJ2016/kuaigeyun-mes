@@ -154,40 +154,20 @@ class ApplicationRegistryService:
                     # 动态导入模型模块
                     model_module = importlib.import_module(model_module_path)
 
-                    # ⚠️ 关键修复：确保模型使用正确的数据库连接
-                    # 在 Tortoise ORM 中，每个模型的 _meta.db 属性指定其数据库连接
-                    # 问题在于动态导入的模型没有被 Tortoise 初始化，所以需要手动设置
+                    # 模型连接由 reload_tortoise_for_enabled_apps / Tortoise.init 统一绑定，
+                    # 禁止在此旁路改 Tortoise 内部注册表。
                     try:
-                        # 导入 Tortoise 的连接模块
-                        from tortoise import connections
-
-                        # 为模块中的所有 Tortoise 模型设置数据库连接
                         for attr_name in dir(model_module):
                             attr = getattr(model_module, attr_name)
-                            # 检查是否是 Tortoise 模型类
-                            if (hasattr(attr, '_meta') and
-                                hasattr(attr._meta, 'db_table') and
-                                hasattr(attr, '__bases__') and
-                                hasattr(attr, 'Meta')):
-                                # ⚠️ 关键修复：不再手动设置 _meta.db (read-only property)，由 Tortoise 自动处理
-                                # 在 Tortoise ORM 中，通过 Meta 类或 default_connection 指定连接
+                            if (
+                                hasattr(attr, "_meta")
+                                and hasattr(attr._meta, "db_table")
+                                and hasattr(attr, "__bases__")
+                                and hasattr(attr, "Meta")
+                            ):
                                 logger.debug(f"验证模型 {attr.__name__} 结构正常")
-
-                        # 尝试注册模型到 Tortoise（如果可能的话）
-                        # 注意：Tortoise.init 后可能无法动态添加模型，但我们可以尝试
-                        try:
-                            from tortoise import Tortoise
-                            # 如果 Tortoise 已经初始化，尝试重新注册模型
-                            if hasattr(Tortoise, '_apps') and 'models' in Tortoise._apps:
-                                # 强制将模型添加到已注册的应用中
-                                if model_module_path not in Tortoise._apps['models']['models']:
-                                    Tortoise._apps['models']['models'].append(model_module_path)
-                                    logger.debug(f"将模型模块 {model_module_path} 添加到 Tortoise 配置")
-                        except Exception as e:
-                            logger.debug(f"无法动态注册模型到 Tortoise: {e}")
-
                     except Exception as setup_error:
-                        logger.error(f"设置模型数据库连接失败: {setup_error}")
+                        logger.error(f"校验应用模型结构失败: {setup_error}")
 
                     # 注册到已注册模型集合
                     cls._registered_models.add(model_module_path)
@@ -366,6 +346,11 @@ class ApplicationRegistryService:
         """
         logger.info("🔄 重新加载应用配置...")
 
+        from infra.infrastructure.database.database import reload_tortoise_for_enabled_apps
+
+        # 先按启用集对齐 ORM（含修复 default_connection 丢失），再挂路由
+        await reload_tortoise_for_enabled_apps()
+
         # 清空缓存
         cls._registered_apps.clear()
         cls._registered_models.clear()
@@ -377,80 +362,72 @@ class ApplicationRegistryService:
     @classmethod
     async def register_single_app(cls, app_code: str) -> bool:
         """
-        注册单个应用的路由和模型
-        
-        用于应用启用时动态注册。
-        
-        Args:
-            app_code: 应用代码
-            
-        Returns:
-            bool: 是否注册成功
+        注册单个应用的路由，并按启用集重建 Tortoise ORM。
+
+        用于应用启用时动态注册。进程级 ORM 按「任一租户已启用」加载，
+        路由按应用 code 挂载；不得只查「首个租户」是否启用。
+
+        ORM 重建失败必须抛出，不得吞掉后继续挂路由（否则会出现
+        ``default_connection ... cannot be None``）。
         """
+        from infra.infrastructure.database.database import (
+            get_db_connection,
+            reload_tortoise_for_enabled_apps,
+        )
+
+        # 启用后先重建 ORM，再挂路由（否则会 default_connection is None）
+        await reload_tortoise_for_enabled_apps()
+
+        conn = await get_db_connection()
         try:
-            # 从数据库查询应用信息（动态获取首个租户 ID，避免硬编码）
-            from infra.infrastructure.database.database import get_db_connection
-            conn = await get_db_connection()
-            
-            try:
-                tenant_row = await conn.fetchrow(
-                    "SELECT id FROM infra_tenants WHERE deleted_at IS NULL ORDER BY id ASC LIMIT 1"
+            rows = await conn.fetch(
+                """
+                SELECT uuid, code, name, description, version, changelog,
+                       route_path, entry_point, menu_config,
+                       is_system, is_active, is_installed,
+                       created_at, updated_at
+                FROM core_applications
+                WHERE code = $1
+                  AND is_installed = TRUE
+                  AND is_active = TRUE
+                  AND deleted_at IS NULL
+                ORDER BY tenant_id ASC
+                LIMIT 1
+                """,
+                app_code,
+            )
+
+            if not rows:
+                all_rows = await conn.fetch(
+                    "SELECT tenant_id, code, is_active, is_installed FROM core_applications WHERE code = $1",
+                    app_code,
                 )
-                default_tenant_id = tenant_row["id"] if tenant_row else 1
+                logger.warning(f"应用 {app_code} 不存在或未启用；全部记录={all_rows}")
+                return False
 
-                rows = await conn.fetch("""
-                    SELECT uuid, code, name, description, version, changelog,
-                           route_path, entry_point, menu_config,
-                           is_system, is_active, is_installed,
-                           created_at, updated_at
-                    FROM core_applications
-                    WHERE code = $1
-                      AND is_installed = TRUE
-                      AND is_active = TRUE
-                      AND deleted_at IS NULL
-                      AND tenant_id = $2
-                    LIMIT 1
-                """, app_code, default_tenant_id)
+            app_data = dict(rows[0])
+        finally:
+            await conn.close()
 
-                if not rows:
-                    all_rows = await conn.fetch(
-                        "SELECT code, is_active, is_installed FROM core_applications WHERE code = $1",
-                        app_code,
-                    )
-                    logger.warning(f"应用 {app_code} 不存在或未启用；全部记录={all_rows}")
-                    return False
-
-                app_data = dict(rows[0])
-            finally:
-                await conn.close()
-            
-            # 解析JSON字段
-            if app_data.get('menu_config') and isinstance(app_data['menu_config'], str):
-                try:
-                    app_data['menu_config'] = json.loads(app_data['menu_config'])
-                except json.JSONDecodeError:
-                    app_data['menu_config'] = None
-            
-            # 注册应用模型
-            await cls._register_app_models([app_data])
-
+        if app_data.get("menu_config") and isinstance(app_data["menu_config"], str):
             try:
-                await cls._register_app_routes([app_data])
-            except Exception as route_error:
-                import traceback
+                app_data["menu_config"] = json.loads(app_data["menu_config"])
+            except json.JSONDecodeError:
+                app_data["menu_config"] = None
 
-                logger.error(
-                    f"❌ 应用 {app_code} 路由注册失败: {route_error}\n{traceback.format_exc()}"
-                )
-                raise
+        try:
+            await cls._register_app_routes([app_data])
+        except Exception as route_error:
+            import traceback
 
-            cls._registered_apps[app_code] = app_data
-            logger.info(f"✅ 应用 {app_code} 动态注册成功")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ 注册应用 {app_code} 失败: {e}")
-            return False
+            logger.error(
+                f"❌ 应用 {app_code} 路由注册失败: {route_error}\n{traceback.format_exc()}"
+            )
+            raise
+
+        cls._registered_apps[app_code] = app_data
+        logger.info(f"✅ 应用 {app_code} 动态注册成功")
+        return True
     
     @classmethod
     async def unregister_single_app(cls, app_code: str) -> None:

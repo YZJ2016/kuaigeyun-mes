@@ -1,5 +1,6 @@
 /**
  * 快智造：按菜单路径预取页面 chunk（与 index.tsx 中 lazy 同源），hover 菜单时触发，减轻「点击后等白屏」。
+ * P5-5：进系统后 idle 预取 Top-5 高频页，缩短冷跳转。
  */
 
 const pageModules = import.meta.glob('./pages/**/*.tsx') as Record<string, () => Promise<unknown>>;
@@ -11,6 +12,15 @@ const ROUTE_MODULE_OVERRIDES: Record<string, string> = {
   // 生产终端路由已下线
   // 'production-execution/terminal': './pages/production-execution/work-orders/kiosk.tsx',
 };
+
+/** 销售订单 / 采购订单 / 工单 / 库存 / 应用首页 */
+export const KUZHI_TOP_PREFETCH_ROUTES: readonly string[] = [
+  '/apps/kuaizhizao',
+  '/apps/kuaizhizao/sales-management/sales-orders',
+  '/apps/kuaizhizao/purchase-management/purchase-orders',
+  '/apps/kuaizhizao/production-execution/work-orders',
+  '/apps/kuaizhizao/warehouse-management/inventory',
+];
 
 function runLoader(key: string | undefined): void {
   if (!key) return;
@@ -54,5 +64,28 @@ export function prefetchKuaizhizaoRoute(fullPath: string | undefined): void {
   if (pageModules[asFile]) {
     runLoader(asFile);
     return;
+  }
+}
+
+let topPrefetchScheduled = false;
+
+/** 壳就绪后 idle 预取 Top-5（只调度一次） */
+export function schedulePrefetchKuaizhizaoTopRoutes(): void {
+  if (topPrefetchScheduled || typeof window === 'undefined') return;
+  topPrefetchScheduled = true;
+  const run = () => {
+    for (const path of KUZHI_TOP_PREFETCH_ROUTES) {
+      prefetchKuaizhizaoRoute(path);
+    }
+  };
+  const ric = (
+    window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    }
+  ).requestIdleCallback;
+  if (typeof ric === 'function') {
+    ric(run, { timeout: 4000 });
+  } else {
+    window.setTimeout(run, 1800);
   }
 }

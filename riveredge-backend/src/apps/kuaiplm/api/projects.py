@@ -253,7 +253,12 @@ async def create_deliverable(
     data: RdProjectDeliverableCreate,
     project_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_permission_codes("kuaiplm:project:create")),
+    _auth=Depends(
+        require_permission_codes(
+            "kuaiplm:project:create",
+            "kuaiplm:project:upload-part-spec",
+        )
+    ),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -263,7 +268,7 @@ async def create_deliverable(
         )
     except NotFoundError as e:
         raise _err(404, str(e), f"/rd-projects/{project_id}/deliverables", tenant_id)
-    except BusinessLogicError as e:
+    except (BusinessLogicError, ValidationError) as e:
         raise _err(422, str(e), f"/rd-projects/{project_id}/deliverables", tenant_id)
 
 
@@ -277,7 +282,12 @@ async def update_deliverable(
     project_id: int = Path(...),
     deliverable_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
+    _auth=Depends(
+        require_permission_codes(
+            "kuaiplm:project:update",
+            "kuaiplm:project:upload-part-spec",
+        )
+    ),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -292,7 +302,7 @@ async def update_deliverable(
         )
     except NotFoundError as e:
         raise _err(404, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}", tenant_id)
-    except BusinessLogicError as e:
+    except (BusinessLogicError, ValidationError) as e:
         raise _err(422, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}", tenant_id)
 
 
@@ -359,21 +369,28 @@ async def revise_deliverable(
     project_id: int = Path(...),
     deliverable_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
+    _auth=Depends(
+        require_permission_codes(
+            "kuaiplm:project:update",
+            "kuaiplm:project:upload-part-spec",
+        )
+    ),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
+        codes = await _permission_codes(current_user, tenant_id)
         return await service.revise_deliverable(
             tenant_id,
             project_id,
             deliverable_id,
             data,
             actor_id=current_user.id,
+            permission_codes=codes,
         )
     except NotFoundError as e:
         raise _err(404, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}/revise", tenant_id)
-    except BusinessLogicError as e:
-        raise _err(400, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}/revise", tenant_id)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _err(422, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}/revise", tenant_id)
 
 
 @router.post(

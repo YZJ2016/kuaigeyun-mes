@@ -55,10 +55,10 @@ export const standardCostService = {
   get: (id: number) =>
     apiRequest<StandardCost>(`${API}/${id}`, { method: 'GET' }),
 
-  create: (data: Partial<StandardCost>) =>
+  create: (data: Partial<StandardCost> & Record<string, unknown>) =>
     apiRequest<StandardCost>(API, { method: 'POST', data }),
 
-  update: (id: number, data: Partial<StandardCost>) =>
+  update: (id: number, data: Partial<StandardCost> & Record<string, unknown>) =>
     apiRequest<StandardCost>(`${API}/${id}`, { method: 'PUT', data }),
 
   delete: (id: number) =>

@@ -72,9 +72,10 @@ class DepartmentInfo(BaseModel):
 
     用于在树形结构中返回部门信息。
 
-    **注意**: 遵循自增ID+UUID混合方案，只对外暴露UUID。
-    内部关联字段（parent_id, manager_id）在树形结构中仍保留用于前端处理。
+    **注意**: 自增ID+UUID混合方案；UUID 为业务标识，id 供凭证辅助核算等内部 FK 选用
+    （与 UserListItem.id 同契约）。
     """
+    id: int = Field(..., description="部门ID（自增主键，内部关联使用）")
     uuid: str = Field(..., description="部门UUID（对外暴露，业务标识）")
     name: str = Field(..., description="部门名称")
     code: Optional[str] = Field(None, description="部门代码")

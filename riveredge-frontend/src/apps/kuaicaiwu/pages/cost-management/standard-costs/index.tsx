@@ -33,13 +33,28 @@ import {
   resolveStandardCostListParams,
   standardCostSearchColumns,
 } from '../../../utils/costListCore';
-import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
+import { formDateRangeFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 type TargetOption = { label: string; value: number; code?: string; name?: string };
+
+function buildStandardCostWritePayload(values: Record<string, unknown>) {
+  return {
+    target_code: values.target_code,
+    target_name: values.target_name,
+    standard_value: values.standard_value,
+    currency: values.currency,
+    unit: values.unit,
+    version: values.version,
+    effective_date: toApiDateString(values.effective_date) ?? null,
+    expiry_date: toApiDateString(values.expiry_date) ?? null,
+    is_active: values.is_active,
+    description: values.description,
+  };
+}
 
 const StandardCostsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -401,21 +416,15 @@ const StandardCostsPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
         onFinish={async (values) => {
           if (editing) {
-            await standardCostService.update(editing.id, {
-              target_code: values.target_code,
-              target_name: values.target_name,
-              standard_value: values.standard_value,
-              currency: values.currency,
-              unit: values.unit,
-              version: values.version,
-              effective_date: values.effective_date,
-              expiry_date: values.expiry_date,
-              is_active: values.is_active,
-              description: values.description,
-            });
+            await standardCostService.update(editing.id, buildStandardCostWritePayload(values));
             messageApi.success(t('common.updateSuccess'));
           } else {
-            await standardCostService.create(values);
+            await standardCostService.create({
+              target_type: values.target_type,
+              target_id: values.target_id,
+              cost_item_type: values.cost_item_type,
+              ...buildStandardCostWritePayload(values),
+            });
             messageApi.success(t('common.createSuccess'));
           }
           setModalVisible(false);
@@ -490,8 +499,8 @@ const StandardCostsPage: React.FC = () => {
         />
         <ProFormDatePicker name="effective_date" label={t('app.kuaicaiwu.standardCost.field.effectiveDate')} />
         <ProFormDatePicker name="expiry_date" label={t('app.kuaicaiwu.standardCost.field.expiryDate')} />
-        <ProFormSwitch name="is_active" label={t('common.enabled')} />
         <ProFormTextArea name="description" label={t('common.remark')} />
+        <ProFormSwitch name="is_active" label={t('common.enabled')} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

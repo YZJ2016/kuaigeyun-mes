@@ -639,6 +639,22 @@
   min-height: 0;
 }
 
+/* 仿微信：居中灰字时间条，仅与上一条间隔大于 30 分钟时出现 */
+.messageTimeDivider {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 4px 0 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #b2b2b2;
+  user-select: none;
+}
+
+[data-theme='dark'] .messageTimeDivider {
+  color: var(--ant-colorTextTertiary);
+}
+
 .messageRow {
   display: flex;
   margin-bottom: 16px;

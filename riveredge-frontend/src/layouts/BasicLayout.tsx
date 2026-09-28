@@ -9,6 +9,7 @@ import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { Spin, theme } from 'antd';
 import { PageLoadingFullscreen } from '../components/page-loading-lottie';
+import { subscribeResizeBus } from '../hooks/useResizeBus';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import {
   LogoutOutlined,
@@ -52,7 +53,7 @@ import {
 import { resolveCustomPageTitle } from '../utils/customPageTitle';
 import { DEFAULT_THEME_BORDER_RADIUS } from '../utils/themeBorderRadius';
 import { prefetchPlugin } from '../utils/pluginLoader';
-import { prefetchKuaizhizaoRoute } from '../apps/kuaizhizao/routePrefetch';
+import { prefetchKuaizhizaoRoute, schedulePrefetchKuaizhizaoTopRoutes } from '../apps/kuaizhizao/routePrefetch';
 import { prefetchMasterDataRoute } from '../apps/master-data/routePrefetch';
 import { prefetchSystemRoute, prefetchSystemRoutes } from '../routes/systemRoutePrefetch';
 import { PRO_APP_CODES } from '../pages/system/applications/proAppCatalog';
@@ -109,15 +110,18 @@ import TopBarSearch from '../components/TopBarSearch';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
 import { HeaderClientDownloadButton } from '../components/header-client-download';
-import ThemeEditor from '../components/theme-editor';
 import IterationFloatButton from '../components/iteration-float-button';
-import { UniImHeaderButton, UniImPanel } from '../components/uni-im';
+import { UniImHeaderButton } from '../components/uni-im/UniImHeaderButton';
 import { LinkedDocumentDetailProvider } from '../components/linked-document-detail';
 import MenuSyncPrompt from '../components/menu-sync-prompt';
 import { RouteTransition } from '../components/route-transition';
 const TenantBootstrapModal = React.lazy(() => import('../components/tenant-bootstrap-modal'));
 /** AI 助手按需加载，避免动画/AntX 栈进入启动主图 */
 const AiAssistant = React.lazy(() => import('../components/ai-assistant'));
+/** 主题编辑只在第一次打开时加载，关闭态不进首屏 */
+const ThemeEditor = React.lazy(() => import('../components/theme-editor'));
+/** 消息窗口只在第一次打开时加载；顶栏按钮仍立即可用 */
+const UniImPanel = React.lazy(() => import('../components/uni-im/UniImDock'));
 import { getTenantById, getPackageConfigs } from '../services/tenant';
 import { getToken, clearAuth, getTenantId } from '../utils/auth';
 import { resolveIsInfraSuperAdminSession } from '../utils/infraSuperAdminSession';
@@ -150,7 +154,6 @@ import { getChatIntegrationStatus } from '../services/deepseekChat';
 import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationStatus';
 import { hasPermission, resolveUserForMenuPermission } from '../utils/permission';
 import { AiAssistantHeaderButton } from './AiAssistantHeaderButton';
-import OnboardingGuide from '../components/onboarding-guide';
 import { HeaderQuickEntryPopover } from '../components/quick-entry';
 import { useConfigStore, resolveEffectiveHomePath } from '../stores/configStore';
 import TenantHomeRedirect from '../components/tenant-home-redirect';
@@ -435,6 +438,11 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       setCurrentUser(userData);
     }
   }, [userData, setCurrentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    schedulePrefetchKuaizhizaoTopRoutes();
+  }, [currentUser]);
 
   const publicPaths = ['/login', '/debug/'];
   const isInfraLoginPage = isPlatformAdminLoginPathname(location.pathname);
@@ -768,6 +776,7 @@ const getMenuConfig = (
       { path: '/infra/packages', name: t('menu.infra.packages'), icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages') },
       { path: '/infra/scripts', name: t('menu.infra.scripts'), icon: getMenuIcon(t('menu.infra.scripts'), '/infra/scripts') },
       { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
+      { path: '/infra/open-api', name: t('menu.infra.open-api'), icon: getMenuIcon(t('menu.infra.open-api'), '/infra/open-api') },
       { path: '/infra/official-api-library', name: t('menu.infra.official-api-library'), icon: getMenuIcon(t('menu.infra.official-api-library'), '/infra/official-api-library') },
       { path: '/infra/open-api', name: t('menu.infra.open-api'), icon: getMenuIcon(t('menu.infra.open-api'), '/infra/open-api') },
       { path: '/infra/client-releases', name: t('menu.infra.client-releases'), icon: getMenuIcon(t('menu.infra.client-releases'), '/infra/client-releases') },
@@ -865,6 +874,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
   const [techStackModalOpen, setTechStackModalOpen] = useState(false);
   const [themeEditorOpen, setThemeEditorOpen] = useState(false);
+  const [themeEditorEverOpened, setThemeEditorEverOpened] = useState(false);
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
   /** 开始面板：挂载与退场动画（仿 Win11 自左下上浮/下沉） */
   const [systemSettingsPanelMounted, setSystemSettingsPanelMounted] = useState(false);
@@ -1425,7 +1435,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, []);
 
   const { data: installedApps } = useQuery({
-    queryKey: ['installedApplications', { is_active: true }],
+    queryKey: [
+      'installedApplications',
+      { is_active: true, tenantId: tenantIdStrForHome },
+    ],
     queryFn: () => getInstalledApplicationList({ is_active: true }),
     ...layoutShellQueryOptions,
     staleTime: 5 * 60 * 1000,
@@ -1904,12 +1917,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         checkBreadcrumbWrap();
       }, 120);
     };
-    window.addEventListener('resize', onResize, { passive: true });
+    const unsub = subscribeResizeBus(onResize);
 
     return () => {
       clearTimeout(timer);
       if (resizeThrottle) clearTimeout(resizeThrottle);
-      window.removeEventListener('resize', onResize);
+      unsub();
     };
   }, [location.pathname]);
 
@@ -2430,6 +2443,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    * 处理主题颜色切换
    */
   const handleThemeChange = () => {
+    setThemeEditorEverOpened(true);
     setThemeEditorOpen(true);
   };
 
@@ -3267,6 +3281,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
             return (
               <div
+                className={badgeEl ? 'menu-item-badge-host' : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                 }}
@@ -3296,10 +3311,25 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     prefetchSystemRoute(path);
                   }
                 }}
-                style={{ display: 'block', width: '100%' }}
+                style={{ display: 'block', width: '100%', minWidth: 0 }}
               >
-                <Link to={item.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 6 }}>
-                  {dom}
+                <Link
+                  to={item.path}
+                  className={badgeEl ? 'menu-item-badge-link' : undefined}
+                  style={
+                    badgeEl
+                      ? {
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          width: '100%',
+                          minWidth: 0,
+                          gap: 6,
+                        }
+                      : undefined
+                  }
+                >
+                  {badgeEl ? <span className="menu-item-badge-label">{dom}</span> : dom}
                   {badgeEl}
                 </Link>
               </div>
@@ -3412,14 +3442,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
       />
 
-      {/* 主题编辑面板 */}
-      <ThemeEditor
-        open={themeEditorOpen}
-        onClose={() => setThemeEditorOpen(false)}
-        onThemeUpdate={(themeConfig) => {
-          // 主题更新回调（可选）
-        }}
-      />
+      {/* 主题编辑：第一次打开后再挂载 */}
+      {themeEditorEverOpened && (
+        <React.Suspense fallback={null}>
+          <ThemeEditor
+            open={themeEditorOpen}
+            onClose={() => setThemeEditorOpen(false)}
+            onThemeUpdate={() => {
+              // 主题更新回调（可选）
+            }}
+          />
+        </React.Suspense>
+      )}
 
       {/* AI 助手：首次打开后再挂载，避免未使用时常驻重包 */}
       {aiAssistantEverOpened && (
@@ -3432,7 +3466,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       )}
 
       {/* 新手引导 */}
-      {/* <OnboardingGuide /> */}
+      {/* P5-19：OnboardingGuide（react-joyride）已从壳层静态依赖移除；需要时再 lazy 挂载 */}
 
       {/* 键盘快捷键帮助 */}
       <Modal
@@ -3499,13 +3533,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       {/* UNI-IM：顶栏入口 + 右下角弹窗（非独立路由） */}
       {uniImEverOpened ? (
         <LinkedDocumentDetailProvider>
-          <UniImPanel
-            open={uniImOpen}
-            minimized={uniImMinimized}
-            onMinimizedChange={setUniImMinimized}
-            onClose={closeUniIm}
-            hasKuAiEntry={hasAiAssistantEntry}
-          />
+          <React.Suspense fallback={null}>
+            <UniImPanel
+              open={uniImOpen}
+              minimized={uniImMinimized}
+              onMinimizedChange={setUniImMinimized}
+              onClose={closeUniIm}
+              hasKuAiEntry={hasAiAssistantEntry}
+            />
+          </React.Suspense>
         </LinkedDocumentDetailProvider>
       ) : null}
 

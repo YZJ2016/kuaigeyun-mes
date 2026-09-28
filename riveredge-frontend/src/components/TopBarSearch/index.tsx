@@ -4,7 +4,7 @@ import { SearchOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import type { MenuProps } from 'antd';
-
+import { subscribeResizeBus } from '../../hooks/useResizeBus';
 import { useTranslation } from 'react-i18next';
 
 export interface TopBarSearchProps {
@@ -77,8 +77,7 @@ const TopBarSearch: React.FC<TopBarSearchProps> = ({
             return () => ro.disconnect();
         }
 
-        window.addEventListener('resize', update);
-        return () => window.removeEventListener('resize', update);
+        return subscribeResizeBus(update);
     }, []);
 
     // Flatten the menu data into a searchable list

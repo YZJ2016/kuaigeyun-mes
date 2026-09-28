@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { resolveSalesOrderDisplayTotalAmount } from '../../../../utils/documentLineAmounts';
+import { resolveDocumentCurrencyInputPrefix } from '../../../../utils/documentCurrencyDisplay';
 import { AmountDisplay } from '../../../../../../components/permission';
 import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../../constants/fieldPermissionResources';
 import { MaterialUnitLabel } from '../../../../../../components/material-unit-label';
@@ -275,6 +276,7 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
     customFieldValues,
   } = useSalesOrderDetailContext();
   const showCustomFields = hasCustomFieldsDetailContent(customFields, customFieldValues);
+  const orderMoneyPrefix = resolveDocumentCurrencyInputPrefix(order.currency_code);
 
   const columns = useMemo(
     () =>
@@ -342,6 +344,20 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
             '-',
         },
         {
+          title: t('app.kuaizhizao.quotation.form.currency'),
+          dataIndex: 'currency_code',
+          key: 'currency_code',
+        },
+        {
+          title: t('app.kuaizhizao.salesOrder.exchangeRate'),
+          dataIndex: 'exchange_rate',
+          key: 'exchange_rate',
+          render: (_, record) =>
+            record.exchange_rate != null && Number.isFinite(Number(record.exchange_rate))
+              ? Number(record.exchange_rate).toFixed(4)
+              : '-',
+        },
+        {
           title: t('app.kuaizhizao.salesOrder.priceType'),
           dataIndex: 'price_type',
           render: (_, record) =>
@@ -354,7 +370,12 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
           dataIndex: 'discount_amount',
           render: (_, record) =>
             Number(record.discount_amount ?? 0) > 0 ? (
-              <AmountDisplay resource={SO} fieldName="amount" value={record.discount_amount ?? 0} />
+              <AmountDisplay
+                resource={SO}
+                fieldName="amount"
+                value={record.discount_amount ?? 0}
+                prefix={orderMoneyPrefix}
+              />
             ) : (
               '-'
             ),
@@ -367,6 +388,7 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
               resource={SO}
               fieldName="total_amount"
               value={resolveSalesOrderDisplayTotalAmount(record)}
+              prefix={orderMoneyPrefix}
             />
           ),
         },
@@ -375,11 +397,16 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
           dataIndex: 'total_fee_amount',
           span: 3,
           render: (_, record) => (
-            <AmountDisplay resource={SO} fieldName="amount" value={record.total_fee_amount ?? 0} />
+            <AmountDisplay
+              resource={SO}
+              fieldName="amount"
+              value={record.total_fee_amount ?? 0}
+              prefix={orderMoneyPrefix}
+            />
           ),
         },
       ] as ProDescriptionsItemProps<SalesOrder>[]),
-    [t, shippingMethodOptions, paymentTermsOptions, handlePrintSalesOrder, messageApi],
+    [t, shippingMethodOptions, paymentTermsOptions, handlePrintSalesOrder, messageApi, orderMoneyPrefix],
   );
 
   const noteColumns = useMemo(
@@ -547,6 +574,7 @@ export const SalesOrderDetailCollaborationPane: React.FC = () => {
 export const SalesOrderDetailLinesPane: React.FC = () => {
   const { t } = useTranslation();
   const { order, feeTypeOptions } = useSalesOrderDetailContext();
+  const orderMoneyPrefix = resolveDocumentCurrencyInputPrefix(order.currency_code);
 
   return (
     <>
@@ -569,7 +597,9 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                   dataIndex: 'amount',
                   width: 120,
                   align: 'right',
-                  render: (val: number) => <AmountDisplay resource={SO} fieldName="amount" value={val} />,
+                  render: (val: number) => (
+                    <AmountDisplay resource={SO} fieldName="amount" value={val} prefix={orderMoneyPrefix} />
+                  ),
                 },
                 {
                   title: t('app.kuaizhizao.salesOrder.feeBearer'),
@@ -640,7 +670,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 align: 'right' as const,
                 render: (val: number, record: SalesOrderItem) => (
                   <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                    <AmountDisplay resource={SO} fieldName="unit_price" value={val} />
+                    <AmountDisplay resource={SO} fieldName="unit_price" value={val} prefix={orderMoneyPrefix} />
                     {(record as SalesOrderItem & { price_settlement_status?: string }).price_settlement_status ===
                     'PROVISIONAL' ? (
                       <MarkerTag color="warning">{t('app.kuaizhizao.salesOrder.priceProvisional')}</MarkerTag>
@@ -660,7 +690,9 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 dataIndex: 'item_amount',
                 width: 120,
                 align: 'right' as const,
-                render: (val: number) => <AmountDisplay resource={SO} fieldName="amount_with_tax" value={val} />,
+                render: (val: number) => (
+                  <AmountDisplay resource={SO} fieldName="amount_with_tax" value={val} prefix={orderMoneyPrefix} />
+                ),
               },
               { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120 },
               {

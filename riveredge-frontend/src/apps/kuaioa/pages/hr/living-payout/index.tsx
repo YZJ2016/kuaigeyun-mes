@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Button, DatePicker, Select, Space, Table, Typography } from 'antd';
+import { Alert, App, Button, DatePicker, Empty, Select, Space, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -74,6 +74,9 @@ const LivingPayoutPage: React.FC = () => {
     }
     return Array.from(map.entries());
   }, [rows]);
+
+  const allZeroPayout =
+    rows.length > 0 && rows.every((r) => Number(r.payout_amount || 0) === 0);
 
   const buildColumns = (bank: string): ColumnsType<Row> => [
     { title: t('app.kuaioa.livingPayout.bank'), width: 80, render: () => bank },
@@ -163,14 +166,29 @@ const LivingPayoutPage: React.FC = () => {
         </Space>
       }
     >
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        title={t('app.kuaioa.livingPayout.guideTitle')}
+        description={t('app.kuaioa.livingPayout.guideBody')}
+      />
       <Typography.Title level={5} style={{ marginTop: 0 }}>
         {sheetTitle}
       </Typography.Title>
       <Typography.Paragraph type="secondary" style={{ textAlign: 'right', marginBottom: 8 }}>
         {t('app.kuaioa.livingPayout.unitYuan')}
       </Typography.Paragraph>
+      {allZeroPayout && !loading ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaioa.livingPayout.zeroAmountTip')}
+        />
+      ) : null}
       {groups.length === 0 && !loading ? (
-        <Typography.Paragraph type="secondary">{t('app.kuaioa.livingPayout.hint')}</Typography.Paragraph>
+        <Empty description={t('app.kuaioa.livingPayout.emptyTip')} />
       ) : null}
       {groups.map(([bank, list]) => {
         const payoutSum = list.reduce((s, r) => s + Number(r.payout_amount || 0), 0);

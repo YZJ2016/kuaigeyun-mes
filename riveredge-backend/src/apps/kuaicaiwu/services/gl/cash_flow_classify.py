@@ -122,8 +122,9 @@ def pick_counterpart_codes(
         code = account_code_by_id.get(aid) or str(line.get("account_code") or "")
         if not code:
             continue
-        amt = Decimal(str(line.get("debit_amount") or 0)) + Decimal(
-            str(line.get("credit_amount") or 0)
+        amt = abs(
+            Decimal(str(line.get("debit_amount") or 0))
+            + Decimal(str(line.get("credit_amount") or 0))
         )
         scored.append((amt, code))
     scored.sort(key=lambda x: x[0], reverse=True)

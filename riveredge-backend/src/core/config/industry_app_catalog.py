@@ -19,6 +19,7 @@ FREE_INDUSTRY_APP_CODES: FrozenSet[str] = frozenset(
         "ind-electronics",
         "ind-mold",
         "ind-relay",
+        "ind-foreign-trade",
     }
 )
 

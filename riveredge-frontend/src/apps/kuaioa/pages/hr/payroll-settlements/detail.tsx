@@ -49,6 +49,18 @@ const PayrollSettlementDetailPage: React.FC = () => {
   const locked = sheet?.status === 'confirmed';
   const lines = (sheet?.lines as LineRow[] | undefined) || [];
   const belowIds = new Set((sheet?.below_minimum_lines as number[] | undefined) || []);
+  const guide = (sheet?.guide as Record<string, number> | undefined) || {};
+  const submittedAttendanceCount = Number(guide.submitted_attendance_count || 0);
+  const lineCount = Number(guide.line_count || lines.length);
+  const zeroTimeWageCount = Number(guide.zero_time_wage_count || 0);
+  const showEmptyLinesTip = Boolean(sheet) && lineCount === 0;
+  const showNoAttendanceTip =
+    Boolean(sheet) && lineCount > 0 && submittedAttendanceCount === 0;
+  const showZeroTimeTip =
+    Boolean(sheet) &&
+    lineCount > 0 &&
+    submittedAttendanceCount > 0 &&
+    zeroTimeWageCount === lineCount;
 
   const patchLine = async (lineId: number, field: string, value: number | null) => {
     if (locked || !perms.canUpdate || value === null) return;
@@ -115,15 +127,19 @@ const PayrollSettlementDetailPage: React.FC = () => {
     },
     moneyCol('basic_wage', 'app.kuaioa.payroll.basicWage'),
     moneyCol('post_wage', 'app.kuaioa.employee.postWage'),
+    moneyCol('time_wage', 'app.kuaioa.payroll.timeWage'),
     moneyCol('piece_wage', 'app.kuaioa.payroll.pieceWage'),
     moneyCol('night_subsidy', 'app.kuaioa.payroll.nightSubsidy'),
     moneyCol('heat_subsidy', 'app.kuaioa.payroll.heatSubsidy'),
     moneyCol('post_allowance', 'app.kuaioa.payroll.postAllowance'),
+    moneyCol('allowance', 'app.kuaioa.payroll.allowance'),
     moneyCol('earning_subtotal', 'app.kuaioa.payroll.earningSubtotal', false),
     moneyCol('living_deduct', 'app.kuaioa.payroll.livingDeduct'),
+    moneyCol('rent_utility_deduct', 'app.kuaioa.payroll.rentUtilityDeduct'),
     moneyCol('insurance_deduct', 'app.kuaioa.payroll.insuranceDeduct'),
     moneyCol('leave_deduct', 'app.kuaioa.payroll.leaveDeduct'),
     moneyCol('tax_deduct', 'app.kuaioa.payroll.taxDeduct'),
+    moneyCol('compensation', 'app.kuaioa.payroll.compensation'),
     moneyCol('deduct_subtotal', 'app.kuaioa.payroll.deductSubtotal', false),
     moneyCol('card_pay', 'app.kuaioa.payroll.cardPay'),
     moneyCol('balance', 'app.kuaioa.payroll.balance', false),
@@ -133,10 +149,6 @@ const PayrollSettlementDetailPage: React.FC = () => {
       width: 80,
       render: () => '',
     },
-    moneyCol('time_wage', 'app.kuaioa.payroll.timeWage'),
-    moneyCol('allowance', 'app.kuaioa.payroll.allowance'),
-    moneyCol('rent_utility_deduct', 'app.kuaioa.payroll.rentUtilityDeduct'),
-    moneyCol('compensation', 'app.kuaioa.payroll.compensation'),
   ];
 
   const handleImportFile = async (file: File) => {
@@ -225,15 +237,40 @@ const PayrollSettlementDetailPage: React.FC = () => {
               {t('app.kuaioa.payroll.reopen')}
             </Button>
           ) : null}
-          <Button onClick={() => window.print()}>{t('app.kuaioa.payroll.exportPdf')}</Button>
+          <Button onClick={() => window.print()}>{t('app.kuaioa.payroll.print')}</Button>
         </Space>
       }
     >
       <Typography.Paragraph type="secondary">
         {t('app.kuaioa.payroll.detailHint')}
       </Typography.Paragraph>
+      {showEmptyLinesTip ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaioa.payroll.emptyLinesTip')}
+        />
+      ) : null}
+      {showNoAttendanceTip ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaioa.payroll.noAttendanceTip')}
+        />
+      ) : null}
+      {showZeroTimeTip ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaioa.payroll.zeroTimeWageTip')}
+        />
+      ) : null}
       {!locked && perms.canUpdate ? (
         <Space wrap style={{ marginBottom: 12 }} className="no-print">
+          <Typography.Text type="secondary">{t('app.kuaioa.payroll.lineShareHint')}</Typography.Text>
           <Typography.Text>{t('app.kuaioa.payroll.lineTotalOutput')}:</Typography.Text>
           <InputNumber
             min={0}
@@ -241,15 +278,6 @@ const PayrollSettlementDetailPage: React.FC = () => {
             value={Number(sheet?.line_total_output || 0) || undefined}
             onChange={(v) => {
               if (v !== null && v !== undefined) void patchHeader('line_total_output', Number(v));
-            }}
-          />
-          <Typography.Text>{t('app.kuaioa.payroll.lineTotalHours')}:</Typography.Text>
-          <InputNumber
-            min={0}
-            changeOnBlur
-            value={Number(sheet?.line_total_hours || 0) || undefined}
-            onChange={(v) => {
-              if (v !== null && v !== undefined) void patchHeader('line_total_hours', Number(v));
             }}
           />
           <Typography.Text>{t('app.kuaioa.payroll.lineTotalWage')}:</Typography.Text>

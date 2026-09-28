@@ -103,11 +103,12 @@ async def _scoped_work_order_ids(*, tenant_id: int, current_user: User) -> List[
 async def _scoped_purchase_receipt_ids(*, tenant_id: int, current_user: User) -> List[int]:
     from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 
+    # 与 manifest purchase-receipt.data_scope_key / permission_prefix 一致：kuaizhizao:inbound
     scoped_receipt_query = await DataScopeService.apply(
         PurchaseReceipt.filter(tenant_id=tenant_id, deleted_at__isnull=True),
         tenant_id=tenant_id,
         user=current_user,
-        resource="kuaizhizao:purchase-receipt",
+        resource="kuaizhizao:inbound",
     )
     receipt_ids = await scoped_receipt_query.values_list("id", flat=True)
     return [int(x) for x in receipt_ids]
@@ -181,11 +182,13 @@ async def _assert_purchase_receipt_visible_by_id(
     if not receipt:
         return
     # 引用单据（采购订单）仅用于追溯，不应阻塞采购入库单本身的查看/确认。
+    # 数据范围键须与 manifest purchase-receipt.data_scope_key（inbound）一致；
+    # 误用 purchase-receipt 会导致仅有 inbound 权的仓储员在 ensure/确认时报权限不足。
     await DataScopeService.assert_row_visible(
         receipt,
         tenant_id=tenant_id,
         user=current_user,
-        resource="kuaizhizao:purchase-receipt",
+        resource="kuaizhizao:inbound",
     )
 
 
@@ -677,6 +680,27 @@ async def push_incoming_inspection_to_purchase_receipt(
 
 
 @router.get(
+    "/incoming-inspections/pull-candidates/purchase-orders",
+    summary="List purchase order pull candidates for incoming inspection",
+)
+async def list_incoming_inspection_purchase_order_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    order_code: Optional[str] = Query(None, description="采购订单号（模糊）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await IncomingInspectionService().list_purchase_order_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        order_code=order_code,
+    )
+
+
+@router.get(
     "/incoming-inspections/pull-candidates/purchase-receipts",
     summary="List purchase receipt pull candidates for incoming inspection",
 )
@@ -810,6 +834,30 @@ async def create_inspection_from_purchase_receipt(
     )
 
 
+@router.get(
+    "/incoming-inspections/from-purchase-order/{purchase_order_id}/preview",
+    summary="Preview push incoming inspection from purchase order",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-incoming-inspection:create"))
+    ],
+)
+async def preview_inspection_from_purchase_order(
+    purchase_order_id: int = Path(..., description="采购订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """采购订单下推来料检验预览（剩余可检数量、可选明细）。"""
+    await _assert_purchase_order_visible_by_id(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        purchase_order_id=purchase_order_id,
+    )
+    return await IncomingInspectionService().preview_push_from_purchase_order(
+        tenant_id=tenant_id,
+        purchase_order_id=purchase_order_id,
+    )
+
+
 @router.post(
     "/incoming-inspections/from-purchase-order/{purchase_order_id}",
     response_model=List[IncomingInspectionResponse],
@@ -824,20 +872,34 @@ async def create_inspection_from_purchase_order(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[IncomingInspectionResponse]:
-    """从采购订单下推来料检验单（到货前检验）。"""
+    """从采购订单下推来料检验单（支持按来货数量分批与备注）。"""
     await _assert_purchase_order_visible_by_id(
         tenant_id=tenant_id,
         current_user=current_user,
         purchase_order_id=purchase_order_id,
     )
     selected_item_ids = None
-    if body and body.get("selected_item_ids") is not None:
-        selected_item_ids = [int(i) for i in (body.get("selected_item_ids") or []) if i is not None]
+    inspection_quantities: Optional[Dict[int, float]] = None
+    notes = None
+    if body:
+        if body.get("selected_item_ids") is not None:
+            selected_item_ids = [int(i) for i in (body.get("selected_item_ids") or []) if i is not None]
+        raw_qty = body.get("inspection_quantities")
+        if isinstance(raw_qty, dict):
+            inspection_quantities = {
+                int(k): float(v)
+                for k, v in raw_qty.items()
+                if k is not None and v is not None
+            }
+        if body.get("notes") is not None:
+            notes = str(body.get("notes") or "")
     return await IncomingInspectionService().create_inspection_from_purchase_order(
         tenant_id=tenant_id,
         purchase_order_id=purchase_order_id,
         created_by=current_user.id,
         selected_item_ids=selected_item_ids,
+        inspection_quantities=inspection_quantities,
+        notes=notes,
     )
 
 

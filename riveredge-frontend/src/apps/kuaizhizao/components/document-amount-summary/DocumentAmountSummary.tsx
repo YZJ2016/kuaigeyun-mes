@@ -15,6 +15,8 @@ import {
   type PurchaseDocumentTotals,
   type SalesDocumentTotals,
 } from '../../utils/documentLineAmounts';
+import { resolveDocumentCurrencyInputPrefix } from '../../utils/documentCurrencyDisplay';
+import { formatAmount } from '../../../../utils/format';
 
 export type DocumentAmountSummaryVariant = 'sales' | 'purchase' | 'lines' | 'basic';
 
@@ -348,10 +350,15 @@ const SummaryItem: React.FC<{
   row: SummaryRowDef;
   token: ReturnType<typeof antdTheme.useToken>['token'];
   showRmbUppercase?: boolean;
-}> = ({ row, token, showRmbUppercase }) => {
+  moneyPrefix?: string;
+}> = ({ row, token, showRmbUppercase, moneyPrefix }) => {
   const { t } = useTranslation();
   const isQuantity = row.key === 'quantity';
-  const displayValue = isQuantity ? formatQuantity(row.value) : formatDocumentMoneyYuan(row.value);
+  const displayValue = isQuantity
+    ? formatQuantity(row.value)
+    : moneyPrefix
+      ? `${moneyPrefix}${formatAmount(row.value, '0.00')}`
+      : formatDocumentMoneyYuan(row.value);
   const uppercase = showRmbUppercase && !isQuantity ? amountToChineseRmb(row.value) : '';
   const fontSize = row.emphasis ? EMPHASIS_FONT_SIZE : LABEL_FONT_SIZE;
   const valueSize = row.emphasis ? EMPHASIS_FONT_SIZE : VALUE_FONT_SIZE;
@@ -433,13 +440,18 @@ export type DocumentAmountSummaryProps = {
   discountAmount?: unknown;
   showDiscount?: boolean;
   getFieldValue?: (name: string) => unknown;
+  /** 单据币种（销售外币场景） */
+  currencyCode?: string;
+  /** 本位币，用于控制大写金额仅本币展示 */
+  baseCurrencyCode?: string;
   style?: React.CSSProperties;
 };
 
 const DocumentDiscountInput: React.FC<{
+  moneyPrefix?: string;
   goodsIncl: number;
   token: ReturnType<typeof antdTheme.useToken>['token'];
-}> = ({ goodsIncl, token }) => {
+}> = ({ goodsIncl, token, moneyPrefix }) => {
   const { t } = useTranslation();
   const amountDecimals = useNumericPrecisionPlaces('amount');
   return (
@@ -470,7 +482,7 @@ const DocumentDiscountInput: React.FC<{
           min={0}
           max={goodsIncl > 0 ? goodsIncl : undefined}
           precision={amountDecimals}
-          prefix="¥"
+          prefix={moneyPrefix ?? '¥'}
           size="small"
           style={{ width: 140, fontSize: VALUE_FONT_SIZE }}
         />
@@ -488,6 +500,8 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
   discountAmount: discountAmountProp,
   showDiscount: showDiscountProp,
   getFieldValue,
+  currencyCode: currencyCodeProp,
+  baseCurrencyCode,
   style,
 }) => {
   const { t } = useTranslation();
@@ -501,6 +515,16 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
   const discountAmount = showDiscount
     ? (discountAmountProp ?? getFieldValue?.('discount_amount') ?? 0)
     : 0;
+  const resolvedCurrencyCode = (
+    currencyCodeProp ?? (getFieldValue?.('currency_code') as string | undefined) ?? ''
+  ).trim();
+  const moneyPrefix =
+    variant === 'sales' && resolvedCurrencyCode
+      ? resolveDocumentCurrencyInputPrefix(resolvedCurrencyCode)
+      : undefined;
+  const showRmbUppercaseForCurrency =
+    !resolvedCurrencyCode ||
+    resolvedCurrencyCode.toUpperCase() === (baseCurrencyCode ?? 'CNY').trim().toUpperCase();
 
   const goodsInclForCap = useMemo(
     () =>
@@ -562,21 +586,28 @@ export const DocumentAmountSummary: React.FC<DocumentAmountSummaryProps> = ({
     >
       <div style={{ maxWidth: SUMMARY_PANEL_MAX_WIDTH, marginLeft: 'auto' }}>
         {showDiscount && getFieldValue && (
-          <DocumentDiscountInput goodsIncl={goodsInclForCap} token={token} />
+          <DocumentDiscountInput goodsIncl={goodsInclForCap} token={token} moneyPrefix={moneyPrefix} />
         )}
         {bodyRows.map((row) => (
           <SummaryItem
             key={row.key}
             row={row}
             token={token}
-            showRmbUppercase={!hasFooter && !!row.emphasis}
+            moneyPrefix={moneyPrefix}
+            showRmbUppercase={showRmbUppercaseForCurrency && !hasFooter && !!row.emphasis}
           />
         ))}
         {hasFooter && bodyRows.length > 0 && (
           <Divider style={{ margin: `${SUMMARY_ROW_GAP}px 0`, borderColor: token.colorBorderSecondary }} />
         )}
         {emphasisRows.map((row) => (
-          <SummaryItem key={row.key} row={row} token={token} showRmbUppercase={!!row.emphasis} />
+          <SummaryItem
+            key={row.key}
+            row={row}
+            token={token}
+            moneyPrefix={moneyPrefix}
+            showRmbUppercase={showRmbUppercaseForCurrency && !!row.emphasis}
+          />
         ))}
       </div>
     </div>

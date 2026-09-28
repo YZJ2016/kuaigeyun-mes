@@ -12,7 +12,7 @@
  */
 
 import React, { Component, useEffect, useState, useMemo, useRef, Suspense, type ErrorInfo, type ReactNode } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Alert, Button } from 'antd';
 import { AlertTriangle, CircleX, Lightbulb, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -20,12 +20,16 @@ import { useQuery } from '@tanstack/react-query';
 import { getInstalledApplicationList, scanPlugins } from '../services/application';
 import { loadPlugin } from '../utils/pluginLoader';
 import { getToken, getTenantId } from '../utils/auth';
+import { resolvePostLoginHomePath } from '../utils/tenantHomePath';
 import type { Application } from '../services/application';
 import PageSkeleton from '../components/page-skeleton';
 import ProUpgradePrompt from '../components/pro-upgrade-prompt';
 import { PAGE_SPACING } from '../components/layout-templates/constants';
 
-const INSTALLED_APPS_QUERY_KEY = ['installedApplications', { is_active: true }] as const;
+/** 须含 tenantId：切换组织后不得复用上一组织的已启用列表 */
+function installedAppsQueryKey(tenantId: string | null) {
+  return ['installedApplications', { is_active: true, tenantId }] as const;
+}
 
 /**
  * 延迟显示的 Fallback 组件
@@ -150,8 +154,54 @@ class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorBoundary
   }
 }
 
-// 加载中组件 - 延迟显示骨架屏，快速加载时不闪烁
-const LoadingFallback: React.FC = () => <DelayedFallback />;
+/** 路径对应应用未启用/未安装（切换组织、深链、浏览器后退常见）：回本组织首页，禁止卡在黄条告警 */
+const UnmatchedAppPathFallback: React.FC = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [homePath, setHomePath] = useState('/');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let target = '/';
+      try {
+        target = await resolvePostLoginHomePath();
+      } catch {
+        target = '/';
+      }
+      if (cancelled) return;
+      setHomePath(target);
+      const current = location.pathname || '';
+      if (target && target !== current) {
+        navigate(target, { replace: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, navigate]);
+
+  return (
+    <div style={{ ...appErrorPanelStyle, background: '#fffbe6', border: '1px solid #ffe58f' }}>
+      <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <AlertTriangle size={20} strokeWidth={1.75} aria-hidden />
+        {t('appRoutes.unmatchedAppPath')}
+      </h3>
+      <p>
+        {t('appRoutes.currentPath')}: {location.pathname}
+      </p>
+      <p>{t('appRoutes.unmatchedAppPathHint')}</p>
+      <Button
+        type="primary"
+        style={{ marginTop: 10 }}
+        onClick={() => navigate(homePath || '/', { replace: true })}
+      >
+        {t('appRoutes.backToHome')}
+      </Button>
+    </div>
+  );
+};
 
 // 应用加载错误组件
 const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, onRetry }) => {
@@ -205,8 +255,14 @@ const AppRoutes: React.FC = () => {
   const tenantId = getTenantId()?.toString() ?? null;
   const isAuthenticated = !!(token && tenantId);
 
+  // 切换组织后清空 lazy 缓存并允许重新扫描，避免沿用上一组织已挂载身份
+  useEffect(() => {
+    lazyAppsCache.current.clear();
+    setHasScanned(false);
+  }, [tenantId]);
+
   const { data: applications = [], isLoading: loading, error, refetch } = useQuery({
-    queryKey: INSTALLED_APPS_QUERY_KEY,
+    queryKey: installedAppsQueryKey(tenantId),
     queryFn: async () => {
       let apps = await getInstalledApplicationList({ is_active: true });
       if (apps.length === 0 && !hasScanned) {
@@ -270,23 +326,12 @@ const AppRoutes: React.FC = () => {
         />
       );
     }
-    // 已启用应用列表未包含目标 app（如定制壳菜单深链到依赖应用）时给出可见提示，禁止纯白
+    // 已启用应用列表未包含目标 app（切换组织残留 URL / 深链）：回首页，禁止纯白或长期卡告警
     routes.push(
       <Route
         key="app-unmatched"
         path="*"
-        element={
-          <div style={{ ...appErrorPanelStyle, background: '#fffbe6', border: '1px solid #ffe58f' }}>
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <AlertTriangle size={20} strokeWidth={1.75} aria-hidden />
-              {t('appRoutes.unmatchedAppPath')}
-            </h3>
-            <p>
-              {t('appRoutes.currentPath')}: {typeof window !== 'undefined' ? window.location.pathname : ''}
-            </p>
-            <p>{t('appRoutes.unmatchedAppPathHint')}</p>
-          </div>
-        }
+        element={<UnmatchedAppPathFallback />}
       />,
     );
     return routes;
@@ -294,7 +339,7 @@ const AppRoutes: React.FC = () => {
 
   // 加载中状态（应用列表加载中）
   if (isAuthenticated && loading) {
-    return <LoadingFallback />;
+    return <DelayedFallback />;
   }
 
   // 加载出错状态

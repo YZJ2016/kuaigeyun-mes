@@ -74,6 +74,7 @@ const MaterialReviewsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
+  const auditEnabled = useAuditRequired('material_review');
   const [searchParams] = useSearchParams();
   const filterProjectId = searchParams.get('project_id')
     ? Number(searchParams.get('project_id'))
@@ -99,12 +100,128 @@ const MaterialReviewsPage: React.FC = () => {
   }, []);
 
   const statusLabel = useCallback(
-    (s: string) => t(`app.kuaiplm.materialReview.status.${s}`, { defaultValue: s }),
+    (s: string) => t(`app.kuaiplm.materialReview.status.${s}`),
     [t],
   );
   const usageLabel = useCallback(
-    (s: string) => t(`app.kuaiplm.materialReview.usage.${s}`, { defaultValue: s }),
+    (s: string) => t(`app.kuaiplm.materialReview.usage.${s}`),
     [t],
+  );
+
+  const downloadLineTemplate = useCallback(async () => {
+    await downloadRecordsAsXlsx(
+      [
+        {
+          material_code: 'MAT-001',
+          material_name: t('app.kuaiplm.materialReview.template.sampleName'),
+          usage_status: t('app.kuaiplm.materialReview.usage.preferred'),
+          remarks: t('app.kuaiplm.materialReview.template.sampleRemark'),
+        },
+      ],
+      `material-review-lines-template-${todaySiteDateString()}.xlsx`,
+      { columns: LINE_TEMPLATE_COLUMNS, sheetName: '评审物料' },
+    );
+    messageApi.success(t('app.kuaiplm.materialReview.messages.templateDownloaded'));
+  }, [messageApi, t]);
+
+  const importLinesFromFile = useCallback(
+    async (file: File) => {
+      try {
+        const XLSX = await import('xlsx');
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) {
+          messageApi.error(t('app.kuaiplm.materialReview.messages.templateEmpty'));
+          return false;
+        }
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+          workbook.Sheets[sheetName],
+          { defval: '' },
+        );
+        const parsed: MaterialReviewLine[] = [];
+        for (const row of rows) {
+          const code = String(
+            row['物料编码'] ?? row.material_code ?? row.MaterialCode ?? '',
+          ).trim();
+          const name = String(
+            row['物料名称'] ?? row.material_name ?? row.MaterialName ?? '',
+          ).trim();
+          const usageRaw = String(
+            row['使用状态'] ?? row.usage_status ?? row.UsageStatus ?? '',
+          ).trim();
+          const remarks = String(row['备注'] ?? row.remarks ?? row.Remarks ?? '').trim();
+          if (!code && !name) continue;
+          const usage = normalizeUsageStatus(usageRaw);
+          if (!code || !name || !usage) {
+            messageApi.error(
+              t('app.kuaiplm.materialReview.messages.templateRowInvalid', {
+                code: code || '-',
+              }),
+            );
+            return false;
+          }
+          parsed.push({
+            material_code: code,
+            material_name: name,
+            usage_status: usage,
+            remarks: remarks || null,
+          });
+        }
+        if (!parsed.length) {
+          messageApi.error(t('app.kuaiplm.materialReview.messages.templateEmpty'));
+          return false;
+        }
+        // 尝试用编码匹配物料库 id（匹配不到仍可保存编码+名称）
+        const enriched = await Promise.all(
+          parsed.map(async (line) => {
+            try {
+              const res = await materialApi.list({
+                keyword: line.material_code,
+                limit: 20,
+                isActive: true,
+              });
+              const hit = (res.items ?? []).find(
+                (item: { main_code?: string; code?: string; id?: number; name?: string }) =>
+                  String(item.main_code ?? item.code ?? '').trim() === line.material_code,
+              );
+              if (!hit?.id) return line;
+              return {
+                ...line,
+                material_id: Number(hit.id),
+                material_name: String(hit.name || line.material_name),
+                _material_pick: Number(hit.id),
+              } as MaterialReviewLine & { _material_pick?: number };
+            } catch {
+              return line;
+            }
+          }),
+        );
+        formRef.current?.setFieldsValue?.({ lines: enriched });
+        setMaterialOptions((prev) => {
+          const next = [...prev];
+          enriched.forEach((line) => {
+            if (!line.material_id) return;
+            if (next.some((o) => o.value === line.material_id)) return;
+            next.push({
+              value: Number(line.material_id),
+              label: `${line.material_code} - ${line.material_name}`,
+              code: line.material_code,
+              name: line.material_name,
+            });
+          });
+          return next;
+        });
+        messageApi.success(
+          t('app.kuaiplm.materialReview.messages.templateImported', { count: enriched.length }),
+        );
+        return false;
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e));
+        return false;
+      }
+    },
+    [messageApi, t],
   );
 
   const searchMaterials = useCallback(async (keyword?: string) => {
@@ -350,7 +467,7 @@ const MaterialReviewsPage: React.FC = () => {
               />,
             );
           }
-          if (row.status === 'pending' && perms.canAction?.('approve') && row.id) {
+          if (row.status === 'pending' && !auditEnabled && perms.canAction?.('approve') && row.id) {
             actions.push(
               <Button
                 key="approve"
@@ -369,7 +486,7 @@ const MaterialReviewsPage: React.FC = () => {
               />,
             );
           }
-          if (row.status === 'pending' && perms.canAction?.('reject') && row.id) {
+          if (row.status === 'pending' && !auditEnabled && perms.canAction?.('reject') && row.id) {
             actions.push(
               <Button
                 key="reject"
@@ -393,7 +510,7 @@ const MaterialReviewsPage: React.FC = () => {
       },
     ];
     return cols;
-  }, [t, statusLabel, openDetail, openEdit, perms, messageApi, reload]);
+  }, [t, statusLabel, openDetail, openEdit, perms, messageApi, reload, auditEnabled]);
 
   const basicColumns = useMemo(() => {
     const cols: ProDescriptionsItemProps<MaterialReview>[] = [
@@ -445,13 +562,22 @@ const MaterialReviewsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.material-reviews.width-v2"
+        columnPersistenceId="apps.kuaiplm.pages.material-reviews.width-v3"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.materialReview.createButton') + NEW_SHORTCUT_HINT}
         onCreate={() => {
           void searchMaterials();
           openCreate();
         }}
+        toolBarRender={() => [
+          <Button
+            key="line-template"
+            icon={<DownloadOutlined />}
+            onClick={() => void downloadLineTemplate()}
+          >
+            {t('app.kuaiplm.materialReview.actions.downloadTemplate')}
+          </Button>,
+        ]}
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {
           const rows = tableRowsRef.current.filter((r) => keys.includes(r.uuid));
@@ -514,7 +640,11 @@ const MaterialReviewsPage: React.FC = () => {
 
       <FormModalTemplate
         key={editing?.uuid ?? 'create'}
-        title={editing ? t('common.edit') : t('common.create')}
+        title={
+          editing
+            ? t('app.kuaiplm.materialReview.editTitle')
+            : t('app.kuaiplm.materialReview.createTitle')
+        }
         open={modalOpen}
         onClose={() => {
           setModalOpen(false);
@@ -593,10 +723,30 @@ const MaterialReviewsPage: React.FC = () => {
               rules={[{ required: true }]}
             />
           </Col>
-          <Col span={24}>
-            <ProFormTextArea name="remarks" label={t('common.remark')} />
-          </Col>
         </Row>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaiplm.materialReview.usageHint')}
+        />
+        <Space style={{ marginBottom: 8 }}>
+          <Button icon={<DownloadOutlined />} onClick={() => void downloadLineTemplate()}>
+            {t('app.kuaiplm.materialReview.actions.downloadTemplate')}
+          </Button>
+          <Upload
+            accept=".xlsx,.xls"
+            showUploadList={false}
+            beforeUpload={(file) => {
+              void importLinesFromFile(file);
+              return false;
+            }}
+          >
+            <Button icon={<UploadOutlined />}>
+              {t('app.kuaiplm.materialReview.actions.importTemplate')}
+            </Button>
+          </Upload>
+        </Space>
         <UniTableDetail
           name="lines"
           title={t('app.kuaiplm.materialReview.fields.lines')}
@@ -606,6 +756,11 @@ const MaterialReviewsPage: React.FC = () => {
           initialValue={{ usage_status: 'preferred' }}
           minRows={1}
         />
+        <Row gutter={16} style={{ marginTop: 8 }}>
+          <Col span={24}>
+            <ProFormTextArea name="remarks" label={t('common.remark')} />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       <DetailDrawerTemplate
@@ -665,7 +820,11 @@ const MaterialReviewsPage: React.FC = () => {
                     title: t('app.kuaiplm.materialReview.fields.usageStatus'),
                     dataIndex: 'usage_status',
                     width: 120,
-                    render: (v: string) => <MarkerTag>{usageLabel(v)}</MarkerTag>,
+                    render: (v: string) => (
+                      <MarkerTag variant="filled" color={usageMarkerColor(v)}>
+                        {usageLabel(v)}
+                      </MarkerTag>
+                    ),
                   },
                   {
                     title: t('common.remark'),
@@ -674,6 +833,33 @@ const MaterialReviewsPage: React.FC = () => {
                 ]}
               />
             </DetailDrawerSection>
+          ) : null
+        }
+        extra={
+          detail && !detailError && (detail.lines?.length || 0) > 0 ? (
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={async () => {
+                try {
+                  const lines = (detail.lines || []).map((line) => ({
+                    material_code: line.material_code,
+                    material_name: line.material_name,
+                    usage_status: usageLabel(String(line.usage_status)),
+                    remarks: line.remarks || '',
+                  }));
+                  await downloadRecordsAsXlsx(
+                    lines as Array<Record<string, unknown>>,
+                    `material-review-${detail.review_code || detail.id}-${todaySiteDateString()}.xlsx`,
+                    { columns: LINE_TEMPLATE_COLUMNS, sheetName: '评审物料' },
+                  );
+                  messageApi.success(t('common.exportSuccess', { count: lines.length }));
+                } catch (e) {
+                  messageApi.error(getApiErrorMessage(e, t('common.exportFailed')));
+                }
+              }}
+            >
+              {t('app.kuaiplm.materialReview.actions.downloadSheet')}
+            </Button>
           ) : null
         }
       />

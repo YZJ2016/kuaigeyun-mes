@@ -4,6 +4,7 @@ import pytest
 
 from infra.exceptions.exceptions import ValidationError
 from infra.services.official_api_library_service import (
+    OfficialApiLibraryClient,
     OfficialApiLibraryService,
     normalize_official_api_item,
     pack_to_preview,
@@ -31,6 +32,19 @@ def test_normalize_official_api_item_strips_sensitive_headers():
 def test_normalize_official_api_item_requires_path():
     with pytest.raises(ValidationError):
         normalize_official_api_item({"item_key": "a", "name": "n", "method": "GET"})
+
+
+def test_extract_remote_error_detail_from_platform_envelope():
+    detail = OfficialApiLibraryClient._extract_remote_error_detail(
+        {
+            "success": False,
+            "error": {
+                "code": "AUTHORIZATION_ERROR",
+                "message": "非官方客户端禁止调用写接口",
+            },
+        }
+    )
+    assert detail == "非官方客户端禁止调用写接口"
 
 
 def test_pack_to_preview_includes_status():

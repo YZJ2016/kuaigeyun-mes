@@ -39,7 +39,19 @@
   display: flow-root;
 }
 
+/* 字段名与「自定义字段」徽章垂直居中对齐（禁止徽章相对文字上浮） */
+.custom-fields-form-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
 .custom-fields-form-label-tag {
-  margin-left: 6px;
+  margin: 0;
   font-size: 11px;
+  line-height: 18px;
+  flex-shrink: 0;
 }

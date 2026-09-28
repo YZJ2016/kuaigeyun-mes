@@ -5,27 +5,40 @@ from __future__ import annotations
 from typing import Final
 
 # category → 满足其一即可上传（新建/编辑业务单据时均可传附件）
+# 注塑机单据族与通用设备单据族权限码并列：移动端/PC 共用同一 category，
+# 入口 family=injection 时用户仅有 injection-documents-*，缺登记会 HTTP 403。
 BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
     "haoligo_equipment": (
         "haoligo:equipment-ledger:create",
         "haoligo:equipment-ledger:update",
         "haoligo:equipment-documents-acceptance:complete",
+        "haoligo:injection-documents-acceptance:complete",
     ),
     "haoligo_equipment_upkeep": (
         "haoligo:equipment-documents-upkeep-sheet:create",
         "haoligo:equipment-documents-upkeep-sheet:update",
+        "haoligo:injection-documents-upkeep-sheet:create",
+        "haoligo:injection-documents-upkeep-sheet:update",
     ),
     "haoligo_equipment_upkeep_complete": (
         "haoligo:equipment-documents-upkeep-complete:create",
         "haoligo:equipment-documents-upkeep-complete:update",
+        "haoligo:equipment-documents-upkeep-sheet:complete",
+        "haoligo:injection-documents-upkeep-complete:create",
+        "haoligo:injection-documents-upkeep-complete:update",
+        "haoligo:injection-documents-upkeep-sheet:complete",
     ),
     "haoligo_equipment_spot_check": (
         "haoligo:equipment-documents-spot-check:create",
         "haoligo:equipment-documents-spot-check:update",
+        "haoligo:injection-documents-spot-check:create",
+        "haoligo:injection-documents-spot-check:update",
     ),
     "haoligo_equipment_route_patrol": (
         "haoligo:equipment-documents-route-patrol:create",
         "haoligo:equipment-documents-route-patrol:update",
+        "haoligo:injection-documents-route-patrol:create",
+        "haoligo:injection-documents-route-patrol:update",
     ),
     "haoligo_equipment_acceptance": (
         "haoligo:equipment-documents-acceptance:create",
@@ -33,6 +46,27 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "haoligo:equipment-documents-acceptance:submit",
         "haoligo:equipment-documents-acceptance:execute",
         "haoligo:equipment-documents-acceptance:complete",
+        "haoligo:injection-documents-acceptance:create",
+        "haoligo:injection-documents-acceptance:update",
+        "haoligo:injection-documents-acceptance:submit",
+        "haoligo:injection-documents-acceptance:execute",
+        "haoligo:injection-documents-acceptance:complete",
+    ),
+    "haoligo_finance_equipment_contract": (
+        "haoligo:finance-equipment-contracts:create",
+        "haoligo:finance-equipment-contracts:update",
+    ),
+    "haoligo_finance_equipment_invoice": (
+        "haoligo:finance-equipment-payables:create",
+        "haoligo:finance-equipment-payables:update",
+        "haoligo:finance-equipment-payables:submit",
+        "haoligo:finance-equipment-payables:execute",
+    ),
+    "haoligo_finance_equipment_acceptance": (
+        "haoligo:finance-equipment-payables:create",
+        "haoligo:finance-equipment-payables:update",
+        "haoligo:finance-equipment-payables:submit",
+        "haoligo:finance-equipment-payables:execute",
     ),
     "haoligo_patrol_hazard": (
         "haoligo:patrol-hazards:create",
@@ -80,6 +114,10 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "haoligo:molds-documents-outsource-maintenance:complete",
     ),
     # kuaizhizao — 销售管理
+    "customer_follow_up_attachments": (
+        "kuaizhizao:customer-follow-up:create",
+        "kuaizhizao:customer-follow-up:update",
+    ),
     "sales_contract_attachments": (
         "kuaizhizao:sales-contract:create",
         "kuaizhizao:sales-contract:update",
@@ -223,6 +261,21 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
     "equipment_repair_attachments": (
         "kuaizhizao:equipment-fault:create",
         "kuaizhizao:equipment-fault:update",
+    ),
+    "equipment_spot_check": (
+        "kuaizhizao:equipment-spot-check:create",
+        "kuaizhizao:equipment-spot-check:update",
+        "kuaizhizao:equipment-spot-check:submit",
+    ),
+    "equipment_spot_check_line": (
+        "kuaizhizao:equipment-spot-check:create",
+        "kuaizhizao:equipment-spot-check:update",
+        "kuaizhizao:equipment-spot-check:submit",
+    ),
+    "equipment_route_patrol_line": (
+        "kuaizhizao:equipment-route-patrol:create",
+        "kuaizhizao:equipment-route-patrol:update",
+        "kuaizhizao:equipment-route-patrol:submit",
     ),
     "maintenance_plan_attachments": (
         "kuaizhizao:maintenance-plan:create",

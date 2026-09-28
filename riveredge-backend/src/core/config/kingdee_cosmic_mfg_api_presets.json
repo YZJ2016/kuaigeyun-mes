@@ -1,0 +1,2460 @@
+{
+  "version": 1,
+  "pack_id": "kingdee_cosmic_mfg",
+  "title": "金蝶AI苍穹·制造链路",
+  "description": "销售订单→生产/车间→领料/入库/出库→即时库存，并含物料/多计量单位/客商等生产辅助主数据查询（已探活）。本环境未发布独立「计量单位」「仓库」主数据接口，单位见多计量单位，仓库字段见即时库存。",
+  "presets": [
+    {
+      "code_suffix": "basedata_query_5",
+      "name": "苍穹查询供应商地址信息",
+      "description": "调用此API查询供应商地址信息。服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_address/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_address/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_queryAddress",
+      "name": "苍穹查询客户地址信息",
+      "description": "服务应用 appid=basedata，接口编码 queryAddress。开放平台 urlformat=/v2/basedata/bd_address/queryAddress。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_address/queryAddress",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "basedata_query",
+      "name": "苍穹查询客户信息",
+      "description": "服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_customer/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_customer/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_query_6",
+      "name": "苍穹客户分类查询",
+      "description": "服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_customergroup/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_customergroup/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "query_material",
+      "name": "苍穹查询物料",
+      "description": "基础资料API服务里的物料批量查询。请求地址 /v2/basedata/bd_material/batchQuery，完整地址为门户域名/kapi 加上该请求地址。筛选放在请求体的 data 内，字段与开放平台该 API 的请求体一致；均为非必填。",
+      "path": "kapi/v2/basedata/bd_material/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_query_7",
+      "name": "苍穹存货类别查询",
+      "description": "服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_materialcategory/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_materialcategory/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_batchQuery",
+      "name": "苍穹物料组织公共信息批量查询",
+      "description": "物料组织公共信息批量查询服务应用 appid=basedata，接口编码 batchQuery。开放平台 urlformat=/v2/basedata/bd_materialcommon/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_materialcommon/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "query_material_group",
+      "name": "苍穹查询物料分组",
+      "description": "基础资料API服务里的物料分组批量查询。请求地址 /v2/basedata/bd_materialgroup/batchQuery，请求体为 data、pageNo、pageSize。筛选字段放在 data 内。",
+      "path": "kapi/v2/basedata/bd_materialgroup/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_batchQuery_2",
+      "name": "苍穹物料多计量单位批量查询",
+      "description": "物料多计量单位批量查询（本环境开放平台未发布独立「计量单位」接口，单位编码/名称在此接口的 measureunitid_number/name 字段）。筛选放 data，pageNo/pageSize 分页。换票由连接器自动完成。",
+      "path": "kapi/v2/basedata/bd_multimeasureunit/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_getList_2",
+      "name": "苍穹项目基础资料查询",
+      "description": "服务应用 appid=basedata，接口编码 getList。开放平台 urlformat=/v2/basedata/bd_project/getList。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_project/getList",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_query_2",
+      "name": "苍穹查询供应商信息",
+      "description": "调用此API查询供应商信息。服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_supplier/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_supplier/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "basedata_query_4",
+      "name": "苍穹查询供应商分类信息",
+      "description": "调用此API查询供应商分类信息。服务应用 appid=basedata，接口编码 query。开放平台 urlformat=/v2/basedata/bd_suppliergroup/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/basedata/bd_suppliergroup/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_getInventoryDetail",
+      "name": "苍穹即时库存明细查询",
+      "description": "即时库存明细。请求体：params.org=库存组织编码（本环境示例 100=湖南兴合创精密科技有限公司），可选 materialNumbers 等；pageNo/pageSize 分页。换票由连接器自动完成。",
+      "path": "kapi/v2/im/getInventoryDetail",
+      "method": "POST",
+      "request_body": {
+        "pageNo": 1,
+        "params": {
+          "org": "<库存组织编码，如 100>"
+        },
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_getInventorySum",
+      "name": "苍穹即时库存汇总查询",
+      "description": "即时库存汇总。请求体：params.org=库存组织编码（示例 100），pageNo/pageSize。换票由连接器自动完成。",
+      "path": "kapi/v2/im/getInventorySum",
+      "method": "POST",
+      "request_body": {
+        "pageNo": 1,
+        "params": {
+          "org": "<库存组织编码，如 100>"
+        },
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_19",
+      "name": "苍穹生产补料单批量审核",
+      "description": "生产补料单批量审核服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/im_mdc_mftfeedorder/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftfeedorder/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete_22",
+      "name": "苍穹批量删除生产补料单",
+      "description": "服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/im_mdc_mftfeedorder/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftfeedorder/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batcheQuery",
+      "name": "苍穹生产补料单批量查询",
+      "description": "生产补料单批量查询服务应用 appid=im，接口编码 batcheQuery。开放平台 urlformat=/v2/im/im_mdc_mftfeedorder/batcheQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftfeedorder/batcheQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_19",
+      "name": "苍穹生产补料单批量提交",
+      "description": "生产补料单批量提交服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/im_mdc_mftfeedorder/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftfeedorder/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnAudit_2",
+      "name": "苍穹生产补料单批量反审核",
+      "description": "生产补料单批量反审核服务应用 appid=im，接口编码 batchUnAudit。开放平台 urlformat=/v2/im/im_mdc_mftfeedorder/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftfeedorder/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnSubmit_15",
+      "name": "苍穹生产补料单批量撤销提交",
+      "description": "生产补料单批量撤销提交服务应用 appid=im，接口编码 batchUnSubmit。开放平台 urlformat=/v2/im/im_mdc_mftfeedorder/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftfeedorder/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_im_mdc_mftfeedorder/pushGenerateMftFeedO",
+      "name": "苍穹下推生成生产补料单",
+      "description": "服务应用 appid=im，接口编码 im_mdc_mftfeedorder/pushGenerateMftFeedOrder。开放平台 urlformat=/v2/im/im_mdc_mftfeedorder/pushGenerateMftFeedOrder。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftfeedorder/pushGenerateMftFeedOrder",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_update_2",
+      "name": "苍穹生产补料单修改",
+      "description": "服务应用 appid=im，接口编码 update。开放平台 urlformat=/v2/im/im_mdc_mftfeedorder/update。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftfeedorder/update",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_10",
+      "name": "苍穹批量审核完工入库单",
+      "description": "批量审核完工入库单服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/im_mdc_mftmanuinbill/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftmanuinbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete_18",
+      "name": "苍穹完工入库单--批量删除",
+      "description": "服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/im_mdc_mftmanuinbill/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftmanuinbill/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchQuery_3",
+      "name": "苍穹完工入库单--批量查询",
+      "description": "服务应用 appid=im，接口编码 batchQuery。开放平台 urlformat=/v2/im/im_mdc_mftmanuinbill/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftmanuinbill/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_10",
+      "name": "苍穹批量提交完工入库单",
+      "description": "批量提交完工入库单服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/im_mdc_mftmanuinbill/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftmanuinbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnAudit_3",
+      "name": "苍穹完工入库单--批量反审核",
+      "description": "服务应用 appid=im，接口编码 batchUnAudit。开放平台 urlformat=/v2/im/im_mdc_mftmanuinbill/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftmanuinbill/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnSubmit_18",
+      "name": "苍穹完工入库单--批量撤销",
+      "description": "服务应用 appid=im，接口编码 batchUnSubmit。开放平台 urlformat=/v2/im/im_mdc_mftmanuinbill/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftmanuinbill/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUpdate_16",
+      "name": "苍穹完工入库单--批量更新",
+      "description": "服务应用 appid=im，接口编码 batchUpdate。开放平台 urlformat=/v2/im/im_mdc_mftmanuinbill/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftmanuinbill/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_im_mdc_mftmanuinbill/pomOrderPushInstkBa",
+      "name": "苍穹生产工单下推生成入库单(批量)",
+      "description": "服务应用 appid=im，接口编码 im_mdc_mftmanuinbill/pomOrderPushInstkBatch。开放平台 urlformat=/v2/im/im_mdc_mftmanuinbill/pomOrderPushInstkBatch。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftmanuinbill/pomOrderPushInstkBatch",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_im_mdc_mftmanuinbill/pomReportPushInstkB",
+      "name": "苍穹生产汇报单下推生成入库单(批量)",
+      "description": "服务应用 appid=im，接口编码 im_mdc_mftmanuinbill/pomReportPushInstkBatch。开放平台 urlformat=/v2/im/im_mdc_mftmanuinbill/pomReportPushInstkBatch。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftmanuinbill/pomReportPushInstkBatch",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_query_8",
+      "name": "苍穹完工入库单查询",
+      "description": "完工入库单单据查询服务应用 appid=im，接口编码 query。开放平台 urlformat=/v2/im/im_mdc_mftmanuinbill/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftmanuinbill/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_11",
+      "name": "苍穹批量审核生产领料单",
+      "description": "批量审核生产领料单服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/im_mdc_mftproorder/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftproorder/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete_20",
+      "name": "苍穹批量删除生产领料单",
+      "description": "服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/im_mdc_mftproorder/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftproorder/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchQuery",
+      "name": "苍穹生产领料单批量查询",
+      "description": "生产领料单批量查询服务应用 appid=im，接口编码 batchQuery。开放平台 urlformat=/v2/im/im_mdc_mftproorder/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftproorder/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_11",
+      "name": "苍穹批量提交生产领料单",
+      "description": "批量提交生产领料单服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/im_mdc_mftproorder/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftproorder/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnaudit_16",
+      "name": "苍穹生产领料单批量反审核",
+      "description": "生产领料单批量反审核服务应用 appid=im，接口编码 batchUnaudit。开放平台 urlformat=/v2/im/im_mdc_mftproorder/batchUnaudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftproorder/batchUnaudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnsubmit",
+      "name": "苍穹生产领料单批量撤销提交",
+      "description": "服务应用 appid=im，接口编码 batchUnsubmit。开放平台 urlformat=/v2/im/im_mdc_mftproorder/batchUnsubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftproorder/batchUnsubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_im_mdc_mftproorder/pushGenerateMftProOrd",
+      "name": "苍穹下推生成生产领料单",
+      "description": "服务应用 appid=im，接口编码 im_mdc_mftproorder/pushGenerateMftProOrder。开放平台 urlformat=/v2/im/im_mdc_mftproorder/pushGenerateMftProOrder。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftproorder/pushGenerateMftProOrder",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_update_3",
+      "name": "苍穹修改生产领料单",
+      "description": "服务应用 appid=im，接口编码 update。开放平台 urlformat=/v2/im/im_mdc_mftproorder/update。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftproorder/update",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_22",
+      "name": "苍穹完工退库单--批量审核",
+      "description": "服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/im_mdc_mftreturnbill/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete_19",
+      "name": "苍穹完工退库单--批量删除",
+      "description": "服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/im_mdc_mftreturnbill/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnbill/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchQuery_4",
+      "name": "苍穹完工退库单--批量查询",
+      "description": "服务应用 appid=im，接口编码 batchQuery。开放平台 urlformat=/v2/im/im_mdc_mftreturnbill/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnbill/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_22",
+      "name": "苍穹完工退库单--批量提交",
+      "description": "服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/im_mdc_mftreturnbill/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnAudit_4",
+      "name": "苍穹完工退库单--批量反审核",
+      "description": "服务应用 appid=im，接口编码 batchUnAudit。开放平台 urlformat=/v2/im/im_mdc_mftreturnbill/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnbill/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnSubmit_19",
+      "name": "苍穹完工退库单--批量撤销",
+      "description": "服务应用 appid=im，接口编码 batchUnSubmit。开放平台 urlformat=/v2/im/im_mdc_mftreturnbill/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnbill/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUpdate_17",
+      "name": "苍穹完工退库单--批量修改",
+      "description": "服务应用 appid=im，接口编码 batchUpdate。开放平台 urlformat=/v2/im/im_mdc_mftreturnbill/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnbill/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_im_mdc_mftreturnbill/manuInPushManuRetBa",
+      "name": "苍穹完工入库单下推生成完工退库单(批量)",
+      "description": "服务应用 appid=im，接口编码 im_mdc_mftreturnbill/manuInPushManuRetBatch。开放平台 urlformat=/v2/im/im_mdc_mftreturnbill/manuInPushManuRetBatch。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnbill/manuInPushManuRetBatch",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_18",
+      "name": "苍穹生产退料单批量审核",
+      "description": "生产退料单批量审核服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/im_mdc_mftreturnorder/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnorder/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete_21",
+      "name": "苍穹批量删除生产退料单",
+      "description": "服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/im_mdc_mftreturnorder/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnorder/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchQuery_2",
+      "name": "苍穹生产退料单批量查询",
+      "description": "服务应用 appid=im，接口编码 batchQuery。开放平台 urlformat=/v2/im/im_mdc_mftreturnorder/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnorder/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_18",
+      "name": "苍穹生产退料单批量提交",
+      "description": "生产退料单批量提交服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/im_mdc_mftreturnorder/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnorder/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnAudit",
+      "name": "苍穹生产退料单批量反审核",
+      "description": "生产退料单批量反审核服务应用 appid=im，接口编码 batchUnAudit。开放平台 urlformat=/v2/im/im_mdc_mftreturnorder/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnorder/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnSubmit_14",
+      "name": "苍穹生产退料单批量撤销提交",
+      "description": "生产退料单批量撤销提交服务应用 appid=im，接口编码 batchUnSubmit。开放平台 urlformat=/v2/im/im_mdc_mftreturnorder/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnorder/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_im_mdc_mftreturnorder/pushGenerateMftRet",
+      "name": "苍穹下推生成生产退料单",
+      "description": "服务应用 appid=im，接口编码 im_mdc_mftreturnorder/pushGenerateMftReturnOrder。开放平台 urlformat=/v2/im/im_mdc_mftreturnorder/pushGenerateMftReturnOrder。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnorder/pushGenerateMftReturnOrder",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_update",
+      "name": "苍穹生产退料单修改",
+      "description": "服务应用 appid=im，接口编码 update。开放平台 urlformat=/v2/im/im_mdc_mftreturnorder/update。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_mftreturnorder/update",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_26",
+      "name": "苍穹批量审核委外补料单",
+      "description": "批量审核委外补料单服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/im_mdc_omfeedbill/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omfeedbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete_31",
+      "name": "苍穹批量删除委外补料单",
+      "description": "服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/im_mdc_omfeedbill/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omfeedbill/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchQuery_7",
+      "name": "苍穹批量查询委外补料单",
+      "description": "服务应用 appid=im，接口编码 batchQuery。开放平台 urlformat=/v2/im/im_mdc_omfeedbill/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omfeedbill/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSave_6",
+      "name": "苍穹批量保存委外补料单",
+      "description": "批量新增/修改委外补料单服务应用 appid=im，接口编码 batchSave。开放平台 urlformat=/v2/im/im_mdc_omfeedbill/batchSave。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omfeedbill/batchSave",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_26",
+      "name": "苍穹批量提交委外补料单",
+      "description": "批量提交委外补料单服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/im_mdc_omfeedbill/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omfeedbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnAudit_6",
+      "name": "苍穹批量反审核委外补料单",
+      "description": "批量反审核委外补料单服务应用 appid=im，接口编码 batchUnAudit。开放平台 urlformat=/v2/im/im_mdc_omfeedbill/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omfeedbill/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnSubmit_22",
+      "name": "苍穹批量撤销委外补料单提交",
+      "description": "批量撤销委外补料单提交服务应用 appid=im，接口编码 batchUnSubmit。开放平台 urlformat=/v2/im/im_mdc_omfeedbill/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omfeedbill/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_24",
+      "name": "苍穹批量审核委外领料单",
+      "description": "批量审核委外领料单服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/im_mdc_omoutbill/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omoutbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete_23",
+      "name": "苍穹批量删除委外领料单",
+      "description": "批量删除委外领料单服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/im_mdc_omoutbill/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omoutbill/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchQuery_5",
+      "name": "苍穹批量查询委外领料单",
+      "description": "委外领料单批量查询服务应用 appid=im，接口编码 batchQuery。开放平台 urlformat=/v2/im/im_mdc_omoutbill/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omoutbill/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSave_7",
+      "name": "苍穹批量保存委外领料单",
+      "description": "批量新增/修改委外领料单服务应用 appid=im，接口编码 batchSave。开放平台 urlformat=/v2/im/im_mdc_omoutbill/batchSave。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omoutbill/batchSave",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_24",
+      "name": "苍穹批量提交委外领料单",
+      "description": "批量提交委外领料单服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/im_mdc_omoutbill/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omoutbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnaudit_20",
+      "name": "苍穹批量反审核委外领料单",
+      "description": "委外领料单批量反审核服务应用 appid=im，接口编码 batchUnaudit。开放平台 urlformat=/v2/im/im_mdc_omoutbill/batchUnaudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omoutbill/batchUnaudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnsubmit_2",
+      "name": "苍穹批量撤销委外领料单提交",
+      "description": "委外领料单批量撤销提交服务应用 appid=im，接口编码 batchUnsubmit。开放平台 urlformat=/v2/im/im_mdc_omoutbill/batchUnsubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omoutbill/batchUnsubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_25",
+      "name": "苍穹批量审核委外退料单",
+      "description": "批量审核委外退料单服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/im_mdc_omreturnbill/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omreturnbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete_24",
+      "name": "苍穹批量删除委外退料单",
+      "description": "批量删除委外退料单服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/im_mdc_omreturnbill/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omreturnbill/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchQuery_6",
+      "name": "苍穹批量查询委外退料单",
+      "description": "委外退料单批量查询服务应用 appid=im，接口编码 batchQuery。开放平台 urlformat=/v2/im/im_mdc_omreturnbill/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omreturnbill/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSave_8",
+      "name": "苍穹批量保存委外退料单",
+      "description": "批量新增/修改委外退料单服务应用 appid=im，接口编码 batchSave。开放平台 urlformat=/v2/im/im_mdc_omreturnbill/batchSave。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omreturnbill/batchSave",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_25",
+      "name": "苍穹批量提交委外退料单",
+      "description": "批量提交委外退料单服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/im_mdc_omreturnbill/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omreturnbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnAudit_5",
+      "name": "苍穹批量反审核委外退料单",
+      "description": "服务应用 appid=im，接口编码 batchUnAudit。开放平台 urlformat=/v2/im/im_mdc_omreturnbill/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omreturnbill/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnSubmit_21",
+      "name": "苍穹批量撤销委外退料单提交",
+      "description": "委外退料单批量撤销提交服务应用 appid=im，接口编码 batchUnSubmit。开放平台 urlformat=/v2/im/im_mdc_omreturnbill/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_mdc_omreturnbill/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAdd_3",
+      "name": "苍穹销售出库单批量新增",
+      "description": "服务应用 appid=im，接口编码 batchAdd。开放平台 urlformat=/v2/im/im_saloutbill/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_saloutbill/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit",
+      "name": "苍穹销售出库单批量审核",
+      "description": "服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/im_saloutbill/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_saloutbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete",
+      "name": "苍穹销售出库单批量删除",
+      "description": "服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/im_saloutbill/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_saloutbill/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit",
+      "name": "苍穹销售出库单批量提交",
+      "description": "服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/im_saloutbill/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_saloutbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnaudit",
+      "name": "苍穹销售出库单批量反审核",
+      "description": "服务应用 appid=im，接口编码 batchUnaudit。开放平台 urlformat=/v2/im/im_saloutbill/batchUnaudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_saloutbill/batchUnaudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnSubmit_6",
+      "name": "苍穹销售出库单批量撤销提交",
+      "description": "服务应用 appid=im，接口编码 batchUnSubmit。开放平台 urlformat=/v2/im/im_saloutbill/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_saloutbill/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUpdate_4",
+      "name": "苍穹销售出库单批量更新",
+      "description": "服务应用 appid=im，接口编码 batchUpdate。开放平台 urlformat=/v2/im/im_saloutbill/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_saloutbill/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_getList_2",
+      "name": "苍穹销售出库单列表查询",
+      "description": "服务应用 appid=im，接口编码 getList。开放平台 urlformat=/v2/im/im_saloutbill/getList。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_saloutbill/getList",
+      "method": "POST",
+      "request_body": {
+        "data": {
+          "billno": []
+        }
+      }
+    },
+    {
+      "code_suffix": "im_query_4",
+      "name": "苍穹销售出库单详情查询",
+      "description": "服务应用 appid=im，接口编码 query。开放平台 urlformat=/v2/im/im_saloutbill/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/im_saloutbill/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchAdd_15",
+      "name": "苍穹简单产品入库单--批量新增",
+      "description": "服务应用 appid=im，接口编码 batchAdd。开放平台 urlformat=/v2/im/xkim_sp_mftinstkbill/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftinstkbill/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_27",
+      "name": "苍穹简单产品入库单--批量审核",
+      "description": "简单产品入库单--批量审核服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/xkim_sp_mftinstkbill/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftinstkbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete_25",
+      "name": "苍穹简单产品入库单--批量删除",
+      "description": "简单产品入库单--批量删除服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/xkim_sp_mftinstkbill/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftinstkbill/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchQuery_8",
+      "name": "苍穹简单产品入库单--批量查询",
+      "description": "服务应用 appid=im，接口编码 batchQuery。开放平台 urlformat=/v2/im/xkim_sp_mftinstkbill/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftinstkbill/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_27",
+      "name": "苍穹简单产品入库单--批量提交",
+      "description": "简单产品入库单批量提交服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/xkim_sp_mftinstkbill/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftinstkbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnAudit_7",
+      "name": "苍穹简单产品入库单--批量反审核",
+      "description": "简单产品入库单--批量反审核服务应用 appid=im，接口编码 batchUnAudit。开放平台 urlformat=/v2/im/xkim_sp_mftinstkbill/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftinstkbill/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnSubmit_23",
+      "name": "苍穹简单产品入库单--批量撤销",
+      "description": "简单产品入库单批量撤销服务应用 appid=im，接口编码 batchUnSubmit。开放平台 urlformat=/v2/im/xkim_sp_mftinstkbill/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftinstkbill/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUpdate_19",
+      "name": "苍穹简单产品入库单--批量更新",
+      "description": "服务应用 appid=im，接口编码 batchUpdate。开放平台 urlformat=/v2/im/xkim_sp_mftinstkbill/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftinstkbill/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAdd_17",
+      "name": "苍穹简单生产领料单批量新增",
+      "description": "简单生产领料单批量新增。服务应用 appid=im，接口编码 batchAdd。开放平台 urlformat=/v2/im/xkim_sp_mftpmorder/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftpmorder/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_31",
+      "name": "苍穹简单生产领料单批量审核",
+      "description": "传入多个简单生产领料单编码，批量审核。服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/xkim_sp_mftpmorder/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftpmorder/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete_29",
+      "name": "苍穹简单生产领料单批量删除",
+      "description": "传入多个简单生产领料单编号进行批量删除。服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/xkim_sp_mftpmorder/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftpmorder/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchQuery_11",
+      "name": "苍穹简单生产领料单批量查询",
+      "description": "根据传入条件进行简单生产领料单的批量查询。服务应用 appid=im，接口编码 batchQuery。开放平台 urlformat=/v2/im/xkim_sp_mftpmorder/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftpmorder/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_31",
+      "name": "苍穹简单生产领料单批量提交",
+      "description": "传入多个简单生产领料单编码，批量提交。服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/xkim_sp_mftpmorder/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftpmorder/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnAudit_11",
+      "name": "苍穹简单生产领料单批量反审核",
+      "description": "传入多个简单生产领料单编码，批量反审核。服务应用 appid=im，接口编码 batchUnAudit。开放平台 urlformat=/v2/im/xkim_sp_mftpmorder/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftpmorder/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnSubmit_27",
+      "name": "苍穹简单生产领料单批量撤销",
+      "description": "传入多个简单生产领料单编码，批量撤销。服务应用 appid=im，接口编码 batchUnSubmit。开放平台 urlformat=/v2/im/xkim_sp_mftpmorder/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftpmorder/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUpdate_22",
+      "name": "苍穹简单生产领料单批量修改",
+      "description": "简单生产领料单批量修改。服务应用 appid=im，接口编码 batchUpdate。开放平台 urlformat=/v2/im/xkim_sp_mftpmorder/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftpmorder/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAdd_18",
+      "name": "苍穹简单生产退料单批量新增",
+      "description": "简单生产退料单批量新增。服务应用 appid=im，接口编码 batchAdd。开放平台 urlformat=/v2/im/xkim_sp_mftrmorder/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrmorder/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_32",
+      "name": "苍穹简单生产退料单批量审核",
+      "description": "传入多个简单生产退料单编码，批量撤销。服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/xkim_sp_mftrmorder/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrmorder/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchDelete_30",
+      "name": "苍穹简单生产退料单批量删除",
+      "description": "传入多个简单生产退料单编号进行批量删除。服务应用 appid=im，接口编码 batchDelete。开放平台 urlformat=/v2/im/xkim_sp_mftrmorder/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrmorder/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchQuery_12",
+      "name": "苍穹简单生产退料单批量查询",
+      "description": "批量查询简单生产退料单。服务应用 appid=im，接口编码 batchQuery。开放平台 urlformat=/v2/im/xkim_sp_mftrmorder/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrmorder/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_32",
+      "name": "苍穹简单生产退料单批量提交",
+      "description": "传入多个简单生产退料单编码，批量提交。服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/xkim_sp_mftrmorder/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrmorder/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnAudit_12",
+      "name": "苍穹简单生产退料单批量反审核",
+      "description": "传入多个简单生产退料单编码，批量反审核。服务应用 appid=im，接口编码 batchUnAudit。开放平台 urlformat=/v2/im/xkim_sp_mftrmorder/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrmorder/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnSubmit_28",
+      "name": "苍穹简单生产退料单批量撤销",
+      "description": "传入多个简单生产退料单编码，批量撤销。服务应用 appid=im，接口编码 batchUnSubmit。开放平台 urlformat=/v2/im/xkim_sp_mftrmorder/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrmorder/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUpdate_23",
+      "name": "苍穹简单生产退料单批量修改",
+      "description": "简单生产退料单批量修改。服务应用 appid=im，接口编码 batchUpdate。开放平台 urlformat=/v2/im/xkim_sp_mftrmorder/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrmorder/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAdd_16",
+      "name": "苍穹简单产品退库单--批量新增",
+      "description": "服务应用 appid=im，接口编码 batchAdd。开放平台 urlformat=/v2/im/xkim_sp_mftrtnstkbill/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrtnstkbill/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchAudit_30",
+      "name": "苍穹简单产品退库单--批量审核",
+      "description": "服务应用 appid=im，接口编码 batchAudit。开放平台 urlformat=/v2/im/xkim_sp_mftrtnstkbill/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrtnstkbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchQuery_13",
+      "name": "苍穹简单产品退库单--批量查询",
+      "description": "服务应用 appid=im，接口编码 batchQuery。开放平台 urlformat=/v2/im/xkim_sp_mftrtnstkbill/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrtnstkbill/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "im_batchSubmit_30",
+      "name": "苍穹简单产品退库单--批量提交",
+      "description": "服务应用 appid=im，接口编码 batchSubmit。开放平台 urlformat=/v2/im/xkim_sp_mftrtnstkbill/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrtnstkbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnAudit_10",
+      "name": "苍穹简单产品退库单--批量反审核",
+      "description": "服务应用 appid=im，接口编码 batchUnAudit。开放平台 urlformat=/v2/im/xkim_sp_mftrtnstkbill/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrtnstkbill/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUnSubmit_26",
+      "name": "苍穹简单产品退库单--批量撤销",
+      "description": "服务应用 appid=im，接口编码 batchUnSubmit。开放平台 urlformat=/v2/im/xkim_sp_mftrtnstkbill/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrtnstkbill/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "im_batchUpdate_24",
+      "name": "苍穹简单产品退库单--批量更新",
+      "description": "服务应用 appid=im，接口编码 batchUpdate。开放平台 urlformat=/v2/im/xkim_sp_mftrtnstkbill/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/im/xkim_sp_mftrtnstkbill/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_mftOrderBeginWork",
+      "name": "苍穹生产工单开工",
+      "description": "传入多个生产工单ID，对生产工单进行开工操作。服务应用 appid=pom，接口编码 mftOrderBeginWork。开放平台 urlformat=/v2/pom/mftOrderBeginWork。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/mftOrderBeginWork",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_mftOrderEndWork",
+      "name": "苍穹生产工单完工",
+      "description": "传入多个生产工单ID，对生产工单进行完工操作。服务应用 appid=pom，接口编码 mftOrderEndWork。开放平台 urlformat=/v2/pom/mftOrderEndWork。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/mftOrderEndWork",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_mftOrderShut",
+      "name": "苍穹生产工单关闭",
+      "description": "传入多个生产工单ID，对生产工单进行关闭操作。服务应用 appid=pom，接口编码 mftOrderShut。开放平台 urlformat=/v2/pom/mftOrderShut。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/mftOrderShut",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_mftOrderTransmit",
+      "name": "苍穹生产工单下达",
+      "description": "传入多个生产工单ID，对生产工单进行下达操作。服务应用 appid=pom，接口编码 mftOrderTransmit。开放平台 urlformat=/v2/pom/mftOrderTransmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/mftOrderTransmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchAdd",
+      "name": "苍穹生产工单批量新增",
+      "description": "生产工单批量新增服务应用 appid=pom，接口编码 batchAdd。开放平台 urlformat=/v2/pom/pom_mftorder/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorder/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchAudit_2",
+      "name": "苍穹生产工单批量审核",
+      "description": "生产工单批量审核服务应用 appid=pom，接口编码 batchAudit。开放平台 urlformat=/v2/pom/pom_mftorder/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorder/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchDelete",
+      "name": "苍穹生产工单批量删除",
+      "description": "生产工单批量删除服务应用 appid=pom，接口编码 batchDelete。开放平台 urlformat=/v2/pom/pom_mftorder/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorder/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchQuery",
+      "name": "苍穹生产工单批量查询（废弃）",
+      "description": "生产工单批量查询服务应用 appid=pom，接口编码 batchQuery。开放平台 urlformat=/v2/pom/pom_mftorder/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorder/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "query_mftorder",
+      "name": "苍穹查询生产工单",
+      "description": "生产工单批量查询（pom_mftorder/batchQueryNew）。筛选条件放在 data 内，均为可选：billno（工单号数组）、billstatus、org_number、billtype_number、start_billdate/end_billdate、start_createtime/end_createtime、creator_number 等；按本环境单据与组织编码填写，不要沿用开放平台文档里的演示单号。换票由应用连接器自动完成，无需单独 getToken 接口。",
+      "path": "kapi/v2/pom/pom_mftorder/batchQueryNew",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "pom_batchSubmit_2",
+      "name": "苍穹生产工单批量提交",
+      "description": "生产工单批量提交服务应用 appid=pom，接口编码 batchSubmit。开放平台 urlformat=/v2/pom/pom_mftorder/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorder/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchUnAudit",
+      "name": "苍穹生产工单批量反审核",
+      "description": "生产工单批量反审核服务应用 appid=pom，接口编码 batchUnAudit。开放平台 urlformat=/v2/pom/pom_mftorder/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorder/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchUnSubmit",
+      "name": "苍穹生产工单批量撤销",
+      "description": "生产工单批量撤销服务应用 appid=pom，接口编码 batchUnSubmit。开放平台 urlformat=/v2/pom/pom_mftorder/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorder/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchUpdate_3",
+      "name": "苍穹生产工单批量更新",
+      "description": "服务应用 appid=pom，接口编码 batchUpdate。开放平台 urlformat=/v2/pom/pom_mftorder/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorder/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchAdd_2",
+      "name": "苍穹生产汇报单批量新增",
+      "description": "服务应用 appid=pom，接口编码 batchAdd。开放平台 urlformat=/v2/pom/pom_mftorderreport/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorderreport/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchAudit",
+      "name": "苍穹批量审核工单汇报单",
+      "description": "批量审核工单汇报单服务应用 appid=pom，接口编码 batchAudit。开放平台 urlformat=/v2/pom/pom_mftorderreport/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorderreport/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchDelete_2",
+      "name": "苍穹批量删除生产汇报单",
+      "description": "服务应用 appid=pom，接口编码 batchDelete。开放平台 urlformat=/v2/pom/pom_mftorderreport/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorderreport/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchQuery_2",
+      "name": "苍穹生产汇报单查询",
+      "description": "服务应用 appid=pom，接口编码 batchQuery。开放平台 urlformat=/v2/pom/pom_mftorderreport/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorderreport/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "pom_batchSubmit",
+      "name": "苍穹批量提交工单汇报单",
+      "description": "批量提交工单汇报单服务应用 appid=pom，接口编码 batchSubmit。开放平台 urlformat=/v2/pom/pom_mftorderreport/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorderreport/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchUnAudit_2",
+      "name": "苍穹批量反审核生产汇报单",
+      "description": "服务应用 appid=pom，接口编码 batchUnAudit。开放平台 urlformat=/v2/pom/pom_mftorderreport/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorderreport/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchUnSubmit_2",
+      "name": "苍穹批量撤销生产汇报单",
+      "description": "服务应用 appid=pom，接口编码 batchUnSubmit。开放平台 urlformat=/v2/pom/pom_mftorderreport/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorderreport/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchUpdate_2",
+      "name": "苍穹生产汇报单批量更新",
+      "description": "服务应用 appid=pom，接口编码 batchUpdate。开放平台 urlformat=/v2/pom/pom_mftorderreport/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftorderreport/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchAudit_3",
+      "name": "苍穹生产用料清单批量审核",
+      "description": "生产用料清单批量审核服务应用 appid=pom，接口编码 batchAudit。开放平台 urlformat=/v2/pom/pom_mftstock/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftstock/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchSubmit_3",
+      "name": "苍穹生产用料清单批量提交",
+      "description": "服务应用 appid=pom，接口编码 batchSubmit。开放平台 urlformat=/v2/pom/pom_mftstock/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftstock/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchUnAudit_3",
+      "name": "苍穹生产用料清单批量反审核",
+      "description": "生产用料清单批量反审核服务应用 appid=pom，接口编码 batchUnAudit。开放平台 urlformat=/v2/pom/pom_mftstock/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftstock/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchUnSubmit_3",
+      "name": "苍穹生产用料清单批量撤销",
+      "description": "生产用料清单批量撤销服务应用 appid=pom，接口编码 batchUnSubmit。开放平台 urlformat=/v2/pom/pom_mftstock/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftstock/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_batchUpdate",
+      "name": "苍穹生产用料清单批量修改",
+      "description": "生产用料清单批量修改服务应用 appid=pom，接口编码 batchUpdate。开放平台 urlformat=/v2/pom/pom_mftstock/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftstock/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "pom_query",
+      "name": "苍穹生产用料清单查询",
+      "description": "生产用料清单列表查询服务应用 appid=pom，接口编码 query。开放平台 urlformat=/v2/pom/pom_mftstock/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/pom/pom_mftstock/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sfc_batchAudit_4",
+      "name": "苍穹委外接收单批量审核",
+      "description": "委外接收单批量审核服务应用 appid=sfc，接口编码 batchAudit。开放平台 urlformat=/v2/sfc/sfc_outreceive/batchAudit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outreceive/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchQuery_3",
+      "name": "苍穹委外接收单批量查询",
+      "description": "服务应用 appid=sfc，接口编码 batchQuery。开放平台 urlformat=/v2/sfc/sfc_outreceive/batchQuery。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outreceive/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sfc_batchSubmit_4",
+      "name": "苍穹委外接收单批量提交",
+      "description": "服务应用 appid=sfc，接口编码 batchSubmit。开放平台 urlformat=/v2/sfc/sfc_outreceive/batchSubmit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outreceive/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUnAudit_3",
+      "name": "苍穹委外接收单批量反审核",
+      "description": "委外接收单批量反审核服务应用 appid=sfc，接口编码 batchUnAudit。开放平台 urlformat=/v2/sfc/sfc_outreceive/batchUnAudit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outreceive/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUnSubmit_3",
+      "name": "苍穹委外接收单批量撤销",
+      "description": "服务应用 appid=sfc，接口编码 batchUnSubmit。开放平台 urlformat=/v2/sfc/sfc_outreceive/batchUnSubmit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outreceive/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUpdate_2",
+      "name": "苍穹委外接收单批量更新",
+      "description": "服务应用 appid=sfc，接口编码 batchUpdate。开放平台 urlformat=/v2/sfc/sfc_outreceive/batchUpdate。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outreceive/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_jointCoBatchAdd",
+      "name": "苍穹委外接收单联副产品新增",
+      "description": "服务应用 appid=sfc，接口编码 jointCoBatchAdd。开放平台 urlformat=/v2/sfc/sfc_outreceive/jointCoBatchAdd。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outreceive/jointCoBatchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_jointCoBatchSelected",
+      "name": "苍穹委外接收单联副产品选择已有",
+      "description": "服务应用 appid=sfc，接口编码 jointCoBatchSelected。开放平台 urlformat=/v2/sfc/sfc_outreceive/jointCoBatchSelected。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outreceive/jointCoBatchSelected",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_sfc_outreceive/pushadd",
+      "name": "苍穹委外发出单下推生成委外接收单",
+      "description": "委外发出单下推生成委外接收单服务应用 appid=sfc，接口编码 sfc_outreceive/pushadd。开放平台 urlformat=/v2/sfc/sfc_outreceive/pushadd。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outreceive/pushadd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchAudit_2",
+      "name": "苍穹委外发出单批量审核",
+      "description": "委外发出单批量审核服务应用 appid=sfc，接口编码 batchAudit。开放平台 urlformat=/v2/sfc/sfc_outsourcesendbill/batchAudit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outsourcesendbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchQuery_2",
+      "name": "苍穹委外发出单批量查询",
+      "description": "委外发出单批量查询服务应用 appid=sfc，接口编码 batchQuery。开放平台 urlformat=/v2/sfc/sfc_outsourcesendbill/batchQuery。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outsourcesendbill/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sfc_batchSubmit_2",
+      "name": "苍穹委外发出单批量提交",
+      "description": "委外发出单批量提交服务应用 appid=sfc，接口编码 batchSubmit。开放平台 urlformat=/v2/sfc/sfc_outsourcesendbill/batchSubmit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outsourcesendbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUnAudit",
+      "name": "苍穹委外发出单批量反审核",
+      "description": "委外发出单批量反审核服务应用 appid=sfc，接口编码 batchUnAudit。开放平台 urlformat=/v2/sfc/sfc_outsourcesendbill/batchUnAudit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outsourcesendbill/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUnSubmit",
+      "name": "苍穹委外发出单批量撤销提交",
+      "description": "委外发出单批量撤销提交服务应用 appid=sfc，接口编码 batchUnSubmit。开放平台 urlformat=/v2/sfc/sfc_outsourcesendbill/batchUnSubmit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outsourcesendbill/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUpdate",
+      "name": "苍穹委外发出单批量更新",
+      "description": "委外发出单批量更新服务应用 appid=sfc，接口编码 batchUpdate。开放平台 urlformat=/v2/sfc/sfc_outsourcesendbill/batchUpdate。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outsourcesendbill/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_sfc_outsourcesendbill/pushadd",
+      "name": "苍穹工序计划下推生成委外发出单",
+      "description": "工序计划下推生成委外发出单服务应用 appid=sfc，接口编码 sfc_outsourcesendbill/pushadd。开放平台 urlformat=/v2/sfc/sfc_outsourcesendbill/pushadd。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_outsourcesendbill/pushadd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchAudit_5",
+      "name": "苍穹工序计划批量审核",
+      "description": "服务应用 appid=sfc，接口编码 batchAudit。开放平台 urlformat=/v2/sfc/sfc_processplanbill/batchAudit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processplanbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchQuery_4",
+      "name": "苍穹工序计划批量查询",
+      "description": "工序计划批量查询服务应用 appid=sfc，接口编码 batchQuery。开放平台 urlformat=/v2/sfc/sfc_processplanbill/batchQuery。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processplanbill/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sfc_batchSubmit_5",
+      "name": "苍穹工序计划批量提交",
+      "description": "工序计划批量提交服务应用 appid=sfc，接口编码 batchSubmit。开放平台 urlformat=/v2/sfc/sfc_processplanbill/batchSubmit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processplanbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUnAudit_4",
+      "name": "苍穹工序计划批量反审核",
+      "description": "服务应用 appid=sfc，接口编码 batchUnAudit。开放平台 urlformat=/v2/sfc/sfc_processplanbill/batchUnAudit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processplanbill/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUnSubmit_4",
+      "name": "苍穹工序计划批量撤销",
+      "description": "服务应用 appid=sfc，接口编码 batchUnSubmit。开放平台 urlformat=/v2/sfc/sfc_processplanbill/batchUnSubmit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processplanbill/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUpdate_4",
+      "name": "苍穹工序计划批量更新",
+      "description": "工序计划批量更新服务应用 appid=sfc，接口编码 batchUpdate。开放平台 urlformat=/v2/sfc/sfc_processplanbill/batchUpdate。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processplanbill/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchAudit_3",
+      "name": "苍穹工序汇报单批量审核",
+      "description": "服务应用 appid=sfc，接口编码 batchAudit。开放平台 urlformat=/v2/sfc/sfc_processreviewbill/batchAudit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processreviewbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchDelete",
+      "name": "苍穹工序汇报单批量删除",
+      "description": "服务应用 appid=sfc，接口编码 batchDelete。开放平台 urlformat=/v2/sfc/sfc_processreviewbill/batchDelete。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processreviewbill/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchQuery",
+      "name": "苍穹工序汇报单批量查询",
+      "description": "批量查询工序汇报单。服务应用 appid=sfc，接口编码 batchQuery。开放平台 urlformat=/v2/sfc/sfc_processreviewbill/batchQuery。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processreviewbill/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sfc_batchSubmit_3",
+      "name": "苍穹工序汇报单批量提交",
+      "description": "服务应用 appid=sfc，接口编码 batchSubmit。开放平台 urlformat=/v2/sfc/sfc_processreviewbill/batchSubmit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processreviewbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUnAudit_2",
+      "name": "苍穹工序汇报单批量反审核",
+      "description": "服务应用 appid=sfc，接口编码 batchUnAudit。开放平台 urlformat=/v2/sfc/sfc_processreviewbill/batchUnAudit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processreviewbill/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUnSubmit_2",
+      "name": "苍穹工序汇报单批量撤销提交",
+      "description": "服务应用 appid=sfc，接口编码 batchUnSubmit。开放平台 urlformat=/v2/sfc/sfc_processreviewbill/batchUnSubmit。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processreviewbill/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_batchUpdate_3",
+      "name": "苍穹工序汇报单批量更新",
+      "description": "服务应用 appid=sfc，接口编码 batchUpdate。开放平台 urlformat=/v2/sfc/sfc_processreviewbill/batchUpdate。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processreviewbill/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sfc_sfc_processreviewbill/pushAdd",
+      "name": "苍穹工序计划下推生成工序汇报单",
+      "description": "服务应用 appid=sfc，接口编码 sfc_processreviewbill/pushAdd。开放平台 urlformat=/v2/sfc/sfc_processreviewbill/pushAdd。换票由应用连接器自动完成。请求体为空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sfc/sfc_processreviewbill/pushAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAdd_5",
+      "name": "苍穹发货通知单批量新增",
+      "description": "服务应用 appid=sm，接口编码 batchAdd。开放平台 urlformat=/v2/sm/sm_delivernotice/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_delivernotice/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAudit_5",
+      "name": "苍穹发货通知单批量审核",
+      "description": "服务应用 appid=sm，接口编码 batchAudit。开放平台 urlformat=/v2/sm/sm_delivernotice/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_delivernotice/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchDelete_4",
+      "name": "苍穹发货通知单批量删除",
+      "description": "服务应用 appid=sm，接口编码 batchDelete。开放平台 urlformat=/v2/sm/sm_delivernotice/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_delivernotice/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchQuery",
+      "name": "苍穹发货通知单查询",
+      "description": "服务应用 appid=sm，接口编码 batchQuery。开放平台 urlformat=/v2/sm/sm_delivernotice/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_delivernotice/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sm_batchSubmit_6",
+      "name": "苍穹发货通知单批量提交",
+      "description": "服务应用 appid=sm，接口编码 batchSubmit。开放平台 urlformat=/v2/sm/sm_delivernotice/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_delivernotice/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnAudit_3",
+      "name": "苍穹发货通知单批量反审核",
+      "description": "服务应用 appid=sm，接口编码 batchUnAudit。开放平台 urlformat=/v2/sm/sm_delivernotice/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_delivernotice/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnSubmit_3",
+      "name": "苍穹发货通知单批量撤销提交",
+      "description": "服务应用 appid=sm，接口编码 batchUnSubmit。开放平台 urlformat=/v2/sm/sm_delivernotice/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_delivernotice/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUpdate_4",
+      "name": "苍穹发货通知单批量更新",
+      "description": "服务应用 appid=sm，接口编码 batchUpdate。开放平台 urlformat=/v2/sm/sm_delivernotice/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_delivernotice/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_updateDeliveryNotice",
+      "name": "苍穹发货通知单批量更新",
+      "description": "服务应用 appid=sm，接口编码 updateDeliveryNotice。开放平台 urlformat=/v2/sm/sm_delivernotice/updateDeliveryNotice。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_delivernotice/updateDeliveryNotice",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAdd_4",
+      "name": "苍穹销售报价单批量新增",
+      "description": "服务应用 appid=sm，接口编码 batchAdd。开放平台 urlformat=/v2/sm/sm_quotationbill/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_quotationbill/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAudit_6",
+      "name": "苍穹销售报价单批量审核",
+      "description": "服务应用 appid=sm，接口编码 batchAudit。开放平台 urlformat=/v2/sm/sm_quotationbill/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_quotationbill/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchDelete_3",
+      "name": "苍穹销售报价单批量删除",
+      "description": "服务应用 appid=sm，接口编码 batchDelete。开放平台 urlformat=/v2/sm/sm_quotationbill/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_quotationbill/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchSubmit_5",
+      "name": "苍穹销售报价单批量提交",
+      "description": "服务应用 appid=sm，接口编码 batchSubmit。开放平台 urlformat=/v2/sm/sm_quotationbill/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_quotationbill/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnAudit_2",
+      "name": "苍穹销售报价单批量反审核",
+      "description": "服务应用 appid=sm，接口编码 batchUnAudit。开放平台 urlformat=/v2/sm/sm_quotationbill/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_quotationbill/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnSubmit_2",
+      "name": "苍穹销售报价单批量撤销提交",
+      "description": "服务应用 appid=sm，接口编码 batchUnSubmit。开放平台 urlformat=/v2/sm/sm_quotationbill/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_quotationbill/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUpdate_3",
+      "name": "苍穹销售报价单批量更新",
+      "description": "服务应用 appid=sm，接口编码 batchUpdate。开放平台 urlformat=/v2/sm/sm_quotationbill/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_quotationbill/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_query_3",
+      "name": "苍穹销售报价单查询",
+      "description": "销售报价单查询服务应用 appid=sm，接口编码 query。开放平台 urlformat=/v2/sm/sm_quotationbill/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_quotationbill/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sm_batchAdd_2",
+      "name": "苍穹销售退货申请单批量新增",
+      "description": "退货申请单批量新增操作服务应用 appid=sm，接口编码 batchAdd。开放平台 urlformat=/v2/sm/sm_returnapply/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_returnapply/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAudit_2",
+      "name": "苍穹销售退货申请单批量审核",
+      "description": "服务应用 appid=sm，接口编码 batchAudit。开放平台 urlformat=/v2/sm/sm_returnapply/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_returnapply/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchQuery_3",
+      "name": "苍穹销售退货申请单批量查询",
+      "description": "服务应用 appid=sm，接口编码 batchQuery。开放平台 urlformat=/v2/sm/sm_returnapply/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_returnapply/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sm_batchSubmit_2",
+      "name": "苍穹销售退货申请单批量提交",
+      "description": "服务应用 appid=sm，接口编码 batchSubmit。开放平台 urlformat=/v2/sm/sm_returnapply/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_returnapply/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnaudit_2",
+      "name": "苍穹销售退货申请单批量反审核",
+      "description": "服务应用 appid=sm，接口编码 batchUnaudit。开放平台 urlformat=/v2/sm/sm_returnapply/batchUnaudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_returnapply/batchUnaudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnsubmit_3",
+      "name": "苍穹销售退货申请单批量撤销",
+      "description": "服务应用 appid=sm，接口编码 batchUnsubmit。开放平台 urlformat=/v2/sm/sm_returnapply/batchUnsubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_returnapply/batchUnsubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUpdate_6",
+      "name": "苍穹销售退货申请单批量更新",
+      "description": "服务应用 appid=sm，接口编码 batchUpdate。开放平台 urlformat=/v2/sm/sm_returnapply/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_returnapply/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAdd_6",
+      "name": "苍穹销售价目表批量新增",
+      "description": "服务应用 appid=sm，接口编码 batchAdd。开放平台 urlformat=/v2/sm/sm_salepricelist/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelist/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAudit_7",
+      "name": "苍穹销售价目表批量审核",
+      "description": "服务应用 appid=sm，接口编码 batchAudit。开放平台 urlformat=/v2/sm/sm_salepricelist/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelist/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchDisable",
+      "name": "苍穹销售价目表批量禁用",
+      "description": "服务应用 appid=sm，接口编码 batchDisable。开放平台 urlformat=/v2/sm/sm_salepricelist/batchDisable。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelist/batchDisable",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchEnable",
+      "name": "苍穹销售价目表批量启用",
+      "description": "服务应用 appid=sm，接口编码 batchEnable。开放平台 urlformat=/v2/sm/sm_salepricelist/batchEnable。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelist/batchEnable",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchQuery_4",
+      "name": "苍穹销售价目表批量查询",
+      "description": "服务应用 appid=sm，接口编码 batchQuery。开放平台 urlformat=/v2/sm/sm_salepricelist/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelist/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sm_batchSubmit_7",
+      "name": "苍穹销售价目表批量提交",
+      "description": "服务应用 appid=sm，接口编码 batchSubmit。开放平台 urlformat=/v2/sm/sm_salepricelist/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelist/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnAudit_4",
+      "name": "苍穹销售价目表批量反审核",
+      "description": "服务应用 appid=sm，接口编码 batchUnAudit。开放平台 urlformat=/v2/sm/sm_salepricelist/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelist/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnSubmit_4",
+      "name": "苍穹销售价目表批量撤销提交",
+      "description": "服务应用 appid=sm，接口编码 batchUnSubmit。开放平台 urlformat=/v2/sm/sm_salepricelist/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelist/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUpdate_7",
+      "name": "苍穹销售价目表批量更新",
+      "description": "服务应用 appid=sm，接口编码 batchUpdate。开放平台 urlformat=/v2/sm/sm_salepricelist/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelist/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAdd_7",
+      "name": "苍穹销售价目表分组批量新增",
+      "description": "服务应用 appid=sm，接口编码 batchAdd。开放平台 urlformat=/v2/sm/sm_salepricelistgroup/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelistgroup/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchQuery_5",
+      "name": "苍穹销售价目表分组批量查询",
+      "description": "服务应用 appid=sm，接口编码 batchQuery。开放平台 urlformat=/v2/sm/sm_salepricelistgroup/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelistgroup/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sm_batchUpdate_8",
+      "name": "苍穹销售价目表分组批量更新",
+      "description": "服务应用 appid=sm，接口编码 batchUpdate。开放平台 urlformat=/v2/sm/sm_salepricelistgroup/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salepricelistgroup/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAdd_3",
+      "name": "苍穹委托代销清单批量新增",
+      "description": "委托代销清单批量新增操作服务应用 appid=sm，接口编码 batchAdd。开放平台 urlformat=/v2/sm/sm_salesagency/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salesagency/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAudit",
+      "name": "苍穹委托代销清单批量审核",
+      "description": "服务应用 appid=sm，接口编码 batchAudit。开放平台 urlformat=/v2/sm/sm_salesagency/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salesagency/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchQuery_2",
+      "name": "苍穹委托代销清单批量查询",
+      "description": "服务应用 appid=sm，接口编码 batchQuery。开放平台 urlformat=/v2/sm/sm_salesagency/batchQuery。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salesagency/batchQuery",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sm_batchSubmit",
+      "name": "苍穹委托代销清单批量提交",
+      "description": "服务应用 appid=sm，接口编码 batchSubmit。开放平台 urlformat=/v2/sm/sm_salesagency/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salesagency/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnaudit",
+      "name": "苍穹委托代销清单批量反审核",
+      "description": "服务应用 appid=sm，接口编码 batchUnaudit。开放平台 urlformat=/v2/sm/sm_salesagency/batchUnaudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salesagency/batchUnaudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnsubmit_2",
+      "name": "苍穹委托代销清单批量撤销",
+      "description": "服务应用 appid=sm，接口编码 batchUnsubmit。开放平台 urlformat=/v2/sm/sm_salesagency/batchUnsubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salesagency/batchUnsubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUpdate_5",
+      "name": "苍穹委托代销清单批量更新",
+      "description": "服务应用 appid=sm，接口编码 batchUpdate。开放平台 urlformat=/v2/sm/sm_salesagency/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salesagency/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAdd",
+      "name": "苍穹销售订单批量新增",
+      "description": "销售订单批量新增操作服务应用 appid=sm，接口编码 batchAdd。开放平台 urlformat=/v2/sm/sm_salorder/batchAdd。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salorder/batchAdd",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchAudit_3",
+      "name": "苍穹销售订单批量审核",
+      "description": "服务应用 appid=sm，接口编码 batchAudit。开放平台 urlformat=/v2/sm/sm_salorder/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salorder/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchDelete",
+      "name": "苍穹销售订单批量删除",
+      "description": "服务应用 appid=sm，接口编码 batchDelete。开放平台 urlformat=/v2/sm/sm_salorder/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salorder/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchSubmit_3",
+      "name": "苍穹销售订单批量提交",
+      "description": "服务应用 appid=sm，接口编码 batchSubmit。开放平台 urlformat=/v2/sm/sm_salorder/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salorder/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnaudit_3",
+      "name": "苍穹销售订单批量反审核",
+      "description": "服务应用 appid=sm，接口编码 batchUnaudit。开放平台 urlformat=/v2/sm/sm_salorder/batchUnaudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salorder/batchUnaudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnsubmit",
+      "name": "苍穹销售订单批量撤销",
+      "description": "服务应用 appid=sm，接口编码 batchUnsubmit。开放平台 urlformat=/v2/sm/sm_salorder/batchUnsubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salorder/batchUnsubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUpdate",
+      "name": "苍穹销售订单批量更新",
+      "description": "销售订单批量更新操作服务应用 appid=sm，接口编码 batchUpdate。开放平台 urlformat=/v2/sm/sm_salorder/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salorder/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_bizchange",
+      "name": "苍穹销售订单变更",
+      "description": "API结果没有返回变更单信息，建议使用销售订单变更（新）接口newbizchange服务应用 appid=sm，接口编码 bizchange。开放平台 urlformat=/v2/sm/sm_salorder/bizchange。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salorder/bizchange",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_bizclose",
+      "name": "苍穹销售订单关闭",
+      "description": "服务应用 appid=sm，接口编码 bizclose。开放平台 urlformat=/v2/sm/sm_salorder/bizclose。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salorder/bizclose",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_newbizchange",
+      "name": "苍穹销售订单变更（新）",
+      "description": "返回结果中，changeBillId为变更单ID，changeBillNo为变更单单据编号服务应用 appid=sm，接口编码 newbizchange。开放平台 urlformat=/v2/sm/sm_salorder/newbizchange。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salorder/newbizchange",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_query",
+      "name": "苍穹销售订单查询",
+      "description": "销售订单查询服务应用 appid=sm，接口编码 query。开放平台 urlformat=/v2/sm/sm_salorder/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_salorder/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    },
+    {
+      "code_suffix": "sm_batchAudit_4",
+      "name": "苍穹销售订单变更单批量审核",
+      "description": "服务应用 appid=sm，接口编码 batchAudit。开放平台 urlformat=/v2/sm/sm_xssalorder/batchAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_xssalorder/batchAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchBizValid",
+      "name": "苍穹销售订单变更单批量生效",
+      "description": "服务应用 appid=sm，接口编码 batchBizValid。开放平台 urlformat=/v2/sm/sm_xssalorder/batchBizValid。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_xssalorder/batchBizValid",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchDelete_2",
+      "name": "苍穹销售订单变更单批量删除",
+      "description": "服务应用 appid=sm，接口编码 batchDelete。开放平台 urlformat=/v2/sm/sm_xssalorder/batchDelete。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_xssalorder/batchDelete",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchSubmit_4",
+      "name": "苍穹销售订单变更单批量提交",
+      "description": "服务应用 appid=sm，接口编码 batchSubmit。开放平台 urlformat=/v2/sm/sm_xssalorder/batchSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_xssalorder/batchSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnAudit",
+      "name": "苍穹销售订单变更单批量反审核",
+      "description": "服务应用 appid=sm，接口编码 batchUnAudit。开放平台 urlformat=/v2/sm/sm_xssalorder/batchUnAudit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_xssalorder/batchUnAudit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUnSubmit",
+      "name": "苍穹销售订单变更单批量撤销提交",
+      "description": "服务应用 appid=sm，接口编码 batchUnSubmit。开放平台 urlformat=/v2/sm/sm_xssalorder/batchUnSubmit。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_xssalorder/batchUnSubmit",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_batchUpdate_2",
+      "name": "苍穹销售订单变更单批量更新",
+      "description": "服务应用 appid=sm，接口编码 batchUpdate。开放平台 urlformat=/v2/sm/sm_xssalorder/batchUpdate。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_xssalorder/batchUpdate",
+      "method": "POST",
+      "request_body": {
+        "data": {}
+      }
+    },
+    {
+      "code_suffix": "sm_query_2",
+      "name": "苍穹销售订单变更单查询",
+      "description": "服务应用 appid=sm，接口编码 query。开放平台 urlformat=/v2/sm/sm_xssalorder/query。换票由应用连接器自动完成。请求体按常见约定给了空模板，请按本环境 API 详情补全。",
+      "path": "kapi/v2/sm/sm_xssalorder/query",
+      "method": "POST",
+      "request_body": {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100
+      }
+    }
+  ]
+}

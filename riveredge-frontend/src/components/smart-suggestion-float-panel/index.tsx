@@ -13,6 +13,7 @@ import { Card, Button } from 'antd';
 import Lottie from 'lottie-react';
 import robotAnimation from '../../../static/lottie/robot.json';
 import { useLineReveal } from '../../hooks/useLineReveal';
+import { subscribeResizeBus } from '../../hooks/useResizeBus';
 import './index.less';
 
 export interface SuggestionData {
@@ -130,10 +131,10 @@ const SmartSuggestionFloatPanel: React.FC<SmartSuggestionFloatPanelProps> = ({
       if (anchor) {
         const resizeObserver = new ResizeObserver(runUpdate);
         resizeObserver.observe(anchor);
-        window.addEventListener('resize', runUpdate);
+        const unsubResize = subscribeResizeBus(runUpdate);
         return () => {
           resizeObserver.disconnect();
-          window.removeEventListener('resize', runUpdate);
+          unsubResize();
         };
       }
       return null;

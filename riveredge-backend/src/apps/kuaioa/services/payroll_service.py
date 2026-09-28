@@ -5,6 +5,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Optional
 
+from tortoise.expressions import Q
+
 from apps.kuaioa.models.attendance import KuaioaAttendanceDay, KuaioaAttendanceSheet
 from apps.kuaioa.models.employee import KuaioaEmployeeProfile
 from apps.kuaioa.models.minimum_wage import KuaioaMinimumWageConfig
@@ -393,6 +395,21 @@ class PayrollSettlementService:
             ]
         else:
             item["below_minimum_lines"] = []
+        submitted_attendance_count = await KuaioaAttendanceSheet.filter(
+            tenant_id=tenant_id,
+            year_month=sheet.year_month,
+            workshop_name=sheet.workshop_name,
+            status="submitted",
+            deleted_at__isnull=True,
+        ).count()
+        zero_time_wage_count = sum(
+            1 for line in lines if _d(line.time_wage) == ZERO and _d(line.regular_hours) == ZERO
+        )
+        item["guide"] = {
+            "submitted_attendance_count": int(submitted_attendance_count),
+            "line_count": len(lines),
+            "zero_time_wage_count": int(zero_time_wage_count),
+        }
         return item
 
     async def create_settlement(
@@ -528,14 +545,8 @@ class PayrollSettlementService:
     async def list_living_payout(
         self, tenant_id: int, year_month: str, workshop_name: Optional[str] = None
     ) -> list[dict[str, Any]]:
-        """生活费发放表：档案标准 + 当月预支，按银行再车间排序。"""
+        """生活费发放表：在职档案（及本月已确认预支的离职人员）+ 档案标准 + 当月预支。"""
         ym = _parse_ym(year_month)
-        q = KuaioaEmployeeProfile.filter(
-            tenant_id=tenant_id, deleted_at__isnull=True, status="active"
-        )
-        if workshop_name:
-            q = q.filter(workshop_name=workshop_name.strip())
-        employees = await q.order_by("bank_name", "workshop_name", "full_name")
         advances = await KuaioaLivingAdvance.filter(
             tenant_id=tenant_id,
             year_month=ym,
@@ -545,14 +556,21 @@ class PayrollSettlementService:
         adv_map: dict[int, Decimal] = {}
         for a in advances:
             adv_map[int(a.employee_id)] = adv_map.get(int(a.employee_id), ZERO) + _d(a.amount)
+        advance_ids = list(adv_map.keys())
+
+        q = KuaioaEmployeeProfile.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if workshop_name:
+            q = q.filter(workshop_name=workshop_name.strip())
+        if advance_ids:
+            q = q.filter(Q(status="active") | Q(id__in=advance_ids))
+        else:
+            q = q.filter(status="active")
+        employees = await q.order_by("bank_name", "workshop_name", "full_name", "id")
 
         rows: list[dict[str, Any]] = []
         for emp in employees:
             base = _d(emp.living_allowance)
             adv = adv_map.get(int(emp.id), ZERO)
-            payout = base + adv
-            if payout <= 0 and not emp.living_allowance:
-                continue
             rows.append(
                 {
                     "employee_id": emp.id,
@@ -563,7 +581,7 @@ class PayrollSettlementService:
                     "workshop_name": emp.workshop_name,
                     "base_living": base,
                     "advance_amount": adv,
-                    "payout_amount": payout,
+                    "payout_amount": base + adv,
                     "year_month": ym,
                 }
             )
@@ -637,6 +655,8 @@ class PayrollSettlementService:
 
         piece_by_user = await self._load_piece_by_user(tenant_id, ym)
 
+        night_sub_map: dict[int, Decimal] = {}
+        heat_sub_map: dict[int, Decimal] = {}
         post_sub_map: dict[int, Decimal] = {}
         post_rows = await KuaioaPostSubsidy.filter(
             tenant_id=tenant_id,
@@ -645,7 +665,15 @@ class PayrollSettlementService:
         )
         for ps in post_rows:
             eid = int(ps.employee_id)
-            post_sub_map[eid] = post_sub_map.get(eid, ZERO) + _d(ps.amount)
+            amt = _d(ps.amount)
+            item_name = str(ps.item_name or "").strip()
+            # 与岗位补贴表单选项「夜班补贴」「高温补贴」一致，写入对应结算列
+            if item_name == "夜班补贴":
+                night_sub_map[eid] = night_sub_map.get(eid, ZERO) + amt
+            elif item_name == "高温补贴":
+                heat_sub_map[eid] = heat_sub_map.get(eid, ZERO) + amt
+            else:
+                post_sub_map[eid] = post_sub_map.get(eid, ZERO) + amt
 
         line_hours_total = ZERO
         line_emp_hours: dict[int, Decimal] = {}
@@ -681,6 +709,8 @@ class PayrollSettlementService:
             insurance = _d(emp.social_insurance) + _d(emp.housing_fund)
             rent_utility_deduct = _d(getattr(emp, "rent_utility", None))
             allowance = reward_map.get(eid, ZERO)
+            night_subsidy = night_sub_map.get(eid, ZERO)
+            heat_subsidy = heat_sub_map.get(eid, ZERO)
             post_allowance = post_sub_map.get(eid, ZERO)
             leave_deduct = _d(hours.get("leave_deduct"))
 
@@ -710,8 +740,8 @@ class PayrollSettlementService:
                 post_wage=_d(emp.post_wage),
                 time_wage=time_wage,
                 piece_wage=piece,
-                night_subsidy=ZERO,
-                heat_subsidy=ZERO,
+                night_subsidy=night_subsidy,
+                heat_subsidy=heat_subsidy,
                 post_allowance=post_allowance,
                 allowance=allowance,
                 living_deduct=living_deduct,

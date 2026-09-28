@@ -913,7 +913,7 @@ const PayableList: React.FC = () => {
                     acts.push(
                         <Button
                             key="pay"
-                            {...rowActionMakePayment('execute')}
+                            {...rowActionMakePayment('skip')}
                             onClick={() =>
                                 navigate('/apps/kuaicaiwu/finance-management/payments', {
                                     state: { pullPayableId: record.id },

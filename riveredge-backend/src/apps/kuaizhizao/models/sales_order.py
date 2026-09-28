@@ -62,6 +62,7 @@ class SalesOrder(BaseModel):
     shipping_method = fields.CharField(max_length=50, null=True, description="发货方式")
     payment_terms = fields.CharField(max_length=100, null=True, description="付款条件")
     currency_code = fields.CharField(max_length=20, null=True, default="CNY", description="币种（如 CNY 人民币）")
+    exchange_rate = fields.DecimalField(max_digits=8, decimal_places=4, default=1, description="汇率（相对本位币）")
 
     contract_id = fields.IntField(null=True, description="关联销售合同ID")
     contract_code = fields.CharField(max_length=50, null=True, description="关联销售合同编码")

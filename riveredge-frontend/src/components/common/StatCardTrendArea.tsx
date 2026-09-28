@@ -1,9 +1,11 @@
 /**
  * 列表页指标卡 `backgroundChart`（与 `ListPageTemplate` 搭配使用，**勿改** layout-templates 内模板）。
  * 视觉与销售订单页内 Area 配置一致：smooth、渐变填充、描边；销售订单示范页本身保持页内实现不变。
+ *
+ * P5-4/12：Area 动态加载，避免壳层/列表父 chunk 静态绑 @ant-design/charts；
+ * useMemo 依赖用 data 引用（调用方保证不可变），去掉 JSON.stringify。
  */
-import React, { useMemo } from 'react';
-import { Area } from '@ant-design/charts';
+import React, { Suspense, useMemo } from 'react';
 
 export type StatCardTrendPoint = { date: string; value: number };
 export type StatCardTrendData = number[] | StatCardTrendPoint[];
@@ -42,6 +44,10 @@ function normalizeTrendData(data: StatCardTrendData): StatCardTrendPoint[] {
   }));
 }
 
+const LazyArea = React.lazy(() =>
+  import('@ant-design/charts').then((m) => ({ default: m.Area })),
+);
+
 export interface StatCardTrendAreaProps {
   data: StatCardTrendData;
   color?: string;
@@ -53,7 +59,7 @@ export const StatCardTrendArea: React.FC<StatCardTrendAreaProps> = ({
   color = '#1890ff',
   height,
 }) => {
-  const chartData = useMemo(() => normalizeTrendData(data), [JSON.stringify(data)]);
+  const chartData = useMemo(() => normalizeTrendData(data), [data]);
   if (!chartData.length) return null;
   return (
     <div
@@ -63,22 +69,24 @@ export const StatCardTrendArea: React.FC<StatCardTrendAreaProps> = ({
         minHeight: 56,
       }}
     >
-      <Area
-        data={chartData}
-        xField="date"
-        yField="value"
-        padding={0}
-        axis={false}
-        colorField={() => color}
-        shapeField="smooth"
-        style={{
-          fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
-          fillOpacity: 0.1,
-          stroke: strokeColorWithAlpha(color),
-          lineWidth: 1,
-        }}
-        autoFit
-      />
+      <Suspense fallback={null}>
+        <LazyArea
+          data={chartData}
+          xField="date"
+          yField="value"
+          padding={0}
+          axis={false}
+          colorField={() => color}
+          shapeField="smooth"
+          style={{
+            fill: `linear-gradient(-90deg, transparent 0%, ${color} 100%)`,
+            fillOpacity: 0.1,
+            stroke: strokeColorWithAlpha(color),
+            lineWidth: 1,
+          }}
+          autoFit
+        />
+      </Suspense>
     </div>
   );
 };

@@ -390,13 +390,11 @@ class MaterialSourceSuggestionService:
                     warnings.append("建议配置默认供应商")
             
             elif material.source_type == SOURCE_TYPE_OUTSOURCE:
-                # 委外件需要委外供应商和委外工序
                 if not source_config.get("outsource_supplier_id"):
-                    missing_configs.append("委外供应商配置")
-                
+                    warnings.append("建议配置默认委外供应商（也可在委外工单中指定）")
                 if not source_config.get("outsource_operation"):
-                    missing_configs.append("委外工序配置")
-            
+                    warnings.append("建议配置默认委外工序（也可在委外工单中指定）")
+
             elif material.source_type == SOURCE_TYPE_CONFIGURE:
                 # 配置件需要属性和BOM配置
                 if not material.variant_attributes:

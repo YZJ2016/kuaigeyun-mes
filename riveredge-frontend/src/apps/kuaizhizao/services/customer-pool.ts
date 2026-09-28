@@ -13,12 +13,22 @@ export interface CustomerPoolItem {
   short_name?: string | null;
   contact_person?: string | null;
   phone?: string | null;
+  email?: string | null;
   salesman_id?: number | null;
   salesman_name?: string | null;
   pool_status: 'pool' | 'owned';
   assigned_at?: string | null;
   last_follow_up_at?: string | null;
   recycle_at?: string | null;
+  follow_status?: 'pending' | 'followed' | string | null;
+  project_description?: string | null;
+  intent_material_name?: string | null;
+  region_text?: string | null;
+  market_scope?: 'domestic' | 'export' | string | null;
+  country_code?: string | null;
+  customer_level_code?: string | null;
+  follow_up_count?: number;
+  inactive_7d?: boolean;
   created_by_name?: string | null;
   updated_by_name?: string | null;
   created_at: string;
@@ -78,6 +88,12 @@ export interface CustomerPoolListParams {
   created_end_date?: string;
   updated_start_date?: string;
   updated_end_date?: string;
+  intentMaterialName?: string;
+  customerLevelCode?: string;
+  regionText?: string;
+  followStatus?: string;
+  marketScope?: string;
+  inactive7d?: boolean;
   order_by?: string;
 }
 

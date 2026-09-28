@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, Select, Space, Button, Tooltip, Segmented, Popover } from 'antd';
 import { RotateRightOutlined, ReloadOutlined, LeftOutlined, ZoomInOutlined } from '@ant-design/icons';
+import { subscribeResizeBus } from '../../hooks/useResizeBus';
 
 interface DeviceConfig {
     name: string;
@@ -38,8 +39,7 @@ export const MobileDevicePreview: React.FC<MobileDevicePreviewProps> = ({ open, 
     // Handle Resize
     React.useEffect(() => {
         const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        return subscribeResizeBus(handleResize);
     }, []);
 
     const isLandscape = orientation === 'landscape';

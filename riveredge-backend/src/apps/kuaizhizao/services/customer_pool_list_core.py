@@ -24,11 +24,26 @@ CUSTOMER_POOL_SORTABLE_FIELDS = frozenset({
     "last_follow_up_at",
     "recycle_at",
     "assigned_at",
+    "follow_status",
+    "customer_level_code",
+    "intent_material_name",
+    "region_text",
+    "market_scope",
     "created_at",
     "updated_at",
 })
 
-CUSTOMER_POOL_KEYWORD_FIELDS = ["code", "name", "short_name", "contact_person", "phone"]
+CUSTOMER_POOL_KEYWORD_FIELDS = [
+    "code",
+    "name",
+    "short_name",
+    "contact_person",
+    "phone",
+    "email",
+    "intent_material_name",
+    "region_text",
+    "project_description",
+]
 
 DEFAULT_CUSTOMER_POOL_ORDER = "-code"
 
@@ -136,6 +151,12 @@ def apply_customer_pool_list_filters(
     created_end_date: Optional[str] = None,
     updated_start_date: Optional[str] = None,
     updated_end_date: Optional[str] = None,
+    intent_material_name: Optional[str] = None,
+    customer_level_code: Optional[str] = None,
+    region_text: Optional[str] = None,
+    follow_status: Optional[str] = None,
+    market_scope: Optional[str] = None,
+    country_code: Optional[str] = None,
     order_by: Optional[str] = None,
 ) -> tuple:
     query = apply_customer_pool_search_filters(
@@ -146,6 +167,18 @@ def apply_customer_pool_list_filters(
         contact_person=contact_person,
         phone=phone,
     )
+    if intent_material_name and str(intent_material_name).strip():
+        query = query.filter(intent_material_name__icontains=str(intent_material_name).strip())
+    if customer_level_code and str(customer_level_code).strip():
+        query = query.filter(customer_level_code=str(customer_level_code).strip())
+    if region_text and str(region_text).strip():
+        query = query.filter(region_text__icontains=str(region_text).strip())
+    if follow_status and str(follow_status).strip():
+        query = query.filter(follow_status=str(follow_status).strip().lower())
+    if market_scope and str(market_scope).strip():
+        query = query.filter(market_scope=str(market_scope).strip().lower())
+    if country_code and str(country_code).strip():
+        query = query.filter(country_code__icontains=str(country_code).strip())
     query = apply_customer_pool_datetime_range(
         query,
         field="last_follow_up_at",

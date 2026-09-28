@@ -144,7 +144,7 @@ async def list_warehouses(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
     is_active: Optional[bool] = Query(None, description="是否启用"),
-    warehouse_type: Optional[str] = Query(None, description="仓库类型（normal/line_side/wip/outsourcing/consignment/vmi/defect/quarantine）"),
+    warehouse_type: Optional[str] = Query(None, description="仓库类型（normal/line_side/wip/outsourcing/consignment/vmi/defect/scrap/quarantine）"),
     keyword: Optional[str] = Query(None, description="关键词（编码或名称模糊匹配）"),
     code: Optional[str] = Query(None, description="仓库编码（模糊匹配）"),
     name: Optional[str] = Query(None, description="仓库名称（模糊匹配）"),

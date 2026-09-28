@@ -56,10 +56,12 @@ async def resolve_material_incoming_qty(
     """
     本道可用的在制转入上限。
 
-    - 不允许跳转：紧邻上道合格转出（首道为计划数）
-    - 允许跳转：不校验紧邻上道流转量，按计划数；若有前序节点工序则取节点转入量最小值
+    - 不允许跳转：紧邻上道合格转出（首道为计划数 + 本道超报抬高）
+    - 允许跳转：不校验紧邻上道流转量，按计划数 + 本道超报；若有前序节点工序则取节点转入量最小值
     """
     plan = plan_qty if plan_qty > 0 else Decimal("0")
+    from apps.kuaizhizao.services.over_report_rules import first_operation_material_incoming
+
     if not effective_allow_jump(work_order, work_order_operation):
         return adjacent_prev_transfer if adjacent_prev_transfer > 0 else Decimal("0")
 
@@ -78,7 +80,7 @@ async def resolve_material_incoming_qty(
         nodes = await list_node_predecessors(tenant_id, work_order_id, current_seq)
 
     if not nodes:
-        return plan
+        return first_operation_material_incoming(plan, work_order_operation)
 
     caps: List[Decimal] = []
     for n in nodes:
@@ -91,7 +93,7 @@ async def resolve_material_incoming_qty(
                 inspections_by_op=inspections_by_op,
             )
         )
-    return min(caps) if caps else plan
+    return min(caps) if caps else first_operation_material_incoming(plan, work_order_operation)
 
 
 async def list_node_predecessors(

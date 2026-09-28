@@ -107,6 +107,7 @@ export function buildSalesOrderItemExportColumns(ctx: SalesOrderExportContext): 
     { key: 'discount_amount', title: t('app.kuaizhizao.salesOrder.discountAmount') },
     { key: 'price_type', title: t('app.kuaizhizao.salesOrder.priceType') },
     { key: 'currency_code', title: t('app.kuaizhizao.quotation.form.currency') },
+    { key: 'exchange_rate', title: t('app.kuaizhizao.salesOrder.exchangeRate') },
     { key: 'payment_terms', title: t('app.kuaizhizao.salesOrder.paymentTerms') },
     { key: 'shipping_method', title: t('app.kuaizhizao.salesOrder.shippingMethod') },
     { key: 'shipping_address', title: t('app.kuaizhizao.salesOrder.shippingAddress') },
@@ -158,6 +159,7 @@ export function flattenSalesOrdersForExport(orders: SalesOrder[]): Array<Record<
       shipping_method: order.shipping_method,
       payment_terms: order.payment_terms,
       currency_code: order.currency_code,
+      exchange_rate: order.exchange_rate,
       price_type: order.price_type,
       total_quantity: order.total_quantity,
       total_amount: order.total_amount,
@@ -243,6 +245,10 @@ export function mapSalesOrderItemToExportRow(
     discount_amount: formatAmount(row.discount_amount),
     price_type: formatPriceType(row.price_type, t),
     currency_code: dictLabel(dictionaryLabels.CURRENCY, row.currency_code || 'CNY'),
+    exchange_rate:
+      row.exchange_rate != null && row.exchange_rate !== ''
+        ? Number(row.exchange_rate).toFixed(4)
+        : '',
     payment_terms: dictLabel(dictionaryLabels.PAYMENT_TERMS, row.payment_terms),
     shipping_method: dictLabel(dictionaryLabels.SHIPPING_METHOD, row.shipping_method),
     shipping_address: String(row.shipping_address ?? ''),

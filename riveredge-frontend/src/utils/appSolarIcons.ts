@@ -2,9 +2,10 @@
  * 应用中心卡片 Solar 图标解析（manifest.icon 别名 → solar:xxx-bold-duotone）
  */
 import { addCollection } from '@iconify/react/dist/offline';
-import solarIcons from '@iconify-json/solar/icons.json';
+/** 只含应用中心实际用到的图标。禁止再 import 整份 @iconify-json/solar/icons.json（约 6MB）。 */
+import solarAppCenterIcons from '../assets/icons/solar-app-center.json';
 
-addCollection(solarIcons);
+addCollection(solarAppCenterIcons);
 
 /** 应用 code → Solar 图标（应用根 / 行业包一级菜单） */
 export const APP_SOLAR_ICONS: Record<string, string> = {

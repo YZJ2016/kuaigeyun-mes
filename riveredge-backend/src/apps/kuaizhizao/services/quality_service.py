@@ -3153,6 +3153,97 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             )
         return {"data": rows, "total": total, "success": True}
 
+    async def list_purchase_order_pull_candidates(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        order_code: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """来料检验加载：采购订单候选列表（含剩余可检 capabilities）。"""
+        from apps.kuaizhizao.constants import ORDER_PUSHABLE_STATUSES
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+        from apps.kuaizhizao.services.document_action_policy.purchase_order import (
+            derive_purchase_order_capabilities,
+        )
+
+        await _require_iqc_stage_enabled(tenant_id)
+        incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
+        if not incoming_enabled:
+            return {"data": [], "total": 0, "success": True}
+
+        query = PurchaseOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status__in=list(ORDER_PUSHABLE_STATUSES),
+        )
+        kw = str(keyword or "").strip()
+        oc = str(order_code or "").strip()
+        if oc:
+            query = query.filter(order_code__icontains=oc)
+        elif kw:
+            query = query.filter(
+                Q(order_code__icontains=kw) | Q(supplier_name__icontains=kw)
+            )
+        total = await query.count()
+        orders = await query.offset(skip).limit(limit).order_by("-created_at")
+        order_ids = [int(o.id) for o in orders]
+        if not order_ids:
+            return {"data": [], "total": total, "success": True}
+
+        all_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            order_id__in=order_ids,
+        ).all()
+        items_by_order: Dict[int, List[Any]] = {}
+        for item in all_items:
+            items_by_order.setdefault(int(item.order_id), []).append(item)
+
+        rows: List[Dict[str, Any]] = []
+        for order in orders:
+            oid = int(order.id)
+            order_items = items_by_order.get(oid, [])
+            push_cap = derive_purchase_order_capabilities(
+                order,
+                has_items=bool(order_items),
+            ).push_incoming_inspection
+            preview_items = await self._build_po_incoming_inspection_push_preview_items(
+                tenant_id, oid, order_items
+            )
+            allowed, reason = self._derive_iqc_pull_capability(
+                source_allowed=bool(push_cap.allowed),
+                preview_items=preview_items,
+                not_allowed_reason=(
+                    push_cap.reason or "incoming_inspection.pull_from_purchase_order.not_allowed"
+                ),
+                no_lines_reason="incoming_inspection.pull_from_purchase_order.no_lines",
+                already_pulled_reason="incoming_inspection.pull_from_purchase_order.already_pulled",
+            )
+            pull_summary = _summarize_pull_preview_items(preview_items)
+            label = f"{order.order_code or oid}"
+            if getattr(order, "supplier_name", None):
+                label = f"{label} - {order.supplier_name}"
+            rows.append(
+                {
+                    "id": oid,
+                    "code": label,
+                    "order_code": order.order_code,
+                    "purchase_order_code": order.order_code,
+                    "supplier_name": order.supplier_name,
+                    "status": getattr(order, "status", None),
+                    "updated_at": getattr(order, "updated_at", None),
+                    **pull_summary,
+                    "capabilities": {
+                        "pull_incoming_inspection": {
+                            "allowed": allowed,
+                            "reason": reason,
+                        }
+                    },
+                }
+            )
+        return {"data": rows, "total": total, "success": True}
+
     async def create_inspection_from_purchase_receipt(
         self,
         tenant_id: int,
@@ -3210,29 +3301,161 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
             return inspections
 
-    async def _po_material_already_has_iqc(
+    async def _po_iqc_receipt_ids(self, tenant_id: int, purchase_order_id: int) -> List[int]:
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        return list(
+            await PurchaseReceipt.filter(
+                tenant_id=tenant_id,
+                purchase_order_id=purchase_order_id,
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+        )
+
+    async def _po_material_iqc_pushed_qty_map(
         self,
         tenant_id: int,
         purchase_order_id: int,
-        material_id: int,
-        receipt_ids: List[int],
-    ) -> bool:
-        """同一采购订单（或由其下推的入库单）下该物料是否已有来料检验。"""
-        if await IncomingInspection.filter(
+        material_ids: List[int],
+        receipt_ids: Optional[List[int]] = None,
+    ) -> Dict[int, float]:
+        """采购订单（及由其入库单）下各物料已下推来料检验数量合计。"""
+        mids = [int(m) for m in material_ids if m]
+        if not mids:
+            return {}
+        if receipt_ids is None:
+            receipt_ids = await self._po_iqc_receipt_ids(tenant_id, purchase_order_id)
+        cond = Q(purchase_order_id=purchase_order_id)
+        if receipt_ids:
+            cond = cond | Q(purchase_receipt_id__in=list(receipt_ids))
+        rows = await IncomingInspection.filter(
             tenant_id=tenant_id,
-            purchase_order_id=purchase_order_id,
-            material_id=material_id,
+            material_id__in=mids,
             deleted_at__isnull=True,
-        ).exists():
-            return True
-        if receipt_ids and await IncomingInspection.filter(
-            tenant_id=tenant_id,
-            purchase_receipt_id__in=receipt_ids,
-            material_id=material_id,
-            deleted_at__isnull=True,
-        ).exists():
-            return True
-        return False
+        ).filter(cond).values("material_id", "inspection_quantity")
+        pushed: Dict[int, float] = {}
+        for row in rows:
+            mid = int(row.get("material_id") or 0)
+            if mid <= 0:
+                continue
+            pushed[mid] = pushed.get(mid, 0.0) + float(row.get("inspection_quantity") or 0)
+        return pushed
+
+    async def _build_po_incoming_inspection_push_preview_items(
+        self,
+        tenant_id: int,
+        purchase_order_id: int,
+        order_items: List[Any],
+        *,
+        receipt_ids: Optional[List[int]] = None,
+    ) -> List[Dict[str, Any]]:
+        """按物料剩余可检数量构建下推预览行（支持分批来货）。"""
+        material_ids = [
+            int(getattr(it, "material_id", 0) or 0)
+            for it in order_items
+            if int(getattr(it, "material_id", 0) or 0) > 0
+        ]
+        pushed_by_mid = await self._po_material_iqc_pushed_qty_map(
+            tenant_id, purchase_order_id, material_ids, receipt_ids=receipt_ids
+        )
+        ordered_by_mid: Dict[int, float] = {}
+        for it in order_items:
+            mid = int(getattr(it, "material_id", 0) or 0)
+            if mid <= 0:
+                continue
+            ordered_by_mid[mid] = ordered_by_mid.get(mid, 0.0) + float(
+                getattr(it, "ordered_quantity", 0) or 0
+            )
+        remaining_by_mid = {
+            mid: max(0.0, ordered_by_mid.get(mid, 0.0) - pushed_by_mid.get(mid, 0.0))
+            for mid in ordered_by_mid
+        }
+
+        policy_cache: Dict[int, str] = {}
+        preview_items: List[Dict[str, Any]] = []
+        for item in order_items:
+            item_id = int(getattr(item, "id", 0) or 0)
+            mid = int(getattr(item, "material_id", 0) or 0)
+            ordered = float(getattr(item, "ordered_quantity", 0) or 0)
+            if item_id <= 0 or mid <= 0 or ordered <= 0:
+                continue
+            if await self._resolve_iqc_policy_eff(tenant_id, mid, policy_cache) == "none":
+                continue
+            material_remaining = remaining_by_mid.get(mid, 0.0)
+            max_push = min(ordered, material_remaining)
+            if max_push <= 0:
+                continue
+            # 同行物料多行时按行序扣减剩余，避免预览合计超过物料可检量
+            remaining_by_mid[mid] = max(0.0, material_remaining - max_push)
+            preview_items.append(
+                {
+                    "item_id": item_id,
+                    "material_id": mid,
+                    "material_code": str(getattr(item, "material_code", "") or ""),
+                    "material_name": str(getattr(item, "material_name", "") or ""),
+                    "material_spec": getattr(item, "material_spec", None),
+                    "unit": getattr(item, "unit", None)
+                    or getattr(item, "material_unit", None)
+                    or "pcs",
+                    "quantity": ordered,
+                    "pushed_quantity": float(pushed_by_mid.get(mid, 0.0)),
+                    "max_push_quantity": max_push,
+                }
+            )
+        return preview_items
+
+    async def preview_push_from_purchase_order(
+        self,
+        tenant_id: int,
+        purchase_order_id: int,
+    ) -> Dict[str, Any]:
+        """采购订单下推来料检验预览（可选行、手填本次来货数量）。"""
+        await _require_iqc_stage_enabled(tenant_id)
+        incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
+        if not incoming_enabled:
+            raise BusinessLogicError("当前组织未开启来料检验，禁止从采购订单下推来料检验")
+
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+        from apps.kuaizhizao.services.document_action_policy.purchase_order import (
+            assert_purchase_order_capability,
+        )
+
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=purchase_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"采购订单不存在: {purchase_order_id}")
+
+        order_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id, order_id=purchase_order_id
+        ).all()
+        assert_purchase_order_capability(
+            order,
+            "push_incoming_inspection",
+            has_items=bool(order_items),
+        )
+        preview_items = await self._build_po_incoming_inspection_push_preview_items(
+            tenant_id, purchase_order_id, order_items
+        )
+        pushable_count = len(preview_items)
+        has_blocking = pushable_count == 0
+        return {
+            "target_type": "incoming_inspection",
+            "order_id": purchase_order_id,
+            "order_code": order.order_code,
+            "summary": (
+                f"请选择本次来货要下推的检验明细（{pushable_count} 行可下推）"
+                if not has_blocking
+                else "当前采购单无可下来料检验明细"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": (
+                "purchase_order.push_incoming_inspection.no_iqc_lines" if has_blocking else None
+            ),
+            "tip": "请填写本次来货数量与备注；可分批下推，累计不超过采购数量。",
+            "line_warehouse_required": False,
+        }
 
     async def create_inspection_from_purchase_order(
         self,
@@ -3241,18 +3464,28 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         created_by: int,
         *,
         selected_item_ids: Optional[List[int]] = None,
+        inspection_quantities: Optional[Dict[int, float]] = None,
+        notes: Optional[str] = None,
     ) -> List[IncomingInspectionResponse]:
-        """从采购订单下推来料检验单（到货前检验；按需检物料各建一张）。"""
+        """从采购订单下推来料检验单（支持按来货数量分批；未传数量时推剩余可检量）。"""
         await _require_iqc_stage_enabled(tenant_id)
         incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
         if not incoming_enabled:
             raise BusinessLogicError("当前组织未开启来料检验，禁止从采购订单下推来料检验")
 
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
-        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         from apps.kuaizhizao.services.document_action_policy.purchase_order import (
             assert_purchase_order_capability,
         )
+
+        notes_value = (notes or "").strip() or None
+        qty_map: Dict[int, float] = {}
+        if inspection_quantities:
+            for raw_id, raw_qty in inspection_quantities.items():
+                item_id = int(raw_id)
+                qty = float(raw_qty)
+                if item_id > 0 and qty > 0:
+                    qty_map[item_id] = qty
 
         async with in_transaction():
             order = await PurchaseOrder.get_or_none(
@@ -3270,39 +3503,45 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 has_items=bool(order_items),
             )
 
+            preview_items = await self._build_po_incoming_inspection_push_preview_items(
+                tenant_id, purchase_order_id, order_items
+            )
+            preview_by_id = {int(row["item_id"]): row for row in preview_items}
+
             if selected_item_ids is not None:
                 selected = {int(v) for v in selected_item_ids if v is not None}
-                order_items = [it for it in order_items if int(getattr(it, "id", 0)) in selected]
-                if not order_items:
+                if not selected:
                     raise BusinessLogicError("所选明细为空，无法下推来料检验")
+                target_ids = [iid for iid in selected if iid in preview_by_id]
+            else:
+                target_ids = list(preview_by_id.keys())
 
-            receipt_ids = list(
-                await PurchaseReceipt.filter(
-                    tenant_id=tenant_id,
-                    purchase_order_id=purchase_order_id,
-                    deleted_at__isnull=True,
-                ).values_list("id", flat=True)
-            )
+            if not target_ids:
+                raise BusinessLogicError(
+                    "未生成任何来料检验单：无可检剩余数量，或物料质检模式为无质检（与组织 IQC 总开关、业务参数「来料检验」共同生效）"
+                )
 
             initial_review_fields = await _quality_inspection_initial_review_fields(
                 tenant_id, "incoming_inspection"
             )
+            creator_name = await self.get_user_name(created_by) if created_by else None
             inspections: List[IncomingInspectionResponse] = []
-            for item in order_items:
-                mid = int(getattr(item, "material_id", 0) or 0)
-                qty = float(getattr(item, "ordered_quantity", 0) or 0)
-                if mid <= 0 or qty <= 0:
+            for item_id in target_ids:
+                row = preview_by_id[item_id]
+                max_push = float(row.get("max_push_quantity") or 0)
+                if max_push <= 0:
                     continue
-                eff, _, _ = await resolve_inspection_policy(
-                    tenant_id, "iqc", material_id=mid
-                )
-                if eff == "none":
+                if item_id in qty_map:
+                    qty = float(qty_map[item_id])
+                else:
+                    qty = max_push
+                if qty <= 0:
                     continue
-                if await self._po_material_already_has_iqc(
-                    tenant_id, purchase_order_id, mid, receipt_ids
-                ):
-                    continue
-
+                if qty > max_push + 1e-9:
+                    raise BusinessLogicError(
+                        f"物料 {row.get('material_code') or item_id} 本次下推数量超过剩余可检数量"
+                    )
+                mid = int(row["material_id"])
                 template = await _resolve_inspection_template_fields(tenant_id, mid, "iqc")
                 today = today_site_str()
                 code = await self.generate_code(
@@ -3317,22 +3556,22 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     "supplier_id": order.supplier_id,
                     "supplier_name": order.supplier_name,
                     "material_id": mid,
-                    "material_code": item.material_code,
-                    "material_name": item.material_name,
-                    "material_spec": getattr(item, "material_spec", None),
-                    "material_unit": getattr(item, "unit", None) or getattr(item, "material_unit", None) or "pcs",
+                    "material_code": row.get("material_code"),
+                    "material_name": row.get("material_name"),
+                    "material_spec": row.get("material_spec"),
+                    "material_unit": row.get("unit") or "pcs",
                     "inspection_quantity": qty,
                     "qualified_quantity": 0,
                     "unqualified_quantity": 0,
                     "inspection_result": "待检验",
                     "quality_status": "待判定",
                     "status": "待检验",
+                    "notes": notes_value,
                     "created_by": created_by,
                     **template,
                 }
                 create_kwargs.update(initial_review_fields)
-                if created_by:
-                    creator_name = await self.get_user_name(created_by)
+                if created_by and creator_name:
                     create_kwargs["created_by_name"] = creator_name
                     create_kwargs["updated_by"] = created_by
                     create_kwargs["updated_by_name"] = creator_name
@@ -3367,7 +3606,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
             if not inspections:
                 raise BusinessLogicError(
-                    "未生成任何来料检验单：各明细可能已有检验单，或物料质检模式为无质检（与组织 IQC 总开关、业务参数「来料检验」共同生效）"
+                    "未生成任何来料检验单：无可检剩余数量，或物料质检模式为无质检（与组织 IQC 总开关、业务参数「来料检验」共同生效）"
                 )
             return inspections
 

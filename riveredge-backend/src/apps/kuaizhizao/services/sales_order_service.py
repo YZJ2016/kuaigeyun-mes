@@ -87,6 +87,34 @@ class SalesOrderService:
         self.business_config_service = BusinessConfigService()
 
     @staticmethod
+    async def _tenant_base_currency(tenant_id: int) -> str:
+        from apps.kuaicaiwu.services.gl.settings_service import GlSettingsService
+
+        row = await GlSettingsService().get_or_create(tenant_id)
+        return (row.base_currency or "").strip()
+
+    async def _resolve_sales_order_exchange_rate(
+        self,
+        tenant_id: int,
+        currency_code: Optional[str],
+        exchange_rate: Optional[Decimal],
+        *,
+        exchange_rate_provided: bool,
+    ) -> Decimal:
+        base = await self._tenant_base_currency(tenant_id)
+        if not base:
+            raise ValidationError("未配置总账本位币，无法保存销售订单汇率")
+        code = (currency_code or base).strip().upper()
+        if code == base.strip().upper():
+            return Decimal("1")
+        if not exchange_rate_provided or exchange_rate is None:
+            raise ValidationError("外币销售订单须填写汇率")
+        rate = Decimal(str(exchange_rate))
+        if rate <= 0:
+            raise ValidationError("汇率须大于 0")
+        return rate
+
+    @staticmethod
     async def _apply_sales_order_list_scope(
         query,
         tenant_id: int,
@@ -981,6 +1009,7 @@ class SalesOrderService:
         work_order_push_progress: Optional[float] = None,
         pushed_work_order_codes: Optional[List[str]] = None,
         audit_enabled: bool = False,
+        lifecycle_items: Optional[List[Any]] = None,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
@@ -988,7 +1017,8 @@ class SalesOrderService:
 
         lifecycle = get_sales_order_lifecycle(
             order,
-            items=items,
+            # include_items=False 时 items 为 None，生命周期仍需用轻量明细判断 has_items/工单
+            items=lifecycle_items if lifecycle_items is not None else items,
             delivery_progress=delivery_progress,
             invoice_progress=invoice_progress,
             invoice_amount_progress=invoice_amount_progress,
@@ -1037,6 +1067,7 @@ class SalesOrderService:
             "term_group_name": getattr(order, "term_group_name", None),
             "contract_terms": getattr(order, "contract_terms", None),
             "currency_code": getattr(order, "currency_code", None) or "CNY",
+            "exchange_rate": getattr(order, "exchange_rate", None) or Decimal("1"),
             "notes": order.notes,
             "attachments": getattr(order, "attachments", None),
             "fee_details": getattr(order, "fee_details", None),
@@ -1205,13 +1236,15 @@ class SalesOrderService:
     def _sales_order_capability_context(
         self,
         order: SalesOrder,
-        items: Optional[List[SalesOrderItem]],
+        items: Optional[List[Any]],
         demand: Optional[Demand],
         *,
         pushable_by_item: Optional[Dict[int, Decimal]] = None,
         has_existing_delivery_project: bool = False,
         has_remaining_work_order_qty: Optional[bool] = None,
         has_remaining_invoice_amount: bool = True,
+        has_purchasable_remaining: bool = False,
+        require_purchase_requisition: bool = False,
     ) -> dict[str, bool]:
         item_list = items or []
         has_items = len(item_list) > 0
@@ -1245,6 +1278,8 @@ class SalesOrderService:
             "has_remaining_work_order_qty": remaining_wo,
             "has_existing_delivery_project": has_existing_delivery_project,
             "has_remaining_invoice_amount": has_remaining_invoice_amount,
+            "has_purchasable_remaining": has_purchasable_remaining,
+            "require_purchase_requisition": require_purchase_requisition,
         }
 
     async def _assert_sales_order_capability_for_order(
@@ -1281,11 +1316,23 @@ class SalesOrderService:
         invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
             tenant_id, order
         )
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_has_purchasable_remaining,
+            require_purchase_requisition_for_tenant,
+        )
+
+        purchasable_map = await batch_has_purchasable_remaining(
+            tenant_id, {int(order.id): items}
+        )
         ctx = self._sales_order_capability_context(
             order, items, demand, pushable_by_item=pushable_by_item,
             has_existing_delivery_project=has_existing_delivery_project,
             has_remaining_work_order_qty=remaining_wo > 0,
             has_remaining_invoice_amount=invoice_remainder > Decimal("0"),
+            has_purchasable_remaining=purchasable_map.get(int(order.id), False),
+            require_purchase_requisition=await require_purchase_requisition_for_tenant(
+                tenant_id
+            ),
         )
         if action == "delete":
             from apps.kuaizhizao.services.sales_order_code_sync import (
@@ -1834,6 +1881,12 @@ class SalesOrderService:
                 order_dict["total_amount"] = Decimal("0")
             if order_dict.get("total_quantity") is None:
                 order_dict["total_quantity"] = Decimal("0")
+            order_dict["exchange_rate"] = await self._resolve_sales_order_exchange_rate(
+                tenant_id,
+                order_dict.get("currency_code"),
+                order_dict.get("exchange_rate"),
+                exchange_rate_provided="exchange_rate" in sales_order_data.model_fields_set,
+            )
 
             # 自动带出归属业务员与月结方式
             partner_settlement_method = None
@@ -2057,19 +2110,40 @@ class SalesOrderService:
         if include_duration and demand:
             duration_info = getattr(demand, "duration_info", None)
 
+        # capabilities / 进度 / 可下推量：始终用明细（完整或轻量），勿依赖 include_items
         if items is not None:
-            items_for_progress: List[Any] = list(items)
+            capability_items: List[Any] = list(items)
         else:
             agg_rows = await SalesOrderItem.filter(
                 tenant_id=tenant_id, sales_order_id=sales_order_id
-            ).values_list("order_quantity", "delivered_quantity")
-            items_for_progress = [
-                type("_AggItem", (), {"order_quantity": q, "delivered_quantity": d})()
-                for q, d in agg_rows
+            ).values_list(
+                "id",
+                "sales_order_id",
+                "order_quantity",
+                "delivered_quantity",
+                "remaining_quantity",
+                "material_id",
+                "work_order_id",
+            )
+            capability_items = [
+                type(
+                    "_AggItem",
+                    (),
+                    {
+                        "id": iid,
+                        "sales_order_id": oid,
+                        "order_quantity": q,
+                        "delivered_quantity": d,
+                        "remaining_quantity": remaining,
+                        "material_id": mid,
+                        "work_order_id": work_order_id,
+                    },
+                )()
+                for iid, oid, q, d, remaining, mid, work_order_id in agg_rows
             ]
         shipped_by = await self._shipped_qty_by_sales_order(tenant_id, [sales_order_id])
         delivery_progress = self._merged_delivery_progress(
-            order, items_for_progress, shipped_by.get(sales_order_id, Decimal("0"))
+            order, capability_items, shipped_by.get(sales_order_id, Decimal("0"))
         )
         shippable_map = (
             await self._batch_shippable_by_order(tenant_id, [sales_order_id])
@@ -2094,7 +2168,7 @@ class SalesOrderService:
         from apps.kuaizhizao.utils.sales_order_push_qty import get_pushable_qty_for_order_items
 
         pushable_by_item = await get_pushable_qty_for_order_items(
-            tenant_id, sales_order_id, items
+            tenant_id, sales_order_id, capability_items
         )
         has_existing_delivery_project = await self._order_has_delivery_project(
             tenant_id, sales_order_id
@@ -2102,9 +2176,9 @@ class SalesOrderService:
         pushed_wo = await self._pushed_work_orders_by_sales_order(tenant_id, [sales_order_id])
         pushed_wo_qty = Decimal(str((pushed_wo.get(sales_order_id) or {}).get("qty") or 0))
         order_total = Decimal(str(order.total_quantity or 0))
-        if order_total <= 0 and items:
+        if order_total <= 0 and capability_items:
             order_total = sum(
-                (Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in items),
+                (Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in capability_items),
                 Decimal("0"),
             )
         remaining_wo = order_total - pushed_wo_qty
@@ -2125,6 +2199,14 @@ class SalesOrderService:
         invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
             tenant_id, order
         )
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_has_purchasable_remaining,
+            require_purchase_requisition_for_tenant,
+        )
+
+        purchasable_map = await batch_has_purchasable_remaining(
+            tenant_id, {int(order.id): capability_items}
+        )
         resp = enrich_sales_order_capabilities_on_response(
             order,
             self._order_to_response(
@@ -2142,14 +2224,19 @@ class SalesOrderService:
                 collection_progress=finance.get("collection_progress", 0.0),
                 shippable_hint=shippable_map.get(sales_order_id),
                 audit_enabled=audit_enabled,
+                lifecycle_items=capability_items,
             ),
             require_audit_before_print=require_audit_before_print,
             has_downstream_documents=has_downstream_documents,
             **self._sales_order_capability_context(
-                order, items, demand, pushable_by_item=pushable_by_item,
+                order, capability_items, demand, pushable_by_item=pushable_by_item,
                 has_existing_delivery_project=has_existing_delivery_project,
                 has_remaining_work_order_qty=remaining_wo > 0,
                 has_remaining_invoice_amount=invoice_remainder > Decimal("0"),
+                has_purchasable_remaining=purchasable_map.get(int(order.id), False),
+                require_purchase_requisition=await require_purchase_requisition_for_tenant(
+                    tenant_id
+                ),
             ),
         )
         from core.config.code_rule_pages import CODE_RULE_PAGES
@@ -2726,6 +2813,15 @@ class SalesOrderService:
         invoice_remainder_by_order = await SalesInvoiceService().batch_sales_order_invoice_remainder(
             tenant_id, orders
         )
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_has_purchasable_remaining,
+            require_purchase_requisition_for_tenant,
+        )
+
+        purchasable_by_order = await batch_has_purchasable_remaining(
+            tenant_id, items_by_order
+        )
+        require_pr = await require_purchase_requisition_for_tenant(tenant_id)
 
         # 6. 组装响应
         sales_orders = []
@@ -2740,6 +2836,11 @@ class SalesOrderService:
             invoice_amount_progress_val = finance.get("invoice_amount_progress", 0.0)
             collection_progress_val = finance.get("collection_progress", 0.0)
             total_qty = Decimal(str(order.total_quantity or 0))
+            if total_qty <= 0 and items:
+                total_qty = sum(
+                    (Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in items),
+                    Decimal("0"),
+                )
             pushed_bucket = pushed_work_orders_by_order.get(order.id) or {
                 "qty": Decimal("0"),
                 "codes": [],
@@ -2774,6 +2875,7 @@ class SalesOrderService:
                         material_fallback=material_fallback_all.get(order.id) if include_items else None,
                         shippable_hint=shippable_map.get(order.id),
                         audit_enabled=audit_enabled,
+                        lifecycle_items=items,
                     ),
                     require_audit_before_print=require_audit_before_print,
                     has_downstream_documents=downstream_by_order.get(order.id, False),
@@ -2790,6 +2892,10 @@ class SalesOrderService:
                             int(order.id), Decimal("0")
                         )
                         > Decimal("0"),
+                        has_purchasable_remaining=purchasable_by_order.get(
+                            int(order.id), False
+                        ),
+                        require_purchase_requisition=require_pr,
                     ),
                 )
             )
@@ -2906,6 +3012,31 @@ class SalesOrderService:
             upd = sales_order_data.model_dump(
                 exclude_unset=True, exclude=_SALES_ORDER_PERSIST_EXCLUDE
             )
+            effective_currency = (
+                upd["currency_code"]
+                if "currency_code" in upd
+                else getattr(order, "currency_code", None)
+            )
+            rate_provided = "exchange_rate" in sales_order_data.model_fields_set
+            if "currency_code" in upd or rate_provided:
+                base = await self._tenant_base_currency(tenant_id)
+                if not base:
+                    raise ValidationError("未配置总账本位币，无法保存销售订单汇率")
+                foreign_code = (effective_currency or base).strip().upper()
+                is_foreign = foreign_code != base.strip().upper()
+                if is_foreign and "currency_code" in upd and not rate_provided:
+                    prev_code = (getattr(order, "currency_code", None) or base).strip().upper()
+                    if prev_code != foreign_code:
+                        raise ValidationError("外币销售订单须填写汇率")
+                effective_rate = (
+                    upd["exchange_rate"] if rate_provided else getattr(order, "exchange_rate", None)
+                )
+                upd["exchange_rate"] = await self._resolve_sales_order_exchange_rate(
+                    tenant_id,
+                    effective_currency,
+                    effective_rate,
+                    exchange_rate_provided=rate_provided or not is_foreign,
+                )
             if "price_type" in upd and not upd["price_type"]:
                 upd["price_type"] = order.price_type or DEFAULT_SALES_PRICE_TYPE
             if "term_group_id" in sales_order_data.model_fields_set or sales_order_data.contract_terms is not None:
@@ -4558,6 +4689,130 @@ class SalesOrderService:
                 for w in work_orders
             ],
         }
+
+    async def preview_push_sales_order_to_purchase_requisition(
+        self, tenant_id: int, sales_order_id: int
+    ) -> Dict[str, Any]:
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        await self._assert_sales_order_capability_for_order(
+            tenant_id, order, "push_purchase_requisition", items=items
+        )
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            preview_push_to_purchase_requisition,
+        )
+
+        return await preview_push_to_purchase_requisition(
+            tenant_id=tenant_id, order=order, items=items
+        )
+
+    async def push_sales_order_to_purchase_requisition(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
+        selected_quantities: Optional[Dict[int, Any]] = None,
+    ) -> Dict[str, Any]:
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        await self._assert_sales_order_capability_for_order(
+            tenant_id, order, "push_purchase_requisition", items=items
+        )
+        qty_map: Optional[Dict[int, Decimal]] = None
+        if isinstance(selected_quantities, dict):
+            qty_map = {}
+            for k, v in selected_quantities.items():
+                try:
+                    qty_map[int(k)] = Decimal(str(v))
+                except Exception:
+                    continue
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            push_to_purchase_requisition,
+        )
+
+        return await push_to_purchase_requisition(
+            tenant_id=tenant_id,
+            order=order,
+            items=items,
+            created_by=created_by,
+            selected_item_ids=selected_item_ids,
+            selected_quantities=qty_map,
+        )
+
+    async def preview_push_sales_order_to_purchase_order(
+        self, tenant_id: int, sales_order_id: int
+    ) -> Dict[str, Any]:
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        await self._assert_sales_order_capability_for_order(
+            tenant_id, order, "push_purchase_order", items=items
+        )
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            preview_push_to_purchase_order,
+        )
+
+        return await preview_push_to_purchase_order(
+            tenant_id=tenant_id, order=order, items=items
+        )
+
+    async def push_sales_order_to_purchase_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
+        selected_quantities: Optional[Dict[int, Any]] = None,
+    ) -> Dict[str, Any]:
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        await self._assert_sales_order_capability_for_order(
+            tenant_id, order, "push_purchase_order", items=items
+        )
+        qty_map: Optional[Dict[int, Decimal]] = None
+        if isinstance(selected_quantities, dict):
+            qty_map = {}
+            for k, v in selected_quantities.items():
+                try:
+                    qty_map[int(k)] = Decimal(str(v))
+                except Exception:
+                    continue
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            push_to_purchase_order,
+        )
+
+        return await push_to_purchase_order(
+            tenant_id=tenant_id,
+            order=order,
+            items=items,
+            created_by=created_by,
+            selected_item_ids=selected_item_ids,
+            selected_quantities=qty_map,
+        )
 
     async def preview_push_sales_order_to_work_order(
         self, tenant_id: int, sales_order_id: int

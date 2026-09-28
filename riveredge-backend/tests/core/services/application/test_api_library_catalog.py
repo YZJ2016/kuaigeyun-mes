@@ -11,6 +11,7 @@ def test_system_api_library_includes_kingdee_cosmic_pack():
     pack_ids = {item["pack_id"] for item in items}
     assert "kingdee_galaxy" in pack_ids
     assert "kingdee_cosmic" in pack_ids
+    assert "kingdee_cosmic_mfg" in pack_ids
 
     cosmic = get_api_library_pack("kingdee_cosmic")
     assert cosmic is not None
@@ -19,6 +20,14 @@ def test_system_api_library_includes_kingdee_cosmic_pack():
     cosmic_item = next(item for item in items if item["pack_id"] == "kingdee_cosmic")
     assert cosmic_item["api_count"] >= 8
     assert cosmic_item["source"] == "system"
+
+    mfg = get_api_library_pack("kingdee_cosmic_mfg")
+    assert mfg is not None
+    assert mfg["connector_type"] == "kingdee_cosmic"
+    assert mfg["preset_loader"] == "kingdee_cosmic_mfg"
+    mfg_item = next(item for item in items if item["pack_id"] == "kingdee_cosmic_mfg")
+    assert mfg_item["api_count"] >= 100
+    assert any("库存" in (it.get("name") or "") for it in mfg_item["items"])
 
 
 def test_kingdee_cosmic_presets_use_concrete_sys_query_paths():
@@ -35,3 +44,32 @@ def test_kingdee_cosmic_presets_use_concrete_sys_query_paths():
     assert customer["path"] == "kapi/v2/basedata/bd_customer/batchQuery"
     assert customer.get("request_body", {}).get("pageSize") == 100
     assert "__API_NUMBER__" not in material["path"]
+
+
+def test_kingdee_cosmic_mfg_presets_include_inventory_params_body():
+    from core.services.integration.kingdee_cosmic_mfg_api_presets import (
+        list_kingdee_cosmic_mfg_api_presets,
+    )
+
+    presets = list_kingdee_cosmic_mfg_api_presets()
+    detail = next(p for p in presets if p["path"].endswith("getInventoryDetail"))
+    body = detail.get("request_body") or {}
+    assert "params" in body
+    assert "org" in (body.get("params") or {})
+    assert body.get("pageSize") == 100
+
+
+def test_kingdee_cosmic_mfg_presets_include_production_aux_basedata():
+    from core.services.integration.kingdee_cosmic_mfg_api_presets import (
+        list_kingdee_cosmic_mfg_api_presets,
+    )
+
+    presets = list_kingdee_cosmic_mfg_api_presets()
+    paths = {p["path"] for p in presets}
+    assert "kapi/v2/basedata/bd_material/batchQuery" in paths
+    assert "kapi/v2/basedata/bd_multimeasureunit/batchQuery" in paths
+    assert "kapi/v2/basedata/bd_customer/query" in paths
+    assert "kapi/v2/basedata/bd_supplier/query" in paths
+    assert len([p for p in presets if "/basedata/" in p["path"]]) >= 12
+    multi = next(p for p in presets if p["path"].endswith("bd_multimeasureunit/batchQuery"))
+    assert "计量单位" in (multi.get("description") or "")

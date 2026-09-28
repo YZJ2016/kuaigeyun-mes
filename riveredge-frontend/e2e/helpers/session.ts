@@ -6,9 +6,16 @@ import path from 'node:path';
 
 export const BACKEND_URL = process.env.E2E_BACKEND_URL || 'http://127.0.0.1:8200';
 export const FRONTEND_URL = process.env.E2E_FRONTEND_URL || 'http://127.0.0.1:8100';
-export const USERNAME = process.env.E2E_USERNAME || 'kg001';
+/**
+ * 默认对齐当前联调库（10.27.130.30）：
+ * xiaofeng @ 测试(tenant=3) — 无同名同密歧义，免手机号后四位；可用 E2E_* 覆盖。
+ */
+export const USERNAME = process.env.E2E_USERNAME || 'xiaofeng';
 export const PASSWORD = process.env.E2E_PASSWORD || '12345678';
-export const TENANT_ID = Number(process.env.E2E_TENANT_ID || 35);
+export const TENANT_ID = Number(process.env.E2E_TENANT_ID || 3);
+/** 登录页多组织弹窗中要点选的组织名（与 TENANT_ID 对应） */
+export const TENANT_DISPLAY_NAME =
+  process.env.E2E_TENANT_NAME || '测试';
 
 export const AUTH_DIR = path.join(__dirname, '..', '.auth');
 export const STORAGE_STATE_PATH = path.join(AUTH_DIR, 'state.json');

@@ -1181,7 +1181,7 @@ class RdProjectService(AppBaseService[RdProject]):
         permission_codes: Optional[List[str]] = None,
     ) -> None:
         from apps.kuaiplm.utils.rd_deliverable_naming import (
-            PART_SPEC_TYPES,
+            is_part_spec_type,
             validate_deliverable_catalog,
         )
         from core.services.application.industry_extension_runtime_service import (
@@ -1204,16 +1204,21 @@ class RdProjectService(AppBaseService[RdProject]):
             project_code=project_code,
             naming_rules=naming_rules if isinstance(naming_rules, dict) else None,
         )
-        dtype = (deliverable_type or "").strip().lower()
-        if dtype in PART_SPEC_TYPES or dtype in (naming_rules or {}).get("part_spec_types", []):
-            codes = {str(c or "").strip().lower() for c in (permission_codes or [])}
-            allowed = {
-                "kuaiplm:project:create",
-                "kuaiplm:project:update",
-                "kuaiplm:project:upload-part-spec",
-            }
-            if not codes.intersection(allowed):
-                raise BusinessLogicError("上传部品规格书须具备研发项目维护或 IQC 部品规格书上传权限")
+        codes = {str(c or "").strip().lower() for c in (permission_codes or [])}
+        has_project_write = bool(
+            codes.intersection({"kuaiplm:project:create", "kuaiplm:project:update"})
+        )
+        has_part_spec_upload = "kuaiplm:project:upload-part-spec" in codes
+        if is_part_spec_type(
+            deliverable_type,
+            naming_rules if isinstance(naming_rules, dict) else None,
+        ):
+            if not (has_project_write or has_part_spec_upload):
+                raise BusinessLogicError(
+                    "上传部品规格书须具备研发项目维护或 IQC 部品规格书上传权限"
+                )
+        elif not has_project_write:
+            raise BusinessLogicError("当前权限仅可上传部品规格书，不可维护其它交付物类型")
 
     async def create_deliverable(
         self,
@@ -1559,6 +1564,7 @@ class RdProjectService(AppBaseService[RdProject]):
         payload: RdProjectDeliverableReviseRequest,
         *,
         actor_id: int,
+        permission_codes: Optional[List[str]] = None,
     ) -> RdProjectDeliverableResponse:
         row = await RdProjectDeliverable.get_or_none(
             tenant_id=tenant_id, id=deliverable_id, project_id=project_id, deleted_at__isnull=True
@@ -1567,6 +1573,19 @@ class RdProjectService(AppBaseService[RdProject]):
             raise NotFoundError(f"交付物不存在: {deliverable_id}")
         if row.status != RdDeliverableStatus.APPROVED.value:
             raise BusinessLogicError("仅已批准交付物可升版")
+        project = await self._get_project_or_404(tenant_id, project_id)
+        next_file_name = (
+            payload.file_name if payload.file_name is not None else row.file_name
+        )
+        await self._validate_deliverable_write(
+            tenant_id,
+            project_code=project.project_code,
+            deliverable_type=row.deliverable_type,
+            material_code=getattr(row, "material_code", None),
+            legacy_material_code=getattr(row, "legacy_material_code", None),
+            file_name=next_file_name,
+            permission_codes=permission_codes,
+        )
         user_info = await self.get_user_info(actor_id)
         new_version = (payload.version or "").strip() or bump_deliverable_version(row.version)
         clash = await RdProjectDeliverableVersion.filter(
@@ -1749,11 +1768,12 @@ class RdProjectService(AppBaseService[RdProject]):
         if not row:
             raise NotFoundError(f"交付物不存在: {deliverable_id}")
         status = (row.status or "").strip().upper()
+        # PENDING = 待提交草稿；无 DRAFT 枚举。已提交/生效只能升版。
         if status not in {
-            RdDeliverableStatus.DRAFT.value,
+            RdDeliverableStatus.PENDING.value,
             RdDeliverableStatus.REJECTED.value,
         }:
-            raise BusinessLogicError("仅草稿或已驳回交付物可删除；已进入审核或发布的文件只能升版")
+            raise BusinessLogicError("仅待提交或已驳回交付物可删除；已进入审核或发布的文件只能升版")
         has_published_history = await RdProjectDeliverableVersion.filter(
             tenant_id=tenant_id,
             deliverable_id=deliverable_id,

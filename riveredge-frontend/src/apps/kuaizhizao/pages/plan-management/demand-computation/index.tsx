@@ -1,4 +1,4 @@
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionRunComputation } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 /**
  * 统一需求计算页面
@@ -2421,7 +2421,7 @@ const DemandComputationPage: React.FC = () => {
         ]
         if (canExecute && canExecuteByCapability && computationPerms.canUpdate) {
           parts.push(
-            <Button {...rowActionKind('execute')} key="ex" onClick={() => handleExecute(record)}>
+            <Button {...rowActionRunComputation('update')} key="ex" onClick={() => handleExecute(record)}>
               {t('app.kuaizhizao.demandComputation.actionExecute')}
             </Button>
           )
