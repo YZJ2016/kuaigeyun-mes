@@ -83,6 +83,8 @@ export type PurchaseInvoicePushMode = 'remaining' | 'prepayment';
 export interface PushToInvoiceRequest {
   invoice_mode?: PurchaseInvoicePushMode;
   total_amount?: number;
+  /** 票面发票代码/号码；空则后端仍写「待补全」 */
+  invoice_number?: string;
 }
 
 export interface PushToReceiptNoticeRequest {

@@ -1298,6 +1298,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const [pushPreviewWarehouseOptions, setPushPreviewWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
   const [pushInvoiceMode, setPushInvoiceMode] = useState<PurchaseInvoicePushMode>('remaining');
   const [pushInvoiceAmount, setPushInvoiceAmount] = useState<number>(0);
+  const [pushInvoiceNumber, setPushInvoiceNumber] = useState('');
 
   const pushPreviewModalTitle = useMemo(() => {
     if (pushPreviewKind === 'receipt_notice') return pushToReceiptNoticeAction.label;
@@ -1390,6 +1391,7 @@ const PurchaseOrdersPage: React.FC = () => {
     setPushPreviewWarehouseOptions([]);
     setPushInvoiceMode('remaining');
     setPushInvoiceAmount(0);
+    setPushInvoiceNumber('');
   }, []);
 
   const openPushReturnWarehouseModal = useCallback(
@@ -1452,6 +1454,7 @@ const PurchaseOrdersPage: React.FC = () => {
       setPushPreviewWarehouseOptions([]);
       setPushInvoiceMode(invoiceMode ?? 'remaining');
       setPushInvoiceAmount(0);
+      setPushInvoiceNumber('');
       setPushPreviewLoading(true);
       setPushPreviewData(null);
       try {
@@ -1698,6 +1701,7 @@ const PurchaseOrdersPage: React.FC = () => {
       const result = await pushPurchaseOrderToInvoice(target.id!, {
         invoice_mode: pushInvoiceMode,
         total_amount: pushInvoiceAmount > 0 ? pushInvoiceAmount : undefined,
+        invoice_number: pushInvoiceNumber.trim() || undefined,
       });
       messageApi.success(t('app.kuaizhizao.purchaseOrder.pushInvoiceSuccess', { code: result.invoice_code || t('app.kuaizhizao.purchaseOrder.createdFallback') }));
       invalidateStatistics();
@@ -1720,6 +1724,7 @@ const PurchaseOrdersPage: React.FC = () => {
     orderDetail?.id,
     pushInvoiceAmount,
     pushInvoiceMode,
+    pushInvoiceNumber,
     pushPreviewData,
     pushPreviewKind,
     pushPreviewLineWh,
@@ -4330,22 +4335,37 @@ const PurchaseOrdersPage: React.FC = () => {
                     }))}
                   />
                 </div>
-                <div style={{ marginBottom: 12 }}>
-                  <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-                    {t('app.kuaizhizao.purchaseOrder.pushInvoiceAmount')}
-                  </Typography.Text>
-                  <InputNumber
-                    min={0.01}
-                    max={
-                      pushInvoiceMode === 'prepayment'
-                        ? Number(pushPreviewData.prepayment_pushable ?? 0) || undefined
-                        : Number(pushPreviewData.remaining_total ?? 0) || undefined
-                    }
-                    precision={2}
-                    style={{ width: 220 }}
-                    value={pushInvoiceAmount}
-                    onChange={(v) => setPushInvoiceAmount(Number(v) || 0)}
-                  />
+                <div style={{ marginBottom: 12, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  <div>
+                    <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                      {t('app.kuaizhizao.purchaseOrder.pushInvoiceAmount')}
+                    </Typography.Text>
+                    <InputNumber
+                      min={0.01}
+                      max={
+                        pushInvoiceMode === 'prepayment'
+                          ? Number(pushPreviewData.prepayment_pushable ?? 0) || undefined
+                          : Number(pushPreviewData.remaining_total ?? 0) || undefined
+                      }
+                      precision={2}
+                      style={{ width: 220 }}
+                      value={pushInvoiceAmount}
+                      onChange={(v) => setPushInvoiceAmount(Number(v) || 0)}
+                    />
+                  </div>
+                  <div>
+                    <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                      {t('app.kuaizhizao.purchaseOrder.pushInvoiceNumber')}
+                    </Typography.Text>
+                    <Input
+                      allowClear
+                      maxLength={100}
+                      style={{ width: 220 }}
+                      value={pushInvoiceNumber}
+                      onChange={(e) => setPushInvoiceNumber(e.target.value)}
+                      placeholder={t('app.kuaizhizao.purchaseOrder.pushInvoiceNumberPlaceholder')}
+                    />
+                  </div>
                 </div>
                 {pushPreviewData.items?.length > 0 ? (
                   <Table

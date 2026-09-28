@@ -44,6 +44,38 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'finance-invoice-fill-number-approved-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-invoice-fill-number-approved-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-invoice-fill-number-approved-r01.description',
+  },
+  {
+    id: 'purchase-order-push-invoice-number-r01',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-push-invoice-number-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-push-invoice-number-r01.description',
+  },
+  {
+    id: 'finance-voucher-confirm-bank-first-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-voucher-confirm-bank-first-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-voucher-confirm-bank-first-r01.description',
+  },
+  {
+    id: 'sales-order-linked-demand-status-align-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-linked-demand-status-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-linked-demand-status-align-r01.description',
+  },
+  {
     id: 'customer-pool-inactive-alert-days-r01',
     date: '2026-09-28',
     type: 'feature',

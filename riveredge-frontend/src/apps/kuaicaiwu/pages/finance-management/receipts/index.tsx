@@ -414,7 +414,14 @@ const ReceiptsPage: React.FC = () => {
     actionRef.current?.reload();
           refreshOpenDetail();
         } catch (e: any) {
-          messageApi.error(e?.message || t('common.operationFailed'));
+          messageApi.error(
+            e?.response?.data?.detail?.message ||
+              e?.response?.data?.detail ||
+              e?.message ||
+              t('common.operationFailed'),
+          );
+          actionRef.current?.reload();
+          refreshOpenDetail();
         }
   };
 

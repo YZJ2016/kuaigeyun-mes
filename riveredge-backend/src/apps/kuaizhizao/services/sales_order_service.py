@@ -1376,6 +1376,52 @@ class SalesOrderService:
             logger.warning("销售订单关联需求同步失败 order_id={}: {}", order_id, e)
             return False
 
+    async def _align_linked_demand_status_from_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        operator_id: int,
+    ) -> bool:
+        """
+        将已存在的关联需求生命周期状态与销售订单对齐。
+
+        审核/确认/驳回/反审核只改订单时，历史关联 Demand 可能仍停在 DRAFT/PENDING，
+        导致下推需求计算按需求门禁失败。此处不新建需求，只改已有关联行。
+        """
+        demand = await self._get_linked_demand(tenant_id, sales_order_id)
+        if not demand:
+            return False
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            return False
+        if (
+            str(demand.status or "") == str(order.status or "")
+            and str(demand.review_status or "") == str(order.review_status or "")
+            and demand.reviewer_id == order.reviewer_id
+            and str(demand.reviewer_name or "") == str(order.reviewer_name or "")
+        ):
+            return False
+        await Demand.filter(tenant_id=tenant_id, id=demand.id).update(
+            status=order.status,
+            review_status=order.review_status,
+            reviewer_id=order.reviewer_id,
+            reviewer_name=order.reviewer_name,
+            review_time=order.review_time,
+            updated_by=operator_id,
+        )
+        logger.info(
+            "销售订单 {} 关联需求 {} 状态已对齐: {}/{} -> {}/{}",
+            sales_order_id,
+            demand.id,
+            demand.status,
+            demand.review_status,
+            order.status,
+            order.review_status,
+        )
+        return True
+
     def _is_audited(self, status: str) -> bool:
         """判断是否已审核（兼容中英文状态）"""
         normalized = normalize_status(status or "")
@@ -3376,7 +3422,10 @@ class SalesOrderService:
                     DemandStatus.DRAFT, DemandStatus.CONFIRMED,
                     submitted_by, submitter_name, "提交并自动确认",
                 )
-                # 不再在提交时自动创建/同步 Demand，避免形成「订单→需求计划」隐式链路。
+                # 不再在提交时自动创建 Demand；若历史已有关联需求则对齐生命周期状态。
+            await self._align_linked_demand_status_from_order(
+                tenant_id, sales_order_id, submitted_by
+            )
             order_row = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
             from apps.kuaicaiwu.services.finance_integration_hooks import (
                 ensure_prepayment_receipt_for_sales_order,
@@ -3524,7 +3573,9 @@ class SalesOrderService:
                     DemandStatus.PENDING_REVIEW, DemandStatus.AUDITED,
                     approved_by, approver_name, "自动审核" if is_auto_approve else "审核通过",
                 )
-                demand_synced = False
+            demand_synced = await self._align_linked_demand_status_from_order(
+                tenant_id, sales_order_id, approved_by
+            )
             result = await self.get_sales_order_by_id(tenant_id, sales_order_id)
             order_row = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
             from apps.kuaicaiwu.services.finance_integration_hooks import (
@@ -3661,6 +3712,9 @@ class SalesOrderService:
                     DemandStatus.PENDING_REVIEW, DemandStatus.REJECTED,
                     approved_by, approver_name, f"驳回: {reject_reason}",
                 )
+            await self._align_linked_demand_status_from_order(
+                tenant_id, sales_order_id, approved_by
+            )
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
         if is_auto_approve or flow_completed_rejected:
@@ -3734,6 +3788,9 @@ class SalesOrderService:
                     order.status, revoke_state["status"],
                     unapproved_by, unapprover_name, "反审核",
                 )
+            await self._align_linked_demand_status_from_order(
+                tenant_id, sales_order_id, unapproved_by
+            )
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
         return await UniAuditService.revoke_with_flow_fallback(
@@ -3766,6 +3823,12 @@ class SalesOrderService:
         await self._assert_sales_order_capability_for_order(tenant_id, order, "push_computation")
 
         demand = await self._get_linked_demand(tenant_id, sales_order_id)
+        if demand:
+            # 覆盖：手工下推、审核后自动下推、历史脏数据（订单已审但需求仍草稿）
+            await self._align_linked_demand_status_from_order(
+                tenant_id, sales_order_id, created_by
+            )
+            demand = await self._get_linked_demand(tenant_id, sales_order_id)
         if not demand:
             demand = await self._create_demand_from_sales_order(
                 tenant_id,

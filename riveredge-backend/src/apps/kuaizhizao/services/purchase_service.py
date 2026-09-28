@@ -2181,7 +2181,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             "items": preview_items,
             "has_blocking_issues": has_blocking,
             "blocking_reason": blocking_reason,
-            "tip": "可选按可开票余额或按预付款开票；发票号码等信息可在财务管理中补全。",
+            "tip": "可选按可开票余额或按预付款开票；发票代码可在此填写，也可稍后在财务管理中补全。",
             "order_total": money_to_json_float(order_total),
             "invoiced_total": money_to_json_float(invoiced_total),
             "remaining_total": money_to_json_float(remaining_total),
@@ -3221,6 +3221,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         *,
         invoice_mode: str = "remaining",
         total_amount: Optional[Decimal] = None,
+        invoice_number: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         下推到采购发票
@@ -3229,6 +3230,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
           - remaining: 按可开票余额（订单价税合计 − 已开票）
           - prepayment: 按预付款金额（不超过可开票余额）
         total_amount: 可选，显式指定价税合计（不得超过所选模式上限）
+        invoice_number: 可选，票面发票代码/号码；空则写入「待补全」
         """
         from decimal import Decimal
 
@@ -3296,6 +3298,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         today = today_site_str()
         invoice_code = await self.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today}")
+        face_number = (invoice_number or "").strip() or "待补全"
+        if len(face_number) > 100:
+            raise BusinessLogicError("发票代码长度不能超过 100 个字符")
 
         # 编码只经 create_purchase_invoice(invoice_code=…) 传入；与进项加载一致跳过入库金额门禁
         invoice_data = PurchaseInvoiceCreate(
@@ -3303,7 +3308,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             purchase_order_code=order.order_code,
             supplier_id=order.supplier_id,
             supplier_name=order.supplier_name,
-            invoice_number="待补全",
+            invoice_number=face_number,
             invoice_date=to_site_date(resolve_business_datetime()),
             invoice_type="增值税专用发票",
             tax_rate=tax_rate,

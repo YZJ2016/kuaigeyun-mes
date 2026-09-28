@@ -154,10 +154,19 @@ class PurchaseInvoiceCreate(PurchaseInvoiceBase):
     )
 
 
-class PurchaseInvoiceUpdate(PurchaseInvoiceBase):
-    """采购发票更新schema"""
-    invoice_code: Optional[str] = Field(None, max_length=50, description="发票编码")
+class PurchaseInvoiceUpdate(BaseSchema):
+    """采购发票更新（部分字段）；已审核仅允许补全发票号码与附件"""
 
+    invoice_number: Optional[str] = Field(None, max_length=100, description="发票号码")
+    invoice_date: Optional[date] = None
+    invoice_type: Optional[str] = Field(None, max_length=20)
+    tax_rate: Optional[Decimal] = Field(None, ge=0, le=100, description="税率（百分比）")
+    invoice_amount: Optional[Decimal] = Field(None, ge=0, description="未税金额")
+    tax_amount: Optional[Decimal] = Field(None, ge=0, description="税额")
+    total_amount: Optional[Decimal] = Field(None, ge=0, description="价税合计")
+    notes: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    attachment_path: Optional[str] = Field(None, max_length=500)
 
 class PurchaseInvoiceResponse(PurchaseInvoiceBase):
     """采购发票响应schema"""
@@ -492,7 +501,7 @@ class SalesInvoiceCreate(SalesInvoiceBase):
 
 
 class SalesInvoiceUpdate(BaseSchema):
-    """销售发票更新schema"""
+    """销售发票更新schema；已审核仅允许补全发票号码与附件"""
     invoice_number: Optional[str] = Field(None, max_length=100)
     invoice_date: Optional[date] = None
     invoice_type: Optional[str] = Field(None, max_length=50)

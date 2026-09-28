@@ -46,12 +46,26 @@ export function displaySalesInvoiceListCode(r: SalesInvoiceCodeRow): string {
 }
 
 const SALES_INVOICE_NON_DELETABLE_STATUSES = new Set(['已审核', '已开票', '已作废', '已红冲']);
+const SALES_INVOICE_FACE_LOCKED_STATUSES = new Set(['已作废', '已红冲']);
 
 /** 是否允许物理删除（与后端 delete 接口一致） */
 export function canDeleteSalesInvoice(record: { status?: string | null }): boolean {
   const st = String(record.status || '').trim();
   if (!st) return false;
   return !SALES_INVOICE_NON_DELETABLE_STATUSES.has(st);
+}
+
+/** 是否允许填写/更正票面发票号码（与后端 PUT 门禁一致；已审核仍可补全） */
+export function canFillSalesInvoiceNumber(record: { status?: string | null }): boolean {
+  const st = String(record.status || '').trim();
+  return !SALES_INVOICE_FACE_LOCKED_STATUSES.has(st);
+}
+
+/** 填号弹窗初始值：占位「待补全」视为空 */
+export function faceInvoiceNumberForEdit(invoiceNumber?: string | null): string {
+  const s = String(invoiceNumber ?? '').trim();
+  if (!s || s === '待补全') return '';
+  return s;
 }
 
 /** 详情页标题：销售发票 + 发票号码（无号码时不展示内部序号） */

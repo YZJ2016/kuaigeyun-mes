@@ -380,6 +380,91 @@ async def get_purchase_invoice(
         raise _http_exception_with_trace(404, str(e), "/purchase-invoices/{id}", tenant_id)
 
 
+@router.put("/{id}", response_model=PurchaseInvoiceResponse)
+async def update_purchase_invoice(
+    id: int,
+    data: PurchaseInvoiceUpdate,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """更新采购发票；已审核仅允许补全发票号码与附件。"""
+    from apps.common.audit_actor import apply_update_audit
+    from apps.kuaicaiwu.services.tax.tax_period_service import tax_period_from_date
+
+    invoice = await PurchaseInvoice.get_or_none(
+        tenant_id=tenant_id, id=id, deleted_at__isnull=True
+    )
+    if not invoice:
+        raise _http_exception_with_trace(404, f"采购发票不存在: {id}", "/purchase-invoices/{id}", tenant_id)
+
+    provided = data.model_dump(exclude_unset=True)
+    status_text = str(invoice.status or "").strip()
+    if status_text in ("已作废", "已红冲"):
+        raise _http_exception_with_trace(
+            400, "已作废或已红冲的发票不能修改", "/purchase-invoices/{id}", tenant_id
+        )
+    if status_text == "已审核":
+        extra = set(provided) - {"invoice_number", "attachments"}
+        if extra:
+            raise _http_exception_with_trace(
+                400,
+                "已审核发票仅可补全发票号码与附件",
+                "/purchase-invoices/{id}",
+                tenant_id,
+            )
+
+    update_data: dict = {}
+    if data.invoice_number is not None:
+        update_data["invoice_number"] = data.invoice_number
+    if data.invoice_date is not None:
+        update_data["invoice_date"] = data.invoice_date
+        update_data["tax_period"] = tax_period_from_date(data.invoice_date)
+    if data.invoice_type is not None:
+        update_data["invoice_type"] = data.invoice_type
+    if data.notes is not None:
+        update_data["notes"] = data.notes
+    if data.attachments is not None:
+        update_data["attachments"] = data.attachments
+    if data.attachment_path is not None:
+        update_data["attachment_path"] = data.attachment_path or None
+    if data.invoice_amount is not None or data.tax_rate is not None or data.total_amount is not None:
+        amount_excl = (
+            Decimal(str(data.invoice_amount))
+            if data.invoice_amount is not None
+            else Decimal(str(invoice.invoice_amount or 0))
+        )
+        tax_rate_percent = (
+            Decimal(str(data.tax_rate))
+            if data.tax_rate is not None
+            else Decimal(str(invoice.tax_rate or 0))
+        )
+        amount_excl, tax_amount, total_amount = resolve_invoice_amounts_for_create(
+            amount_excl,
+            tax_rate_percent,
+            Decimal(str(data.total_amount)) if data.total_amount is not None else None,
+        )
+        update_data["invoice_amount"] = amount_excl
+        update_data["tax_amount"] = tax_amount
+        update_data["total_amount"] = total_amount
+        if data.tax_rate is not None:
+            update_data["tax_rate"] = tax_rate_percent
+
+    if update_data:
+        apply_update_audit(update_data, current_user)
+        await PurchaseInvoice.filter(tenant_id=tenant_id, id=id).update(**update_data)
+        if data.invoice_number is not None and invoice.payable_id:
+            await Payable.filter(tenant_id=tenant_id, id=int(invoice.payable_id)).update(
+                invoice_number=data.invoice_number,
+                updated_by=current_user.id,
+            )
+
+    try:
+        return await invoice_service.get_purchase_invoice_by_id(tenant_id, id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/purchase-invoices/{id}", tenant_id) from e
+
+
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_purchase_invoice(
     id: int,
