@@ -26,6 +26,10 @@ riveredge-frontend/.expo/
 
 # ===== 构建产物 =====
 # riveredge-frontend/dist/ 不忽略：支持本机构建后提交，云服务器拉取即用（弱机器上现构建过慢）。
+# .gz/.br 不入库（与未压缩资源重复，会撑仓库）。生产 start/update 由 precompress_web_dist 按 dist 现生成，
+# 供 Caddy file_server precompressed；未生成时 Caddy encode gzip zstd 仍会在线压缩。
+*.gz
+*.br
 # 误生成在 src 下的构建输出勿提交：
 riveredge-frontend/src/dist/
 riveredge-frontend/src/dev-dist/

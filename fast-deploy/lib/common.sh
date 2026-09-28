@@ -3072,6 +3072,43 @@ ensure_frontend_deps() {
     fi
 }
 
+# 为 Caddy file_server precompressed 按 dist 现生成 .gz/.br（不入库）。
+# 阈值 10240 与 vite-plugin-compression 一致；已存在且不旧于源文件则跳过。
+precompress_web_dist() {
+    local root="${1:-$FRONTEND_DIR/dist}"
+    [ -d "$root" ] || return 0
+    if ! command -v gzip >/dev/null 2>&1; then
+        log_warn "未找到 gzip，跳过预压缩（Caddy encode 仍会在线压缩）"
+        return 0
+    fi
+    local gz_n=0 br_n=0
+    local has_brotli=0
+    command -v brotli >/dev/null 2>&1 && has_brotli=1
+    local f
+    while IFS= read -r -d '' f; do
+        case "$f" in
+            *.gz|*.br|*.png|*.jpg|*.jpeg|*.webp|*.gif|*.ico|*.woff|*.woff2|*.mp4|*.zip) continue ;;
+        esac
+        if [ ! -f "$f.gz" ] || [ "$f" -nt "$f.gz" ]; then
+            gzip -9 -c "$f" > "$f.gz.tmp"
+            mv "$f.gz.tmp" "$f.gz"
+            gz_n=$((gz_n + 1))
+        fi
+        if [ "$has_brotli" = "1" ]; then
+            if [ ! -f "$f.br" ] || [ "$f" -nt "$f.br" ]; then
+                brotli -q 5 -c "$f" > "$f.br.tmp"
+                mv "$f.br.tmp" "$f.br"
+                br_n=$((br_n + 1))
+            fi
+        fi
+    done < <(find "$root" -type f -size +10240c -print0)
+    if [ "$gz_n" -gt 0 ] || [ "$br_n" -gt 0 ]; then
+        local extra=""
+        [ "$has_brotli" != "1" ] && extra="；无 brotli CLI，br 由 Caddy encode 回退"
+        log_ok "已生成 Caddy 预压缩 gzip=${gz_n} brotli=${br_n}（${root}）${extra}"
+    fi
+}
+
 cmd_build() {
     ensure_frontend_deps
     log_info "构建 Web 前端..."
@@ -3082,11 +3119,13 @@ cmd_build() {
         npm run build
     ) || { log_error "前端构建失败"; exit 1; }
     [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少 dist/index.html"; exit 1; }
+    precompress_web_dist "$FRONTEND_DIR/dist"
     log_ok "前端构建完成"
 }
 
 # 生产 update/start 前确保 dist 可用：默认使用 Git 中的 dist，跳过服务器构建（弱机友好）。
 # 显式 ALLOW_SERVER_BUILD=1 时强制 npm build；dist 缺失且无该开关则报错退出。
+# Git 中的 dist 不含 .gz/.br，随后 precompress_web_dist 按需生成。
 cmd_ensure_frontend_dist() {
     load_deploy_env
     local frontend_index="$FRONTEND_DIR/dist/index.html"
@@ -3103,6 +3142,7 @@ cmd_ensure_frontend_dist() {
             exit 1
         fi
         log_ok "已检测到 Web dist（含 login.html），跳过服务器构建（Caddy 直接代理 Git 中的 dist）"
+        precompress_web_dist "$FRONTEND_DIR/dist"
         return 0
     fi
 

@@ -1404,6 +1404,61 @@ function Ensure-FrontendDeps {
     }
 }
 
+function Precompress-WebDist {
+    param([string]$Root)
+    if (-not $Root) { $Root = Join-Path $script:FrontendDir 'dist' }
+    if (-not (Test-Path -LiteralPath $Root)) { return }
+    Add-Type -AssemblyName System.IO.Compression -ErrorAction SilentlyContinue
+    $skip = @{
+        '.gz' = $true; '.br' = $true; '.png' = $true; '.jpg' = $true; '.jpeg' = $true
+        '.webp' = $true; '.gif' = $true; '.ico' = $true; '.woff' = $true; '.woff2' = $true
+        '.mp4' = $true; '.zip' = $true
+    }
+    $brotliType = [type]::GetType('System.IO.Compression.BrotliStream, System.IO.Compression')
+    $gzN = 0
+    $brN = 0
+    foreach ($file in (Get-ChildItem -LiteralPath $Root -Recurse -File)) {
+        $ext = $file.Extension.ToLowerInvariant()
+        if ($skip.ContainsKey($ext)) { continue }
+        if ($file.Length -le 10240) { continue }
+        $src = $file.FullName
+        $gzPath = $src + '.gz'
+        $needGz = -not (Test-Path -LiteralPath $gzPath) -or ($file.LastWriteTimeUtc -gt (Get-Item -LiteralPath $gzPath).LastWriteTimeUtc)
+        if ($needGz) {
+            $inStream = [System.IO.File]::OpenRead($src)
+            try {
+                $tmp = $gzPath + '.tmp'
+                $outStream = [System.IO.File]::Create($tmp)
+                try {
+                    $gzip = New-Object System.IO.Compression.GZipStream($outStream, [System.IO.Compression.CompressionLevel]::Optimal)
+                    try { $inStream.CopyTo($gzip) } finally { $gzip.Dispose() }
+                } finally { $outStream.Dispose() }
+                Move-Item -LiteralPath $tmp -Destination $gzPath -Force
+            } finally { $inStream.Dispose() }
+            $gzN++
+        }
+        if ($null -eq $brotliType) { continue }
+        $brPath = $src + '.br'
+        $needBr = -not (Test-Path -LiteralPath $brPath) -or ($file.LastWriteTimeUtc -gt (Get-Item -LiteralPath $brPath).LastWriteTimeUtc)
+        if ($needBr) {
+            $inStream = [System.IO.File]::OpenRead($src)
+            try {
+                $tmp = $brPath + '.tmp'
+                $outStream = [System.IO.File]::Create($tmp)
+                try {
+                    $brotli = New-Object System.IO.Compression.BrotliStream($outStream, [System.IO.Compression.CompressionLevel]::Fastest)
+                    try { $inStream.CopyTo($brotli) } finally { $brotli.Dispose() }
+                } finally { $outStream.Dispose() }
+                Move-Item -LiteralPath $tmp -Destination $brPath -Force
+            } finally { $inStream.Dispose() }
+            $brN++
+        }
+    }
+    if ($gzN -gt 0 -or $brN -gt 0) {
+        Write-LogOk "已生成 Caddy 预压缩 gzip=$gzN brotli=$brN（$Root）"
+    }
+}
+
 function Invoke-Build {
     Ensure-FrontendDeps
     Write-LogInfo '构建 Web 前端...'
@@ -1415,6 +1470,7 @@ function Invoke-Build {
     } finally { Pop-Location }
     if (-not (Test-Path (Join-Path $script:FrontendDir 'dist\index.html'))) { throw '缺少 dist/index.html' }
     if (-not (Test-Path (Join-Path $script:FrontendDir 'dist\login.html'))) { throw '缺少 dist/login.html（登录 MPA）' }
+    Precompress-WebDist (Join-Path $script:FrontendDir 'dist')
     Write-LogOk '前端构建完成'
 }
 
@@ -1432,6 +1488,7 @@ function Ensure-FrontendDist {
             throw '缺少 dist/login.html（登录 MPA）。请重新执行 fast-deploy/build.web.sh 并推送'
         }
         Write-LogOk '已检测到 Web dist（含 login.html），跳过服务器构建（Caddy 直接代理 Git 中的 dist）'
+        Precompress-WebDist (Join-Path $script:FrontendDir 'dist')
         return
     }
     throw '缺少 dist/index.html。请在本地 fast-deploy/build.web.sh 构建并推送，或设置 ALLOW_SERVER_BUILD=1'
