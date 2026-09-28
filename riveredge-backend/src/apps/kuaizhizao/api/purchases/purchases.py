@@ -785,6 +785,21 @@ async def preview_push_purchase_order_to_invoice(
     )
 
 
+@router.get(
+    "/purchase-orders/{order_id}/push-to-prepayment/preview",
+    summary="Preview push to prepayment payment",
+)
+async def preview_push_purchase_order_to_prepayment(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await PurchaseService().preview_push_to_prepayment(
+        tenant_id=tenant_id,
+        order_id=order_id,
+    )
+
+
 @router.get("/purchase-orders/{order_id}/push-to-purchase-return/preview", summary="Preview push to purchase return")
 async def preview_push_purchase_order_to_purchase_return(
     order_id: int = Path(..., description="采购订单ID"),
@@ -1017,6 +1032,46 @@ async def push_purchase_order_to_invoice(
         invoice_mode=invoice_mode,
         total_amount=total_amount,
         invoice_number=invoice_number,
+    )
+    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+
+
+@router.post(
+    "/purchase-orders/{order_id}/push-to-prepayment",
+    summary="Push to prepayment payment",
+)
+async def push_purchase_order_to_prepayment(
+    order_id: int = Path(..., description="采购订单ID"),
+    body: Optional[Dict[str, Any]] = Body(None),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从采购订单下推预付付款单。body 可选 amount / bank_account_id / notes。"""
+    from decimal import Decimal
+
+    from fastapi import status
+
+    amount = None
+    bank_account_id = None
+    notes = None
+    if isinstance(body, dict):
+        raw_amount = body.get("amount")
+        if raw_amount is not None and raw_amount != "":
+            amount = Decimal(str(raw_amount))
+        raw_bank = body.get("bank_account_id")
+        if raw_bank is not None and raw_bank != "":
+            bank_account_id = int(raw_bank)
+        raw_notes = body.get("notes")
+        if isinstance(raw_notes, str) and raw_notes.strip():
+            notes = raw_notes.strip()
+
+    result = await PurchaseService().push_to_prepayment(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        created_by=current_user.id,
+        amount=amount,
+        bank_account_id=bank_account_id,
+        notes=notes,
     )
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 

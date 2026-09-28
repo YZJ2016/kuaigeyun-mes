@@ -44,6 +44,38 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'material-form-process-route-perm-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-form-process-route-perm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-form-process-route-perm-r01.description',
+  },
+  {
+    id: 'file-preview-notfound-import-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-notfound-import-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-notfound-import-r01.description',
+  },
+  {
+    id: 'role-permission-version-null-unique-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.role-permission-version-null-unique-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.role-permission-version-null-unique-r01.description',
+  },
+  {
+    id: 'order-push-prepayment-receipt-r01',
+    date: '2026-09-28',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.order-push-prepayment-receipt-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.order-push-prepayment-receipt-r01.description',
+  },
+  {
     id: 'bank-account-statement-uniimport-r01',
     date: '2026-09-28',
     type: 'improvement',

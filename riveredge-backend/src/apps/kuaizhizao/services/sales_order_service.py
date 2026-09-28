@@ -1245,6 +1245,7 @@ class SalesOrderService:
         has_remaining_invoice_amount: bool = True,
         has_purchasable_remaining: bool = False,
         require_purchase_requisition: bool = False,
+        has_prepayment_receipt: bool = False,
     ) -> dict[str, bool]:
         item_list = items or []
         has_items = len(item_list) > 0
@@ -1280,6 +1281,7 @@ class SalesOrderService:
             "has_remaining_invoice_amount": has_remaining_invoice_amount,
             "has_purchasable_remaining": has_purchasable_remaining,
             "require_purchase_requisition": require_purchase_requisition,
+            "has_prepayment_receipt": has_prepayment_receipt,
         }
 
     async def _assert_sales_order_capability_for_order(
@@ -1324,6 +1326,16 @@ class SalesOrderService:
         purchasable_map = await batch_has_purchasable_remaining(
             tenant_id, {int(order.id): items}
         )
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            _order_prepayment_linked_by_ids,
+        )
+
+        prepay_map = await _order_prepayment_linked_by_ids(
+            tenant_id,
+            [int(order.id)],
+            source_type="sales_order",
+            target_type="receipt",
+        )
         ctx = self._sales_order_capability_context(
             order, items, demand, pushable_by_item=pushable_by_item,
             has_existing_delivery_project=has_existing_delivery_project,
@@ -1333,6 +1345,7 @@ class SalesOrderService:
             require_purchase_requisition=await require_purchase_requisition_for_tenant(
                 tenant_id
             ),
+            has_prepayment_receipt=prepay_map.get(int(order.id), False),
         )
         if action == "delete":
             from apps.kuaizhizao.services.sales_order_code_sync import (
@@ -2253,6 +2266,16 @@ class SalesOrderService:
         purchasable_map = await batch_has_purchasable_remaining(
             tenant_id, {int(order.id): capability_items}
         )
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            _order_prepayment_linked_by_ids,
+        )
+
+        prepay_map = await _order_prepayment_linked_by_ids(
+            tenant_id,
+            [int(order.id)],
+            source_type="sales_order",
+            target_type="receipt",
+        )
         resp = enrich_sales_order_capabilities_on_response(
             order,
             self._order_to_response(
@@ -2283,6 +2306,7 @@ class SalesOrderService:
                 require_purchase_requisition=await require_purchase_requisition_for_tenant(
                     tenant_id
                 ),
+                has_prepayment_receipt=prepay_map.get(int(order.id), False),
             ),
         )
         from core.config.code_rule_pages import CODE_RULE_PAGES
@@ -2868,6 +2892,16 @@ class SalesOrderService:
             tenant_id, items_by_order
         )
         require_pr = await require_purchase_requisition_for_tenant(tenant_id)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            _order_prepayment_linked_by_ids,
+        )
+
+        prepay_by_order = await _order_prepayment_linked_by_ids(
+            tenant_id,
+            order_ids,
+            source_type="sales_order",
+            target_type="receipt",
+        )
 
         # 6. 组装响应
         sales_orders = []
@@ -2942,6 +2976,7 @@ class SalesOrderService:
                             int(order.id), False
                         ),
                         require_purchase_requisition=require_pr,
+                        has_prepayment_receipt=prepay_by_order.get(int(order.id), False),
                     ),
                 )
             )
@@ -6369,6 +6404,123 @@ class SalesOrderService:
             ),
             "items": preview_items,
             "tip": "确认后将按全部订单明细生成销售发票草稿；可开票金额不足时将无法下推。",
+        }
+
+    async def preview_push_sales_order_to_prepayment(
+        self, tenant_id: int, sales_order_id: int
+    ) -> Dict[str, Any]:
+        """下推预收收款单预览。"""
+        from apps.kuaicaiwu.services.finance_tax import money_to_json_float, quantize_money
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            _order_prepayment_linked_by_ids,
+        )
+
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+
+        prepay_map = await _order_prepayment_linked_by_ids(
+            tenant_id,
+            [sales_order_id],
+            source_type="sales_order",
+            target_type="receipt",
+        )
+        await self._assert_sales_order_capability_for_order(
+            tenant_id, order, "push_prepayment"
+        )
+
+        amount = quantize_money(Decimal(str(order.prepayment_amount or 0)))
+        bank_id = order.prepayment_bank_account_id
+        has_blocking = amount <= 0 or prepay_map.get(sales_order_id, False)
+        blocking_reason = None
+        if prepay_map.get(sales_order_id, False):
+            blocking_reason = "sales_order.push_prepayment.already_exists"
+        elif amount <= 0:
+            blocking_reason = "sales_order.push_prepayment.no_amount"
+
+        return {
+            "target_type": "receipt",
+            "order_id": sales_order_id,
+            "order_code": order.order_code,
+            "summary": (
+                f"将按销售订单 {order.order_code} 生成预收收款单（金额 {money_to_json_float(amount)}）"
+                if not has_blocking
+                else "当前销售订单不可下推预收收款单"
+            ),
+            "items": [],
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "确认后将生成已确认的预收收款单；金额默认取订单预收款，可在此调整。",
+            "prepayment_amount": money_to_json_float(amount),
+            "prepayment_bank_account_id": int(bank_id) if bank_id else None,
+            "customer_id": int(order.customer_id) if order.customer_id else None,
+            "customer_name": order.customer_name,
+        }
+
+    async def push_sales_order_to_prepayment(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        created_by: int,
+        *,
+        amount: Optional[Decimal] = None,
+        bank_account_id: Optional[int] = None,
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """从销售订单下推预收收款单。"""
+        from apps.kuaicaiwu.models.receipt import Receipt
+        from apps.kuaicaiwu.services.finance_integration_hooks import (
+            ensure_prepayment_receipt_for_sales_order,
+        )
+        from apps.kuaicaiwu.services.finance_tax import quantize_money
+
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+
+        await self._assert_sales_order_capability_for_order(
+            tenant_id, order, "push_prepayment"
+        )
+
+        amount_override = None
+        if amount is not None:
+            amount_override = quantize_money(Decimal(str(amount)))
+            if amount_override <= 0:
+                raise BusinessLogicError("预收金额须大于 0")
+
+        note_text = (notes or "").strip() or (
+            f"从销售订单 {order.order_code} 下推预收收款单"
+        )
+        receipt_id = await ensure_prepayment_receipt_for_sales_order(
+            tenant_id=tenant_id,
+            order_id=int(order.id),
+            order_code=str(order.order_code or ""),
+            customer_id=int(order.customer_id),
+            customer_name=str(order.customer_name or ""),
+            prepayment_amount=order.prepayment_amount,
+            prepayment_bank_account_id=order.prepayment_bank_account_id,
+            operator_id=created_by,
+            amount_override=amount_override,
+            bank_account_id_override=bank_account_id,
+            notes_override=note_text,
+            raise_if_exists=True,
+        )
+        if not receipt_id:
+            raise BusinessLogicError("未能生成预收收款单，请确认预收款金额大于 0")
+
+        receipt = await Receipt.get(id=receipt_id)
+        return {
+            "success": True,
+            "message": f"已生成预收收款单 {receipt.receipt_code}",
+            "order_id": sales_order_id,
+            "order_code": order.order_code,
+            "receipt_id": receipt.id,
+            "receipt_code": receipt.receipt_code,
+            "total_amount": float(receipt.total_amount or 0),
         }
 
     async def preview_push_sales_order_to_sales_return(

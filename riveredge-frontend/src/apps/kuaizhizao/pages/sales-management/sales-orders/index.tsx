@@ -197,6 +197,7 @@ import {
   previewPushSalesOrderToShipmentNotice,
   previewPushSalesOrderToDelivery,
   previewPushSalesOrderToInvoice,
+  previewPushSalesOrderToPrepayment,
   previewPushSalesOrderToSalesReturn,
   previewBackfillSalesContract,
   pushSalesOrderToComputation,
@@ -206,6 +207,7 @@ import {
   pushSalesOrderToShipmentNotice,
   pushSalesOrderToDelivery,
   pushSalesOrderToInvoice,
+  pushSalesOrderToPrepayment,
   pushSalesOrderToSalesReturn,
   pullSalesOrderFromQuotation,
   pullSalesOrderFromSalesContract,
@@ -587,6 +589,7 @@ const SalesOrdersPage: React.FC = () => {
   const pushToPurchaseRequisitionAction = resolveKuaizhizaoDocumentAction(t, 'purchase_requisition.pull_from_sales_order');
   const pushToPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_sales_order');
   const pushToSalesInvoiceAction = resolveKuaizhizaoDocumentAction(t, 'sales_invoice.pull_from_sales_order');
+  const pushToPrepaymentAction = resolveKuaizhizaoDocumentAction(t, 'receipt.pull_from_sales_order');
   const pushToShipmentNoticeAction = resolveKuaizhizaoDocumentAction(t, 'shipment_notice.pull_from_sales_order');
   const pushToSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'sales_delivery.pull_from_sales_order');
   const pushToSalesReturnAction = resolveKuaizhizaoDocumentAction(t, 'sales_return.pull_from_sales_order');
@@ -1864,6 +1867,7 @@ const SalesOrdersPage: React.FC = () => {
   const [pushShipmentNoticeLineWh, setPushShipmentNoticeLineWh] = useState<Record<number, number>>({});
   const [pushReturnLineBatch, setPushReturnLineBatch] = useState<Record<number, string>>({});
   const [pushDeliveryNotes, setPushDeliveryNotes] = useState('');
+  const [pushPrepaymentAmount, setPushPrepaymentAmount] = useState(0);
 
   const resolvePushPreviewModalTitle = (
     targetType: NonNullable<PushPreviewResponse['target_type']>,
@@ -1874,6 +1878,7 @@ const SalesOrdersPage: React.FC = () => {
     if (targetType === 'purchase_requisition') return pushToPurchaseRequisitionAction.label;
     if (targetType === 'purchase_order') return pushToPurchaseOrderAction.label;
     if (targetType === 'sales_invoice') return pushToSalesInvoiceAction.label;
+    if (targetType === 'receipt') return pushToPrepaymentAction.label;
     if (targetType === 'sales_delivery') return pushToSalesDeliveryAction.label;
     if (targetType === 'sales_return') return pushToSalesReturnAction.label;
     if (targetType === 'sales_contract') return pushToBackfillSalesContractAction.label;
@@ -1904,6 +1909,7 @@ const SalesOrdersPage: React.FC = () => {
     setPushShipmentNoticeLineWh({});
     setPushReturnLineBatch({});
     setPushDeliveryNotes('');
+    setPushPrepaymentAmount(0);
     const ensureWorkCentersLoaded = async () => {
       if (workCenterList.length > 0) return;
       try {
@@ -1999,6 +2005,8 @@ const SalesOrdersPage: React.FC = () => {
             .filter((row) => Number((row as any).max_push_quantity ?? 0) > 0)
             .map((row) => Number((row as any).item_id));
           setWorkOrderSelectedItemIds(ids);
+        } else if (res?.target_type === 'receipt') {
+          setPushPrepaymentAmount(Number(res.prepayment_amount ?? 0));
         }
         setPushPreviewLoading(false);
       })
@@ -2318,6 +2326,18 @@ const SalesOrdersPage: React.FC = () => {
             code: res?.contract_code || t('app.kuaizhizao.salesOrder.createdFallback'),
           }),
         );
+      } else if (pushPreviewData.target_type === 'receipt') {
+        if (!(pushPrepaymentAmount > 0)) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.pushPrepaymentAmountInvalid'));
+          return;
+        }
+        const res = await pushPreviewAction.doPush({ amount: pushPrepaymentAmount });
+        messageApi.success(
+          res?.message ||
+            t('app.kuaizhizao.salesOrder.pushPrepaymentSuccess', {
+              code: res?.receipt_code || t('app.kuaizhizao.salesOrder.createdFallback'),
+            }),
+        );
       }
       if (pushPreviewData.target_type === 'shipment_notice') {
         messageApi.success(t('app.kuaizhizao.salesOrder.shipmentNoticeCreated'));
@@ -2429,6 +2449,25 @@ const SalesOrdersPage: React.FC = () => {
       'sales_invoice',
       () => previewPushSalesOrderToInvoice(id),
       () => pushSalesOrderToInvoice(id),
+      () => refreshDrawerOrder(id),
+      id,
+    );
+  };
+
+  /** 处理下推到预收收款单 */
+  const handlePushToPrepayment = async (id: number, order?: SalesOrder | null) => {
+    if (!order?.capabilities?.push_prepayment?.allowed) {
+      messageApi.warning(
+        salesOrderCapabilityReasonMessage(order?.capabilities?.push_prepayment?.reason, t) ||
+          t('app.kuaizhizao.salesOrder.pushRequiresApproved'),
+      );
+      return;
+    }
+    showPushPreviewModal(
+      'receipt',
+      () => previewPushSalesOrderToPrepayment(id),
+      (payload?: { amount?: number; bank_account_id?: number; notes?: string }) =>
+        pushSalesOrderToPrepayment(id, payload),
       () => refreshDrawerOrder(id),
       id,
     );
@@ -3575,6 +3614,10 @@ const SalesOrdersPage: React.FC = () => {
       { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
       !salesNodeEnabled.invoice ? t('app.kuaizhizao.salesOrder.nodeInvoiceDisabled') : undefined,
     );
+    const prepaymentDisabledReason = resolvePushReason(
+      record.capabilities?.push_prepayment,
+      { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
+    );
     const shipmentDisabledReason = resolvePushReason(
       record.capabilities?.push_shipment_notice,
       { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
@@ -3592,6 +3635,7 @@ const SalesOrdersPage: React.FC = () => {
     const canPushShipment = !shipmentDisabledReason;
     const canPushDelivery = !deliveryDisabledReason;
     const canPushInvoice = !invoiceDisabledReason;
+    const canPushPrepayment = !prepaymentDisabledReason;
     const salesReturnDisabledReason = resolvePushReason(
       record.capabilities?.push_sales_return,
       { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
@@ -3659,6 +3703,13 @@ const SalesOrdersPage: React.FC = () => {
         onClick: () => canPushInvoice && handlePushToInvoice(record.id!),
       },
       {
+        key: 'prepayment',
+        label: pushToPrepaymentAction.label,
+        disabled: !!prepaymentDisabledReason,
+        title: prepaymentDisabledReason,
+        onClick: () => canPushPrepayment && handlePushToPrepayment(record.id!, record),
+      },
+      {
         key: 'shipment',
         label: pushToShipmentNoticeAction.label,
         disabled: !!shipmentDisabledReason,
@@ -3703,7 +3754,7 @@ const SalesOrdersPage: React.FC = () => {
         onClick: () => canWithdrawComputation && handleWithdrawFromComputation(record.id!),
       },
     ]);
-  }, [deliveryProjectPerms.canCreate, handleBackfillSalesContract, handlePushToComputation, handlePushToDelivery, handlePushToDeliveryProject, handlePushToInvoice, handlePushToPurchaseOrder, handlePushToPurchaseRequisition, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, purchaseOrderPerms.canCreate, purchaseRequisitionPerms.canCreate, pushToBackfillSalesContractAction.label, pushToDemandComputationAction.label, pushToPurchaseOrderAction.label, pushToPurchaseRequisitionAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, salesContractPerms.canCreate, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canCreate, salesOrderPerms.canUpdate, t]);
+  }, [deliveryProjectPerms.canCreate, handleBackfillSalesContract, handlePushToComputation, handlePushToDelivery, handlePushToDeliveryProject, handlePushToInvoice, handlePushToPrepayment, handlePushToPurchaseOrder, handlePushToPurchaseRequisition, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, purchaseOrderPerms.canCreate, purchaseRequisitionPerms.canCreate, pushToBackfillSalesContractAction.label, pushToDemandComputationAction.label, pushToPrepaymentAction.label, pushToPurchaseOrderAction.label, pushToPurchaseRequisitionAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, salesContractPerms.canCreate, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canCreate, salesOrderPerms.canUpdate, t]);
   const toolbarPushMenuItems = useMemo(
     () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : buildUniPushMenuItems([])),
     [buildToolbarPushMenuItems, selectedOrderForToolbar]
@@ -6328,7 +6379,8 @@ const SalesOrdersPage: React.FC = () => {
           disabled:
             pushPreviewLoading ||
             !pushPreviewData ||
-            (!!pushPreviewData?.has_blocking_issues && !!pushPreviewData?.blocking_reason),
+            (!!pushPreviewData?.has_blocking_issues && !!pushPreviewData?.blocking_reason) ||
+            (pushPreviewData?.target_type === 'receipt' && !(pushPrepaymentAmount > 0)),
         }}
       >
         {pushPreviewLoading ? (
@@ -6349,6 +6401,20 @@ const SalesOrdersPage: React.FC = () => {
                   t('app.kuaizhizao.salesOrder.pushFailed')
                 }
               />
+            ) : null}
+            {pushPreviewData.target_type === 'receipt' && !pushPreviewData.has_blocking_issues ? (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ marginBottom: 8 }}>
+                  {t('app.kuaizhizao.salesOrder.pushPrepaymentAmount')}
+                </div>
+                <InputNumber
+                  style={{ width: 280 }}
+                  min={0.01}
+                  precision={2}
+                  value={pushPrepaymentAmount > 0 ? pushPrepaymentAmount : undefined}
+                  onChange={(v) => setPushPrepaymentAmount(Number(v) || 0)}
+                />
+              </div>
             ) : null}
             {pushPreviewData.target_type === 'work_order' && (
               <div style={{ marginBottom: 10 }}>

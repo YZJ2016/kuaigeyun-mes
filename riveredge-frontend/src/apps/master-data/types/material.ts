@@ -162,8 +162,12 @@ export interface Material {
   source_config?: Record<string, any>; // 物料来源相关配置（向后兼容）
   processRouteId?: number; // 默认工艺路线ID（自制件）
   processRouteName?: string; // 默认工艺路线名称
+  processRouteCode?: string;
+  processRouteUuid?: string;
   process_route_id?: number;
   process_route_name?: string;
+  process_route_code?: string;
+  process_route_uuid?: string;
   /** 质检模式（none:无质检, simple:简易质检, plan:方案质检） */
   inspectionMode?: 'none' | 'simple' | 'plan';
   inspection_mode?: string;

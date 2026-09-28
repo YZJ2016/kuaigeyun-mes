@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from loguru import logger
 
 from infra.config.infra_config import infra_settings as settings
+from infra.exceptions.exceptions import NotFoundError
 from infra.infrastructure.cache.cache_manager import cache_manager
 from core.utils.timezone_utils import now_utc
 
