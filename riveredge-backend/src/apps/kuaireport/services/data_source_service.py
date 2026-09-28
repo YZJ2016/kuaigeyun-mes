@@ -31,6 +31,7 @@ from infra.exceptions.exceptions import (
 )
 
 _LOCAL_HOSTNAMES = frozenset({"localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback"})
+_LOCAL_TEST_HOSTS = frozenset({"localhost", "127.0.0.1"})
 
 
 def _reject_sql_keys(payload: dict[str, Any]) -> None:
@@ -40,13 +41,15 @@ def _reject_sql_keys(payload: dict[str, Any]) -> None:
 
 
 def _reject_internal_http_address(url: str) -> None:
-    """拒绝明显内网/环回/链路本地地址，只允许 http/https 公网地址。"""
+    """拒绝明显内网/环回/链路本地地址。localhost 与 127.0.0.1 留给本地测试。"""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         raise ValidationError("http 地址无效")
     host = (parsed.hostname or "").strip().lower()
     if not host:
         raise ValidationError("http 地址无效")
+    if host in _LOCAL_TEST_HOSTS:
+        return
     if host in _LOCAL_HOSTNAMES or host.endswith(".localhost"):
         raise ValidationError("http 地址不允许指向本机或内网")
     ip = None

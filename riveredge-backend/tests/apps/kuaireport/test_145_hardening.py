@@ -46,11 +46,9 @@ def _report_config(source_uuid: str) -> dict:
     "url",
     [
         "http://169.254.169.254/latest/meta-data",
-        "http://127.0.0.1:8080/admin",
         "http://10.1.2.3/internal",
         "http://172.16.5.5/internal",
         "http://192.168.1.1/router",
-        "http://localhost:8000/api",
         "http://0.0.0.0:9000/",
         "http://[::1]:8080/",
         "http://[fe80::1]/",
@@ -78,8 +76,28 @@ async def test_http_source_accepts_public_https_and_update_also_checked(db):
     assert row.config["url"] == "https://tenant.example.com/feed"
     with pytest.raises(ValidationError):
         await data_source_service.update_data_source(
-            1, row.id, DataSourceUpdate(config={"url": "http://127.0.0.1/x"})
+            1, row.id, DataSourceUpdate(config={"url": "http://192.168.1.1/x"})
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1:8080/admin",
+        "http://localhost:8000/api",
+    ],
+)
+async def test_http_source_accepts_localhost_for_local_test(db, url):
+    set_current_tenant_id(1)
+    row = await data_source_service.create_data_source(
+        1, DataSourceCreate(name="本机", type="http", config={"url": url})
+    )
+    assert row.config["url"] == url
+    updated = await data_source_service.update_data_source(
+        1, row.id, DataSourceUpdate(config={"url": url})
+    )
+    assert updated.config["url"] == url
 
 
 @pytest.mark.asyncio

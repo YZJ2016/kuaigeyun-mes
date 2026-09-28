@@ -88,11 +88,10 @@ tools/workspace/workspace.yaml
 # 专业 / 定制应用：源码在私有仓，经 fast-deploy/tools/workspace/compose.py 组装
 # 例外：apps/kuaiai 私仓版已废弃（KR-G0，2026-09-24），前后端槽位均由本仓 KU-AI 重建轨独占，不再忽略
 # 例外：apps/kuaireport 槽位收归本仓（KRP-D1，2026-09-28），前后端不再忽略，专业包组装不再覆盖
-riveredge-backend/src/apps/kuaiiot/
+# 例外：apps/kuaiiot 槽位收归本仓（KIO-W1，2026-09-28），前后端不再忽略，专业包组装不再覆盖
 riveredge-backend/src/apps/haoligo/
 riveredge-backend/src/apps/haolisales/
 riveredge-backend/src/apps/funide_oa/
-riveredge-frontend/src/apps/kuaiiot/
 riveredge-frontend/src/apps/haoligo/
 riveredge-frontend/src/apps/haolisales/
 riveredge-frontend/src/apps/funide-oa/
