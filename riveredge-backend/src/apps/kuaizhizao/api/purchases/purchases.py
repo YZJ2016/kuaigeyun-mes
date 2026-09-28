@@ -988,6 +988,7 @@ async def push_purchase_order_to_invoice(
 
     body.invoice_mode: remaining（可开票余额）| prepayment（按预付款）
     body.total_amount: 可选，显式价税合计（不超过所选模式上限）
+    body.invoice_number: 可选，票面发票代码/号码；空则创建时仍为「待补全」
     """
     from decimal import Decimal
 
@@ -996,6 +997,7 @@ async def push_purchase_order_to_invoice(
 
     invoice_mode = "remaining"
     total_amount = None
+    invoice_number = None
     if isinstance(body, dict):
         raw_mode = body.get("invoice_mode")
         if isinstance(raw_mode, str) and raw_mode.strip():
@@ -1003,6 +1005,9 @@ async def push_purchase_order_to_invoice(
         raw_total = body.get("total_amount")
         if raw_total is not None and raw_total != "":
             total_amount = Decimal(str(raw_total))
+        raw_number = body.get("invoice_number")
+        if isinstance(raw_number, str) and raw_number.strip():
+            invoice_number = raw_number.strip()
 
     service = PurchaseService()
     result = await service.push_to_invoice(
@@ -1011,6 +1016,7 @@ async def push_purchase_order_to_invoice(
         created_by=current_user.id,
         invoice_mode=invoice_mode,
         total_amount=total_amount,
+        invoice_number=invoice_number,
     )
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 

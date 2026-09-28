@@ -66,6 +66,16 @@ export const purchaseInvoiceService = {
     });
   },
 
+  update: (
+    id: number,
+    data: { invoice_number?: string; attachments?: unknown[] },
+  ) => {
+    return apiRequest<PurchaseInvoice>(`${PURCHASE_INVOICE_API}/${id}`, {
+      method: 'PUT',
+      data,
+    });
+  },
+
   listPurchaseOrderPullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
     apiRequest<{ data: PurchaseInvoicePullCandidate[]; total: number; success: boolean }>(
       `${PURCHASE_INVOICE_API}/pull-candidates/purchase-orders`,

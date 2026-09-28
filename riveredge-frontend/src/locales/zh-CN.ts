@@ -10767,12 +10767,14 @@ export default {
   'app.kuaizhizao.purchaseOrder.pushReceiptFailed': '下推采购入库失败',
   'app.kuaizhizao.purchaseOrder.pushNoticeSuccess': '成功生成收货通知单：{{code}}',
   'app.kuaizhizao.purchaseOrder.pushNoticeFailed': '下推收货通知失败',
-  'app.kuaizhizao.purchaseOrder.pushInvoiceSuccess': '成功生成采购发票：{{code}}，请前往财务管理完善发票号码等信息',
+  'app.kuaizhizao.purchaseOrder.pushInvoiceSuccess': '成功生成采购发票：{{code}}',
   'app.kuaizhizao.purchaseOrder.pushInvoiceByRemaining': '按可开票余额创建',
   'app.kuaizhizao.purchaseOrder.pushInvoiceByPrepayment': '按预付款创建',
   'app.kuaizhizao.purchaseOrder.pushInvoiceNoPrepayment': '采购单未填写预付款金额',
   'app.kuaizhizao.purchaseOrder.pushInvoiceMode': '开票方式',
   'app.kuaizhizao.purchaseOrder.pushInvoiceAmount': '本次开票价税合计',
+  'app.kuaizhizao.purchaseOrder.pushInvoiceNumber': '发票代码',
+  'app.kuaizhizao.purchaseOrder.pushInvoiceNumberPlaceholder': '可选，票面发票代码或号码',
   'app.kuaizhizao.purchaseOrder.pushInvoiceOrderTotal': '订单价税合计',
   'app.kuaizhizao.purchaseOrder.pushInvoiceInvoiced': '已开票',
   'app.kuaizhizao.purchaseOrder.pushInvoiceRemaining': '可开票余额',
@@ -19332,6 +19334,9 @@ export default {
   'app.kuaicaiwu.purchaseInvoice.pageTitle': '采购发票',
   'app.kuaicaiwu.purchaseInvoice.entityName': '采购发票',
   'app.kuaicaiwu.purchaseInvoice.createTitle': '手动登记采购发票',
+  'app.kuaicaiwu.purchaseInvoice.editNumberTitle': '填写发票号码',
+  'app.kuaicaiwu.purchaseInvoice.editNumberTitleWithCode': '填写发票号码（{{code}}）',
+  'app.kuaicaiwu.purchaseInvoice.editNumberSuccess': '发票号码已保存',
   'app.kuaicaiwu.purchaseInvoice.createSuccess': '采购发票登记成功',
   'app.kuaicaiwu.purchaseInvoice.registerFailed': '登记失败',
   'app.kuaicaiwu.purchaseInvoice.pullFormTitle': '填写采购发票信息',
@@ -29045,6 +29050,22 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.finance-invoice-fill-number-approved-r01.title':
+    '采购/销售发票已审核后仍可补全发票号码',
+  'pages.dashboard.updateLog.entries.finance-invoice-fill-number-approved-r01.description':
+    '采购发票列表补齐「填号」操作与更新接口；销售发票同步放开已审核仅补号码/附件。下推产生「待补全」后无需先撤销审核即可填写票面号码。',
+  'pages.dashboard.updateLog.entries.purchase-order-push-invoice-number-r01.title':
+    '从采购订单创建采购发票时可填写发票代码',
+  'pages.dashboard.updateLog.entries.purchase-order-push-invoice-number-r01.description':
+    '下推弹窗在开票金额旁增加发票代码输入；填写后写入采购发票票面号码，未填仍为待补全，可稍后在财务管理中完善。',
+  'pages.dashboard.updateLog.entries.finance-voucher-confirm-bank-first-r01.title':
+    '收付款单确认先校验资金流水，避免草稿显示与库内已确认不一致',
+  'pages.dashboard.updateLog.entries.finance-voucher-confirm-bank-first-r01.description':
+    '付款/收款确认时先预检账户余额并写入资金流水，成功后再改为已确认；流水失败保持草稿。修复此前因账户余额不足导致状态已确认、界面仍显示草稿、再次确认却提示「只有草稿可以确认」的问题。',
+  'pages.dashboard.updateLog.entries.sales-order-linked-demand-status-align-r01.title':
+    '销售订单审核后同步关联需求状态，修复下推需求计算失败',
+  'pages.dashboard.updateLog.entries.sales-order-linked-demand-status-align-r01.description':
+    '销售订单审核通过、驳回、反审核及下推需求计算前，将已存在的关联需求生命周期状态与订单对齐，避免订单已审但需求仍为草稿导致「只能下推已审核/已确认的需求」。',
   'pages.dashboard.updateLog.entries.customer-pool-inactive-alert-days-r01.title':
     '客户池未联系天数可配置',
   'pages.dashboard.updateLog.entries.customer-pool-inactive-alert-days-r01.description':

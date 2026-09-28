@@ -298,8 +298,14 @@ async def confirm_payment(
 ):
     """确认付款单（过账：核销往来 + 记入资金流水）。"""
     payment = await _get_or_404(tenant_id, id)
-    if payment.status != "Draft":
-        raise _http_exception_with_trace(400, "只有草稿状态的付款单可以确认", "/payments/{id}/confirm", tenant_id)
+    # Confirmed 允许再次进入过账以补写资金流水（修复历史「先改状态后流水失败」脏数据）
+    if payment.status not in ("Draft", "Confirmed"):
+        raise _http_exception_with_trace(
+            400,
+            f"只有草稿状态的付款单可以确认，当前状态: {payment.status}",
+            "/payments/{id}/confirm",
+            tenant_id,
+        )
     from apps.kuaicaiwu.services.finance_voucher_posting_service import FinanceVoucherPostingService
     from infra.exceptions.exceptions import NotFoundError, ValidationError
 
