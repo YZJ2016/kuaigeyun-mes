@@ -261,21 +261,27 @@ async def get_users_statistics(
         # 业务用户条件：tenant_id 不为空（排除平台管理员）、未软删除
         base_q = Q(tenant_id__not_isnull=True) & Q(deleted_at__isnull=True)
 
-        total_users = await User.filter(base_q).count()
+        # spec 143：平台超管跨组织统计视图——显式 unscoped（请求态审计由
+        # scope 激活点写 core_operation_logs，操作者已登记为 infra_superadmin）
+        from infra.domain.tenant_context import unscoped
+
+        async with unscoped(reason="平台超管跨组织用户注册统计"):
+            total_users = await User.filter(base_q).count()
 
         now = resolve_business_datetime()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = today_start - timedelta(days=today_start.weekday())
         month_start = today_start.replace(day=1)
 
-        new_today = await User.filter(base_q & Q(created_at__gte=today_start)).count()
-        new_week = await User.filter(base_q & Q(created_at__gte=week_start)).count()
-        new_month = await User.filter(base_q & Q(created_at__gte=month_start)).count()
+        async with unscoped(reason="平台超管跨组织用户注册统计"):
+            new_today = await User.filter(base_q & Q(created_at__gte=today_start)).count()
+            new_week = await User.filter(base_q & Q(created_at__gte=week_start)).count()
+            new_month = await User.filter(base_q & Q(created_at__gte=month_start)).count()
 
-        # 按 source 分组统计（保留兼容）
-        source_stats = await User.filter(base_q).group_by("source").annotate(
-            cnt=Count("id")
-        ).values("source", "cnt")
+            # 按 source 分组统计（保留兼容）
+            source_stats = await User.filter(base_q).group_by("source").annotate(
+                cnt=Count("id")
+            ).values("source", "cnt")
         by_source: Dict[str, int] = {}
         for s in source_stats:
             key = s["source"] if s["source"] else "unknown"
@@ -360,9 +366,14 @@ async def get_access_statistics(
     try:
         base_q = Q()
 
-        total_logins = await LoginLog.filter(base_q).count()
-        success_count = await LoginLog.filter(base_q & Q(login_status="success")).count()
-        failed_count = await LoginLog.filter(base_q & Q(login_status="failed")).count()
+        # spec 143：平台超管跨组织登录统计——显式 unscoped（请求态审计由
+        # scope 激活点写 core_operation_logs）
+        from infra.domain.tenant_context import unscoped
+
+        async with unscoped(reason="平台超管跨组织登录访问统计"):
+            total_logins = await LoginLog.filter(base_q).count()
+            success_count = await LoginLog.filter(base_q & Q(login_status="success")).count()
+            failed_count = await LoginLog.filter(base_q & Q(login_status="failed")).count()
 
         now = now_utc()
         start_dt, end_dt = _parse_date_range(start, end)
@@ -382,7 +393,8 @@ async def get_access_statistics(
                 today_start = today_start.replace(tzinfo=timezone.utc)
                 today_end = today_end.replace(tzinfo=timezone.utc)
         today_q = base_q & Q(created_at__gte=today_start) & Q(created_at__lte=today_end)
-        logins_today = await LoginLog.filter(today_q).count()
+        async with unscoped(reason="平台超管跨组织登录访问统计"):
+            logins_today = await LoginLog.filter(today_q).count()
         conn = Tortoise.get_connection("default")
         dau_sql = """
             SELECT COUNT(DISTINCT user_id) AS cnt

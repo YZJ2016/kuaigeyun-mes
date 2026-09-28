@@ -38,6 +38,7 @@ from core.services.system.data_backup_jobs import (
 )
 from core.tasks.dispatcher import TaskContext, TaskStep, register_event_handler
 from core.utils.timezone_utils import resolve_business_datetime
+from infra.domain.tenant_context import unscoped, with_tenant
 
 # 全站同时只允许一个备份任务跑，避免多任务并发打爆内存（专用连接持锁，不用连接池）
 _BACKUP_ADVISORY_LOCK_KEY = 824_601_001
@@ -93,7 +94,9 @@ async def _mark_restore_status(
     if not backup_uuid:
         return
     try:
-        backup = await DataBackup.get(uuid=backup_uuid)
+        # spec 143：按全局唯一 uuid 的内部状态回写（记录归属组织可能为 NULL）
+        async with unscoped(reason="恢复任务状态回写按 uuid 内部定位"):
+            backup = await DataBackup.get(uuid=backup_uuid)
         backup.restore_status = status
         if mark_started:
             backup.restore_started_at = resolve_business_datetime()
@@ -109,6 +112,42 @@ async def _mark_restore_status(
 
 
 async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> None:
+    """备份事件入口：worker 无 ambient 上下文，先建立显式执行域。
+
+    spec 143：事件带 tenant_id → ``with_tenant(tid)``；全库备份（无
+    tenant_id，平台级操作）→ ``unscoped``；先以内部 unscoped 读取任务
+    记录回填缺失的 tenant_id。
+    """
+    event_data = ctx.event.data
+    tenant_id = event_data.get("tenant_id")
+    if tenant_id is None and event_data.get("backup_uuid"):
+        # spec 143：归属组织探测失败必须失败关闭——不得回退到 unscoped
+        # 全库执行域（错误路径权限反而更宽）。
+        try:
+            async with unscoped(reason="备份任务按 uuid 恢复记录归属组织"):
+                probe = await DataBackup.get_or_none(uuid=event_data.get("backup_uuid"))
+        except Exception as e:
+            logger.error(
+                "备份任务归属组织探测失败 backup_uuid={}，已中止: {}",
+                event_data.get("backup_uuid"),
+                e,
+            )
+            raise
+        if probe is None:
+            raise RuntimeError(
+                f"备份任务记录不存在 backup_uuid={event_data.get('backup_uuid')}，已中止"
+            )
+        tenant_id = probe.tenant_id
+    scope = (
+        with_tenant(int(tenant_id), reason="租户级备份任务按任务组织执行")
+        if tenant_id is not None
+        else unscoped(reason="全库备份任务（平台级，无组织归属）")
+    )
+    async with scope:
+        await _handle_database_backup_requested_body(ctx, step)
+
+
+async def _handle_database_backup_requested_body(ctx: TaskContext, step: TaskStep) -> None:
     """数据备份：更新记录 -> dump+zip -> 更新成功/失败。"""
     event_data = ctx.event.data
     backup_uuid = event_data.get("backup_uuid")
@@ -236,6 +275,42 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
 
 
 async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) -> None:
+    """恢复事件入口：worker 无 ambient 上下文，先建立显式执行域。
+
+    spec 143：租户级恢复 → ``with_tenant(target)``；全局恢复（无目标
+    组织，须平台管理员授权标记）→ ``unscoped``；先以内部 unscoped
+    读取任务记录回填缺失的 tenant_id。
+    """
+    event_data = ctx.event.data
+    tenant_id = event_data.get("target_tenant_id") or event_data.get("tenant_id")
+    if tenant_id is None and event_data.get("backup_uuid"):
+        # spec 143：归属组织探测失败必须失败关闭——不得回退到 unscoped
+        # 全库执行域（错误路径权限反而更宽）。
+        try:
+            async with unscoped(reason="恢复任务按 uuid 恢复记录归属组织"):
+                probe = await DataBackup.get_or_none(uuid=event_data.get("backup_uuid"))
+        except Exception as e:
+            logger.error(
+                "恢复任务归属组织探测失败 backup_uuid={}，已中止: {}",
+                event_data.get("backup_uuid"),
+                e,
+            )
+            raise
+        if probe is None:
+            raise RuntimeError(
+                f"恢复任务记录不存在 backup_uuid={event_data.get('backup_uuid')}，已中止"
+            )
+        tenant_id = probe.tenant_id
+    scope = (
+        with_tenant(int(tenant_id), reason="租户级恢复任务按目标组织执行")
+        if tenant_id is not None
+        else unscoped(reason="全库恢复任务（平台级，需平台管理员授权）")
+    )
+    async with scope:
+        await _handle_database_restore_requested_body(ctx, step)
+
+
+async def _handle_database_restore_requested_body(ctx: TaskContext, step: TaskStep) -> None:
     """数据恢复：可选恢复前备份 -> 解压并 pg_restore / 租户覆盖 -> 恢复 uploads。"""
     event_data = ctx.event.data
     backup_uuid = event_data.get("backup_uuid")

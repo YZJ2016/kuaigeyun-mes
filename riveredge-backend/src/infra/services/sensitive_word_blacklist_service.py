@@ -48,10 +48,15 @@ class SensitiveWordBlacklistService:
         normalized = normalize_text(word)
         if not normalized:
             return False
-        return await TenantSensitiveWordAllowlist.filter(
-            tenant_id=tenant_id,
-            word=normalized,
-        ).exists()
+        # spec 143：敏感词中间件在路由依赖之前执行，ambient 上下文可能未建立；
+        # 以参数组织身份进入显式 scope（该组织内查询，仍被过滤到该组织）
+        from infra.domain.tenant_context import with_tenant
+
+        async with with_tenant(int(tenant_id), reason="敏感词中间件按请求组织查放行词"):
+            return await TenantSensitiveWordAllowlist.filter(
+                tenant_id=tenant_id,
+                word=normalized,
+            ).exists()
 
     async def list_bans(
         self,
@@ -65,25 +70,30 @@ class SensitiveWordBlacklistService:
         if not enabled_ids:
             return {"items": [], "total": 0, "page": page, "page_size": page_size}
 
-        query = SensitiveWordBan.filter(tenant_id__in=enabled_ids)
-        if tenant_id is not None:
-            query = query.filter(tenant_id=tenant_id)
-        if active_only:
-            query = query.filter(is_active=True)
+        # spec 143：本接口仅平台超管可达（路由 Depends get_current_infra_superadmin），
+        # 跨组织封禁视图为显式 unscoped（激活点写审计）
+        from infra.domain.tenant_context import unscoped
 
-        total = await query.count()
-        rows = (
-            await query.order_by("-banned_at")
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        )
+        async with unscoped(reason="平台超管敏感词封禁跨组织治理视图"):
+            query = SensitiveWordBan.filter(tenant_id__in=enabled_ids)
+            if tenant_id is not None:
+                query = query.filter(tenant_id=tenant_id)
+            if active_only:
+                query = query.filter(is_active=True)
 
-        tenant_map = {
-            t.id: t
-            for t in await Tenant.filter(id__in={row.tenant_id for row in rows}).all()
-        }
-        user_ids = {row.user_id for row in rows}
-        users = await User.filter(id__in=user_ids).all() if user_ids else []
+            total = await query.count()
+            rows = (
+                await query.order_by("-banned_at")
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+
+            tenant_map = {
+                t.id: t
+                for t in await Tenant.filter(id__in={row.tenant_id for row in rows}).all()
+            }
+            user_ids = {row.user_id for row in rows}
+            users = await User.filter(id__in=user_ids).all() if user_ids else []
         user_map = {u.id: u for u in users}
 
         items = []
@@ -94,7 +104,11 @@ class SensitiveWordBlacklistService:
         return {"items": items, "total": total, "page": page, "page_size": page_size}
 
     async def unban(self, ban_id: int) -> SensitiveWordBan:
-        ban = await SensitiveWordBan.get_or_none(id=ban_id)
+        # spec 143：仅平台超管路由可达——按主键解封为显式 unscoped
+        from infra.domain.tenant_context import unscoped
+
+        async with unscoped(reason="平台超管敏感词封禁解封按主键定位"):
+            ban = await SensitiveWordBan.get_or_none(id=ban_id)
         if ban is None:
             raise ValueError("封禁记录不存在")
         if not ban.is_active:
@@ -129,13 +143,17 @@ class SensitiveWordBlacklistService:
         if tenant is None or not tenant.sensitive_word_enabled:
             return {"items": [], "total": 0, "page": page, "page_size": page_size}
 
-        query = TenantSensitiveWordAllowlist.filter(tenant_id=tenant_id)
-        total = await query.count()
-        rows = (
-            await query.order_by("-created_at")
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        )
+        # spec 143：平台超管按指定组织查看放行词——显式 with_tenant scope
+        from infra.domain.tenant_context import with_tenant
+
+        async with with_tenant(tenant_id, reason="平台超管查看指定组织敏感词放行词"):
+            query = TenantSensitiveWordAllowlist.filter(tenant_id=tenant_id)
+            total = await query.count()
+            rows = (
+                await query.order_by("-created_at")
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
         return {
             "items": [self._serialize_allowlist(row) for row in rows],
             "total": total,
@@ -157,10 +175,14 @@ class SensitiveWordBlacklistService:
         if not normalized:
             raise ValueError("放行词不能为空")
 
-        existing = await TenantSensitiveWordAllowlist.get_or_none(
-            tenant_id=tenant_id,
-            word=normalized,
-        )
+        # spec 143：平台超管向指定组织写入放行词——显式 with_tenant scope
+        from infra.domain.tenant_context import with_tenant
+
+        async with with_tenant(tenant_id, reason="平台超管向指定组织写入敏感词放行词"):
+            existing = await TenantSensitiveWordAllowlist.get_or_none(
+                tenant_id=tenant_id,
+                word=normalized,
+            )
         if existing is not None:
             return existing
 
@@ -171,7 +193,11 @@ class SensitiveWordBlacklistService:
         )
 
     async def remove_allowlist_word(self, allowlist_id: int) -> None:
-        row = await TenantSensitiveWordAllowlist.get_or_none(id=allowlist_id)
+        # spec 143：仅平台超管路由可达——按主键删除为显式 unscoped
+        from infra.domain.tenant_context import unscoped
+
+        async with unscoped(reason="平台超管删除敏感词放行词按主键定位"):
+            row = await TenantSensitiveWordAllowlist.get_or_none(id=allowlist_id)
         if row is None:
             raise ValueError("放行记录不存在")
         await row.delete()

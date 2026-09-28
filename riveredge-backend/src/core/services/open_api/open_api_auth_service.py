@@ -117,20 +117,26 @@ class OpenApiAuthService:
                 detail="账套 ID / 应用 ID / 秘钥不能为空",
             )
 
-        account = await OpenApiAccount.get_or_none(
-            acct_id=acct_id,
-            deleted_at__isnull=True,
-        )
+        # spec 143：换票为认证前凭据核验——按 acct_id/app_id 显式
+        # unscoped 内部路径定位（组织归属来自凭据记录本身，仅结构化日志）
+        from infra.domain.tenant_context import unscoped, with_tenant
+
+        async with unscoped(reason="开放 API 换票按账套/应用凭据内部核验"):
+            account = await OpenApiAccount.get_or_none(
+                acct_id=acct_id,
+                deleted_at__isnull=True,
+            )
         if not account or account.status != "active":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="账套无效或已停用",
             )
 
-        app = await OpenApiApp.get_or_none(
-            app_id=app_id,
-            deleted_at__isnull=True,
-        )
+        async with unscoped(reason="开放 API 换票按应用凭据内部核验"):
+            app = await OpenApiApp.get_or_none(
+                app_id=app_id,
+                deleted_at__isnull=True,
+            )
         if (
             not app
             or app.status != "active"
@@ -160,10 +166,12 @@ class OpenApiAuthService:
                 detail="来源 IP 不在应用白名单中",
             )
 
-        grants = await OpenApiAppGrant.filter(
-            app_pk=app.id,
-            deleted_at__isnull=True,
-        ).values_list("permission_code", flat=True)
+        # 授权范围查询限定在凭据所属组织
+        async with with_tenant(account.tenant_id, reason="开放 API 换票按凭据组织查授权"):
+            grants = await OpenApiAppGrant.filter(
+                app_pk=app.id,
+                deleted_at__isnull=True,
+            ).values_list("permission_code", flat=True)
         grant_list = list(grants)
 
         minutes = int(getattr(infra_settings, "OPEN_API_TOKEN_EXPIRE_MINUTES", 120) or 120)

@@ -1021,12 +1021,16 @@ class PermissionSyncService:
         for row in tenant_rows:
             tenant_id = int(row["id"])
             try:
-                result = await cls.ensure_permissions(
-                    tenant_id=tenant_id,
-                    force=True,
-                    dry_run=dry_run,
-                    prune=prune,
-                )
+                # spec 143：全租户治理逐组织执行——每租户进入显式 with_tenant scope
+                from infra.domain.tenant_context import with_tenant
+
+                async with with_tenant(tenant_id, reason="全租户权限治理逐组织执行"):
+                    result = await cls.ensure_permissions(
+                        tenant_id=tenant_id,
+                        force=True,
+                        dry_run=dry_run,
+                        prune=prune,
+                    )
                 for k in ("created", "updated", "deprecated", "purged", "merged", "orphaned", "scanned", "type_repaired"):
                     total[k] += int(result.get(k, 0))
                 results.append({"tenant_id": tenant_id, "ok": True, "result": result})

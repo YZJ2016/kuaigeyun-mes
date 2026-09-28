@@ -54,6 +54,8 @@ class Package(BaseModel):
         模型元数据
         """
         table = "infra_packages"  # 表名必须包含模块前缀（infra_ - 平台级，对应 infra/ 文件夹）
+        # spec 143：套餐为平台级配置（tenant_id 恒为 NULL），退出强制隔离
+        tenant_isolation = "platform"
         indexes = [
             ("plan",),  # 套餐类型索引
         ]

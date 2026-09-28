@@ -377,8 +377,9 @@ class TenantService:
         if not tenant_ids:
             return {}
 
-        rows = await LoginLog.filter(
-            tenant_id__in=tenant_ids,
+        # spec 143：按给定组织集合聚合——钉住到该集合（限定集合，非旁路），
+        # 避免 ambient 上下文再叠加过滤导致少计/失败关闭
+        rows = await get_tenant_queryset(LoginLog, tenant_id=tenant_ids).filter(
             login_status="success",
         ).group_by("tenant_id").annotate(last_login_at=Max("created_at")).values(
             "tenant_id", "last_login_at"
@@ -391,8 +392,8 @@ class TenantService:
         if not tenant_ids:
             return {}
 
-        rows = await User.filter(
-            tenant_id__in=tenant_ids,
+        # spec 143：按给定组织集合聚合——钉住到该集合（限定集合，非旁路）
+        rows = await get_tenant_queryset(User, tenant_id=tenant_ids).filter(
             deleted_at__isnull=True,
         ).group_by("tenant_id").annotate(user_count=Count("id")).values(
             "tenant_id", "user_count"
@@ -434,8 +435,8 @@ class TenantService:
         tenant_list = [root_tenant, *subtenants]
         tenant_ids = [t.id for t in tenant_list]
 
-        rows = await User.filter(
-            tenant_id__in=tenant_ids,
+        # spec 143：主/子组织共享池统计——钉住到组织树集合（限定集合，非旁路）
+        rows = await get_tenant_queryset(User, tenant_id=tenant_ids).filter(
             deleted_at__isnull=True,
             is_active=True,
         ).group_by("tenant_id").annotate(user_count=Count("id")).values("tenant_id", "user_count")
@@ -565,8 +566,9 @@ class TenantService:
         subtenants = await subtenant_query.all()
         tenant_ids = [root_tenant.id, *[item.id for item in subtenants]]
 
-        user_query = User.filter(
-            tenant_id__in=tenant_ids,
+        # spec 143：共享用户池配额跨主/子组织计数——钉住到组织树集合
+        # （限定集合，非旁路），避免 ambient 上下文再叠加过滤导致少计
+        user_query = get_tenant_queryset(User, tenant_id=tenant_ids).filter(
             deleted_at__isnull=True,
             is_active=True,
         )
@@ -704,8 +706,12 @@ class TenantService:
         from infra.services.tenant_business_document_service import (
             TenantBusinessDocumentService,
         )
+        from infra.domain.tenant_context import with_tenant
 
-        summary = await TenantBusinessDocumentService.summarize_business_documents(tenant_id)
+        async with with_tenant(
+            tenant_id, reason="组织删除前按本组织汇总业务单据"
+        ):
+            summary = await TenantBusinessDocumentService.summarize_business_documents(tenant_id)
         if summary["total"] > 0:
             raise ValidationError(
                 TenantBusinessDocumentService.format_blocking_message(tenant.name, summary)
@@ -951,18 +957,21 @@ class TenantService:
             current_user_id: 当前用户ID（部门/职位/角色等预设需要，可选）
         """
         from core.services.tenant.tenant_init_data_service import TenantInitDataService
-        from infra.domain.tenant_context import set_current_tenant_id
+        from infra.domain.tenant_context import with_tenant
 
-        await TenantInitDataService.set_tenant_data_initializing(tenant_id, True)
-        try:
-            await self._initialize_tenant_data_body(
-                tenant_id,
-                init_data_options=init_data_options,
-                current_user_id=current_user_id,
-                industry_preset=industry_preset,
-            )
-        finally:
-            await TenantInitDataService.set_tenant_data_initializing(tenant_id, False)
+        # spec 143：初始化以目标组织身份执行——显式 with_tenant scope
+        # （替代原先 set_current_tenant_id 泄漏 ambient 的写法）
+        async with with_tenant(tenant_id, reason="组织数据初始化以目标组织执行"):
+            await TenantInitDataService.set_tenant_data_initializing(tenant_id, True)
+            try:
+                await self._initialize_tenant_data_body(
+                    tenant_id,
+                    init_data_options=init_data_options,
+                    current_user_id=current_user_id,
+                    industry_preset=industry_preset,
+                )
+            finally:
+                await TenantInitDataService.set_tenant_data_initializing(tenant_id, False)
 
     async def _initialize_tenant_data_body(
         self,
@@ -972,10 +981,9 @@ class TenantService:
         industry_preset: Optional[str] = None,
     ) -> None:
         from core.services.tenant.tenant_init_data_service import TenantInitDataService
-        from infra.domain.tenant_context import set_current_tenant_id
 
-        # 设置组织上下文，确保初始化过程中的查询使用正确的 tenant_id
-        set_current_tenant_id(tenant_id)
+        # 组织上下文由调用方 ``initialize_tenant_data`` 的 with_tenant scope 提供
+        # （spec 143：不再向 ambient 泄漏初始化组织）
 
         # 站点名称与组织名称一致（创建时写入，非运行时兜底）
         tenant = await Tenant.get_or_none(id=tenant_id)

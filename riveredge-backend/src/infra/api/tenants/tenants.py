@@ -39,9 +39,12 @@ async def _rollback_created_tenant(tenant_id: int) -> None:
     """创建流程失败时清理已写入的组织记录。"""
     from infra.models.tenant import Tenant as TenantModel
     from infra.models.tenant_activity_log import TenantActivityLog
+    from infra.domain.tenant_context import with_tenant
 
-    await TenantActivityLog.filter(tenant_id=tenant_id).delete()
-    await TenantModel.filter(id=tenant_id).delete()
+    # spec 143：回滚限定在刚创建的组织域内（该组织可能尚无 ambient 上下文）
+    async with with_tenant(tenant_id, reason="组织创建失败回滚清理"):
+        await TenantActivityLog.filter(tenant_id=tenant_id).delete()
+        await TenantModel.filter(id=tenant_id).delete()
 
 
 class BulkInactivityTimeoutBody(BaseModel):
@@ -430,27 +433,32 @@ async def create_tenant_by_superadmin(
 
     admin = data.admin_account
     user_service = UserService()
+    # spec 143：平台超管向新建组织写管理员账号——以目标组织身份进入显式 scope
+    from infra.domain.tenant_context import with_tenant
+
     try:
-        admin_user = await user_service.create_user(
-            UserCreate(
-                username=admin.username,
-                phone=admin.phone,
-                password=admin.password,
-                full_name=admin.full_name,
+        async with with_tenant(tenant.id, reason="平台超管创建组织管理员账号"):
+            admin_user = await user_service.create_user(
+                UserCreate(
+                    username=admin.username,
+                    phone=admin.phone,
+                    password=admin.password,
+                    full_name=admin.full_name,
+                    tenant_id=tenant.id,
+                    is_active=True,
+                    is_infra_admin=False,
+                    is_tenant_admin=True,
+                ),
                 tenant_id=tenant.id,
-                is_active=True,
-                is_infra_admin=False,
-                is_tenant_admin=True,
-            ),
-            tenant_id=tenant.id,
-        )
+            )
     except Exception:
         await _rollback_created_tenant(tenant.id)
         raise
 
     from core.services.tenant.tenant_init_data_service import TenantInitDataService
 
-    await TenantInitDataService.set_tenant_data_initializing(tenant.id, True)
+    async with with_tenant(tenant.id, reason="标记新组织初始化中"):
+        await TenantInitDataService.set_tenant_data_initializing(tenant.id, True)
     # 系统级初始化耗时较长，放后台执行，接口立即返回
     schedule_initialize_tenant_data(
         tenant.id,
@@ -600,8 +608,12 @@ async def get_tenant_application_center_permissions(
     from core.services.application.application_center_permission_service import (
         ApplicationCenterPermissionService,
     )
+    from infra.domain.tenant_context import with_tenant
 
-    caps = await ApplicationCenterPermissionService.build_center_capabilities(tenant_id)
+    async with with_tenant(
+        tenant_id, reason="平台管理员查看目标组织应用中心权限"
+    ):
+        caps = await ApplicationCenterPermissionService.build_center_capabilities(tenant_id)
     return ApplicationCenterPermissionsResponse(
         tenant_id=tenant_id,
         category_permissions=caps["category_permissions"],
@@ -635,8 +647,13 @@ async def put_tenant_application_center_permissions(
         "industry": body.industry.model_dump(),
         "dedicated": body.dedicated.model_dump(),
     }
-    await ApplicationCenterPermissionService.set_category_permissions(tenant_id, payload)
-    caps = await ApplicationCenterPermissionService.build_center_capabilities(tenant_id)
+    from infra.domain.tenant_context import with_tenant
+
+    async with with_tenant(
+        tenant_id, reason="平台管理员更新目标组织应用中心权限"
+    ):
+        await ApplicationCenterPermissionService.set_category_permissions(tenant_id, payload)
+        caps = await ApplicationCenterPermissionService.build_center_capabilities(tenant_id)
     logger.info(
         f"平台超级管理员 {current_admin.username} 更新组织 {tenant_id} 应用中心权限"
     )

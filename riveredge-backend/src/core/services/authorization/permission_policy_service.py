@@ -879,7 +879,11 @@ class PermissionPolicyService:
         for row in tenant_rows:
             tenant_id = int(row["id"])
             try:
-                result = await cls.canonicalize_field_policies(tenant_id=tenant_id, role_uuid=None)
+                # spec 143：全租户字段权限治理逐组织执行——每租户显式 with_tenant scope
+                from infra.domain.tenant_context import with_tenant
+
+                async with with_tenant(tenant_id, reason="全租户字段权限治理逐组织执行"):
+                    result = await cls.canonicalize_field_policies(tenant_id=tenant_id, role_uuid=None)
                 summary["scanned"] += int(result.get("scanned", 0))
                 summary["updated"] += int(result.get("updated", 0))
                 summary["merged_deleted"] += int(result.get("merged_deleted", 0))

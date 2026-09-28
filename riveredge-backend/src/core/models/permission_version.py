@@ -7,8 +7,10 @@
 from tortoise import fields
 from tortoise.models import Model
 
+from infra.domain.tenant_isolation import TenantIsolationMixin
 
-class PermissionVersion(Model):
+
+class PermissionVersion(TenantIsolationMixin, Model):
     id = fields.IntField(pk=True, description="版本记录ID")
     tenant_id = fields.IntField(description="组织ID")
     user_id = fields.IntField(null=True, description="用户ID（为空表示租户级版本）")

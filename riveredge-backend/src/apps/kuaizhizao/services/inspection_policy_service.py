@@ -1250,7 +1250,7 @@ async def assert_fqc_for_finished_goods_receipt(
     """
     from infra.exceptions.exceptions import BusinessLogicError
 
-    # 让步接收查询带 tenant_id，将被 spec 143 收口替换
+    # spec 143：组织条件由 ORM 强制隔离机制注入；显式 tenant_id 仅为业务定位，非隔离依据
     concession_allowance = await sum_defect_accept_quantity_for_finished_goods_receipt(
         tenant_id, receipt_id
     )
@@ -1352,7 +1352,7 @@ async def assert_iqc_for_purchase_receipt_lines(
     if not needs_qc_mids:
         return
 
-    # 让步接收与检验单查询带 tenant_id，将被 spec 143 收口替换
+    # spec 143：组织条件由 ORM 强制隔离机制注入；显式 tenant_id 仅为业务定位，非隔离依据
     concession_mids = await defect_accept_material_ids_for_purchase_receipt(
         tenant_id, receipt_id
     )
@@ -1418,7 +1418,7 @@ async def assert_iqc_for_customer_material_registration_lines(
     if not needs_qc_mids:
         return
 
-    # 检验单查询带 tenant_id，将被 spec 143 收口替换
+    # spec 143：组织条件由 ORM 强制隔离机制注入；显式 tenant_id 仅为业务定位，非隔离依据
     inspections = await IncomingInspection.filter(
         tenant_id=tenant_id,
         customer_material_registration_id=registration_id,

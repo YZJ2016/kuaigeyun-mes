@@ -49,8 +49,12 @@ async def activate_all():
     """将所有未启用的客户和供应商设为启用"""
     await Tortoise.init(config=TORTOISE_ORM)
     try:
-        customers = await Customer.filter(is_active=False).all()
-        suppliers = await Supplier.filter(is_active=False).all()
+        # spec 143：运维脚本无 ambient 上下文——跨组织批量启用为显式 unscoped
+        from infra.domain.tenant_context import unscoped
+
+        async with unscoped(reason="运维脚本跨组织批量启用客户与供应商"):
+            customers = await Customer.filter(is_active=False).all()
+            suppliers = await Supplier.filter(is_active=False).all()
         for c in customers:
             c.is_active = True
             await c.save()

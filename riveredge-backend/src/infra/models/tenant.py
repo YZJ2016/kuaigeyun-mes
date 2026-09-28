@@ -103,6 +103,8 @@ class Tenant(BaseModel):
         模型元数据
         """
         table = "infra_tenants"  # 表名必须包含模块前缀（infra_ - 平台级租户管理，对应 infra/ 文件夹）
+        # spec 143：组织注册表为平台级（tenant_id 恒为 NULL），退出强制隔离
+        tenant_isolation = "platform"
         indexes = [
             ("domain",),  # 域名索引
             ("status",),  # 状态索引

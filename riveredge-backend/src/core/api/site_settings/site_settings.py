@@ -129,9 +129,12 @@ async def _rollback_created_tenant(tenant_id: int) -> None:
     """创建流程失败时清理已写入的组织记录。"""
     from infra.models.tenant import Tenant as TenantModel
     from infra.models.tenant_activity_log import TenantActivityLog
+    from infra.domain.tenant_context import with_tenant
 
-    await TenantActivityLog.filter(tenant_id=tenant_id).delete()
-    await TenantModel.filter(id=tenant_id).delete()
+    # spec 143：回滚限定在刚创建的组织域内（ambient 为创建者组织，需显式切换）
+    async with with_tenant(tenant_id, reason="分支组织创建失败回滚清理"):
+        await TenantActivityLog.filter(tenant_id=tenant_id).delete()
+        await TenantModel.filter(id=tenant_id).delete()
 
 
 @router.get(
@@ -425,22 +428,26 @@ async def create_subtenant_from_site_settings(
     from infra.services.user_service import UserService
 
     user_service = UserService()
+    # spec 143：向新建分支组织写管理员账号——以新组织身份进入显式 scope
+    from infra.domain.tenant_context import with_tenant
+
     try:
         if data.admin_account is not None:
             admin = data.admin_account
-            await user_service.create_user(
-                UserCreate(
-                    username=admin.username,
-                    phone=admin.phone,
-                    password=admin.password,
-                    full_name=admin.full_name,
+            async with with_tenant(tenant.id, reason="创建分支组织管理员账号"):
+                await user_service.create_user(
+                    UserCreate(
+                        username=admin.username,
+                        phone=admin.phone,
+                        password=admin.password,
+                        full_name=admin.full_name,
+                        tenant_id=tenant.id,
+                        is_active=True,
+                        is_infra_admin=False,
+                        is_tenant_admin=True,
+                    ),
                     tenant_id=tenant.id,
-                    is_active=True,
-                    is_infra_admin=False,
-                    is_tenant_admin=True,
-                ),
-                tenant_id=tenant.id,
-            )
+                )
         else:
             creator = await User.get_or_none(
                 id=current_user.id,
@@ -453,25 +460,27 @@ async def create_subtenant_from_site_settings(
                     detail="当前管理员账号异常，无法沿用当前账号创建分支组织管理员",
                 )
             await tenant_service.assert_shared_user_quota_capacity(tenant.id, increment=1)
-            await User.create(
-                tenant_id=tenant.id,
-                username=creator.username,
-                phone=creator.phone,
-                email=creator.email,
-                password_hash=creator.password_hash,
-                full_name=creator.full_name,
-                is_active=True,
-                is_infra_admin=False,
-                is_tenant_admin=True,
-                source=creator.source,
-            )
+            async with with_tenant(tenant.id, reason="沿用主组织管理员创建分支组织管理员"):
+                await User.create(
+                    tenant_id=tenant.id,
+                    username=creator.username,
+                    phone=creator.phone,
+                    email=creator.email,
+                    password_hash=creator.password_hash,
+                    full_name=creator.full_name,
+                    is_active=True,
+                    is_infra_admin=False,
+                    is_tenant_admin=True,
+                    source=creator.source,
+                )
     except Exception:
         await _rollback_created_tenant(tenant.id)
         raise
 
     from core.services.tenant.tenant_init_data_service import TenantInitDataService
 
-    await TenantInitDataService.set_tenant_data_initializing(tenant.id, True)
+    async with with_tenant(tenant.id, reason="标记分支组织初始化中"):
+        await TenantInitDataService.set_tenant_data_initializing(tenant.id, True)
     schedule_initialize_tenant_data(tenant.id)
     return tenant
 

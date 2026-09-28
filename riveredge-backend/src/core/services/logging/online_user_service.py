@@ -298,8 +298,12 @@ class OnlineUserService:
     async def cleanup_expired_activities() -> None:
         """定时任务：清理已过期的在线用户活动记录。"""
         try:
+            # spec 143：定时清理跨组织过期记录——显式 unscoped 内部路径
+            from infra.domain.tenant_context import unscoped
+
             now = now_utc()
-            deleted_count = await UserActivity.filter(expires_at__lt=now).delete()
+            async with unscoped(reason="定时清理跨组织过期在线活动记录"):
+                deleted_count = await UserActivity.filter(expires_at__lt=now).delete()
             if deleted_count > 0:
                 logger.info(f"🧹 在线用户清理任务：已清理 {deleted_count} 条过期记录")
         except Exception as e:

@@ -342,23 +342,27 @@ class SiteSettingService:
             包含处理租户数量与目标值的字典
         """
         from infra.models.tenant import Tenant
+        from infra.domain.tenant_context import with_tenant
 
         tenants = await Tenant.all()
         tenant_count = len(tenants)
         updated = 0
         for t in tenants:
-            site = await SiteSettingService.get_settings(t.id)
-            st = dict(site.settings or {})
-            sec = dict(st.get("security") or {})
-            sec["inactivity_timeout"] = inactivity_timeout
-            # 若从未配置过 security，补齐常用键，避免仅含 inactivity_timeout
-            if not st.get("security"):
-                sec.setdefault("token_check_interval", _DEFAULT_SITE_SECURITY["token_check_interval"])
-                sec.setdefault("user_cache_time", _DEFAULT_SITE_SECURITY["user_cache_time"])
-            st["security"] = sec
-            site.settings = st
-            await site.save()
-            updated += 1
+            async with with_tenant(
+                t.id, reason="批量更新组织站点无操作超时配置"
+            ):
+                site = await SiteSettingService.get_settings(t.id)
+                st = dict(site.settings or {})
+                sec = dict(st.get("security") or {})
+                sec["inactivity_timeout"] = inactivity_timeout
+                # 若从未配置过 security，补齐常用键，避免仅含 inactivity_timeout
+                if not st.get("security"):
+                    sec.setdefault("token_check_interval", _DEFAULT_SITE_SECURITY["token_check_interval"])
+                    sec.setdefault("user_cache_time", _DEFAULT_SITE_SECURITY["user_cache_time"])
+                st["security"] = sec
+                site.settings = st
+                await site.save()
+                updated += 1
         return {
             "tenant_count": tenant_count,
             "updated": updated,

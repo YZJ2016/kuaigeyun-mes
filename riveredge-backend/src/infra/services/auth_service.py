@@ -34,7 +34,11 @@ from infra.domain.security.security import (
     verify_password,
     hash_password,
 )
-from infra.domain.tenant_context import set_current_tenant_id
+from infra.domain.tenant_context import (
+    set_current_tenant_id,
+    unscoped,
+    with_tenant,
+)
 from infra.domain.tenant.guest_tenant_admin import guest_may_be_tenant_admin
 from infra.exceptions.exceptions import RiverEdgeException
 from infra.services.login_brute_force_guard import LoginBruteForceGuard, normalize_login_identity
@@ -104,12 +108,20 @@ class AuthService:
         username_or_phone: str,
         tenant_id: Optional[int] = None,
     ) -> list[User]:
-        """按账号查找未删除的活跃用户（不按组织状态过滤）。"""
+        """按账号查找未删除的活跃用户（不按组织状态过滤）。
+
+        spec 143：认证前无 ambient 组织上下文——指定组织时以
+        ``with_tenant(tid)`` 限定，总入口跨组织候选解析走显式
+        ``unscoped``（内部路径，仅结构化日志）。
+        """
         q = Q(username=username_or_phone) | Q(phone=username_or_phone)
         queryset = User.filter(q, is_active=True, deleted_at__isnull=True)
         if tenant_id is not None:
             queryset = queryset.filter(tenant_id=tenant_id)
-        return await queryset.all()
+            async with with_tenant(tenant_id, reason="登录组织入口候选账号查询"):
+                return await queryset.all()
+        async with unscoped(reason="登录总入口按账号跨组织解析候选用户"):
+            return await queryset.all()
 
     async def _expand_candidates_by_phone(self, seed: list[User]) -> list[User]:
         """总入口：用种子账号上的手机号桥接同号各租户用户行。"""
@@ -119,11 +131,12 @@ class AuthService:
         phones = { (u.phone or "").strip() for u in seed if (u.phone or "").strip() }
         if not phones:
             return list(by_id.values())
-        expanded = await User.filter(
-            phone__in=list(phones),
-            is_active=True,
-            deleted_at__isnull=True,
-        ).all()
+        async with unscoped(reason="登录总入口同手机号跨组织桥接候选用户"):
+            expanded = await User.filter(
+                phone__in=list(phones),
+                is_active=True,
+                deleted_at__isnull=True,
+            ).all()
         for u in expanded:
             by_id[u.id] = u
         return list(by_id.values())
@@ -245,11 +258,13 @@ class AuthService:
         q = Q(username=user.username)
         if user.phone:
             q = q | Q(phone=user.phone)
-        users_with_same_account = await User.filter(
-            q,
-            is_active=True,
-            deleted_at__isnull=True,
-        ).all()
+        # spec 143：同账号跨组织桥接为显式跨组织读（请求态经 scope 激活点审计）
+        async with unscoped(reason="同账号跨组织可登录组织列表解析"):
+            users_with_same_account = await User.filter(
+                q,
+                is_active=True,
+                deleted_at__isnull=True,
+            ).all()
         users_with_same_account = filter_same_entity_users(user, users_with_same_account)
         users_with_same_account = await self._filter_users_with_active_tenant(users_with_same_account)
         return await self._tenants_payload_from_users(users_with_same_account)
@@ -292,11 +307,13 @@ class AuthService:
         q = Q(username=current_user.username)
         if current_user.phone:
             q = q | Q(phone=current_user.phone)
-        candidate_users = await User.filter(
-            q,
-            is_active=True,
-            deleted_at__isnull=True,
-        ).all()
+        # spec 143：切换组织需跨组织桥接同账号（请求态经 scope 激活点审计）
+        async with unscoped(reason="切换组织时同账号跨组织候选解析"):
+            candidate_users = await User.filter(
+                q,
+                is_active=True,
+                deleted_at__isnull=True,
+            ).all()
         candidate_users = await self._filter_users_with_active_tenant(candidate_users)
         from infra.domain.security.login_phone_disambiguation import (
             filter_same_entity_users,
@@ -357,17 +374,19 @@ class AuthService:
         tenant = await require_operational_tenant_by_id(data.tenant_id)
         
         # 检查组织内用户名是否已存在（排除已软删除的用户，允许复用被删用户的用户名）
-        existing_username = await User.get_or_none(
-            tenant_id=data.tenant_id,
-            username=data.username,
-            deleted_at__isnull=True
-        )
+        # spec 143：注册过程以目标组织身份执行（查询被过滤到该组织）
+        async with with_tenant(data.tenant_id, reason="组织内注册-查重与创建"):
+            existing_username = await User.get_or_none(
+                tenant_id=data.tenant_id,
+                username=data.username,
+                deleted_at__isnull=True
+            )
         if existing_username:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="该组织下用户名已被使用"
             )
-        
+
         # 创建用户（自动设置 tenant_id）
         password_hash = hash_password(data.password)
         user = await User.create(
@@ -577,35 +596,38 @@ class AuthService:
 
         assert_username_not_reserved(data.username)
 
-        # 检查组织内用户名是否已存在（排除已软删除的用户，允许复用被删用户的用户名）
-        existing_username = await User.get_or_none(
-            tenant_id=tenant_id,
-            username=data.username,
-            deleted_at__isnull=True
-        )
-        if existing_username:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="该组织下用户名已被使用"
+        # spec 143：个人注册以目标组织身份执行（查重/创建/角色绑定
+        # 均被过滤到该组织；注册请求本身无 ambient 上下文）
+        async with with_tenant(tenant_id, reason="个人注册-目标组织内查重与创建"):
+            # 检查组织内用户名是否已存在（排除已软删除的用户，允许复用被删用户的用户名）
+            existing_username = await User.get_or_none(
+                tenant_id=tenant_id,
+                username=data.username,
+                deleted_at__isnull=True
             )
-        
-        # 创建用户
-        from infra.schemas.user import UserCreate
-        user_data = UserCreate(
-            username=data.username,
-            phone=data.phone,
-            email=data.email,
-            password=data.password,
-            full_name=data.full_name,
-            tenant_id=tenant_id,
-            is_active=True,  # 个人注册直接激活
-            is_infra_admin=False,
-            is_tenant_admin=False,
-        )
-        user = await user_service.create_user(user_data, tenant_id=tenant_id)
+            if existing_username:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="该组织下用户名已被使用"
+                )
 
-        if self._is_default_tenant(tenant):
-            await self._ensure_user_has_guest_role(user.id, tenant_id)
+            # 创建用户
+            from infra.schemas.user import UserCreate
+            user_data = UserCreate(
+                username=data.username,
+                phone=data.phone,
+                email=data.email,
+                password=data.password,
+                full_name=data.full_name,
+                tenant_id=tenant_id,
+                is_active=True,  # 个人注册直接激活
+                is_infra_admin=False,
+                is_tenant_admin=False,
+            )
+            user = await user_service.create_user(user_data, tenant_id=tenant_id)
+
+            if self._is_default_tenant(tenant):
+                await self._ensure_user_has_guest_role(user.id, tenant_id)
         
         return {
             "success": True,
@@ -721,7 +743,9 @@ class AuthService:
             is_tenant_admin=True,  # ⭐ 关键：设置为组织管理员
         )
         try:
-            user = await user_service.create_user(user_data, tenant_id=tenant.id)
+            # spec 143：组织注册以新组织身份创建管理员——显式 with_tenant scope
+            async with with_tenant(tenant.id, reason="组织注册-创建管理员账号"):
+                user = await user_service.create_user(user_data, tenant_id=tenant.id)
         except Exception:
             await Tenant.filter(id=tenant.id).delete()
             raise
@@ -772,13 +796,15 @@ class AuthService:
 
             await require_operational_tenant_by_id(data.tenant_id)
 
-        # 优先查找平台管理
-        user = await User.get_or_none(
-            username=data.username,
-            tenant_id__isnull=True,
-            is_infra_admin=True,
-            deleted_at__isnull=True
-        )
+        # 优先查找平台管理（tenant_id 为 NULL 的系统级账号——登录前无
+        # ambient 上下文，按显式 unscoped 内部路径核验，仅结构化日志）
+        async with unscoped(reason="登录前系统级管理员账号核验（tenant_id IS NULL）"):
+            user = await User.get_or_none(
+                username=data.username,
+                tenant_id__isnull=True,
+                is_infra_admin=True,
+                deleted_at__isnull=True
+            )
         password_matched_users: Optional[list[User]] = None
 
         # 如果不是系统级超级管理员，按账号解析登录用户
@@ -980,11 +1006,13 @@ class AuthService:
                 q = Q(username=user.username)
                 if user.phone:
                     q = q | Q(phone=user.phone)
-                users_with_same_username = await User.filter(
-                    q,
-                    is_active=True,
-                    deleted_at__isnull=True,
-                ).all()
+                # spec 143：登录结果中的可登录组织列表为显式跨组织读
+                async with unscoped(reason="登录结果同账号跨组织可登录组织列表"):
+                    users_with_same_username = await User.filter(
+                        q,
+                        is_active=True,
+                        deleted_at__isnull=True,
+                    ).all()
                 users_with_same_username = filter_same_entity_users(user, users_with_same_username)
                 users_with_same_username = await self._filter_users_with_active_tenant(
                     users_with_same_username
@@ -1052,7 +1080,13 @@ class AuthService:
         
         permissions: list[str] = []
         permission_version = 1
-        await user.fetch_related("department", "position")
+        if final_tenant_id is None:
+            # spec 143：平台管理员（tenant_id IS NULL）登录无 ambient 组织上下文；
+            # Department/Position 为租户模型，按显式 unscoped 内部善后执行
+            async with unscoped(reason="平台管理员登录后内部善后（无组织归属）"):
+                await user.fetch_related("department", "position")
+        else:
+            await user.fetch_related("department", "position")
         
         if final_tenant_id is not None:
             permission_set = await UserPermissionService.get_user_permissions(
@@ -1120,14 +1154,19 @@ class AuthService:
                 from datetime import datetime
                 user_activity_service = ServiceLocator.get_service("user_activity_service")
                 login_ip = request.client.host if request.client else None
-                asyncio.create_task(
-                    user_activity_service.update_user_activity(
-                        tenant_id=final_tenant_id,
-                        user_id=user.id,
-                        login_ip=login_ip,
-                        login_time=resolve_business_datetime(),
-                    )
+                activity_coro = user_activity_service.update_user_activity(
+                    tenant_id=final_tenant_id,
+                    user_id=user.id,
+                    login_ip=login_ip,
+                    login_time=resolve_business_datetime(),
                 )
+                if final_tenant_id is None:
+                    # spec 143：task 复制当前 context；平台管理员无 ambient
+                    # 组织上下文，须在 task 快照内携带 unscoped 执行域
+                    with unscoped(reason="平台管理员登录后活动记录（无组织归属）"):
+                        asyncio.create_task(activity_coro)
+                else:
+                    asyncio.create_task(activity_coro)
             except Exception as e:
                 logger.warning(f"更新用户活动时间失败: {e}")
         
@@ -1198,8 +1237,10 @@ class AuthService:
             )
         
         # 获取用户信息（排除已软删除的用户）
+        # spec 143：刷新令牌时上下文尚未建立，按主键内部核验后显式校验组织
         user_id = int(payload.get("sub"))
-        user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
+        async with unscoped(reason="刷新令牌用户主键内部核验"):
+            user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -1503,12 +1544,17 @@ class AuthService:
         user_id = int(payload.get("sub"))
         tenant_id = payload.get("tenant_id")  # ⭐ 关键：从 Token 中获取组织 ID
         
-        # 设置组织上下文
+        # 设置组织上下文（JWT 原值可能为 str，与 deps 口径一致统一转 int）
         if tenant_id:
-            set_current_tenant_id(tenant_id)
-        
+            set_current_tenant_id(int(tenant_id))
+
         # 获取用户（排除已软删除的用户）
-        user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
+        # spec 143：Token 无组织声明时按主键内部核验（不显式注入过滤）
+        if tenant_id:
+            user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
+        else:
+            async with unscoped(reason="get_user_by_token 无组织声明的主键内部核验"):
+                user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -1593,7 +1639,10 @@ class AuthService:
             ip_info = {}
             try:
                 from core.utils.ip_parser import parse_ip_info
-                ip_info = await parse_ip_info(login_ip, user_agent)
+                # spec 143：同 IP 历史登录日志地理回查是跨组织内部审计读；
+                # 登录前/平台管理员路径无 ambient 上下文，须显式 unscoped
+                async with unscoped(reason="登录日志同 IP 历史地理回查（审计内部读）"):
+                    ip_info = await parse_ip_info(login_ip, user_agent)
             except Exception as e:
                 # IP解析失败不影响登录流程，静默处理
                 logger.debug(f"IP地址解析失败: {login_ip}, 错误: {e}")

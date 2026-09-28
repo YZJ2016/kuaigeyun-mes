@@ -16,6 +16,8 @@ class OfficialApiLibraryPack(BaseModel):
 
     class Meta:
         table = "infra_official_api_library_packs"
+        # spec 143：官方接口库为平台级（tenant_id 恒为 NULL），退出强制隔离
+        tenant_isolation = "platform"
         indexes = [
             ("status",),
             ("connector_type",),

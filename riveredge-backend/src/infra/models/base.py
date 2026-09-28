@@ -11,13 +11,15 @@ import uuid
 from tortoise.models import Model
 from tortoise import fields
 
+from infra.domain.tenant_isolation import TenantIsolationMixin
+
 
 def _generate_uuid() -> str:
     """生成 UUID 字符串（用于 BaseModel 的 uuid 字段默认值）"""
     return str(uuid.uuid4())
 
 
-class BaseModel(Model):
+class BaseModel(TenantIsolationMixin, Model):
     """
     基础数据模型类
 
@@ -27,6 +29,10 @@ class BaseModel(Model):
     - tenant_id: 组织 ID（多组织隔离，关键字段）
     - created_at: 创建时间
     - updated_at: 更新时间
+
+    继承 TenantIsolationMixin：所有含 tenant_id 的子类默认 Manager 为
+    强制隔离 Manager（spec 143）。平台级表在自身 Meta 上声明
+    ``tenant_isolation = "platform"`` 退出强制过滤。
 
     Attributes:
         id: 主键 ID（自增ID，内部使用）

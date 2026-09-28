@@ -10,6 +10,7 @@ from core.models.approval_history import ApprovalHistory
 from core.models.approval_task import ApprovalTask
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.utils.timezone_utils import resolve_business_datetime
+from infra.domain.tenant_context import unscoped, with_tenant
 
 
 class ApprovalTimeoutService:
@@ -17,48 +18,52 @@ class ApprovalTimeoutService:
     async def scan_and_escalate(limit: int = 200) -> int:
         """扫描已过期 pending 任务，写 timeout_escalate 历史并通知。"""
         now = resolve_business_datetime()
-        tasks = (
-            await ApprovalTask.filter(
-                status="pending",
-                due_at__not_isnull=True,
-                due_at__lt=now,
+        # spec 143：后台扫描循环无 ambient 上下文——跨组织扫描走显式
+        # unscoped 内部路径；每条任务的读写限定在该任务所属组织
+        async with unscoped(reason="审批超时扫描跨组织定位到期任务"):
+            tasks = (
+                await ApprovalTask.filter(
+                    status="pending",
+                    due_at__not_isnull=True,
+                    due_at__lt=now,
+                )
+                .prefetch_related("approval_instance")
+                .limit(limit)
+                .all()
             )
-            .prefetch_related("approval_instance")
-            .limit(limit)
-            .all()
-        )
         handled = 0
         for task in tasks:
             inst = task.approval_instance
             if not inst or inst.status != "pending":
                 continue
-            exists = await ApprovalHistory.filter(
-                tenant_id=task.tenant_id,
-                approval_instance_id=inst.id,
-                action="timeout_escalate",
-                from_node=task.node_id,
-                action_by=task.approver_id,
-            ).exists()
-            if exists:
-                continue
-            await ApprovalHistory.create(
-                tenant_id=task.tenant_id,
-                approval_instance_id=inst.id,
-                action="timeout_escalate",
-                action_by=task.approver_id,
-                action_at=now,
-                comment="审批任务已超时",
-                from_node=task.node_id,
-                to_node=task.node_id,
-            )
-            try:
-                await ApprovalInstanceService._send_urge_notification(
+            async with with_tenant(task.tenant_id, reason="审批超时升级按任务组织执行"):
+                exists = await ApprovalHistory.filter(
                     tenant_id=task.tenant_id,
-                    instance=inst,
-                    approver_ids=[task.approver_id],
-                    comment="审批任务已超时，请尽快处理",
+                    approval_instance_id=inst.id,
+                    action="timeout_escalate",
+                    from_node=task.node_id,
+                    action_by=task.approver_id,
+                ).exists()
+                if exists:
+                    continue
+                await ApprovalHistory.create(
+                    tenant_id=task.tenant_id,
+                    approval_instance_id=inst.id,
+                    action="timeout_escalate",
+                    action_by=task.approver_id,
+                    action_at=now,
+                    comment="审批任务已超时",
+                    from_node=task.node_id,
+                    to_node=task.node_id,
                 )
-            except Exception as exc:
-                logger.warning("超时通知失败 task={}: {}", task.id, exc)
+                try:
+                    await ApprovalInstanceService._send_urge_notification(
+                        tenant_id=task.tenant_id,
+                        instance=inst,
+                        approver_ids=[task.approver_id],
+                        comment="审批任务已超时，请尽快处理",
+                    )
+                except Exception as exc:
+                    logger.warning("超时通知失败 task={}: {}", task.id, exc)
             handled += 1
         return handled

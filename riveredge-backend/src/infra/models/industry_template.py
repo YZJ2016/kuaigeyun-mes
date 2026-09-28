@@ -51,6 +51,8 @@ class IndustryTemplate(BaseModel):
         模型元数据
         """
         table = "infra_industry_templates"
+        # spec 143：行业模板为平台级（tenant_id 恒为 NULL），退出强制隔离
+        tenant_isolation = "platform"
         indexes = [
             ("code",),
             ("industry",),

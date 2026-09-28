@@ -52,6 +52,15 @@ def _request_memo() -> dict[str, Any]:
 
 
 class DataScopeService:
+    """
+    组织内行级数据权限（全部/部门/本人/自定义）。
+
+    分层说明（spec 143）：组织间隔离（tenant_id 强制条件、无上下文失败
+    关闭、跨组织显式 scope）由 ORM 层 ``infra.domain.tenant_isolation``
+    机制保证，与本服务**不是同一层**——本服务只在「已进入本组织数据域」
+    之后做组织内行权限裁剪，不能也不应替代组织间隔离。
+    """
+
     @classmethod
     def _ensure_builtin_resolvers(cls) -> None:
         global _BUILTIN_REGISTERED

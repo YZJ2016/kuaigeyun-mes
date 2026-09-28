@@ -13,6 +13,7 @@ from core.models.scheduled_task import ScheduledTask
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.utils.cron_match import match_cron as _match_cron
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat, to_site_timezone
+from infra.domain.tenant_context import unscoped, with_tenant
 
 # is_running 超过该时长视为 worker 异常退出，允许下一 tick 重新调度
 _STALE_RUNNING = timedelta(hours=1)
@@ -43,14 +44,18 @@ async def run_scheduled_task_scheduler_tick() -> Dict[str, Any]:
     executed_count = 0
 
     try:
-        active_tasks = await ScheduledTask.filter(
-            is_active=True,
-            deleted_at__isnull=True,
-        ).all()
+        # spec 143：调度器按分钟跨组织扫描启用任务——显式 unscoped 内部路径
+        async with unscoped(reason="定时任务调度器跨组织扫描启用任务"):
+            active_tasks = await ScheduledTask.filter(
+                is_active=True,
+                deleted_at__isnull=True,
+            ).all()
 
         for task in active_tasks:
             try:
-                should_execute = await _should_execute_task(task, now)
+                # spec 143：任务级读写限定在该任务所属组织
+                async with with_tenant(task.tenant_id, reason="定时任务按任务组织执行"):
+                    should_execute = await _should_execute_task(task, now)
 
                 if should_execute:
                     await dispatch_event(

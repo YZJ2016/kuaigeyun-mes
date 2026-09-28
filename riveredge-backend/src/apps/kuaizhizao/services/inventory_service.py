@@ -837,8 +837,8 @@ class InventoryService:
                     # 锁序约定（spec 141 KR-CL2）：先批次行锁（上方
                     # _find_in_stock_material_batch for_update），再按序列号排序
                     # 逐条 select_for_update；序列号与批次在同一 DB 事务、同成败。
-                    # 全路径统一该锁序，避免并发互锁。查询沿用 tenant_id 过滤
-                    # （租户强制收口将被 spec 143 统一替换）。
+                    # 全路径统一该锁序，避免并发互锁。查询显式带 tenant_id 仅为
+                    # 业务定位；组织隔离由 spec 143 ORM 强制机制注入保证。
                     for s_no in sorted(serial_nos, key=lambda v: str(v or "")):
                         existing = await MaterialSerial.filter(tenant_id=tenant_id, serial_no=s_no).select_for_update().first()
                         if existing:
@@ -1112,7 +1112,8 @@ class InventoryService:
         锁序约定（spec 141 KR-CL2）：与入库一致——先批次行锁（扣减分支已对批次
         ``select_for_update``），再按序列号排序逐条 ``select_for_update``；
         序列号与批次扣减在同一 DB 事务提交，任一侧失败全滚。
-        查询沿用 ``tenant_id`` 过滤（租户强制收口将被 spec 143 统一替换）。
+        查询显式带 ``tenant_id`` 仅为业务定位；组织隔离由 spec 143
+        ORM 强制机制注入保证。
         """
         if not serial_nos:
             return
