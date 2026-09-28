@@ -241,6 +241,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const processRoutePerms = useResourcePermissions('master-data:process:route');
   const processOperationPerms = useResourcePermissions('master-data:process:operation');
   const supplierPerms = useResourcePermissions('master-data:supply-chain:supplier');
+  const customerPerms = useResourcePermissions('master-data:supply-chain:customer');
+  const warehousePerms = useResourcePermissions('master-data:warehouse:warehouse');
+  const engineeringBomPerms = useResourcePermissions('master-data:process:engineering-bom');
 
   const sourceTypeOptions = useMemo(() => buildMaterialSourceTypeOptions(t), [t]);
   const [activeTab, setActiveTab] = useState<string>('basic');
@@ -307,6 +310,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
    * 加载客户列表
    */
   const loadCustomers = async () => {
+    if (!customerPerms.canRead) {
+      setCustomers([]);
+      return;
+    }
     try {
       setCustomersLoading(true);
       const result = await customerApi.list({ limit: 1000, isActive: true });
@@ -379,6 +386,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
    * 加载仓库列表
    */
   const loadWarehouses = async () => {
+    if (!warehousePerms.canRead) {
+      setWarehouses([]);
+      return;
+    }
     try {
       setWarehousesLoading(true);
       const result = await warehouseApi.list({ limit: 1000, is_active: true });
@@ -1469,6 +1480,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   canCreateOperations={processOperationPerms.canCreate}
                   canReadSuppliers={supplierPerms.canRead}
                   canCreateSuppliers={supplierPerms.canCreate}
+                  canUpdateEngineeringBom={engineeringBomPerms.canUpdate}
                   sourceTypeOptions={sourceTypeOptions}
                   suspendedModalReturnPath={pageSuspendPath}
                   materialUuid={isEdit && material ? material.uuid : undefined}
@@ -3793,6 +3805,7 @@ interface MaterialSourceTabProps {
   canCreateOperations: boolean;
   canReadSuppliers: boolean;
   canCreateSuppliers: boolean;
+  canUpdateEngineeringBom: boolean;
   sourceTypeOptions: Array<{ label: string; value: string }>;
   suspendedModalReturnPath?: string;
   materialUuid?: string;
@@ -3817,6 +3830,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
   canCreateOperations,
   canReadSuppliers,
   canCreateSuppliers,
+  canUpdateEngineeringBom,
   sourceTypeOptions,
   suspendedModalReturnPath,
   materialUuid,
@@ -3928,7 +3942,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
       const defaultRow = rows.find((r) => r.isDefault) ?? rows[0];
       setSelectedBomVersion(defaultRow?.version);
     } catch (e: unknown) {
-      messageApi.error((e as Error).message || t('app.master-data.materialForm.fetchBomVersionsFailed'));
+      console.error('load material BOM versions failed', e);
       setBomVersionRows([]);
       setSelectedBomVersion(undefined);
     } finally {
@@ -3954,7 +3968,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
   };
 
   const handleDefaultBomVersionChange = async (version: string | undefined) => {
-    if (!version || !materialId) return;
+    if (!version || !materialId || !canUpdateEngineeringBom) return;
     const row = bomVersionRows.find((r) => r.version === version);
     if (!row?.uuid) return;
     try {
@@ -4179,7 +4193,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                           disabled={!materialId}
                           loading={bomVersionsLoading}
                           allowClear={false}
-                          showSearch
+                          showSearch={canUpdateEngineeringBom}
                           optionFilterProp="label"
                           style={{ width: '100%' }}
                           value={selectedBomVersion}
@@ -4189,7 +4203,11 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                               ? `${row.version} ${t('app.kuaizhizao.demandComputation.bomVersionDefault')}`
                               : row.version,
                           }))}
-                          onChange={(val) => handleDefaultBomVersionChange(val as string | undefined)}
+                          onChange={(val) => {
+                            if (canUpdateEngineeringBom) {
+                              void handleDefaultBomVersionChange(val as string | undefined);
+                            }
+                          }}
                           quickCreate={
                             materialId
                               ? {

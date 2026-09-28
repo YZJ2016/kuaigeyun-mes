@@ -8,6 +8,7 @@ from fastapi import Depends, Request
 
 from core.api.deps.access import AuthContext, ensure_permission_codes, get_auth_context
 from core.api.deps.deps import get_current_tenant
+from core.config.affiliate_read_allowlist import resolve_affiliate_read_codes
 from core.config.permission_contract import build_permission_code
 
 # 路径片段 → manifest module（master-data 下，不含 app 前缀）
@@ -96,14 +97,11 @@ def resolve_master_data_required_codes(
         module_code=effective,
         resolve_print=resolve_print,
     )
-    primary = build_permission_code("master-data", effective, action)
+    affiliate = resolve_affiliate_read_codes("master-data", method, path or "")
+    if affiliate:
+        return affiliate
 
-    # GET 物料 BOM 版本列表：物料读 或 工程 BOM 读 均可
-    if (method or "").upper() == "GET" and _BOM_BY_MATERIAL_LIST_RE.search(path or ""):
-        return [
-            build_permission_code("master-data", "material", "read"),
-            build_permission_code("master-data", "process:engineering-bom", "read"),
-        ]
+    primary = build_permission_code("master-data", effective, action)
     return [primary]
 
 
