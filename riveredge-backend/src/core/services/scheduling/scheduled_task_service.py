@@ -8,6 +8,7 @@ from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 
+from tortoise.backends.base.client import BaseDBAsyncClient
 from tortoise.exceptions import IntegrityError
 
 from core.models.scheduled_task import ScheduledTask
@@ -53,18 +54,21 @@ class ScheduledTaskService:
     @staticmethod
     async def create_scheduled_task(
         tenant_id: int,
-        data: ScheduledTaskCreate
+        data: ScheduledTaskCreate,
+        using_db: Optional[BaseDBAsyncClient] = None,
     ) -> ScheduledTask:
         """
         创建定时任务
-        
+
         Args:
             tenant_id: 组织ID
             data: 定时任务创建数据
-            
+            using_db: 可选事务连接。传入后写入随该事务提交/回滚，
+                不传时行为不变（默认连接立即落库）。
+
         Returns:
             ScheduledTask: 创建的定时任务对象
-            
+
         Raises:
             ValidationError: 当任务代码已存在时抛出
         """
@@ -75,7 +79,7 @@ class ScheduledTaskService:
                 tenant_id=tenant_id,
                 **data.model_dump()
             )
-            await scheduled_task.save()
+            await scheduled_task.save(using_db=using_db)
             
             # TODO: 集成工作流函数注册
             # 当任务启用时，注册到工作流执行器

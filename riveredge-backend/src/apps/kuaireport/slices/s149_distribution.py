@@ -15,9 +15,11 @@ from pydantic import BaseModel, Field
 from pydantic import ValidationError as ModelValidationError
 
 from apps.kuaireport.services.subscription_service import TASK_TYPE, public_error
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.schemas.scheduled_task import ScheduledTaskCreate
 from core.services.scheduling.scheduled_task_service import ScheduledTaskService
+from infra.exceptions.exceptions import RiverEdgeException
 from infra.models.user import User
 
 RESOURCE_REPORT = "report"
@@ -31,14 +33,25 @@ DASHBOARD_CONFIG_KEYS = (
 )
 DEFAULT_CRON = "0 8 * * 1-5"
 DEFAULT_PERMISSION = "view"
+ALLOWED_PERMISSIONS = frozenset({DEFAULT_PERMISSION})
 
 router = APIRouter(prefix="/distribution", tags=["kuaireport-distribution"])
 
 
 class DistributionError(Exception):
-    def __init__(self, message: str) -> None:
+    status_code = 422
+
+    def __init__(self, message: str, status_code: int | None = None) -> None:
         super().__init__(message)
         self.message = message
+        if status_code is not None:
+            self.status_code = status_code
+
+
+class DistributionNotFoundError(DistributionError):
+    """资源不存在：经 _raise_http 映射为 404。"""
+
+    status_code = 404
 
 
 def _load_json(value: Any) -> Any:
@@ -499,7 +512,7 @@ async def _require_bound_source(store: Any, tenant_id: int, config: dict[str, An
     if not isinstance(raw, str) or not raw.strip():
         raise DistributionError("报表未绑定数据源")
     if not await store.registered_data_source(tenant_id, raw.strip()):
-        raise DistributionError("数据源不存在")
+        raise DistributionNotFoundError("数据源不存在")
 
 
 async def append_dashboard_version(
@@ -539,7 +552,7 @@ async def _require_resource(store: Any, tenant_id: int, resource_type: str, reso
     else:
         row = await store.get_dashboard(tenant_id, resource_id)
     if row is None:
-        raise DistributionError("资源不存在")
+        raise DistributionNotFoundError("资源不存在")
     return row
 
 
@@ -556,8 +569,10 @@ async def grant_share(
     kind = _require_resource_type(resource_type)
     await _require_resource(store, tenant_id, kind, int(resource_id))
     if not await store.role_in_tenant(tenant_id, int(role_id)):
-        raise DistributionError("角色不存在")
+        raise DistributionNotFoundError("角色不存在")
     perm = (permission or DEFAULT_PERMISSION).strip() or DEFAULT_PERMISSION
+    if perm not in ALLOWED_PERMISSIONS:
+        raise DistributionError("权限只允许 view")
     if len(perm) > 20:
         raise DistributionError("权限名过长")
     return await store.insert_grant(
@@ -594,9 +609,13 @@ async def list_grants(
     return await store.list_grants(tenant_id, kind, int(resource_id))
 
 
-async def _default_create_task(tenant_id: int, fields: dict[str, Any]) -> Any:
+async def _default_create_task(
+    tenant_id: int, fields: dict[str, Any], using_db: Any = None
+) -> Any:
     data = ScheduledTaskCreate(**fields)
-    return await ScheduledTaskService.create_scheduled_task(tenant_id, data)
+    return await ScheduledTaskService.create_scheduled_task(
+        tenant_id, data, using_db=using_db
+    )
 
 
 async def create_subscription(
@@ -627,11 +646,10 @@ async def create_subscription(
         raise DistributionError("没有接收人")
 
     store = _store(store)
-    factory = create_task or _default_create_task
     async with store.transaction() as tx:
         report = await tx.get_report(tenant_id, int(report_id))
         if report is None:
-            raise DistributionError("报表不存在")
+            raise DistributionNotFoundError("报表不存在")
         found = await tx.users_in_tenant(tenant_id, user_ids)
         if set(user_ids) != set(found):
             raise DistributionError("接收人不是本组织用户")
@@ -649,25 +667,29 @@ async def create_subscription(
             }
         )
         subscription_id = int(created["id"])
-        task = await factory(
-            tenant_id,
-            {
-                "name": title[:100],
-                "code": f"krps{subscription_id}"[:50],
-                "type": TASK_TYPE,
-                "trigger_type": "cron",
-                "trigger_config": {"cron": cron_text},
-                "task_config": {"subscription_id": subscription_id},
-                "is_active": bool(is_active),
-            },
-        )
+        task_fields = {
+            "name": title[:100],
+            "code": f"krps{subscription_id}"[:50],
+            "type": TASK_TYPE,
+            "trigger_type": "cron",
+            "trigger_config": {"cron": cron_text},
+            "task_config": {"subscription_id": subscription_id},
+            "is_active": bool(is_active),
+        }
+        if create_task is not None:
+            task = await create_task(tenant_id, task_fields)
+        else:
+            # 定时任务与订阅行同一事务：回写失败时任务一并回滚，不留孤儿任务
+            task = await _default_create_task(
+                tenant_id, task_fields, using_db=getattr(tx, "conn", None)
+            )
         task_uuid = str(getattr(task, "uuid", "") or "")
         if not task_uuid:
-            raise DistributionError("定时任务未生成")
+            raise DistributionError("定时任务未生成", status_code=500)
         await tx.set_subscription_task_uuid(tenant_id, subscription_id, task_uuid)
         saved = await tx.get_subscription(tenant_id, subscription_id)
     if saved is None or not saved.get("scheduled_task_uuid") or not saved.get("name"):
-        raise DistributionError("订阅未写入")
+        raise DistributionError("订阅未写入", status_code=500)
     return saved
 
 
@@ -676,7 +698,7 @@ async def list_report_versions(
 ) -> list[dict[str, Any]]:
     store = _store(store)
     if await store.get_report(tenant_id, int(report_id)) is None:
-        raise DistributionError("报表不存在")
+        raise DistributionNotFoundError("报表不存在")
     return await store.list_report_versions(tenant_id, int(report_id))
 
 
@@ -691,10 +713,10 @@ async def restore_report_version(
     async with store.transaction() as tx:
         report = await tx.get_report(tenant_id, int(report_id))
         if report is None:
-            raise DistributionError("报表不存在")
+            raise DistributionNotFoundError("报表不存在")
         version = await tx.get_report_version(tenant_id, int(report_id), int(version_no))
         if version is None:
-            raise DistributionError("版本不存在")
+            raise DistributionNotFoundError("版本不存在")
         config = _report_config_from_snapshot(version["snapshot"])
         await _require_bound_source(tx, tenant_id, config)
         new_no = int(report.get("current_version") or 0) + 1
@@ -758,7 +780,7 @@ async def save_dashboard(
     async with store.transaction() as tx:
         row = await tx.get_dashboard(tenant_id, int(dashboard_id))
         if row is None:
-            raise DistributionError("大屏不存在")
+            raise DistributionNotFoundError("大屏不存在")
         new_no = int(row.get("current_version") or 0) + 1
         await tx.update_dashboard_saved(tenant_id, int(dashboard_id), snapshot, new_no)
         await tx.insert_dashboard_version(
@@ -772,7 +794,7 @@ async def list_dashboard_versions(
 ) -> list[dict[str, Any]]:
     store = _store(store)
     if await store.get_dashboard(tenant_id, int(dashboard_id)) is None:
-        raise DistributionError("大屏不存在")
+        raise DistributionNotFoundError("大屏不存在")
     return await store.list_dashboard_versions(tenant_id, int(dashboard_id))
 
 
@@ -787,10 +809,10 @@ async def restore_dashboard_version(
     async with store.transaction() as tx:
         row = await tx.get_dashboard(tenant_id, int(dashboard_id))
         if row is None:
-            raise DistributionError("大屏不存在")
+            raise DistributionNotFoundError("大屏不存在")
         version = await tx.get_dashboard_version(tenant_id, int(dashboard_id), int(version_no))
         if version is None:
-            raise DistributionError("版本不存在")
+            raise DistributionNotFoundError("版本不存在")
         configs = _dashboard_configs_from_snapshot(version["snapshot"])
         new_no = int(row.get("current_version") or 0) + 1
         await tx.update_dashboard_saved(tenant_id, int(dashboard_id), configs, new_no)
@@ -837,14 +859,22 @@ class DashboardSaveIn(BaseModel):
 
 
 def _raise_http(exc: Exception) -> None:
+    if isinstance(exc, HTTPException):
+        raise exc from None
     if isinstance(exc, DistributionError):
-        raise HTTPException(status_code=422, detail=exc.message) from None
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from None
+    if isinstance(exc, RiverEdgeException):
+        # NotFoundError→404、AuthorizationError→403、ValidationError/TenantError→422/400 等
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from None
     if isinstance(exc, ModelValidationError):
         raise HTTPException(status_code=422, detail=public_error(str(exc))) from None
-    raise HTTPException(status_code=422, detail="操作失败") from None
+    raise HTTPException(status_code=500, detail="操作失败") from None
 
 
-@router.post("/grants")
+@router.post(
+    "/grants",
+    dependencies=[Depends(require_permission_codes("kuaireport:distribution:manage"))],
+)
 async def post_grant(
     body: GrantIn,
     current_user: User = Depends(get_current_user),
@@ -863,7 +893,10 @@ async def post_grant(
         _raise_http(exc)
 
 
-@router.get("/grants")
+@router.get(
+    "/grants",
+    dependencies=[Depends(require_permission_codes("kuaireport:distribution:display"))],
+)
 async def get_grants(
     resource_type: str,
     resource_id: int,
@@ -876,7 +909,10 @@ async def get_grants(
         _raise_http(exc)
 
 
-@router.get("/grants/can-view")
+@router.get(
+    "/grants/can-view",
+    dependencies=[Depends(require_permission_codes("kuaireport:distribution:display"))],
+)
 async def get_can_view(
     resource_type: str,
     resource_id: int,
@@ -892,7 +928,10 @@ async def get_can_view(
     return {"allowed": allowed}
 
 
-@router.post("/subscriptions")
+@router.post(
+    "/subscriptions",
+    dependencies=[Depends(require_permission_codes("kuaireport:distribution:manage"))],
+)
 async def post_subscription(
     body: SubscriptionIn,
     tenant_id: int = Depends(get_current_tenant),
@@ -914,7 +953,10 @@ async def post_subscription(
         _raise_http(exc)
 
 
-@router.get("/reports/{report_id}/versions")
+@router.get(
+    "/reports/{report_id}/versions",
+    dependencies=[Depends(require_permission_codes("kuaireport:distribution:display"))],
+)
 async def get_report_versions(
     report_id: int,
     tenant_id: int = Depends(get_current_tenant),
@@ -926,7 +968,10 @@ async def get_report_versions(
         _raise_http(exc)
 
 
-@router.post("/reports/{report_id}/versions/{version_no}/restore")
+@router.post(
+    "/reports/{report_id}/versions/{version_no}/restore",
+    dependencies=[Depends(require_permission_codes("kuaireport:distribution:manage"))],
+)
 async def post_restore_report(
     report_id: int,
     version_no: int,
@@ -941,7 +986,10 @@ async def post_restore_report(
         _raise_http(exc)
 
 
-@router.post("/dashboards/backfill-versions")
+@router.post(
+    "/dashboards/backfill-versions",
+    dependencies=[Depends(require_permission_codes("kuaireport:distribution:manage"))],
+)
 async def post_backfill(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -952,7 +1000,10 @@ async def post_backfill(
         _raise_http(exc)
 
 
-@router.post("/dashboards/{dashboard_id}/save")
+@router.post(
+    "/dashboards/{dashboard_id}/save",
+    dependencies=[Depends(require_permission_codes("kuaireport:distribution:manage"))],
+)
 async def post_save_dashboard(
     dashboard_id: int,
     body: DashboardSaveIn,
@@ -970,7 +1021,10 @@ async def post_save_dashboard(
         _raise_http(exc)
 
 
-@router.get("/dashboards/{dashboard_id}/versions")
+@router.get(
+    "/dashboards/{dashboard_id}/versions",
+    dependencies=[Depends(require_permission_codes("kuaireport:distribution:display"))],
+)
 async def get_dashboard_versions(
     dashboard_id: int,
     tenant_id: int = Depends(get_current_tenant),
@@ -982,7 +1036,10 @@ async def get_dashboard_versions(
         _raise_http(exc)
 
 
-@router.post("/dashboards/{dashboard_id}/versions/{version_no}/restore")
+@router.post(
+    "/dashboards/{dashboard_id}/versions/{version_no}/restore",
+    dependencies=[Depends(require_permission_codes("kuaireport:distribution:manage"))],
+)
 async def post_restore_dashboard(
     dashboard_id: int,
     version_no: int,

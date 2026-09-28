@@ -20,6 +20,7 @@ from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 
 from apps.kuaireport.constants import REPORT_DATA_SOURCE_UUID
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.domain.tenant_context import TenantContextError, get_current_tenant_id
@@ -30,8 +31,20 @@ router = APIRouter(tags=["kuaireport-designer"])
 
 _ALLOWED_SOURCE_TYPES = frozenset({"static", "dataset", "http"})
 _ALLOWED_FORMATS = frozenset({"money", "date", "datetime", "percent", "number", "digit"})
+# 只拦 SQL 语句形态（select ... from / insert into / drop table 等），
+# 字段名或文案里含 select、update、sql 字样不再误伤；键名拦截见 _SECRET_KEYS。
 _SQL_RE = re.compile(
-    r"(?i)(\bselect\b|\binsert\b|\bupdate\b|\bdelete\b|\bdrop\b|\balter\b|\bunion\b|query_config|\bsql\b)"
+    r"(?i)("
+    r"\bselect\b[\s\S]*\bfrom\b"
+    r"|\binsert\s+into\b"
+    r"|\bupdate\b[\s\S]*\bset\b"
+    r"|\bdelete\s+from\b"
+    r"|\bdrop\s+(?:table|database|view|index)\b"
+    r"|\balter\s+(?:table|database|view|index)\b"
+    r"|\btruncate\s+table\b"
+    r"|\bunion\s+(?:all\s+)?select\b"
+    r"|\bexec(?:ute)?\b\s*[(A-Za-z_]"
+    r")"
 )
 _SECRET_KEYS = frozenset(
     {
@@ -450,6 +463,9 @@ async def save_custom_report(
                     raise NotFoundError("账表", str(report_id))
                 if locked.get("category") != "custom":
                     raise ValidationError("系统报表只能查看，不能在设计器里保存")
+                if str(locked.get("code") or "") != code_text:
+                    # code 是租户内唯一键，作为已有列不允许随保存变更
+                    raise ValidationError("账表编码创建后不可修改")
                 version_no = int(locked.get("current_version") or 0) + 1
                 row = await _update_report(
                     conn,
@@ -529,33 +545,6 @@ def _source_uuid_of(config: dict[str, Any]) -> Optional[str]:
     return raw.strip()
 
 
-def _preview_payload(result: Any) -> dict[str, Any]:
-    if hasattr(result, "model_dump"):
-        return result.model_dump()
-    return {
-        "data": result.data,
-        "total": result.total,
-        "summary": result.summary,
-    }
-
-
-async def preview_saved_report(
-    report_id: int,
-    filters: dict[str, Any],
-    execute: Any,
-) -> dict[str, Any]:
-    """保存后的预览只把 reportId 交给已有 executeReport，不另做返回形态。"""
-    _require_tenant()
-    result = _preview_payload(await execute(report_id, filters))
-    if not isinstance(result["data"], list):
-        raise ValidationError("executeReport 必须返回 data")
-    if type(result["total"]) is not int:
-        raise ValidationError("executeReport 必须返回 total")
-    if not isinstance(result["summary"], dict):
-        raise ValidationError("executeReport 必须返回 summary")
-    return result
-
-
 def _user_name(user: User) -> Optional[str]:
     name = getattr(user, "full_name", None) or getattr(user, "username", None)
     if name is None:
@@ -564,7 +553,11 @@ def _user_name(user: User) -> Optional[str]:
     return text or None
 
 
-@router.post("/designer/reports", response_model=DesignerReportOut)
+@router.post(
+    "/designer/reports",
+    response_model=DesignerReportOut,
+    dependencies=[Depends(require_permission_codes("kuaireport:report:design"))],
+)
 async def api_save_designer_report(
     body: DesignerSaveBody,
     tenant_id: int = Depends(get_current_tenant),
@@ -587,7 +580,11 @@ async def api_save_designer_report(
     )
 
 
-@router.get("/designer/reports/{report_id}", response_model=DesignerReportOut)
+@router.get(
+    "/designer/reports/{report_id}",
+    response_model=DesignerReportOut,
+    dependencies=[Depends(require_permission_codes("kuaireport:report:design"))],
+)
 async def api_view_designer_report(
     report_id: int,
     tenant_id: int = Depends(get_current_tenant),

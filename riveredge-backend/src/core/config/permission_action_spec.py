@@ -27,6 +27,8 @@ STANDARD_ACTIONS: set[str] = {
     "publish",
     "close",
     "obsolete",
+    # 星报表设计器（报表/大屏设计）
+    "design",
     # 试模单等业务子操作（manifest 声明后由路由路径映射，勿用 update 代替）
     "dispatch",
     "recall",
@@ -76,6 +78,7 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "publish": "发布",
     "close": "关闭",
     "obsolete": "作废",
+    "design": "设计",
     "upload-part-spec": "上传部品规格书",
 }
 

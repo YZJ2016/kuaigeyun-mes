@@ -275,7 +275,6 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
     ) => {
       const toolbarParams = pickListPageToolbarSearchParams(searchParamsRef.current);
       const mergedSearch: Record<string, unknown> = {
-        ...toolbarParams,
         ...(searchParamsRef.current || {}),
         ...(searchFormValues || {}),
         ...toolbarParams,
@@ -396,7 +395,11 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
   }, [columns, globalSummary, pageData, reportConfig, showIndexColumn, showSummaryRow, summaryFields]);
 
   const preferenceRevision = useUserPreferenceStore((s) => s.preferences);
-  const defaultPageSize = useMemo(() => resolveDefaultTablePageSize(), [preferenceRevision]);
+  // 页大小优先级：report_config.page_size > 用户偏好 > 站点默认；用户手动换页后由 params.pageSize 接管
+  const defaultPageSize = useMemo(
+    () => resolveDefaultTablePageSize(reportConfig?.page_size),
+    [preferenceRevision, reportConfig?.page_size],
+  );
   const reportPagination = useMemo(
     () => buildUniReportTablePagination(t, defaultPageSize),
     [defaultPageSize, t],

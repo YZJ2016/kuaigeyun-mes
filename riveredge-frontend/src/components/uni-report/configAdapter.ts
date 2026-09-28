@@ -108,6 +108,7 @@ export function buildExecuteFilters(
           : v;
       filters[`${fc.field}_start`] = fmt(val[0]);
       filters[`${fc.field}_end`] = fmt(val[1]);
+      delete filters[fc.field];
     }
   }
   return filters;

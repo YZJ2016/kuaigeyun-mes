@@ -124,7 +124,9 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     if (!fileUuid || loadingOriginal || isOriginalPreview) return;
     setLoadingOriginal(true);
     try {
-      const url = await getFileDownloadUrlWithToken(fileUuid);
+      const url = sharePreviewToken
+        ? await getDashboardSharedFilePreviewUrl(sharePreviewToken, fileUuid)
+        : await getFileDownloadUrlWithToken(fileUuid);
       setPreviewSrc(url);
       setIsOriginalPreview(true);
       messageApi.success(t('components.secureImage.switchedToOriginal'));
@@ -133,7 +135,7 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     } finally {
       setLoadingOriginal(false);
     }
-  }, [fileUuid, loadingOriginal, isOriginalPreview, messageApi, t]);
+  }, [fileUuid, loadingOriginal, isOriginalPreview, messageApi, sharePreviewToken, t]);
 
   useEffect(() => {
     // 非懒加载：立即可见（与 preview 开关无关；preview=false 仅关闭点击放大）
@@ -215,7 +217,10 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     if (!previewVisible || !useTieredLoading || !fileUuid) return;
 
     let cancelled = false;
-    getFileDownloadUrlWithToken(fileUuid, { size: previewSize })
+    const previewUrlPromise = sharePreviewToken
+      ? getDashboardSharedFilePreviewUrl(sharePreviewToken, fileUuid, { size: previewSize })
+      : getFileDownloadUrlWithToken(fileUuid, { size: previewSize });
+    previewUrlPromise
       .then((url) => {
         if (!cancelled) {
           setPreviewSrc(url);
@@ -231,7 +236,7 @@ export const SecureImage: React.FC<SecureImageProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [previewVisible, fileUuid, previewSize, useTieredLoading, src]);
+  }, [previewVisible, fileUuid, previewSize, useTieredLoading, src, sharePreviewToken]);
 
   const previewConfig = React.useMemo(() => {
     if (!preview) return false;

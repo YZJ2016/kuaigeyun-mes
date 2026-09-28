@@ -4,6 +4,14 @@ const base = '/apps/kuaireport/distribution';
 
 export type ResourceType = 'report' | 'dashboard';
 
+export interface GrantRow {
+  id: number;
+  resource_type: string;
+  resource_id: number;
+  role_id: number;
+  permission: string;
+}
+
 export function grantShare(data: {
   resource_type: ResourceType;
   resource_id: number;
@@ -13,8 +21,16 @@ export function grantShare(data: {
   return apiRequest(`${base}/grants`, { method: 'POST', data });
 }
 
+/** 已授权列表：按资源查 apps_kuaireport_share_grants */
+export function listGrants(resourceType: ResourceType, resourceId: number) {
+  return apiRequest<GrantRow[]>(`${base}/grants`, {
+    method: 'GET',
+    params: { resource_type: resourceType, resource_id: resourceId },
+  });
+}
+
 export function canView(resourceType: ResourceType, resourceId: number) {
-  return apiRequest(`${base}/grants/can-view`, {
+  return apiRequest<{ allowed: boolean }>(`${base}/grants/can-view`, {
     method: 'GET',
     params: { resource_type: resourceType, resource_id: resourceId },
   });
@@ -26,6 +42,7 @@ export function createSubscription(data: {
   recipient_user_ids: number[];
   cron?: string;
   channel?: 'inbox';
+  filters?: Record<string, unknown>;
   attach_excel?: boolean;
   is_active?: boolean;
 }) {

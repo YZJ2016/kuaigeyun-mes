@@ -15,13 +15,16 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Optional
 
+from asyncpg.exceptions import UniqueViolationError
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
+from tortoise.exceptions import IntegrityError
 
+from core.api.deps.access import require_permission_codes
 from infra.api.deps.deps import get_current_user
 from infra.domain.security.security import hash_password, verify_password
-from infra.utils.client_ip import get_client_ip
+from infra.utils.client_ip import get_client_ip, request_is_https
 
 WIDGET_TYPES = (
     "metric",
@@ -56,14 +59,24 @@ UNLOCK_COOKIE = "kuaireport_share_unlock"
 UNLOCK_PURPOSE = "kuaireport_share_unlock"
 UNLOCK_TTL = timedelta(hours=8)
 
+PERM_SHARE_MANAGE = "kuaireport:share:manage"
+PERM_DASHBOARD_DESIGN = "kuaireport:dashboard:design"
+PERM_DASHBOARD_DISPLAY = "kuaireport:dashboard:display"
+
+MAX_SHARE_PASSWORD_LENGTH = 128
+MAX_SHARE_CIDR_ENTRIES = 50
+SHARED_REPORT_MAX_LIMIT = 500
+
 DETAIL_OK = "ok"
 DETAIL_NOT_SHARED = "not_shared"
 DETAIL_MISSING_HASH = "missing_password_hash"
 DETAIL_MISSING_EXPIRY = "missing_expiry"
 DETAIL_EXPIRED = "expired"
 DETAIL_PASSWORD = "password_mismatch"
+DETAIL_PASSWORD_REQUIRED = "password_required"
 DETAIL_IP = "ip_denied"
 DETAIL_DATA = "data_unavailable"
+DETAIL_FILE_NOT_SHARED = "file_not_shared"
 ALLOWED_DETAILS = frozenset(
     {
         DETAIL_OK,
@@ -72,8 +85,10 @@ ALLOWED_DETAILS = frozenset(
         DETAIL_MISSING_EXPIRY,
         DETAIL_EXPIRED,
         DETAIL_PASSWORD,
+        DETAIL_PASSWORD_REQUIRED,
         DETAIL_IP,
         DETAIL_DATA,
+        DETAIL_FILE_NOT_SHARED,
     }
 )
 
@@ -90,6 +105,14 @@ WHERE tenant_id = $1 AND code = ANY($2::varchar[])
 
 class ShareLogError(RuntimeError):
     """访问日志没写上。此时不能把大屏或账表数据返回。"""
+
+
+class FileNotSharedError(RuntimeError):
+    """file-preview 的 uuid 不在该大屏组件引用集合内。"""
+
+
+DECORATIVE_WIDGET_TYPES = frozenset(set(WIDGET_TYPES) - DATA_WIDGET_TYPES)
+FILE_WIDGET_TYPES = frozenset({"image"})
 
 
 def as_utc(value: datetime) -> datetime:
@@ -163,7 +186,7 @@ def evaluate_share(
         if not matched:
             return False, DETAIL_PASSWORD
     elif not unlock_ok:
-        return False, DETAIL_PASSWORD
+        return False, DETAIL_PASSWORD_REQUIRED
     if not ip_allowed(client_ip, share_allow_ip_cidrs):
         return False, DETAIL_IP
     return True, DETAIL_OK
@@ -178,7 +201,7 @@ def _as_object(value: Any, name: str) -> Optional[dict]:
 
 
 def validate_widgets(widgets: Any) -> list[dict]:
-    """每个组件恰好一个 data_source_id，并带 refresh_seconds。"""
+    """数据组件必绑一个 data_source_id；装饰组件可省。每组件至多一个数据源。"""
     if widgets is None:
         return []
     if not isinstance(widgets, list):
@@ -197,10 +220,12 @@ def validate_widgets(widgets: Any) -> list[dict]:
         widget_type = widget.get("type")
         if widget_type not in WIDGET_TYPES:
             raise ValueError("unknown widget type")
-        if "data_source_id" not in widget:
+        source_id = widget.get("data_source_id")
+        if widget_type in DATA_WIDGET_TYPES and source_id is None:
             raise ValueError("widget requires one data source")
-        source_id = widget["data_source_id"]
-        if isinstance(source_id, bool) or not isinstance(source_id, int):
+        if source_id is not None and (
+            isinstance(source_id, bool) or not isinstance(source_id, int)
+        ):
             raise ValueError("data_source_id must be an integer")
         refresh = widget.get("refresh_seconds")
         if isinstance(refresh, bool) or not isinstance(refresh, int) or refresh < 1:
@@ -208,9 +233,10 @@ def validate_widgets(widgets: Any) -> list[dict]:
         item = {
             "id": str(widget.get("id") or f"w{index + 1}"),
             "type": widget_type,
-            "data_source_id": source_id,
             "refresh_seconds": refresh,
         }
+        if source_id is not None:
+            item["data_source_id"] = source_id
         if isinstance(widget.get("title"), str):
             item["title"] = widget["title"]
         if isinstance(widget.get("options"), dict):
@@ -219,6 +245,30 @@ def validate_widgets(widgets: Any) -> list[dict]:
             item["layout"] = widget["layout"]
         cleaned.append(item)
     return cleaned
+
+
+def bound_source_ids(widgets: Any) -> set[int]:
+    """收集组件绑定的数据源 id（不分组件类型）。"""
+    found: set[int] = set()
+    for widget in widgets or []:
+        if isinstance(widget, dict) and isinstance(widget.get("data_source_id"), int):
+            found.add(int(widget["data_source_id"]))
+    return found
+
+
+def shared_file_uuids(widgets: Any) -> set[str]:
+    """file-preview 白名单：image 组件 options.file_uuid 集合。"""
+    found: set[str] = set()
+    for widget in widgets or []:
+        if not isinstance(widget, dict) or widget.get("type") not in FILE_WIDGET_TYPES:
+            continue
+        options = widget.get("options")
+        if not isinstance(options, dict):
+            continue
+        raw = options.get("file_uuid")
+        if isinstance(raw, str) and raw.strip():
+            found.add(raw.strip())
+    return found
 
 
 def scrub(value: Any) -> Any:
@@ -285,6 +335,7 @@ class DashboardRecord:
     share_password_hash: Optional[str] = None
     share_allow_ip_cidrs: Any = None
     current_version: int = 0
+    updated_at: Optional[datetime] = None
 
 
 @dataclass
@@ -317,7 +368,7 @@ class AccessLogRecord:
 
 
 SourceExecutor = Callable[[int, int], Awaitable[dict]]
-ReportExecutor = Callable[[int, int, Optional[dict]], Awaitable[dict]]
+ReportExecutor = Callable[[int, int, Optional[dict], Optional[dict]], Awaitable[dict]]
 PreviewBuilder = Callable[[str, int, Optional[int]], Awaitable[str]]
 
 
@@ -375,7 +426,10 @@ async def default_execute_source(tenant_id: int, data_source_id: int) -> dict:
 
 
 async def default_execute_report(
-    tenant_id: int, report_id: int, report_config: Optional[dict]
+    tenant_id: int,
+    report_id: int,
+    report_config: Optional[dict],
+    page: Optional[dict] = None,
 ) -> dict:
     del report_config
     try:
@@ -384,7 +438,7 @@ async def default_execute_report(
     except ImportError:
         return _empty_result()
     async with with_tenant(tenant_id):
-        result = await execute_report(tenant_id, report_id)
+        result = await execute_report(tenant_id, report_id, dict(page or {}))
     return _shape_result(result)
 
 
@@ -411,11 +465,22 @@ class MemoryShareStore:
         self.logs: list[AccessLogRecord] = []
         self.fail_logs = False
         self._next_id = 1
+        # None 表示不模拟数据源登记表（放行），set 内为「本租户已登记」id。
+        self.data_source_ids: Optional[set[int]] = None
+
+    def with_conn(self, conn: Any) -> "MemoryShareStore":
+        """事务连接对内存实现无意义，返回自身。"""
+        return self
 
     def _alloc(self) -> int:
         value = self._next_id
         self._next_id += 1
         return value
+
+    async def has_data_source(self, tenant_id: int, source_id: int) -> bool:
+        if self.data_source_ids is None:
+            return True
+        return int(source_id) in self.data_source_ids
 
     async def create_dashboard(
         self,
@@ -440,9 +505,28 @@ class MemoryShareStore:
             widgets_config=widgets_config,
             theme_config=theme_config,
             tv_config=tv_config,
+            updated_at=datetime.now(timezone.utc),
         )
         self.dashboards[row.id] = row
         return row
+
+    async def list_dashboards(self, tenant_id: int) -> list[dict]:
+        rows = [row for row in self.dashboards.values() if row.tenant_id == tenant_id]
+        rows.sort(
+            key=lambda row: (row.updated_at or datetime.min.replace(tzinfo=timezone.utc)),
+            reverse=True,
+        )
+        return [
+            {
+                "id": row.id,
+                "code": row.code,
+                "name": row.name,
+                "status": row.status,
+                "is_shared": row.is_shared,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            }
+            for row in rows
+        ]
 
     async def update_dashboard(
         self,
@@ -464,6 +548,7 @@ class MemoryShareStore:
         row.widgets_config = widgets_config
         row.theme_config = theme_config
         row.tv_config = tv_config
+        row.updated_at = datetime.now(timezone.utc)
         return row
 
     async def get_dashboard(self, tenant_id: int, dashboard_id: int) -> Optional[DashboardRecord]:
@@ -496,6 +581,19 @@ class MemoryShareStore:
         row.share_expires_at = share_expires_at
         row.share_password_hash = share_password_hash
         row.share_allow_ip_cidrs = share_allow_ip_cidrs
+        return row
+
+    async def clear_dashboard_share(
+        self, *, tenant_id: int, dashboard_id: int
+    ) -> Optional[DashboardRecord]:
+        row = await self.get_dashboard(tenant_id, dashboard_id)
+        if row is None:
+            return None
+        row.is_shared = False
+        row.share_token = None
+        row.share_expires_at = None
+        row.share_password_hash = None
+        row.share_allow_ip_cidrs = None
         return row
 
     async def add_report(self, row: ReportRecord) -> ReportRecord:
@@ -534,6 +632,19 @@ class MemoryShareStore:
         row.share_allow_ip_cidrs = share_allow_ip_cidrs
         return row
 
+    async def clear_report_share(
+        self, *, tenant_id: int, report_id: int
+    ) -> Optional[ReportRecord]:
+        row = await self.get_report(tenant_id, report_id)
+        if row is None:
+            return None
+        row.is_shared = False
+        row.share_token = None
+        row.share_expires_at = None
+        row.share_password_hash = None
+        row.share_allow_ip_cidrs = None
+        return row
+
     async def system_share_flags(self, tenant_id: int) -> dict[str, bool]:
         flags = {code: False for code in SYSTEM_REPORT_CODES}
         for row in self.reports.values():
@@ -550,14 +661,21 @@ class MemoryShareStore:
 
 
 class SqlShareStore:
-    """读写迁移 92 / 563 已有列。按分享 token 找行时不用客户端租户。"""
+    """读写迁移 92 / 563 已有列。按分享 token 找行时不用客户端租户。
 
-    def __init__(self) -> None:
-        self._conn_override = None
+    事务连接随 ``with_conn`` 产生的实例走，进程级单例本身不持有可变连接，
+    并发请求互不影响。
+    """
 
-    async def _conn(self):
-        if self._conn_override is not None:
-            return self._conn_override
+    def __init__(self, conn: Any = None) -> None:
+        self._conn = conn
+
+    def with_conn(self, conn: Any) -> "SqlShareStore":
+        return SqlShareStore(conn)
+
+    async def _connection(self):
+        if self._conn is not None:
+            return self._conn
         from tortoise import Tortoise
 
         return Tortoise.get_connection("default")
@@ -566,12 +684,7 @@ class SqlShareStore:
         from tortoise.transactions import in_transaction
 
         async with in_transaction() as conn:
-            previous = self._conn_override
-            self._conn_override = conn
-            try:
-                return await work(conn)
-            finally:
-                self._conn_override = previous
+            return await work(conn)
 
     def _dashboard_from_row(self, row: dict) -> DashboardRecord:
         return DashboardRecord(
@@ -591,6 +704,7 @@ class SqlShareStore:
             share_password_hash=row.get("share_password_hash"),
             share_allow_ip_cidrs=_json_load(row.get("share_allow_ip_cidrs")),
             current_version=int(row.get("current_version") or 0),
+            updated_at=row.get("updated_at"),
         )
 
     def _report_from_row(self, row: dict) -> ReportRecord:
@@ -620,30 +734,72 @@ class SqlShareStore:
         theme_config: Optional[dict],
         tv_config: Optional[dict],
     ) -> DashboardRecord:
-        conn = await self._conn()
+        conn = await self._connection()
+        try:
+            rows = await conn.execute_query_dict(
+                """
+                INSERT INTO apps_kuaireport_dashboards
+                    (uuid, tenant_id, code, name, layout_config, widgets_config,
+                     theme_config, tv_config, status, is_shared, current_version)
+                VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, 'DRAFT', FALSE, 1)
+                RETURNING id, uuid, tenant_id, code, name, layout_config, widgets_config,
+                          theme_config, tv_config, status, is_shared, share_token,
+                          share_expires_at, share_password_hash, share_allow_ip_cidrs,
+                          current_version
+                """,
+                [
+                    str(uuid.uuid4()),
+                    tenant_id,
+                    code,
+                    name,
+                    _json_dumps(layout_config),
+                    _json_dumps(widgets_config),
+                    _json_dumps(theme_config),
+                    _json_dumps(tv_config),
+                ],
+            )
+        except (UniqueViolationError, IntegrityError) as exc:
+            text = str(getattr(exc, "constraint_name", "") or "") + str(exc)
+            if "kuaireport_dashboards" in text:
+                raise ValueError("dashboard code already exists") from exc
+            raise
+        return self._dashboard_from_row(rows[0])
+
+    async def has_data_source(self, tenant_id: int, source_id: int) -> bool:
+        conn = await self._connection()
         rows = await conn.execute_query_dict(
             """
-            INSERT INTO apps_kuaireport_dashboards
-                (uuid, tenant_id, code, name, layout_config, widgets_config,
-                 theme_config, tv_config, status, is_shared, current_version)
-            VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, 'DRAFT', FALSE, 1)
-            RETURNING id, uuid, tenant_id, code, name, layout_config, widgets_config,
-                      theme_config, tv_config, status, is_shared, share_token,
-                      share_expires_at, share_password_hash, share_allow_ip_cidrs,
-                      current_version
+            SELECT id FROM apps_kuaireport_data_sources
+            WHERE id = $1 AND tenant_id = $2
             """,
-            [
-                str(uuid.uuid4()),
-                tenant_id,
-                code,
-                name,
-                _json_dumps(layout_config),
-                _json_dumps(widgets_config),
-                _json_dumps(theme_config),
-                _json_dumps(tv_config),
-            ],
+            [source_id, tenant_id],
         )
-        return self._dashboard_from_row(rows[0])
+        return bool(rows)
+
+    async def list_dashboards(self, tenant_id: int) -> list[dict]:
+        conn = await self._connection()
+        rows = await conn.execute_query_dict(
+            """
+            SELECT id, code, name, status, is_shared, updated_at
+            FROM apps_kuaireport_dashboards
+            WHERE tenant_id = $1
+            ORDER BY updated_at DESC, id DESC
+            """,
+            [tenant_id],
+        )
+        return [
+            {
+                "id": int(row["id"]),
+                "code": row["code"],
+                "name": row["name"],
+                "status": row.get("status"),
+                "is_shared": bool(row.get("is_shared")),
+                "updated_at": row["updated_at"].isoformat()
+                if isinstance(row.get("updated_at"), datetime)
+                else row.get("updated_at"),
+            }
+            for row in rows
+        ]
 
     async def update_dashboard(
         self,
@@ -656,7 +812,7 @@ class SqlShareStore:
         theme_config: Optional[dict],
         tv_config: Optional[dict],
     ) -> Optional[DashboardRecord]:
-        conn = await self._conn()
+        conn = await self._connection()
         rows = await conn.execute_query_dict(
             """
             UPDATE apps_kuaireport_dashboards
@@ -688,7 +844,7 @@ class SqlShareStore:
         return self._dashboard_from_row(rows[0])
 
     async def get_dashboard(self, tenant_id: int, dashboard_id: int) -> Optional[DashboardRecord]:
-        conn = await self._conn()
+        conn = await self._connection()
         rows = await conn.execute_query_dict(
             """
             SELECT id, uuid, tenant_id, code, name, layout_config, widgets_config,
@@ -704,7 +860,7 @@ class SqlShareStore:
         return self._dashboard_from_row(rows[0])
 
     async def find_dashboard_by_token(self, share_token: str) -> Optional[DashboardRecord]:
-        conn = await self._conn()
+        conn = await self._connection()
         rows = await conn.execute_query_dict(
             """
             SELECT id, uuid, tenant_id, code, name, layout_config, widgets_config,
@@ -729,7 +885,7 @@ class SqlShareStore:
         share_password_hash: str,
         share_allow_ip_cidrs: Any,
     ) -> Optional[DashboardRecord]:
-        conn = await self._conn()
+        conn = await self._connection()
         rows = await conn.execute_query_dict(
             """
             UPDATE apps_kuaireport_dashboards
@@ -755,8 +911,30 @@ class SqlShareStore:
             return None
         return await self.get_dashboard(tenant_id, dashboard_id)
 
+    async def clear_dashboard_share(
+        self, *, tenant_id: int, dashboard_id: int
+    ) -> Optional[DashboardRecord]:
+        conn = await self._connection()
+        rows = await conn.execute_query_dict(
+            """
+            UPDATE apps_kuaireport_dashboards
+            SET is_shared = FALSE,
+                share_token = NULL,
+                share_expires_at = NULL,
+                share_password_hash = NULL,
+                share_allow_ip_cidrs = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1 AND tenant_id = $2
+            RETURNING id
+            """,
+            [dashboard_id, tenant_id],
+        )
+        if not rows:
+            return None
+        return await self.get_dashboard(tenant_id, dashboard_id)
+
     async def get_report(self, tenant_id: int, report_id: int) -> Optional[ReportRecord]:
-        conn = await self._conn()
+        conn = await self._connection()
         rows = await conn.execute_query_dict(
             """
             SELECT id, uuid, tenant_id, code, name, report_config, is_system,
@@ -772,7 +950,7 @@ class SqlShareStore:
         return self._report_from_row(rows[0])
 
     async def find_report_by_token(self, share_token: str) -> Optional[ReportRecord]:
-        conn = await self._conn()
+        conn = await self._connection()
         rows = await conn.execute_query_dict(
             """
             SELECT id, uuid, tenant_id, code, name, report_config, is_system,
@@ -797,7 +975,7 @@ class SqlShareStore:
         share_password_hash: str,
         share_allow_ip_cidrs: Any,
     ) -> Optional[ReportRecord]:
-        conn = await self._conn()
+        conn = await self._connection()
         rows = await conn.execute_query_dict(
             """
             UPDATE apps_kuaireport_reports
@@ -823,8 +1001,30 @@ class SqlShareStore:
             return None
         return await self.get_report(tenant_id, report_id)
 
+    async def clear_report_share(
+        self, *, tenant_id: int, report_id: int
+    ) -> Optional[ReportRecord]:
+        conn = await self._connection()
+        rows = await conn.execute_query_dict(
+            """
+            UPDATE apps_kuaireport_reports
+            SET is_shared = FALSE,
+                share_token = NULL,
+                share_expires_at = NULL,
+                share_password_hash = NULL,
+                share_allow_ip_cidrs = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1 AND tenant_id = $2
+            RETURNING id
+            """,
+            [report_id, tenant_id],
+        )
+        if not rows:
+            return None
+        return await self.get_report(tenant_id, report_id)
+
     async def system_share_flags(self, tenant_id: int) -> dict[str, bool]:
-        conn = await self._conn()
+        conn = await self._connection()
         rows = await conn.execute_query_dict(
             SYSTEM_SHARE_FLAG_SQL,
             [tenant_id, list(SYSTEM_REPORT_CODES)],
@@ -837,7 +1037,7 @@ class SqlShareStore:
     async def append_log(self, record: AccessLogRecord) -> None:
         if record.detail not in ALLOWED_DETAILS:
             raise ShareLogError("access log detail rejected")
-        conn = await self._conn()
+        conn = await self._connection()
         await conn.execute_query(
             """
             INSERT INTO apps_kuaireport_share_access_logs
@@ -897,6 +1097,25 @@ class ShareService:
     def _new_token(self) -> str:
         return secrets.token_urlsafe(32)[:64]
 
+    def _check_share_args(
+        self, *, expires_at: datetime, password: str, allow_ip_cidrs: Any
+    ) -> tuple[datetime, str, Any]:
+        expires = as_utc(expires_at)
+        if expires <= self.now():
+            raise ValueError("expires_at must be in the future")
+        if not isinstance(password, str) or not password:
+            raise ValueError("password required")
+        if len(password) > MAX_SHARE_PASSWORD_LENGTH:
+            raise ValueError("password too long")
+        return expires, password, _normalize_cidrs(allow_ip_cidrs)
+
+    async def _ensure_bound_sources(
+        self, tenant_id: int, widgets: list[dict]
+    ) -> None:
+        for source_id in sorted(bound_source_ids(widgets)):
+            if not await self.store.has_data_source(tenant_id, source_id):
+                raise ValueError("data_source_id must reference a tenant data source")
+
     async def save_dashboard(
         self,
         *,
@@ -915,6 +1134,7 @@ class ShareService:
         theme = _as_object(theme_config, "theme_config")
         tv = _as_object(tv_config, "tv_config")
         widgets = validate_widgets(widgets_config)
+        await self._ensure_bound_sources(tenant_id, widgets)
         configs = {
             "layout_config": layout,
             "widgets_config": widgets,
@@ -923,10 +1143,11 @@ class ShareService:
         }
 
         async def _persist(conn=None):
+            store = self.store.with_conn(conn) if conn is not None else self.store
             if dashboard_id is None:
                 if not code or not str(code).strip():
                     raise ValueError("code required")
-                saved = await self.store.create_dashboard(
+                saved = await store.create_dashboard(
                     tenant_id=tenant_id,
                     code=str(code).strip(),
                     name=name,
@@ -936,7 +1157,7 @@ class ShareService:
                     tv_config=tv,
                 )
             else:
-                saved = await self.store.update_dashboard(
+                saved = await store.update_dashboard(
                     tenant_id=tenant_id,
                     dashboard_id=dashboard_id,
                     name=name,
@@ -989,22 +1210,25 @@ class ShareService:
         password: str,
         allow_ip_cidrs: Any,
     ) -> dict:
+        expires, password, allow = self._check_share_args(
+            expires_at=expires_at, password=password, allow_ip_cidrs=allow_ip_cidrs
+        )
         hashed = self._hash_password(password)
         token = self._new_token()
         row = await self.store.set_dashboard_share(
             tenant_id=tenant_id,
             dashboard_id=dashboard_id,
             share_token=token,
-            share_expires_at=as_utc(expires_at),
+            share_expires_at=expires,
             share_password_hash=hashed,
-            share_allow_ip_cidrs=allow_ip_cidrs,
+            share_allow_ip_cidrs=allow,
         )
         if row is None:
             raise LookupError("dashboard not found")
         return {
             "is_shared": True,
             "share_path": f"/apps/kuaireport/dashboards/shared?token={token}",
-            "expires_at": as_utc(expires_at).isoformat(),
+            "expires_at": expires.isoformat(),
         }
 
     async def enable_report_share(
@@ -1016,23 +1240,47 @@ class ShareService:
         password: str,
         allow_ip_cidrs: Any,
     ) -> dict:
+        expires, password, allow = self._check_share_args(
+            expires_at=expires_at, password=password, allow_ip_cidrs=allow_ip_cidrs
+        )
         hashed = self._hash_password(password)
         token = self._new_token()
         row = await self.store.set_report_share(
             tenant_id=tenant_id,
             report_id=report_id,
             share_token=token,
-            share_expires_at=as_utc(expires_at),
+            share_expires_at=expires,
             share_password_hash=hashed,
-            share_allow_ip_cidrs=allow_ip_cidrs,
+            share_allow_ip_cidrs=allow,
         )
         if row is None:
             raise LookupError("report not found")
         return {
             "is_shared": True,
             "share_path": f"/apps/kuaireport/reports/shared?token={token}",
-            "expires_at": as_utc(expires_at).isoformat(),
+            "expires_at": expires.isoformat(),
         }
+
+    async def disable_dashboard_share(
+        self, *, tenant_id: int, dashboard_id: int
+    ) -> dict:
+        row = await self.store.clear_dashboard_share(
+            tenant_id=tenant_id, dashboard_id=dashboard_id
+        )
+        if row is None:
+            raise LookupError("dashboard not found")
+        return {"is_shared": False}
+
+    async def disable_report_share(self, *, tenant_id: int, report_id: int) -> dict:
+        row = await self.store.clear_report_share(
+            tenant_id=tenant_id, report_id=report_id
+        )
+        if row is None:
+            raise LookupError("report not found")
+        return {"is_shared": False}
+
+    async def list_dashboards(self, tenant_id: int) -> list[dict]:
+        return await self.store.list_dashboards(tenant_id)
 
     async def system_share_flags(self, tenant_id: int) -> dict[str, bool]:
         return await self.store.system_share_flags(tenant_id)
@@ -1073,6 +1321,7 @@ class ShareService:
         client_ip: Optional[str],
         user_agent: Optional[str],
         unlock_cookie: Optional[str],
+        page: Optional[dict] = None,
     ) -> tuple[str, Optional[dict], Optional[str]]:
         row = await self.store.find_report_by_token(share_token)
         if row is None:
@@ -1090,7 +1339,7 @@ class ShareService:
             client_ip=client_ip,
             user_agent=user_agent,
             unlock_cookie=unlock_cookie,
-            build=lambda: self._report_payload(row),
+            build=lambda: self._report_payload(row, page),
         )
 
     async def open_file_preview(
@@ -1107,8 +1356,11 @@ class ShareService:
         row = await self.store.find_dashboard_by_token(share_token)
         if row is None:
             return "missing", {"success": False, "message": "missing"}, None
+        allowed_files = shared_file_uuids(row.widgets_config)
 
         async def build() -> dict:
+            if (file_uuid or "").strip() not in allowed_files:
+                raise FileNotSharedError("file uuid not referenced by this dashboard")
             preview = await self.preview_url(file_uuid, row.tenant_id, size)
             if not preview:
                 raise RuntimeError("preview unavailable")
@@ -1169,6 +1421,10 @@ class ShareService:
         if ok:
             try:
                 payload = scrub(await build())
+            except FileNotSharedError:
+                ok = False
+                reason = DETAIL_FILE_NOT_SHARED
+                payload = None
             except Exception:
                 ok = False
                 reason = DETAIL_DATA
@@ -1240,9 +1496,11 @@ class ShareService:
             "tv_config": row.tv_config,
         }
 
-    async def _report_payload(self, row: ReportRecord) -> dict:
+    async def _report_payload(
+        self, row: ReportRecord, page: Optional[dict] = None
+    ) -> dict:
         result = _shape_result(
-            await self.execute_report(row.tenant_id, row.id, row.report_config)
+            await self.execute_report(row.tenant_id, row.id, row.report_config, page)
         )
         return {
             "name": row.name,
@@ -1278,12 +1536,38 @@ def _parse_expires(value: Any) -> datetime:
     return as_utc(datetime.fromisoformat(text))
 
 
+def _normalize_cidrs(allow: Any) -> Optional[list[str]]:
+    """逐条校验 CIDR / IP 字面量；非法或超上限即拒。"""
+    if allow is None:
+        return None
+    if not isinstance(allow, list):
+        raise ValueError("allow_ip_cidrs must be a list")
+    cleaned: list[str] = []
+    for entry in allow:
+        raw = "" if entry is None else str(entry).strip()
+        if not raw:
+            continue
+        try:
+            if "/" in raw:
+                ipaddress.ip_network(raw, strict=False)
+            else:
+                ipaddress.ip_address(raw)
+        except ValueError as exc:
+            raise ValueError("allow_ip_cidrs entries must be valid IP or CIDR") from exc
+        cleaned.append(raw)
+    if len(cleaned) > MAX_SHARE_CIDR_ENTRIES:
+        raise ValueError("allow_ip_cidrs exceeds 50 entries")
+    return cleaned
+
+
 def _share_body(body: Any) -> tuple[datetime, str, Any]:
     if not isinstance(body, dict):
         raise ValueError("invalid body")
     password = body.get("password")
     if not isinstance(password, str) or not password:
         raise ValueError("password required")
+    if len(password) > MAX_SHARE_PASSWORD_LENGTH:
+        raise ValueError("password too long")
     expires_at = _parse_expires(body.get("expires_at"))
     allow = body.get("allow_ip_cidrs")
     if allow is not None and not isinstance(allow, list):
@@ -1306,13 +1590,19 @@ def _set_unlock_cookie(response: Response, token: Optional[str], request: Reques
         max_age=int(UNLOCK_TTL.total_seconds()),
         httponly=True,
         samesite="lax",
-        secure=request.url.scheme == "https",
+        secure=request_is_https(request),
         path="/api/v1/apps/kuaireport",
     )
 
 
 def _log_unavailable() -> JSONResponse:
     return JSONResponse(status_code=503, content={"detail": "access log unavailable"})
+
+
+# 模块级依赖实例：测试可用 dependency_overrides 按对象覆盖。
+DASHBOARD_DESIGN_DEP = require_permission_codes(PERM_DASHBOARD_DESIGN)
+DASHBOARD_DISPLAY_DEP = require_permission_codes(PERM_DASHBOARD_DISPLAY)
+SHARE_MANAGE_DEP = require_permission_codes(PERM_SHARE_MANAGE)
 
 
 def create_router(service: ShareService) -> APIRouter:
@@ -1324,7 +1614,7 @@ def create_router(service: ShareService) -> APIRouter:
             raise HTTPException(status_code=403, detail="tenant required")
         return int(tenant_id)
 
-    @router.post("/dashboards")
+    @router.post("/dashboards", dependencies=[Depends(DASHBOARD_DESIGN_DEP)])
     async def create_dashboard(
         request: Request,
         user: Any = Depends(get_current_user),
@@ -1344,7 +1634,10 @@ def create_router(service: ShareService) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    @router.put("/dashboards/{dashboard_id}")
+    @router.put(
+        "/dashboards/{dashboard_id}",
+        dependencies=[Depends(DASHBOARD_DESIGN_DEP)],
+    )
     async def update_dashboard(
         dashboard_id: int,
         request: Request,
@@ -1367,7 +1660,14 @@ def create_router(service: ShareService) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    @router.get("/dashboards/{dashboard_id}/preview")
+    @router.get("/dashboards", dependencies=[Depends(DASHBOARD_DISPLAY_DEP)])
+    async def list_dashboards_endpoint(user: Any = Depends(get_current_user)):
+        return await service.list_dashboards(tenant_id=_tenant_of(user))
+
+    @router.get(
+        "/dashboards/{dashboard_id}/preview",
+        dependencies=[Depends(DASHBOARD_DISPLAY_DEP)],
+    )
     async def preview_dashboard(
         dashboard_id: int,
         user: Any = Depends(get_current_user),
@@ -1380,7 +1680,10 @@ def create_router(service: ShareService) -> APIRouter:
         except LookupError as exc:
             raise HTTPException(status_code=404, detail="dashboard not found") from exc
 
-    @router.post("/dashboards/{dashboard_id}/share")
+    @router.post(
+        "/dashboards/{dashboard_id}/share",
+        dependencies=[Depends(SHARE_MANAGE_DEP)],
+    )
     async def share_dashboard(
         dashboard_id: int,
         request: Request,
@@ -1400,7 +1703,10 @@ def create_router(service: ShareService) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    @router.post("/reports/{report_id}/share")
+    @router.post(
+        "/reports/{report_id}/share",
+        dependencies=[Depends(SHARE_MANAGE_DEP)],
+    )
     async def share_report(
         report_id: int,
         request: Request,
@@ -1419,6 +1725,36 @@ def create_router(service: ShareService) -> APIRouter:
             raise HTTPException(status_code=404, detail="report not found") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.delete(
+        "/dashboards/{dashboard_id}/share",
+        dependencies=[Depends(SHARE_MANAGE_DEP)],
+    )
+    async def unshare_dashboard(
+        dashboard_id: int,
+        user: Any = Depends(get_current_user),
+    ):
+        try:
+            return await service.disable_dashboard_share(
+                tenant_id=_tenant_of(user), dashboard_id=dashboard_id
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="dashboard not found") from exc
+
+    @router.delete(
+        "/reports/{report_id}/share",
+        dependencies=[Depends(SHARE_MANAGE_DEP)],
+    )
+    async def unshare_report(
+        report_id: int,
+        user: Any = Depends(get_current_user),
+    ):
+        try:
+            return await service.disable_report_share(
+                tenant_id=_tenant_of(user), report_id=report_id
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="report not found") from exc
 
     @router.get("/dashboards/shared")
     async def open_shared_dashboard(
@@ -1473,9 +1809,18 @@ def create_router(service: ShareService) -> APIRouter:
         request: Request,
         response: Response,
         token: str = Query(...),
+        limit: Optional[int] = Query(default=None),
+        offset: Optional[int] = Query(default=None),
         share_password: Optional[str] = Header(default=None, alias=PASSWORD_HEADER),
         unlock_cookie: Optional[str] = Cookie(default=None, alias=UNLOCK_COOKIE),
     ):
+        page = None
+        if limit is not None or offset is not None:
+            page = {}
+            if limit is not None:
+                page["limit"] = min(max(int(limit), 1), SHARED_REPORT_MAX_LIMIT)
+            if offset is not None:
+                page["offset"] = max(int(offset), 0)
         try:
             opened = await service.open_report(
                 share_token=token,
@@ -1483,6 +1828,7 @@ def create_router(service: ShareService) -> APIRouter:
                 client_ip=get_client_ip(request),
                 user_agent=request.headers.get("user-agent"),
                 unlock_cookie=unlock_cookie,
+                page=page,
             )
         except ShareLogError:
             return _log_unavailable()
@@ -1501,7 +1847,14 @@ async def _read_json(request: Request) -> Any:
 def _finish_open(request: Request, response: Response, result: tuple[str, Optional[dict], Optional[str]]):
     status, payload, cookie = result
     if status == "missing":
-        raise HTTPException(status_code=404, detail="share not found")
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "SHARE_ACCESS_DENIED",
+                "reason": "missing",
+                "requires_password": False,
+            },
+        )
     if status != "ok":
         denied = status if status in ALLOWED_DETAILS else DETAIL_PASSWORD
         raise HTTPException(
@@ -1509,7 +1862,7 @@ def _finish_open(request: Request, response: Response, result: tuple[str, Option
             detail={
                 "code": "SHARE_ACCESS_DENIED",
                 "reason": denied,
-                "requires_password": denied == DETAIL_PASSWORD,
+                "requires_password": denied in (DETAIL_PASSWORD, DETAIL_PASSWORD_REQUIRED),
             },
         )
     _set_unlock_cookie(response, cookie, request)

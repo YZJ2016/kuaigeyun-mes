@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import json
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from apps.kuaireport.slices import s148_share as share
 from infra.api.deps.deps import get_current_user
+from infra.utils import client_ip as client_ip_mod
 
 PLAIN = "share-plain-9f3a"
 NOW = datetime(2026, 9, 28, 8, 0, tzinfo=timezone.utc)
@@ -20,10 +22,25 @@ LATER = NOW + timedelta(days=2)
 PAST = NOW - timedelta(hours=1)
 TENANT = 7
 
+PERMISSION_DEPS = (
+    share.DASHBOARD_DESIGN_DEP,
+    share.DASHBOARD_DISPLAY_DEP,
+    share.SHARE_MANAGE_DEP,
+)
 
-def _widgets():
+
+@pytest.fixture(autouse=True)
+def _trust_testclient_proxy(monkeypatch):
+    """TestClient 直连对端视为可信代理，XFF 用例才能走到转发头。"""
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "*")
+
+
+def _widgets(file_uuid="file-1"):
     rows = []
     for index, widget_type in enumerate(share.WIDGET_TYPES, start=1):
+        options = {"label": widget_type}
+        if widget_type == "image":
+            options["file_uuid"] = file_uuid
         rows.append(
             {
                 "id": f"w{index}",
@@ -31,7 +48,7 @@ def _widgets():
                 "data_source_id": index,
                 "refresh_seconds": 15 + index,
                 "title": widget_type,
-                "options": {"label": widget_type},
+                "options": options,
             }
         )
     return rows
@@ -43,9 +60,9 @@ def _service(store, *, execute_source=None, execute_report=None, preview_url=Non
             return await execute_source(tenant_id, data_source_id)
         return {"data": [{"n": data_source_id}], "total": 1, "summary": {"n": data_source_id}}
 
-    async def report_exec(tenant_id, report_id, report_config):
+    async def report_exec(tenant_id, report_id, report_config, page=None):
         if execute_report:
-            return await execute_report(tenant_id, report_id, report_config)
+            return await execute_report(tenant_id, report_id, report_config, page)
         return {"data": [{"id": report_id}], "total": 1, "summary": {"rows": 1}}
 
     async def preview(file_uuid, tenant_id, size):
@@ -69,6 +86,8 @@ def _client(service) -> TestClient:
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
         id=1, tenant_id=TENANT, username="designer"
     )
+    for dep in PERMISSION_DEPS:
+        app.dependency_overrides[dep] = lambda: SimpleNamespace(tenant_id=TENANT)
     return TestClient(app)
 
 
@@ -257,8 +276,8 @@ async def test_report_share_uses_same_gate_and_system_rows_stay_unshared():
     store = share.MemoryShareStore()
     calls = []
 
-    async def report_exec(tenant_id, report_id, report_config):
-        calls.append((tenant_id, report_id))
+    async def report_exec(tenant_id, report_id, report_config, page=None):
+        calls.append((tenant_id, report_id, page))
         return {"data": [{"code": "row"}], "total": 4, "summary": {"qty": 4}}
 
     service = _service(store, execute_report=report_exec)
@@ -305,8 +324,19 @@ async def test_report_share_uses_same_gate_and_system_rows_stay_unshared():
         headers={"X-Forwarded-For": "10.0.0.8"},
     )
     assert denied.status_code == 403
+    assert denied.json()["detail"]["reason"] == "password_required"
+    assert denied.json()["detail"]["requires_password"] is True
     assert calls == []
     assert "data" not in denied.json()
+
+    mismatch = client.get(
+        "/api/v1/apps/kuaireport/reports/shared",
+        params={"token": token},
+        headers={"X-Share-Password": "not-it", "X-Forwarded-For": "10.0.0.8"},
+    )
+    assert mismatch.status_code == 403
+    assert mismatch.json()["detail"]["reason"] == "password_mismatch"
+    assert calls == []
 
     opened = client.get(
         "/api/v1/apps/kuaireport/reports/shared",
@@ -318,10 +348,14 @@ async def test_report_share_uses_same_gate_and_system_rows_stay_unshared():
     assert body["data"] == [{"code": "row"}]
     assert body["total"] == 4
     assert body["summary"] == {"qty": 4}
-    assert calls == [(TENANT, inv.id)]
+    assert calls == [(TENANT, inv.id, None)]
     _assert_no_secret(body, inv.share_password_hash or "")
     report_logs = [record for record in store.logs if record.resource_type == "report"]
-    assert {record.detail for record in report_logs} >= {"password_mismatch", "ok"}
+    assert {record.detail for record in report_logs} >= {
+        "password_required",
+        "password_mismatch",
+        "ok",
+    }
     _assert_logs_clean(store, inv.share_password_hash or "")
 
 
@@ -364,6 +398,21 @@ async def test_file_preview_contract_and_log_failure_hides_payload():
     assert body["preview_url"].startswith("/api/v1/core/files/file-1/")
     assert seen["args"] == ("file-1", TENANT, 64)
     _assert_no_secret(body, store.dashboards[saved["id"]].share_password_hash)
+
+    # file_uuid 必须在该大屏组件引用集合内；遍历任意 uuid 不能签出预览 URL
+    denied_uuid = client.get(
+        "/api/v1/apps/kuaireport/dashboards/shared/file-preview",
+        params={"token": token, "uuid": "file-other"},
+        headers={"X-Share-Password": PLAIN},
+    )
+    assert denied_uuid.status_code == 200
+    assert denied_uuid.json()["success"] is False
+    assert denied_uuid.json()["message"] == "file_not_shared"
+    assert seen["args"] == ("file-1", TENANT, 64)
+    denied_logs = [
+        record for record in store.logs if record.detail == "file_not_shared"
+    ]
+    assert denied_logs and denied_logs[-1].success is False
 
     failed = client.get(
         "/api/v1/apps/kuaireport/dashboards/shared/file-preview",
@@ -428,6 +477,368 @@ def test_slice_calls_version_insert_without_writing_sql():
     assert "INSERT INTO apps_kuaireport_dashboard_versions" not in source
     assert "apps_kuaireport_share_grants" not in source
     assert "apps_kuaireport_report_subscriptions" not in source
+    assert "_conn_override" not in source
     route_paths = [getattr(route, "path", "") for route in share.router.routes]
     assert any(path.endswith("/dashboards/shared/file-preview") for path in route_paths)
+    assert any(path == "/dashboards/{dashboard_id}/share" for path in route_paths)
+    assert any(path == "/reports/{report_id}/share" for path in route_paths)
     assert not any("rollback" in path or "subscription" in path or "grant" in path for path in route_paths)
+
+
+@pytest.mark.asyncio
+async def test_sql_store_binds_conn_per_call_not_on_singleton(monkeypatch):
+    """事务连接随每次调用传入，进程级单例不残留可变 conn 状态。"""
+    store = share.SqlShareStore()
+    conns = []
+
+    class _FakeTx:
+        def __init__(self, conn):
+            self._conn = conn
+
+        async def __aenter__(self):
+            return self._conn
+
+        async def __aexit__(self, *args):
+            return False
+
+    def fake_in_transaction(*args, **kwargs):
+        conn = object()
+        conns.append(conn)
+        return _FakeTx(conn)
+
+    monkeypatch.setattr("tortoise.transactions.in_transaction", fake_in_transaction)
+
+    entered = asyncio.Event()
+    seen = []
+
+    async def work(conn):
+        seen.append(conn)
+        entered.set()
+        await asyncio.wait_for(entered.wait(), 5)
+        await asyncio.sleep(0)
+        return conn
+
+    first, second = await asyncio.gather(
+        store.run_in_transaction(work), store.run_in_transaction(work)
+    )
+    assert first is not second
+    assert set(seen) == {first, second}
+    assert getattr(store, "_conn", None) is None
+    assert not hasattr(store, "_conn_override")
+
+    class _FakeConn:
+        def __init__(self):
+            self.calls = []
+
+        async def execute_query_dict(self, sql, params):
+            self.calls.append((sql, params))
+            return []
+
+        async def execute_query(self, sql, params):
+            self.calls.append((sql, params))
+
+    conn_a = _FakeConn()
+    bound = store.with_conn(conn_a)
+    assert bound is not store
+    assert await bound.get_dashboard(TENANT, 123) is None
+    assert len(conn_a.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_disable_share_clears_credentials_and_revokes_link():
+    store = share.MemoryShareStore()
+    service = _service(store)
+    saved = await _save_dashboard(service, store)
+    report = share.ReportRecord(
+        id=88, uuid="rep-88", tenant_id=TENANT, code="rep-88", name="报表88"
+    )
+    await store.add_report(report)
+    client = _client(service)
+
+    issued = client.post(
+        f"/api/v1/apps/kuaireport/dashboards/{saved['id']}/share",
+        json={"expires_at": LATER.isoformat(), "password": PLAIN},
+    )
+    assert issued.status_code == 200
+    token = issued.json()["share_path"].split("token=", 1)[1]
+
+    closed = client.delete(f"/api/v1/apps/kuaireport/dashboards/{saved['id']}/share")
+    assert closed.status_code == 200
+    assert closed.json() == {"is_shared": False}
+    row = store.dashboards[saved["id"]]
+    assert row.is_shared is False
+    assert row.share_token is None
+    assert row.share_expires_at is None
+    assert row.share_password_hash is None
+    assert row.share_allow_ip_cidrs is None
+
+    reopened = client.get(
+        "/api/v1/apps/kuaireport/dashboards/shared",
+        params={"token": token},
+        headers={"X-Share-Password": PLAIN},
+    )
+    assert reopened.status_code == 404
+    assert reopened.json()["detail"]["reason"] == "missing"
+
+    issued_report = client.post(
+        f"/api/v1/apps/kuaireport/reports/{report.id}/share",
+        json={"expires_at": LATER.isoformat(), "password": PLAIN},
+    )
+    report_token = issued_report.json()["share_path"].split("token=", 1)[1]
+    closed_report = client.delete(
+        f"/api/v1/apps/kuaireport/reports/{report.id}/share"
+    )
+    assert closed_report.status_code == 200
+    assert closed_report.json() == {"is_shared": False}
+    reopened_report = client.get(
+        "/api/v1/apps/kuaireport/reports/shared",
+        params={"token": report_token},
+        headers={"X-Share-Password": PLAIN},
+    )
+    assert reopened_report.status_code == 404
+    assert reopened_report.json()["detail"]["code"] == "SHARE_ACCESS_DENIED"
+
+    missing = client.delete("/api/v1/apps/kuaireport/reports/999999/share")
+    assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_enable_share_rejects_past_expiry_and_bad_inputs():
+    store = share.MemoryShareStore()
+    service = _service(store)
+    saved = await _save_dashboard(service, store)
+    client = _client(service)
+    url = f"/api/v1/apps/kuaireport/dashboards/{saved['id']}/share"
+
+    past = client.post(
+        url, json={"expires_at": PAST.isoformat(), "password": PLAIN}
+    )
+    assert past.status_code == 400
+
+    long_password = client.post(
+        url, json={"expires_at": LATER.isoformat(), "password": "x" * 129}
+    )
+    assert long_password.status_code == 400
+
+    bad_cidr = client.post(
+        url,
+        json={
+            "expires_at": LATER.isoformat(),
+            "password": PLAIN,
+            "allow_ip_cidrs": ["not-a-cidr"],
+        },
+    )
+    assert bad_cidr.status_code == 400
+
+    too_many = client.post(
+        url,
+        json={
+            "expires_at": LATER.isoformat(),
+            "password": PLAIN,
+            "allow_ip_cidrs": [f"10.0.{i // 256}.{i % 256}/32" for i in range(51)],
+        },
+    )
+    assert too_many.status_code == 400
+
+    ok = client.post(
+        url,
+        json={
+            "expires_at": LATER.isoformat(),
+            "password": PLAIN,
+            "allow_ip_cidrs": ["10.0.0.0/8", "1.2.3.4"],
+        },
+    )
+    assert ok.status_code == 200
+    assert store.dashboards[saved["id"]].share_allow_ip_cidrs == [
+        "10.0.0.0/8",
+        "1.2.3.4",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_shared_report_forwards_limit_and_offset_with_cap():
+    store = share.MemoryShareStore()
+    pages = []
+
+    async def report_exec(tenant_id, report_id, report_config, page=None):
+        pages.append(page)
+        return {"data": [], "total": 0, "summary": {}}
+
+    service = _service(store, execute_report=report_exec)
+    report = share.ReportRecord(
+        id=91, uuid="rep-91", tenant_id=TENANT, code="rep-91", name="报表91"
+    )
+    await store.add_report(report)
+    client = _client(service)
+    issued = client.post(
+        f"/api/v1/apps/kuaireport/reports/{report.id}/share",
+        json={"expires_at": LATER.isoformat(), "password": PLAIN},
+    )
+    token = issued.json()["share_path"].split("token=", 1)[1]
+    headers = {"X-Share-Password": PLAIN}
+
+    paged = client.get(
+        "/api/v1/apps/kuaireport/reports/shared",
+        params={"token": token, "limit": 10, "offset": 30},
+        headers=headers,
+    )
+    assert paged.status_code == 200
+    assert pages[-1] == {"limit": 10, "offset": 30}
+
+    capped = client.get(
+        "/api/v1/apps/kuaireport/reports/shared",
+        params={"token": token, "limit": 9999},
+        headers=headers,
+    )
+    assert capped.status_code == 200
+    assert pages[-1] == {"limit": 500}
+
+    default_page = client.get(
+        "/api/v1/apps/kuaireport/reports/shared",
+        params={"token": token},
+        headers=headers,
+    )
+    assert default_page.status_code == 200
+    assert pages[-1] is None
+
+
+@pytest.mark.asyncio
+async def test_dashboard_list_endpoint_returns_tenant_summary():
+    store = share.MemoryShareStore()
+    service = _service(store)
+    saved = await _save_dashboard(service, store)
+    other = share.DashboardRecord(
+        id=999, uuid="d-999", tenant_id=TENANT + 1, code="other", name="别租户"
+    )
+    store.dashboards[other.id] = other
+    client = _client(service)
+
+    listed = client.get("/api/v1/apps/kuaireport/dashboards")
+    assert listed.status_code == 200
+    rows = listed.json()
+    assert [row["id"] for row in rows] == [saved["id"]]
+    row = rows[0]
+    assert row["code"] == "board-1"
+    assert row["name"] == "车间大屏"
+    assert row["status"] == "DRAFT"
+    assert row["is_shared"] is False
+    assert row["updated_at"]
+    assert "share_token" not in row
+
+
+@pytest.mark.asyncio
+async def test_decorative_widgets_source_optional_but_must_be_registered():
+    store = share.MemoryShareStore()
+    store.data_source_ids = {1, 2, 3}
+    service = _service(store)
+    widgets = [
+        {"type": "metric", "data_source_id": 1, "refresh_seconds": 5},
+        {"type": "clock", "refresh_seconds": 5},
+        {
+            "type": "image",
+            "options": {"file_uuid": "f-9"},
+            "refresh_seconds": 5,
+        },
+    ]
+    saved = await service.save_dashboard(
+        tenant_id=TENANT,
+        dashboard_id=None,
+        code="board-decor",
+        name="装饰",
+        layout_config=None,
+        widgets_config=widgets,
+        theme_config=None,
+        tv_config=None,
+    )
+    clock = next(w for w in saved["widgets_config"] if w["type"] == "clock")
+    assert "data_source_id" not in clock
+
+    base = dict(
+        tenant_id=TENANT,
+        dashboard_id=None,
+        name="坏",
+        layout_config=None,
+        theme_config=None,
+        tv_config=None,
+    )
+    with pytest.raises(ValueError):
+        await service.save_dashboard(
+            code="b1",
+            widgets_config=[
+                {"type": "clock", "data_source_id": 999, "refresh_seconds": 5}
+            ],
+            **base,
+        )
+    with pytest.raises(ValueError):
+        await service.save_dashboard(
+            code="b2",
+            widgets_config=[{"type": "metric", "refresh_seconds": 5}],
+            **base,
+        )
+    with pytest.raises(ValueError):
+        await service.save_dashboard(
+            code="b3",
+            widgets_config=[
+                {"type": "metric", "data_source_id": 999, "refresh_seconds": 5}
+            ],
+            **base,
+        )
+
+
+def test_create_dashboard_code_conflict_returns_4xx():
+    store = share.MemoryShareStore()
+    service = _service(store)
+    client = _client(service)
+    body = {
+        "code": "dup-code",
+        "name": "一",
+        "widgets_config": [
+            {"type": "clock", "refresh_seconds": 5}
+        ],
+    }
+    first = client.post("/api/v1/apps/kuaireport/dashboards", json=body)
+    assert first.status_code == 200
+    second = client.post("/api/v1/apps/kuaireport/dashboards", json=body)
+    assert second.status_code == 400
+    assert "already exists" in second.json()["detail"]
+
+
+def _fake_request(headers=None, client_host="9.9.9.9", scheme="http") -> Request:
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "query_string": b"",
+        "headers": [
+            (key.lower().encode(), value.encode())
+            for key, value in (headers or {}).items()
+        ],
+        "client": (client_host, 50000),
+        "server": ("testserver", 80),
+        "scheme": scheme,
+    }
+    return Request(scope)
+
+
+def test_forwarded_headers_only_trusted_with_configured_proxies(monkeypatch):
+    for key in ("TRUSTED_PROXY_IPS", "FORWARDED_ALLOW_IPS", "TRUSTED_PROXIES"):
+        monkeypatch.delenv(key, raising=False)
+
+    req = _fake_request({"X-Forwarded-For": "1.2.3.4"}, client_host="9.9.9.9")
+    assert client_ip_mod.get_client_ip(req) == "9.9.9.9"
+
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "10.0.0.0/8")
+    assert client_ip_mod.get_client_ip(req) == "9.9.9.9"
+
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "9.9.9.0/24")
+    assert client_ip_mod.get_client_ip(req) == "1.2.3.4"
+
+    https_via_proxy = _fake_request(
+        {"X-Forwarded-Proto": "https"}, client_host="9.9.9.9"
+    )
+    assert client_ip_mod.request_is_https(https_via_proxy) is True
+
+    monkeypatch.delenv("TRUSTED_PROXY_IPS")
+    assert client_ip_mod.request_is_https(https_via_proxy) is False
+    direct_https = _fake_request({}, client_host="9.9.9.9", scheme="https")
+    assert client_ip_mod.request_is_https(direct_https) is True

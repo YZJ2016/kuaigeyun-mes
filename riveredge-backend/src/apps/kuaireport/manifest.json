@@ -14,7 +14,7 @@
     "title": "app.kuaireport.name",
     "icon": "barChart",
     "path": "/apps/kuaireport",
-    "permission": "kuaireport:data-source:display"
+    "permission": "kuaireport:report:display"
   },
   "permissions": [
     "kuaireport:data-source:display",
@@ -22,7 +22,16 @@
     "kuaireport:data-source:create",
     "kuaireport:data-source:update",
     "kuaireport:data-source:delete",
-    "kuaireport:report:execute"
+    "kuaireport:report:execute",
+    "kuaireport:report:display",
+    "kuaireport:report:publish",
+    "kuaireport:report:export",
+    "kuaireport:report:design",
+    "kuaireport:dashboard:display",
+    "kuaireport:dashboard:design",
+    "kuaireport:share:manage",
+    "kuaireport:distribution:display",
+    "kuaireport:distribution:manage"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

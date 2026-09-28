@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from apps.kuaireport.schemas.execute import ExecuteReportResult
 from apps.kuaireport.services.subscription_service import (
@@ -19,6 +20,7 @@ from apps.kuaireport.slices import s149_distribution as dist
 from apps.kuaireport.slices.s149_distribution import (
     RESOURCE_REPORT,
     DistributionError,
+    DistributionNotFoundError,
     TortoiseDistributionStore,
     backfill_dashboard_versions,
     can_view_by_grant,
@@ -31,6 +33,11 @@ from apps.kuaireport.slices.s149_distribution import (
 )
 from core.schemas.message_template import SendMessageResponse
 from core.schemas.scheduled_task import ScheduledTaskCreate
+from infra.exceptions.exceptions import (
+    AuthorizationError,
+    NotFoundError,
+    ValidationError,
+)
 
 
 class MemoryStore:
@@ -571,9 +578,12 @@ async def test_execute_failure_hides_password_and_path():
     ):
         result = await SubscriptionService(store).execute_subscription(1, 3)
     assert result["success"] is False
-    assert result["excel_attached"] is False
+    assert result["excel_attached"] is True
     assert store.subs[3]["last_run_status"] == "failed"
-    assert store.subs[3]["last_run_error"] == "订阅执行失败"
+    last_error = store.subs[3]["last_run_error"]
+    assert "订阅执行失败" in last_error
+    assert "password" not in last_error
+    assert "C:\\" not in last_error
     assert "password" not in store.subs[3]["last_run_error"]
     assert "C:" not in store.subs[3]["last_run_error"]
 
@@ -749,3 +759,184 @@ async def test_executor_calls_execute_subscription():
         3, SimpleNamespace(task_config={})
     )
     assert missing["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_grant_rejects_non_view_permission():
+    """permission 白名单只允许 view；can_view_by_grant 也只查 view。"""
+    store = MemoryStore()
+    _seed_report(store)
+    store.roles.add((1, 3))
+    with pytest.raises(DistributionError, match="view"):
+        await grant_share(1, RESOURCE_REPORT, 10, 3, permission="edit", store=store)
+    assert store.grants == []
+
+    saved = await grant_share(1, RESOURCE_REPORT, 10, 3, permission="view", store=store)
+    assert saved["permission"] == "view"
+
+    rows = await dist.list_grants(1, RESOURCE_REPORT, 10, store=store)
+    assert rows[0]["resource_type"] == RESOURCE_REPORT
+    assert rows[0]["resource_id"] == 10
+    assert rows[0]["role_id"] == 3
+    assert rows[0]["permission"] == "view"
+
+
+def test_raise_http_maps_exception_statuses():
+    with pytest.raises(HTTPException) as not_found:
+        dist._raise_http(DistributionNotFoundError("报表不存在"))
+    assert not_found.value.status_code == 404
+
+    with pytest.raises(HTTPException) as infra_not_found:
+        dist._raise_http(NotFoundError("报表", "1"))
+    assert infra_not_found.value.status_code == 404
+
+    with pytest.raises(HTTPException) as forbidden:
+        dist._raise_http(AuthorizationError("权限不足"))
+    assert forbidden.value.status_code == 403
+
+    with pytest.raises(HTTPException) as invalid:
+        dist._raise_http(ValidationError("bad"))
+    assert invalid.value.status_code == 422
+
+    with pytest.raises(HTTPException) as dist_err:
+        dist._raise_http(DistributionError("授权已存在"))
+    assert dist_err.value.status_code == 422
+
+    with pytest.raises(HTTPException) as unknown:
+        dist._raise_http(RuntimeError("boom"))
+    assert unknown.value.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_subscription_rolls_back_when_task_creation_fails():
+    """定时任务创建抛错时，订阅行随事务回滚。"""
+    store = MemoryStore()
+    _seed_report(store)
+    store.users.add((1, 5))
+
+    async def boom(tenant_id, fields):
+        raise RuntimeError("task save failed")
+
+    with pytest.raises(RuntimeError, match="task save failed"):
+        await create_subscription(1, 10, "早报", [5], store=store, create_task=boom)
+    assert store.subs == {}
+
+
+@pytest.mark.asyncio
+async def test_subscription_rolls_back_when_uuid_writeback_fails(monkeypatch):
+    """回写失败时订阅行回滚；默认任务工厂收到的是事务连接（任务同事务，无孤儿）。"""
+    store = MemoryStore()
+    _seed_report(store)
+    store.users.add((1, 5))
+    store.conn = "TX-CONN"
+    captured = {}
+
+    async def fake_default(tenant_id, fields, using_db=None):
+        captured["using_db"] = using_db
+        return SimpleNamespace(uuid="task-uuid-9")
+
+    async def fail_writeback(*_args, **_kwargs):
+        raise RuntimeError("writeback failed")
+
+    monkeypatch.setattr(dist, "_default_create_task", fake_default)
+    store.set_subscription_task_uuid = fail_writeback
+    with pytest.raises(RuntimeError, match="writeback failed"):
+        await create_subscription(1, 10, "早报", [5], store=store)
+    assert store.subs == {}
+    assert captured["using_db"] == "TX-CONN"
+
+
+@pytest.mark.asyncio
+async def test_create_subscription_passes_tx_connection_to_default_task(monkeypatch):
+    """默认路径把事务连接传给 ScheduledTaskService（同事务，无孤儿任务）。"""
+    store = MemoryStore()
+    _seed_report(store)
+    store.users.add((1, 5))
+    store.conn = "TX-CONN"
+    captured = {}
+
+    async def fake_default(tenant_id, fields, using_db=None):
+        captured["using_db"] = using_db
+        captured["fields"] = fields
+        return SimpleNamespace(uuid="task-uuid-tx")
+
+    monkeypatch.setattr(dist, "_default_create_task", fake_default)
+    saved = await create_subscription(1, 10, "早报", [5], store=store)
+    assert captured["using_db"] == "TX-CONN"
+    assert saved["scheduled_task_uuid"] == "task-uuid-tx"
+
+
+@pytest.mark.asyncio
+async def test_default_create_task_forwards_using_db(monkeypatch):
+    captured = {}
+
+    class FakeService:
+        @staticmethod
+        async def create_scheduled_task(tenant_id, data, using_db=None):
+            captured["using_db"] = using_db
+            captured["type"] = data.type
+            return SimpleNamespace(uuid="u-1")
+
+    monkeypatch.setattr(dist, "ScheduledTaskService", FakeService)
+    fields = {
+        "name": "早报",
+        "code": "krps1",
+        "type": TASK_TYPE,
+        "trigger_type": "cron",
+        "trigger_config": {"cron": "0 8 * * 1-5"},
+        "task_config": {"subscription_id": 1},
+        "is_active": True,
+    }
+    task = await dist._default_create_task(1, fields, using_db="CONN")
+    assert captured["using_db"] == "CONN"
+    assert captured["type"] == TASK_TYPE
+    assert task.uuid == "u-1"
+
+
+@pytest.mark.asyncio
+async def test_execute_partial_recipient_failure_aggregates():
+    """单收件人失败不中断整批；聚合后 last_run_status=failed 且错误脱敏。"""
+    store = MemoryStore()
+    store.users.update({(1, 5), (1, 6)})
+    store.subs[3] = {
+        "id": 3,
+        "tenant_id": 1,
+        "report_id": 10,
+        "name": "早报",
+        "channel": "inbox",
+        "recipient_user_ids": [5, 6],
+        "is_active": True,
+        "attach_excel": False,
+        "filters": {},
+    }
+    calls: list[str] = []
+
+    async def fake_send(*args, **kwargs):
+        request = kwargs["request"]
+        calls.append(request.recipient)
+        if request.recipient == "5":
+            return SendMessageResponse(success=False, error="smtp password=abc /tmp/x")
+        return SendMessageResponse(success=True)
+
+    async def fake_execute(tenant_id, report_id, filters):
+        return ExecuteReportResult(data=[{"qty": 1}], total=1, summary={})
+
+    with (
+        patch(
+            "apps.kuaireport.services.execute_service.execute_report",
+            fake_execute,
+        ),
+        patch(
+            "apps.kuaireport.services.subscription_service.MessageService.send_message",
+            fake_send,
+        ),
+    ):
+        result = await SubscriptionService(store).execute_subscription(1, 3)
+
+    assert calls == ["5", "6"]
+    assert result["success"] is False
+    assert store.subs[3]["last_run_status"] == "failed"
+    err = store.subs[3]["last_run_error"]
+    assert "接收人 5" in err
+    assert "password" not in err
+    assert "/tmp" not in err

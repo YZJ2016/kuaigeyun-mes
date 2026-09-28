@@ -14,7 +14,6 @@ class DataSourceCreate(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
     description: Optional[str] = None
     is_default: bool = False
-    is_system: bool = False
 
 
 class DataSourceUpdate(BaseModel):
@@ -25,7 +24,6 @@ class DataSourceUpdate(BaseModel):
     config: Optional[dict[str, Any]] = None
     description: Optional[str] = None
     is_default: Optional[bool] = None
-    is_system: Optional[bool] = None
 
 
 class DataSourceOut(BaseModel):

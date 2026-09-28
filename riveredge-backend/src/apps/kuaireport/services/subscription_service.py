@@ -89,7 +89,7 @@ class SubscriptionService:
         filters = row.get("filters") if isinstance(row.get("filters"), dict) else {}
         executed = await execute_report(tenant_id, int(row["report_id"]), filters)
         payload = _execute_payload(executed)
-        if payload["success"] is False:
+        if payload.get("success") is not True:
             await store.mark_run(tenant_id, subscription_id, "failed", "报表执行失败")
             return {"success": False, "error": "报表执行失败", "excel_attached": False}
         content = _message_body(
@@ -100,6 +100,8 @@ class SubscriptionService:
         attachment = await _workbook_attachment(tenant_id, row, filters)
 
         # 站内信走已有 MessageService.send_message。inbox 映射为 internal。
+        # 逐收件人容错：单个失败不中断整批，结束后聚合写 last_run_status。
+        failures: list[str] = []
         for user_id in recipient_ids:
             request_fields: dict[str, Any] = {
                 "type": INTERNAL_MESSAGE_TYPE,
@@ -109,15 +111,25 @@ class SubscriptionService:
             }
             if attachment is not None:
                 request_fields["attachment"] = attachment
-            response = await MessageService.send_message(
-                tenant_id=tenant_id,
-                request=SendMessageRequest(**request_fields),
-            )
+            try:
+                response = await MessageService.send_message(
+                    tenant_id=tenant_id,
+                    request=SendMessageRequest(**request_fields),
+                )
+            except Exception as exc:
+                failures.append(f"接收人 {user_id}：{public_error(str(exc))}")
+                continue
             if not response.success:
-                safe = public_error(response.error or "")
-                await store.mark_run(tenant_id, subscription_id, "failed", safe)
-                return {"success": False, "error": safe, "excel_attached": False}
+                failures.append(f"接收人 {user_id}：{public_error(response.error or '')}")
 
+        if failures:
+            safe = public_error("；".join(failures))
+            await store.mark_run(tenant_id, subscription_id, "failed", safe)
+            return {
+                "success": False,
+                "error": safe,
+                "excel_attached": attachment is not None,
+            }
         await store.mark_run(tenant_id, subscription_id, "success", None)
         return {"success": True, "excel_attached": attachment is not None}
 
