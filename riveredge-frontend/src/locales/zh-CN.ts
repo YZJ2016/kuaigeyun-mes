@@ -19688,10 +19688,18 @@ export default {
   'app.kuaicaiwu.bankAccount.batchSetActive': '已将 {{count}} 个银行账户设为{{status}}',
   'app.kuaicaiwu.bankAccount.status.disabled': '停用',
   'app.kuaicaiwu.bankAccount.form.accountNumber': '银行账号',
-  'app.kuaicaiwu.bankAccount.importHint': '将网银或柜台导出的对账单粘贴到下方（暂不支持银企直联）。首行表头示例：交易日期,收支方向,金额,摘要；收支方向填「收入」或「支出」。',
-  'app.kuaicaiwu.bankAccount.importContent': '对账单内容',
-  'app.kuaicaiwu.bankAccount.importContentRequired': '请粘贴对账单内容',
-  'app.kuaicaiwu.bankAccount.importPlaceholder': '交易日期,收支方向,金额,摘要\\n2026-05-01,收入,10000.00,期初调账',
+  'app.kuaicaiwu.bankAccount.importHint': '在明细中逐行填写，或点「导入」用 UniImport 批量灌入（暂不支持银企直联）。',
+  'app.kuaicaiwu.bankAccount.import.transactionDate': '交易日期',
+  'app.kuaicaiwu.bankAccount.import.direction': '收支方向',
+  'app.kuaicaiwu.bankAccount.import.amount': '金额',
+  'app.kuaicaiwu.bankAccount.import.linesTitle': '对账明细',
+  'app.kuaicaiwu.bankAccount.import.linesRequired': '请至少填写一行对账明细',
+  'app.kuaicaiwu.bankAccount.importUniImportTitle': '批量导入对账明细',
+  'app.kuaicaiwu.bankAccount.importFilledLines': '已填入 {{count}} 行明细，确认无误后保存',
+  'app.kuaicaiwu.bankAccount.importHeaderError': '导入表头需包含交易日期、收支方向、金额',
+  'app.kuaicaiwu.bankAccount.importExample.transactionDate': '2026-05-01',
+  'app.kuaicaiwu.bankAccount.importExample.amount': '10000.00',
+  'app.kuaicaiwu.bankAccount.importExample.summary': '期初调账',
   'app.kuaicaiwu.bankAccount.importTitleWithAccount': '导入对账单 - {{name}}',
   'app.kuaicaiwu.bankAccount.transactionsTitleWithAccount': '{{name}} - 银行流水',
   'app.kuaicaiwu.prepayment.statCustomerTotal': '客户预收余额合计',
@@ -29050,6 +29058,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.bank-account-statement-uniimport-r01.title':
+    '银行账户导入对账单改为表单明细并可 UniImport',
+  'pages.dashboard.updateLog.entries.bank-account-statement-uniimport-r01.description':
+    '「导入对账单」改为表单弹窗+对账明细行（日期/收支方向/金额/摘要），可手工增删行；明细区支持 UniImport 批量灌入后保存写入流水并更新余额。',
   'pages.dashboard.updateLog.entries.finance-invoice-fill-number-approved-r01.title':
     '采购/销售发票已审核后仍可补全发票号码',
   'pages.dashboard.updateLog.entries.finance-invoice-fill-number-approved-r01.description':
