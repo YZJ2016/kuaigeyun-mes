@@ -434,7 +434,7 @@ export default defineConfig({
       // ⚠️ 关键修复：使用经典的JSX运行时，确保兼容性
       jsxRuntime: 'automatic', // 使用自动JSX运行时，不需要显式导入React
     }),
-    // P5-1：预压缩产物（.gz/.br），Caddy file_server precompressed 直出，弱网 Transfer Size 下降
+    // P5-1：本地/CI 构建仍生成 .gz/.br；不提交 Git。生产 update 由 precompress_web_dist 补齐。
     viteCompression({
       algorithm: 'gzip',
       ext: '.gz',
