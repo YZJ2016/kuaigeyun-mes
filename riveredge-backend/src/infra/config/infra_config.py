@@ -51,6 +51,10 @@ class InfraSettings(BaseSettings):
         default=True,
         description="是否启用 ReDoc 与 OpenAPI schema（生产小内存可关闭以省约 MB 级常驻内存）",
     )
+    SENSITIVE_WORD_LEXICON_ENABLED: bool = Field(
+        default=True,
+        description="是否加载敏感词 lexicon.pack；fast-deploy OPT_SENSITIVE_LEXICON=0 时写入 false",
+    )
     CLIENT_CHANNEL_WRITE_GUARD_ENABLED: bool = Field(
         default=True,
         description="是否对 /api 写请求强制要求官方 X-Client-Channel（pc/android/…/integration）",

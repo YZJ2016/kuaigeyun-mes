@@ -89,6 +89,7 @@ import {
   stripLabRequestExtensionFormValues,
   type LabRequestOutsourceCertLine,
 } from '../../utils/labRequestExtension';
+import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
 import {
   labRequestApi,
   type LabRequest,
@@ -1522,6 +1523,8 @@ const LabRequestsPage: React.FC = () => {
           setModalOpen(true);
         }}
         showExportButton={!!perms.canExport}
+        params={isBoard ? undefined : { listScope }}
+        skipFuzzyPinyinClientFilter
         onExport={async () => {
           const items = await fetchAllListItems<LabRequest>(async ({ skip, limit }) => {
             const res = await labRequestApi.list({
@@ -1545,16 +1548,19 @@ const LabRequestsPage: React.FC = () => {
             rows as Record<string, unknown>[],
           );
         }}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const { keyword, status, business_type, priority } =
+            resolvePlmStandardDocListSearch(searchFormValues, []);
           const res = await labRequestApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            keyword: params.keyword,
-            status: params.status,
-            business_type: params.business_type,
-            priority: params.priority,
+            keyword,
+            status,
+            business_type,
+            priority,
             board: isBoard || undefined,
-            mine: !isBoard && listScope === 'mine' ? true : undefined,
+            mine:
+              !isBoard && params.listScope === 'mine' ? true : undefined,
           });
           return { data: res.items, success: true, total: res.total };
         }}

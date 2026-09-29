@@ -699,6 +699,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 表头文案 → 字段名（与 buildFactoryImportTemplate.importHeaderMap 一致；内部传给 UniImport.importFieldMap）
    */
   importFieldMap?: Record<string, string>
+  /** 导入模板修订号（传给 UniImport，模板列变更时 bump） */
+  importTemplateRevision?: string
   /**
    * 是否启用自定义导入字段选择
    */
@@ -1180,6 +1182,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   importColumnOptions,
   importTemplateName,
   importFieldMap,
+  importTemplateRevision,
   enableCustomImport = false,
   enableRelationImport = false,
   relationImportConfig,
@@ -4300,6 +4303,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             exampleRow={effectiveImportConfig.exampleRow}
             columnOptions={effectiveImportConfig.columnOptions}
             importFieldMap={effectiveImportConfig.fieldMap}
+            importTemplateRevision={importTemplateRevision}
             enableXlsxTemplate
             enableMappingImport
             enableImportPreview

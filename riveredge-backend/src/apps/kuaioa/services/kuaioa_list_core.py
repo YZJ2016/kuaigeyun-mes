@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time as dt_time
+from datetime import date, datetime, time as dt_time, timedelta
 from typing import Any, Dict, Optional, Type
 
 from tortoise.expressions import Q
@@ -23,10 +23,44 @@ def build_keyword_q(keyword: Optional[str], *fields: str) -> Q:
     return q
 
 
+def _excel_serial_to_date(serial: float) -> date:
+    """OOXML 数值日期（1900 日期系统，与 Excel/WPS 默认一致）。"""
+    if serial < 0 or serial > 1_000_000:
+        raise ValueError(f"无效的 Excel 日期序列: {serial}")
+    epoch = date(1899, 12, 30)
+    return epoch + timedelta(days=int(serial))
+
+
+def _parse_calendar_date_text(raw: str) -> Optional[date]:
+    head = raw.strip()
+    for sep in (" ", "T"):
+        if sep in head:
+            head = head.split(sep, 1)[0].strip()
+    if len(head) >= 10 and head[4:5] == "-" and head[7:8] == "-":
+        return date.fromisoformat(head[:10])
+    for sep in ("/", "."):
+        if sep in head:
+            parts = head.split(sep)
+            if len(parts) == 3 and all(p.isdigit() for p in parts):
+                y, m, d = (int(parts[0]), int(parts[1]), int(parts[2]))
+                return date(y, m, d)
+    if len(head) == 8 and head.isdigit():
+        return date(int(head[0:4]), int(head[4:6]), int(head[6:8]))
+    return None
+
+
 def parse_optional_date(value: Optional[str]) -> Optional[date]:
     if value is None or not str(value).strip():
         return None
-    return date.fromisoformat(str(value).strip()[:10])
+    raw = str(value).strip()
+    parsed = _parse_calendar_date_text(raw)
+    if parsed is not None:
+        return parsed
+    if raw.isdigit() or (
+        raw.replace(".", "", 1).isdigit() and raw.count(".") <= 1
+    ):
+        return _excel_serial_to_date(float(raw))
+    raise ValueError(f"无法解析日期: {raw}")
 
 
 def date_range_q(field: str, start: Optional[str], end: Optional[str]) -> Q:
@@ -48,8 +82,20 @@ async def generate_daily_code(
 ) -> str:
     today = today_site_str().replace("-", "")
     base = f"{prefix}{today}"
-    count = await model.filter(tenant_id=tenant_id, **{f"{code_field}__startswith": base}).count()
-    return f"{base}{count + 1:04d}"
+    rows = await model.filter(
+        tenant_id=tenant_id, **{f"{code_field}__startswith": base}
+    ).only(code_field)
+    max_seq = 0
+    suffix_len = 4
+    for row in rows:
+        code = str(getattr(row, code_field, "") or "")
+        if not code.startswith(base) or len(code) < len(base) + suffix_len:
+            continue
+        try:
+            max_seq = max(max_seq, int(code[-suffix_len:]))
+        except ValueError:
+            continue
+    return f"{base}{max_seq + 1:04d}"
 
 
 def model_to_dict(row: Model, extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

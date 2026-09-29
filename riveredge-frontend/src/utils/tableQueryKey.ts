@@ -128,9 +128,27 @@ export function pickSearchString(
   key: string,
 ): string | undefined {
   const raw = searchFormValues?.[key]
-  if (raw == null) return undefined
+  if (raw == null || raw === '') return undefined
+  if (Array.isArray(raw)) {
+    const first = String(raw[0] ?? '').trim()
+    return first || undefined
+  }
   const trimmed = String(raw).trim()
   return trimmed || undefined
+}
+
+/** 模糊 keyword，否则依次尝试列内高级搜索字段 */
+export function pickListSearchKeywordOrFields(
+  searchFormValues?: Record<string, unknown> | null,
+  ...fieldKeys: string[]
+): string | undefined {
+  const kw = pickListSearchKeyword(searchFormValues)
+  if (kw) return kw
+  for (const key of fieldKeys) {
+    const v = pickSearchString(searchFormValues, key)
+    if (v) return v
+  }
+  return undefined
 }
 
 /** 高级搜索日期字段 → YYYY-MM-DD（兼容 dayjs / Date / ISO 字符串） */

@@ -16,7 +16,56 @@ export const PLM_CHANGE_PINNED_STATUS_FIELD = 'status';
 
 function pickString(search: Record<string, unknown> | null | undefined, key: string) {
   const v = search?.[key];
+  if (v == null || v === '') return undefined;
+  if (Array.isArray(v)) {
+    const first = String(v[0] ?? '').trim();
+    return first || undefined;
+  }
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    return String(v);
+  }
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
+
+function pickBoolean(search: Record<string, unknown> | null | undefined, key: string) {
+  const v = search?.[key];
+  if (v === true || v === 'true') return true;
+  if (v === false || v === 'false') return false;
+  return undefined;
+}
+
+/** UniTable 顶栏模糊词 + 列内高级搜索（title/code 等）→ API keyword */
+export function resolvePlmListKeyword(
+  searchFormValues?: Record<string, unknown> | null,
+  fallbackFieldKeys: string[] = ['title'],
+): string | undefined {
+  const s = searchFormValues ?? {};
+  const kw = pickString(s, 'keyword');
+  if (kw) return kw;
+  for (const key of fallbackFieldKeys) {
+    const v = pickString(s, key);
+    if (v) return v;
+  }
+  return undefined;
+}
+
+/** 快研发单据列表通用：模糊/钉住/高级搜索 → API 查询字段（勿从 params 读 keyword） */
+export function resolvePlmStandardDocListSearch(
+  searchFormValues?: Record<string, unknown> | null,
+  keywordFallbackKeys: string[] = ['title'],
+) {
+  const s = searchFormValues ?? {};
+  return {
+    keyword: resolvePlmListKeyword(s, keywordFallbackKeys),
+    status: pickString(s, 'status'),
+    business_type: pickString(s, 'business_type'),
+    priority: pickString(s, 'priority'),
+    doc_kind: pickString(s, 'doc_kind'),
+    doc_type: pickString(s, 'doc_type'),
+    request_kind: pickString(s, 'request_kind'),
+    plan_year: pickString(s, 'plan_year'),
+    is_active: pickBoolean(s, 'is_active'),
+  };
 }
 
 function resolvePlmSort(sort?: Record<string, unknown>) {

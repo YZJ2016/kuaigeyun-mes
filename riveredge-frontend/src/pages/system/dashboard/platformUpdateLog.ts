@@ -44,6 +44,102 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-plm-list-search-batch-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.description',
+  },
+  {
+    id: 'kuaiplm-lab-request-list-search-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-batch-import-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.description',
+  },
+  {
+    id: 'chunked-import-write-rate-limit-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.chunked-import-write-rate-limit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.chunked-import-write-rate-limit-r01.description',
+  },
+  {
+    id: 'uniimport-xlsx-self-closing-cell-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uniimport-xlsx-self-closing-cell-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uniimport-xlsx-self-closing-cell-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-import-uniimport-code-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-import-uniimport-code-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-import-uniimport-code-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-import-date-normalize-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-import-date-normalize-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-import-date-normalize-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-import-template-code-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-import-template-code-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-import-template-code-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-import-xlsx-date-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-import-xlsx-date-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-import-xlsx-date-r01.description',
+  },
+  {
+    id: 'deploy-wizard-optional-deps-menu-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.deploy-wizard-optional-deps-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.deploy-wizard-optional-deps-menu-r01.description',
+  },
+  {
+    id: 'deploy-wizard-migrate-menu-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.deploy-wizard-migrate-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.deploy-wizard-migrate-menu-r01.description',
+  },
+  {
+    id: 'deploy-optional-backend-deps-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.deploy-optional-backend-deps-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.deploy-optional-backend-deps-r01.description',
+  },
+  {
     id: 'permission-governance-affiliate-r01',
     date: '2026-09-28',
     type: 'improvement',

@@ -9,6 +9,16 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'haoligo-order-tracking-prepay-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-order-tracking-prepay-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-order-tracking-prepay-r01.description',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+  },
+  {
     id: 'engineering-drawing-l33-funide-r01',
     date: '2026-09-24',
     type: 'feature',

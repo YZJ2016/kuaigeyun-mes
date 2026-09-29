@@ -187,6 +187,8 @@ type Props = {
   importColumnOptions?: Array<string[] | undefined>;
   importFieldMap?: Record<string, string>;
   importTemplateName?: string;
+  /** 模板列变更时 bump，使 UniImport 在线表与下载模板一致 */
+  importTemplateRevision?: string;
 };
 
 type KuaioaListScope = 'all' | 'expiring';
@@ -245,6 +247,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   importColumnOptions,
   importFieldMap,
   importTemplateName,
+  importTemplateRevision,
 }) => {
   const { t } = useTranslation();
   const currentUser = useCurrentUser();
@@ -810,6 +813,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         importColumnOptions={importColumnOptions}
         importFieldMap={importFieldMap}
         importTemplateName={importTemplateName}
+        importTemplateRevision={importTemplateRevision}
       />
 
       <FormModalTemplate

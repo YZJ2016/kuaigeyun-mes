@@ -95,6 +95,7 @@ special_deps_status_label() {
         disabled-present) echo "浏览器就绪 · 补装关闭" ;;
         disabled-missing) echo "补装关闭 · 浏览器未装" ;;
         pending) echo "待配置数据库" ;;
+        opt-off) echo "选装未启用" ;;
         n/a|na) echo "不适用" ;;
         old:*) echo "需升级 (${1#old:})" ;;
         *) echo "$1" ;;
@@ -103,8 +104,8 @@ special_deps_status_label() {
 
 print_special_deps_header() {
     echo "=== 可选能力依赖 ==="
-    echo "  仅在使用打印 PDF、发票 OCR、KU-AI 向量或敏感词过滤时需要；不用对应功能可忽略未就绪项。"
-    echo "  迁移/启动时会按需尝试安装；完整日志: DEPLOY_SPECIAL_DEPS_VERBOSE=1 ./fast-deploy/deploy.sh start"
+    echo "  在 fast-deploy/config/deploy.env 用 OPT_*=1 启用后再安装/校验；默认均为 0（选装未开）。"
+    echo "  完整日志: DEPLOY_SPECIAL_DEPS_VERBOSE=1 ./fast-deploy/deploy.sh check"
     echo ""
 }
 
@@ -231,6 +232,108 @@ load_deploy_env() {
     # Taskiq worker/scheduler 就绪等待（低内存机 import 慢，sleep 也会因 swap 被拉长）
     TASKIQ_START_TIMEOUT="${TASKIQ_START_TIMEOUT:-180}"
     LOW_SPEC_MODE="${LOW_SPEC_MODE:-0}"
+    OPT_INVOICE_OCR="${OPT_INVOICE_OCR:-0}"
+    OPT_PDF_PRINT="${OPT_PDF_PRINT:-0}"
+    OPT_KUAI_VECTOR="${OPT_KUAI_VECTOR:-0}"
+    OPT_SENSITIVE_LEXICON="${OPT_SENSITIVE_LEXICON:-0}"
+}
+
+# deploy.env 选装开关：1 / true / yes / on 视为启用；未设置时在 load_deploy_env 已默认 0
+deploy_env_flag_enabled() {
+    local raw="${1:-}"
+    case "$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+deploy_opt_invoice_ocr_enabled() {
+    load_deploy_env
+    deploy_env_flag_enabled "${OPT_INVOICE_OCR:-0}"
+}
+
+deploy_opt_pdf_print_enabled() {
+    load_deploy_env
+    deploy_env_flag_enabled "${OPT_PDF_PRINT:-0}"
+}
+
+deploy_opt_kuaiai_vector_enabled() {
+    load_deploy_env
+    deploy_env_flag_enabled "${OPT_KUAI_VECTOR:-0}"
+}
+
+deploy_opt_sensitive_lexicon_enabled() {
+    load_deploy_env
+    deploy_env_flag_enabled "${OPT_SENSITIVE_LEXICON:-0}"
+}
+
+# 将选装开关同步到 riveredge-backend/.env（后端运行时唯一入口）
+sync_deploy_optional_features_to_backend_env() {
+    ensure_env_file
+    if deploy_opt_sensitive_lexicon_enabled; then
+        set_env_value SENSITIVE_WORD_LEXICON_ENABLED true
+    else
+        set_env_value SENSITIVE_WORD_LEXICON_ENABLED false
+    fi
+}
+
+ensure_sensitive_lexicon_if_enabled() {
+    if deploy_opt_sensitive_lexicon_enabled; then
+        ensure_sensitive_lexicon_pack || return 1
+        return 0
+    fi
+    log_special "敏感词选装未启用 (OPT_SENSITIVE_LEXICON=0)，跳过 lexicon.pack"
+    return 0
+}
+
+deploy_opt_flag_label() {
+    if deploy_env_flag_enabled "${1:-0}"; then
+        printf '%s' "已启用"
+    else
+        printf '%s' "未启用"
+    fi
+}
+
+set_deploy_opt_flag() {
+    local key=$1 val=$2
+    case "$key" in
+        OPT_INVOICE_OCR|OPT_PDF_PRINT|OPT_KUAI_VECTOR|OPT_SENSITIVE_LEXICON) ;;
+        *)
+            log_error "未知选装项: $key"
+            return 1
+            ;;
+    esac
+    case "$val" in
+        0|1) ;;
+        *)
+            log_error "选装值须为 0 或 1"
+            return 1
+            ;;
+    esac
+    set_deploy_env_value "$key" "$val"
+    load_deploy_env
+    sync_deploy_optional_features_to_backend_env
+}
+
+toggle_deploy_opt_flag() {
+    local key=$1 current new_val
+    load_deploy_env
+    case "$key" in
+        OPT_INVOICE_OCR) current="${OPT_INVOICE_OCR:-0}" ;;
+        OPT_PDF_PRINT) current="${OPT_PDF_PRINT:-0}" ;;
+        OPT_KUAI_VECTOR) current="${OPT_KUAI_VECTOR:-0}" ;;
+        OPT_SENSITIVE_LEXICON) current="${OPT_SENSITIVE_LEXICON:-0}" ;;
+        *)
+            log_error "未知选装项: $key"
+            return 1
+            ;;
+    esac
+    if deploy_env_flag_enabled "$current"; then
+        new_val=0
+    else
+        new_val=1
+    fi
+    set_deploy_opt_flag "$key" "$new_val"
 }
 
 # shellcheck source=lib/low_spec_mode.sh
@@ -2008,6 +2111,7 @@ apply_app_config() {
         # PC 前端 / Expo Web / 工位 Vite：loopback + 局域网 IP
         set_env_value CORS_ORIGINS "http://${server_ip}:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT},http://localhost:${FRONTEND_PORT},http://${server_ip}:8098,http://127.0.0.1:8098,http://localhost:8098,http://${server_ip}:8081,http://127.0.0.1:8081,http://localhost:8081,http://${server_ip}:8300,http://127.0.0.1:8300,http://localhost:8300"
     fi
+    sync_deploy_optional_features_to_backend_env
 }
 
 blue_green_deploy_status_label() {
@@ -2184,10 +2288,17 @@ cmd_configure() {
     print_configure_summary
 }
 
-# 后端 uv sync/run extras：ocr 始终开启（发票 PDF）；pdf（Playwright 包）始终保留。
-# Chromium 浏览器是否后台补装由 PLAYWRIGHT_POSTINSTALL_ENABLE 单独控制，勿与包安装混为一谈。
+# 后端 uv sync/run extras：由 deploy.env OPT_INVOICE_OCR / OPT_PDF_PRINT 选装。
+# Chromium 浏览器是否后台补装由 OPT_PDF_PRINT + PLAYWRIGHT_POSTINSTALL_ENABLE 控制。
 backend_uv_extra_args() {
-    printf '%s' "--extra ocr --extra pdf"
+    local args=""
+    if deploy_opt_invoice_ocr_enabled; then
+        args="${args} --extra ocr"
+    fi
+    if deploy_opt_pdf_print_enabled; then
+        args="${args} --extra pdf"
+    fi
+    printf '%s' "$args"
 }
 
 # glibc 多 arena 收敛：降低 CPython 多线程下 RSS 虚高（生产 API / Worker 启动路径唯一出口）
@@ -2250,7 +2361,7 @@ sync_backend_deps() {
     apply_cn_mirrors
     ensure_uv || { log_error "Python 依赖同步失败"; exit 1; }
     log_info "同步 Python 依赖..."
-    log_special "uv sync extras: $(backend_uv_extra_args)（OCR+Playwright 包；Chromium 补装见 PLAYWRIGHT_POSTINSTALL_ENABLE）"
+    log_special "uv sync extras:$(backend_uv_extra_args)（选装见 OPT_INVOICE_OCR / OPT_PDF_PRINT；Chromium 见 PLAYWRIGHT_POSTINSTALL_ENABLE）"
     (
         cd "$BACKEND_DIR"
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
@@ -2261,13 +2372,14 @@ sync_backend_deps() {
     ) || { log_error "Python 依赖同步失败"; exit 1; }
     if is_windows_gitbash; then
         ensure_pyzbar_windows_native
-    elif [ "$(uname -s)" = "Linux" ]; then
+    elif [ "$(uname -s)" = "Linux" ] && deploy_opt_invoice_ocr_enabled; then
         ensure_linux_invoice_parse_runtime
     fi
     _BACKEND_DEPS_SYNCED=1
 }
 
 playwright_postinstall_enabled() {
+    deploy_opt_pdf_print_enabled || return 1
     [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" != "0" ]
 }
 
@@ -2660,12 +2772,16 @@ ensure_linux_zbar_runtime() {
 }
 
 check_playwright() {
+    if ! deploy_opt_pdf_print_enabled; then
+        echo "opt-off"
+        return
+    fi
     [ -d "$BACKEND_DIR" ] || { echo "missing"; return; }
     local uv_bin
     uv_bin="$(resolve_uv)"
     playwright_export_env
     if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
-        "$uv_bin" run --extra pdf python -m playwright --version >/dev/null 2>&1); then
+        "$uv_bin" run $(backend_uv_extra_args) python -m playwright --version >/dev/null 2>&1); then
         if playwright_postinstall_enabled; then
             echo "ok"
         else
@@ -3004,9 +3120,14 @@ cmd_migrate() {
     DEPLOY_SPECIAL_DEPS_QUIET=1
     sync_backend_deps
     ensure_timezone_env
-    ensure_postgresql_pgvector || { log_error "pgvector 未就绪，无法执行依赖 vector 的迁移"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
-    ensure_vector_extension_created || { log_error "无法在应用库创建 vector 扩展（需要超级用户）"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
-    ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    sync_deploy_optional_features_to_backend_env
+    if deploy_opt_kuaiai_vector_enabled; then
+        ensure_postgresql_pgvector || { log_error "pgvector 未就绪（OPT_KUAI_VECTOR=1）；请安装扩展或关闭选装"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+        ensure_vector_extension_created || { log_error "无法在应用库创建 vector 扩展（需要超级用户）"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    else
+        log_special "KU-AI 向量选装未启用 (OPT_KUAI_VECTOR=0)，跳过 pgvector"
+    fi
+    ensure_sensitive_lexicon_if_enabled || { log_error "敏感词 lexicon.pack 未就绪（OPT_SENSITIVE_LEXICON=1）"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     log_info "执行数据库迁移（aerich upgrade，含 804 ind_relay）..."
     (
         cd "$BACKEND_DIR"
@@ -3017,6 +3138,9 @@ cmd_migrate() {
         fi
         PYTHONUNBUFFERED=1 AERICH_MIGRATE=1 "$(resolve_uv)" run aerich upgrade
     ) || { log_error "数据库迁移失败"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    if deploy_opt_kuaiai_vector_enabled; then
+        ensure_kuaiai_vector_schema || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    fi
     ensure_ind_relay_tables_804 || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
     log_ok "迁移完成"
@@ -3300,7 +3424,8 @@ ensure_linux_caddy_ready() {
 
 start_backend_dev() {
     ensure_timezone_env
-    ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; exit 1; }
+    sync_deploy_optional_features_to_backend_env
+    ensure_sensitive_lexicon_if_enabled || { log_error "敏感词 lexicon.pack 未就绪（OPT_SENSITIVE_LEXICON=1）"; exit 1; }
     if bg_enabled; then
         bg_init_state
         bg_start_backend_slot "$(bg_active_slot)" dev || exit 1
@@ -3371,7 +3496,8 @@ start_frontend_dev() {
 
 start_backend_prod() {
     ensure_timezone_env
-    ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; exit 1; }
+    sync_deploy_optional_features_to_backend_env
+    ensure_sensitive_lexicon_if_enabled || { log_error "敏感词 lexicon.pack 未就绪（OPT_SENSITIVE_LEXICON=1）"; exit 1; }
     if bg_enabled; then
         bg_init_state
         bg_start_backend_slot "$(bg_active_slot)" prod || exit 1
@@ -4215,6 +4341,10 @@ cmd_details() {
             echo "  riveredge.service: $(boot_service_status_label)"
         fi
     fi
+    echo ""
+    echo "  选装开关: DEPLOY [5] 选装依赖"
+    echo "  仅数据库迁移（不拉代码）: ./fast-deploy/deploy.sh migrate"
+    echo "  日常发版请用菜单 [3] 更新系统，或 start（启动前会自动 migrate）"
 }
 
 print_special_deps_hint() {
@@ -4224,15 +4354,15 @@ print_special_deps_hint() {
     case "$st_cr" in
         ok|disabled-present) ;;
         installing)
-            echo "  可选依赖: Chromium 后台补装中（不用打印 PDF 可忽略）— 详情见菜单 [5]"
+            echo "  可选依赖: Chromium 后台补装中 — DEPLOY [5] 选装 / OPS [6] 详情"
             ;;
         disabled-missing|skipped)
             if [ "$st_pw" = "skipped" ] || [ "$st_cr" = "disabled-missing" ]; then
-                echo "  可选依赖: 打印 PDF 补装已关闭（不用打印可忽略）— 详情见菜单 [5]"
+                echo "  可选依赖: 打印 PDF 补装已关闭 — DEPLOY [5] 选装 / OPS [6] 详情"
             fi
             ;;
         *)
-            echo "  可选依赖: 部分增强能力未就绪（按需安装）— 详情见菜单 [5]"
+            echo "  可选依赖: 部分增强能力未就绪 — DEPLOY [5] 选装 / OPS [6] 详情"
             ;;
     esac
 }
@@ -4297,34 +4427,52 @@ cmd_check_special() {
     local failed=0 st pw_st cr_st
     print_special_deps_header
 
-    print_special_deps_group "打印 PDF（报表 / 单据，可跳过）"
-    pw_st="$(check_playwright)"
-    print_special_deps_item "Playwright Python 包" "$pw_st"
-    case "$pw_st" in ok|skipped) ;; *) failed=1 ;; esac
-    cr_st="$(check_playwright_chromium)"
-    print_special_deps_item "Chromium 浏览器" "$cr_st"
-    case "$cr_st" in ok|skipped|installing|disabled-present) ;; *) failed=1 ;; esac
+    print_special_deps_group "打印 PDF（OPT_PDF_PRINT=1 时校验）"
+    if deploy_opt_pdf_print_enabled; then
+        pw_st="$(check_playwright)"
+        print_special_deps_item "Playwright Python 包" "$pw_st"
+        case "$pw_st" in ok|skipped) ;; *) failed=1 ;; esac
+        cr_st="$(check_playwright_chromium)"
+        print_special_deps_item "Chromium 浏览器" "$cr_st"
+        case "$cr_st" in ok|skipped|installing|disabled-present) ;; *) failed=1 ;; esac
+    else
+        pw_st="opt-off"
+        cr_st="opt-off"
+        print_special_deps_item "Playwright / Chromium" "opt-off"
+    fi
     echo ""
 
-    print_special_deps_group "发票解析（二维码 / OCR，可跳过）"
-    st="$(check_invoice_parse_runtime)"
-    print_special_deps_item "系统库 (zbar 等)" "$st"
-    [ "$st" = "ok" ] || failed=1
-    st="$(check_ocr)"
-    print_special_deps_item "OCR Python 包" "$st"
-    [ "$st" = "ok" ] || failed=1
+    print_special_deps_group "发票解析（OPT_INVOICE_OCR=1 时校验）"
+    if deploy_opt_invoice_ocr_enabled; then
+        st="$(check_invoice_parse_runtime)"
+        print_special_deps_item "系统库 (zbar 等)" "$st"
+        [ "$st" = "ok" ] || failed=1
+        st="$(check_ocr)"
+        print_special_deps_item "OCR Python 包" "$st"
+        [ "$st" = "ok" ] || failed=1
+    else
+        print_special_deps_item "发票 OCR" "opt-off"
+    fi
     echo ""
 
-    print_special_deps_group "KU-AI 向量检索（可跳过）"
-    st="$(check_pgvector)"
-    print_special_deps_item "PostgreSQL pgvector" "$st"
-    case "$st" in ok|pending) ;; *) failed=1 ;; esac
+    print_special_deps_group "KU-AI 向量（OPT_KUAI_VECTOR=1 时校验）"
+    if deploy_opt_kuaiai_vector_enabled; then
+        st="$(check_pgvector)"
+        print_special_deps_item "PostgreSQL pgvector" "$st"
+        case "$st" in ok|pending) ;; *) failed=1 ;; esac
+    else
+        print_special_deps_item "pgvector" "opt-off"
+    fi
     echo ""
 
-    print_special_deps_group "敏感词过滤（组织开启时，可跳过）"
-    st="$(check_sensitive_lexicon)"
-    print_special_deps_item "词库 lexicon.pack" "$st"
-    [ "$st" = "ok" ] || failed=1
+    print_special_deps_group "敏感词（OPT_SENSITIVE_LEXICON=1 时校验）"
+    if deploy_opt_sensitive_lexicon_enabled; then
+        st="$(check_sensitive_lexicon)"
+        print_special_deps_item "词库 lexicon.pack" "$st"
+        [ "$st" = "ok" ] || failed=1
+    else
+        print_special_deps_item "lexicon.pack" "opt-off"
+    fi
     echo ""
 
     print_special_deps_footnotes "$pw_st" "$cr_st"
@@ -4847,6 +4995,44 @@ ensure_vector_extension_created() {
     fi
     log_error "CREATE EXTENSION 后应用库仍无 vector"
     return 1
+}
+
+# OPT_KUAI_VECTOR=1 时补建迁移 517 的 vector 列（迁移在无 pgvector 时会跳过 DDL）
+ensure_kuaiai_vector_schema() {
+    local sql out
+    if ! pgvector_available_in_app_db; then
+        log_error "应用库尚无 pgvector，无法创建 KU-AI vector 列"
+        return 1
+    fi
+    if ! vector_extension_installed_in_app_db; then
+        ensure_vector_extension_created || return 1
+    fi
+    out="$(app_db_psql -tAc "SELECT 1 FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='apps_kuaiai_knowledge_chunks'
+          AND column_name='embedding_vector'" 2>/dev/null | tr -d '[:space:]')" || true
+    if [ "$out" = "1" ]; then
+        log_special_ok "KU-AI embedding_vector 列已存在"
+        return 0
+    fi
+    log_info "创建 KU-AI 知识库 pgvector 列与索引..."
+    sql='DO $m$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = ''vector'') THEN
+    CREATE EXTENSION IF NOT EXISTS vector;
+    ALTER TABLE "apps_kuaiai_knowledge_chunks"
+        ADD COLUMN IF NOT EXISTS "embedding_vector" vector(768);
+    CREATE INDEX IF NOT EXISTS "idx_kuaiai_kchunk_tenant_hnsw"
+        ON "apps_kuaiai_knowledge_chunks"
+        USING hnsw ("embedding_vector" vector_cosine_ops)
+        WHERE "deleted_at" IS NULL AND "embedding_vector" IS NOT NULL;
+  END IF;
+END $m$;'
+    if ! postgres_superuser_sql_on_app_db "$sql"; then
+        log_error "KU-AI vector 列创建失败"
+        return 1
+    fi
+    log_special_ok "KU-AI pgvector 列已就绪"
+    return 0
 }
 
 curl_pipe_bash_fallback() {
@@ -5474,8 +5660,11 @@ cmd_install() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         run_install_component caddy "$(check_caddy)" || return 1
     fi
-    # 发票 PDF：系统库 zbar+libgomp；Python OCR 包在 migrate/sync_backend_deps 中 --extra ocr
-    run_install_component invoice-runtime "$(check_invoice_parse_runtime)" || true
+    if deploy_opt_invoice_ocr_enabled; then
+        run_install_component invoice-runtime "$(check_invoice_parse_runtime)" || true
+    else
+        log_info "发票 OCR 选装未启用 (OPT_INVOICE_OCR=0)，跳过 zbar 等系统库"
+    fi
     log_warn "若刚安装系统软件，请重新打开终端或刷新 PATH 后再次 check"
     cmd_check_baseline || exit 1
 }

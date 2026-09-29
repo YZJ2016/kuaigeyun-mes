@@ -27,6 +27,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
@@ -262,11 +263,12 @@ const ProductionDailyReportsPage: React.FC = () => {
             </Button>
           ) : null,
         ]}
-        request={async (params) => {
+        skipFuzzyPinyinClientFilter
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await productionDailyReportApi.list({
-            keyword: params.keyword,
-            template_code: params.template_code,
-            team_name: params.team_name,
+            keyword: pickListSearchKeyword(searchFormValues),
+            template_code: pickSearchString(searchFormValues, 'template_code'),
+            team_name: pickSearchString(searchFormValues, 'team_name'),
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
           });

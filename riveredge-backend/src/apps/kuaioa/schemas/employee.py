@@ -1,12 +1,13 @@
 """员工档案 schemas。"""
 
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class EmployeeProfileCreate(BaseModel):
+    employee_code: Optional[str] = Field(None, max_length=50)
     full_name: str = Field(..., max_length=100)
     phone: Optional[str] = Field(None, max_length=30)
     workshop_name: Optional[str] = Field(None, max_length=100)
@@ -31,6 +32,19 @@ class EmployeeProfileCreate(BaseModel):
     department_name: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
+
+
+class EmployeeBulkCreateRequest(BaseModel):
+    """批量创建员工档案（导入分片；单次最多 200）"""
+
+    items: List[EmployeeProfileCreate] = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="待创建员工列表（单次最多 200）",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class EmployeeProfileUpdate(BaseModel):

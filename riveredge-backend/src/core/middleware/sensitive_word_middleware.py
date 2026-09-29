@@ -17,6 +17,7 @@ from core.services.content.sensitive_word_ip_guard import (
     tenant_has_sensitive_word_control,
 )
 from core.services.content.sensitive_word_service import SensitiveWordService
+from infra.config.infra_config import infra_settings
 from infra.exceptions.exceptions import create_error_response
 from infra.services.sensitive_word_blacklist_service import SensitiveWordBlacklistService
 from infra.utils.client_ip import get_client_ip
@@ -60,11 +61,16 @@ class SensitiveWordMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app):
         super().__init__(app)
-        SensitiveWordService.instance()
-        logger.info("敏感词中间件已初始化")
+        if infra_settings.SENSITIVE_WORD_LEXICON_ENABLED:
+            SensitiveWordService.instance()
+            logger.info("敏感词中间件已初始化（词库已加载）")
+        else:
+            logger.info("敏感词中间件已初始化（选装词库未启用，不加载 lexicon.pack）")
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         if not self._should_scan(request):
+            return await call_next(request)
+        if not infra_settings.SENSITIVE_WORD_LEXICON_ENABLED:
             return await call_next(request)
 
         tenant_id = get_request_tenant_id(request)
