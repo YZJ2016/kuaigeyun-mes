@@ -84,6 +84,8 @@ class FilePreviewService:
     _PREVIEW_EXTENSIONS = frozenset({
         "txt", "log", "md", "markdown", "csv", "json", "xml", "yaml", "yml",
         "ini", "cfg", "conf", "html", "htm", "sql", "xls", "xlsx", "ods",
+        # Office：前端 react-doc-viewer → 微软 Office Online（需公网可访问的带 token 下载 URL）
+        "doc", "docx", "ppt", "pptx",
         # CAD：浏览器端解析（STEP→occt / DWG→libredwg / PcbDoc→altium-toolkit），预览 URL 仍走鉴权下载
         "step", "stp", "dwg", "dxf", "pcbdoc", "schdoc",
     })
@@ -115,6 +117,15 @@ class FilePreviewService:
         if file_type_lower == "application/json":
             return True
         if file_type_lower in FilePreviewService._SPREADSHEET_MIMES:
+            return True
+        if file_type_lower in (
+            "application/msword",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel",
+        ):
             return True
         if file_type_lower.startswith("image/"):
             return True
@@ -156,6 +167,20 @@ class FilePreviewService:
         return path
 
     @staticmethod
+    async def generate_office_pdf_preview_url(
+        file_uuid: str,
+        tenant_id: int,
+        *,
+        vault_authorized: bool = False,
+    ) -> str:
+        token = FilePreviewService._generate_preview_token(
+            file_uuid,
+            tenant_id,
+            vault_authorized=vault_authorized,
+        )
+        return f"/api/v1/core/files/{file_uuid}/download?token={token}&office_pdf=1"
+
+    @staticmethod
     async def get_preview_info(
         file_uuid: str,
         tenant_id: int,
@@ -165,6 +190,7 @@ class FilePreviewService:
         vault_authorized: bool = False,
     ) -> Dict[str, Any]:
         from core.services.file.file_service import FileService
+        from core.services.file.office_preview_service import OfficePreviewService
 
         file = await FileService.get_file_by_uuid(tenant_id, file_uuid)
         if not await FileService.file_content_available(tenant_id, file):
@@ -174,20 +200,53 @@ class FilePreviewService:
         resolved_size = thumbnail_size
         if resolved_size is None and force_simple_for_image:
             resolved_size = avatar_thumbnail_size
+
+        supported = FilePreviewService._is_simple_preview_supported(
+            file.file_type,
+            file.file_extension,
+        )
+
+        # LibreOffice 可用时：Word/PPT 走高级预览（预转换并返回 PDF 下载链）
+        # Excel 由前端 Univer Sheet 预览，不转 PDF
+        if (
+            not force_simple_for_image
+            and OfficePreviewService.is_office_document(file.file_type, file.file_extension)
+            and OfficePreviewService.is_available()
+        ):
+            content = await FileService.get_file_content(tenant_id, file_uuid)
+            await OfficePreviewService.ensure_pdf_bytes(
+                file_uuid=str(file.uuid),
+                file_row=file,
+                source_bytes=content,
+                file_extension=file.file_extension,
+            )
+            preview_url = await FilePreviewService.generate_office_pdf_preview_url(
+                file_uuid=file.uuid,
+                tenant_id=file.tenant_id,
+                vault_authorized=vault_authorized,
+            )
+            return {
+                "preview_mode": "advanced",
+                "preview_url": preview_url,
+                "file_type": "application/pdf",
+                "file_extension": "pdf",
+                "supported": True,
+            }
+
         preview_url = await FilePreviewService.generate_simple_preview_url(
             file_uuid=file.uuid,
             tenant_id=file.tenant_id,
             size=resolved_size,
             vault_authorized=vault_authorized,
         )
+        if OfficePreviewService.is_office_document(file.file_type, file.file_extension):
+            supported = True
         return {
             "preview_mode": "simple",
             "preview_url": preview_url,
             "file_type": file.file_type,
-            "supported": FilePreviewService._is_simple_preview_supported(
-                file.file_type,
-                file.file_extension,
-            ),
+            "file_extension": file.file_extension,
+            "supported": supported,
         }
 
     @staticmethod

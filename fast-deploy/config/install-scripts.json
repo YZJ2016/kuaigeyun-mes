@@ -55,6 +55,14 @@
       "debian": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1",
       "rhel": "sudo dnf install -y zbar libgomp mesa-libGL || sudo yum install -y zbar libgomp mesa-libGL",
       "fedora": "sudo dnf install -y zbar libgomp mesa-libGL"
+    },
+    "libreoffice": {
+      "windows": "winget install -e --id TheDocumentFoundation.LibreOffice --accept-package-agreements",
+      "linux": "sudo apt-get install -y libreoffice-writer libreoffice-calc libreoffice-impress || sudo dnf install -y libreoffice",
+      "ubuntu22": "sudo apt-get update && sudo apt-get install -y libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-java-common",
+      "debian": "sudo apt-get update && sudo apt-get install -y libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-java-common",
+      "rhel": "sudo dnf install -y libreoffice-writer libreoffice-calc libreoffice-impress || sudo yum install -y libreoffice",
+      "fedora": "sudo dnf install -y libreoffice-writer libreoffice-calc libreoffice-impress"
     }
   },
   "scripts_cn": {
@@ -62,6 +70,7 @@
     "python": "sudo apt update && sudo apt install -y python3 python3-venv python3-pip",
     "uv": "pip3 install -i https://mirrors.aliyun.com/pypi/simple/ uv 2>/dev/null || python3 -m pip install -i https://mirrors.aliyun.com/pypi/simple/ uv",
     "zbar": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1",
-    "invoice-runtime": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1"
+    "invoice-runtime": "sudo apt-get update && sudo apt-get install -y libzbar0 libgomp1 libgl1",
+    "libreoffice": "sudo apt-get update && sudo apt-get install -y libreoffice-writer libreoffice-calc libreoffice-impress"
   }
 }
