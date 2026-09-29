@@ -163,7 +163,7 @@
         redir * /mobile?{query} permanent
     }
 
-    # Expo Web（riveredge-app/mobile web-dist，baseUrl=/mobile）
+    # uni-app x H5：部署目录是 MOBILE_WEB_DIR（由 HBuilderX 发行产物复制而来），URL 仍是 /mobile
     # 注意：handle /mobile 是前缀匹配，会吃掉 /mobile/*；必须用 path 精确匹配再 308
     @mobile_exact path /mobile
     redir @mobile_exact /mobile/ 308

@@ -8,7 +8,7 @@
 #   ./fast-deploy/deploy.sh configure    # 仅配置向导
 #   ./fast-deploy/deploy.sh pro-apps [pro|custom|all]  # 扩展应用（专业/定制 → compose）
 #   ./fast-deploy/deploy.sh install-custom             # 仅定制包 kuaigeyun-custom
-#   ./fast-deploy/deploy.sh install-h5                 # 移动端 H5（拉 kuaigeyun-client → web-dist）
+#   ./fast-deploy/deploy.sh install-h5                 # 移动端 H5（复制已有的 HBuilderX Web 发行产物到 /mobile）
 #   ./fast-deploy/deploy.sh install-client             # 同上（兼容旧名）
 #   ./fast-deploy/deploy.sh stop|status|update|low-spec-mode|setup-swap|free-memory|...
 #

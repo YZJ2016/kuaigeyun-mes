@@ -564,7 +564,7 @@ wizard_show_ext_install_menu() {
     wizard_panel_blank
     wizard_panel_menu_item "1" "专业包" "kuaigeyun-pro → compose"
     wizard_panel_menu_item "2" "定制包" "kuaigeyun-custom → compose"
-    wizard_panel_menu_item "3" "移动端 H5" "拉 kuaigeyun-client → /mobile web-dist"
+    wizard_panel_menu_item "3" "移动端 H5" "拉已发行的 Web 产物 → /mobile"
     wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回上级"
     wizard_panel_bot
     echo ""
@@ -579,7 +579,7 @@ wizard_show_ext_update_menu() {
     wizard_panel_blank
     wizard_panel_menu_item "1" "专业包" "sync kuaigeyun-pro → compose"
     wizard_panel_menu_item "2" "定制包" "sync kuaigeyun-custom → compose"
-    wizard_panel_menu_item "3" "移动端 H5" "sync client → 重新部署 web-dist"
+    wizard_panel_menu_item "3" "移动端 H5" "sync client → 重新部署 Web 发行产物"
     wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回上级"
     wizard_panel_bot
     echo ""
@@ -787,10 +787,10 @@ wizard_run_ext_h5() {
     echo ""
     wizard_reload_deploy_libs
     if cmd_install_client_repo; then
-        wizard_say_ok "移动端 H5 已同步并部署到 riveredge-app/mobile/web-dist（Caddy /mobile）。生产环境请再执行 start/update 以刷新网关。"
+        wizard_say_ok "移动端 H5 已复制到部署目录（Caddy /mobile）。生产环境请再执行 start/update 以刷新网关。"
         return 0
     fi
-    wizard_say_warn "移动端 H5 安装/更新失败（见上方日志）。需私仓中已有 web-dist，或先执行 build.mobile.web.sh。"
+    wizard_say_warn "移动端 H5 安装/更新失败（见上方日志）。需私仓里已有 HBuilderX 发行的 Web 产物（unpackage/dist/build/web）。本脚本不会 npm 编译。"
     return 1
 }
 
