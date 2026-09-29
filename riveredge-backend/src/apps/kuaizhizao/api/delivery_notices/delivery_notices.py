@@ -87,7 +87,7 @@ async def preview_delivery_notice_from_sales_delivery(
 )
 async def list_delivery_notice_pull_lines(
     skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=500),
     keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
     sales_delivery_id: Optional[int] = Query(None, description="来源销售出库单"),
     pullable_only: bool = Query(True, description="仅剩余可通知量大于 0"),

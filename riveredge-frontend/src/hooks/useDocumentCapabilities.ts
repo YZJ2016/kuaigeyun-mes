@@ -232,6 +232,7 @@ export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'sales_order.withdraw_submit.not_allowed': '只能撤回已提交且未审核的订单（待审核或已生效）',
   'sales_order.withdraw_submit.computation_pushed': '订单已下推需求计算，请先在「下推」菜单中撤回计算后再撤回提交',
   'sales_order.revoke_approval.not_allowed': '只能撤销审核已审核或已驳回的订单',
+  'sales_order.revoke_approval.has_downstream': '该销售订单已有下游单据，不能撤销审核；如需变更请走销售变更单',
   'sales_order.push.requires_approved': '只能下推已审核的销售订单',
   'sales_order.push.closed': '订单已关闭，无法继续执行',
   'sales_order.push.cancelled': '订单已取消，无法继续执行',

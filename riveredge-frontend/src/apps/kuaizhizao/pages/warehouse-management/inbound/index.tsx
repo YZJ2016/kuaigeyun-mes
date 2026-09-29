@@ -1560,58 +1560,86 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
    */
   const executeWithdrawInbound = async (record: InboundOrder) => {
     const isReturn = record.receipt_type === 'production_return';
+    const idStr = String(record.id);
     try {
-          if (record.receipt_type === 'finished_goods') {
-            await warehouseApi.finishedGoodsReceipt.withdraw(String(record.id));
-          } else if (record.receipt_type === 'semi_finished_goods') {
-            await warehouseApi.semiFinishedGoodsReceipt.withdraw(String(record.id));
-          } else if (record.receipt_type === 'purchase') {
-            await warehouseApi.purchaseReceipt.withdraw(String(record.id));
-          } else if (record.receipt_type === 'customer_material') {
-            await customerMaterialRegistrationApi.withdraw(String(record.id));
-          } else {
-            await warehouseApi.productionReturn.withdraw(String(record.id));
-          }
-          messageApi.success(isReturn ? t('app.kuaizhizao.warehouseInbound.msg.withdrawReturnSuccess') : t('app.kuaizhizao.warehouseInbound.msg.withdrawInboundSuccess'));
-          invalidateMenuBadgeCounts();
+      if (record.receipt_type === 'finished_goods') {
+        await warehouseApi.finishedGoodsReceipt.withdraw(idStr);
+      } else if (record.receipt_type === 'semi_finished_goods') {
+        await warehouseApi.semiFinishedGoodsReceipt.withdraw(idStr);
+      } else if (record.receipt_type === 'purchase') {
+        await warehouseApi.purchaseReceipt.withdraw(idStr);
+      } else if (record.receipt_type === 'customer_material') {
+        await customerMaterialRegistrationApi.withdraw(idStr);
+      } else if (record.receipt_type === 'other_inbound') {
+        await warehouseApi.otherInbound.withdraw(idStr);
+      } else if (record.receipt_type === 'sales_return') {
+        await warehouseApi.salesReturn.withdraw(idStr);
+      } else if (record.receipt_type === 'production_return') {
+        await warehouseApi.productionReturn.withdraw(idStr);
+      } else {
+        messageApi.warning(
+          t('app.kuaizhizao.warehouseInbound.msg.withdrawUnsupportedType', {
+            type: record.receipt_type
+              ? inboundReceiptTypeLabel(t, record.receipt_type)
+              : String(record.receipt_type ?? ''),
+          }),
+        );
+        return;
+      }
+      messageApi.success(
+        isReturn
+          ? t('app.kuaizhizao.warehouseInbound.msg.withdrawReturnSuccess')
+          : t('app.kuaizhizao.warehouseInbound.msg.withdrawInboundSuccess'),
+      );
+      invalidateMenuBadgeCounts();
 
-          await actionRef.current?.reload?.();
-          if (currentOrder?.id === record.id && currentOrder?.receipt_type === record.receipt_type) {
-            try {
-              let detailData: any;
-              if (record.receipt_type === 'finished_goods') {
-                detailData = await warehouseApi.finishedGoodsReceipt.get(String(record.id));
-              } else if (record.receipt_type === 'semi_finished_goods') {
-                detailData = await warehouseApi.semiFinishedGoodsReceipt.get(String(record.id));
-              } else if (record.receipt_type === 'purchase') {
-                detailData = await warehouseApi.purchaseReceipt.get(String(record.id));
-              } else {
-                detailData = await warehouseApi.productionReturn.get(String(record.id));
-              }
-              if (detailData) {
-                setCurrentOrder(
-                  normalizeInboundHubDetail(
-                    record.receipt_type!,
-                    detailData as Record<string, unknown>,
-                    record,
-                  ),
-                );
-                if (record.receipt_type === 'purchase' && record.id != null) {
-                  await loadPurchaseReceiptFieldValuesForDetail(record.id);
-                } else if (record.receipt_type === 'production_return' && record.id != null) {
-                  await loadProductionReturnFieldValuesForDetail(record.id);
-                } else if (record.receipt_type === 'finished_goods' && record.id != null) {
-                  await loadFinishedGoodsReceiptFieldValuesForDetail(record.id);
-                }
-              }
-            } catch {
-              /* ignore */
+      await actionRef.current?.reload?.();
+      if (currentOrder?.id === record.id && currentOrder?.receipt_type === record.receipt_type) {
+        try {
+          let detailData: any;
+          if (record.receipt_type === 'finished_goods') {
+            detailData = await warehouseApi.finishedGoodsReceipt.get(idStr);
+          } else if (record.receipt_type === 'semi_finished_goods') {
+            detailData = await warehouseApi.semiFinishedGoodsReceipt.get(idStr);
+          } else if (record.receipt_type === 'purchase') {
+            detailData = await warehouseApi.purchaseReceipt.get(idStr);
+          } else if (record.receipt_type === 'other_inbound') {
+            detailData = await warehouseApi.otherInbound.get(idStr);
+          } else if (record.receipt_type === 'sales_return') {
+            detailData = await warehouseApi.salesReturn.get(idStr);
+          } else if (record.receipt_type === 'customer_material') {
+            detailData = await customerMaterialRegistrationApi.get(idStr);
+          } else if (record.receipt_type === 'production_return') {
+            detailData = await warehouseApi.productionReturn.get(idStr);
+          }
+          if (detailData) {
+            setCurrentOrder(
+              normalizeInboundHubDetail(
+                record.receipt_type!,
+                detailData as Record<string, unknown>,
+                record,
+              ),
+            );
+            if (record.receipt_type === 'purchase' && record.id != null) {
+              await loadPurchaseReceiptFieldValuesForDetail(record.id);
+            } else if (record.receipt_type === 'production_return' && record.id != null) {
+              await loadProductionReturnFieldValuesForDetail(record.id);
+            } else if (record.receipt_type === 'finished_goods' && record.id != null) {
+              await loadFinishedGoodsReceiptFieldValuesForDetail(record.id);
             }
           }
-          setInboundTrackingRefreshKey((k) => k + 1);
-        } catch (error: any) {
-          messageApi.error(error?.message || error?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.withdrawFailed'));
+        } catch {
+          /* ignore */
         }
+      }
+      setInboundTrackingRefreshKey((k) => k + 1);
+    } catch (error: any) {
+      messageApi.error(
+        formatApiErrorDetail(error?.response?.data?.detail) ||
+          error?.message ||
+          t('app.kuaizhizao.warehouseInbound.msg.withdrawFailed'),
+      );
+    }
   };
 
   const handleWithdrawInbound = async (record: InboundOrder) => {

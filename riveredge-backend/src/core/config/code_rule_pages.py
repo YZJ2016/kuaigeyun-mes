@@ -31,6 +31,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "master-data-supply-chain-supplier": "GYS",  # 供应商
     "master-data-performance-skill": "JN",       # 技能
     "kuaizhizao-production-work-order": "GD",    # 工单
+    "kuaizhizao-production-packing-binding": "PB",  # 装箱绑定（与 INDUSTRY_PACKING_BOX 同号段）
     "kuaizhizao-production-rework-order": "FGD", # 返工单
     "kuaizhizao-production-daily": "PDR",
     "kuaizhizao-production-daily-template": "PDT",
@@ -510,7 +511,8 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module": "快格轻制造",
         "module_icon": "tool",
         "auto_generate": True,
-        "rule_code": "PACKING_BINDING_BOX_CODE",
+        # 与行业插件「装箱箱号」共用同一 rule_code，避免另建 PACKING_BINDING_BOX_CODE
+        "rule_code": "INDUSTRY_PACKING_BOX",
         "allow_manual_edit": True,
     },
     {
@@ -2494,6 +2496,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "code_field_label": "箱号",
         "module": "行业插件",
         "module_icon": "layers",
+        # 业务真源在装箱绑定；本页仅作行业插件侧展示入口，共用 INDUSTRY_PACKING_BOX
         "auto_generate": False,
         "rule_code": "INDUSTRY_PACKING_BOX",
         "allow_manual_edit": True,

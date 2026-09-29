@@ -49,7 +49,7 @@ from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
-PACKING_BINDING_BOX_RULE = "PACKING_BINDING_BOX_CODE"
+PACKING_BINDING_BOX_RULE = "INDUSTRY_PACKING_BOX"
 
 PACKING_BINDING_SORTABLE_FIELDS = frozenset({
     "box_no",
@@ -160,7 +160,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
         )
         allocated = str(allocated or "").strip()
         if not allocated:
-            raise BusinessLogicError("箱号编码规则未返回有效箱号，请检查 PACKING_BINDING_BOX_CODE")
+            raise BusinessLogicError("箱号编码规则未返回有效箱号，请检查「装箱箱号」编码规则（INDUSTRY_PACKING_BOX）")
         exists = await PackingBinding.filter(
             tenant_id=tenant_id,
             box_no=allocated,

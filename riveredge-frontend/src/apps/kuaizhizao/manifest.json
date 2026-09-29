@@ -3971,7 +3971,7 @@
       "module": "快制造",
       "module_icon": "tool",
       "auto_generate": true,
-      "rule_code": "PACKING_BINDING_BOX_CODE",
+      "rule_code": "INDUSTRY_PACKING_BOX",
       "allow_manual_edit": true
     },
     {

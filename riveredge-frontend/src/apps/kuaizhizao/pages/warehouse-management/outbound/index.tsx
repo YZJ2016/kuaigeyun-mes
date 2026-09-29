@@ -796,7 +796,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
       try {
         const linesRes = await deliveryNoticeApi.listSalesDeliveryPullLines({
           skip: 0,
-          limit: 500,
+          limit: 100,
           sales_delivery_id: salesDeliveryId,
           pullable_only: true,
         });

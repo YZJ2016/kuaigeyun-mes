@@ -126,6 +126,18 @@ class ProductionPickingListResponse(ProductionPickingResponse):
 class ProductionPickingWithItemsResponse(ProductionPickingResponse):
     """生产领料单详情响应（含明细）"""
     items: List["ProductionPickingItemResponse"] = Field(default_factory=list, description="领料明细列表")
+    total_quantity: Optional[float] = Field(None, ge=0, description="总数量（明细应领合计）")
+    total_items: Optional[int] = Field(None, description="出库品种数（明细行数）")
+    quantity_unit: Optional[str] = Field(
+        None,
+        description="明细单位一致时的单位；不一致或无明细为 null",
+    )
+    required_quantity_total: Optional[float] = Field(
+        None, ge=0, description="应领数量合计（明细 required_quantity 之和）"
+    )
+    picked_quantity_total: Optional[float] = Field(
+        None, ge=0, description="已领数量合计（明细 picked_quantity 之和）"
+    )
 
 
 class ProductionPickingPullLineCreate(BaseSchema):

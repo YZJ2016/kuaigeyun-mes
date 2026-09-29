@@ -157,10 +157,30 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
         {
           title: t('app.kuaizhizao.warehouseOutbound.col.totalQty'),
           dataIndex: 'total_quantity',
+          render: (_, record) => {
+            const fromApi = record.total_quantity;
+            if (fromApi != null && fromApi !== '') return fromApi;
+            const lines = Array.isArray(record.items) ? record.items : [];
+            if (!lines.length) return '-';
+            const sum = lines.reduce((acc, row) => {
+              const r = row as Record<string, unknown>;
+              const n = Number(
+                r.required_quantity ?? r.delivery_quantity ?? r.picked_quantity ?? r.quantity ?? 0,
+              );
+              return acc + (Number.isFinite(n) ? n : 0);
+            }, 0);
+            return sum;
+          },
         },
         {
           title: t('app.kuaizhizao.warehouseOutbound.col.totalSku'),
           dataIndex: 'total_items',
+          render: (_, record) => {
+            const fromApi = record.total_items;
+            if (fromApi != null && fromApi !== '') return fromApi;
+            const lines = Array.isArray(record.items) ? record.items : [];
+            return lines.length || '-';
+          },
         },
         ...(showNotes
           ? [

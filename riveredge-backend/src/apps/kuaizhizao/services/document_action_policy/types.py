@@ -440,6 +440,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_order.approve.not_pending": "只有待审核状态的订单可审核",
     "sales_order.print.requires_audit": "已开启「打印须审核」，未审核通过的销售订单不可打印",
     "sales_order.revoke_approval.not_allowed": "当前状态不可撤销审核（仅已审核/已生效且审核通过，或已驳回时可撤销）",
+    "sales_order.revoke_approval.has_downstream": "该销售订单已有下游单据，不能撤销审核；如需变更请走销售变更单",
     "sales_order.push.requires_approved": "只能下推已审核的销售订单",
     "sales_order.push.closed": "订单已关闭，无法继续执行",
     "sales_order.push.cancelled": "订单已取消，无法继续执行",

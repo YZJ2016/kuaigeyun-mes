@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
 
@@ -85,7 +85,55 @@ async def sales_order_downstream_by_ids(
     return result
 
 
-async def sales_order_has_downstream_documents(tenant_id: int, sales_order_id: int) -> bool:
+_SALES_ORDER_DOWNSTREAM_TYPE_LABELS: Dict[str, str] = {
+    "work_order": "工单",
+    "demand_computation": "需求计算",
+    "shipment_notice": "发货通知",
+    "sales_delivery": "销售出库",
+    "sales_return": "销售退货",
+    "sales_invoice": "销售发票",
+    "delivery_project": "交付项目",
+}
+
+# 销售订单删除时会级联处理的伴随单据，不作为「不可删除」的下游拦截
+_SALES_ORDER_DELETE_IGNORE_DOWNSTREAM_TYPES = frozenset({"demand"})
+
+
+def _flatten_active_downstream_nodes(
+    nodes: List[Any],
+    collected: Optional[Dict[Tuple[str, int], Dict[str, Any]]] = None,
+) -> Dict[Tuple[str, int], Dict[str, Any]]:
+    """仅收集未删除的下游节点（忽略 is_deleted / 级联伴随 demand）。"""
+    if collected is None:
+        collected = {}
+    for node in nodes:
+        doc_type = str(getattr(node, "document_type", "") or "")
+        if doc_type in _SALES_ORDER_DELETE_IGNORE_DOWNSTREAM_TYPES:
+            _flatten_active_downstream_nodes(getattr(node, "children", None) or [], collected)
+            continue
+        if bool(getattr(node, "is_deleted", False)):
+            # 已删节点的子树仍可能挂着有效单据，继续下钻
+            _flatten_active_downstream_nodes(getattr(node, "children", None) or [], collected)
+            continue
+        doc_id = int(getattr(node, "document_id", 0) or 0)
+        if doc_id <= 0:
+            continue
+        key = (doc_type, doc_id)
+        if key not in collected:
+            collected[key] = {
+                "document_type": doc_type,
+                "document_id": doc_id,
+                "document_code": getattr(node, "document_code", None),
+                "document_name": getattr(node, "document_name", None),
+            }
+        _flatten_active_downstream_nodes(getattr(node, "children", None) or [], collected)
+    return collected
+
+
+async def list_sales_order_active_downstream_documents(
+    tenant_id: int, sales_order_id: int
+) -> List[Dict[str, Any]]:
+    """销售订单有效下游（未软删），用于删除/改号门禁与报错明细。"""
     from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
 
     trace = await DocumentRelationNewService().trace_document_chain(
@@ -95,12 +143,69 @@ async def sales_order_has_downstream_documents(tenant_id: int, sales_order_id: i
         direction="downstream",
         max_depth=10,
     )
-    collected = DocumentRelationNewService()._flatten_downstream_nodes(trace.downstream_chain)
+    collected = _flatten_active_downstream_nodes(trace.downstream_chain)
     if collected:
-        return True
+        return list(collected.values())
 
     downstream_map = await sales_order_downstream_by_ids(tenant_id, [sales_order_id])
-    return downstream_map.get(sales_order_id, False)
+    if not downstream_map.get(sales_order_id, False):
+        return []
+
+    # FK 兜底：追溯树为空但 FK 仍指向有效单据时，补齐明细
+    docs: List[Dict[str, Any]] = []
+    for loader, field in _SALES_ORDER_DOWNSTREAM_FK_SPECS:
+        model = loader()
+        fields_map = getattr(getattr(model, "_meta", None), "fields_map", {}) or {}
+        if field not in fields_map:
+            continue
+        filters: Dict[str, Any] = {
+            "tenant_id": tenant_id,
+            field: sales_order_id,
+        }
+        if "deleted_at" in fields_map:
+            filters["deleted_at__isnull"] = True
+        rows = await model.filter(**filters).limit(20)
+        type_name = {
+            _lazy_work_order_model: "work_order",
+            _lazy_sales_delivery_model: "sales_delivery",
+            _lazy_shipment_notice_model: "shipment_notice",
+            _lazy_sales_return_model: "sales_return",
+        }.get(loader, "downstream")
+        for row in rows:
+            code = (
+                getattr(row, "code", None)
+                or getattr(row, "delivery_code", None)
+                or getattr(row, "notice_code", None)
+                or getattr(row, "return_code", None)
+            )
+            docs.append(
+                {
+                    "document_type": type_name,
+                    "document_id": int(row.id),
+                    "document_code": code,
+                    "document_name": getattr(row, "name", None),
+                }
+            )
+    return docs
+
+
+def format_sales_order_downstream_labels(docs: List[Dict[str, Any]], *, limit: int = 5) -> str:
+    parts: List[str] = []
+    for doc in docs[:limit]:
+        type_label = _SALES_ORDER_DOWNSTREAM_TYPE_LABELS.get(
+            str(doc.get("document_type") or ""),
+            str(doc.get("document_type") or "下游"),
+        )
+        code = str(doc.get("document_code") or doc.get("document_id") or "").strip()
+        parts.append(f"{type_label}{code}" if code else type_label)
+    if len(docs) > limit:
+        parts.append(f"等{len(docs)}单")
+    return "、".join(parts)
+
+
+async def sales_order_has_downstream_documents(tenant_id: int, sales_order_id: int) -> bool:
+    docs = await list_sales_order_active_downstream_documents(tenant_id, sales_order_id)
+    return bool(docs)
 
 
 async def resolve_sales_order_code_editable(
