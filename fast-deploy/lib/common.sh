@@ -95,6 +95,7 @@ special_deps_status_label() {
         disabled-present) echo "浏览器就绪 · 补装关闭" ;;
         disabled-missing) echo "补装关闭 · 浏览器未装" ;;
         pending) echo "待配置数据库" ;;
+        partial) echo "部分就绪" ;;
         opt-off) echo "选装未启用" ;;
         n/a|na) echo "不适用" ;;
         old:*) echo "需升级 (${1#old:})" ;;
@@ -104,7 +105,7 @@ special_deps_status_label() {
 
 print_special_deps_header() {
     echo "=== 可选能力依赖 ==="
-    echo "  在 fast-deploy/config/deploy.env 用 OPT_*=1 启用后再安装/校验；默认均为 0（选装未开）。"
+    echo "  下列为机上探测结果；是否纳入 install/migrate 由 deploy.env 的 OPT_*=1 决定（默认均为 0）。"
     echo "  完整日志: DEPLOY_SPECIAL_DEPS_VERBOSE=1 ./fast-deploy/deploy.sh check"
     echo ""
 }
@@ -299,6 +300,69 @@ deploy_opt_flag_label() {
     else
         printf '%s' "未启用"
     fi
+}
+
+# 机上探测结果 → 选装面板短文案（与 OPT 开关并列，不替代开关）
+deploy_opt_install_short_label() {
+    case "${1:-}" in
+        ok|skipped|disabled-present) printf '%s' "已装" ;;
+        partial) printf '%s' "部分就绪" ;;
+        installing) printf '%s' "补装中" ;;
+        pending) printf '%s' "待检" ;;
+        deps-missing) printf '%s' "缺库" ;;
+        *) printf '%s' "未装" ;;
+    esac
+}
+
+# 面板一行：开关状态｜机上是否已装（间隔用全角竖线，避免与间隔号混淆）
+deploy_opt_panel_status() {
+    local flag_val=$1 probe_st=$2
+    printf '%s｜%s' "$(deploy_opt_flag_label "$flag_val")" "$(deploy_opt_install_short_label "$probe_st")"
+}
+
+# 下列 probe_* 始终探测机上实况，与 OPT_*=0/1 无关（开关只决定是否纳入 install/migrate）
+deploy_opt_probe_invoice() {
+    local rt ocr
+    rt="$(check_invoice_parse_runtime 2>/dev/null || echo missing)"
+    ocr="$(check_ocr 2>/dev/null || echo missing)"
+    if [ "$rt" = "ok" ] && [ "$ocr" = "ok" ]; then
+        echo "ok"
+    elif [ "$rt" = "ok" ] || [ "$ocr" = "ok" ]; then
+        echo "partial"
+    else
+        echo "missing"
+    fi
+}
+
+deploy_opt_probe_pdf() {
+    local pw cr pw_ok=0 cr_ok=0
+    pw="$(check_playwright 2>/dev/null || echo missing)"
+    cr="$(check_playwright_chromium 2>/dev/null || echo missing)"
+    case "$cr" in
+        installing) echo "installing"; return ;;
+        deps-missing) echo "deps-missing"; return ;;
+    esac
+    case "$pw" in ok|skipped) pw_ok=1 ;; esac
+    case "$cr" in ok|skipped|disabled-present) cr_ok=1 ;; esac
+    if [ "$pw_ok" -eq 1 ] && [ "$cr_ok" -eq 1 ]; then
+        echo "ok"
+    elif [ "$pw_ok" -eq 1 ] || [ "$cr_ok" -eq 1 ]; then
+        echo "partial"
+    else
+        echo "missing"
+    fi
+}
+
+deploy_opt_probe_pgvector() {
+    check_pgvector 2>/dev/null || echo missing
+}
+
+deploy_opt_probe_lexicon() {
+    check_sensitive_lexicon 2>/dev/null || echo missing
+}
+
+deploy_opt_probe_libreoffice() {
+    check_libreoffice 2>/dev/null || echo missing
 }
 
 set_deploy_opt_flag() {
@@ -2892,14 +2956,12 @@ ensure_libreoffice_if_enabled() {
 }
 
 check_playwright() {
-    if ! deploy_opt_pdf_print_enabled; then
-        echo "opt-off"
-        return
-    fi
+    # 机上探测：不因 OPT_PDF_PRINT=0 而跳过（开关只决定是否强制 install）
     [ -d "$BACKEND_DIR" ] || { echo "missing"; return; }
     local uv_bin
     uv_bin="$(resolve_uv)"
     playwright_export_env
+    # 优先用当前 venv 直接探测；已装过 pdf extra 的包在 OPT=0 时仍可 import
     if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
         "$uv_bin" run $(backend_uv_extra_args) python -m playwright --version >/dev/null 2>&1); then
         if playwright_postinstall_enabled; then
@@ -4550,66 +4612,61 @@ cmd_check_special() {
     local failed=0 st pw_st cr_st
     print_special_deps_header
 
-    print_special_deps_group "打印 PDF（OPT_PDF_PRINT=1 时校验）"
+    print_special_deps_group "打印 PDF（机上探测；OPT_PDF_PRINT=1 时 install/migrate 强制）"
+    pw_st="$(check_playwright)"
+    print_special_deps_item "Playwright Python 包" "$pw_st"
+    cr_st="$(check_playwright_chromium)"
+    print_special_deps_item "Chromium 浏览器" "$cr_st"
     if deploy_opt_pdf_print_enabled; then
-        pw_st="$(check_playwright)"
-        print_special_deps_item "Playwright Python 包" "$pw_st"
         case "$pw_st" in ok|skipped) ;; *) failed=1 ;; esac
-        cr_st="$(check_playwright_chromium)"
-        print_special_deps_item "Chromium 浏览器" "$cr_st"
         case "$cr_st" in ok|skipped|installing|disabled-present) ;; *) failed=1 ;; esac
     else
-        pw_st="opt-off"
-        cr_st="opt-off"
-        print_special_deps_item "Playwright / Chromium" "opt-off"
+        printf '      %-22s %s\n' "选装开关" "未启用（不强制安装）"
     fi
     echo ""
 
-    print_special_deps_group "发票解析（OPT_INVOICE_OCR=1 时校验）"
+    print_special_deps_group "发票解析（机上探测；OPT_INVOICE_OCR=1 时强制）"
+    st="$(check_invoice_parse_runtime)"
+    print_special_deps_item "系统库 (zbar 等)" "$st"
     if deploy_opt_invoice_ocr_enabled; then
-        st="$(check_invoice_parse_runtime)"
-        print_special_deps_item "系统库 (zbar 等)" "$st"
         [ "$st" = "ok" ] || failed=1
-        st="$(check_ocr)"
-        print_special_deps_item "OCR Python 包" "$st"
+    fi
+    st="$(check_ocr)"
+    print_special_deps_item "OCR Python 包" "$st"
+    if deploy_opt_invoice_ocr_enabled; then
         [ "$st" = "ok" ] || failed=1
     else
-        print_special_deps_item "发票 OCR" "opt-off"
+        printf '      %-22s %s\n' "选装开关" "未启用（不强制安装）"
     fi
     echo ""
 
-    print_special_deps_group "KU-AI 向量（OPT_KUAI_VECTOR=1 时校验）"
+    print_special_deps_group "KU-AI 向量（机上探测；OPT_KUAI_VECTOR=1 时强制）"
+    st="$(check_pgvector)"
+    print_special_deps_item "PostgreSQL pgvector" "$st"
     if deploy_opt_kuaiai_vector_enabled; then
-        st="$(check_pgvector)"
-        print_special_deps_item "PostgreSQL pgvector" "$st"
         case "$st" in ok|pending) ;; *) failed=1 ;; esac
     else
-        print_special_deps_item "pgvector" "opt-off"
+        printf '      %-22s %s\n' "选装开关" "未启用（不强制安装）"
     fi
     echo ""
 
-    print_special_deps_group "敏感词（OPT_SENSITIVE_LEXICON=1 时校验）"
+    print_special_deps_group "敏感词（机上探测；OPT_SENSITIVE_LEXICON=1 时强制）"
+    st="$(check_sensitive_lexicon)"
+    print_special_deps_item "词库 lexicon.pack" "$st"
     if deploy_opt_sensitive_lexicon_enabled; then
-        st="$(check_sensitive_lexicon)"
-        print_special_deps_item "词库 lexicon.pack" "$st"
         [ "$st" = "ok" ] || failed=1
     else
-        print_special_deps_item "lexicon.pack" "opt-off"
+        printf '      %-22s %s\n' "选装开关" "未启用（不强制安装）"
     fi
     echo ""
 
-    print_special_deps_group "Office 高级预览（OPT_LIBREOFFICE=1 时安装；有 soffice 即高级预览）"
+    print_special_deps_group "Office 高级预览（机上有 soffice 即高级预览；OPT_LIBREOFFICE=1 时 install）"
+    st="$(check_libreoffice)"
+    print_special_deps_item "LibreOffice (soffice)" "$st"
     if deploy_opt_libreoffice_enabled; then
-        st="$(check_libreoffice)"
-        print_special_deps_item "LibreOffice (soffice)" "$st"
         [ "$st" = "ok" ] || failed=1
     else
-        st="$(check_libreoffice)"
-        if [ "$st" = "ok" ]; then
-            print_special_deps_item "LibreOffice (已装·高级预览)" "ok"
-        else
-            print_special_deps_item "LibreOffice" "opt-off"
-        fi
+        printf '      %-22s %s\n' "选装开关" "未启用（不强制安装）"
     fi
     echo ""
 
