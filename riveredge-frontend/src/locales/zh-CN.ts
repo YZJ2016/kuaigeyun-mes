@@ -29124,9 +29124,9 @@ export default {
   'pages.dashboard.updateLog.entries.haoligo-order-tracking-prepay-r01.description':
     '款到发货不再拦截提交生产；收款足额后再登记发货或标记已收款；有更新权限即可维护订单情况。',
   'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.title':
-    '福尼特 OA 相关列表搜索与钉住条件批量修复',
+    '研发协同相关列表搜索与钉住条件批量修复',
   'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.description':
-    '快研发/文控/生产日报等 UniTable 列表统一从 searchFormValues 取 keyword 与状态等钉住条件，不再误读分页 params；含项目建议书、试流、BOM、固件、图纸发放借用等已交付页。',
+    '实验委托、项目建议书、试流、BOM、固件、图纸发放借用、生产日报等 UniTable 列表统一从 searchFormValues 取 keyword 与状态等钉住条件，不再误读分页 params。',
   'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.title':
     '实验委托列表搜索与钉住条件生效',
   'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.description':

@@ -44,22 +44,6 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
-    id: 'funide-plm-list-search-batch-r01',
-    date: '2026-09-29',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.description',
-  },
-  {
-    id: 'kuaiplm-lab-request-list-search-r01',
-    date: '2026-09-29',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.description',
-  },
-  {
     id: 'kuaioa-employee-batch-import-r01',
     date: '2026-09-29',
     type: 'improvement',

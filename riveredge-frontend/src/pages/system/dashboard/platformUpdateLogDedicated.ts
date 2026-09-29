@@ -9,6 +9,26 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-plm-list-search-batch-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.description',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+  },
+  {
+    id: 'kuaiplm-lab-request-list-search-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.description',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+  },
+  {
     id: 'haoligo-order-tracking-prepay-r01',
     date: '2026-09-29',
     type: 'fix',
