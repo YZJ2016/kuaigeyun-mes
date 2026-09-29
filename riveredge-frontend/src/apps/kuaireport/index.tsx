@@ -2,7 +2,7 @@
  * 星报表 APP 入口文件
  *
  * 路由约定与 pluginLoader 一致：默认导出应用组件，挂在 /apps/kuaireport 下。
- * 顶部 Menu 给各子页（报表中心/设计器/大屏/分发）提供可达入口。
+ * 顶部 Menu 给各子页（报表中心/数据源/设计器/大屏/分发）提供可达入口。
  */
 
 import React, { Suspense, lazy, useMemo } from 'react';
@@ -17,6 +17,7 @@ const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.Compone
 );
 
 const ReportCenterPage = lazy(() => import('./pages/reports'));
+const DataSourcePage = lazy(() => import('./pages/data-sources'));
 const ReportPreviewPage = lazy(() => import('./pages/reports/preview'));
 const ReportDesignerPage = lazy(() => import('./pages/designer'));
 const DashboardListPage = lazy(() => import('./pages/dashboards'));
@@ -26,6 +27,7 @@ const DistributionPage = lazy(() => import('./pages/distribution'));
 
 const NAV_ITEMS = [
   { key: 'reports', label: '报表中心' },
+  { key: 'data-sources', label: '数据源' },
   { key: 'designer', label: '设计器' },
   { key: 'dashboards', label: '大屏' },
   { key: 'distribution', label: '分发' },
@@ -49,6 +51,7 @@ const KuaireportApp: React.FC = () => {
       <Routes>
         <Route index element={<Navigate to="reports" replace />} />
         <Route path="reports" element={withPageSuspense(ReportCenterPage)} />
+        <Route path="data-sources" element={withPageSuspense(DataSourcePage)} />
         <Route path="reports/view/:reportId" element={withPageSuspense(ReportPreviewPage)} />
         <Route path="designer" element={withPageSuspense(ReportDesignerPage)} />
         <Route path="dashboards" element={withPageSuspense(DashboardListPage)} />

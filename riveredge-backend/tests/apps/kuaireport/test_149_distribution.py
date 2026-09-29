@@ -940,3 +940,275 @@ async def test_execute_partial_recipient_failure_aggregates():
     assert "接收人 5" in err
     assert "password" not in err
     assert "/tmp" not in err
+
+
+class _CenterStore:
+    """报表行与授权行放在同一个替身上，列表和详情才能按授权过滤。"""
+
+    def __init__(self, grants: MemoryStore) -> None:
+        self.grants = grants
+        self.rows: dict[tuple[int, int], dict] = {}
+
+    async def list_rows(self, tenant_id, status, category, classify):
+        found = []
+        for (owner, _report_id), row in self.rows.items():
+            if owner != tenant_id:
+                continue
+            if status is not None and row["status"] != status:
+                continue
+            if category is not None and row["category"] != category:
+                continue
+            if classify is not None and row["classify"] != classify:
+                continue
+            found.append(dict(row))
+        return found
+
+    async def get_row(self, tenant_id, report_id):
+        row = self.rows.get((tenant_id, report_id))
+        return dict(row) if row else None
+
+    async def list_grants(self, tenant_id, resource_type, resource_id):
+        return await self.grants.list_grants(tenant_id, resource_type, resource_id)
+
+    async def has_grant(self, tenant_id, resource_type, resource_id, role_ids, permission):
+        return await self.grants.has_grant(
+            tenant_id, resource_type, resource_id, role_ids, permission
+        )
+
+    async def user_role_ids(self, tenant_id, user_id):
+        return await self.grants.user_role_ids(tenant_id, user_id)
+
+
+def _report_row(report_id: int, code: str) -> dict:
+    return {
+        "id": report_id,
+        "tenant_id": 1,
+        "code": code,
+        "name": code,
+        "category": "custom",
+        "classify": "未分类",
+        "is_system": False,
+        "status": "DRAFT",
+        "is_shared": False,
+        "report_config": {},
+    }
+
+
+def _arm_roles(store: MemoryStore) -> None:
+    store.users.update({(1, 8), (1, 9)})
+    store.user_roles[(1, 8)] = [3]
+    store.user_roles[(1, 9)] = [4]
+
+
+def _add_view_grant(store: MemoryStore, resource_type: str, resource_id: int, role_id: int) -> None:
+    store.grants.append(
+        {
+            "id": len(store.grants) + 1,
+            "tenant_id": 1,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "role_id": role_id,
+            "permission": "view",
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_entries_stay_open_when_resource_has_no_grants(monkeypatch):
+    """没有任何授权记录时，列表、详情、预览、执行、导出仍按原调用通过。"""
+    from apps.kuaireport.api import execute as execute_api
+    from apps.kuaireport.slices import s146_center as center
+    from apps.kuaireport.slices import s147_designer as designer
+    from apps.kuaireport.slices import s148_share as share
+    from infra.domain.tenant_context import clear_tenant_context, set_current_tenant_id
+
+    grants = MemoryStore()
+    _arm_roles(grants)
+    center_store = _CenterStore(grants)
+    center_store.rows[(1, 10)] = _report_row(10, "open")
+
+    @asynccontextmanager
+    async def _tx():
+        yield center_store
+
+    monkeypatch.setattr(center, "report_center_transaction", _tx)
+    set_current_tenant_id(1)
+
+    async def fake_execute(tenant_id, report_id, filters):
+        return ExecuteReportResult(data=[{"qty": 1}], total=1, summary={"qty": 1})
+
+    async def fake_load(report_id, tenant_id=None):
+        return {"report_id": report_id, "code": "open"}
+
+    monkeypatch.setattr(execute_api, "execute_report", fake_execute)
+    monkeypatch.setattr(center, "resolve_execute_report", lambda: fake_execute)
+    monkeypatch.setattr(designer, "load_report_for_view", fake_load)
+
+    board = share.MemoryShareStore()
+    board.dashboards[20] = share.DashboardRecord(
+        id=20, uuid="d-20", tenant_id=1, code="board", name="大屏"
+    )
+    board.list_grants = grants.list_grants
+    board.has_grant = grants.has_grant
+    board.user_role_ids = grants.user_role_ids
+    service = share.ShareService(board)
+
+    try:
+        listed = await center.list_reports(user_id=9)
+        assert [row["id"] for row in listed] == [10]
+        detail = await center.get_report(10, user_id=9)
+        assert detail["code"] == "open"
+        content, filename = await center.export_full_excel(
+            10, {}, viewer_id=9, apply_grant=True
+        )
+        assert filename == "open.xlsx"
+        assert content[:2] == b"PK"
+        executed = await execute_api.execute_report_for_viewer(
+            1, 9, 10, {}, grant_store=grants
+        )
+        assert executed.total == 1
+        viewed = await designer.open_designer_report(
+            10, tenant_id=1, user_id=9, grant_store=grants
+        )
+        assert viewed["code"] == "open"
+        dashboards = await service.list_dashboards(1, user_id=9)
+        assert [row["id"] for row in dashboards] == [20]
+        preview = await service.preview_dashboard(tenant_id=1, dashboard_id=20, user_id=9)
+        assert preview["name"] == "大屏"
+    finally:
+        clear_tenant_context()
+
+
+@pytest.mark.asyncio
+async def test_grant_hides_list_and_rejects_other_role(monkeypatch):
+    from apps.kuaireport.api import execute as execute_api
+    from apps.kuaireport.slices import s146_center as center
+    from apps.kuaireport.slices import s147_designer as designer
+    from apps.kuaireport.slices import s148_share as share
+    from infra.domain.tenant_context import clear_tenant_context, set_current_tenant_id
+
+    grants = MemoryStore()
+    _arm_roles(grants)
+    _add_view_grant(grants, "report", 10, 3)
+    _add_view_grant(grants, "dashboard", 20, 3)
+    center_store = _CenterStore(grants)
+    center_store.rows[(1, 10)] = _report_row(10, "locked")
+    center_store.rows[(1, 11)] = _report_row(11, "free")
+
+    @asynccontextmanager
+    async def _tx():
+        yield center_store
+
+    monkeypatch.setattr(center, "report_center_transaction", _tx)
+    set_current_tenant_id(1)
+    executed = {"called": False}
+
+    async def fake_execute(tenant_id, report_id, filters):
+        executed["called"] = True
+        return ExecuteReportResult(data=[], total=0, summary={})
+
+    async def fake_load(report_id, tenant_id=None):
+        executed["called"] = True
+        return {"report_id": report_id}
+
+    monkeypatch.setattr(execute_api, "execute_report", fake_execute)
+    monkeypatch.setattr(designer, "load_report_for_view", fake_load)
+
+    board = share.MemoryShareStore()
+    board.dashboards[20] = share.DashboardRecord(
+        id=20, uuid="d-20", tenant_id=1, code="board", name="大屏"
+    )
+    board.dashboards[21] = share.DashboardRecord(
+        id=21, uuid="d-21", tenant_id=1, code="free", name="开放"
+    )
+    board.list_grants = grants.list_grants
+    board.has_grant = grants.has_grant
+    board.user_role_ids = grants.user_role_ids
+    service = share.ShareService(board)
+
+    try:
+        listed = await center.list_reports(user_id=9)
+        assert [row["id"] for row in listed] == [11]
+        with pytest.raises(AuthorizationError):
+            await center.get_report(10, user_id=9)
+        with pytest.raises(AuthorizationError):
+            await center.export_full_excel(10, {}, viewer_id=9, apply_grant=True)
+        with pytest.raises(AuthorizationError):
+            await execute_api.execute_report_for_viewer(1, 9, 10, {}, grant_store=grants)
+        with pytest.raises(AuthorizationError):
+            await designer.open_designer_report(
+                10, tenant_id=1, user_id=9, grant_store=grants
+            )
+        dashboards = await service.list_dashboards(1, user_id=9)
+        assert [row["id"] for row in dashboards] == [21]
+        with pytest.raises(AuthorizationError):
+            await service.preview_dashboard(tenant_id=1, dashboard_id=20, user_id=9)
+        assert executed["called"] is False
+    finally:
+        clear_tenant_context()
+
+
+@pytest.mark.asyncio
+async def test_grant_allows_matching_role(monkeypatch):
+    from apps.kuaireport.api import execute as execute_api
+    from apps.kuaireport.slices import s146_center as center
+    from apps.kuaireport.slices import s147_designer as designer
+    from apps.kuaireport.slices import s148_share as share
+    from infra.domain.tenant_context import clear_tenant_context, set_current_tenant_id
+
+    grants = MemoryStore()
+    _arm_roles(grants)
+    _add_view_grant(grants, "report", 10, 3)
+    _add_view_grant(grants, "dashboard", 20, 3)
+    center_store = _CenterStore(grants)
+    center_store.rows[(1, 10)] = _report_row(10, "locked")
+
+    @asynccontextmanager
+    async def _tx():
+        yield center_store
+
+    monkeypatch.setattr(center, "report_center_transaction", _tx)
+    set_current_tenant_id(1)
+
+    async def fake_execute(tenant_id, report_id, filters):
+        return ExecuteReportResult(data=[{"qty": 2}], total=1, summary={"qty": 2})
+
+    async def fake_load(report_id, tenant_id=None):
+        return {"report_id": report_id, "code": "locked"}
+
+    monkeypatch.setattr(execute_api, "execute_report", fake_execute)
+    monkeypatch.setattr(center, "resolve_execute_report", lambda: fake_execute)
+    monkeypatch.setattr(designer, "load_report_for_view", fake_load)
+
+    board = share.MemoryShareStore()
+    board.dashboards[20] = share.DashboardRecord(
+        id=20, uuid="d-20", tenant_id=1, code="board", name="大屏"
+    )
+    board.list_grants = grants.list_grants
+    board.has_grant = grants.has_grant
+    board.user_role_ids = grants.user_role_ids
+    service = share.ShareService(board)
+
+    try:
+        listed = await center.list_reports(user_id=8)
+        assert [row["id"] for row in listed] == [10]
+        detail = await center.get_report(10, user_id=8)
+        assert detail["code"] == "locked"
+        _content, filename = await center.export_full_excel(
+            10, {}, viewer_id=8, apply_grant=True
+        )
+        assert filename == "locked.xlsx"
+        executed = await execute_api.execute_report_for_viewer(
+            1, 8, 10, {}, grant_store=grants
+        )
+        assert executed.data == [{"qty": 2}]
+        viewed = await designer.open_designer_report(
+            10, tenant_id=1, user_id=8, grant_store=grants
+        )
+        assert viewed["code"] == "locked"
+        dashboards = await service.list_dashboards(1, user_id=8)
+        assert [row["id"] for row in dashboards] == [20]
+        preview = await service.preview_dashboard(tenant_id=1, dashboard_id=20, user_id=8)
+        assert preview["code"] == "board"
+    finally:
+        clear_tenant_context()

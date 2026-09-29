@@ -60,13 +60,11 @@ async def create_offline_rule(
 
 
 async def write_offline_alerts(flipped: list[dict], checked_at: datetime | None) -> int:
-    """为本次被标成离线、且曾经有入站时间的设备写告警。没有 offline 规则则不写。"""
+    """为本次被标成离线的设备写告警（152 翻转集合自带 last_seen_at）。没有 offline 规则则不写。"""
     if not flipped or checked_at is None:
         return 0
     created = 0
     for item in flipped:
-        if item.get("last_seen_at") is None:
-            continue
         tenant_id = item.get("tenant_id")
         device_id = item.get("id")
         if tenant_id is None or device_id is None:

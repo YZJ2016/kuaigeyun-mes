@@ -9,7 +9,7 @@
   "author": "StarTech",
   "entry_point": "../apps/kuaiiot/index.tsx",
   "route_path": "/apps/kuaiiot",
-  "sort_order": 360,
+  "sort_order": 320,
   "menu_config": {
     "title": "星数采",
     "icon": "api",

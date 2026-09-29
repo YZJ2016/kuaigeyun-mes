@@ -580,6 +580,21 @@ async def api_save_designer_report(
     )
 
 
+async def open_designer_report(
+    report_id: int,
+    *,
+    tenant_id: int,
+    user_id: int | None,
+    grant_store: Any = None,
+) -> dict[str, Any]:
+    from apps.kuaireport.slices.s149_distribution import RESOURCE_REPORT, enforce_grant_view
+
+    await enforce_grant_view(
+        tenant_id, user_id, RESOURCE_REPORT, report_id, store=grant_store
+    )
+    return await load_report_for_view(report_id, tenant_id=tenant_id)
+
+
 @router.get(
     "/designer/reports/{report_id}",
     response_model=DesignerReportOut,
@@ -588,5 +603,8 @@ async def api_save_designer_report(
 async def api_view_designer_report(
     report_id: int,
     tenant_id: int = Depends(get_current_tenant),
+    user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    return await load_report_for_view(report_id, tenant_id=tenant_id)
+    return await open_designer_report(
+        report_id, tenant_id=tenant_id, user_id=user.id
+    )

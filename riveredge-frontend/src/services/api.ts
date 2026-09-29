@@ -276,7 +276,7 @@ export async function apiRequest<T = any>(
     headers['Content-Type'] = 'application/json';
   }
 
-  // 客户端渠道（登录日志设备识别；PC / 工位由 VITE_CLIENT_CHANNEL 区分）
+  // 客户端渠道：每次请求现算。工位入口为 station，其余为 pc（resolveWebClientChannel）。
   Object.assign(headers, webClientChannelHeaders());
 
   // 写请求自动带幂等键（后端可回放/去重；调用方已传则不覆盖）

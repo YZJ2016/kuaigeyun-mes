@@ -69,6 +69,7 @@
         "@univerjs/sheets-ui": "^0.12.4",
         "@univerjs/ui": "^0.12.4",
         "@velipso/polybool": "^1.1.1",
+        "@vladmandic/human": "^3.3.6",
         "@wecom/jssdk": "^2.4.2",
         "ahooks": "^3.9.6",
         "altium-toolkit": "^1.4.3",

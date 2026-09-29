@@ -19,7 +19,7 @@ from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.schemas.scheduled_task import ScheduledTaskCreate
 from core.services.scheduling.scheduled_task_service import ScheduledTaskService
-from infra.exceptions.exceptions import RiverEdgeException
+from infra.exceptions.exceptions import AuthorizationError, RiverEdgeException
 from infra.models.user import User
 
 RESOURCE_REPORT = "report"
@@ -598,6 +598,68 @@ async def can_view_by_grant(
     return await store.has_grant(
         tenant_id, kind, int(resource_id), role_ids, DEFAULT_PERMISSION
     )
+
+
+def grant_reader(store: Any) -> Any | None:
+    """能查授权的存储。内存替身没有授权表时返回 None，当作没有任何授权记录。"""
+    if store is not None and all(
+        hasattr(store, name) for name in ("list_grants", "has_grant", "user_role_ids")
+    ):
+        return store
+    if store is None:
+        return TortoiseDistributionStore()
+    if hasattr(store, "conn"):
+        return TortoiseDistributionStore(store.conn)
+    if hasattr(store, "_conn"):
+        return TortoiseDistributionStore(store._conn)
+    return None
+
+
+async def enforce_grant_view(
+    tenant_id: int,
+    user_id: int | None,
+    resource_type: str,
+    resource_id: int,
+    store: Any = None,
+) -> None:
+    """没有授权记录则不拦截。有记录时仅被授权角色可看。"""
+    reader = store if store is not None else TortoiseDistributionStore()
+    kind = _require_resource_type(resource_type)
+    grants = await reader.list_grants(tenant_id, kind, int(resource_id))
+    if not grants:
+        return
+    role_ids: list[int] = []
+    if user_id is not None:
+        role_ids = await reader.user_role_ids(tenant_id, int(user_id))
+    allowed = await reader.has_grant(
+        tenant_id, kind, int(resource_id), role_ids, DEFAULT_PERMISSION
+    )
+    if not allowed:
+        raise AuthorizationError("无权查看")
+
+
+async def filter_visible_rows(
+    tenant_id: int,
+    user_id: int | None,
+    resource_type: str,
+    rows: list[dict[str, Any]],
+    store: Any,
+    *,
+    id_key: str = "id",
+) -> list[dict[str, Any]]:
+    reader = grant_reader(store)
+    if reader is None:
+        return rows
+    visible: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            await enforce_grant_view(
+                tenant_id, user_id, resource_type, int(row[id_key]), store=reader
+            )
+        except AuthorizationError:
+            continue
+        visible.append(row)
+    return visible
 
 
 async def list_grants(

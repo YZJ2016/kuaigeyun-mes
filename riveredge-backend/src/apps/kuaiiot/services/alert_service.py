@@ -6,6 +6,9 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
+from tortoise.exceptions import IntegrityError
+
+from apps.kuaizhizao.services.equipment_service import EquipmentService
 from apps.kuaiiot.models.alert import KuaiiotAlert, KuaiiotAlertRule
 from apps.kuaiiot.models.device import KuaiiotDevice
 from apps.kuaiiot.services.alert_threshold_resolver import (
@@ -15,6 +18,9 @@ from apps.kuaiiot.services.alert_threshold_resolver import (
 )
 from apps.kuaiiot.services.tag_template_service import _require_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+
+_RULE_SEVERITIES = {"info", "warning", "critical"}
 
 
 def _aware(value: datetime) -> datetime:
@@ -63,6 +69,8 @@ async def evaluate_thresholds(
         previous = await KuaiiotAlert.filter(
             tenant_id=tenant_id,
             rule_id=rule.id,
+            device_id=device_id,
+            equipment_uuid=equipment_uuid,
             deleted_at__isnull=True,
         ).order_by("-triggered_at").first()
         if previous is not None:
@@ -91,6 +99,18 @@ async def create_rule(tenant_id: int, payload, *, user_id: Optional[int] = None)
     operator = payload.operator.strip()
     if operator not in OPERATORS:
         raise ValidationError("比较符仅允许 gt、lt、gte、lte、eq、ne")
+    severity = (payload.severity or "warning").strip() or "warning"
+    if severity not in _RULE_SEVERITIES:
+        raise ValidationError("告警严重级别仅允许 info、warning、critical")
+    threshold_text = (payload.threshold_text or "").strip() or None
+    if payload.threshold_number is None and threshold_text is None:
+        raise ValidationError("数值阈值与文本阈值至少填写其一")
+    equipment_uuid = (payload.equipment_uuid or "").strip() or None
+    if equipment_uuid is not None:
+        try:
+            await EquipmentService.get_equipment_by_uuid(tid, equipment_uuid)
+        except NotFoundError as exc:
+            raise ValidationError("绑定设备不属于当前租户") from exc
     if payload.device_id is not None:
         device = await KuaiiotDevice.filter(
             tenant_id=tid,
@@ -103,25 +123,28 @@ async def create_rule(tenant_id: int, payload, *, user_id: Optional[int] = None)
     exists = await KuaiiotAlertRule.filter(tenant_id=tid, code=code, deleted_at__isnull=True).exists()
     if exists:
         raise ValidationError("告警规则编码已存在")
-    return await KuaiiotAlertRule.create(
-        tenant_id=tid,
-        code=code,
-        name=payload.name.strip(),
-        device_id=payload.device_id,
-        equipment_uuid=(payload.equipment_uuid or "").strip() or None,
-        tag_key=payload.tag_key.strip(),
-        operator=operator,
-        threshold_number=payload.threshold_number,
-        threshold_text=(payload.threshold_text or "").strip() or None,
-        severity=(payload.severity or "warning").strip() or "warning",
-        cooldown_seconds=payload.cooldown_seconds,
-        notify_enabled=payload.notify_enabled,
-        is_enabled=payload.is_enabled,
-        rule_type="threshold",
-        remark=payload.remark,
-        created_by=user_id,
-        updated_by=user_id,
-    )
+    try:
+        return await KuaiiotAlertRule.create(
+            tenant_id=tid,
+            code=code,
+            name=payload.name.strip(),
+            device_id=payload.device_id,
+            equipment_uuid=equipment_uuid,
+            tag_key=payload.tag_key.strip(),
+            operator=operator,
+            threshold_number=payload.threshold_number,
+            threshold_text=threshold_text,
+            severity=severity,
+            cooldown_seconds=payload.cooldown_seconds,
+            notify_enabled=payload.notify_enabled,
+            is_enabled=payload.is_enabled,
+            rule_type="threshold",
+            remark=payload.remark,
+            created_by=user_id,
+            updated_by=user_id,
+        )
+    except IntegrityError as exc:
+        raise ValidationError("告警规则编码已存在") from exc
 
 
 async def list_alerts(tenant_id: int) -> list[KuaiiotAlert]:

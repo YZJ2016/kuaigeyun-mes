@@ -20,7 +20,16 @@ from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import TenantContextError, get_current_tenant_id, unscoped, with_tenant
 from infra.exceptions.exceptions import AuthenticationError, NotFoundError, ValidationError
 
-_SECRET_KEYS = frozenset({"password", "passwd", "broker_password", "mqtt_password"})
+# 与 message_log_service._SECRET_PARTS 同款口径：键名包含任意子串即视为口令。
+_SECRET_PARTS = (
+    "token",
+    "password",
+    "passwd",
+    "secret",
+    "api_key",
+    "access_key",
+    "credential",
+)
 _API_PREFIX = "/api/v1/apps/kuaiiot"
 _DEVICE_OFFLINE = timedelta(minutes=5)
 _AGENT_OFFLINE = timedelta(minutes=3)
@@ -38,7 +47,8 @@ def _require_tenant(explicit: int) -> int:
 def _reject_secrets(value: Any) -> None:
     if isinstance(value, dict):
         for key, item in value.items():
-            if str(key).strip().lower() in _SECRET_KEYS:
+            lowered = str(key).strip().lower()
+            if any(part in lowered for part in _SECRET_PARTS):
                 raise ValidationError("配置不能包含口令")
             _reject_secrets(item)
         return
@@ -203,7 +213,12 @@ class EdgeConfigService:
         changed = int(row.config_version) != int(config_version)
         tenant_id = int(device.tenant_id)
         async with with_tenant(tenant_id, reason="心跳写入凭据命中的边缘配置"):
-            current = await KuaiiotEdgeConfig.get(id=row.id, tenant_id=tenant_id)
+            # 校验到写入之间可能被禁用/删除，重取时复查（TOCTOU）。
+            current = await KuaiiotEdgeConfig.get_or_none(
+                id=row.id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if current is None or not current.is_enabled:
+                raise NotFoundError("边缘配置不存在")
             current.last_agent_heartbeat_at = resolve_business_datetime()
             current.agent_version = version_text
             current.agent_status = status_text
@@ -225,8 +240,13 @@ class EdgeConfigService:
         count = len(items or [])
         if count < 1 or count > INGEST_BATCH_MAX_ITEMS:
             raise ValidationError("单批须为 1 到 100 条")
-        for item in items:
-            await IngestService.ingest(device_token, item)
+        token = (device_token or "").strip()
+        if not token:
+            raise AuthenticationError("设备凭据无效")
+        device = await IngestService._match_device(token)
+        async with with_tenant(int(device.tenant_id), reason="批量续传写入设备所属租户"):
+            for item in items:
+                await IngestService._ingest_matched(device, item)
         return {"count": count}
 
     @staticmethod
@@ -250,7 +270,7 @@ class EdgeConfigService:
     @staticmethod
     async def list_configs(tenant_id: int) -> list[dict[str, Any]]:
         tid = _require_tenant(tenant_id)
-        rows = await KuaiiotEdgeConfig.filter(tenant_id=tid, deleted_at__isnull=True).order_by("id")
+        rows = await KuaiiotEdgeConfig.filter(tenant_id=tid, deleted_at__isnull=True).order_by("id").limit(500)
         return [EdgeConfigService._public(row) for row in rows]
 
     @staticmethod
@@ -292,6 +312,7 @@ class EdgeConfigService:
             existing.protocol != protocol
             or existing.config != config
             or int(existing.device_id) != int(device.id)
+            or bool(existing.is_enabled) != bool(is_enabled)
         )
         existing.name = title
         existing.device_id = device.id

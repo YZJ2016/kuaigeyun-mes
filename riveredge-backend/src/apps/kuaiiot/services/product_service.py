@@ -22,6 +22,7 @@ from apps.kuaiiot.schemas.product import (
     ProductUpdate,
 )
 from apps.kuaiiot.services.tag_service import _validate_fill_target, _validate_map_target
+from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import TenantContextError, get_current_tenant_id
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -208,7 +209,7 @@ async def create_product(
 
 async def list_products(tenant_id: int) -> list[KuaiiotProduct]:
     tid = _require_tenant(tenant_id)
-    return await KuaiiotProduct.filter(tenant_id=tid, deleted_at__isnull=True).order_by("id")
+    return await KuaiiotProduct.filter(tenant_id=tid, deleted_at__isnull=True).order_by("id").limit(500)
 
 
 async def get_product(tenant_id: int, product_id: int) -> KuaiiotProduct:
@@ -249,9 +250,7 @@ async def update_product(
 
 async def delete_product(tenant_id: int, product_id: int, *, user_id: Optional[int] = None) -> None:
     row = await get_product(tenant_id, product_id)
-    from tortoise import timezone
-
-    row.deleted_at = timezone.now()
+    row.deleted_at = resolve_business_datetime()
     row.deleted_by = user_id
     await row.save(update_fields=["deleted_at", "deleted_by", "updated_at"])
 
@@ -274,10 +273,13 @@ async def batch_create_devices(
     if not name_prefix:
         raise ValidationError("设备名称前缀不能为空")
     codes = _device_codes(payload.code_prefix, count)
-    if await KuaiiotDevice.filter(tenant_id=tid, code__in=codes, deleted_at__isnull=True).exists():
-        raise ValidationError("设备编码已存在")
     created: list[dict] = []
     async with in_transaction():
+        # 编码预检放进事务，与批量插入同一临界区。
+        if await KuaiiotDevice.filter(
+            tenant_id=tid, code__in=codes, deleted_at__isnull=True
+        ).exists():
+            raise ValidationError("设备编码已存在")
         for index, code in enumerate(codes, start=1):
             token = _new_device_token()
             device = await KuaiiotDevice.create(

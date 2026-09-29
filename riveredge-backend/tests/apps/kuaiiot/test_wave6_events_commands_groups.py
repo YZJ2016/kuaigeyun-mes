@@ -377,7 +377,8 @@ async def test_command_heartbeat_receipt_timeout_and_foreign_device(db):
     )
     clear_tenant_context()
     timeout = await run_kuaiiot_command_timeout_check()
-    assert timeout["commands_timed_out"] == 1
+    # 过期 pending（未下发即超时）与过期 sent 一并置 timeout
+    assert timeout["commands_timed_out"] == 2
     set_current_tenant_id(1)
     await expired.refresh_from_db()
     await kept_success.refresh_from_db()
@@ -388,7 +389,7 @@ async def test_command_heartbeat_receipt_timeout_and_foreign_device(db):
     assert expired.completed_at is not None
     assert kept_success.status == "success"
     assert kept_failed.status == "failed"
-    assert still_pending.status == "pending"
+    assert still_pending.status == "timeout"
     assert still_sent.status == "sent"
 
     kinds = [row.msg_type for row in await KuaiiotMessageLog.filter(device_id=device.id)]

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -62,7 +64,7 @@ async def _numeric_tag(tenant_id: int, device_id: int, tag_key: str) -> KuaiiotT
     if device is None:
         raise NotFoundError("IoT 设备不存在")
     key = (tag_key or "").strip()
-    if not key or any(char in key for char in '"\\\n\r {}'):
+    if not key or any(char in key for char in ',=\'"\\\n\r {}'):
         raise ValidationError("点位键无效")
     definition = await KuaiiotTagDefinition.filter(
         tenant_id=tenant_id,
@@ -100,19 +102,30 @@ async def write_trend(
     settings = await _active_tsdb(tid)
     if isinstance(value, bool):
         raise ValidationError("趋势只接受数值点位")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("趋势只接受数值点位") from exc
+    if not math.isfinite(number):
+        raise ValidationError("趋势值必须是有限数值")
     definition = await _numeric_tag(tid, device_id, tag_key)
     when = sampled_at or datetime.now(timezone.utc)
+    # naive 时间戳统一按 UTC 解释，与 _flux_time 口径一致
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
     timestamp_ns = int(when.timestamp() * 1_000_000_000)
     line = (
         f"{_MEASUREMENT},device_id={definition.device_id},tag_key={definition.tag_key} "
-        f"value={float(value)} {timestamp_ns}"
+        f"value={number} {timestamp_ns}"
     )
     try:
         from influxdb_client.client.write_api import SYNCHRONOUS
 
         client = _open_client(settings)
         try:
-            client.write_api(write_options=SYNCHRONOUS).write(
+            # InfluxDBClient 是同步客户端，读写放到线程避免阻塞事件循环
+            await asyncio.to_thread(
+                client.write_api(write_options=SYNCHRONOUS).write,
                 bucket=settings["bucket"],
                 org=settings["org"],
                 record=line,
@@ -149,7 +162,9 @@ async def query_trend(
     try:
         client = _open_client(settings)
         try:
-            tables = client.query_api().query(flux, org=settings["org"])
+            tables = await asyncio.to_thread(
+                client.query_api().query, flux, org=settings["org"]
+            )
         finally:
             client.close()
     except ValidationError:

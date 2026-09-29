@@ -16,14 +16,44 @@ export type ClientChannel =
 
 export type ReportingReportMode = 'self' | 'proxy' | 'team';
 
-/** PC Web / 工位：由 Vite 注入，缺省为 pc */
-export function resolveWebClientChannel(): ClientChannel {
+/** 工位入口。办公室页面与这一路径不共用渠道。 */
+export const STATION_ENTRY_PATH = '/apps/kuaizhizao/production-execution/station';
+
+/** 当前地址是否落在工位入口（含其子路径）。标签工位、已下线 terminal 不在此列。 */
+export function isStationEntryPath(pathname: string): boolean {
+  const path = String(pathname || '').split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+  return path === STATION_ENTRY_PATH || path.startsWith(`${STATION_ENTRY_PATH}/`);
+}
+
+function readDebugEnvChannel(): 'station' | 'pc' | null {
   const fromEnv = String(import.meta.env.VITE_CLIENT_CHANNEL || '')
     .trim()
     .toLowerCase()
     .replace(/-/g, '_');
-  if (fromEnv === 'station') return 'station';
-  if (fromEnv === 'pc') return 'pc';
+  if (fromEnv === 'station' || fromEnv === 'pc') return fromEnv;
+  return null;
+}
+
+function hasInjectedStationShell(): boolean {
+  if (typeof window === 'undefined') return false;
+  const shell = (window as Window & { stationShell?: unknown }).stationShell;
+  return !!shell && typeof shell === 'object';
+}
+
+/**
+ * 生产构建只有一份。判断顺序：
+ * 开发模式若显式设置了 VITE_CLIENT_CHANNEL，仅用于本地整站调试，生产构建不看该变量。
+ * 其后若页面里已有壳注入的 window.stationShell，渠道为 station。
+ * 再按当前 location：工位入口为 station，其余页面为 pc。
+ */
+export function resolveWebClientChannel(): ClientChannel {
+  if (import.meta.env.DEV) {
+    const debug = readDebugEnvChannel();
+    if (debug) return debug;
+  }
+  if (hasInjectedStationShell()) return 'station';
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+  if (isStationEntryPath(pathname)) return 'station';
   return 'pc';
 }
 

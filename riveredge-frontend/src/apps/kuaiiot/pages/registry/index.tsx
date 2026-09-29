@@ -15,6 +15,13 @@ import {
 
 const { Title, Text } = Typography;
 
+const CONNECTION_TYPES = [
+  { value: 'http', label: 'http' },
+  { value: 'mqtt', label: 'mqtt' },
+  { value: 'thingsboard', label: 'thingsboard' },
+  { value: 'jetlinks', label: 'jetlinks' },
+];
+
 const MAP_TARGETS = [
   { value: 'status', label: 'status' },
   { value: 'is_online', label: 'is_online' },
@@ -64,7 +71,7 @@ export default function RegistryPage() {
             <Input placeholder="名称" />
           </Form.Item>
           <Form.Item name="connection_type" initialValue="http" rules={[{ required: true }]}>
-            <Select style={{ width: 140 }} options={[{ value: 'http', label: 'http' }]} />
+            <Select style={{ width: 160 }} options={CONNECTION_TYPES} />
           </Form.Item>
           <Button type="primary" htmlType="submit">
             登记连接

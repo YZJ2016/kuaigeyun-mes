@@ -10,12 +10,18 @@ import pytest_asyncio
 from tortoise import Tortoise
 
 from apps.kuaiiot.models.device import KuaiiotDevice
+from apps.kuaireport.models.dashboard import KuaireportDashboard, KuaireportDashboardVersion
 from apps.kuaireport.models.data_source import KuaireportDataSource
 from apps.kuaizhizao.models.equipment import Equipment
 from apps.kuaizhizao.models.equipment_ops import EquipmentSpotCheck
 from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusMonitor
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
-from apps.kuaiiot.services.ops_feed_service import FEED_PATH, read_equipment_ops_feed
+from apps.kuaiiot.services.ops_feed_service import (
+    EQUIPMENT_OPS_DASHBOARD_CODE,
+    FEED_PATH,
+    FEED_SOURCE_NAME,
+    read_equipment_ops_feed,
+)
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 from infra.config.infra_config import infra_settings
 from infra.domain.tenant_context import clear_tenant_context, set_current_tenant_id
@@ -45,6 +51,7 @@ async def feed_db():
                 "apps.kuaizhizao.models.reporting_record",
                 "apps.kuaizhizao.models.equipment_ops",
                 "apps.kuaireport.models.data_source",
+                "apps.kuaireport.models.dashboard",
             ]
         },
     )
@@ -198,6 +205,13 @@ async def test_feed_five_fields_hide_other_tenant_and_register_one_http_row(feed
     again = await read_equipment_ops_feed(1, 24, at=end)
     assert again["ops_metrics"][0]["oee_live"] == 0.4
     assert await KuaireportDataSource.filter(type="http").count() == 1
+    dashboards = await KuaireportDashboard.filter(tenant_id=1, code=EQUIPMENT_OPS_DASHBOARD_CODE)
+    assert len(dashboards) == 1
+    widgets = dashboards[0].widgets_config
+    assert widgets[0]["options"]["field"] == "ops_metrics.oee_live"
+    assert widgets[0]["data_source_id"] == rows[0].id
+    assert "data_source_uuid" not in widgets[0]
+    assert await KuaireportDashboardVersion.filter(tenant_id=1, dashboard_id=dashboards[0].id).count() == 1
     await equipment.refresh_from_db()
     await report.refresh_from_db()
     assert equipment.updated_at == equipment_updated
@@ -235,6 +249,7 @@ async def test_no_tenant_returns_empty_without_insert(feed_db, monkeypatch):
     set_current_tenant_id(1)
     assert await Equipment.filter(code="EQ-1").count() == 1
     assert await KuaireportDataSource.all().count() == 0
+    assert await KuaireportDashboard.all().count() == 0
 
 
 @pytest.mark.asyncio
@@ -310,7 +325,8 @@ async def test_empty_base_url_does_not_insert_row(feed_db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_localhost_base_url_registers_row(feed_db, monkeypatch):
+async def test_localhost_base_url_registers_row_via_service(feed_db, monkeypatch):
+    """回环地址经星报表服务层正常登记（_LOCAL_TEST_HOSTS 已放行），不再直写 ORM。"""
     _base(monkeypatch, "http://127.0.0.1:8000")
     set_current_tenant_id(1)
     body = await read_equipment_ops_feed(1, 24)
@@ -318,6 +334,20 @@ async def test_localhost_base_url_registers_row(feed_db, monkeypatch):
     rows = await KuaireportDataSource.filter(type="http")
     assert len(rows) == 1
     assert rows[0].config["url"] == "http://127.0.0.1:8000" + FEED_PATH
+    assert rows[0].name == FEED_SOURCE_NAME
+    assert rows[0].tenant_id == 1
+
+
+@pytest.mark.asyncio
+async def test_localhost_feed_row_seeds_dashboard(feed_db, monkeypatch):
+    _base(monkeypatch, "http://localhost:8000")
+    set_current_tenant_id(1)
+    await read_equipment_ops_feed(1, 24)
+    source = await KuaireportDataSource.filter(type="http").first()
+    assert source is not None
+    dashboards = await KuaireportDashboard.filter(tenant_id=1, code=EQUIPMENT_OPS_DASHBOARD_CODE)
+    assert len(dashboards) == 1
+    assert dashboards[0].widgets_config[0]["data_source_id"] == source.id
 
 
 @pytest.mark.asyncio
@@ -327,6 +357,30 @@ async def test_private_base_url_returns_feed_without_row(feed_db, monkeypatch):
     body = await read_equipment_ops_feed(1, 24)
     assert set(body) == set(_EMPTY)
     assert await KuaireportDataSource.all().count() == 0
+    assert await KuaireportDashboard.all().count() == 0
+
+
+@pytest.mark.asyncio
+async def test_repeat_read_keeps_edited_dashboard(feed_db, monkeypatch):
+    _base(monkeypatch, "https://mes.example.com")
+    set_current_tenant_id(1)
+    await read_equipment_ops_feed(1, 24)
+    source = await KuaireportDataSource.filter(type="http").first()
+    dashboard = await KuaireportDashboard.get(tenant_id=1, code=EQUIPMENT_OPS_DASHBOARD_CODE)
+    assert dashboard.widgets_config[0]["data_source_id"] == source.id
+    assert dashboard.widgets_config[0]["options"]["field"] == "ops_metrics.oee_live"
+    edited = [{"id": "custom", "type": "title", "refresh_seconds": 5, "title": "用户改过"}]
+    dashboard.widgets_config = edited
+    dashboard.name = "用户改过的大屏"
+    await dashboard.save()
+    await read_equipment_ops_feed(1, 24)
+    await dashboard.refresh_from_db()
+    assert dashboard.widgets_config == edited
+    assert dashboard.name == "用户改过的大屏"
+    assert await KuaireportDashboard.filter(tenant_id=1).count() == 1
+    assert await KuaireportDashboardVersion.filter(dashboard_id=dashboard.id).count() == 1
+    listed = await KuaireportDashboard.filter(tenant_id=1).values("id", "code", "name", "status", "is_shared")
+    assert listed[0]["code"] == EQUIPMENT_OPS_DASHBOARD_CODE
 
 
 @pytest.mark.asyncio

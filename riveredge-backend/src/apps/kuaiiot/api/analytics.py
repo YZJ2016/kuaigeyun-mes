@@ -14,7 +14,7 @@ router = APIRouter(tags=["App - 星数采 - 馈送"])
     dependencies=[Depends(require_permission_codes("kuaiiot:analytics:read"))],
 )
 async def api_equipment_ops_feed(
-    hours: int = Query(default=24, ge=1),
+    hours: int = Query(default=24, ge=1, le=720),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await read_equipment_ops_feed(tenant_id, hours)

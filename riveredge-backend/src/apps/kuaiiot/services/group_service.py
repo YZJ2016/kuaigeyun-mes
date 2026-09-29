@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+from tortoise.exceptions import IntegrityError
+
 from apps.kuaiiot.models.device import KuaiiotDevice
 from apps.kuaiiot.models.group import KuaiiotDeviceGroup
 from infra.domain.tenant_context import TenantContextError, get_current_tenant_id
@@ -62,21 +64,24 @@ async def create_group(
     if await KuaiiotDeviceGroup.filter(tenant_id=tid, code=text, deleted_at__isnull=True).exists():
         raise ValidationError("分组编码已存在")
     await _assert_parent(tid, parent_id)
-    return await KuaiiotDeviceGroup.create(
-        tenant_id=tid,
-        code=text,
-        name=title,
-        parent_id=parent_id,
-        sort_order=sort_order,
-        remark=remark,
-        created_by=user_id,
-        updated_by=user_id,
-    )
+    try:
+        return await KuaiiotDeviceGroup.create(
+            tenant_id=tid,
+            code=text,
+            name=title,
+            parent_id=parent_id,
+            sort_order=sort_order,
+            remark=remark,
+            created_by=user_id,
+            updated_by=user_id,
+        )
+    except IntegrityError as exc:
+        raise ValidationError("分组编码已存在") from exc
 
 
 async def list_groups(tenant_id: int) -> list[KuaiiotDeviceGroup]:
     tid = _require_tenant(tenant_id)
-    return await KuaiiotDeviceGroup.filter(tenant_id=tid, deleted_at__isnull=True).order_by("sort_order", "id")
+    return await KuaiiotDeviceGroup.filter(tenant_id=tid, deleted_at__isnull=True).order_by("sort_order", "id").limit(500)
 
 
 async def update_group(
