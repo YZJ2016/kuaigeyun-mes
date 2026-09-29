@@ -396,11 +396,18 @@ async def create_quick_reporting_record(
     快捷报工入口（用于扫码报工、工位机报工）
     """
     try:
-        is_proxy = (
-            reporting.team_id is not None
-            or reporting.worker_id is None
-            or int(reporting.worker_id) != int(current_user.id)
-        )
+        client_channel = _resolve_reporting_client_channel(request)
+        # 工位渠道：入口操作员与登录用户可以不是同一人，仍算本人报工；
+        # 小组报工也不走办公室代报权限。recorded_by 仍是当前登录用户。
+        # 非 station 保持原代报判断。两边都没有生产人员、也没有小组时仍要 assign。
+        if client_channel == "station":
+            is_proxy = reporting.team_id is None and reporting.worker_id is None
+        else:
+            is_proxy = (
+                reporting.team_id is not None
+                or reporting.worker_id is None
+                or int(reporting.worker_id) != int(current_user.id)
+            )
         if is_proxy:
             await ensure_permission_codes(
                 auth,
@@ -413,7 +420,7 @@ async def create_quick_reporting_record(
             reporting_data=reporting,
             reported_by=current_user.id,
             entry_mode="quick",
-            client_channel=_resolve_reporting_client_channel(request),
+            client_channel=client_channel,
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/reporting/quick", tenant_id)

@@ -21,8 +21,10 @@ from pydantic import BaseModel, Field
 from apps.kuaireport.constants import REPORT_DATA_SOURCE_UUID
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
+from infra.api.deps.deps import get_current_user
 from infra.domain.tenant_context import TenantContextError, get_current_tenant_id
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 CLASSIFY_COLUMN_DEFAULT = "未分类"
 CATEGORY_SYSTEM = "system"
@@ -306,25 +308,51 @@ async def _rebind_missing_sources(
     return [rebound.get(row["id"], row) for row in rows]
 
 
+async def _keep_visible(
+    store: Any,
+    tenant_id: int,
+    user_id: int | None,
+    resource_type: str,
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    from apps.kuaireport.slices.s149_distribution import filter_visible_rows
+
+    return await filter_visible_rows(tenant_id, user_id, resource_type, rows, store)
+
+
+async def _assert_visible(
+    store: Any, tenant_id: int, user_id: int | None, resource_type: str, resource_id: int
+) -> None:
+    from apps.kuaireport.slices.s149_distribution import enforce_grant_view, grant_reader
+
+    reader = grant_reader(store)
+    if reader is None:
+        return
+    await enforce_grant_view(tenant_id, user_id, resource_type, resource_id, store=reader)
+
+
 async def list_reports(
     *,
     status: str | None = None,
     category: str | None = None,
     classify: str | None = None,
+    user_id: int | None = None,
 ) -> list[dict[str, Any]]:
     tenant_id = require_tenant_id()
     _check_category(category)
     async with report_center_transaction() as store:
         rows = await store.list_rows(tenant_id, status, category, classify)
-        return await _rebind_missing_sources(store, tenant_id, rows)
+        rows = await _rebind_missing_sources(store, tenant_id, rows)
+        return await _keep_visible(store, tenant_id, user_id, "report", rows)
 
 
-async def get_report(report_id: int) -> dict[str, Any]:
+async def get_report(report_id: int, *, user_id: int | None = None) -> dict[str, Any]:
     tenant_id = require_tenant_id()
     async with report_center_transaction() as store:
         row = await store.get_row(tenant_id, report_id)
-    if row is None:
-        raise NotFoundError("报表", str(report_id))
+        if row is None:
+            raise NotFoundError("报表", str(report_id))
+        await _assert_visible(store, tenant_id, user_id, "report", report_id)
     return row
 
 
@@ -482,13 +510,21 @@ def _safe_filename(code: Any) -> str:
     return f"{text}.xlsx"
 
 
-async def export_full_excel(report_id: int, filters: dict[str, Any] | None) -> tuple[bytes, str]:
+async def export_full_excel(
+    report_id: int,
+    filters: dict[str, Any] | None,
+    *,
+    viewer_id: int | None = None,
+    apply_grant: bool = False,
+) -> tuple[bytes, str]:
     """按同一套筛选翻页调用 execute_report，写成 xlsx。忽略调用方自带的 limit/offset。"""
     tenant_id = require_tenant_id()
     async with report_center_transaction() as store:
         report = await store.get_row(tenant_id, report_id)
-    if report is None:
-        raise NotFoundError("报表", str(report_id))
+        if report is None:
+            raise NotFoundError("报表", str(report_id))
+        if apply_grant:
+            await _assert_visible(store, tenant_id, viewer_id, "report", report_id)
 
     execute_report = resolve_execute_report()
     base = {
@@ -522,8 +558,11 @@ async def list_reports_api(
     category: str | None = None,
     classify: str | None = None,
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ) -> list[dict[str, Any]]:
-    return await list_reports(status=status, category=category, classify=classify)
+    return await list_reports(
+        status=status, category=category, classify=classify, user_id=current_user.id
+    )
 
 
 @router.get(
@@ -533,8 +572,9 @@ async def list_reports_api(
 async def get_report_api(
     report_id: int,
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
-    return await get_report(report_id)
+    return await get_report(report_id, user_id=current_user.id)
 
 
 @router.post(
@@ -556,8 +596,11 @@ async def export_report_excel_api(
     report_id: int,
     body: FullExcelRequest,
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ) -> Response:
-    content, filename = await export_full_excel(report_id, body.filters)
+    content, filename = await export_full_excel(
+        report_id, body.filters, viewer_id=current_user.id, apply_grant=True
+    )
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -25,7 +25,7 @@ GET /api/v1/apps/kuaiiot/analytics/equipment-ops-feed?hours=24
 1. 在星报表数据源新增 **HTTP** 类型
 2. URL 填 `{MES_BASE}/api/v1/apps/kuaiiot/analytics/equipment-ops-feed`
 3. 请求头携带租户 Token
-4. 大屏组件绑定 JSON 路径，例如 `ops_metrics[].oee_live`
+4. 登记该 HTTP 源时种入一张已绑定的设备运营大屏（组件指向 `ops_metrics[].oee_live` 等路径）。设计器仍可改布局。
 
 ## OEE Live 说明
 

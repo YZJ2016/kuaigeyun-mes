@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class IngestBody(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    tags: dict[str, Any] = Field(default_factory=dict)
-    events: list[dict[str, Any]] = Field(default_factory=list)
+    tags: dict[str, Any] = Field(default_factory=dict, max_length=200)
+    events: list[dict[str, Any]] = Field(default_factory=list, max_length=50)
     timestamp: Optional[str] = None
     idempotency_key: Optional[str] = Field(default=None, max_length=128)

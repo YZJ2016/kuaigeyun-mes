@@ -1,13 +1,17 @@
-"""指令闭环。下发只走边缘心跳，回执只改凭据命中的那台设备。"""
+"""指令闭环。边缘通道走心跳领取，平台通道停在未发出。回执只改凭据命中的那台设备。"""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import timedelta
 from typing import Any, Optional
 
+from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
+from apps.kuaiiot.constants import COMMAND_DEFAULT_TIMEOUT_SECONDS
 from apps.kuaiiot.models.command import KuaiiotDeviceCommand
+from apps.kuaiiot.models.connection import KuaiiotConnection
 from apps.kuaiiot.models.device import KuaiiotDevice
 from apps.kuaiiot.services.message_log_service import MessageLogService, sanitize_payload
 from apps.kuaiiot.services.product_service import get_product
@@ -16,6 +20,23 @@ from infra.domain.tenant_context import TenantContextError, get_current_tenant_i
 from infra.exceptions.exceptions import AuthenticationError, NotFoundError, ValidationError
 
 DISPATCH_CHANNEL = "edge_heartbeat"
+NOT_SENT = "not_sent"
+
+
+def dispatch_thingsboard() -> str:
+    """不发 HTTP。说明见 spec 156「平台地址未进入仓库」。"""
+    return NOT_SENT
+
+
+def dispatch_jetlinks() -> str:
+    """不发 HTTP。说明见 spec 156「平台地址未进入仓库」。"""
+    return NOT_SENT
+
+
+PLATFORM_DISPATCHERS: dict[str, Callable[[], str]] = {
+    "thingsboard": dispatch_thingsboard,
+    "jetlinks": dispatch_jetlinks,
+}
 
 
 def _require_tenant(explicit: int) -> int:
@@ -144,18 +165,36 @@ async def create_command(
         raise ValidationError("function_key 不在产品指令中")
     _executable_edge_action(function)
     _check_required_params(function, body)
+    source = "http"
+    if device.connection_id is not None:
+        connection = await KuaiiotConnection.filter(
+            tenant_id=tid,
+            id=device.connection_id,
+            deleted_at__isnull=True,
+        ).first()
+        if connection is not None and connection.connection_type:
+            source = connection.connection_type.strip().lower()
+    if source == "mqtt":
+        raise ValidationError("MQTT 连接不做指令下发")
+    dispatcher = PLATFORM_DISPATCHERS.get(source)
+    if dispatcher is not None:
+        channel = source
+        status = dispatcher()
+    else:
+        channel = DISPATCH_CHANNEL
+        status = "pending"
     timeout = function.get("timeout_seconds")
-    expires_at = None
-    if isinstance(timeout, int) and not isinstance(timeout, bool) and timeout > 0:
-        expires_at = resolve_business_datetime() + timedelta(seconds=timeout)
+    if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
+        timeout = COMMAND_DEFAULT_TIMEOUT_SECONDS
+    expires_at = resolve_business_datetime() + timedelta(seconds=timeout)
     async with in_transaction():
         command = await KuaiiotDeviceCommand.create(
             tenant_id=tid,
             device_id=device.id,
             function_key=str(function["function_key"]).strip(),
             params=body,
-            dispatch_channel=DISPATCH_CHANNEL,
-            status="pending",
+            dispatch_channel=channel,
+            status=status,
             requested_by=user_id,
             expires_at=expires_at,
             created_by=user_id,
@@ -167,7 +206,7 @@ async def create_command(
             device_token=device.device_token,
             command_uuid=command.uuid,
             function_key=command.function_key,
-            status="pending",
+            status=status,
             direction="out",
         )
     return command
@@ -179,20 +218,22 @@ async def list_commands(tenant_id: int, device_id: int) -> list[KuaiiotDeviceCom
         tenant_id=tid,
         device_id=device_id,
         deleted_at__isnull=True,
-    ).order_by("-id")
+    ).order_by("-id").limit(500)
 
 
 async def claim_pending_commands(tenant_id: int, device_id: int) -> list[dict[str, Any]]:
-    """心跳取走 pending，并标成 sent。调用方需已处于该设备租户。"""
+    """心跳只领取 edge_heartbeat 的 pending，并标成 sent。调用方需已处于该设备租户。"""
     now = resolve_business_datetime()
     device = await KuaiiotDevice.filter(tenant_id=tenant_id, id=device_id, deleted_at__isnull=True).first()
     if device is None:
         return []
     functions = await _functions_by_key(tenant_id, device.product_id)
     rows = await KuaiiotDeviceCommand.filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=now),
         tenant_id=tenant_id,
         device_id=device_id,
         status="pending",
+        dispatch_channel=DISPATCH_CHANNEL,
         deleted_at__isnull=True,
     ).order_by("id")
     claimed: list[dict[str, Any]] = []
@@ -207,6 +248,7 @@ async def claim_pending_commands(tenant_id: int, device_id: int) -> list[dict[st
                 id=row.id,
                 tenant_id=tenant_id,
                 status="pending",
+                dispatch_channel=DISPATCH_CHANNEL,
                 deleted_at__isnull=True,
             ).update(status="sent", sent_at=now)
             if not updated:
@@ -260,11 +302,23 @@ async def submit_command_result(
             if row.status != "sent":
                 return {"status": row.status}
             status = "success" if success else "failed"
-            row.status = status
-            row.result = sanitize_payload(result, (device.device_token,)) if result else None
-            row.error_message = error_message.replace(device.device_token, "") if error_message else None
-            row.completed_at = resolve_business_datetime()
-            await row.save(update_fields=["status", "result", "error_message", "completed_at", "updated_at"])
+            cleaned_result = sanitize_payload(result, (device.device_token,)) if result else None
+            cleaned_error = error_message.replace(device.device_token, "") if error_message else None
+            # CAS：只覆盖仍停在 sent 的行；并发改态后不重写也不补日志
+            updated = await KuaiiotDeviceCommand.filter(
+                id=row.id,
+                tenant_id=tenant_id,
+                status="sent",
+                deleted_at__isnull=True,
+            ).update(
+                status=status,
+                result=cleaned_result,
+                error_message=cleaned_error,
+                completed_at=resolve_business_datetime(),
+            )
+            if not updated:
+                await row.refresh_from_db(fields=["status"])
+                return {"status": row.status}
             await _log_command(
                 tenant_id=tenant_id,
                 device_id=device.id,
@@ -273,7 +327,7 @@ async def submit_command_result(
                 function_key=row.function_key,
                 status=status,
                 direction="in",
-                error_message=row.error_message,
+                error_message=cleaned_error,
             )
     return {"status": status}
 
@@ -282,7 +336,7 @@ async def timeout_sent_commands() -> int:
     now = resolve_business_datetime()
     async with unscoped(reason="定时任务扫描已下发且超过到期时间的指令", resource="KuaiiotDeviceCommand"):
         rows = await KuaiiotDeviceCommand.filter(
-            status="sent",
+            status__in=["pending", "sent"],
             expires_at__lt=now,
             deleted_at__isnull=True,
         )
@@ -300,7 +354,7 @@ async def timeout_sent_commands() -> int:
                 updated = await KuaiiotDeviceCommand.filter(
                     id=command_id,
                     tenant_id=tenant_id,
-                    status="sent",
+                    status__in=["pending", "sent"],
                     deleted_at__isnull=True,
                 ).update(status="timeout", completed_at=now)
                 if not updated:

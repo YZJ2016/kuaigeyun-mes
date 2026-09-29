@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import ipaddress
+import re
 from collections import defaultdict
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 from apps.kuaiiot.constants import SENSOR_DATA_SOURCE
 from apps.kuaiiot.models.device import KuaiiotDevice
+from apps.kuaireport.models.dashboard import KuaireportDashboard
 from apps.kuaireport.models.data_source import KuaireportDataSource
 from apps.kuaireport.schemas.data_source import DataSourceCreate, DataSourceUpdate
 from apps.kuaireport.services.data_source_service import create_data_source, update_data_source
@@ -25,8 +26,11 @@ from infra.exceptions.exceptions import ValidationError
 
 FEED_PATH = "/api/v1/apps/kuaiiot/analytics/equipment-ops-feed"
 FEED_SOURCE_NAME = "设备运营馈送"
+# 迁移 464：未删除行上 (tenant_id, code) 唯一。已有该 code 不覆盖。
+EQUIPMENT_OPS_DASHBOARD_CODE = "equipment-ops"
+EQUIPMENT_OPS_DASHBOARD_NAME = "设备运营大屏"
+_PG_PLACEHOLDER = re.compile(r"\$\d+(?:::jsonb)?")
 _SITE_ROOT_MESSAGE = "请配置站点根地址"
-_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 _RUNNING_STATUS = "运行中"
 _RATE = Decimal("0.0001")
 _RECENT_SPOT_CHECKS = 20
@@ -53,38 +57,6 @@ def _public_site_root() -> str:
     return raw
 
 
-def _feed_host(url: str) -> str:
-    return (urlparse(url).hostname or "").strip().lower()
-
-
-def _is_loopback_url(url: str) -> bool:
-    host = _feed_host(url)
-    if host in _LOOPBACK_HOSTS or host.endswith(".localhost"):
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
-
-
-def _skip_private_registration(url: str) -> bool:
-    """内网地址不登记，避免报表执行器去拉内网。回环地址留给本地测试。"""
-    if _is_loopback_url(url):
-        return False
-    host = _feed_host(url)
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    return bool(
-        ip.is_private
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_unspecified
-        or ip.is_multicast
-    )
-
-
 def _feed_url() -> str:
     return _public_site_root() + FEED_PATH
 
@@ -100,36 +72,179 @@ def _is_internal_address_error(exc: ValidationError) -> bool:
     return "内网" in exc.message or "本机" in exc.message
 
 
-async def _write_loopback_feed_row(
-    tenant_id: int,
-    url: str,
-    existing: Optional[KuaireportDataSource],
-) -> None:
-    """回环地址写登记行。星报表校验拒绝本机地址，本地测试不走那条拒绝。"""
-    if existing is None:
-        await KuaireportDataSource.create(
-            tenant_id=tenant_id,
-            name=FEED_SOURCE_NAME,
-            type="http",
-            config={"url": url},
-        )
+def _ops_widgets(source_id: int) -> list[dict[str, Any]]:
+    """组件用执行器读取的 data_source_id。指标字段来自馈送 JSON。"""
+    bound = int(source_id)
+
+    def widget(
+        widget_id: str,
+        widget_type: str,
+        title: str,
+        options: dict[str, Any],
+        layout: dict[str, int],
+    ) -> dict[str, Any]:
+        return {
+            "id": widget_id,
+            "type": widget_type,
+            "data_source_id": bound,
+            "refresh_seconds": 30,
+            "title": title,
+            "options": options,
+            "layout": layout,
+        }
+
+    return [
+        widget(
+            "oee",
+            "metric",
+            "OEE",
+            {"field": "ops_metrics.oee_live"},
+            {"x": 0, "y": 0, "w": 4, "h": 4},
+        ),
+        widget(
+            "availability",
+            "metric",
+            "可用率",
+            {"field": "ops_metrics.availability_rate"},
+            {"x": 4, "y": 0, "w": 4, "h": 4},
+        ),
+        widget(
+            "quality",
+            "metric",
+            "良品率",
+            {"field": "ops_metrics.quality_rate"},
+            {"x": 8, "y": 0, "w": 4, "h": 4},
+        ),
+        widget(
+            "status",
+            "chart",
+            "状态分布",
+            {
+                "chart_type": "bar",
+                "field": "status_dist",
+                "x_field": "status",
+                "y_field": "count",
+            },
+            {"x": 0, "y": 4, "w": 6, "h": 8},
+        ),
+        widget(
+            "workshop",
+            "chart",
+            "车间设备",
+            {
+                "chart_type": "bar",
+                "field": "workshop_stats",
+                "x_field": "workshop_name",
+                "y_field": "equipment_count",
+            },
+            {"x": 6, "y": 4, "w": 6, "h": 8},
+        ),
+        widget(
+            "ops",
+            "chart",
+            "设备OEE",
+            {
+                "chart_type": "bar",
+                "field": "ops_metrics",
+                "x_field": "code",
+                "y_field": "oee_live",
+            },
+            {"x": 0, "y": 12, "w": 12, "h": 8},
+        ),
+    ]
+
+
+class _SqliteVersionConn:
+    """149 的版本插入使用 $n / ::jsonb。sqlite 测试改成 ?，生产连接原样传递。"""
+
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+
+    async def execute_query_dict(self, sql: str, params: Optional[list] = None) -> list:
+        return await self._conn.execute_query_dict(_PG_PLACEHOLDER.sub("?", sql), params)
+
+    async def execute_query(self, sql: str, params: Optional[list] = None) -> Any:
+        return await self._conn.execute_query(_PG_PLACEHOLDER.sub("?", sql), params)
+
+
+def _version_conn(conn: Any) -> Any:
+    dialect = getattr(getattr(conn, "capabilities", None), "dialect", "")
+    if dialect == "sqlite":
+        return _SqliteVersionConn(conn)
+    return conn
+
+
+async def _feed_source(tenant_id: int) -> Optional[KuaireportDataSource]:
+    rows = await KuaireportDataSource.filter(tenant_id=tenant_id, type="http").order_by("id")
+    matches = [row for row in rows if _path_is_feed((row.config or {}).get("url"))]
+    return matches[0] if matches else None
+
+
+async def _seed_equipment_ops_dashboard(tenant_id: int, source: KuaireportDataSource) -> None:
+    """本租户已有同 code 大屏则保留。无租户上下文不写。"""
+    current = get_current_tenant_id()
+    if current is None or int(current) != int(tenant_id):
         return
-    existing.config = {"url": url}
-    await existing.save(update_fields=["config", "updated_at"])
+    if source.id is None:
+        return
+    from tortoise.exceptions import IntegrityError
+    from tortoise.transactions import in_transaction
+
+    from apps.kuaireport.slices.s148_share import validate_widgets
+    from apps.kuaireport.slices.s149_distribution import (
+        TortoiseDistributionStore,
+        append_dashboard_version,
+    )
+
+    widgets = validate_widgets(_ops_widgets(int(source.id)))
+    configs = {
+        "layout_config": {"cols": 12},
+        "widgets_config": widgets,
+        "theme_config": {"background": "#001529"},
+        "tv_config": {"rotate_seconds": 60},
+    }
+    try:
+        async with in_transaction() as conn:
+            existing = await KuaireportDashboard.filter(
+                tenant_id=tenant_id,
+                code=EQUIPMENT_OPS_DASHBOARD_CODE,
+            ).using_db(conn).first()
+            if existing is not None:
+                return
+            row = await KuaireportDashboard.create(
+                tenant_id=tenant_id,
+                code=EQUIPMENT_OPS_DASHBOARD_CODE,
+                name=EQUIPMENT_OPS_DASHBOARD_NAME,
+                layout_config=configs["layout_config"],
+                widgets_config=widgets,
+                theme_config=configs["theme_config"],
+                tv_config=configs["tv_config"],
+                status="DRAFT",
+                is_shared=False,
+                current_version=1,
+                using_db=conn,
+            )
+            await append_dashboard_version(
+                TortoiseDistributionStore(_version_conn(conn)),
+                tenant_id,
+                int(row.id),
+                configs,
+                version_no=1,
+            )
+    except IntegrityError:
+        return
 
 
 async def ensure_equipment_ops_http_source(tenant_id: int) -> None:
-    """本租户只保留一条馈送 HTTP 登记。内网地址不插行，调用方仍返回馈送。"""
+    """本租户只保留一条馈送 HTTP 登记。登记成功后再种入大屏。
+
+    一律经星报表服务层登记（审计字段与 spec145 校验一致，localhost/127.0.0.1 已放行）。
+    服务层因内网地址校验拒绝时跳过登记与种入，馈送本身照常返回。
+    """
     url = _feed_url()
-    if _skip_private_registration(url):
-        return
-    rows = await KuaireportDataSource.filter(tenant_id=tenant_id, type="http").order_by("id")
-    matches = [row for row in rows if _path_is_feed((row.config or {}).get("url"))]
-    current = matches[0] if matches else None
+    current = await _feed_source(tenant_id)
     if current is not None and (current.config or {}).get("url") == url:
-        return
-    if _is_loopback_url(url):
-        await _write_loopback_feed_row(tenant_id, url, current)
+        await _seed_equipment_ops_dashboard(tenant_id, current)
         return
     try:
         if current is None:
@@ -141,16 +256,19 @@ async def ensure_equipment_ops_http_source(tenant_id: int) -> None:
                     config={"url": url},
                 ),
             )
-            return
-        await update_data_source(
-            tenant_id,
-            current.id,
-            DataSourceUpdate(config={"url": url}),
-        )
+        else:
+            await update_data_source(
+                tenant_id,
+                current.id,
+                DataSourceUpdate(config={"url": url}),
+            )
     except ValidationError as exc:
         if _is_internal_address_error(exc):
             return
         raise
+    saved = await _feed_source(tenant_id)
+    if saved is not None:
+        await _seed_equipment_ops_dashboard(tenant_id, saved)
 
 
 def _matches_equipment(device_info: Any, equipment: Equipment) -> bool:
@@ -243,7 +361,7 @@ async def read_equipment_ops_feed(
     current = get_current_tenant_id()
     if current is None or int(current) != int(tenant_id):
         return _empty_feed()
-    if isinstance(hours, bool) or not isinstance(hours, int) or hours < 1:
+    if isinstance(hours, bool) or not isinstance(hours, int) or hours < 1 or hours > 720:
         raise ValidationError("查询窗口小时数无效")
     end = resolve_business_datetime(at)
     start = end - timedelta(hours=hours)

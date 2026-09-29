@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
@@ -41,6 +42,13 @@ from infra.exceptions.exceptions import AuthenticationError, NotFoundError, Vali
 
 _NUMERIC_TARGETS = {"temperature", "pressure", "vibration"}
 
+# 事件 message 里的 key=value 凭据统一打码（大小写不敏感）
+_SECRET_PAIR = re.compile(r"\b(password|passwd|token|secret|api_key|apikey)\s*=\s*[^\s&,;]+", re.IGNORECASE)
+
+
+def _mask_secret_pairs(text: str) -> str:
+    return _SECRET_PAIR.sub(lambda match: f"{match.group(1)}=***", text)
+
 
 def _aware(value: datetime) -> datetime:
     if value.tzinfo is None:
@@ -66,9 +74,12 @@ def _as_decimal(value: Any) -> Decimal:
     if isinstance(value, bool) or value is None:
         raise ValidationError("数值点位值无效")
     try:
-        return Decimal(str(value))
+        number = Decimal(str(value))
     except Exception as exc:
         raise ValidationError("数值点位值无效") from exc
+    if not number.is_finite() or abs(number) >= Decimal("1e12"):
+        raise ValidationError("数值点位值超量程")
+    return number
 
 
 def _json_ready(value: Any) -> Any:
@@ -167,6 +178,9 @@ def _parse_sampled_at(raw: Optional[str], server_now: datetime) -> datetime:
         parsed = datetime.fromisoformat(text)
     except ValueError as exc:
         raise ValidationError("timestamp 无效") from exc
+    # 边缘端上送的是 UTC naive；naive 先按 UTC 标记，aware 原样走统一口径
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
     return resolve_business_datetime(parsed)
 
 
@@ -330,18 +344,21 @@ class IngestService:
     ) -> list[str]:
         defined = await _defined_events(tenant_id, device)
         accepted: list[str] = []
+        seen: set[str] = set()
         for raw in events:
             if not isinstance(raw, dict):
                 continue
             event_key = str(raw.get("event_key") or "").strip()
-            if not event_key or event_key not in defined:
+            if not event_key or event_key not in defined or event_key in seen:
                 continue
+            seen.add(event_key)
             definition = defined[event_key]
             severity = _event_severity(definition, raw)
             message = _event_message(definition, raw, event_key)
             token = device.device_token or ""
             if token and token in message:
                 message = message.replace(token, "").strip() or event_key
+            message = _mask_secret_pairs(message)
             accepted.append(event_key)
             alerted = severity in _ALERT_SEVERITIES
             if alerted:
@@ -459,7 +476,7 @@ class IngestService:
                 if "status" in fields
                 else MONITOR_STATUS_WHEN_ABSENT
             )
-            is_online = fields["is_online"] if "is_online" in fields else False
+            is_online = fields["is_online"] if "is_online" in fields else True
         await EquipmentStatusMonitor.create(
             tenant_id=tenant_id,
             equipment_id=equipment.id,

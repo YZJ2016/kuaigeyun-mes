@@ -23,3 +23,5 @@ OFFLINE_ALERT_OPERATOR = "eq"
 OFFLINE_ALERT_THRESHOLD_TEXT = "false"
 TSDB_INTEGRATION_CODE = "kuaiiot_tsdb"
 TSDB_INTEGRATION_TYPE = "influxdb"
+# 产品指令未声明 timeout_seconds 时的默认过期秒数（1 天）
+COMMAND_DEFAULT_TIMEOUT_SECONDS = 86400

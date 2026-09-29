@@ -2,9 +2,24 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
+
+_SECRET_CONFIG_KEYS = frozenset({"password", "passwd", "broker_password", "mqtt_password"})
+
+
+def redact_connection_config(value: Any) -> Any:
+    if isinstance(value, dict):
+        cleaned: dict[str, Any] = {}
+        for key, item in value.items():
+            if str(key).strip().lower() in _SECRET_CONFIG_KEYS:
+                continue
+            cleaned[str(key)] = redact_connection_config(item)
+        return cleaned
+    if isinstance(value, list):
+        return [redact_connection_config(item) for item in value]
+    return value
 
 
 class ConnectionCreate(BaseModel):
@@ -31,6 +46,13 @@ class ConnectionOut(BaseModel):
     health_status: str
     created_at: datetime
 
+    @field_serializer("config")
+    def _serialize_config(self, config: Optional[dict]) -> Optional[dict]:
+        if config is None:
+            return None
+        redacted = redact_connection_config(config)
+        return redacted if isinstance(redacted, dict) else None
+
 
 class DeviceCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -41,6 +63,19 @@ class DeviceCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     equipment_uuid: Optional[str] = Field(default=None, max_length=36)
     template_code: Optional[str] = Field(default=None, max_length=50)
+    remark: Optional[str] = None
+
+
+class DeviceUpdate(BaseModel):
+    """设备改绑与资料更新。equipment_uuid 需配合 clear_equipment 表达解绑。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    equipment_uuid: Optional[str] = Field(default=None, max_length=36)
+    clear_equipment: bool = False
+    group_id: Optional[int] = None
+    product_id: Optional[int] = None
     remark: Optional[str] = None
 
 
@@ -58,6 +93,12 @@ class DeviceOut(BaseModel):
     is_online: bool
     last_seen_at: Optional[datetime] = None
     created_at: datetime
+
+
+class DeviceTokenOut(DeviceOut):
+    """仅建机/轮换凭据当次返回；列表与详情仍走 DeviceOut。"""
+
+    device_token: str
 
 
 class TagCreate(BaseModel):

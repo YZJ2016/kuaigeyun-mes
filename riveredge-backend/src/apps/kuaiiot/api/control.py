@@ -1,4 +1,4 @@
-"""控制面路由。凭据不出现在响应里。"""
+"""控制面路由。凭据只在建机/轮换当次响应里出现一次。"""
 
 from fastapi import APIRouter, Depends, status
 
@@ -7,6 +7,8 @@ from apps.kuaiiot.schemas.control import (
     ConnectionOut,
     DeviceCreate,
     DeviceOut,
+    DeviceTokenOut,
+    DeviceUpdate,
     SnapshotOut,
     TagCreate,
     TagOut,
@@ -46,7 +48,7 @@ async def api_list_connections(tenant_id: int = Depends(get_current_tenant)):
 
 @router.post(
     "/devices",
-    response_model=DeviceOut,
+    response_model=DeviceTokenOut,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_permission_codes("kuaiiot:device:create"))],
 )
@@ -69,9 +71,25 @@ async def api_list_devices(tenant_id: int = Depends(get_current_tenant)):
     return await control_service.list_devices(tenant_id)
 
 
+@router.put(
+    "/devices/{device_id}",
+    response_model=DeviceOut,
+    dependencies=[Depends(require_permission_codes("kuaiiot:device:update"))],
+)
+async def api_update_device(
+    device_id: int,
+    payload: DeviceUpdate,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    return await control_service.update_device(
+        tenant_id, device_id, payload, user_id=getattr(current_user, "id", None)
+    )
+
+
 @router.post(
     "/devices/{device_id}/rotate-token",
-    response_model=DeviceOut,
+    response_model=DeviceTokenOut,
     dependencies=[Depends(require_permission_codes("kuaiiot:device:update"))],
 )
 async def api_rotate_device_token(

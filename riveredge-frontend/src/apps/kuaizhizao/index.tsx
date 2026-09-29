@@ -55,6 +55,7 @@ const ProductionOutboundPage = lazy(() => import('./pages/production-execution/o
 const ProductionInboundPage = lazy(() => import('./pages/production-execution/inbound'));
 // 生产终端路由已下线，页面保留：./pages/production-execution/work-orders/kiosk.tsx
 // const WorkOrdersTerminalPage = lazy(() => import('./pages/production-execution/work-orders/kiosk'));
+const StationEntryPage = lazy(() => import('./station/entry'));
 const WorkOrderDetailKioskPage = lazy(() => import('./pages/production-execution/work-orders/detail-kiosk'));
 const ReportingPage = lazy(() => import('./pages/production-execution/reporting'));
 const ReportingKioskPage = lazy(() => import('./pages/production-execution/reporting/kiosk'));
@@ -432,6 +433,13 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/outbound" element={withPageSuspense(ProductionOutboundPage)} />
       <Route path="production-execution/inbound" element={withPageSuspense(ProductionInboundPage)} />
       {/* 生产终端路由已下线：/apps/kuaizhizao/production-execution/terminal */}
+      <Route path="production-execution/station" element={withPageSuspense(StationEntryPage)} />
+      <Route path="production-execution/station/work-orders/:id/kiosk" element={withPageSuspense(WorkOrderDetailKioskPage)} />
+      <Route path="production-execution/station/reporting/kiosk" element={withPageSuspense(ReportingKioskPage)} />
+      <Route path="production-execution/station/sop-viewer/kiosk" element={withPageSuspense(SOPViewerKioskPage)} />
+      <Route path="production-execution/station/drawing-viewer/kiosk" element={withPageSuspense(DrawingViewerKioskPage)} />
+      <Route path="production-execution/station/program-viewer/kiosk" element={withPageSuspense(ProgramViewerKioskPage)} />
+      <Route path="production-execution/station/*" element={withPageSuspense(StationEntryPage)} />
       <Route path="production-execution/reporting" element={withPageSuspense(ReportingPage)} />
       <Route path="production-execution/reporting/kiosk" element={withPageSuspense(ReportingKioskPage)} />
       <Route path="production-execution/reporting/statistics" element={withPageSuspense(ReportingStatisticsPage)} />

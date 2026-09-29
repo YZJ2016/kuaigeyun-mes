@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -17,6 +18,7 @@ from apps.kuaiiot.schemas.control import ConnectionCreate, DeviceCreate, TagCrea
 from apps.kuaiiot.schemas.ingest import IngestBody
 from apps.kuaiiot.services import control_service
 from apps.kuaiiot.services.edge_config_service import EdgeConfigService
+from apps.kuaiiot.services.ingest_service import IngestService
 from apps.kuaiiot.workflows.functions.device_lifecycle_workflow import run_kuaiiot_offline_check
 from apps.kuaiiot.workflows.functions.edge_agent_lifecycle_workflow import run_kuaiiot_edge_agent_offline_check
 from core.utils.timezone_utils import resolve_business_datetime
@@ -313,3 +315,107 @@ async def test_batch_uses_single_ingest_and_rejects_101(db):
     assert len(monitors) == 2
     assert monitors[1].status == "故障"
     assert monitors[1].temperature == Decimal("21.50")
+
+
+@pytest.mark.asyncio
+async def test_secret_key_substrings_are_rejected(db):
+    set_current_tenant_id(1)
+    device = await _device("secret-parts")
+    cases = [
+        {**_modbus(), "api_key": "k"},
+        {**_modbus(), "device_token": "t"},
+        {**_modbus(), "credential": "c"},
+        {**_modbus(), "publish": {"mode": "http_ingest", "access_key": "k"}},
+        {**_modbus(), "publish": {"mode": "mqtt", "broker_password": "p"}},
+    ]
+    for index, config in enumerate(cases):
+        with pytest.raises(ValidationError, match="口令"):
+            await _save(device, f"secret-{index}", config)
+    assert await KuaiiotEdgeConfig.all().count() == 0
+
+
+@pytest.mark.asyncio
+async def test_is_enabled_toggle_bumps_config_version(db):
+    set_current_tenant_id(1)
+    device = await _device("toggle")
+    saved = await _save(device, "toggle")
+    assert saved["config_version"] == 1
+    same = await _save(device, "toggle")
+    assert same["config_version"] == 1
+    paused = await EdgeConfigService.save_config(
+        1,
+        code="toggle",
+        name="toggle",
+        device_id=device.id,
+        protocol="modbus_tcp",
+        config=_modbus(),
+        is_enabled=False,
+    )
+    assert paused["is_enabled"] is False
+    assert paused["config_version"] == 2
+    resumed = await EdgeConfigService.save_config(
+        1,
+        code="toggle",
+        name="toggle",
+        device_id=device.id,
+        protocol="modbus_tcp",
+        config=_modbus(),
+        is_enabled=True,
+    )
+    assert resumed["config_version"] == 3
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_rechecks_disabled_before_write(db, monkeypatch):
+    set_current_tenant_id(1)
+    device = await _device("hb-toctou")
+    await _save(device, "toctou")
+    stale_row = await KuaiiotEdgeConfig.get(code="toctou")
+    assert stale_row.is_enabled is True
+    # 校验通过后、写入前被禁用：事务内重取行复查须拒绝
+    await KuaiiotEdgeConfig.filter(id=stale_row.id).update(is_enabled=False)
+    monkeypatch.setattr(
+        EdgeConfigService,
+        "_enabled_config",
+        staticmethod(AsyncMock(return_value=stale_row)),
+    )
+    clear_tenant_context()
+    with pytest.raises(NotFoundError):
+        await EdgeConfigService.record_heartbeat(
+            device.device_token,
+            edge_config_code="toctou",
+            config_version=1,
+            agent_version="1.0.0",
+            buffer_pending_count=0,
+            status="online",
+        )
+    set_current_tenant_id(1)
+    await stale_row.refresh_from_db()
+    assert stale_row.last_agent_heartbeat_at is None
+    assert stale_row.agent_status != "online"
+
+
+@pytest.mark.asyncio
+async def test_batch_matches_device_only_once(db, monkeypatch):
+    set_current_tenant_id(1)
+    device = await _tagged_device("match-once")
+    calls: list[str] = []
+    original = IngestService._match_device
+
+    async def spy(token: str):
+        calls.append(token)
+        return await original(token)
+
+    monkeypatch.setattr(IngestService, "_match_device", staticmethod(spy))
+    result = await EdgeConfigService.ingest_batch(
+        device.device_token,
+        [
+            IngestBody(tags={"temp": "1"}, idempotency_key="mo-1"),
+            IngestBody(tags={"temp": "2"}, idempotency_key="mo-2"),
+        ],
+    )
+    assert result == {"count": 2}
+    assert calls == [device.device_token]
+    snapshots = await KuaiiotTagSnapshot.filter(device_id=device.id, tag_key="temp")
+    assert len(snapshots) == 1
+    assert snapshots[0].value_number == Decimal("2")

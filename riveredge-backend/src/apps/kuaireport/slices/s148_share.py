@@ -23,6 +23,7 @@ from tortoise.exceptions import IntegrityError
 
 from core.api.deps.access import require_permission_codes
 from infra.api.deps.deps import get_current_user
+from infra.exceptions.exceptions import AuthorizationError
 from infra.domain.security.security import hash_password, verify_password
 from infra.utils.client_ip import get_client_ip, request_is_https
 
@@ -390,27 +391,59 @@ def _shape_result(raw: Any) -> dict:
     }
 
 
-async def default_execute_source(tenant_id: int, data_source_id: int) -> dict:
-    """指标/表格/图表走 145 的取数。分享打开时用大屏所属租户，不读客户端租户。"""
+async def default_execute_source(
+    tenant_id: int,
+    data_source_id: int,
+    *,
+    http_get: Any = None,
+) -> dict:
+    """指标/表格/图表走 145 的取数。分享打开时用大屏所属租户，不读客户端租户。
+
+    ``http_get`` 仅供已登录的预览路径转发请求头；缺省保持裸 GET。
+    """
     try:
+        from apps.kuaireport.constants import HTTP_URL_KEY
         from apps.kuaireport.models.data_source import KuaireportDataSource
         from apps.kuaireport.services.execute_service import (
+            _assert_registered_http_url,
             _filter_rows,
             _load_rows,
             _page,
+            _reject_address_override,
+            _rows_from_http,
             default_http_get,
+            nested_http_document,
             summarize_rows,
         )
         from infra.domain.tenant_context import with_tenant
+        from infra.exceptions.exceptions import ValidationError
     except ImportError:
         return _empty_result()
+    http_get = http_get or default_http_get
     report_config = {"data_source_id": data_source_id}
     async with with_tenant(tenant_id):
         source = await KuaireportDataSource.get_or_none(id=data_source_id, tenant_id=tenant_id)
         if source is None:
             return _empty_result()
+        if source.type == "http":
+            config = source.config if isinstance(source.config, dict) else {}
+            url = config.get(HTTP_URL_KEY)
+            if not isinstance(url, str) or not url:
+                raise ValidationError("http 配置必须包含地址")
+            _reject_address_override({}, url)
+            await _assert_registered_http_url(url, tenant_id)
+            payload = await http_get(url)
+            document = nested_http_document(payload)
+            if document is not None:
+                return {"data": [document], "total": 1, "summary": {}}
+            rows = _rows_from_http(payload)
+            filtered = _filter_rows(rows, report_config, {})
+            summary = summarize_rows(filtered, report_config)
+            limit, offset = _page({}, report_config)
+            data_rows = filtered[offset : offset + limit]
+            return {"data": data_rows, "total": len(filtered), "summary": summary}
         rows, remote_total, paged = await _load_rows(
-            source, tenant_id, {}, report_config, default_http_get
+            source, tenant_id, {}, report_config, http_get
         )
         if paged:
             data_rows = rows
@@ -1060,6 +1093,23 @@ class SqlShareStore:
         )
 
 
+async def _assert_dashboard_visible(
+    store: Any, tenant_id: int, user_id: int | None, dashboard_id: int
+) -> None:
+    from apps.kuaireport.slices.s149_distribution import (
+        RESOURCE_DASHBOARD,
+        enforce_grant_view,
+        grant_reader,
+    )
+
+    reader = grant_reader(store)
+    if reader is None:
+        return
+    await enforce_grant_view(
+        tenant_id, user_id, RESOURCE_DASHBOARD, dashboard_id, store=reader
+    )
+
+
 class ShareService:
     def __init__(
         self,
@@ -1191,11 +1241,19 @@ class ShareService:
             row = await _persist(None)
         return self._dashboard_public(row)
 
-    async def preview_dashboard(self, *, tenant_id: int, dashboard_id: int) -> dict:
+    async def preview_dashboard(
+        self,
+        *,
+        tenant_id: int,
+        dashboard_id: int,
+        user_id: int | None = None,
+        http_get: Any = None,
+    ) -> dict:
         row = await self.store.get_dashboard(tenant_id, dashboard_id)
         if row is None:
             raise LookupError("dashboard not found")
-        body = await self._dashboard_payload(row)
+        await _assert_dashboard_visible(self.store, tenant_id, user_id, dashboard_id)
+        body = await self._dashboard_payload(row, http_get=http_get)
         body["id"] = row.id
         body["code"] = row.code
         body["status"] = row.status
@@ -1279,8 +1337,18 @@ class ShareService:
             raise LookupError("report not found")
         return {"is_shared": False}
 
-    async def list_dashboards(self, tenant_id: int) -> list[dict]:
-        return await self.store.list_dashboards(tenant_id)
+    async def list_dashboards(
+        self, tenant_id: int, user_id: int | None = None
+    ) -> list[dict]:
+        rows = await self.store.list_dashboards(tenant_id)
+        from apps.kuaireport.slices.s149_distribution import (
+            RESOURCE_DASHBOARD,
+            filter_visible_rows,
+        )
+
+        return await filter_visible_rows(
+            tenant_id, user_id, RESOURCE_DASHBOARD, rows, self.store
+        )
 
     async def system_share_flags(self, tenant_id: int) -> dict[str, bool]:
         return await self.store.system_share_flags(tenant_id)
@@ -1480,13 +1548,28 @@ class ShareService:
         except Exception as exc:
             raise ShareLogError("access log write failed") from exc
 
-    async def _dashboard_payload(self, row: DashboardRecord) -> dict:
+    def _source_executor(self, http_get: Any) -> SourceExecutor:
+        """登录预览可注入转发请求头的 http_get；自定义执行器与分享路径不受影响。"""
+        if http_get is None or self.execute_source is not default_execute_source:
+            return self.execute_source
+
+        async def _run(tenant_id: int, data_source_id: int) -> dict:
+            return await default_execute_source(
+                tenant_id, data_source_id, http_get=http_get
+            )
+
+        return _run
+
+    async def _dashboard_payload(self, row: DashboardRecord, http_get: Any = None) -> dict:
+        from apps.kuaireport.services.execute_service import project_widget_field
+
+        execute_source = self._source_executor(http_get)
         rendered = []
         for widget in row.widgets_config or []:
             item = dict(widget)
             if widget.get("type") in DATA_WIDGET_TYPES:
-                raw = await self.execute_source(row.tenant_id, int(widget["data_source_id"]))
-                item["result"] = _shape_result(raw)
+                raw = await execute_source(row.tenant_id, int(widget["data_source_id"]))
+                item["result"] = project_widget_field(widget, _shape_result(raw))
             rendered.append(item)
         return {
             "name": row.name,
@@ -1662,7 +1745,9 @@ def create_router(service: ShareService) -> APIRouter:
 
     @router.get("/dashboards", dependencies=[Depends(DASHBOARD_DISPLAY_DEP)])
     async def list_dashboards_endpoint(user: Any = Depends(get_current_user)):
-        return await service.list_dashboards(tenant_id=_tenant_of(user))
+        return await service.list_dashboards(
+            _tenant_of(user), user_id=getattr(user, "id", None)
+        )
 
     @router.get(
         "/dashboards/{dashboard_id}/preview",
@@ -1670,15 +1755,22 @@ def create_router(service: ShareService) -> APIRouter:
     )
     async def preview_dashboard(
         dashboard_id: int,
+        request: Request,
         user: Any = Depends(get_current_user),
     ):
+        from apps.kuaireport.services.execute_service import forward_auth_http_get
+
         try:
             return await service.preview_dashboard(
                 tenant_id=_tenant_of(user),
                 dashboard_id=dashboard_id,
+                user_id=getattr(user, "id", None),
+                http_get=forward_auth_http_get(request),
             )
         except LookupError as exc:
             raise HTTPException(status_code=404, detail="dashboard not found") from exc
+        except AuthorizationError as exc:
+            raise HTTPException(status_code=403, detail=exc.message) from exc
 
     @router.post(
         "/dashboards/{dashboard_id}/share",

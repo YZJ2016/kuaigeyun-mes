@@ -379,6 +379,53 @@ async def test_trend_uses_only_this_tenant_influx(db, caplog):
 
 
 @pytest.mark.asyncio
+async def test_trend_rejects_bad_tag_key_and_nonfinite_value(db):
+    set_current_tenant_id(1)
+    product = await _product()
+    created = await product_service.batch_create_devices(
+        1,
+        DeviceBatchCreate(product_id=product.id, name_prefix="设备", code_prefix="bad", count=1),
+    )
+    device_id = created[0]["id"]
+    await _tsdb(1)
+    start = datetime(2026, 9, 28, 0, 0, tzinfo=timezone.utc)
+    stop = datetime(2026, 9, 28, 2, 0, tzinfo=timezone.utc)
+    with patch("influxdb_client.InfluxDBClient") as client_cls:
+        for bad_key in ("temp,evil", "a=b", "tag key", 'qu"ote', "line\nbreak"):
+            with pytest.raises(ValidationError, match="点位键无效"):
+                await write_trend(1, device_id=device_id, tag_key=bad_key, value=1.0)
+            with pytest.raises(ValidationError, match="点位键无效"):
+                await query_trend(
+                    1, device_id=device_id, tag_key=bad_key, start=start, stop=stop
+                )
+        for bad_value in (float("inf"), float("-inf"), float("nan"), "not-a-number"):
+            with pytest.raises(ValidationError):
+                await write_trend(1, device_id=device_id, tag_key="temp", value=bad_value)
+        client_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_trend_naive_sampled_at_is_utc(db):
+    set_current_tenant_id(1)
+    product = await _product()
+    created = await product_service.batch_create_devices(
+        1,
+        DeviceBatchCreate(product_id=product.id, name_prefix="设备", code_prefix="naive", count=1),
+    )
+    device_id = created[0]["id"]
+    await _tsdb(1)
+    naive = datetime(2026, 9, 28, 1, 0, 0)
+    write_api = MagicMock()
+    client = MagicMock()
+    client.write_api.return_value = write_api
+    with patch("influxdb_client.InfluxDBClient", return_value=client):
+        await write_trend(1, device_id=device_id, tag_key="temp", value=1.5, sampled_at=naive)
+    record = write_api.write.call_args.kwargs["record"]
+    expected_ns = int(naive.replace(tzinfo=timezone.utc).timestamp() * 1_000_000_000)
+    assert record.endswith(str(expected_ns))
+
+
+@pytest.mark.asyncio
 async def test_other_tenant_product_is_not_used_for_batch(db):
     set_current_tenant_id(1)
     product = await _product()

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ipaddress
 import math
 from typing import Any, Awaitable, Callable, Optional
+from urllib.parse import urlparse
 from uuid import UUID
 
 from apps.kuaireport.constants import (
@@ -243,12 +245,12 @@ async def run_dataset_query(tenant_id: int, dataset_uuid: str, request):
     )
 
 
-async def default_http_get(url: str) -> Any:
+async def _http_get(url: str, headers: Optional[dict[str, str]] = None) -> Any:
     import httpx
 
     try:
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
-            response = await client.get(url)
+            response = await client.get(url, headers=headers)
     except httpx.HTTPError:
         raise ValidationError("HTTP 数据源执行失败") from None
     if response.status_code != 200:
@@ -257,6 +259,56 @@ async def default_http_get(url: str) -> Any:
         return response.json()
     except ValueError:
         raise ValidationError("HTTP 数据源执行失败") from None
+
+
+async def default_http_get(url: str) -> Any:
+    return await _http_get(url)
+
+
+_FORWARDED_HEADER_NAMES = ("authorization", "x-tenant-id")
+_LOOPBACK_HOSTNAMES = frozenset({"localhost", "localhost.localdomain"})
+
+
+def _is_self_hosted(url: str) -> bool:
+    """目标主机与本服务 BASE_URL 主机一致，或是回环地址时才算同源。"""
+    host = (urlparse(url).hostname or "").strip().lower()
+    if not host:
+        return False
+    if host in _LOOPBACK_HOSTNAMES or host.endswith(".localhost"):
+        return True
+    try:
+        if ipaddress.ip_address(host).is_loopback:
+            return True
+    except ValueError:
+        pass
+    from infra.config.infra_config import infra_settings
+
+    raw = (infra_settings.BASE_URL or "").strip()
+    if not raw:
+        return False
+    base_host = (
+        urlparse(raw if "://" in raw else f"//{raw}").hostname or ""
+    ).strip().lower()
+    return bool(base_host) and host == base_host
+
+
+def forward_auth_http_get(request: Any) -> HttpGet:
+    """同源（本服务主机/回环）地址转发当前请求的 Authorization 与租户头。
+
+    馈送类地址要求 ``Authorization`` + 租户上下文，裸 GET 必 401；其它主机保持裸 GET。
+    """
+    forwarded = {
+        name: request.headers[name]
+        for name in _FORWARDED_HEADER_NAMES
+        if request.headers.get(name)
+    }
+
+    async def _get(url: str) -> Any:
+        if forwarded and _is_self_hosted(url):
+            return await _http_get(url, forwarded)
+        return await _http_get(url)
+
+    return _get
 
 
 def _rows_from_http(payload: Any) -> list[dict[str, Any]]:
@@ -269,6 +321,109 @@ def _rows_from_http(payload: Any) -> list[dict[str, Any]]:
     if any(not isinstance(row, dict) for row in rows):
         raise ValidationError("HTTP 数据源执行失败")
     return rows
+
+
+def nested_http_document(payload: Any) -> Optional[dict[str, Any]]:
+    """顶层数组和 ``{data: []}`` 仍走 ``_rows_from_http``。其余对象交给组件路径。"""
+    if isinstance(payload, list) or not isinstance(payload, dict):
+        return None
+    if isinstance(payload.get("data"), list):
+        return None
+    if "data" in payload:
+        return None
+    return payload
+
+
+_MISSING = object()
+
+
+def _walk_path(node: Any, parts: list[str]) -> Any:
+    if not parts:
+        return node
+    key, *rest = parts
+    if isinstance(node, dict):
+        if key not in node:
+            return _MISSING
+        return _walk_path(node[key], rest)
+    if isinstance(node, list):
+        found = False
+        values: list[Any] = []
+        for item in node:
+            if not isinstance(item, dict) or key not in item:
+                continue
+            found = True
+            got = _walk_path(item[key], rest)
+            if got is _MISSING:
+                continue
+            values.append(got)
+        if not found:
+            return _MISSING
+        return values
+    return _MISSING
+
+
+def _widget_field_path(widget: dict[str, Any]) -> str:
+    options = widget.get("options")
+    if not isinstance(options, dict):
+        return ""
+    raw = options.get("field")
+    if not isinstance(raw, str):
+        return ""
+    return raw.strip()
+
+
+def _plain_column(path: str, result: dict[str, Any]) -> bool:
+    """无点号、且已经是行上的标量列或合计键时，保留列表源的原结果。"""
+    if "." in path:
+        return False
+    summary = result.get("summary")
+    if isinstance(summary, dict) and path in summary:
+        return True
+    rows = result.get("data")
+    if not isinstance(rows, list):
+        return False
+    for row in rows:
+        if isinstance(row, dict) and path in row and not isinstance(row[path], (dict, list)):
+            return True
+    return False
+
+
+def _rows_from_walked(path: str, value: Any) -> dict[str, Any]:
+    if isinstance(value, list):
+        if not value:
+            return {"data": [], "total": 0, "summary": {}}
+        if all(isinstance(item, dict) for item in value):
+            rows = [dict(item) for item in value]
+            return {"data": rows, "total": len(rows), "summary": {}}
+        leaf = path.rsplit(".", 1)[-1]
+        rows = [{leaf: item} for item in value]
+        summary = {path: value[0]} if len(value) == 1 else {}
+        return {"data": rows, "total": len(rows), "summary": summary}
+    if isinstance(value, dict):
+        return {"data": [dict(value)], "total": 1, "summary": {}}
+    leaf = path.rsplit(".", 1)[-1]
+    return {"data": [{leaf: value}], "total": 1, "summary": {path: value}}
+
+
+def project_widget_field(widget: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    """按组件 ``options.field`` 点号取嵌套值。缺层时该组件为空，不抛错。
+
+    路径落到数组（如 ``status_dist``）时，原样返回元素；图表的 ``x_field`` / ``y_field`` 仍是元素上的列。
+    """
+    path = _widget_field_path(widget)
+    if not path or _plain_column(path, result):
+        return result
+    rows = result.get("data")
+    if not isinstance(rows, list):
+        return {"data": [], "total": 0, "summary": {}}
+    if len(rows) == 1 and isinstance(rows[0], dict):
+        root: Any = rows[0]
+    else:
+        root = rows
+    walked = _walk_path(root, [part for part in path.split(".") if part])
+    if walked is _MISSING:
+        return {"data": [], "total": 0, "summary": {}}
+    return _rows_from_walked(path, walked)
 
 
 async def _assert_registered_http_url(url: str, tenant_id: int) -> None:

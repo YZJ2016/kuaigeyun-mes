@@ -80,7 +80,7 @@ class BufferStore:
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def _load_local_config(path: str) -> LocalConfig:
