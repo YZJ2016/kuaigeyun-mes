@@ -57,6 +57,12 @@ class SalesDelivery(BaseModel):
     total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总出库数量")
     total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总金额")
 
+    # 币种（继承销售订单）
+    currency_code = fields.CharField(max_length=20, null=True, default="CNY", description="币种代码")
+    exchange_rate = fields.DecimalField(
+        max_digits=8, decimal_places=4, default=1, description="汇率（相对本位币）"
+    )
+
     # 物流信息
     shipping_method = fields.CharField(max_length=50, null=True, description="发货方式")
     tracking_number = fields.CharField(max_length=100, null=True, description="物流单号")

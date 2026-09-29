@@ -504,10 +504,13 @@ async def push_to_purchase_order(
     from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
     from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
     from apps.kuaizhizao.services.purchase_service import PurchaseService
+    from apps.kuaizhizao.utils.sales_order_currency_carry import currency_fields_for_purchase_doc
     from apps.master_data.models.supplier import Supplier
 
     if await require_purchase_requisition_for_tenant(tenant_id):
         raise BusinessLogicError("当前组织要求先采购申请后下单，请下推采购申请")
+
+    so_currency = currency_fields_for_purchase_doc(order)
 
     lines, _ = await collect_sales_order_buy_push_lines(
         tenant_id,
@@ -574,6 +577,8 @@ async def push_to_purchase_order(
                 order_date=today,
                 delivery_date=min(required_dates) if required_dates else today,
                 order_type="标准采购",
+                currency=so_currency["currency"],
+                exchange_rate=so_currency["exchange_rate"],
                 source_type="sales_order",
                 source_id=int(order.id),
                 notes=f"由销售订单 {order.order_code} 直推生成（按单外购，未做库存抵扣）",

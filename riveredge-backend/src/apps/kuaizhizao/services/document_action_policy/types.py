@@ -453,6 +453,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_order.push_shipment.no_backorder": "销售订单无欠发数量，无法下推发货通知单",
     "sales_order.push_delivery.not_allowed": "当前状态不可下推销售出库",
     "sales_order.push_delivery.no_backorder": "销售订单无欠发数量，无法下推销售出库",
+    "sales_order.push_delivery.require_shipment_notice": "当前组织要求先发货通知后出库，请先下推发货通知",
     "sales_order.push_invoice.not_allowed": "当前状态不可下推销售发票",
     "sales_order.push_invoice.already_fully_invoiced": "销售订单可开票金额已全部开票，删除未审核发票后可再次下推",
     "sales_order.push_return.not_allowed": "当前状态不可下推销售退货单",

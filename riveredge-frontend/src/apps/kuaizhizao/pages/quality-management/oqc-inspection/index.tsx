@@ -60,6 +60,7 @@ import {
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useQualityStageCreateEnabled } from '../components/QualityMasterDataHint';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { oqcInspectionCapabilityReasonMessage, oqcInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
@@ -121,6 +122,8 @@ const OQCInspectionPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const oqcPerms = useResourcePermissions(OQC_RESOURCE);
   const { canCreate, canAction } = oqcPerms;
+  const { enabled: oqcCreateEnabled } = useQualityStageCreateEnabled('oqc');
+  const canCreateByConfig = canCreate && oqcCreateEnabled;
   const canConduct = canAction?.('execute') ?? false;
   const oqcAuditEnabled = useAuditRequired('oqc_inspection', false);
   const oqcAuditColumn = useMemo(
@@ -674,7 +677,7 @@ const OQCInspectionPage: React.FC = () => {
             tableRowsRef.current = rows;
           }}
           toolBarRender={() =>
-            canCreate
+            canCreateByConfig
               ? [
                   <Button
                     {...rowActionKind('create')}

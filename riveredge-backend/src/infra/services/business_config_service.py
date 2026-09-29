@@ -6,11 +6,13 @@
 变更说明（2026 重构，蓝图下线后）：
 - 业务是否启用：由「菜单管理（is_active）」控制，不再落在本服务；
   历史 `check_node_enabled` 签名保留，内部恒返回 True，避免改动
-  20+ 个业务 Service 的调用点；后续可逐步删除调用并移除此方法。
+  20+ 个业务 Service 的调用点；运维说明见 docs/config-center-ops.md。
 - 是否需要审核：由「审核设置（AuditDocumentBinding.is_enabled）」决定；
   `check_audit_required` 查 AuditDocumentBinding；流程在启用开关时按需创建。
   不再用 ApprovalProcess.code=node_key 的 is_active 充当开关。
 - 运行模式 / 节点 / 模块 / 模板等蓝图时代的概念全部移除，不再提供相关常量与方法。
+- 已废弃 `parameters.sales.require_contract_before_order`：读/写时强制剥离，
+  避免存量 true 阻断销售订单创建。
 
 Author: Luigi Lu
 Date: 2026-01-27
@@ -23,6 +25,27 @@ from loguru import logger
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
 from core.config.functional_domain_spec import FUNCTIONAL_DOMAINS, normalize_functional_domain
+
+
+# 已废弃、读时剥离且写时拒绝的参数（category -> frozenset of keys）
+DEPRECATED_PARAMETER_KEYS: Dict[str, frozenset] = {
+    "sales": frozenset({"require_contract_before_order"}),
+    # 多单位未接业务门禁，勿再当可配开关；库存换算走主数据单位因子
+    "warehouse": frozenset({"multi_unit"}),
+}
+
+
+def strip_deprecated_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
+    """就地剥离已废弃参数键，返回同一 dict。"""
+    if not isinstance(parameters, dict):
+        return parameters
+    for category, keys in DEPRECATED_PARAMETER_KEYS.items():
+        bucket = parameters.get(category)
+        if not isinstance(bucket, dict):
+            continue
+        for key in keys:
+            bucket.pop(key, None)
+    return parameters
 
 
 def coerce_finance_parameter_dict(finance: Dict[str, Any]) -> Dict[str, Any]:
@@ -46,7 +69,7 @@ def coerce_finance_parameter_dict(finance: Dict[str, Any]) -> Dict[str, Any]:
     return fin
 
 from infra.models.tenant import Tenant
-from infra.exceptions.exceptions import NotFoundError
+from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.models.approval_process import ApprovalProcess
 from core.config.audit_registry import audit_node_keys
 
@@ -287,8 +310,9 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     },
     "parameters.sales.low_margin_threshold_percent": {"type": "number", "min": 0, "max": 100},
     "parameters.sales.price_deviation_approval_threshold_percent": {"type": "number", "min": 0, "max": 100},
-    "parameters.sales.require_contract_before_order": {"type": "boolean"},
     "parameters.sales.require_audit_before_print": {"type": "boolean"},
+    "parameters.sales.require_shipment_notice_before_delivery": {"type": "boolean"},
+    "parameters.planning.auto_push_sales_to_computation_on_approve": {"type": "boolean"},
     "parameters.sales.contract_expiry_alert_days": {"type": "number", "min": 1, "max": 365},
     "parameters.sales.contract_auto_close_on_full_release": {"type": "boolean"},
     "parameters.sales.contract_milestone_required": {"type": "boolean"},
@@ -324,7 +348,104 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "parameters.warehouse.over_issue_allowance_ratio": {"type": "number", "min": 0, "max": 1},
+    "parameters.procurement.arrival_imminent_days": {"type": "number", "min": 0, "max": 365},
+    "parameters.work_order.picking_confirm_allowed_role_codes": {"type": "tags"},
+    "parameters.work_order.picking_confirm_allowed_functional_domains": {"type": "multiselect"},
+    "parameters.finance.gl_closed_periods": {"type": "object"},
 }
+
+
+def _control_meta_for(category: str, parameter_key: str) -> Dict[str, Any]:
+    full_key = f"parameters.{category}.{parameter_key}"
+    if full_key in REGISTRY_PARAM_CONTROL_META:
+        return dict(REGISTRY_PARAM_CONTROL_META[full_key])
+    # 已实装但未声明控件元数据的键，默认按 boolean（配置中心绝大多数开关）
+    return {"type": "boolean"}
+
+
+def _coerce_number_for_write(value: Any, *, full_key: str) -> Decimal:
+    if isinstance(value, bool):
+        raise ValidationError(f"配置项 {full_key} 须为数字，不能为布尔")
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        # 仅用于校验比较，不落库为 float
+        return Decimal(str(value))
+    if isinstance(value, str) and value.strip():
+        try:
+            return Decimal(value.strip())
+        except Exception as exc:
+            raise ValidationError(f"配置项 {full_key} 须为数字") from exc
+    raise ValidationError(f"配置项 {full_key} 须为数字")
+
+
+def validate_parameter_write(
+    category: str,
+    parameter_key: str,
+    value: Any,
+    *,
+    merged_category_params: Optional[Dict[str, Any]] = None,
+) -> None:
+    """
+    单值/批量写入统一校验：废弃键拒绝、类型/枚举/范围（按 IMPLEMENTED + control meta）。
+    合法值原样通过；财务互斥 coerce、质检跨键约束在调用方合并后仍走本函数/专属校验。
+    """
+    if parameter_key in DEPRECATED_PARAMETER_KEYS.get(category, frozenset()):
+        raise ValidationError(f"配置项 {category}.{parameter_key} 已废弃，禁止写入")
+
+    full_key = f"parameters.{category}.{parameter_key}"
+    # 仅对已注册且已实装键做严格 schema；未实装键仍可写但前端已灰显
+    if full_key not in (PARAMETER_KEYS | PROCESS_KEYS):
+        return
+    if full_key not in IMPLEMENTED_PARAMETER_KEYS:
+        return
+
+    meta = _control_meta_for(category, parameter_key)
+    ptype = str(meta.get("type") or "boolean")
+
+    if ptype == "boolean":
+        if not isinstance(value, bool):
+            raise ValidationError(f"配置项 {full_key} 须为布尔值 true/false")
+    elif ptype == "number":
+        num = _coerce_number_for_write(value, full_key=full_key)
+        if "min" in meta and num < Decimal(str(meta["min"])):
+            raise ValidationError(
+                f"配置项 {full_key} 须 ≥ {meta['min']}，当前为 {value}"
+            )
+        if "max" in meta and num > Decimal(str(meta["max"])):
+            raise ValidationError(
+                f"配置项 {full_key} 须 ≤ {meta['max']}，当前为 {value}"
+            )
+    elif ptype == "select":
+        options = meta.get("options") or []
+        allowed = [o.get("value") for o in options if isinstance(o, dict) and "value" in o]
+        if allowed and value not in allowed:
+            raise ValidationError(
+                f"配置项 {full_key} 取值非法，合法值为: {', '.join(str(v) for v in allowed)}"
+            )
+    elif ptype == "tags":
+        if value is not None and not isinstance(value, (list, tuple)):
+            raise ValidationError(f"配置项 {full_key} 须为字符串数组")
+    elif ptype == "multiselect":
+        if value is not None and not isinstance(value, (list, tuple)):
+            raise ValidationError(f"配置项 {full_key} 须为数组")
+    elif ptype == "object":
+        if value is not None and not isinstance(value, dict):
+            raise ValidationError(f"配置项 {full_key} 须为对象")
+    elif ptype == "string":
+        if value is not None and not isinstance(value, str):
+            raise ValidationError(f"配置项 {full_key} 须为字符串")
+
+    # 质检跨键：单值/batch 共用，传入合并后的 quality 桶
+    if category == "quality" and merged_category_params is not None:
+        from apps.kuaizhizao.services.inspection_policy_service import (
+            validate_quality_business_parameters,
+        )
+
+        validate_quality_business_parameters(merged_category_params)
 
 
 # ============================================================
@@ -372,8 +493,17 @@ PARAMETER_KEYS = {
     "parameters.reporting.data_correction",
     "parameters.warehouse.batch_management",
     "parameters.warehouse.serial_management",
-    "parameters.warehouse.multi_unit",
     "parameters.warehouse.fifo",
+    "parameters.work_order.toolbar_sync_enabled",
+    "parameters.work_order.toolbar_push_enabled",
+    "parameters.reporting.toolbar_sync_enabled",
+    "parameters.reporting.toolbar_push_enabled",
+    "parameters.sales.toolbar_sync_enabled",
+    "parameters.sales.toolbar_push_enabled",
+    "parameters.purchase.toolbar_sync_enabled",
+    "parameters.purchase.toolbar_push_enabled",
+    "parameters.warehouse.toolbar_sync_enabled",
+    "parameters.warehouse.toolbar_push_enabled",
     "parameters.warehouse.fifo_mode",
     "parameters.warehouse.lifo",
     "parameters.warehouse.location_management",
@@ -407,9 +537,11 @@ PARAMETER_KEYS = {
     "parameters.sales.low_margin_threshold_percent",
     "parameters.sales.price_deviation_approval_threshold_percent",
     "parameters.sales.require_audit_before_print",
+    "parameters.sales.require_shipment_notice_before_delivery",
     "parameters.sales.contract_expiry_alert_days",
     "parameters.sales.contract_auto_close_on_full_release",
     "parameters.sales.sales_review",
+    "parameters.planning.auto_push_sales_to_computation_on_approve",
     "parameters.procurement.arrival_imminent_days",
     "parameters.automation.push_default_mode",
     "parameters.master_data.drawing_max_upload_size_mb",
@@ -460,6 +592,16 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.warehouse.auto_outbound",
     "parameters.warehouse.allow_negative_inventory",
     "parameters.warehouse.over_issue_allowance_ratio",
+    "parameters.work_order.toolbar_sync_enabled",
+    "parameters.work_order.toolbar_push_enabled",
+    "parameters.reporting.toolbar_sync_enabled",
+    "parameters.reporting.toolbar_push_enabled",
+    "parameters.sales.toolbar_sync_enabled",
+    "parameters.sales.toolbar_push_enabled",
+    "parameters.purchase.toolbar_sync_enabled",
+    "parameters.purchase.toolbar_push_enabled",
+    "parameters.warehouse.toolbar_sync_enabled",
+    "parameters.warehouse.toolbar_push_enabled",
     "parameters.purchase.tolerance_percentage",
     "parameters.purchase.price_fluctuation_limit_percent",
     "parameters.quality.incoming_inspection",
@@ -487,9 +629,11 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.sales.low_margin_threshold_percent",
     "parameters.sales.price_deviation_approval_threshold_percent",
     "parameters.sales.require_audit_before_print",
+    "parameters.sales.require_shipment_notice_before_delivery",
     "parameters.sales.contract_expiry_alert_days",
     "parameters.sales.contract_auto_close_on_full_release",
     "parameters.sales.sales_review",
+    "parameters.planning.auto_push_sales_to_computation_on_approve",
     "parameters.automation.push_default_mode",
     "parameters.master_data.drawing_max_upload_size_mb",
 }
@@ -678,7 +822,6 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     "warehouse": {
         "batch_management": True,
         "serial_management": True,
-        "multi_unit": True,
         "fifo": True,
         "fifo_mode": "batch_id",
         "lifo": False,
@@ -717,8 +860,8 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "audit_enabled": False,
         "low_margin_threshold_percent": 0,
         "price_deviation_approval_threshold_percent": 0,
-        "require_contract_before_order": False,
         "require_audit_before_print": False,
+        "require_shipment_notice_before_delivery": False,
         "contract_expiry_alert_days": 30,
         "contract_auto_close_on_full_release": True,
         "contract_milestone_required": False,
@@ -952,14 +1095,18 @@ class BusinessConfigService:
 
     async def check_node_enabled(self, tenant_id: int, node_key: str) -> bool:
         """
-        保留签名的空实现：功能是否开启由「菜单管理（is_active）」控制。
-        保留此方法仅为避免改动 20+ 个业务 Service 调用点。
+        【已废弃 / 空实现】恒返回 True。
+
+        业务模块是否对用户可见、可用：请在「菜单管理」设置菜单 is_active，
+        或通过角色权限控制。配置中心不再提供节点级功能开关。
+        调用方不应再依赖本方法做门禁；见 docs/config-center-ops.md。
         """
         return True
 
     async def check_audit_required(self, tenant_id: int, node_key: str) -> bool:
         """
-        是否需要人工审核：租户在审核设置中启用 node_key 且已绑定可用审批流程。
+        是否需要人工审核：配置中心「审核设置」中启用 node_key
+        （AuditDocumentBinding.is_enabled）且已绑定可用审批流程。
         """
         from core.services.approval.audit_binding_service import AuditBindingService
 
@@ -1014,6 +1161,7 @@ class BusinessConfigService:
         if "master_data" in merged:
             merged["master_data"] = coerce_master_data_parameters(dict(merged["master_data"] or {}))
 
+        strip_deprecated_parameters(merged)
         return {"parameters": merged}
 
     async def get_bom_multi_version_allowed(self, tenant_id: int) -> bool:
@@ -1148,6 +1296,13 @@ class BusinessConfigService:
         """报价单/销售订单：开启后须审核通过才可打印（默认关闭）。"""
         config = await self.get_business_config(tenant_id)
         return bool(config["parameters"].get("sales", {}).get("require_audit_before_print", False))
+
+    async def require_shipment_notice_before_delivery(self, tenant_id: int) -> bool:
+        """销售出库须先发货通知：开启后禁止销售订单直连出库（默认关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"].get("sales", {}).get("require_shipment_notice_before_delivery", False)
+        )
 
     async def get_finance_auto_write_off_precision_limit(self, tenant_id: int) -> float:
         return await self._get_percentage_param(tenant_id, "finance", "auto_write_off_precision_limit")
@@ -1411,6 +1566,15 @@ class BusinessConfigService:
         business_config = settings.get("business_config", {})
         business_config.setdefault("parameters", {})
         business_config["parameters"].setdefault(category, {})
+        merged_cat = dict(business_config["parameters"].get(category) or {})
+        merged_cat[parameter_key] = value
+        validate_parameter_write(
+            category,
+            parameter_key,
+            value,
+            merged_category_params=merged_cat if category == "quality" else None,
+        )
+
         business_config["parameters"][category][parameter_key] = value
         if category == "master_data":
             business_config["parameters"]["master_data"] = coerce_master_data_parameters(
@@ -1420,6 +1584,7 @@ class BusinessConfigService:
             business_config["parameters"]["finance"] = coerce_finance_parameter_dict(
                 business_config["parameters"]["finance"]
             )
+        strip_deprecated_parameters(business_config["parameters"])
 
         settings["business_config"] = business_config
         await Tenant.filter(id=tenant_id).update(settings=settings)
@@ -1446,16 +1611,22 @@ class BusinessConfigService:
         business_config = settings.get("business_config", {})
         business_config.setdefault("parameters", {})
         for category, params in parameters.items():
-            business_config["parameters"].setdefault(category, {}).update(params)
+            current = dict(business_config["parameters"].get(category) or {})
+            for parameter_key, value in (params or {}).items():
+                preview = dict(current)
+                preview[parameter_key] = value
+                validate_parameter_write(
+                    category,
+                    parameter_key,
+                    value,
+                    merged_category_params=preview if category == "quality" else None,
+                )
+                current[parameter_key] = value
+            business_config["parameters"].setdefault(category, {}).update(params or {})
         if "common" in business_config["parameters"]:
             business_config["parameters"]["common"] = coerce_common_detail_drawer_params(
                 dict(business_config["parameters"]["common"] or {})
             )
-        if "quality" in parameters:
-            from apps.kuaizhizao.services.inspection_policy_service import validate_quality_business_parameters
-
-            merged_quality = business_config["parameters"].get("quality") or {}
-            validate_quality_business_parameters(merged_quality)
         if "master_data" in business_config["parameters"]:
             business_config["parameters"]["master_data"] = coerce_master_data_parameters(
                 dict(business_config["parameters"]["master_data"] or {})
@@ -1464,6 +1635,7 @@ class BusinessConfigService:
             business_config["parameters"]["finance"] = coerce_finance_parameter_dict(
                 business_config["parameters"]["finance"]
             )
+        strip_deprecated_parameters(business_config["parameters"])
 
         settings["business_config"] = business_config
         await Tenant.filter(id=tenant_id).update(settings=settings)

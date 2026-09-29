@@ -20,6 +20,11 @@ describe('parseReportingWorkHours', () => {
     expect(parseReportingWorkHours(0)).toBe(0);
     expect(parseReportingWorkHours('1.5')).toBe(1.5);
   });
+
+  it('rounds to two decimal places', () => {
+    expect(parseReportingWorkHours(1.234)).toBe(1.23);
+    expect(parseReportingWorkHours('1.235')).toBe(1.24);
+  });
 });
 
 describe('deriveReportingWorkTimeUpdates', () => {
