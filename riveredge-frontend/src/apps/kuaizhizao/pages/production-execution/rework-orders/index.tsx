@@ -2274,7 +2274,13 @@ const ReworkOrdersPage: React.FC = () => {
                       <ProFormText name="section_name" label={t('app.kuaizhizao.reworkOrder.colSectionName')} width="sm" />
                       <ProFormText name="station_code" label={t('app.kuaizhizao.reworkOrder.colStationCode')} width="sm" />
                       <ProFormDigit name="planned_headcount" label={t('app.kuaizhizao.reworkOrder.colPlannedHeadcount')} width="xs" min={0} />
-                      <ProFormDigit name="standard_minutes" label={t('app.kuaizhizao.reworkOrder.colStandardMinutes')} width="xs" min={0} />
+                      <ProFormDigit
+                        name="standard_minutes"
+                        label={t('app.kuaizhizao.reworkOrder.colStandardMinutes')}
+                        width="xs"
+                        min={0}
+                        fieldProps={{ precision: 2, step: 0.01 }}
+                      />
                       <ProFormDigit name="planned_qty" label={t('app.kuaizhizao.reworkOrder.colPlannedQty')} width="xs" min={0} />
                       <ProFormDatePicker name="planned_start_at" label={t('app.kuaizhizao.reworkOrder.colPlannedStartAt')} fieldProps={{ showTime: true }} />
                       <ProFormDatePicker name="planned_end_at" label={t('app.kuaizhizao.reworkOrder.colPlannedEndAt')} fieldProps={{ showTime: true }} />

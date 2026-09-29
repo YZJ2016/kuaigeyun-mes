@@ -8,6 +8,7 @@ Date: 2025-12-30
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional, List, Literal
 from pydantic import Field, field_validator
 from core.schemas.base import BaseSchema
@@ -679,6 +680,8 @@ class SalesDeliveryBase(BaseSchema):
     status: str = Field("待出库", max_length=20, description="出库状态")
     total_quantity: float = Field(0, ge=0, description="总出库数量")
     total_amount: float = Field(0, ge=0, description="总金额")
+    currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码")
+    exchange_rate: Decimal = Field(default=Decimal("1"), gt=0, description="汇率（相对本位币）")
     shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
     tracking_number: Optional[str] = Field(None, max_length=100, description="物流单号")
     shipping_address: Optional[str] = Field(None, description="收货地址")
@@ -1004,6 +1007,8 @@ class SalesReturnBase(BaseSchema):
     status: str = Field("待退货", max_length=20, description="退货状态")
     total_quantity: float = Field(0, ge=0, description="总退货数量")
     total_amount: float = Field(0, ge=0, description="总金额")
+    currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码")
+    exchange_rate: Decimal = Field(default=Decimal("1"), gt=0, description="汇率（相对本位币）")
     shipping_method: Optional[str] = Field(None, max_length=50, description="退货方式")
     tracking_number: Optional[str] = Field(None, max_length=100, description="物流单号")
     shipping_address: Optional[str] = Field(None, description="退货地址")

@@ -128,6 +128,7 @@ import { pickImportExampleValue } from '../../../../../utils/loadImportDictionar
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useQualityStageCreateEnabled } from '../components/QualityMasterDataHint';
 import { qualityInspectionRowGates, qualityInspectionCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
@@ -271,6 +272,7 @@ const IncomingInspectionPage: React.FC = () => {
   const incomingPerms = useResourcePermissions(INCOMING_RESOURCE);
   const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
   const inspectionPlanPerms = useResourcePermissions(INSPECTION_PLAN_RESOURCE);
+  const { enabled: iqcCreateEnabled } = useQualityStageCreateEnabled('iqc');
   const incomingAuditEnabled = useAuditRequired('incoming_inspection');
   const incomingAuditColumn = useMemo(
     () => createListAuditPhaseColumn<IncomingInspection>({ t, auditEnabled: incomingAuditEnabled }),
@@ -1124,7 +1126,9 @@ const IncomingInspectionPage: React.FC = () => {
       }
     },
   });
-  useNewShortcut(pullFromPurchaseReceiptQuery.openModal);
+  useNewShortcut(
+    iqcCreateEnabled ? pullFromPurchaseReceiptQuery.openModal : () => undefined,
+  );
 
   const createMenuItems = useMemo(
     () => [
@@ -1617,23 +1621,27 @@ const IncomingInspectionPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         showCreateButton={false}
-        toolBarActionsBeforeCreate={[
-          <UniPullCreateToolbar
-            key="create-incoming"
-            compactKey="create-incoming"
-            createIcon={<PlusOutlined />}
-            createLabel={t('app.kuaizhizao.quality.incoming.createButton')}
-            onCreate={pullFromPurchaseReceiptQuery.openModal}
-            menuItems={createMenuItems}
-          />,
-          <Button
-            key="posted-receipt-recheck"
-            type="primary"
-            onClick={pullFromPostedPurchaseReceiptQuery.openModal}
-          >
-            {t('app.kuaizhizao.quality.incoming.createFromPostedReceiptButton')}
-          </Button>,
-        ]}
+        toolBarActionsBeforeCreate={
+          iqcCreateEnabled
+            ? [
+                <UniPullCreateToolbar
+                  key="create-incoming"
+                  compactKey="create-incoming"
+                  createIcon={<PlusOutlined />}
+                  createLabel={t('app.kuaizhizao.quality.incoming.createButton')}
+                  onCreate={pullFromPurchaseReceiptQuery.openModal}
+                  menuItems={createMenuItems}
+                />,
+                <Button
+                  key="posted-receipt-recheck"
+                  type="primary"
+                  onClick={pullFromPostedPurchaseReceiptQuery.openModal}
+                >
+                  {t('app.kuaizhizao.quality.incoming.createFromPostedReceiptButton')}
+                </Button>,
+              ]
+            : []
+        }
         toolBarRender={() => [
           <UniPushToolbarButton
             key={`incoming-inspection-push-${selectedIncomingForToolbar?.id ?? 'none'}`}

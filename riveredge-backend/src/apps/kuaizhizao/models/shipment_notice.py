@@ -54,6 +54,12 @@ class ShipmentNotice(BaseModel):
     total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总数量")
     total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总金额")
 
+    # 币种（继承销售订单）
+    currency_code = fields.CharField(max_length=20, null=True, default="CNY", description="币种代码")
+    exchange_rate = fields.DecimalField(
+        max_digits=8, decimal_places=4, default=1, description="汇率（相对本位币）"
+    )
+
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
     is_active = fields.BooleanField(default=True, description="是否有效")

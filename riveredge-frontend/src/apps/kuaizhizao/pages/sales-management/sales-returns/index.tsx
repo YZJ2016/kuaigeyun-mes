@@ -73,6 +73,8 @@ import {
 } from '../../../../../utils/documentFormReferenceLoad';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { DictionarySelect } from '../../../../../components/dictionary-select';
+import { resolveDocumentCurrencyInputPrefix } from '../../../utils/documentCurrencyDisplay';
 import dayjs from 'dayjs';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListLifecycleParams } from '../../../utils/salesReturnLifecycle';
@@ -1201,6 +1203,8 @@ const SalesReturnsPage: React.FC = () => {
         return_reason: detail.return_reason,
         return_type: detail.return_type,
         shipping_method: detail.shipping_method,
+        currency_code: String(detail.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+        exchange_rate: Number(detail.exchange_rate ?? 1) || 1,
         notes: detail.notes,
         attachments: mapAttachmentsToUploadList(detail.attachments),
         items: (detail.items || []).map((it) => ({
@@ -1287,6 +1291,8 @@ const SalesReturnsPage: React.FC = () => {
           shipping_method: standardValues.shipping_method ?? null,
           tracking_number: detail.tracking_number ?? null,
           shipping_address: detail.shipping_address ?? null,
+          currency_code: String(standardValues.currency_code || detail.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+          exchange_rate: Number(standardValues.exchange_rate ?? detail.exchange_rate ?? 1) || 1,
           notes: standardValues.notes ?? null,
           attachments: normalizeDocumentAttachments(standardValues.attachments),
           sales_delivery_id: detail.sales_delivery_id ?? null,
@@ -2158,6 +2164,22 @@ const SalesReturnsPage: React.FC = () => {
         </Row>
         <Row gutter={16}>
           <Col span={8}>
+            <DictionarySelect
+              dictionaryCode="CURRENCY"
+              name="currency_code"
+              label={t('app.kuaizhizao.quotation.form.currency')}
+              placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
+              initialValue="CNY"
+            />
+          </Col>
+          <Col span={8}>
+            <ProForm.Item name="exchange_rate" label={t('app.kuaizhizao.salesOrder.exchangeRate')} initialValue={1}>
+              <InputNumber min={0.0001} precision={4} style={{ width: '100%' }} />
+            </ProForm.Item>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={8}>
             <ProFormSelect
               name="return_reason"
               label={t('app.kuaizhizao.salesReturn.returnReason')}
@@ -2341,8 +2363,23 @@ const SalesReturnsPage: React.FC = () => {
                       width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: unknown, __: unknown, index: number) => (
-                        <AntForm.Item name={[index, 'unit_price']} noStyle>
-                          <InputNumber size={DOCUMENT_DETAIL_CONTROL_SIZE} style={{ width: '100%' }} min={0} prefix="¥" />
+                        <AntForm.Item
+                          noStyle
+                          shouldUpdate={(prev: any, curr: any) => prev?.currency_code !== curr?.currency_code}
+                        >
+                          {({ getFieldValue }) => {
+                            const moneyPrefix = resolveDocumentCurrencyInputPrefix(getFieldValue('currency_code'));
+                            return (
+                              <AntForm.Item name={[index, 'unit_price']} noStyle>
+                                <InputNumber
+                                  size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                                  style={{ width: '100%' }}
+                                  min={0}
+                                  prefix={moneyPrefix}
+                                />
+                              </AntForm.Item>
+                            );
+                          }}
                         </AntForm.Item>
                       ),
                     },
@@ -2612,8 +2649,22 @@ const SalesReturnsPage: React.FC = () => {
                       { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
                       { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
                       { title: t('app.kuaizhizao.salesReturn.returnQuantity'), dataIndex: 'return_quantity', width: 100, align: 'right', render: formatQuantity },
-                      { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
-                      { title: t('app.kuaizhizao.salesReturn.amount'), dataIndex: 'total_amount', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
+                      {
+                        title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                        dataIndex: 'unit_price',
+                        width: 100,
+                        align: 'right',
+                        render: (text) =>
+                          `${resolveDocumentCurrencyInputPrefix(returnDetail?.currency_code)}${text || 0}`,
+                      },
+                      {
+                        title: t('app.kuaizhizao.salesReturn.amount'),
+                        dataIndex: 'total_amount',
+                        width: 100,
+                        align: 'right',
+                        render: (text) =>
+                          `${resolveDocumentCurrencyInputPrefix(returnDetail?.currency_code)}${text || 0}`,
+                      },
                       { title: t('app.kuaizhizao.salesReturn.import.batchNumber'), dataIndex: 'batch_number', width: 120 },
                       { title: t('app.kuaizhizao.salesReturn.location'), dataIndex: 'location_code', width: 100 },
                     ]}

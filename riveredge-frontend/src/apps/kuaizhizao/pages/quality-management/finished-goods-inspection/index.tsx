@@ -123,6 +123,7 @@ import { pickImportExampleValue } from '../../../../../utils/loadImportDictionar
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useQualityStageCreateEnabled } from '../components/QualityMasterDataHint';
 import { qualityInspectionRowGates, qualityInspectionCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
@@ -320,6 +321,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   }, [disposalFallback]);
   const finishedPerms = useResourcePermissions(FINISHED_RESOURCE);
   const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
+  const { enabled: fqcCreateEnabled } = useQualityStageCreateEnabled('fqc');
   const finishedAuditEnabled = useAuditRequired('finished_goods_inspection');
   const finishedAuditColumn = useMemo(
     () => createListAuditPhaseColumn<FinishedGoodsInspection>({ t, auditEnabled: finishedAuditEnabled }),
@@ -635,7 +637,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     },
   });
   pullFromWorkOrderCloseRef.current = pullFromWorkOrderQuery.closeModal;
-  useNewShortcut(pullFromWorkOrderQuery.openModal);
+  useNewShortcut(fqcCreateEnabled ? pullFromWorkOrderQuery.openModal : () => undefined);
 
   // 处理创建不合格品记录
   const handleCreateDefect = (record: FinishedGoodsInspection) => {
@@ -1230,7 +1232,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
         }}
-        showCreateButton={true}
+        showCreateButton={fqcCreateEnabled}
         createButtonText={createButtonLabel}
         onCreate={pullFromWorkOrderQuery.openModal}
         toolBarRender={() => [

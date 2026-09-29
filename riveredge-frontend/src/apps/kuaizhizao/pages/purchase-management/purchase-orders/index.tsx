@@ -55,7 +55,8 @@ import {
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
 import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
-import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
+import { useToolbarSyncPushFlags, TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY } from '../../../../../hooks/useToolbarSyncPushFlags';
+import { getBusinessConfig } from '../../../../../services/businessConfig';
 import { renderExternalSyncPrimaryExtra } from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
 import PurchaseOrderSyncFromSourceModal from './PurchaseOrderSyncFromSourceModal';
 import PurchaseOrderDocumentPushPanel from './PurchaseOrderDocumentPushPanel';
@@ -378,6 +379,14 @@ const PurchaseOrdersPage: React.FC = () => {
   const purchaseOrderAuditEnabled = useAuditRequired('purchase_order', false);
   const purchaseOrderPerms = useResourcePermissions(PURCHASE_ORDER_RESOURCE);
   const toolbarSyncPush = useToolbarSyncPushFlags('purchase');
+  const { data: businessConfig } = useQuery({
+    queryKey: TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY,
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const requirePurchaseRequisition = Boolean(
+    businessConfig?.parameters?.procurement?.require_purchase_requisition,
+  );
   const purchaseOrderChangePerms = useResourcePermissions('kuaizhizao:purchase-order-change');
   const { token } = theme.useToken();
   const purchaseOrderDetailDrawerZIndex = token.zIndexPopupBase;
@@ -2360,8 +2369,20 @@ const PurchaseOrdersPage: React.FC = () => {
   };
 
   const handleCreate = () => {
+    if (requirePurchaseRequisition) {
+      messageApi.warning('当前组织要求先采购申请后下单，请从采购申请加载');
+      pullFromRequisitionQuery.openModal();
+      return;
+    }
     navigate(PURCHASE_ORDER_CREATE_PATH);
   };
+
+  useEffect(() => {
+    if (!isCreatePage || !requirePurchaseRequisition) return;
+    messageApi.warning('当前组织要求先采购申请后下单，请从采购申请加载');
+    navigate(PURCHASE_ORDER_LIST_PATH, { replace: true });
+    pullFromRequisitionQuery.openModal();
+  }, [isCreatePage, requirePurchaseRequisition]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isFormPage) {
@@ -3713,20 +3734,35 @@ const PurchaseOrdersPage: React.FC = () => {
             <UniPullCreateToolbar
               compactKey="create-purchase-order-with-pull"
               createIcon={<PlusOutlined />}
-              createLabel={t('app.kuaizhizao.menu.purchase-management.purchase-orders.new')}
+              createLabel={
+                requirePurchaseRequisition
+                  ? pullFromRequisitionAction.label
+                  : t('app.kuaizhizao.menu.purchase-management.purchase-orders.new')
+              }
               onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
-                {
-                  key: 'pull-from-requisition',
-                  actionKey: 'purchase_order.pull_from_requisition',
-                  onClick: pullFromRequisitionQuery.openModal,
-                },
-                {
-                  key: 'pull-from-inquiry',
-                  actionKey: 'purchase_order.pull_from_inquiry',
-                  onClick: pullFromInquiryQuery.openModal,
-                },
-              ])}
+              menuItems={buildKuaizhizaoPullCreateMenuItems(
+                t,
+                requirePurchaseRequisition
+                  ? [
+                      {
+                        key: 'pull-from-requisition',
+                        actionKey: 'purchase_order.pull_from_requisition',
+                        onClick: pullFromRequisitionQuery.openModal,
+                      },
+                    ]
+                  : [
+                      {
+                        key: 'pull-from-requisition',
+                        actionKey: 'purchase_order.pull_from_requisition',
+                        onClick: pullFromRequisitionQuery.openModal,
+                      },
+                      {
+                        key: 'pull-from-inquiry',
+                        actionKey: 'purchase_order.pull_from_inquiry',
+                        onClick: pullFromInquiryQuery.openModal,
+                      },
+                    ],
+              )}
             />,
             <UniPushToolbarButton
               key={`purchase-order-push-${selectedOrderForToolbar?.id ?? 'none'}`}

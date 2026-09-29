@@ -1100,6 +1100,67 @@ class ApprovalInstanceService:
         return True
 
     @staticmethod
+    async def cancel_pending_for_process(
+        tenant_id: int,
+        process_id: int,
+        *,
+        operator_id: int = 0,
+        node_key: Optional[str] = None,
+    ) -> int:
+        """
+        配置级关审核开关：取消该流程下全部 pending 实例。
+
+        不改变 cancel_approval 语义；仅用于 AuditBindingService 关闭开关路径。
+        在 instance.data 写入 invalidated_by_config 留痕，并记审批历史。
+        """
+        instances = await ApprovalInstance.filter(
+            tenant_id=tenant_id,
+            process_id=process_id,
+            status="pending",
+            deleted_at__isnull=True,
+        )
+        cancelled = 0
+        for instance in instances:
+            withdraw_node = instance.current_node
+            data = dict(instance.data or {})
+            data["invalidated_by_config"] = True
+            if node_key:
+                data["invalidated_node_key"] = node_key
+            instance.data = data
+
+            await ApprovalInstanceService._create_approval_history(
+                tenant_id=tenant_id,
+                approval_instance_id=instance.id,
+                action="withdraw",
+                action_by=operator_id,
+                comment="invalidated_by_config",
+                from_node=withdraw_node,
+                to_node="start",
+            )
+            await ApprovalTask.filter(
+                tenant_id=tenant_id,
+                approval_instance_id=instance.id,
+                status="pending",
+            ).update(status="cancelled")
+
+            instance.status = "cancelled"
+            instance.completed_at = resolve_business_datetime()
+            instance.current_node = None
+            instance.current_approver_id = None
+            await instance.save()
+            cancelled += 1
+
+        if cancelled:
+            logger.info(
+                "配置关审核开关取消 pending 实例: tenant={} process_id={} node_key={} count={}",
+                tenant_id,
+                process_id,
+                node_key,
+                cancelled,
+            )
+        return cancelled
+
+    @staticmethod
     async def _list_instances_by_entity(
         tenant_id: int,
         entity_type: str,

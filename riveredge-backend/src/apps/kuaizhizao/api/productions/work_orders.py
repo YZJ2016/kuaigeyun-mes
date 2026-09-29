@@ -753,6 +753,9 @@ async def get_work_order_execution_config(
         tenant_id=tenant_id,
         user_id=current_user.id,
     )
+    biz_params = (await BusinessConfigService().get_business_config(tenant_id)).get("parameters", {}) or {}
+    wo_params = biz_params.get("work_order", {}) or {}
+    reporting_params = biz_params.get("reporting", {}) or {}
     return {
         **policy,
         "last_operation_auto_inbound_mode": last_inbound_mode,
@@ -766,12 +769,15 @@ async def get_work_order_execution_config(
         "current_user_role_codes": sorted(role_codes),
         "current_user_functional_domains": sorted(functional_domains),
         "current_user_can_confirm_picking": can_confirm_picking,
-        "show_customer_name": bool(
-            (await BusinessConfigService().get_business_config(tenant_id))
-            .get("parameters", {})
-            .get("work_order", {})
-            .get("show_customer_name", False)
-        ),
+        "show_customer_name": bool(wo_params.get("show_customer_name", False)),
+        # 与配置中心 parameters.work_order / reporting 开关对齐，供前端隐藏入口；服务端仍强校验
+        "priority_enabled": bool(wo_params.get("priority", True)),
+        "split_enabled": bool(wo_params.get("split", True)),
+        "merge_enabled": bool(wo_params.get("merge", True)),
+        "quick_reporting_enabled": bool(reporting_params.get("quick_reporting", True)),
+        "parameter_reporting_enabled": bool(reporting_params.get("parameter_reporting", True)),
+        "data_correction_enabled": bool(reporting_params.get("data_correction", True)),
+        "reporting_auto_approve_enabled": bool(reporting_params.get("auto_approve", False)),
     }
 
 

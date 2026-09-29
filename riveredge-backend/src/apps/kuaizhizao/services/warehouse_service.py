@@ -6188,6 +6188,21 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "sales_delivery")
         if not is_enabled:
             raise BusinessLogicError("销售发货模块未启用，无法创建出库单")
+        if await self.business_config_service.require_shipment_notice_before_delivery(tenant_id):
+            items = list(getattr(delivery_data, "items", None) or [])
+            if not items:
+                raise BusinessLogicError(
+                    "当前组织要求先发货通知后出库，请从发货通知下推或加载生成出库单"
+                )
+            missing_sn = [
+                item
+                for item in items
+                if not getattr(item, "shipment_notice_item_id", None)
+            ]
+            if missing_sn:
+                raise BusinessLogicError(
+                    "当前组织要求先发货通知后出库，出库明细须关联发货通知行，请从发货通知下推或加载"
+                )
         location_required, auto_outbound_enabled = await _get_warehouse_policy_flags(tenant_id)
         created_delivery_id: Optional[int] = None
 
@@ -6242,6 +6257,37 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     demand_type = "sales_order"
                 elif sales_forecast_id:
                     demand_type = "sales_forecast"
+
+            from apps.kuaizhizao.utils.sales_order_currency_carry import (
+                currency_fields_for_sales_doc,
+                resolve_sales_order_currency_for_tenant,
+            )
+
+            fields_set = getattr(delivery_data, "model_fields_set", set()) or set()
+            provided_code = (
+                getattr(delivery_data, "currency_code", None)
+                if "currency_code" in fields_set
+                else None
+            )
+            provided_rate = (
+                getattr(delivery_data, "exchange_rate", None)
+                if "exchange_rate" in fields_set
+                else None
+            )
+            if provided_code and str(provided_code).strip():
+                so_currency = currency_fields_for_sales_doc(
+                    None,
+                    override_code=provided_code,
+                    override_rate=provided_rate,
+                )
+            else:
+                code_rate = await resolve_sales_order_currency_for_tenant(
+                    tenant_id, sales_order_id
+                )
+                so_currency = {
+                    "currency_code": code_rate[0],
+                    "exchange_rate": provided_rate if provided_rate is not None else code_rate[1],
+                }
             
             delivery = await SalesDelivery.create(
                 tenant_id=tenant_id,
@@ -6269,6 +6315,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 status=initial_status,
                 total_quantity=total_quantity,
                 total_amount=total_amount,
+                currency_code=so_currency["currency_code"],
+                exchange_rate=so_currency["exchange_rate"],
                 shipping_method=delivery_data.shipping_method,
                 tracking_number=delivery_data.tracking_number,
                 shipping_address=getattr(delivery_data, 'shipping_address', None),
@@ -7262,6 +7310,10 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             NotFoundError: 销售订单不存在
             BusinessLogicError: 销售订单未审核或已全部出库
         """
+        if await self.business_config_service.require_shipment_notice_before_delivery(tenant_id):
+            raise BusinessLogicError(
+                "当前组织要求先发货通知后出库，请先下推发货通知，再从发货通知生成出库单"
+            )
         from apps.kuaizhizao.models.sales_order import SalesOrder
         from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
         from apps.kuaizhizao.schemas.warehouse import SalesDeliveryItemCreate
@@ -11260,6 +11312,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             sales_order_code = return_data.sales_order_code
             
             # 如果提供了sales_delivery_id但没有sales_delivery_code，尝试获取
+            delivery = None
             if sales_delivery_id and not sales_delivery_code:
                 delivery = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=sales_delivery_id)
                 if delivery:
@@ -11267,12 +11320,50 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     if not sales_order_id:
                         sales_order_id = delivery.sales_order_id
                         sales_order_code = delivery.sales_order_code
+            elif sales_delivery_id:
+                delivery = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=sales_delivery_id)
 
             resolved_warehouse_id, resolved_warehouse_name = await _resolve_warehouse_identity(
                 tenant_id=tenant_id,
                 warehouse_id=return_data.warehouse_id,
                 warehouse_name=return_data.warehouse_name,
             )
+
+            from apps.kuaizhizao.utils.sales_order_currency_carry import (
+                currency_fields_for_sales_doc,
+                resolve_sales_order_currency_for_tenant,
+            )
+
+            fields_set = getattr(return_data, "model_fields_set", set()) or set()
+            provided_code = (
+                getattr(return_data, "currency_code", None)
+                if "currency_code" in fields_set
+                else None
+            )
+            provided_rate = (
+                getattr(return_data, "exchange_rate", None)
+                if "exchange_rate" in fields_set
+                else None
+            )
+            if provided_code and str(provided_code).strip():
+                so_currency = currency_fields_for_sales_doc(
+                    None,
+                    override_code=provided_code,
+                    override_rate=provided_rate,
+                )
+            elif delivery and getattr(delivery, "currency_code", None):
+                so_currency = currency_fields_for_sales_doc(
+                    delivery,
+                    override_rate=provided_rate,
+                )
+            else:
+                code_rate = await resolve_sales_order_currency_for_tenant(
+                    tenant_id, sales_order_id
+                )
+                so_currency = {
+                    "currency_code": code_rate[0],
+                    "exchange_rate": provided_rate if provided_rate is not None else code_rate[1],
+                }
             
             return_obj = await SalesReturn.create(
                 tenant_id=tenant_id,
@@ -11299,6 +11390,8 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 status=return_data.status,
                 total_quantity=total_quantity,
                 total_amount=total_amount,
+                currency_code=so_currency["currency_code"],
+                exchange_rate=so_currency["exchange_rate"],
                 shipping_method=return_data.shipping_method,
                 tracking_number=return_data.tracking_number,
                 shipping_address=getattr(return_data, 'shipping_address', None),
