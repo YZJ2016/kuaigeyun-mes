@@ -9,8 +9,16 @@ FAST_DEPLOY_CONFIG_DIR="$FAST_DEPLOY_DIR/config"
 INSTALL_SCRIPTS_JSON="$FAST_DEPLOY_CONFIG_DIR/install-scripts.json"
 BACKEND_DIR="$PROJECT_ROOT/riveredge-backend"
 FRONTEND_DIR="$PROJECT_ROOT/riveredge-frontend"
-MOBILE_APP_DIR="$PROJECT_ROOT/riveredge-app/mobile"
-MOBILE_WEB_DIR="$MOBILE_APP_DIR/web-dist"
+# uni-app x 工程（独立 git，可尚未创建）。不再把 Expo 的 riveredge-app/mobile 当作 H5 源码。
+MOBILE_APP_DIR="$PROJECT_ROOT/kuaigeyun-client/riveredge-app-mobile"
+# HBuilderX 发行 Web 的默认目录。官方：在当下项目下的 unpackage/dist/build/web 目录找到出的资源，部署服务器。
+# https://uniapp.dcloud.net.cn/matter.html （HBuilderX 4.06 起编译目录从 h5 改为 web）
+# uni-app x 项目结构与老版基本一致，unpackage 存放发行编译结果；不支持用 cli/npm 创建工程，打包走 HBuilderX：
+# https://doc.dcloud.net.cn/uni-app-x/project.html
+# https://doc.dcloud.net.cn/uni-app-x/worktile/
+MOBILE_H5_PUBLISH_DIR="$MOBILE_APP_DIR/unpackage/dist/build/web"
+# Caddy /mobile 的现有部署目录。只把发行产物复制到这里，不新增站点、不改 FRONTEND_ROOT。
+MOBILE_WEB_DIR="$PROJECT_ROOT/riveredge-app/mobile/web-dist"
 ENV_FILE="$BACKEND_DIR/.env"
 DEPLOY_ENV_FILE="$FAST_DEPLOY_CONFIG_DIR/deploy.env"
 DEPLOY_ENV_EXAMPLE="$FAST_DEPLOY_CONFIG_DIR/deploy.env.example"
@@ -3151,7 +3159,13 @@ cmd_ensure_frontend_dist() {
     exit 1
 }
 
-# 主仓无 H5 时写入占位页，保证 Caddy /mobile 可挂载且不依赖私仓。
+# 已部署的是占位页（标题句），还不是 HBuilderX 发行结果。
+_mobile_h5_placeholder_installed() {
+    [ -f "$MOBILE_WEB_DIR/index.html" ] || return 1
+    grep -q "移动端 H5 尚未安装" "$MOBILE_WEB_DIR/index.html"
+}
+
+# 主仓无 H5 时写入占位页，保证 Caddy /mobile 可挂载。不在这里编译。
 write_mobile_web_dist_placeholder() {
     mkdir -p "$MOBILE_WEB_DIR"
     cat >"$MOBILE_WEB_DIR/index.html" <<'EOF'
@@ -3168,41 +3182,53 @@ write_mobile_web_dist_placeholder() {
 </head>
 <body>
   <h1>移动端 H5 尚未安装</h1>
-  <p>主仓已正常运行。手机端为可选扩展，需私仓 <code>kuaigeyun-client</code>。</p>
-  <p>安装：<code>./fast-deploy/deploy.sh install-h5</code><br />
+  <p>主仓已正常运行。手机 H5 挂在 /mobile。请先在本机用 HBuilderX 发行 Web，产物目录为 <code>unpackage/dist/build/web</code>。</p>
+  <p>有产物后安装：<code>./fast-deploy/deploy.sh install-h5</code><br />
   或向导菜单 <strong>[4] 扩展应用 → [3] 安装 H5</strong></p>
 </body>
 </html>
 EOF
-    log_warn "已写入 H5 占位页 → $MOBILE_WEB_DIR（不影响主仓启动）"
+    log_warn "已写入 H5 占位页 → $MOBILE_WEB_DIR（不影响主仓启动；需先用 HBuilderX 发行 Web）"
 }
 
-# 确保 Caddy /mobile 可挂载：已有产物则跳过；可选从私仓安装；失败仅警告并写占位页。
-# 绝不因扩展仓阻断主仓 install / update / start。
+# 确保 Caddy /mobile 可挂载：已有正式产物则跳过；有 HBuilderX 发行目录则复制；失败仅警告并写占位页。
+# 绝不因扩展仓阻断主仓 install / update / start。本函数不编译 uni-app x。
 ensure_mobile_web_dist() {
-    if [ -f "$MOBILE_WEB_DIR/index.html" ]; then
+    if [ -f "$MOBILE_WEB_DIR/index.html" ] && ! _mobile_h5_placeholder_installed; then
         return 0
     fi
     load_deploy_env
     local path client_en
-    path="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
-    [ -n "$path" ] || path="$(_client_default_repo_path)"
-    if _resolve_client_web_dist_dir "$path" >/dev/null 2>&1; then
-        log_info "检测到私仓 H5 产物，正在安装到 ${MOBILE_WEB_DIR}…"
-        if install_mobile_h5_from_client_repo "$path"; then
+    if [ -f "$MOBILE_H5_PUBLISH_DIR/index.html" ]; then
+        log_info "检测到本机 HBuilderX Web 发行产物，正在安装到 ${MOBILE_WEB_DIR}…"
+        if copy_mobile_h5_publish_to_web_dir "$MOBILE_H5_PUBLISH_DIR"; then
             return 0
         fi
-        log_warn "从私仓安装 H5 失败，改用占位页（不阻断主仓）"
-    fi
-    client_en="$(read_deploy_env_value CLIENT_ENABLED || echo 0)"
-    if [ "$client_en" = "1" ]; then
-        log_info "CLIENT_ENABLED=1 且缺少 web-dist，尝试安装 H5…"
-        if cmd_install_client_repo; then
-            return 0
-        fi
-        log_warn "H5 私仓同步失败，改用占位页（不阻断主仓；可稍后 ./fast-deploy/deploy.sh install-h5）"
+        log_warn "从本机发行目录安装 H5 失败，改用占位页（不阻断主仓）"
     else
-        log_warn "未部署移动端 H5（可选扩展）。主仓继续启动；需要时执行 ./fast-deploy/deploy.sh install-h5"
+        path="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
+        [ -n "$path" ] || path="$(_client_default_repo_path)"
+        if _resolve_client_web_dist_dir "$path" >/dev/null 2>&1; then
+            log_info "检测到私仓 H5 发行产物，正在安装到 ${MOBILE_WEB_DIR}…"
+            if install_mobile_h5_from_client_repo "$path"; then
+                return 0
+            fi
+            log_warn "从私仓安装 H5 失败，改用占位页（不阻断主仓）"
+        elif [ ! -f "$MOBILE_WEB_DIR/index.html" ]; then
+            client_en="$(read_deploy_env_value CLIENT_ENABLED || echo 0)"
+            if [ "$client_en" = "1" ]; then
+                log_info "CLIENT_ENABLED=1 且缺少 Web 发行产物，尝试安装 H5…"
+                if cmd_install_client_repo; then
+                    return 0
+                fi
+                log_warn "H5 私仓同步失败，改用占位页（不阻断主仓；可稍后 ./fast-deploy/deploy.sh install-h5）"
+            else
+                log_warn "未部署移动端 H5（可选扩展）。主仓继续启动；需要时先用 HBuilderX 发行 Web，再执行 ./fast-deploy/deploy.sh install-h5"
+            fi
+        fi
+    fi
+    if [ -f "$MOBILE_WEB_DIR/index.html" ]; then
+        return 0
     fi
     write_mobile_web_dist_placeholder
     return 0
@@ -6222,32 +6248,25 @@ cmd_install_pro_apps() {
     cmd_install_extension_apps "${1:-all}"
 }
 
-# 从私仓 kuaigeyun-client 定位已入库的 Expo Web 产物目录
+# 从私仓 kuaigeyun-client 定位 HBuilderX 已发行的 Web 目录（uni-app x，不是 Expo web-dist）。
 _resolve_client_web_dist_dir() {
     local client_root="$1" candidate
-    for candidate in \
-        "$client_root/riveredge-app-mobile/web-dist" \
-        "$client_root/mobile/web-dist" \
-        "$client_root/riveredge-app/mobile/web-dist"
-    do
-        if [ -f "$candidate/index.html" ]; then
-            echo "$candidate"
-            return 0
-        fi
-    done
+    candidate="$client_root/riveredge-app-mobile/unpackage/dist/build/web"
+    if [ -f "$candidate/index.html" ]; then
+        echo "$candidate"
+        return 0
+    fi
     return 1
 }
 
-# 将私仓 web-dist 安装到主仓 Caddy 路径 riveredge-app/mobile/web-dist
-install_mobile_h5_from_client_repo() {
-    local client_root="$1"
-    local src_dist dest_dist
-    src_dist="$(_resolve_client_web_dist_dir "$client_root")" || {
-        log_error "私仓中未找到 web-dist/index.html（期望 riveredge-app-mobile/web-dist）"
-        log_error "请先在有 Node 的环境执行 ./fast-deploy/build.mobile.web.sh 并推送到 kuaigeyun-client"
+# 把已有的静态发行目录复制到 Caddy /mobile 所用的 MOBILE_WEB_DIR。不编译。
+copy_mobile_h5_publish_to_web_dir() {
+    local src_dist="$1"
+    local dest_dist="$MOBILE_WEB_DIR"
+    [ -f "$src_dist/index.html" ] || {
+        log_error "H5 发行产物缺少 $src_dist/index.html"
         return 1
     }
-    dest_dist="$MOBILE_WEB_DIR"
     mkdir -p "$(dirname "$dest_dist")"
     rm -rf "$dest_dist"
     mkdir -p "$dest_dist"
@@ -6260,6 +6279,18 @@ install_mobile_h5_from_client_repo() {
         return 1
     }
     log_ok "移动端 H5 已安装 → $dest_dist（Caddy /mobile）"
+}
+
+# 将私仓中的 Web 发行目录安装到主仓 MOBILE_WEB_DIR（Caddy /mobile）。
+install_mobile_h5_from_client_repo() {
+    local client_root="$1"
+    local src_dist
+    src_dist="$(_resolve_client_web_dist_dir "$client_root")" || {
+        log_error "私仓中未找到 Web 发行产物 index.html（期望 riveredge-app-mobile/unpackage/dist/build/web）"
+        log_error "请先在本机用 HBuilderX 发行 Web。uni-app x 不能靠 npm run build 生成该目录，服务器也不安装 HBuilderX。"
+        return 1
+    }
+    copy_mobile_h5_publish_to_web_dir "$src_dist"
 }
 
 cmd_install_client_repo() {

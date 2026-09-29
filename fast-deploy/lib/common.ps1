@@ -1528,8 +1528,8 @@ function Write-MobileWebDistPlaceholder {
 </head>
 <body>
   <h1>移动端 H5 尚未安装</h1>
-  <p>主仓已正常运行。手机端为可选扩展，需私仓 <code>kuaigeyun-client</code>。</p>
-  <p>安装：<code>./fast-deploy/deploy.sh install-h5</code><br />
+  <p>主仓已正常运行。手机 H5 挂在 /mobile。请先在本机用 HBuilderX 发行 Web，产物目录为 <code>unpackage/dist/build/web</code>。</p>
+  <p>有产物后安装：<code>./fast-deploy/deploy.sh install-h5</code><br />
   或向导菜单 <strong>[4] 扩展应用 → [3] 安装 H5</strong></p>
 </body>
 </html>
@@ -1542,7 +1542,7 @@ function Write-MobileWebDistPlaceholder {
 function Ensure-MobileWebDist {
     $index = Join-Path $script:MobileWebDir 'index.html'
     if (Test-Path $index) { return }
-    Write-LogWarn "未部署移动端 H5（可选扩展）。主仓继续启动；需要时执行 ./fast-deploy/deploy.sh install-h5"
+    Write-LogWarn "未部署移动端 H5（可选扩展）。主仓继续启动；需要时先用 HBuilderX 发行 Web，再执行 ./fast-deploy/deploy.sh install-h5"
     Write-MobileWebDistPlaceholder
 }
 
