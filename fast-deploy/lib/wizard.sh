@@ -1154,7 +1154,11 @@ wizard_optional_deps_label_column() {
     local w max=0 label
     for label in \
         "发票 OCR（二维码/识别）" \
-        "PDF 打印（Playwright）" \
+        "系统库 (zbar 等)" \
+        "OCR Python 包" \
+        "PDF 打印" \
+        "Playwright Python 包" \
+        "Chromium 浏览器" \
         "KU-AI 向量（pgvector）" \
         "敏感词库（lexicon.pack）" \
         "LibreOffice（Office 高级预览）"; do
@@ -1168,6 +1172,20 @@ wizard_optional_deps_item_line() {
     local num=$1 label=$2 status=$3 col=$4 padded
     padded="$(wizard_pad_to_display_width "$label" "$col")"
     echo -e "  ${WIZARD_CYAN}[${num}]${WIZARD_RESET} ${padded}${status}"
+}
+
+# 开关行（仅显示已启用/未启用）；子探测行另起
+wizard_optional_deps_flag_line() {
+    local num=$1 label=$2 flag_val=$3 col=$4 padded
+    padded="$(wizard_pad_to_display_width "$label" "$col")"
+    echo -e "  ${WIZARD_CYAN}[${num}]${WIZARD_RESET} ${padded}$(wizard_optional_deps_flag_colored "$flag_val")"
+}
+
+# 与 [n] 主行标签列对齐的子探测行（仅机上状态）
+wizard_optional_deps_sub_line() {
+    local label=$1 probe_st=$2 col=$3 padded
+    padded="$(wizard_pad_to_display_width "$label" "$col")"
+    echo -e "      ${padded}$(wizard_optional_deps_install_colored "$probe_st")"
 }
 
 # 选装面板状态着色：开关（已启用绿 / 未启用暗）｜机上探测（已装绿 / 告警黄 / 未装红）
@@ -1205,11 +1223,15 @@ wizard_show_optional_deps_panel() {
     local label_col
     label_col="$(wizard_optional_deps_label_column)"
     echo ""
-    wizard_say "选装依赖（写入 fast-deploy/config/deploy.env；左栏=开关，右栏=机上是否已装）"
+    wizard_say "选装依赖（写入 fast-deploy/config/deploy.env；主行=开关，子行=机上探测）"
     echo ""
     wizard_say "正在探测机上依赖，请稍候..."
-    wizard_optional_deps_item_line 1 "发票 OCR（二维码/识别）" "$(wizard_optional_deps_panel_status "${OPT_INVOICE_OCR:-0}" "$(deploy_opt_probe_invoice)")" "$label_col"
-    wizard_optional_deps_item_line 2 "PDF 打印（Playwright）" "$(wizard_optional_deps_panel_status "${OPT_PDF_PRINT:-0}" "$(deploy_opt_probe_pdf)")" "$label_col"
+    wizard_optional_deps_flag_line 1 "发票 OCR（二维码/识别）" "${OPT_INVOICE_OCR:-0}" "$label_col"
+    wizard_optional_deps_sub_line "系统库 (zbar 等)" "$(check_invoice_parse_runtime 2>/dev/null || echo missing)" "$label_col"
+    wizard_optional_deps_sub_line "OCR Python 包" "$(check_ocr 2>/dev/null || echo missing)" "$label_col"
+    wizard_optional_deps_flag_line 2 "PDF 打印" "${OPT_PDF_PRINT:-0}" "$label_col"
+    wizard_optional_deps_sub_line "Playwright Python 包" "$(check_playwright 2>/dev/null || echo missing)" "$label_col"
+    wizard_optional_deps_sub_line "Chromium 浏览器" "$(check_playwright_chromium 2>/dev/null || echo missing)" "$label_col"
     wizard_optional_deps_item_line 3 "KU-AI 向量（pgvector）" "$(wizard_optional_deps_panel_status "${OPT_KUAI_VECTOR:-0}" "$(deploy_opt_probe_pgvector)")" "$label_col"
     wizard_optional_deps_item_line 4 "敏感词库（lexicon.pack）" "$(wizard_optional_deps_panel_status "${OPT_SENSITIVE_LEXICON:-0}" "$(deploy_opt_probe_lexicon)")" "$label_col"
     wizard_optional_deps_item_line 5 "LibreOffice（Office 高级预览）" "$(wizard_optional_deps_panel_status "${OPT_LIBREOFFICE:-0}" "$(deploy_opt_probe_libreoffice)")" "$label_col"
