@@ -49,12 +49,12 @@ export function formatReportingDateTime(value: Dayjs): string {
   return value.format('YYYY-MM-DD HH:mm:ss');
 }
 
-/** null/空视为未填；0 是合法工时 */
+/** null/空视为未填；0 是合法工时；统一保留两位小数 */
 export function parseReportingWorkHours(value: unknown): number | null {
   if (value == null || value === '') return null;
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(n) || n < 0) return null;
-  return n;
+  return roundReportingWorkHours(n);
 }
 
 function hoursFromRange(start: Dayjs, end: Dayjs): number {

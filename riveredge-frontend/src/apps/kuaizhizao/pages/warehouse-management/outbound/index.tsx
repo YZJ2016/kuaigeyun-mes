@@ -7,7 +7,10 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { getBusinessConfig } from '../../../../../services/businessConfig';
+import { TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY } from '../../../../../hooks/useToolbarSyncPushFlags';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, theme as AntdTheme } from 'antd';
 import { CheckCircleOutlined, PlayCircleOutlined, RollbackOutlined } from '@ant-design/icons';
@@ -200,6 +203,14 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
   const { token } = AntdTheme.useToken();
   const outboundDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
+  const { data: businessConfig } = useQuery({
+    queryKey: TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY,
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const requireShipmentNoticeBeforeDelivery = Boolean(
+    businessConfig?.parameters?.sales?.require_shipment_notice_before_delivery,
+  );
   const actionRef = useRef<ActionType>(null);
   const searchFormRef = useRef<ProFormInstance>();
   const quickPullRef = useRef<OutboundQuickPullModalsRef>(null);
@@ -449,11 +460,15 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
             actionKey: 'sales_delivery.pull_from_shipment_notice',
             onClick: () => quickPullRef.current?.open('shipment_notice'),
           },
-          {
-            key: 'pull-from-sales-order',
-            actionKey: 'sales_delivery.pull_from_sales_order',
-            onClick: () => quickPullRef.current?.open('sales_order'),
-          },
+          ...(requireShipmentNoticeBeforeDelivery
+            ? []
+            : [
+                {
+                  key: 'pull-from-sales-order',
+                  actionKey: 'sales_delivery.pull_from_sales_order',
+                  onClick: () => quickPullRef.current?.open('sales_order'),
+                },
+              ]),
           {
             actionKey: 'outbound.pull_from_outsource_work_order',
             onClick: () => quickPullRef.current?.open('outsource'),
@@ -466,7 +481,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         ],
         hubScopedOutboundTypes,
       ),
-    [hubScopedOutboundTypes, t],
+    [hubScopedOutboundTypes, requireShipmentNoticeBeforeDelivery, t],
   );
   const handleCreate = useCallback(() => {
     quickPullRef.current?.open(defaultOutboundQuickPullKey);

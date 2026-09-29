@@ -11,6 +11,7 @@ export type ExceptionListPage<T> = {
 };
 
 export { workOrderApi, reworkOrderApi, getWorkOrderStatistics } from './work-order';
+export type { WorkOrderExecutionConfig } from './work-order';
 export { reportingApi, materialBindingApi, getReportingStatistics, getReportingSyncBinding, syncReportingFromSource, getReportingSyncHistory } from './reporting';
 export { warehouseApi } from './warehouse-execution';
 export { qualityApi, inspectionPlanApi, unwrapInspectionPlanList } from './quality-execution';

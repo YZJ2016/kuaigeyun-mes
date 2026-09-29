@@ -93,7 +93,7 @@ async def get_audit_required_map(
 ) -> dict:
     """
     返回当前组织各单据节点是否需要审核。
-    审核真源为 ApprovalProcess(code=node_key, is_active=true)。
+    审核真源为配置中心「审核设置」AuditDocumentBinding（is_enabled + 已绑定流程）。
     """
     try:
         result = await BusinessConfigService().get_audit_required_map(tenant_id)

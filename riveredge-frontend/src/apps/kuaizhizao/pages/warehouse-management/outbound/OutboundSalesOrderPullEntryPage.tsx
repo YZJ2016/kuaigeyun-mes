@@ -40,6 +40,9 @@ import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundSalesOrderEntryPath } from './outboundPaths';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
+import { useQuery } from '@tanstack/react-query';
+import { getBusinessConfig } from '../../../../../services/businessConfig';
+import { TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY } from '../../../../../hooks/useToolbarSyncPushFlags';
 import { reportDocumentStatusText } from '../../../utils/reportPresentation';
 
 const OutboundSalesOrderPullEntryPage: React.FC = () => {
@@ -50,6 +53,14 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { message: messageApi } = App.useApp();
+  const { data: businessConfig } = useQuery({
+    queryKey: TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY,
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const requireShipmentNoticeBeforeDelivery = Boolean(
+    businessConfig?.parameters?.sales?.require_shipment_notice_before_delivery,
+  );
   const operatorHook = useOutboundOperatorSelect();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const initRef = useRef(false);
@@ -155,6 +166,14 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
       pullEntryTabKey(location.pathname, location.search),
     );
   }, [clearDraft, navigate, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!requireShipmentNoticeBeforeDelivery) return;
+    messageApi.warning(
+      t('pages.system.configCenter.param.sales_require_shipment_notice_before_delivery_desc'),
+    );
+    leavePage();
+  }, [requireShipmentNoticeBeforeDelivery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bindSnapshot(() => ({

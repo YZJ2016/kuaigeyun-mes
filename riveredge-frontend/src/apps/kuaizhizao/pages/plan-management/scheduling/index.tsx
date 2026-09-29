@@ -2729,7 +2729,8 @@ const SchedulingPage: React.FC = () => {
                 row.needHours ? (
                   <InputNumber
                     min={0}
-                    step={0.1}
+                    step={0.01}
+                    precision={2}
                     style={{ width: '100%' }}
                     value={row.setup_time}
                     onChange={(v) =>
@@ -2753,7 +2754,8 @@ const SchedulingPage: React.FC = () => {
                 row.needHours ? (
                   <InputNumber
                     min={0}
-                    step={0.1}
+                    step={0.01}
+                    precision={2}
                     style={{ width: '100%' }}
                     value={row.standard_time}
                     onChange={(v) =>
@@ -2902,6 +2904,7 @@ const SchedulingPage: React.FC = () => {
                 min={0}
                 max={12}
                 step={0.5}
+                precision={2}
                 value={schedulingConstraints.setup_changeover_hours}
                 onChange={(v) =>
                   setSchedulingConstraints((c) => ({

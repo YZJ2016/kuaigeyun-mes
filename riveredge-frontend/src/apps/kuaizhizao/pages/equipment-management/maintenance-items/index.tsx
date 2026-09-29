@@ -319,7 +319,12 @@ const MaintenanceItemsPage: React.FC = () => {
             <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} />
           </Col>
           <Col span={12}>
-            <ProFormDigit name="standard_hours" label={t(`${P}.col.standardHours`)} min={0} />
+            <ProFormDigit
+              name="standard_hours"
+              label={t(`${P}.col.standardHours`)}
+              min={0}
+              fieldProps={{ precision: 2, step: 0.01 }}
+            />
           </Col>
           <Col span={24}>
             <ProFormTextArea name="requirement" label={t(`${P}.col.requirement`)} fieldProps={{ rows: 3 }} />

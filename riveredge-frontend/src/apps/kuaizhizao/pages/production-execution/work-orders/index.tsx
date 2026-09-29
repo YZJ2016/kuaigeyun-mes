@@ -3776,6 +3776,10 @@ const WorkOrdersPage: React.FC = () => {
 
   /** 工序卡环形进度：打开快速报工（与报工管理页提交逻辑一致） */
   const openQuickReportingFromOperationCard = (operation: any, workOrder: WorkOrder) => {
+    if (executionConfig?.quick_reporting_enabled === false) {
+      messageApi.warning('当前组织未开启快捷报工，请在配置中心启用后再操作')
+      return
+    }
     if (isSplitParentWorkOrder(workOrder)) {
       messageApi.warning('已拆分主工单不可报工，请将剩余数量拆分为子工单后执行')
       return
@@ -3858,6 +3862,10 @@ const WorkOrdersPage: React.FC = () => {
   const handleQuickReportingSubmit = async (values: any) => {
     if (!quickReportingWorkOrder?.id || !quickReportingOperation) return
     try {
+      if (executionConfig?.quick_reporting_enabled === false) {
+        messageApi.warning('当前组织未开启快捷报工，请在配置中心启用后再操作')
+        return
+      }
       if (executionConfig?.require_confirmed_picking_before_reporting) {
         const status = await workOrderApi.getPickingConfirmationStatus(quickReportingWorkOrder.id.toString())
         if (!status?.has_confirmed_picking) {
@@ -3960,7 +3968,7 @@ const WorkOrdersPage: React.FC = () => {
         }
       }
       const wid = quickReportingWorkOrder.id
-      const created = await reportingApi.create(
+      const created = await reportingApi.quickCreate(
         coerceReportingCreateStrings(reportingData, quickReportingWorkOrder)
       )
       const createdId = Number((created as any)?.id)
@@ -4263,7 +4271,13 @@ const WorkOrdersPage: React.FC = () => {
               <div
                 role="button"
                 tabIndex={0}
-                title={isPaused ? '工序已暂停' : '点击报工'}
+                title={
+                  executionConfig?.quick_reporting_enabled === false
+                    ? '当前组织未开启快捷报工'
+                    : isPaused
+                      ? '工序已暂停'
+                      : '点击报工'
+                }
                 onClick={e => {
                   e.stopPropagation()
                   openQuickReportingFromOperationCard(operation, workOrder)
@@ -4276,10 +4290,11 @@ const WorkOrdersPage: React.FC = () => {
                   }
                 }}
                 style={{
-                  cursor: 'pointer',
+                  cursor: executionConfig?.quick_reporting_enabled === false ? 'not-allowed' : 'pointer',
                   flexShrink: 0,
                   lineHeight: 0,
                   borderRadius: '50%',
+                  opacity: executionConfig?.quick_reporting_enabled === false ? 0.55 : 1,
                 }}
               >
                 <Progress
@@ -6473,6 +6488,10 @@ const WorkOrdersPage: React.FC = () => {
    * 处理批量设置优先级
    */
   const handleBatchSetPriority = () => {
+    if (executionConfig?.priority_enabled === false) {
+      messageApi.warning('当前组织未开启工单优先级，请在配置中心启用后再操作')
+      return
+    }
     if (selectedWorkOrderIds.length === 0) {
       messageApi.warning('请至少选择一个工单')
       return
@@ -6618,7 +6637,7 @@ const WorkOrdersPage: React.FC = () => {
 
   const workOrderToolBarActionsAfterDelete = useMemo(
     () => [
-      ...(mergeableWorkOrderIds.length >= 2
+      ...(mergeableWorkOrderIds.length >= 2 && executionConfig?.merge_enabled !== false
         ? [
             <UniBatchButton
               key="merge-into-group"
@@ -6717,8 +6736,9 @@ const WorkOrdersPage: React.FC = () => {
             label: t('app.kuaizhizao.workOrder.batchSetPriority'),
             icon: <FlagOutlined />,
             disabled:
-              selectedWorkOrdersForBatch.length > 0 &&
-              !workOrderBatchSetPriorityAllowed(selectedWorkOrdersForBatch, workOrderPerms.canUpdate),
+              executionConfig?.priority_enabled === false ||
+              (selectedWorkOrdersForBatch.length > 0 &&
+                !workOrderBatchSetPriorityAllowed(selectedWorkOrdersForBatch, workOrderPerms.canUpdate)),
             onClick: () => handleBatchSetPriority(),
           },
           {
@@ -6753,6 +6773,8 @@ const WorkOrdersPage: React.FC = () => {
       dissolveGroupLoading,
       workOrderPerms,
       outboundPerms,
+      executionConfig?.merge_enabled,
+      executionConfig?.priority_enabled,
       handleDissolveGroups,
       handleBatchGenerateQRCode,
       handleBatchSetPriority,
@@ -6769,6 +6791,10 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleSplit = async (record: WorkOrder) => {
     try {
+      if (executionConfig?.split_enabled === false) {
+        messageApi.warning('当前组织未开启工单拆分，请在配置中心启用后再操作')
+        return
+      }
       const detail = await workOrderApi.get(record.id!.toString())
       setCurrentWorkOrderForSplit(detail)
       const isFollowUpSplit = ['split', '已拆分'].includes(detail.status || '')
@@ -7725,7 +7751,8 @@ const WorkOrdersPage: React.FC = () => {
         // 指定结束条件：非已完成且非终态
         const canComplete = !isCompleted && !isTerminal
 
-        const canSplit = isDraft || isReleased || hasSplitRemaining
+        const canSplit =
+          executionConfig?.split_enabled !== false && (isDraft || isReleased || hasSplitRemaining)
         const canFreeze = !isTerminal && !isCompleted
 
         const executeDeleteClick = async () => {
@@ -7955,6 +7982,8 @@ const WorkOrdersPage: React.FC = () => {
     workOrderAuditColumn,
     handleWorkOrderAuditSuccess,
     executionConfig?.show_customer_name,
+    executionConfig?.split_enabled,
+    executionConfig?.quick_reporting_enabled,
   ])
 
   const workOrderTableBodyColSpan = useMemo(() => {
@@ -10308,6 +10337,7 @@ const WorkOrdersPage: React.FC = () => {
                 },
                 {
                   key: 'priority',
+                  visible: executionConfig?.priority_enabled !== false,
                   render: () => (
                     <Select
                       value={workOrderDetail.priority || 'normal'}

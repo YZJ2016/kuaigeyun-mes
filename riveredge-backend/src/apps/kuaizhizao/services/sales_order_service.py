@@ -1245,6 +1245,7 @@ class SalesOrderService:
         has_remaining_invoice_amount: bool = True,
         has_purchasable_remaining: bool = False,
         require_purchase_requisition: bool = False,
+        require_shipment_notice_before_delivery: bool = False,
         has_prepayment_receipt: bool = False,
     ) -> dict[str, bool]:
         item_list = items or []
@@ -1281,6 +1282,7 @@ class SalesOrderService:
             "has_remaining_invoice_amount": has_remaining_invoice_amount,
             "has_purchasable_remaining": has_purchasable_remaining,
             "require_purchase_requisition": require_purchase_requisition,
+            "require_shipment_notice_before_delivery": require_shipment_notice_before_delivery,
             "has_prepayment_receipt": has_prepayment_receipt,
         }
 
@@ -1322,6 +1324,7 @@ class SalesOrderService:
             batch_has_purchasable_remaining,
             require_purchase_requisition_for_tenant,
         )
+        from infra.services.business_config_service import BusinessConfigService
 
         purchasable_map = await batch_has_purchasable_remaining(
             tenant_id, {int(order.id): items}
@@ -1343,6 +1346,9 @@ class SalesOrderService:
             has_remaining_invoice_amount=invoice_remainder > Decimal("0"),
             has_purchasable_remaining=purchasable_map.get(int(order.id), False),
             require_purchase_requisition=await require_purchase_requisition_for_tenant(
+                tenant_id
+            ),
+            require_shipment_notice_before_delivery=await BusinessConfigService().require_shipment_notice_before_delivery(
                 tenant_id
             ),
             has_prepayment_receipt=prepay_map.get(int(order.id), False),
@@ -1818,14 +1824,6 @@ class SalesOrderService:
         from apps.kuaizhizao.models.sales_contract import SalesContract
         from apps.kuaizhizao.services.document_lifecycle_service import _is_approved
 
-        cfg = await self.business_config_service.get_business_config(tenant_id)
-        require_contract = bool(
-            cfg.get("parameters", {}).get("sales", {}).get("require_contract_before_order", False)
-        )
-        if require_contract:
-            raise BusinessLogicError(
-                "配置项「须先建销售合同再下推订单」已废弃，请在业务配置中关闭 require_contract_before_order"
-            )
         contract_id = getattr(sales_order_data, "contract_id", None)
         if not contract_id:
             return
@@ -2262,6 +2260,7 @@ class SalesOrderService:
             batch_has_purchasable_remaining,
             require_purchase_requisition_for_tenant,
         )
+        from infra.services.business_config_service import BusinessConfigService
 
         purchasable_map = await batch_has_purchasable_remaining(
             tenant_id, {int(order.id): capability_items}
@@ -2304,6 +2303,9 @@ class SalesOrderService:
                 has_remaining_invoice_amount=invoice_remainder > Decimal("0"),
                 has_purchasable_remaining=purchasable_map.get(int(order.id), False),
                 require_purchase_requisition=await require_purchase_requisition_for_tenant(
+                    tenant_id
+                ),
+                require_shipment_notice_before_delivery=await BusinessConfigService().require_shipment_notice_before_delivery(
                     tenant_id
                 ),
                 has_prepayment_receipt=prepay_map.get(int(order.id), False),
@@ -2887,11 +2889,15 @@ class SalesOrderService:
             batch_has_purchasable_remaining,
             require_purchase_requisition_for_tenant,
         )
+        from infra.services.business_config_service import BusinessConfigService
 
         purchasable_by_order = await batch_has_purchasable_remaining(
             tenant_id, items_by_order
         )
         require_pr = await require_purchase_requisition_for_tenant(tenant_id)
+        require_sn_before_sd = await BusinessConfigService().require_shipment_notice_before_delivery(
+            tenant_id
+        )
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             _order_prepayment_linked_by_ids,
         )
@@ -2976,6 +2982,7 @@ class SalesOrderService:
                             int(order.id), False
                         ),
                         require_purchase_requisition=require_pr,
+                        require_shipment_notice_before_delivery=require_sn_before_sd,
                         has_prepayment_receipt=prepay_by_order.get(int(order.id), False),
                     ),
                 )
@@ -5818,6 +5825,9 @@ class SalesOrderService:
         header_wh_name: Optional[str] = None
 
         async with in_transaction():
+            from apps.kuaizhizao.utils.sales_order_currency_carry import currency_fields_for_sales_doc
+
+            so_currency = currency_fields_for_sales_doc(order)
             notice = await ShipmentNotice.create(
                 tenant_id=tenant_id,
                 notice_code=code,
@@ -5831,6 +5841,8 @@ class SalesOrderService:
                 planned_ship_date=order.delivery_date,
                 status="待发货",
                 notes=order.notes,
+                currency_code=so_currency["currency_code"],
+                exchange_rate=so_currency["exchange_rate"],
                 created_by=created_by,
                 updated_by=created_by,
             )
@@ -6066,6 +6078,9 @@ class SalesOrderService:
             header_wh_name: Optional[str] = None
             created_lines = 0
             async with in_transaction():
+                from apps.kuaizhizao.utils.sales_order_currency_carry import currency_fields_for_sales_doc
+
+                so_currency = currency_fields_for_sales_doc(primary)
                 notice = await ShipmentNotice.create(
                     tenant_id=tenant_id,
                     notice_code=code,
@@ -6079,6 +6094,8 @@ class SalesOrderService:
                     planned_ship_date=primary.delivery_date,
                     status="待发货",
                     notes=primary.notes,
+                    currency_code=so_currency["currency_code"],
+                    exchange_rate=so_currency["exchange_rate"],
                     created_by=created_by,
                     updated_by=created_by,
                 )
