@@ -64,6 +64,7 @@ riveredge-backend/backups/
 .agent-teams/
 .agent-audit/
 .argo/
+.codegraph/
 .cursor/
 .trae/
 .vscode/
@@ -82,7 +83,7 @@ nul
 riveredge-mobile/
 # 闭源客户端（移动 App / 工位机），独立仓库或本地维护，不纳入主仓
 riveredge-app/
-# 私有终端仓（工位壳等），独立仓库或本地维护，避免壳源码进入开源主仓
+# 工位/移动客户端源码（与 riveredge-backend 同级纳入主仓）
 # kuaigeyun-client/
 
 # 工作区组装（本机/部署生成，勿提交）

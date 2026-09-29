@@ -1,0 +1,13 @@
+{
+  "name": "riveredge-app-station",
+  "version": "0.1.0",
+  "private": true,
+  "description": "工位机 Electron 壳。窗口用 loadURL 打开服务器上的工位入口，不包含业务页面。",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "44.4.5"
+  }
+}

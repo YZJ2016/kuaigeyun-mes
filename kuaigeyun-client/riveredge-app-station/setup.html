@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>配置服务器</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f3f4f6;
+      color: #111827;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    .card {
+      width: min(560px, calc(100vw - 48px));
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+    h1 {
+      font-size: 28px;
+      margin: 0 0 8px;
+    }
+    .hint {
+      margin: 0 0 24px;
+      color: #4b5563;
+      line-height: 1.5;
+    }
+    label {
+      display: block;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 20px;
+      padding: 12px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+    }
+    button {
+      margin-top: 16px;
+      width: 100%;
+      font-size: 18px;
+      padding: 12px 16px;
+      border: 0;
+      border-radius: 8px;
+      background: #1677ff;
+      color: #fff;
+    }
+    button:disabled {
+      opacity: 0.6;
+    }
+    #status {
+      min-height: 1.5em;
+      margin: 16px 0 0;
+    }
+    #status.error {
+      color: #b91c1c;
+    }
+    #status.ok {
+      color: #047857;
+    }
+  </style>
+</head>
+<body>
+  <form class="card" id="form">
+    <h1>配置服务器</h1>
+    <p class="hint">填写快格 Web 的地址。保存前会访问工位入口，确认能连上后再写入本机。工位编号在登录后绑定。</p>
+    <label for="origin">服务器地址</label>
+    <input id="origin" name="origin" type="text" placeholder="https://mes.example.com" autocomplete="off" spellcheck="false" />
+    <button type="submit" id="save">测试并保存</button>
+    <p id="status" role="status"></p>
+  </form>
+  <script src="setup.js"></script>
+</body>
+</html>
