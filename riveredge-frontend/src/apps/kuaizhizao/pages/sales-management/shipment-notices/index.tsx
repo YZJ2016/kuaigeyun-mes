@@ -38,6 +38,8 @@ const LazyUniImport = lazy(() =>
 );
 import type { Material } from '../../../../master-data/types/material';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
+import { resolveDocumentCurrencyInputPrefix } from '../../../utils/documentCurrencyDisplay';
+import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -771,6 +773,8 @@ const ShipmentNoticesPage: React.FC = () => {
         warehouse_name: detail.warehouse_name,
         planned_ship_date: detail.planned_ship_date ? dayjs(detail.planned_ship_date) : undefined,
         shipping_address: detail.shipping_address,
+        currency_code: String((detail as any).currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+        exchange_rate: Number((detail as any).exchange_rate ?? 1) || 1,
         notes: detail.notes,
         attachments: mapAttachmentsToUploadList(detail.attachments),
         items: itemsForm.length ? itemsForm : [defaultNoticeItem],
@@ -1147,6 +1151,8 @@ const ShipmentNoticesPage: React.FC = () => {
       customer_contact: order.customer_contact || cust?.contactPerson || (cust as any)?.contact,
       customer_phone: order.customer_phone || cust?.phone,
       shipping_address: order.shipping_address || cust?.address,
+      currency_code: String(order.currency_code || order.currency || 'CNY').trim().toUpperCase() || 'CNY',
+      exchange_rate: Number(order.exchange_rate ?? 1) || 1,
     });
     if (order.items && order.items.length > 0) {
       const items = order.items
@@ -1236,6 +1242,8 @@ const ShipmentNoticesPage: React.FC = () => {
         warehouse_name: values.warehouse_name || undefined,
         planned_ship_date: values.planned_ship_date ? formatDateTime(values.planned_ship_date, 'YYYY-MM-DD') : undefined,
         shipping_address: values.shipping_address,
+        currency_code: String(values.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+        exchange_rate: Number(values.exchange_rate ?? 1) || 1,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
         items: payloadItems,
@@ -1265,6 +1273,8 @@ const ShipmentNoticesPage: React.FC = () => {
         warehouse_name: values.warehouse_name,
         planned_ship_date: values.planned_ship_date ? formatDateTime(values.planned_ship_date, 'YYYY-MM-DD') : undefined,
         shipping_address: values.shipping_address,
+        currency_code: String(values.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+        exchange_rate: Number(values.exchange_rate ?? 1) || 1,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
@@ -1404,6 +1414,20 @@ const ShipmentNoticesPage: React.FC = () => {
         <Col span={8}>
           <ProFormDatePicker name="planned_ship_date" label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => createFormRef.current, fieldName: 'planned_ship_date', t })} />
         </Col>
+        <Col span={8}>
+          <DictionarySelect
+            dictionaryCode="CURRENCY"
+            name="currency_code"
+            label={t('app.kuaizhizao.quotation.form.currency')}
+            placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
+            initialValue="CNY"
+          />
+        </Col>
+        <Col span={8}>
+          <ProForm.Item name="exchange_rate" label={t('app.kuaizhizao.salesOrder.exchangeRate')} initialValue={1}>
+            <InputNumber min={0.0001} precision={4} style={{ width: '100%' }} />
+          </ProForm.Item>
+        </Col>
       </Row>
       <ProFormTextArea name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} fieldProps={{ rows: 2 }} />
       <UniTableDetail
@@ -1530,8 +1554,25 @@ const ShipmentNoticesPage: React.FC = () => {
                   width: 100,
                   align: 'right' as const,
                   render: (_: any, __: any, index: number) => (
-                    <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                      <InputNumber placeholder="0" min={0} precision={priceDecimals} style={{ width: '100%' }} size="small" />
+                    <AntForm.Item
+                      noStyle
+                      shouldUpdate={(prev: any, curr: any) => prev?.currency_code !== curr?.currency_code}
+                    >
+                      {({ getFieldValue }: any) => {
+                        const moneyPrefix = resolveDocumentCurrencyInputPrefix(getFieldValue('currency_code'));
+                        return (
+                          <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                            <InputNumber
+                              placeholder="0"
+                              min={0}
+                              precision={priceDecimals}
+                              prefix={moneyPrefix}
+                              style={{ width: '100%' }}
+                              size="small"
+                            />
+                          </AntForm.Item>
+                        );
+                      }}
                     </AntForm.Item>
                   ),
                 },
@@ -1596,6 +1637,21 @@ const ShipmentNoticesPage: React.FC = () => {
       </Row>
       <ProFormText name="warehouse_name" hidden />
       <ProFormText name="customer_name" hidden />
+      <Row gutter={16}>
+        <Col span={8}>
+          <DictionarySelect
+            dictionaryCode="CURRENCY"
+            name="currency_code"
+            label={t('app.kuaizhizao.quotation.form.currency')}
+            placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
+          />
+        </Col>
+        <Col span={8}>
+          <ProForm.Item name="exchange_rate" label={t('app.kuaizhizao.salesOrder.exchangeRate')}>
+            <InputNumber min={0.0001} precision={4} style={{ width: '100%' }} />
+          </ProForm.Item>
+        </Col>
+      </Row>
       <ProFormTextArea name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} fieldProps={{ rows: 2 }} />
       <ProFormItem label={t('app.kuaizhizao.shipmentNotice.noticeItems')}>
         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>

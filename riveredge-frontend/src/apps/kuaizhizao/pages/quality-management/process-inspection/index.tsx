@@ -122,6 +122,7 @@ import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useQualityStageCreateEnabled } from '../components/QualityMasterDataHint';
 import { qualityInspectionCapabilityReasonMessage, qualityInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
@@ -260,6 +261,7 @@ const ProcessInspectionPage: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const processInspectionDetailDrawerZIndex = token.zIndexPopupBase;
   const processPerms = useResourcePermissions(PROCESS_RESOURCE);
+  const { enabled: ipqcCreateEnabled } = useQualityStageCreateEnabled('ipqc');
   const processAuditEnabled = useAuditRequired('process_inspection');
   const processAuditColumn = useMemo(
     () => createListAuditPhaseColumn<ProcessInspection>({ t, auditEnabled: processAuditEnabled }),
@@ -667,7 +669,7 @@ const ProcessInspectionPage: React.FC = () => {
       setPullPreviewConfirming(false);
     }
   };
-  useNewShortcut(pullFromWorkOrderQuery.openModal);
+  useNewShortcut(ipqcCreateEnabled ? pullFromWorkOrderQuery.openModal : () => undefined);
 
   // 处理创建不合格品记录
   const handleCreateDefect = (record: ProcessInspection) => {
@@ -1006,7 +1008,7 @@ const ProcessInspectionPage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
         }}
-        showCreateButton={true}
+        showCreateButton={ipqcCreateEnabled}
         createButtonText={createButtonLabel}
         onCreate={pullFromWorkOrderQuery.openModal}
         enableRowSelection={true}

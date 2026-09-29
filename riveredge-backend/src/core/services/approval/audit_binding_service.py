@@ -12,9 +12,12 @@ import asyncio
 from typing import Any, Dict, List, Optional, Set
 from uuid import UUID
 
+from loguru import logger
+
 from core.config.audit_registry import AuditEntry, all_entries, entry_by_node_key, is_auditable_node_key
 from core.models.approval_process import ApprovalProcess
 from core.models.audit_document_binding import AuditDocumentBinding
+from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.approval_process_service import ApprovalProcessService
 from core.services.system.installed_feature_scope import (
     approval_process_codes_for_installed_apps,
@@ -25,6 +28,34 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 class AuditBindingService:
     """审核单据 ↔ 审批流程绑定（运行时唯一真源）"""
+
+    @staticmethod
+    async def _cancel_pending_for_node(
+        tenant_id: int,
+        node_key: str,
+        binding: AuditDocumentBinding,
+    ) -> int:
+        """关闭审核开关时取消该 node 关联流程的存量 pending 实例。"""
+        process_ids: Set[int] = set()
+        if binding.process_id:
+            process_ids.add(int(binding.process_id))
+        by_code = await ApprovalProcess.filter(
+            tenant_id=tenant_id,
+            code=node_key,
+            deleted_at__isnull=True,
+        ).values_list("id", flat=True)
+        for pid in by_code:
+            process_ids.add(int(pid))
+
+        total = 0
+        for process_id in process_ids:
+            total += await ApprovalInstanceService.cancel_pending_for_process(
+                tenant_id,
+                process_id,
+                operator_id=0,
+                node_key=node_key,
+            )
+        return total
 
     @staticmethod
     async def _ensure_binding_row(tenant_id: int, node_key: str) -> AuditDocumentBinding:
@@ -344,9 +375,18 @@ class AuditBindingService:
                 await ApprovalProcessService.upgrade_pristine_process_to_template(
                     tenant_id, node_key
                 )
-                process = await AuditBindingService._resolve_or_create_bound_process(
-                    tenant_id, node_key
-                )
+                # 同批已绑定 process_uuid 时复用，避免 _resolve_or_create 覆盖刚写入的流程
+                process = None
+                if process_uuid is not None and binding.process_id:
+                    process = await ApprovalProcess.get_or_none(
+                        id=binding.process_id,
+                        tenant_id=tenant_id,
+                        deleted_at__isnull=True,
+                    )
+                if process is None:
+                    process = await AuditBindingService._resolve_or_create_bound_process(
+                        tenant_id, node_key
+                    )
                 from core.schemas.approval_flow_schema import (
                     assert_flow_executable,
                     normalize_and_validate_flow,
@@ -363,6 +403,16 @@ class AuditBindingService:
                     process = await ApprovalProcess.get_or_none(id=binding.process_id)
                     if process and process.deleted_at is None:
                         await AuditBindingService._deactivate_process(process)
+                cancelled = await AuditBindingService._cancel_pending_for_node(
+                    tenant_id, node_key, binding
+                )
+                if cancelled:
+                    logger.info(
+                        "审核开关关闭已清理 pending 实例: tenant={} node_key={} count={}",
+                        tenant_id,
+                        node_key,
+                        cancelled,
+                    )
 
         await binding.save()
         await binding.fetch_related("process")

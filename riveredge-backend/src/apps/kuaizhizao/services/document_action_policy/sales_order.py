@@ -144,6 +144,7 @@ def derive_sales_order_capabilities(
     has_remaining_invoice_amount: bool = True,
     has_purchasable_remaining: bool = False,
     require_purchase_requisition: bool = False,
+    require_shipment_notice_before_delivery: bool = False,
     require_audit_before_print: bool = False,
     has_prepayment_receipt: bool = False,
 ) -> SalesOrderCapabilities:
@@ -313,10 +314,16 @@ def derive_sales_order_capabilities(
         "sales_order.push_shipment.not_allowed",
         "sales_order.push_shipment.no_backorder",
     )
-    push_delivery_cap = _push_shipment_or_delivery_cap(
-        "sales_order.push_delivery.not_allowed",
-        "sales_order.push_delivery.no_backorder",
-    )
+    if require_shipment_notice_before_delivery:
+        push_delivery_cap = _cap(
+            False,
+            "sales_order.push_delivery.require_shipment_notice",
+        )
+    else:
+        push_delivery_cap = _push_shipment_or_delivery_cap(
+            "sales_order.push_delivery.not_allowed",
+            "sales_order.push_delivery.no_backorder",
+        )
 
     push_invoice_allowed = False
     push_invoice_reason = push_reason or "sales_order.push_invoice.not_allowed"
@@ -477,6 +484,7 @@ def assert_sales_order_capability(
     has_remaining_invoice_amount: bool = True,
     has_purchasable_remaining: bool = False,
     require_purchase_requisition: bool = False,
+    require_shipment_notice_before_delivery: bool = False,
     require_audit_before_print: bool = False,
     has_prepayment_receipt: bool = False,
 ) -> None:
@@ -494,6 +502,7 @@ def assert_sales_order_capability(
         has_remaining_invoice_amount=has_remaining_invoice_amount,
         has_purchasable_remaining=has_purchasable_remaining,
         require_purchase_requisition=require_purchase_requisition,
+        require_shipment_notice_before_delivery=require_shipment_notice_before_delivery,
         require_audit_before_print=require_audit_before_print,
         has_prepayment_receipt=has_prepayment_receipt,
     )

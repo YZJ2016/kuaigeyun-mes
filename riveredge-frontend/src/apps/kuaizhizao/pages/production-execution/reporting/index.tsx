@@ -1103,6 +1103,10 @@ const ReportingPage: React.FC = () => {
    */
   const handleCorrectReporting = async (record: ReportingRecord) => {
     try {
+      if (executionConfig?.data_correction_enabled === false) {
+        messageApi.warning(t('app.kuaizhizao.workReporting.dataCorrectionDisabled'));
+        return;
+      }
       const detail = await reportingApi.get(record.id!.toString());
       const d = detail as ReportingRecord;
       correctModalProxyWorkerRef.current = null;
@@ -1379,19 +1383,21 @@ const ReportingPage: React.FC = () => {
       </span>
     );
     if (isPending) {
-      nodes.push(
-        <Button {...rowActionKind('update')}
-          key="corr"
-          type="link"
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleCorrectReporting(record);
-          }}
-        >
-          {t('app.kuaizhizao.workReporting.correct')}
-        </Button>
-      );
+      if (executionConfig?.data_correction_enabled !== false) {
+        nodes.push(
+          <Button {...rowActionKind('update')}
+            key="corr"
+            type="link"
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleCorrectReporting(record);
+            }}
+          >
+            {t('app.kuaizhizao.workReporting.correct')}
+          </Button>
+        );
+      }
       nodes.push(
         <ActionConfirmPopconfirm
           key="del"
@@ -1441,19 +1447,21 @@ const ReportingPage: React.FC = () => {
           </Button>
         );
       }
-      nodes.push(
-        <Button {...rowActionKind('update')}
-          key="corr2"
-          type="link"
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            void handleCorrectReporting(record);
-          }}
-        >
-          {t('app.kuaizhizao.workReporting.correct')}
-        </Button>
-      );
+      if (executionConfig?.data_correction_enabled !== false) {
+        nodes.push(
+          <Button {...rowActionKind('update')}
+            key="corr2"
+            type="link"
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleCorrectReporting(record);
+            }}
+          >
+            {t('app.kuaizhizao.workReporting.correct')}
+          </Button>
+        );
+      }
     }
     if (isRejected) {
       nodes.push(
@@ -1722,7 +1730,7 @@ const ReportingPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => renderReportingRowActionNodes(record),
     },
-  ], [t, reportingAuditColumn, reportingStatusValueEnum, reportingCustomFieldColumns]);
+  ], [t, reportingAuditColumn, reportingStatusValueEnum, reportingCustomFieldColumns, executionConfig?.data_correction_enabled]);
 
 
   const reportingDetailBaseColumns: ProDescriptionsItemProps<ReportingRecord>[] = useMemo(

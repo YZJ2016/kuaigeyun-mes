@@ -436,6 +436,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
             <InputNumber
               min={0}
               step={0.01}
+              precision={2}
               style={{ width: 72 }}
               disabled={disabled}
               value={row.standardTime}
@@ -500,6 +501,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
             <InputNumber
               min={0}
               step={0.01}
+              precision={2}
               style={{ flex: 1, minWidth: 72 }}
               disabled={disabled}
               value={row.setupTime}

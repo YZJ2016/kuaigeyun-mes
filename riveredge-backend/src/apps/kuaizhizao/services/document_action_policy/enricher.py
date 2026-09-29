@@ -381,6 +381,7 @@ def enrich_sales_order_capabilities_on_response(
     has_remaining_invoice_amount: bool = True,
     has_purchasable_remaining: bool = False,
     require_purchase_requisition: bool = False,
+    require_shipment_notice_before_delivery: bool = False,
     require_audit_before_print: bool = False,
     has_prepayment_receipt: bool = False,
 ) -> T:
@@ -398,6 +399,7 @@ def enrich_sales_order_capabilities_on_response(
         has_remaining_invoice_amount=has_remaining_invoice_amount,
         has_purchasable_remaining=has_purchasable_remaining,
         require_purchase_requisition=require_purchase_requisition,
+        require_shipment_notice_before_delivery=require_shipment_notice_before_delivery,
         require_audit_before_print=require_audit_before_print,
         has_prepayment_receipt=has_prepayment_receipt,
     )
