@@ -313,7 +313,24 @@ async def _compute_operation_reportable_remaining(
     material_remaining = prev_transfer - material_consumed
     if material_remaining < 0:
         material_remaining = Decimal("0")
-    return min(plan_remaining, material_remaining)
+    remaining = min(plan_remaining, material_remaining)
+
+    # 「报工前必须确认领料」开启时，可报量再受正式领料可支撑产量约束
+    from infra.services.business_config_service import BusinessConfigService
+
+    policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
+    if policy.get("require_confirmed_picking_before_reporting", False):
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+        max_from_pick = await WorkOrderService.resolve_max_reportable_qty_from_confirmed_picking(
+            tenant_id, int(work_order.id)
+        )
+        if max_from_pick is not None:
+            pick_remaining = max_from_pick - completed
+            if pick_remaining < 0:
+                pick_remaining = Decimal("0")
+            remaining = min(remaining, pick_remaining)
+    return remaining
 
 
 def _operation_assignee_user_ids(operation: WorkOrderOperation) -> List[int]:
@@ -1412,6 +1429,16 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     reporting_data.qualified_quantity = delta
                     reporting_data.unqualified_quantity = Decimal("0")
                     reported_quantity_dec = delta
+                    from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+                    await WorkOrderService.assert_reporting_qty_within_confirmed_picking_if_required(
+                        tenant_id,
+                        int(reporting_data.work_order_id),
+                        operation_completed_qty=Decimal(
+                            str(work_order_operation.completed_quantity or 0)
+                        ),
+                        reporting_qty=reported_quantity_dec,
+                    )
                 elif reported_quantity_dec < 0:
                     raise ValidationError("按状态报工模式下，报工数量不能为负数")
                 else:
@@ -1494,6 +1521,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
                         f"（计划 {plan_qty}，超报规则 {om}，允许累计完成 {max_completed}，"
                         f"当前已报完成 {current_completed}），本次报工 {reported_quantity_dec}"
                     )
+                from apps.kuaizhizao.services.work_order_service import WorkOrderService
+
+                await WorkOrderService.assert_reporting_qty_within_confirmed_picking_if_required(
+                    tenant_id,
+                    int(reporting_data.work_order_id),
+                    operation_completed_qty=current_completed,
+                    reporting_qty=reported_quantity_dec,
+                )
 
             if reporting_type != "status":
                 # 按数量报工：需要验证数量合理性

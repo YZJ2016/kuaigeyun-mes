@@ -96,7 +96,10 @@ import {
 import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { glService } from '../../../../kuaicaiwu/services/gl';
 import { exchangeRateService } from '../../../../kuaicaiwu/services/exchange-rate';
-import { resolveDocumentCurrencyInputPrefix } from '../../../utils/documentCurrencyDisplay';
+import {
+  documentCurrencyTitleVars,
+  resolveDocumentCurrencyInputPrefix,
+} from '../../../utils/documentCurrencyDisplay';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -334,6 +337,7 @@ function resolveDefaultSalesOrderListScope(): SalesOrderListScope {
 /** 销售明细行（订单 + 明细合并，用于明细表格平铺） */
 type SalesOrderItemRow = SalesOrderItem & {
   _rowKey: string;
+  currency_code?: string;
   sales_order_id: number;
   order_code?: string;
   customer_name?: string;
@@ -4045,6 +4049,7 @@ const SalesOrdersPage: React.FC = () => {
           resource={SO}
           fieldName="total_amount"
           value={resolveSalesOrderDisplayTotalAmount(r)}
+          prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
         />
       ),
     },
@@ -4256,14 +4261,21 @@ const SalesOrdersPage: React.FC = () => {
       ),
     },
     {
-      title: t('app.kuaizhizao.salesOrder.unitPrice'),
+      title: t('app.kuaizhizao.salesOrder.unitPrice', documentCurrencyTitleVars(undefined, t)),
       dataIndex: 'unit_price',
       width: 90,
       minWidth: 90,
       uniTableKeepWidth: true,
       resizable: false,
       align: 'right' as const,
-      render: (val: any) => <AmountDisplay resource={SO} fieldName="unit_price" value={val} />,
+      render: (val: any, r: SalesOrderItemRow) => (
+        <AmountDisplay
+          resource={SO}
+          fieldName="unit_price"
+          value={val}
+          prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
+        />
+      ),
     },
     {
       title: t('app.kuaizhizao.salesOrder.taxRate'),
@@ -4276,14 +4288,21 @@ const SalesOrdersPage: React.FC = () => {
       render: (val: any) => val ?? 0,
     },
     {
-      title: t('app.kuaizhizao.salesOrder.inclAmount'),
+      title: t('app.kuaizhizao.salesOrder.inclAmount', documentCurrencyTitleVars(undefined, t)),
       dataIndex: 'item_amount',
       width: 100,
       minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
       align: 'right' as const,
-      render: (val: any) => <AmountDisplay resource={SO} fieldName="amount_with_tax" value={val} />,
+      render: (val: any, r: SalesOrderItemRow) => (
+        <AmountDisplay
+          resource={SO}
+          fieldName="amount_with_tax"
+          value={val}
+          prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
+        />
+      ),
     },
     {
       title: t('app.kuaizhizao.salesOrder.deliveredQty'),
@@ -4761,10 +4780,16 @@ const SalesOrdersPage: React.FC = () => {
       </DetailDrawerSection>
 
       <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
-          <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
+          <AntForm.Item
+            noStyle
+            shouldUpdate={(prev: any, curr: any) =>
+              prev?.price_type !== curr?.price_type || prev?.currency_code !== curr?.currency_code
+            }
+          >
             {({ getFieldValue: getFormValue }: any) => {
               const priceType = salesFormPriceType(getFormValue('price_type'));
               const showTaxBreakdownColumns = priceType === 'tax_inclusive';
+              const currencyVars = documentCurrencyTitleVars(getFormValue('currency_code'), t);
               const materialSourceType = productScope === 'make' ? 'Make' : undefined;
               const productColumnTitle = (
                 <Space size={8} align="center">
@@ -4978,8 +5003,8 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title:
                         priceType === 'tax_inclusive'
-                          ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
-                          : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive'),
+                          ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive', currencyVars)
+                          : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive', currencyVars),
                       dataIndex: 'unit_price',
                       width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice + 28,
                       ...DOCUMENT_DETAIL_NUM_COL,
@@ -5032,7 +5057,7 @@ const SalesOrdersPage: React.FC = () => {
                     ...(showTaxBreakdownColumns
                       ? [
                           {
-                            title: t('app.kuaizhizao.salesOrder.exclAmount'),
+                            title: t('app.kuaizhizao.salesOrder.exclAmount', currencyVars),
                             width: DOCUMENT_DETAIL_COL_WIDTH.exclAmount,
                             ...DOCUMENT_DETAIL_NUM_COL,
                             render: (_: any, __: any, index: number) => (
@@ -5106,7 +5131,7 @@ const SalesOrdersPage: React.FC = () => {
                     ...(showTaxBreakdownColumns
                       ? [
                           {
-                            title: t('app.kuaizhizao.salesOrder.taxAmount'),
+                            title: t('app.kuaizhizao.salesOrder.taxAmount', currencyVars),
                             width: DOCUMENT_DETAIL_COL_WIDTH.taxAmount,
                             ...DOCUMENT_DETAIL_NUM_COL,
                             render: (_: any, __: any, index: number) => (
@@ -5147,8 +5172,8 @@ const SalesOrdersPage: React.FC = () => {
                       : []),
                     {
                       title: showTaxBreakdownColumns
-                        ? t('app.kuaizhizao.salesOrder.inclAmount')
-                        : t('app.kuaizhizao.salesOrder.exclAmount'),
+                        ? t('app.kuaizhizao.salesOrder.inclAmount', currencyVars)
+                        : t('app.kuaizhizao.salesOrder.exclAmount', currencyVars),
                       width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
@@ -5432,7 +5457,7 @@ const SalesOrdersPage: React.FC = () => {
             onCancel={() => setImportModalVisible(false)}
             onConfirm={handleItemImport}
             title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
-            headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('common.unit'), t('common.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
+            headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('common.unit'), t('common.quantity'), t('app.kuaizhizao.salesOrder.unitPrice', documentCurrencyTitleVars(undefined, t)), t('app.kuaizhizao.salesOrder.deliveryDate')]}
             exampleRow={['MAT001', 'Spec X', pickImportExampleValue(salesOrderLineUnitOptions, 'PCS'), '100', '1.5', '2026-03-01']}
             columnOptions={salesOrderLineImportColumnOptions}
           />
@@ -5668,6 +5693,7 @@ const SalesOrdersPage: React.FC = () => {
                     material_name: '-',
                     required_quantity: 0,
                     delivery_date: order.delivery_date ?? '',
+                    currency_code: order.currency_code,
                   } as SalesOrderItemRow);
                 } else {
                   items.forEach((item: SalesOrderItem, idx: number) => {
@@ -5708,6 +5734,7 @@ const SalesOrdersPage: React.FC = () => {
                       delivered_quantity: item.delivered_quantity,
                       remaining_quantity: item.remaining_quantity,
                       delivery_date: item.delivery_date ?? order.delivery_date ?? '',
+                      currency_code: order.currency_code,
                     } as SalesOrderItemRow);
                   });
                 }

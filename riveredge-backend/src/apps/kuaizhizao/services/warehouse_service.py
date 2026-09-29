@@ -1761,6 +1761,19 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         resp = ProductionPickingWithItemsResponse.model_validate(picking)
         resp.lifecycle = get_production_picking_lifecycle(picking)
         resp.items = [_build_production_picking_item_response(i) for i in items]
+        req_total = float(sum(float(getattr(i, "required_quantity", 0) or 0) for i in items))
+        picked_total = float(sum(float(getattr(i, "picked_quantity", 0) or 0) for i in items))
+        resp.total_items = len(items)
+        resp.required_quantity_total = req_total
+        resp.picked_quantity_total = picked_total
+        # 与列表口径一致：总数量取应领合计
+        resp.total_quantity = req_total
+        units = {
+            str(getattr(i, "material_unit", None) or "").strip()
+            for i in items
+            if str(getattr(i, "material_unit", None) or "").strip()
+        }
+        resp.quantity_unit = next(iter(units)) if len(units) == 1 else None
         wh_id, wh_name = _aggregate_warehouse_from_picking_item_rows(
             [
                 {

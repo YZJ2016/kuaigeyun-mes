@@ -38,7 +38,10 @@ const LazyUniImport = lazy(() =>
 );
 import type { Material } from '../../../../master-data/types/material';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
-import { resolveDocumentCurrencyInputPrefix } from '../../../utils/documentCurrencyDisplay';
+import {
+  documentCurrencyTitleVars,
+  resolveDocumentCurrencyInputPrefix,
+} from '../../../utils/documentCurrencyDisplay';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -1546,7 +1549,19 @@ const ShipmentNoticesPage: React.FC = () => {
                   ),
                 },
                 {
-                  title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                  title: (
+                    <AntForm.Item
+                      noStyle
+                      shouldUpdate={(prev: any, curr: any) => prev?.currency_code !== curr?.currency_code}
+                    >
+                      {({ getFieldValue }: any) =>
+                        t(
+                          'app.kuaizhizao.salesOrder.unitPrice',
+                          documentCurrencyTitleVars(getFieldValue('currency_code'), t),
+                        )
+                      }
+                    </AntForm.Item>
+                  ),
                   dataIndex: 'unit_price',
                   width: 100,
                   align: 'right' as const,
@@ -1640,9 +1655,15 @@ const ShipmentNoticesPage: React.FC = () => {
       </ProForm.Item>
       <ProFormTextArea name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} fieldProps={{ rows: 2 }} />
       <ProFormItem label={t('app.kuaizhizao.shipmentNotice.noticeItems')}>
-        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+        <AntForm.Item
+          noStyle
+          shouldUpdate={(prev: any, curr: any) =>
+            prev?.items !== curr?.items || prev?.currency_code !== curr?.currency_code
+          }
+        >
           {({ getFieldValue }: any) => {
             const items = getFieldValue('items') ?? [];
+            const currencyVars = documentCurrencyTitleVars(getFieldValue('currency_code'), t);
             return (
               <Table
                 size="small"
@@ -1655,12 +1676,12 @@ const ShipmentNoticesPage: React.FC = () => {
                   { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
                   { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
                   {
-                    title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                    title: t('app.kuaizhizao.salesOrder.unitPrice', currencyVars),
                     dataIndex: 'unit_price',
                     width: 90,
                     align: 'right' as const,
                     render: (text: unknown) => {
-                      const code = editFormRef.current?.getFieldValue('currency_code');
+                      const code = getFieldValue('currency_code');
                       return `${resolveDocumentCurrencyInputPrefix(code)}${text ?? 0}`;
                     },
                   },
@@ -2099,7 +2120,10 @@ const ShipmentNoticesPage: React.FC = () => {
                   { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
                   { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
                   {
-                    title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                    title: t(
+                      'app.kuaizhizao.salesOrder.unitPrice',
+                      documentCurrencyTitleVars((noticeDetail as any)?.currency_code, t),
+                    ),
                     dataIndex: 'unit_price',
                     width: 90,
                     align: 'right' as const,

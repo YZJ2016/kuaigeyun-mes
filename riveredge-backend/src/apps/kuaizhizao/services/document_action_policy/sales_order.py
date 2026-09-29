@@ -235,14 +235,17 @@ def derive_sales_order_capabilities(
         withdraw_submit_reason if not withdraw_submit_allowed else None,
     )
 
-    # revoke_approval — 已审核/已生效且审核通过，或已驳回（终态除外）
+    # revoke_approval — 已审核/已生效且审核通过，或已驳回（终态除外）；
+    # 有下游时禁止变更审核态，已审核订单变更须走销售变更单
     revoke_allowed = False
     revoke_reason = "sales_order.revoke_approval.not_allowed"
-    if _is_rejected_status(status):
+    if _is_closed(status) or _is_completed_status(status) or _is_cancelled_status(status):
+        revoke_allowed = False
+    elif has_downstream_documents:
+        revoke_reason = "sales_order.revoke_approval.has_downstream"
+    elif _is_rejected_status(status):
         revoke_allowed = True
         revoke_reason = None
-    elif _is_closed(status) or _is_completed_status(status) or _is_cancelled_status(status):
-        revoke_allowed = False
     elif _is_review_approved(review_status) and (
         _is_audited_status(status) or _is_confirmed(status)
     ):

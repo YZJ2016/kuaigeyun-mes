@@ -73,7 +73,10 @@ import {
 } from '../../../../../utils/documentFormReferenceLoad';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { resolveDocumentCurrencyInputPrefix } from '../../../utils/documentCurrencyDisplay';
+import {
+  documentCurrencyTitleVars,
+  resolveDocumentCurrencyInputPrefix,
+} from '../../../utils/documentCurrencyDisplay';
 import dayjs from 'dayjs';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListLifecycleParams } from '../../../utils/salesReturnLifecycle';
@@ -1500,7 +1503,7 @@ const SalesReturnsPage: React.FC = () => {
     ];
     const unitPriceKeys = [
       t('app.kuaizhizao.salesReturn.import.unitPrice'),
-      t('app.kuaizhizao.salesOrder.unitPrice'),
+      t('app.kuaizhizao.salesOrder.unitPrice', documentCurrencyTitleVars(undefined, t)),
       '单价',
     ];
     const batchNumberKeys = [
@@ -2353,7 +2356,19 @@ const SalesReturnsPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                      title: (
+                        <AntForm.Item
+                          noStyle
+                          shouldUpdate={(prev: any, curr: any) => prev?.currency_code !== curr?.currency_code}
+                        >
+                          {({ getFieldValue }) =>
+                            t(
+                              'app.kuaizhizao.salesOrder.unitPrice',
+                              documentCurrencyTitleVars(getFieldValue('currency_code'), t),
+                            )
+                          }
+                        </AntForm.Item>
+                      ),
                       dataIndex: 'unit_price',
                       width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
                       ...DOCUMENT_DETAIL_NUM_COL,
@@ -2645,7 +2660,10 @@ const SalesReturnsPage: React.FC = () => {
                       { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
                       { title: t('app.kuaizhizao.salesReturn.returnQuantity'), dataIndex: 'return_quantity', width: 100, align: 'right', render: formatQuantity },
                       {
-                        title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                        title: t(
+                          'app.kuaizhizao.salesOrder.unitPrice',
+                          documentCurrencyTitleVars(returnDetail?.currency_code, t),
+                        ),
                         dataIndex: 'unit_price',
                         width: 100,
                         align: 'right',

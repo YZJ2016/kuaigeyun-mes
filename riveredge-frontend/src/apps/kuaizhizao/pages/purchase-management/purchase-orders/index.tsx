@@ -3999,6 +3999,12 @@ const PurchaseOrdersPage: React.FC = () => {
               if (sf.supplier_id != null && sf.supplier_id !== '') {
                 apiParams.supplier_id = Number(sf.supplier_id);
               }
+              if (sf.buyer_id != null && sf.buyer_id !== '') {
+                const buyerId = Number(sf.buyer_id);
+                if (Number.isFinite(buyerId) && buyerId > 0) {
+                  apiParams.buyer_id = buyerId;
+                }
+              }
               const orderDateRange = sf.order_date_range as [unknown, unknown] | undefined;
               if (orderDateRange && Array.isArray(orderDateRange) && orderDateRange[0]) {
                 apiParams.order_date_from = formatDateTime(orderDateRange[0] as string | Date, 'YYYY-MM-DD');

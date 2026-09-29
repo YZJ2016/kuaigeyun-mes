@@ -481,6 +481,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         # 应用筛选条件
         if params.supplier_id:
             query = query.filter(supplier_id=params.supplier_id)
+        if params.buyer_id is not None and int(params.buyer_id) > 0:
+            query = query.filter(buyer_id=int(params.buyer_id))
         if params.status:
             query = query.filter(status=params.status)
         if params.review_status:

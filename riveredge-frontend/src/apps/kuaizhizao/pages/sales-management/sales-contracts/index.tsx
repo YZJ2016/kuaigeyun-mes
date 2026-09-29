@@ -166,6 +166,7 @@ import { DictionaryLabel } from '../../../../../components/dictionary-label';
 
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
+import { resolveDocumentCurrencyInputPrefix } from '../../../utils/documentCurrencyDisplay';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
@@ -2370,7 +2371,12 @@ const SalesContractsPage: React.FC = () => {
 
       render: (_, r) =>
         Number(r.discount_amount ?? 0) > 0 ? (
-          <AmountDisplay resource={SC} fieldName="amount" value={r.discount_amount} />
+          <AmountDisplay
+            resource={SC}
+            fieldName="amount"
+            value={r.discount_amount}
+            prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
+          />
         ) : (
           '-'
         ),
@@ -2393,7 +2399,14 @@ const SalesContractsPage: React.FC = () => {
 
       dataIndex: 'total_amount',
 
-      render: (_, r) => <AmountDisplay resource={SC} fieldName="total_amount" value={r.total_amount} />,
+      render: (_, r) => (
+        <AmountDisplay
+          resource={SC}
+          fieldName="total_amount"
+          value={r.total_amount}
+          prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
+        />
+      ),
 
     },
 
@@ -2403,7 +2416,14 @@ const SalesContractsPage: React.FC = () => {
 
       dataIndex: 'released_amount',
 
-      render: (_, r) => <AmountDisplay resource={SC} fieldName="amount" value={r.released_amount} />,
+      render: (_, r) => (
+        <AmountDisplay
+          resource={SC}
+          fieldName="amount"
+          value={r.released_amount}
+          prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
+        />
+      ),
 
     },
 
@@ -2413,7 +2433,14 @@ const SalesContractsPage: React.FC = () => {
 
       dataIndex: 'remaining_amount',
 
-      render: (_, r) => <AmountDisplay resource={SC} fieldName="amount" value={r.remaining_amount} />,
+      render: (_, r) => (
+        <AmountDisplay
+          resource={SC}
+          fieldName="amount"
+          value={r.remaining_amount}
+          prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
+        />
+      ),
 
     },
 

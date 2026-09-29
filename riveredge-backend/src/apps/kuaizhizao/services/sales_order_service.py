@@ -1353,17 +1353,38 @@ class SalesOrderService:
             ),
             has_prepayment_receipt=prepay_map.get(int(order.id), False),
         )
-        if action == "delete":
-            from apps.kuaizhizao.services.sales_order_code_sync import (
-                sales_order_has_downstream_documents,
-            )
-
-            ctx["has_downstream_documents"] = await sales_order_has_downstream_documents(
-                tenant_id, int(order.id)
-            )
         require_audit_before_print = (
             await self.business_config_service.get_sales_require_audit_before_print(tenant_id)
         )
+        if action in ("delete", "revoke_approval"):
+            from apps.kuaizhizao.services.sales_order_code_sync import (
+                format_sales_order_downstream_labels,
+                list_sales_order_active_downstream_documents,
+            )
+
+            downstream_docs = await list_sales_order_active_downstream_documents(
+                tenant_id, int(order.id)
+            )
+            ctx["has_downstream_documents"] = bool(downstream_docs)
+            try:
+                assert_sales_order_capability(
+                    order,
+                    action,
+                    require_audit_before_print=require_audit_before_print,
+                    **ctx,
+                )
+            except BusinessLogicError:
+                if downstream_docs:
+                    labels = format_sales_order_downstream_labels(downstream_docs)
+                    if action == "delete":
+                        raise BusinessLogicError(
+                            f"该销售订单已有下游单据（{labels}），请先撤回或删除下游后再删除订单"
+                        )
+                    raise BusinessLogicError(
+                        f"该销售订单已有下游单据（{labels}），不能撤销审核；如需变更请走销售变更单"
+                    )
+                raise
+            return
         assert_sales_order_capability(
             order,
             action,
