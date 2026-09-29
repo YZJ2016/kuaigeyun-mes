@@ -1175,69 +1175,118 @@ wizard_show_optional_deps_panel() {
     local label_col
     label_col="$(wizard_optional_deps_label_column)"
     echo ""
-    wizard_say "选装依赖（写入 fast-deploy/config/deploy.env，保存后立即生效）"
+    wizard_say "选装依赖（写入 fast-deploy/config/deploy.env；左栏=开关，右栏=机上是否已装）"
     echo ""
-    wizard_optional_deps_item_line 1 "发票 OCR（二维码/识别）" "$(deploy_opt_flag_label "${OPT_INVOICE_OCR:-0}")" "$label_col"
-    wizard_optional_deps_item_line 2 "PDF 打印（Playwright）" "$(deploy_opt_flag_label "${OPT_PDF_PRINT:-0}")" "$label_col"
-    wizard_optional_deps_item_line 3 "KU-AI 向量（pgvector）" "$(deploy_opt_flag_label "${OPT_KUAI_VECTOR:-0}")" "$label_col"
-    wizard_optional_deps_item_line 4 "敏感词库（lexicon.pack）" "$(deploy_opt_flag_label "${OPT_SENSITIVE_LEXICON:-0}")" "$label_col"
-    wizard_optional_deps_item_line 5 "LibreOffice（Office 高级预览）" "$(deploy_opt_flag_label "${OPT_LIBREOFFICE:-0}")" "$label_col"
+    wizard_say "正在探测机上依赖，请稍候..."
+    wizard_optional_deps_item_line 1 "发票 OCR（二维码/识别）" "$(deploy_opt_panel_status "${OPT_INVOICE_OCR:-0}" "$(deploy_opt_probe_invoice)")" "$label_col"
+    wizard_optional_deps_item_line 2 "PDF 打印（Playwright）" "$(deploy_opt_panel_status "${OPT_PDF_PRINT:-0}" "$(deploy_opt_probe_pdf)")" "$label_col"
+    wizard_optional_deps_item_line 3 "KU-AI 向量（pgvector）" "$(deploy_opt_panel_status "${OPT_KUAI_VECTOR:-0}" "$(deploy_opt_probe_pgvector)")" "$label_col"
+    wizard_optional_deps_item_line 4 "敏感词库（lexicon.pack）" "$(deploy_opt_panel_status "${OPT_SENSITIVE_LEXICON:-0}" "$(deploy_opt_probe_lexicon)")" "$label_col"
+    wizard_optional_deps_item_line 5 "LibreOffice（Office 高级预览）" "$(deploy_opt_panel_status "${OPT_LIBREOFFICE:-0}" "$(deploy_opt_probe_libreoffice)")" "$label_col"
     echo ""
-    echo -e "  ${WIZARD_CYAN}[6]${WIZARD_RESET} 检查已启用项的依赖就绪情况"
+    echo -e "  ${WIZARD_CYAN}[6]${WIZARD_RESET} 检查依赖就绪详情（含未启用项的机上探测）"
+    echo -e "  ${WIZARD_CYAN}[A]${WIZARD_RESET} 全选启用（1–5 全部设为已启用）"
     echo -e "  ${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
     echo ""
+    wizard_say "「已装」仅表示机上具备，不等于已写入开关；纳入 install/migrate 须先启用"
     wizard_say "开启某项后建议依次: install（系统库）→ migrate → start"
-    wizard_say "LibreOffice 启用并安装后，Word/PPT 走转 PDF 高级预览；未装时用简易预览。Excel 始终走 Univer Sheet"
+}
+
+# 切换单项选装开关；成功返回 0
+wizard_optional_deps_toggle_one() {
+    local num=$1
+    case "$num" in
+        1)
+            toggle_deploy_opt_flag OPT_INVOICE_OCR || { wizard_say_fail "发票 OCR 保存失败"; return 1; }
+            wizard_say_ok "发票 OCR: $(deploy_opt_flag_label "${OPT_INVOICE_OCR:-0}")"
+            ;;
+        2)
+            toggle_deploy_opt_flag OPT_PDF_PRINT || { wizard_say_fail "PDF 打印 保存失败"; return 1; }
+            wizard_say_ok "PDF 打印: $(deploy_opt_flag_label "${OPT_PDF_PRINT:-0}")"
+            ;;
+        3)
+            toggle_deploy_opt_flag OPT_KUAI_VECTOR || { wizard_say_fail "KU-AI 向量 保存失败"; return 1; }
+            wizard_say_ok "KU-AI 向量: $(deploy_opt_flag_label "${OPT_KUAI_VECTOR:-0}")"
+            ;;
+        4)
+            toggle_deploy_opt_flag OPT_SENSITIVE_LEXICON || { wizard_say_fail "敏感词库 保存失败"; return 1; }
+            wizard_say_ok "敏感词库: $(deploy_opt_flag_label "${OPT_SENSITIVE_LEXICON:-0}")"
+            ;;
+        5)
+            toggle_deploy_opt_flag OPT_LIBREOFFICE || { wizard_say_fail "LibreOffice 保存失败"; return 1; }
+            wizard_say_ok "LibreOffice: $(deploy_opt_flag_label "${OPT_LIBREOFFICE:-0}")"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+    return 0
 }
 
 wizard_ask_optional_deps_choice() {
-    local choice
+    local choice raw token tokens seen fail norm
     while true; do
         wizard_show_optional_deps_panel
-        read -rp "$(echo -e "${WIZARD_DIM}选择 › ${WIZARD_RESET}")" choice
-        case "${choice:-}" in
+        read -rp "$(echo -e "${WIZARD_DIM}选择（可多选如 1,2,4；A=全选启用） › ${WIZARD_RESET}")" choice
+        raw="${choice:-}"
+        norm="$(echo "$raw" | tr -d '[:space:]')"
+        # 去掉空白后的 0/q 返回；单独 6 查详情；A/a 全选启用
+        case "$norm" in
             0|q|Q)
                 return 0
-                ;;
-            1)
-                toggle_deploy_opt_flag OPT_INVOICE_OCR || wizard_say_fail "保存失败"
-                wizard_say_ok "发票 OCR: $(deploy_opt_flag_label "${OPT_INVOICE_OCR:-0}")"
-                ;;
-            2)
-                toggle_deploy_opt_flag OPT_PDF_PRINT || wizard_say_fail "保存失败"
-                wizard_say_ok "PDF 打印: $(deploy_opt_flag_label "${OPT_PDF_PRINT:-0}")"
-                if deploy_opt_pdf_print_enabled; then
-                    wizard_say "Chromium 后台补装仍受 PLAYWRIGHT_POSTINSTALL_ENABLE 控制（deploy.env）"
-                fi
-                ;;
-            3)
-                toggle_deploy_opt_flag OPT_KUAI_VECTOR || wizard_say_fail "保存失败"
-                wizard_say_ok "KU-AI 向量: $(deploy_opt_flag_label "${OPT_KUAI_VECTOR:-0}")"
-                ;;
-            4)
-                toggle_deploy_opt_flag OPT_SENSITIVE_LEXICON || wizard_say_fail "保存失败"
-                wizard_say_ok "敏感词库: $(deploy_opt_flag_label "${OPT_SENSITIVE_LEXICON:-0}")"
-                ;;
-            5)
-                toggle_deploy_opt_flag OPT_LIBREOFFICE || wizard_say_fail "保存失败"
-                wizard_say_ok "LibreOffice: $(deploy_opt_flag_label "${OPT_LIBREOFFICE:-0}")"
-                if deploy_opt_libreoffice_enabled; then
-                    wizard_say "请执行 install 安装 LibreOffice；就绪后 Word/PPT 附件使用转 PDF 高级预览（Excel 走 Univer Sheet）"
-                else
-                    wizard_say "未启用时 Word/PPT 使用简易预览（react-doc-viewer）；Excel 仍走 Univer Sheet"
-                fi
                 ;;
             6)
                 echo ""
                 cmd_check_special || true
                 echo ""
                 read -rp "$(echo -e "${WIZARD_DIM}Enter 继续${WIZARD_RESET} › ")" _ || true
+                continue
                 ;;
-            *)
-                wizard_say_warn "无效选项"
-                sleep 0.3
+            A|a)
+                set_deploy_opt_flag OPT_INVOICE_OCR 1 || wizard_say_fail "发票 OCR 保存失败"
+                set_deploy_opt_flag OPT_PDF_PRINT 1 || wizard_say_fail "PDF 打印 保存失败"
+                set_deploy_opt_flag OPT_KUAI_VECTOR 1 || wizard_say_fail "KU-AI 向量 保存失败"
+                set_deploy_opt_flag OPT_SENSITIVE_LEXICON 1 || wizard_say_fail "敏感词库 保存失败"
+                set_deploy_opt_flag OPT_LIBREOFFICE 1 || wizard_say_fail "LibreOffice 保存失败"
+                wizard_say_ok "已全选启用 1–5"
+                continue
                 ;;
         esac
+
+        # 支持 1,2,4 / 1 2 4 / 1，2，4 / 1、2
+        raw="$(printf '%s' "$raw" | tr '，、;' ',')"
+        tokens=()
+        seen="|"
+        fail=0
+        # shellcheck disable=SC2086
+        for token in ${raw//,/ }; do
+            [ -n "$token" ] || continue
+            case "$token" in
+                [1-5])
+                    case "$seen" in
+                        *"|${token}|"*) ;;
+                        *)
+                            tokens+=("$token")
+                            seen="${seen}${token}|"
+                            ;;
+                    esac
+                    ;;
+                *)
+                    fail=1
+                    break
+                    ;;
+            esac
+        done
+
+        if [ "$fail" -ne 0 ] || [ "${#tokens[@]}" -eq 0 ]; then
+            wizard_say_warn "无效选项（1-5 切换，可多选；A=全选启用；6 查详情；0 返回）"
+            sleep 0.3
+            continue
+        fi
+
+        for token in "${tokens[@]}"; do
+            wizard_optional_deps_toggle_one "$token" || true
+        done
     done
 }
 
