@@ -2473,10 +2473,11 @@ playwright_uv_extra_args() {
 
 _playwright_chromium_probe() {
     # 0=可运行；1=浏览器未装；2=二进制在但系统共享库缺失（打印会 exit 127）
+    # 探测用 --no-sync：禁止 uv 因 --extra pdf 静默拉包导致面板假死
     local uv_bin="$1"
     playwright_export_env
     (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
-        "$uv_bin" run --extra pdf python - <<'PY'
+        "$uv_bin" run --no-sync python - <<'PY'
 import os
 import subprocess
 import sys
@@ -2740,13 +2741,13 @@ check_invoice_parse_runtime() {
 
 check_ocr() {
     # Python 侧：pymupdf + rapidocr（需 uv sync --extra ocr 之后）
+    # 探测必须 --no-sync 且不带 --extra：否则刚启用 OPT 时 uv 会静默拉包，面板像卡住
     [ -d "$BACKEND_DIR" ] || { echo "missing"; return; }
     local uv_bin
     uv_bin="$(resolve_uv 2>/dev/null || true)"
     [ -n "$uv_bin" ] || { echo "missing"; return; }
-    # shellcheck disable=SC2046
     if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
-        "$uv_bin" run $(backend_uv_extra_args) python - <<'PY' >/dev/null 2>&1
+        "$uv_bin" run --no-sync python - <<'PY' >/dev/null 2>&1
 import fitz
 from rapidocr_onnxruntime import RapidOCR
 PY
@@ -2957,13 +2958,13 @@ ensure_libreoffice_if_enabled() {
 
 check_playwright() {
     # 机上探测：不因 OPT_PDF_PRINT=0 而跳过（开关只决定是否强制 install）
+    # --no-sync：只看当前 venv，禁止因 --extra pdf 静默拉包导致面板假死
     [ -d "$BACKEND_DIR" ] || { echo "missing"; return; }
     local uv_bin
     uv_bin="$(resolve_uv)"
     playwright_export_env
-    # 优先用当前 venv 直接探测；已装过 pdf extra 的包在 OPT=0 时仍可 import
     if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
-        "$uv_bin" run $(backend_uv_extra_args) python -m playwright --version >/dev/null 2>&1); then
+        "$uv_bin" run --no-sync python -m playwright --version >/dev/null 2>&1); then
         if playwright_postinstall_enabled; then
             echo "ok"
         else
