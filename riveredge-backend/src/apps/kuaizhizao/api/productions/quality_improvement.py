@@ -13,6 +13,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 
 from apps.kuaizhizao.schemas.defect_record import DefectRecordListResponse, DefectRecordResponse
+from apps.kuaizhizao.schemas.quality import (
+    QualityInspectionApplyPlanBody,
+    QualityInspectionAttachmentsPatch,
+)
 from apps.kuaizhizao.schemas.quality_improvement import (
     NonconformingDispositionUpdate,
     OQCInspectionConduct,
@@ -650,6 +654,50 @@ async def revoke_conduct_oqc_inspection(
     return await oqc_service.revoke_conduct(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
+        user_id=current_user.id,
+    )
+
+
+@router.patch(
+    "/oqc-inspections/{inspection_id}/attachments",
+    response_model=OQCInspectionResponse,
+    summary="Update OQC inspection attachments",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:update"))],
+)
+async def patch_oqc_inspection_attachments(
+    inspection_id: int = Path(...),
+    body: QualityInspectionAttachmentsPatch = ...,
+    _auth=_OQC_UPDATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OQCInspectionResponse:
+    _ = _auth
+    return await oqc_service.patch_attachments(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        attachments=body.attachments,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/oqc-inspections/{inspection_id}/apply-plan",
+    response_model=OQCInspectionResponse,
+    summary="Apply inspection plan to pending OQC inspection",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:update"))],
+)
+async def apply_oqc_inspection_plan(
+    inspection_id: int = Path(...),
+    body: QualityInspectionApplyPlanBody = ...,
+    _auth=_OQC_UPDATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OQCInspectionResponse:
+    _ = _auth
+    return await oqc_service.apply_inspection_plan(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        inspection_plan_id=body.inspection_plan_id,
         user_id=current_user.id,
     )
 

@@ -58,6 +58,16 @@ def _is_approved_review(review_status: Any) -> bool:
 _CONDUCT_ALLOWED_STATUSES = frozenset({"待检验", "已检验", "已驳回", "待审核"})
 
 
+def can_apply_quality_inspection_plan(status: Any, inspection_result: Any = None) -> bool:
+    """切换检验方案：仅待检验。"""
+    return _norm(status) == "待检验" or _norm(inspection_result) == "待检验"
+
+
+def can_update_quality_inspection_attachments() -> bool:
+    """补充附件：与 conduct 解耦，未删除单据均可（删除在 service 层拦截）。"""
+    return True
+
+
 def can_conduct_quality_inspection(
     status: Any,
     inspection_result: Any = None,
@@ -184,6 +194,14 @@ def derive_quality_inspection_capabilities(
         "quality_inspection.update.not_editable" if not conduct_allowed else None,
     )
 
+    apply_plan_allowed = can_apply_quality_inspection_plan(status, inspection_result)
+    apply_plan_cap = _cap(
+        apply_plan_allowed,
+        "quality_inspection.apply_plan.not_pending" if not apply_plan_allowed else None,
+    )
+
+    update_attachments_cap = _cap(can_update_quality_inspection_attachments())
+
     delete_allowed = status == "待检验" or inspection_result == "待检验"
     delete_cap = _cap(
         delete_allowed,
@@ -254,6 +272,8 @@ def derive_quality_inspection_capabilities(
         push_rework=push_rework_cap,
         push_inbound=push_inbound_cap,
         update=update_cap,
+        update_attachments=update_attachments_cap,
+        apply_plan=apply_plan_cap,
         delete=delete_cap,
         print=print_cap,
     )
@@ -294,6 +314,8 @@ def assert_quality_inspection_capability(
         "push_rework": caps.push_rework,
         "push_inbound": caps.push_inbound,
         "update": caps.update,
+        "update_attachments": caps.update_attachments,
+        "apply_plan": caps.apply_plan,
         "delete": caps.delete,
         "print": caps.print,
     }
