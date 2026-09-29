@@ -484,6 +484,7 @@ async def download_file(
     access_token: Optional[str] = Query(None, description="标准访问令牌（Bearer Token），用于鉴权"),
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
     size: Optional[int] = Query(None, ge=16, le=512, description="缩略图边长（像素），仅图片有效，用于头像等场景"),
+    office_pdf: bool = Query(False, description="LibreOffice 高级预览：返回转换后的 PDF"),
 ):
     from loguru import logger
     logger.info(f"🔍 download_file 请求: uuid={uuid}, token={token[:50] if token else 'None'}..., access_token={access_token[:50] if access_token else 'None'}..., x_tenant_id={x_tenant_id}")
@@ -571,6 +572,53 @@ async def download_file(
         file = await FileService.get_file_by_uuid(tenant_id, uuid)
         if not await FileService.file_content_available(tenant_id, file):
             raise NotFoundError("文件内容不存在，请重新上传")
+
+        # LibreOffice 高级预览：返回转换后的 PDF
+        if office_pdf:
+            from core.services.file.office_preview_service import OfficePreviewService
+
+            if not OfficePreviewService.is_office_document(file.file_type, file.file_extension):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="该文件不是 Office 文档，无法使用高级预览",
+                )
+            if not OfficePreviewService.is_available():
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="未安装 LibreOffice，无法使用 Office 高级预览",
+                )
+            source_bytes = await FileService.get_file_content(tenant_id, uuid)
+            try:
+                pdf_bytes = await OfficePreviewService.ensure_pdf_bytes(
+                    file_uuid=str(file.uuid),
+                    file_row=file,
+                    source_bytes=source_bytes,
+                    file_extension=file.file_extension,
+                )
+            except Exception as e:
+                logger.error(f"Office 高级预览转换失败: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Office 高级预览转换失败: {e}",
+                ) from e
+            from urllib.parse import quote
+
+            base_name = (file.original_name or "preview").rsplit(".", 1)[0]
+            pdf_name = f"{base_name}.pdf"
+            try:
+                pdf_name.encode("latin-1")
+                content_disposition = f'inline; filename="{pdf_name}"'
+            except UnicodeEncodeError:
+                encoded_filename = quote(pdf_name, safe="")
+                content_disposition = f"inline; filename*=UTF-8''{encoded_filename}"
+            return StreamingResponse(
+                iter([pdf_bytes]),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": content_disposition,
+                    "Content-Length": str(len(pdf_bytes)),
+                },
+            )
 
         # 图片档位与原文件同一存储后端（本地或 COS），禁止本机 sidecar 旁路 COS。
         if size and ImageTierService.is_tier_eligible_image(file.file_type, file.file_extension):
@@ -661,6 +709,11 @@ async def get_file_preview(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        ) from e
 
 
 @router.get("/{uuid}/preview-markup", response_model=FilePreviewMarkupResponse)

@@ -26344,6 +26344,8 @@ export default {
   'pages.system.files.previewTextTruncated': '文件较大，仅显示前 512 KB 内容',
   'pages.system.files.previewRowsTruncated': '行数较多，仅显示前 {{count}} 行',
   'pages.system.files.previewSheetEmpty': '表格中没有可显示的数据',
+  'pages.system.files.previewOfficePublicUrlRequired':
+    '当前为简易预览（微软在线）。本机/内网地址微软可能无法拉取文件。启用选装 LibreOffice（OPT_LIBREOFFICE）并安装后可使用服务端转 PDF 高级预览。',
   'pages.system.files.downloadFailed': '下载失败',
   'pages.system.files.selectToDelete': '请选择要删除的文件',
   'pages.system.files.enterNewName': '请输入新名称',
@@ -29127,6 +29129,30 @@ export default {
     '研发协同相关列表搜索与钉住条件批量修复',
   'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.description':
     '实验委托、项目建议书、试流、BOM、固件、图纸发放借用、生产日报等 UniTable 列表统一从 searchFormValues 取 keyword 与状态等钉住条件，不再误读分页 params。',
+  'pages.dashboard.updateLog.entries.file-preview-txt-overlay-r01.title':
+    '文本预览改用全屏预览壳',
+  'pages.dashboard.updateLog.entries.file-preview-txt-overlay-r01.description':
+    'txt 及同类纯文本预览与 PDF/Excel 相同：四周留白全屏浮层，正文区铺满并可滚动。',
+  'pages.dashboard.updateLog.entries.file-preview-excel-univer-overlay-r01.title':
+    'Excel 预览弹窗限高与 PDF 预览对齐',
+  'pages.dashboard.updateLog.entries.file-preview-excel-univer-overlay-r01.description':
+    'xls/xlsx 预览改为与 PDF/图纸相同的全屏浮层（四周留白、内容区铺满），不再使用过矮/被撑高的 72vh Modal。',
+  'pages.dashboard.updateLog.entries.file-preview-excel-univer-scroll-r01.title':
+    '修复 Excel Univer 预览无法滚动',
+  'pages.dashboard.updateLog.entries.file-preview-excel-univer-scroll-r01.description':
+    '约束预览弹窗与 Univer 根节点不得被表格内容撑破，并按裁剪盒重算引擎视口，恢复横向/纵向滚动条。',
+  'pages.dashboard.updateLog.entries.file-preview-excel-univer-sheet-r01.title':
+    'Excel 预览改走表格而不是转 PDF',
+  'pages.dashboard.updateLog.entries.file-preview-excel-univer-sheet-r01.description':
+    'xls/xlsx 不再经 LibreOffice 转 PDF；改为 Univer Sheet 在线预览（多工作表），版式与单元格内容更接近原表。Word/PPT 仍可用 LibreOffice 高级预览。',
+  'pages.dashboard.updateLog.entries.file-preview-libreoffice-advanced-r01.title':
+    'Office 高级预览可选装 LibreOffice',
+  'pages.dashboard.updateLog.entries.file-preview-libreoffice-advanced-r01.description':
+    '部署向导选装依赖新增 LibreOffice：安装后 Word/PPT 由服务端转 PDF 高级预览；未安装时继续简易预览（react-doc-viewer）。开关 OPT_LIBREOFFICE。Excel 走 Univer Sheet，不转 PDF。',
+  'pages.dashboard.updateLog.entries.file-preview-office-react-doc-viewer-r01.title':
+    '文件预览支持 Word / PPT / Excel',
+  'pages.dashboard.updateLog.entries.file-preview-office-react-doc-viewer-r01.description':
+    '接入 react-doc-viewer，对 doc/docx/ppt/pptx/xls/xlsx 走微软 Office 在线预览（需公网可访问的带 token 下载地址）。本机或内网时 Excel 仍用本地表格预览，Word/PPT 会提示可能失败。',
   'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.title':
     '实验委托列表搜索与钉住条件生效',
   'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.description':

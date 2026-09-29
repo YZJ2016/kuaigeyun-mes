@@ -388,7 +388,7 @@ wizard_show_home_panel() {
     wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
     wizard_panel_menu_item "3" "更新系统" "fetch+reset 拉最新 → 迁移重启（低配固定传统部署）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
-    wizard_panel_menu_item "5" "选装依赖" "发票 OCR / PDF 打印 / KU-AI 向量 / 敏感词库"
+    wizard_panel_menu_item "5" "选装依赖" "发票 OCR / PDF 打印 / KU-AI / 敏感词 / LibreOffice"
     wizard_panel_section "OPS 运维"
     wizard_panel_menu_short "${WIZARD_CYAN}[6]${WIZARD_RESET} ${WIZARD_BOLD}详情${WIZARD_RESET}  ${WIZARD_CYAN}[7]${WIZARD_RESET} ${WIZARD_BOLD}服务${WIZARD_RESET}  ${WIZARD_CYAN}[8]${WIZARD_RESET} ${WIZARD_BOLD}自启${WIZARD_RESET}  ${WIZARD_CYAN}[9]${WIZARD_RESET} ${WIZARD_BOLD}低配${WIZARD_RESET}  ${WIZARD_CYAN}[0]${WIZARD_RESET} ${WIZARD_BOLD}退出${WIZARD_RESET}"
     wizard_panel_bot
@@ -1156,7 +1156,8 @@ wizard_optional_deps_label_column() {
         "发票 OCR（二维码/识别）" \
         "PDF 打印（Playwright）" \
         "KU-AI 向量（pgvector）" \
-        "敏感词库（lexicon.pack）"; do
+        "敏感词库（lexicon.pack）" \
+        "LibreOffice（Office 高级预览）"; do
         w="$(wizard_unicode_display_width "$label")"
         [ "${w:-0}" -gt "$max" ] && max=$w
     done
@@ -1180,11 +1181,13 @@ wizard_show_optional_deps_panel() {
     wizard_optional_deps_item_line 2 "PDF 打印（Playwright）" "$(deploy_opt_flag_label "${OPT_PDF_PRINT:-0}")" "$label_col"
     wizard_optional_deps_item_line 3 "KU-AI 向量（pgvector）" "$(deploy_opt_flag_label "${OPT_KUAI_VECTOR:-0}")" "$label_col"
     wizard_optional_deps_item_line 4 "敏感词库（lexicon.pack）" "$(deploy_opt_flag_label "${OPT_SENSITIVE_LEXICON:-0}")" "$label_col"
+    wizard_optional_deps_item_line 5 "LibreOffice（Office 高级预览）" "$(deploy_opt_flag_label "${OPT_LIBREOFFICE:-0}")" "$label_col"
     echo ""
-    echo -e "  ${WIZARD_CYAN}[5]${WIZARD_RESET} 检查已启用项的依赖就绪情况"
+    echo -e "  ${WIZARD_CYAN}[6]${WIZARD_RESET} 检查已启用项的依赖就绪情况"
     echo -e "  ${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
     echo ""
     wizard_say "开启某项后建议依次: install（系统库）→ migrate → start"
+    wizard_say "LibreOffice 启用并安装后，Word/PPT 走转 PDF 高级预览；未装时用简易预览。Excel 始终走 Univer Sheet"
 }
 
 wizard_ask_optional_deps_choice() {
@@ -1216,6 +1219,15 @@ wizard_ask_optional_deps_choice() {
                 wizard_say_ok "敏感词库: $(deploy_opt_flag_label "${OPT_SENSITIVE_LEXICON:-0}")"
                 ;;
             5)
+                toggle_deploy_opt_flag OPT_LIBREOFFICE || wizard_say_fail "保存失败"
+                wizard_say_ok "LibreOffice: $(deploy_opt_flag_label "${OPT_LIBREOFFICE:-0}")"
+                if deploy_opt_libreoffice_enabled; then
+                    wizard_say "请执行 install 安装 LibreOffice；就绪后 Word/PPT 附件使用转 PDF 高级预览（Excel 走 Univer Sheet）"
+                else
+                    wizard_say "未启用时 Word/PPT 使用简易预览（react-doc-viewer）；Excel 仍走 Univer Sheet"
+                fi
+                ;;
+            6)
                 echo ""
                 cmd_check_special || true
                 echo ""
@@ -1651,6 +1663,7 @@ wizard_component_display_name() {
         postgresql) echo "PostgreSQL 15+" ;;
         caddy) echo "Caddy" ;;
         zbar|invoice-runtime) echo "发票解析系统库 (zbar+libgomp)" ;;
+        libreoffice) echo "LibreOffice（Office 高级预览）" ;;
         *) echo "$1" ;;
     esac
 }
@@ -1698,6 +1711,13 @@ wizard_install_method_hint() {
                 *) echo "apt 安装 libzbar0 + libgomp1" ;;
             esac
             ;;
+        libreoffice)
+            case "$plat" in
+                windows) echo "winget 安装 LibreOffice" ;;
+                rhel|fedora) echo "dnf/yum 安装 libreoffice" ;;
+                *) echo "apt 安装 libreoffice-writer/calc/impress" ;;
+            esac
+            ;;
         *) echo "" ;;
     esac
 }
@@ -1723,6 +1743,9 @@ wizard_install_deps() {
     if deploy_opt_invoice_ocr_enabled; then
         st="$(check_invoice_parse_runtime)"; [ "$st" != "ok" ] && plan+=("invoice-runtime:$st")
     fi
+    if deploy_opt_libreoffice_enabled; then
+        st="$(check_libreoffice)"; [ "$st" != "ok" ] && plan+=("libreoffice:$st")
+    fi
 
     if [ "${#plan[@]}" -eq 0 ]; then
         wizard_say_ok "所有依赖已就绪，无需安装"
@@ -1741,7 +1764,7 @@ wizard_install_deps() {
         hint="$(wizard_install_method_hint "$comp")"
         echo "    · $(wizard_component_display_name "$comp") — $(wizard_install_reason "$status")${hint:+ · ${hint}}"
         case "$comp" in
-            postgresql|caddy|node|python|invoice-runtime|zbar) needs_sudo=1 ;;
+            postgresql|caddy|node|python|invoice-runtime|zbar|libreoffice) needs_sudo=1 ;;
         esac
     done
     wizard_say "安装过程会实时输出到终端，同时写入日志: ${log}"

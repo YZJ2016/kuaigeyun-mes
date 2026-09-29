@@ -44,6 +44,54 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'file-preview-txt-overlay-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-txt-overlay-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-txt-overlay-r01.description',
+  },
+  {
+    id: 'file-preview-excel-univer-overlay-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-excel-univer-overlay-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-excel-univer-overlay-r01.description',
+  },
+  {
+    id: 'file-preview-excel-univer-scroll-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-excel-univer-scroll-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-excel-univer-scroll-r01.description',
+  },
+  {
+    id: 'file-preview-excel-univer-sheet-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-excel-univer-sheet-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-excel-univer-sheet-r01.description',
+  },
+  {
+    id: 'file-preview-libreoffice-advanced-r01',
+    date: '2026-09-29',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-libreoffice-advanced-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-libreoffice-advanced-r01.description',
+  },
+  {
+    id: 'file-preview-office-react-doc-viewer-r01',
+    date: '2026-09-29',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-office-react-doc-viewer-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-office-react-doc-viewer-r01.description',
+  },
+  {
     id: 'kuaioa-employee-batch-import-r01',
     date: '2026-09-29',
     type: 'improvement',

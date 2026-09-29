@@ -236,6 +236,7 @@ load_deploy_env() {
     OPT_PDF_PRINT="${OPT_PDF_PRINT:-0}"
     OPT_KUAI_VECTOR="${OPT_KUAI_VECTOR:-0}"
     OPT_SENSITIVE_LEXICON="${OPT_SENSITIVE_LEXICON:-0}"
+    OPT_LIBREOFFICE="${OPT_LIBREOFFICE:-0}"
 }
 
 # deploy.env 选装开关：1 / true / yes / on 视为启用；未设置时在 load_deploy_env 已默认 0
@@ -267,6 +268,11 @@ deploy_opt_sensitive_lexicon_enabled() {
     deploy_env_flag_enabled "${OPT_SENSITIVE_LEXICON:-0}"
 }
 
+deploy_opt_libreoffice_enabled() {
+    load_deploy_env
+    deploy_env_flag_enabled "${OPT_LIBREOFFICE:-0}"
+}
+
 # 将选装开关同步到 riveredge-backend/.env（后端运行时唯一入口）
 sync_deploy_optional_features_to_backend_env() {
     ensure_env_file
@@ -275,6 +281,7 @@ sync_deploy_optional_features_to_backend_env() {
     else
         set_env_value SENSITIVE_WORD_LEXICON_ENABLED false
     fi
+    # LibreOffice：后端以 soffice 是否在 PATH/常见路径为准；选装开关仅驱动安装，不强制写死禁用
 }
 
 ensure_sensitive_lexicon_if_enabled() {
@@ -297,7 +304,7 @@ deploy_opt_flag_label() {
 set_deploy_opt_flag() {
     local key=$1 val=$2
     case "$key" in
-        OPT_INVOICE_OCR|OPT_PDF_PRINT|OPT_KUAI_VECTOR|OPT_SENSITIVE_LEXICON) ;;
+        OPT_INVOICE_OCR|OPT_PDF_PRINT|OPT_KUAI_VECTOR|OPT_SENSITIVE_LEXICON|OPT_LIBREOFFICE) ;;
         *)
             log_error "未知选装项: $key"
             return 1
@@ -323,6 +330,7 @@ toggle_deploy_opt_flag() {
         OPT_PDF_PRINT) current="${OPT_PDF_PRINT:-0}" ;;
         OPT_KUAI_VECTOR) current="${OPT_KUAI_VECTOR:-0}" ;;
         OPT_SENSITIVE_LEXICON) current="${OPT_SENSITIVE_LEXICON:-0}" ;;
+        OPT_LIBREOFFICE) current="${OPT_LIBREOFFICE:-0}" ;;
         *)
             log_error "未知选装项: $key"
             return 1
@@ -2771,6 +2779,118 @@ ensure_linux_zbar_runtime() {
     ensure_linux_invoice_parse_runtime
 }
 
+# LibreOffice：Office 高级预览（Word/PPT → PDF；Excel 走前端 Univer Sheet）
+resolve_libreoffice_binary() {
+    if command -v soffice >/dev/null 2>&1; then
+        command -v soffice
+        return 0
+    fi
+    if command -v libreoffice >/dev/null 2>&1; then
+        command -v libreoffice
+        return 0
+    fi
+    local cand
+    for cand in \
+        "/usr/bin/soffice" \
+        "/usr/bin/libreoffice" \
+        "/usr/lib/libreoffice/program/soffice" \
+        "/opt/libreoffice*/program/soffice" \
+        "/c/Program Files/LibreOffice/program/soffice.exe" \
+        "/c/Program Files (x86)/LibreOffice/program/soffice.exe"; do
+        # shellcheck disable=SC2086
+        for path in $cand; do
+            if [ -x "$path" ]; then
+                echo "$path"
+                return 0
+            fi
+        done
+    done
+    if is_windows_gitbash; then
+        local win
+        for win in \
+            "/c/Program Files/LibreOffice/program/soffice.exe" \
+            "/c/Program Files (x86)/LibreOffice/program/soffice.exe"; do
+            if [ -f "$win" ]; then
+                echo "$win"
+                return 0
+            fi
+        done
+    fi
+    return 1
+}
+
+check_libreoffice() {
+    if resolve_libreoffice_binary >/dev/null 2>&1; then
+        echo "ok"
+        return
+    fi
+    echo "missing"
+}
+
+install_libreoffice_runtime() {
+    if [ "$(check_libreoffice)" = "ok" ]; then
+        log_special_ok "LibreOffice 已就绪（Office 高级预览）"
+        return 0
+    fi
+    log_info "安装 LibreOffice（Office 文档高级预览：转 PDF）..."
+    if is_windows_gitbash; then
+        if command -v winget >/dev/null 2>&1; then
+            winget install -e --id TheDocumentFoundation.LibreOffice \
+                --accept-package-agreements --accept-source-agreements \
+                || {
+                    log_error "winget 安装 LibreOffice 失败，请手动安装后重试"
+                    return 1
+                }
+        else
+            log_error "未找到 winget，请手动安装 LibreOffice: https://www.libreoffice.org/download/"
+            return 1
+        fi
+        refresh_windows_path 2>/dev/null || true
+    elif [ -f /etc/debian_version ]; then
+        ensure_sudo_ready || return 1
+        sudo -n apt-get update \
+            && sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-java-common \
+            || {
+                log_error "请手动执行: sudo apt-get install -y libreoffice-writer libreoffice-calc libreoffice-impress"
+                return 1
+            }
+    elif is_linux_rhel_family || is_linux_fedora; then
+        ensure_sudo_ready || return 1
+        local pkg_mgr=dnf
+        command -v dnf >/dev/null 2>&1 || pkg_mgr=yum
+        sudo -n "$pkg_mgr" install -y libreoffice-writer libreoffice-calc libreoffice-impress \
+            || sudo -n "$pkg_mgr" install -y libreoffice \
+            || {
+                log_error "请手动执行: sudo $pkg_mgr install -y libreoffice"
+                return 1
+            }
+    else
+        log_error "不支持的平台，请手动安装 LibreOffice（需提供 soffice/libreoffice 命令）"
+        return 1
+    fi
+    if [ "$(check_libreoffice)" = "ok" ]; then
+        log_ok "LibreOffice 已就绪（Office 高级预览）"
+        return 0
+    fi
+    log_warn "LibreOffice 包已尝试安装，但未检测到 soffice；请重新打开终端或检查 PATH"
+    return 1
+}
+
+ensure_libreoffice_if_enabled() {
+    if ! deploy_opt_libreoffice_enabled; then
+        log_special "LibreOffice 选装未启用 (OPT_LIBREOFFICE=0)，Office 使用简易预览"
+        return 0
+    fi
+    if [ "$(check_libreoffice)" = "ok" ]; then
+        return 0
+    fi
+    install_libreoffice_runtime || {
+        log_warn "LibreOffice 未就绪：Office 将回落简易预览（react-doc-viewer / 微软在线）"
+        return 0
+    }
+}
+
 check_playwright() {
     if ! deploy_opt_pdf_print_enabled; then
         echo "opt-off"
@@ -3128,6 +3248,7 @@ cmd_migrate() {
         log_special "KU-AI 向量选装未启用 (OPT_KUAI_VECTOR=0)，跳过 pgvector"
     fi
     ensure_sensitive_lexicon_if_enabled || { log_error "敏感词 lexicon.pack 未就绪（OPT_SENSITIVE_LEXICON=1）"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    ensure_libreoffice_if_enabled
     log_info "执行数据库迁移（aerich upgrade，含 804 ind_relay）..."
     (
         cd "$BACKEND_DIR"
@@ -3426,6 +3547,7 @@ start_backend_dev() {
     ensure_timezone_env
     sync_deploy_optional_features_to_backend_env
     ensure_sensitive_lexicon_if_enabled || { log_error "敏感词 lexicon.pack 未就绪（OPT_SENSITIVE_LEXICON=1）"; exit 1; }
+    ensure_libreoffice_if_enabled
     if bg_enabled; then
         bg_init_state
         bg_start_backend_slot "$(bg_active_slot)" dev || exit 1
@@ -3498,6 +3620,7 @@ start_backend_prod() {
     ensure_timezone_env
     sync_deploy_optional_features_to_backend_env
     ensure_sensitive_lexicon_if_enabled || { log_error "敏感词 lexicon.pack 未就绪（OPT_SENSITIVE_LEXICON=1）"; exit 1; }
+    ensure_libreoffice_if_enabled
     if bg_enabled; then
         bg_init_state
         bg_start_backend_slot "$(bg_active_slot)" prod || exit 1
@@ -4472,6 +4595,21 @@ cmd_check_special() {
         [ "$st" = "ok" ] || failed=1
     else
         print_special_deps_item "lexicon.pack" "opt-off"
+    fi
+    echo ""
+
+    print_special_deps_group "Office 高级预览（OPT_LIBREOFFICE=1 时安装；有 soffice 即高级预览）"
+    if deploy_opt_libreoffice_enabled; then
+        st="$(check_libreoffice)"
+        print_special_deps_item "LibreOffice (soffice)" "$st"
+        [ "$st" = "ok" ] || failed=1
+    else
+        st="$(check_libreoffice)"
+        if [ "$st" = "ok" ]; then
+            print_special_deps_item "LibreOffice (已装·高级预览)" "ok"
+        else
+            print_special_deps_item "LibreOffice" "opt-off"
+        fi
     fi
     echo ""
 
@@ -5603,6 +5741,10 @@ run_install_component() {
         install_invoice_parse_runtime || return 1
         return 0
     fi
+    if [ "$comp" = "libreoffice" ]; then
+        install_libreoffice_runtime || return 1
+        return 0
+    fi
     local cmd
     cmd="$(get_install_command "$comp")"
     [ -n "$cmd" ] || { log_error "无 $comp 的安装命令"; return 1; }
@@ -5664,6 +5806,11 @@ cmd_install() {
         run_install_component invoice-runtime "$(check_invoice_parse_runtime)" || true
     else
         log_info "发票 OCR 选装未启用 (OPT_INVOICE_OCR=0)，跳过 zbar 等系统库"
+    fi
+    if deploy_opt_libreoffice_enabled; then
+        run_install_component libreoffice "$(check_libreoffice)" || true
+    else
+        log_info "LibreOffice 选装未启用 (OPT_LIBREOFFICE=0)，Office 使用简易预览"
     fi
     log_warn "若刚安装系统软件，请重新打开终端或刷新 PATH 后再次 check"
     cmd_check_baseline || exit 1
