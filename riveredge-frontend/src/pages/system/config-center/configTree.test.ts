@@ -5,7 +5,7 @@ import {
   FLOW_CATEGORIES,
 } from './configTree';
 
-const TOOLBAR_SOURCE_PATHS = [
+const REMOVED_TOOLBAR_SOURCE_PATHS = [
   'parameters.work_order.toolbar_sync_enabled',
   'parameters.work_order.toolbar_push_enabled',
   'parameters.reporting.toolbar_sync_enabled',
@@ -25,10 +25,10 @@ function allParams() {
 }
 
 describe('configTree toolbar / empty modules', () => {
-  it('exposes all toolbar sync/push switches', () => {
+  it('does not expose toolbar sync/push in business config (moved to role permissions)', () => {
     const paths = new Set(allParams().map((p) => p.sourcePath));
-    for (const path of TOOLBAR_SOURCE_PATHS) {
-      expect(paths.has(path)).toBe(true);
+    for (const path of REMOVED_TOOLBAR_SOURCE_PATHS) {
+      expect(paths.has(path)).toBe(false);
     }
   });
 
@@ -38,9 +38,9 @@ describe('configTree toolbar / empty modules', () => {
   });
 
   it('equipment module stays empty in parameter and automation trees', () => {
-    const paramEquip = PARAMETER_CATEGORIES.find((c) => c.id === 'equipment');
-    const autoEquip = AUTOMATION_CATEGORIES.find((c) => c.id === 'equipment');
-    expect(paramEquip?.params ?? []).toEqual([]);
-    expect(autoEquip?.params ?? []).toEqual([]);
+    const equipmentParam = PARAMETER_CATEGORIES.find((c) => c.id === 'equipment');
+    const equipmentAuto = AUTOMATION_CATEGORIES.find((c) => c.id === 'equipment');
+    expect(equipmentParam?.params ?? []).toHaveLength(0);
+    expect(equipmentAuto?.params ?? []).toHaveLength(0);
   });
 });

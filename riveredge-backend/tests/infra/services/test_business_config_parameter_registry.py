@@ -1,4 +1,4 @@
-"""配置中心参数注册表回归：工具栏开关、废弃 multi_unit、IMPLEMENTED 对齐。"""
+"""配置中心参数注册表回归：废弃 multi_unit、工具栏改角色权限、IMPLEMENTED 对齐。"""
 
 from pathlib import Path
 import re
@@ -13,7 +13,6 @@ from infra.services.business_config_service import (
     PARAMETER_KEYS,
     PROCESS_KEYS,
     BusinessConfigService,
-    _build_parameter_implementation_schema,
     strip_deprecated_parameters,
 )
 
@@ -44,13 +43,19 @@ CONFIG_TREE = (
 
 def test_strip_deprecated_removes_multi_unit():
     params = {
-        "warehouse": {"multi_unit": True, "fifo": True},
-        "sales": {"require_contract_before_order": True, "sales_review": {}},
+        "warehouse": {"multi_unit": True, "fifo": True, "toolbar_sync_enabled": True},
+        "sales": {
+            "require_contract_before_order": True,
+            "sales_review": {},
+            "toolbar_push_enabled": False,
+        },
     }
     strip_deprecated_parameters(params)
     assert "multi_unit" not in params["warehouse"]
+    assert "toolbar_sync_enabled" not in params["warehouse"]
     assert params["warehouse"]["fifo"] is True
     assert "require_contract_before_order" not in params["sales"]
+    assert "toolbar_push_enabled" not in params["sales"]
     assert "sales_review" in params["sales"]
 
 
@@ -80,16 +85,13 @@ async def test_update_process_parameter_rejects_multi_unit(monkeypatch):
         await svc.update_process_parameter(1, "warehouse", "multi_unit", True)
 
 
-def test_toolbar_keys_registered_and_implemented():
+def test_toolbar_keys_removed_from_business_config_registry():
     for key in TOOLBAR_KEYS:
-        assert key in PARAMETER_KEYS, key
-        assert key in IMPLEMENTED_PARAMETER_KEYS, key
+        assert key not in PARAMETER_KEYS, key
+        assert key not in IMPLEMENTED_PARAMETER_KEYS, key
         category, name = key.replace("parameters.", "").split(".", 1)
-        assert DEFAULT_PARAMETERS[category][name] is True
-    impl = _build_parameter_implementation_schema()
-    for key in TOOLBAR_KEYS:
-        category, name = key.replace("parameters.", "").split(".", 1)
-        assert impl[category][name] is True
+        assert name not in DEFAULT_PARAMETERS.get(category, {})
+        assert name in DEPRECATED_PARAMETER_KEYS.get(category, frozenset())
 
 
 def test_implemented_subset_of_registry():
@@ -98,11 +100,11 @@ def test_implemented_subset_of_registry():
     assert not orphan, f"IMPLEMENTED 有未注册键: {sorted(orphan)}"
 
 
-def test_config_tree_exposes_toolbar_and_hides_multi_unit():
+def test_config_tree_hides_toolbar_and_multi_unit():
     text = CONFIG_TREE.read_text(encoding="utf-8")
     for key in TOOLBAR_KEYS:
-        source_path = key  # parameters.x.y
-        assert f"sourcePath: '{source_path}'" in text or f'sourcePath: "{source_path}"' in text, source_path
+        assert f"sourcePath: '{key}'" not in text
+        assert f'sourcePath: "{key}"' not in text
     assert "warehouse.multi_unit" not in text
     assert "parameters.warehouse.multi_unit" not in text
 

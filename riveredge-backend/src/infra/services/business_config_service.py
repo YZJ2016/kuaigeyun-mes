@@ -29,9 +29,16 @@ from core.config.functional_domain_spec import FUNCTIONAL_DOMAINS, normalize_fun
 
 # 已废弃、读时剥离且写时拒绝的参数（category -> frozenset of keys）
 DEPRECATED_PARAMETER_KEYS: Dict[str, frozenset] = {
-    "sales": frozenset({"require_contract_before_order"}),
-    # 多单位未接业务门禁，勿再当可配开关；库存换算走主数据单位因子
-    "warehouse": frozenset({"multi_unit"}),
+    "sales": frozenset({
+        "require_contract_before_order",
+        "toolbar_sync_enabled",
+        "toolbar_push_enabled",
+    }),
+    # 多单位未接业务门禁；工具栏同步/推送改由角色 :sync / :push
+    "warehouse": frozenset({"multi_unit", "toolbar_sync_enabled", "toolbar_push_enabled"}),
+    "work_order": frozenset({"toolbar_sync_enabled", "toolbar_push_enabled"}),
+    "reporting": frozenset({"toolbar_sync_enabled", "toolbar_push_enabled"}),
+    "purchase": frozenset({"toolbar_sync_enabled", "toolbar_push_enabled"}),
 }
 
 
@@ -494,16 +501,6 @@ PARAMETER_KEYS = {
     "parameters.warehouse.batch_management",
     "parameters.warehouse.serial_management",
     "parameters.warehouse.fifo",
-    "parameters.work_order.toolbar_sync_enabled",
-    "parameters.work_order.toolbar_push_enabled",
-    "parameters.reporting.toolbar_sync_enabled",
-    "parameters.reporting.toolbar_push_enabled",
-    "parameters.sales.toolbar_sync_enabled",
-    "parameters.sales.toolbar_push_enabled",
-    "parameters.purchase.toolbar_sync_enabled",
-    "parameters.purchase.toolbar_push_enabled",
-    "parameters.warehouse.toolbar_sync_enabled",
-    "parameters.warehouse.toolbar_push_enabled",
     "parameters.warehouse.fifo_mode",
     "parameters.warehouse.lifo",
     "parameters.warehouse.location_management",
@@ -592,16 +589,6 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.warehouse.auto_outbound",
     "parameters.warehouse.allow_negative_inventory",
     "parameters.warehouse.over_issue_allowance_ratio",
-    "parameters.work_order.toolbar_sync_enabled",
-    "parameters.work_order.toolbar_push_enabled",
-    "parameters.reporting.toolbar_sync_enabled",
-    "parameters.reporting.toolbar_push_enabled",
-    "parameters.sales.toolbar_sync_enabled",
-    "parameters.sales.toolbar_push_enabled",
-    "parameters.purchase.toolbar_sync_enabled",
-    "parameters.purchase.toolbar_push_enabled",
-    "parameters.warehouse.toolbar_sync_enabled",
-    "parameters.warehouse.toolbar_push_enabled",
     "parameters.purchase.tolerance_percentage",
     "parameters.purchase.price_fluctuation_limit_percent",
     "parameters.quality.incoming_inspection",
@@ -761,8 +748,6 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "show_customer_name": False,
         "score_enabled": True,
         "score_stale_minutes": 30,
-        "toolbar_sync_enabled": True,
-        "toolbar_push_enabled": True,
         "kingdee_production_order_push": {
             "enabled": False,
             "form_id": "PRD_MO",
@@ -804,8 +789,6 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "default_production_worker_mode": "auto",
         "data_correction": True,
         "auto_approve": False,
-        "toolbar_sync_enabled": True,
-        "toolbar_push_enabled": True,
         "kingdee_production_report_push": {
             "enabled": False,
             "form_id": "PRD_MORPT",
@@ -829,8 +812,6 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "auto_outbound": True,
         "allow_negative_inventory": False,
         "over_issue_allowance_ratio": 0,
-        "toolbar_sync_enabled": True,
-        "toolbar_push_enabled": True,
         "kingdee_inventory_push": {
             "enabled": False,
             "form_id": "STK_Miscellaneous",
@@ -865,8 +846,6 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "contract_expiry_alert_days": 30,
         "contract_auto_close_on_full_release": True,
         "contract_milestone_required": False,
-        "toolbar_sync_enabled": True,
-        "toolbar_push_enabled": True,
         "kingdee_sales_order_push": {
             "enabled": False,
             "form_id": "SAL_SaleOrder",
@@ -886,8 +865,6 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "price_fluctuation_limit_percent": 0,
         "price_control": False,
         "supplier_evaluation": False,
-        "toolbar_sync_enabled": True,
-        "toolbar_push_enabled": True,
         "kingdee_purchase_order_push": {
             "enabled": False,
             "form_id": "PUR_PurchaseOrder",
