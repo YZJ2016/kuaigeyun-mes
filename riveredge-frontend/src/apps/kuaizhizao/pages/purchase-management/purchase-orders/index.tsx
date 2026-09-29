@@ -3927,13 +3927,11 @@ const PurchaseOrdersPage: React.FC = () => {
           }}
           showSyncButton={
             viewTypeState !== 'detailTable' &&
-            purchaseOrderPerms.canCreate &&
             toolbarSyncPush.hubVisible
           }
           onSync={() => undefined}
           syncToolbarExtra={
             viewTypeState !== 'detailTable' &&
-            purchaseOrderPerms.canCreate &&
             toolbarSyncPush.hubVisible
               ? () => (
                   <SyncPushHubButton

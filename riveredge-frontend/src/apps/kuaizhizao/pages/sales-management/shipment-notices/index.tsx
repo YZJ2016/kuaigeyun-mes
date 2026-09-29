@@ -39,7 +39,6 @@ const LazyUniImport = lazy(() =>
 import type { Material } from '../../../../master-data/types/material';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { resolveDocumentCurrencyInputPrefix } from '../../../utils/documentCurrencyDisplay';
-import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -658,7 +657,8 @@ const ShipmentNoticesPage: React.FC = () => {
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
-        render: (text: unknown) => formatPrice(text),
+        render: (text: unknown, record: any) =>
+          `${resolveDocumentCurrencyInputPrefix(record?.currency_code)}${formatPrice(text)}`,
       },
       {
         title: t('app.kuaizhizao.shipmentNotice.amount'),
@@ -668,7 +668,8 @@ const ShipmentNoticesPage: React.FC = () => {
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
-        render: (text: unknown) => formatAmount(text),
+        render: (text: unknown, record: any) =>
+          `${resolveDocumentCurrencyInputPrefix(record?.currency_code)}${formatAmount(text)}`,
       },
       {
         title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'),
@@ -1297,6 +1298,12 @@ const ShipmentNoticesPage: React.FC = () => {
     { title: t('field.customer.phone'), dataIndex: 'customer_phone' },
     { title: t('app.kuaizhizao.shipmentNotice.outboundWarehouse'), dataIndex: 'warehouse_name' },
     { title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'), dataIndex: 'planned_ship_date', valueType: 'date' },
+    {
+      title: t('app.kuaizhizao.quotation.form.currency'),
+      dataIndex: 'currency_code',
+      render: (_: unknown, record: ShipmentNoticeDetail) =>
+        String((record as any)?.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+    },
     { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
     { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', valueType: 'dateTime' },
     { title: t('common.remark'), dataIndex: 'notes', span: 3 },
@@ -1410,23 +1417,13 @@ const ShipmentNoticesPage: React.FC = () => {
         </Col>
       </Row>
       <ProFormText name="warehouse_name" hidden />
+      <ProFormText name="currency_code" hidden initialValue="CNY" />
+      <ProForm.Item name="exchange_rate" hidden initialValue={1}>
+        <InputNumber />
+      </ProForm.Item>
       <Row gutter={16}>
         <Col span={8}>
           <ProFormDatePicker name="planned_ship_date" label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => createFormRef.current, fieldName: 'planned_ship_date', t })} />
-        </Col>
-        <Col span={8}>
-          <DictionarySelect
-            dictionaryCode="CURRENCY"
-            name="currency_code"
-            label={t('app.kuaizhizao.quotation.form.currency')}
-            placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
-            initialValue="CNY"
-          />
-        </Col>
-        <Col span={8}>
-          <ProForm.Item name="exchange_rate" label={t('app.kuaizhizao.salesOrder.exchangeRate')} initialValue={1}>
-            <InputNumber min={0.0001} precision={4} style={{ width: '100%' }} />
-          </ProForm.Item>
         </Col>
       </Row>
       <ProFormTextArea name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} fieldProps={{ rows: 2 }} />
@@ -1637,21 +1634,10 @@ const ShipmentNoticesPage: React.FC = () => {
       </Row>
       <ProFormText name="warehouse_name" hidden />
       <ProFormText name="customer_name" hidden />
-      <Row gutter={16}>
-        <Col span={8}>
-          <DictionarySelect
-            dictionaryCode="CURRENCY"
-            name="currency_code"
-            label={t('app.kuaizhizao.quotation.form.currency')}
-            placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
-          />
-        </Col>
-        <Col span={8}>
-          <ProForm.Item name="exchange_rate" label={t('app.kuaizhizao.salesOrder.exchangeRate')}>
-            <InputNumber min={0.0001} precision={4} style={{ width: '100%' }} />
-          </ProForm.Item>
-        </Col>
-      </Row>
+      <ProFormText name="currency_code" hidden />
+      <ProForm.Item name="exchange_rate" hidden>
+        <InputNumber />
+      </ProForm.Item>
       <ProFormTextArea name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} fieldProps={{ rows: 2 }} />
       <ProFormItem label={t('app.kuaizhizao.shipmentNotice.noticeItems')}>
         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
@@ -1668,7 +1654,16 @@ const ShipmentNoticesPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
                   { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
                   { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                    dataIndex: 'unit_price',
+                    width: 90,
+                    align: 'right' as const,
+                    render: (text: unknown) => {
+                      const code = editFormRef.current?.getFieldValue('currency_code');
+                      return `${resolveDocumentCurrencyInputPrefix(code)}${text ?? 0}`;
+                    },
+                  },
                 ]}
               />
             );
@@ -2103,8 +2098,22 @@ const ShipmentNoticesPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
                   { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
                   { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.shipmentNotice.amount'), dataIndex: 'total_amount', width: 100, align: 'right' },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                    dataIndex: 'unit_price',
+                    width: 90,
+                    align: 'right' as const,
+                    render: (text: unknown) =>
+                      `${resolveDocumentCurrencyInputPrefix((noticeDetail as any)?.currency_code)}${text ?? 0}`,
+                  },
+                  {
+                    title: t('app.kuaizhizao.shipmentNotice.amount'),
+                    dataIndex: 'total_amount',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (text: unknown) =>
+                      `${resolveDocumentCurrencyInputPrefix((noticeDetail as any)?.currency_code)}${formatAmount(text ?? 0, '0.00')}`,
+                  },
                 ]}
                 dataSource={noticeDetail.items}
                 pagination={false}
