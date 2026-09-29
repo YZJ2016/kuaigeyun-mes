@@ -1170,6 +1170,36 @@ wizard_optional_deps_item_line() {
     echo -e "  ${WIZARD_CYAN}[${num}]${WIZARD_RESET} ${padded}${status}"
 }
 
+# 选装面板状态着色：开关（已启用绿 / 未启用暗）｜机上探测（已装绿 / 告警黄 / 未装红）
+wizard_optional_deps_flag_colored() {
+    if deploy_env_flag_enabled "${1:-0}"; then
+        printf '%b%s%b' "${WIZARD_GREEN}" "已启用" "${WIZARD_RESET}"
+    else
+        printf '%b%s%b' "${WIZARD_DIM}" "未启用" "${WIZARD_RESET}"
+    fi
+}
+
+wizard_optional_deps_install_colored() {
+    local label
+    label="$(deploy_opt_install_short_label "${1:-}")"
+    case "${1:-}" in
+        ok|skipped|disabled-present)
+            printf '%b%s%b' "${WIZARD_GREEN}" "$label" "${WIZARD_RESET}"
+            ;;
+        partial|installing|pending|deps-missing)
+            printf '%b%s%b' "${WIZARD_YELLOW}" "$label" "${WIZARD_RESET}"
+            ;;
+        *)
+            printf '%b%s%b' "${WIZARD_RED}" "$label" "${WIZARD_RESET}"
+            ;;
+    esac
+}
+
+wizard_optional_deps_panel_status() {
+    local flag_val=$1 probe_st=$2
+    printf '%s｜%s' "$(wizard_optional_deps_flag_colored "$flag_val")" "$(wizard_optional_deps_install_colored "$probe_st")"
+}
+
 wizard_show_optional_deps_panel() {
     load_deploy_env
     local label_col
@@ -1178,18 +1208,19 @@ wizard_show_optional_deps_panel() {
     wizard_say "选装依赖（写入 fast-deploy/config/deploy.env；左栏=开关，右栏=机上是否已装）"
     echo ""
     wizard_say "正在探测机上依赖，请稍候..."
-    wizard_optional_deps_item_line 1 "发票 OCR（二维码/识别）" "$(deploy_opt_panel_status "${OPT_INVOICE_OCR:-0}" "$(deploy_opt_probe_invoice)")" "$label_col"
-    wizard_optional_deps_item_line 2 "PDF 打印（Playwright）" "$(deploy_opt_panel_status "${OPT_PDF_PRINT:-0}" "$(deploy_opt_probe_pdf)")" "$label_col"
-    wizard_optional_deps_item_line 3 "KU-AI 向量（pgvector）" "$(deploy_opt_panel_status "${OPT_KUAI_VECTOR:-0}" "$(deploy_opt_probe_pgvector)")" "$label_col"
-    wizard_optional_deps_item_line 4 "敏感词库（lexicon.pack）" "$(deploy_opt_panel_status "${OPT_SENSITIVE_LEXICON:-0}" "$(deploy_opt_probe_lexicon)")" "$label_col"
-    wizard_optional_deps_item_line 5 "LibreOffice（Office 高级预览）" "$(deploy_opt_panel_status "${OPT_LIBREOFFICE:-0}" "$(deploy_opt_probe_libreoffice)")" "$label_col"
+    wizard_optional_deps_item_line 1 "发票 OCR（二维码/识别）" "$(wizard_optional_deps_panel_status "${OPT_INVOICE_OCR:-0}" "$(deploy_opt_probe_invoice)")" "$label_col"
+    wizard_optional_deps_item_line 2 "PDF 打印（Playwright）" "$(wizard_optional_deps_panel_status "${OPT_PDF_PRINT:-0}" "$(deploy_opt_probe_pdf)")" "$label_col"
+    wizard_optional_deps_item_line 3 "KU-AI 向量（pgvector）" "$(wizard_optional_deps_panel_status "${OPT_KUAI_VECTOR:-0}" "$(deploy_opt_probe_pgvector)")" "$label_col"
+    wizard_optional_deps_item_line 4 "敏感词库（lexicon.pack）" "$(wizard_optional_deps_panel_status "${OPT_SENSITIVE_LEXICON:-0}" "$(deploy_opt_probe_lexicon)")" "$label_col"
+    wizard_optional_deps_item_line 5 "LibreOffice（Office 高级预览）" "$(wizard_optional_deps_panel_status "${OPT_LIBREOFFICE:-0}" "$(deploy_opt_probe_libreoffice)")" "$label_col"
     echo ""
     echo -e "  ${WIZARD_CYAN}[6]${WIZARD_RESET} 检查依赖就绪详情（含未启用项的机上探测）"
     echo -e "  ${WIZARD_CYAN}[A]${WIZARD_RESET} 全选启用（1–5 全部设为已启用）"
+    echo -e "  ${WIZARD_CYAN}[I]${WIZARD_RESET} 安装已启用（当场补齐系统库 / Python extras / Chromium 等）"
     echo -e "  ${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
     echo ""
-    wizard_say "「已装」仅表示机上具备，不等于已写入开关；纳入 install/migrate 须先启用"
-    wizard_say "开启某项后建议依次: install（系统库）→ migrate → start"
+    wizard_say "「已装」仅表示机上具备，不等于已写入开关；纳入安装须先启用"
+    wizard_say "先启用再按 [I] 安装；若开了 KU-AI 向量，装完后仍需 migrate 补列"
 }
 
 # 切换单项选装开关；成功返回 0
@@ -1227,10 +1258,10 @@ wizard_ask_optional_deps_choice() {
     local choice raw token tokens seen fail norm
     while true; do
         wizard_show_optional_deps_panel
-        read -rp "$(echo -e "${WIZARD_DIM}选择（可多选如 1,2,4；A=全选启用） › ${WIZARD_RESET}")" choice
+        read -rp "$(echo -e "${WIZARD_DIM}选择（可多选如 1,2,4；A=全选；I=安装已启用） › ${WIZARD_RESET}")" choice
         raw="${choice:-}"
         norm="$(echo "$raw" | tr -d '[:space:]')"
-        # 去掉空白后的 0/q 返回；单独 6 查详情；A/a 全选启用
+        # 去掉空白后的 0/q 返回；单独 6 查详情；A/a 全选启用；I/i 安装已启用
         case "$norm" in
             0|q|Q)
                 return 0
@@ -1249,6 +1280,17 @@ wizard_ask_optional_deps_choice() {
                 set_deploy_opt_flag OPT_SENSITIVE_LEXICON 1 || wizard_say_fail "敏感词库 保存失败"
                 set_deploy_opt_flag OPT_LIBREOFFICE 1 || wizard_say_fail "LibreOffice 保存失败"
                 wizard_say_ok "已全选启用 1–5"
+                continue
+                ;;
+            I|i)
+                echo ""
+                if cmd_install_optional_deps; then
+                    wizard_say_ok "选装安装结束"
+                else
+                    wizard_say_warn "选装安装未完全成功，见上方日志"
+                fi
+                echo ""
+                read -rp "$(echo -e "${WIZARD_DIM}Enter 继续${WIZARD_RESET} › ")" _ || true
                 continue
                 ;;
         esac
@@ -1279,7 +1321,7 @@ wizard_ask_optional_deps_choice() {
         done
 
         if [ "$fail" -ne 0 ] || [ "${#tokens[@]}" -eq 0 ]; then
-            wizard_say_warn "无效选项（1-5 切换，可多选；A=全选启用；6 查详情；0 返回）"
+            wizard_say_warn "无效选项（1-5 切换，可多选；A=全选；I=安装已启用；6 查详情；0 返回）"
             sleep 0.3
             continue
         fi

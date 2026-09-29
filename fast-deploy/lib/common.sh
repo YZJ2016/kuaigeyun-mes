@@ -4674,6 +4674,119 @@ cmd_check_special() {
     return $failed
 }
 
+# 仅安装 deploy.env 中已启用的选装依赖（当场补齐，不跑全库 migrate / 不启服务）
+cmd_install_optional_deps() {
+    load_deploy_env
+    apply_cn_mirrors
+    sync_deploy_optional_features_to_backend_env
+
+    local any=0 failed=0 need_py=0 need_sudo=0 st
+
+    deploy_opt_invoice_ocr_enabled && any=1
+    deploy_opt_pdf_print_enabled && any=1
+    deploy_opt_kuaiai_vector_enabled && any=1
+    deploy_opt_sensitive_lexicon_enabled && any=1
+    deploy_opt_libreoffice_enabled && any=1
+
+    if [ "$any" -eq 0 ]; then
+        log_warn "当前无已启用的选装项。请先用 1–5 或 A 启用后再安装。"
+        return 1
+    fi
+
+    if deploy_opt_invoice_ocr_enabled || deploy_opt_pdf_print_enabled; then
+        need_py=1
+    fi
+
+    echo "=== 安装已启用的选装依赖 ==="
+    echo "  仅处理 OPT_*=1 的项；Python extras / 系统库 / Chromium / pgvector / 词库 / LibreOffice。"
+    echo "  不执行全库 migrate / start；KU-AI vector 列仍需另行 migrate。"
+    echo ""
+
+    if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 0 ]; then
+        if deploy_opt_invoice_ocr_enabled && [ "$(check_invoice_parse_runtime)" != "ok" ]; then
+            need_sudo=1
+        fi
+        if deploy_opt_libreoffice_enabled && [ "$(check_libreoffice)" != "ok" ]; then
+            need_sudo=1
+        fi
+        if deploy_opt_kuaiai_vector_enabled; then
+            need_sudo=1
+        fi
+        if deploy_opt_pdf_print_enabled; then
+            st="$(check_playwright_chromium)"
+            case "$st" in deps-missing|missing|disabled-missing) need_sudo=1 ;; esac
+        fi
+        if [ "$need_sudo" -eq 1 ]; then
+            ensure_sudo_ready || {
+                log_error "无法获取 sudo，部分系统依赖无法安装"
+                return 1
+            }
+        fi
+    fi
+
+    if [ "$need_py" -eq 1 ]; then
+        log_info "同步 Python 依赖（按已启用 OPT 带入 uv --extra）..."
+        # 允许刚打开 OPT 后强制再 sync（避免沿用「无 extra」的旧同步标记）
+        _BACKEND_DEPS_SYNCED=0
+        sync_backend_deps || failed=1
+    fi
+
+    if deploy_opt_invoice_ocr_enabled; then
+        log_info "[发票 OCR] 系统库..."
+        st="$(check_invoice_parse_runtime)"
+        if [ "$st" = "ok" ]; then
+            log_ok "发票解析系统库已就绪"
+        else
+            run_install_component invoice-runtime "$st" || failed=1
+        fi
+        if [ "$(check_ocr)" = "ok" ]; then
+            log_ok "OCR Python 包已就绪"
+        else
+            log_warn "OCR Python 包未就绪（需 uv sync --extra ocr 成功）"
+            failed=1
+        fi
+    fi
+
+    if deploy_opt_pdf_print_enabled; then
+        log_info "[PDF 打印] Playwright Chromium..."
+        if [ "$(check_playwright)" = "missing" ]; then
+            log_warn "Playwright Python 包未就绪"
+            failed=1
+        fi
+        ensure_playwright_chromium_sync || failed=1
+    fi
+
+    if deploy_opt_kuaiai_vector_enabled; then
+        log_info "[KU-AI 向量] PostgreSQL pgvector..."
+        ensure_postgresql_pgvector || failed=1
+        ensure_vector_extension_created || failed=1
+        log_info "知识库 vector 列/索引请随后执行 migrate"
+    fi
+
+    if deploy_opt_sensitive_lexicon_enabled; then
+        log_info "[敏感词] lexicon.pack..."
+        ensure_sensitive_lexicon_pack || failed=1
+    fi
+
+    if deploy_opt_libreoffice_enabled; then
+        log_info "[LibreOffice] soffice..."
+        if [ "$(check_libreoffice)" = "ok" ]; then
+            log_ok "LibreOffice 已就绪"
+        else
+            install_libreoffice_runtime || failed=1
+        fi
+    fi
+
+    echo ""
+    cmd_check_special || true
+    if [ "$failed" -eq 0 ]; then
+        log_ok "已启用选装依赖安装完成"
+        return 0
+    fi
+    log_warn "部分选装依赖未完全就绪，见上方详情"
+    return 1
+}
+
 cmd_status() {
     load_deploy_env
     local server_ip web_url
@@ -6705,6 +6818,9 @@ fd_dispatch() {
         install)
             cmd_install
             log_info "install 仅安装系统依赖；完整部署请执行: ./fast-deploy/deploy.sh"
+            ;;
+        install-optional|install-opt|install_optional)
+            cmd_install_optional_deps
             ;;
         configure) cmd_configure ;;
         migrate)   cmd_migrate ;;
