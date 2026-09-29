@@ -1894,10 +1894,10 @@ const ReportingPage: React.FC = () => {
         showCreateButton={true}
         createButtonText={createButtonLabel}
         onCreate={handleNewReporting}
-        showSyncButton={reportingPerms.canCreate && toolbarSyncPush.hubVisible}
+        showSyncButton={toolbarSyncPush.hubVisible}
         onSync={() => undefined}
         syncToolbarExtra={
-          reportingPerms.canCreate && toolbarSyncPush.hubVisible
+          toolbarSyncPush.hubVisible
             ? () => (
                 <Space>
                   <SyncPushHubButton

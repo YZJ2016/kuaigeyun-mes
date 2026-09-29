@@ -8380,11 +8380,11 @@ const WorkOrdersPage: React.FC = () => {
             }
           }}
           showSyncButton={
-            workOrderPerms.canCreate && toolbarSyncPush.hubVisible
+            toolbarSyncPush.hubVisible
           }
           onSync={() => undefined}
           syncToolbarExtra={
-            workOrderPerms.canCreate && toolbarSyncPush.hubVisible
+            toolbarSyncPush.hubVisible
               ? () => (
                   <Suspense fallback={null}>
                     <SyncPushHubButton

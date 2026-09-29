@@ -73,7 +73,6 @@ import {
 } from '../../../../../utils/documentFormReferenceLoad';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
-import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { resolveDocumentCurrencyInputPrefix } from '../../../utils/documentCurrencyDisplay';
 import dayjs from 'dayjs';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -113,7 +112,7 @@ import {
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatCurrencyAmount } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatAmount } from '../../../../../utils/format';
 import type { SalesReturnDeliveryPullLine, SalesReturnOrderPullLine } from '../../../services/warehouse-execution';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -753,7 +752,8 @@ const SalesReturnsPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
-      render: (text: any) => formatCurrencyAmount(text || 0),
+      render: (text: any, record: any) =>
+        `${resolveDocumentCurrencyInputPrefix(record?.currency_code)}${formatAmount(text || 0, '0.00')}`,
     },
     {
       title: t('app.kuaizhizao.salesReturn.returnTime'),
@@ -1563,6 +1563,12 @@ const SalesReturnsPage: React.FC = () => {
         dataIndex: 'warehouse_name',
       },
       {
+        title: t('app.kuaizhizao.quotation.form.currency'),
+        dataIndex: 'currency_code',
+        render: (_, record) =>
+          String(record.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+      },
+      {
         title: t('app.kuaizhizao.salesReturn.returnReason'),
         dataIndex: 'return_reason',
       },
@@ -1578,7 +1584,8 @@ const SalesReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesReturn.totalAmount'),
         dataIndex: 'total_amount',
-        render: (_, record) => formatCurrencyAmount(record.total_amount),
+        render: (_, record) =>
+          `${resolveDocumentCurrencyInputPrefix(record.currency_code)}${formatAmount(record.total_amount, '0.00')}`,
       },
       {
         title: t('app.kuaizhizao.salesReturn.returnTime'),
@@ -1708,8 +1715,8 @@ const SalesReturnsPage: React.FC = () => {
         resizable: false,
         align: 'right',
         hideInSearch: true,
-        render: (text: unknown) =>
-          formatCurrencyAmount(text || 0),
+        render: (text: unknown, record: any) =>
+          `${resolveDocumentCurrencyInputPrefix(record?.currency_code)}${formatAmount(text || 0, '0.00')}`,
       },
       {
         title: t('app.kuaizhizao.salesReturn.totalAmount'),
@@ -1720,8 +1727,8 @@ const SalesReturnsPage: React.FC = () => {
         resizable: false,
         align: 'right',
         hideInSearch: true,
-        render: (text: unknown) =>
-          formatCurrencyAmount(text || 0),
+        render: (text: unknown, record: any) =>
+          `${resolveDocumentCurrencyInputPrefix(record?.currency_code)}${formatAmount(text || 0, '0.00')}`,
       },
       {
         title: t('app.kuaizhizao.salesReturn.batchNumber'),
@@ -2162,22 +2169,10 @@ const SalesReturnsPage: React.FC = () => {
             />
           </Col>
         </Row>
-        <Row gutter={16}>
-          <Col span={8}>
-            <DictionarySelect
-              dictionaryCode="CURRENCY"
-              name="currency_code"
-              label={t('app.kuaizhizao.quotation.form.currency')}
-              placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
-              initialValue="CNY"
-            />
-          </Col>
-          <Col span={8}>
-            <ProForm.Item name="exchange_rate" label={t('app.kuaizhizao.salesOrder.exchangeRate')} initialValue={1}>
-              <InputNumber min={0.0001} precision={4} style={{ width: '100%' }} />
-            </ProForm.Item>
-          </Col>
-        </Row>
+        <ProFormText name="currency_code" hidden initialValue="CNY" />
+        <ProForm.Item name="exchange_rate" hidden initialValue={1}>
+          <InputNumber />
+        </ProForm.Item>
         <Row gutter={16}>
           <Col span={8}>
             <ProFormSelect
