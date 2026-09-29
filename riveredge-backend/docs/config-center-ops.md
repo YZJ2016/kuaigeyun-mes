@@ -10,6 +10,7 @@
 | **模块/菜单是否可见** | 菜单管理 `is_active` + 角色权限 | **不是**配置中心开关 |
 | **单据是否人工审核** | 配置中心「审核设置」`AuditDocumentBinding` | `check_audit_required(node_key)` |
 | **业务参数 / 流程前置** | `Tenant.settings.business_config.parameters` | 容差、先采购申请、报工自动审核等 |
+| **列表工具栏「同步/推送」显隐** | 角色功能权限 `:sync` / `:push` | 角色权限勾选；勿再配业务配置 |
 
 ## `check_node_enabled` 已废弃
 

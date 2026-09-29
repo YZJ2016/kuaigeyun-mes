@@ -19,6 +19,9 @@ STANDARD_ACTIONS: set[str] = {
     "export",
     "print",
     "display",
+    # 列表工具栏 SyncPushHub 显隐（按角色分配，勿放业务配置）
+    "sync",
+    "push",
     # 已在应用 manifest 使用的业务动作（新增须先登记此处再写入 manifest）
     "claim",
     "recycle",
@@ -57,6 +60,8 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "export": "导出",
     "print": "打印",
     "display": "展示",
+    "sync": "显示同步",
+    "push": "显示推送",
     "submit": "提交",
     "audit": "审核",
     "approve": "审核",
@@ -129,6 +134,8 @@ MANIFEST_ACTION_ORDER: tuple[str, ...] = (
     "audit",
     "reject",
     "print",
+    "sync",
+    "push",
     "assign",
     "execute",
     "complete",

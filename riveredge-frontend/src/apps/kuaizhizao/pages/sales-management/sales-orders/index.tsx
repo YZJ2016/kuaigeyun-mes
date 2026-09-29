@@ -5906,10 +5906,10 @@ const SalesOrdersPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
-          showSyncButton={salesOrderPerms.canCreate && toolbarSyncPush.hubVisible}
+          showSyncButton={toolbarSyncPush.hubVisible}
           onSync={() => undefined}
           syncToolbarExtra={
-            salesOrderPerms.canCreate && toolbarSyncPush.hubVisible
+            toolbarSyncPush.hubVisible
               ? () => (
                   <SyncPushHubButton
                     syncEnabled={toolbarSyncPush.syncEnabled}

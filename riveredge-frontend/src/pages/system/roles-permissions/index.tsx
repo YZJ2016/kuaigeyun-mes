@@ -358,7 +358,31 @@ function permissionsForMenu(menu: MenuTree, pool: Permission[]): Permission[] {
     seen.add(p.uuid);
     out.push(p);
   }
-  out.sort((a, b) => a.code.localeCompare(b.code));
+  out.sort((a, b) => {
+    const aa = parseResourceAndAction(a.code || '')?.action || '';
+    const bb = parseResourceAndAction(b.code || '')?.action || '';
+    const order: Record<string, number> = {
+      read: 0,
+      create: 1,
+      delete: 2,
+      update: 3,
+      display: 4,
+      import: 5,
+      export: 6,
+      submit: 7,
+      revoke: 8,
+      approve: 9,
+      audit: 10,
+      reject: 11,
+      print: 12,
+      sync: 13,
+      push: 14,
+    };
+    const da = order[aa] ?? 1000;
+    const db = order[bb] ?? 1000;
+    if (da !== db) return da - db;
+    return (a.code || '').localeCompare(b.code || '');
+  });
   return out;
 }
 
