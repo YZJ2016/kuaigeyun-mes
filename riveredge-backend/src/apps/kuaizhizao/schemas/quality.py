@@ -447,3 +447,15 @@ class QualityStandardResponse(QualityStandardBase):
 class QualityStandardListResponse(QualityStandardResponse):
     """质检标准列表响应schema（简化版）"""
     pass
+
+
+class QualityInspectionAttachmentsPatch(BaseSchema):
+    """检验单附件补充（与 conduct 解耦）"""
+
+    attachments: List[dict] = Field(..., description="附件列表")
+
+
+class QualityInspectionApplyPlanBody(BaseSchema):
+    """待检验单据切换检验方案"""
+
+    inspection_plan_id: int = Field(..., gt=0, description="检验方案ID")

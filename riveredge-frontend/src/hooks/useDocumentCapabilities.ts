@@ -1388,6 +1388,8 @@ export const QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, strin
   'quality_inspection.conduct.not_pending': '只有待检验状态的检验单才能执行检验',
   'quality_inspection.conduct.approved_locked': '已审核的检验单不可执行检验，请先撤销审核',
   'quality_inspection.update.not_editable': '已审核的检验单不可编辑，请先撤销审核',
+  'quality_inspection.apply_plan.not_pending': '仅待检验状态可切换检验方案',
+  'quality_inspection.apply_plan.invalid': '检验方案无效或与当前环节不匹配',
   'quality_inspection.approve.not_pending': '检验单审核状态不是待审核',
   'quality_inspection.revoke_approval.not_approved': '仅已审核通过的检验单可撤销审核',
   'quality_inspection.revoke_conduct.not_allowed': '当前状态不可撤回检验',
@@ -1446,6 +1448,8 @@ export const OQC_INSPECTION_CAPABILITY_REASON_MESSAGES: Record<string, string> =
   'oqc_inspection.revoke_conduct.need_revoke_approval': '请先撤销审核，再撤回检验',
   'oqc_inspection.revoke_conduct.has_downstream': '该出货检验单已有下游单据，请先处理后再撤回检验',
   'oqc_inspection.delete.not_pending': '仅待检验状态的出货检验单可删除',
+  'oqc_inspection.apply_plan.not_pending': '仅待检验状态可切换检验方案',
+  'oqc_inspection.apply_plan.invalid': '检验方案无效或与当前环节不匹配',
   'oqc_inspection.pull_from_shipment_notice.not_allowed': '当前状态的发货通知单不可加载出货检验',
   'oqc_inspection.pull_from_shipment_notice.no_lines': '发货通知单无需要出货检验的明细',
   'oqc_inspection.pull_from_shipment_notice.already_pulled': '相关明细均已存在出货检验单，删除后可再次加载',
@@ -1500,6 +1504,8 @@ export interface QualityInspectionCapabilitiesShape {
   create_defect?: ActionCapability;
   push_purchase_return?: ActionCapability;
   update?: ActionCapability;
+  update_attachments?: ActionCapability;
+  apply_plan?: ActionCapability;
   delete?: ActionCapability;
   print?: ActionCapability;
 }
@@ -1569,6 +1575,22 @@ export function qualityInspectionRowGates(
       QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,
       'app.kuaizhizao.quality.capability',
     ),
+    updateAttachments: qualityCapView(
+      caps?.update_attachments,
+      inspectionPerms.canUpdate,
+      permDeniedTitle,
+      t,
+      QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.quality.capability',
+    ),
+    applyPlan: qualityCapView(
+      caps?.apply_plan,
+      inspectionPerms.canUpdate,
+      permDeniedTitle,
+      t,
+      QUALITY_INSPECTION_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.quality.capability',
+    ),
     delete: qualityCapView(
       caps?.delete,
       inspectionPerms.canDelete,
@@ -1594,7 +1616,15 @@ export function oqcInspectionCapabilityReasonMessage(
 }
 
 export function oqcInspectionRowGates(
-  record: { capabilities?: { conduct?: ActionCapability; delete?: ActionCapability; revoke_conduct?: ActionCapability } } | null | undefined,
+  record: {
+    capabilities?: {
+      conduct?: ActionCapability;
+      delete?: ActionCapability;
+      revoke_conduct?: ActionCapability;
+      update_attachments?: ActionCapability;
+      apply_plan?: ActionCapability;
+    };
+  } | null | undefined,
   oqcPerms: ResourcePermissionGates,
   t?: TFunction,
   permDeniedTitle?: string,
@@ -1619,6 +1649,22 @@ export function oqcInspectionRowGates(
     ),
     revokeConduct: qualityCapView(
       caps?.revoke_conduct,
+      oqcPerms.canUpdate,
+      permDeniedTitle,
+      t,
+      OQC_INSPECTION_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.quality.oqc.capability',
+    ),
+    updateAttachments: qualityCapView(
+      caps?.update_attachments,
+      oqcPerms.canUpdate,
+      permDeniedTitle,
+      t,
+      OQC_INSPECTION_CAPABILITY_REASON_MESSAGES,
+      'app.kuaizhizao.quality.oqc.capability',
+    ),
+    applyPlan: qualityCapView(
+      caps?.apply_plan,
       oqcPerms.canUpdate,
       permDeniedTitle,
       t,

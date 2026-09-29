@@ -27,6 +27,10 @@ import { valueTypeOptions } from '../../../components/InspectionStepValueSpecFie
 import InspectionStepConductPhotoField from '../../../components/InspectionStepConductPhotoField';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
+import {
+  InspectionConductPlanSwitcher,
+  type InspectionConductPlanSwitcherProps,
+} from './InspectionConductPlanSwitcher';
 
 const { Text } = Typography;
 
@@ -35,6 +39,8 @@ interface InspectionTemplateConductFieldsProps {
   photoCategory?: string;
   /** 为 false 时仍展示照片上传，但不强制校验（如来料检验） */
   stepPhotoRequired?: boolean;
+  /** 待检验时在检验 Modal 内切换方案 */
+  planSwitch?: Omit<InspectionConductPlanSwitcherProps, 'inspection'> | null;
 }
 
 function JudgmentTag({ judgment }: { judgment?: string | null }) {
@@ -388,6 +394,7 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
   inspection,
   photoCategory,
   stepPhotoRequired = true,
+  planSwitch,
 }) => {
   const { t } = useTranslation();
   const template = getInspectionTemplateSource(inspection);
@@ -404,13 +411,28 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
   const passLabel = t('app.kuaizhizao.quality.common.result.qualified');
   const failLabel = t('app.kuaizhizao.quality.common.result.unqualified');
 
+  const planCardExtra =
+    planSwitch && inspection ? (
+      <InspectionConductPlanSwitcher
+        inspection={inspection}
+        planType={planSwitch.planType}
+        materialId={planSwitch.materialId}
+        operationId={planSwitch.operationId}
+        disabled={planSwitch.disabled}
+        disabledTitle={planSwitch.disabledTitle}
+        onApplyPlan={planSwitch.onApplyPlan}
+      />
+    ) : planName ? (
+      <Text type="secondary">{planName}</Text>
+    ) : null;
+
   if (hasInspectionPlanSteps(template)) {
     return (
       <Col span={24}>
         <Card
           size="small"
           title={t('app.kuaizhizao.quality.template.planItemsTitle')}
-          extra={planName ? <Text type="secondary">{planName}</Text> : null}
+          extra={planCardExtra}
           style={{ marginBottom: 8 }}
         >
           <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
@@ -456,7 +478,7 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
       <Card
         size="small"
         title={t('app.kuaizhizao.quality.template.standardTitle')}
-        extra={planName ? <Text type="secondary">{planName}</Text> : null}
+        extra={planCardExtra}
         style={{ marginBottom: 8 }}
       >
         {criteria ? (

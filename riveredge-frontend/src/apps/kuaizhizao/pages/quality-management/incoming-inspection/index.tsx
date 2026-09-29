@@ -87,10 +87,15 @@ import InspectionPlanFormModal from '../../../components/InspectionPlanFormModal
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
 import {
+  buildQualityInspectionDetailSupplementNode,
+  renderQualityInspectionPlanSummary,
+} from '../components/QualityInspectionDetailSupplement';
+import {
   InspectionUnqualifiedBanner,
   buildInspectionQualityExtraButtons,
 } from '../components/InspectionDetailQualityActions';
 import {
+  buildConductStepResultDefaults,
   getInspectionTemplateSource,
   hasInspectionPlanSteps,
   pickInspectionConductExtras,
@@ -1266,9 +1271,53 @@ const IncomingInspectionPage: React.FC = () => {
     ],
   );
 
+  const incomingDetailSupplement = useMemo(() => {
+    if (!inspectionDetail?.id) return null;
+    const gates = qualityInspectionRowGates(inspectionDetail, incomingPerms, ncPerms, t);
+    return buildQualityInspectionDetailSupplementNode({
+      inspection: inspectionDetail as Record<string, unknown>,
+      attachmentCategory: 'incoming_inspection_attachments',
+      updateAttachmentsGate: gates.updateAttachments,
+      patchAttachments: (attachments) =>
+        qualityApi.incomingInspection.patchAttachments(String(inspectionDetail.id), attachments),
+      onUpdated: (record) => {
+        setInspectionDetail(record as IncomingInspection);
+        setIiTrackingRefreshKey((k) => k + 1);
+        actionRef.current?.reload();
+      },
+    });
+  }, [inspectionDetail, incomingPerms, ncPerms, t]);
+
+  const incomingConductPlanSwitch = useMemo(() => {
+    if (!currentInspection?.id) return undefined;
+    if (currentInspection.capabilities?.apply_plan?.allowed !== true) return undefined;
+    const gates = qualityInspectionRowGates(currentInspection, incomingPerms, ncPerms, t);
+    return {
+      planType: 'incoming' as const,
+      materialId: currentInspection.material_id,
+      disabled: gates.applyPlan.disabled,
+      disabledTitle: gates.applyPlan.title,
+      onApplyPlan: async (planId: number) => {
+        const updated = (await qualityApi.incomingInspection.applyPlan(
+          String(currentInspection.id),
+          planId,
+        )) as IncomingInspection;
+        setCurrentInspection(updated);
+        formRef.current?.setFieldsValue({
+          conduct_step_results: buildConductStepResultDefaults(updated as Record<string, unknown>),
+        });
+      },
+    };
+  }, [currentInspection, incomingPerms, ncPerms, t]);
+
   const detailBaseColumns: ProDescriptionsItemProps<IncomingInspection>[] = useMemo(
     () => [
       buildQualityInspectionDetailCodeColumn<IncomingInspection>(t),
+      {
+        title: t('app.kuaizhizao.quality.common.columns.inspectionKind'),
+        key: 'inspection_plan_summary',
+        render: (_, row) => renderQualityInspectionPlanSummary(row as Record<string, unknown>, t),
+      },
       ...buildQualityInspectionDetailMaterialColumns<IncomingInspection>(t),
       {
         title: t('app.kuaizhizao.quality.common.columns.purchaseReceiptCode'),
@@ -1757,6 +1806,7 @@ const IncomingInspectionPage: React.FC = () => {
           inspection={currentInspection as Record<string, unknown>}
           photoCategory="incoming_inspection_attachments"
           stepPhotoRequired={false}
+          planSwitch={incomingConductPlanSwitch}
         />
         <InspectionConductQuantityFields
           materialId={currentInspection?.material_id}
@@ -1844,6 +1894,7 @@ const IncomingInspectionPage: React.FC = () => {
         }
         banner={<InspectionUnqualifiedBanner inspection={inspectionDetail} />}
         basicColumns={detailBaseColumns}
+        supplement={incomingDetailSupplement}
         customFields={inspectionListCustomFields}
         customFieldValues={inspectionDetailCustomFieldValues}
         tracking={incomingTracking}

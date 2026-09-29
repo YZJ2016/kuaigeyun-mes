@@ -1216,6 +1216,61 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         row.deleted_at = resolve_business_datetime()
         await row.save(update_fields=["deleted_at"])
 
+    async def patch_attachments(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        attachments: list,
+        user_id: int,
+    ):
+        from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
+            assert_oqc_inspection_capability,
+        )
+
+        row = await OQCInspection.get_or_none(
+            id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("OQC 检验单不存在")
+        assert_oqc_inspection_capability(row, "update_attachments")
+        user_info = await self.get_user_info(user_id)
+        row.attachments = attachments
+        row.updated_by = user_id
+        row.updated_by_name = user_info["name"]
+        await row.save()
+        return await self.get_by_id(tenant_id, inspection_id)
+
+    async def apply_inspection_plan(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        inspection_plan_id: int,
+        user_id: int,
+    ):
+        from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
+            assert_oqc_inspection_capability,
+        )
+        from apps.kuaizhizao.services.quality_service import (
+            _apply_explicit_inspection_plan_to_inspection_row,
+        )
+
+        row = await OQCInspection.get_or_none(
+            id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("OQC 检验单不存在")
+        assert_oqc_inspection_capability(row, "apply_plan")
+        user_info = await self.get_user_info(user_id)
+        await _apply_explicit_inspection_plan_to_inspection_row(
+            tenant_id,
+            row,
+            inspection_plan_id,
+            "oqc",
+            updated_by=user_id,
+            updated_by_name=user_info["name"],
+        )
+        return await self.get_by_id(tenant_id, inspection_id)
+
     async def revoke_approval(
         self, tenant_id: int, inspection_id: int, user_id: int
     ) -> OQCInspectionResponse:

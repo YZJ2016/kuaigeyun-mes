@@ -41,6 +41,8 @@ from apps.kuaizhizao.schemas.quality import (
     FinishedGoodsInspectionCreate,
     FinishedGoodsInspectionResponse,
     FinishedGoodsInspectionListResponse,
+    QualityInspectionAttachmentsPatch,
+    QualityInspectionApplyPlanBody,
 )
 from apps.kuaizhizao.schemas.inspection_policy import (
     QualityEffectiveConfigResponse,
@@ -545,6 +547,62 @@ async def revoke_conduct_incoming_inspection(
     return await service.revoke_conduct(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
+        user_id=current_user.id,
+    )
+
+
+@router.patch(
+    "/incoming-inspections/{inspection_id}/attachments",
+    response_model=IncomingInspectionResponse,
+    summary="Update incoming inspection attachments",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-incoming-inspection:update"))
+    ],
+)
+async def patch_incoming_inspection_attachments(
+    inspection_id: int,
+    body: QualityInspectionAttachmentsPatch,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> IncomingInspectionResponse:
+    await _assert_incoming_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    service = IncomingInspectionService()
+    return await service.patch_incoming_inspection_attachments(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        attachments=body.attachments,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/incoming-inspections/{inspection_id}/apply-plan",
+    response_model=IncomingInspectionResponse,
+    summary="Apply inspection plan to pending incoming inspection",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-incoming-inspection:update"))
+    ],
+)
+async def apply_incoming_inspection_plan(
+    inspection_id: int,
+    body: QualityInspectionApplyPlanBody,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> IncomingInspectionResponse:
+    await _assert_incoming_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    service = IncomingInspectionService()
+    return await service.apply_incoming_inspection_plan(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        inspection_plan_id=body.inspection_plan_id,
         user_id=current_user.id,
     )
 
@@ -1376,6 +1434,60 @@ async def revoke_conduct_process_inspection(
     )
 
 
+@router.patch(
+    "/process-inspections/{inspection_id}/attachments",
+    response_model=ProcessInspectionResponse,
+    summary="Update process inspection attachments",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-process-inspection:update"))
+    ],
+)
+async def patch_process_inspection_attachments(
+    inspection_id: int,
+    body: QualityInspectionAttachmentsPatch,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProcessInspectionResponse:
+    await _assert_process_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    return await ProcessInspectionService().patch_process_inspection_attachments(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        attachments=body.attachments,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/process-inspections/{inspection_id}/apply-plan",
+    response_model=ProcessInspectionResponse,
+    summary="Apply inspection plan to pending process inspection",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-process-inspection:update"))
+    ],
+)
+async def apply_process_inspection_plan(
+    inspection_id: int,
+    body: QualityInspectionApplyPlanBody,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProcessInspectionResponse:
+    await _assert_process_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    return await ProcessInspectionService().apply_process_inspection_plan(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        inspection_plan_id=body.inspection_plan_id,
+        user_id=current_user.id,
+    )
+
+
 @router.post("/process-inspections/from-work-order", response_model=ProcessInspectionResponse, summary="Create in-process inspection from work order")
 async def create_process_inspection_from_work_order(
     work_order_id: int = Query(..., description="工单ID"),
@@ -1792,6 +1904,62 @@ async def revoke_conduct_finished_goods_inspection(
     return await service.revoke_conduct(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
+        user_id=current_user.id,
+    )
+
+
+@router.patch(
+    "/finished-goods-inspections/{inspection_id}/attachments",
+    response_model=FinishedGoodsInspectionResponse,
+    summary="Update finished goods inspection attachments",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-finished-goods-inspection:update"))
+    ],
+)
+async def patch_finished_goods_inspection_attachments(
+    inspection_id: int,
+    body: QualityInspectionAttachmentsPatch,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsInspectionResponse:
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    service = FinishedGoodsInspectionService()
+    return await service.patch_finished_goods_inspection_attachments(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        attachments=body.attachments,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/finished-goods-inspections/{inspection_id}/apply-plan",
+    response_model=FinishedGoodsInspectionResponse,
+    summary="Apply inspection plan to pending finished goods inspection",
+    dependencies=[
+        Depends(require_permission_codes("kuaizhizao:quality-management-finished-goods-inspection:update"))
+    ],
+)
+async def apply_finished_goods_inspection_plan(
+    inspection_id: int,
+    body: QualityInspectionApplyPlanBody,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsInspectionResponse:
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    service = FinishedGoodsInspectionService()
+    return await service.apply_finished_goods_inspection_plan(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        inspection_plan_id=body.inspection_plan_id,
         user_id=current_user.id,
     )
 

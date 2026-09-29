@@ -302,6 +302,18 @@ export const qualityImprovementApi = {
       apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/conduct`, { method: 'POST', data }),
     revokeConduct: async (id: number) =>
       apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/revoke-conduct`, { method: 'POST' }),
+    get: async (id: number) =>
+      apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}`, { method: 'GET' }),
+    patchAttachments: async (id: number, attachments: unknown[]) =>
+      apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/attachments`, {
+        method: 'PATCH',
+        data: { attachments },
+      }),
+    applyPlan: async (id: number, inspectionPlanId: number) =>
+      apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/apply-plan`, {
+        method: 'POST',
+        data: { inspection_plan_id: inspectionPlanId },
+      }),
     approve: async (id: number, approve = true) =>
       apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/approve`, {
         method: 'POST',

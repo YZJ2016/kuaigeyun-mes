@@ -44,6 +44,93 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'quality-inspection-conduct-plan-list-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-list-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-list-r01.description',
+  },
+  {
+    id: 'quality-inspection-conduct-plan-label-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-label-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-label-r01.description',
+  },
+  {
+    id: 'quality-inspection-plan-switch-conduct-modal-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-conduct-modal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-conduct-modal-r01.description',
+  },
+  {
+    id: 'quality-inspection-plan-switch-r01',
+    date: '2026-09-29',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-r01.description',
+  },
+  {
+    id: 'quality-inspection-attachments-after-complete-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-attachments-after-complete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-attachments-after-complete-r01.description',
+  },
+  {
+    id: 'kuaicaiwu-notes-form-grid-batch-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaicaiwu-notes-form-grid-batch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-notes-form-grid-batch-r01.description',
+  },
+  {
+    id: 'kuaicaiwu-refund-list-batch-select-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaicaiwu-refund-list-batch-select-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-refund-list-batch-select-r01.description',
+  },
+  {
+    id: 'kuaicaiwu-ar-ap-toolbar-push-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaicaiwu-ar-ap-toolbar-push-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-ar-ap-toolbar-push-r01.description',
+  },
+  {
+    id: 'material-buy-default-suppliers-multi-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-buy-default-suppliers-multi-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-buy-default-suppliers-multi-r01.description',
+  },
+  {
+    id: 'customer-contact-phone-optional-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-contact-phone-optional-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-contact-phone-optional-r01.description',
+  },
+  {
+    id: 'user-create-phone-optional-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.user-create-phone-optional-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.user-create-phone-optional-r01.description',
+  },
+  {
     id: 'file-preview-txt-overlay-r01',
     date: '2026-09-29',
     type: 'improvement',

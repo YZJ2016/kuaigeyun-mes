@@ -8197,7 +8197,7 @@ export default {
   'app.kuaizhizao.customerPool.inactiveAlertDaysRequired': '请输入未联系提醒天数',
   'app.kuaizhizao.customerPool.inactiveAlertDaysExtra': '超过该天数未跟进时，列表显示未联系徽章并可筛选',
   'app.kuaizhizao.customerPool.projectDescription': '项目描述',
-  'app.kuaizhizao.customerPool.phoneOrEmailRequired': '手机号与邮箱至少填写一项',
+  'app.kuaizhizao.customerPool.phoneOrEmailRequired': '填写联系人后，手机号与邮箱至少填写一项',
   'app.kuaizhizao.customerPool.keyword': '关键词',
   'app.kuaizhizao.customerPool.claim': '领取',
   'app.kuaizhizao.customerPool.batchClaim': '批量领取',
@@ -18812,6 +18812,16 @@ export default {
   'app.kuaicaiwu.receivable.pullExceedMax': '应收金额不能超过可应收金额 ¥{{max}}',
   'app.kuaicaiwu.receivable.pullCreateSuccess': '已成功创建{{target}}',
   'app.kuaicaiwu.receivable.createInvoice': '开具销项发票',
+  'app.kuaicaiwu.financePush.pushPayment': '下推付款单',
+  'app.kuaicaiwu.financePush.pushPurchaseInvoice': '下推进项发票',
+  'app.kuaicaiwu.financePush.pushReceipt': '下推收款单',
+  'app.kuaicaiwu.financePush.pushSalesInvoice': '下推销项发票',
+  'app.kuaicaiwu.financePush.pushReceiptRefund': '下推收款退款',
+  'app.kuaicaiwu.financePush.pushPaymentRefund': '下推付款退款',
+  'app.kuaicaiwu.financePush.noCreatePermission': '无{{target}}新建权限',
+  'app.kuaicaiwu.financePush.offsetPayableNoPayment': '退货冲减应付不可付款',
+  'app.kuaicaiwu.financePush.offsetReceivableNoReceipt': '退货冲减应收不可收款',
+  'app.kuaicaiwu.receivable.capability.sales_invoice.pull_from_receivable.no_lines': '应收单无可开票金额',
   'app.kuaicaiwu.mergeFinance.mergeReceipt': '合并收款',
   'app.kuaicaiwu.mergeFinance.mergeSalesInvoice': '合并开票',
   'app.kuaicaiwu.mergeFinance.mergePayment': '合并付款',
@@ -19036,6 +19046,12 @@ export default {
   'app.kuaicaiwu.receiptRefund.cancelContent': '确定作废草稿退款单 {{code}}？',
   'app.kuaicaiwu.receiptRefund.cancelSuccess': '已作废',
   'app.kuaicaiwu.receiptRefund.cancelFailed': '作废失败',
+  'app.kuaicaiwu.receiptRefund.batchConfirmed': '已确认 {{count}} 条收款退款',
+  'app.kuaicaiwu.receiptRefund.batchVoided': '已作废 {{count}} 条收款退款',
+  'app.kuaicaiwu.receiptRefund.batchConfirmTitle': '确认批量确认 {{count}} 条收款退款',
+  'app.kuaicaiwu.receiptRefund.batchConfirmDesc': '仅草稿退款单可确认，不满足条件的记录会由后端拒绝。',
+  'app.kuaicaiwu.receiptRefund.batchVoidTitle': '确认批量作废 {{count}} 条收款退款',
+  'app.kuaicaiwu.receiptRefund.batchVoidDesc': '已确认的退款单须先撤回确认再作废；不满足条件的记录会由后端拒绝。',
   'app.kuaicaiwu.receiptRefund.syncBank': '补记流水',
   'app.kuaicaiwu.receiptRefund.syncBankTitle': '补记银行流水',
   'app.kuaicaiwu.receiptRefund.syncBankContent':
@@ -19160,6 +19176,12 @@ export default {
   'app.kuaicaiwu.paymentRefund.cancelContent': '确定作废草稿退款单 {{code}}？',
   'app.kuaicaiwu.paymentRefund.cancelSuccess': '已作废',
   'app.kuaicaiwu.paymentRefund.cancelFailed': '作废失败',
+  'app.kuaicaiwu.paymentRefund.batchConfirmed': '已确认 {{count}} 条付款退款',
+  'app.kuaicaiwu.paymentRefund.batchVoided': '已作废 {{count}} 条付款退款',
+  'app.kuaicaiwu.paymentRefund.batchConfirmTitle': '确认批量确认 {{count}} 条付款退款',
+  'app.kuaicaiwu.paymentRefund.batchConfirmDesc': '仅草稿退款单可确认，不满足条件的记录会由后端拒绝。',
+  'app.kuaicaiwu.paymentRefund.batchVoidTitle': '确认批量作废 {{count}} 条付款退款',
+  'app.kuaicaiwu.paymentRefund.batchVoidDesc': '已确认的退款单须先撤回确认再作废；不满足条件的记录会由后端拒绝。',
   'app.kuaicaiwu.paymentRefund.syncBank': '补记流水',
   'app.kuaicaiwu.paymentRefund.syncBankTitle': '补记银行流水',
   'app.kuaicaiwu.paymentRefund.syncBankContent':
@@ -22746,7 +22768,8 @@ export default {
   'app.master-data.source.productionWasteRate': '生产损耗率（%）',
   'app.master-data.source.wasteRatePlaceholder': '损耗率',
   'app.master-data.source.defaultSupplier': '默认供应商',
-  'app.master-data.source.selectDefaultSupplier': '请选择默认供应商（建议配置）',
+  'app.master-data.source.defaultSupplierMultiHint': '可多选。第一项为优先供应商，下推采购时按该项带出。',
+  'app.master-data.source.selectDefaultSupplier': '请选择默认供应商（可多选）',
   'app.master-data.source.purchaseLeadTime': '采购提前期（天）',
   'app.master-data.source.minPurchaseBatch': '最小采购批量',
   'app.master-data.source.purchasePrice': '采购价格',
@@ -25068,6 +25091,15 @@ export default {
   'app.kuaizhizao.quality.common.messages.exportSuccess': '导出成功',
   'app.kuaizhizao.quality.common.messages.deleteSuccess': '成功删除 {{count}} 条记录',
   'app.kuaizhizao.quality.common.messages.deleteBatchEmpty': '所选记录均不可删除，仅待检验状态的检验单可删除',
+  'app.kuaizhizao.quality.common.messages.attachmentsSaved': '附件已保存',
+  'app.kuaizhizao.quality.common.messages.selectInspectionPlan': '请选择检验方案',
+  'app.kuaizhizao.quality.common.messages.inspectionPlanUnchanged': '当前已是所选检验方案',
+  'app.kuaizhizao.quality.common.messages.applyInspectionPlanSuccess': '检验方案已切换',
+  'app.kuaizhizao.quality.common.actions.saveAttachments': '保存附件',
+  'app.kuaizhizao.quality.common.actions.switchInspectionPlan': '切换方案',
+  'app.kuaizhizao.quality.common.confirm.applyInspectionPlanTitle': '确认切换检验方案',
+  'app.kuaizhizao.quality.common.confirm.applyInspectionPlanDescription':
+    '将按新方案重建检验项目清单，待检验单据尚未录入检验结果。',
   'app.kuaizhizao.quality.common.messages.revokeConductSuccess': '已撤回检验',
   'app.kuaizhizao.quality.common.messages.revokeConductFailed': '撤回检验失败',
   'app.kuaizhizao.quality.common.messages.revokeConductBatchEmpty': '所选记录均不可撤回检验',
@@ -29130,6 +29162,50 @@ export default {
     '研发协同相关列表搜索与钉住条件批量修复',
   'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.description':
     '实验委托、项目建议书、试流、BOM、固件、图纸发放借用、生产日报等 UniTable 列表统一从 searchFormValues 取 keyword 与状态等钉住条件，不再误读分页 params。',
+  'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-list-r01.title':
+    '检验弹窗切换方案下拉可选项修复',
+  'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-list-r01.description':
+    '切换检验方案时按环节类型加载全部启用方案，并修正搜索框把方案 ID 当关键词导致暂无数据的问题。',
+  'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-label-r01.title':
+    '检验弹窗方案下拉显示名称',
+  'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-label-r01.description':
+    '来料等检验弹窗切换方案时，下拉框展示方案名称与编码，不再只显示方案 ID。',
+  'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-conduct-modal-r01.title':
+    '检验弹窗内切换检验方案',
+  'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-conduct-modal-r01.description':
+    '来料、过程、成品、出货检验在待检验状态下，于检验弹窗的检验方案项标题栏选择方案并切换，不再在详情抽屉切换。',
+  'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-r01.title':
+    '来料过程成品出货检验待检验可切换方案',
+  'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-r01.description':
+    '检验单据详情展示当前检验方案，待检验状态可选择其他方案并重建检验项目清单。',
+  'pages.dashboard.updateLog.entries.quality-inspection-attachments-after-complete-r01.title':
+    '检验完成后仍可补充附件',
+  'pages.dashboard.updateLog.entries.quality-inspection-attachments-after-complete-r01.description':
+    '来料、过程、成品、出货检验详情支持在已检验或已审核后单独保存附件，无需重新打开检验录入。',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-notes-form-grid-batch-r01.title':
+    '应收应付票据新建双栏与列表批量删除',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-notes-form-grid-batch-r01.description':
+    '新建/编辑票据弹窗改为两列布局，出票日、到期日日期框通栏铺满；应收、应付票据列表开启多选与批量删除。',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-refund-list-batch-select-r01.title':
+    '收付款退款列表支持多选与批量操作',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-refund-list-batch-select-r01.description':
+    '收款退款、付款退款列表开启行勾选，并提供批量确认、批量作废菜单，与收款单、付款单列表操作方式一致。',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-ar-ap-toolbar-push-r01.title':
+    '应收应付与收付款列表增加工具栏下推',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-ar-ap-toolbar-push-r01.description':
+    '应付、应收列表可单选下推付款/进项发票或收款/销项发票；收款单、付款单可单选下推退款，与行内入口同路径预填创建；合并收付款与开票不变。',
+  'pages.dashboard.updateLog.entries.material-buy-default-suppliers-multi-r01.title':
+    '采购件默认供应商支持多选',
+  'pages.dashboard.updateLog.entries.material-buy-default-suppliers-multi-r01.description':
+    '物料基本信息中采购件的默认供应商可多选，第一项作为优先供应商供下推采购沿用。',
+  'pages.dashboard.updateLog.entries.customer-contact-phone-optional-r01.title':
+    '未填联系人时客户不再强制联系方式',
+  'pages.dashboard.updateLog.entries.customer-contact-phone-optional-r01.description':
+    '新建或编辑客户时，联系人明细为空则不要求手机号或邮箱；填写了联系人后仍须手机号与邮箱至少一项。',
+  'pages.dashboard.updateLog.entries.user-create-phone-optional-r01.title':
+    '新建用户手机号改为可选',
+  'pages.dashboard.updateLog.entries.user-create-phone-optional-r01.description':
+    '账户管理新建/编辑用户时手机号可不填；填写时仍须为11位大陆手机号。无手机号不影响用户名密码登录，短信登录、企微按号自动绑定等能力需后续补填。',
   'pages.dashboard.updateLog.entries.file-preview-txt-overlay-r01.title':
     '文本预览改用全屏预览壳',
   'pages.dashboard.updateLog.entries.file-preview-txt-overlay-r01.description':
@@ -35233,7 +35309,7 @@ export default {
   'field.user.fullNameDuplicateWarning': '已有 {{count}} 位用户使用相同姓名（账号：{{accounts}}），客户池等场景可能难以区分归属',
   'field.user.phoneRequired': '请输入手机号',
   'field.user.phonePattern': '请输入正确的11位中国大陆手机号（以1开头）',
-  'field.user.phonePlaceholder': '请输入手机号',
+  'field.user.phonePlaceholder': '请输入手机号（可选）',
   'field.user.emailInvalid': '请输入正确的邮箱地址',
   'field.user.emailPlaceholder': '请输入邮箱（可选）',
   'field.user.password': '密码',
@@ -37663,6 +37739,9 @@ export default {
   'app.kuaicaiwu.notes.col.dueDate': '到期日',
   'app.kuaicaiwu.notes.col.issueDate': '出票日',
   'app.kuaicaiwu.notes.confirmDelete': '确认删除该票据？',
+  'app.kuaicaiwu.notes.batchDeleted': '已删除 {{count}} 张票据',
+  'app.kuaicaiwu.notes.batchDeleteConfirm':
+    '确定删除选中的 {{count}} 张票据吗？仅持有/已开出且未被后续业务占用的票据可删除，不满足条件的记录会由后端拒绝。',
   'app.kuaicaiwu.notes.create': '新建票据',
   'app.kuaicaiwu.notes.edit': '编辑票据',
   'app.kuaicaiwu.notes.field.acceptingBank': '承兑行',

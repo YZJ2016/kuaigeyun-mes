@@ -85,10 +85,15 @@ import type { PushPreviewResponse } from '../../../services/sales-order';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
 import {
+  buildQualityInspectionDetailSupplementNode,
+  renderQualityInspectionPlanSummary,
+} from '../components/QualityInspectionDetailSupplement';
+import {
   InspectionUnqualifiedBanner,
   buildInspectionQualityExtraButtons,
 } from '../components/InspectionDetailQualityActions';
 import {
+  buildConductStepResultDefaults,
   getInspectionTemplateSource,
   hasInspectionPlanSteps,
   pickInspectionConductExtras,
@@ -864,9 +869,53 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     ],
   );
 
+  const finishedDetailSupplement = useMemo(() => {
+    if (!inspectionDetail?.id) return null;
+    const gates = qualityInspectionRowGates(inspectionDetail, finishedPerms, ncPerms, t);
+    return buildQualityInspectionDetailSupplementNode({
+      inspection: inspectionDetail as Record<string, unknown>,
+      attachmentCategory: 'finished_goods_inspection_attachments',
+      updateAttachmentsGate: gates.updateAttachments,
+      patchAttachments: (attachments) =>
+        qualityApi.finishedGoodsInspection.patchAttachments(String(inspectionDetail.id), attachments),
+      onUpdated: (record) => {
+        setInspectionDetail(record as FinishedGoodsInspection);
+        setFgiTrackingRefreshKey((k) => k + 1);
+        actionRef.current?.reload();
+      },
+    });
+  }, [inspectionDetail, finishedPerms, ncPerms, t]);
+
+  const finishedConductPlanSwitch = useMemo(() => {
+    if (!currentInspection?.id) return undefined;
+    if (currentInspection.capabilities?.apply_plan?.allowed !== true) return undefined;
+    const gates = qualityInspectionRowGates(currentInspection, finishedPerms, ncPerms, t);
+    return {
+      planType: 'finished' as const,
+      materialId: currentInspection.material_id,
+      disabled: gates.applyPlan.disabled,
+      disabledTitle: gates.applyPlan.title,
+      onApplyPlan: async (planId: number) => {
+        const updated = (await qualityApi.finishedGoodsInspection.applyPlan(
+          String(currentInspection.id),
+          planId,
+        )) as FinishedGoodsInspection;
+        setCurrentInspection(updated);
+        formRef.current?.setFieldsValue({
+          conduct_step_results: buildConductStepResultDefaults(updated as Record<string, unknown>),
+        });
+      },
+    };
+  }, [currentInspection, finishedPerms, ncPerms, t]);
+
   const detailBaseColumns: ProDescriptionsItemProps<FinishedGoodsInspection>[] = useMemo(
     () => [
       buildQualityInspectionDetailCodeColumn<FinishedGoodsInspection>(t),
+      {
+        title: t('app.kuaizhizao.quality.common.columns.inspectionKind'),
+        key: 'inspection_plan_summary',
+        render: (_, row) => renderQualityInspectionPlanSummary(row as Record<string, unknown>, t),
+      },
       ...buildQualityInspectionDetailMaterialColumns<FinishedGoodsInspection>(t),
       { title: t('app.kuaizhizao.quality.common.columns.materialSpec'), dataIndex: 'material_spec' },
       { title: t('app.kuaizhizao.quality.common.columns.batchNo'), dataIndex: 'batch_number' },
@@ -1353,6 +1402,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         <InspectionTemplateConductFields
           inspection={currentInspection as Record<string, unknown>}
           photoCategory="finished_goods_inspection_attachments"
+          planSwitch={finishedConductPlanSwitch}
         />
         <InspectionConductQuantityFields
           materialId={currentInspection?.material_id}
@@ -1480,6 +1530,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         }
         banner={<InspectionUnqualifiedBanner inspection={inspectionDetail} />}
         basicColumns={detailBaseColumns}
+        supplement={finishedDetailSupplement}
         customFields={inspectionListCustomFields}
         customFieldValues={inspectionDetailCustomFieldValues}
         tracking={finishedTracking}

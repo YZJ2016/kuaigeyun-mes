@@ -354,6 +354,8 @@ class QualityInspectionCapabilities(BaseModel):
     push_rework: ActionCapability
     push_inbound: ActionCapability
     update: ActionCapability
+    update_attachments: ActionCapability
+    apply_plan: ActionCapability
     delete: ActionCapability
     print: ActionCapability
 
@@ -364,6 +366,8 @@ class OQCInspectionCapabilities(BaseModel):
     reject: ActionCapability
     revoke_approval: ActionCapability
     revoke_conduct: ActionCapability
+    update_attachments: ActionCapability
+    apply_plan: ActionCapability
     delete: ActionCapability
     print: ActionCapability
 
@@ -812,9 +816,13 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "process_inspection.pull_from_work_order.already_pulled": "相关工序均已存在待检验的过程检验单，删除后可再次加载",
     "quality_inspection.update.not_pending": "只能更新待检验状态的检验单",
     "quality_inspection.update.not_editable": "已审核的检验单不可编辑，请先撤销审核",
+    "quality_inspection.apply_plan.not_pending": "仅待检验状态可切换检验方案",
+    "quality_inspection.apply_plan.invalid": "检验方案无效或与当前环节不匹配",
     "quality_inspection.delete.not_pending": "只能删除待检验状态的检验单",
     "oqc_inspection.conduct.not_pending": "只有待检验状态的出货检验单可执行检验",
     "oqc_inspection.conduct.approved_locked": "已审核的出货检验单不可执行检验，请先撤销审核",
+    "oqc_inspection.apply_plan.not_pending": "仅待检验状态可切换检验方案",
+    "oqc_inspection.apply_plan.invalid": "检验方案无效或与当前环节不匹配",
     "oqc_inspection.approve.not_pending": "出货检验单当前不可审核",
     "oqc_inspection.revoke_approval.not_approved": "仅已审核通过的出货检验单可撤销审核",
     "oqc_inspection.revoke_conduct.not_allowed": "当前状态不可撤回检验",
