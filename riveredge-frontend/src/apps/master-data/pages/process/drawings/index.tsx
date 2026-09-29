@@ -35,6 +35,10 @@ import {
   TWO_COLUMN_LAYOUT,
 } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
 import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { DetailDrawerActions } from '../../../../../components/layout-templates/DetailDrawerActions';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
@@ -1801,19 +1805,26 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           onTableDataChange={(rows) => {
             drawingRowsRef.current = rows;
           }}
-          request={async (params, meta?: UniTableRequestMeta) => {
+          skipFuzzyPinyinClientFilter
+          request={async (params, _sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const tf = treeFilterRef.current;
+              const keyword = pickListSearchKeywordOrFields(searchFormValues, 'name', 'code');
               const res = await drawingApi.list({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                keyword: params.keyword as string | undefined,
-                status: (params.status as DrawingStatus | undefined) ?? tf.status,
+                keyword,
+                status:
+                  (pickSearchString(searchFormValues, 'status') as DrawingStatus | undefined) ??
+                  tf.status,
                 drawingType:
                   fixedCatalogDrawingType ??
-                  ((params.drawingType as DrawingType | undefined) ?? tf.drawingType),
+                  ((pickSearchString(searchFormValues, 'drawingType') as DrawingType | undefined) ??
+                    tf.drawingType),
                 excludeDrawingTypes: excludeCatalogDrawingTypes,
-                securityLevel: params.securityLevel as DrawingSecurityLevel | undefined,
+                securityLevel: pickSearchString(searchFormValues, 'securityLevel') as
+                  | DrawingSecurityLevel
+                  | undefined,
                 materialUuid: tf.materialUuid,
                 processRouteUuid: tf.processRouteUuid,
                 folderUuid: tf.folderUuid,

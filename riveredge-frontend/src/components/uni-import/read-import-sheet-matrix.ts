@@ -5,6 +5,7 @@
  * 严禁按 getMaxRows 全表 scrape（默认上千行 × 多列会卡住主线程，表现为「预检并继续无反应」）。
  */
 
+import { normalizeImportSpreadsheetDate } from '../../utils/importSpreadsheetDate';
 import { spreadsheetCellToPlainString } from '../../utils/spreadsheetCellPlainString';
 
 type RangeLike = {
@@ -44,6 +45,9 @@ const HARD_MAX_COLS = 200;
 
 function cellToString(value: unknown): string {
   if (value === null || value === undefined) return '';
+  if (value instanceof Date) {
+    return normalizeImportSpreadsheetDate(value) ?? '';
+  }
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'object') {
     const obj = value as { v?: unknown; m?: unknown };

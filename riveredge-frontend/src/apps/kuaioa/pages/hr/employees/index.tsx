@@ -9,6 +9,7 @@ import {
 } from '../../../utils/oaFormEnums';
 import { loadOaProductionLineNameOptions, loadOaWorkshopNameOptions } from '../../../utils/oaWorkshopOptions';
 import {
+  bulkCreateEmployees,
   createEmployee,
   deleteEmployee,
   getEmployee,
@@ -19,8 +20,9 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../master-data/utils/factoryImportTemplate';
-import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
+import { importInChunks } from '../../../../../utils/chunkedBulkImport';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import { normalizeImportSpreadsheetDate } from '../../../../../utils/importSpreadsheetDate';
 
 type OptionItem = { label: string; value: string };
 
@@ -91,6 +93,11 @@ const EmployeesPage: React.FC = () => {
       buildFactoryImportTemplate(
         t,
         [
+          {
+            field: 'employee_code',
+            labelKey: 'app.kuaioa.employee.code',
+            aliases: ['员工编号', '工号', '编号'],
+          },
           {
             field: 'full_name',
             required: true,
@@ -206,6 +213,7 @@ const EmployeesPage: React.FC = () => {
           },
         ],
         [
+          t('app.kuaioa.employee.importExample.employeeCode'),
           t('app.kuaioa.employee.importExample.fullName'),
           t('app.kuaioa.employee.importExample.department'),
           t('app.kuaioa.employee.importExample.workshop'),
@@ -396,16 +404,6 @@ const EmployeesPage: React.FC = () => {
     }
 
     const headers = (data[0] || []).map((h) => String(h ?? '').trim());
-    const rows = data.slice(2);
-    const nonEmptyRows = rows.filter((row) => {
-      if (!Array.isArray(row) || row.length === 0) return false;
-      return row.some((cell) => String(cell ?? '').trim() !== '');
-    });
-
-    if (nonEmptyRows.length === 0) {
-      messageApi.warning(t('app.kuaioa.employee.importNoRows'));
-      return false;
-    }
 
     const headerIndexMap = resolveFactoryImportHeaderIndexMap(
       headers,
@@ -421,16 +419,58 @@ const EmployeesPage: React.FC = () => {
       return false;
     }
 
+    const exampleFullName = t('app.kuaioa.employee.importExample.fullName').trim();
+    let bodyRows = data.slice(1);
+    if (
+      bodyRows.length > 0 &&
+      String(bodyRows[0][headerIndexMap.full_name] ?? '').trim() === exampleFullName
+    ) {
+      bodyRows = bodyRows.slice(1);
+    }
+
+    const nonEmptyRows = bodyRows.filter((row) => {
+      if (!Array.isArray(row) || row.length === 0) return false;
+      return row.some((cell) => String(cell ?? '').trim() !== '');
+    });
+
+    if (nonEmptyRows.length === 0) {
+      messageApi.warning(t('app.kuaioa.employee.importNoRows'));
+      return false;
+    }
+
     const importData: Record<string, unknown>[] = [];
     const errors: Array<{ row: number; message: string }> = [];
+    const seenEmployeeCodes = new Map<string, number>();
 
     nonEmptyRows.forEach((row, rowIndex) => {
       if (!Array.isArray(row)) return;
-      const actualRowIndex = rowIndex + 3;
+      const actualRowIndex = rowIndex + (data.length - bodyRows.length) + 1;
       const cell = (field: string) => {
         const idx = headerIndexMap[field];
         if (idx === undefined) return '';
         return String(row[idx] ?? '').trim();
+      };
+      const parseImportDateField = (
+        field: 'hire_date' | 'leave_date',
+        labelKey: string,
+      ): string | undefined | null => {
+        const idx = headerIndexMap[field];
+        if (idx === undefined) return undefined;
+        const raw = row[idx];
+        const rawText = String(raw ?? '').trim();
+        if (!rawText) return undefined;
+        const normalized = normalizeImportSpreadsheetDate(raw);
+        if (!normalized) {
+          errors.push({
+            row: actualRowIndex,
+            message: t('app.kuaioa.employee.importDateInvalid', {
+              field: t(labelKey),
+              value: rawText,
+            }),
+          });
+          return null;
+        }
+        return normalized;
       };
 
       const fullName = cell('full_name');
@@ -476,11 +516,27 @@ const EmployeesPage: React.FC = () => {
         }
       }
 
+      const employeeCode = cell('employee_code');
+      if (employeeCode) {
+        const prevRow = seenEmployeeCodes.get(employeeCode);
+        if (prevRow !== undefined) {
+          errors.push({
+            row: actualRowIndex,
+            message: t('app.kuaioa.employee.importEmployeeCodeDuplicate', {
+              code: employeeCode,
+            }),
+          });
+          return;
+        }
+        seenEmployeeCodes.set(employeeCode, actualRowIndex);
+      }
+
       const payload: Record<string, unknown> = {
         full_name: fullName,
         employment_type: employmentType,
         pay_method: payMethod,
       };
+      if (employeeCode) payload.employee_code = employeeCode;
 
       const departmentName = cell('department_name');
       if (departmentName) payload.department_name = departmentName;
@@ -490,9 +546,11 @@ const EmployeesPage: React.FC = () => {
       if (productionLineName) payload.production_line_name = productionLineName;
       const phone = cell('phone');
       if (phone) payload.phone = phone;
-      const hireDate = cell('hire_date');
+      const hireDate = parseImportDateField('hire_date', 'app.kuaioa.employee.hireDate');
+      if (hireDate === null) return;
       if (hireDate) payload.hire_date = hireDate;
-      const leaveDate = cell('leave_date');
+      const leaveDate = parseImportDateField('leave_date', 'app.kuaioa.employee.leaveDate');
+      if (leaveDate === null) return;
       if (leaveDate) payload.leave_date = leaveDate;
       const bankAccount = cell('bank_account');
       if (bankAccount) payload.bank_account = bankAccount;
@@ -561,14 +619,19 @@ const EmployeesPage: React.FC = () => {
     }
 
     try {
-      const result = await importInChunksViaPerItemCreate({
+      const result = await importInChunks({
         items: importData,
-        createOne: async (item) => createEmployee(item),
         title: t('app.kuaioa.employee.importTitle'),
-        chunkSize: 50,
-        concurrency: 4,
-        rowNumberForIndex: (i) => i + 3,
+        chunkSize: 100,
+        rowNumberForIndex: (i) => i + (data.length - bodyRows.length) + 1,
         showResultModal: false,
+        importChunk: async (chunk) => {
+          const res = await bulkCreateEmployees(chunk);
+          return {
+            createdCount: res.createdCount,
+            failedItems: res.failedItems,
+          };
+        },
       });
 
       if (result.failureCount > 0) {
@@ -639,6 +702,7 @@ const EmployeesPage: React.FC = () => {
       importColumnOptions={employeeImportTemplate.importColumnOptions}
       importFieldMap={employeeImportTemplate.importHeaderMap}
       importTemplateName={t('app.kuaioa.employee.exportFileName')}
+      importTemplateRevision="kuaioa-employee-v20260929-code"
       showExportButton
       onExport={async (type, keys, pageData) => {
         await runKuaioaListExport({

@@ -9,7 +9,8 @@ export RIVEREDGE_SYSTEMD=1
 source "$SCRIPT_DIR/../lib/common.sh"
 load_deploy_env
 ensure_timezone_env
-ensure_sensitive_lexicon_pack || exit 1
+sync_deploy_optional_features_to_backend_env
+ensure_sensitive_lexicon_if_enabled || exit 1
 sync_backend_deps
 export_production_malloc_tuning
 export PORT="${BACKEND_PORT}"

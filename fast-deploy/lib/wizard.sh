@@ -40,9 +40,9 @@ wizard_supports_truecolor() {
 
 # 固定主题色：优先 24-bit RGB（各终端观感一致），否则退回标准 16 色（不用 90–97 亮色系）
 wizard_init_theme() {
-    WIZARD_RESET='\033[0m'
-    WIZARD_BOLD='\033[1m'
-    WIZARD_DIM='\033[2m'
+    WIZARD_RESET=$'\033[0m'
+    WIZARD_BOLD=$'\033[1m'
+    WIZARD_DIM=$'\033[2m'
     if [ -n "${NO_COLOR:-}" ]; then
         WIZARD_CYAN=''
         WIZARD_GREEN=''
@@ -61,12 +61,12 @@ wizard_init_theme() {
         WIZARD_RED=$'\033[38;2;208;96;96m'
         WIZARD_BLUE=$'\033[38;2;96;144;208m'
     else
-        WIZARD_CYAN='\033[36m'
+        WIZARD_CYAN=$'\033[36m'
         WIZARD_LOGO_COLOR="${WIZARD_CYAN}"
-        WIZARD_GREEN='\033[32m'
-        WIZARD_YELLOW='\033[33m'
-        WIZARD_RED='\033[31m'
-        WIZARD_BLUE='\033[34m'
+        WIZARD_GREEN=$'\033[32m'
+        WIZARD_YELLOW=$'\033[33m'
+        WIZARD_RED=$'\033[31m'
+        WIZARD_BLUE=$'\033[34m'
     fi
     WIZARD_PANEL_BORDER="${WIZARD_DIM}"
 }
@@ -388,9 +388,9 @@ wizard_show_home_panel() {
     wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
     wizard_panel_menu_item "3" "更新系统" "fetch+reset 拉最新 → 迁移重启（低配固定传统部署）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
+    wizard_panel_menu_item "5" "选装依赖" "发票 OCR / PDF 打印 / KU-AI 向量 / 敏感词库"
     wizard_panel_section "OPS 运维"
-    wizard_panel_menu_item "5" "详情" "服务状态 · 基线依赖 · 可选能力依赖"
-    wizard_panel_menu_short "${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[9]${WIZARD_RESET} 低配模式  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
+    wizard_panel_menu_short "${WIZARD_CYAN}[6]${WIZARD_RESET} ${WIZARD_BOLD}详情${WIZARD_RESET}  ${WIZARD_CYAN}[7]${WIZARD_RESET} ${WIZARD_BOLD}服务${WIZARD_RESET}  ${WIZARD_CYAN}[8]${WIZARD_RESET} ${WIZARD_BOLD}自启${WIZARD_RESET}  ${WIZARD_CYAN}[9]${WIZARD_RESET} ${WIZARD_BOLD}低配${WIZARD_RESET}  ${WIZARD_CYAN}[0]${WIZARD_RESET} ${WIZARD_BOLD}退出${WIZARD_RESET}"
     wizard_panel_bot
     echo ""
 }
@@ -1083,6 +1083,152 @@ wizard_ask_intent_hint() {
     esac
 }
 
+# 终端显示宽度：全角/CJK 计 2、半角计 1（与 UTF-8 中文终端常见行为一致）
+wizard_python_bin() {
+    local py
+    for py in python python3; do
+        command -v "$py" >/dev/null 2>&1 || continue
+        if "$py" - <<'PY' >/dev/null 2>&1
+import unicodedata  # noqa: F401
+PY
+        then
+            printf '%s\n' "$py"
+            return 0
+        fi
+    done
+    return 1
+}
+
+wizard_unicode_display_width() {
+    local py w
+    py="$(wizard_python_bin 2>/dev/null || true)"
+    if [ -n "$py" ]; then
+        w="$(WIZARD_WIDTH_TEXT=$1 "$py" - <<'PY'
+import os, unicodedata
+
+s = os.environ.get("WIZARD_WIDTH_TEXT", "")
+w = 0
+for ch in s:
+    if unicodedata.east_asian_width(ch) in ("F", "W", "A"):
+        w += 2
+    else:
+        w += 1
+print(w)
+PY
+)"
+    fi
+    case "${w:-}" in
+        ''|*[!0-9]*) w=${#1} ;;
+    esac
+    echo "$w"
+}
+
+wizard_pad_to_display_width() {
+    local label=$1 target=$2 py out
+    py="$(wizard_python_bin 2>/dev/null || true)"
+    if [ -n "$py" ]; then
+        out="$(WIZARD_WIDTH_TEXT=$1 WIZARD_WIDTH_TARGET=$2 "$py" - <<'PY'
+import os, unicodedata
+
+label = os.environ.get("WIZARD_WIDTH_TEXT", "")
+target = int(os.environ.get("WIZARD_WIDTH_TARGET", "0"))
+w = 0
+for ch in label:
+    if unicodedata.east_asian_width(ch) in ("F", "W", "A"):
+        w += 2
+    else:
+        w += 1
+pad = max(0, target - w)
+print(label + " " * pad, end="")
+PY
+)"
+        if [ -n "$out" ]; then
+            printf '%s' "$out"
+            return
+        fi
+    fi
+    printf '%s' "$label"
+}
+
+wizard_optional_deps_label_column() {
+    local w max=0 label
+    for label in \
+        "发票 OCR（二维码/识别）" \
+        "PDF 打印（Playwright）" \
+        "KU-AI 向量（pgvector）" \
+        "敏感词库（lexicon.pack）"; do
+        w="$(wizard_unicode_display_width "$label")"
+        [ "${w:-0}" -gt "$max" ] && max=$w
+    done
+    echo $((max + 2))
+}
+
+wizard_optional_deps_item_line() {
+    local num=$1 label=$2 status=$3 col=$4 padded
+    padded="$(wizard_pad_to_display_width "$label" "$col")"
+    echo -e "  ${WIZARD_CYAN}[${num}]${WIZARD_RESET} ${padded}${status}"
+}
+
+wizard_show_optional_deps_panel() {
+    load_deploy_env
+    local label_col
+    label_col="$(wizard_optional_deps_label_column)"
+    echo ""
+    wizard_say "选装依赖（写入 fast-deploy/config/deploy.env，保存后立即生效）"
+    echo ""
+    wizard_optional_deps_item_line 1 "发票 OCR（二维码/识别）" "$(deploy_opt_flag_label "${OPT_INVOICE_OCR:-0}")" "$label_col"
+    wizard_optional_deps_item_line 2 "PDF 打印（Playwright）" "$(deploy_opt_flag_label "${OPT_PDF_PRINT:-0}")" "$label_col"
+    wizard_optional_deps_item_line 3 "KU-AI 向量（pgvector）" "$(deploy_opt_flag_label "${OPT_KUAI_VECTOR:-0}")" "$label_col"
+    wizard_optional_deps_item_line 4 "敏感词库（lexicon.pack）" "$(deploy_opt_flag_label "${OPT_SENSITIVE_LEXICON:-0}")" "$label_col"
+    echo ""
+    echo -e "  ${WIZARD_CYAN}[5]${WIZARD_RESET} 检查已启用项的依赖就绪情况"
+    echo -e "  ${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
+    echo ""
+    wizard_say "开启某项后建议依次: install（系统库）→ migrate → start"
+}
+
+wizard_ask_optional_deps_choice() {
+    local choice
+    while true; do
+        wizard_show_optional_deps_panel
+        read -rp "$(echo -e "${WIZARD_DIM}选择 › ${WIZARD_RESET}")" choice
+        case "${choice:-}" in
+            0|q|Q)
+                return 0
+                ;;
+            1)
+                toggle_deploy_opt_flag OPT_INVOICE_OCR || wizard_say_fail "保存失败"
+                wizard_say_ok "发票 OCR: $(deploy_opt_flag_label "${OPT_INVOICE_OCR:-0}")"
+                ;;
+            2)
+                toggle_deploy_opt_flag OPT_PDF_PRINT || wizard_say_fail "保存失败"
+                wizard_say_ok "PDF 打印: $(deploy_opt_flag_label "${OPT_PDF_PRINT:-0}")"
+                if deploy_opt_pdf_print_enabled; then
+                    wizard_say "Chromium 后台补装仍受 PLAYWRIGHT_POSTINSTALL_ENABLE 控制（deploy.env）"
+                fi
+                ;;
+            3)
+                toggle_deploy_opt_flag OPT_KUAI_VECTOR || wizard_say_fail "保存失败"
+                wizard_say_ok "KU-AI 向量: $(deploy_opt_flag_label "${OPT_KUAI_VECTOR:-0}")"
+                ;;
+            4)
+                toggle_deploy_opt_flag OPT_SENSITIVE_LEXICON || wizard_say_fail "保存失败"
+                wizard_say_ok "敏感词库: $(deploy_opt_flag_label "${OPT_SENSITIVE_LEXICON:-0}")"
+                ;;
+            5)
+                echo ""
+                cmd_check_special || true
+                echo ""
+                read -rp "$(echo -e "${WIZARD_DIM}Enter 继续${WIZARD_RESET} › ")" _ || true
+                ;;
+            *)
+                wizard_say_warn "无效选项"
+                sleep 0.3
+                ;;
+        esac
+    done
+}
+
 wizard_ask_intent() {
     if [ -n "${WIZARD_INTENT:-}" ]; then
         wizard_say_ok "操作: $(wizard_intent_label)"
@@ -1104,24 +1250,22 @@ wizard_ask_intent() {
             wizard_ask_pro_apps_choice
             return 2
             ;;
-        5|details|status)
+        5|opt|optional|optional-deps|选装)
+            wizard_ask_optional_deps_choice
+            return 2
+            ;;
+        6|details|status)
             echo ""
             wizard_run_quick_action details || true
             wizard_pause_return_menu
             return 2
             ;;
-        6|service|svc)
+        7|service|svc)
             wizard_ask_service_choice
             return 2
             ;;
-        7|boot|autostart)
+        8|boot|autostart)
             wizard_ask_boot_service_choice
-            return 2
-            ;;
-        8|migrate)
-            echo ""
-            wizard_run_quick_action migrate || true
-            wizard_pause_return_menu
             return 2
             ;;
         9|low-spec-mode|low_spec_mode|lowspec|mem)
@@ -1239,7 +1383,7 @@ wizard_env_scan() {
     else
         wizard_say "部分基线依赖尚未就绪，下一阶段将自动安装"
     fi
-    wizard_say "可选能力依赖（PDF / OCR / 向量 / 敏感词）按需安装，不用可忽略；状态见菜单 [5] 详情"
+    wizard_say "选装依赖默认关闭；开关见 DEPLOY [5]，就绪情况见 OPS [6] 详情"
     return $failed
 }
 
@@ -1576,7 +1720,9 @@ wizard_install_deps() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         st="$(check_caddy)"; [ "$st" != "ok" ] && plan+=("caddy:$st")
     fi
-    st="$(check_invoice_parse_runtime)"; [ "$st" != "ok" ] && plan+=("invoice-runtime:$st")
+    if deploy_opt_invoice_ocr_enabled; then
+        st="$(check_invoice_parse_runtime)"; [ "$st" != "ok" ] && plan+=("invoice-runtime:$st")
+    fi
 
     if [ "${#plan[@]}" -eq 0 ]; then
         wizard_say_ok "所有依赖已就绪，无需安装"
@@ -1655,7 +1801,7 @@ wizard_install_deps() {
     if [ "$check_rc" -eq 0 ]; then
         wizard_finalize_local_database || return 1
         wizard_say_ok "环境软件安装全部完成"
-        wizard_say "可选能力依赖将在迁移/启动时按需处理（不用可忽略），状态见菜单 [5] 详情"
+        wizard_say "选装依赖见 DEPLOY [5]；迁移/启动时仅处理已启用项，就绪情况见 OPS [6] 详情"
         return 0
     fi
     wizard_say_fail "环境复核未通过"
@@ -1779,7 +1925,7 @@ wizard_update_app() {
     fi
 
     wizard_run_deploy_step release_meta_final "确认发版信息与运行 commit 一致" "$log" record_deploy_release_metadata || return 1
-    wizard_say_ok "系统更新已全部完成（可选能力依赖状态见菜单 [5] 详情）"
+    wizard_say_ok "系统更新已全部完成（选装 DEPLOY [5] · 就绪 OPS [6] 详情）"
 }
 
 wizard_show_summary() {

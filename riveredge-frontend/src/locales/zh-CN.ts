@@ -3529,11 +3529,14 @@ export default {
   'app.kuaioa.employee.importEmploymentInvalid': '用工类型无效',
   'app.kuaioa.employee.importPayMethodInvalid': '计薪方式无效',
   'app.kuaioa.employee.importStatusInvalid': '状态无效',
+  'app.kuaioa.employee.importEmployeeCodeDuplicate': '员工编号「{{code}}」在导入文件中重复',
+  'app.kuaioa.employee.importDateInvalid': '{{field}}无法识别（{{value}}），请用日期或 Excel 日期格式',
   'app.kuaioa.employee.importValidationTitle': '导入数据校验失败',
   'app.kuaioa.employee.importValidationIntro': '请修正以下问题后重新导入：',
   'app.kuaioa.employee.importPartialTitle': '导入完成（部分失败）',
   'app.kuaioa.employee.importPartialIntro': '导入结果：成功 {{success}} 条，失败 {{failure}} 条',
   'app.kuaioa.employee.rowError': '第 {{row}} 行：{{message}}',
+  'app.kuaioa.employee.importExample.employeeCode': 'EMP001',
   'app.kuaioa.employee.importExample.fullName': '张三',
   'app.kuaioa.employee.importExample.department': '生产部',
   'app.kuaioa.employee.importExample.workshop': '一车间',
@@ -29083,6 +29086,58 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-prepay-r01.title':
+    '订单跟踪款到发货校验调整',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-prepay-r01.description':
+    '款到发货不再拦截提交生产；收款足额后再登记发货或标记已收款；有更新权限即可维护订单情况。',
+  'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.title':
+    '福尼特 OA 相关列表搜索与钉住条件批量修复',
+  'pages.dashboard.updateLog.entries.funide-plm-list-search-batch-r01.description':
+    '快研发/文控/生产日报等 UniTable 列表统一从 searchFormValues 取 keyword 与状态等钉住条件，不再误读分页 params；含项目建议书、试流、BOM、固件、图纸发放借用等已交付页。',
+  'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.title':
+    '实验委托列表搜索与钉住条件生效',
+  'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.description':
+    '列表 request 改为读取 UniTable 的 searchFormValues（模糊 keyword、状态/类型等钉住与高级搜索），并纳入「全部/我的」范围进缓存键，避免搜了不筛选或切换范围仍显示旧数据。',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.title':
+    '员工档案导入恢复分片批量接口',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.description':
+    '新增员工 batch-create：每批最多 200 条一次提交，不再逐条 POST，大批量导入更快且不易触发写限流；你已自编员工编号时片内顺序建档即可。',
+  'pages.dashboard.updateLog.entries.chunked-import-write-rate-limit-r01.title':
+    '大批量逐条导入不再触发写限流',
+  'pages.dashboard.updateLog.entries.chunked-import-write-rate-limit-r01.description':
+    '分片逐条导入统一按每分钟写请求上限节流，遇 429 按 Retry-After 自动重试，避免员工档案等大批量导入成片报「请求过于频繁」。',
+  'pages.dashboard.updateLog.entries.uniimport-xlsx-self-closing-cell-r01.title':
+    '修复 Excel 导入空单元格误显示为 27 等问题',
+  'pages.dashboard.updateLog.entries.uniimport-xlsx-self-closing-cell-r01.description':
+    '修正 xlsx 自闭合空单元格解析错位，避免把共享字符串空项索引（如 27）当成数字显示在社保、生活费等列；并修复误判导致整表解析为空、提示「没有有效数据」的问题。',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-import-uniimport-code-r01.title':
+    '员工档案 UniImport 在线表同步员工编号列',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-import-uniimport-code-r01.description':
+    '导入弹窗在线表与下载模板一致，首列为员工编号；模板修订后自动刷新列布局，避免沿用上次的自定义列偏好。',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-import-date-normalize-r01.title':
+    '员工档案导入自动识别入职与离职日期',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-import-date-normalize-r01.description':
+    '支持 Excel 日期序列号、YYYY-MM-DD、斜杠分隔与 YYYYMMDD；在线表与 xlsx 上传均会归一化为标准日期再建档。',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-import-template-code-r01.title':
+    '员工档案导入模板增加员工编号列',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-import-template-code-r01.description':
+    '下载模板首列为员工编号（可选）；填写则按指定编号建档，留空仍自动生成；导入文件内重复编号会前置校验。',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-import-xlsx-date-r01.title':
+    '员工档案导入支持 Excel 日期与无示例行表格',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-import-xlsx-date-r01.description':
+    '修复入职日期按 Excel 序列号写入时无法落库、以及仅表头+数据行时首条被误跳过；批量导入改为顺序生成员工编号避免冲突。',
+  'pages.dashboard.updateLog.entries.deploy-wizard-optional-deps-menu-r01.title':
+    '部署向导新增选装依赖菜单',
+  'pages.dashboard.updateLog.entries.deploy-wizard-optional-deps-menu-r01.description':
+    '部署区 [5] 可开关发票 OCR、PDF 打印、KU-AI 向量与敏感词库；运维区从 [6] 详情起，服务与开机自启等为 [7]～[9]。',
+  'pages.dashboard.updateLog.entries.deploy-wizard-migrate-menu-r01.title':
+    '部署向导主菜单不再单独提供数据库迁移',
+  'pages.dashboard.updateLog.entries.deploy-wizard-migrate-menu-r01.description':
+    '迁移已包含在更新系统、启动与全新安装流程中；仅需单独执行 aerich 时使用 ./fast-deploy/deploy.sh migrate，[6] 详情有说明。',
+  'pages.dashboard.updateLog.entries.deploy-optional-backend-deps-r01.title':
+    '部署脚本支持后端选装依赖',
+  'pages.dashboard.updateLog.entries.deploy-optional-backend-deps-r01.description':
+    'fast-deploy 可通过 deploy.env 的 OPT_INVOICE_OCR、OPT_PDF_PRINT、OPT_KUAI_VECTOR、OPT_SENSITIVE_LEXICON 按需安装发票 OCR、打印 PDF、KU-AI 向量与敏感词库，默认不再全量安装。',
   'pages.dashboard.updateLog.entries.permission-governance-affiliate-r01.title':
     '权限治理：附属只读白名单与物料复合页门控',
   'pages.dashboard.updateLog.entries.permission-governance-affiliate-r01.description':

@@ -41,6 +41,7 @@ import {
   type AnnualLabPlanMonth,
   type AnnualLabPlanStatus,
 } from '../../services/annual-lab-plan';
+import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
 
 const RESOURCE = 'kuaiplm:annual-lab-plan';
 const STATUS_KEYS: AnnualLabPlanStatus[] = [
@@ -533,13 +534,15 @@ const AnnualLabPlansPage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
         }}
-        request={async (params) => {
+        skipFuzzyPinyinClientFilter
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const { keyword, status, plan_year } = resolvePlmStandardDocListSearch(searchFormValues);
           const res = await annualLabPlanApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            keyword: params.keyword || params.title,
-            status: params.status,
-            plan_year: params.plan_year,
+            keyword,
+            status,
+            plan_year,
           });
           return { data: res.items, success: true, total: res.total };
         }}

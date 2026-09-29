@@ -28,6 +28,10 @@ import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 import { detailDrawerBasicColumn } from '../../../../../components/layout-templates/constants';
@@ -420,12 +424,13 @@ const DrawingLoansPage: React.FC = () => {
             </Button>
           ) : null,
         ]}
-        request={async (params) => {
+        skipFuzzyPinyinClientFilter
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await drawingLoanApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            status: params.status,
-            keyword: params.keyword || params.name || params.code,
+            status: pickSearchString(searchFormValues, 'status'),
+            keyword: pickListSearchKeywordOrFields(searchFormValues, 'name', 'code'),
           });
           return { data: res.data ?? [], total: res.total ?? 0, success: true };
         }}
