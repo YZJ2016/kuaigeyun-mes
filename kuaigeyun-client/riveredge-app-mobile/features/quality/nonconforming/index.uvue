@@ -1,11 +1,11 @@
 <template>
 	<scroll-view class="page" scroll-y="true">
 		<view class="toolbar">
-			<text class="link" @click="loadLedger">刷新</text>
+			<button class="btn-secondary" @click="loadLedger">刷新</button>
 		</view>
-		<text v-if="loading" class="meta">加载中</text>
-		<text v-if="errorText.length > 0" class="err">{{ errorText }}</text>
-		<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="meta">暂无不合格品</text>
+		<text v-if="loading" class="loading">加载中</text>
+		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
+		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无不合格品</text>
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ titleOf(row) }}</text>
 			<text v-if="lineOf(row).length > 0" class="meta">{{ lineOf(row) }}</text>
@@ -15,15 +15,15 @@
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
-	import { jsonText, readError, readRows } from '../json-read.uts'
+	import { fieldText, errorText, readRows } from '../../../shared/api/fields.uts'
 
 	const loading = ref(false)
-	const errorText = ref('')
+	const errorTextValue = ref('')
 	const rows = ref<UTSJSONObject[]>([])
 
 	function titleOf(row : UTSJSONObject) : string {
-		const code = jsonText(row, 'code')
-		const name = jsonText(row, 'product_name')
+		const code = fieldText(row, 'code')
+		const name = fieldText(row, 'product_name')
 		if (code.length > 0 && name.length > 0) {
 			return code + ' ' + name
 		}
@@ -35,23 +35,23 @@
 
 	function lineOf(row : UTSJSONObject) : string {
 		const parts : string[] = []
-		const status = jsonText(row, 'status')
+		const status = fieldText(row, 'status')
 		if (status.length > 0) {
 			parts.push(status)
 		}
-		const defectType = jsonText(row, 'defect_type')
+		const defectType = fieldText(row, 'defect_type')
 		if (defectType.length > 0) {
 			parts.push(defectType)
 		}
-		const qty = jsonText(row, 'defect_quantity')
+		const qty = fieldText(row, 'defect_quantity')
 		if (qty.length > 0) {
 			parts.push('数量 ' + qty)
 		}
-		const reason = jsonText(row, 'defect_reason')
+		const reason = fieldText(row, 'defect_reason')
 		if (reason.length > 0) {
 			parts.push(reason)
 		}
-		const disposition = jsonText(row, 'disposition')
+		const disposition = fieldText(row, 'disposition')
 		if (disposition.length > 0) {
 			parts.push(disposition)
 		}
@@ -60,7 +60,7 @@
 
 	async function loadLedger() {
 		loading.value = true
-		errorText.value = ''
+		errorTextValue.value = ''
 		try {
 			const payload = await request({
 				path: '/api/v1/apps/kuaizhizao/nonconforming-ledger',
@@ -70,7 +70,7 @@
 			rows.value = readRows(payload)
 		} catch (err) {
 			rows.value = [] as UTSJSONObject[]
-			errorText.value = readError(err)
+			errorTextValue.value = errorText(err)
 		}
 		loading.value = false
 	}
@@ -80,41 +80,4 @@
 	})
 </script>
 
-<style>
-	.page {
-		padding: 12px;
-		background-color: #F1F1F4;
-	}
 
-	.toolbar {
-		margin-bottom: 8px;
-	}
-
-	.link {
-		color: #801ED3;
-		font-size: 14px;
-	}
-
-	.card {
-		background-color: #ffffff;
-		border-radius: 16px;
-		padding: 12px;
-		margin-bottom: 10px;
-	}
-
-	.title {
-		font-size: 16px;
-		color: #28113C;
-	}
-
-	.meta {
-		font-size: 13px;
-		color: #888B9D;
-		margin-top: 4px;
-	}
-
-	.err {
-		color: #FF4942;
-		font-size: 13px;
-	}
-</style>

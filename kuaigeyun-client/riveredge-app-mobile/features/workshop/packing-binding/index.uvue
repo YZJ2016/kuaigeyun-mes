@@ -1,16 +1,16 @@
 <template>
 	<view class="page">
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="loading" class="hint">加载中</text>
+		<text v-if="loading" class="loading">加载中</text>
 		<view v-if="detail == null">
-			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="hint">暂无绑定</text>
-			<view v-for="(row, index) in rows" :key="index" class="card" @click="openBinding(index)">
+			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无绑定</text>
+			<view v-for="(row, index) in rows" :key="index" class="card" hover-class="pressed" @click="openBinding(index)">
 				<text class="title">{{ lineTitle(row) }}</text>
 				<text class="sub">{{ lineSub(row) }}</text>
 			</view>
 		</view>
 		<view v-else>
-			<button class="action" @click="closeDetail">返回列表</button>
+			<button class="btn-secondary" @click="closeDetail">返回列表</button>
 			<text class="title">{{ detailLine('product_code') }} {{ detailLine('product_name') }}</text>
 			<text class="sub">箱号 {{ detailLine('box_no') }}</text>
 			<text class="sub">数量 {{ detailLine('packing_quantity') }}</text>
@@ -24,7 +24,8 @@
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
-	import { readRows, textOf, fieldNumber, errorText, toast } from '../json.uts'
+	import { readRows, fieldText, fieldNumber, errorText } from '../../../shared/api/fields.uts'
+	import { toast } from '../json.uts'
 
 	const rows = ref<any[]>([])
 	const detail = ref<any | null>(null)
@@ -32,15 +33,15 @@
 	const errorTextValue = ref('')
 
 	function lineTitle(row : any) : string {
-		return textOf(row, 'product_code') + ' ' + textOf(row, 'product_name')
+		return fieldText(row, 'product_code') + ' ' + fieldText(row, 'product_name')
 	}
 
 	function lineSub(row : any) : string {
-		return '箱号 ' + textOf(row, 'box_no') + '  数量 ' + textOf(row, 'packing_quantity')
+		return '箱号 ' + fieldText(row, 'box_no') + '  数量 ' + fieldText(row, 'packing_quantity')
 	}
 
 	function detailLine(key : string) : string {
-		return textOf(detail.value, key)
+		return fieldText(detail.value, key)
 	}
 
 	async function load() {
@@ -90,43 +91,4 @@
 	})
 </script>
 
-<style>
-	.page {
-		flex-direction: column;
-		padding: 12px;
-	}
 
-	.hint {
-		font-size: 14px;
-		color: #888B9D;
-		margin-bottom: 8px;
-	}
-
-	.error {
-		font-size: 14px;
-		color: #FF4942;
-		margin-bottom: 8px;
-	}
-
-	.card {
-		flex-direction: column;
-		padding: 12px;
-		margin-bottom: 8px;
-		background-color: #ffffff;
-		border-radius: 16px;
-	}
-
-	.title {
-		font-size: 16px;
-	}
-
-	.sub {
-		font-size: 13px;
-		color: #888B9D;
-		margin-top: 4px;
-	}
-
-	.action {
-		margin-bottom: 8px;
-	}
-</style>

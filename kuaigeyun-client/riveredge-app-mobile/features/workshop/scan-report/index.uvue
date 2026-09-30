@@ -1,17 +1,17 @@
 <template>
 	<view class="page">
 		<text class="hint">报工人员 {{ workerName }}</text>
-		<button class="action" @click="onScan">扫码</button>
+		<button class="btn-primary" @click="onScan">扫码</button>
 		<text v-if="codeText.length > 0" class="hint">扫码内容 {{ codeText }}</text>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="loading" class="hint">加载中</text>
-		<view v-for="(row, index) in orders" :key="index" class="card" @click="pickOrder(index)">
+		<text v-if="loading" class="loading">加载中</text>
+		<view v-for="(row, index) in orders" :key="index" class="card" hover-class="pressed" @click="pickOrder(index)">
 			<text class="title">{{ orderTitle(row) }}</text>
 			<text class="sub">{{ orderSub(row) }}</text>
 		</view>
 		<view v-if="selectedOrder != null">
 			<text class="section">选择工序</text>
-			<view v-for="(row, index) in operations" :key="index" class="card" @click="pickOperation(index)">
+			<view v-for="(row, index) in operations" :key="index" class="card" hover-class="pressed" @click="pickOperation(index)">
 				<text class="title">{{ operationTitle(row) }}</text>
 				<text class="sub">{{ selectedOperationIndex == index ? '已选' : '点选' }}</text>
 			</view>
@@ -19,7 +19,7 @@
 			<input class="field" v-model="qualifiedQuantity" placeholder="合格数量" />
 			<input class="field" v-model="unqualifiedQuantity" placeholder="不合格数量" />
 			<input class="field" v-model="workHours" placeholder="工时（小时）" />
-			<button class="action" @click="submitReport">提交报工</button>
+			<button class="btn-primary" :disabled="submitting" @click="submitReport">提交报工</button>
 		</view>
 	</view>
 </template>
@@ -27,7 +27,8 @@
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
 	import { scan } from '../../../shared/channel/index.uts'
-	import { readRows, textOf, fieldNumber, errorText, scanRaw, nowIso, toast, firstText } from '../json.uts'
+	import { readRows, fieldText, fieldNumber, errorText, firstText } from '../../../shared/api/fields.uts'
+	import { scanRaw, nowIso, toast, readWorkOrderRows } from '../json.uts'
 	import { readCurrentUser } from '../session.uts'
 
 	const workerName = ref('')
@@ -42,6 +43,7 @@
 	const qualifiedQuantity = ref('')
 	const unqualifiedQuantity = ref('')
 	const workHours = ref('')
+	const submitting = ref(false)
 
 	function orderTitle(row : any) : string {
 		return firstText(row, ['code', 'name'])
@@ -52,8 +54,8 @@
 	}
 
 	function operationTitle(row : any) : string {
-		const name = textOf(row, 'operation_name')
-		const code = textOf(row, 'operation_code')
+		const name = fieldText(row, 'operation_name')
+		const code = fieldText(row, 'operation_code')
 		if (code.length > 0) {
 			return code + ' ' + name
 		}
@@ -81,7 +83,7 @@
 				query: null,
 				body: body,
 			})
-			orders.value = readRows(payload)
+			orders.value = readWorkOrderRows(payload)
 			if (!(payload instanceof Array)) {
 				const message = (payload as UTSJSONObject).getString('message')
 				if (orders.value.length == 0 && message != null && message.length > 0) {
@@ -139,6 +141,9 @@
 	}
 
 	async function submitReport() {
+		if (submitting.value) {
+			return
+		}
 		const user = readCurrentUser()
 		if (user == null) {
 			toast('未找到当前用户')
@@ -163,11 +168,11 @@
 		}
 		const body = new UTSJSONObject()
 		body.set('work_order_id', fieldNumber(order, 'id'))
-		body.set('work_order_code', textOf(order, 'code'))
-		body.set('work_order_name', textOf(order, 'name'))
+		body.set('work_order_code', fieldText(order, 'code'))
+		body.set('work_order_name', fieldText(order, 'name'))
 		body.set('operation_id', fieldNumber(operation, 'operation_id'))
-		body.set('operation_code', textOf(operation, 'operation_code'))
-		body.set('operation_name', textOf(operation, 'operation_name'))
+		body.set('operation_code', fieldText(operation, 'operation_code'))
+		body.set('operation_name', fieldText(operation, 'operation_name'))
 		body.set('worker_id', user.id)
 		body.set('worker_name', user.name)
 		body.set('reported_quantity', reported)
@@ -176,6 +181,7 @@
 		body.set('work_hours', hours)
 		body.set('reported_at', nowIso())
 		loading.value = true
+		submitting.value = true
 		errorTextValue.value = ''
 		try {
 			await request({
@@ -185,9 +191,17 @@
 				body: body,
 			})
 			toast('报工已提交')
+			selectedOrder.value = null
+			operations.value = []
+			selectedOperationIndex.value = -1
+			reportedQuantity.value = ''
+			qualifiedQuantity.value = ''
+			unqualifiedQuantity.value = ''
+			workHours.value = ''
 		} catch (err) {
 			errorTextValue.value = errorText(err)
 		}
+		submitting.value = false
 		loading.value = false
 	}
 
@@ -202,55 +216,7 @@
 </script>
 
 <style>
-	.page {
-		flex-direction: column;
-		padding: 12px;
-	}
-
-	.hint {
-		font-size: 14px;
-		color: #888B9D;
-		margin-bottom: 8px;
-	}
-
-	.error {
-		font-size: 14px;
-		color: #FF4942;
-		margin-bottom: 8px;
-	}
-
 	.section {
-		font-size: 16px;
 		margin-top: 12px;
-		margin-bottom: 8px;
-	}
-
-	.card {
-		flex-direction: column;
-		padding: 12px;
-		margin-bottom: 8px;
-		background-color: #ffffff;
-		border-radius: 16px;
-	}
-
-	.title {
-		font-size: 16px;
-	}
-
-	.sub {
-		font-size: 13px;
-		color: #888B9D;
-		margin-top: 4px;
-	}
-
-	.field {
-		margin-top: 8px;
-		padding: 8px;
-		background-color: #ffffff;
-	}
-
-	.action {
-		margin-top: 8px;
-		margin-bottom: 8px;
 	}
 </style>

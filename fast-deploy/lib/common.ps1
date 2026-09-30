@@ -10,6 +10,7 @@ if (-not (Test-Path (Join-Path $script:ProjectRoot 'riveredge-backend'))) {
 
 $script:BackendDir = Join-Path $script:ProjectRoot 'riveredge-backend'
 $script:FrontendDir = Join-Path $script:ProjectRoot 'riveredge-frontend'
+# H5 产物安装只走 bash ./fast-deploy/deploy.sh install-h5；PS1 侧仅用此目录写占位页与渲染 Caddy 变量，不复制产物
 $script:MobileAppDir = Join-Path $script:ProjectRoot 'riveredge-app\mobile'
 $script:MobileWebDir = Join-Path $script:MobileAppDir 'web-dist'
 $script:EnvFile = Join-Path $script:BackendDir '.env'

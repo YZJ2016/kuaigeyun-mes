@@ -1,32 +1,32 @@
 <template>
 	<scroll-view class="page" direction="vertical">
-		<view class="block">
+		<view class="card">
 			<text class="title">点检</text>
 			<text v-if="equipmentText.length > 0" class="hint">{{ equipmentText }}</text>
-			<input class="input" v-model="schemeIdText" placeholder="方案 ID" />
-			<input class="input" v-model="checkDateText" placeholder="点检日期（可空，YYYY-MM-DD）" />
-			<input class="input" v-model="inspectorIdText" placeholder="点检人 ID（可空）" />
-			<input class="input" v-model="inspectorNameText" placeholder="点检人姓名（可空）" />
-			<input class="input" v-model="remarkText" placeholder="备注（可空）" />
-			<button class="action" :disabled="busy" @click="loadPreview">加载点检项</button>
+			<input class="field" v-model="schemeIdText" placeholder="方案 ID" />
+			<input class="field" v-model="checkDateText" placeholder="点检日期（可空，YYYY-MM-DD）" />
+			<input class="field" v-model="inspectorIdText" placeholder="点检人 ID（可空）" />
+			<input class="field" v-model="inspectorNameText" placeholder="点检人姓名（可空）" />
+			<input class="field" v-model="remarkText" placeholder="备注（可空）" />
+			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadPreview">加载点检项</button>
 			<text v-if="captureMode.length > 0" class="hint">采集模式 {{ captureMode }}</text>
 			<view v-if="captureMode == 'B'">
-				<button class="action" :disabled="busy" @click="onHeaderPhoto">上传整单照片</button>
+				<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="onHeaderPhoto">上传整单照片</button>
 				<text v-if="headerPhotos.length > 0" class="hint">已选 {{ headerPhotos.length }} 张</text>
-				<button v-if="headerPhotos.length > 0" class="action" :disabled="busy" @click="clearHeaderPhotos">清除照片</button>
+				<button v-if="headerPhotos.length > 0" :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="clearHeaderPhotos">清除照片</button>
 			</view>
 			<view class="item" v-for="(line, index) in lines" :key="line.rowKey">
 				<text class="item-title">{{ line.title }}</text>
 				<text v-if="line.detail.length > 0" class="hint">{{ line.detail }}</text>
 				<text v-if="line.isBoolean" class="hint">{{ line.measuredValue }}</text>
-				<input v-if="line.showMeasured" class="input" :value="line.measuredValue" placeholder="实测值" @input="onMeasured(index, $event)" />
-				<button class="action" :disabled="busy" @click="onTogglePass(index)">{{ line.passLabel }}</button>
+				<input v-if="line.showMeasured" class="field" :value="line.measuredValue" placeholder="实测值" @input="onMeasured(index, $event)" />
+				<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="onTogglePass(index)">{{ line.passLabel }}</button>
 				<text v-if="line.photoHint.length > 0" class="hint">{{ line.photoHint }}</text>
-				<button class="action" :disabled="busy" @click="onLinePhoto(index)">上传照片</button>
+				<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="onLinePhoto(index)">上传照片</button>
 				<text v-if="line.attachments.length > 0" class="hint">已选 {{ line.attachments.length }} 张</text>
-				<button v-if="line.attachments.length > 0" class="action" :disabled="busy" @click="clearLinePhotos(index)">清除照片</button>
+				<button v-if="line.attachments.length > 0" :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="clearLinePhotos(index)">清除照片</button>
 			</view>
-			<button class="action" type="primary" :disabled="busy" @click="submitCreate">新建</button>
+			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitCreate">新建</button>
 			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
@@ -35,8 +35,9 @@
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
-	import { asJson, joinParts, jsonInt, jsonText, parseRequiredInt } from '../json-text.uts'
-	import { uploadChosenImages } from '../pick-image.uts'
+	import { asJsonObject, fieldIntOrNull, fieldText } from '../../../shared/api/fields.uts'
+	import { pickAndUploadImage } from '../../../shared/api/pick-image.uts'
+	import { joinParts, parseRequiredInt, readError } from '../json-text.uts'
 	import { loadSpotCheckPreview, SpotLineForm, submitSpotCheck, toggleSpotPass } from '../spot-check-create.uts'
 
 	const busy = ref(false)
@@ -52,6 +53,7 @@
 	const errorText = ref('')
 	const loadedEquipmentId = ref(0)
 	const loadedSchemeId = ref(0)
+	const loadedEquipmentUuid = ref('')
 	const captureMode = ref('')
 	const lines = ref<Array<SpotLineForm>>([])
 	const headerPhotos = ref<Array<UTSJSONObject>>([])
@@ -81,6 +83,10 @@
 			errorText.value = '缺少设备 uuid'
 			equipmentText.value = ''
 			equipmentId.value = 0
+			loadedEquipmentUuid.value = ''
+			return
+		}
+		if (loadedEquipmentUuid.value == uuid && equipmentId.value > 0) {
 			return
 		}
 		const raw = await request({
@@ -88,17 +94,20 @@
 			method: 'GET',
 			data: null
 		})
-		const body = asJson(raw)
-		const id = jsonInt(body, 'id')
+		const body = asJsonObject(raw)
+		const id = fieldIntOrNull(body, 'id')
 		equipmentId.value = id == null ? 0 : id
 		equipmentText.value = joinParts([
-			jsonText(body, 'code'),
-			jsonText(body, 'name'),
-			jsonText(body, 'status')
+			fieldText(body, 'code'),
+			fieldText(body, 'name'),
+			fieldText(body, 'status')
 		])
 		if (equipmentId.value <= 0) {
 			errorText.value = '未打开设备'
+			loadedEquipmentUuid.value = ''
+			return
 		}
+		loadedEquipmentUuid.value = uuid
 	}
 
 	function clearPreview(): void {
@@ -146,7 +155,7 @@
 			}
 		} catch (e) {
 			clearPreview()
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		}
 		busy.value = false
 	}
@@ -170,14 +179,14 @@
 		busy.value = true
 		errorText.value = ''
 		try {
-			const files = await uploadChosenImages('equipment_spot_check')
-			const next = headerPhotos.value
-			for (let i = 0; i < files.length; i++) {
-				next.push(files[i])
+			const file = await pickAndUploadImage('equipment_spot_check')
+			if (file != null) {
+				const next = headerPhotos.value
+				next.push(file)
+				headerPhotos.value = next
 			}
-			headerPhotos.value = next
 		} catch (e) {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		}
 		busy.value = false
 	}
@@ -193,16 +202,16 @@
 		busy.value = true
 		errorText.value = ''
 		try {
-			const files = await uploadChosenImages('equipment_spot_check_line')
-			const list = lines.value
-			const attachments = list[index].attachments
-			for (let i = 0; i < files.length; i++) {
-				attachments.push(files[i])
+			const file = await pickAndUploadImage('equipment_spot_check_line')
+			if (file != null) {
+				const list = lines.value
+				const attachments = list[index].attachments
+				attachments.push(file)
+				list[index].attachments = attachments
+				lines.value = list
 			}
-			list[index].attachments = attachments
-			lines.value = list
 		} catch (e) {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		}
 		busy.value = false
 	}
@@ -264,11 +273,11 @@
 				busy.value = false
 				return
 			}
-			const documentNo = jsonText(result.saved, 'document_no')
+			const documentNo = fieldText(result.saved, 'document_no')
 			messageText.value = documentNo.length > 0 ? ('已新建 ' + documentNo) : '已新建'
 			clearPreview()
 		} catch (e) {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		}
 		busy.value = false
 	}
@@ -283,19 +292,9 @@
 			return
 		}
 		loadEquipment().catch((e) => {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		})
 	})
 </script>
 
-<style>
-	.page { flex: 1; background-color: #F1F1F4; }
-	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
-	.title { font-size: 18px; color: #28113C; }
-	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
-	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
-	.input { margin-top: 8px; padding: 8px; font-size: 14px; background-color: #EEE5FB; }
-	.action { margin-top: 12px; }
-	.item { margin-top: 12px; padding-top: 8px; border-top-width: 1px; border-top-style: solid; border-top-color: #E7D9FD; }
-	.item-title { font-size: 16px; color: #28113C; }
-</style>
+

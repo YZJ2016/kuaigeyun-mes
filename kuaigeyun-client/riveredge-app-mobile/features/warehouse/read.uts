@@ -1,23 +1,8 @@
 import { DetailForm, DocCard, LineForm } from './models.uts'
-
-export function asObject(raw: any | null): UTSJSONObject | null {
-	if (raw == null) {
-		return null
-	}
-	if (raw instanceof UTSJSONObject) {
-		return raw
-	}
-	if (typeof raw == 'string') {
-		const parsed = JSON.parse(raw as string)
-		if (parsed instanceof UTSJSONObject) {
-			return parsed as UTSJSONObject
-		}
-	}
-	return null
-}
+import { asJsonObject, fieldId, fieldNumber, fieldText, firstText, readRows } from '../../shared/api/fields.uts'
 
 export function unwrap(raw: any | null): any | null {
-	const obj = asObject(raw)
+	const obj = asJsonObject(raw)
 	if (obj == null) {
 		return raw
 	}
@@ -34,44 +19,6 @@ export function unwrap(raw: any | null): any | null {
 	return obj
 }
 
-export function readString(obj: UTSJSONObject, key: string): string {
-	const text = obj.getString(key)
-	if (text != null) {
-		return text
-	}
-	const num = obj.getNumber(key)
-	if (num != null) {
-		return num.toString()
-	}
-	return ''
-}
-
-export function readNumber(obj: UTSJSONObject, key: string): number {
-	const num = obj.getNumber(key)
-	if (num != null) {
-		return num
-	}
-	const text = obj.getString(key)
-	if (text == null || text.length == 0) {
-		return 0
-	}
-	const parsed = parseFloat(text)
-	if (isNaN(parsed)) {
-		return 0
-	}
-	return parsed
-}
-
-function firstString(obj: UTSJSONObject, keys: string[]): string {
-	for (let i = 0; i < keys.length; i++) {
-		const text = readString(obj, keys[i]).trim()
-		if (text.length > 0) {
-			return text
-		}
-	}
-	return ''
-}
-
 function idText(value: number): string {
 	if (value > 0) {
 		return Math.floor(value).toString()
@@ -79,36 +26,16 @@ function idText(value: number): string {
 	return ''
 }
 
-function objectRows(raw: any | null): UTSJSONObject[] {
-	const body = unwrap(raw)
-	const obj = asObject(body)
-	if (obj == null) {
-		return []
-	}
-	const arr = obj.getArray('items')
-	if (arr == null) {
-		return []
-	}
-	const rows: UTSJSONObject[] = []
-	for (let i = 0; i < arr.length; i++) {
-		const row = arr[i]
-		if (row instanceof UTSJSONObject) {
-			rows.push(row as UTSJSONObject)
-		}
-	}
-	return rows
-}
-
 export function readTotal(raw: any | null): number {
-	const obj = asObject(unwrap(raw))
+	const obj = asJsonObject(unwrap(raw))
 	if (obj == null) {
 		return 0
 	}
-	return Math.floor(readNumber(obj, 'total'))
+	return Math.floor(fieldNumber(obj, 'total'))
 }
 
 export function readCards(raw: any | null): DocCard[] {
-	const rows = objectRows(raw)
+	const rows = readRows(raw)
 	const cards: DocCard[] = []
 	for (let i = 0; i < rows.length; i++) {
 		cards.push(readCard(rows[i]))
@@ -118,26 +45,26 @@ export function readCards(raw: any | null): DocCard[] {
 
 function readCard(row: UTSJSONObject): DocCard {
 	const card = new DocCard()
-	card.id = Math.floor(readNumber(row, 'id'))
-	card.status = readString(row, 'status')
-	card.title = firstString(row, ['picking_code', 'return_code', 'receipt_code', 'delivery_code', 'notice_code', 'inbound_code', 'outbound_code', 'code', 'material_code'])
+	card.id = fieldId(row)
+	card.status = fieldText(row, 'status')
+	card.title = firstText(row, ['picking_code', 'return_code', 'receipt_code', 'delivery_code', 'notice_code', 'inbound_code', 'outbound_code', 'code', 'material_code'])
 	if (card.title.length == 0) {
 		card.title = '#' + card.id.toString()
 	}
-	const fromWh = readString(row, 'from_warehouse_name')
-	const toWh = readString(row, 'to_warehouse_name')
+	const fromWh = fieldText(row, 'from_warehouse_name')
+	const toWh = fieldText(row, 'to_warehouse_name')
 	if (fromWh.length > 0 || toWh.length > 0) {
 		card.subtitle = fromWh + ' → ' + toWh
 	} else {
-		card.subtitle = firstString(row, ['warehouse_name', 'customer_name', 'material_name', 'alert_message'])
+		card.subtitle = firstText(row, ['warehouse_name', 'customer_name', 'material_name', 'alert_message'])
 	}
 	if (row.get('quantity') != null) {
-		const unit = readString(row, 'material_unit')
-		const qty = readNumber(row, 'quantity').toString()
+		const unit = fieldText(row, 'material_unit')
+		const qty = fieldNumber(row, 'quantity').toString()
 		card.subtitle = (card.subtitle + ' ' + qty + unit).trim()
 	}
 	if (row.get('current_quantity') != null) {
-		card.subtitle = (card.subtitle + ' 当前 ' + readNumber(row, 'current_quantity').toString()).trim()
+		card.subtitle = (card.subtitle + ' 当前 ' + fieldNumber(row, 'current_quantity').toString()).trim()
 	}
 	return card
 }
@@ -145,7 +72,7 @@ function readCard(row: UTSJSONObject): DocCard {
 function joinSerials(item: UTSJSONObject): string {
 	const arr = item.getArray('serial_numbers')
 	if (arr == null) {
-		return readString(item, 'serial_numbers')
+		return fieldText(item, 'serial_numbers')
 	}
 	const parts: string[] = []
 	for (let i = 0; i < arr.length; i++) {
@@ -159,59 +86,63 @@ function joinSerials(item: UTSJSONObject): string {
 
 function lineFrom(kind: string, item: UTSJSONObject, headerWh: string, headerWhName: string): LineForm {
 	const line = new LineForm()
-	line.itemId = Math.floor(readNumber(item, 'id'))
-	line.materialCode = readString(item, 'material_code')
-	line.materialName = readString(item, 'material_name')
-	line.warehouseIdText = idText(readNumber(item, 'warehouse_id'))
-	line.warehouseName = readString(item, 'warehouse_name')
-	line.locationIdText = idText(readNumber(item, 'location_id'))
-	line.locationCode = readString(item, 'location_code')
-	line.batchNumber = readString(item, 'batch_number').trim()
+	line.itemId = fieldId(item)
+	line.materialCode = fieldText(item, 'material_code')
+	line.materialName = fieldText(item, 'material_name')
+	line.warehouseIdText = idText(fieldNumber(item, 'warehouse_id'))
+	line.warehouseName = fieldText(item, 'warehouse_name')
+	line.locationIdText = idText(fieldNumber(item, 'location_id'))
+	line.locationCode = fieldText(item, 'location_code')
+	line.batchNumber = fieldText(item, 'batch_number')
 	if (line.batchNumber.length == 0) {
-		line.batchNumber = readString(item, 'batch_no').trim()
+		line.batchNumber = fieldText(item, 'batch_no')
 	}
 	line.serialText = joinSerials(item)
-	line.deliveryQuantity = readNumber(item, 'delivery_quantity')
+	line.deliveryQuantity = fieldNumber(item, 'delivery_quantity')
 	line.displayQty = ''
 	if (kind == 'pickings') {
-		line.displayQty = readNumber(item, 'required_quantity').toString()
+		line.displayQty = fieldNumber(item, 'required_quantity').toString()
 	} else if (kind == 'sales-deliveries') {
 		line.displayQty = line.deliveryQuantity.toString()
 	} else if (kind == 'other-outbound') {
-		line.displayQty = readNumber(item, 'outbound_quantity').toString()
+		line.displayQty = fieldNumber(item, 'outbound_quantity').toString()
 	} else if (kind == 'other-inbound') {
-		line.displayQty = readNumber(item, 'inbound_quantity').toString()
+		line.displayQty = fieldNumber(item, 'inbound_quantity').toString()
+	} else if (kind == 'returns') {
+		line.displayQty = fieldNumber(item, 'return_quantity').toString()
+	} else if (kind == 'fg-receipts' || kind == 'purchase-receipts') {
+		line.displayQty = fieldNumber(item, 'receipt_quantity').toString()
 	} else if (kind == 'stocktaking') {
-		line.bookQuantityText = readNumber(item, 'book_quantity').toString()
+		line.bookQuantityText = fieldNumber(item, 'book_quantity').toString()
 		if (item.get('actual_quantity') != null) {
-			line.actualQuantityText = readNumber(item, 'actual_quantity').toString()
+			line.actualQuantityText = fieldNumber(item, 'actual_quantity').toString()
 		}
-		line.remarks = readString(item, 'remarks')
+		line.remarks = fieldText(item, 'remarks')
 	}
 	if (kind == 'returns') {
-		const receipt = readNumber(item, 'receipt_quantity')
-		const back = readNumber(item, 'return_quantity')
+		const receipt = fieldNumber(item, 'receipt_quantity')
+		const back = fieldNumber(item, 'return_quantity')
 		const qty = receipt > 0 ? receipt : back
 		if (qty > 0) {
 			line.receiptQuantityText = qty.toString()
 		}
 	} else if (kind == 'purchase-receipts' || kind == 'fg-receipts') {
-		const qty = readNumber(item, 'receipt_quantity')
+		const qty = fieldNumber(item, 'receipt_quantity')
 		if (qty > 0) {
 			line.receiptQuantityText = qty.toString()
 		}
 	} else if (kind == 'other-inbound') {
-		const receipt = readNumber(item, 'receipt_quantity')
+		const receipt = fieldNumber(item, 'receipt_quantity')
 		if (receipt > 0) {
 			line.receiptQuantityText = receipt.toString()
 		} else {
-			const inbound = readNumber(item, 'inbound_quantity')
+			const inbound = fieldNumber(item, 'inbound_quantity')
 			if (inbound > 0) {
 				line.receiptQuantityText = inbound.toString()
 			}
 		}
 	}
-	if ((kind == 'returns' || kind == 'fg-receipts' || kind == 'purchase-receipts') && line.warehouseIdText.length == 0) {
+	if (line.warehouseIdText.length == 0) {
 		line.warehouseIdText = headerWh
 		if (line.warehouseName.length == 0) {
 			line.warehouseName = headerWhName
@@ -222,36 +153,36 @@ function lineFrom(kind: string, item: UTSJSONObject, headerWh: string, headerWhN
 
 function fillPerson(kind: string, obj: UTSJSONObject, form: DetailForm): void {
 	if (kind == 'pickings') {
-		form.personIdText = idText(readNumber(obj, 'picker_id'))
-		form.personName = readString(obj, 'picker_name')
+		form.personIdText = idText(fieldNumber(obj, 'picker_id'))
+		form.personName = fieldText(obj, 'picker_name')
 		return
 	}
 	if (kind == 'other-outbound' || kind == 'sales-deliveries') {
-		form.personIdText = idText(readNumber(obj, 'deliverer_id'))
-		form.personName = readString(obj, 'deliverer_name')
+		form.personIdText = idText(fieldNumber(obj, 'deliverer_id'))
+		form.personName = fieldText(obj, 'deliverer_name')
 		return
 	}
-	let personId = readNumber(obj, 'receiver_id')
+	let personId = fieldNumber(obj, 'receiver_id')
 	if (personId <= 0) {
-		personId = readNumber(obj, 'returner_id')
+		personId = fieldNumber(obj, 'returner_id')
 	}
 	if (personId <= 0) {
-		personId = readNumber(obj, 'received_by')
+		personId = fieldNumber(obj, 'received_by')
 	}
 	form.personIdText = idText(personId)
-	form.personName = firstString(obj, ['receiver_name', 'returner_name', 'received_by_name'])
+	form.personName = firstText(obj, ['receiver_name', 'returner_name', 'received_by_name'])
 }
 
 export function readDetail(kind: string, raw: any | null): DetailForm {
 	const form = new DetailForm()
-	const obj = asObject(unwrap(raw))
+	const obj = asJsonObject(unwrap(raw))
 	if (obj == null) {
 		return form
 	}
-	form.warehouseIdText = idText(readNumber(obj, 'warehouse_id'))
-	form.warehouseName = readString(obj, 'warehouse_name')
+	form.warehouseIdText = idText(fieldNumber(obj, 'warehouse_id'))
+	form.warehouseName = fieldText(obj, 'warehouse_name')
 	fillPerson(kind, obj, form)
-	const rows = objectRows(obj)
+	const rows = readRows(obj)
 	const lines: LineForm[] = []
 	for (let i = 0; i < rows.length; i++) {
 		const line = lineFrom(kind, rows[i], form.warehouseIdText, form.warehouseName)
@@ -265,31 +196,4 @@ export function readDetail(kind: string, raw: any | null): DetailForm {
 	}
 	form.lines = lines
 	return form
-}
-
-export function errorMessage(err: any | null): string {
-	if (err == null) {
-		return '操作失败'
-	}
-	if (typeof err == 'string' && (err as string).length > 0) {
-		return err as string
-	}
-	if (err instanceof Error) {
-		const message = (err as Error).message
-		if (message.length > 0) {
-			return message
-		}
-	}
-	if (err instanceof UTSJSONObject) {
-		const obj = err as UTSJSONObject
-		const message = obj.getString('message')
-		if (message != null && message.length > 0) {
-			return message
-		}
-		const detail = obj.getString('detail')
-		if (detail != null && detail.length > 0) {
-			return detail
-		}
-	}
-	return '操作失败'
 }

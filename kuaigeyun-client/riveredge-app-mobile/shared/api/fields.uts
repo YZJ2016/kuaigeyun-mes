@@ -1,0 +1,222 @@
+/**
+ * 领域无关的 JSON 字段读取助手。
+ * 抽取自 features/{workshop,equipment,quality,warehouse,mold} 里同形的读取函数，
+ * 供各 feature 包与 shell 复用，避免每个包各写一份。
+ */
+
+/** 把 any 转成 UTSJSONObject；字符串会先尝试 JSON.parse。 */
+export function asJsonObject(raw : any | null) : UTSJSONObject | null {
+	if (raw == null) {
+		return null
+	}
+	if (raw instanceof UTSJSONObject) {
+		return raw
+	}
+	if (typeof raw == 'string') {
+		try {
+			const parsed = JSON.parse(raw as string)
+			if (parsed instanceof UTSJSONObject) {
+				return parsed as UTSJSONObject
+			}
+		} catch (_err) {
+		}
+		return null
+	}
+	if (typeof raw == 'object' && !Array.isArray(raw)) {
+		return raw as UTSJSONObject
+	}
+	return null
+}
+
+/** 字符串字段读取（trim）。数字转字符串，布尔转 'true'/'false'，其余返回 ''。 */
+export function fieldText(row : any | null, key : string) : string {
+	if (row == null) {
+		return ''
+	}
+	const obj = row as UTSJSONObject
+	const text = obj.getString(key)
+	if (text != null) {
+		return text.trim()
+	}
+	const num = obj.getNumber(key)
+	if (num != null) {
+		return num.toString()
+	}
+	const flag = obj.getBoolean(key)
+	if (flag != null) {
+		return flag ? 'true' : 'false'
+	}
+	return ''
+}
+
+/** 依次尝试多个键，返回第一个非空字符串。 */
+export function firstText(row : any | null, keys : Array<string>) : string {
+	for (let i = 0; i < keys.length; i++) {
+		const text = fieldText(row, keys[i])
+		if (text.length > 0) {
+			return text
+		}
+	}
+	return ''
+}
+
+/** 数字读取，可空版。字符串值尝试 parseFloat，缺字段/不可解析返回 null。 */
+export function fieldNumberOrNull(row : any | null, key : string) : number | null {
+	if (row == null) {
+		return null
+	}
+	const obj = row as UTSJSONObject
+	const num = obj.getNumber(key)
+	if (num != null) {
+		return num
+	}
+	const text = obj.getString(key)
+	if (text == null) {
+		return null
+	}
+	const trimmed = text.trim()
+	if (trimmed.length == 0) {
+		return null
+	}
+	const parsed = parseFloat(trimmed)
+	if (isNaN(parsed)) {
+		return null
+	}
+	return parsed
+}
+
+/** 数字读取，缺失/不可解析返回 0。 */
+export function fieldNumber(row : any | null, key : string) : number {
+	const value = fieldNumberOrNull(row, key)
+	if (value == null) {
+		return 0
+	}
+	return value
+}
+
+/** 整数读取（向下取整），缺失返回 0。 */
+export function fieldInt(row : any | null, key : string) : number {
+	return Math.floor(fieldNumber(row, key))
+}
+
+/** 整数读取可空版（向下取整），缺失返回 null。 */
+export function fieldIntOrNull(row : any | null, key : string) : number | null {
+	const value = fieldNumberOrNull(row, key)
+	if (value == null) {
+		return null
+	}
+	return Math.floor(value)
+}
+
+/** 主键 id 读取：'id' 字段向下取整，缺失返回 0。 */
+export function fieldId(row : any | null) : number {
+	return fieldInt(row, 'id')
+}
+
+/** 布尔读取，缺字段返回 fallback。 */
+export function fieldBool(row : any | null, key : string, fallback : boolean) : boolean {
+	if (row == null) {
+		return fallback
+	}
+	const value = (row as UTSJSONObject).getBoolean(key)
+	if (value == null) {
+		return fallback
+	}
+	return value
+}
+
+function pushRows(raw : Array<any>, rows : Array<UTSJSONObject>) : void {
+	for (let i = 0; i < raw.length; i++) {
+		const item = raw[i]
+		if (item instanceof UTSJSONObject) {
+			rows.push(item as UTSJSONObject)
+		}
+	}
+}
+
+/**
+ * 列表行解包。兼容：裸数组、{items:[..]}、{data:[..]}、
+ * {data:{items:[..]}}、{data:{data:[..]}}。只收集对象行。
+ */
+export function readRows(payload : any | null) : Array<UTSJSONObject> {
+	const rows : Array<UTSJSONObject> = []
+	if (payload == null) {
+		return rows
+	}
+	if (Array.isArray(payload)) {
+		pushRows(payload as Array<any>, rows)
+		return rows
+	}
+	if (typeof payload != 'object') {
+		return rows
+	}
+	const obj = payload as UTSJSONObject
+	const items = obj.getArray('items')
+	if (items != null) {
+		pushRows(items as Array<any>, rows)
+		return rows
+	}
+	const data = obj['data']
+	if (data == null) {
+		return rows
+	}
+	if (Array.isArray(data)) {
+		pushRows(data as Array<any>, rows)
+		return rows
+	}
+	if (typeof data == 'object') {
+		const inner = data as UTSJSONObject
+		const innerItems = inner.getArray('items')
+		if (innerItems != null) {
+			pushRows(innerItems as Array<any>, rows)
+			return rows
+		}
+		const innerData = inner['data']
+		if (innerData != null && Array.isArray(innerData)) {
+			pushRows(innerData as Array<any>, rows)
+		}
+	}
+	return rows
+}
+
+/**
+ * 错误消息提取。覆盖：字符串、Error.message、
+ * {message}、{detail:'..'}、{detail:{message:'..'}}（HTTPException 对象型 detail）。
+ */
+export function errorText(err : any | null) : string {
+	if (err == null) {
+		return '请求失败'
+	}
+	if (typeof err == 'string') {
+		const text = (err as string).trim()
+		if (text.length > 0) {
+			return text
+		}
+		return '请求失败'
+	}
+	if (err instanceof Error) {
+		const message = (err as Error).message
+		if (message != null && message.length > 0) {
+			return message
+		}
+	}
+	try {
+		const obj = err as UTSJSONObject
+		const message = obj.getString('message')
+		if (message != null && message.length > 0) {
+			return message
+		}
+		const detail = obj['detail']
+		if (typeof detail == 'string' && (detail as string).length > 0) {
+			return detail as string
+		}
+		if (detail != null && typeof detail == 'object' && !Array.isArray(detail)) {
+			const nested = (detail as UTSJSONObject).getString('message')
+			if (nested != null && nested.length > 0) {
+				return nested
+			}
+		}
+	} catch (_ignored) {
+	}
+	return '请求失败'
+}

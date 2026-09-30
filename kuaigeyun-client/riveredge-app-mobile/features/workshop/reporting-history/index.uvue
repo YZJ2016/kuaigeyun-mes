@@ -1,8 +1,8 @@
 <template>
 	<view class="page">
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="loading" class="hint">加载中</text>
-		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="hint">暂无报工</text>
+		<text v-if="loading" class="loading">加载中</text>
+		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无报工</text>
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ lineTitle(row) }}</text>
 			<text class="sub">{{ lineSub(row) }}</text>
@@ -12,7 +12,7 @@
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
-	import { readRows, textOf, errorText } from '../json.uts'
+	import { readRows, fieldText, errorText } from '../../../shared/api/fields.uts'
 	import { readCurrentUser } from '../session.uts'
 
 	const rows = ref<any[]>([])
@@ -20,11 +20,11 @@
 	const errorTextValue = ref('')
 
 	function lineTitle(row : any) : string {
-		return textOf(row, 'work_order_code') + ' ' + textOf(row, 'operation_name')
+		return fieldText(row, 'work_order_code') + ' ' + fieldText(row, 'operation_name')
 	}
 
 	function lineSub(row : any) : string {
-		return '数量 ' + textOf(row, 'reported_quantity') + '  ' + textOf(row, 'status')
+		return '数量 ' + fieldText(row, 'reported_quantity') + '  ' + fieldText(row, 'status')
 	}
 
 	async function load() {
@@ -56,39 +56,4 @@
 	})
 </script>
 
-<style>
-	.page {
-		flex-direction: column;
-		padding: 12px;
-	}
 
-	.hint {
-		font-size: 14px;
-		color: #888B9D;
-		margin-bottom: 8px;
-	}
-
-	.error {
-		font-size: 14px;
-		color: #FF4942;
-		margin-bottom: 8px;
-	}
-
-	.card {
-		flex-direction: column;
-		padding: 12px;
-		margin-bottom: 8px;
-		background-color: #ffffff;
-		border-radius: 16px;
-	}
-
-	.title {
-		font-size: 16px;
-	}
-
-	.sub {
-		font-size: 13px;
-		color: #888B9D;
-		margin-top: 4px;
-	}
-</style>

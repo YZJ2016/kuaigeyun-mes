@@ -40,7 +40,7 @@
 </script>
 
 <style>
-	/* 品牌色来自 startech-weapp-person：#801ED3、#28113C、#888B9D、#E7D9FD、#F1F1F4、#FF4942 */
+	/* 品牌色：#801ED3 强调 #9730E3 文字 #28113C/#625370/#888B9D 底 #F1F1F4 浅紫 #E7D9FD/#EEE5FB 成功 #07C160 错误 #FF4942 */
 	.uni-row {
 		flex-direction: row;
 	}
@@ -50,14 +50,222 @@
 	}
 
 	.page {
+		flex: 1;
+		flex-direction: column;
 		background-color: #F1F1F4;
+		color: #28113C;
+		padding-top: 12px;
+		padding-right: 12px;
+		padding-bottom: 12px;
+		padding-left: 12px;
+	}
+
+	.card {
+		flex-direction: column;
+		background-color: #FFFFFF;
+		border-radius: 16px;
+		padding-top: 12px;
+		padding-right: 12px;
+		padding-bottom: 12px;
+		padding-left: 12px;
+		margin-bottom: 12px;
+	}
+
+	.title,
+	.item-title {
+		font-size: 16px;
+		color: #28113C;
+	}
+
+	.section,
+	.section-title {
+		font-size: 16px;
+		color: #28113C;
+		margin-top: 8px;
+		margin-bottom: 8px;
+	}
+
+	.hint,
+	.meta,
+	.sub,
+	.muted,
+	.label,
+	.badge-label,
+	.missing {
+		font-size: 13px;
+		color: #888B9D;
+		margin-top: 4px;
+	}
+
+	.paragraph {
+		font-size: 15px;
+		color: #625370;
+	}
+
+	.error,
+	.err {
+		font-size: 14px;
+		color: #FF4942;
+		margin-top: 8px;
+		margin-bottom: 8px;
+	}
+
+	.empty {
+		font-size: 14px;
+		color: #888B9D;
+		padding-top: 20px;
+		padding-bottom: 20px;
+	}
+
+	.loading {
+		font-size: 14px;
+		color: #625370;
+		padding-top: 12px;
+		padding-bottom: 12px;
+	}
+
+	.field {
+		background-color: #FFFFFF;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #DDDBE5;
+		border-radius: 12px;
+		padding-top: 12px;
+		padding-right: 12px;
+		padding-bottom: 12px;
+		padding-left: 12px;
+		margin-top: 8px;
+		margin-bottom: 8px;
+		font-size: 16px;
 		color: #28113C;
 	}
 
 	button {
+		height: 44px;
+		border-radius: 22px;
+		font-size: 16px;
 		color: #801ED3;
 		background-color: #FFFFFF;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E7D9FD;
+		margin-top: 8px;
+		margin-bottom: 8px;
+		margin-left: 0;
+		margin-right: 0;
+	}
+
+	.btn-primary {
+		width: 100%;
+		height: 44px;
+		border-radius: 22px;
+		background-color: #9730E3;
+		color: #FFFFFF;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #9730E3;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		margin-top: 8px;
+		margin-bottom: 8px;
+	}
+
+	.btn-secondary {
+		width: 100%;
+		height: 44px;
+		border-radius: 22px;
+		background-color: #FFFFFF;
+		color: #801ED3;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E7D9FD;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		margin-top: 8px;
+		margin-bottom: 8px;
+	}
+
+	.btn-label {
+		color: #FFFFFF;
+		font-size: 16px;
+	}
+
+	.btn-label-secondary,
+	.link-text {
+		color: #801ED3;
+		font-size: 16px;
+	}
+
+	.btn-chip {
+		height: 44px;
+		border-radius: 22px;
+		background-color: #EEE5FB;
+		color: #28113C;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E7D9FD;
+		padding-left: 16px;
+		padding-right: 16px;
+		margin-top: 8px;
+		margin-right: 8px;
+		margin-bottom: 8px;
+		font-size: 14px;
+		align-self: flex-start;
+	}
+
+	.btn-chip-on {
+		background-color: #9730E3;
+		color: #FFFFFF;
+		border-color: #9730E3;
+	}
+
+	.choice {
+		margin-top: 8px;
+		margin-right: 8px;
+		margin-bottom: 8px;
+		padding-top: 12px;
+		padding-right: 16px;
+		padding-bottom: 12px;
+		padding-left: 16px;
+		border-width: 1px;
+		border-style: solid;
 		border-color: #E7D9FD;
 		border-radius: 22px;
+		background-color: #EEE5FB;
+		font-size: 14px;
+		color: #28113C;
+	}
+
+	.choice-on {
+		background-color: #9730E3;
+		border-color: #9730E3;
+		color: #FFFFFF;
+	}
+
+	.list-row,
+	.item {
+		flex-direction: column;
+		padding-top: 12px;
+		padding-bottom: 12px;
+		border-bottom-width: 1px;
+		border-bottom-style: solid;
+		border-bottom-color: #E7D9FD;
+	}
+
+	.link {
+		flex-direction: row;
+		align-items: center;
+		padding-top: 12px;
+		padding-bottom: 12px;
+	}
+
+	.is-disabled {
+		opacity: 0.45;
+	}
+
+	.pressed {
+		background-color: #EEE5FB;
 	}
 </style>

@@ -1,37 +1,37 @@
 <template>
 	<scroll-view class="page" scroll-y="true">
 		<view v-if="isQuery" class="row">
-			<input class="input grow" v-model="keyword" placeholder="物料编码、名称或仓库" />
-			<button size="mini" @click="reload">查询</button>
+			<input class="field grow" v-model="keyword" placeholder="物料编码、名称或仓库" />
+			<button class="btn-chip" @click="reload">查询</button>
 		</view>
-		<button v-if="selectedId == 0" size="mini" @click="reload">刷新</button>
-		<text v-if="hint.length > 0" class="err">{{ hint }}</text>
-		<text v-if="loading" class="meta">加载中</text>
+		<button v-if="selectedId == 0" class="btn-secondary" @click="reload">刷新</button>
+		<text v-if="hint.length > 0" class="error">{{ hint }}</text>
+		<text v-if="loading" class="loading">加载中</text>
 
 		<view v-if="selectedId == 0">
-			<text v-if="!loading && cards.length == 0" class="meta">没有数据</text>
-			<view v-for="(card, index) in cards" :key="index" class="card" @click="openCard(index)">
+			<text v-if="!loading && cards.length == 0" class="empty">没有数据</text>
+			<view v-for="(card, index) in cards" :key="index" class="card" hover-class="pressed" @click="openCard(index)">
 				<text class="title">{{ card.title }}</text>
 				<text v-if="card.status.length > 0" class="meta">{{ card.status }}</text>
 				<text v-if="card.subtitle.length > 0" class="meta">{{ card.subtitle }}</text>
 			</view>
-			<button v-if="cards.length < total" size="mini" @click="loadMore">加载更多</button>
+			<button v-if="cards.length < total" class="btn-secondary" @click="loadMore">加载更多</button>
 		</view>
 
 		<view v-else class="card">
-			<button size="mini" @click="closeDetail">返回列表</button>
+			<button class="btn-secondary" @click="closeDetail">返回列表</button>
 			<text class="title">{{ detailTitle }}</text>
 			<text v-if="detailStatus.length > 0" class="meta">{{ detailStatus }}</text>
 
 			<view v-if="showHeader">
 				<text class="label">仓库 ID</text>
-				<input class="input" :value="warehouseIdText" @input="onWarehouseId" />
+				<input class="field" :value="warehouseIdText" @input="onWarehouseId" />
 				<text class="label">仓库名称</text>
-				<input class="input" :value="warehouseName" @input="onWarehouseName" />
+				<input class="field" :value="warehouseName" @input="onWarehouseName" />
 				<text class="label">{{ personLabel }} ID</text>
-				<input class="input" :value="personIdText" @input="onPersonId" />
+				<input class="field" :value="personIdText" @input="onPersonId" />
 				<text class="label">{{ personLabel }}</text>
-				<input class="input" :value="personName" @input="onPersonName" />
+				<input class="field" :value="personName" @input="onPersonName" />
 			</view>
 
 			<view v-if="showLines || isStock">
@@ -40,29 +40,29 @@
 				<text v-if="line.displayQty.length > 0" class="meta">单据数量 {{ line.displayQty }}</text>
 				<view v-if="showLines">
 					<text class="label">仓库 ID</text>
-					<input class="input" :value="line.warehouseIdText" @input="onLineInput(index, 'warehouseIdText', $event)" />
+					<input class="field" :value="line.warehouseIdText" @input="onLineInput(index, 'warehouseIdText', $event)" />
 					<text class="label">仓库名称</text>
-					<input class="input" :value="line.warehouseName" @input="onLineInput(index, 'warehouseName', $event)" />
+					<input class="field" :value="line.warehouseName" @input="onLineInput(index, 'warehouseName', $event)" />
 					<text class="label">库位 ID</text>
-					<input class="input" :value="line.locationIdText" @input="onLineInput(index, 'locationIdText', $event)" />
+					<input class="field" :value="line.locationIdText" @input="onLineInput(index, 'locationIdText', $event)" />
 					<text class="label">库位编码</text>
-					<input class="input" :value="line.locationCode" @input="onLineInput(index, 'locationCode', $event)" />
+					<input class="field" :value="line.locationCode" @input="onLineInput(index, 'locationCode', $event)" />
 					<text class="label">批号</text>
-					<input class="input" :value="line.batchNumber" @input="onLineInput(index, 'batchNumber', $event)" />
+					<input class="field" :value="line.batchNumber" @input="onLineInput(index, 'batchNumber', $event)" />
 					<text class="label">序列号（逗号分隔）</text>
-					<input class="input" :value="line.serialText" @input="onLineInput(index, 'serialText', $event)" />
+					<input class="field" :value="line.serialText" @input="onLineInput(index, 'serialText', $event)" />
 					<view v-if="showReceipt">
 						<text class="label">实收数量</text>
-						<input class="input" :value="line.receiptQuantityText" @input="onLineInput(index, 'receiptQuantityText', $event)" />
+						<input class="field" :value="line.receiptQuantityText" @input="onLineInput(index, 'receiptQuantityText', $event)" />
 					</view>
 				</view>
 				<view v-if="isStock">
 					<text class="meta">账面 {{ line.bookQuantityText }}</text>
 					<text class="label">实际数量</text>
-					<input class="input" :value="line.actualQuantityText" @input="onLineInput(index, 'actualQuantityText', $event)" />
+					<input class="field" :value="line.actualQuantityText" @input="onLineInput(index, 'actualQuantityText', $event)" />
 					<text class="label">备注</text>
-					<input class="input" :value="line.remarks" @input="onLineInput(index, 'remarks', $event)" />
-					<button size="mini" type="primary" :disabled="busy" @click="submitStock(index)">记录实盘</button>
+					<input class="field" :value="line.remarks" @input="onLineInput(index, 'remarks', $event)" />
+					<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitStock(index)">记录实盘</button>
 				</view>
 			</view>
 			</view>
@@ -70,15 +70,15 @@
 			<view v-if="isAlert">
 				<text class="label">处理状态</text>
 				<view class="row">
-					<button size="mini" :type="alertStatus == 'processing' ? 'primary' : 'default'" @click="pickStatus('processing')">处理中</button>
-					<button size="mini" :type="alertStatus == 'resolved' ? 'primary' : 'default'" @click="pickStatus('resolved')">已解决</button>
-					<button size="mini" :type="alertStatus == 'ignored' ? 'primary' : 'default'" @click="pickStatus('ignored')">已忽略</button>
+					<button :class="alertStatus == 'processing' ? 'btn-chip btn-chip-on' : 'btn-chip'" @click="pickStatus('processing')">处理中</button>
+					<button :class="alertStatus == 'resolved' ? 'btn-chip btn-chip-on' : 'btn-chip'" @click="pickStatus('resolved')">已解决</button>
+					<button :class="alertStatus == 'ignored' ? 'btn-chip btn-chip-on' : 'btn-chip'" @click="pickStatus('ignored')">已忽略</button>
 				</view>
 				<text class="label">处理备注</text>
-				<input class="input" :value="alertNotes" @input="onAlertNotes" />
+				<input class="field" :value="alertNotes" @input="onAlertNotes" />
 			</view>
 
-			<button v-if="showSubmit" class="submit" type="primary" :disabled="busy" @click="submitMain">{{ actionLabel }}</button>
+			<button v-if="showSubmit" :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitMain">{{ actionLabel }}</button>
 		</view>
 	</scroll-view>
 </template>
@@ -87,7 +87,12 @@
 	import { alertHandlePath, apiGet, apiPost, confirmPath, detailPath, listPath, listQuery, sendPath, stockExecutePath, transferExecutePath } from './http.uts'
 	import { DocCard, LineForm } from './models.uts'
 	import { buildAlertBody, buildInboundBody, buildOutboundBody, buildSalesBody, buildStockBody } from './payload.uts'
-	import { errorMessage, readCards, readDetail, readTotal } from './read.uts'
+	import { errorText } from '../../shared/api/fields.uts'
+	import { readCards, readDetail, readTotal } from './read.uts'
+
+	defineOptions({
+		styleIsolation: 'app'
+	})
 
 	const props = defineProps({
 		kind: {
@@ -234,7 +239,7 @@
 				cards.value = next
 			}
 		} catch (err) {
-			hint.value = errorMessage(err)
+			hint.value = errorText(err)
 		} finally {
 			loading.value = false
 		}
@@ -271,7 +276,7 @@
 			alertStatus.value = 'processing'
 			alertNotes.value = ''
 		} catch (err) {
-			hint.value = errorMessage(err)
+			hint.value = errorText(err)
 		} finally {
 			loading.value = false
 		}
@@ -379,7 +384,7 @@
 			closeDetail()
 			reload()
 		} catch (err) {
-			hint.value = errorMessage(err)
+			hint.value = errorText(err)
 		} finally {
 			busy.value = false
 		}
@@ -394,7 +399,7 @@
 			closeDetail()
 			reload()
 		} catch (err) {
-			hint.value = errorMessage(err)
+			hint.value = errorText(err)
 		} finally {
 			busy.value = false
 		}
@@ -402,72 +407,20 @@
 </script>
 
 <style>
-	.page {
-		flex: 1;
-		padding: 12px;
-		background-color: #F1F1F4;
-	}
-
-	.card {
-		background-color: #ffffff;
-		border-radius: 16px;
-		padding: 12px;
-		margin-top: 10px;
-	}
-
-	.line {
-		margin-top: 12px;
-		padding-top: 8px;
-		border-top-width: 1px;
-		border-top-style: solid;
-		border-top-color: #E7D9FD;
-	}
-
-	.title {
-		font-size: 16px;
-		color: #28113C;
-	}
-
-	.meta {
-		font-size: 13px;
-		color: #888B9D;
-		margin-top: 4px;
-	}
-
-	.label {
-		font-size: 12px;
-		color: #888B9D;
-		margin-top: 8px;
-	}
-
-	.err {
-		font-size: 13px;
-		color: #FF4942;
-		margin-top: 8px;
-	}
-
-	.input {
-		margin-top: 4px;
-		padding: 8px;
-		font-size: 14px;
-		border-width: 1px;
-		border-style: solid;
-		border-color: #E7D9FD;
-		border-radius: 4px;
-	}
-
 	.row {
 		flex-direction: row;
 		align-items: center;
 		margin-top: 8px;
 	}
-
 	.grow {
 		flex: 1;
 		margin-right: 8px;
 	}
-
-	.submit {
-		margin-top: 16px;
+	.line {
+		margin-top: 12px;
+		padding-top: 12px;
+		border-top-width: 1px;
+		border-top-style: solid;
+		border-top-color: #E7D9FD;
 	}
 </style>

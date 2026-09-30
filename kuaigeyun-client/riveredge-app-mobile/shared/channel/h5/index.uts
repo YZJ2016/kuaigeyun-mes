@@ -45,11 +45,16 @@ export function readBrowserQuery(name : string) : string {
 	const prefix = name + '='
 	for (let i = 0; i < parts.length; i++) {
 		if (parts[i].indexOf(prefix) == 0) {
-			const decoded = decodeURIComponent(parts[i].substring(prefix.length))
-			if (decoded == null) {
-				return ''
+			const raw = parts[i].substring(prefix.length)
+			try {
+				const decoded = decodeURIComponent(raw)
+				if (decoded == null) {
+					return ''
+				}
+				return decoded
+			} catch (_err) {
+				return raw
 			}
-			return decoded
 		}
 	}
 	return ''

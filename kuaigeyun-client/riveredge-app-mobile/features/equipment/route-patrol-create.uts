@@ -1,5 +1,6 @@
 import { request } from '../../shared/api/index.uts'
-import { asJson, joinParts, jsonBool, jsonInt, jsonNumberOrNull, jsonObjectList, jsonText } from './json-text.uts'
+import { asJsonObject, fieldBool, fieldIntOrNull, fieldNumberOrNull, fieldText } from '../../shared/api/fields.uts'
+import { isValidDateText, joinParts, jsonObjectList } from './json-text.uts'
 
 export type PatrolLineForm = {
 	rowKey: string
@@ -110,20 +111,20 @@ function lineTitle(itemName: string, itemCode: string, stepNo: number): string {
 }
 
 function readLine(row: UTSJSONObject, index: number): PatrolLineForm {
-	const stepValue = positiveInt(jsonNumberOrNull(row, 'step_no'))
+	const stepValue = positiveInt(fieldNumberOrNull(row, 'step_no'))
 	const stepNo = stepValue == null ? (index + 1) : stepValue
-	const mode = upperMode(jsonText(row, 'capture_mode'))
-	const valueType = jsonText(row, 'value_type')
+	const mode = upperMode(fieldText(row, 'capture_mode'))
+	const valueType = fieldText(row, 'value_type')
 	const booleanItem = isPatrolBoolean(valueType)
-	const isPass = jsonBool(row, 'is_pass', true)
-	const photoRequired = jsonBool(row, 'photo_required', false) || mode == 'B'
-	let measured = jsonText(row, 'measured_value')
+	const isPass = fieldBool(row, 'is_pass', true)
+	const photoRequired = fieldBool(row, 'photo_required', false) || mode == 'B'
+	let measured = fieldText(row, 'measured_value')
 	if (mode != 'B' && booleanItem) {
 		measured = booleanMeasured(isPass, measured)
 	}
-	const itemName = jsonText(row, 'item_name')
-	const itemCode = jsonText(row, 'item_code')
-	const equipmentId = jsonInt(row, 'equipment_id')
+	const itemName = fieldText(row, 'item_name')
+	const itemCode = fieldText(row, 'item_code')
+	const equipmentId = positiveInt(fieldIntOrNull(row, 'equipment_id'))
 	let hint = ''
 	if (mode == 'B' || (mode == 'C' && photoRequired)) {
 		hint = '需拍照'
@@ -133,11 +134,11 @@ function readLine(row: UTSJSONObject, index: number): PatrolLineForm {
 		rowKey: 'step-' + stepNo + '-' + index,
 		title: lineTitle(itemName, itemCode, stepNo),
 		detail: joinParts([
-			jsonText(row, 'equipment_name'),
-			jsonText(row, 'method'),
-			jsonText(row, 'judgment_standard'),
-			jsonText(row, 'requirement'),
-			jsonText(row, 'unit')
+			fieldText(row, 'equipment_name'),
+			fieldText(row, 'method'),
+			fieldText(row, 'judgment_standard'),
+			fieldText(row, 'requirement'),
+			fieldText(row, 'unit')
 		]),
 		photoHint: hint,
 		showMeasured: mode != 'B' && !booleanItem,
@@ -145,20 +146,20 @@ function readLine(row: UTSJSONObject, index: number): PatrolLineForm {
 		passLabel: passLabel(isPass),
 		stepNo: stepNo,
 		equipmentId: equipmentId == null ? 0 : equipmentId,
-		itemId: jsonInt(row, 'item_id'),
+		itemId: positiveInt(fieldIntOrNull(row, 'item_id')),
 		itemCode: itemCode,
 		itemName: itemName,
 		captureMode: mode,
-		requirement: jsonText(row, 'requirement'),
-		method: jsonText(row, 'method'),
-		judgmentStandard: jsonText(row, 'judgment_standard'),
+		requirement: fieldText(row, 'requirement'),
+		method: fieldText(row, 'method'),
+		judgmentStandard: fieldText(row, 'judgment_standard'),
 		valueType: valueType,
-		unit: jsonText(row, 'unit'),
+		unit: fieldText(row, 'unit'),
 		photoRequired: photoRequired,
 		measuredValue: measured,
 		isPass: isPass,
 		isBoolean: booleanItem,
-		remark: jsonText(row, 'remark'),
+		remark: fieldText(row, 'remark'),
 		attachments: empty
 	}
 }
@@ -183,7 +184,7 @@ export async function loadRoutePatrolPreview(routeId: number): Promise<PatrolPre
 		method: 'GET',
 		query: query
 	})
-	const body = asJson(raw)
+	const body = asJsonObject(raw)
 	if (body == null) {
 		throw new Error('请求失败')
 	}
@@ -231,6 +232,12 @@ function mapLine(line: PatrolLineForm): UTSJSONObject {
 }
 
 export async function submitRoutePatrol(draft: PatrolDraft): Promise<PatrolSubmitResult> {
+	if (draft.patrolDate.length > 0 && !isValidDateText(draft.patrolDate)) {
+		return {
+			errorText: '巡检日期须为 YYYY-MM-DD 且是真实日期',
+			saved: null
+		}
+	}
 	if (draft.lines.length == 0) {
 		return {
 			errorText: '没有预览行',
@@ -272,6 +279,6 @@ export async function submitRoutePatrol(draft: PatrolDraft): Promise<PatrolSubmi
 	})
 	return {
 		errorText: '',
-		saved: asJson(raw)
+		saved: asJsonObject(raw)
 	}
 }

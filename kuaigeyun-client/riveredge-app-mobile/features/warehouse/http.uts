@@ -54,6 +54,9 @@ export function listPath(kind: string): string {
 }
 
 export function detailPath(kind: string, id: number): string {
+	if (kind == 'inventory-query') {
+		return ''
+	}
 	return resource(kind) + '/' + id.toString()
 }
 

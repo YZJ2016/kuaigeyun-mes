@@ -1,74 +1,81 @@
 <template>
 	<scroll-view class="page" scroll-y="true">
 		<view class="toolbar">
-			<text class="link" @click="loadList">刷新</text>
+			<button class="btn-secondary" @click="loadList">刷新</button>
 		</view>
-		<text v-if="loading" class="meta">加载中</text>
-		<text v-if="errorText.length > 0" class="err">{{ errorText }}</text>
-		<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="meta">暂无检验单</text>
+		<text v-if="loading" class="loading">加载中</text>
+		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
+		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无检验单</text>
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ rowTitle(row) }}</text>
 			<text v-if="rowLine(row).length > 0" class="meta">{{ rowLine(row) }}</text>
-			<text class="action" @click="openConduct(index)">执行检验</text>
+			<view class="btn-secondary" @click="openConduct(index)"><text class="btn-label-secondary">执行检验</text></view>
 		</view>
 		<view v-if="conducting" class="card">
 			<text class="title">执行检验 {{ currentTitle }}</text>
 			<text class="meta">检验数量 {{ currentQty }}</text>
-			<view class="field">
+			<view class="field-wrap">
 				<text class="label">合格数量</text>
-				<input class="input" type="digit" :value="qualifiedText" @input="onQualifiedInput" />
+				<input class="field" type="digit" :value="qualifiedText" @input="onQualifiedInput" />
 			</view>
-			<view class="field">
+			<view class="field-wrap">
 				<text class="label">不合格数量</text>
-				<input class="input" type="digit" :value="unqualifiedText" @input="onUnqualifiedInput" />
+				<input class="field" type="digit" :value="unqualifiedText" @input="onUnqualifiedInput" />
 			</view>
-			<view v-if="conductKind == 'oqc'" class="field">
+			<view v-if="conductKind == 'oqc'" class="field-wrap">
 				<text class="label">检验结果</text>
 				<view class="choices">
 					<text v-for="(label, index) in resultOptions" :key="index" :class="choiceClass(inspectionResult, label)" @click="pickResult(label)">{{ label }}</text>
 				</view>
 			</view>
-			<view v-if="conductKind == 'oqc'" class="field">
+			<view v-if="conductKind == 'oqc'" class="field-wrap">
 				<text class="label">质量状态</text>
 				<view class="choices">
 					<text v-for="(label, index) in statusOptions" :key="index" :class="choiceClass(qualityStatus, label)" @click="pickStatus(label)">{{ label }}</text>
 				</view>
 			</view>
-			<view v-if="conductKind == 'oqc'" class="field">
+			<view v-if="conductKind == 'oqc'" class="field-wrap">
 				<text class="label">放行结论</text>
 				<view class="choices">
 					<text v-for="(label, index) in releaseLabels" :key="index" :class="choiceClass(releaseDecision, releaseValues[index])" @click="pickRelease(index)">{{ label }}</text>
 				</view>
 			</view>
-			<view v-if="conductKind == 'oqc'" class="field">
+			<view v-if="conductKind == 'oqc'" class="field-wrap">
 				<text class="label">放行说明</text>
-				<input class="input" :value="releaseNote" @input="onReleaseNoteInput" />
+				<input class="field" :value="releaseNote" @input="onReleaseNoteInput" />
 			</view>
-			<view class="field">
+			<view class="field-wrap">
 				<text class="label">备注</text>
-				<input class="input" :value="notes" @input="onNotesInput" />
+				<input class="field" :value="notes" @input="onNotesInput" />
 			</view>
-			<view v-if="conductKind != 'oqc'" class="field">
+			<view v-if="conductKind != 'oqc'" class="field-wrap">
 				<text class="label">不合格原因</text>
-				<input class="input" :value="nonconformanceReason" @input="onReasonInput" />
+				<input class="field" :value="nonconformanceReason" @input="onReasonInput" />
 			</view>
-			<view class="field">
+			<view class="field-wrap">
 				<text class="label">检验人员 ID</text>
-				<input class="input" type="number" :value="inspectorIdText" @input="onInspectorIdInput" />
+				<input class="field" type="number" :value="inspectorIdText" @input="onInspectorIdInput" />
 			</view>
-			<view v-if="conductKind != 'oqc'" class="field">
+			<view v-if="conductKind != 'oqc'" class="field-wrap">
 				<text class="label">检验人员 UUID</text>
-				<input class="input" :value="inspectorUuid" @input="onInspectorUuidInput" />
+				<input class="field" :value="inspectorUuid" @input="onInspectorUuidInput" />
 			</view>
-			<view class="field">
+			<view class="field-wrap">
 				<text class="label">附件</text>
-				<text class="action" @click="addAttachment">添加附件</text>
+				<view class="link" @click="addAttachment"><text class="link-text">添加附件</text></view>
 				<view v-for="(file, fileIndex) in attachments" :key="fileIndex" class="choices">
 					<text class="meta">{{ fileLabel(file) }}</text>
-					<text class="action" @click="removeAttachment(fileIndex)">移除</text>
+					<view class="link" @click="removeAttachment(fileIndex)"><text class="link-text">移除</text></view>
 				</view>
 			</view>
-			<view v-for="(step, index) in steps" :key="step.key" class="field">
+			<view v-if="needsOverallJudgment" class="field-wrap">
+				<text class="label">整体判定</text>
+				<view class="choices">
+					<text :class="choiceClass(overallJudgment, 'pass')" @click="pickOverall('pass')">合格</text>
+					<text :class="choiceClass(overallJudgment, 'fail')" @click="pickOverall('fail')">不合格</text>
+				</view>
+			</view>
+			<view v-for="(step, index) in steps" :key="step.key" class="field-wrap">
 				<text class="label">{{ step.name }}</text>
 				<view v-if="step.legacy" class="choices">
 					<text :class="choiceClass(step.judgment, 'pass')" @click="pickLegacy(index, 'pass')">合格</text>
@@ -82,31 +89,39 @@
 					<view v-if="step.allowNa && !step.textNeedsJudgment" class="choices">
 						<text :class="choiceClass(step.judgment, 'na')" @click="toggleNa(index)">不适用</text>
 					</view>
-					<input v-if="step.judgment != 'na'" class="input" :value="step.value" @input="onStepInput(index, $event)" />
+					<view v-if="step.judgment != 'na' && step.valueType == 'single_select'" class="choices">
+						<text v-for="(opt, optIndex) in step.options" :key="optIndex" :class="choiceClass(step.value, opt.value)" @click="pickOption(index, optIndex)">{{ opt.label }}</text>
+					</view>
+					<view v-if="step.judgment != 'na' && step.valueType == 'multi_select'" class="choices">
+						<text v-for="(opt, optIndex) in step.options" :key="optIndex" :class="multiChoiceClass(index, opt.value)" @click="toggleOption(index, optIndex)">{{ opt.label }}</text>
+					</view>
+					<input v-if="step.judgment != 'na' && step.valueType != 'single_select' && step.valueType != 'multi_select'" class="field" :value="step.value" @input="onStepInput(index, $event)" />
 					<view v-if="step.textNeedsJudgment" class="choices">
 						<text :class="choiceClass(step.judgment, 'pass')" @click="pickLegacy(index, 'pass')">合格</text>
 						<text :class="choiceClass(step.judgment, 'fail')" @click="pickLegacy(index, 'fail')">不合格</text>
 						<text v-if="step.allowNa" :class="choiceClass(step.judgment, 'na')" @click="pickLegacy(index, 'na')">不适用</text>
 					</view>
 				</view>
-				<view v-if="stepShowsPhoto(index)" class="field">
+				<view v-if="stepShowsPhoto(index)" class="field-wrap">
 					<text class="label">步骤照片</text>
-					<text class="action" @click="addStepPhoto(index)">添加照片</text>
+					<view class="link" @click="addStepPhoto(index)"><text class="link-text">添加照片</text></view>
 					<view v-for="(photo, photoIndex) in step.photos" :key="photoIndex" class="choices">
 						<text class="meta">{{ fileLabel(photo) }}</text>
-						<text class="action" @click="removeStepPhoto(index, photoIndex)">移除</text>
+						<view class="link" @click="removeStepPhoto(index, photoIndex)"><text class="link-text">移除</text></view>
 					</view>
 				</view>
 			</view>
-			<view v-for="(field, index) in customFields" :key="field.code" class="field">
+			<view v-for="(field, index) in customFields" :key="field.code" class="field-wrap">
 				<text class="label">{{ field.name }}</text>
-				<input class="input" :value="field.value" @input="onCustomInput(index, $event)" />
+				<input class="field" :value="field.value" @input="onCustomInput(index, $event)" />
 			</view>
-			<text v-if="uploadingCount > 0" class="meta">图片上传中</text>
-			<text v-if="formError.length > 0" class="err">{{ formError }}</text>
-			<view class="choices">
-				<text class="action" @click="submitConduct">{{ submitting ? '提交中' : '提交检验' }}</text>
-				<text class="meta" @click="closeConduct">取消</text>
+			<text v-if="uploadingCount > 0" class="loading">图片上传中</text>
+			<text v-if="formError.length > 0" class="error">{{ formError }}</text>
+			<view :class="submitting ? 'btn-primary is-disabled' : 'btn-primary'" @click="submitConduct">
+				<text class="btn-label">{{ submitting ? '提交中' : '提交检验' }}</text>
+			</view>
+			<view class="link" @click="closeConduct">
+				<text class="link-text">取消</text>
 			</view>
 		</view>
 	</scroll-view>
@@ -115,7 +130,16 @@
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
 	import { uploadImage } from '../../../shared/api/upload.uts'
-	import { jsonId, jsonText, readError, readRows } from '../json-read.uts'
+	import { asJsonObject, errorText, fieldId, fieldText, readRows } from '../../../shared/api/fields.uts'
+
+	defineOptions({
+		styleIsolation: 'app'
+	})
+
+	class StepOption {
+		value : string = ''
+		label : string = ''
+	}
 
 	class StepDraft {
 		index : number = 0
@@ -127,8 +151,11 @@
 		value : string = ''
 		judgment : string = ''
 		allowNa : boolean = false
+		required : boolean = true
 		wantsPhoto : boolean = false
 		photos : UTSJSONObject[] = []
+		options : StepOption[] = []
+		multiSelected : string[] = []
 	}
 
 	class FieldDraft {
@@ -166,7 +193,7 @@
 	const loading = ref(false)
 	const submitting = ref(false)
 	const conducting = ref(false)
-	const errorText = ref('')
+	const errorTextValue = ref('')
 	const formError = ref('')
 	const rows = ref<UTSJSONObject[]>([])
 	const steps = ref<StepDraft[]>([])
@@ -187,6 +214,8 @@
 	const qualityStatus = ref('合格')
 	const releaseDecision = ref('pending')
 	const releaseNote = ref('')
+	const needsOverallJudgment = ref(false)
+	const overallJudgment = ref('')
 
 	function choiceClass(current : string, value : string) : string {
 		if (current == value) {
@@ -196,8 +225,8 @@
 	}
 
 	function rowTitle(row : UTSJSONObject) : string {
-		const code = jsonText(row, 'inspection_code')
-		const name = jsonText(row, 'material_name')
+		const code = fieldText(row, 'inspection_code')
+		const name = fieldText(row, 'material_name')
 		if (code.length > 0 && name.length > 0) {
 			return code + ' ' + name
 		}
@@ -209,31 +238,31 @@
 
 	function rowLine(row : UTSJSONObject) : string {
 		const parts : string[] = []
-		const status = jsonText(row, 'status')
+		const status = fieldText(row, 'status')
 		if (status.length > 0) {
 			parts.push(status)
 		}
-		const quality = jsonText(row, 'quality_status')
+		const quality = fieldText(row, 'quality_status')
 		if (quality.length > 0) {
 			parts.push(quality)
 		}
-		const qty = jsonText(row, 'inspection_quantity')
+		const qty = fieldText(row, 'inspection_quantity')
 		if (qty.length > 0) {
 			parts.push('数量 ' + qty)
 		}
-		const supplier = jsonText(row, 'supplier_name')
+		const supplier = fieldText(row, 'supplier_name')
 		if (supplier.length > 0) {
 			parts.push(supplier)
 		}
-		const workOrder = jsonText(row, 'work_order_code')
+		const workOrder = fieldText(row, 'work_order_code')
 		if (workOrder.length > 0) {
 			parts.push(workOrder)
 		}
-		const operation = jsonText(row, 'operation_name')
+		const operation = fieldText(row, 'operation_name')
 		if (operation.length > 0) {
 			parts.push(operation)
 		}
-		const customer = jsonText(row, 'customer_name')
+		const customer = fieldText(row, 'customer_name')
 		if (customer.length > 0) {
 			parts.push(customer)
 		}
@@ -306,6 +335,59 @@
 		const list = steps.value
 		list[index].value = value
 		steps.value = list
+	}
+
+	function pickOption(index : number, optIndex : number) {
+		const list = steps.value
+		const step = list[index]
+		if (optIndex < 0 || optIndex >= step.options.length) {
+			return
+		}
+		// 再点已选项清除选择（对齐 PC Select allowClear）
+		const value = step.options[optIndex].value
+		step.value = step.value == value ? '' : value
+		steps.value = list
+	}
+
+	function toggleOption(index : number, optIndex : number) {
+		const list = steps.value
+		const step = list[index]
+		if (optIndex < 0 || optIndex >= step.options.length) {
+			return
+		}
+		const value = step.options[optIndex].value
+		const next : string[] = []
+		let found = false
+		for (let i = 0; i < step.multiSelected.length; i++) {
+			if (step.multiSelected[i] == value) {
+				found = true
+				continue
+			}
+			next.push(step.multiSelected[i])
+		}
+		if (!found) {
+			next.push(value)
+		}
+		step.multiSelected = next
+		steps.value = list
+	}
+
+	function multiChoiceClass(index : number, value : string) : string {
+		const list = steps.value
+		if (index < 0 || index >= list.length) {
+			return 'choice'
+		}
+		const selected = list[index].multiSelected
+		for (let i = 0; i < selected.length; i++) {
+			if (selected[i] == value) {
+				return 'choice choice-on'
+			}
+		}
+		return 'choice'
+	}
+
+	function pickOverall(value : string) {
+		overallJudgment.value = value
 	}
 
 	function toggleNa(index : number) {
@@ -461,7 +543,7 @@
 				}
 			} catch (err) {
 				if (session == uploadSession.value) {
-					formError.value = readError(err)
+					formError.value = errorText(err)
 				}
 			}
 			if (session == uploadSession.value) {
@@ -478,11 +560,16 @@
 		return num
 	}
 
-	function readTemplateItems(row : UTSJSONObject) : UTSJSONObject[] {
+	function templateSource(row : UTSJSONObject) : UTSJSONObject | null {
 		let src = row.getJSON('quality_characteristics')
 		if (src == null) {
 			src = row.getJSON('other_checks')
 		}
+		return src
+	}
+
+	function readTemplateItems(row : UTSJSONObject) : UTSJSONObject[] {
+		const src = templateSource(row)
 		if (src == null) {
 			return [] as UTSJSONObject[]
 		}
@@ -491,6 +578,64 @@
 			return [] as UTSJSONObject[]
 		}
 		return items as UTSJSONObject[]
+	}
+
+	// 模板无 items 但需要整体判定的形态（对齐 PC InspectionTemplateConductFields 与后端校验）：
+	// plan_id 存在时后端强制 item_results/conduct_step_results 非空；
+	// acceptance_criteria / inspection_items 存在时 PC 同样渲染整体合格/不合格。
+	function needsOverallResult(row : UTSJSONObject) : boolean {
+		const src = templateSource(row)
+		if (src == null) {
+			return false
+		}
+		const items = src.getArray('items')
+		if (items != null && items.length > 0) {
+			return false
+		}
+		const planId = fieldText(src, 'plan_id')
+		if (planId.length > 0 && planId != '0') {
+			return true
+		}
+		if (fieldText(src, 'acceptance_criteria').length > 0) {
+			return true
+		}
+		const raw = src['inspection_items']
+		if (raw == null) {
+			return false
+		}
+		if (typeof raw == 'string' && (raw as string).trim().length == 0) {
+			return false
+		}
+		return true
+	}
+
+	function readStepOptions(spec : UTSJSONObject | null) : StepOption[] {
+		const out : StepOption[] = []
+		if (spec == null) {
+			return out
+		}
+		const raw = spec.getArray('options')
+		if (raw == null) {
+			return out
+		}
+		for (let i = 0; i < raw.length; i++) {
+			const obj = asJsonObject(raw[i])
+			if (obj == null) {
+				continue
+			}
+			const opt = new StepOption()
+			opt.value = fieldText(obj, 'value')
+			let label = fieldText(obj, 'label')
+			if (label.length == 0) {
+				label = opt.value
+			}
+			if (obj.getBoolean('defect') == true) {
+				label = label + '（缺陷）'
+			}
+			opt.label = label
+			out.push(opt)
+		}
+		return out
 	}
 
 	function buildSteps(row : UTSJSONObject) : StepDraft[] {
@@ -521,6 +666,12 @@
 				draft.textNeedsJudgment = valueType == 'text'
 				draft.allowNa = spec != null && spec.getBoolean('allow_na') == true
 				draft.wantsPhoto = spec != null && spec.getBoolean('require_photo') == true
+				// 缺省必填，与后端 spec.get("required", True) 对齐
+				const requiredFlag = spec != null ? spec.getBoolean('required') : null
+				draft.required = requiredFlag == null || requiredFlag == true
+				if (valueType == 'single_select' || valueType == 'multi_select') {
+					draft.options = readStepOptions(spec)
+				}
 				if (valueType == 'boolean') {
 					draft.value = 'true'
 				}
@@ -545,17 +696,8 @@
 				entry.set('value', step.value == 'true')
 				filled = true
 			} else if (step.valueType == 'multi_select') {
-				const parts : string[] = []
-				if (step.value.length > 0) {
-					const raw = step.value.split(',')
-					for (let p = 0; p < raw.length; p++) {
-						const piece = raw[p].trim()
-						if (piece.length > 0) {
-							parts.push(piece)
-						}
-					}
-				}
-				entry.set('value', parts)
+				// 缺陷多选：空数组即「无缺陷」，后端按合格处理
+				entry.set('value', step.multiSelected)
 				filled = true
 			} else if (step.valueType == 'numeric') {
 				if (step.value.length > 0) {
@@ -601,6 +743,11 @@
 	function buildItemResults() : UTSJSONObject | null {
 		const obj = new UTSJSONObject()
 		let count = 0
+		// 无 items 模板：整体判定写入 item_results['0']（对齐 PC）
+		if (needsOverallJudgment.value && (overallJudgment.value == 'pass' || overallJudgment.value == 'fail')) {
+			obj.set('0', overallJudgment.value)
+			count++
+		}
 		const list = steps.value
 		for (let i = 0; i < list.length; i++) {
 			const step = list[i]
@@ -718,20 +865,26 @@
 		const values : UTSJSONObject[] = []
 		for (let i = 0; i < list.length; i++) {
 			const field = list[i]
-			if (field.value.length == 0) {
+			const text = field.value.trim()
+			// 对齐 PC useCustomFields：formula 空值跳过不写，其余空值提交 null 以清除旧值
+			if (field.fieldType == 'formula' && text.length == 0) {
 				continue
 			}
 			const one = new UTSJSONObject()
 			one.set('field_uuid', field.uuid)
-			if (field.fieldType == 'number' || field.fieldType == 'formula') {
-				const num = parseFloat(field.value)
+			if (text.length == 0) {
+				one.set('value', null)
+			} else if (field.fieldType == 'number' || field.fieldType == 'formula') {
+				const num = parseFloat(text)
 				if (isNaN(num)) {
-					one.set('value', field.value)
+					one.set('value', null)
 				} else {
 					one.set('value', num)
 				}
 			} else {
-				one.set('value', field.value)
+				// date/datetime 在提交前已按 YYYY-MM-DD / YYYY-MM-DD HH:mm 校验；
+				// 其余 field_type（text/select/image/file/json 等）按字符串原样提交，不做额外转换
+				one.set('value', text)
 			}
 			values.push(one)
 		}
@@ -759,7 +912,7 @@
 			return
 		}
 		loading.value = true
-		errorText.value = ''
+		errorTextValue.value = ''
 		try {
 			const payload = await request({
 				path: props.listPath,
@@ -769,21 +922,21 @@
 			rows.value = readRows(payload)
 		} catch (err) {
 			rows.value = [] as UTSJSONObject[]
-			errorText.value = readError(err)
+			errorTextValue.value = errorText(err)
 		}
 		loading.value = false
 	}
 
 	function openConduct(index : number) {
 		const row = rows.value[index]
-		const id = jsonId(row)
+		const id = fieldId(row)
 		if (id <= 0) {
 			formError.value = '检验单缺少 id'
 			return
 		}
 		currentId.value = id
 		currentTitle.value = rowTitle(row)
-		currentQty.value = jsonText(row, 'inspection_quantity')
+		currentQty.value = fieldText(row, 'inspection_quantity')
 		qualifiedText.value = currentQty.value.length > 0 ? currentQty.value : '0'
 		unqualifiedText.value = '0'
 		notes.value = ''
@@ -799,6 +952,8 @@
 		uploadSession.value = uploadSession.value + 1
 		uploadingCount.value = 0
 		steps.value = buildSteps(row)
+		needsOverallJudgment.value = needsOverallResult(row)
+		overallJudgment.value = ''
 		conducting.value = true
 		loadCustomFields(id)
 	}
@@ -808,12 +963,133 @@
 		formError.value = ''
 	}
 
+	// 对照后端 assert_inspection_quantities_balanced：合格+不合格须等于检验数量。
+	// 检验数量读不到时跳过，交给后端兜底。
+	function validateQuantities() : string {
+		const expected = parseFloat(currentQty.value)
+		if (isNaN(expected)) {
+			return ''
+		}
+		const sum = readQty(qualifiedText.value) + readQty(unqualifiedText.value)
+		if (Math.abs(sum - expected) > 0.000001) {
+			return '合格数量和不合格数量之和必须等于检验数量 ' + currentQty.value
+		}
+		return ''
+	}
+
+	// 必填校验的最小子集（完整校验仍在后端 inspection_step_spec.py）：
+	// legacy 项须选合格/不合格；typed 项按 valueType 判必填，na/非必填跳过；
+	// text 项值与判定都必填；multi_select 空选视为「无缺陷」不必填。
+	function validateSteps() : string {
+		const missing : string[] = []
+		const list = steps.value
+		for (let i = 0; i < list.length; i++) {
+			const step = list[i]
+			if (step.legacy) {
+				if (step.judgment != 'pass' && step.judgment != 'fail') {
+					missing.push(step.name)
+				}
+				continue
+			}
+			if (step.judgment == 'na' || !step.required) {
+				continue
+			}
+			if (step.valueType == 'boolean' || step.valueType == 'multi_select') {
+				continue
+			}
+			if (step.valueType == 'text') {
+				if (step.value.trim().length == 0 || (step.judgment != 'pass' && step.judgment != 'fail')) {
+					missing.push(step.name)
+				}
+				continue
+			}
+			if (step.value.trim().length == 0) {
+				missing.push(step.name)
+			}
+		}
+		if (missing.length > 0) {
+			return '请完成检验项：' + missing.join('、')
+		}
+		return ''
+	}
+
+	function isDigitsRange(text : string, from : number, to : number) : boolean {
+		for (let i = from; i < to; i++) {
+			const code = text.charCodeAt(i)
+			if (isNaN(code) || code < 48 || code > 57) {
+				return false
+			}
+		}
+		return true
+	}
+
+	function isDateShape(text : string) : boolean {
+		if (text.length != 10) {
+			return false
+		}
+		if (text.charAt(4) != '-' || text.charAt(7) != '-') {
+			return false
+		}
+		return isDigitsRange(text, 0, 4) && isDigitsRange(text, 5, 7) && isDigitsRange(text, 8, 10)
+	}
+
+	function isDateTimeShape(text : string) : boolean {
+		if (text.length != 16) {
+			return false
+		}
+		if (!isDateShape(text.substring(0, 10))) {
+			return false
+		}
+		if (text.charAt(10) != ' ' || text.charAt(13) != ':') {
+			return false
+		}
+		return isDigitsRange(text, 11, 13) && isDigitsRange(text, 14, 16)
+	}
+
+	// date/datetime 自定义字段的提交形态校验（对齐 PC useCustomFields）
+	function validateCustomFieldFormats() : string {
+		const list = customFields.value
+		for (let i = 0; i < list.length; i++) {
+			const field = list[i]
+			const text = field.value.trim()
+			if (text.length == 0) {
+				continue
+			}
+			if (field.fieldType == 'date' && !isDateShape(text)) {
+				return '自定义字段「' + field.name + '」须为 YYYY-MM-DD 格式'
+			}
+			if (field.fieldType == 'datetime' && !isDateTimeShape(text)) {
+				return '自定义字段「' + field.name + '」须为 YYYY-MM-DD HH:mm 格式'
+			}
+		}
+		return ''
+	}
+
 	async function submitConduct() {
 		if (uploadingCount.value > 0) {
 			formError.value = '图片仍在上传'
 			return
 		}
 		if (submitting.value || currentId.value <= 0) {
+			return
+		}
+		const qtyError = validateQuantities()
+		if (qtyError.length > 0) {
+			formError.value = qtyError
+			return
+		}
+		const stepError = validateSteps()
+		if (stepError.length > 0) {
+			formError.value = stepError
+			return
+		}
+		if (needsOverallJudgment.value && overallJudgment.value != 'pass' && overallJudgment.value != 'fail') {
+			formError.value = '请填写整体检验判定'
+			return
+		}
+		const fieldError = validateCustomFieldFormats()
+		if (fieldError.length > 0) {
+			formError.value = fieldError
 			return
 		}
 		if (props.conductKind == 'oqc') {
@@ -833,7 +1109,7 @@
 				data: body
 			})
 		} catch (err) {
-			formError.value = readError(err)
+			formError.value = errorText(err)
 			submitting.value = false
 			return
 		}
@@ -861,85 +1137,12 @@
 </script>
 
 <style>
-	.page {
-		padding: 12px;
-		background-color: #F1F1F4;
-	}
-
-	.toolbar {
-		margin-bottom: 8px;
-	}
-
-	.card {
-		background-color: #ffffff;
-		border-radius: 16px;
-		padding: 12px;
-		margin-bottom: 10px;
-	}
-
-	.title {
-		font-size: 16px;
-		color: #28113C;
-	}
-
-	.meta {
-		font-size: 13px;
-		color: #888B9D;
-		margin-top: 4px;
-	}
-
-	.action {
-		margin-top: 8px;
-		color: #801ED3;
-		font-size: 14px;
-	}
-
-	.field {
+	.field-wrap {
 		margin-top: 10px;
 	}
-
-	.label {
-		font-size: 13px;
-		color: #888B9D;
-		margin-bottom: 4px;
-	}
-
-	.input {
-		border-width: 1px;
-		border-style: solid;
-		border-color: #E7D9FD;
-		border-radius: 6px;
-		padding: 8px;
-		font-size: 14px;
-		background-color: #ffffff;
-	}
-
 	.choices {
 		flex-direction: row;
 		flex-wrap: wrap;
 		margin-top: 6px;
-	}
-
-	.choice {
-		margin-right: 8px;
-		margin-top: 6px;
-		padding: 4px 8px;
-		border-width: 1px;
-		border-style: solid;
-		border-color: #E7D9FD;
-		border-radius: 4px;
-		font-size: 13px;
-		color: #28113C;
-	}
-
-	.choice-on {
-		border-color: #801ED3;
-		color: #801ED3;
-	}
-
-	.err {
-		color: #FF4942;
-		font-size: 13px;
-		margin-top: 8px;
 	}
 </style>

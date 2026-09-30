@@ -1,0 +1,147 @@
+/**
+ * 工作台宫格字形映射。
+ * 后端 manifest.json 的 mobile_workbench（及其它入口）用语义名描述 icon，
+ * 这里给每个语义名一个 emoji/字符字形。未命中返回 ''，页面保持纯 label。
+ */
+
+function glyphFor(name : string) : string {
+	const key = name.trim()
+	if (key == 'scan' || key == 'scanLine') {
+		return '📷'
+	}
+	if (key == 'user') {
+		return '👤'
+	}
+	if (key == 'file' || key == 'fileText') {
+		return '📄'
+	}
+	if (key == 'list') {
+		return '≡'
+	}
+	if (key == 'history') {
+		return '🕘'
+	}
+	if (key == 'check') {
+		return '✅'
+	}
+	if (key == 'check-circle') {
+		return '✔️'
+	}
+	if (key == 'close-circle') {
+		return '❌'
+	}
+	if (key == 'inbox' || key == 'package' || key == 'boxes') {
+		return '📦'
+	}
+	if (key == 'plus-square' || key == 'file-plus') {
+		return '➕'
+	}
+	if (key == 'minus-square' || key == 'file-minus') {
+		return '➖'
+	}
+	if (key == 'warning' || key == 'alert-triangle') {
+		return '⚠️'
+	}
+	if (key == 'alert-circle') {
+		return '❗'
+	}
+	if (key == 'chart' || key == 'chartBar') {
+		return '📊'
+	}
+	if (key == 'chartLine' || key == 'trendingUp' || key == 'activity') {
+		return '📈'
+	}
+	if (key == 'export' || key == 'arrow-up-from-line') {
+		return '📤'
+	}
+	if (key == 'import' || key == 'arrow-down-to-line') {
+		return '📥'
+	}
+	if (key == 'rollback' || key == 'rotate-ccw') {
+		return '↩️'
+	}
+	if (key == 'shopping') {
+		return '🛒'
+	}
+	if (key == 'shoppingBag') {
+		return '🛍️'
+	}
+	if (key == 'truck') {
+		return '🚚'
+	}
+	if (key == 'audit' || key == 'clipboardList') {
+		return '📋'
+	}
+	if (key == 'search') {
+		return '🔍'
+	}
+	if (key == 'swap' || key == 'arrow-left-right' || key == 'gitBranch') {
+		return '🔀'
+	}
+	if (key == 'bell') {
+		return '🔔'
+	}
+	if (key == 'shield') {
+		return '🛡️'
+	}
+	if (key == 'link') {
+		return '🔗'
+	}
+	if (key == 'tool') {
+		return '🔧'
+	}
+	if (key == 'maintain') {
+		return '🛠️'
+	}
+	if (key == 'calendar') {
+		return '📅'
+	}
+	if (key == 'clock') {
+		return '🕐'
+	}
+	if (key == 'dashboard') {
+		return '🗂️'
+	}
+	if (key == 'assembly') {
+		return '🧩'
+	}
+	if (key == 'barcode') {
+		return '🏷️'
+	}
+	if (key == 'fileSpreadsheet') {
+		return '📑'
+	}
+	if (key == 'handshake') {
+		return '🤝'
+	}
+	if (key == 'key') {
+		return '🔑'
+	}
+	if (key == 'layers') {
+		return '📚'
+	}
+	if (key == 'map-pin') {
+		return '📍'
+	}
+	if (key == 'production') {
+		return '🏭'
+	}
+	if (key == 'refresh-cw') {
+		return '🔃'
+	}
+	if (key == 'warehouse') {
+		return '🏬'
+	}
+	return ''
+}
+
+/**
+ * icon 为主键，iconGroup 为次选键；都未命中返回 ''。
+ */
+export function iconGlyph(icon : string, iconGroup : string) : string {
+	const primary = glyphFor(icon)
+	if (primary.length > 0) {
+		return primary
+	}
+	return glyphFor(iconGroup)
+}

@@ -1,48 +1,49 @@
 <template>
 	<view class="page">
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="loading" class="hint">加载中</text>
+		<text v-if="loading" class="loading">加载中</text>
 		<view v-if="selectedOrder == null">
 			<text class="section">选择工单</text>
-			<view v-for="(row, index) in orders" :key="index" class="card" @click="pickOrder(index)">
+			<view v-for="(row, index) in orders" :key="index" class="card" hover-class="pressed" @click="pickOrder(index)">
 				<text class="title">{{ orderTitle(row) }}</text>
 				<text class="sub">{{ orderStatus(row) }}</text>
 			</view>
 		</view>
 		<view v-if="selectedOrder != null && selectedOperation == null">
-			<button class="action" @click="clearOrder">返回工单</button>
+			<button class="btn-secondary" @click="clearOrder">返回工单</button>
 			<text class="section">选择工序</text>
-			<view v-for="(row, index) in operations" :key="index" class="card" @click="pickOperation(index)">
+			<view v-for="(row, index) in operations" :key="index" class="card" hover-class="pressed" @click="pickOperation(index)">
 				<text class="title">{{ operationTitle(row) }}</text>
 			</view>
 		</view>
 		<view v-if="selectedOperation != null">
-			<button class="action" @click="clearOperation">返回工序</button>
+			<button class="btn-secondary" @click="clearOperation">返回工序</button>
 			<view class="modes">
-				<button class="action" @click="setMode('worker')">指派给人员</button>
-				<button class="action" @click="setMode('team')">指派给小组</button>
+				<button class="btn-chip" @click="setMode('worker')">指派给人员</button>
+				<button class="btn-chip" @click="setMode('team')">指派给小组</button>
 			</view>
 			<view v-if="mode == 'worker'">
-				<view v-for="(row, index) in workers" :key="index" class="card" @click="toggleWorker(index)">
+				<view v-for="(row, index) in workers" :key="index" class="card" hover-class="pressed" @click="toggleWorker(index)">
 					<text class="title">{{ workerTitle(row) }}</text>
 					<text class="sub">{{ workerMarked(row) }}</text>
 				</view>
 			</view>
 			<view v-else>
-				<view v-for="(row, index) in teams" :key="index" class="card" @click="pickTeam(index)">
-					<text class="title">{{ textOf(row, 'name') }}</text>
+				<view v-for="(row, index) in teams" :key="index" class="card" hover-class="pressed" @click="pickTeam(index)">
+					<text class="title">{{ fieldText(row, 'name') }}</text>
 					<text class="sub">{{ selectedTeamIndex == index ? '已选' : '点选' }}</text>
 				</view>
 			</view>
 			<input class="field" v-model="remarks" placeholder="备注（可空）" />
-			<button class="action" @click="submitDispatch">指派</button>
+			<button class="btn-primary" @click="submitDispatch">指派</button>
 		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
-	import { readRows, textOf, fieldNumber, errorText, toast, firstText } from '../json.uts'
+	import { readRows, fieldText, fieldNumber, errorText, firstText } from '../../../shared/api/fields.uts'
+	import { toast } from '../json.uts'
 
 	const orders = ref<any[]>([])
 	const operations = ref<any[]>([])
@@ -58,15 +59,15 @@
 	const errorTextValue = ref('')
 
 	function orderTitle(row : any) : string {
-		return textOf(row, 'code') + ' ' + textOf(row, 'name')
+		return fieldText(row, 'code') + ' ' + fieldText(row, 'name')
 	}
 
 	function orderStatus(row : any) : string {
-		return textOf(row, 'status')
+		return fieldText(row, 'status')
 	}
 
 	function operationTitle(row : any) : string {
-		return textOf(row, 'operation_code') + ' ' + textOf(row, 'operation_name')
+		return fieldText(row, 'operation_code') + ' ' + fieldText(row, 'operation_name')
 	}
 
 	function workerTitle(row : any) : string {
@@ -243,7 +244,7 @@
 			}
 			const team = teams.value[selectedTeamIndex.value]
 			body.set('assigned_team_id', fieldNumber(team, 'id'))
-			body.set('assigned_team_name', textOf(team, 'name'))
+			body.set('assigned_team_name', fieldText(team, 'name'))
 		} else {
 			const ids = selectedWorkerIds.value
 			if (ids.length == 0) {
@@ -280,60 +281,11 @@
 </script>
 
 <style>
-	.page {
-		flex-direction: column;
-		padding: 12px;
-	}
-
 	.modes {
 		flex-direction: row;
-		margin-bottom: 8px;
+		flex-wrap: wrap;
 	}
-
-	.hint {
-		font-size: 14px;
-		color: #888B9D;
-		margin-bottom: 8px;
-	}
-
-	.error {
-		font-size: 14px;
-		color: #FF4942;
-		margin-bottom: 8px;
-	}
-
 	.section {
-		font-size: 16px;
-		margin-bottom: 8px;
-	}
-
-	.card {
-		flex-direction: column;
-		padding: 12px;
-		margin-bottom: 8px;
-		background-color: #ffffff;
-		border-radius: 16px;
-	}
-
-	.title {
-		font-size: 16px;
-	}
-
-	.sub {
-		font-size: 13px;
-		color: #888B9D;
-		margin-top: 4px;
-	}
-
-	.field {
-		margin-top: 8px;
-		padding: 8px;
-		background-color: #ffffff;
-	}
-
-	.action {
-		margin-top: 8px;
-		margin-right: 8px;
-		margin-bottom: 8px;
+		margin-top: 12px;
 	}
 </style>

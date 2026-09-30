@@ -1,26 +1,26 @@
 <template>
 	<scroll-view class="page" direction="vertical">
-		<view class="block">
+		<view class="card">
 			<text class="title">维修台账</text>
-			<button class="action" :disabled="busy" @click="loadList">刷新</button>
-			<text v-if="rows.length == 0" class="hint">暂无记录</text>
-			<view class="item" v-for="(item, index) in rows" :key="item.rowKey" @click="selectRow(index)">
+			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
+			<text v-if="rows.length == 0" class="empty">暂无记录</text>
+			<view class="item" hover-class="pressed" v-for="(item, index) in rows" :key="item.rowKey" @click="selectRow(index)">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
 			</view>
 		</view>
-		<view class="block" v-if="completeUuid.length > 0">
+		<view class="card" v-if="completeUuid.length > 0">
 			<text class="title">完工</text>
 			<text class="hint">维修结果：{{ repairResult }}</text>
 			<view class="choices">
-				<button class="choice" @click="chooseResult(0)">成功</button>
-				<button class="choice" @click="chooseResult(1)">失败</button>
-				<button class="choice" @click="chooseResult(2)">部分成功</button>
+				<button class="btn-chip" @click="chooseResult(0)">成功</button>
+				<button class="btn-chip" @click="chooseResult(1)">失败</button>
+				<button class="btn-chip" @click="chooseResult(2)">部分成功</button>
 			</view>
-			<input class="input" v-model="faultCauseText" placeholder="故障原因" />
-			<input class="input" v-model="repairContentText" placeholder="维修内容" />
-			<input class="input" v-model="remarkText" placeholder="备注（可空）" />
-			<button class="action" type="primary" :disabled="busy" @click="submitComplete">完工</button>
+			<input class="field" v-model="faultCauseText" placeholder="故障原因" />
+			<input class="field" v-model="repairContentText" placeholder="维修内容" />
+			<input class="field" v-model="remarkText" placeholder="备注（可空）" />
+			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitComplete">完工</button>
 		</view>
 		<text v-if="messageText.length > 0" class="hint page-hint">{{ messageText }}</text>
 		<text v-if="errorText.length > 0" class="error page-hint">{{ errorText }}</text>
@@ -29,7 +29,8 @@
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
-	import { asJson, joinParts, jsonItems, jsonText } from '../json-text.uts'
+	import { fieldText, readRows } from '../../../shared/api/fields.uts'
+	import { joinParts, readError } from '../json-text.uts'
 
 	type ListRow = {
 		rowKey: string
@@ -70,45 +71,54 @@
 	}
 
 	async function loadList(): Promise<void> {
-		const raw = await request({
-			url: '/api/v1/apps/kuaizhizao/equipment-faults/repairs',
-			method: 'GET',
-			data: null
-		})
-		const items = jsonItems(asJson(raw))
-		const next: Array<ListRow> = []
-		for (let i = 0; i < items.length; i++) {
-			const row = items[i]
-			const status = jsonText(row, 'status')
-			const arrival = jsonText(row, 'arrival_at')
-			let canComplete = true
-			let blocked = ''
-			if (status == '已完成') {
-				canComplete = false
-				blocked = '该维修已完工'
-			} else if (arrival.length == 0) {
-				canComplete = false
-				blocked = '须先到场后再完工'
+		try {
+			const raw = await request({
+				url: '/api/v1/apps/kuaizhizao/equipment-faults/repairs',
+				method: 'GET',
+				data: null
+			})
+			const items = readRows(raw)
+			const next: Array<ListRow> = []
+			for (let i = 0; i < items.length; i++) {
+				const row = items[i]
+				const status = fieldText(row, 'status')
+				const arrival = fieldText(row, 'arrival_at')
+				let canComplete = false
+				let blocked = '当前状态不可完工'
+				if (status == '已完成') {
+					blocked = '该维修已完工'
+				} else if (status == '已取消') {
+					blocked = '该维修已取消'
+				} else if (status == '进行中') {
+					if (arrival.length == 0) {
+						blocked = '须先到场后再完工'
+					} else {
+						canComplete = true
+						blocked = ''
+					}
+				}
+				const title = fieldText(row, 'repair_no')
+				const detail = joinParts([
+					fieldText(row, 'equipment_name'),
+					fieldText(row, 'repair_type'),
+					status,
+					arrival.length > 0 ? arrival : '未到场'
+				])
+				const key = fieldText(row, 'uuid')
+				const view: ListRow = {
+					rowKey: key.length > 0 ? key : ('' + i),
+					uuid: key,
+					title: title.length > 0 ? title : '维修',
+					detail: detail,
+					canComplete: canComplete,
+					blocked: blocked
+				}
+				next.push(view)
 			}
-			const title = jsonText(row, 'repair_no')
-			const detail = joinParts([
-				jsonText(row, 'equipment_name'),
-				jsonText(row, 'repair_type'),
-				status,
-				arrival.length > 0 ? arrival : '未到场'
-			])
-			const key = jsonText(row, 'uuid')
-			const view: ListRow = {
-				rowKey: key.length > 0 ? key : ('' + i),
-				uuid: key,
-				title: title.length > 0 ? title : '维修',
-				detail: detail,
-				canComplete: canComplete,
-				blocked: blocked
-			}
-			next.push(view)
+			rows.value = next
+		} catch (e) {
+			errorText.value = readError(e)
 		}
-		rows.value = next
 	}
 
 	async function submitComplete(): Promise<void> {
@@ -153,29 +163,21 @@
 			remarkText.value = ''
 			await loadList()
 		} catch (e) {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		}
 		busy.value = false
 	}
 
 	onShow(() => {
 		loadList().catch((e) => {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		})
 	})
 </script>
 
 <style>
-	.page { flex: 1; background-color: #F1F1F4; }
-	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
-	.title { font-size: 18px; color: #28113C; }
-	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
-	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
-	.page-hint { margin-left: 12px; margin-right: 12px; }
-	.input { margin-top: 8px; padding: 8px; font-size: 14px; background-color: #EEE5FB; }
-	.action { margin-top: 12px; }
-	.choice { margin-top: 8px; margin-right: 8px; }
-	.choices { flex-direction: row; flex-wrap: wrap; }
-	.item { margin-top: 12px; padding-top: 8px; border-top-width: 1px; border-top-style: solid; border-top-color: #E7D9FD; }
-	.item-title { font-size: 16px; color: #28113C; }
+	.choices {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
 </style>

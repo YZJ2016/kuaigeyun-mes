@@ -1,8 +1,8 @@
 <template>
 	<scroll-view class="page" direction="vertical">
-		<view class="block">
+		<view class="card">
 			<text class="title">扫码查设备</text>
-			<button class="action" type="primary" :disabled="busy" @click="onScan">扫码</button>
+			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="onScan">扫码</button>
 			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
@@ -11,8 +11,10 @@
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
+	import { asJsonObject, fieldText } from '../../../shared/api/fields.uts'
 	import { scan } from '../../../shared/channel/index.uts'
-	import { asJson, jsonText } from '../json-text.uts'
+	import { openRegisteredRoute } from '../../../shell/registry/index.uts'
+	import { readError } from '../json-text.uts'
 
 	const busy = ref(false)
 	const messageText = ref('')
@@ -38,30 +40,21 @@
 				method: 'GET',
 				data: null
 			})
-			const uuid = jsonText(asJson(raw), 'uuid')
+			const uuid = fieldText(asJsonObject(raw), 'uuid')
 			if (uuid.length == 0) {
 				errorText.value = '未解析到设备'
 				busy.value = false
 				return
 			}
-			uni.navigateTo({
-				url: '/features/equipment/detail/index?uuid=' + encodeURIComponent(uuid),
-				fail: () => {
-					errorText.value = '无法打开设备'
-				}
-			})
+			const opened = openRegisteredRoute('/equipment/detail?uuid=' + encodeURIComponent(uuid))
+			if (!opened) {
+				errorText.value = '无法打开设备'
+			}
 		} catch (e) {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		}
 		busy.value = false
 	}
 </script>
 
-<style>
-	.page { flex: 1; background-color: #F1F1F4; }
-	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
-	.title { font-size: 18px; color: #28113C; }
-	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
-	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
-	.action { margin-top: 12px; }
-</style>
+

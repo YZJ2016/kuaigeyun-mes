@@ -1,6 +1,6 @@
 import { apiGet } from '../../shared/api/http.uts'
+import { fieldText } from '../../shared/api/fields.uts'
 import { getToken } from '../../shared/api/session.uts'
-import { loginConnected } from '../../shared/channel/headers.uts'
 import {
 	entryInWorkbench,
 	entryPagePath,
@@ -43,10 +43,7 @@ export type WorkScope = {
 }
 
 function readString(obj : any | null, key : string) : string {
-	if (obj == null || (obj as UTSJSONObject)[key] == null) {
-		return ''
-	}
-	return String((obj as UTSJSONObject)[key]).trim()
+	return fieldText(obj, key)
 }
 
 function hasOwn(obj : any | null, key : string) : boolean {
@@ -97,7 +94,7 @@ async function loadBadge(pkg : any) : Promise<WorkScope | null> {
 }
 
 export async function loadWorkbench() : Promise<WorkScope[]> {
-	if (!loginConnected() || getToken().length == 0) {
+	if (getToken().length == 0) {
 		return []
 	}
 	const packages = installedPackages()

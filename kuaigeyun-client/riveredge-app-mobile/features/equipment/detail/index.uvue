@@ -1,8 +1,8 @@
 <template>
 	<scroll-view class="page" direction="vertical">
-		<view class="block">
+		<view class="card">
 			<text class="title">设备详情</text>
-			<button class="action" :disabled="busy" @click="loadDetail">刷新</button>
+			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadDetail">刷新</button>
 			<text v-if="summaryText.length > 0" class="hint">{{ summaryText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
@@ -11,7 +11,8 @@
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
-	import { asJson, joinParts, jsonText } from '../json-text.uts'
+	import { asJsonObject, fieldText } from '../../../shared/api/fields.uts'
+	import { joinParts, readError } from '../json-text.uts'
 
 	const busy = ref(false)
 	const queryUuid = ref('')
@@ -44,20 +45,20 @@
 				method: 'GET',
 				data: null
 			})
-			const body = asJson(raw)
+			const body = asJsonObject(raw)
 			summaryText.value = joinParts([
-				jsonText(body, 'code'),
-				jsonText(body, 'name'),
-				jsonText(body, 'status'),
-				jsonText(body, 'production_line_name'),
-				jsonText(body, 'workshop_name'),
-				jsonText(body, 'uuid')
+				fieldText(body, 'code'),
+				fieldText(body, 'name'),
+				fieldText(body, 'status'),
+				fieldText(body, 'production_line_name'),
+				fieldText(body, 'workshop_name'),
+				fieldText(body, 'uuid')
 			])
 			if (summaryText.value.length == 0) {
 				errorText.value = '未打开设备'
 			}
 		} catch (e) {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 			summaryText.value = ''
 		}
 		busy.value = false
@@ -72,11 +73,4 @@
 	})
 </script>
 
-<style>
-	.page { flex: 1; background-color: #F1F1F4; }
-	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
-	.title { font-size: 18px; color: #28113C; }
-	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
-	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
-	.action { margin-top: 12px; }
-</style>
+

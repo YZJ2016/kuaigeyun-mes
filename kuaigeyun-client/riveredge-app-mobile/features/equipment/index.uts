@@ -1,5 +1,5 @@
 import { request } from '../../shared/api/index.uts'
-import { asJson } from './json-text.uts'
+import { asJsonObject } from '../../shared/api/fields.uts'
 
 export type EquipmentEntry = {
 	key: string
@@ -50,7 +50,7 @@ async function readBadge(): Promise<EquipmentBadge> {
 		method: 'GET',
 		data: null
 	})
-	const body = asJson(raw)
+	const body = asJsonObject(raw)
 	return {
 		pending_fault_count: countOf(body, 'pending_fault_count'),
 		overdue_maintenance_reminder_count: countOf(body, 'overdue_maintenance_reminder_count')

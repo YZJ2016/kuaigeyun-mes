@@ -134,17 +134,60 @@ async function exchangeCode(code : string, state : string) : Promise<string> {
 	return ''
 }
 
-export async function bootLogin(options : any | null) : Promise<LoginState> {
-	if (!loginConnected()) {
-		clearToken()
-		return stateOf(false, false, '当前端取码未接通，不能进入工作台。', [])
+export async function loginWithPassword(username : string, password : string) : Promise<string> {
+	const name = username.trim()
+	if (name.length == 0 || password.length == 0) {
+		return '请输入用户名和密码'
 	}
+	const body = new UTSJSONObject()
+	body['username'] = name
+	body['password'] = password
+	const data = await apiPost('/auth/login', body)
+	if (data != null && (data as UTSJSONObject)['requires_phone_verification'] == true) {
+		clearToken()
+		return '需要继续核验，当前壳未接通该步骤'
+	}
+	const token = readString(data, 'access_token')
+	if (token.length == 0) {
+		clearToken()
+		return '没有获得登录令牌'
+	}
+	if (data != null && (data as UTSJSONObject)['requires_tenant_selection'] == true) {
+		clearToken()
+		return '需要选择组织，客户端不猜测'
+	}
+	setToken(token)
+	const tenantText = readString(data, 'default_tenant_id').trim()
+	if (isPositiveInt(tenantText)) {
+		setTenantId(tenantText)
+	}
+	if (data != null) {
+		const user = (data as UTSJSONObject)['user']
+		if (user != null) {
+			const idText = readString(user, 'id').trim()
+			if (isPositiveInt(idText)) {
+				setSessionUser(parseInt(idText), readString(user, 'full_name'), readString(user, 'username'))
+			}
+		}
+	}
+	return ''
+}
+
+export async function bootLogin(options : any | null) : Promise<LoginState> {
 	rememberDeepLink()
-	const tenantMessage = await resolveTenant(options)
+	if (!loginConnected()) {
+		if (getToken().length > 0) {
+			return stateOf(false, true, '', [])
+		}
+		return stateOf(false, false, '', [])
+	}
+	await resolveTenant(options)
 	const got = await acquireLoginCode()
 	if (!got.connected) {
-		clearToken()
-		return stateOf(false, false, '当前端取码未接通，不能进入工作台。', [])
+		if (getToken().length > 0) {
+			return stateOf(false, true, '', [])
+		}
+		return stateOf(false, false, '', [])
 	}
 	if (got.code.length > 0) {
 		const state = readBrowserQuery('state')
@@ -168,7 +211,7 @@ export async function bootLogin(options : any | null) : Promise<LoginState> {
 	if (getToken().length > 0) {
 		return stateOf(true, true, '', [])
 	}
-	return stateOf(true, false, tenantMessage, [])
+	return stateOf(true, false, '', [])
 }
 
 export async function searchTenants(keyword : string) : Promise<Array<TenantChoice>> {
