@@ -1287,6 +1287,15 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             f"不合格品 {defect_record.code} 已让步接收入库 {confirmed.inbound_code}"
         )
 
+    @staticmethod
+    def _is_outsource_material_receipt_inspection(inspection: Any) -> bool:
+        """委外收货来料检验的让步只作确认门禁，不在处置时入库。"""
+        if inspection is None:
+            return False
+        if str(getattr(inspection, "source_type", "") or "").strip() == "outsource_material_receipt":
+            return True
+        return getattr(inspection, "outsource_material_receipt_id", None) is not None
+
     async def _execute_accept_concession_inbound(
         self,
         tenant_id: int,
@@ -1298,6 +1307,18 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         """让步接收：按来源检验生成对应入库单并确认过账。"""
         if self._accept_inbound_already_linked(defect_record):
             return
+
+        inspection = None
+        if defect_record.incoming_inspection_id:
+            from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+
+            inspection = await IncomingInspection.get_or_none(
+                tenant_id=tenant_id,
+                id=int(defect_record.incoming_inspection_id),
+                deleted_at__isnull=True,
+            )
+            if self._is_outsource_material_receipt_inspection(inspection):
+                return
 
         qty = float(defect_record.defect_quantity or 0)
         if qty <= 0:
@@ -1330,28 +1351,20 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             )
             return
 
-        if defect_record.incoming_inspection_id:
-            from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
-
-            inspection = await IncomingInspection.get_or_none(
+        if inspection is not None and inspection.supplier_id:
+            await self._execute_accept_via_purchase_receipt(
                 tenant_id=tenant_id,
-                id=int(defect_record.incoming_inspection_id),
-                deleted_at__isnull=True,
+                defect_record=defect_record,
+                updated_by=updated_by,
+                stock_warehouse_id=stock_warehouse_id,
+                material_code=material_code,
+                material_name=material_name,
+                material_unit=material_unit,
+                warehouse_id=warehouse_id,
+                warehouse_name=warehouse_name,
+                qty=qty,
             )
-            if inspection and inspection.supplier_id:
-                await self._execute_accept_via_purchase_receipt(
-                    tenant_id=tenant_id,
-                    defect_record=defect_record,
-                    updated_by=updated_by,
-                    stock_warehouse_id=stock_warehouse_id,
-                    material_code=material_code,
-                    material_name=material_name,
-                    material_unit=material_unit,
-                    warehouse_id=warehouse_id,
-                    warehouse_name=warehouse_name,
-                    qty=qty,
-                )
-                return
+            return
 
         await self._execute_accept_via_other_inbound(
             tenant_id=tenant_id,
