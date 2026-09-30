@@ -119,8 +119,8 @@ async def _effective_completion_quantity(
 ) -> Decimal:
     """
     工序完成判定用数量：
-    - none/simple：报工累计合格
-    - plan：过程检验放行后的可转下道合格（未检完不得算完成）
+    - none：报工累计合格
+    - simple / plan：过程检验放行数量（未放行不得算完成，不含让步）
     """
     from apps.kuaizhizao.services.operation_transfer_service import (
         resolve_operation_transfer_qualified,
@@ -208,6 +208,60 @@ async def _sync_operation_completion_status(
     return await _maybe_mark_operation_completed(
         tenant_id, work_order, work_order_operation, now=now
     )
+
+
+async def _mark_approved_operation_completion(
+    tenant_id: int,
+    work_order: WorkOrder,
+    work_order_operation: WorkOrderOperation,
+    *,
+    reporting_type: str,
+    reported_quantity: Decimal,
+) -> bool:
+    """审核通过后判定工序是否本次变为 completed。关键工序走放行数量，不因报工数量大于 0 直接完成。"""
+    from apps.kuaizhizao.services.operation_transfer_service import resolve_operation_ipqc_mode
+
+    status_shortcut = reporting_type == "status" and reported_quantity > 0
+    if status_shortcut:
+        mode = await resolve_operation_ipqc_mode(tenant_id, work_order_operation)
+        if mode not in ("simple", "plan"):
+            if work_order_operation.status != "completed":
+                work_order_operation.status = "completed"
+                work_order_operation.actual_end_date = resolve_business_datetime()
+                return True
+            return False
+    was_completed = work_order_operation.status == "completed"
+    if await _sync_operation_completion_status(
+        tenant_id, work_order, work_order_operation
+    ):
+        return (not was_completed) and work_order_operation.status == "completed"
+    return False
+
+
+async def _apply_key_last_operation_header_output(
+    tenant_id: int,
+    work_order: WorkOrder,
+    last_op: WorkOrderOperation,
+    *,
+    policy_cache: Optional[Dict[int, Any]] = None,
+    inspections_by_op: Optional[Dict[int, List[Any]]] = None,
+) -> None:
+    """末道是关键工序时，工单头完成/合格数量改为放行合格数加已处理让步。"""
+    from apps.kuaizhizao.services.operation_transfer_service import (
+        resolve_key_operation_output_quantity,
+    )
+
+    output = await resolve_key_operation_output_quantity(
+        tenant_id,
+        int(work_order.id),
+        last_op,
+        policy_cache=policy_cache,
+        inspections_by_op=inspections_by_op,
+    )
+    if output is None:
+        return
+    work_order.completed_quantity = output
+    work_order.qualified_quantity = output
 
 
 async def _compute_operation_reportable_remaining(
@@ -852,9 +906,28 @@ class ReportingService(AppBaseService[ReportingRecord]):
             ):
                 return None
 
-            qualified = float(record.qualified_quantity or 0)
-            if qualified <= 0:
-                return None
+            woo = await _resolve_work_order_operation_for_reporting(
+                tenant_id,
+                record.work_order_id,
+                record.operation_id,
+            )
+            key_output = None
+            if woo is not None:
+                from apps.kuaizhizao.services.operation_transfer_service import (
+                    resolve_key_operation_output_quantity,
+                )
+
+                key_output = await resolve_key_operation_output_quantity(
+                    tenant_id, int(record.work_order_id), woo
+                )
+            if key_output is not None:
+                if key_output <= 0:
+                    return None
+                qualified = float(key_output)
+            else:
+                qualified = float(record.qualified_quantity or 0)
+                if qualified <= 0:
+                    return None
 
             if await self._direct_inbound_receipt_exists_for_reporting(
                 tenant_id, reporting_record_id
@@ -1637,18 +1710,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 待审核报工可累计数量，但工序 completed 须在审核通过后判定（与撤回报工「仅统计 approved」一致）
             operation_became_completed = False
             if reporting_record.status == "approved":
-                if reporting_type == "status" and reported_quantity_dec > 0:
-                    if work_order_operation.status != "completed":
-                        work_order_operation.status = "completed"
-                        work_order_operation.actual_end_date = resolve_business_datetime()
-                        operation_became_completed = True
-                else:
-                    was_completed = work_order_operation.status == "completed"
-                    if await _sync_operation_completion_status(
-                        tenant_id, work_order, work_order_operation
-                    ):
-                        if not was_completed and work_order_operation.status == "completed":
-                            operation_became_completed = True
+                operation_became_completed = await _mark_approved_operation_completion(
+                    tenant_id,
+                    work_order,
+                    work_order_operation,
+                    reporting_type=reporting_type,
+                    reported_quantity=reported_quantity_dec,
+                )
 
             _sync_operation_assigned_producer_from_reporting(
                 work_order_operation,
@@ -1685,11 +1753,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 work_order.status = 'in_progress'
                 work_order.actual_end_date = None
 
-            # 工单头已完成/合格数量 = 末道工序累计（不按全工序报工相加）
+            # 工单头已完成/合格数量 = 末道工序。非关键末道保持报工数；关键末道改为放行数加已处理让步。
             if all_operations:
                 last_op = max(all_operations, key=lambda op: (op.sequence or 0, op.id or 0))
                 work_order.completed_quantity = last_op.completed_quantity or Decimal("0")
                 work_order.qualified_quantity = last_op.qualified_quantity or Decimal("0")
+                await _apply_key_last_operation_header_output(
+                    tenant_id, work_order, last_op
+                )
             else:
                 work_order.completed_quantity = Decimal("0")
                 work_order.qualified_quantity = Decimal("0")
@@ -3077,8 +3148,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
         多道工序时，各工序报工合格数表示该工序产出，不能简单相加作为工单成品数量；
         工单维度应以 sequence 最大的工序为准：
-        - completed_quantity：末道报工完成数（现场产出）
-        - qualified_quantity：末道有效合格（方案质检为检验放行数，未检完不计）
+        - 非关键末道：completed_quantity 为末道报工完成数，qualified_quantity 为报工合格数
+        - 关键末道：两者都是过程检验放行合格数加已处理让步；合计为 0 时不写回报工合格数
         """
         operations = await WorkOrderOperation.filter(
             tenant_id=tenant_id,
@@ -3111,6 +3182,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
         work_order.qualified_quantity = await resolve_operation_transfer_qualified(
             tenant_id,
             int(work_order.id),
+            last_op,
+            policy_cache=policy_cache,
+            inspections_by_op=inspections_by_op,
+        )
+        await _apply_key_last_operation_header_output(
+            tenant_id,
+            work_order,
             last_op,
             policy_cache=policy_cache,
             inspections_by_op=inspections_by_op,
