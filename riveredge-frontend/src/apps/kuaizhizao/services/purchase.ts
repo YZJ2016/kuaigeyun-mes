@@ -159,6 +159,8 @@ export interface PurchaseOrder {
   capabilities?: PurchaseOrderCapabilities;
   prepayment_amount?: number | null;
   prepayment_bank_account_id?: number | null;
+  /** 空：还没跑过。missing：未补齐。backfilled：已补齐。 */
+  prepayment_backfill_status?: string | null;
   payment_milestones?: PurchaseOrderPaymentMilestone[];
 }
 

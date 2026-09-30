@@ -7243,6 +7243,8 @@ export default {
   'app.kuaizhizao.purchaseOrder.form.prepaymentAmountPlaceholder': '前払金額を入力',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccount': '前払銀行口座',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccountPlaceholder': '前払銀行口座を選択',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillMissing': '未補完',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillDone': '補完済',
   'app.kuaizhizao.purchaseOrder.loadBankAccountsFailed': '銀行口座の読み込みに失敗しました。財務管理で有効な口座が登録されているか確認してください',
   'app.kuaizhizao.purchaseOrder.form.itemsTitle': '購入ライン',
   'app.kuaizhizao.purchaseOrder.form.itemsRequired': '少なくとも 1 つの購入行を追加します',

@@ -7251,6 +7251,8 @@ export default {
   'app.kuaizhizao.purchaseOrder.form.prepaymentAmountPlaceholder': 'ໃສ່ຈຳນວນເງິນລ່ວງໜ້າ',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccount': 'ບັນຊີທະນາຄານຊໍາລະລ່ວງໜ້າ',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccountPlaceholder': 'ເລືອກບັນຊີທະນາຄານການຈ່າຍເງິນລ່ວງໜ້າ',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillMissing': 'ຍັງບໍ່ທັນຕື່ມ',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillDone': 'ຕື່ມແລ້ວ',
   'app.kuaizhizao.purchaseOrder.loadBankAccountsFailed': 'ໂຫຼດບັນຊີທະນາຄານບໍ່ສຳເລັດ. ໃຫ້ແນ່ໃຈວ່າບັນຊີທີ່ມີການເຄື່ອນໄຫວຢູ່ໃນການເງິນ.',
   'app.kuaizhizao.purchaseOrder.form.itemsTitle': 'ສາຍການຊື້',
   'app.kuaizhizao.purchaseOrder.form.itemsRequired': 'ເພີ່ມຢ່າງໜ້ອຍໜຶ່ງແຖວການຊື້',
