@@ -6041,10 +6041,24 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         tenant_id: int,
         work_order_id: int,
     ) -> None:
-        """过程检验放行/变更后：按检验有效合格重算工序与工单完成态。"""
-        from apps.kuaizhizao.services.reporting_service import sync_work_order_operations_completion
+        """过程检验放行/变更后：重算工序完成态，再按末道重计工单头产出。"""
+        from apps.kuaizhizao.services.reporting_service import (
+            ReportingService,
+            sync_work_order_operations_completion,
+        )
 
         await sync_work_order_operations_completion(tenant_id, work_order_id)
+        work_order = await WorkOrder.get_or_none(
+            id=work_order_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if work_order is None:
+            return
+        await ReportingService()._sync_work_order_header_quantities_from_last_operation(
+            tenant_id, work_order
+        )
+        await work_order.save()
 
     async def update_work_order_operations(
         self,
