@@ -94,6 +94,10 @@ class PurchaseOrder(BaseModel):
         max_digits=14, decimal_places=4, null=True, description="预付款金额"
     )
     prepayment_bank_account_id = fields.IntField(null=True, description="预付款银行账户ID")
+    # 空：还没跑过批量补齐。missing：未补齐。backfilled：已补齐。
+    prepayment_backfill_status = fields.CharField(
+        max_length=20, null=True, description="预付补齐状态"
+    )
 
     # 备注
     notes = fields.TextField(null=True, description="备注")

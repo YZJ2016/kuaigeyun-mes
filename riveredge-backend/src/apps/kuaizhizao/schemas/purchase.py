@@ -132,6 +132,11 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     payment_milestones: Optional[List[PurchaseOrderMilestoneResponse]] = Field(
         None, description="付款计划"
     )
+    prepayment_backfill_status: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="预付补齐状态：空=还没跑过，missing=未补齐，backfilled=已补齐",
+    )
 
 
 class PurchaseOrderListResponse(PurchaseOrderResponse):

@@ -332,12 +332,22 @@ async def _existing_order_prepayment_relation(
     ).exists()
 
 
+async def _commit_purchase_order_prepayment_mark(order, status: str) -> None:
+    """提交这一张采购订单的预付补齐标记。写入失败向调用方上抛。"""
+    from tortoise.transactions import in_transaction
+
+    order.prepayment_backfill_status = status
+    async with in_transaction():
+        await order.save(update_fields=["prepayment_backfill_status", "updated_at"])
+
+
 async def backfill_missing_purchase_order_prepayments(
     tenant_id: int, *, operator_id: int
 ) -> int:
     """
     补齐历史缺口：已确认采购订单填写了预付金额，但提交时未生成预付付款单。
-    幂等（已有 purchase_order→payment 关联则跳过）。
+    已有 purchase_order→payment 关联则标已补齐并跳过生成。
+    生成失败把该订单标未补齐并提交后继续下一张；标记写入失败则上抛。
     """
     from apps.kuaizhizao.constants import DocumentStatus, LEGACY_AUDITED_VALUES, normalize_status
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder
@@ -361,6 +371,7 @@ async def backfill_missing_purchase_order_prepayments(
         if await _existing_order_prepayment_relation(
             tenant_id, "purchase_order", int(order.id), "payment"
         ):
+            await _commit_purchase_order_prepayment_mark(order, "backfilled")
             continue
         try:
             payment_id = await ensure_prepayment_payment_for_purchase_order(
@@ -373,14 +384,17 @@ async def backfill_missing_purchase_order_prepayments(
                 prepayment_bank_account_id=order.prepayment_bank_account_id,
                 operator_id=operator_id,
             )
-            if payment_id:
-                created += 1
         except Exception as e:
             logger.warning(
                 "补齐采购订单 %s 预付付款单失败: %s",
                 getattr(order, "order_code", order.id),
                 e,
             )
+            await _commit_purchase_order_prepayment_mark(order, "missing")
+            continue
+        if payment_id:
+            created += 1
+            await _commit_purchase_order_prepayment_mark(order, "backfilled")
     return created
 
 

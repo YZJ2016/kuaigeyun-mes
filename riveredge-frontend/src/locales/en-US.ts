@@ -7393,6 +7393,8 @@ export default {
   'app.kuaizhizao.purchaseOrder.form.prepaymentAmountPlaceholder': 'Enter prepayment amount',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccount': 'Prepayment Bank Account',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccountPlaceholder': 'Select prepayment bank account',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillMissing': 'Not backfilled',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillDone': 'Backfilled',
   'app.kuaizhizao.purchaseOrder.loadBankAccountsFailed': 'Failed to load bank accounts. Ensure active accounts exist in Finance.',
   'app.kuaizhizao.purchaseOrder.form.itemsTitle': 'Purchase Lines',
   'app.kuaizhizao.purchaseOrder.form.itemsRequired': 'Add at least one purchase line',

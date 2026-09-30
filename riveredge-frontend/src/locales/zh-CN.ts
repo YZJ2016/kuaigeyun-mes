@@ -10830,6 +10830,8 @@ export default {
   'app.kuaizhizao.purchaseOrder.form.prepaymentAmountPlaceholder': '请输入预付金额',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccount': '预付银行账户',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccountPlaceholder': '请选择预付银行账户',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillMissing': '未补齐',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillDone': '已补齐',
   'app.kuaizhizao.purchaseOrder.loadBankAccountsFailed': '加载银行账户失败，请确认已在财务管理维护启用账户',
   'app.kuaizhizao.purchaseOrder.form.itemsTitle': '采购明细',
   'app.kuaizhizao.purchaseOrder.form.itemsRequired': '请至少添加一条采购明细',
