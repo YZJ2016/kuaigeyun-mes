@@ -4,7 +4,8 @@
  */
 import React from 'react';
 import { Progress } from 'antd';
-import { formatApiErrorDetail, getAntdMessage, getAntdModal } from '../services/api';
+import { formatApiErrorDetail } from '../services/api';
+import { getAntdMessage, getAntdModal } from './antdAppApis';
 import type { BatchImportResult } from './batchOperations';
 
 export const DEFAULT_IMPORT_CHUNK_SIZE = 100;
