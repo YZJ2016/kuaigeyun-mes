@@ -116,9 +116,15 @@ async def test_increase_rejects_when_warehouse_flags_unreadable():
             await _increase()
 
     message = str(raised.value)
+    assert message == "读取仓库批号或序列号管理开关失败，拒绝本笔入库"
+    assert raised.value.__cause__ is None
     assert "postgres://" not in message
     assert "secret" not in message
     assert "10.0.0.1" not in message
+    # 采购入库确认：__cause__ 为空时原样再抛，客户端拿到业务文案而不是读库异常
+    propagated = raised.value.__cause__ if raised.value.__cause__ is not None else raised.value
+    assert type(propagated) is BusinessLogicError
+    assert str(propagated) == "读取仓库批号或序列号管理开关失败，拒绝本笔入库"
     material_get.assert_not_called()
     record.assert_not_called()
 
