@@ -106,20 +106,64 @@ export function withKingdeePreviewLimit(
   return cloned;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** 与接口测试预览一致：解包 data.rows / items / records 等嵌套数组。 */
+function extractArrayFromObject(body: Record<string, unknown>, depth = 0): unknown[] | null {
+  const candidates = ['data', 'items', 'rows', 'records', 'Results', 'result', 'list'];
+  for (const key of candidates) {
+    const value = body[key];
+    if (Array.isArray(value)) {
+      return value;
+    }
+  }
+  if (depth >= 2) {
+    return null;
+  }
+  for (const key of candidates) {
+    const value = body[key];
+    if (isPlainObject(value)) {
+      const nested = extractArrayFromObject(value, depth + 1);
+      if (nested) {
+        return nested;
+      }
+    }
+  }
+  return null;
+}
+
+function normalizeBodyValue(body: unknown): unknown {
+  if (typeof body !== 'string') {
+    return body;
+  }
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return body;
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return body;
+  }
+}
+
 export function normalizeApiBodyToRows(
   body: unknown,
   columnNames?: string[],
 ): Record<string, unknown>[] {
-  if (body == null) return [];
-  if (typeof body === 'object' && !Array.isArray(body) && 'error' in (body as Record<string, unknown>)) {
-    throw new Error(String((body as Record<string, unknown>).error));
+  const normalized = normalizeBodyValue(body);
+  if (normalized == null) return [];
+  if (isPlainObject(normalized) && 'error' in normalized) {
+    throw new Error(String(normalized.error));
   }
-  if (Array.isArray(body)) {
-    if (body.length === 0) return [];
-    const first = body[0];
+  if (Array.isArray(normalized)) {
+    if (normalized.length === 0) return [];
+    const first = normalized[0];
     if (Array.isArray(first)) {
       const cols = columnNames?.length ? columnNames : first.map((_, index) => `col_${index}`);
-      return body
+      return normalized
         .filter((row): row is unknown[] => Array.isArray(row))
         .map((row) => {
           const padded = [...row, ...Array(Math.max(0, cols.length - row.length)).fill(null)];
@@ -127,17 +171,20 @@ export function normalizeApiBodyToRows(
         });
     }
     if (typeof first === 'object' && first !== null) {
-      return body.filter((row): row is Record<string, unknown> => typeof row === 'object' && row !== null);
+      return normalized.filter(
+        (row): row is Record<string, unknown> => typeof row === 'object' && row !== null,
+      );
     }
-    return body.map((value) => ({ value }));
+    return normalized.map((value) => ({ value }));
   }
-  if (typeof body === 'object') {
-    const record = body as Record<string, unknown>;
-    if (Array.isArray(record.data)) return normalizeApiBodyToRows(record.data, columnNames);
-    if (Array.isArray(record.items)) return normalizeApiBodyToRows(record.items, columnNames);
-    return [record];
+  if (isPlainObject(normalized)) {
+    const nested = extractArrayFromObject(normalized);
+    if (nested) {
+      return normalizeApiBodyToRows(nested, columnNames);
+    }
+    return [normalized];
   }
-  return [{ value: body }];
+  return [{ value: normalized }];
 }
 
 const CAMEL_SNAKE_PAIRS: Array<[string, string]> = [
