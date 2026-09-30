@@ -448,3 +448,123 @@ async def test_platform_commands_stay_not_sent_and_are_not_claimed(db):
     with pytest.raises(ValidationError, match="MQTT"):
         await create_command(1, mqtt_device.id, function_key="set_speed", params={"value": 1})
     assert await KuaiiotDeviceCommand.filter(device_id=mqtt_device.id).count() == 0
+
+
+@pytest.mark.asyncio
+async def test_platform_command_without_edge_action_stays_not_sent(db):
+    set_current_tenant_id(1)
+    product = await product_service.create_product(
+        1,
+        ProductCreate(
+            code="no-edge",
+            name="无边缘动作产品",
+            functions=[
+                ProductFunctionIn(
+                    function_key="reboot",
+                    name="平台重启",
+                    params=[ProductFunctionParamIn(key="value", name="值", value_type="number", required=True)],
+                )
+            ],
+        ),
+    )
+    connection = await control_service.create_connection(
+        1,
+        ConnectionCreate(
+            code="conn-no-edge",
+            name="平台",
+            connection_type="thingsboard",
+            config=dict(_PATH_CONFIG),
+        ),
+    )
+    device = await control_service.create_device(
+        1,
+        DeviceCreate(
+            connection_id=connection.id,
+            external_device_id="ext-no-edge",
+            code="dev-no-edge",
+            name="采集no-edge",
+        ),
+    )
+    device.product_id = product.id
+    await device.save(update_fields=["product_id", "updated_at"])
+    command = await create_command(1, device.id, function_key="reboot", params={"value": 1})
+    assert command.dispatch_channel == "thingsboard"
+    assert command.status == NOT_SENT
+    assert await claim_pending_commands(1, device.id) == []
+
+    edge_connection = await control_service.create_connection(
+        1,
+        ConnectionCreate(code="conn-edge-na", name="边缘", connection_type="http"),
+    )
+    edge_device = await control_service.create_device(
+        1,
+        DeviceCreate(
+            connection_id=edge_connection.id,
+            external_device_id="ext-edge-na",
+            code="dev-edge-na",
+            name="采集edge-na",
+        ),
+    )
+    edge_device.product_id = product.id
+    await edge_device.save(update_fields=["product_id", "updated_at"])
+    with pytest.raises(ValidationError, match="写寄存器地址"):
+        await create_command(1, edge_device.id, function_key="reboot", params={"value": 1})
+    assert await KuaiiotDeviceCommand.filter(device_id=edge_device.id).count() == 0
+
+
+@pytest.mark.asyncio
+async def test_overlength_idempotency_key_is_rejected(db):
+    set_current_tenant_id(1)
+    connection, device = await _mapped_device("long-key", "thingsboard", dict(_PATH_CONFIG))
+    result = await platform_telemetry.normalize_thingsboard(connection, _mapped_payload(device, "k" * 200))
+    assert result["stored"] is False
+    assert "幂等键" in str(result.get("reason") or "")
+    assert await KuaiiotTagSnapshot.filter(device_id=device.id).count() == 0
+
+
+def test_topic_matches_treats_empty_levels_as_real_levels():
+    assert platform_telemetry.topic_matches("a//b", "a//b") is True
+    assert platform_telemetry.topic_matches("a/+/b", "a//b") is True
+    assert platform_telemetry.topic_matches("a/#", "a//b") is True
+    assert platform_telemetry.topic_matches("a/b", "a//b") is False
+    assert platform_telemetry.topic_matches("a//b", "a/b") is False
+    assert platform_telemetry.topic_matches("a/b/c", "a//b") is False
+    assert platform_telemetry.topic_matches("", "") is False
+    assert platform_telemetry.topic_matches("a/b", "a/b") is True
+    assert platform_telemetry.topic_matches("a/+", "a/b") is True
+    assert platform_telemetry.topic_matches("a/#", "a/b/c") is True
+
+
+@pytest.mark.asyncio
+async def test_pull_skips_invalid_records_without_breaking(db, monkeypatch):
+    set_current_tenant_id(1)
+    _connection, device = await _mapped_device("pull-mix", "thingsboard", dict(_PATH_CONFIG))
+
+    def _mixed() -> list[dict]:
+        return [
+            {"device_token": device.device_token, "tags": {"temp": "1"}, "idempotency_key": "k" * 200},
+            {"device_token": device.device_token, "tags": {"temp": "2"}, "timestamp": "not-a-time"},
+            {"device_token": device.device_token, "tags": {"temp": "3"}, "idempotency_key": "good-key"},
+        ]
+
+    monkeypatch.setattr(platform_telemetry, "load_platform_records", _mixed)
+    pulled = await run_kuaiiot_telemetry_pull()
+    assert pulled == {"stored": 1, "skipped_unregistered": 2}
+    snapshots = await KuaiiotTagSnapshot.filter(device_id=device.id)
+    assert len(snapshots) == 1
+    assert snapshots[0].value_number == Decimal("3")
+
+
+@pytest.mark.asyncio
+async def test_mqtt_reload_matches_connection_type_case_insensitively(db):
+    set_current_tenant_id(1)
+    await control_service.create_connection(
+        1,
+        ConnectionCreate(
+            code="conn-uptype",
+            name="上行",
+            connection_type="MQTT",
+            config={"topic": "plant/#"},
+        ),
+    )
+    assert await run_kuaiiot_mqtt_reload() == {"subscriptions_aligned": 1}

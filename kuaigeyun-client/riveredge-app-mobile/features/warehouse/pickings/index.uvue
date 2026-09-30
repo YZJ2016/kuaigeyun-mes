@@ -1,0 +1,7 @@
+<template>
+	<WarehouseBoard kind="pickings"></WarehouseBoard>
+</template>
+
+<script setup lang="uts">
+	import WarehouseBoard from '../board.uvue'
+</script>

@@ -1,0 +1,12 @@
+<template>
+	<InspectionBoard
+		list-path="/api/v1/apps/kuaizhizao/oqc-inspections"
+		conduct-kind="oqc"
+		custom-table=""
+		photo-category="oqc_inspection_attachments"
+	/>
+</template>
+
+<script setup lang="uts">
+	import InspectionBoard from '../components/inspection-board.uvue'
+</script>

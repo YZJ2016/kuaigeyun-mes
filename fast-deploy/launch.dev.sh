@@ -2,7 +2,7 @@
 # RiverEdge SaaS 多组织框架 - 一键启动脚本 (重构稳定版)
 # 用法:
 #   ./fast-deploy/launch.dev.sh              # 后端 + Worker + PC 前端
-#   ./fast-deploy/launch.dev.sh with-h5      # 同上，并启动手机 Expo Web（别名: withh5 / with5）
+#   ./fast-deploy/launch.dev.sh with-h5      # 同上。H5 由本机 HBuilderX 发行，不启动 Expo，不编译 uni-app x
 #   ./fast-deploy/launch.dev.sh stop|status|be|fe|me
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
@@ -648,62 +648,9 @@ start_frontend() {
     return 1
 }
 
-start_mobile() {
-    ensure_nodejs_path || return 1
-    if [ ! -f "${MOBILE_APP_DIR}/package.json" ]; then
-        log_error "缺少手机端工程: ${MOBILE_APP_DIR}"
-        log_error "请将闭源 mobile 组装到 riveredge-app/mobile 后再用 with-h5"
-        return 1
-    fi
-    log_info "正在拉起手机 Expo Web (${MOBILE_PORT})..."
-    stop_mobile
-    ensure_mobile_port_free || return 1
-    verify_mobile_port_bindable || return 1
-    if mobile_port_has_live_listener; then
-        log_error "端口 ${MOBILE_PORT} 启动前仍被占用: $(get_listening_pids "${MOBILE_PORT}" | tr '\n' ' ')"
-        return 1
-    fi
-    cd "${MOBILE_APP_DIR}"
-    if [ ! -d node_modules ]; then
-        log_info "手机端首次安装依赖..."
-        npm install || { cd "$PROJECT_ROOT"; return 1; }
-    fi
-    # nohup 无 TTY → Expo 始终非交互，端口不可 bind 时不会自动换端口；须确保 MOBILE_PORT 可绑定
-    # 勿设 CI=1：Expo 在 CI 下端口冲突会直接退出
-    unset CI EXPO_CI 2>/dev/null || true
-    export CI=false
-    export BROWSER=none
-    export EXPO_NO_TELEMETRY=1
-    : > "${PROJECT_ROOT}/.logs/mobile.log"
-    nohup npx expo start --web --port "${MOBILE_PORT}" \
-        > "${PROJECT_ROOT}/.logs/mobile.log" 2>&1 &
-    echo $! > "${PROJECT_ROOT}/.logs/mobile.pid"
-    cd "$PROJECT_ROOT"
-
-    local retries=0
-    while [ "$retries" -lt 45 ]; do
-        if mobile_http_ready; then
-            log_success "手机 H5 已就绪! → http://127.0.0.1:${MOBILE_PORT}/"
-            return 0
-        fi
-        if [ -f .logs/mobile.pid ]; then
-            local launcher
-            launcher="$(cat .logs/mobile.pid 2>/dev/null)"
-            if [ -n "$launcher" ] && ! pid_is_alive "$launcher"; then
-                if grep -q "Port ${MOBILE_PORT} is being used" .logs/mobile.log 2>/dev/null \
-                    || grep -q "Skipping dev server" .logs/mobile.log 2>/dev/null; then
-                    log_error "手机端端口 ${MOBILE_PORT} 冲突（Expo 已跳过启动），请执行: ./fast-deploy/launch.dev.sh stop 后再试"
-                else
-                    log_error "手机端进程已退出，请查看 .logs/mobile.log"
-                fi
-                return 1
-            fi
-        fi
-        sleep 1
-        retries=$((retries + 1))
-    done
-    log_warn "手机端尚未响应 HTTP（可能仍在打包），请稍后打开 http://127.0.0.1:${MOBILE_PORT}/ 或查看 .logs/mobile.log"
-    return 0
+note_h5_hbuilderx() {
+    log_info "H5 由本机 HBuilderX 发行。本脚本不要求 riveredge-app/mobile/package.json，不启动 Expo，也不编译 uni-app x。"
+    log_info "发行 Web 后，产物在 kuaigeyun-client/riveredge-app-mobile/unpackage/dist/build/web。"
 }
 
 stop_mobile() {
@@ -794,10 +741,7 @@ case "$CMD" in
     be) start_backend ;;
     fe) start_frontend ;;
     me|h5)
-        mkdir -p .logs
-        start_mobile || exit 1
-        echo "  - Mobile H5: http://127.0.0.1:${MOBILE_PORT}/"
-        echo "  - API 默认: http://127.0.0.1:${BACKEND_PORT}（需后端已启动）"
+        note_h5_hbuilderx
         ;;
     "")
         mkdir -p .logs
@@ -808,20 +752,17 @@ case "$CMD" in
         # 并在 Vite 回来的那一秒执行 location.reload() —— 表现为「系统开着好一会儿后页面自己刷一下」。
         if start_frontend && start_backend 1 && start_worker; then
             if [ "$WITH_H5" = "1" ]; then
-                start_mobile || {
-                    log_error "PC 端已起，手机端失败，请查看 .logs/mobile.log"
-                    exit 1
-                }
+                note_h5_hbuilderx
             fi
             log_success "🚀 RiverEdge 系统已恢复就绪!"
             echo "  - Web: http://127.0.0.1:${FRONTEND_PORT} / http://localhost:${FRONTEND_PORT}"
             echo "  - API: http://127.0.0.1:${BACKEND_PORT} / http://localhost:${BACKEND_PORT}"
             if [ "$WITH_H5" = "1" ]; then
-                echo "  - Mobile H5: http://127.0.0.1:${MOBILE_PORT}/"
+                echo "  - Mobile H5: 由本机 HBuilderX 发行，本脚本不启动 Expo，也不编译 uni-app x"
             fi
             echo "  - 局域网用本机 IP 替换主机名（前后端均监听 0.0.0.0）"
             if [ "$WITH_H5" != "1" ]; then
-                echo "  - 提示: 加 with-h5 可同时启动手机端 → ./fast-deploy/launch.dev.sh with-h5"
+                echo "  - 提示: with-h5 不启动手机 Expo。H5 由本机 HBuilderX 发行"
             fi
         else
             log_error "启动未完成，请查看 .logs/backend.log / .logs/frontend.log"

@@ -43,7 +43,7 @@ class MqttSubscriberService:
         """按 config.topic 统计可对齐的订阅。不连接 Broker，不读取口令。"""
         async with unscoped(reason="订阅对齐只读取各租户 MQTT 连接的 topic", resource="KuaiiotConnection"):
             rows = await KuaiiotConnection.filter(
-                connection_type="mqtt",
+                connection_type__iexact="mqtt",
                 is_enabled=True,
                 deleted_at__isnull=True,
             )

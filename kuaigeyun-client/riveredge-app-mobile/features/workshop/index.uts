@@ -1,0 +1,44 @@
+export type WorkshopEntry = {
+	key : string
+	label : string
+	route : string
+	page_path : string
+	platforms : string[]
+	in_workbench : boolean
+}
+
+export type WorkshopPackage = {
+	scope : string
+	entries : WorkshopEntry[]
+	badge : null
+}
+
+const platforms : string[] = ['h5', 'mp-weixin', 'app']
+
+function entry(key : string, label : string, route : string, pagePath : string) : WorkshopEntry {
+	return {
+		key: key,
+		label: label,
+		route: route,
+		page_path: pagePath,
+		platforms: platforms,
+		in_workbench: true,
+	}
+}
+
+export const featurePackage : WorkshopPackage = {
+	scope: 'workshop',
+	entries: [
+		entry('scan-report', '扫码报工', '/mes/scan', 'features/workshop/scan-report/index'),
+		entry('work-order-assign', '工单指派', '/mes/assign', 'features/workshop/work-order-assign/index'),
+		entry('my-work-orders', '我的工单', '/mes?my=1', 'features/workshop/my-work-orders/index'),
+		entry('work-orders', '全部工单', '/mes', 'features/workshop/work-orders/index'),
+		entry('reporting-history', '我的报工', '/mes/reporting-history', 'features/workshop/reporting-history/index'),
+		entry('reporting-approve', '报工审核', '/mes/reporting-approve', 'features/workshop/reporting-approve/index'),
+		entry('packing-binding', '装箱绑定', '/mes/packing', 'features/workshop/packing-binding/index'),
+		entry('exception-report', '异常提报', '/exception/report', 'features/workshop/exception-report/index'),
+		entry('exceptions', '异常追踪', '/exception', 'features/workshop/exceptions/index'),
+		entry('performance', '我的绩效', '/performance', 'features/workshop/performance/index'),
+	],
+	badge: null,
+}

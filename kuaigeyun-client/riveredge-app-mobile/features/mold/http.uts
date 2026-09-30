@@ -1,0 +1,241 @@
+import { request } from '../../shared/api/index.uts'
+
+export const MOLD_ARCHIVE = '/api/v1/apps/kuaizhizao/molds'
+export const MOLD_BORROWS = '/api/v1/apps/kuaizhizao/mold-borrows'
+export const MOLD_BORROWS_OUTSTANDING = '/api/v1/apps/kuaizhizao/mold-borrows/outstanding'
+export const MOLD_RETURNS = '/api/v1/apps/kuaizhizao/mold-returns'
+export const MOLD_RETURN_USAGE_PREVIEW = '/api/v1/apps/kuaizhizao/mold-returns/usage-preview'
+export const MOLD_MAINTENANCES = '/api/v1/apps/kuaizhizao/mold-maintenances'
+export const MOLD_MAINTENANCE_SCHEMES = '/api/v1/apps/kuaizhizao/mold-maintenance-schemes'
+export const MOLD_REPAIRS = '/api/v1/apps/kuaizhizao/mold-repairs'
+export const MOLD_REPAIR_SCHEMES = '/api/v1/apps/kuaizhizao/mold-repair-schemes'
+export const MOLD_REMINDERS = '/api/v1/apps/kuaizhizao/molds/maintenance-reminders'
+
+export function textOf(row: UTSJSONObject, key: string): string {
+	const value = row.getString(key)
+	if (value == null) {
+		return ''
+	}
+	return value
+}
+
+export function numberOf(row: UTSJSONObject, key: string): number {
+	const value = row.getNumber(key)
+	if (value == null) {
+		return 0
+	}
+	return value
+}
+
+export function readItems(payload: UTSJSONObject): UTSJSONObject[] {
+	const items = payload.getArray<UTSJSONObject>('items')
+	if (items == null) {
+		return []
+	}
+	return items
+}
+
+export function withQuery(url: string, query: string): string {
+	if (query == '') {
+		return url
+	}
+	return url + '?' + query
+}
+
+export function apiGet(url: string): Promise<UTSJSONObject> {
+	return request({
+		url: url,
+		method: 'GET'
+	}) as Promise<UTSJSONObject>
+}
+
+export function apiPost(url: string, data: UTSJSONObject): Promise<UTSJSONObject> {
+	return request({
+		url: url,
+		method: 'POST',
+		data: data
+	}) as Promise<UTSJSONObject>
+}
+
+export function putText(body: UTSJSONObject, key: string, value: string): void {
+	const trimmed = value.trim()
+	if (trimmed != '') {
+		body.set(key, trimmed)
+	}
+}
+
+export function isDateText(value: string): boolean {
+	const text = value.trim()
+	if (text.length != 10) {
+		return false
+	}
+	if (text.charAt(4) != '-' || text.charAt(7) != '-') {
+		return false
+	}
+	for (let i = 0; i < text.length; i++) {
+		const ch = text.charAt(i)
+		if (i == 4 || i == 7) {
+			continue
+		}
+		if (ch < '0' || ch > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+export function todayDate(): string {
+	const now = new Date()
+	const month = now.getMonth() + 1
+	const day = now.getDate()
+	let monthText = '' + month
+	let dayText = '' + day
+	if (month < 10) {
+		monthText = '0' + month
+	}
+	if (day < 10) {
+		dayText = '0' + day
+	}
+	return now.getFullYear() + '-' + monthText + '-' + dayText
+}
+
+export function readError(err: any | null): string {
+	if (err == null) {
+		return '请求失败'
+	}
+	try {
+		const obj = err as UTSJSONObject
+		const message = obj.getString('message')
+		if (message != null && message != '') {
+			return message
+		}
+		const detail = obj.getString('detail')
+		if (detail != null && detail != '') {
+			return detail
+		}
+	} catch (ignored) {
+	}
+	const text = '' + err
+	if (text == '' || text == '[object Object]') {
+		return '请求失败'
+	}
+	if (text.indexOf('/api/') >= 0 || text.indexOf('http') >= 0 || text.length > 200) {
+		return '请求失败'
+	}
+	return text
+}
+
+export class NamedOption {
+	id: number = 0
+	label: string = ''
+}
+
+export function mapNamedOptions(payload: UTSJSONObject): NamedOption[] {
+	const items = readItems(payload)
+	const rows: NamedOption[] = []
+	for (let i = 0; i < items.length; i++) {
+		const item = items[i]
+		const row = new NamedOption()
+		row.id = numberOf(item, 'id')
+		const code = textOf(item, 'code')
+		const name = textOf(item, 'name')
+		if (code != '' && name != '') {
+			row.label = code + ' - ' + name
+		} else if (name != '') {
+			row.label = name
+		} else if (code != '') {
+			row.label = code
+		} else {
+			row.label = '' + row.id
+		}
+		rows.push(row)
+	}
+	return rows
+}
+
+export class DocLine {
+	title: string = ''
+	detail: string = ''
+}
+
+export class SubmitLine {
+	lineNo: number = 1
+	itemId: number = 0
+	itemCode: string = ''
+	itemName: string = ''
+	requirement: string = ''
+	remark: string = ''
+	executed: boolean = false
+	label: string = ''
+}
+
+export function readPreviewLines(payload: UTSJSONObject): SubmitLine[] {
+	const raw = payload.getArray<UTSJSONObject>('lines')
+	const rows: SubmitLine[] = []
+	if (raw == null) {
+		return rows
+	}
+	for (let i = 0; i < raw.length; i++) {
+		const item = raw[i]
+		const line = new SubmitLine()
+		const lineNo = numberOf(item, 'line_no')
+		line.lineNo = lineNo > 0 ? lineNo : (i + 1)
+		line.itemId = numberOf(item, 'item_id')
+		line.itemCode = textOf(item, 'item_code')
+		line.itemName = textOf(item, 'item_name')
+		line.requirement = textOf(item, 'requirement')
+		line.remark = textOf(item, 'remark')
+		line.executed = false
+		if (line.itemName != '') {
+			line.label = line.itemName
+		} else if (line.itemCode != '') {
+			line.label = line.itemCode
+		} else {
+			line.label = '明细 ' + line.lineNo
+		}
+		rows.push(line)
+	}
+	return rows
+}
+
+export function toPcLines(lines: SubmitLine[]): UTSJSONObject[] {
+	const rows: UTSJSONObject[] = []
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i]
+		const row = new UTSJSONObject()
+		row.set('line_no', line.lineNo)
+		if (line.itemId > 0) {
+			row.set('item_id', line.itemId)
+		}
+		if (line.itemCode != '') {
+			row.set('item_code', line.itemCode)
+		}
+		if (line.itemName != '') {
+			row.set('item_name', line.itemName)
+		}
+		if (line.requirement != '') {
+			row.set('requirement', line.requirement)
+		}
+		row.set('executed', line.executed)
+		if (line.remark != '') {
+			row.set('remark', line.remark)
+		}
+		rows.push(row)
+	}
+	return rows
+}
+
+export function joinParts(parts: string[]): string {
+	let text = ''
+	for (let i = 0; i < parts.length; i++) {
+		const part = parts[i]
+		if (part == '') {
+			continue
+		}
+		if (text != '') {
+			text = text + ' · '
+		}
+		text = text + part
+	}
+	return text
+}

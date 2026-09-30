@@ -1,0 +1,119 @@
+<template>
+	<view class="page">
+		<view class="modes">
+			<button class="action" @click="switchKind('material-shortage')">缺料</button>
+			<button class="action" @click="switchKind('delivery-delay')">交期</button>
+			<button class="action" @click="switchKind('quality')">质量</button>
+		</view>
+		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
+		<text v-if="loading" class="hint">加载中</text>
+		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="hint">暂无异常</text>
+		<view v-for="(row, index) in rows" :key="index" class="card">
+			<text class="title">{{ lineTitle(row) }}</text>
+			<text class="sub">{{ lineSub(row) }}</text>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { readRows, textOf, errorText } from '../json.uts'
+
+	const kind = ref('material-shortage')
+	const rows = ref<any[]>([])
+	const loading = ref(false)
+	const errorTextValue = ref('')
+
+	function lineTitle(row : any) : string {
+		if (kind.value == 'quality') {
+			return textOf(row, 'problem_description')
+		}
+		if (kind.value == 'delivery-delay') {
+			return textOf(row, 'work_order_code') + ' ' + textOf(row, 'delay_reason')
+		}
+		return textOf(row, 'work_order_code') + ' ' + textOf(row, 'material_name')
+	}
+
+	function lineSub(row : any) : string {
+		if (kind.value == 'quality') {
+			return textOf(row, 'work_order_code') + '  ' + textOf(row, 'severity') + '  ' + textOf(row, 'status')
+		}
+		if (kind.value == 'delivery-delay') {
+			return '延期 ' + textOf(row, 'delay_days') + ' 天  ' + textOf(row, 'status')
+		}
+		return '缺料 ' + textOf(row, 'shortage_quantity') + '  ' + textOf(row, 'status')
+	}
+
+	async function load() {
+		loading.value = true
+		errorTextValue.value = ''
+		try {
+			const payload = await request({
+				method: 'GET',
+				path: '/api/v1/apps/kuaizhizao/exceptions/' + kind.value,
+				query: null,
+				body: null,
+			})
+			rows.value = readRows(payload)
+		} catch (err) {
+			errorTextValue.value = errorText(err)
+		}
+		loading.value = false
+	}
+
+	function switchKind(next : string) {
+		kind.value = next
+		rows.value = []
+		load()
+	}
+
+	onLoad(() => {
+		load()
+	})
+</script>
+
+<style>
+	.page {
+		flex-direction: column;
+		padding: 12px;
+	}
+
+	.modes {
+		flex-direction: row;
+		margin-bottom: 8px;
+	}
+
+	.hint {
+		font-size: 14px;
+		color: #888B9D;
+		margin-bottom: 8px;
+	}
+
+	.error {
+		font-size: 14px;
+		color: #FF4942;
+		margin-bottom: 8px;
+	}
+
+	.card {
+		flex-direction: column;
+		padding: 12px;
+		margin-bottom: 8px;
+		background-color: #ffffff;
+		border-radius: 16px;
+	}
+
+	.title {
+		font-size: 16px;
+	}
+
+	.sub {
+		font-size: 13px;
+		color: #888B9D;
+		margin-top: 4px;
+	}
+
+	.action {
+		margin-right: 8px;
+	}
+</style>

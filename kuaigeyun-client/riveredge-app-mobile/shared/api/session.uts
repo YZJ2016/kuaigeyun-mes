@@ -1,0 +1,77 @@
+const TOKEN_KEY = 'access_token'
+const TENANT_KEY = 'tenant_id'
+const PENDING_ENTRY_KEY = 'pending_entry'
+const USER_INFO_KEY = 'user_info'
+
+function readStorage(key : string) : string {
+	const raw = uni.getStorageSync(key)
+	if (raw == null) {
+		return ''
+	}
+	const text = String(raw).trim()
+	if (text == 'null' || text == 'undefined') {
+		return ''
+	}
+	return text
+}
+
+export function getToken() : string {
+	return readStorage(TOKEN_KEY)
+}
+
+export function setToken(token : string) : void {
+	const value = token.trim()
+	if (value.length == 0) {
+		clearToken()
+		return
+	}
+	uni.setStorageSync(TOKEN_KEY, value)
+}
+
+export function clearToken() : void {
+	uni.removeStorageSync(TOKEN_KEY)
+	uni.removeStorageSync(USER_INFO_KEY)
+}
+
+export function setSessionUser(id : number, fullName : string, username : string) : void {
+	if (id <= 0) {
+		return
+	}
+	const payload = new UTSJSONObject()
+	payload['id'] = id
+	payload['full_name'] = fullName
+	payload['username'] = username
+	const text = JSON.stringify(payload)
+	if (text == null || text.length == 0) {
+		return
+	}
+	uni.setStorageSync(USER_INFO_KEY, text)
+}
+
+export function getTenantId() : string {
+	return readStorage(TENANT_KEY)
+}
+
+export function setTenantId(tenantId : string) : void {
+	const value = tenantId.trim()
+	if (value.length == 0) {
+		uni.removeStorageSync(TENANT_KEY)
+		return
+	}
+	uni.setStorageSync(TENANT_KEY, value)
+}
+
+export function setPendingEntry(path : string) : void {
+	const value = path.trim()
+	if (value.length == 0) {
+		uni.removeStorageSync(PENDING_ENTRY_KEY)
+		return
+	}
+	uni.setStorageSync(PENDING_ENTRY_KEY, value)
+}
+
+export function takePendingEntry() : string {
+	const value = readStorage(PENDING_ENTRY_KEY)
+	uni.removeStorageSync(PENDING_ENTRY_KEY)
+	return value
+}

@@ -1,0 +1,181 @@
+<template>
+	<scroll-view class="page" direction="vertical">
+		<view class="block">
+			<text class="title">维修台账</text>
+			<button class="action" :disabled="busy" @click="loadList">刷新</button>
+			<text v-if="rows.length == 0" class="hint">暂无记录</text>
+			<view class="item" v-for="(item, index) in rows" :key="item.rowKey" @click="selectRow(index)">
+				<text class="item-title">{{ item.title }}</text>
+				<text class="hint">{{ item.detail }}</text>
+			</view>
+		</view>
+		<view class="block" v-if="completeUuid.length > 0">
+			<text class="title">完工</text>
+			<text class="hint">维修结果：{{ repairResult }}</text>
+			<view class="choices">
+				<button class="choice" @click="chooseResult(0)">成功</button>
+				<button class="choice" @click="chooseResult(1)">失败</button>
+				<button class="choice" @click="chooseResult(2)">部分成功</button>
+			</view>
+			<input class="input" v-model="faultCauseText" placeholder="故障原因" />
+			<input class="input" v-model="repairContentText" placeholder="维修内容" />
+			<input class="input" v-model="remarkText" placeholder="备注（可空）" />
+			<button class="action" type="primary" :disabled="busy" @click="submitComplete">完工</button>
+		</view>
+		<text v-if="messageText.length > 0" class="hint page-hint">{{ messageText }}</text>
+		<text v-if="errorText.length > 0" class="error page-hint">{{ errorText }}</text>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { asJson, joinParts, jsonItems, jsonText } from '../json-text.uts'
+
+	type ListRow = {
+		rowKey: string
+		uuid: string
+		title: string
+		detail: string
+		canComplete: boolean
+		blocked: string
+	}
+
+	const repairResults: string[] = ['成功', '失败', '部分成功']
+
+	const busy = ref(false)
+	const rows = ref<Array<ListRow>>([])
+	const completeUuid = ref('')
+	const repairResult = ref('成功')
+	const faultCauseText = ref('')
+	const repairContentText = ref('')
+	const remarkText = ref('')
+	const messageText = ref('')
+	const errorText = ref('')
+
+	function chooseResult(index: number): void {
+		repairResult.value = repairResults[index]
+	}
+
+	function selectRow(index: number): void {
+		const item = rows.value[index]
+		errorText.value = ''
+		messageText.value = ''
+		if (!item.canComplete) {
+			errorText.value = item.blocked
+			completeUuid.value = ''
+			return
+		}
+		completeUuid.value = item.uuid
+		repairResult.value = '成功'
+	}
+
+	async function loadList(): Promise<void> {
+		const raw = await request({
+			url: '/api/v1/apps/kuaizhizao/equipment-faults/repairs',
+			method: 'GET',
+			data: null
+		})
+		const items = jsonItems(asJson(raw))
+		const next: Array<ListRow> = []
+		for (let i = 0; i < items.length; i++) {
+			const row = items[i]
+			const status = jsonText(row, 'status')
+			const arrival = jsonText(row, 'arrival_at')
+			let canComplete = true
+			let blocked = ''
+			if (status == '已完成') {
+				canComplete = false
+				blocked = '该维修已完工'
+			} else if (arrival.length == 0) {
+				canComplete = false
+				blocked = '须先到场后再完工'
+			}
+			const title = jsonText(row, 'repair_no')
+			const detail = joinParts([
+				jsonText(row, 'equipment_name'),
+				jsonText(row, 'repair_type'),
+				status,
+				arrival.length > 0 ? arrival : '未到场'
+			])
+			const key = jsonText(row, 'uuid')
+			const view: ListRow = {
+				rowKey: key.length > 0 ? key : ('' + i),
+				uuid: key,
+				title: title.length > 0 ? title : '维修',
+				detail: detail,
+				canComplete: canComplete,
+				blocked: blocked
+			}
+			next.push(view)
+		}
+		rows.value = next
+	}
+
+	async function submitComplete(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		const uuid = completeUuid.value
+		if (uuid.length == 0) {
+			errorText.value = '请选择一条维修'
+			return
+		}
+		const cause = faultCauseText.value.trim()
+		const content = repairContentText.value.trim()
+		if (cause.length == 0) {
+			errorText.value = '请填写故障原因'
+			return
+		}
+		if (content.length == 0) {
+			errorText.value = '请填写维修内容'
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		messageText.value = ''
+		try {
+			const data = new UTSJSONObject()
+			data.set('fault_cause', cause)
+			data.set('repair_content', content)
+			data.set('repair_result', repairResult.value)
+			if (remarkText.value.trim().length > 0) {
+				data.set('remark', remarkText.value.trim())
+			}
+			await request({
+				url: '/api/v1/apps/kuaizhizao/equipment-faults/repairs/' + encodeURIComponent(uuid) + '/complete',
+				method: 'POST',
+				data: data
+			})
+			messageText.value = '已完工'
+			completeUuid.value = ''
+			faultCauseText.value = ''
+			repairContentText.value = ''
+			remarkText.value = ''
+			await loadList()
+		} catch (e) {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+
+	onShow(() => {
+		loadList().catch((e) => {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		})
+	})
+</script>
+
+<style>
+	.page { flex: 1; background-color: #F1F1F4; }
+	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
+	.title { font-size: 18px; color: #28113C; }
+	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
+	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
+	.page-hint { margin-left: 12px; margin-right: 12px; }
+	.input { margin-top: 8px; padding: 8px; font-size: 14px; background-color: #EEE5FB; }
+	.action { margin-top: 12px; }
+	.choice { margin-top: 8px; margin-right: 8px; }
+	.choices { flex-direction: row; flex-wrap: wrap; }
+	.item { margin-top: 12px; padding-top: 8px; border-top-width: 1px; border-top-style: solid; border-top-color: #E7D9FD; }
+	.item-title { font-size: 16px; color: #28113C; }
+</style>

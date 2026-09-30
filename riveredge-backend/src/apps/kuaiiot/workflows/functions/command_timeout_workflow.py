@@ -1,4 +1,4 @@
-"""已下发且超过 expires_at 的指令改为 timeout。不改 success 或 failed。"""
+"""pending 与 sent 中超过 expires_at 的指令改为 timeout。不改 success 或 failed。"""
 
 from apps.kuaiiot.services.command_service import timeout_sent_commands
 

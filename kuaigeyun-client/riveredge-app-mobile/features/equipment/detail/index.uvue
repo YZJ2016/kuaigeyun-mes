@@ -1,0 +1,82 @@
+<template>
+	<scroll-view class="page" direction="vertical">
+		<view class="block">
+			<text class="title">设备详情</text>
+			<button class="action" :disabled="busy" @click="loadDetail">刷新</button>
+			<text v-if="summaryText.length > 0" class="hint">{{ summaryText }}</text>
+			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { asJson, joinParts, jsonText } from '../json-text.uts'
+
+	const busy = ref(false)
+	const queryUuid = ref('')
+	const summaryText = ref('')
+	const errorText = ref('')
+
+	function readQueryUuid(options: OnLoadOptions): string {
+		const raw = options['uuid']
+		if (raw == null) {
+			return ''
+		}
+		return ('' + raw).trim()
+	}
+
+	async function loadDetail(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		const uuid = queryUuid.value
+		if (uuid.length == 0) {
+			errorText.value = '缺少设备 uuid'
+			summaryText.value = ''
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		try {
+			const raw = await request({
+				url: '/api/v1/apps/kuaizhizao/equipment/' + encodeURIComponent(uuid),
+				method: 'GET',
+				data: null
+			})
+			const body = asJson(raw)
+			summaryText.value = joinParts([
+				jsonText(body, 'code'),
+				jsonText(body, 'name'),
+				jsonText(body, 'status'),
+				jsonText(body, 'production_line_name'),
+				jsonText(body, 'workshop_name'),
+				jsonText(body, 'uuid')
+			])
+			if (summaryText.value.length == 0) {
+				errorText.value = '未打开设备'
+			}
+		} catch (e) {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+			summaryText.value = ''
+		}
+		busy.value = false
+	}
+
+	onLoad((options: OnLoadOptions) => {
+		queryUuid.value = readQueryUuid(options)
+	})
+
+	onShow(() => {
+		loadDetail()
+	})
+</script>
+
+<style>
+	.page { flex: 1; background-color: #F1F1F4; }
+	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
+	.title { font-size: 18px; color: #28113C; }
+	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
+	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
+	.action { margin-top: 12px; }
+</style>

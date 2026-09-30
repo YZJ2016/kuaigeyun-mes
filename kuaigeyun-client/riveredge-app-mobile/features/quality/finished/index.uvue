@@ -1,0 +1,12 @@
+<template>
+	<InspectionBoard
+		list-path="/api/v1/apps/kuaizhizao/finished-goods-inspections"
+		conduct-kind="standard"
+		custom-table="apps_kuaizhizao_finished_goods_inspections"
+		photo-category="finished_goods_inspection_attachments"
+	/>
+</template>
+
+<script setup lang="uts">
+	import InspectionBoard from '../components/inspection-board.uvue'
+</script>

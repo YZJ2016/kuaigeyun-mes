@@ -1,0 +1,473 @@
+<template>
+	<scroll-view class="page" scroll-y="true">
+		<view v-if="isQuery" class="row">
+			<input class="input grow" v-model="keyword" placeholder="物料编码、名称或仓库" />
+			<button size="mini" @click="reload">查询</button>
+		</view>
+		<button v-if="selectedId == 0" size="mini" @click="reload">刷新</button>
+		<text v-if="hint.length > 0" class="err">{{ hint }}</text>
+		<text v-if="loading" class="meta">加载中</text>
+
+		<view v-if="selectedId == 0">
+			<text v-if="!loading && cards.length == 0" class="meta">没有数据</text>
+			<view v-for="(card, index) in cards" :key="index" class="card" @click="openCard(index)">
+				<text class="title">{{ card.title }}</text>
+				<text v-if="card.status.length > 0" class="meta">{{ card.status }}</text>
+				<text v-if="card.subtitle.length > 0" class="meta">{{ card.subtitle }}</text>
+			</view>
+			<button v-if="cards.length < total" size="mini" @click="loadMore">加载更多</button>
+		</view>
+
+		<view v-else class="card">
+			<button size="mini" @click="closeDetail">返回列表</button>
+			<text class="title">{{ detailTitle }}</text>
+			<text v-if="detailStatus.length > 0" class="meta">{{ detailStatus }}</text>
+
+			<view v-if="showHeader">
+				<text class="label">仓库 ID</text>
+				<input class="input" :value="warehouseIdText" @input="onWarehouseId" />
+				<text class="label">仓库名称</text>
+				<input class="input" :value="warehouseName" @input="onWarehouseName" />
+				<text class="label">{{ personLabel }} ID</text>
+				<input class="input" :value="personIdText" @input="onPersonId" />
+				<text class="label">{{ personLabel }}</text>
+				<input class="input" :value="personName" @input="onPersonName" />
+			</view>
+
+			<view v-if="showLines || isStock">
+			<view v-for="(line, index) in lines" :key="index" class="line">
+				<text class="title">{{ line.materialCode }} {{ line.materialName }}</text>
+				<text v-if="line.displayQty.length > 0" class="meta">单据数量 {{ line.displayQty }}</text>
+				<view v-if="showLines">
+					<text class="label">仓库 ID</text>
+					<input class="input" :value="line.warehouseIdText" @input="onLineInput(index, 'warehouseIdText', $event)" />
+					<text class="label">仓库名称</text>
+					<input class="input" :value="line.warehouseName" @input="onLineInput(index, 'warehouseName', $event)" />
+					<text class="label">库位 ID</text>
+					<input class="input" :value="line.locationIdText" @input="onLineInput(index, 'locationIdText', $event)" />
+					<text class="label">库位编码</text>
+					<input class="input" :value="line.locationCode" @input="onLineInput(index, 'locationCode', $event)" />
+					<text class="label">批号</text>
+					<input class="input" :value="line.batchNumber" @input="onLineInput(index, 'batchNumber', $event)" />
+					<text class="label">序列号（逗号分隔）</text>
+					<input class="input" :value="line.serialText" @input="onLineInput(index, 'serialText', $event)" />
+					<view v-if="showReceipt">
+						<text class="label">实收数量</text>
+						<input class="input" :value="line.receiptQuantityText" @input="onLineInput(index, 'receiptQuantityText', $event)" />
+					</view>
+				</view>
+				<view v-if="isStock">
+					<text class="meta">账面 {{ line.bookQuantityText }}</text>
+					<text class="label">实际数量</text>
+					<input class="input" :value="line.actualQuantityText" @input="onLineInput(index, 'actualQuantityText', $event)" />
+					<text class="label">备注</text>
+					<input class="input" :value="line.remarks" @input="onLineInput(index, 'remarks', $event)" />
+					<button size="mini" type="primary" :disabled="busy" @click="submitStock(index)">记录实盘</button>
+				</view>
+			</view>
+			</view>
+
+			<view v-if="isAlert">
+				<text class="label">处理状态</text>
+				<view class="row">
+					<button size="mini" :type="alertStatus == 'processing' ? 'primary' : 'default'" @click="pickStatus('processing')">处理中</button>
+					<button size="mini" :type="alertStatus == 'resolved' ? 'primary' : 'default'" @click="pickStatus('resolved')">已解决</button>
+					<button size="mini" :type="alertStatus == 'ignored' ? 'primary' : 'default'" @click="pickStatus('ignored')">已忽略</button>
+				</view>
+				<text class="label">处理备注</text>
+				<input class="input" :value="alertNotes" @input="onAlertNotes" />
+			</view>
+
+			<button v-if="showSubmit" class="submit" type="primary" :disabled="busy" @click="submitMain">{{ actionLabel }}</button>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { alertHandlePath, apiGet, apiPost, confirmPath, detailPath, listPath, listQuery, sendPath, stockExecutePath, transferExecutePath } from './http.uts'
+	import { DocCard, LineForm } from './models.uts'
+	import { buildAlertBody, buildInboundBody, buildOutboundBody, buildSalesBody, buildStockBody } from './payload.uts'
+	import { errorMessage, readCards, readDetail, readTotal } from './read.uts'
+
+	const props = defineProps({
+		kind: {
+			type: String,
+			default: ''
+		}
+	})
+
+	const cards = ref<DocCard[]>([])
+	const lines = ref<LineForm[]>([])
+	const keyword = ref('')
+	const hint = ref('')
+	const loading = ref(false)
+	const busy = ref(false)
+	const skip = ref(0)
+	const page = ref(1)
+	const total = ref(0)
+	const selectedId = ref(0)
+	const detailTitle = ref('')
+	const detailStatus = ref('')
+	const warehouseIdText = ref('')
+	const warehouseName = ref('')
+	const personIdText = ref('')
+	const personName = ref('')
+	const alertStatus = ref('processing')
+	const alertNotes = ref('')
+
+	function currentKind(): string {
+		const value = props.kind
+		if (value == null) {
+			return ''
+		}
+		return value as string
+	}
+
+	function pageMode(kind: string): string {
+		if (kind == 'inventory-query') return 'query'
+		if (kind == 'delivery-notices') return 'send'
+		if (kind == 'inventory-transfer') return 'execute'
+		if (kind == 'stocktaking') return 'stock'
+		if (kind == 'inventory-alerts') return 'alert'
+		if (kind == 'sales-deliveries') return 'sales'
+		if (kind == 'pickings') return 'picking'
+		if (kind == 'other-outbound') return 'deliver'
+		return 'inbound'
+	}
+
+	const mode = computed((): string => {
+		return pageMode(currentKind())
+	})
+
+	const isQuery = computed((): boolean => {
+		return mode.value == 'query'
+	})
+
+	const isStock = computed((): boolean => {
+		return mode.value == 'stock'
+	})
+
+	const isAlert = computed((): boolean => {
+		return mode.value == 'alert'
+	})
+
+	const showHeader = computed((): boolean => {
+		const value = mode.value
+		return value == 'inbound' || value == 'picking' || value == 'deliver' || value == 'sales'
+	})
+
+	const showLines = computed((): boolean => {
+		return showHeader.value
+	})
+
+	const showReceipt = computed((): boolean => {
+		const kind = currentKind()
+		return kind == 'returns' || kind == 'fg-receipts' || kind == 'purchase-receipts' || kind == 'other-inbound'
+	})
+
+	const showSubmit = computed((): boolean => {
+		const value = mode.value
+		return value == 'inbound' || value == 'picking' || value == 'deliver' || value == 'sales' || value == 'send' || value == 'execute' || value == 'alert'
+	})
+
+	const personLabel = computed((): string => {
+		if (mode.value == 'picking') return '领料人'
+		if (mode.value == 'deliver' || mode.value == 'sales') return '出库人'
+		return '收货人'
+	})
+
+	const actionLabel = computed((): string => {
+		const kind = currentKind()
+		if (kind == 'pickings') return '确认领料'
+		if (kind == 'returns') return '确认退料'
+		if (kind == 'purchase-receipts') return '确认收货'
+		if (kind == 'sales-deliveries' || kind == 'other-outbound') return '确认出库'
+		if (kind == 'delivery-notices') return '发送'
+		if (kind == 'inventory-transfer') return '执行调拨'
+		if (kind == 'inventory-alerts') return '处理'
+		return '确认入库'
+	})
+
+	onMounted(() => {
+		reload()
+	})
+
+	function reload(): void {
+		skip.value = 0
+		page.value = 1
+		cards.value = []
+		void loadList(true)
+	}
+
+	function loadMore(): void {
+		if (currentKind() == 'inventory-query') {
+			page.value = page.value + 1
+		} else {
+			skip.value = skip.value + 50
+		}
+		void loadList(false)
+	}
+
+	async function loadList(reset: boolean): Promise<void> {
+		const path = listPath(currentKind())
+		if (path.length == 0) {
+			hint.value = '未知页面'
+			return
+		}
+		loading.value = true
+		hint.value = ''
+		try {
+			const raw = await apiGet(path, listQuery(currentKind(), skip.value, page.value, keyword.value))
+			const batch = readCards(raw)
+			total.value = readTotal(raw)
+			if (reset) {
+				cards.value = batch
+			} else {
+				const next: DocCard[] = []
+				const current = cards.value
+				for (let i = 0; i < current.length; i++) {
+					next.push(current[i])
+				}
+				for (let i = 0; i < batch.length; i++) {
+					next.push(batch[i])
+				}
+				cards.value = next
+			}
+		} catch (err) {
+			hint.value = errorMessage(err)
+		} finally {
+			loading.value = false
+		}
+	}
+
+	function openCard(index: number): void {
+		if (mode.value == 'query') {
+			return
+		}
+		const card = cards.value[index]
+		selectedId.value = card.id
+		detailTitle.value = card.title
+		detailStatus.value = card.status
+		void loadDetail()
+	}
+
+	function closeDetail(): void {
+		selectedId.value = 0
+		lines.value = []
+		hint.value = ''
+	}
+
+	async function loadDetail(): Promise<void> {
+		loading.value = true
+		hint.value = ''
+		try {
+			const raw = await apiGet(detailPath(currentKind(), selectedId.value), null)
+			const form = readDetail(currentKind(), raw)
+			warehouseIdText.value = form.warehouseIdText
+			warehouseName.value = form.warehouseName
+			personIdText.value = form.personIdText
+			personName.value = form.personName
+			lines.value = form.lines
+			alertStatus.value = 'processing'
+			alertNotes.value = ''
+		} catch (err) {
+			hint.value = errorMessage(err)
+		} finally {
+			loading.value = false
+		}
+	}
+
+	function onWarehouseId(e: UniInputEvent): void {
+		warehouseIdText.value = e.detail.value
+	}
+
+	function onWarehouseName(e: UniInputEvent): void {
+		warehouseName.value = e.detail.value
+	}
+
+	function onPersonId(e: UniInputEvent): void {
+		personIdText.value = e.detail.value
+	}
+
+	function onPersonName(e: UniInputEvent): void {
+		personName.value = e.detail.value
+	}
+
+	function onAlertNotes(e: UniInputEvent): void {
+		alertNotes.value = e.detail.value
+	}
+
+	function pickStatus(status: string): void {
+		alertStatus.value = status
+	}
+
+	function onLineInput(index: number, field: string, e: UniInputEvent): void {
+		const value = e.detail.value
+		const next: LineForm[] = []
+		const current = lines.value
+		for (let i = 0; i < current.length; i++) {
+			const line = current[i]
+			if (i == index) {
+				if (field == 'warehouseIdText') line.warehouseIdText = value
+				else if (field == 'warehouseName') line.warehouseName = value
+				else if (field == 'locationIdText') line.locationIdText = value
+				else if (field == 'locationCode') line.locationCode = value
+				else if (field == 'batchNumber') line.batchNumber = value
+				else if (field == 'serialText') line.serialText = value
+				else if (field == 'receiptQuantityText') line.receiptQuantityText = value
+				else if (field == 'actualQuantityText') line.actualQuantityText = value
+				else if (field == 'remarks') line.remarks = value
+			}
+			next.push(line)
+		}
+		lines.value = next
+	}
+
+	async function submitMain(): Promise<void> {
+		if (busy.value || selectedId.value <= 0) {
+			return
+		}
+		const kind = currentKind()
+		const value = mode.value
+		hint.value = ''
+		if (value == 'send') {
+			await postEmpty(sendPath(selectedId.value))
+			return
+		}
+		if (value == 'execute') {
+			await postEmpty(transferExecutePath(selectedId.value))
+			return
+		}
+		let body: UTSJSONObject | null = null
+		if (value == 'alert') {
+			body = buildAlertBody(alertStatus.value, alertNotes.value)
+		} else if (value == 'sales') {
+			body = buildSalesBody(warehouseIdText.value, warehouseName.value, personIdText.value, personName.value, lines.value)
+		} else if (value == 'picking') {
+			body = buildOutboundBody('picker', warehouseIdText.value, warehouseName.value, personIdText.value, personName.value, lines.value)
+		} else if (value == 'deliver') {
+			body = buildOutboundBody('deliverer', warehouseIdText.value, warehouseName.value, personIdText.value, personName.value, lines.value)
+		} else if (value == 'inbound') {
+			body = buildInboundBody(warehouseIdText.value, warehouseName.value, personIdText.value, personName.value, lines.value, true)
+		}
+		if (body == null) {
+			hint.value = '没有可提交的确认内容'
+			return
+		}
+		await postBody(value == 'alert' ? alertHandlePath(selectedId.value) : confirmPath(kind, selectedId.value), body)
+	}
+
+	async function submitStock(index: number): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		const line = lines.value[index]
+		const body = buildStockBody(line.actualQuantityText, line.remarks)
+		if (body == null) {
+			hint.value = '请填写实际数量'
+			return
+		}
+		await postBody(stockExecutePath(selectedId.value, line.itemId), body)
+	}
+
+	async function postEmpty(path: string): Promise<void> {
+		busy.value = true
+		hint.value = ''
+		try {
+			await apiPost(path, null)
+			uni.showToast({ title: '已提交', icon: 'none' })
+			closeDetail()
+			reload()
+		} catch (err) {
+			hint.value = errorMessage(err)
+		} finally {
+			busy.value = false
+		}
+	}
+
+	async function postBody(path: string, body: UTSJSONObject): Promise<void> {
+		busy.value = true
+		hint.value = ''
+		try {
+			await apiPost(path, body)
+			uni.showToast({ title: '已提交', icon: 'none' })
+			closeDetail()
+			reload()
+		} catch (err) {
+			hint.value = errorMessage(err)
+		} finally {
+			busy.value = false
+		}
+	}
+</script>
+
+<style>
+	.page {
+		flex: 1;
+		padding: 12px;
+		background-color: #F1F1F4;
+	}
+
+	.card {
+		background-color: #ffffff;
+		border-radius: 16px;
+		padding: 12px;
+		margin-top: 10px;
+	}
+
+	.line {
+		margin-top: 12px;
+		padding-top: 8px;
+		border-top-width: 1px;
+		border-top-style: solid;
+		border-top-color: #E7D9FD;
+	}
+
+	.title {
+		font-size: 16px;
+		color: #28113C;
+	}
+
+	.meta {
+		font-size: 13px;
+		color: #888B9D;
+		margin-top: 4px;
+	}
+
+	.label {
+		font-size: 12px;
+		color: #888B9D;
+		margin-top: 8px;
+	}
+
+	.err {
+		font-size: 13px;
+		color: #FF4942;
+		margin-top: 8px;
+	}
+
+	.input {
+		margin-top: 4px;
+		padding: 8px;
+		font-size: 14px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E7D9FD;
+		border-radius: 4px;
+	}
+
+	.row {
+		flex-direction: row;
+		align-items: center;
+		margin-top: 8px;
+	}
+
+	.grow {
+		flex: 1;
+		margin-right: 8px;
+	}
+
+	.submit {
+		margin-top: 16px;
+	}
+</style>

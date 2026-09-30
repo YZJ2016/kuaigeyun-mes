@@ -1,0 +1,74 @@
+export type CallResult = {
+	ok : boolean
+	message : string
+}
+
+export type ScanResult = {
+	ok : boolean
+	message : string
+	value : string
+}
+
+export type LoginCodeResult = {
+	connected : boolean
+	code : string
+}
+
+export function readBrowserQuery(_name : string) : string {
+	return ''
+}
+
+export function readBrowserPath() : string {
+	return ''
+}
+
+export function publishH5Route(_route : string) : void {
+}
+
+/** App 取码未接通，不签发令牌。 */
+export function acquireLoginCode() : Promise<LoginCodeResult> {
+	return Promise.resolve({
+		connected: false,
+		code: ''
+	} as LoginCodeResult)
+}
+
+export function loginRedirect() : Promise<CallResult> {
+	return Promise.resolve({
+		ok: false,
+		message: '取码未接通'
+	} as CallResult)
+}
+
+export function scan() : Promise<ScanResult> {
+	return new Promise<ScanResult>((resolve) => {
+		uni.scanCode({
+			success: (res) => {
+				const value = res.result != null ? String(res.result) : ''
+				resolve({
+					ok: value.length > 0,
+					message: '',
+					value: value
+				} as ScanResult)
+			},
+			fail: () => {
+				resolve({ ok: false, message: '扫码未完成', value: '' } as ScanResult)
+			}
+		})
+	})
+}
+
+export function openCamera() : Promise<CallResult> {
+	return new Promise<CallResult>((resolve) => {
+		uni.chooseImage({
+			count: 1,
+			sourceType: ['camera'],
+			success: () => {
+				resolve({ ok: true, message: '' } as CallResult)
+			},
+			fail: () => {
+				resolve({ ok: false, message: '未能打开摄像头' } as CallResult)
+			}
+		})
+	})
+}

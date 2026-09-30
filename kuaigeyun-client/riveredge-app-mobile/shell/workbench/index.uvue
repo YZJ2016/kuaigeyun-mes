@@ -1,0 +1,155 @@
+<template>
+	<view class="page">
+		<text v-if="loading" class="hint">正在加载</text>
+		<text v-if="errorText.length > 0" class="hint">{{ errorText }}</text>
+		<text v-if="empty" class="hint">没有可显示的入口</text>
+		<view v-for="block in scopes" :key="block.scope" class="scope">
+			<text v-if="block.errorText.length > 0" class="hint">{{ block.errorText }}</text>
+			<view v-if="block.showBadge || block.badgeNote.length > 0" class="badges">
+				<view v-if="block.pendingText.length > 0" class="badge-row">
+					<text class="badge-label">待处理故障 {{ block.pendingText }}</text>
+					<uni-badge-view v-if="block.pendingCount > 0" :text="block.pendingText"></uni-badge-view>
+				</view>
+				<view v-if="block.overdueText.length > 0" class="badge-row">
+					<text class="badge-label">逾期保养提醒 {{ block.overdueText }}</text>
+					<uni-badge-view v-if="block.overdueCount > 0" :text="block.overdueText"></uni-badge-view>
+				</view>
+				<text v-if="block.badgeNote.length > 0" class="hint">{{ block.badgeNote }}</text>
+			</view>
+			<view v-for="section in block.sections" :key="section.uid" class="section">
+				<text v-if="section.showTitle" class="section-title">{{ section.title }}</text>
+				<view class="grid">
+					<view v-for="cell in section.cells" :key="cell.uid" :class="cell.solo ? 'cell solo' : 'cell'" @click="onCell(cell)">
+						<text class="label">{{ cell.label }}</text>
+						<text v-if="cell.missing" class="missing">功能尚未安装</text>
+					</view>
+				</view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { getToken, takePendingEntry } from '../../shared/api/session.uts'
+	import { loginConnected } from '../../shared/channel/headers.uts'
+	import { openRegisteredRoute } from '../registry/index.uts'
+	import { loadWorkbench } from './load.uts'
+	import type { WorkCell, WorkScope } from './load.uts'
+
+	const loading = ref(false)
+	const scopes = ref<Array<WorkScope>>([])
+	const empty = ref(false)
+	const errorText = ref('')
+	let openedDeepLink = false
+
+	function leaveToLogin() {
+		uni.reLaunch({ url: '/shell/login/index' })
+	}
+
+	async function refresh() {
+		if (!loginConnected() || getToken().length == 0) {
+			leaveToLogin()
+			return
+		}
+		loading.value = true
+		empty.value = false
+		errorText.value = ''
+		try {
+			scopes.value = await loadWorkbench()
+			empty.value = scopes.value.length == 0
+		} catch (err) {
+			scopes.value = []
+			empty.value = false
+			errorText.value = err instanceof Error ? err.message : '工作台未能加载'
+		}
+		loading.value = false
+		if (!openedDeepLink) {
+			openedDeepLink = true
+			const pending = takePendingEntry()
+			if (pending.length > 0) {
+				openRegisteredRoute(pending)
+			}
+		}
+	}
+
+	function onCell(cell : WorkCell) {
+		if (cell.missing || cell.route.length == 0) {
+			uni.showToast({ title: '功能尚未安装', icon: 'none' })
+			return
+		}
+		openRegisteredRoute(cell.route)
+	}
+
+	onShow(() => {
+		refresh()
+	})
+</script>
+
+<style>
+	.page {
+		padding: 12px;
+		flex-direction: column;
+	}
+
+	.hint {
+		font-size: 14px;
+		color: #888B9D;
+		margin-bottom: 8px;
+	}
+
+	.scope {
+		margin-bottom: 16px;
+		flex-direction: column;
+	}
+
+	.badges {
+		margin-bottom: 8px;
+		flex-direction: column;
+	}
+
+	.badge-row {
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 4px;
+	}
+
+	.badge-label {
+		font-size: 13px;
+		color: #888B9D;
+		margin-right: 6px;
+	}
+
+	.section-title {
+		font-size: 15px;
+		color: #28113C;
+		margin-bottom: 8px;
+	}
+
+	.grid {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
+	.cell {
+		width: 48%;
+		margin: 1%;
+		padding: 14px 8px;
+		background-color: #EEE5FB;
+		flex-direction: column;
+	}
+
+	.solo {
+		width: 98%;
+	}
+
+	.label {
+		font-size: 15px;
+		color: #28113C;
+	}
+
+	.missing {
+		font-size: 12px;
+		color: #888B9D;
+		margin-top: 4px;
+	}
+</style>

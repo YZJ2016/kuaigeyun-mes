@@ -1,0 +1,75 @@
+import { request } from '../../shared/api/index.uts'
+import { asJson } from './json-text.uts'
+
+export type EquipmentEntry = {
+	key: string
+	label: string
+	route: string
+	page_path: string
+	platforms: string[]
+	in_workbench: boolean
+}
+
+export type EquipmentBadge = {
+	pending_fault_count: number
+	overdue_maintenance_reminder_count: number
+}
+
+export type EquipmentFeaturePackage = {
+	scope: string
+	badge: () => Promise<EquipmentBadge>
+	entries: EquipmentEntry[]
+}
+
+function makeEntry(key: string, label: string, route: string, pagePath: string, inWorkbench: boolean): EquipmentEntry {
+	const platforms: string[] = ['h5', 'mp-weixin', 'app']
+	return {
+		key: key,
+		label: label,
+		route: route,
+		page_path: pagePath,
+		platforms: platforms,
+		in_workbench: inWorkbench
+	}
+}
+
+function countOf(body: UTSJSONObject | null, key: string): number {
+	if (body == null) {
+		return 0
+	}
+	const value = body.getNumber(key)
+	if (value == null) {
+		return 0
+	}
+	return value
+}
+
+async function readBadge(): Promise<EquipmentBadge> {
+	const raw = await request({
+		url: '/api/v1/apps/kuaizhizao/mobile/bootstrap',
+		method: 'GET',
+		data: null
+	})
+	const body = asJson(raw)
+	return {
+		pending_fault_count: countOf(body, 'pending_fault_count'),
+		overdue_maintenance_reminder_count: countOf(body, 'overdue_maintenance_reminder_count')
+	}
+}
+
+export const featurePackage: EquipmentFeaturePackage = {
+	scope: 'equipment',
+	badge: readBadge,
+	entries: [
+		makeEntry('scan', '扫码查设备', '/equipment/scan', 'features/equipment/scan/index', true),
+		makeEntry('spot-checks', '设备点检', '/equipment/spot-checks', 'features/equipment/spot-checks/index', true),
+		makeEntry('line-rebinds', '换线绑定', '/equipment/line-rebinds', 'features/equipment/line-rebinds/index', true),
+		makeEntry('route-patrols', '路线巡检', '/equipment/route-patrols', 'features/equipment/route-patrols/index', true),
+		makeEntry('faults', '报修维修', '/equipment/faults', 'features/equipment/faults/index', true),
+		makeEntry('repairs', '维修台账', '/equipment/repairs', 'features/equipment/repairs/index', true),
+		makeEntry('maintenance-executions', '保养执行记录', '/equipment/maintenance-executions', 'features/equipment/maintenance-executions/index', true),
+		makeEntry('maintenance-reminders', '维护提醒', '/equipment/maintenance-reminders', 'features/equipment/maintenance-reminders/index', true),
+		makeEntry('detail', '设备详情', '/equipment/detail', 'features/equipment/detail/index', false),
+		makeEntry('spot-check-conduct', '点检', '/equipment/spot-check-conduct', 'features/equipment/spot-check-conduct/index', false)
+	]
+}

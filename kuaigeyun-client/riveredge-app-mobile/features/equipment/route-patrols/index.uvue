@@ -1,0 +1,235 @@
+<template>
+	<scroll-view class="page" direction="vertical">
+		<view class="block">
+			<text class="title">路线巡检</text>
+			<button class="action" :disabled="busy" @click="loadList">刷新</button>
+			<text v-if="rows.length == 0" class="hint">暂无记录</text>
+			<view class="item" v-for="item in rows" :key="item.rowKey">
+				<text class="item-title">{{ item.title }}</text>
+				<text class="hint">{{ item.detail }}</text>
+			</view>
+		</view>
+		<view class="block">
+			<text class="title">新建</text>
+			<input class="input" v-model="routeIdText" placeholder="路线 ID" />
+			<input class="input" v-model="patrolDateText" placeholder="巡检日期（可空，YYYY-MM-DD）" />
+			<input class="input" v-model="inspectorIdText" placeholder="巡检人 ID（可空）" />
+			<input class="input" v-model="inspectorNameText" placeholder="巡检人姓名（可空）" />
+			<input class="input" v-model="remarkText" placeholder="备注（可空）" />
+			<button class="action" :disabled="busy" @click="loadPreview">加载巡检项</button>
+			<view class="item" v-for="(line, index) in lines" :key="line.rowKey">
+				<text class="item-title">{{ line.title }}</text>
+				<text v-if="line.detail.length > 0" class="hint">{{ line.detail }}</text>
+				<text class="hint">采集模式 {{ line.captureMode }}</text>
+				<text v-if="line.isBoolean && line.showPass" class="hint">{{ line.measuredValue }}</text>
+				<input v-if="line.showMeasured" class="input" :value="line.measuredValue" placeholder="实测值" @input="onMeasured(index, $event)" />
+				<button v-if="line.showPass" class="action" :disabled="busy" @click="onTogglePass(index)">{{ line.passLabel }}</button>
+				<text v-if="line.photoHint.length > 0" class="hint">{{ line.photoHint }}</text>
+				<button class="action" :disabled="busy" @click="onLinePhoto(index)">上传照片</button>
+				<text v-if="line.attachments.length > 0" class="hint">已选 {{ line.attachments.length }} 张</text>
+				<button v-if="line.attachments.length > 0" class="action" :disabled="busy" @click="clearLinePhotos(index)">清除照片</button>
+			</view>
+			<button class="action" type="primary" :disabled="busy" @click="submitCreate">新建</button>
+			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
+			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { asJson, joinParts, jsonItems, jsonText, parseRequiredInt } from '../json-text.uts'
+	import { uploadChosenImages } from '../pick-image.uts'
+	import { loadRoutePatrolPreview, PatrolLineForm, submitRoutePatrol, togglePatrolPass } from '../route-patrol-create.uts'
+
+	type ListRow = {
+		rowKey: string
+		title: string
+		detail: string
+	}
+
+	const busy = ref(false)
+	const rows = ref<Array<ListRow>>([])
+	const routeIdText = ref('')
+	const patrolDateText = ref('')
+	const inspectorIdText = ref('')
+	const inspectorNameText = ref('')
+	const remarkText = ref('')
+	const messageText = ref('')
+	const errorText = ref('')
+	const loadedRouteId = ref(0)
+	const lines = ref<Array<PatrolLineForm>>([])
+
+	function optionalInt(raw: string): number | null {
+		if (raw.trim().length == 0) {
+			return null
+		}
+		return parseRequiredInt(raw)
+	}
+
+	function inputValue(event: UniInputEvent): string {
+		return event.detail.value
+	}
+
+	async function loadList(): Promise<void> {
+		const raw = await request({
+			url: '/api/v1/apps/kuaizhizao/equipment-route-patrols',
+			method: 'GET',
+			data: null
+		})
+		const items = jsonItems(asJson(raw))
+		const next: Array<ListRow> = []
+		for (let i = 0; i < items.length; i++) {
+			const row = items[i]
+			const title = jsonText(row, 'document_no')
+			const detail = joinParts([
+				jsonText(row, 'route_name'),
+				jsonText(row, 'patrol_date'),
+				jsonText(row, 'status'),
+				jsonText(row, 'inspector_name')
+			])
+			const key = jsonText(row, 'uuid')
+			const view: ListRow = {
+				rowKey: key.length > 0 ? key : ('' + i),
+				title: title.length > 0 ? title : '巡检单',
+				detail: detail
+			}
+			next.push(view)
+		}
+		rows.value = next
+	}
+
+	function clearPreview(): void {
+		loadedRouteId.value = 0
+		lines.value = []
+	}
+
+	async function loadPreview(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		errorText.value = ''
+		messageText.value = ''
+		const routeId = parseRequiredInt(routeIdText.value)
+		if (routeId == null) {
+			errorText.value = '请填写路线 ID'
+			return
+		}
+		busy.value = true
+		try {
+			const preview = await loadRoutePatrolPreview(routeId)
+			loadedRouteId.value = routeId
+			lines.value = preview.lines
+			messageText.value = '已加载 ' + preview.lines.length + ' 行'
+		} catch (e) {
+			clearPreview()
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+
+	function onMeasured(index: number, event: UniInputEvent): void {
+		const list = lines.value
+		list[index].measuredValue = inputValue(event)
+		lines.value = list
+	}
+
+	function onTogglePass(index: number): void {
+		const list = lines.value
+		togglePatrolPass(list[index])
+		lines.value = list
+	}
+
+	async function onLinePhoto(index: number): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		try {
+			const files = await uploadChosenImages('equipment_route_patrol_line')
+			const list = lines.value
+			const attachments = list[index].attachments
+			for (let i = 0; i < files.length; i++) {
+				attachments.push(files[i])
+			}
+			list[index].attachments = attachments
+			lines.value = list
+		} catch (e) {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+
+	function clearLinePhotos(index: number): void {
+		const list = lines.value
+		const cleared: Array<UTSJSONObject> = []
+		list[index].attachments = cleared
+		lines.value = list
+	}
+
+	async function submitCreate(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		messageText.value = ''
+		try {
+			const routeId = parseRequiredInt(routeIdText.value)
+			if (routeId == null) {
+				errorText.value = '请填写路线 ID'
+				busy.value = false
+				return
+			}
+			if (inspectorIdText.value.trim().length > 0 && optionalInt(inspectorIdText.value) == null) {
+				errorText.value = '巡检人 ID 无效'
+				busy.value = false
+				return
+			}
+			if (loadedRouteId.value != routeId) {
+				errorText.value = '请先加载巡检项'
+				busy.value = false
+				return
+			}
+			const result = await submitRoutePatrol({
+				routeId: routeId,
+				patrolDate: patrolDateText.value.trim(),
+				inspectorId: optionalInt(inspectorIdText.value),
+				inspectorName: inspectorNameText.value.trim(),
+				remark: remarkText.value.trim(),
+				lines: lines.value
+			})
+			if (result.errorText.length > 0) {
+				errorText.value = result.errorText
+				busy.value = false
+				return
+			}
+			const documentNo = jsonText(result.saved, 'document_no')
+			messageText.value = documentNo.length > 0 ? ('已新建 ' + documentNo) : '已新建'
+			clearPreview()
+			await loadList()
+		} catch (e) {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+
+	onShow(() => {
+		loadList().catch((e) => {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		})
+	})
+</script>
+
+<style>
+	.page { flex: 1; background-color: #F1F1F4; }
+	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
+	.title { font-size: 18px; color: #28113C; }
+	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
+	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
+	.input { margin-top: 8px; padding: 8px; font-size: 14px; background-color: #EEE5FB; }
+	.action { margin-top: 12px; }
+	.item { margin-top: 12px; padding-top: 8px; border-top-width: 1px; border-top-style: solid; border-top-color: #E7D9FD; }
+	.item-title { font-size: 16px; color: #28113C; }
+</style>

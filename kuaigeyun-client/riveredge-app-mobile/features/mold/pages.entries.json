@@ -1,0 +1,38 @@
+[
+	{
+		"path": "features/mold/mold-scan/index",
+		"style": {
+			"navigationBarTitleText": "扫码查模具"
+		}
+	},
+	{
+		"path": "features/mold/mold-borrows/index",
+		"style": {
+			"navigationBarTitleText": "模具领用"
+		}
+	},
+	{
+		"path": "features/mold/mold-returns/index",
+		"style": {
+			"navigationBarTitleText": "模具归还"
+		}
+	},
+	{
+		"path": "features/mold/mold-maintenances/index",
+		"style": {
+			"navigationBarTitleText": "模具保养"
+		}
+	},
+	{
+		"path": "features/mold/mold-repairs/index",
+		"style": {
+			"navigationBarTitleText": "模具维修"
+		}
+	},
+	{
+		"path": "features/mold/mold-reminders/index",
+		"style": {
+			"navigationBarTitleText": "模具保养提醒"
+		}
+	}
+]

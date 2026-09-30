@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from pydantic import ValidationError as PydanticValidationError
+
 from apps.kuaiiot.models.connection import KuaiiotConnection
 from apps.kuaiiot.schemas.ingest import IngestBody
 from apps.kuaiiot.services.ingest_service import IngestService
-from infra.exceptions.exceptions import AuthenticationError
+from infra.exceptions.exceptions import AuthenticationError, ValidationError
 
 # KuaiiotConnection.config 字段名。topic 只用于 mqtt。
 TOPIC_FIELD = "topic"
@@ -87,9 +89,10 @@ def _events(value: Any) -> list[dict[str, Any]]:
 
 
 def topic_matches(pattern: str, topic: str) -> bool:
-    wanted = [part for part in pattern.strip().split("/") if part]
-    actual = [part for part in (topic or "").strip().split("/") if part]
-    if not wanted or not actual or "#" in wanted[:-1]:
+    # 空层是真实层级：保留空段逐层比较，a//b 不等于 a/b
+    wanted = pattern.strip().split("/")
+    actual = (topic or "").strip().split("/")
+    if not pattern.strip() or not (topic or "").strip() or "#" in wanted[:-1]:
         return False
     index = 0
     for part in wanted:
@@ -103,7 +106,7 @@ def topic_matches(pattern: str, topic: str) -> bool:
     return index == len(actual)
 
 
-async def ingest_mapped_payload(connection: KuaiiotConnection, payload: dict[str, Any]) -> dict[str, bool]:
+async def ingest_mapped_payload(connection: KuaiiotConnection, payload: dict[str, Any]) -> dict[str, Any]:
     """按 config 的 JSON 路径收成 IngestBody，只调用 IngestService.ingest。"""
     config = _config_dict(connection)
     token = _text(_path_value(payload, _configured_path(config, DEVICE_TOKEN_PATH)))
@@ -112,15 +115,20 @@ async def ingest_mapped_payload(connection: KuaiiotConnection, payload: dict[str
     tags = _scrub(_path_value(payload, _configured_path(config, TAGS_PATH)))
     if not isinstance(tags, dict):
         tags = {}
-    body = IngestBody(
-        tags=tags,
-        events=_events(_path_value(payload, _configured_path(config, EVENTS_PATH))),
-        timestamp=_text(_path_value(payload, _configured_path(config, TIMESTAMP_PATH))),
-        idempotency_key=_text(_path_value(payload, _configured_path(config, IDEMPOTENCY_KEY_PATH)), 128),
-    )
+    raw_key = _path_value(payload, _configured_path(config, IDEMPOTENCY_KEY_PATH))
+    idempotency_key = _text(raw_key, 128)
+    if idempotency_key is None and isinstance(raw_key, str) and raw_key.strip():
+        # 幂等键超 128 限长：整条拒收，不静默降级为无幂等键入库
+        return {"stored": False, "reason": "幂等键超限"}
     try:
+        body = IngestBody(
+            tags=tags,
+            events=_events(_path_value(payload, _configured_path(config, EVENTS_PATH))),
+            timestamp=_text(_path_value(payload, _configured_path(config, TIMESTAMP_PATH))),
+            idempotency_key=idempotency_key,
+        )
         await IngestService.ingest(token, body)
-    except AuthenticationError:
+    except (AuthenticationError, ValidationError, PydanticValidationError):
         return {"stored": False}
     return {"stored": True}
 
@@ -167,15 +175,15 @@ async def deliver_registered_telemetry(
     timestamp: Optional[str] = None,
     idempotency_key: Optional[str] = None,
 ) -> dict[str, bool]:
-    body = IngestBody(
-        tags=dict(tags or {}),
-        events=list(events or []),
-        timestamp=timestamp,
-        idempotency_key=idempotency_key,
-    )
     try:
+        body = IngestBody(
+            tags=dict(tags or {}),
+            events=list(events or []),
+            timestamp=timestamp,
+            idempotency_key=idempotency_key,
+        )
         await IngestService.ingest(device_token, body)
-    except AuthenticationError:
+    except (AuthenticationError, ValidationError, PydanticValidationError):
         return {"stored": False}
     return {"stored": True}
 

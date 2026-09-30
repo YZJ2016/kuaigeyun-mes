@@ -1,0 +1,179 @@
+import { loginConnected } from './headers.uts'
+
+export type CallResult = {
+	ok : boolean
+	message : string
+}
+
+export type ScanResult = {
+	ok : boolean
+	message : string
+	value : string
+}
+
+export type LoginCodeResult = {
+	connected : boolean
+	code : string
+}
+
+// #ifdef WEB || H5
+import {
+	acquireLoginCode as platformAcquireLoginCode,
+	loginRedirect as platformLoginRedirect,
+	scan as platformScan,
+	openCamera as platformOpenCamera,
+	readBrowserQuery as platformReadBrowserQuery,
+	readBrowserPath as platformReadBrowserPath,
+	publishH5Route as platformPublishH5Route
+} from './h5/index.uts'
+// #endif
+// #ifdef MP-WEIXIN
+import {
+	acquireLoginCode as platformAcquireLoginCode,
+	loginRedirect as platformLoginRedirect,
+	scan as platformScan,
+	openCamera as platformOpenCamera,
+	readBrowserQuery as platformReadBrowserQuery,
+	readBrowserPath as platformReadBrowserPath,
+	publishH5Route as platformPublishH5Route
+} from './mp-weixin/index.uts'
+// #endif
+// #ifdef APP
+import {
+	acquireLoginCode as platformAcquireLoginCode,
+	loginRedirect as platformLoginRedirect,
+	scan as platformScan,
+	openCamera as platformOpenCamera,
+	readBrowserQuery as platformReadBrowserQuery,
+	readBrowserPath as platformReadBrowserPath,
+	publishH5Route as platformPublishH5Route
+} from './app/index.uts'
+// #endif
+
+function disconnectedCode() : LoginCodeResult {
+	return { connected: false, code: '' } as LoginCodeResult
+}
+
+export function readBrowserQuery(name : string) : string {
+	let value = ''
+	// #ifdef WEB || H5
+	value = platformReadBrowserQuery(name)
+	// #endif
+	// #ifdef MP-WEIXIN
+	value = platformReadBrowserQuery(name)
+	// #endif
+	// #ifdef APP
+	value = platformReadBrowserQuery(name)
+	// #endif
+	return value
+}
+
+export function readBrowserPath() : string {
+	let value = ''
+	// #ifdef WEB || H5
+	value = platformReadBrowserPath()
+	// #endif
+	// #ifdef MP-WEIXIN
+	value = platformReadBrowserPath()
+	// #endif
+	// #ifdef APP
+	value = platformReadBrowserPath()
+	// #endif
+	return value
+}
+
+export function publishH5Route(route : string) : void {
+	// #ifdef WEB || H5
+	platformPublishH5Route(route)
+	// #endif
+	// #ifdef MP-WEIXIN
+	platformPublishH5Route(route)
+	// #endif
+	// #ifdef APP
+	platformPublishH5Route(route)
+	// #endif
+}
+
+export function acquireLoginCode() : Promise<LoginCodeResult> {
+	if (!loginConnected()) {
+		return Promise.resolve(disconnectedCode())
+	}
+	let pending : Promise<LoginCodeResult> | null = null
+	// #ifdef WEB || H5
+	pending = platformAcquireLoginCode()
+	// #endif
+	if (pending != null) {
+		return pending
+	}
+	return Promise.resolve(disconnectedCode())
+}
+
+export function loginRedirect() : Promise<CallResult> {
+	if (!loginConnected()) {
+		return Promise.resolve({ ok: false, message: '取码未接通' } as CallResult)
+	}
+	let pending : Promise<CallResult> | null = null
+	// #ifdef WEB || H5
+	pending = platformLoginRedirect()
+	// #endif
+	if (pending != null) {
+		return pending
+	}
+	return Promise.resolve({ ok: false, message: '取码未接通' } as CallResult)
+}
+
+/** 成功时只返回扫码文本。未接通或未完成时拒绝，不把空结果当成扫到的内容。 */
+export function scan() : Promise<string> {
+	let pending : Promise<ScanResult> | null = null
+	// #ifdef WEB || H5
+	pending = platformScan()
+	// #endif
+	// #ifdef MP-WEIXIN
+	pending = platformScan()
+	// #endif
+	// #ifdef APP
+	pending = platformScan()
+	// #endif
+	if (pending == null) {
+		return Promise.reject(new Error('当前端未接通扫码'))
+	}
+	const running = pending
+	return new Promise<string>((resolve, reject) => {
+		running.then((result : ScanResult) => {
+			if (result.ok && result.value.length > 0) {
+				resolve(result.value)
+				return
+			}
+			const message = result.message.length > 0 ? result.message : '扫码未完成'
+			reject(new Error(message))
+		}, (err : any) => {
+			reject(err)
+		})
+	})
+}
+
+export function openCamera() : Promise<CallResult> {
+	let pending : Promise<CallResult> | null = null
+	// #ifdef WEB || H5
+	pending = platformOpenCamera()
+	// #endif
+	// #ifdef MP-WEIXIN
+	pending = platformOpenCamera()
+	// #endif
+	// #ifdef APP
+	pending = platformOpenCamera()
+	// #endif
+	if (pending != null) {
+		return pending
+	}
+	return Promise.resolve({ ok: false, message: '未能打开摄像头' } as CallResult)
+}
+
+export const push = {
+	register(): Promise<CallResult> {
+		return Promise.resolve({
+			ok: false,
+			message: '推送未接通'
+		} as CallResult)
+	}
+}

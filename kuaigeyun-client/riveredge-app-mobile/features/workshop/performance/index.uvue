@@ -1,0 +1,93 @@
+<template>
+	<view class="page">
+		<text class="hint">周期 {{ period }}</text>
+		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
+		<text v-if="loading" class="hint">加载中</text>
+		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="hint">暂无绩效</text>
+		<view v-for="(row, index) in rows" :key="index" class="card">
+			<text class="title">{{ lineTitle(row) }}</text>
+			<text class="sub">{{ lineSub(row) }}</text>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { readRows, textOf, errorText, currentPeriod } from '../json.uts'
+
+	const period = ref('')
+	const rows = ref<any[]>([])
+	const loading = ref(false)
+	const errorTextValue = ref('')
+
+	function lineTitle(row : any) : string {
+		return textOf(row, 'employee_name') + ' ' + textOf(row, 'period')
+	}
+
+	function lineSub(row : any) : string {
+		return '工时 ' + textOf(row, 'total_hours') + '  件数 ' + textOf(row, 'total_pieces') + '  金额 ' + textOf(row, 'total_amount') + '  ' + textOf(row, 'status')
+	}
+
+	async function load() {
+		loading.value = true
+		errorTextValue.value = ''
+		const query = new UTSJSONObject()
+		query.set('period', period.value)
+		query.set('skip', 0)
+		query.set('limit', 100)
+		try {
+			const payload = await request({
+				method: 'GET',
+				path: '/api/v1/apps/master-data/performance/summaries',
+				query: query,
+				body: null,
+			})
+			rows.value = readRows(payload)
+		} catch (err) {
+			errorTextValue.value = errorText(err)
+		}
+		loading.value = false
+	}
+
+	onLoad(() => {
+		period.value = currentPeriod()
+		load()
+	})
+</script>
+
+<style>
+	.page {
+		flex-direction: column;
+		padding: 12px;
+	}
+
+	.hint {
+		font-size: 14px;
+		color: #888B9D;
+		margin-bottom: 8px;
+	}
+
+	.error {
+		font-size: 14px;
+		color: #FF4942;
+		margin-bottom: 8px;
+	}
+
+	.card {
+		flex-direction: column;
+		padding: 12px;
+		margin-bottom: 8px;
+		background-color: #ffffff;
+		border-radius: 16px;
+	}
+
+	.title {
+		font-size: 16px;
+	}
+
+	.sub {
+		font-size: 13px;
+		color: #888B9D;
+		margin-top: 4px;
+	}
+</style>

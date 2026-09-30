@@ -1,0 +1,207 @@
+<template>
+	<view class="page">
+		<text class="section">模具</text>
+		<input class="field" v-model="moldKeyword" placeholder="编码或名称" />
+		<button size="mini" @click="searchMolds">查找模具</button>
+		<view v-for="(item, index) in moldOptions" :key="index" class="row" @click="chooseMold(index)">
+			<text class="title">{{ item.label }}</text>
+		</view>
+		<text v-if="chosenMold != ''" class="meta">已选 {{ chosenMold }}</text>
+		<input class="field" v-model="borrowDate" placeholder="领用日期 YYYY-MM-DD" />
+		<input class="field" v-model="borrowerName" placeholder="领用人" />
+		<input class="field" v-model="departmentName" placeholder="部门" />
+		<input class="field" v-model="expectedReturnDate" placeholder="预计归还 YYYY-MM-DD" />
+		<input class="field" v-model="remark" placeholder="备注" />
+		<button type="primary" :disabled="submitting" @click="createBorrow">创建领用</button>
+		<text v-if="hint != ''" class="error">{{ hint }}</text>
+		<text class="section">领用记录</text>
+		<input class="field" v-model="listKeyword" placeholder="搜索领用单" />
+		<button size="mini" @click="loadList">刷新</button>
+		<view v-for="(item, index) in rows" :key="index" class="row">
+			<text class="title">{{ item.title }}</text>
+			<text class="meta">{{ item.detail }}</text>
+		</view>
+		<text v-if="rows.length == 0" class="meta">暂无领用</text>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import {
+		DocLine,
+		MOLD_ARCHIVE,
+		MOLD_BORROWS,
+		NamedOption,
+		apiGet,
+		apiPost,
+		isDateText,
+		joinParts,
+		mapNamedOptions,
+		putText,
+		readError,
+		readItems,
+		textOf,
+		todayDate,
+		withQuery
+	} from '../http.uts'
+
+	const moldKeyword = ref('')
+	const moldOptions = ref<NamedOption[]>([])
+	const moldId = ref(0)
+	const chosenMold = ref('')
+	const borrowDate = ref('')
+	const borrowerName = ref('')
+	const departmentName = ref('')
+	const expectedReturnDate = ref('')
+	const remark = ref('')
+	const listKeyword = ref('')
+	const rows = ref<DocLine[]>([])
+	const hint = ref('')
+	const submitting = ref(false)
+
+	function chooseMold(index: number): void {
+		const options = moldOptions.value
+		if (index < 0 || index >= options.length) {
+			return
+		}
+		const row = options[index]
+		moldId.value = row.id
+		chosenMold.value = row.label
+	}
+
+	async function searchMolds(): Promise<void> {
+		hint.value = ''
+		try {
+			let query = 'limit=50'
+			const keyword = moldKeyword.value.trim()
+			if (keyword != '') {
+				query = 'keyword=' + encodeURIComponent(keyword) + '&limit=50'
+			}
+			const payload = await apiGet(withQuery(MOLD_ARCHIVE, query))
+			moldOptions.value = mapNamedOptions(payload)
+		} catch (err) {
+			hint.value = readError(err)
+		}
+	}
+
+	function mapBorrow(item: UTSJSONObject): DocLine {
+		const line = new DocLine()
+		const no = textOf(item, 'document_no')
+		const code = textOf(item, 'mold_code')
+		const name = textOf(item, 'mold_name')
+		line.title = no != '' ? no : code + ' ' + name
+		line.detail = joinParts([
+			code + ' ' + name,
+			textOf(item, 'borrower_name'),
+			textOf(item, 'borrow_date'),
+			textOf(item, 'status')
+		])
+		return line
+	}
+
+	async function loadList(): Promise<void> {
+		try {
+			let query = 'limit=50'
+			const keyword = listKeyword.value.trim()
+			if (keyword != '') {
+				query = 'keyword=' + encodeURIComponent(keyword) + '&limit=50'
+			}
+			const payload = await apiGet(withQuery(MOLD_BORROWS, query))
+			const items = readItems(payload)
+			const lines: DocLine[] = []
+			for (let i = 0; i < items.length; i++) {
+				lines.push(mapBorrow(items[i]))
+			}
+			rows.value = lines
+		} catch (err) {
+			hint.value = readError(err)
+		}
+	}
+
+	async function createBorrow(): Promise<void> {
+		hint.value = ''
+		if (moldId.value <= 0) {
+			hint.value = '请选择模具'
+			return
+		}
+		const dateText = borrowDate.value.trim()
+		if (dateText != '' && !isDateText(dateText)) {
+			hint.value = '领用日期格式为 YYYY-MM-DD'
+			return
+		}
+		const expected = expectedReturnDate.value.trim()
+		if (expected != '' && !isDateText(expected)) {
+			hint.value = '预计归还日期格式为 YYYY-MM-DD'
+			return
+		}
+		const body = new UTSJSONObject()
+		body.set('mold_id', moldId.value)
+		putText(body, 'borrow_date', dateText)
+		putText(body, 'borrower_name', borrowerName.value)
+		putText(body, 'department_name', departmentName.value)
+		putText(body, 'expected_return_date', expected)
+		putText(body, 'remark', remark.value)
+		submitting.value = true
+		try {
+			const created = await apiPost(MOLD_BORROWS, body)
+			const no = textOf(created, 'document_no')
+			hint.value = no == '' ? '已创建' : '已创建 ' + no
+			await loadList()
+		} catch (err) {
+			hint.value = readError(err)
+		} finally {
+			submitting.value = false
+		}
+	}
+
+	onShow(() => {
+		if (borrowDate.value == '') {
+			borrowDate.value = todayDate()
+		}
+		searchMolds()
+		loadList()
+	})
+</script>
+
+<style>
+	.page {
+		padding: 16px;
+	}
+
+	.section {
+		display: block;
+		margin-top: 16px;
+		margin-bottom: 8px;
+		font-size: 14px;
+		color: #888B9D;
+	}
+
+	.field {
+		margin-top: 8px;
+		padding: 8px;
+		border: 1px solid #E7D9FD;
+	}
+
+	.row {
+		padding: 10px 0;
+		border-bottom: 1px solid #E7D9FD;
+	}
+
+	.title {
+		font-size: 16px;
+		color: #28113C;
+	}
+
+	.meta {
+		display: block;
+		margin-top: 4px;
+		font-size: 13px;
+		color: #888B9D;
+	}
+
+	.error {
+		display: block;
+		margin-top: 8px;
+		font-size: 13px;
+		color: #FF4942;
+	}
+</style>

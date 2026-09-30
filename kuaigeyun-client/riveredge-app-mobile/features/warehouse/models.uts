@@ -1,0 +1,32 @@
+export class DocCard {
+	id: number = 0
+	title: string = ''
+	status: string = ''
+	subtitle: string = ''
+}
+
+export class LineForm {
+	itemId: number = 0
+	materialCode: string = ''
+	materialName: string = ''
+	warehouseIdText: string = ''
+	warehouseName: string = ''
+	locationIdText: string = ''
+	locationCode: string = ''
+	batchNumber: string = ''
+	serialText: string = ''
+	receiptQuantityText: string = ''
+	deliveryQuantity: number = 0
+	displayQty: string = ''
+	bookQuantityText: string = ''
+	actualQuantityText: string = ''
+	remarks: string = ''
+}
+
+export class DetailForm {
+	warehouseIdText: string = ''
+	warehouseName: string = ''
+	personIdText: string = ''
+	personName: string = ''
+	lines: LineForm[] = []
+}

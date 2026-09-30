@@ -1,0 +1,126 @@
+import { apiBase } from './http.uts'
+import { clearToken, getTenantId, getToken } from './session.uts'
+import { clientChannel, createIdempotencyKey } from '../channel/headers.uts'
+
+function authHeader() : UTSJSONObject {
+	const header = new UTSJSONObject()
+	const channel = clientChannel()
+	if (channel.length > 0) {
+		header['X-Client-Channel'] = channel
+	}
+	header['Idempotency-Key'] = createIdempotencyKey()
+	const token = getToken()
+	if (token.length > 0) {
+		header['Authorization'] = 'Bearer ' + token
+	}
+	const tenantId = getTenantId()
+	if (tenantId.length > 0) {
+		header['X-Tenant-ID'] = tenantId
+	}
+	return header
+}
+
+function readText(obj : any | null, key : string) : string {
+	if (obj == null) {
+		return ''
+	}
+	const value = (obj as UTSJSONObject)[key]
+	if (value == null) {
+		return ''
+	}
+	return String(value).trim()
+}
+
+function firstRecord(payload : any | null) : UTSJSONObject | null {
+	if (payload == null) {
+		return null
+	}
+	if (Array.isArray(payload)) {
+		const list = payload as any[]
+		if (list.length == 0) {
+			return null
+		}
+		return list[0] as UTSJSONObject
+	}
+	if (typeof payload != 'object') {
+		return null
+	}
+	const obj = payload as UTSJSONObject
+	if (obj['success'] == true && obj['data'] != null) {
+		return firstRecord(obj['data'])
+	}
+	if (obj['uuid'] != null) {
+		return obj
+	}
+	return null
+}
+
+function toAttachment(record : UTSJSONObject) : UTSJSONObject | null {
+	const uid = readText(record, 'uuid')
+	if (uid.length == 0) {
+		return null
+	}
+	let name = readText(record, 'original_name')
+	if (name.length == 0) {
+		name = readText(record, 'name')
+	}
+	const file = new UTSJSONObject()
+	file['uid'] = uid
+	file['name'] = name
+	file['status'] = 'done'
+	file['url'] = '/api/v1/core/files/' + uid + '/download'
+	return file
+}
+
+/**
+ * 单张图片走已有 POST /api/v1/core/files/upload/multiple。
+ * 表单字段名 files，category 为查询参数。返回与 PC normalizeDocumentAttachments 相同的 uid/name/status/url。
+ */
+export function uploadImage(filePath : string, category : string) : Promise<UTSJSONObject> {
+	const path = filePath.trim()
+	const kind = category.trim()
+	return new Promise<UTSJSONObject>((resolve, reject) => {
+		if (path.length == 0 || kind.length == 0) {
+			reject(new Error('没有可上传的图片'))
+			return
+		}
+		uni.uploadFile({
+			url: apiBase() + '/core/files/upload/multiple?category=' + encodeURIComponent(kind),
+			filePath: path,
+			name: 'files',
+			header: authHeader(),
+			success: (res) => {
+				const status = res.statusCode as number
+				let payload : any | null = res.data
+				if (typeof payload == 'string' && (payload as string).length > 0) {
+					try {
+						payload = JSON.parse(payload as string)
+					} catch (_err) {
+						payload = res.data
+					}
+				}
+				if (status == 401) {
+					clearToken()
+				}
+				if (status < 200 || status >= 300) {
+					reject(new Error('上传失败（' + status.toString() + '）'))
+					return
+				}
+				const record = firstRecord(payload)
+				if (record == null) {
+					reject(new Error('上传没有返回文件'))
+					return
+				}
+				const file = toAttachment(record)
+				if (file == null) {
+					reject(new Error('上传没有返回文件'))
+					return
+				}
+				resolve(file)
+			},
+			fail: (_err) => {
+				reject(new Error('上传失败'))
+			}
+		})
+	})
+}

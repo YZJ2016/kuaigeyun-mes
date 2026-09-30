@@ -1,0 +1,134 @@
+export function readRows(payload : any | null) : any[] {
+	if (payload == null) {
+		return []
+	}
+	if (payload instanceof Array) {
+		return payload as any[]
+	}
+	const obj = payload as UTSJSONObject
+	const data = obj.getArray('data')
+	if (data != null) {
+		return data as any[]
+	}
+	const items = obj.getArray('items')
+	if (items != null) {
+		return items as any[]
+	}
+	const orders = obj.getArray('work_orders')
+	if (orders != null) {
+		return orders as any[]
+	}
+	return []
+}
+
+export function textOf(row : any | null, key : string) : string {
+	if (row == null) {
+		return ''
+	}
+	const obj = row as UTSJSONObject
+	const text = obj.getString(key)
+	if (text != null && text.length > 0) {
+		return text
+	}
+	const num = obj.getNumber(key)
+	if (num != null) {
+		return '' + num
+	}
+	return ''
+}
+
+export function fieldNumber(row : any | null, key : string) : number {
+	if (row == null) {
+		return 0
+	}
+	const obj = row as UTSJSONObject
+	const num = obj.getNumber(key)
+	if (num != null) {
+		return num
+	}
+	const text = obj.getString(key)
+	if (text == null || text.length == 0) {
+		return 0
+	}
+	const parsed = parseFloat(text)
+	if (isNaN(parsed)) {
+		return 0
+	}
+	return parsed
+}
+
+export function idOf(row : any | null) : number {
+	return fieldNumber(row, 'id')
+}
+
+export function firstText(row : any | null, keys : string[]) : string {
+	for (let i = 0; i < keys.length; i++) {
+		const text = textOf(row, keys[i])
+		if (text.length > 0) {
+			return text
+		}
+	}
+	return ''
+}
+
+export function errorText(error : any | null) : string {
+	if (error == null) {
+		return '请求失败'
+	}
+	if (typeof error == 'string') {
+		const text = error as string
+		if (text.length > 0) {
+			return text
+		}
+		return '请求失败'
+	}
+	if (error instanceof Error) {
+		const message = (error as Error).message
+		if (message != null && message.length > 0) {
+			return message
+		}
+	}
+	const obj = error as UTSJSONObject
+	const message = obj.getString('message')
+	if (message != null && message.length > 0) {
+		return message
+	}
+	const detail = obj.getString('detail')
+	if (detail != null && detail.length > 0) {
+		return detail
+	}
+	return '请求失败'
+}
+
+export function scanRaw(value : any | null) : string {
+	if (value == null) {
+		return ''
+	}
+	if (typeof value == 'string') {
+		return (value as string).trim()
+	}
+	const obj = value as UTSJSONObject
+	const result = obj.getString('result')
+	if (result != null) {
+		return result.trim()
+	}
+	return ''
+}
+
+export function nowIso() : string {
+	return new Date().toISOString()
+}
+
+export function currentPeriod() : string {
+	const now = new Date()
+	const month = now.getMonth() + 1
+	const monthText = month < 10 ? '0' + month : '' + month
+	return now.getFullYear() + '-' + monthText
+}
+
+export function toast(title : string) {
+	uni.showToast({
+		title: title,
+		icon: 'none',
+	})
+}

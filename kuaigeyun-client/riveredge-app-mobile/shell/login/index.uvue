@@ -1,0 +1,119 @@
+<template>
+	<view class="page">
+		<text v-if="ready && !connected" class="message">当前端取码未接通，不能进入工作台。</text>
+		<view v-else-if="ready">
+			<text v-if="message.length > 0" class="message">{{ message }}</text>
+			<text v-if="tenantId.length > 0" class="tenant">当前组织 {{ tenantId }}</text>
+			<input class="field" v-model="keyword" placeholder="组织名称或域名" />
+			<button class="button" @click="onSearch">搜索组织</button>
+			<view v-for="item in tenants" :key="item.tenantId" class="choice" @click="onChoose(item.tenantId)">
+				<text class="choice-name">{{ item.tenantName }}</text>
+				<text class="choice-domain">{{ item.tenantDomain }}</text>
+			</view>
+			<button class="button primary" @click="onLogin">企业微信登录</button>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { bootLogin, chooseTenant, searchTenants, startWecomLogin } from './flow.uts'
+	import type { TenantChoice } from './flow.uts'
+
+	const ready = ref(false)
+	const connected = ref(false)
+	const message = ref('')
+	const tenantId = ref('')
+	const keyword = ref('')
+	const tenants = ref<Array<TenantChoice>>([])
+
+	async function refresh(options : any | null) {
+		const state = await bootLogin(options)
+		connected.value = state.connected
+		message.value = state.message
+		tenantId.value = state.tenantId
+		ready.value = true
+		if (state.enterWorkbench) {
+			uni.reLaunch({ url: '/shell/workbench/index' })
+		}
+	}
+
+	onLoad((options : any) => {
+		refresh(options)
+	})
+
+	async function onSearch() {
+		if (!connected.value) {
+			return
+		}
+		try {
+			tenants.value = await searchTenants(keyword.value)
+			if (tenants.value.length == 0) {
+				message.value = '没有匹配的组织'
+			}
+		} catch (err) {
+			message.value = err instanceof Error ? err.message : '组织搜索失败'
+		}
+	}
+
+	function onChoose(id : string) {
+		chooseTenant(id)
+		tenantId.value = id
+		message.value = ''
+	}
+
+	async function onLogin() {
+		if (!connected.value) {
+			return
+		}
+		const text = await startWecomLogin()
+		if (text.length > 0) {
+			message.value = text
+		}
+	}
+</script>
+
+<style>
+	.page {
+		padding: 24px 16px;
+		flex-direction: column;
+		background-color: #E7D9FD;
+	}
+
+	.message {
+		font-size: 16px;
+		color: #28113C;
+		margin-bottom: 12px;
+	}
+
+	.tenant {
+		font-size: 14px;
+		color: #888B9D;
+		margin-bottom: 12px;
+	}
+
+	.field {
+		border: 1px solid #E7D9FD;
+		padding: 8px 10px;
+		margin-bottom: 12px;
+	}
+
+	.button {
+		margin-bottom: 12px;
+	}
+
+	.choice {
+		padding: 10px 0;
+		border-bottom: 1px solid #E7D9FD;
+		flex-direction: column;
+	}
+
+	.choice-name {
+		font-size: 16px;
+		color: #28113C;
+	}
+
+	.choice-domain {
+		font-size: 12px;
+		color: #888B9D;
+	}
+</style>

@@ -1,0 +1,36 @@
+type MoldEntry = {
+	key: string
+	name: string
+	route: string
+	page_path: string
+	platforms: string[]
+	in_workbench: boolean
+}
+
+function entry(key: string, name: string, route: string, pagePath: string): MoldEntry {
+	return {
+		key: key,
+		name: name,
+		route: route,
+		page_path: pagePath,
+		platforms: ['h5', 'mp-weixin', 'app'],
+		in_workbench: true
+	}
+}
+
+const entries: MoldEntry[] = [
+	entry('mold-scan', '扫码查模具', '/mold/scan', 'features/mold/mold-scan/index'),
+	entry('mold-borrows', '模具领用', '/mold/borrows', 'features/mold/mold-borrows/index'),
+	entry('mold-returns', '模具归还', '/mold/returns', 'features/mold/mold-returns/index'),
+	entry('mold-maintenances', '模具保养', '/mold/maintenances', 'features/mold/mold-maintenances/index'),
+	entry('mold-repairs', '模具维修', '/mold/repairs', 'features/mold/mold-repairs/index'),
+	entry('mold-reminders', '模具保养提醒', '/mold/reminders', 'features/mold/mold-reminders/index')
+]
+
+export const featurePackage = {
+	scope: 'mold',
+	badge: null,
+	platforms: ['h5', 'mp-weixin', 'app'],
+	in_workbench: true,
+	entries: entries
+}

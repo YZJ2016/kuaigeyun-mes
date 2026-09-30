@@ -1,0 +1,43 @@
+export type WarehouseEntry = {
+	key : string
+	route : string
+	page_path : string
+	platforms : string[]
+	in_workbench : boolean
+}
+
+export type WarehousePackage = {
+	scope : string
+	badge : string | null
+	entries : WarehouseEntry[]
+}
+
+function entry(key : string, route : string, pagePath : string) : WarehouseEntry {
+	const ends : string[] = ['h5', 'mp-weixin', 'app']
+	return {
+		key : key,
+		route : route,
+		page_path : pagePath,
+		platforms : ends,
+		in_workbench : true
+	}
+}
+
+export const featurePackage : WarehousePackage = {
+	scope : 'warehouse',
+	badge : null,
+	entries : [
+		entry('pickings', '/wms/pickings', 'features/warehouse/pickings/index'),
+		entry('returns', '/wms/returns', 'features/warehouse/returns/index'),
+		entry('fg-receipts', '/wms/receipts', 'features/warehouse/fg-receipts/index'),
+		entry('purchase-receipts', '/wms/purchase-receipts', 'features/warehouse/purchase-receipts/index'),
+		entry('sales-deliveries', '/wms/sales-deliveries', 'features/warehouse/sales-deliveries/index'),
+		entry('delivery-notices', '/wms/delivery-notices', 'features/warehouse/delivery-notices/index'),
+		entry('other-inbound', '/wms/other-inbounds', 'features/warehouse/other-inbound/index'),
+		entry('other-outbound', '/wms/other-outbounds', 'features/warehouse/other-outbound/index'),
+		entry('stocktaking', '/wms/stocktaking', 'features/warehouse/stocktaking/index'),
+		entry('inventory-query', '/wms/inventory', 'features/warehouse/inventory-query/index'),
+		entry('inventory-transfer', '/wms/transfers', 'features/warehouse/inventory-transfer/index'),
+		entry('inventory-alerts', '/wms/alerts', 'features/warehouse/inventory-alerts/index')
+	]
+}

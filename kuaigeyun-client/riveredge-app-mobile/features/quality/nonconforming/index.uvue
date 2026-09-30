@@ -1,0 +1,120 @@
+<template>
+	<scroll-view class="page" scroll-y="true">
+		<view class="toolbar">
+			<text class="link" @click="loadLedger">刷新</text>
+		</view>
+		<text v-if="loading" class="meta">加载中</text>
+		<text v-if="errorText.length > 0" class="err">{{ errorText }}</text>
+		<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="meta">暂无不合格品</text>
+		<view v-for="(row, index) in rows" :key="index" class="card">
+			<text class="title">{{ titleOf(row) }}</text>
+			<text v-if="lineOf(row).length > 0" class="meta">{{ lineOf(row) }}</text>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { jsonText, readError, readRows } from '../json-read.uts'
+
+	const loading = ref(false)
+	const errorText = ref('')
+	const rows = ref<UTSJSONObject[]>([])
+
+	function titleOf(row : UTSJSONObject) : string {
+		const code = jsonText(row, 'code')
+		const name = jsonText(row, 'product_name')
+		if (code.length > 0 && name.length > 0) {
+			return code + ' ' + name
+		}
+		if (code.length > 0) {
+			return code
+		}
+		return name.length > 0 ? name : '不合格品'
+	}
+
+	function lineOf(row : UTSJSONObject) : string {
+		const parts : string[] = []
+		const status = jsonText(row, 'status')
+		if (status.length > 0) {
+			parts.push(status)
+		}
+		const defectType = jsonText(row, 'defect_type')
+		if (defectType.length > 0) {
+			parts.push(defectType)
+		}
+		const qty = jsonText(row, 'defect_quantity')
+		if (qty.length > 0) {
+			parts.push('数量 ' + qty)
+		}
+		const reason = jsonText(row, 'defect_reason')
+		if (reason.length > 0) {
+			parts.push(reason)
+		}
+		const disposition = jsonText(row, 'disposition')
+		if (disposition.length > 0) {
+			parts.push(disposition)
+		}
+		return parts.join(' · ')
+	}
+
+	async function loadLedger() {
+		loading.value = true
+		errorText.value = ''
+		try {
+			const payload = await request({
+				path: '/api/v1/apps/kuaizhizao/nonconforming-ledger',
+				method: 'GET',
+				data: null
+			})
+			rows.value = readRows(payload)
+		} catch (err) {
+			rows.value = [] as UTSJSONObject[]
+			errorText.value = readError(err)
+		}
+		loading.value = false
+	}
+
+	onShow(() => {
+		loadLedger()
+	})
+</script>
+
+<style>
+	.page {
+		padding: 12px;
+		background-color: #F1F1F4;
+	}
+
+	.toolbar {
+		margin-bottom: 8px;
+	}
+
+	.link {
+		color: #801ED3;
+		font-size: 14px;
+	}
+
+	.card {
+		background-color: #ffffff;
+		border-radius: 16px;
+		padding: 12px;
+		margin-bottom: 10px;
+	}
+
+	.title {
+		font-size: 16px;
+		color: #28113C;
+	}
+
+	.meta {
+		font-size: 13px;
+		color: #888B9D;
+		margin-top: 4px;
+	}
+
+	.err {
+		color: #FF4942;
+		font-size: 13px;
+	}
+</style>

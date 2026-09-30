@@ -1,0 +1,38 @@
+[
+	{
+		"path": "features/quality/quality-hub/index",
+		"style": {
+			"navigationBarTitleText": "待检验"
+		}
+	},
+	{
+		"path": "features/quality/process-scan/index",
+		"style": {
+			"navigationBarTitleText": "过程检验"
+		}
+	},
+	{
+		"path": "features/quality/incoming/index",
+		"style": {
+			"navigationBarTitleText": "来料检验"
+		}
+	},
+	{
+		"path": "features/quality/finished/index",
+		"style": {
+			"navigationBarTitleText": "成品检验"
+		}
+	},
+	{
+		"path": "features/quality/oqc/index",
+		"style": {
+			"navigationBarTitleText": "出库检验"
+		}
+	},
+	{
+		"path": "features/quality/nonconforming/index",
+		"style": {
+			"navigationBarTitleText": "不合格品"
+		}
+	}
+]

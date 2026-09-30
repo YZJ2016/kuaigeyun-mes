@@ -1,0 +1,222 @@
+<template>
+	<scroll-view class="page" direction="vertical">
+		<view class="block">
+			<text class="title">报修维修</text>
+			<button class="action" :disabled="busy" @click="reload">刷新</button>
+			<text v-if="queryUuid.length > 0" class="hint">以下为该设备的故障</text>
+			<text v-if="openedText.length > 0" class="hint">{{ openedText }}</text>
+			<text v-if="rows.length == 0" class="hint">暂无记录</text>
+			<view class="item" v-for="item in rows" :key="item.rowKey" @click="openFault(item.faultUuid)">
+				<text class="item-title">{{ item.title }}</text>
+				<text class="hint">{{ item.detail }}</text>
+			</view>
+		</view>
+		<view class="block">
+			<text class="title">新建故障</text>
+			<input class="input" v-model="equipmentUuidText" placeholder="设备 UUID" />
+			<text class="hint">故障类型：{{ faultType }}</text>
+			<view class="choices">
+				<button class="choice" @click="chooseType(0)">机械故障</button>
+				<button class="choice" @click="chooseType(1)">电气故障</button>
+				<button class="choice" @click="chooseType(2)">软件故障</button>
+				<button class="choice" @click="chooseType(3)">其他</button>
+			</view>
+			<text class="hint">故障级别：{{ faultLevel }}</text>
+			<view class="choices">
+				<button class="choice" @click="chooseLevel(0)">轻微</button>
+				<button class="choice" @click="chooseLevel(1)">一般</button>
+				<button class="choice" @click="chooseLevel(2)">严重</button>
+				<button class="choice" @click="chooseLevel(3)">紧急</button>
+			</view>
+			<input class="input" v-model="faultDescriptionText" placeholder="故障描述" />
+			<input class="input" v-model="faultDateText" placeholder="故障时刻（可空）" />
+			<input class="input" v-model="remarkText" placeholder="备注（可空）" />
+			<button class="action" type="primary" :disabled="busy" @click="submitCreate">新建</button>
+			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
+			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { asJson, joinParts, jsonItems, jsonText } from '../json-text.uts'
+
+	type ListRow = {
+		rowKey: string
+		faultUuid: string
+		title: string
+		detail: string
+	}
+
+	const faultTypes: string[] = ['机械故障', '电气故障', '软件故障', '其他']
+	const faultLevels: string[] = ['轻微', '一般', '严重', '紧急']
+
+	const busy = ref(false)
+	const queryUuid = ref('')
+	const openedText = ref('')
+	const rows = ref<Array<ListRow>>([])
+	const equipmentUuidText = ref('')
+	const faultType = ref('机械故障')
+	const faultLevel = ref('一般')
+	const faultDescriptionText = ref('')
+	const faultDateText = ref('')
+	const remarkText = ref('')
+	const messageText = ref('')
+	const errorText = ref('')
+
+	function readQueryUuid(options: OnLoadOptions): string {
+		const raw = options['uuid']
+		if (raw == null) {
+			return ''
+		}
+		return ('' + raw).trim()
+	}
+
+	function chooseType(index: number): void {
+		faultType.value = faultTypes[index]
+	}
+
+	function chooseLevel(index: number): void {
+		faultLevel.value = faultLevels[index]
+	}
+
+	async function loadList(): Promise<void> {
+		let url = '/api/v1/apps/kuaizhizao/equipment-faults'
+		const equipmentUuid = queryUuid.value
+		if (equipmentUuid.length > 0) {
+			url = url + '?equipment_uuid=' + encodeURIComponent(equipmentUuid)
+		}
+		const raw = await request({
+			url: url,
+			method: 'GET',
+			data: null
+		})
+		const items = jsonItems(asJson(raw))
+		const next: Array<ListRow> = []
+		for (let i = 0; i < items.length; i++) {
+			const row = items[i]
+			const title = jsonText(row, 'fault_no')
+			const detail = joinParts([
+				jsonText(row, 'equipment_name'),
+				jsonText(row, 'fault_type'),
+				jsonText(row, 'fault_level'),
+				jsonText(row, 'status')
+			])
+			const faultUuid = jsonText(row, 'uuid')
+			const view: ListRow = {
+				rowKey: faultUuid.length > 0 ? faultUuid : ('' + i),
+				faultUuid: faultUuid,
+				title: title.length > 0 ? title : '故障',
+				detail: detail
+			}
+			next.push(view)
+		}
+		rows.value = next
+	}
+
+	async function openFault(faultUuid: string): Promise<void> {
+		if (faultUuid.length == 0) {
+			errorText.value = '这条故障没有单号'
+			return
+		}
+		errorText.value = ''
+		const raw = await request({
+			url: '/api/v1/apps/kuaizhizao/equipment-faults/' + encodeURIComponent(faultUuid),
+			method: 'GET',
+			data: null
+		})
+		const body = asJson(raw)
+		openedText.value = joinParts([
+			jsonText(body, 'fault_no'),
+			jsonText(body, 'equipment_name'),
+			jsonText(body, 'equipment_code'),
+			jsonText(body, 'fault_type'),
+			jsonText(body, 'fault_level'),
+			jsonText(body, 'status'),
+			jsonText(body, 'fault_description'),
+			jsonText(body, 'uuid')
+		])
+		if (openedText.value.length == 0) {
+			errorText.value = '未打开故障'
+		}
+	}
+
+	async function reload(): Promise<void> {
+		errorText.value = ''
+		await loadList()
+	}
+
+	async function submitCreate(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		messageText.value = ''
+		try {
+			const equipmentUuid = equipmentUuidText.value.trim()
+			const description = faultDescriptionText.value.trim()
+			if (equipmentUuid.length == 0) {
+				errorText.value = '请填写设备 UUID'
+				busy.value = false
+				return
+			}
+			if (description.length == 0) {
+				errorText.value = '请填写故障描述'
+				busy.value = false
+				return
+			}
+			const data = new UTSJSONObject()
+			data.set('equipment_uuid', equipmentUuid)
+			data.set('fault_type', faultType.value)
+			data.set('fault_level', faultLevel.value)
+			data.set('fault_description', description)
+			if (faultDateText.value.trim().length > 0) {
+				data.set('fault_date', faultDateText.value.trim())
+			}
+			if (remarkText.value.trim().length > 0) {
+				data.set('remark', remarkText.value.trim())
+			}
+			const raw = await request({
+				url: '/api/v1/apps/kuaizhizao/equipment-faults',
+				method: 'POST',
+				data: data
+			})
+			const faultNo = jsonText(asJson(raw), 'fault_no')
+			messageText.value = faultNo.length > 0 ? ('已新建 ' + faultNo) : '已新建'
+			await loadList()
+		} catch (e) {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+
+	onLoad((options: OnLoadOptions) => {
+		const equipmentUuid = readQueryUuid(options)
+		queryUuid.value = equipmentUuid
+		if (equipmentUuid.length > 0 && equipmentUuidText.value.trim().length == 0) {
+			equipmentUuidText.value = equipmentUuid
+		}
+	})
+
+	onShow(() => {
+		reload().catch((e) => {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		})
+	})
+</script>
+
+<style>
+	.page { flex: 1; background-color: #F1F1F4; }
+	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
+	.title { font-size: 18px; color: #28113C; }
+	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
+	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
+	.input { margin-top: 8px; padding: 8px; font-size: 14px; background-color: #EEE5FB; }
+	.action { margin-top: 12px; }
+	.choice { margin-top: 8px; margin-right: 8px; }
+	.choices { flex-direction: row; flex-wrap: wrap; }
+	.item { margin-top: 12px; padding-top: 8px; border-top-width: 1px; border-top-style: solid; border-top-color: #E7D9FD; }
+	.item-title { font-size: 16px; color: #28113C; }
+</style>

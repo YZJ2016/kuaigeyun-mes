@@ -5,7 +5,7 @@ import type { Dayjs } from 'dayjs';
 import { TouchScreenTemplate } from '../../../../components/layout-templates/hmi';
 import { STATION_ENTRY_PATH } from '../../../../utils/clientChannel';
 import { formatApiErrorDetail } from '../../../../services/api';
-import { getSessionCurrentUser } from '../../../../utils/sessionCurrentUser';
+import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 import {
   confirmShiftHandover,
   deleteFaceTemplate,
@@ -82,6 +82,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
 }) => {
   const { message } = App.useApp();
   const navigate = useNavigate();
+  const currentUser = useCurrentUser();
 
   const [templates, setTemplates] = useState<FaceTemplateResponse[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -131,6 +132,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
   useEffect(() => {
     if (workOrderId == null) {
       setFlags(null);
+      setFlagsLoading(false);
       return;
     }
     let cancelled = false;
@@ -159,6 +161,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
   useEffect(() => {
     if (workOrderId == null || operationId == null) {
       setDocuments(null);
+      setDocumentsLoading(false);
       return;
     }
     let cancelled = false;
@@ -236,10 +239,6 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
   const handleIdentify = () => {
     void withCapturedDescriptor(async (descriptor) => {
       const res = await identifyFace(descriptor);
-      if (!res.matched) {
-        message.warning('未识别到操作员');
-        return;
-      }
       setStationOperator({
         id: res.user_id,
         name: res.full_name || res.username,
@@ -336,7 +335,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
   };
 
   const drawings = documents?.drawings ?? [];
-  const loginUserId = getSessionCurrentUser()?.id ?? null;
+  const loginUserId = currentUser?.id ?? null;
   const enrollsOtherOperator =
     operatorUserId != null && loginUserId != null && operatorUserId !== loginUserId;
 

@@ -1,0 +1,12 @@
+<template>
+	<InspectionBoard
+		list-path="/api/v1/apps/kuaizhizao/process-inspections"
+		conduct-kind="standard"
+		custom-table="apps_kuaizhizao_process_inspections"
+		photo-category="process_inspection_attachments"
+	/>
+</template>
+
+<script setup lang="uts">
+	import InspectionBoard from '../components/inspection-board.uvue'
+</script>

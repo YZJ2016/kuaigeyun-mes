@@ -1,0 +1,64 @@
+{
+	"pages": [
+		{
+			"path": "features/equipment/scan/index",
+			"style": {
+				"navigationBarTitleText": "扫码查设备"
+			}
+		},
+		{
+			"path": "features/equipment/spot-checks/index",
+			"style": {
+				"navigationBarTitleText": "设备点检"
+			}
+		},
+		{
+			"path": "features/equipment/line-rebinds/index",
+			"style": {
+				"navigationBarTitleText": "换线绑定"
+			}
+		},
+		{
+			"path": "features/equipment/route-patrols/index",
+			"style": {
+				"navigationBarTitleText": "路线巡检"
+			}
+		},
+		{
+			"path": "features/equipment/faults/index",
+			"style": {
+				"navigationBarTitleText": "报修维修"
+			}
+		},
+		{
+			"path": "features/equipment/repairs/index",
+			"style": {
+				"navigationBarTitleText": "维修台账"
+			}
+		},
+		{
+			"path": "features/equipment/maintenance-executions/index",
+			"style": {
+				"navigationBarTitleText": "保养执行记录"
+			}
+		},
+		{
+			"path": "features/equipment/maintenance-reminders/index",
+			"style": {
+				"navigationBarTitleText": "维护提醒"
+			}
+		},
+		{
+			"path": "features/equipment/detail/index",
+			"style": {
+				"navigationBarTitleText": "设备详情"
+			}
+		},
+		{
+			"path": "features/equipment/spot-check-conduct/index",
+			"style": {
+				"navigationBarTitleText": "点检"
+			}
+		}
+	]
+}

@@ -51,6 +51,7 @@ import { isCreateTabKey } from './isCreateTabKey';
 import { readUniTabsBorderRadius } from '../../utils/themeBorderRadius';
 import { isAppGroupTitleItem } from '../../utils/permission';
 import { dispatchRouteSoftRefresh } from '../../hooks/useRouteSoftRefresh';
+import { isStationEntryPath } from '../../utils/clientChannel';
 
 function isTenantDefaultHomePath(p: string): boolean {
   return (LEGACY_TENANT_DEFAULT_HOME_PATHS as readonly string[]).includes(p);
@@ -1523,8 +1524,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   /** 当前是否为 HMI/生产终端类页面（需使用专用内容容器：左右 16px padding + 系统圆角） */
   const isHMIPage = useMemo(() => {
     const key = activeKey || '';
-    return key.includes('production-execution/terminal') || key.includes('/kiosk');
-  }, [activeKey]);
+    return (
+      key.includes('production-execution/terminal') ||
+      key.includes('/kiosk') ||
+      isStationEntryPath(location.pathname)
+    );
+  }, [activeKey, location.pathname]);
 
   /** 标签顶角 / 底内凹圆角：保底 4px，高于 4px 时跟随系统 borderRadius */
   const tabRadius = useMemo(() => readUniTabsBorderRadius(token.borderRadius, 8), [token.borderRadius]);

@@ -1,0 +1,42 @@
+[
+	{
+		"path": "features/workshop/scan-report/index",
+		"style": { "navigationBarTitleText": "扫码报工" }
+	},
+	{
+		"path": "features/workshop/work-order-assign/index",
+		"style": { "navigationBarTitleText": "工单指派" }
+	},
+	{
+		"path": "features/workshop/my-work-orders/index",
+		"style": { "navigationBarTitleText": "我的工单" }
+	},
+	{
+		"path": "features/workshop/work-orders/index",
+		"style": { "navigationBarTitleText": "全部工单" }
+	},
+	{
+		"path": "features/workshop/reporting-history/index",
+		"style": { "navigationBarTitleText": "我的报工" }
+	},
+	{
+		"path": "features/workshop/reporting-approve/index",
+		"style": { "navigationBarTitleText": "报工审核" }
+	},
+	{
+		"path": "features/workshop/packing-binding/index",
+		"style": { "navigationBarTitleText": "装箱绑定" }
+	},
+	{
+		"path": "features/workshop/exception-report/index",
+		"style": { "navigationBarTitleText": "异常提报" }
+	},
+	{
+		"path": "features/workshop/exceptions/index",
+		"style": { "navigationBarTitleText": "异常追踪" }
+	},
+	{
+		"path": "features/workshop/performance/index",
+		"style": { "navigationBarTitleText": "我的绩效" }
+	}
+]

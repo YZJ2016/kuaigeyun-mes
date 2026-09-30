@@ -1,0 +1,277 @@
+import { request } from '../../shared/api/index.uts'
+import { asJson, joinParts, jsonBool, jsonInt, jsonNumberOrNull, jsonObjectList, jsonText } from './json-text.uts'
+
+export type PatrolLineForm = {
+	rowKey: string
+	title: string
+	detail: string
+	photoHint: string
+	showMeasured: boolean
+	showPass: boolean
+	passLabel: string
+	stepNo: number
+	equipmentId: number
+	itemId: number | null
+	itemCode: string
+	itemName: string
+	captureMode: string
+	requirement: string
+	method: string
+	judgmentStandard: string
+	valueType: string
+	unit: string
+	photoRequired: boolean
+	measuredValue: string
+	isPass: boolean
+	isBoolean: boolean
+	remark: string
+	attachments: Array<UTSJSONObject>
+}
+
+export type PatrolPreview = {
+	lines: Array<PatrolLineForm>
+}
+
+export type PatrolDraft = {
+	routeId: number
+	patrolDate: string
+	inspectorId: number | null
+	inspectorName: string
+	remark: string
+	lines: Array<PatrolLineForm>
+}
+
+export type PatrolSubmitResult = {
+	errorText: string
+	saved: UTSJSONObject | null
+}
+
+function upperMode(raw: string): string {
+	const text = raw.trim()
+	if (text.length == 0) {
+		return 'A'
+	}
+	return text.toUpperCase()
+}
+
+function isPatrolBoolean(raw: string): boolean {
+	const value = raw.trim().toLowerCase()
+	if (value.length == 0 || value == 'bool' || value == '是/否' || value == 'boolean') {
+		return true
+	}
+	return false
+}
+
+function passLabel(isPass: boolean): string {
+	if (isPass) {
+		return '合格'
+	}
+	return '不合格'
+}
+
+function booleanMeasured(isPass: boolean, current: string): string {
+	const text = current.trim()
+	if (text.length > 0) {
+		return text
+	}
+	if (isPass) {
+		return '是'
+	}
+	return '否'
+}
+
+function positiveInt(value: number | null): number | null {
+	if (value == null || value <= 0) {
+		return null
+	}
+	return value
+}
+
+function setText(data: UTSJSONObject, key: string, value: string): void {
+	if (value.length > 0) {
+		data.set(key, value)
+	}
+}
+
+function setNumber(data: UTSJSONObject, key: string, value: number | null): void {
+	if (value != null) {
+		data.set(key, value)
+	}
+}
+
+function lineTitle(itemName: string, itemCode: string, stepNo: number): string {
+	if (itemName.length > 0) {
+		return itemName
+	}
+	if (itemCode.length > 0) {
+		return itemCode
+	}
+	return '第 ' + stepNo + ' 步'
+}
+
+function readLine(row: UTSJSONObject, index: number): PatrolLineForm {
+	const stepValue = positiveInt(jsonNumberOrNull(row, 'step_no'))
+	const stepNo = stepValue == null ? (index + 1) : stepValue
+	const mode = upperMode(jsonText(row, 'capture_mode'))
+	const valueType = jsonText(row, 'value_type')
+	const booleanItem = isPatrolBoolean(valueType)
+	const isPass = jsonBool(row, 'is_pass', true)
+	const photoRequired = jsonBool(row, 'photo_required', false) || mode == 'B'
+	let measured = jsonText(row, 'measured_value')
+	if (mode != 'B' && booleanItem) {
+		measured = booleanMeasured(isPass, measured)
+	}
+	const itemName = jsonText(row, 'item_name')
+	const itemCode = jsonText(row, 'item_code')
+	const equipmentId = jsonInt(row, 'equipment_id')
+	let hint = ''
+	if (mode == 'B' || (mode == 'C' && photoRequired)) {
+		hint = '需拍照'
+	}
+	const empty: Array<UTSJSONObject> = []
+	return {
+		rowKey: 'step-' + stepNo + '-' + index,
+		title: lineTitle(itemName, itemCode, stepNo),
+		detail: joinParts([
+			jsonText(row, 'equipment_name'),
+			jsonText(row, 'method'),
+			jsonText(row, 'judgment_standard'),
+			jsonText(row, 'requirement'),
+			jsonText(row, 'unit')
+		]),
+		photoHint: hint,
+		showMeasured: mode != 'B' && !booleanItem,
+		showPass: mode != 'B',
+		passLabel: passLabel(isPass),
+		stepNo: stepNo,
+		equipmentId: equipmentId == null ? 0 : equipmentId,
+		itemId: jsonInt(row, 'item_id'),
+		itemCode: itemCode,
+		itemName: itemName,
+		captureMode: mode,
+		requirement: jsonText(row, 'requirement'),
+		method: jsonText(row, 'method'),
+		judgmentStandard: jsonText(row, 'judgment_standard'),
+		valueType: valueType,
+		unit: jsonText(row, 'unit'),
+		photoRequired: photoRequired,
+		measuredValue: measured,
+		isPass: isPass,
+		isBoolean: booleanItem,
+		remark: jsonText(row, 'remark'),
+		attachments: empty
+	}
+}
+
+export function togglePatrolPass(line: PatrolLineForm): void {
+	if (!line.showPass) {
+		return
+	}
+	const next = !line.isPass
+	line.isPass = next
+	line.passLabel = passLabel(next)
+	if (line.isBoolean) {
+		line.measuredValue = next ? '是' : '否'
+	}
+}
+
+export async function loadRoutePatrolPreview(routeId: number): Promise<PatrolPreview> {
+	const query = new UTSJSONObject()
+	query.set('route_id', '' + routeId)
+	const raw = await request({
+		url: '/api/v1/apps/kuaizhizao/equipment-route-patrols/preview-lines',
+		method: 'GET',
+		query: query
+	})
+	const body = asJson(raw)
+	if (body == null) {
+		throw new Error('请求失败')
+	}
+	const source = jsonObjectList(body, 'lines')
+	const lines: Array<PatrolLineForm> = []
+	for (let i = 0; i < source.length; i++) {
+		lines.push(readLine(source[i], i))
+	}
+	return {
+		lines: lines
+	}
+}
+
+function measuredForSubmit(line: PatrolLineForm): string {
+	if (line.captureMode == 'B') {
+		return line.measuredValue.trim()
+	}
+	if (line.isBoolean) {
+		return booleanMeasured(line.isPass, line.measuredValue)
+	}
+	return line.measuredValue.trim()
+}
+
+function mapLine(line: PatrolLineForm): UTSJSONObject {
+	const row = new UTSJSONObject()
+	row.set('step_no', line.stepNo)
+	row.set('equipment_id', line.equipmentId)
+	setNumber(row, 'item_id', line.itemId)
+	setText(row, 'item_code', line.itemCode)
+	setText(row, 'item_name', line.itemName)
+	row.set('capture_mode', upperMode(line.captureMode))
+	setText(row, 'requirement', line.requirement)
+	setText(row, 'method', line.method)
+	setText(row, 'judgment_standard', line.judgmentStandard)
+	setText(row, 'value_type', line.valueType)
+	setText(row, 'unit', line.unit)
+	row.set('photo_required', line.photoRequired)
+	setText(row, 'measured_value', measuredForSubmit(line))
+	row.set('is_pass', line.isPass)
+	setText(row, 'remark', line.remark)
+	if (line.attachments.length > 0) {
+		row.set('attachments', line.attachments)
+	}
+	return row
+}
+
+export async function submitRoutePatrol(draft: PatrolDraft): Promise<PatrolSubmitResult> {
+	if (draft.lines.length == 0) {
+		return {
+			errorText: '没有预览行',
+			saved: null
+		}
+	}
+	for (let i = 0; i < draft.lines.length; i++) {
+		const line = draft.lines[i]
+		const mode = upperMode(line.captureMode)
+		const needsPhoto = mode == 'B' || (mode == 'C' && line.photoRequired)
+		if (needsPhoto && line.attachments.length == 0) {
+			return {
+				errorText: '请上传行照片',
+				saved: null
+			}
+		}
+		if (line.equipmentId <= 0) {
+			return {
+				errorText: '请求失败',
+				saved: null
+			}
+		}
+	}
+	const mapped: Array<UTSJSONObject> = []
+	for (let i = 0; i < draft.lines.length; i++) {
+		mapped.push(mapLine(draft.lines[i]))
+	}
+	const data = new UTSJSONObject()
+	data.set('route_id', draft.routeId)
+	setText(data, 'patrol_date', draft.patrolDate)
+	setNumber(data, 'inspector_id', draft.inspectorId)
+	setText(data, 'inspector_name', draft.inspectorName)
+	setText(data, 'remark', draft.remark)
+	data.set('lines', mapped)
+	const raw = await request({
+		url: '/api/v1/apps/kuaizhizao/equipment-route-patrols',
+		method: 'POST',
+		data: data
+	})
+	return {
+		errorText: '',
+		saved: asJson(raw)
+	}
+}

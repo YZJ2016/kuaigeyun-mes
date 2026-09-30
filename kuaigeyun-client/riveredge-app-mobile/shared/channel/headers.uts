@@ -1,0 +1,67 @@
+/**
+ * 渠道码只在这里按平台赋值。正式码：mobile_h5、miniprogram、android、ios。
+ */
+export function clientChannel() : string {
+	let code = ''
+	// #ifdef WEB || H5
+	code = 'mobile_h5'
+	// #endif
+	// #ifdef MP-WEIXIN
+	code = 'miniprogram'
+	// #endif
+	// #ifdef APP-ANDROID
+	code = 'android'
+	// #endif
+	// #ifdef APP-IOS
+	code = 'ios'
+	// #endif
+	return code
+}
+
+/** 功能声明里的端：h5、mp-weixin、app。 */
+export function runtimePlatform() : string {
+	let name = ''
+	// #ifdef WEB || H5
+	name = 'h5'
+	// #endif
+	// #ifdef MP-WEIXIN
+	name = 'mp-weixin'
+	// #endif
+	// #ifdef APP
+	name = 'app'
+	// #endif
+	return name
+}
+
+export function loginConnected() : boolean {
+	let connected = false
+	// #ifdef WEB || H5
+	connected = true
+	// #endif
+	return connected
+}
+
+function readWebUuid() : string {
+	let key = ''
+	// #ifdef WEB || H5
+	try {
+		const generated = crypto.randomUUID()
+		if (generated != null) {
+			key = generated
+		}
+	} catch (_err) {
+		key = ''
+	}
+	// #endif
+	return key
+}
+
+/** 与 PC api.ts 相同：优先 randomUUID，否则时间与随机数。 */
+export function createIdempotencyKey() : string {
+	const webKey = readWebUuid()
+	if (webKey.length > 0) {
+		return webKey
+	}
+	const n = Math.floor(Math.random() * 1000000000)
+	return 'idemp-' + Date.now().toString() + '-' + n.toString()
+}

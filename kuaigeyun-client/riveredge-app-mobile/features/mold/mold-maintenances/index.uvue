@@ -1,0 +1,262 @@
+<template>
+	<view class="page">
+		<text class="section">模具</text>
+		<input class="field" v-model="moldKeyword" placeholder="编码或名称" />
+		<button size="mini" @click="searchMolds">查找模具</button>
+		<view v-for="(item, index) in moldOptions" :key="index" class="row" @click="chooseMold(index)">
+			<text class="title">{{ item.label }}</text>
+		</view>
+		<text v-if="chosenMold != ''" class="meta">已选 {{ chosenMold }}</text>
+		<text class="section">保养方案（不选则用模具默认方案）</text>
+		<view v-for="(item, index) in schemeOptions" :key="index" class="row" @click="chooseScheme(index)">
+			<text class="title">{{ item.label }}</text>
+		</view>
+		<text v-if="chosenScheme != ''" class="meta">已选方案 {{ chosenScheme }}</text>
+		<input class="field" v-model="maintenanceDate" placeholder="保养日期 YYYY-MM-DD" />
+		<input class="field" v-model="remark" placeholder="备注" />
+		<text class="section">方案明细</text>
+		<view v-for="(item, index) in previewLines" :key="index" class="row" @click="toggleExecuted(index)">
+			<text class="title">{{ item.label }}</text>
+			<text class="meta">{{ item.executed ? '已执行' : '未执行' }}</text>
+		</view>
+		<text v-if="previewLines.length == 0" class="meta">无明细</text>
+		<button type="primary" :disabled="submitting" @click="createMaintenance">创建保养</button>
+		<text v-if="hint != ''" class="error">{{ hint }}</text>
+		<text class="section">保养记录</text>
+		<input class="field" v-model="listKeyword" placeholder="搜索保养单" />
+		<button size="mini" @click="loadList">刷新</button>
+		<view v-for="(item, index) in rows" :key="index" class="row">
+			<text class="title">{{ item.title }}</text>
+			<text class="meta">{{ item.detail }}</text>
+		</view>
+		<text v-if="rows.length == 0" class="meta">暂无保养</text>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import {
+		DocLine,
+		MOLD_ARCHIVE,
+		MOLD_MAINTENANCES,
+		MOLD_MAINTENANCE_SCHEMES,
+		NamedOption,
+		SubmitLine,
+		apiGet,
+		apiPost,
+		isDateText,
+		joinParts,
+		mapNamedOptions,
+		putText,
+		readError,
+		readItems,
+		readPreviewLines,
+		textOf,
+		todayDate,
+		toPcLines,
+		withQuery
+	} from '../http.uts'
+
+	const moldKeyword = ref('')
+	const moldOptions = ref<NamedOption[]>([])
+	const schemeOptions = ref<NamedOption[]>([])
+	const moldId = ref(0)
+	const schemeId = ref(0)
+	const chosenMold = ref('')
+	const chosenScheme = ref('')
+	const maintenanceDate = ref('')
+	const remark = ref('')
+	const previewLines = ref<SubmitLine[]>([])
+	const listKeyword = ref('')
+	const rows = ref<DocLine[]>([])
+	const hint = ref('')
+	const submitting = ref(false)
+
+	function chooseMold(index: number): void {
+		const options = moldOptions.value
+		if (index < 0 || index >= options.length) {
+			return
+		}
+		moldId.value = options[index].id
+		chosenMold.value = options[index].label
+		loadPreview()
+	}
+
+	function chooseScheme(index: number): void {
+		const options = schemeOptions.value
+		if (index < 0 || index >= options.length) {
+			return
+		}
+		schemeId.value = options[index].id
+		chosenScheme.value = options[index].label
+		loadPreview()
+	}
+
+	async function searchMolds(): Promise<void> {
+		try {
+			let query = 'limit=50'
+			const keyword = moldKeyword.value.trim()
+			if (keyword != '') {
+				query = 'keyword=' + encodeURIComponent(keyword) + '&limit=50'
+			}
+			moldOptions.value = mapNamedOptions(await apiGet(withQuery(MOLD_ARCHIVE, query)))
+		} catch (err) {
+			hint.value = readError(err)
+		}
+	}
+
+	async function loadSchemes(): Promise<void> {
+		try {
+			schemeOptions.value = mapNamedOptions(await apiGet(withQuery(MOLD_MAINTENANCE_SCHEMES, 'limit=50&is_active=true')))
+		} catch (err) {
+			schemeOptions.value = []
+		}
+	}
+
+	function mapDoc(item: UTSJSONObject): DocLine {
+		const line = new DocLine()
+		const no = textOf(item, 'document_no')
+		line.title = no != '' ? no : textOf(item, 'mold_code') + ' ' + textOf(item, 'mold_name')
+		line.detail = joinParts([
+			textOf(item, 'mold_code') + ' ' + textOf(item, 'mold_name'),
+			textOf(item, 'maintenance_date'),
+			textOf(item, 'status')
+		])
+		return line
+	}
+
+	async function loadList(): Promise<void> {
+		try {
+			let query = 'limit=50'
+			const keyword = listKeyword.value.trim()
+			if (keyword != '') {
+				query = 'keyword=' + encodeURIComponent(keyword) + '&limit=50'
+			}
+			const items = readItems(await apiGet(withQuery(MOLD_MAINTENANCES, query)))
+			const lines: DocLine[] = []
+			for (let i = 0; i < items.length; i++) {
+				lines.push(mapDoc(items[i]))
+			}
+			rows.value = lines
+		} catch (err) {
+			hint.value = readError(err)
+		}
+	}
+
+	async function loadPreview(): Promise<void> {
+		if (moldId.value <= 0) {
+			previewLines.value = []
+			return
+		}
+		let query = 'mold_id=' + moldId.value
+		if (schemeId.value > 0) {
+			query = query + '&scheme_id=' + schemeId.value
+		}
+		try {
+			previewLines.value = readPreviewLines(await apiGet(withQuery(MOLD_MAINTENANCES + '/preview-lines', query)))
+		} catch (err) {
+			previewLines.value = []
+			hint.value = readError(err)
+		}
+	}
+
+	function toggleExecuted(index: number): void {
+		const current = previewLines.value
+		if (index < 0 || index >= current.length) {
+			return
+		}
+		const next: SubmitLine[] = []
+		for (let i = 0; i < current.length; i++) {
+			const line = current[i]
+			if (i == index) {
+				line.executed = !line.executed
+			}
+			next.push(line)
+		}
+		previewLines.value = next
+	}
+
+	async function createMaintenance(): Promise<void> {
+		hint.value = ''
+		if (moldId.value <= 0) {
+			hint.value = '请选择模具'
+			return
+		}
+		const dateText = maintenanceDate.value.trim()
+		if (dateText != '' && !isDateText(dateText)) {
+			hint.value = '保养日期格式为 YYYY-MM-DD'
+			return
+		}
+		const body = new UTSJSONObject()
+		body.set('mold_id', moldId.value)
+		if (schemeId.value > 0) {
+			body.set('scheme_id', schemeId.value)
+		}
+		putText(body, 'maintenance_date', dateText)
+		putText(body, 'remark', remark.value)
+		body.set('lines', toPcLines(previewLines.value))
+		submitting.value = true
+		try {
+			const created = await apiPost(MOLD_MAINTENANCES, body)
+			const no = textOf(created, 'document_no')
+			hint.value = no == '' ? '已创建' : '已创建 ' + no
+			await loadList()
+		} catch (err) {
+			hint.value = readError(err)
+		} finally {
+			submitting.value = false
+		}
+	}
+
+	onShow(() => {
+		if (maintenanceDate.value == '') {
+			maintenanceDate.value = todayDate()
+		}
+		searchMolds()
+		loadSchemes()
+		loadList()
+	})
+</script>
+
+<style>
+	.page {
+		padding: 16px;
+	}
+
+	.section {
+		display: block;
+		margin-top: 16px;
+		margin-bottom: 8px;
+		font-size: 14px;
+		color: #888B9D;
+	}
+
+	.field {
+		margin-top: 8px;
+		padding: 8px;
+		border: 1px solid #E7D9FD;
+	}
+
+	.row {
+		padding: 10px 0;
+		border-bottom: 1px solid #E7D9FD;
+	}
+
+	.title {
+		font-size: 16px;
+		color: #28113C;
+	}
+
+	.meta {
+		display: block;
+		margin-top: 4px;
+		font-size: 13px;
+		color: #888B9D;
+	}
+
+	.error {
+		display: block;
+		margin-top: 8px;
+		font-size: 13px;
+		color: #FF4942;
+	}
+</style>

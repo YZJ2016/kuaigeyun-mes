@@ -1,0 +1,134 @@
+<template>
+	<scroll-view class="page" scroll-y="true">
+		<view class="toolbar">
+			<text class="link" @click="loadSummary">刷新</text>
+		</view>
+		<text v-if="loading" class="meta">加载中</text>
+		<text v-if="errorText.length > 0" class="err">{{ errorText }}</text>
+		<text v-if="!loading && pendingRows.length == 0 && errorText.length == 0" class="meta">汇总里没有待检项</text>
+		<view v-for="(row, index) in pendingRows" :key="index" class="card" @click="openRow(index)">
+			<text class="title">{{ row.label }}</text>
+			<text class="meta">待检 {{ row.countText }}</text>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { readError } from '../json-read.uts'
+	import { featurePackage } from '../index.uts'
+
+	class PendingRow {
+		label : string = ''
+		countText : string = ''
+		pageUrl : string = ''
+	}
+
+	const fieldToKey : string[] = ['pending_incoming', 'pending_process', 'pending_finished', 'pending_oqc']
+	const entryKeys : string[] = ['incoming', 'process-scan', 'finished', 'oqc']
+
+	const loading = ref(false)
+	const errorText = ref('')
+	const pendingRows = ref<PendingRow[]>([])
+
+	function readPending(summary : UTSJSONObject) : PendingRow[] {
+		const out : PendingRow[] = []
+		const entries = featurePackage.entries
+		for (let i = 0; i < fieldToKey.length; i++) {
+			const count = summary.getNumber(fieldToKey[i])
+			if (count == null) {
+				continue
+			}
+			let label = ''
+			let pagePath = ''
+			for (let j = 0; j < entries.length; j++) {
+				if (entries[j].key == entryKeys[i]) {
+					label = entries[j].label
+					pagePath = entries[j].page_path
+				}
+			}
+			if (pagePath.length == 0) {
+				continue
+			}
+			const row = new PendingRow()
+			row.label = label
+			row.countText = String(count)
+			row.pageUrl = '/' + pagePath
+			out.push(row)
+		}
+		return out
+	}
+
+	async function loadSummary() {
+		loading.value = true
+		errorText.value = ''
+		try {
+			const payload = await request({
+				path: '/api/v1/apps/kuaizhizao/quality/inspection-center-summary',
+				method: 'GET',
+				data: null
+			})
+			if (payload == null || Array.isArray(payload)) {
+				pendingRows.value = [] as PendingRow[]
+				errorText.value = '汇总响应不是对象'
+			} else {
+				pendingRows.value = readPending(payload as UTSJSONObject)
+			}
+		} catch (err) {
+			pendingRows.value = [] as PendingRow[]
+			errorText.value = readError(err)
+		}
+		loading.value = false
+	}
+
+	function openRow(index : number) {
+		const url = pendingRows.value[index].pageUrl
+		if (url.length == 0) {
+			return
+		}
+		uni.navigateTo({ url: url })
+	}
+
+	onShow(() => {
+		loadSummary()
+	})
+</script>
+
+<style>
+	.page {
+		padding: 12px;
+		background-color: #F1F1F4;
+	}
+
+	.toolbar {
+		margin-bottom: 8px;
+	}
+
+	.link {
+		color: #801ED3;
+		font-size: 14px;
+	}
+
+	.card {
+		background-color: #ffffff;
+		border-radius: 16px;
+		padding: 12px;
+		margin-bottom: 10px;
+	}
+
+	.title {
+		font-size: 16px;
+		color: #28113C;
+	}
+
+	.meta {
+		font-size: 13px;
+		color: #888B9D;
+		margin-top: 4px;
+	}
+
+	.err {
+		color: #FF4942;
+		font-size: 13px;
+	}
+</style>
