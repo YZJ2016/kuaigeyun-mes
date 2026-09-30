@@ -343,6 +343,8 @@ async def _existing_order_prepayment_relation(
 
 async def _commit_purchase_order_prepayment_mark(order, status: str) -> None:
     """提交这一张采购订单的预付补齐标记。写入失败向调用方上抛。"""
+    if order.prepayment_backfill_status == status:
+        return
     from tortoise.transactions import in_transaction
 
     order.prepayment_backfill_status = status

@@ -21,7 +21,7 @@ class _Tx:
 
 
 class _Order:
-    def __init__(self, order_id: int, status: str, *, amount: str = "10"):
+    def __init__(self, order_id: int, status: str, *, amount: str = "10", mark: str | None = None):
         self.id = order_id
         self.tenant_id = 1
         self.status = status
@@ -30,7 +30,7 @@ class _Order:
         self.order_code = f"PO-{order_id}"
         self.supplier_id = 9
         self.supplier_name = "供应商"
-        self.prepayment_backfill_status = None
+        self.prepayment_backfill_status = mark
         self.save_error: Exception | None = None
         self.events: list = []
 
@@ -177,3 +177,45 @@ async def test_later_generation_failure_does_not_rollback_committed_mark(monkeyp
     second_save = events.index(("save", 12, "missing", ["prepayment_backfill_status", "updated_at"]))
     assert first_save < second_save
     assert events[first_save + 1] == "tx-commit"
+
+
+@pytest.mark.asyncio
+async def test_unchanged_mark_skips_save_but_status_change_still_commits(monkeypatch):
+    from apps.kuaicaiwu.services.finance_integration_hooks import (
+        backfill_missing_purchase_order_prepayments,
+    )
+
+    already_backfilled = _Order(21, "CONFIRMED", mark="backfilled")
+    still_missing = _Order(22, "CONFIRMED", mark="missing")
+    newly_linked = _Order(23, "CONFIRMED", mark="missing")
+
+    async def _ensure(kwargs):
+        if kwargs["order_id"] == 22:
+            raise RuntimeError("payment create failed")
+        return 200
+
+    events = _patch_backfill(
+        monkeypatch,
+        [already_backfilled, still_missing, newly_linked],
+        linked_ids={21, 23},
+        ensure_impl=_ensure,
+    )
+
+    created = await backfill_missing_purchase_order_prepayments(1, operator_id=7)
+
+    assert created == 0
+    assert already_backfilled.prepayment_backfill_status == "backfilled"
+    assert still_missing.prepayment_backfill_status == "missing"
+    assert newly_linked.prepayment_backfill_status == "backfilled"
+    assert ("ensure", 21) not in events
+    assert ("ensure", 22) in events
+    assert ("ensure", 23) not in events
+    assert not any(
+        isinstance(item, tuple) and item[0] == "save" and item[1] in (21, 22) for item in events
+    )
+    save = ("save", 23, "backfilled", ["prepayment_backfill_status", "updated_at"])
+    save_at = events.index(save)
+    assert events[save_at - 1] == "tx-begin"
+    assert events[save_at + 1] == "tx-commit"
+    assert events.count("tx-begin") == 1
+    assert events.count("tx-commit") == 1
