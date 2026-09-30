@@ -160,6 +160,9 @@ class SalesForecastService(AppBaseService[SalesForecast]):
     ) -> None:
         """清理销售预测下推失败留下的、尚未真正下推到需求计算的中间 Demand。"""
         from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
         from core.utils.timezone_utils import resolve_business_datetime
 
         q = Demand.filter(
@@ -186,15 +189,16 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             ).exists()
             if has_comp:
                 continue
-            await DemandItem.filter(tenant_id=tenant_id, demand_id=d.id).delete()
-            await Demand.filter(tenant_id=tenant_id, id=d.id).update(deleted_at=now, updated_at=now)
-            await DocumentRelation.filter(
-                tenant_id=tenant_id,
-                source_type="sales_forecast",
-                source_id=forecast_id,
-                target_type="demand",
-                target_id=d.id,
-            ).delete()
+            async with in_transaction():
+                await DemandItem.filter(tenant_id=tenant_id, demand_id=d.id).delete()
+                await Demand.filter(tenant_id=tenant_id, id=d.id).update(deleted_at=now, updated_at=now)
+                await DocumentRelationNewService().delete_relation(
+                    tenant_id,
+                    source_type="sales_forecast",
+                    source_id=forecast_id,
+                    target_type="demand",
+                    target_id=d.id,
+                )
             logger.info(
                 "已清理销售预测 %s 未下推的中间需求 %s",
                 forecast_id,

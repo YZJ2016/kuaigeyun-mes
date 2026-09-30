@@ -203,7 +203,10 @@ async def cleanup_payables_for_purchase_receipt(
     from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
     from apps.kuaicaiwu.services.finance_service import PayableService
     from apps.kuaizhizao.models.document_relation import DocumentRelation
-    from infra.exceptions.exceptions import BusinessLogicError
+    from apps.kuaizhizao.services.document_relation_new_service import (
+        DocumentRelationNewService,
+    )
+    from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
     receipt_id = int(receipt_id)
     source_types = (PAYABLE_SOURCE_PURCHASE_RECEIPT, "purchase_receipt")
@@ -272,16 +275,22 @@ async def cleanup_payables_for_purchase_receipt(
             )
 
         await payable_svc.delete_payable(tenant_id, payable_id)
-        await DocumentRelation.filter(
+        rel_svc = DocumentRelationNewService()
+        payable_target_rows = await DocumentRelation.filter(
             tenant_id=tenant_id,
             target_type="payable",
             target_id=payable_id,
-        ).delete()
-        await DocumentRelation.filter(
+        ).all()
+        payable_source_rows = await DocumentRelation.filter(
             tenant_id=tenant_id,
             source_type="payable",
             source_id=payable_id,
-        ).delete()
+        ).all()
+        for row in (*payable_target_rows, *payable_source_rows):
+            try:
+                await rel_svc.delete_relation(tenant_id, relation_id=row.id)
+            except NotFoundError:
+                continue
         deleted += 1
         logger.info(
             "采购入库撤回/删除已清理应付单 tenant_id=%s receipt_id=%s payable_id=%s code=%s",

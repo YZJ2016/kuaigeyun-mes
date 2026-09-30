@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Tuple
 from loguru import logger
 
 from apps.kuaizhizao.constants import DemandStatus, normalize_status
-from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from core.services.document_code_editability import (
     REASON_HAS_DOWNSTREAM,
@@ -207,11 +206,16 @@ async def sync_sales_order_code_snapshots(
     if old_code:
         await Demand.filter(**demand_filters, demand_code=old_code).update(demand_code=new_code)
 
-    await DocumentRelation.filter(
-        tenant_id=tenant_id,
-        source_type="sales_order",
-        source_id=sales_order_id,
-    ).update(source_code=new_code, source_name=new_code)
+    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+
+    await DocumentRelationNewService().refresh_document_code_snapshots(
+        tenant_id,
+        document_type="sales_order",
+        document_id=sales_order_id,
+        code=new_code,
+        refresh_source=True,
+        refresh_target=False,
+    )
 
     logger.info(
         "销售订单 {} 编号已同步快照为 {}",

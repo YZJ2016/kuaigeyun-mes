@@ -327,6 +327,13 @@ class InvoiceMergeAllocationRepairService:
     ) -> bool:
         rel_by_source = {int(r.source_id): r for r in rels if r.source_id is not None}
         changed = False
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
+        from infra.exceptions.exceptions import BusinessLogicError
+
+        rel_svc = DocumentRelationNewService()
         for sid, amount in allocations.items():
             notes = encode_relation_allocated_amount(amount)
             rel = rel_by_source.get(int(sid))
@@ -335,25 +342,41 @@ class InvoiceMergeAllocationRepairService:
                 if current == _q(amount):
                     continue
                 if not dry_run:
-                    rel.notes = notes
-                    await rel.save(update_fields=["notes"])
+                    await rel_svc.update_relation_notes(tenant_id, int(rel.id), notes)
                 changed = True
                 continue
             if dry_run:
                 changed = True
                 continue
-            await DocumentRelation.create(
-                tenant_id=tenant_id,
-                source_type=source_type,
-                source_id=int(sid),
-                source_code=code_by_id.get(int(sid)),
-                target_type=target_type,
-                target_id=invoice_id,
-                target_code=invoice_code,
-                relation_type="source",
-                relation_mode="pull",
-                relation_desc="合并开票分摊修复",
-                notes=notes,
-            )
+            try:
+                await rel_svc.create_relation(
+                    tenant_id,
+                    DocumentRelationCreate(
+                        source_type=source_type,
+                        source_id=int(sid),
+                        source_code=code_by_id.get(int(sid)),
+                        target_type=target_type,
+                        target_id=invoice_id,
+                        target_code=invoice_code,
+                        relation_type="source",
+                        relation_mode="pull",
+                        relation_desc="合并开票分摊修复",
+                        notes=notes,
+                    ),
+                    None,
+                )
+            except BusinessLogicError as exc:
+                if exc.message != "关联关系已存在":
+                    raise
+                existing = await DocumentRelation.get_or_none(
+                    tenant_id=tenant_id,
+                    source_type=source_type,
+                    source_id=int(sid),
+                    target_type=target_type,
+                    target_id=invoice_id,
+                )
+                if existing is None:
+                    raise
+                await rel_svc.update_relation_notes(tenant_id, int(existing.id), notes)
             changed = True
         return changed
