@@ -69,6 +69,7 @@ import {
 } from '../components/qualityDetailColumns';
 import {
   buildIncomingCustomerMaterialPullColumns,
+  buildIncomingOutsourceReceiptPullColumns,
   buildIncomingPurchaseOrderPullColumns,
   buildIncomingPurchaseReceiptPullColumns,
   type QualityPullCandidateBase,
@@ -170,6 +171,8 @@ interface IncomingInspection {
   inspection_code?: string;
   purchase_receipt_id?: number;
   purchase_receipt_code?: string;
+  outsource_material_receipt_id?: number;
+  outsource_material_receipt_code?: string;
   supplier_id?: number;
   supplier_name?: string;
   material_id?: number;
@@ -214,6 +217,7 @@ const IncomingInspectionPage: React.FC = () => {
   const pullFromPurchaseReceiptAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_purchase_receipt');
   const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_purchase_order');
   const pullFromCustomerMaterialAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_customer_material_registration');
+  const pullFromOutsourceReceiptAction = resolveKuaizhizaoDocumentAction(t, 'incoming_inspection.pull_from_outsource_material_receipt');
   const urlListFiltersRef = useRef<{ purchase_receipt_id?: number }>({});
   const deepLinkOpenedRef = useRef(false);
 
@@ -790,6 +794,10 @@ const IncomingInspectionPage: React.FC = () => {
     () => buildIncomingCustomerMaterialPullColumns(t),
     [t],
   );
+  const outsourceReceiptPullColumns = useMemo(
+    () => buildIncomingOutsourceReceiptPullColumns(t),
+    [t],
+  );
 
   const isPullIncomingInspectionSelectable = useCallback(
     (row: PullSourceCandidate) => row.capabilities?.pull_incoming_inspection?.allowed !== false,
@@ -1124,6 +1132,58 @@ const IncomingInspectionPage: React.FC = () => {
       }
     },
   });
+  const pullFromOutsourceReceiptQuery = useUniPullQuery<PullSourceCandidate>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    scopeOptions: pullQueryScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const trimmed = keyword.trim();
+        const res = await qualityApi.incomingInspection.listOutsourceReceiptPullCandidates({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          receipt_code: trimmed || undefined,
+        });
+        const rows = (res.data || []) as PullSourceCandidate[];
+        const filtered = isPullableScope(scope)
+          ? rows.filter((row) => isPullIncomingInspectionSelectable(row))
+          : rows;
+        return { data: filtered, total: Number(res.total ?? filtered.length) };
+      } catch {
+        messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadReceiptFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (row) => !isPullIncomingInspectionSelectable(row),
+    onConfirm: async (_keys, rows) => {
+      const selectedIds = rows
+        .filter((row) => isPullIncomingInspectionSelectable(row))
+        .map((row) => Number(row.id))
+        .filter((id) => id > 0);
+      if (!selectedIds.length) {
+        messageApi.warning(t('app.kuaizhizao.quality.incoming.form.selectReceipt'));
+        return;
+      }
+      try {
+        let count = 0;
+        for (const receiptId of selectedIds) {
+          const created = await qualityApi.incomingInspection.createFromOutsourceReceipt(String(receiptId));
+          count += Array.isArray(created) ? created.length : 0;
+        }
+        if (!count) {
+          messageApi.warning(t('app.kuaizhizao.quality.incoming.messages.createFailed'));
+          return;
+        }
+        messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createSuccess'));
+        pullFromOutsourceReceiptQuery.closeModal();
+        invalidateStats();
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.quality.incoming.messages.createFailed')));
+      }
+    },
+  });
   useNewShortcut(pullFromPurchaseReceiptQuery.openModal);
 
   const createMenuItems = useMemo(
@@ -1139,6 +1199,11 @@ const IncomingInspectionPage: React.FC = () => {
         onClick: () => pullFromCustomerMaterialQuery.openModal(),
       },
       {
+        key: 'from-outsource-receipt',
+        label: pullFromOutsourceReceiptAction.label,
+        onClick: () => pullFromOutsourceReceiptQuery.openModal(),
+      },
+      {
         key: 'from-purchase-order',
         label: pullFromPurchaseOrderAction.label,
         onClick: () => pullFromPurchaseOrderQuery.openModal(),
@@ -1147,9 +1212,11 @@ const IncomingInspectionPage: React.FC = () => {
     [
       pullFromPurchaseReceiptAction.label,
       pullFromCustomerMaterialAction.label,
+      pullFromOutsourceReceiptAction.label,
       pullFromPurchaseOrderAction.label,
       pullFromPurchaseReceiptQuery.openModal,
       pullFromCustomerMaterialQuery.openModal,
+      pullFromOutsourceReceiptQuery.openModal,
       pullFromPurchaseOrderQuery.openModal,
     ],
   );
@@ -1269,6 +1336,10 @@ const IncomingInspectionPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.quality.common.columns.purchaseReceiptCode'),
         dataIndex: 'purchase_receipt_code',
+      },
+      {
+        title: t('components.documentTrackingPanel.docType.outsource_material_receipt'),
+        dataIndex: 'outsource_material_receipt_code',
       },
       { title: t('app.kuaizhizao.quality.common.columns.supplier'), dataIndex: 'supplier_name' },
       ...buildQualityInspectionDetailQuantityStatusColumns<IncomingInspection>(t),
@@ -1914,6 +1985,38 @@ const IncomingInspectionPage: React.FC = () => {
         scopeOptions={pullFromCustomerMaterialQuery.scopeOptions}
         scope={pullFromCustomerMaterialQuery.scope}
         onScopeChange={pullFromCustomerMaterialQuery.handleScopeChange}
+      />
+
+      <UniPullQueryModal<PullSourceCandidate>
+        open={pullFromOutsourceReceiptQuery.open}
+        title={pullFromOutsourceReceiptAction.label}
+        onCancel={pullFromOutsourceReceiptQuery.closeModal}
+        onOk={pullFromOutsourceReceiptQuery.handleConfirm}
+        rowKey="id"
+        columns={outsourceReceiptPullColumns}
+        dataSource={pullFromOutsourceReceiptQuery.dataSource}
+        loading={pullFromOutsourceReceiptQuery.loading}
+        confirmLoading={pullFromOutsourceReceiptQuery.confirmLoading}
+        selectionType={pullFromOutsourceReceiptQuery.selectionType}
+        selectedRowKeys={pullFromOutsourceReceiptQuery.selectedRowKeys}
+        selectedRows={pullFromOutsourceReceiptQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromOutsourceReceiptQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromOutsourceReceiptQuery.isRowDisabled}
+        searchDraft={pullFromOutsourceReceiptQuery.searchDraft}
+        onSearchDraftChange={pullFromOutsourceReceiptQuery.setSearchDraft}
+        onSearchApply={pullFromOutsourceReceiptQuery.handleSearchApply}
+        onSearchClear={pullFromOutsourceReceiptQuery.handleSearchClear}
+        appliedKeyword={pullFromOutsourceReceiptQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.quality.pullQuery.receiptCode')}
+        getRowLabel={(row) => row.receipt_code || String(row.id)}
+        okText={t('app.kuaizhizao.quality.incoming.pull.ok')}
+        page={pullFromOutsourceReceiptQuery.page}
+        pageSize={pullFromOutsourceReceiptQuery.pageSize}
+        total={pullFromOutsourceReceiptQuery.total}
+        onPageChange={pullFromOutsourceReceiptQuery.handlePageChange}
+        scopeOptions={pullFromOutsourceReceiptQuery.scopeOptions}
+        scope={pullFromOutsourceReceiptQuery.scope}
+        onScopeChange={pullFromOutsourceReceiptQuery.handleScopeChange}
       />
 
       <UniPullQueryModal<PullSourceCandidate>

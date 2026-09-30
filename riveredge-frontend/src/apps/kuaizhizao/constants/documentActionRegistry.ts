@@ -31,6 +31,7 @@ export type KuaizhizaoDocumentActionKey =
   | 'incoming_inspection.pull_from_purchase_order'
   | 'incoming_inspection.pull_from_purchase_receipt'
   | 'incoming_inspection.pull_from_customer_material_registration'
+  | 'incoming_inspection.pull_from_outsource_material_receipt'
   | 'process_inspection.pull_from_work_order'
   | 'finished_goods_inspection.pull_from_work_order'
   | 'oqc_inspection.pull_from_shipment_notice'
@@ -336,6 +337,14 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     labelKey: documentActionI18n('incoming_inspection.pull_from_customer_material_registration', 'label'),
     sourceLabelKey: documentActionI18n('incoming_inspection.pull_from_customer_material_registration', 'source'),
     targetLabelKey: documentActionI18n('incoming_inspection.pull_from_customer_material_registration', 'target'),
+  },
+  'incoming_inspection.pull_from_outsource_material_receipt': {
+    key: 'incoming_inspection.pull_from_outsource_material_receipt',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    labelKey: documentActionI18n('incoming_inspection.pull_from_outsource_material_receipt', 'label'),
+    sourceLabelKey: documentActionI18n('incoming_inspection.pull_from_outsource_material_receipt', 'source'),
+    targetLabelKey: documentActionI18n('incoming_inspection.pull_from_outsource_material_receipt', 'target'),
   },
   'process_inspection.pull_from_work_order': {
     key: 'process_inspection.pull_from_work_order',

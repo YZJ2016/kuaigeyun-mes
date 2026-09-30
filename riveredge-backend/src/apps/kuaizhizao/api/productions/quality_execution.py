@@ -753,6 +753,27 @@ async def list_incoming_inspection_customer_material_pull_candidates(
 
 
 @router.get(
+    "/incoming-inspections/pull-candidates/outsource-material-receipts",
+    summary="List outsource receipt pull candidates for incoming inspection",
+)
+async def list_incoming_inspection_outsource_receipt_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    receipt_code: Optional[str] = Query(None, description="委外收货单号（模糊）"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await IncomingInspectionService().list_outsource_material_receipt_pull_candidates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        receipt_code=receipt_code,
+    )
+
+
+@router.get(
     "/incoming-inspections/from-purchase-receipt/{purchase_receipt_id}/pull-preview",
     summary="Preview pull incoming inspection from purchase receipt",
 )
@@ -1019,6 +1040,24 @@ async def create_inspection_from_customer_material(
         registration_id=registration_id,
         created_by=current_user.id,
         selected_item_ids=selected_item_ids,
+    )
+
+
+@router.post(
+    "/incoming-inspections/from-outsource-material-receipt/{receipt_id}",
+    response_model=List[IncomingInspectionResponse],
+    summary="Create incoming inspection from outsource material receipt",
+)
+async def create_inspection_from_outsource_material_receipt(
+    receipt_id: int = Path(..., description="委外收货单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[IncomingInspectionResponse]:
+    """从草稿委外收货创建来料检验单"""
+    return await IncomingInspectionService().create_inspection_from_outsource_material_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        created_by=current_user.id,
     )
 
 
