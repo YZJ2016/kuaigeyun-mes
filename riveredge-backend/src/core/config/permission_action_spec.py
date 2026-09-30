@@ -38,6 +38,8 @@ STANDARD_ACTIONS: set[str] = {
     "upload-part-spec",
     # 应用管理破坏性操作（须搭配 RBAC + 二次确认）
     "reset-data",
+    # 按销售订单生成全流程演示数据
+    "flow-generate",
     # 开放 API 凭证管理
     "manage",
 }
@@ -74,6 +76,7 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "confirm_adjustment": "确认调整",
     "recall": "确认收回",
     "reset-data": "重置数据",
+    "flow-generate": "流程造数",
     "claim": "认领",
     "recycle": "回收",
     "release": "释放",

@@ -77,6 +77,8 @@ export const ROUTES = {
   PERF_WORK_CALENDAR: `${APP_BASE}/performance/work-calendar`,
   PERF_SKILLS: `${APP_BASE}/performance/skills`,
   PERF_SUMMARIES: `${APP_BASE}/performance/summaries`,
+  /** 流程造数：仅手输地址，不进菜单 */
+  FLOW_DATA_GENERATE: `${APP_BASE}/app-management/flow-data-generate`,
 } as const;
 
 /** 报修维修列表或详情抽屉深链（与 equipment-faults 页 ?uuid= 契约一致） */
