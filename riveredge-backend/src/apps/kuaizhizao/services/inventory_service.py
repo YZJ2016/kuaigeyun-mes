@@ -713,8 +713,8 @@ class InventoryService:
 
             try:
                 batch_management_enabled, serial_management_enabled = await InventoryService._get_warehouse_management_flags(tenant_id)
-            except Exception as _flag_exc:
-                raise BusinessLogicError("读取仓库批号或序列号管理开关失败，拒绝本笔入库") from _flag_exc
+            except Exception:
+                raise BusinessLogicError("读取仓库批号或序列号管理开关失败，拒绝本笔入库")
             material = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
 
             if (
