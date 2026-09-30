@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from apps.kuaizhizao.schemas.outsource_work_order import OutsourceMaterialReceiptCreate
+from apps.kuaizhizao.schemas.quality import IncomingInspectionUpdate
+from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 from apps.kuaizhizao.services.outsource_material_receipt_service import (
     OutsourceMaterialReceiptService,
 )
@@ -38,6 +40,7 @@ def _receipt_create() -> OutsourceMaterialReceiptCreate:
 def _work_order(*, product_id=9):
     wo = MagicMock()
     wo.id = 3
+    wo.tenant_id = 1
     wo.product_id = product_id
     wo.unit_price = Decimal("2")
     wo.quantity = Decimal("10")
@@ -264,7 +267,7 @@ async def test_complete_posts_after_passed_inspection():
     receipt = _draft_receipt()
     wo = _work_order()
     svc = _service(wo)
-    inspection = SimpleNamespace(id=11, tenant_id=1)
+    inspection = SimpleNamespace(id=11, tenant_id=1, material_id=9)
     inspections = MagicMock()
     inspections.all = AsyncMock(return_value=[inspection])
 
@@ -320,7 +323,7 @@ async def test_complete_posts_on_processed_accept_concession():
     receipt = _draft_receipt()
     wo = _work_order()
     svc = _service(wo)
-    inspection = SimpleNamespace(id=11, tenant_id=1)
+    inspection = SimpleNamespace(id=11, tenant_id=1, material_id=9)
     inspections = MagicMock()
     inspections.all = AsyncMock(return_value=[inspection])
     concessions = MagicMock()
@@ -368,6 +371,9 @@ async def test_complete_posts_on_processed_accept_concession():
     assert result.status == "completed"
     assert wo.received_quantity == Decimal("4")
     svc._schedule_stock_for_outsource_receipt.assert_called_once()
+    stock = svc._schedule_stock_for_outsource_receipt.call_args.args[0]
+    assert stock["source_type"] == "outsource_material_receipt"
+    assert stock["source_doc_id"] == receipt.id
 
 
 @pytest.mark.asyncio
@@ -488,3 +494,272 @@ async def test_create_inspection_from_draft_outsource_receipt_links_source():
     assert kwargs["tenant_id"] == 1
     assert kwargs["material_id"] == 9
     assert kwargs["inspection_quantity"] == Decimal("5")
+
+
+def _accept_defect():
+    return SimpleNamespace(
+        id=3,
+        tenant_id=1,
+        code="DF-1",
+        disposition="accept",
+        status="draft",
+        defect_quantity=Decimal("1"),
+        incoming_inspection_id=11,
+        finished_goods_inspection_id=None,
+        finished_goods_receipt_id=None,
+        accept_purchase_receipt_id=None,
+        other_inbound_id=None,
+        processed_by=None,
+        processed_at=None,
+        processed_by_name=None,
+        updated_by=None,
+        updated_by_name=None,
+        work_order_id=None,
+        remarks=None,
+        save=AsyncMock(),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "inspection",
+    [
+        SimpleNamespace(
+            id=11,
+            source_type="outsource_material_receipt",
+            outsource_material_receipt_id=8,
+            supplier_id=5,
+        ),
+        SimpleNamespace(
+            id=11,
+            source_type="purchase_receipt",
+            outsource_material_receipt_id=8,
+            supplier_id=5,
+        ),
+    ],
+)
+async def test_outsource_concession_stays_processed_without_other_inbound(inspection):
+    defect = _accept_defect()
+    svc = DefectRecordService()
+    svc.get_user_info = AsyncMock(return_value={"name": "tester"})
+    svc._close_linked_quality_exceptions_after_disposition = AsyncMock()
+    svc._resolve_accept_material_and_warehouse = AsyncMock(
+        return_value=("P-9", "委外件", "件", 2, "主仓")
+    )
+    svc._execute_accept_via_purchase_receipt = AsyncMock()
+    svc._execute_accept_via_other_inbound = AsyncMock()
+    svc._execute_accept_via_finished_goods_receipt = AsyncMock()
+
+    with (
+        patch(
+            "apps.kuaizhizao.services.defect_record_service.in_transaction",
+            _txn,
+        ),
+        patch(
+            "apps.kuaizhizao.services.defect_record_service.DefectRecord.get",
+            new=AsyncMock(return_value=defect),
+        ),
+        patch(
+            "apps.kuaizhizao.models.incoming_inspection.IncomingInspection.get_or_none",
+            new=AsyncMock(return_value=inspection),
+        ),
+        patch(
+            "apps.kuaizhizao.services.warehouse_service.PurchaseReceiptService"
+        ) as purchase_cls,
+        patch(
+            "apps.kuaizhizao.services.warehouse_service.OtherInboundService"
+        ) as other_cls,
+    ):
+        result = await svc._apply_disposition_after_persist(
+            tenant_id=1,
+            defect_id=3,
+            updated_by=4,
+            stock_warehouse_id=2,
+        )
+
+    assert result.status == "processed"
+    assert result.disposition == "accept"
+    assert result.accept_purchase_receipt_id is None
+    assert result.other_inbound_id is None
+    svc._execute_accept_via_purchase_receipt.assert_not_awaited()
+    svc._execute_accept_via_other_inbound.assert_not_awaited()
+    svc._execute_accept_via_finished_goods_receipt.assert_not_awaited()
+    purchase_cls.assert_not_called()
+    other_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_locked_assert_failure_keeps_draft():
+    receipt = _draft_receipt()
+    wo = _work_order()
+    svc = _service(wo)
+    inspection = SimpleNamespace(id=11, tenant_id=1, material_id=9)
+    inspections = MagicMock()
+    inspections.all = AsyncMock(return_value=[inspection])
+    concessions = MagicMock()
+    concessions.first = AsyncMock(return_value=None)
+    events = []
+    query = _receipt_query(receipt)
+    locked = query.select_for_update.return_value
+
+    async def locked_first():
+        events.append("lock")
+        return receipt
+
+    locked.first = locked_first
+    passes = {"n": 0}
+
+    async def passed(_tenant_id, _inspection):
+        passes["n"] += 1
+        if passes["n"] == 1:
+            assert "lock" not in events
+            return True
+        assert "lock" in events
+        return False
+
+    with (
+        patch(
+            "apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub.assert_inbound_hub_capability"
+        ),
+        patch(
+            "apps.kuaizhizao.services.outsource_material_receipt_service.in_transaction",
+            _txn,
+        ),
+        patch(
+            "apps.kuaizhizao.models.incoming_inspection.IncomingInspection.filter",
+            return_value=inspections,
+        ),
+        patch(
+            "apps.kuaizhizao.models.defect_record.DefectRecord.filter",
+            return_value=concessions,
+        ),
+        patch(
+            "apps.kuaizhizao.services.inspection_policy_service.iqc_inspection_passed_for_inbound",
+            new=passed,
+        ),
+        patch(
+            "apps.kuaizhizao.models.outsource_work_order.OutsourceMaterialReceipt.filter",
+            return_value=query,
+        ),
+        patch(
+            "apps.kuaizhizao.utils.inbound_confirm_helper.resolve_inbound_confirm_receiver",
+            new=AsyncMock(return_value=(4, "tester")),
+        ),
+        patch(
+            "apps.kuaizhizao.utils.inbound_confirm_helper.resolve_inbound_confirm_business_time",
+            return_value=datetime(2026, 9, 30, 8, 0, 0),
+        ),
+    ):
+        with pytest.raises(BusinessLogicError, match="来料检验"):
+            await svc.complete_material_receipt(1, 8, 4)
+
+    assert passes["n"] == 2
+    assert receipt.status == "draft"
+    receipt.save.assert_not_awaited()
+    wo.save.assert_not_awaited()
+    svc._acquire_outsource_work_order_row_lock.assert_awaited()
+    svc._schedule_stock_for_outsource_receipt.assert_not_called()
+    svc._schedule_auto_payable_for_outsource_receipt.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_complete_rejects_when_inspection_material_differs_from_work_order():
+    receipt = _draft_receipt()
+    wo = _work_order(product_id=9)
+    svc = _service(wo)
+    inspection = SimpleNamespace(id=11, tenant_id=1, material_id=8)
+    inspections = MagicMock()
+    inspections.all = AsyncMock(return_value=[inspection])
+    query = _receipt_query(receipt)
+
+    with (
+        patch(
+            "apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub.assert_inbound_hub_capability"
+        ),
+        patch(
+            "apps.kuaizhizao.services.outsource_material_receipt_service.in_transaction",
+            _txn,
+        ),
+        patch(
+            "apps.kuaizhizao.models.incoming_inspection.IncomingInspection.filter",
+            return_value=inspections,
+        ),
+        patch(
+            "apps.kuaizhizao.services.inspection_policy_service.iqc_inspection_passed_for_inbound",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "apps.kuaizhizao.models.outsource_work_order.OutsourceMaterialReceipt.filter",
+            return_value=query,
+        ),
+        patch(
+            "apps.kuaizhizao.utils.inbound_confirm_helper.resolve_inbound_confirm_receiver",
+            new=AsyncMock(return_value=(4, "tester")),
+        ),
+        patch(
+            "apps.kuaizhizao.utils.inbound_confirm_helper.resolve_inbound_confirm_business_time",
+            return_value=datetime(2026, 9, 30, 8, 0, 0),
+        ),
+    ):
+        with pytest.raises(BusinessLogicError, match="来料检验"):
+            await svc.complete_material_receipt(1, 8, 4)
+
+    assert query.select_for_update.called
+    svc._acquire_outsource_work_order_row_lock.assert_awaited()
+    assert receipt.status == "draft"
+    receipt.save.assert_not_awaited()
+    wo.save.assert_not_awaited()
+    svc._schedule_stock_for_outsource_receipt.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_incoming_inspection_keeps_outsource_link():
+    inspection_model = SimpleNamespace(
+        inspection_result="待检验",
+        source_type="outsource_material_receipt",
+        outsource_material_receipt_id=8,
+        outsource_material_receipt_code="OWR-1",
+    )
+    update_qs = MagicMock()
+    update_qs.update = AsyncMock()
+    svc = IncomingInspectionService()
+    svc.get_user_info = AsyncMock(return_value={"name": "tester"})
+    svc.get_incoming_inspection_by_id = AsyncMock(return_value=SimpleNamespace(id=21))
+
+    with (
+        patch(
+            "apps.kuaizhizao.services.quality_service.in_transaction",
+            _txn,
+        ),
+        patch(
+            "apps.kuaizhizao.services.quality_service.IncomingInspection.get_or_none",
+            new=AsyncMock(return_value=inspection_model),
+        ),
+        patch(
+            "apps.kuaizhizao.services.document_action_policy.quality_inspection_record.assert_quality_inspection_capability"
+        ),
+        patch(
+            "apps.kuaizhizao.services.quality_service.IncomingInspection.filter",
+            return_value=update_qs,
+        ),
+    ):
+        await svc.update_incoming_inspection(
+            1,
+            21,
+            IncomingInspectionUpdate(
+                notes="备注",
+                source_type="purchase_receipt",
+                outsource_material_receipt_id=99,
+                outsource_material_receipt_code="OWR-HACK",
+            ),
+            4,
+        )
+
+    kwargs = update_qs.update.await_args.kwargs
+    assert "source_type" not in kwargs
+    assert "outsource_material_receipt_id" not in kwargs
+    assert "outsource_material_receipt_code" not in kwargs
+    assert kwargs["notes"] == "备注"
+    assert inspection_model.source_type == "outsource_material_receipt"
+    assert inspection_model.outsource_material_receipt_id == 8
+    assert inspection_model.outsource_material_receipt_code == "OWR-1"

@@ -1209,7 +1209,15 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 raise NotFoundError(f"来料检验单不存在: {inspection_id}")
             assert_quality_inspection_capability(inspection_model, "update")
             user_info = await self.get_user_info(updated_by)
-            update_data = inspection_data.model_dump(exclude_unset=True, exclude={'updated_by'})
+            update_data = inspection_data.model_dump(
+                exclude_unset=True,
+                exclude={
+                    "updated_by",
+                    "outsource_material_receipt_id",
+                    "outsource_material_receipt_code",
+                    "source_type",
+                },
+            )
             conducted = str(getattr(inspection_model, "inspection_result", "") or "").strip() == "已检验"
             if conducted:
                 locked = sorted(k for k in update_data if k in RAW_INSPECTION_FIELDS)
