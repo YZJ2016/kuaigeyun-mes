@@ -512,7 +512,7 @@ const PurchaseOrdersPage: React.FC = () => {
     () => (
       <Space key="highlight-overdue-switch" align="center">
         <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
-        <span className="uni-table-toolbar-plain-label" style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
+        <span className="uni-table-toolbar-plain-label">
           {t('app.kuaizhizao.purchaseOrder.highlightOverdue')}
         </span>
       </Space>
@@ -3778,6 +3778,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 'receipt-notice': 'receipt_notice',
                 receipt: 'purchase_receipt',
                 invoice: 'purchase_invoice',
+                prepayment: 'payment',
                 'incoming-inspection': 'incoming_inspection',
                 'purchase-return': 'purchase_return',
                 'purchase-order-change': 'purchase_order_change',

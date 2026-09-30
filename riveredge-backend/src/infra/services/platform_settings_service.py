@@ -18,6 +18,7 @@ from infra.schemas.platform_settings import (
     PlatformSettingsResponse
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.utils.login_quick_providers import normalize_login_quick_providers
 
 
 class PlatformSettingsService:
@@ -112,6 +113,10 @@ class PlatformSettingsService:
             PlatformSettingsResponse: 更新后的平台设置信息
         """
         update_data = data.model_dump(exclude_unset=True)
+        if "login_quick_providers" in update_data:
+            update_data["login_quick_providers"] = normalize_login_quick_providers(
+                update_data.get("login_quick_providers")
+            )
         if "default_tenant_id" in update_data:
             await self._validate_default_tenant_id(update_data.get("default_tenant_id"))
         if "official_api_library_host" in update_data:
@@ -163,6 +168,9 @@ class PlatformSettingsService:
                 login_client_win_enabled=data.login_client_win_enabled if data.login_client_win_enabled is not None else True,
                 login_client_android_enabled=data.login_client_android_enabled if data.login_client_android_enabled is not None else True,
                 login_quick_enabled=data.login_quick_enabled if data.login_quick_enabled is not None else True,
+                login_quick_providers=normalize_login_quick_providers(
+                    data.login_quick_providers if data.login_quick_providers is not None else None
+                ),
                 enable_register=data.enable_register if data.enable_register is not None else True,
             )
             settings = await PlatformSettings.create(**create_data.model_dump(exclude_unset=True))

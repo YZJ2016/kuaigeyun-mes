@@ -13,13 +13,12 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import {
   ActionType,
   ProColumns,
-  ProDescriptionsItemProps,
   ProFormItem,
   ProFormTextArea,
   ProFormSelect,
   ProFormText,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col, Typography, Spin, Empty, Descriptions } from 'antd';
+import { App, Button, Tag, Space, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, MoreOutlined, ShoppingOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -33,7 +32,11 @@ import {
   renderDocumentLineMaterialsPreview,
 } from '../../sales-management/shared/documentLineMaterialsPreview';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import {
+  DeliveryNoticeDetailDrawer,
+  type DeliveryNoticeDetailRecord,
+} from './components/DeliveryNoticeDetailDrawer';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, isPullableScope, renderPullCapabilityTag, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
@@ -45,8 +48,7 @@ import { useNavigate } from 'react-router-dom';
 import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { warehouseApi } from '../../../services/production';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import {
   KUAIZHIZAO_DOC_HOST,
   loadCustomerFormReferenceList,
@@ -67,7 +69,7 @@ import { resolveDeliveryNoticeQualityCertificates } from '../../../services/prin
 import { SafetyCertificateOutlined } from '@ant-design/icons';
 import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatAmount, todaySiteDateString } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { alignDescriptionColumns, alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
@@ -128,9 +130,7 @@ interface DeliveryNotice {
   };
 }
 
-interface DeliveryNoticeDetail extends DeliveryNotice {
-  items?: { id?: number; material_code: string; material_name: string; material_unit: string; notice_quantity: number; unit_price?: number; total_amount?: number }[];
-}
+type DeliveryNoticeDetail = DeliveryNoticeDetailRecord;
 
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
   待发送: { text: '待发送', color: 'default' },
@@ -152,11 +152,6 @@ const DeliveryNotesPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [noticeDetail, setNoticeDetail] = useState<DeliveryNoticeDetail | null>(null);
-
-  const deliveryTracking = useDocumentTracking(
-    detailDrawerVisible && noticeDetail?.id ? 'delivery_notice' : undefined,
-    noticeDetail?.id
-  );
 
   const openLinkedFreightTracking = useCallback(async () => {
     if (!noticeDetail?.id) return;
@@ -871,62 +866,6 @@ const DeliveryNotesPage: React.FC = () => {
     }
   };
 
-  const detailColumns = useMemo(() => alignDescriptionColumns([
-    { title: t('app.kuaizhizao.deliveryNote.col.noticeCode'), dataIndex: 'notice_code' },
-    {
-      title: t('app.kuaizhizao.deliveryNote.col.salesDeliveryCode'),
-      dataIndex: 'sales_delivery_code',
-    },
-    {
-      title: t('app.kuaizhizao.deliveryNote.col.salesOrderCode'),
-      dataIndex: 'sales_order_code',
-    },
-    { title: t('app.kuaizhizao.deliveryNote.field.customer'), dataIndex: 'customer_name' },
-    { title: t('app.kuaizhizao.deliveryNote.field.contact'), dataIndex: 'customer_contact' },
-    { title: t('app.kuaizhizao.deliveryNote.field.phone'), dataIndex: 'customer_phone' },
-    { title: t('app.kuaizhizao.deliveryNote.col.plannedDelivery'), dataIndex: 'planned_delivery_date', valueType: 'date' },
-    { title: t('app.kuaizhizao.deliveryNote.col.carrier'), dataIndex: 'carrier' },
-    { title: t('app.kuaizhizao.deliveryNote.col.trackingNumber'), dataIndex: 'tracking_number' },
-    { title: t('app.kuaizhizao.deliveryNote.field.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
-    {
-      title: t('common.status'),
-      dataIndex: 'status',
-      render: (s) => {
-        const c = STATUS_MAP[(s as string) || ''] || { text: (s as string) || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
-      },
-    },
-    { title: t('app.kuaizhizao.deliveryNote.col.sentAt'), dataIndex: 'sent_at', valueType: 'dateTime' },
-    { title: t('common.remark'), dataIndex: 'notes', span: 3 },
-  ]), [t]);
-
-  const detailItemColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
-      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
-      { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' as const , render: formatQuantity },
-      { title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const },
-      { title: t('app.kuaizhizao.warehouseOutbound.field.amount'), dataIndex: 'total_amount', width: 100, align: 'right' as const },
-    ],
-    [t],
-  );
-
-  const detailCollaboration = useMemo(() => {
-    if (!noticeDetail) return undefined;
-    const lc = getDeliveryNoticeLifecycle(noticeDetail as Record<string, unknown>, t);
-    const mainStages = lc.mainStages ?? [];
-    if (mainStages.length === 0) return undefined;
-    return (
-      <UniLifecycleStepper
-        steps={mainStages}
-        showLabels
-        status={lc.status}
-        nextStepSuggestions={lc.nextStepSuggestions}
-      />
-    );
-  }, [noticeDetail, t]);
-
   const pullModalColumns = useMemo(
     () => [
       {
@@ -1287,11 +1226,6 @@ const DeliveryNotesPage: React.FC = () => {
     </>
   );
 
-  const timeconfigBasicItems = useDetailDrawerDescriptionItems(
-    detailColumns, noticeDetail,
-    'delivery_note',
-  );
-
   return (
     <>
       <ListPageTemplate>
@@ -1316,6 +1250,7 @@ const DeliveryNotesPage: React.FC = () => {
           }}
           toolBarRender={() => [
             <UniPullCreateToolbar
+              key="create-delivery-note-with-pull"
               compactKey="create-delivery-note-with-pull"
               createIcon={<PlusOutlined />}
               createLabel={createButtonLabel}
@@ -1330,14 +1265,6 @@ const DeliveryNotesPage: React.FC = () => {
                 },
               ])}
             />,
-          ]}
-          enableRowSelection
-          selectedRowKeys={selectedRowKeys}
-          onRowSelectionChange={setSelectedRowKeys}
-          showDeleteButton
-          onDelete={handleBatchDelete}
-          deleteConfirmTitle={(count) => t('app.kuaizhizao.deliveryNote.msg.deleteConfirm', { count })}
-          toolBarActionsAfterBatch={[
             <UniPushToolbarButton
               key={`delivery-note-push-freight-${selectedDeliveryNoticeForPush?.id ?? 'none'}`}
               menuItems={toolbarPushMenuItems}
@@ -1351,6 +1278,12 @@ const DeliveryNotesPage: React.FC = () => {
               pushTargets={{ 'push-freight-order': 'freight_order' }}
             />,
           ]}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.deliveryNote.msg.deleteConfirm', { count })}
           showImportButton={false}
           showExportButton
           rightToolBarActionsBeforeExport={
@@ -1483,77 +1416,20 @@ const DeliveryNotesPage: React.FC = () => {
         okText={t('app.kuaizhizao.deliveryNote.pull.ok')}
       />
 
-      <DetailDrawerTemplate
-        title={`${t('app.kuaizhizao.deliveryNote.detailTitle')}${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
+      <DeliveryNoticeDetailDrawer
         open={detailDrawerVisible}
         loading={detailLoading}
-        onClose={() => { setDetailDrawerVisible(false); setNoticeDetail(null); }}
-        size={DRAWER_CONFIG.HALF_WIDTH}
+        notice={noticeDetail}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setNoticeDetail(null);
+        }}
         extra={
           noticeDetail?.id != null ? (
             <Button onClick={() => void openLinkedFreightTracking()}>
               {t('app.kuaizhizao.logistics.action.openTracking')}
             </Button>
           ) : null
-        }
-        basic={
-          noticeDetail ? (
-            <Descriptions
-              column={detailDrawerBasicColumn(false)}
-              size="small"
-              items={timeconfigBasicItems}
-            />
-          ) : undefined
-        }
-        collaboration={detailCollaboration}
-        linesTitle={t('app.kuaizhizao.deliveryNote.section.lineDetails')}
-        lines={
-          noticeDetail?.items && noticeDetail.items.length > 0 ? (
-            <>
-              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-              <Table
-                className="warehouse-detail-table"
-                size="small"
-                rowKey={(row: Record<string, unknown>, idx = 0) =>
-                  String((row as { id?: React.Key }).id ?? `${noticeDetail?.id ?? 'dn'}-${idx}`)
-                }
-                columns={detailItemColumns}
-                dataSource={noticeDetail.items}
-                pagination={false}
-              />
-            </>
-          ) : noticeDetail ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.deliveryNote.msg.noLineDetails')} />
-          ) : undefined
-        }
-        timeline={
-          noticeDetail?.id != null ? (
-            <>
-              {deliveryTracking.loading && (
-                <div style={{ textAlign: 'center', padding: 24 }}>
-                  <Spin />
-                </div>
-              )}
-              {deliveryTracking.error && !deliveryTracking.loading && (
-                <Typography.Text type="danger">{deliveryTracking.error}</Typography.Text>
-              )}
-              {deliveryTracking.data && !deliveryTracking.loading && (
-                <DocumentTrackingTimelineBody data={deliveryTracking.data} />
-              )}
-              {!deliveryTracking.loading && !deliveryTracking.data && !deliveryTracking.error && (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.deliveryNote.msg.noOperationLog')} />
-              )}
-            </>
-          ) : undefined
-        }
-        traceDocument={
-          noticeDetail?.id != null
-            ? {
-                documentType: 'delivery_notice',
-                documentId: noticeDetail.id,
-                selfDocumentId: noticeDetail.id,
-              }
-            : undefined
         }
       />
 

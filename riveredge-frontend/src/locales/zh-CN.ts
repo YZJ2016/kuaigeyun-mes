@@ -29243,6 +29243,30 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.login-quick-providers-r01.title':
+    '登录页快捷登录可按渠道单独开关',
+  'pages.dashboard.updateLog.entries.login-quick-providers-r01.description':
+    '平台管理与组织站点设置的登录页配置在开启快捷登录后，可分别控制微信、QQ、企业微信、钉钉、飞书；未开启的渠道在登录页显示灰色图标，悬停提示未开启且不可点击。',
+  'pages.dashboard.updateLog.entries.uni-push-pushed-docs-r01.title':
+    '下推菜单展示已下推单号并可打开详情',
+  'pages.dashboard.updateLog.entries.uni-push-pushed-docs-r01.description':
+    '列表工具栏下推在选中源单后，菜单右侧展示已下推下游单号；已登记关联类型的单号可点击嵌套打开原版详情抽屉。销售/采购/计划/质检/仓储/委外等页补齐 sourceDocument 与 pushTargets，并扩展送货单、出库 hub、检验单等 Linked 详情类型。',
+  'pages.dashboard.updateLog.entries.unitable-push-after-create-order-r01.title':
+    '下推按钮紧跟新建入口',
+  'pages.dashboard.updateLog.entries.unitable-push-after-create-order-r01.description':
+    '出库管理、送货单列表「下推」从批量区挪到新建/从单据加载之后，符合 UniTable 工具栏顺序：新建 → 下推 → 删除 → 其它。',
+  'pages.dashboard.updateLog.entries.unitable-toolbar-plain-label-font-r01.title':
+    '列表工具栏开关标签字号对齐',
+  'pages.dashboard.updateLog.entries.unitable-toolbar-plain-label-font-r01.description':
+    '「显示金额」等工具栏开关文案统一走 uni-table-toolbar-plain-label，字号跟 antd 控件 token，不再跟着系统放大字体变大；销售/采购/工单逾期高亮开关一并收口。',
+  'pages.dashboard.updateLog.entries.warehouse-source-doc-link-r01.title':
+    '出入库列表来源单号可点开关联单据',
+  'pages.dashboard.updateLog.entries.warehouse-source-doc-link-r01.description':
+    '出库/入库 Hub「来源单号」按销售订单、采购订单、工单等 *_code+*_id 挂嵌套详情，不再纯文本，避免部分可点部分不可点。',
+  'pages.dashboard.updateLog.entries.inline-marker-tag-preview-middle-align-r01.title':
+    '列表明细徽章与邻列徽章垂直居中对齐',
+  'pages.dashboard.updateLog.entries.inline-marker-tag-preview-middle-align-r01.description':
+    '明细预览改为 inline-flex，与预测周期等单枚徽章同属行内盒；表体保持垂直居中，叠列撑高行时同类徽章落在同一水平线。',
   'pages.dashboard.updateLog.entries.haoligo-order-tracking-prepay-r01.title':
     '订单跟踪款到发货校验调整',
   'pages.dashboard.updateLog.entries.haoligo-order-tracking-prepay-r01.description':
@@ -35925,6 +35949,13 @@ export default {
   'pages.infra.platform.loginGuestEnabledTooltip': '关闭后，登录页不再显示「免注册体验登录」按钮，且接口拒绝体验登录',
   'pages.infra.platform.loginQuickEnabled': '是否开启快捷登录',
   'pages.infra.platform.loginQuickEnabledTooltip': '关闭后，登录页不再显示微信、QQ、企业微信、钉钉、飞书等快捷登录入口',
+  'pages.infra.platform.loginQuickProvidersTitle': '快捷登录方式',
+  'pages.infra.platform.loginQuickProviderWechat': '微信',
+  'pages.infra.platform.loginQuickProviderQq': 'QQ',
+  'pages.infra.platform.loginQuickProviderWechatWork': '企业微信',
+  'pages.infra.platform.loginQuickProviderDingtalk': '钉钉',
+  'pages.infra.platform.loginQuickProviderFeishu': '飞书',
+  'pages.login.quickLoginNotEnabled': '未开启',
   'pages.infra.platform.loginClientWinEnabled': '登录页显示 Windows 工位机下载',
   'pages.infra.platform.loginClientWinEnabledTooltip': '关闭后，登录页不再显示触屏工位机 Windows 安装包入口',
   'pages.infra.platform.loginClientAndroidEnabled': '登录页显示 Android PDA 下载',

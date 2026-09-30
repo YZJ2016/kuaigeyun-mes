@@ -44,6 +44,51 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'login-quick-providers-r01',
+    date: '2026-09-30',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.login-quick-providers-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.login-quick-providers-r01.description',
+  },
+  {
+    id: 'uni-push-pushed-docs-r01',
+    date: '2026-09-30',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-push-pushed-docs-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.uni-push-pushed-docs-r01.description',
+  },
+  {
+    id: 'unitable-push-after-create-order-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-push-after-create-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unitable-push-after-create-order-r01.description',
+  },
+  {
+    id: 'unitable-toolbar-plain-label-font-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-toolbar-plain-label-font-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unitable-toolbar-plain-label-font-r01.description',
+  },
+  {
+    id: 'warehouse-source-doc-link-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-source-doc-link-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.warehouse-source-doc-link-r01.description',
+  },
+  {
+    id: 'inline-marker-tag-preview-middle-align-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inline-marker-tag-preview-middle-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inline-marker-tag-preview-middle-align-r01.description',
+  },
+  {
     id: 'quality-inspection-conduct-plan-list-r01',
     date: '2026-09-29',
     type: 'fix',

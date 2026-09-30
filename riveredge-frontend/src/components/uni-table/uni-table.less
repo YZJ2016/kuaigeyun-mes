@@ -200,6 +200,7 @@
 }
 
 .uni-table-container .ant-table-tbody > tr > td {
+  vertical-align: middle;
   border-bottom-color: rgba(0, 0, 0, 0.12) !important;
 }
 
@@ -369,8 +370,15 @@
   flex-wrap: nowrap !important;
 }
 
+/*
+ * UniTable 工具栏旁路纯文案（开关标签等）：字号跟 antd 控件 token，禁止裸 span 继承
+ * 页面/系统放大字体后比邻钮更大；垂直对齐由外层 Space align="center" 负责。
+ */
 .uni-table-toolbar-plain-label {
   white-space: nowrap;
+  font-size: var(--ant-font-size);
+  line-height: var(--ant-line-height);
+  color: var(--ant-color-text);
 }
 
 .uni-table-container .uni-table-alt-view-toolbar {

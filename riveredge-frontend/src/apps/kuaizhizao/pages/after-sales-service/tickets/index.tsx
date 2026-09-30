@@ -1138,6 +1138,16 @@ const AfterSalesTicketsPage: React.FC = () => {
                 menuItems={toolbarPushMenuItems}
                 disabled={selectedRowKeys.length !== 1 || !selectedTicketForToolbar}
                 disabledReason={toolbarPushDisabledReason}
+                sourceDocument={
+                  selectedTicketForToolbar?.id
+                    ? { type: 'after_sales_ticket', id: Number(selectedTicketForToolbar.id) }
+                    : null
+                }
+                pushTargets={{
+                  'push-sales-return': 'sales_return',
+                  'push-repair-order': 'repair_order',
+                  'push-return-visit': 'customer_return_visit',
+                }}
               />,
             );
             return items;

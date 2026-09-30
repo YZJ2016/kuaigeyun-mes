@@ -43,6 +43,7 @@ _PLATFORM_FALLBACK_KEYS = {
     "login_client_win_enabled": "login_client_win_enabled",
     "login_client_android_enabled": "login_client_android_enabled",
     "login_quick_enabled": "login_quick_enabled",
+    "login_quick_providers": "login_quick_providers",
 }
 
 # 平台未配置时的默认值（新租户未设置时使用）
@@ -58,6 +59,10 @@ _PLATFORM_FALLBACK_BOOL_KEYS = {
     "login_quick_enabled",
     "login_decoration_enabled",
     "login_background_enabled",
+}
+
+_PLATFORM_FALLBACK_DICT_KEYS = {
+    "login_quick_providers",
 }
 
 _LOGO_UUID_RE = re.compile(
@@ -278,6 +283,8 @@ class SiteSettingService:
             if site_key in _PLATFORM_FALLBACK_BOOL_KEYS:
                 # 布尔项仅在未设置（None）时回退；False 必须视为显式覆盖
                 should_fallback = tenant_val is None
+            elif site_key in _PLATFORM_FALLBACK_DICT_KEYS:
+                should_fallback = tenant_val is None
             else:
                 should_fallback = (not tenant_val) or (
                     isinstance(tenant_val, str) and not tenant_val.strip()
@@ -288,6 +295,13 @@ class SiteSettingService:
                 if site_key in _PLATFORM_FALLBACK_BOOL_KEYS:
                     if platform_val is not None:
                         tenant_settings[site_key] = platform_val
+                elif site_key in _PLATFORM_FALLBACK_DICT_KEYS:
+                    from core.utils.login_quick_providers import normalize_login_quick_providers
+
+                    if platform_val is not None:
+                        tenant_settings[site_key] = normalize_login_quick_providers(platform_val)
+                    else:
+                        tenant_settings[site_key] = normalize_login_quick_providers(None)
                 elif platform_val and (not isinstance(platform_val, str) or platform_val.strip()):
                     tenant_settings[site_key] = platform_val
                 elif site_key in _PLATFORM_DEFAULT_VALUES and _PLATFORM_DEFAULT_VALUES[site_key]:

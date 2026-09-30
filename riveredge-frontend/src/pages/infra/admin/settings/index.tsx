@@ -34,6 +34,7 @@ import {
   LoginFeatureSwitchesBlock,
 } from '../../../../components/login-page-editor';
 import { isLoginVisualLayerEnabled, validateLoginVisualLayers } from '../../../../utils/loginVisualLayers';
+import { resolveLoginQuickProviders } from '../../../../constants/loginQuickProviders';
 
 /**
  * 平台设置页面组件
@@ -129,6 +130,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         login_client_win_enabled: data.login_client_win_enabled ?? true,
         login_client_android_enabled: data.login_client_android_enabled ?? true,
         login_quick_enabled: data.login_quick_enabled ?? true,
+        login_quick_providers: resolveLoginQuickProviders(data.login_quick_providers),
         enable_register: data.enable_register ?? true,
       });
       queryClient.setQueryData(['platformSettings'], data);
@@ -331,6 +333,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         login_client_win_enabled: settings.login_client_win_enabled ?? true,
         login_client_android_enabled: settings.login_client_android_enabled ?? true,
         login_quick_enabled: settings.login_quick_enabled ?? true,
+        login_quick_providers: resolveLoginQuickProviders(settings.login_quick_providers),
         enable_register: settings.enable_register !== false,
       });
       
@@ -625,6 +628,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         login_client_win_enabled: true,
         login_client_android_enabled: true,
         login_quick_enabled: true,
+        login_quick_providers: resolveLoginQuickProviders(undefined),
         enable_register: true,
       });
       setDecorationUrl(undefined);

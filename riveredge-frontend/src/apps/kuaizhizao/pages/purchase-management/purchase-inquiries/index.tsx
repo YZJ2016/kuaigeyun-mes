@@ -1650,6 +1650,12 @@ const PurchaseInquiriesPage: React.FC = () => {
             menuItems={toolbarPushMenuItems}
             disabled={selectedRowKeys.length !== 1 || !selectedInquiryForToolbar}
             disabledReason={toolbarPushDisabledReason}
+            sourceDocument={
+              selectedInquiryForToolbar?.id
+                ? { type: 'purchase_inquiry', id: Number(selectedInquiryForToolbar.id) }
+                : null
+            }
+            pushTargets={{ 'push-purchase-order': 'purchase_order' }}
           />,
         ]}
       />

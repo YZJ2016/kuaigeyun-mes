@@ -68,6 +68,7 @@ import {
   LoginFeatureSwitchesBlock,
 } from '../../../components/login-page-editor';
 import { isLoginVisualLayerEnabled, validateLoginVisualLayers } from '../../../utils/loginVisualLayers';
+import { resolveLoginQuickProviders } from '../../../constants/loginQuickProviders';
 
 /**
  * 站点设置页面组件
@@ -121,6 +122,7 @@ function getInitialValuesFromConfigStore(
     login_client_win_enabled: configs.login_client_win_enabled !== false,
     login_client_android_enabled: configs.login_client_android_enabled !== false,
     login_quick_enabled: configs.login_quick_enabled !== false,
+    login_quick_providers: resolveLoginQuickProviders(configs.login_quick_providers),
     copyright: configs.copyright ?? '',
     description: configs.description ?? '',
     'security.token_check_interval': configs['security.token_check_interval'] ?? configs.security?.token_check_interval ?? 60,
@@ -188,6 +190,7 @@ const SITE_SETTINGS_LOGIN_PAGE_TAB_FIELDS = [
   'login_client_win_enabled',
   'login_client_android_enabled',
   'login_quick_enabled',
+  'login_quick_providers',
   'enable_register',
 ] as const;
 
@@ -809,6 +812,7 @@ const SiteSettingsPage: React.FC = () => {
         login_client_win_enabled: setting.settings?.login_client_win_enabled !== false,
         login_client_android_enabled: setting.settings?.login_client_android_enabled !== false,
         login_quick_enabled: setting.settings?.login_quick_enabled !== false,
+        login_quick_providers: resolveLoginQuickProviders(setting.settings?.login_quick_providers),
         copyright: setting.settings?.copyright || '',
         description: setting.settings?.description || '',
         'security.token_check_interval': setting.settings?.security?.token_check_interval ?? 60,
@@ -1235,6 +1239,7 @@ const SiteSettingsPage: React.FC = () => {
           login_client_win_enabled: values.login_client_win_enabled,
           login_client_android_enabled: values.login_client_android_enabled,
           login_quick_enabled: values.login_quick_enabled,
+          login_quick_providers: resolveLoginQuickProviders(values.login_quick_providers),
           enable_register: values.enable_register,
         });
         shouldRefreshConfigs = true;
@@ -1340,6 +1345,7 @@ const SiteSettingsPage: React.FC = () => {
           login_client_win_enabled: null,
           login_client_android_enabled: null,
           login_quick_enabled: null,
+          login_quick_providers: null,
         },
       });
       await loadSiteSetting();

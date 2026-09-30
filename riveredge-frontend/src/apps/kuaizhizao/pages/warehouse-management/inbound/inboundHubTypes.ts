@@ -233,6 +233,16 @@ export function inboundSourceDocNo(record: InboundHubOrder): string {
   return parts.join(' / ');
 }
 
+/** 入库 Hub「来源单号」列挂链字段序（与 inboundSourceDocNo 一致） */
+export const INBOUND_SOURCE_DOC_CODE_FIELDS = [
+  'purchase_order_code',
+  'sales_order_code',
+  'outsource_work_order_code',
+  'work_order_code',
+  'picking_code',
+  'source_doc_no',
+] as const;
+
 /** Hub 统一「日期」原始值：各入库类型字段名不一致（receipt_date / receipt_time / received_at / return_time 等） */
 export function resolveInboundHubDateRaw(record: InboundHubOrder): unknown {
   const row = record as Record<string, unknown>;

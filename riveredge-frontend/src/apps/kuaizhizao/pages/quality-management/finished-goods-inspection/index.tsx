@@ -1290,6 +1290,15 @@ const FinishedGoodsInspectionPage: React.FC = () => {
             menuItems={toolbarPushMenuItems}
             disabled={selectedRowKeys.length !== 1 || !selectedFinishedForToolbar}
             disabledReason={toolbarPushDisabledReason}
+            sourceDocument={
+              selectedFinishedForToolbar?.id
+                ? { type: 'finished_goods_inspection', id: Number(selectedFinishedForToolbar.id) }
+                : null
+            }
+            pushTargets={{
+              'push-inbound': 'finished_goods_receipt',
+              'push-rework': 'rework_order',
+            }}
           />,
         ]}
         enableRowSelection={true}

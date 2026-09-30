@@ -1910,6 +1910,15 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               menuItems={toolbarPushMenuItems}
               disabled={selectedRowKeys.length !== 1 || !selectedOwoForToolbar}
               disabledReason={toolbarPushDisabledReason}
+              sourceDocument={
+                selectedOwoForToolbar?.id
+                  ? { type: 'outsource_work_order', id: Number(selectedOwoForToolbar.id) }
+                  : null
+              }
+              pushTargets={{
+                'push-outbound': 'outsource_issue',
+                'push-inbound': ['outsource_receipt', 'outsource_material_return', 'outsource_product_return'],
+              }}
             />,
           ]}
           showDeleteButton={true}

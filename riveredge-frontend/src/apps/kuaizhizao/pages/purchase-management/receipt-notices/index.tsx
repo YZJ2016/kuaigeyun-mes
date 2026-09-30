@@ -1675,6 +1675,12 @@ const ReceiptNoticesPage: React.FC = () => {
               menuItems={toolbarPushMenuItems}
               disabled={selectedRowKeys.length !== 1 || !selectedNoticeForToolbar}
               disabledReason={toolbarPushDisabledReason}
+              sourceDocument={
+                selectedNoticeForToolbar?.id
+                  ? { type: 'receipt_notice', id: Number(selectedNoticeForToolbar.id) }
+                  : null
+              }
+              pushTargets={{ 'push-purchase-receipt': 'purchase_receipt' }}
             />,
           ]}
           enableRowSelection={viewTypeState !== 'detailTable'}

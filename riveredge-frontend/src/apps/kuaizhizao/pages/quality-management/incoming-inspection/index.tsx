@@ -1697,6 +1697,15 @@ const IncomingInspectionPage: React.FC = () => {
             menuItems={toolbarPushMenuItems}
             disabled={selectedRowKeys.length !== 1 || !selectedIncomingForToolbar}
             disabledReason={toolbarPushDisabledReason}
+            sourceDocument={
+              selectedIncomingForToolbar?.id
+                ? { type: 'incoming_inspection', id: Number(selectedIncomingForToolbar.id) }
+                : null
+            }
+            pushTargets={{
+              'push-inbound': 'purchase_receipt',
+              'push-purchase-return': 'purchase_return',
+            }}
           />,
         ]}
         enableRowSelection={true}

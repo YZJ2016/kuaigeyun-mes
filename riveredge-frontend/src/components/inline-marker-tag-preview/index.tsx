@@ -11,7 +11,7 @@ export const INLINE_MARKER_TAG_PREVIEW_MAX = 2;
 
 const TAG_STYLE: React.CSSProperties = {
   fontSize: 'inherit',
-  lineHeight: 'inherit',
+  /* 勿 inherit 行高：会把 Tag 撑得比邻列单枚 MarkerTag 更高，middle 后顶边看起来上浮 */
 };
 
 export type InlineMarkerTagPreviewOptions = {
@@ -36,12 +36,15 @@ export function renderInlineMarkerTagPreview(
   return (
     <div
       style={{
-        display: 'flex',
+        /* inline-flex：与单枚 MarkerTag 同属行内盒，表体 middle 时与邻列徽章同一水平线；
+         * 块级 flex 会被当成整块盒垂直居中，行高/撑杆差异下会和裸 Tag 错位。 */
+        display: 'inline-flex',
         flexWrap: 'wrap',
         alignItems: 'center',
         gap: 4,
         minWidth: 0,
         maxWidth: '100%',
+        verticalAlign: 'middle',
       }}
     >
       {preview.map((text, index) => (

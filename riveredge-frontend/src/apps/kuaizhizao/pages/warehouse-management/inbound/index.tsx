@@ -35,6 +35,7 @@ import {
 } from '../../../../../components/custom-fields';
 import { buildHubMergedCustomFieldColumns } from '../../../../../components/custom-fields/hubCustomFieldListColumns';
 import { ListPageTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { LinkedDocumentCodesFromFields } from '../../../../../components/linked-document-code';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useGlobalStore } from '../../../../../stores';
@@ -139,7 +140,7 @@ import {
   isInboundEditable,
   isInboundWithdrawable,
   inboundConfirmCapabilityReasonMessage,
-  inboundSourceDocNo,
+  INBOUND_SOURCE_DOC_CODE_FIELDS,
   resolveInboundHubOperator,
   resolveInboundHubDateRaw,
   filterInboundPullCreateMenuSpecs,
@@ -1802,7 +1803,12 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       resizable: false,
       ellipsis: true,
       hideInSearch: true,
-      render: (_, record) => inboundSourceDocNo(record) || '-',
+      render: (_, record) => (
+        <LinkedDocumentCodesFromFields
+          record={record as Record<string, unknown>}
+          codeFields={INBOUND_SOURCE_DOC_CODE_FIELDS}
+        />
+      ),
     },
     {
       title: t('app.kuaizhizao.warehouseInbound.col.supplier'),
