@@ -54,7 +54,7 @@ class QualityAutomationService:
         created_by: int,
     ) -> None:
         """
-        报工生效后自动建过程检验待检单（IPQC，mode=plan，含末道）。
+        报工生效后自动建过程检验待检单（IPQC，eff 为 plan 或 simple，含末道）。
 
         成品检验（FQC）不再在报工时自动创建，也不再在工序展开时扫描补建；
         统一为：入库前 ensure + 工单「下推成品检验单」手工补。
@@ -64,7 +64,7 @@ class QualityAutomationService:
 
         master_op_id = int(work_order_operation.operation_id or 0)
 
-        # 过程检验：任意工序（含末道）在 plan 模式下自动建单
+        # 过程检验：任意工序（含末道）在 plan / simple 模式下自动建单
         if (
             cfg["stage_enabled"]["ipqc"]
             and cfg["module_enabled"]["process"]
@@ -77,7 +77,7 @@ class QualityAutomationService:
                 operation_id=master_op_id,
                 work_order_operation=work_order_operation,
             )
-            if eff == "plan":
+            if eff in ("plan", "simple"):
                 try:
                     from apps.kuaizhizao.services.quality_service import ProcessInspectionService
 
