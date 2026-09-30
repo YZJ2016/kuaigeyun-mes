@@ -65,6 +65,10 @@ import {
 import { operationApi, unwrapProcessPagedList } from '../../../../master-data/services/process';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import {
+  buildLedgerCodeUuidMap,
+  upsertLedgerImportItem,
+} from '../../../utils/ledgerImportUpsert';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import {
   buildFactoryImportTemplate,
@@ -1207,9 +1211,19 @@ const EquipmentPage: React.FC = () => {
               messageApi.warning(t('app.kuaizhizao.equipment.importNoRows'));
               return;
             }
+            const codeToUuid = await buildLedgerCodeUuidMap(
+              (p) => equipmentApi.list(p),
+              { exclude_equipment_nature: MEASURING_INSTRUMENT_NATURE },
+            );
             const result = await importInChunksViaPerItemCreate({
               items,
-              createOne: async (item, _index) => equipmentApi.create(item),
+              createOne: async (item, _index) =>
+                upsertLedgerImportItem(
+                  item,
+                  codeToUuid,
+                  (payload) => equipmentApi.create(payload),
+                  (uuid, payload) => equipmentApi.update(uuid, payload),
+                ),
               title: t('app.kuaizhizao.equipment.importTitle'),
               chunkSize: 100,
               concurrency: 4,

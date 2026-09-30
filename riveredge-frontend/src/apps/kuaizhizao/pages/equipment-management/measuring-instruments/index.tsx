@@ -11,6 +11,16 @@ import {
   ProFormSwitch,
 } from '@ant-design/pro-components';
 import { App, Col, Row } from 'antd';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate';
+import {
+  IMPORT_YES_NO_OPTIONS,
+  pickImportExampleValue,
+} from '../../../../../utils/loadImportDictionaryValues';
+import { useImportDictionaryOptions } from '../../../../../hooks/useImportDictionaryOptions';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -28,6 +38,7 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
   formDateFormItemProps,
   formDateRangeFormItemProps,
+  parseSpreadsheetDateToApiString,
   toApiDateString,
 } from '../../../../../utils/formDate';
 import {
@@ -43,6 +54,10 @@ import { formatDateBySiteSetting, todaySiteDateString } from '../../../../../uti
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { MEASURING_INSTRUMENT_NATURE } from './measuringInstrumentConstants';
+import {
+  buildLedgerCodeUuidMap,
+  upsertLedgerImportItem,
+} from '../../../utils/ledgerImportUpsert';
 import { buildMeasuringInstrumentDetailPath } from './measuringInstrumentPaths';
 
 interface MeasuringInstrument {
@@ -67,7 +82,7 @@ interface MeasuringInstrument {
 const P = 'app.kuaizhizao.measuringInstrument';
 
 const MeasuringInstrumentsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { message: messageApi } = App.useApp();
@@ -84,6 +99,71 @@ const MeasuringInstrumentsPage: React.FC = () => {
     [t],
   );
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
+  const equipmentStatusDict = useImportDictionaryOptions(['EQUIPMENT_STATUS']);
+  const parseEquipmentStatus = equipmentStatusDict.parseDict;
+
+  const measuringInstrumentImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          { field: 'code', labelKey: `${P}.import.code`, aliases: ['器具编号', '编号'] },
+          { field: 'name', required: true, labelKey: `${P}.import.name`, aliases: ['器具名称', '名称'] },
+          { field: 'model', labelKey: `${P}.import.model`, aliases: ['规格型号', '型号'] },
+          { field: 'brand', labelKey: `${P}.import.brand`, aliases: ['品牌'] },
+          { field: 'category', labelKey: `${P}.import.category`, aliases: ['器具类别', '类别'] },
+          { field: 'measuring_precision', labelKey: `${P}.import.measuringPrecision`, aliases: ['精度'] },
+          { field: 'measurement_range', labelKey: `${P}.import.measurementRange`, aliases: ['测量范围'] },
+          {
+            field: 'calibration_period',
+            labelKey: `${P}.import.calibrationPeriod`,
+            aliases: ['校准周期（天）', '校准周期'],
+          },
+          {
+            field: 'last_calibration_date',
+            labelKey: `${P}.import.lastCalibrationDate`,
+            aliases: ['本次校准时间', '上次校准日期', '校准日期'],
+          },
+          { field: 'workshop_name', labelKey: `${P}.import.workshop`, aliases: ['车间', '关联车间'] },
+          {
+            field: 'work_center_code',
+            labelKey: `${P}.import.workCenterCode`,
+            aliases: ['工作中心编码', '工作中心'],
+          },
+          {
+            field: 'status',
+            required: true,
+            labelKey: `${P}.import.status`,
+            aliases: ['状态', '器具状态'],
+            options: equipmentStatusDict.EQUIPMENT_STATUS,
+          },
+          { field: 'description', labelKey: 'common.remark', aliases: ['备注', '描述'] },
+          {
+            field: 'is_active',
+            labelKey: `${P}.import.isActive`,
+            aliases: ['是否启用', '启用'],
+            options: [...IMPORT_YES_NO_OPTIONS],
+          },
+        ],
+        [
+          t(`${P}.importExample.code`),
+          t(`${P}.importExample.name`),
+          t(`${P}.importExample.model`),
+          t(`${P}.importExample.brand`),
+          t(`${P}.importExample.category`),
+          t(`${P}.importExample.measuringPrecision`),
+          t(`${P}.importExample.measurementRange`),
+          t(`${P}.importExample.calibrationPeriod`),
+          t(`${P}.importExample.lastCalibrationDate`),
+          t(`${P}.importExample.workshop`),
+          t(`${P}.importExample.workCenterCode`),
+          pickImportExampleValue(equipmentStatusDict.EQUIPMENT_STATUS, t(`${P}.importExample.status`)),
+          '',
+          pickImportExampleValue([...IMPORT_YES_NO_OPTIONS], t('common.yes')),
+        ],
+      ),
+    [t, i18n.language, equipmentStatusDict],
+  );
 
   const handleCreate = useCallback(() => {
     setIsEdit(false);
@@ -412,7 +492,7 @@ const MeasuringInstrumentsPage: React.FC = () => {
           rowKey="uuid"
           columns={columns}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.measuring-instruments-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.measuring-instruments-v4"
           permissionResource="kuaizhizao:equipment-management-equipment"
           pinnedTabsField={MASTER_DATA_PINNED_ACTIVE_FIELD}
           showAdvancedSearch
@@ -441,6 +521,106 @@ const MeasuringInstrumentsPage: React.FC = () => {
           showCreateButton={perms.canCreate}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          showImportButton={perms.canImport}
+          onImport={async (data) => {
+            if (!data || data.length < 2) {
+              messageApi.warning(t(`${P}.importEmpty`));
+              return;
+            }
+            const headers = (data[0] || []).map((h: unknown) => String(h || '').trim());
+            const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+              headers,
+              measuringInstrumentImportTemplate.importHeaderMap,
+            );
+            if (headerIndexMap.name === undefined) {
+              messageApi.error(t(`${P}.importHeaderMissingName`));
+              return;
+            }
+            const cellAt = (row: unknown[], field: string): string => {
+              const idx = headerIndexMap[field];
+              if (idx === undefined) return '';
+              return String(row[idx] ?? '').trim();
+            };
+            const parseDate = (raw: string): string | undefined => parseSpreadsheetDateToApiString(raw);
+            const parseIntField = (raw: string): number | undefined => {
+              if (!raw) return undefined;
+              const n = Number(raw);
+              return Number.isFinite(n) ? n : undefined;
+            };
+            const parseActive = (raw: string): boolean | undefined => {
+              if (!raw) return undefined;
+              const v = raw.toLowerCase();
+              if (['1', 'true', 'yes', 'y', '是', '启用', 'active'].includes(v)) return true;
+              if (['0', 'false', 'no', 'n', '否', '停用', 'inactive'].includes(v)) return false;
+              return undefined;
+            };
+            const items: Record<string, unknown>[] = [];
+            const importRows = data.slice(2).filter((row: unknown[]) =>
+              row?.some((c: unknown) => c != null && String(c).trim() !== ''),
+            );
+            for (const row of importRows) {
+              const name = cellAt(row, 'name');
+              if (!name) continue;
+              const lastCalibrationDate = parseDate(cellAt(row, 'last_calibration_date'));
+              const calibrationPeriod = parseIntField(cellAt(row, 'calibration_period'));
+              const nextCalibrationDate =
+                lastCalibrationDate && calibrationPeriod
+                  ? dayjs(lastCalibrationDate).add(calibrationPeriod, 'day').format('YYYY-MM-DD')
+                  : undefined;
+              const isActive = parseActive(cellAt(row, 'is_active'));
+              items.push({
+                code: cellAt(row, 'code') || undefined,
+                name,
+                model: cellAt(row, 'model') || undefined,
+                brand: cellAt(row, 'brand') || undefined,
+                category: cellAt(row, 'category') || undefined,
+                measuring_precision: cellAt(row, 'measuring_precision') || undefined,
+                measurement_range: cellAt(row, 'measurement_range') || undefined,
+                calibration_period: calibrationPeriod,
+                last_calibration_date: lastCalibrationDate,
+                next_calibration_date: nextCalibrationDate,
+                workshop_name: cellAt(row, 'workshop_name') || undefined,
+                work_center_code: cellAt(row, 'work_center_code') || undefined,
+                status: parseEquipmentStatus('EQUIPMENT_STATUS', cellAt(row, 'status')) || '正常',
+                description: cellAt(row, 'description') || undefined,
+                equipment_nature: MEASURING_INSTRUMENT_NATURE,
+                needs_calibration: true,
+                ...(isActive === undefined ? {} : { is_active: isActive }),
+              });
+            }
+            if (items.length === 0) {
+              messageApi.warning(t(`${P}.importNoRows`));
+              return;
+            }
+            const codeToUuid = await buildLedgerCodeUuidMap(
+              (p) => equipmentApi.list(p),
+              { equipment_nature: MEASURING_INSTRUMENT_NATURE },
+            );
+            const result = await importInChunksViaPerItemCreate({
+              items,
+              createOne: async (item) =>
+                upsertLedgerImportItem(
+                  item,
+                  codeToUuid,
+                  (payload) => equipmentApi.create(payload),
+                  (uuid, payload) => equipmentApi.update(uuid, payload),
+                ),
+              title: t(`${P}.importTitle`),
+              chunkSize: 100,
+              concurrency: 4,
+            });
+            if (result.successCount > 0) {
+              messageApi.success(t(`${P}.importSuccess`, { count: result.successCount }));
+              actionRef.current?.reload();
+            }
+            if (result.failureCount > 0) {
+              messageApi.warning(t(`${P}.importPartialFail`, { count: result.failureCount }));
+            }
+          }}
+          importHeaders={measuringInstrumentImportTemplate.importHeaders}
+          importExampleRow={measuringInstrumentImportTemplate.importExampleRow}
+          importColumnOptions={measuringInstrumentImportTemplate.importColumnOptions}
+          importFieldMap={measuringInstrumentImportTemplate.importHeaderMap}
           showEditButton={perms.canUpdate}
           onEdit={handleBatchEdit}
           showDeleteButton={perms.canDelete}

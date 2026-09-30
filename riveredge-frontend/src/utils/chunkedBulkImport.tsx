@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { Progress } from 'antd';
-import { getAntdMessage, getAntdModal } from './antdAppApis';
+import { formatApiErrorDetail, getAntdMessage, getAntdModal } from '../services/api';
 import type { BatchImportResult } from './batchOperations';
 
 export const DEFAULT_IMPORT_CHUNK_SIZE = 100;
@@ -20,6 +20,21 @@ function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, delay);
   });
+}
+
+function extractImportFailureReason(error: unknown): string {
+  const err = error as {
+    message?: string;
+    detail?: string;
+    response?: { data?: { detail?: unknown; message?: unknown } };
+  };
+  const fromResponse = formatApiErrorDetail(
+    err.response?.data?.detail ?? err.response?.data?.message,
+  );
+  if (fromResponse) {
+    return fromResponse;
+  }
+  return err.message || err.detail || '未知错误';
 }
 
 function isWriteRateLimitError(error: unknown): boolean {
@@ -489,10 +504,9 @@ export async function importInChunksViaPerItemCreate<T>(config: {
               }
             });
           } catch (error: unknown) {
-            const err = error as { message?: string; detail?: string };
             failedItems.push({
               index: i,
-              reason: err?.message || err?.detail || '未知错误',
+              reason: extractImportFailureReason(error),
             });
           }
         }

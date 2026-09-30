@@ -44,6 +44,20 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'equipment-ledger-import-upsert-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-ledger-import-upsert-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.equipment-ledger-import-upsert-r01.description',
+  },
+  {
+    id: 'measuring-instrument-ledger-import-r01',
+    date: '2026-09-30',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.measuring-instrument-ledger-import-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.measuring-instrument-ledger-import-r01.description',
+  },
+  {
     id: 'login-quick-providers-r01',
     date: '2026-09-30',
     type: 'feature',
