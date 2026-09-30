@@ -1,50 +1,4 @@
-export function jsonText(row: UTSJSONObject | null, key: string): string {
-	if (row == null) {
-		return ''
-	}
-	const text = row.getString(key)
-	if (text != null) {
-		return text
-	}
-	const num = row.getNumber(key)
-	if (num != null) {
-		return '' + num
-	}
-	const flag = row.getBoolean(key)
-	if (flag != null) {
-		return flag ? '是' : '否'
-	}
-	return ''
-}
-
-export function jsonInt(row: UTSJSONObject | null, key: string): number | null {
-	if (row == null) {
-		return null
-	}
-	const value = row.getNumber(key)
-	if (value == null || value <= 0) {
-		return null
-	}
-	return value
-}
-
-export function jsonItems(body: UTSJSONObject | null): Array<UTSJSONObject> {
-	const rows: Array<UTSJSONObject> = []
-	if (body == null) {
-		return rows
-	}
-	const rawItems = body.getArray<UTSJSONObject>('items')
-	if (rawItems == null) {
-		return rows
-	}
-	for (let i = 0; i < rawItems.length; i++) {
-		const row = rawItems[i]
-		if (row != null) {
-			rows.push(row)
-		}
-	}
-	return rows
-}
+import { errorText } from '../../shared/api/fields.uts'
 
 export function joinParts(parts: Array<string>): string {
 	let text = ''
@@ -90,47 +44,6 @@ export function parseIdList(raw: string): Array<number> | null {
 	return ids
 }
 
-export function asJson(raw: any | null): UTSJSONObject | null {
-	if (raw == null) {
-		return null
-	}
-	return raw as UTSJSONObject
-}
-
-export function jsonBool(row: UTSJSONObject | null, key: string, fallback: boolean): boolean {
-	if (row == null) {
-		return fallback
-	}
-	const value = row.getBoolean(key)
-	if (value == null) {
-		return fallback
-	}
-	return value
-}
-
-export function jsonNumberOrNull(row: UTSJSONObject | null, key: string): number | null {
-	if (row == null) {
-		return null
-	}
-	const value = row.getNumber(key)
-	if (value != null) {
-		return value
-	}
-	const text = row.getString(key)
-	if (text == null) {
-		return null
-	}
-	const trimmed = text.trim()
-	if (trimmed.length == 0) {
-		return null
-	}
-	const parsed = parseFloat(trimmed)
-	if (isNaN(parsed)) {
-		return null
-	}
-	return parsed
-}
-
 export function jsonObjectList(body: UTSJSONObject | null, key: string): Array<UTSJSONObject> {
 	const rows: Array<UTSJSONObject> = []
 	if (body == null) {
@@ -147,4 +60,54 @@ export function jsonObjectList(body: UTSJSONObject | null, key: string): Array<U
 		}
 	}
 	return rows
+}
+
+function digitsOnly(text: string): boolean {
+	if (text.length == 0) {
+		return false
+	}
+	for (let i = 0; i < text.length; i++) {
+		const ch = text.charAt(i)
+		if (ch < '0' || ch > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+/** 校验 YYYY-MM-DD 且为真实日期（含闰年 2 月）。 */
+export function isValidDateText(raw: string): boolean {
+	const text = raw.trim()
+	if (text.length != 10) {
+		return false
+	}
+	if (text.charAt(4) != '-' || text.charAt(7) != '-') {
+		return false
+	}
+	const yearText = text.substring(0, 4)
+	const monthText = text.substring(5, 7)
+	const dayText = text.substring(8, 10)
+	if (!digitsOnly(yearText) || !digitsOnly(monthText) || !digitsOnly(dayText)) {
+		return false
+	}
+	const year = parseInt(yearText)
+	const month = parseInt(monthText)
+	const day = parseInt(dayText)
+	if (month < 1 || month > 12) {
+		return false
+	}
+	let maxDay = 31
+	if (month == 4 || month == 6 || month == 9 || month == 11) {
+		maxDay = 30
+	}
+	if (month == 2) {
+		const leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+		maxDay = leap ? 29 : 28
+	}
+	return day >= 1 && day <= maxDay
+}
+
+/** 错误透传：读 message/detail，兜底 '请求失败'。 */
+export function readError(err: any | null): string {
+	return errorText(err)
 }

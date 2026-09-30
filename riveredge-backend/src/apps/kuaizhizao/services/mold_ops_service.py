@@ -1160,7 +1160,7 @@ class MoldMaintenanceService:
                 item_name=line.item_name,
                 requirement=line.requirement,
                 standard_hours=line.standard_hours,
-                is_done=line.is_done,
+                is_done=line.executed,
                 result_value=line.result_value,
                 remark=line.remark,
             )
@@ -1458,7 +1458,7 @@ class MoldRepairService:
                 item_name=line.item_name,
                 requirement=line.requirement,
                 standard_hours=line.standard_hours,
-                is_done=line.is_done,
+                is_done=line.executed,
                 result_value=line.result_value,
                 remark=line.remark,
             )
@@ -1484,6 +1484,7 @@ class MoldRepairService:
                 mold_code=mold.code,
                 mold_name=mold.name,
                 scheme_id=scheme_id,
+                urgency=data.urgency,
                 fault_description=data.fault_description,
                 planned_date=data.planned_date,
                 repair_date=data.repair_date,

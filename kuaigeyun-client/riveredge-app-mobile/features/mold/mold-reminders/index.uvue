@@ -1,17 +1,18 @@
 <template>
 	<view class="page">
-		<button size="mini" @click="loadList">刷新</button>
+		<button class="btn-secondary" @click="loadList">刷新</button>
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
-		<view v-for="(item, index) in rows" :key="index" class="row">
+		<view v-for="(item, index) in rows" :key="index" class="list-row">
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
-		<text v-if="rows.length == 0 && hint == ''" class="meta">暂无保养提醒</text>
+		<text v-if="rows.length == 0 && hint == ''" class="empty">暂无保养提醒</text>
 	</view>
 </template>
 
 <script setup lang="uts">
-	import { DocLine, MOLD_REMINDERS, apiGet, joinParts, readError, readItems, textOf, withQuery } from '../http.uts'
+	import { DocLine, MOLD_REMINDERS, apiGetRows, joinParts, withQuery } from '../http.uts'
+	import { errorText, fieldText } from '../../../shared/api/fields.uts'
 
 	const rows = ref<DocLine[]>([])
 	const hint = ref('')
@@ -38,10 +39,10 @@
 
 	function mapReminder(item: UTSJSONObject): DocLine {
 		const line = new DocLine()
-		line.title = textOf(item, 'mold_code') + ' ' + textOf(item, 'mold_name')
+		line.title = fieldText(item, 'mold_code') + ' ' + fieldText(item, 'mold_name')
 		const parts: string[] = [
-			reminderLabel(textOf(item, 'reminder_type')),
-			triggerLabel(textOf(item, 'trigger_type'))
+			reminderLabel(fieldText(item, 'reminder_type')),
+			triggerLabel(fieldText(item, 'trigger_type'))
 		]
 		const until = item.getNumber('usages_until_due')
 		if (until != null) {
@@ -51,7 +52,7 @@
 		if (days != null) {
 			parts.push('距上次保养 ' + days + ' 天')
 		}
-		const last = textOf(item, 'last_maintenance_date')
+		const last = fieldText(item, 'last_maintenance_date')
 		if (last != '') {
 			parts.push('上次保养 ' + last)
 		}
@@ -62,14 +63,14 @@
 	async function loadList(): Promise<void> {
 		hint.value = ''
 		try {
-			const items = readItems(await apiGet(withQuery(MOLD_REMINDERS, 'limit=50')))
+			const items = await apiGetRows(withQuery(MOLD_REMINDERS, 'limit=50'))
 			const lines: DocLine[] = []
 			for (let i = 0; i < items.length; i++) {
 				lines.push(mapReminder(items[i]))
 			}
 			rows.value = lines
 		} catch (err) {
-			hint.value = readError(err)
+			hint.value = errorText(err)
 		}
 	}
 
@@ -79,31 +80,7 @@
 </script>
 
 <style>
-	.page {
-		padding: 16px;
-	}
-
-	.row {
-		padding: 12px 0;
-		border-bottom: 1px solid #E7D9FD;
-	}
-
-	.title {
-		font-size: 16px;
-		color: #28113C;
-	}
-
-	.meta {
-		display: block;
-		margin-top: 4px;
-		font-size: 13px;
-		color: #888B9D;
-	}
-
-	.error {
-		display: block;
-		margin-top: 8px;
-		font-size: 13px;
-		color: #FF4942;
+	.section {
+		margin-top: 16px;
 	}
 </style>

@@ -1,4 +1,5 @@
 import { request } from '../../shared/api/index.uts'
+import { asJsonObject, fieldNumber, fieldText, readRows } from '../../shared/api/fields.uts'
 
 export const MOLD_ARCHIVE = '/api/v1/apps/kuaizhizao/molds'
 export const MOLD_BORROWS = '/api/v1/apps/kuaizhizao/mold-borrows'
@@ -11,30 +12,6 @@ export const MOLD_REPAIRS = '/api/v1/apps/kuaizhizao/mold-repairs'
 export const MOLD_REPAIR_SCHEMES = '/api/v1/apps/kuaizhizao/mold-repair-schemes'
 export const MOLD_REMINDERS = '/api/v1/apps/kuaizhizao/molds/maintenance-reminders'
 
-export function textOf(row: UTSJSONObject, key: string): string {
-	const value = row.getString(key)
-	if (value == null) {
-		return ''
-	}
-	return value
-}
-
-export function numberOf(row: UTSJSONObject, key: string): number {
-	const value = row.getNumber(key)
-	if (value == null) {
-		return 0
-	}
-	return value
-}
-
-export function readItems(payload: UTSJSONObject): UTSJSONObject[] {
-	const items = payload.getArray<UTSJSONObject>('items')
-	if (items == null) {
-		return []
-	}
-	return items
-}
-
 export function withQuery(url: string, query: string): string {
 	if (query == '') {
 		return url
@@ -42,19 +19,31 @@ export function withQuery(url: string, query: string): string {
 	return url + '?' + query
 }
 
-export function apiGet(url: string): Promise<UTSJSONObject> {
-	return request({
+/** 对象响应收口：unwrap 为 null、裸数组或非对象时返回 null，调用点判空。 */
+export async function apiGet(url: string): Promise<UTSJSONObject | null> {
+	const raw = await request({
 		url: url,
 		method: 'GET'
-	}) as Promise<UTSJSONObject>
+	})
+	return asJsonObject(raw)
 }
 
-export function apiPost(url: string, data: UTSJSONObject): Promise<UTSJSONObject> {
-	return request({
+/** 列表响应收口：兼容裸数组与 {items}/{data} 包装，失败或不可读时返回空列表。 */
+export async function apiGetRows(url: string): Promise<UTSJSONObject[]> {
+	const raw = await request({
+		url: url,
+		method: 'GET'
+	})
+	return readRows(raw)
+}
+
+export async function apiPost(url: string, data: UTSJSONObject): Promise<UTSJSONObject | null> {
+	const raw = await request({
 		url: url,
 		method: 'POST',
 		data: data
-	}) as Promise<UTSJSONObject>
+	})
+	return asJsonObject(raw)
 }
 
 export function putText(body: UTSJSONObject, key: string, value: string): void {
@@ -81,6 +70,25 @@ export function isDateText(value: string): boolean {
 			return false
 		}
 	}
+	const year = parseInt(text.substring(0, 4))
+	const month = parseInt(text.substring(5, 7))
+	const day = parseInt(text.substring(8, 10))
+	if (month < 1 || month > 12) {
+		return false
+	}
+	let limit = 31
+	if (month == 4 || month == 6 || month == 9 || month == 11) {
+		limit = 30
+	} else if (month == 2) {
+		if ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0) {
+			limit = 29
+		} else {
+			limit = 28
+		}
+	}
+	if (day < 1 || day > limit) {
+		return false
+	}
 	return true
 }
 
@@ -99,46 +107,19 @@ export function todayDate(): string {
 	return now.getFullYear() + '-' + monthText + '-' + dayText
 }
 
-export function readError(err: any | null): string {
-	if (err == null) {
-		return '请求失败'
-	}
-	try {
-		const obj = err as UTSJSONObject
-		const message = obj.getString('message')
-		if (message != null && message != '') {
-			return message
-		}
-		const detail = obj.getString('detail')
-		if (detail != null && detail != '') {
-			return detail
-		}
-	} catch (ignored) {
-	}
-	const text = '' + err
-	if (text == '' || text == '[object Object]') {
-		return '请求失败'
-	}
-	if (text.indexOf('/api/') >= 0 || text.indexOf('http') >= 0 || text.length > 200) {
-		return '请求失败'
-	}
-	return text
-}
-
 export class NamedOption {
 	id: number = 0
 	label: string = ''
 }
 
-export function mapNamedOptions(payload: UTSJSONObject): NamedOption[] {
-	const items = readItems(payload)
+export function mapNamedOptions(items: UTSJSONObject[]): NamedOption[] {
 	const rows: NamedOption[] = []
 	for (let i = 0; i < items.length; i++) {
 		const item = items[i]
 		const row = new NamedOption()
-		row.id = numberOf(item, 'id')
-		const code = textOf(item, 'code')
-		const name = textOf(item, 'name')
+		row.id = fieldNumber(item, 'id')
+		const code = fieldText(item, 'code')
+		const name = fieldText(item, 'name')
 		if (code != '' && name != '') {
 			row.label = code + ' - ' + name
 		} else if (name != '') {
@@ -169,22 +150,25 @@ export class SubmitLine {
 	label: string = ''
 }
 
-export function readPreviewLines(payload: UTSJSONObject): SubmitLine[] {
-	const raw = payload.getArray<UTSJSONObject>('lines')
+export function readPreviewLines(payload: UTSJSONObject | null): SubmitLine[] {
 	const rows: SubmitLine[] = []
+	if (payload == null) {
+		return rows
+	}
+	const raw = payload.getArray<UTSJSONObject>('lines')
 	if (raw == null) {
 		return rows
 	}
 	for (let i = 0; i < raw.length; i++) {
 		const item = raw[i]
 		const line = new SubmitLine()
-		const lineNo = numberOf(item, 'line_no')
+		const lineNo = fieldNumber(item, 'line_no')
 		line.lineNo = lineNo > 0 ? lineNo : (i + 1)
-		line.itemId = numberOf(item, 'item_id')
-		line.itemCode = textOf(item, 'item_code')
-		line.itemName = textOf(item, 'item_name')
-		line.requirement = textOf(item, 'requirement')
-		line.remark = textOf(item, 'remark')
+		line.itemId = fieldNumber(item, 'item_id')
+		line.itemCode = fieldText(item, 'item_code')
+		line.itemName = fieldText(item, 'item_name')
+		line.requirement = fieldText(item, 'requirement')
+		line.remark = fieldText(item, 'remark')
 		line.executed = false
 		if (line.itemName != '') {
 			line.label = line.itemName

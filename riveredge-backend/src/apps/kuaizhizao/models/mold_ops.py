@@ -286,6 +286,7 @@ class MoldRepair(BaseModel):
     mold_code = fields.CharField(max_length=50, null=True)
     mold_name = fields.CharField(max_length=200, null=True)
     scheme_id = fields.IntField(null=True)
+    urgency = fields.CharField(max_length=32, null=True, description="紧急程度")
     fault_description = fields.TextField(null=True)
     planned_date = fields.DateField(null=True)
     repair_date = fields.DateField(null=True)

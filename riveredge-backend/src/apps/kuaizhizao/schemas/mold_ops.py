@@ -9,7 +9,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Any
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, AliasChoices
 
 
 class AuditActorFields(BaseModel):
@@ -434,7 +434,8 @@ class MoldMaintenancePreviewLine(BaseModel):
     item_name: Optional[str] = None
     requirement: Optional[str] = None
     standard_hours: Optional[Decimal] = None
-    is_done: bool = False
+    # wire 字段名为 executed，落库列为 is_done；兼容旧发送方 is_done 入参
+    executed: bool = Field(default=False, validation_alias=AliasChoices("executed", "is_done"))
     result_value: Optional[str] = None
 
 
@@ -453,7 +454,8 @@ class MoldMaintenanceLineInput(BaseModel):
     item_name: Optional[str] = None
     requirement: Optional[str] = None
     standard_hours: Optional[Decimal] = None
-    is_done: bool = False
+    # wire 字段名为 executed，落库列为 is_done；兼容旧发送方 is_done 入参
+    executed: bool = Field(default=False, validation_alias=AliasChoices("executed", "is_done"))
     result_value: Optional[str] = None
     remark: Optional[str] = None
 
@@ -532,7 +534,8 @@ class MoldRepairPreviewLine(BaseModel):
     item_name: Optional[str] = None
     requirement: Optional[str] = None
     standard_hours: Optional[Decimal] = None
-    is_done: bool = False
+    # wire 字段名为 executed，落库列为 is_done；兼容旧发送方 is_done 入参
+    executed: bool = Field(default=False, validation_alias=AliasChoices("executed", "is_done"))
     result_value: Optional[str] = None
 
 
@@ -551,7 +554,8 @@ class MoldRepairLineInput(BaseModel):
     item_name: Optional[str] = None
     requirement: Optional[str] = None
     standard_hours: Optional[Decimal] = None
-    is_done: bool = False
+    # wire 字段名为 executed，落库列为 is_done；兼容旧发送方 is_done 入参
+    executed: bool = Field(default=False, validation_alias=AliasChoices("executed", "is_done"))
     result_value: Optional[str] = None
     remark: Optional[str] = None
 
@@ -565,6 +569,7 @@ class MoldRepairLineResponse(MoldRepairLineInput):
 class MoldRepairCreate(BaseModel):
     mold_id: int
     scheme_id: Optional[int] = None
+    urgency: Optional[str] = Field(None, max_length=32)
     fault_description: Optional[str] = None
     planned_date: Optional[date] = None
     repair_date: Optional[date] = None
@@ -576,6 +581,7 @@ class MoldRepairCreate(BaseModel):
 
 class MoldRepairUpdate(BaseModel):
     scheme_id: Optional[int] = None
+    urgency: Optional[str] = Field(None, max_length=32)
     fault_description: Optional[str] = None
     planned_date: Optional[date] = None
     repair_date: Optional[date] = None
@@ -596,6 +602,7 @@ class MoldRepairResponse(AuditActorFields):
     mold_code: Optional[str] = None
     mold_name: Optional[str] = None
     scheme_id: Optional[int] = None
+    urgency: Optional[str] = None
     fault_description: Optional[str] = None
     planned_date: Optional[date] = None
     repair_date: Optional[date] = None

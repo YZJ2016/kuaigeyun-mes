@@ -1,5 +1,6 @@
 import { request } from '../../shared/api/index.uts'
-import { asJson, joinParts, jsonBool, jsonInt, jsonNumberOrNull, jsonObjectList, jsonText } from './json-text.uts'
+import { asJsonObject, fieldBool, fieldIntOrNull, fieldNumberOrNull, fieldText } from '../../shared/api/fields.uts'
+import { isValidDateText, joinParts, jsonObjectList } from './json-text.uts'
 
 export type SpotLineForm = {
 	rowKey: string
@@ -113,15 +114,15 @@ function lineTitle(itemName: string, itemCode: string, lineNo: number): string {
 }
 
 function readLine(row: UTSJSONObject, index: number, captureMode: string): SpotLineForm {
-	const lineNoValue = positiveInt(jsonNumberOrNull(row, 'line_no'))
+	const lineNoValue = positiveInt(fieldNumberOrNull(row, 'line_no'))
 	const lineNo = lineNoValue == null ? (index + 1) : lineNoValue
-	const itemName = jsonText(row, 'item_name')
-	const itemCode = jsonText(row, 'item_code')
-	const valueType = jsonText(row, 'value_type')
+	const itemName = fieldText(row, 'item_name')
+	const itemCode = fieldText(row, 'item_code')
+	const valueType = fieldText(row, 'value_type')
 	const booleanItem = isBooleanType(valueType)
-	const isPass = jsonBool(row, 'is_pass', true)
-	const photoRequired = jsonBool(row, 'photo_required', false)
-	let measured = jsonText(row, 'measured_value')
+	const isPass = fieldBool(row, 'is_pass', true)
+	const photoRequired = fieldBool(row, 'photo_required', false)
+	let measured = fieldText(row, 'measured_value')
 	if (booleanItem) {
 		measured = booleanMeasured(isPass, measured)
 	}
@@ -134,30 +135,30 @@ function readLine(row: UTSJSONObject, index: number, captureMode: string): SpotL
 		rowKey: 'line-' + lineNo + '-' + index,
 		title: lineTitle(itemName, itemCode, lineNo),
 		detail: joinParts([
-			jsonText(row, 'method'),
-			jsonText(row, 'judgment_standard'),
-			jsonText(row, 'requirement'),
-			jsonText(row, 'unit')
+			fieldText(row, 'method'),
+			fieldText(row, 'judgment_standard'),
+			fieldText(row, 'requirement'),
+			fieldText(row, 'unit')
 		]),
 		photoHint: hint,
 		showMeasured: !booleanItem,
 		passLabel: passLabel(isPass),
 		lineNo: lineNo,
-		itemId: jsonInt(row, 'item_id'),
+		itemId: positiveInt(fieldIntOrNull(row, 'item_id')),
 		itemCode: itemCode,
 		itemName: itemName,
-		requirement: jsonText(row, 'requirement'),
-		method: jsonText(row, 'method'),
-		judgmentStandard: jsonText(row, 'judgment_standard'),
+		requirement: fieldText(row, 'requirement'),
+		method: fieldText(row, 'method'),
+		judgmentStandard: fieldText(row, 'judgment_standard'),
 		valueType: valueType,
-		unit: jsonText(row, 'unit'),
-		numericMin: jsonNumberOrNull(row, 'numeric_min'),
-		numericMax: jsonNumberOrNull(row, 'numeric_max'),
+		unit: fieldText(row, 'unit'),
+		numericMin: fieldNumberOrNull(row, 'numeric_min'),
+		numericMax: fieldNumberOrNull(row, 'numeric_max'),
 		measuredValue: measured,
 		isPass: isPass,
 		isBoolean: booleanItem,
 		photoRequired: photoRequired,
-		remark: jsonText(row, 'remark'),
+		remark: fieldText(row, 'remark'),
 		attachments: empty
 	}
 }
@@ -180,11 +181,11 @@ export async function loadSpotCheckPreview(equipmentId: number, schemeId: number
 		method: 'GET',
 		query: query
 	})
-	const body = asJson(raw)
+	const body = asJsonObject(raw)
 	if (body == null) {
 		throw new Error('请求失败')
 	}
-	const captureMode = upperMode(jsonText(body, 'capture_mode'))
+	const captureMode = upperMode(fieldText(body, 'capture_mode'))
 	const source = jsonObjectList(body, 'lines')
 	const lines: Array<SpotLineForm> = []
 	if (captureMode != 'B') {
@@ -229,6 +230,12 @@ function mapLine(line: SpotLineForm): UTSJSONObject {
 }
 
 export async function submitSpotCheck(draft: SpotCheckDraft): Promise<SpotSubmitResult> {
+	if (draft.checkDate.length > 0 && !isValidDateText(draft.checkDate)) {
+		return {
+			errorText: '点检日期须为 YYYY-MM-DD 且是真实日期',
+			saved: null
+		}
+	}
 	const mode = upperMode(draft.captureMode)
 	if (mode == 'B') {
 		if (draft.headerAttachments.length == 0) {
@@ -278,6 +285,6 @@ export async function submitSpotCheck(draft: SpotCheckDraft): Promise<SpotSubmit
 	})
 	return {
 		errorText: '',
-		saved: asJson(raw)
+		saved: asJsonObject(raw)
 	}
 }

@@ -2,13 +2,13 @@
 	<view class="page">
 		<text class="section">模具</text>
 		<input class="field" v-model="moldKeyword" placeholder="编码或名称" />
-		<button size="mini" @click="searchMolds">查找模具</button>
-		<view v-for="(item, index) in moldOptions" :key="index" class="row" @click="chooseMold(index)">
+		<button class="btn-secondary" @click="searchMolds">查找模具</button>
+		<view v-for="(item, index) in moldOptions" :key="index" class="list-row" hover-class="pressed" @click="chooseMold(index)">
 			<text class="title">{{ item.label }}</text>
 		</view>
 		<text v-if="chosenMold != ''" class="meta">已选 {{ chosenMold }}</text>
 		<text class="section">维修方案（不选则用模具默认方案）</text>
-		<view v-for="(item, index) in schemeOptions" :key="index" class="row" @click="chooseScheme(index)">
+		<view v-for="(item, index) in schemeOptions" :key="index" class="list-row" hover-class="pressed" @click="chooseScheme(index)">
 			<text class="title">{{ item.label }}</text>
 		</view>
 		<text v-if="chosenScheme != ''" class="meta">已选方案 {{ chosenScheme }}</text>
@@ -17,21 +17,21 @@
 		<input class="field" v-model="urgency" placeholder="紧急程度" />
 		<input class="field" v-model="remark" placeholder="备注" />
 		<text class="section">方案明细</text>
-		<view v-for="(item, index) in previewLines" :key="index" class="row" @click="toggleExecuted(index)">
+		<view v-for="(item, index) in previewLines" :key="index" class="list-row" hover-class="pressed" @click="toggleExecuted(index)">
 			<text class="title">{{ item.label }}</text>
 			<text class="meta">{{ item.executed ? '已执行' : '未执行' }}</text>
 		</view>
-		<text v-if="previewLines.length == 0" class="meta">无明细</text>
-		<button type="primary" :disabled="submitting" @click="createRepair">创建维修</button>
+		<text v-if="previewLines.length == 0" class="empty">无明细</text>
+		<button :class="submitting ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="submitting" @click="createRepair">创建维修</button>
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
 		<text class="section">维修记录</text>
 		<input class="field" v-model="listKeyword" placeholder="搜索维修单" />
-		<button size="mini" @click="loadList">刷新</button>
-		<view v-for="(item, index) in rows" :key="index" class="row">
+		<button class="btn-secondary" @click="loadList">刷新</button>
+		<view v-for="(item, index) in rows" :key="index" class="list-row">
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
-		<text v-if="rows.length == 0" class="meta">暂无维修</text>
+		<text v-if="rows.length == 0" class="empty">暂无维修</text>
 	</view>
 </template>
 
@@ -44,19 +44,18 @@
 		NamedOption,
 		SubmitLine,
 		apiGet,
+		apiGetRows,
 		apiPost,
 		isDateText,
 		joinParts,
 		mapNamedOptions,
 		putText,
-		readError,
-		readItems,
 		readPreviewLines,
-		textOf,
 		todayDate,
 		toPcLines,
 		withQuery
 	} from '../http.uts'
+	import { errorText, fieldText } from '../../../shared/api/fields.uts'
 
 	const moldKeyword = ref('')
 	const moldOptions = ref<NamedOption[]>([])
@@ -102,15 +101,15 @@
 			if (keyword != '') {
 				query = 'keyword=' + encodeURIComponent(keyword) + '&limit=50'
 			}
-			moldOptions.value = mapNamedOptions(await apiGet(withQuery(MOLD_ARCHIVE, query)))
+			moldOptions.value = mapNamedOptions(await apiGetRows(withQuery(MOLD_ARCHIVE, query)))
 		} catch (err) {
-			hint.value = readError(err)
+			hint.value = errorText(err)
 		}
 	}
 
 	async function loadSchemes(): Promise<void> {
 		try {
-			schemeOptions.value = mapNamedOptions(await apiGet(withQuery(MOLD_REPAIR_SCHEMES, 'limit=50&is_active=true')))
+			schemeOptions.value = mapNamedOptions(await apiGetRows(withQuery(MOLD_REPAIR_SCHEMES, 'limit=50&is_active=true')))
 		} catch (err) {
 			schemeOptions.value = []
 		}
@@ -118,13 +117,13 @@
 
 	function mapDoc(item: UTSJSONObject): DocLine {
 		const line = new DocLine()
-		const no = textOf(item, 'document_no')
-		line.title = no != '' ? no : textOf(item, 'mold_code') + ' ' + textOf(item, 'mold_name')
+		const no = fieldText(item, 'document_no')
+		line.title = no != '' ? no : fieldText(item, 'mold_code') + ' ' + fieldText(item, 'mold_name')
 		line.detail = joinParts([
-			textOf(item, 'mold_code') + ' ' + textOf(item, 'mold_name'),
-			textOf(item, 'repair_date'),
-			textOf(item, 'fault_description'),
-			textOf(item, 'status')
+			fieldText(item, 'mold_code') + ' ' + fieldText(item, 'mold_name'),
+			fieldText(item, 'repair_date'),
+			fieldText(item, 'fault_description'),
+			fieldText(item, 'status')
 		])
 		return line
 	}
@@ -136,14 +135,14 @@
 			if (keyword != '') {
 				query = 'keyword=' + encodeURIComponent(keyword) + '&limit=50'
 			}
-			const items = readItems(await apiGet(withQuery(MOLD_REPAIRS, query)))
+			const items = await apiGetRows(withQuery(MOLD_REPAIRS, query))
 			const lines: DocLine[] = []
 			for (let i = 0; i < items.length; i++) {
 				lines.push(mapDoc(items[i]))
 			}
 			rows.value = lines
 		} catch (err) {
-			hint.value = readError(err)
+			hint.value = errorText(err)
 		}
 	}
 
@@ -160,7 +159,7 @@
 			previewLines.value = readPreviewLines(await apiGet(withQuery(MOLD_REPAIRS + '/preview-lines', query)))
 		} catch (err) {
 			previewLines.value = []
-			hint.value = readError(err)
+			hint.value = errorText(err)
 		}
 	}
 
@@ -204,11 +203,11 @@
 		submitting.value = true
 		try {
 			const created = await apiPost(MOLD_REPAIRS, body)
-			const no = textOf(created, 'document_no')
+			const no = fieldText(created, 'document_no')
 			hint.value = no == '' ? '已创建' : '已创建 ' + no
 			await loadList()
 		} catch (err) {
-			hint.value = readError(err)
+			hint.value = errorText(err)
 		} finally {
 			submitting.value = false
 		}
@@ -225,45 +224,7 @@
 </script>
 
 <style>
-	.page {
-		padding: 16px;
-	}
-
 	.section {
-		display: block;
 		margin-top: 16px;
-		margin-bottom: 8px;
-		font-size: 14px;
-		color: #888B9D;
-	}
-
-	.field {
-		margin-top: 8px;
-		padding: 8px;
-		border: 1px solid #E7D9FD;
-	}
-
-	.row {
-		padding: 10px 0;
-		border-bottom: 1px solid #E7D9FD;
-	}
-
-	.title {
-		font-size: 16px;
-		color: #28113C;
-	}
-
-	.meta {
-		display: block;
-		margin-top: 4px;
-		font-size: 13px;
-		color: #888B9D;
-	}
-
-	.error {
-		display: block;
-		margin-top: 8px;
-		font-size: 13px;
-		color: #FF4942;
 	}
 </style>

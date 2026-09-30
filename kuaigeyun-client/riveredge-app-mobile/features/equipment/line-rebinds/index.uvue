@@ -1,21 +1,21 @@
 <template>
 	<scroll-view class="page" direction="vertical">
-		<view class="block">
+		<view class="card">
 			<text class="title">换线绑定</text>
-			<button class="action" :disabled="busy" @click="loadList">刷新</button>
-			<text v-if="rows.length == 0" class="hint">暂无记录</text>
+			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
+			<text v-if="rows.length == 0" class="empty">暂无记录</text>
 			<view class="item" v-for="item in rows" :key="item.rowKey">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
 			</view>
 		</view>
-		<view class="block">
+		<view class="card">
 			<text class="title">新建</text>
-			<input class="input" v-model="productionLineIdText" placeholder="产线 ID" />
-			<input class="input" v-model="overdueHoursText" placeholder="强制初检超时小时（默认 4）" />
-			<input class="input" v-model="equipmentIdsText" placeholder="预置设备 ID，逗号分隔（可空）" />
-			<input class="input" v-model="remarkText" placeholder="备注（可空）" />
-			<button class="action" type="primary" :disabled="busy" @click="submitCreate">新建</button>
+			<input class="field" v-model="productionLineIdText" placeholder="产线 ID" />
+			<input class="field" v-model="overdueHoursText" placeholder="强制初检超时小时（默认 4）" />
+			<input class="field" v-model="equipmentIdsText" placeholder="预置设备 ID，逗号分隔（可空）" />
+			<input class="field" v-model="remarkText" placeholder="备注（可空）" />
+			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitCreate">新建</button>
 			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
@@ -24,7 +24,8 @@
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
-	import { asJson, joinParts, jsonItems, jsonText, parseIdList, parseRequiredInt } from '../json-text.uts'
+	import { asJsonObject, fieldText, readRows } from '../../../shared/api/fields.uts'
+	import { joinParts, parseIdList, parseRequiredInt, readError } from '../json-text.uts'
 
 	type ListRow = {
 		rowKey: string
@@ -42,31 +43,35 @@
 	const errorText = ref('')
 
 	async function loadList(): Promise<void> {
-		const raw = await request({
-			url: '/api/v1/apps/kuaizhizao/equipment-line-rebinds',
-			method: 'GET',
-			data: null
-		})
-		const items = jsonItems(asJson(raw))
-		const next: Array<ListRow> = []
-		for (let i = 0; i < items.length; i++) {
-			const row = items[i]
-			const title = jsonText(row, 'document_no')
-			const detail = joinParts([
-				jsonText(row, 'production_line_name'),
-				jsonText(row, 'status'),
-				jsonText(row, 'item_count'),
-				jsonText(row, 'force_spot_overdue_hours')
-			])
-			const key = jsonText(row, 'uuid')
-			const view: ListRow = {
-				rowKey: key.length > 0 ? key : ('' + i),
-				title: title.length > 0 ? title : '换线绑定',
-				detail: detail
+		try {
+			const raw = await request({
+				url: '/api/v1/apps/kuaizhizao/equipment-line-rebinds',
+				method: 'GET',
+				data: null
+			})
+			const items = readRows(raw)
+			const next: Array<ListRow> = []
+			for (let i = 0; i < items.length; i++) {
+				const row = items[i]
+				const title = fieldText(row, 'document_no')
+				const detail = joinParts([
+					fieldText(row, 'production_line_name'),
+					fieldText(row, 'status'),
+					fieldText(row, 'item_count'),
+					fieldText(row, 'force_spot_overdue_hours')
+				])
+				const key = fieldText(row, 'uuid')
+				const view: ListRow = {
+					rowKey: key.length > 0 ? key : ('' + i),
+					title: title.length > 0 ? title : '换线绑定',
+					detail: detail
+				}
+				next.push(view)
 			}
-			next.push(view)
+			rows.value = next
+		} catch (e) {
+			errorText.value = readError(e)
 		}
-		rows.value = next
 	}
 
 	async function submitCreate(): Promise<void> {
@@ -108,30 +113,20 @@
 				method: 'POST',
 				data: data
 			})
-			const documentNo = jsonText(asJson(raw), 'document_no')
+			const documentNo = fieldText(asJsonObject(raw), 'document_no')
 			messageText.value = documentNo.length > 0 ? ('已新建 ' + documentNo) : '已新建'
 			await loadList()
 		} catch (e) {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		}
 		busy.value = false
 	}
 
 	onShow(() => {
 		loadList().catch((e) => {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		})
 	})
 </script>
 
-<style>
-	.page { flex: 1; background-color: #F1F1F4; }
-	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
-	.title { font-size: 18px; color: #28113C; }
-	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
-	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
-	.input { margin-top: 8px; padding: 8px; font-size: 14px; background-color: #EEE5FB; }
-	.action { margin-top: 12px; }
-	.item { margin-top: 12px; padding-top: 8px; border-top-width: 1px; border-top-style: solid; border-top-color: #E7D9FD; }
-	.item-title { font-size: 16px; color: #28113C; }
-</style>
+

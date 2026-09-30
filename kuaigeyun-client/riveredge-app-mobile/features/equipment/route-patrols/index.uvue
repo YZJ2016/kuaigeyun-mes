@@ -1,35 +1,35 @@
 <template>
 	<scroll-view class="page" direction="vertical">
-		<view class="block">
+		<view class="card">
 			<text class="title">路线巡检</text>
-			<button class="action" :disabled="busy" @click="loadList">刷新</button>
-			<text v-if="rows.length == 0" class="hint">暂无记录</text>
+			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
+			<text v-if="rows.length == 0" class="empty">暂无记录</text>
 			<view class="item" v-for="item in rows" :key="item.rowKey">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
 			</view>
 		</view>
-		<view class="block">
+		<view class="card">
 			<text class="title">新建</text>
-			<input class="input" v-model="routeIdText" placeholder="路线 ID" />
-			<input class="input" v-model="patrolDateText" placeholder="巡检日期（可空，YYYY-MM-DD）" />
-			<input class="input" v-model="inspectorIdText" placeholder="巡检人 ID（可空）" />
-			<input class="input" v-model="inspectorNameText" placeholder="巡检人姓名（可空）" />
-			<input class="input" v-model="remarkText" placeholder="备注（可空）" />
-			<button class="action" :disabled="busy" @click="loadPreview">加载巡检项</button>
+			<input class="field" v-model="routeIdText" placeholder="路线 ID" />
+			<input class="field" v-model="patrolDateText" placeholder="巡检日期（可空，YYYY-MM-DD）" />
+			<input class="field" v-model="inspectorIdText" placeholder="巡检人 ID（可空）" />
+			<input class="field" v-model="inspectorNameText" placeholder="巡检人姓名（可空）" />
+			<input class="field" v-model="remarkText" placeholder="备注（可空）" />
+			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadPreview">加载巡检项</button>
 			<view class="item" v-for="(line, index) in lines" :key="line.rowKey">
 				<text class="item-title">{{ line.title }}</text>
 				<text v-if="line.detail.length > 0" class="hint">{{ line.detail }}</text>
 				<text class="hint">采集模式 {{ line.captureMode }}</text>
 				<text v-if="line.isBoolean && line.showPass" class="hint">{{ line.measuredValue }}</text>
-				<input v-if="line.showMeasured" class="input" :value="line.measuredValue" placeholder="实测值" @input="onMeasured(index, $event)" />
-				<button v-if="line.showPass" class="action" :disabled="busy" @click="onTogglePass(index)">{{ line.passLabel }}</button>
+				<input v-if="line.showMeasured" class="field" :value="line.measuredValue" placeholder="实测值" @input="onMeasured(index, $event)" />
+				<button v-if="line.showPass" :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="onTogglePass(index)">{{ line.passLabel }}</button>
 				<text v-if="line.photoHint.length > 0" class="hint">{{ line.photoHint }}</text>
-				<button class="action" :disabled="busy" @click="onLinePhoto(index)">上传照片</button>
+				<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="onLinePhoto(index)">上传照片</button>
 				<text v-if="line.attachments.length > 0" class="hint">已选 {{ line.attachments.length }} 张</text>
-				<button v-if="line.attachments.length > 0" class="action" :disabled="busy" @click="clearLinePhotos(index)">清除照片</button>
+				<button v-if="line.attachments.length > 0" :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="clearLinePhotos(index)">清除照片</button>
 			</view>
-			<button class="action" type="primary" :disabled="busy" @click="submitCreate">新建</button>
+			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitCreate">新建</button>
 			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
@@ -38,8 +38,9 @@
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
-	import { asJson, joinParts, jsonItems, jsonText, parseRequiredInt } from '../json-text.uts'
-	import { uploadChosenImages } from '../pick-image.uts'
+	import { fieldText, readRows } from '../../../shared/api/fields.uts'
+	import { pickAndUploadImage } from '../../../shared/api/pick-image.uts'
+	import { joinParts, parseRequiredInt, readError } from '../json-text.uts'
 	import { loadRoutePatrolPreview, PatrolLineForm, submitRoutePatrol, togglePatrolPass } from '../route-patrol-create.uts'
 
 	type ListRow = {
@@ -72,31 +73,35 @@
 	}
 
 	async function loadList(): Promise<void> {
-		const raw = await request({
-			url: '/api/v1/apps/kuaizhizao/equipment-route-patrols',
-			method: 'GET',
-			data: null
-		})
-		const items = jsonItems(asJson(raw))
-		const next: Array<ListRow> = []
-		for (let i = 0; i < items.length; i++) {
-			const row = items[i]
-			const title = jsonText(row, 'document_no')
-			const detail = joinParts([
-				jsonText(row, 'route_name'),
-				jsonText(row, 'patrol_date'),
-				jsonText(row, 'status'),
-				jsonText(row, 'inspector_name')
-			])
-			const key = jsonText(row, 'uuid')
-			const view: ListRow = {
-				rowKey: key.length > 0 ? key : ('' + i),
-				title: title.length > 0 ? title : '巡检单',
-				detail: detail
+		try {
+			const raw = await request({
+				url: '/api/v1/apps/kuaizhizao/equipment-route-patrols',
+				method: 'GET',
+				data: null
+			})
+			const items = readRows(raw)
+			const next: Array<ListRow> = []
+			for (let i = 0; i < items.length; i++) {
+				const row = items[i]
+				const title = fieldText(row, 'document_no')
+				const detail = joinParts([
+					fieldText(row, 'route_name'),
+					fieldText(row, 'patrol_date'),
+					fieldText(row, 'status'),
+					fieldText(row, 'inspector_name')
+				])
+				const key = fieldText(row, 'uuid')
+				const view: ListRow = {
+					rowKey: key.length > 0 ? key : ('' + i),
+					title: title.length > 0 ? title : '巡检单',
+					detail: detail
+				}
+				next.push(view)
 			}
-			next.push(view)
+			rows.value = next
+		} catch (e) {
+			errorText.value = readError(e)
 		}
-		rows.value = next
 	}
 
 	function clearPreview(): void {
@@ -123,7 +128,7 @@
 			messageText.value = '已加载 ' + preview.lines.length + ' 行'
 		} catch (e) {
 			clearPreview()
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		}
 		busy.value = false
 	}
@@ -147,16 +152,16 @@
 		busy.value = true
 		errorText.value = ''
 		try {
-			const files = await uploadChosenImages('equipment_route_patrol_line')
-			const list = lines.value
-			const attachments = list[index].attachments
-			for (let i = 0; i < files.length; i++) {
-				attachments.push(files[i])
+			const file = await pickAndUploadImage('equipment_route_patrol_line')
+			if (file != null) {
+				const list = lines.value
+				const attachments = list[index].attachments
+				attachments.push(file)
+				list[index].attachments = attachments
+				lines.value = list
 			}
-			list[index].attachments = attachments
-			lines.value = list
 		} catch (e) {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		}
 		busy.value = false
 	}
@@ -205,31 +210,21 @@
 				busy.value = false
 				return
 			}
-			const documentNo = jsonText(result.saved, 'document_no')
+			const documentNo = fieldText(result.saved, 'document_no')
 			messageText.value = documentNo.length > 0 ? ('已新建 ' + documentNo) : '已新建'
 			clearPreview()
 			await loadList()
 		} catch (e) {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		}
 		busy.value = false
 	}
 
 	onShow(() => {
 		loadList().catch((e) => {
-			errorText.value = e != null ? '请求失败' : '请求失败'
+			errorText.value = readError(e)
 		})
 	})
 </script>
 
-<style>
-	.page { flex: 1; background-color: #F1F1F4; }
-	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
-	.title { font-size: 18px; color: #28113C; }
-	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
-	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
-	.input { margin-top: 8px; padding: 8px; font-size: 14px; background-color: #EEE5FB; }
-	.action { margin-top: 12px; }
-	.item { margin-top: 12px; padding-top: 8px; border-top-width: 1px; border-top-style: solid; border-top-color: #E7D9FD; }
-	.item-title { font-size: 16px; color: #28113C; }
-</style>
+

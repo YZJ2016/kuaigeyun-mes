@@ -1,0 +1,56 @@
+import { uploadImage } from './upload.uts'
+
+function firstPath(raw : any | null) : string {
+	if (raw == null) {
+		return ''
+	}
+	const list = raw as Array<any>
+	for (let i = 0; i < list.length; i++) {
+		const item = list[i]
+		if (item == null) {
+			continue
+		}
+		const text = ('' + item).trim()
+		if (text.length > 0) {
+			return text
+		}
+	}
+	return ''
+}
+
+/**
+ * 选择一张图片（拍照或相册，与 features/equipment/pick-image.uts 的选择方式一致）
+ * 并通过 uploadImage 上传。返回 uid/name/status/url 附件对象；
+ * 用户取消或没有选到文件时 resolve null，上传失败 reject。
+ */
+export function pickAndUploadImage(category : string) : Promise<UTSJSONObject | null> {
+	return new Promise<UTSJSONObject | null>((resolve, reject) => {
+		uni.chooseImage({
+			count: 1,
+			sourceType: ['camera', 'album'],
+			success: (res) => {
+				const path = firstPath(res.tempFilePaths)
+				if (path.length == 0) {
+					resolve(null)
+					return
+				}
+				uploadImage(path, category).then((file) => {
+					resolve(file)
+				}).catch((err) => {
+					reject(err)
+				})
+			},
+			fail: (err) => {
+				let message = ''
+				if (err != null && err.errMsg != null) {
+					message = '' + err.errMsg
+				}
+				if (message.indexOf('cancel') >= 0) {
+					resolve(null)
+					return
+				}
+				reject(new Error('选择图片失败'))
+			}
+		})
+	})
+}

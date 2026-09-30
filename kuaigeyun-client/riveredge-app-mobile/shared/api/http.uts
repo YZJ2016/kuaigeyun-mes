@@ -116,9 +116,16 @@ function readStringField(obj : any | null, key : string) : string {
 }
 
 function errorText(payload : any | null, status : number) : string {
-	const detail = readStringField(payload, 'detail')
-	if (detail.length > 0) {
-		return detail
+	const detailRaw = payload == null ? null : (payload as UTSJSONObject)['detail']
+	if (typeof detailRaw == 'string' && (detailRaw as string).length > 0) {
+		return detailRaw as string
+	}
+	// detail 也可能是对象：HTTPException(detail={"message":..., "trace_id":...})
+	if (detailRaw != null && typeof detailRaw == 'object' && !Array.isArray(detailRaw)) {
+		const detailMessage = readStringField(detailRaw, 'message')
+		if (detailMessage.length > 0) {
+			return detailMessage
+		}
 	}
 	const message = readStringField(payload, 'message')
 	if (message.length > 0) {

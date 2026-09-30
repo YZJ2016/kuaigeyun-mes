@@ -3,7 +3,7 @@
 # 用法:
 #   ./fast-deploy/launch.dev.sh              # 后端 + Worker + PC 前端
 #   ./fast-deploy/launch.dev.sh with-h5      # 同上。H5 由本机 HBuilderX 发行，不启动 Expo，不编译 uni-app x
-#   ./fast-deploy/launch.dev.sh stop|status|be|fe|me
+#   ./fast-deploy/launch.dev.sh stop|status|be|fe|me|h5
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -14,6 +14,7 @@ BACKEND_PORT=8200
 FRONTEND_PORT=8100
 # 8081 常落在 Windows Hyper-V 保留段 7998-8097 内，Node 无法 bind；Expo 非交互模式会直接 Skip
 MOBILE_PORT=8098
+# 旧 Expo 目录：仅用于 kill_expo_mobile_tree 按路径匹配清理历史残留进程；uni-app x 产物不在此目录
 MOBILE_APP_DIR="$PROJECT_ROOT/riveredge-app/mobile"
 BACKEND_START_TIMEOUT=90
 PORT_KILL_MAX_ROUNDS=6
@@ -367,55 +368,6 @@ kill_expo_mobile_tree() {
     sleep 2
 }
 
-mobile_port_has_live_listener() {
-    [ -n "$(get_listening_pids "${MOBILE_PORT}")" ]
-}
-
-# Node freeport-async：检测端口是否可 bind（Windows Hyper-V 保留段内即使用 netstat 无监听也会失败）
-verify_mobile_port_bindable() {
-    ensure_nodejs_path || return 1
-    local rc=1
-    (
-        cd "${MOBILE_APP_DIR}" || exit 1
-        node -e "
-const freeport = require('freeport-async');
-freeport.availableAsync(${MOBILE_PORT}, { hostnames: [null] })
-  .then((ok) => process.exit(ok ? 0 : 1))
-  .catch(() => process.exit(1));
-" >/dev/null 2>&1
-    ) && rc=0
-    if [ "$rc" -ne 0 ]; then
-        log_error "端口 ${MOBILE_PORT} 在本机不可绑定（常见于 Windows Hyper-V 保留段 7998-8097 含旧默认 8081）"
-        log_error "请改用: MOBILE_PORT=8098 ./fast-deploy/launch.dev.sh me"
-        return 1
-    fi
-    return 0
-}
-
-ensure_mobile_port_free() {
-    local round=0
-    local listeners=""
-    while [ "$round" -lt "$PORT_KILL_MAX_ROUNDS" ]; do
-        kill_expo_mobile_tree
-        if ! kill_port "${MOBILE_PORT}"; then
-            log_warn "端口 ${MOBILE_PORT} kill_port 未完全成功（第 $((round + 1)) 轮）"
-        fi
-        listeners="$(get_listening_pids "${MOBILE_PORT}")"
-        if [ -z "$listeners" ]; then
-            sleep 1
-            listeners="$(get_listening_pids "${MOBILE_PORT}")"
-            [ -z "$listeners" ] && return 0
-        fi
-        log_warn "端口 ${MOBILE_PORT} 仍被占用: ${listeners}（第 $((round + 1)) 轮）"
-        round=$((round + 1))
-        sleep 1
-    done
-    log_error "端口 ${MOBILE_PORT} 仍被占用，无法启动手机 H5"
-    log_error "占用进程: $(get_listening_pids "${MOBILE_PORT}" | tr '\n' ' ')"
-    log_error "请执行: ./fast-deploy/launch.dev.sh stop  或手动结束占用 ${MOBILE_PORT} 的 node/expo 进程"
-    return 1
-}
-
 # Windows：清理 taskiq worker / scheduler 整棵树（uv run / taskiq.exe 会 fork，仅杀 pidfile 会残留占 PG 连接的子进程）
 kill_taskiq_processes() {
     if ! command -v powershell.exe >/dev/null 2>&1; then
@@ -684,10 +636,6 @@ frontend_http_ready() {
     curl -sf --max-time 2 "http://127.0.0.1:${FRONTEND_PORT}/" >/dev/null 2>&1
 }
 
-mobile_http_ready() {
-    curl -sf --max-time 2 "http://127.0.0.1:${MOBILE_PORT}/" >/dev/null 2>&1
-}
-
 pidfile_alive() {
     local pidfile=$1
     [ -f "$pidfile" ] || return 1
@@ -714,7 +662,7 @@ for arg in "$@"; do
                 CMD="$arg"
             else
                 log_error "未知参数: $arg"
-                echo "用法: ./fast-deploy/launch.dev.sh [with-h5] [stop|status|be|fe|me]"
+                echo "用法: ./fast-deploy/launch.dev.sh [with-h5] [stop|status|be|fe|me|h5]"
                 exit 1
             fi
             ;;
@@ -726,7 +674,7 @@ case "$CMD" in
     status)
         backend_http_ready && log_success "Backend [OK] ($(get_listening_pids "${BACKEND_PORT}" | tr '\n' ' '))" || log_warn "Backend [OFF]"
         frontend_http_ready && log_success "Frontend [OK]" || log_warn "Frontend [OFF]"
-        mobile_http_ready && log_success "Mobile H5 [OK] (http://127.0.0.1:${MOBILE_PORT}/)" || log_warn "Mobile H5 [OFF]"
+        log_info "Mobile H5 由本机 HBuilderX 发行，本脚本不启动 Expo，也不编译 uni-app x"
         if pidfile_alive ".logs/worker.pid" || taskiq_service_running broker; then
             log_success "Worker [OK]"
         else
@@ -771,7 +719,7 @@ case "$CMD" in
         ;;
     *)
         log_error "未知命令: $CMD"
-        echo "用法: ./fast-deploy/launch.dev.sh [with-h5] [stop|status|be|fe|me]"
+        echo "用法: ./fast-deploy/launch.dev.sh [with-h5] [stop|status|be|fe|me|h5]"
         exit 1
         ;;
 esac

@@ -1,10 +1,10 @@
 <template>
 	<view class="page">
-		<text v-if="loading" class="hint">正在加载</text>
-		<text v-if="errorText.length > 0" class="hint">{{ errorText }}</text>
-		<text v-if="empty" class="hint">没有可显示的入口</text>
+		<text v-if="loading" class="loading">正在加载</text>
+		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+		<text v-if="empty" class="empty">没有可显示的入口</text>
 		<view v-for="block in scopes" :key="block.scope" class="scope">
-			<text v-if="block.errorText.length > 0" class="hint">{{ block.errorText }}</text>
+			<text v-if="block.errorText.length > 0" class="error">{{ block.errorText }}</text>
 			<view v-if="block.showBadge || block.badgeNote.length > 0" class="badges">
 				<view v-if="block.pendingText.length > 0" class="badge-row">
 					<text class="badge-label">待处理故障 {{ block.pendingText }}</text>
@@ -19,9 +19,10 @@
 			<view v-for="section in block.sections" :key="section.uid" class="section">
 				<text v-if="section.showTitle" class="section-title">{{ section.title }}</text>
 				<view class="grid">
-					<view v-for="cell in section.cells" :key="cell.uid" :class="cell.solo ? 'cell solo' : 'cell'" @click="onCell(cell)">
-						<text class="label">{{ cell.label }}</text>
-						<text v-if="cell.missing" class="missing">功能尚未安装</text>
+					<view v-for="cell in section.cells" :key="cell.uid" :class="cell.solo ? 'cell solo' : 'cell'" hover-class="pressed" @click="onCell(cell)">
+						<text v-if="iconGlyph(cell.icon, cell.iconGroup).length > 0" class="icon">{{ iconGlyph(cell.icon, cell.iconGroup) }}</text>
+						<text class="title">{{ cell.label }}</text>
+						<text v-if="cell.missing" class="hint">功能尚未安装</text>
 					</view>
 				</view>
 			</view>
@@ -31,8 +32,8 @@
 
 <script setup lang="uts">
 	import { getToken, takePendingEntry } from '../../shared/api/session.uts'
-	import { loginConnected } from '../../shared/channel/headers.uts'
 	import { openRegisteredRoute } from '../registry/index.uts'
+	import { iconGlyph } from './icons.uts'
 	import { loadWorkbench } from './load.uts'
 	import type { WorkCell, WorkScope } from './load.uts'
 
@@ -47,7 +48,7 @@
 	}
 
 	async function refresh() {
-		if (!loginConnected() || getToken().length == 0) {
+		if (getToken().length == 0) {
 			leaveToLogin()
 			return
 		}
@@ -86,19 +87,8 @@
 </script>
 
 <style>
-	.page {
-		padding: 12px;
-		flex-direction: column;
-	}
-
-	.hint {
-		font-size: 14px;
-		color: #888B9D;
-		margin-bottom: 8px;
-	}
-
 	.scope {
-		margin-bottom: 16px;
+		margin-bottom: 8px;
 		flex-direction: column;
 	}
 
@@ -113,18 +103,6 @@
 		margin-bottom: 4px;
 	}
 
-	.badge-label {
-		font-size: 13px;
-		color: #888B9D;
-		margin-right: 6px;
-	}
-
-	.section-title {
-		font-size: 15px;
-		color: #28113C;
-		margin-bottom: 8px;
-	}
-
 	.grid {
 		flex-direction: row;
 		flex-wrap: wrap;
@@ -132,9 +110,20 @@
 
 	.cell {
 		width: 48%;
-		margin: 1%;
-		padding: 14px 8px;
-		background-color: #EEE5FB;
+		margin-top: 6px;
+		margin-bottom: 6px;
+		margin-left: 1%;
+		margin-right: 1%;
+		padding-top: 16px;
+		padding-right: 12px;
+		padding-bottom: 16px;
+		padding-left: 12px;
+		min-height: 72px;
+		background-color: #FFFFFF;
+		border-radius: 16px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #DDDBE5;
 		flex-direction: column;
 	}
 
@@ -142,14 +131,8 @@
 		width: 98%;
 	}
 
-	.label {
-		font-size: 15px;
-		color: #28113C;
-	}
-
-	.missing {
-		font-size: 12px;
-		color: #888B9D;
-		margin-top: 4px;
+	.icon {
+		font-size: 22px;
+		margin-bottom: 6px;
 	}
 </style>

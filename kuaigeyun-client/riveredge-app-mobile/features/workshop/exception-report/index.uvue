@@ -1,20 +1,20 @@
 <template>
 	<view class="page">
 		<view class="modes">
-			<button class="action" @click="switchKind('material-shortage')">缺料</button>
-			<button class="action" @click="switchKind('delivery-delay')">交期</button>
-			<button class="action" @click="switchKind('quality')">质量</button>
+			<button class="btn-chip" @click="switchKind('material-shortage')">缺料</button>
+			<button class="btn-chip" @click="switchKind('delivery-delay')">交期</button>
+			<button class="btn-chip" @click="switchKind('quality')">质量</button>
 		</view>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text class="section">工单</text>
-		<view v-for="(row, index) in orders" :key="index" class="card" @click="pickOrder(index)">
+		<view v-for="(row, index) in orders" :key="index" class="card" hover-class="pressed" @click="pickOrder(index)">
 			<text class="title">{{ orderTitle(row) }}</text>
 			<text class="sub">{{ selectedOrderIndex == index ? '已选' : textOfStatus(row) }}</text>
 		</view>
 		<view v-if="kind == 'material-shortage'">
 			<input class="field" v-model="materialKeyword" placeholder="物料名称或编码" />
-			<button class="action" @click="searchMaterials">查找物料</button>
-			<view v-for="(row, index) in materials" :key="index" class="card" @click="pickMaterial(index)">
+			<button class="btn-secondary" @click="searchMaterials">查找物料</button>
+			<view v-for="(row, index) in materials" :key="index" class="card" hover-class="pressed" @click="pickMaterial(index)">
 				<text class="title">{{ materialTitle(row) }}</text>
 				<text class="sub">{{ selectedMaterialIndex == index ? '已选' : '点选' }}</text>
 			</view>
@@ -28,13 +28,14 @@
 			<input class="field" v-model="problemDescription" placeholder="问题描述" />
 		</view>
 		<input class="field" v-model="remarks" placeholder="备注（可空）" />
-		<button class="action" @click="submitReport">提交</button>
+		<button class="btn-primary" @click="submitReport">提交</button>
 	</view>
 </template>
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
-	import { readRows, textOf, fieldNumber, errorText, toast, firstText } from '../json.uts'
+	import { readRows, fieldText, fieldNumber, errorText, firstText } from '../../../shared/api/fields.uts'
+	import { toast } from '../json.uts'
 
 	const kind = ref('material-shortage')
 	const orders = ref<any[]>([])
@@ -50,15 +51,15 @@
 	const errorTextValue = ref('')
 
 	function orderTitle(row : any) : string {
-		return textOf(row, 'code') + ' ' + textOf(row, 'name')
+		return fieldText(row, 'code') + ' ' + fieldText(row, 'name')
 	}
 
 	function textOfStatus(row : any) : string {
-		return textOf(row, 'status')
+		return fieldText(row, 'status')
 	}
 
 	function materialTitle(row : any) : string {
-		return firstText(row, ['main_code', 'mainCode', 'code']) + ' ' + textOf(row, 'name')
+		return firstText(row, ['main_code', 'mainCode', 'code']) + ' ' + fieldText(row, 'name')
 	}
 
 	async function loadOrders() {
@@ -111,6 +112,21 @@
 		kind.value = next
 		selectedOrderIndex.value = -1
 		selectedMaterialIndex.value = -1
+		materials.value = []
+		errorTextValue.value = ''
+	}
+
+	function isNonNegativeIntText(text : string) : boolean {
+		if (text.length == 0) {
+			return false
+		}
+		for (let i = 0; i < text.length; i++) {
+			const ch = text.charAt(i)
+			if (ch < '0' || ch > '9') {
+				return false
+			}
+		}
+		return true
 	}
 
 	function selectedWorkOrderId() : number {
@@ -153,16 +169,11 @@
 			body.set('delay_reason', reason)
 			const daysText = delayDays.value.trim()
 			if (daysText.length > 0) {
-				const days = parseInt(daysText)
-				if (isNaN(days)) {
-					toast('延期天数不是数字')
+				if (!isNonNegativeIntText(daysText)) {
+					toast('延期天数需为非负整数')
 					return
 				}
-				if (days < 0) {
-					toast('延期天数不能小于 0')
-					return
-				}
-				body.set('delay_days', days)
+				body.set('delay_days', parseInt(daysText))
 			}
 			path = '/api/v1/apps/kuaizhizao/exceptions/delivery-delay'
 		} else {
@@ -198,54 +209,11 @@
 </script>
 
 <style>
-	.page {
-		flex-direction: column;
-		padding: 12px;
-	}
-
 	.modes {
 		flex-direction: row;
-		margin-bottom: 8px;
+		flex-wrap: wrap;
 	}
-
 	.section {
-		font-size: 16px;
-		margin-bottom: 8px;
-	}
-
-	.error {
-		font-size: 14px;
-		color: #FF4942;
-		margin-bottom: 8px;
-	}
-
-	.card {
-		flex-direction: column;
-		padding: 12px;
-		margin-bottom: 8px;
-		background-color: #ffffff;
-		border-radius: 16px;
-	}
-
-	.title {
-		font-size: 16px;
-	}
-
-	.sub {
-		font-size: 13px;
-		color: #888B9D;
-		margin-top: 4px;
-	}
-
-	.field {
-		margin-top: 8px;
-		padding: 8px;
-		background-color: #ffffff;
-	}
-
-	.action {
-		margin-top: 8px;
-		margin-right: 8px;
-		margin-bottom: 8px;
+		margin-top: 12px;
 	}
 </style>

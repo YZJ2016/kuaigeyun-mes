@@ -1,12 +1,12 @@
 <template>
 	<scroll-view class="page" scroll-y="true">
 		<view class="toolbar">
-			<text class="link" @click="loadSummary">刷新</text>
+			<button class="btn-secondary" @click="loadSummary">刷新</button>
 		</view>
-		<text v-if="loading" class="meta">加载中</text>
-		<text v-if="errorText.length > 0" class="err">{{ errorText }}</text>
-		<text v-if="!loading && pendingRows.length == 0 && errorText.length == 0" class="meta">汇总里没有待检项</text>
-		<view v-for="(row, index) in pendingRows" :key="index" class="card" @click="openRow(index)">
+		<text v-if="loading" class="loading">加载中</text>
+		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
+		<text v-if="!loading && pendingRows.length == 0 && errorTextValue.length == 0" class="empty">汇总里没有待检项</text>
+		<view v-for="(row, index) in pendingRows" :key="index" class="card" hover-class="pressed" @click="openRow(index)">
 			<text class="title">{{ row.label }}</text>
 			<text class="meta">待检 {{ row.countText }}</text>
 		</view>
@@ -15,20 +15,21 @@
 
 <script setup lang="uts">
 	import { request } from '../../../shared/api/index.uts'
-	import { readError } from '../json-read.uts'
+	import { errorText } from '../../../shared/api/fields.uts'
+	import { openRegisteredRoute } from '../../../shell/registry/index.uts'
 	import { featurePackage } from '../index.uts'
 
 	class PendingRow {
 		label : string = ''
 		countText : string = ''
-		pageUrl : string = ''
+		route : string = ''
 	}
 
 	const fieldToKey : string[] = ['pending_incoming', 'pending_process', 'pending_finished', 'pending_oqc']
 	const entryKeys : string[] = ['incoming', 'process-scan', 'finished', 'oqc']
 
 	const loading = ref(false)
-	const errorText = ref('')
+	const errorTextValue = ref('')
 	const pendingRows = ref<PendingRow[]>([])
 
 	function readPending(summary : UTSJSONObject) : PendingRow[] {
@@ -36,24 +37,24 @@
 		const entries = featurePackage.entries
 		for (let i = 0; i < fieldToKey.length; i++) {
 			const count = summary.getNumber(fieldToKey[i])
-			if (count == null) {
+			if (count == null || count <= 0) {
 				continue
 			}
 			let label = ''
-			let pagePath = ''
+			let route = ''
 			for (let j = 0; j < entries.length; j++) {
 				if (entries[j].key == entryKeys[i]) {
 					label = entries[j].label
-					pagePath = entries[j].page_path
+					route = entries[j].route
 				}
 			}
-			if (pagePath.length == 0) {
+			if (route.length == 0) {
 				continue
 			}
 			const row = new PendingRow()
 			row.label = label
 			row.countText = String(count)
-			row.pageUrl = '/' + pagePath
+			row.route = route
 			out.push(row)
 		}
 		return out
@@ -61,7 +62,7 @@
 
 	async function loadSummary() {
 		loading.value = true
-		errorText.value = ''
+		errorTextValue.value = ''
 		try {
 			const payload = await request({
 				path: '/api/v1/apps/kuaizhizao/quality/inspection-center-summary',
@@ -70,23 +71,25 @@
 			})
 			if (payload == null || Array.isArray(payload)) {
 				pendingRows.value = [] as PendingRow[]
-				errorText.value = '汇总响应不是对象'
+				errorTextValue.value = '汇总响应不是对象'
 			} else {
 				pendingRows.value = readPending(payload as UTSJSONObject)
 			}
 		} catch (err) {
 			pendingRows.value = [] as PendingRow[]
-			errorText.value = readError(err)
+			errorTextValue.value = errorText(err)
 		}
 		loading.value = false
 	}
 
 	function openRow(index : number) {
-		const url = pendingRows.value[index].pageUrl
-		if (url.length == 0) {
+		const route = pendingRows.value[index].route
+		if (route.length == 0) {
 			return
 		}
-		uni.navigateTo({ url: url })
+		if (!openRegisteredRoute(route)) {
+			uni.showToast({ title: '功能尚未安装', icon: 'none' })
+		}
 	}
 
 	onShow(() => {
@@ -94,41 +97,4 @@
 	})
 </script>
 
-<style>
-	.page {
-		padding: 12px;
-		background-color: #F1F1F4;
-	}
 
-	.toolbar {
-		margin-bottom: 8px;
-	}
-
-	.link {
-		color: #801ED3;
-		font-size: 14px;
-	}
-
-	.card {
-		background-color: #ffffff;
-		border-radius: 16px;
-		padding: 12px;
-		margin-bottom: 10px;
-	}
-
-	.title {
-		font-size: 16px;
-		color: #28113C;
-	}
-
-	.meta {
-		font-size: 13px;
-		color: #888B9D;
-		margin-top: 4px;
-	}
-
-	.err {
-		color: #FF4942;
-		font-size: 13px;
-	}
-</style>

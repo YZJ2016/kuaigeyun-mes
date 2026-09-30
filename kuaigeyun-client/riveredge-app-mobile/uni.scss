@@ -16,6 +16,7 @@
 
 /* 行为相关颜色 */
 $uni-color-primary: #801ED3;
+$uni-color-accent: #9730E3;
 $uni-color-success: #07C160;
 $uni-color-warning: #A847F0;
 $uni-color-error: #FF4942;
@@ -35,6 +36,9 @@ $uni-bg-color-mask:rgba(0, 0, 0, 0.4);//遮罩颜色
 
 /* 边框颜色 */
 $uni-border-color:#E7D9FD;
+$uni-border-color-soft:#DDDBE5;
+
+/* 页面 class（.page .card .btn-primary .field .error .empty .loading 等）写在 App.uvue，这里只保留同色变量 */
 
 /* 尺寸变量 */
 

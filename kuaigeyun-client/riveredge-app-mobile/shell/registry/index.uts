@@ -161,6 +161,15 @@ function splitRoute(value : string) : string[] {
 	return [normalized.substring(0, q), normalized.substring(q + 1)]
 }
 
+/** 畸形编码（如裸 %）时解码失败，回退原串，不让 URIError 炸掉路由匹配。 */
+function decodeSafe(value : string) : string {
+	try {
+		return decodeURIComponent(value)
+	} catch (_err) {
+		return value
+	}
+}
+
 function queryValue(query : string, key : string) : string | null {
 	if (query.length == 0) {
 		return null
@@ -169,7 +178,7 @@ function queryValue(query : string, key : string) : string | null {
 	const prefix = key + '='
 	for (let i = 0; i < parts.length; i++) {
 		if (parts[i].indexOf(prefix) == 0) {
-			return decodeURIComponent(parts[i].substring(prefix.length))
+			return decodeSafe(parts[i].substring(prefix.length))
 		}
 	}
 	return null
@@ -185,8 +194,8 @@ function queryKeys(query : string) : Array<string> {
 		const eq = parts[i].indexOf('=')
 		const key = eq < 0 ? parts[i] : parts[i].substring(0, eq)
 		if (key.length > 0) {
-			const decoded = decodeURIComponent(key)
-			if (decoded != null && decoded.length > 0) {
+			const decoded = decodeSafe(key)
+			if (decoded.length > 0) {
 				keys.push(decoded)
 			}
 		}
