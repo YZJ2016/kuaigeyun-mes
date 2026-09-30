@@ -7243,6 +7243,8 @@ export default {
   'app.kuaizhizao.purchaseOrder.form.prepaymentAmountPlaceholder': 'Nhập số tiền tạm ứng',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccount': 'Tài khoản ngân hàng tạm ứng',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccountPlaceholder': 'Chọn tài khoản ngân hàng tạm ứng',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillMissing': 'Chưa bổ sung',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillDone': 'Đã bổ sung',
   'app.kuaizhizao.purchaseOrder.loadBankAccountsFailed': 'Tải tài khoản ngân hàng thất bại, vui lòng kiểm tra đã khai báo tài khoản đang hoạt động trong Quản lý tài chính',
   'app.kuaizhizao.purchaseOrder.form.itemsTitle': 'Dòng mua hàng',
   'app.kuaizhizao.purchaseOrder.form.itemsRequired': 'Thêm ít nhất một dòng mua hàng',

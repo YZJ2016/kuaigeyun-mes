@@ -7299,6 +7299,8 @@ export default {
   'app.kuaizhizao.purchaseOrder.form.prepaymentAmountPlaceholder': '請輸入預付金額',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccount': '預付銀行帳戶',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccountPlaceholder': '請選擇預付銀行帳戶',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillMissing': '未補齊',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillDone': '已補齊',
   'app.kuaizhizao.purchaseOrder.loadBankAccountsFailed': '載入銀行帳戶失敗，請確認已在財務管理維護啟用帳戶',
   'app.kuaizhizao.purchaseOrder.form.itemsTitle': '採購明細',
   'app.kuaizhizao.purchaseOrder.form.itemsRequired': '請至少新增一條採購明細',

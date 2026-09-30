@@ -271,6 +271,16 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
   );
 
   const title = t('app.kuaizhizao.purchaseOrder.detailTitle', { code: order?.order_code || '' });
+  const hasPrepaymentMilestone = (effective.payment_milestones ?? []).some((ms) =>
+    Boolean(ms.is_prepayment),
+  );
+  const prepaymentBackfillLabel = !hasPrepaymentMilestone
+    ? null
+    : effective.prepayment_backfill_status === 'missing'
+      ? t('app.kuaizhizao.purchaseOrder.prepaymentBackfillMissing')
+      : effective.prepayment_backfill_status === 'backfilled'
+        ? t('app.kuaizhizao.purchaseOrder.prepaymentBackfillDone')
+        : null;
   const basicItems = useDetailDrawerDescriptionItems(
     basicColumns,
     effective as Record<string, unknown>,
@@ -337,6 +347,14 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                 <Divider style={{ margin: '16px 0' }} />
                 <Typography.Title level={5} style={{ margin: '0 0 8px' }}>
                   {t('app.kuaizhizao.purchaseOrder.paymentPlan')}
+                  {prepaymentBackfillLabel ? (
+                    <Typography.Text
+                      type={effective.prepayment_backfill_status === 'missing' ? 'danger' : 'success'}
+                      style={{ marginLeft: 8, fontSize: 14, fontWeight: 400 }}
+                    >
+                      {prepaymentBackfillLabel}
+                    </Typography.Text>
+                  ) : null}
                 </Typography.Title>
                 <OrderPaymentMilestonesReadOnly
                   variant="purchase"
