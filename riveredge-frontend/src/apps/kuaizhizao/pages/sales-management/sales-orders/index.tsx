@@ -3797,7 +3797,7 @@ const SalesOrdersPage: React.FC = () => {
     () => (
       <Space key="highlight-overdue-switch" align="center">
         <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
-        <span className="uni-table-toolbar-plain-label" style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
+        <span className="uni-table-toolbar-plain-label">
           {t('app.kuaizhizao.salesOrder.highlightOverdue')}
         </span>
       </Space>
@@ -3844,8 +3844,11 @@ const SalesOrdersPage: React.FC = () => {
         pushTargets={{
           computation: 'demand_computation',
           workorder: 'work_order',
+          'purchase-requisition': 'purchase_requisition',
+          'purchase-order': 'purchase_order',
           'delivery-project': 'delivery_project',
           invoice: 'sales_invoice',
+          prepayment: 'receipt',
           shipment: 'shipment_notice',
           delivery: 'sales_delivery',
           'sales-return': 'sales_return',

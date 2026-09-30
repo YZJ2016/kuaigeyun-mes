@@ -2710,6 +2710,17 @@ const DemandComputationPage: React.FC = () => {
               menuItems={toolbarPushMenuItems}
               disabled={selectedRowKeys.length !== 1 || !selectedComputationForToolbar}
               disabledReason={toolbarPushDisabledReason}
+              sourceDocument={
+                selectedComputationForToolbar?.id
+                  ? { type: 'demand_computation', id: Number(selectedComputationForToolbar.id) }
+                  : null
+              }
+              pushTargets={{
+                'push-production-work-order': 'work_order',
+                'push-purchase-requisition': 'purchase_requisition',
+                'push-purchase-order': 'purchase_order',
+                'push-documents-panel': ['work_order', 'purchase_requisition', 'purchase_order'],
+              }}
             />
           )
           const items: React.ReactNode[] = []

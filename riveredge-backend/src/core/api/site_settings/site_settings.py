@@ -122,6 +122,7 @@ _LOGIN_PAGE_SETTING_KEYS = {
     "login_client_win_enabled",
     "login_client_android_enabled",
     "login_quick_enabled",
+    "login_quick_providers",
 }
 
 

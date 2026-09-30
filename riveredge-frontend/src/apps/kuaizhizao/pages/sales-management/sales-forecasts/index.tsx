@@ -2152,6 +2152,12 @@ export default function SalesForecastsPage() {
               key={`sales-forecast-push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
               disabled={selectedRowKeys.length !== 1 || !selectedForecastForToolbar}
               disabledReason={toolbarPushDisabledReason}
+              sourceDocument={
+                selectedForecastForToolbar?.id
+                  ? { type: 'sales_forecast', id: Number(selectedForecastForToolbar.id) }
+                  : null
+              }
+              pushTargets={{ 'push-to-computation': 'demand_computation' }}
               menuItems={buildUniPushMenuItems([
                 {
                   key: 'push-to-computation',

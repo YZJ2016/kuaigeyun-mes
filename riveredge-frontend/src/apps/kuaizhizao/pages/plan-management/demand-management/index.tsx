@@ -1045,6 +1045,12 @@ const DemandManagementPage: React.FC = () => {
               menuItems={demandToolbarPushMenuItems}
               disabled={selectedRowKeys.length !== 1 || !selectedDemandForPush}
               disabledReason={demandToolbarPushDisabledReason}
+              sourceDocument={
+                selectedDemandForPush?.id
+                  ? { type: 'demand', id: Number(selectedDemandForPush.id) }
+                  : null
+              }
+              pushTargets={{ 'push-to-computation': 'demand_computation' }}
             />,
           ]}
           showEditButton={false}

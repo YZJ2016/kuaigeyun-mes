@@ -1088,6 +1088,12 @@ const SalesReviewsPage: React.FC = () => {
                 key={`sales-review-push-${selectedRowKeys.join('-') || 'none'}`}
                 disabled={selectedRowKeys.length !== 1 || !canToolbarPush}
                 disabledReason={pushDisabledReason}
+                sourceDocument={
+                  selectedSingleReview?.id
+                    ? { type: 'sales_review', id: Number(selectedSingleReview.id) }
+                    : null
+                }
+                pushTargets={{ 'push-to-sales-order': 'sales_order' }}
                 menuItems={buildUniPushMenuItems([
                   {
                     key: 'push-to-sales-order',

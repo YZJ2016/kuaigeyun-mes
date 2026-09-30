@@ -66,6 +66,32 @@ const PerformanceSummaryLinkedDetailDrawer = lazy(() =>
 const AfterSalesLinkedDetailDrawer = lazy(() =>
   import('./drawers/AfterSalesLinkedDetailDrawer').then((m) => ({ default: m.AfterSalesLinkedDetailDrawer })),
 );
+const DeliveryNoticeLinkedDetailDrawer = lazy(() =>
+  import('./drawers/DeliveryNoticeLinkedDetailDrawer').then((m) => ({ default: m.DeliveryNoticeLinkedDetailDrawer })),
+);
+const HubOutboundLinkedDetailDrawer = lazy(() =>
+  import('./drawers/HubOutboundLinkedDetailDrawer').then((m) => ({ default: m.HubOutboundLinkedDetailDrawer })),
+);
+const HubInboundLinkedDetailDrawer = lazy(() =>
+  import('./drawers/HubInboundLinkedDetailDrawer').then((m) => ({ default: m.HubInboundLinkedDetailDrawer })),
+);
+const QualityInspectionLinkedDetailDrawer = lazy(() =>
+  import('./drawers/QualityInspectionLinkedDetailDrawer').then((m) => ({
+    default: m.QualityInspectionLinkedDetailDrawer,
+  })),
+);
+const ShipmentNoticeLinkedDetailDrawer = lazy(() =>
+  import('./drawers/ShipmentNoticeLinkedDetailDrawer').then((m) => ({ default: m.ShipmentNoticeLinkedDetailDrawer })),
+);
+const ReceiptNoticeLinkedDetailDrawer = lazy(() =>
+  import('./drawers/ReceiptNoticeLinkedDetailDrawer').then((m) => ({ default: m.ReceiptNoticeLinkedDetailDrawer })),
+);
+const SalesContractLinkedDetailDrawer = lazy(() =>
+  import('./drawers/SalesContractLinkedDetailDrawer').then((m) => ({ default: m.SalesContractLinkedDetailDrawer })),
+);
+const ReworkOrderLinkedDetailDrawer = lazy(() =>
+  import('./drawers/ReworkOrderLinkedDetailDrawer').then((m) => ({ default: m.ReworkOrderLinkedDetailDrawer })),
+);
 
 /** 高于列表详情抽屉、报价内嵌关联，以及在线消息壳（z-index 1050） */
 const LINKED_DRAWER_Z_OFFSET = 80;
@@ -239,6 +265,97 @@ function LinkedDocumentDetailHost({
       drawer = (
         <FreightOrderLinkedDetailDrawer
           open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+      break;
+    case 'delivery_notice':
+      drawer = (
+        <DeliveryNoticeLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+      break;
+    case 'shipment_notice':
+      drawer = (
+        <ShipmentNoticeLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+      break;
+    case 'sales_contract':
+      drawer = (
+        <SalesContractLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+      break;
+    case 'receipt_notice':
+      drawer = (
+        <ReceiptNoticeLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+      break;
+    case 'rework_order':
+      drawer = (
+        <ReworkOrderLinkedDetailDrawer
+          open
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+      break;
+    case 'production_picking':
+    case 'outsource_issue':
+    case 'purchase_return':
+      drawer = (
+        <HubOutboundLinkedDetailDrawer
+          open
+          documentType={documentType}
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+      break;
+    case 'finished_goods_receipt':
+    case 'production_return':
+    case 'sales_return':
+    case 'outsource_receipt':
+    case 'outsource_material_return':
+    case 'outsource_product_return':
+      drawer = (
+        <HubInboundLinkedDetailDrawer
+          open
+          documentType={documentType}
+          documentId={documentId}
+          onClose={onClose}
+          zIndex={zIndex}
+        />
+      );
+      break;
+    case 'incoming_inspection':
+    case 'finished_goods_inspection':
+      drawer = (
+        <QualityInspectionLinkedDetailDrawer
+          open
+          documentType={documentType}
           documentId={documentId}
           onClose={onClose}
           zIndex={zIndex}

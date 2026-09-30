@@ -47,6 +47,8 @@ export interface OutboundHubOrder {
   work_order_code?: string;
   sales_order_id?: number;
   sales_order_code?: string;
+  sales_forecast_id?: number;
+  sales_forecast_code?: string;
   outsource_work_order_id?: number;
   outsource_work_order_code?: string;
   warehouse_id?: number;
@@ -231,10 +233,20 @@ export function outboundSourceDocNo(record: OutboundHubOrder): string {
   const parts: string[] = [];
   pushUniqueRef(parts, record.purchase_order_code);
   pushUniqueRef(parts, record.sales_order_code);
+  pushUniqueRef(parts, record.sales_forecast_code);
   pushUniqueRef(parts, record.work_order_code);
   pushUniqueRef(parts, record.outsource_work_order_code);
   return parts.join(' / ');
 }
+
+/** 出库 Hub「来源单号」列挂链字段序（与 outboundSourceDocNo 一致） */
+export const OUTBOUND_SOURCE_DOC_CODE_FIELDS = [
+  'purchase_order_code',
+  'sales_order_code',
+  'sales_forecast_code',
+  'work_order_code',
+  'outsource_work_order_code',
+] as const;
 
 export function outboundDocumentTrackingType(
   order: Pick<OutboundHubOrder, 'outbound_type'>,

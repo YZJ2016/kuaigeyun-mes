@@ -34,6 +34,7 @@ import {
 import { buildHubMergedCustomFieldColumns } from '../../../../../components/custom-fields/hubCustomFieldListColumns';
 
 import { ListPageTemplate, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { LinkedDocumentCodesFromFields } from '../../../../../components/linked-document-code';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
 import { OutboundDetailDrawer } from './components/OutboundDetailDrawer';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
@@ -117,7 +118,7 @@ import {
   outboundWithdrawCapabilityReasonMessage,
   mapOutsourceIssueToOutbound,
   outboundDocumentCode,
-  outboundSourceDocNo,
+  OUTBOUND_SOURCE_DOC_CODE_FIELDS,
   resolveOutboundHubOperator,
   resolveOutboundHubDateRaw,
   outboundDocumentTrackingType,
@@ -1160,7 +1161,12 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
       resizable: false,
       ellipsis: true,
       hideInSearch: true,
-      render: (_, record) => outboundSourceDocNo(record) || '-',
+      render: (_, record) => (
+        <LinkedDocumentCodesFromFields
+          record={record as Record<string, unknown>}
+          codeFields={OUTBOUND_SOURCE_DOC_CODE_FIELDS}
+        />
+      ),
     },
     {
       title: t('app.kuaizhizao.common.colLineMaterials'),
@@ -1611,17 +1617,36 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
           setListRowsVersion((v) => v + 1);
         }}
         toolBarRender={() => {
-          if (!outboundPullMenuSpecs.length) return [];
-          return [
-            <UniPullLoadButton
-              key="pull"
-              compactKey="outbound-pull-load"
-              label={pullLoadLabel}
-              type="primary"
-              variant="solid"
-              menuItems={buildKuaizhizaoPullCreateMenuItems(t, outboundPullMenuSpecs)}
-            />,
-          ];
+          const items: React.ReactNode[] = [];
+          if (outboundPullMenuSpecs.length) {
+            items.push(
+              <UniPullLoadButton
+                key="pull"
+                compactKey="outbound-pull-load"
+                label={pullLoadLabel}
+                type="primary"
+                variant="solid"
+                menuItems={buildKuaizhizaoPullCreateMenuItems(t, outboundPullMenuSpecs)}
+              />,
+            );
+          }
+          if (showSalesDeliveryPush) {
+            items.push(
+              <UniPushToolbarButton
+                key={`outbound-push-delivery-notice-${selectedSalesDeliveryForPush?.id ?? 'none'}`}
+                menuItems={toolbarPushMenuItems}
+                disabled={selectedRowKeys.length !== 1 || !selectedSalesDeliveryForPush}
+                disabledReason={salesDeliveryToolbarPushDisabledReason}
+                sourceDocument={
+                  selectedSalesDeliveryForPush?.id
+                    ? { type: 'sales_delivery', id: Number(selectedSalesDeliveryForPush.id) }
+                    : null
+                }
+                pushTargets={{ 'push-delivery-notice': 'delivery_notice' }}
+              />,
+            );
+          }
+          return items;
         }}
         toolBarActionsAfterBatch={[
           <WarehouseShowAmountSwitch
@@ -1629,22 +1654,6 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
             checked={showAmount}
             onChange={setShowAmount}
           />,
-          ...(showSalesDeliveryPush
-            ? [
-                <UniPushToolbarButton
-                  key={`outbound-push-delivery-notice-${selectedSalesDeliveryForPush?.id ?? 'none'}`}
-                  menuItems={toolbarPushMenuItems}
-                  disabled={selectedRowKeys.length !== 1 || !selectedSalesDeliveryForPush}
-                  disabledReason={salesDeliveryToolbarPushDisabledReason}
-                  sourceDocument={
-                    selectedSalesDeliveryForPush?.id
-                      ? { type: 'sales_delivery', id: Number(selectedSalesDeliveryForPush.id) }
-                      : null
-                  }
-                  pushTargets={{ 'push-delivery-notice': 'delivery_notice' }}
-                />,
-              ]
-            : []),
         ]}
         showPrintButton={outboundPerms.canPrint}
         printButtonDisabled={!canToolbarPrint}

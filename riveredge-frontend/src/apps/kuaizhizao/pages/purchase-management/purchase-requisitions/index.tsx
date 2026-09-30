@@ -2338,6 +2338,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
               menuItems={toolbarPushMenuItems}
               disabled={selectedRowKeys.length !== 1 || !selectedRequisitionForToolbar}
               disabledReason={toolbarPushDisabledReason}
+              sourceDocument={
+                selectedRequisitionForToolbar?.id
+                  ? { type: 'purchase_requisition', id: Number(selectedRequisitionForToolbar.id) }
+                  : null
+              }
+              pushTargets={{
+                'push-purchase-order': 'purchase_order',
+                'push-inquiry': 'purchase_inquiry',
+              }}
             />,
           ]}
           enableRowSelection={true}

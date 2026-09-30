@@ -8066,7 +8066,7 @@ const WorkOrdersPage: React.FC = () => {
     () => (
       <Space key="highlight-overdue-switch" align="center">
         <Switch checked={highlightPlannedEndOverdue} onChange={setHighlightPlannedEndOverdue} />
-        <span className="uni-table-toolbar-plain-label" style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
+        <span className="uni-table-toolbar-plain-label">
           {t('app.kuaizhizao.workOrder.highlightOverdue')}
         </span>
       </Space>

@@ -1851,6 +1851,12 @@ const SalesContractsPage: React.FC = () => {
         key={`sales-contract-push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
         disabled={selectedRowKeys.length !== 1 || !selectedContractForPush}
         disabledReason={contractToolbarPushDisabledReason}
+        sourceDocument={
+          selectedContractForPush?.id
+            ? { type: 'sales_contract', id: Number(selectedContractForPush.id) }
+            : null
+        }
+        pushTargets={{ 'push-to-sales-order': 'sales_order' }}
         menuItems={buildUniPushMenuItems([
           {
             key: 'push-to-sales-order',

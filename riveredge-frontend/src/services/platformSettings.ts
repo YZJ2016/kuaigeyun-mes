@@ -45,6 +45,7 @@ export interface PlatformSettings {
   login_client_win_enabled?: boolean;
   login_client_android_enabled?: boolean;
   login_quick_enabled?: boolean;
+  login_quick_providers?: Record<string, boolean>;
   enable_register?: boolean;
   /** 站点时区（infra_settings.TIMEZONE，只读；写入 configs.timezone） */
   timezone?: string;
@@ -83,6 +84,7 @@ export interface PlatformSettingsUpdateRequest {
   login_client_win_enabled?: boolean;
   login_client_android_enabled?: boolean;
   login_quick_enabled?: boolean;
+  login_quick_providers?: Record<string, boolean>;
   enable_register?: boolean;
 }
 

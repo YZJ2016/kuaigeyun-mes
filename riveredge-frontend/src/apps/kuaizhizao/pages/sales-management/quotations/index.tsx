@@ -3985,6 +3985,15 @@ const QuotationsPage: React.FC = () => {
                 !quotationForToolbarPush
               }
               disabledReason={quotationPushDisabledReason}
+              sourceDocument={
+                quotationForToolbarPush?.id
+                  ? { type: 'quotation', id: Number(quotationForToolbarPush.id) }
+                  : null
+              }
+              pushTargets={{
+                'sales-order': 'sales_order',
+                'sales-review': 'sales_contract',
+              }}
             />,
           ]}
           enableRowSelection={viewTypeState !== 'detailTable'}
