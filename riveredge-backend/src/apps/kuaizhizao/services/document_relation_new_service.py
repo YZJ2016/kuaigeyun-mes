@@ -504,7 +504,51 @@ class DocumentRelationNewService:
         if relation_type:
             filters["relation_type"] = relation_type
         return await DocumentRelation.filter(**filters).delete()
-    
+
+    async def refresh_document_code_snapshots(
+        self,
+        tenant_id: int,
+        *,
+        document_type: str,
+        document_id: int,
+        code: str,
+        refresh_source: bool,
+        refresh_target: bool,
+    ) -> int:
+        """按单据原地刷新编码快照，不换主键。0 行返回 0。
+
+        refresh_source 只写 source_code/source_name；refresh_target 只写 target 侧。
+        销售订单必须 refresh_target=False。
+        """
+        updated = 0
+        if refresh_source:
+            updated += await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type=document_type,
+                source_id=document_id,
+            ).update(source_code=code, source_name=code)
+        if refresh_target:
+            updated += await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                target_type=document_type,
+                target_id=document_id,
+            ).update(target_code=code, target_name=code)
+        return updated
+
+    async def update_relation_notes(
+        self,
+        tenant_id: int,
+        relation_id: int,
+        notes: Optional[str],
+    ) -> None:
+        """按主键写 notes，保留 relation_desc 与其余字段。找不到抛 NotFoundError。"""
+        updated = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            id=relation_id,
+        ).update(notes=notes)
+        if not updated:
+            raise NotFoundError(f"关联关系不存在: {relation_id}")
+
     async def get_relation_by_id(
         self,
         tenant_id: int,

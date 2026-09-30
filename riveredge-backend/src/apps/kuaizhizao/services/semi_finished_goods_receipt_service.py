@@ -605,17 +605,26 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                     f"仅草稿或待入库状态的半成品入库单可删除，当前状态：{receipt.status}"
                 )
             from apps.kuaizhizao.models.document_relation import DocumentRelation
+            from apps.kuaizhizao.services.document_relation_new_service import (
+                DocumentRelationNewService,
+            )
 
-            await DocumentRelation.filter(
+            rel_svc = DocumentRelationNewService()
+            target_rows = await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 target_type="semi_finished_goods_receipt",
                 target_id=receipt_id,
-            ).delete()
-            await DocumentRelation.filter(
+            ).all()
+            source_rows = await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 source_type="semi_finished_goods_receipt",
                 source_id=receipt_id,
-            ).delete()
+            ).all()
+            for row in (*target_rows, *source_rows):
+                try:
+                    await rel_svc.delete_relation(tenant_id, relation_id=row.id)
+                except NotFoundError:
+                    continue
             await SemiFinishedGoodsReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).delete()
             now = resolve_business_datetime()
             await SemiFinishedGoodsReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(

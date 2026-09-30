@@ -863,6 +863,9 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         from tortoise.queryset import Q
 
         from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
 
         invoice = await PurchaseInvoice.get_or_none(
             tenant_id=tenant_id, id=invoice_id, deleted_at__isnull=True
@@ -894,22 +897,33 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                     cascade_payable_id = int(payable.id)
 
         async with in_transaction():
-            await DocumentRelation.filter(
+            rel_svc = DocumentRelationNewService()
+            invoice_rels = await DocumentRelation.filter(
                 Q(tenant_id=tenant_id)
                 & (
                     Q(target_type="purchase_invoice", target_id=invoice_id)
                     | Q(source_type="purchase_invoice", source_id=invoice_id)
                 )
-            ).delete()
+            ).all()
+            for row in invoice_rels:
+                try:
+                    await rel_svc.delete_relation(tenant_id, relation_id=row.id)
+                except NotFoundError:
+                    continue
 
             if cascade_payable_id is not None:
-                await DocumentRelation.filter(
+                payable_rels = await DocumentRelation.filter(
                     Q(tenant_id=tenant_id)
                     & (
                         Q(target_type="payable", target_id=cascade_payable_id)
                         | Q(source_type="payable", source_id=cascade_payable_id)
                     )
-                ).delete()
+                ).all()
+                for row in payable_rels:
+                    try:
+                        await rel_svc.delete_relation(tenant_id, relation_id=row.id)
+                    except NotFoundError:
+                        continue
                 await Payable.filter(tenant_id=tenant_id, id=cascade_payable_id).delete()
 
             await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(
