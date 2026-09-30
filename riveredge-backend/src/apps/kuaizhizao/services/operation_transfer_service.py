@@ -280,9 +280,11 @@ async def sum_processed_concession_quantity(
     tenant_id: int,
     inspections: List[Any],
 ) -> Decimal:
-    """已处理让步：过程检验单上 disposition=accept 且 status=processed 的不良数量。"""
+    """已处理让步：与放行同一批过程检验单上 disposition=accept 且 status=processed 的不良数量。"""
     inspection_ids = []
     for insp in inspections:
+        if is_rework_verification_process_inspection(insp):
+            continue
         raw_id = getattr(insp, "id", None)
         if raw_id is None:
             continue
