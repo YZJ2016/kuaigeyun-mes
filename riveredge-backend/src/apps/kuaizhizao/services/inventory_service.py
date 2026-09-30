@@ -831,17 +831,36 @@ class InventoryService:
                 if serial_nos:
                     from apps.master_data.models.material_serial import MaterialSerial
                     from apps.kuaizhizao.models.material_stock_movement import MaterialStockMovement
+                    from apps.kuaizhizao.services.material_serial_document_ledger_service import (
+                        DIRECTION_IN,
+                        record_serial_document_ledger,
+                    )
 
                     # 锁序约定（spec 141 KR-CL2）：先批次行锁（上方
                     # _find_in_stock_material_batch for_update），再按序列号排序
                     # 逐条 select_for_update；序列号与批次在同一 DB 事务、同成败。
                     # 全路径统一该锁序，避免并发互锁。查询显式带 tenant_id 仅为
                     # 业务定位；组织隔离由 spec 143 ORM 强制机制注入保证。
+                    # 留痕写在序列号创建/更新之后、同一事务内；写入失败由外层回滚整笔过账。
                     for s_no in sorted(serial_nos, key=lambda v: str(v or "")):
                         existing = await MaterialSerial.filter(tenant_id=tenant_id, serial_no=s_no).select_for_update().first()
+                        reconfirm_tolerant = False
                         if existing:
                             if existing.status == "in_stock":
                                 if source_type and str(source_type).endswith("_withdraw"):
+                                    await record_serial_document_ledger(
+                                        tenant_id=tenant_id,
+                                        serial_no=s_no,
+                                        material_id=material_id,
+                                        direction=DIRECTION_IN,
+                                        movement_type=movement_type,
+                                        source_type=source_type,
+                                        source_doc_id=source_doc_id,
+                                        source_doc_code=source_doc_code,
+                                        idempotency_key=idempotency_key,
+                                        operator_id=operator_id,
+                                        operator_name=operator_name,
+                                    )
                                     continue
                                 # 同单撤回曾冲数量但未回冲序列号台账时，允许再确认入库对齐台账
                                 _revoke_src = _RECONFIRM_TOLERANT_REVOKE_SOURCE_TYPES.get(
@@ -856,13 +875,15 @@ class InventoryService:
                                         source_doc_id=int(source_doc_id),
                                     ).exists()
                                 ):
-                                    continue
-                                raise BusinessLogicError(f"序列号 {s_no} 已在库，不可重复入库")
-                            existing.status = "in_stock"
-                            existing.material_id = material_id
-                            if existing.production_date is None and ledger_production_date is not None:
-                                existing.production_date = ledger_production_date
-                            await existing.save()
+                                    reconfirm_tolerant = True
+                                else:
+                                    raise BusinessLogicError(f"序列号 {s_no} 已在库，不可重复入库")
+                            else:
+                                existing.status = "in_stock"
+                                existing.material_id = material_id
+                                if existing.production_date is None and ledger_production_date is not None:
+                                    existing.production_date = ledger_production_date
+                                await existing.save()
                         else:
                             await MaterialSerial.create(
                                 tenant_id=tenant_id,
@@ -871,6 +892,20 @@ class InventoryService:
                                 production_date=ledger_production_date,
                                 status="in_stock",
                             )
+                        await record_serial_document_ledger(
+                            tenant_id=tenant_id,
+                            serial_no=s_no,
+                            material_id=material_id,
+                            direction=DIRECTION_IN,
+                            movement_type=movement_type,
+                            source_type=source_type,
+                            source_doc_id=source_doc_id,
+                            source_doc_code=source_doc_code,
+                            idempotency_key=idempotency_key,
+                            operator_id=operator_id,
+                            operator_name=operator_name,
+                            reconfirm_tolerant=reconfirm_tolerant,
+                        )
 
                 logger.info(
                     f"InventoryService.increase_stock: tenant={tenant_id} material={material_id} "
@@ -1104,18 +1139,30 @@ class InventoryService:
         tenant_id: int,
         material_id: int,
         serial_nos: Optional[list[str]],
+        *,
+        source_type: Optional[str] = None,
+        source_doc_id: Optional[int] = None,
+        source_doc_code: Optional[str] = None,
+        movement_type: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        operator_id: Optional[int] = None,
+        operator_name: Optional[str] = None,
     ) -> None:
-        """出库扣减后同步序列号台账为已出库。
+        """出库扣减后同步序列号为已出库，并在同一事务写出入库留痕。
 
         锁序约定（spec 141 KR-CL2）：与入库一致——先批次行锁（扣减分支已对批次
         ``select_for_update``），再按序列号排序逐条 ``select_for_update``；
         序列号与批次扣减在同一 DB 事务提交，任一侧失败全滚。
         查询显式带 ``tenant_id`` 仅为业务定位；组织隔离由 spec 143
-        ORM 强制机制注入保证。
+        ORM 强制机制注入保证。无序列号直接返回，不记台账。
         """
         if not serial_nos:
             return
         from apps.master_data.models.material_serial import MaterialSerial
+        from apps.kuaizhizao.services.material_serial_document_ledger_service import (
+            DIRECTION_OUT,
+            record_serial_document_ledger,
+        )
 
         for s_no in sorted(serial_nos, key=lambda v: str(v or "")):
             sn = str(s_no or "").strip()
@@ -1134,6 +1181,19 @@ class InventoryService:
                 raise BusinessLogicError(f"序列号 {sn} 不在库，无法出库")
             existing.status = "out_stock"
             await existing.save()
+            await record_serial_document_ledger(
+                tenant_id=tenant_id,
+                serial_no=sn,
+                material_id=material_id,
+                direction=DIRECTION_OUT,
+                movement_type=movement_type,
+                source_type=source_type,
+                source_doc_id=source_doc_id,
+                source_doc_code=source_doc_code,
+                idempotency_key=idempotency_key,
+                operator_id=operator_id,
+                operator_name=operator_name,
+            )
 
     @staticmethod
     @idempotent_stock_change
@@ -1632,6 +1692,13 @@ class InventoryService:
                     tenant_id=tenant_id,
                     material_id=material_id,
                     serial_nos=serial_nos,
+                    source_type=source_type,
+                    source_doc_id=source_doc_id,
+                    source_doc_code=source_doc_code,
+                    movement_type=movement_type,
+                    idempotency_key=idempotency_key,
+                    operator_id=operator_id,
+                    operator_name=operator_name,
                 )
             else:
                 # 线边仓（warehouse_type=line_side）：扣减 LineSideInventory
