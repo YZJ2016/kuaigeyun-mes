@@ -1,0 +1,137 @@
+<template>
+	<scroll-view class="page" direction="vertical">
+		<view class="block">
+			<text class="title">换线绑定</text>
+			<button class="action" :disabled="busy" @click="loadList">刷新</button>
+			<text v-if="rows.length == 0" class="hint">暂无记录</text>
+			<view class="item" v-for="item in rows" :key="item.rowKey">
+				<text class="item-title">{{ item.title }}</text>
+				<text class="hint">{{ item.detail }}</text>
+			</view>
+		</view>
+		<view class="block">
+			<text class="title">新建</text>
+			<input class="input" v-model="productionLineIdText" placeholder="产线 ID" />
+			<input class="input" v-model="overdueHoursText" placeholder="强制初检超时小时（默认 4）" />
+			<input class="input" v-model="equipmentIdsText" placeholder="预置设备 ID，逗号分隔（可空）" />
+			<input class="input" v-model="remarkText" placeholder="备注（可空）" />
+			<button class="action" type="primary" :disabled="busy" @click="submitCreate">新建</button>
+			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
+			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { asJson, joinParts, jsonItems, jsonText, parseIdList, parseRequiredInt } from '../json-text.uts'
+
+	type ListRow = {
+		rowKey: string
+		title: string
+		detail: string
+	}
+
+	const busy = ref(false)
+	const rows = ref<Array<ListRow>>([])
+	const productionLineIdText = ref('')
+	const overdueHoursText = ref('4')
+	const equipmentIdsText = ref('')
+	const remarkText = ref('')
+	const messageText = ref('')
+	const errorText = ref('')
+
+	async function loadList(): Promise<void> {
+		const raw = await request({
+			url: '/api/v1/apps/kuaizhizao/equipment-line-rebinds',
+			method: 'GET',
+			data: null
+		})
+		const items = jsonItems(asJson(raw))
+		const next: Array<ListRow> = []
+		for (let i = 0; i < items.length; i++) {
+			const row = items[i]
+			const title = jsonText(row, 'document_no')
+			const detail = joinParts([
+				jsonText(row, 'production_line_name'),
+				jsonText(row, 'status'),
+				jsonText(row, 'item_count'),
+				jsonText(row, 'force_spot_overdue_hours')
+			])
+			const key = jsonText(row, 'uuid')
+			const view: ListRow = {
+				rowKey: key.length > 0 ? key : ('' + i),
+				title: title.length > 0 ? title : '换线绑定',
+				detail: detail
+			}
+			next.push(view)
+		}
+		rows.value = next
+	}
+
+	async function submitCreate(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		messageText.value = ''
+		try {
+			const productionLineId = parseRequiredInt(productionLineIdText.value)
+			if (productionLineId == null) {
+				errorText.value = '请填写产线 ID'
+				busy.value = false
+				return
+			}
+			const hoursText = overdueHoursText.value.trim().length == 0 ? '4' : overdueHoursText.value
+			const hours = parseRequiredInt(hoursText)
+			if (hours == null || hours > 720) {
+				errorText.value = '超时小时须在 1 到 720'
+				busy.value = false
+				return
+			}
+			const equipmentIds = parseIdList(equipmentIdsText.value)
+			if (equipmentIds == null) {
+				errorText.value = '预置设备 ID 无效'
+				busy.value = false
+				return
+			}
+			const data = new UTSJSONObject()
+			data.set('production_line_id', productionLineId)
+			data.set('force_spot_overdue_hours', hours)
+			data.set('equipment_ids', equipmentIds)
+			if (remarkText.value.trim().length > 0) {
+				data.set('remark', remarkText.value.trim())
+			}
+			const raw = await request({
+				url: '/api/v1/apps/kuaizhizao/equipment-line-rebinds',
+				method: 'POST',
+				data: data
+			})
+			const documentNo = jsonText(asJson(raw), 'document_no')
+			messageText.value = documentNo.length > 0 ? ('已新建 ' + documentNo) : '已新建'
+			await loadList()
+		} catch (e) {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+
+	onShow(() => {
+		loadList().catch((e) => {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		})
+	})
+</script>
+
+<style>
+	.page { flex: 1; background-color: #F1F1F4; }
+	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
+	.title { font-size: 18px; color: #28113C; }
+	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
+	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
+	.input { margin-top: 8px; padding: 8px; font-size: 14px; background-color: #EEE5FB; }
+	.action { margin-top: 12px; }
+	.item { margin-top: 12px; padding-top: 8px; border-top-width: 1px; border-top-style: solid; border-top-color: #E7D9FD; }
+	.item-title { font-size: 16px; color: #28113C; }
+</style>

@@ -1,0 +1,324 @@
+import { publishH5Route } from '../../shared/channel/index.uts'
+import { runtimePlatform } from '../../shared/channel/headers.uts'
+import { featurePackage as workshopPackage } from '../../features/workshop/index.uts'
+import { featurePackage as warehousePackage } from '../../features/warehouse/index.uts'
+import { featurePackage as qualityPackage } from '../../features/quality/index.uts'
+import { featurePackage as equipmentPackage } from '../../features/equipment/index.uts'
+import { featurePackage as moldPackage } from '../../features/mold/index.uts'
+
+/**
+ * 已安装的功能包。scope 从各包的声明读取。
+ * apps 不在这里。
+ */
+const installed : Array<any> = [
+	workshopPackage,
+	warehousePackage,
+	qualityPackage,
+	equipmentPackage,
+	moldPackage
+]
+
+export function installedPackages() : Array<any> {
+	return installed
+}
+
+export function packageScope(pkg : any) : string {
+	if (pkg == null || pkg['scope'] == null) {
+		return ''
+	}
+	return String(pkg['scope']).trim()
+}
+
+export function packageEntries(pkg : any) : Array<any> {
+	if (pkg == null || pkg['entries'] == null || !Array.isArray(pkg['entries'])) {
+		return []
+	}
+	return pkg['entries'] as Array<any>
+}
+
+export function packageBadge(pkg : any) : any | null {
+	if (pkg == null || pkg['badge'] == null) {
+		return null
+	}
+	const badge = pkg['badge']
+	if (typeof badge != 'function') {
+		return null
+	}
+	return badge
+}
+
+function entryPlatforms(entry : any) : Array<string> {
+	if (entry == null || entry['platforms'] == null || !Array.isArray(entry['platforms'])) {
+		return []
+	}
+	const raw = entry['platforms'] as Array<any>
+	const names : Array<string> = []
+	for (let i = 0; i < raw.length; i++) {
+		names.push(String(raw[i]))
+	}
+	return names
+}
+
+export function entrySupportsPlatform(entry : any) : boolean {
+	const current = runtimePlatform()
+	const names = entryPlatforms(entry)
+	for (let i = 0; i < names.length; i++) {
+		if (names[i] == current) {
+			return true
+		}
+	}
+	return false
+}
+
+/** 缺省视为进入宫格。 */
+export function entryInWorkbench(entry : any) : boolean {
+	if (entry == null || entry['in_workbench'] == null) {
+		return true
+	}
+	return entry['in_workbench'] != false
+}
+
+export function entryKey(entry : any) : string {
+	if (entry == null || entry['key'] == null) {
+		return ''
+	}
+	return String(entry['key']).trim()
+}
+
+export function entryRoute(entry : any) : string {
+	if (entry == null || entry['route'] == null) {
+		return ''
+	}
+	return String(entry['route']).trim()
+}
+
+export function entryPagePath(entry : any) : string {
+	if (entry == null || entry['page_path'] == null) {
+		return ''
+	}
+	return String(entry['page_path']).trim()
+}
+
+function packagesForScope(scope : string) : Array<any> {
+	const found : Array<any> = []
+	for (let i = 0; i < installed.length; i++) {
+		if (packageScope(installed[i]) == scope) {
+			found.push(installed[i])
+		}
+	}
+	return found
+}
+
+export function findEntryByKey(scope : string, key : string) : any | null {
+	const pkgs = packagesForScope(scope)
+	for (let i = 0; i < pkgs.length; i++) {
+		const entries = packageEntries(pkgs[i])
+		for (let j = 0; j < entries.length; j++) {
+			if (entryKey(entries[j]) == key) {
+				return entries[j]
+			}
+		}
+	}
+	return null
+}
+
+function stripMobilePrefix(full : string) : string {
+	let value = full.trim()
+	const hash = value.indexOf('#')
+	if (hash >= 0) {
+		value = value.substring(0, hash)
+	}
+	let path = value
+	let query = ''
+	const q = value.indexOf('?')
+	if (q >= 0) {
+		path = value.substring(0, q)
+		query = value.substring(q + 1)
+	}
+	if (path == '/mobile' || path == '/mobile/') {
+		path = '/'
+	} else if (path.indexOf('/mobile/') == 0) {
+		path = path.substring('/mobile'.length)
+	}
+	if (path.length > 1 && path.charAt(path.length - 1) == '/') {
+		path = path.substring(0, path.length - 1)
+	}
+	if (path.length == 0) {
+		path = '/'
+	}
+	if (query.length == 0) {
+		return path
+	}
+	return path + '?' + query
+}
+
+function splitRoute(value : string) : string[] {
+	const normalized = stripMobilePrefix(value)
+	const q = normalized.indexOf('?')
+	if (q < 0) {
+		return [normalized, '']
+	}
+	return [normalized.substring(0, q), normalized.substring(q + 1)]
+}
+
+function queryValue(query : string, key : string) : string | null {
+	if (query.length == 0) {
+		return null
+	}
+	const parts = query.split('&')
+	const prefix = key + '='
+	for (let i = 0; i < parts.length; i++) {
+		if (parts[i].indexOf(prefix) == 0) {
+			return decodeURIComponent(parts[i].substring(prefix.length))
+		}
+	}
+	return null
+}
+
+function queryKeys(query : string) : Array<string> {
+	const keys : Array<string> = []
+	if (query.length == 0) {
+		return keys
+	}
+	const parts = query.split('&')
+	for (let i = 0; i < parts.length; i++) {
+		const eq = parts[i].indexOf('=')
+		const key = eq < 0 ? parts[i] : parts[i].substring(0, eq)
+		if (key.length > 0) {
+			const decoded = decodeURIComponent(key)
+			if (decoded != null && decoded.length > 0) {
+				keys.push(decoded)
+			}
+		}
+	}
+	return keys
+}
+
+const PASSTHROUGH_QUERY : Array<string> = ['tenant_id', 'code', 'state']
+
+function isPassthroughQuery(key : string) : boolean {
+	for (let i = 0; i < PASSTHROUGH_QUERY.length; i++) {
+		if (PASSTHROUGH_QUERY[i] == key) {
+			return true
+		}
+	}
+	return false
+}
+
+export function routesMatch(actual : string, manifestRoute : string) : boolean {
+	const left = splitRoute(actual)
+	const right = splitRoute(manifestRoute)
+	if (left[0] != right[0]) {
+		return false
+	}
+	const required = queryKeys(right[1])
+	for (let i = 0; i < required.length; i++) {
+		const key = required[i]
+		if (queryValue(left[1], key) != queryValue(right[1], key)) {
+			return false
+		}
+	}
+	return true
+}
+
+function requiredQueryCount(route : string) : number {
+	return queryKeys(splitRoute(route)[1]).length
+}
+
+export function findEntryByRoute(rawPath : string) : any | null {
+	if (rawPath.trim().length == 0) {
+		return null
+	}
+	let best : any | null = null
+	let bestCount = -1
+	for (let i = 0; i < installed.length; i++) {
+		const entries = packageEntries(installed[i])
+		for (let j = 0; j < entries.length; j++) {
+			const entry = entries[j]
+			if (!entrySupportsPlatform(entry)) {
+				continue
+			}
+			const route = entryRoute(entry)
+			if (route.length == 0) {
+				continue
+			}
+			if (!routesMatch(rawPath, route)) {
+				continue
+			}
+			const count = requiredQueryCount(route)
+			if (count > bestCount) {
+				best = entry
+				bestCount = count
+			}
+		}
+	}
+	return best
+}
+
+function appendQuery(query : string, key : string, value : string) : string {
+	const piece = encodeURIComponent(key) + '=' + encodeURIComponent(value)
+	if (query.length == 0) {
+		return piece
+	}
+	return query + '&' + piece
+}
+
+function containsKey(keys : Array<string>, key : string) : boolean {
+	for (let i = 0; i < keys.length; i++) {
+		if (keys[i] == key) {
+			return true
+		}
+	}
+	return false
+}
+
+function publicRoute(rawPath : string, manifestRoute : string) : string {
+	const actual = splitRoute(rawPath)
+	const manifest = splitRoute(manifestRoute)
+	const declared = queryKeys(manifest[1])
+	let query = manifest[1]
+	const extras = queryKeys(actual[1])
+	for (let i = 0; i < extras.length; i++) {
+		const key = extras[i]
+		if (isPassthroughQuery(key) || containsKey(declared, key)) {
+			continue
+		}
+		const value = queryValue(actual[1], key)
+		if (value == null) {
+			continue
+		}
+		query = appendQuery(query, key, value)
+	}
+	if (query.length == 0) {
+		return manifest[0]
+	}
+	return manifest[0] + '?' + query
+}
+
+export function openRegisteredRoute(rawPath : string) : boolean {
+	const entry = findEntryByRoute(rawPath)
+	if (entry == null) {
+		return false
+	}
+	const pagePath = entryPagePath(entry)
+	if (pagePath.length == 0) {
+		uni.showToast({ title: '功能尚未安装', icon: 'none' })
+		return false
+	}
+	const shown = publicRoute(rawPath, entryRoute(entry))
+	const query = splitRoute(shown)[1]
+	let url = pagePath.indexOf('/') == 0 ? pagePath : '/' + pagePath
+	if (query.length > 0) {
+		url = url + '?' + query
+	}
+	uni.navigateTo({
+		url: url,
+		success: () => {
+			publishH5Route(shown)
+		},
+		fail: () => {
+			uni.showToast({ title: '页面未能打开', icon: 'none' })
+		}
+	})
+	return true
+}

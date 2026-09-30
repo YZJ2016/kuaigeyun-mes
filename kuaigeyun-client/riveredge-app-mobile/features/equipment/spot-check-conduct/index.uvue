@@ -1,0 +1,301 @@
+<template>
+	<scroll-view class="page" direction="vertical">
+		<view class="block">
+			<text class="title">点检</text>
+			<text v-if="equipmentText.length > 0" class="hint">{{ equipmentText }}</text>
+			<input class="input" v-model="schemeIdText" placeholder="方案 ID" />
+			<input class="input" v-model="checkDateText" placeholder="点检日期（可空，YYYY-MM-DD）" />
+			<input class="input" v-model="inspectorIdText" placeholder="点检人 ID（可空）" />
+			<input class="input" v-model="inspectorNameText" placeholder="点检人姓名（可空）" />
+			<input class="input" v-model="remarkText" placeholder="备注（可空）" />
+			<button class="action" :disabled="busy" @click="loadPreview">加载点检项</button>
+			<text v-if="captureMode.length > 0" class="hint">采集模式 {{ captureMode }}</text>
+			<view v-if="captureMode == 'B'">
+				<button class="action" :disabled="busy" @click="onHeaderPhoto">上传整单照片</button>
+				<text v-if="headerPhotos.length > 0" class="hint">已选 {{ headerPhotos.length }} 张</text>
+				<button v-if="headerPhotos.length > 0" class="action" :disabled="busy" @click="clearHeaderPhotos">清除照片</button>
+			</view>
+			<view class="item" v-for="(line, index) in lines" :key="line.rowKey">
+				<text class="item-title">{{ line.title }}</text>
+				<text v-if="line.detail.length > 0" class="hint">{{ line.detail }}</text>
+				<text v-if="line.isBoolean" class="hint">{{ line.measuredValue }}</text>
+				<input v-if="line.showMeasured" class="input" :value="line.measuredValue" placeholder="实测值" @input="onMeasured(index, $event)" />
+				<button class="action" :disabled="busy" @click="onTogglePass(index)">{{ line.passLabel }}</button>
+				<text v-if="line.photoHint.length > 0" class="hint">{{ line.photoHint }}</text>
+				<button class="action" :disabled="busy" @click="onLinePhoto(index)">上传照片</button>
+				<text v-if="line.attachments.length > 0" class="hint">已选 {{ line.attachments.length }} 张</text>
+				<button v-if="line.attachments.length > 0" class="action" :disabled="busy" @click="clearLinePhotos(index)">清除照片</button>
+			</view>
+			<button class="action" type="primary" :disabled="busy" @click="submitCreate">新建</button>
+			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
+			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { asJson, joinParts, jsonInt, jsonText, parseRequiredInt } from '../json-text.uts'
+	import { uploadChosenImages } from '../pick-image.uts'
+	import { loadSpotCheckPreview, SpotLineForm, submitSpotCheck, toggleSpotPass } from '../spot-check-create.uts'
+
+	const busy = ref(false)
+	const queryUuid = ref('')
+	const equipmentId = ref(0)
+	const equipmentText = ref('')
+	const schemeIdText = ref('')
+	const checkDateText = ref('')
+	const inspectorIdText = ref('')
+	const inspectorNameText = ref('')
+	const remarkText = ref('')
+	const messageText = ref('')
+	const errorText = ref('')
+	const loadedEquipmentId = ref(0)
+	const loadedSchemeId = ref(0)
+	const captureMode = ref('')
+	const lines = ref<Array<SpotLineForm>>([])
+	const headerPhotos = ref<Array<UTSJSONObject>>([])
+
+	function readQueryUuid(options: OnLoadOptions): string {
+		const raw = options['uuid']
+		if (raw == null) {
+			return ''
+		}
+		return ('' + raw).trim()
+	}
+
+	function optionalInt(raw: string): number | null {
+		if (raw.trim().length == 0) {
+			return null
+		}
+		return parseRequiredInt(raw)
+	}
+
+	function inputValue(event: UniInputEvent): string {
+		return event.detail.value
+	}
+
+	async function loadEquipment(): Promise<void> {
+		const uuid = queryUuid.value
+		if (uuid.length == 0) {
+			errorText.value = '缺少设备 uuid'
+			equipmentText.value = ''
+			equipmentId.value = 0
+			return
+		}
+		const raw = await request({
+			url: '/api/v1/apps/kuaizhizao/equipment/' + encodeURIComponent(uuid),
+			method: 'GET',
+			data: null
+		})
+		const body = asJson(raw)
+		const id = jsonInt(body, 'id')
+		equipmentId.value = id == null ? 0 : id
+		equipmentText.value = joinParts([
+			jsonText(body, 'code'),
+			jsonText(body, 'name'),
+			jsonText(body, 'status')
+		])
+		if (equipmentId.value <= 0) {
+			errorText.value = '未打开设备'
+		}
+	}
+
+	function clearPreview(): void {
+		loadedEquipmentId.value = 0
+		loadedSchemeId.value = 0
+		captureMode.value = ''
+		lines.value = []
+		headerPhotos.value = []
+	}
+
+	async function loadPreview(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		messageText.value = ''
+		try {
+			await loadEquipment()
+			if (equipmentId.value <= 0) {
+				busy.value = false
+				return
+			}
+			if (schemeIdText.value.trim().length == 0) {
+				errorText.value = '请填写方案 ID'
+				busy.value = false
+				return
+			}
+			const schemeId = optionalInt(schemeIdText.value)
+			if (schemeId == null) {
+				errorText.value = '方案 ID 无效'
+				busy.value = false
+				return
+			}
+			const preview = await loadSpotCheckPreview(equipmentId.value, schemeId)
+			loadedEquipmentId.value = equipmentId.value
+			loadedSchemeId.value = schemeId
+			captureMode.value = preview.captureMode
+			lines.value = preview.lines
+			headerPhotos.value = []
+			if (preview.captureMode == 'B') {
+				messageText.value = '请上传整单照片'
+			} else {
+				messageText.value = '已加载 ' + preview.lines.length + ' 行'
+			}
+		} catch (e) {
+			clearPreview()
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+
+	function onMeasured(index: number, event: UniInputEvent): void {
+		const list = lines.value
+		list[index].measuredValue = inputValue(event)
+		lines.value = list
+	}
+
+	function onTogglePass(index: number): void {
+		const list = lines.value
+		toggleSpotPass(list[index])
+		lines.value = list
+	}
+
+	async function onHeaderPhoto(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		try {
+			const files = await uploadChosenImages('equipment_spot_check')
+			const next = headerPhotos.value
+			for (let i = 0; i < files.length; i++) {
+				next.push(files[i])
+			}
+			headerPhotos.value = next
+		} catch (e) {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+
+	function clearHeaderPhotos(): void {
+		headerPhotos.value = []
+	}
+
+	async function onLinePhoto(index: number): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		try {
+			const files = await uploadChosenImages('equipment_spot_check_line')
+			const list = lines.value
+			const attachments = list[index].attachments
+			for (let i = 0; i < files.length; i++) {
+				attachments.push(files[i])
+			}
+			list[index].attachments = attachments
+			lines.value = list
+		} catch (e) {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+
+	function clearLinePhotos(index: number): void {
+		const list = lines.value
+		const cleared: Array<UTSJSONObject> = []
+		list[index].attachments = cleared
+		lines.value = list
+	}
+
+	async function submitCreate(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		messageText.value = ''
+		try {
+			await loadEquipment()
+			if (equipmentId.value <= 0) {
+				busy.value = false
+				return
+			}
+			if (schemeIdText.value.trim().length == 0) {
+				errorText.value = '请填写方案 ID'
+				busy.value = false
+				return
+			}
+			const schemeId = optionalInt(schemeIdText.value)
+			if (schemeId == null) {
+				errorText.value = '方案 ID 无效'
+				busy.value = false
+				return
+			}
+			if (inspectorIdText.value.trim().length > 0 && optionalInt(inspectorIdText.value) == null) {
+				errorText.value = '点检人 ID 无效'
+				busy.value = false
+				return
+			}
+			if (loadedEquipmentId.value != equipmentId.value || loadedSchemeId.value != schemeId) {
+				errorText.value = '请先加载点检项'
+				busy.value = false
+				return
+			}
+			const result = await submitSpotCheck({
+				equipmentId: equipmentId.value,
+				schemeId: schemeId,
+				checkDate: checkDateText.value.trim(),
+				inspectorId: optionalInt(inspectorIdText.value),
+				inspectorName: inspectorNameText.value.trim(),
+				remark: remarkText.value.trim(),
+				captureMode: captureMode.value,
+				headerAttachments: headerPhotos.value,
+				lines: lines.value
+			})
+			if (result.errorText.length > 0) {
+				errorText.value = result.errorText
+				busy.value = false
+				return
+			}
+			const documentNo = jsonText(result.saved, 'document_no')
+			messageText.value = documentNo.length > 0 ? ('已新建 ' + documentNo) : '已新建'
+			clearPreview()
+		} catch (e) {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+
+	onLoad((options: OnLoadOptions) => {
+		queryUuid.value = readQueryUuid(options)
+	})
+
+	onShow(() => {
+		if (queryUuid.value.length == 0) {
+			errorText.value = '缺少设备 uuid'
+			return
+		}
+		loadEquipment().catch((e) => {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		})
+	})
+</script>
+
+<style>
+	.page { flex: 1; background-color: #F1F1F4; }
+	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
+	.title { font-size: 18px; color: #28113C; }
+	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
+	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
+	.input { margin-top: 8px; padding: 8px; font-size: 14px; background-color: #EEE5FB; }
+	.action { margin-top: 12px; }
+	.item { margin-top: 12px; padding-top: 8px; border-top-width: 1px; border-top-style: solid; border-top-color: #E7D9FD; }
+	.item-title { font-size: 16px; color: #28113C; }
+</style>

@@ -1,0 +1,67 @@
+<template>
+	<scroll-view class="page" direction="vertical">
+		<view class="block">
+			<text class="title">扫码查设备</text>
+			<button class="action" type="primary" :disabled="busy" @click="onScan">扫码</button>
+			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
+			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { scan } from '../../../shared/channel/index.uts'
+	import { asJson, jsonText } from '../json-text.uts'
+
+	const busy = ref(false)
+	const messageText = ref('')
+	const errorText = ref('')
+
+	async function onScan(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		messageText.value = ''
+		try {
+			const code = await scan()
+			const text = code == null ? '' : ('' + code).trim()
+			if (text.length == 0) {
+				errorText.value = '未得到扫码内容'
+				busy.value = false
+				return
+			}
+			const raw = await request({
+				url: '/api/v1/apps/kuaizhizao/equipment/resolve-scan?q=' + encodeURIComponent(text),
+				method: 'GET',
+				data: null
+			})
+			const uuid = jsonText(asJson(raw), 'uuid')
+			if (uuid.length == 0) {
+				errorText.value = '未解析到设备'
+				busy.value = false
+				return
+			}
+			uni.navigateTo({
+				url: '/features/equipment/detail/index?uuid=' + encodeURIComponent(uuid),
+				fail: () => {
+					errorText.value = '无法打开设备'
+				}
+			})
+		} catch (e) {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+</script>
+
+<style>
+	.page { flex: 1; background-color: #F1F1F4; }
+	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
+	.title { font-size: 18px; color: #28113C; }
+	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
+	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
+	.action { margin-top: 12px; }
+</style>

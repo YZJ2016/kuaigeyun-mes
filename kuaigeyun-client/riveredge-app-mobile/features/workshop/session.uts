@@ -1,0 +1,56 @@
+const USER_INFO_KEY = 'user_info'
+
+export type CurrentUser = {
+	id : number
+	name : string
+}
+
+function toJson(value : any | null) : UTSJSONObject | null {
+	if (value == null) {
+		return null
+	}
+	if (typeof value == 'string') {
+		const text = (value as string).trim()
+		if (text.length == 0) {
+			return null
+		}
+		return JSON.parseObject(text)
+	}
+	return value as UTSJSONObject
+}
+
+function userName(user : UTSJSONObject) : string {
+	const fullName = user.getString('full_name')
+	if (fullName != null && fullName.trim().length > 0) {
+		return fullName.trim()
+	}
+	const username = user.getString('username')
+	if (username != null && username.trim().length > 0) {
+		return username.trim()
+	}
+	return ''
+}
+
+export function readCurrentUser() : CurrentUser | null {
+	const root = toJson(uni.getStorageSync(USER_INFO_KEY))
+	if (root == null) {
+		return null
+	}
+	let user = root
+	const nested = root.getJSON('user')
+	if (nested != null && nested.getNumber('id') != null) {
+		user = nested
+	}
+	const id = user.getNumber('id')
+	if (id == null || id <= 0) {
+		return null
+	}
+	const name = userName(user)
+	if (name.length == 0) {
+		return null
+	}
+	return {
+		id: id,
+		name: name,
+	}
+}

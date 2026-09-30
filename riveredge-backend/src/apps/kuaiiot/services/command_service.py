@@ -163,8 +163,6 @@ async def create_command(
     function = _find_function(product.functions or [], key)
     if function is None:
         raise ValidationError("function_key 不在产品指令中")
-    _executable_edge_action(function)
-    _check_required_params(function, body)
     source = "http"
     if device.connection_id is not None:
         connection = await KuaiiotConnection.filter(
@@ -174,6 +172,10 @@ async def create_command(
         ).first()
         if connection is not None and connection.connection_type:
             source = connection.connection_type.strip().lower()
+    # 平台指令永不到边缘，不强制边缘动作；http/mqtt 仍按原顺序校验
+    if source not in PLATFORM_DISPATCHERS:
+        _executable_edge_action(function)
+    _check_required_params(function, body)
     if source == "mqtt":
         raise ValidationError("MQTT 连接不做指令下发")
     dispatcher = PLATFORM_DISPATCHERS.get(source)
@@ -333,8 +335,9 @@ async def submit_command_result(
 
 
 async def timeout_sent_commands() -> int:
+    """超时处理 pending 与 sent：超过 expires_at 仍未完结的指令改为 timeout。"""
     now = resolve_business_datetime()
-    async with unscoped(reason="定时任务扫描已下发且超过到期时间的指令", resource="KuaiiotDeviceCommand"):
+    async with unscoped(reason="定时任务扫描 pending 与 sent 中超过到期时间的指令", resource="KuaiiotDeviceCommand"):
         rows = await KuaiiotDeviceCommand.filter(
             status__in=["pending", "sent"],
             expires_at__lt=now,

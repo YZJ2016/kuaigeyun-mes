@@ -1,0 +1,44 @@
+export type QualityEntry = {
+	key : string
+	label : string
+	route : string
+	page_path : string
+	platforms : string[]
+	in_workbench : boolean
+}
+
+export type QualityFeaturePackage = {
+	scope : string
+	badge : string | null
+	platforms : string[]
+	in_workbench : boolean
+	entries : QualityEntry[]
+}
+
+const platforms : string[] = ['h5', 'mp-weixin', 'app']
+
+function entry(key : string, label : string, route : string, pagePath : string) : QualityEntry {
+	return {
+		key: key,
+		label: label,
+		route: route,
+		page_path: pagePath,
+		platforms: platforms,
+		in_workbench: true
+	} as QualityEntry
+}
+
+export const featurePackage : QualityFeaturePackage = {
+	scope: 'quality',
+	badge: null,
+	platforms: platforms,
+	in_workbench: true,
+	entries: [
+		entry('quality-hub', '待检验', '/quality', 'features/quality/quality-hub/index'),
+		entry('process-scan', '过程检验', '/quality/process', 'features/quality/process-scan/index'),
+		entry('incoming', '来料检验', '/quality/incoming', 'features/quality/incoming/index'),
+		entry('finished', '成品检验', '/quality/finished', 'features/quality/finished/index'),
+		entry('oqc', '出库检验', '/quality/oqc', 'features/quality/oqc/index'),
+		entry('nonconforming', '不合格品', '/quality/nonconforming', 'features/quality/nonconforming/index')
+	]
+}

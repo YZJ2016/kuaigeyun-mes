@@ -1,0 +1,58 @@
+export function readError(err : any) : string {
+	if (err == null) {
+		return '请求失败'
+	}
+	const detail = err['detail']
+	if (detail != null && typeof detail == 'object') {
+		const nested = detail['message']
+		if (typeof nested == 'string' && (nested as string).length > 0) {
+			return nested as string
+		}
+	}
+	if (typeof detail == 'string' && (detail as string).length > 0) {
+		return detail as string
+	}
+	const message = err['message']
+	if (typeof message == 'string' && (message as string).length > 0) {
+		return message as string
+	}
+	return '请求失败'
+}
+
+export function readRows(payload : any) : UTSJSONObject[] {
+	if (payload == null) {
+		return [] as UTSJSONObject[]
+	}
+	if (Array.isArray(payload)) {
+		return payload as UTSJSONObject[]
+	}
+	const data = payload['data']
+	if (Array.isArray(data)) {
+		return data as UTSJSONObject[]
+	}
+	const items = payload['items']
+	if (Array.isArray(items)) {
+		return items as UTSJSONObject[]
+	}
+	return [] as UTSJSONObject[]
+}
+
+export function jsonText(row : UTSJSONObject, key : string) : string {
+	const text = row.getString(key)
+	if (text != null && text.length > 0) {
+		return text
+	}
+	const num = row.getNumber(key)
+	if (num != null) {
+		return String(num)
+	}
+	return ''
+}
+
+export function jsonId(row : UTSJSONObject) : number {
+	const num = row.getNumber('id')
+	if (num == null) {
+		return 0
+	}
+	return Math.floor(num)
+}

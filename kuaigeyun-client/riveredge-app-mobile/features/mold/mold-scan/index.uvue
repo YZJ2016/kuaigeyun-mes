@@ -1,0 +1,216 @@
+<template>
+	<view class="page">
+		<button type="primary" :disabled="loading" @click="onScan">扫码</button>
+		<text v-if="scanned != ''" class="meta">扫到 {{ scanned }}</text>
+		<text v-if="hint != ''" class="error">{{ hint }}</text>
+		<view v-if="hasOpened" class="card">
+			<text class="title">{{ openedTitle }}</text>
+			<text class="meta">{{ openedDetail }}</text>
+		</view>
+		<view v-if="choices.length > 0">
+			<text class="section">请选择模具</text>
+			<view v-for="(item, index) in choices" :key="index" class="row" @click="openAt(index)">
+				<text class="title">{{ item.title }}</text>
+				<text class="meta">{{ item.detail }}</text>
+			</view>
+		</view>
+		<text v-if="!loading && scanned != '' && !hasOpened && choices.length == 0 && hint == ''" class="meta">未找到模具</text>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { scan } from '../../../shared/channel/index.uts'
+	import { DocLine, MOLD_ARCHIVE, apiGet, numberOf, readError, readItems, textOf, withQuery } from '../http.uts'
+
+	const loading = ref(false)
+	const scanned = ref('')
+	const hint = ref('')
+	const hasOpened = ref(false)
+	const openedTitle = ref('')
+	const openedDetail = ref('')
+	const choices = ref<DocLine[]>([])
+	const choiceItems = ref<UTSJSONObject[]>([])
+
+	function moldTitle(item: UTSJSONObject): string {
+		const code = textOf(item, 'code')
+		const name = textOf(item, 'name')
+		if (code != '' && name != '') {
+			return code + ' ' + name
+		}
+		if (name != '') {
+			return name
+		}
+		return code
+	}
+
+	function moldDetail(item: UTSJSONObject): string {
+		const parts: string[] = []
+		const statusText = textOf(item, 'status')
+		if (statusText != '') {
+			parts.push(statusText)
+		}
+		const typeText = textOf(item, 'type')
+		if (typeText != '') {
+			parts.push(typeText)
+		}
+		const location = textOf(item, 'storage_location')
+		if (location != '') {
+			parts.push(location)
+		}
+		parts.push('累计使用 ' + numberOf(item, 'total_usage_count'))
+		const last = textOf(item, 'last_maintenance_date')
+		if (last != '') {
+			parts.push('上次保养 ' + last)
+		}
+		let text = ''
+		for (let i = 0; i < parts.length; i++) {
+			if (text != '') {
+				text = text + ' · '
+			}
+			text = text + parts[i]
+		}
+		return text
+	}
+
+	function showMold(item: UTSJSONObject): void {
+		openedTitle.value = moldTitle(item)
+		openedDetail.value = moldDetail(item)
+		hasOpened.value = true
+		choices.value = []
+		choiceItems.value = []
+	}
+
+	function openAt(index: number): void {
+		const items = choiceItems.value
+		if (index < 0 || index >= items.length) {
+			return
+		}
+		showMold(items[index])
+	}
+
+	function readScanCode(value: any | null): string {
+		if (value == null) {
+			return ''
+		}
+		if (typeof value == 'string') {
+			return (value as string).trim()
+		}
+		try {
+			const obj = value as UTSJSONObject
+			const result = obj.getString('result')
+			if (result != null) {
+				return result.trim()
+			}
+		} catch (ignored) {
+		}
+		return ''
+	}
+
+	function exactMatches(items: UTSJSONObject[], code: string): UTSJSONObject[] {
+		const target = code.toLowerCase()
+		const found: UTSJSONObject[] = []
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i]
+			if (textOf(item, 'code').toLowerCase() == target) {
+				found.push(item)
+			}
+		}
+		return found
+	}
+
+	async function onScan(): Promise<void> {
+		hint.value = ''
+		hasOpened.value = false
+		choices.value = []
+		choiceItems.value = []
+		loading.value = true
+		try {
+			const code = readScanCode(await scan())
+			scanned.value = code
+			if (code == '') {
+				hint.value = '没有扫到内容'
+				return
+			}
+			const payload = await apiGet(withQuery(MOLD_ARCHIVE, 'keyword=' + encodeURIComponent(code) + '&limit=50'))
+			const items = readItems(payload)
+			const exact = exactMatches(items, code)
+			if (exact.length == 1) {
+				const hit = exact[0]
+				if (hit != null) {
+					showMold(hit)
+					return
+				}
+			}
+			if (exact.length == 0 && items.length == 1) {
+				const hit = items[0]
+				if (hit != null) {
+					showMold(hit)
+					return
+				}
+			}
+			const source = exact.length > 0 ? exact : items
+			const lines: DocLine[] = []
+			const kept: UTSJSONObject[] = []
+			for (let i = 0; i < source.length; i++) {
+				const item = source[i]
+				if (item == null) {
+					continue
+				}
+				const line = new DocLine()
+				line.title = moldTitle(item)
+				line.detail = moldDetail(item)
+				lines.push(line)
+				kept.push(item)
+			}
+			choiceItems.value = kept
+			choices.value = lines
+		} catch (err) {
+			hint.value = readError(err)
+		} finally {
+			loading.value = false
+		}
+	}
+</script>
+
+<style>
+	.page {
+		padding: 16px;
+	}
+
+	.card {
+		margin-top: 16px;
+		padding: 12px;
+		background-color: #EEE5FB;
+	}
+
+	.section {
+		display: block;
+		margin-top: 16px;
+		font-size: 14px;
+		color: #888B9D;
+	}
+
+	.row {
+		padding: 12px 0;
+		border-bottom: 1px solid #E7D9FD;
+	}
+
+	.title {
+		font-size: 16px;
+		color: #28113C;
+	}
+
+	.meta {
+		display: block;
+		margin-top: 4px;
+		font-size: 13px;
+		color: #888B9D;
+	}
+
+	.error {
+		display: block;
+		margin-top: 8px;
+		font-size: 13px;
+		color: #FF4942;
+	}
+</style>

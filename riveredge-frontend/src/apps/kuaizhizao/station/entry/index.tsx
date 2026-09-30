@@ -62,19 +62,15 @@ function lazyStationExport(loaders: Array<Record<string, () => Promise<unknown>>
 
 const StationExecutionPage = lazyStationExport([
   import.meta.glob('../execution/index.ts', { import: 'StationExecutionPage' }),
-  import.meta.glob('../execution.tsx', { import: 'StationExecutionPage' }),
 ]);
 const StationReportingPage = lazyStationExport([
   import.meta.glob('../reporting/index.ts', { import: 'StationReportingPage' }),
-  import.meta.glob('../reporting.tsx', { import: 'StationReportingPage' }),
 ]);
 const StationAndonPage = lazyStationExport([
   import.meta.glob('../andon/index.ts', { import: 'StationAndonPage' }),
-  import.meta.glob('../andon.tsx', { import: 'StationAndonPage' }),
 ]);
 const StationFaceHandoverPage = lazyStationExport([
   import.meta.glob('../face/index.ts', { import: 'StationFaceHandoverPage' }),
-  import.meta.glob('../face.tsx', { import: 'StationFaceHandoverPage' }),
 ]);
 
 function LazyModule({
@@ -154,6 +150,7 @@ function StationHome() {
       searchUserIdOptions({
         pageSize: 200,
         isActive: true,
+        hostResource: 'kuaizhizao:production-execution-terminal',
         ...(keyword ? { keyword } : {}),
       })
         .then((items) => {
@@ -323,12 +320,11 @@ export default function StationEntryPage() {
       if (memory && Number.isInteger(memory.stationId) && memory.stationId > 0) return;
 
       const queryText = workstationQuery?.trim() ?? '';
-      if (queryText) {
-        const queryId = positiveWorkstationId(queryText);
-        if (queryId == null) {
-          message.warning('workstationId 无效');
-          return;
-        }
+      const queryId = queryText ? positiveWorkstationId(queryText) : null;
+      if (queryText && queryId == null) {
+        message.warning('workstationId 无效');
+      }
+      if (queryId != null) {
         try {
           const info = await resolveWorkstation(queryId);
           if (cancelled) return;

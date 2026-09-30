@@ -1,0 +1,191 @@
+import { LineForm } from './models.uts'
+
+function setText(body: UTSJSONObject, key: string, value: string): boolean {
+	const text = value.trim()
+	if (text.length == 0) {
+		return false
+	}
+	body.set(key, text)
+	return true
+}
+
+function setPositiveInt(body: UTSJSONObject, key: string, value: string): boolean {
+	const text = value.trim()
+	if (text.length == 0) {
+		return false
+	}
+	const num = parseInt(text)
+	if (isNaN(num) || num <= 0) {
+		return false
+	}
+	body.set(key, num)
+	return true
+}
+
+function serialList(value: string): string[] {
+	let normalized = value
+	while (normalized.indexOf('\n') >= 0) {
+		normalized = normalized.replace('\n', ',')
+	}
+	while (normalized.indexOf('，') >= 0) {
+		normalized = normalized.replace('，', ',')
+	}
+	const parts = normalized.split(',')
+	const out: string[] = []
+	for (let i = 0; i < parts.length; i++) {
+		const text = parts[i].trim()
+		if (text.length > 0) {
+			out.push(text)
+		}
+	}
+	return out
+}
+
+function lineBody(line: LineForm, withReceipt: boolean): UTSJSONObject | null {
+	if (line.itemId <= 0) {
+		return null
+	}
+	const item = new UTSJSONObject()
+	item.set('item_id', line.itemId)
+	setPositiveInt(item, 'warehouse_id', line.warehouseIdText)
+	setText(item, 'warehouse_name', line.warehouseName)
+	setPositiveInt(item, 'location_id', line.locationIdText)
+	setText(item, 'location_code', line.locationCode)
+	setText(item, 'batch_number', line.batchNumber)
+	const serials = serialList(line.serialText)
+	if (serials.length > 0) {
+		item.set('serial_numbers', serials)
+	}
+	if (withReceipt) {
+		const text = line.receiptQuantityText.trim()
+		if (text.length > 0) {
+			const qty = parseFloat(text)
+			if (!isNaN(qty) && qty > 0) {
+				item.set('receipt_quantity', qty)
+			}
+		}
+	}
+	return item
+}
+
+function headerPerson(body: UTSJSONObject, idKey: string, nameKey: string, idText: string, name: string): void {
+	setPositiveInt(body, idKey, idText)
+	setText(body, nameKey, name)
+}
+
+export function buildInboundBody(
+	warehouseIdText: string,
+	warehouseName: string,
+	personIdText: string,
+	personName: string,
+	lines: LineForm[],
+	withReceipt: boolean
+): UTSJSONObject | null {
+	const body = new UTSJSONObject()
+	setPositiveInt(body, 'warehouse_id', warehouseIdText)
+	setText(body, 'warehouse_name', warehouseName)
+	headerPerson(body, 'receiver_id', 'receiver_name', personIdText, personName)
+	const items: UTSJSONObject[] = []
+	for (let i = 0; i < lines.length; i++) {
+		const item = lineBody(lines[i], withReceipt)
+		if (item != null) {
+			items.push(item)
+		}
+	}
+	if (items.length == 0) {
+		return null
+	}
+	body.set('items', items)
+	return body
+}
+
+export function buildOutboundBody(
+	person: string,
+	warehouseIdText: string,
+	warehouseName: string,
+	personIdText: string,
+	personName: string,
+	lines: LineForm[]
+): UTSJSONObject | null {
+	const body = new UTSJSONObject()
+	setPositiveInt(body, 'warehouse_id', warehouseIdText)
+	setText(body, 'warehouse_name', warehouseName)
+	if (person == 'picker') {
+		headerPerson(body, 'picker_id', 'picker_name', personIdText, personName)
+	} else {
+		headerPerson(body, 'deliverer_id', 'deliverer_name', personIdText, personName)
+	}
+	const items: UTSJSONObject[] = []
+	for (let i = 0; i < lines.length; i++) {
+		const item = lineBody(lines[i], false)
+		if (item != null) {
+			items.push(item)
+		}
+	}
+	if (items.length == 0) {
+		return null
+	}
+	body.set('items', items)
+	return body
+}
+
+export function buildSalesBody(
+	warehouseIdText: string,
+	warehouseName: string,
+	personIdText: string,
+	personName: string,
+	lines: LineForm[]
+): UTSJSONObject | null {
+	const body = new UTSJSONObject()
+	setPositiveInt(body, 'warehouse_id', warehouseIdText)
+	setText(body, 'warehouse_name', warehouseName)
+	headerPerson(body, 'deliverer_id', 'deliverer_name', personIdText, personName)
+	const items: UTSJSONObject[] = []
+	const batches: UTSJSONObject[] = []
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i]
+		if (line.deliveryQuantity <= 0) {
+			continue
+		}
+		const item = lineBody(line, false)
+		if (item == null) {
+			continue
+		}
+		items.push(item)
+		const batch = new UTSJSONObject()
+		batch.set('item_id', line.itemId)
+		batch.set('batch_no', line.batchNumber.trim())
+		batches.push(batch)
+	}
+	if (items.length == 0) {
+		return null
+	}
+	body.set('items', items)
+	body.set('item_batches', batches)
+	return body
+}
+
+export function buildStockBody(actualText: string, remarks: string): UTSJSONObject | null {
+	const text = actualText.trim()
+	if (text.length == 0) {
+		return null
+	}
+	const qty = parseFloat(text)
+	if (isNaN(qty) || qty < 0) {
+		return null
+	}
+	const body = new UTSJSONObject()
+	body.set('actual_quantity', qty)
+	setText(body, 'remarks', remarks)
+	return body
+}
+
+export function buildAlertBody(status: string, notes: string): UTSJSONObject | null {
+	if (status != 'processing' && status != 'resolved' && status != 'ignored') {
+		return null
+	}
+	const body = new UTSJSONObject()
+	body.set('status', status)
+	setText(body, 'handling_notes', notes)
+	return body
+}

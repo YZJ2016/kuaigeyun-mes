@@ -1,0 +1,4 @@
+export type UniTabBarLayout = {
+	tabListBaseHeight: number
+	tabContentHeightFull: boolean
+}

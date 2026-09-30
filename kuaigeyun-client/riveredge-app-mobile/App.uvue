@@ -40,12 +40,24 @@
 </script>
 
 <style>
-	/*每个页面公共css */
+	/* 品牌色来自 startech-weapp-person：#801ED3、#28113C、#888B9D、#E7D9FD、#F1F1F4、#FF4942 */
 	.uni-row {
 		flex-direction: row;
 	}
 
 	.uni-column {
 		flex-direction: column;
+	}
+
+	.page {
+		background-color: #F1F1F4;
+		color: #28113C;
+	}
+
+	button {
+		color: #801ED3;
+		background-color: #FFFFFF;
+		border-color: #E7D9FD;
+		border-radius: 22px;
 	}
 </style>

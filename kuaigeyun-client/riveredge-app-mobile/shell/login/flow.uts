@@ -1,0 +1,217 @@
+import { apiGet, apiPost } from '../../shared/api/http.uts'
+import { clearToken, getTenantId, getToken, setPendingEntry, setSessionUser, setTenantId, setToken } from '../../shared/api/session.uts'
+import { acquireLoginCode, loginRedirect, readBrowserPath, readBrowserQuery } from '../../shared/channel/index.uts'
+import { loginConnected } from '../../shared/channel/headers.uts'
+import { findEntryByRoute } from '../registry/index.uts'
+
+export type TenantChoice = {
+	tenantId : string
+	tenantName : string
+	tenantDomain : string
+}
+
+export type LoginState = {
+	connected : boolean
+	enterWorkbench : boolean
+	message : string
+	tenantId : string
+	tenants : Array<TenantChoice>
+}
+
+function stateOf(connected : boolean, enterWorkbench : boolean, message : string, tenants : Array<TenantChoice>) : LoginState {
+	return {
+		connected: connected,
+		enterWorkbench: enterWorkbench,
+		message: message,
+		tenantId: getTenantId(),
+		tenants: tenants
+	} as LoginState
+}
+
+function isPositiveInt(value : string) : boolean {
+	if (value.length == 0) {
+		return false
+	}
+	for (let i = 0; i < value.length; i++) {
+		const ch = value.charAt(i)
+		if (ch < '0' || ch > '9') {
+			return false
+		}
+	}
+	return parseInt(value) >= 1
+}
+
+function readString(obj : any | null, key : string) : string {
+	if (obj == null || (obj as UTSJSONObject)[key] == null) {
+		return ''
+	}
+	return String((obj as UTSJSONObject)[key])
+}
+
+function rememberDeepLink() : void {
+	const raw = readBrowserPath()
+	if (findEntryByRoute(raw) == null) {
+		return
+	}
+	setPendingEntry(raw)
+}
+
+function queryTenant(options : any | null) : string {
+	let fromPage = ''
+	if (options != null && options['tenant_id'] != null) {
+		fromPage = String(options['tenant_id']).trim()
+	}
+	if (isPositiveInt(fromPage)) {
+		return fromPage
+	}
+	const fromBrowser = readBrowserQuery('tenant_id').trim()
+	if (isPositiveInt(fromBrowser)) {
+		return fromBrowser
+	}
+	return ''
+}
+
+async function resolveTenant(options : any | null) : Promise<string> {
+	const fromUrl = queryTenant(options)
+	if (fromUrl.length > 0) {
+		setTenantId(fromUrl)
+		return ''
+	}
+	try {
+		const data = await apiGet('/auth/wecom/bootstrap-tenant', null)
+		const tenantValue = data == null ? null : (data as UTSJSONObject)['tenant_id']
+		if (tenantValue != null && isPositiveInt(String(tenantValue).trim())) {
+			setTenantId(String(tenantValue).trim())
+			return ''
+		}
+	} catch (_err) {
+		const local = getTenantId()
+		if (isPositiveInt(local)) {
+			return ''
+		}
+		return '请搜索并选择组织'
+	}
+	const local = getTenantId()
+	if (isPositiveInt(local)) {
+		return ''
+	}
+	return '请搜索并选择组织'
+}
+
+async function exchangeCode(code : string, state : string) : Promise<string> {
+	const body = new UTSJSONObject()
+	body['code'] = code
+	if (state.length > 0) {
+		body['state'] = state
+	}
+	const tenant = getTenantId()
+	if (isPositiveInt(tenant)) {
+		body['tenant_id'] = parseInt(tenant)
+	}
+	const data = await apiPost('/auth/wecom/callback', body)
+	const token = readString(data, 'access_token')
+	if (token.length == 0) {
+		clearToken()
+		if (data != null && (data as UTSJSONObject)['requires_phone_verification'] == true) {
+			return '需要继续核验，当前壳未接通该步骤'
+		}
+		return '没有获得登录令牌'
+	}
+	setToken(token)
+	if (!isPositiveInt(getTenantId()) && data != null && (data as UTSJSONObject)['requires_tenant_selection'] == true) {
+		clearToken()
+		return '需要选择组织，客户端不猜测'
+	}
+	if (data != null) {
+		const user = (data as UTSJSONObject)['user']
+		if (user != null) {
+			const idText = readString(user, 'id').trim()
+			if (isPositiveInt(idText)) {
+				setSessionUser(parseInt(idText), readString(user, 'full_name'), readString(user, 'username'))
+			}
+		}
+	}
+	return ''
+}
+
+export async function bootLogin(options : any | null) : Promise<LoginState> {
+	if (!loginConnected()) {
+		clearToken()
+		return stateOf(false, false, '当前端取码未接通，不能进入工作台。', [])
+	}
+	rememberDeepLink()
+	const tenantMessage = await resolveTenant(options)
+	const got = await acquireLoginCode()
+	if (!got.connected) {
+		clearToken()
+		return stateOf(false, false, '当前端取码未接通，不能进入工作台。', [])
+	}
+	if (got.code.length > 0) {
+		const state = readBrowserQuery('state')
+		let pageState = ''
+		if (options != null && options['state'] != null) {
+			pageState = String(options['state'])
+		}
+		try {
+			const message = await exchangeCode(got.code, pageState.length > 0 ? pageState : state)
+			if (message.length > 0) {
+				return stateOf(true, false, message, [])
+			}
+			if (getToken().length > 0) {
+				return stateOf(true, true, '', [])
+			}
+		} catch (err) {
+			const message = err instanceof Error ? err.message : '登录失败'
+			return stateOf(true, false, message, [])
+		}
+	}
+	if (getToken().length > 0) {
+		return stateOf(true, true, '', [])
+	}
+	return stateOf(true, false, tenantMessage, [])
+}
+
+export async function searchTenants(keyword : string) : Promise<Array<TenantChoice>> {
+	const text = keyword.trim()
+	if (text.length == 0) {
+		return []
+	}
+	const data = await apiGet('/tenants/search', [
+		{ key: 'keyword', value: text },
+		{ key: 'page', value: '1' },
+		{ key: 'page_size', value: '10' }
+	])
+	const items = data == null ? null : (data as UTSJSONObject)['items']
+	const choices : Array<TenantChoice> = []
+	if (items == null || !Array.isArray(items)) {
+		return choices
+	}
+	const list = items as Array<any>
+	for (let i = 0; i < list.length; i++) {
+		const row = list[i]
+		const tenantId = readString(row, 'tenant_id')
+		if (!isPositiveInt(tenantId)) {
+			continue
+		}
+		choices.push({
+			tenantId: tenantId,
+			tenantName: readString(row, 'tenant_name'),
+			tenantDomain: readString(row, 'tenant_domain')
+		} as TenantChoice)
+	}
+	return choices
+}
+
+export function chooseTenant(tenantId : string) : void {
+	if (isPositiveInt(tenantId)) {
+		setTenantId(tenantId)
+	}
+}
+
+export async function startWecomLogin() : Promise<string> {
+	const result = await loginRedirect()
+	if (!result.ok) {
+		return result.message
+	}
+	return ''
+}

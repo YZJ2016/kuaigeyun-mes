@@ -1,0 +1,339 @@
+<template>
+	<view class="page">
+		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
+		<text v-if="loading" class="hint">加载中</text>
+		<view v-if="selectedOrder == null">
+			<text class="section">选择工单</text>
+			<view v-for="(row, index) in orders" :key="index" class="card" @click="pickOrder(index)">
+				<text class="title">{{ orderTitle(row) }}</text>
+				<text class="sub">{{ orderStatus(row) }}</text>
+			</view>
+		</view>
+		<view v-if="selectedOrder != null && selectedOperation == null">
+			<button class="action" @click="clearOrder">返回工单</button>
+			<text class="section">选择工序</text>
+			<view v-for="(row, index) in operations" :key="index" class="card" @click="pickOperation(index)">
+				<text class="title">{{ operationTitle(row) }}</text>
+			</view>
+		</view>
+		<view v-if="selectedOperation != null">
+			<button class="action" @click="clearOperation">返回工序</button>
+			<view class="modes">
+				<button class="action" @click="setMode('worker')">指派给人员</button>
+				<button class="action" @click="setMode('team')">指派给小组</button>
+			</view>
+			<view v-if="mode == 'worker'">
+				<view v-for="(row, index) in workers" :key="index" class="card" @click="toggleWorker(index)">
+					<text class="title">{{ workerTitle(row) }}</text>
+					<text class="sub">{{ workerMarked(row) }}</text>
+				</view>
+			</view>
+			<view v-else>
+				<view v-for="(row, index) in teams" :key="index" class="card" @click="pickTeam(index)">
+					<text class="title">{{ textOf(row, 'name') }}</text>
+					<text class="sub">{{ selectedTeamIndex == index ? '已选' : '点选' }}</text>
+				</view>
+			</view>
+			<input class="field" v-model="remarks" placeholder="备注（可空）" />
+			<button class="action" @click="submitDispatch">指派</button>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { readRows, textOf, fieldNumber, errorText, toast, firstText } from '../json.uts'
+
+	const orders = ref<any[]>([])
+	const operations = ref<any[]>([])
+	const workers = ref<any[]>([])
+	const teams = ref<any[]>([])
+	const selectedOrder = ref<any | null>(null)
+	const selectedOperation = ref<any | null>(null)
+	const selectedWorkerIds = ref<number[]>([])
+	const selectedTeamIndex = ref(-1)
+	const mode = ref('worker')
+	const remarks = ref('')
+	const loading = ref(false)
+	const errorTextValue = ref('')
+
+	function orderTitle(row : any) : string {
+		return textOf(row, 'code') + ' ' + textOf(row, 'name')
+	}
+
+	function orderStatus(row : any) : string {
+		return textOf(row, 'status')
+	}
+
+	function operationTitle(row : any) : string {
+		return textOf(row, 'operation_code') + ' ' + textOf(row, 'operation_name')
+	}
+
+	function workerTitle(row : any) : string {
+		return firstText(row, ['full_name', 'username', 'label'])
+	}
+
+	function workerMarked(row : any) : string {
+		if (containsId(selectedWorkerIds.value, fieldNumber(row, 'id'))) {
+			return '已选'
+		}
+		return '点选'
+	}
+
+	function containsId(ids : number[], id : number) : boolean {
+		for (let i = 0; i < ids.length; i++) {
+			if (ids[i] == id) {
+				return true
+			}
+		}
+		return false
+	}
+
+	async function loadOrders() {
+		loading.value = true
+		errorTextValue.value = ''
+		try {
+			const payload = await request({
+				method: 'GET',
+				path: '/api/v1/apps/kuaizhizao/work-orders',
+				query: null,
+				body: null,
+			})
+			orders.value = readRows(payload)
+		} catch (err) {
+			errorTextValue.value = errorText(err)
+		}
+		loading.value = false
+	}
+
+	async function pickOrder(index : number) {
+		const row = orders.value[index]
+		const workOrderId = fieldNumber(row, 'id')
+		if (workOrderId <= 0) {
+			toast('工单无效')
+			return
+		}
+		selectedOrder.value = row
+		selectedOperation.value = null
+		loading.value = true
+		errorTextValue.value = ''
+		try {
+			const payload = await request({
+				method: 'GET',
+				path: '/api/v1/apps/kuaizhizao/work-orders/' + workOrderId + '/operations',
+				query: null,
+				body: null,
+			})
+			operations.value = readRows(payload)
+		} catch (err) {
+			errorTextValue.value = errorText(err)
+		}
+		loading.value = false
+	}
+
+	async function pickOperation(index : number) {
+		selectedOperation.value = operations.value[index]
+		selectedWorkerIds.value = []
+		selectedTeamIndex.value = -1
+		await loadAssignees()
+	}
+
+	function clearOrder() {
+		selectedOrder.value = null
+		selectedOperation.value = null
+		operations.value = []
+	}
+
+	function clearOperation() {
+		selectedOperation.value = null
+	}
+
+	function setMode(next : string) {
+		mode.value = next
+	}
+
+	async function loadAssignees() {
+		loading.value = true
+		errorTextValue.value = ''
+		try {
+			const userQuery = new UTSJSONObject()
+			userQuery.set('is_active', true)
+			userQuery.set('page_size', 200)
+			const teamQuery = new UTSJSONObject()
+			teamQuery.set('is_active', true)
+			teamQuery.set('limit', 200)
+			const userPayload = await request({
+				method: 'GET',
+				path: '/api/v1/core/users/display-search',
+				query: userQuery,
+				body: null,
+			})
+			const teamPayload = await request({
+				method: 'GET',
+				path: '/api/v1/apps/master-data/factory/work-groups',
+				query: teamQuery,
+				body: null,
+			})
+			workers.value = readRows(userPayload)
+			teams.value = readRows(teamPayload)
+		} catch (err) {
+			errorTextValue.value = errorText(err)
+		}
+		loading.value = false
+	}
+
+	function toggleWorker(index : number) {
+		const id = fieldNumber(workers.value[index], 'id')
+		if (id <= 0) {
+			return
+		}
+		const next : number[] = []
+		let found = false
+		const current = selectedWorkerIds.value
+		for (let i = 0; i < current.length; i++) {
+			if (current[i] == id) {
+				found = true
+			} else {
+				next.push(current[i])
+			}
+		}
+		if (!found) {
+			next.push(id)
+		}
+		selectedWorkerIds.value = next
+	}
+
+	function pickTeam(index : number) {
+		selectedTeamIndex.value = index
+	}
+
+	function workerNames(ids : number[]) : string {
+		const names : string[] = []
+		for (let i = 0; i < ids.length; i++) {
+			for (let j = 0; j < workers.value.length; j++) {
+				if (fieldNumber(workers.value[j], 'id') == ids[i]) {
+					const name = firstText(workers.value[j], ['full_name', 'username'])
+					if (name.length > 0) {
+						names.push(name)
+					}
+				}
+			}
+		}
+		return names.join('、')
+	}
+
+	async function submitDispatch() {
+		const order = selectedOrder.value
+		const operation = selectedOperation.value
+		if (order == null || operation == null) {
+			toast('请选择工单和工序')
+			return
+		}
+		const workOrderId = fieldNumber(order, 'id')
+		const operationRowId = fieldNumber(operation, 'id')
+		if (workOrderId <= 0 || operationRowId <= 0) {
+			toast('工序无效')
+			return
+		}
+		const body = new UTSJSONObject()
+		if (mode.value == 'team') {
+			if (selectedTeamIndex.value < 0) {
+				toast('请选择小组')
+				return
+			}
+			const team = teams.value[selectedTeamIndex.value]
+			body.set('assigned_team_id', fieldNumber(team, 'id'))
+			body.set('assigned_team_name', textOf(team, 'name'))
+		} else {
+			const ids = selectedWorkerIds.value
+			if (ids.length == 0) {
+				toast('请选择人员')
+				return
+			}
+			body.set('assigned_worker_ids', ids)
+			body.set('assigned_worker_id', ids[0])
+			body.set('assigned_worker_name', workerNames(ids))
+		}
+		const note = remarks.value.trim()
+		if (note.length > 0) {
+			body.set('remarks', note)
+		}
+		loading.value = true
+		errorTextValue.value = ''
+		try {
+			await request({
+				method: 'POST',
+				path: '/api/v1/apps/kuaizhizao/work-orders/' + workOrderId + '/operations/' + operationRowId + '/dispatch',
+				query: null,
+				body: body,
+			})
+			toast('已指派')
+		} catch (err) {
+			errorTextValue.value = errorText(err)
+		}
+		loading.value = false
+	}
+
+	onLoad(() => {
+		loadOrders()
+	})
+</script>
+
+<style>
+	.page {
+		flex-direction: column;
+		padding: 12px;
+	}
+
+	.modes {
+		flex-direction: row;
+		margin-bottom: 8px;
+	}
+
+	.hint {
+		font-size: 14px;
+		color: #888B9D;
+		margin-bottom: 8px;
+	}
+
+	.error {
+		font-size: 14px;
+		color: #FF4942;
+		margin-bottom: 8px;
+	}
+
+	.section {
+		font-size: 16px;
+		margin-bottom: 8px;
+	}
+
+	.card {
+		flex-direction: column;
+		padding: 12px;
+		margin-bottom: 8px;
+		background-color: #ffffff;
+		border-radius: 16px;
+	}
+
+	.title {
+		font-size: 16px;
+	}
+
+	.sub {
+		font-size: 13px;
+		color: #888B9D;
+		margin-top: 4px;
+	}
+
+	.field {
+		margin-top: 8px;
+		padding: 8px;
+		background-color: #ffffff;
+	}
+
+	.action {
+		margin-top: 8px;
+		margin-right: 8px;
+		margin-bottom: 8px;
+	}
+</style>

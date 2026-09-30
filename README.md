@@ -150,7 +150,7 @@
 | **H5** | 与 App **同一套** Expo 源码，`expo export -p web` → `/mobile`；Caddy 托管 | 私仓（构建产物可随部署分发） |
 | **企业微信 / 钉钉 / 飞书** | H5 内嵌工作台；企微 OAuth 登录；各平台 JS-SDK 调原生扫码 | 私仓 `mobile` 平台层（`hostScan` / `wecomAuth`） |
 | **微信小程序** | 原生壳 `web-view` 打开 H5；扫码经小程序页桥接回 H5 | 私仓 `mini-program`（可选，业务仍走 H5） |
-| **触屏工位机** | Windows + Electron 33 + Vite 5 + React 18 + Ant Design 6；复用 PC 前端业务模块 | 私仓 `riveredge-app-station` |
+| **触屏工位机** | Windows + Electron 44；薄壳只放主进程，窗口加载服务器工位入口 | 本仓 `kuaigeyun-client/riveredge-app-station`（本仓跟踪，仓外打包） |
 | **TV 看板** | Android TV + Expo / React Native WebView；预置分享链接，免登录直达看板 | 私仓 `riveredge-app/tv`（`kuaigeyun-client`） |
 
 部署与平台：多租户 SaaS、插件化应用、Caddy 反向代理（Web `/`、H5 `/mobile`、API `/api`）。

@@ -1,0 +1,135 @@
+<template>
+	<scroll-view class="page" direction="vertical">
+		<view class="block">
+			<text class="title">维护提醒</text>
+			<button class="action" :disabled="busy" @click="loadList">刷新</button>
+			<text v-if="rows.length == 0" class="hint">暂无记录</text>
+			<view class="item" v-for="(item, index) in rows" :key="item.rowKey" @click="selectRow(index)">
+				<text class="item-title">{{ item.title }}</text>
+				<text class="hint">{{ item.detail }}</text>
+			</view>
+		</view>
+		<view class="block" v-if="reminderUuid.length > 0">
+			<text class="title">标记已处理</text>
+			<input class="input" v-model="remarkText" placeholder="处理备注（可空）" />
+			<button class="action" type="primary" :disabled="busy" @click="submitHandled">标记已处理</button>
+		</view>
+		<text v-if="messageText.length > 0" class="hint page-hint">{{ messageText }}</text>
+		<text v-if="errorText.length > 0" class="error page-hint">{{ errorText }}</text>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { asJson, joinParts, jsonItems, jsonText } from '../json-text.uts'
+
+	type ListRow = {
+		rowKey: string
+		uuid: string
+		title: string
+		detail: string
+		canHandle: boolean
+	}
+
+	const busy = ref(false)
+	const rows = ref<Array<ListRow>>([])
+	const reminderUuid = ref('')
+	const remarkText = ref('')
+	const messageText = ref('')
+	const errorText = ref('')
+
+	function selectRow(index: number): void {
+		const item = rows.value[index]
+		errorText.value = ''
+		messageText.value = ''
+		if (!item.canHandle) {
+			errorText.value = '该提醒已处理'
+			reminderUuid.value = ''
+			return
+		}
+		reminderUuid.value = item.uuid
+	}
+
+	async function loadList(): Promise<void> {
+		const raw = await request({
+			url: '/api/v1/apps/kuaizhizao/maintenance-reminders',
+			method: 'GET',
+			data: null
+		})
+		const items = jsonItems(asJson(raw))
+		const next: Array<ListRow> = []
+		for (let i = 0; i < items.length; i++) {
+			const row = items[i]
+			const handled = jsonText(row, 'is_handled')
+			const title = jsonText(row, 'equipment_name')
+			const detail = joinParts([
+				jsonText(row, 'reminder_type'),
+				jsonText(row, 'planned_maintenance_date'),
+				jsonText(row, 'reminder_message'),
+				handled == '是' ? '已处理' : '未处理'
+			])
+			const key = jsonText(row, 'uuid')
+			const view: ListRow = {
+				rowKey: key.length > 0 ? key : ('' + i),
+				uuid: key,
+				title: title.length > 0 ? title : '维护提醒',
+				detail: detail,
+				canHandle: handled != '是' && key.length > 0
+			}
+			next.push(view)
+		}
+		rows.value = next
+	}
+
+	async function submitHandled(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		const uuid = reminderUuid.value
+		if (uuid.length == 0) {
+			errorText.value = '请选择一条提醒'
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		messageText.value = ''
+		try {
+			const data = new UTSJSONObject()
+			data.set('reminder_uuid', uuid)
+			if (remarkText.value.trim().length > 0) {
+				data.set('remark', remarkText.value.trim())
+			}
+			await request({
+				url: '/api/v1/apps/kuaizhizao/maintenance-reminders/mark-handled',
+				method: 'POST',
+				data: data
+			})
+			messageText.value = '已标记已处理'
+			reminderUuid.value = ''
+			remarkText.value = ''
+			await loadList()
+		} catch (e) {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		}
+		busy.value = false
+	}
+
+	onShow(() => {
+		loadList().catch((e) => {
+			errorText.value = e != null ? '请求失败' : '请求失败'
+		})
+	})
+</script>
+
+<style>
+	.page { flex: 1; background-color: #F1F1F4; }
+	.block { margin: 12px; padding: 12px; background-color: #ffffff; border-radius: 16px; }
+	.title { font-size: 18px; color: #28113C; }
+	.hint { margin-top: 8px; font-size: 14px; color: #888B9D; }
+	.error { margin-top: 8px; font-size: 14px; color: #FF4942; }
+	.page-hint { margin-left: 12px; margin-right: 12px; }
+	.input { margin-top: 8px; padding: 8px; font-size: 14px; background-color: #EEE5FB; }
+	.action { margin-top: 12px; }
+	.item { margin-top: 12px; padding-top: 8px; border-top-width: 1px; border-top-style: solid; border-top-color: #E7D9FD; }
+	.item-title { font-size: 16px; color: #28113C; }
+</style>

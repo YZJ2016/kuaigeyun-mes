@@ -1,0 +1,150 @@
+export function jsonText(row: UTSJSONObject | null, key: string): string {
+	if (row == null) {
+		return ''
+	}
+	const text = row.getString(key)
+	if (text != null) {
+		return text
+	}
+	const num = row.getNumber(key)
+	if (num != null) {
+		return '' + num
+	}
+	const flag = row.getBoolean(key)
+	if (flag != null) {
+		return flag ? '是' : '否'
+	}
+	return ''
+}
+
+export function jsonInt(row: UTSJSONObject | null, key: string): number | null {
+	if (row == null) {
+		return null
+	}
+	const value = row.getNumber(key)
+	if (value == null || value <= 0) {
+		return null
+	}
+	return value
+}
+
+export function jsonItems(body: UTSJSONObject | null): Array<UTSJSONObject> {
+	const rows: Array<UTSJSONObject> = []
+	if (body == null) {
+		return rows
+	}
+	const rawItems = body.getArray<UTSJSONObject>('items')
+	if (rawItems == null) {
+		return rows
+	}
+	for (let i = 0; i < rawItems.length; i++) {
+		const row = rawItems[i]
+		if (row != null) {
+			rows.push(row)
+		}
+	}
+	return rows
+}
+
+export function joinParts(parts: Array<string>): string {
+	let text = ''
+	for (let i = 0; i < parts.length; i++) {
+		const part = parts[i]
+		if (part.length == 0) {
+			continue
+		}
+		if (text.length > 0) {
+			text = text + ' · '
+		}
+		text = text + part
+	}
+	return text
+}
+
+export function parseRequiredInt(raw: string): number | null {
+	const text = raw.trim()
+	if (text.length == 0) {
+		return null
+	}
+	const value = parseInt(text)
+	if (isNaN(value) || value <= 0) {
+		return null
+	}
+	return value
+}
+
+export function parseIdList(raw: string): Array<number> | null {
+	const text = raw.trim()
+	const ids: Array<number> = []
+	if (text.length == 0) {
+		return ids
+	}
+	const parts = text.split(',')
+	for (let i = 0; i < parts.length; i++) {
+		const value = parseRequiredInt(parts[i])
+		if (value == null) {
+			return null
+		}
+		ids.push(value)
+	}
+	return ids
+}
+
+export function asJson(raw: any | null): UTSJSONObject | null {
+	if (raw == null) {
+		return null
+	}
+	return raw as UTSJSONObject
+}
+
+export function jsonBool(row: UTSJSONObject | null, key: string, fallback: boolean): boolean {
+	if (row == null) {
+		return fallback
+	}
+	const value = row.getBoolean(key)
+	if (value == null) {
+		return fallback
+	}
+	return value
+}
+
+export function jsonNumberOrNull(row: UTSJSONObject | null, key: string): number | null {
+	if (row == null) {
+		return null
+	}
+	const value = row.getNumber(key)
+	if (value != null) {
+		return value
+	}
+	const text = row.getString(key)
+	if (text == null) {
+		return null
+	}
+	const trimmed = text.trim()
+	if (trimmed.length == 0) {
+		return null
+	}
+	const parsed = parseFloat(trimmed)
+	if (isNaN(parsed)) {
+		return null
+	}
+	return parsed
+}
+
+export function jsonObjectList(body: UTSJSONObject | null, key: string): Array<UTSJSONObject> {
+	const rows: Array<UTSJSONObject> = []
+	if (body == null) {
+		return rows
+	}
+	const raw = body.getArray<UTSJSONObject>(key)
+	if (raw == null) {
+		return rows
+	}
+	for (let i = 0; i < raw.length; i++) {
+		const row = raw[i]
+		if (row != null) {
+			rows.push(row)
+		}
+	}
+	return rows
+}

@@ -1,0 +1,7 @@
+<template>
+	<WarehouseBoard kind="inventory-transfer"></WarehouseBoard>
+</template>
+
+<script setup lang="uts">
+	import WarehouseBoard from '../board.uvue'
+</script>

@@ -1,0 +1,78 @@
+import { QueryPair, apiGet as shellGet, apiPost as shellPost } from '../../shared/api/http.uts'
+
+const API = '/apps/kuaizhizao'
+
+export function apiGet(path: string, query: Array<QueryPair> | null): Promise<any | null> {
+	return shellGet(path, query)
+}
+
+export function apiPost(path: string, data: UTSJSONObject | null): Promise<any | null> {
+	return shellPost(path, data)
+}
+
+function pair(key: string, value: string): QueryPair {
+	return {
+		key: key,
+		value: value
+	}
+}
+
+export function listQuery(kind: string, skip: number, page: number, keyword: string): Array<QueryPair> {
+	const query: Array<QueryPair> = []
+	if (kind == 'inventory-query') {
+		query.push(pair('current', page.toString()))
+		query.push(pair('page_size', '50'))
+		const kw = keyword.trim()
+		if (kw.length > 0) {
+			query.push(pair('keyword', kw))
+		}
+		return query
+	}
+	query.push(pair('skip', skip.toString()))
+	query.push(pair('limit', '50'))
+	return query
+}
+
+function resource(kind: string): string {
+	if (kind == 'pickings') return API + '/production-pickings'
+	if (kind == 'returns') return API + '/production-returns'
+	if (kind == 'fg-receipts') return API + '/finished-goods-receipts'
+	if (kind == 'purchase-receipts') return API + '/purchase-receipts'
+	if (kind == 'sales-deliveries') return API + '/sales-deliveries'
+	if (kind == 'delivery-notices') return API + '/delivery-notices'
+	if (kind == 'other-inbound') return API + '/other-inbounds'
+	if (kind == 'other-outbound') return API + '/other-outbounds'
+	if (kind == 'stocktaking') return API + '/stocktakings'
+	if (kind == 'inventory-query') return API + '/reports/inventory/material-balances'
+	if (kind == 'inventory-transfer') return API + '/inventory-transfers'
+	if (kind == 'inventory-alerts') return API + '/inventory-alerts'
+	return ''
+}
+
+export function listPath(kind: string): string {
+	return resource(kind)
+}
+
+export function detailPath(kind: string, id: number): string {
+	return resource(kind) + '/' + id.toString()
+}
+
+export function confirmPath(kind: string, id: number): string {
+	return resource(kind) + '/' + id.toString() + '/confirm'
+}
+
+export function sendPath(id: number): string {
+	return resource('delivery-notices') + '/' + id.toString() + '/send'
+}
+
+export function transferExecutePath(id: number): string {
+	return resource('inventory-transfer') + '/' + id.toString() + '/execute'
+}
+
+export function stockExecutePath(stocktakingId: number, itemId: number): string {
+	return resource('stocktaking') + '/' + stocktakingId.toString() + '/items/' + itemId.toString() + '/execute'
+}
+
+export function alertHandlePath(id: number): string {
+	return resource('inventory-alerts') + '/' + id.toString() + '/handle'
+}

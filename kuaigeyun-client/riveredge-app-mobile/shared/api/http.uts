@@ -1,0 +1,286 @@
+import { API_ORIGIN } from './origin.uts'
+import { getTenantId, getToken, clearToken } from './session.uts'
+import { clientChannel, createIdempotencyKey } from '../channel/headers.uts'
+
+export type QueryPair = {
+	key : string
+	value : string
+}
+
+function trimSlash(value : string) : string {
+	let text = value.trim()
+	while (text.length > 0 && text.charAt(text.length - 1) == '/') {
+		text = text.substring(0, text.length - 1)
+	}
+	return text
+}
+
+export function apiBase() : string {
+	const origin = trimSlash(API_ORIGIN)
+	if (origin.length > 0) {
+		return origin + '/api/v1'
+	}
+	return '/api/v1'
+}
+
+function isPublicPath(path : string) : boolean {
+	if (path == '/auth/login' || path.indexOf('/auth/login?') == 0) {
+		return true
+	}
+	if (path == '/auth/guest-login' || path.indexOf('/auth/guest-login?') == 0) {
+		return true
+	}
+	if (path == '/login' || path.indexOf('/login?') == 0) {
+		return true
+	}
+	if (path == '/infra/login' || path.indexOf('/infra/login?') == 0) {
+		return true
+	}
+	if (path == '/auth/register' || path.indexOf('/auth/register?') == 0) {
+		return true
+	}
+	if (path == '/register' || path.indexOf('/register?') == 0) {
+		return true
+	}
+	if (path.indexOf('/tenants/search') == 0) {
+		return true
+	}
+	if (path.indexOf('/tenants/check-domain') == 0) {
+		return true
+	}
+	return false
+}
+
+function isWriteMethod(method : string) : boolean {
+	return method == 'POST' || method == 'PUT' || method == 'PATCH' || method == 'DELETE'
+}
+
+function buildUrl(path : string, query : Array<QueryPair> | null) : string {
+	let url = apiBase() + path
+	if (query == null || query.length == 0) {
+		return url
+	}
+	const parts : Array<string> = []
+	for (let i = 0; i < query.length; i++) {
+		const pair = query[i]
+		if (pair.value.length == 0) {
+			continue
+		}
+		parts.push(encodeURIComponent(pair.key) + '=' + encodeURIComponent(pair.value))
+	}
+	if (parts.length == 0) {
+		return url
+	}
+	const joiner = url.indexOf('?') >= 0 ? '&' : '?'
+	return url + joiner + parts.join('&')
+}
+
+function buildHeaders(method : string, path : string) : UTSJSONObject {
+	const header = new UTSJSONObject()
+	header['Content-Type'] = 'application/json'
+	const channel = clientChannel()
+	if (channel.length > 0) {
+		header['X-Client-Channel'] = channel
+	}
+	const isPublic = isPublicPath(path)
+	// 调用方未传入 Idempotency-Key。写方法且非公开接口时生成，对齐 api.ts。
+	if (isWriteMethod(method) && !isPublic) {
+		header['Idempotency-Key'] = createIdempotencyKey()
+	}
+	if (!isPublic) {
+		const token = getToken()
+		if (token.length > 0) {
+			header['Authorization'] = 'Bearer ' + token
+		}
+		const tenantId = getTenantId()
+		if (tenantId.length > 0) {
+			header['X-Tenant-ID'] = tenantId
+		}
+	}
+	return header
+}
+
+function readStringField(obj : any | null, key : string) : string {
+	if (obj == null) {
+		return ''
+	}
+	const record = obj as UTSJSONObject
+	const value = record[key]
+	if (value == null) {
+		return ''
+	}
+	if (typeof value == 'string') {
+		return value as string
+	}
+	return ''
+}
+
+function errorText(payload : any | null, status : number) : string {
+	const detail = readStringField(payload, 'detail')
+	if (detail.length > 0) {
+		return detail
+	}
+	const message = readStringField(payload, 'message')
+	if (message.length > 0) {
+		return message
+	}
+	const error = payload == null ? null : (payload as UTSJSONObject)['error']
+	const errorMessage = readStringField(error, 'message')
+	if (errorMessage.length > 0) {
+		return errorMessage
+	}
+	if (typeof error == 'string' && (error as string).length > 0) {
+		return error as string
+	}
+	return '请求失败（' + status.toString() + '）'
+}
+
+function unwrap(payload : any | null) : any | null {
+	if (payload == null) {
+		return null
+	}
+	if (Array.isArray(payload)) {
+		return payload
+	}
+	if (typeof payload != 'object') {
+		return payload
+	}
+	const obj = payload as UTSJSONObject
+	const success = obj['success']
+	if (success == true && obj['data'] != null && obj['total'] != null) {
+		return obj
+	}
+	if (success == true && obj['data'] != null) {
+		const inner = obj['data']
+		if (inner != null && typeof inner == 'object' && !Array.isArray(inner)) {
+			const innerObj = inner as UTSJSONObject
+			if (innerObj['failed_count'] != null || innerObj['success_count'] != null) {
+				return obj
+			}
+		}
+		return inner
+	}
+	if (success == false) {
+		throw new Error(errorText(payload, 200))
+	}
+	if (obj['code'] != null && obj['data'] != null) {
+		const code = obj['code']
+		if (code == 200) {
+			return obj['data']
+		}
+		throw new Error(errorText(payload, 200))
+	}
+	return payload
+}
+
+function handleResponse(res : any, resolve : (value : any | null) => void, reject : (reason : any) => void) : void {
+	const status = res.statusCode as number
+	let payload : any | null = res.data
+	let parseFailed = false
+	if (typeof payload == 'string' && (payload as string).length > 0) {
+		try {
+			payload = JSON.parse(payload as string)
+		} catch (_err) {
+			parseFailed = true
+			payload = null
+		}
+	}
+	if (status == 401) {
+		clearToken()
+	}
+	if (parseFailed) {
+		if (status < 200 || status >= 300) {
+			reject(new Error(errorText(null, status)))
+			return
+		}
+		reject(new Error('请求失败（' + status.toString() + '）'))
+		return
+	}
+	if (status < 200 || status >= 300) {
+		reject(new Error(errorText(payload, status)))
+		return
+	}
+	try {
+		resolve(unwrap(payload))
+	} catch (err) {
+		reject(err)
+	}
+}
+
+export function apiRequest(method : string, path : string, query : Array<QueryPair> | null, body : UTSJSONObject | null) : Promise<any | null> {
+	const verb = method.toUpperCase()
+	const header = buildHeaders(verb, path)
+	const url = buildUrl(path, query)
+	return new Promise((resolve, reject) => {
+		const fail = (_err : any) => {
+			reject(new Error('网络连接失败'))
+		}
+		const success = (res : any) => {
+			handleResponse(res, resolve, reject)
+		}
+		if (verb == 'POST') {
+			uni.request({
+				url: url,
+				method: 'POST',
+				data: body,
+				header: header,
+				timeout: 15000,
+				success: success,
+				fail: fail
+			})
+			return
+		}
+		if (verb == 'PUT') {
+			uni.request({
+				url: url,
+				method: 'PUT',
+				data: body,
+				header: header,
+				timeout: 15000,
+				success: success,
+				fail: fail
+			})
+			return
+		}
+		if (verb == 'PATCH') {
+			uni.request({
+				url: url,
+				method: 'PATCH',
+				data: body,
+				header: header,
+				timeout: 15000,
+				success: success,
+				fail: fail
+			})
+			return
+		}
+		if (verb == 'DELETE') {
+			uni.request({
+				url: url,
+				method: 'DELETE',
+				data: body,
+				header: header,
+				timeout: 15000,
+				success: success,
+				fail: fail
+			})
+			return
+		}
+		uni.request({
+			url: url,
+			method: 'GET',
+			header: header,
+			timeout: 15000,
+			success: success,
+			fail: fail
+		})
+	})
+}
+
+export function apiGet(path : string, query : Array<QueryPair> | null) : Promise<any | null> {
+	return apiRequest('GET', path, query, null)
+}
+
+export function apiPost(path : string, body : UTSJSONObject | null) : Promise<any | null> {
+	return apiRequest('POST', path, null, body)
+}

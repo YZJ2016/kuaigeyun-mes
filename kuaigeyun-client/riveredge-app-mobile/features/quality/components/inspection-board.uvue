@@ -1,0 +1,945 @@
+<template>
+	<scroll-view class="page" scroll-y="true">
+		<view class="toolbar">
+			<text class="link" @click="loadList">刷新</text>
+		</view>
+		<text v-if="loading" class="meta">加载中</text>
+		<text v-if="errorText.length > 0" class="err">{{ errorText }}</text>
+		<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="meta">暂无检验单</text>
+		<view v-for="(row, index) in rows" :key="index" class="card">
+			<text class="title">{{ rowTitle(row) }}</text>
+			<text v-if="rowLine(row).length > 0" class="meta">{{ rowLine(row) }}</text>
+			<text class="action" @click="openConduct(index)">执行检验</text>
+		</view>
+		<view v-if="conducting" class="card">
+			<text class="title">执行检验 {{ currentTitle }}</text>
+			<text class="meta">检验数量 {{ currentQty }}</text>
+			<view class="field">
+				<text class="label">合格数量</text>
+				<input class="input" type="digit" :value="qualifiedText" @input="onQualifiedInput" />
+			</view>
+			<view class="field">
+				<text class="label">不合格数量</text>
+				<input class="input" type="digit" :value="unqualifiedText" @input="onUnqualifiedInput" />
+			</view>
+			<view v-if="conductKind == 'oqc'" class="field">
+				<text class="label">检验结果</text>
+				<view class="choices">
+					<text v-for="(label, index) in resultOptions" :key="index" :class="choiceClass(inspectionResult, label)" @click="pickResult(label)">{{ label }}</text>
+				</view>
+			</view>
+			<view v-if="conductKind == 'oqc'" class="field">
+				<text class="label">质量状态</text>
+				<view class="choices">
+					<text v-for="(label, index) in statusOptions" :key="index" :class="choiceClass(qualityStatus, label)" @click="pickStatus(label)">{{ label }}</text>
+				</view>
+			</view>
+			<view v-if="conductKind == 'oqc'" class="field">
+				<text class="label">放行结论</text>
+				<view class="choices">
+					<text v-for="(label, index) in releaseLabels" :key="index" :class="choiceClass(releaseDecision, releaseValues[index])" @click="pickRelease(index)">{{ label }}</text>
+				</view>
+			</view>
+			<view v-if="conductKind == 'oqc'" class="field">
+				<text class="label">放行说明</text>
+				<input class="input" :value="releaseNote" @input="onReleaseNoteInput" />
+			</view>
+			<view class="field">
+				<text class="label">备注</text>
+				<input class="input" :value="notes" @input="onNotesInput" />
+			</view>
+			<view v-if="conductKind != 'oqc'" class="field">
+				<text class="label">不合格原因</text>
+				<input class="input" :value="nonconformanceReason" @input="onReasonInput" />
+			</view>
+			<view class="field">
+				<text class="label">检验人员 ID</text>
+				<input class="input" type="number" :value="inspectorIdText" @input="onInspectorIdInput" />
+			</view>
+			<view v-if="conductKind != 'oqc'" class="field">
+				<text class="label">检验人员 UUID</text>
+				<input class="input" :value="inspectorUuid" @input="onInspectorUuidInput" />
+			</view>
+			<view class="field">
+				<text class="label">附件</text>
+				<text class="action" @click="addAttachment">添加附件</text>
+				<view v-for="(file, fileIndex) in attachments" :key="fileIndex" class="choices">
+					<text class="meta">{{ fileLabel(file) }}</text>
+					<text class="action" @click="removeAttachment(fileIndex)">移除</text>
+				</view>
+			</view>
+			<view v-for="(step, index) in steps" :key="step.key" class="field">
+				<text class="label">{{ step.name }}</text>
+				<view v-if="step.legacy" class="choices">
+					<text :class="choiceClass(step.judgment, 'pass')" @click="pickLegacy(index, 'pass')">合格</text>
+					<text :class="choiceClass(step.judgment, 'fail')" @click="pickLegacy(index, 'fail')">不合格</text>
+				</view>
+				<view v-else-if="step.valueType == 'boolean'" class="choices">
+					<text :class="choiceClass(step.value, 'true')" @click="pickBool(index, 'true')">是</text>
+					<text :class="choiceClass(step.value, 'false')" @click="pickBool(index, 'false')">否</text>
+				</view>
+				<view v-else>
+					<view v-if="step.allowNa && !step.textNeedsJudgment" class="choices">
+						<text :class="choiceClass(step.judgment, 'na')" @click="toggleNa(index)">不适用</text>
+					</view>
+					<input v-if="step.judgment != 'na'" class="input" :value="step.value" @input="onStepInput(index, $event)" />
+					<view v-if="step.textNeedsJudgment" class="choices">
+						<text :class="choiceClass(step.judgment, 'pass')" @click="pickLegacy(index, 'pass')">合格</text>
+						<text :class="choiceClass(step.judgment, 'fail')" @click="pickLegacy(index, 'fail')">不合格</text>
+						<text v-if="step.allowNa" :class="choiceClass(step.judgment, 'na')" @click="pickLegacy(index, 'na')">不适用</text>
+					</view>
+				</view>
+				<view v-if="stepShowsPhoto(index)" class="field">
+					<text class="label">步骤照片</text>
+					<text class="action" @click="addStepPhoto(index)">添加照片</text>
+					<view v-for="(photo, photoIndex) in step.photos" :key="photoIndex" class="choices">
+						<text class="meta">{{ fileLabel(photo) }}</text>
+						<text class="action" @click="removeStepPhoto(index, photoIndex)">移除</text>
+					</view>
+				</view>
+			</view>
+			<view v-for="(field, index) in customFields" :key="field.code" class="field">
+				<text class="label">{{ field.name }}</text>
+				<input class="input" :value="field.value" @input="onCustomInput(index, $event)" />
+			</view>
+			<text v-if="uploadingCount > 0" class="meta">图片上传中</text>
+			<text v-if="formError.length > 0" class="err">{{ formError }}</text>
+			<view class="choices">
+				<text class="action" @click="submitConduct">{{ submitting ? '提交中' : '提交检验' }}</text>
+				<text class="meta" @click="closeConduct">取消</text>
+			</view>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { request } from '../../../shared/api/index.uts'
+	import { uploadImage } from '../../../shared/api/upload.uts'
+	import { jsonId, jsonText, readError, readRows } from '../json-read.uts'
+
+	class StepDraft {
+		index : number = 0
+		key : string = ''
+		name : string = ''
+		valueType : string = ''
+		legacy : boolean = false
+		textNeedsJudgment : boolean = false
+		value : string = ''
+		judgment : string = ''
+		allowNa : boolean = false
+		wantsPhoto : boolean = false
+		photos : UTSJSONObject[] = []
+	}
+
+	class FieldDraft {
+		uuid : string = ''
+		code : string = ''
+		name : string = ''
+		fieldType : string = ''
+		value : string = ''
+	}
+
+	const props = defineProps({
+		listPath: {
+			type: String,
+			default: ''
+		},
+		conductKind: {
+			type: String,
+			default: 'standard'
+		},
+		customTable: {
+			type: String,
+			default: ''
+		},
+		photoCategory: {
+			type: String,
+			default: ''
+		}
+	})
+
+	const resultOptions : string[] = ['合格', '不合格', '部分合格']
+	const statusOptions : string[] = ['合格', '不合格']
+	const releaseValues : string[] = ['pending', 'released', 'rejected']
+	const releaseLabels : string[] = ['待判定', '放行', '拒绝放行']
+
+	const loading = ref(false)
+	const submitting = ref(false)
+	const conducting = ref(false)
+	const errorText = ref('')
+	const formError = ref('')
+	const rows = ref<UTSJSONObject[]>([])
+	const steps = ref<StepDraft[]>([])
+	const attachments = ref<UTSJSONObject[]>([])
+	const uploadingCount = ref(0)
+	const uploadSession = ref(0)
+	const customFields = ref<FieldDraft[]>([])
+	const currentId = ref(0)
+	const currentTitle = ref('')
+	const currentQty = ref('')
+	const qualifiedText = ref('0')
+	const unqualifiedText = ref('0')
+	const notes = ref('')
+	const nonconformanceReason = ref('')
+	const inspectorIdText = ref('')
+	const inspectorUuid = ref('')
+	const inspectionResult = ref('合格')
+	const qualityStatus = ref('合格')
+	const releaseDecision = ref('pending')
+	const releaseNote = ref('')
+
+	function choiceClass(current : string, value : string) : string {
+		if (current == value) {
+			return 'choice choice-on'
+		}
+		return 'choice'
+	}
+
+	function rowTitle(row : UTSJSONObject) : string {
+		const code = jsonText(row, 'inspection_code')
+		const name = jsonText(row, 'material_name')
+		if (code.length > 0 && name.length > 0) {
+			return code + ' ' + name
+		}
+		if (code.length > 0) {
+			return code
+		}
+		return name
+	}
+
+	function rowLine(row : UTSJSONObject) : string {
+		const parts : string[] = []
+		const status = jsonText(row, 'status')
+		if (status.length > 0) {
+			parts.push(status)
+		}
+		const quality = jsonText(row, 'quality_status')
+		if (quality.length > 0) {
+			parts.push(quality)
+		}
+		const qty = jsonText(row, 'inspection_quantity')
+		if (qty.length > 0) {
+			parts.push('数量 ' + qty)
+		}
+		const supplier = jsonText(row, 'supplier_name')
+		if (supplier.length > 0) {
+			parts.push(supplier)
+		}
+		const workOrder = jsonText(row, 'work_order_code')
+		if (workOrder.length > 0) {
+			parts.push(workOrder)
+		}
+		const operation = jsonText(row, 'operation_name')
+		if (operation.length > 0) {
+			parts.push(operation)
+		}
+		const customer = jsonText(row, 'customer_name')
+		if (customer.length > 0) {
+			parts.push(customer)
+		}
+		return parts.join(' · ')
+	}
+
+	function inputValue(event : UniInputEvent) : string {
+		return event.detail.value
+	}
+
+	function onQualifiedInput(event : UniInputEvent) {
+		qualifiedText.value = inputValue(event)
+	}
+
+	function onUnqualifiedInput(event : UniInputEvent) {
+		unqualifiedText.value = inputValue(event)
+	}
+
+	function onNotesInput(event : UniInputEvent) {
+		notes.value = inputValue(event)
+	}
+
+	function onReasonInput(event : UniInputEvent) {
+		nonconformanceReason.value = inputValue(event)
+	}
+
+	function onInspectorIdInput(event : UniInputEvent) {
+		inspectorIdText.value = inputValue(event)
+	}
+
+	function onInspectorUuidInput(event : UniInputEvent) {
+		inspectorUuid.value = inputValue(event)
+	}
+
+	function onReleaseNoteInput(event : UniInputEvent) {
+		releaseNote.value = inputValue(event)
+	}
+
+	function onStepInput(index : number, event : UniInputEvent) {
+		const list = steps.value
+		list[index].value = inputValue(event)
+		steps.value = list
+	}
+
+	function onCustomInput(index : number, event : UniInputEvent) {
+		const list = customFields.value
+		list[index].value = inputValue(event)
+		customFields.value = list
+	}
+
+	function pickResult(label : string) {
+		inspectionResult.value = label
+	}
+
+	function pickStatus(label : string) {
+		qualityStatus.value = label
+	}
+
+	function pickRelease(index : number) {
+		releaseDecision.value = releaseValues[index]
+	}
+
+	function pickLegacy(index : number, judgment : string) {
+		const list = steps.value
+		list[index].judgment = judgment
+		steps.value = list
+	}
+
+	function pickBool(index : number, value : string) {
+		const list = steps.value
+		list[index].value = value
+		steps.value = list
+	}
+
+	function toggleNa(index : number) {
+		const list = steps.value
+		if (list[index].judgment == 'na') {
+			list[index].judgment = ''
+		} else {
+			list[index].judgment = 'na'
+		}
+		steps.value = list
+	}
+
+	function fileLabel(file : UTSJSONObject) : string {
+		const name = file.getString('name')
+		if (name != null && name.length > 0) {
+			return name
+		}
+		const uid = file.getString('uid')
+		if (uid != null && uid.length > 0) {
+			return uid
+		}
+		return '附件'
+	}
+
+	function keptFile(file : UTSJSONObject) : UTSJSONObject | null {
+		const uid = file.getString('uid')
+		const url = file.getString('url')
+		const uidText = uid != null ? uid : ''
+		const urlText = url != null ? url : ''
+		if (uidText.length == 0 && urlText.length == 0) {
+			return null
+		}
+		const status = file.getString('status')
+		const name = file.getString('name')
+		const out = new UTSJSONObject()
+		out.set('uid', uidText)
+		out.set('name', name != null ? name : '')
+		out.set('url', urlText)
+		out.set('status', status != null && status.length > 0 ? status : 'done')
+		return out
+	}
+
+	function keptFiles(list : UTSJSONObject[]) : UTSJSONObject[] {
+		const out : UTSJSONObject[] = []
+		for (let i = 0; i < list.length; i++) {
+			const one = keptFile(list[i])
+			if (one != null) {
+				out.push(one)
+			}
+		}
+		return out
+	}
+
+	function stepShowsPhoto(index : number) : boolean {
+		if (props.photoCategory.trim().length == 0) {
+			return false
+		}
+		const list = steps.value
+		if (index < 0 || index >= list.length) {
+			return false
+		}
+		const step = list[index]
+		if (step.legacy || !step.wantsPhoto) {
+			return false
+		}
+		return step.judgment != 'na'
+	}
+
+	function removeAttachment(index : number) {
+		const list = attachments.value
+		const next : UTSJSONObject[] = []
+		for (let i = 0; i < list.length; i++) {
+			if (i != index) {
+				next.push(list[i])
+			}
+		}
+		attachments.value = next
+	}
+
+	function removeStepPhoto(stepIndex : number, photoIndex : number) {
+		const list = steps.value
+		const photos = list[stepIndex].photos
+		const next : UTSJSONObject[] = []
+		for (let i = 0; i < photos.length; i++) {
+			if (i != photoIndex) {
+				next.push(photos[i])
+			}
+		}
+		list[stepIndex].photos = next
+		steps.value = list
+	}
+
+	function addAttachment() {
+		beginUpload(true, -1)
+	}
+
+	function addStepPhoto(index : number) {
+		beginUpload(false, index)
+	}
+
+	function beginUpload(intoAttachments : boolean, stepIndex : number) {
+		const category = props.photoCategory.trim()
+		if (category.length == 0) {
+			formError.value = '缺少附件分类'
+			return
+		}
+		uni.chooseImage({
+			count: 9,
+			success: (res) => {
+				const picked = res.tempFilePaths
+				if (picked == null || picked.length == 0) {
+					return
+				}
+				const paths : string[] = []
+				for (let i = 0; i < picked.length; i++) {
+					const one = picked[i]
+					if (one != null && one.length > 0) {
+						paths.push(one)
+					}
+				}
+				if (paths.length == 0) {
+					return
+				}
+				uploadChosen(paths, category, intoAttachments, stepIndex, uploadSession.value)
+			},
+			fail: () => {}
+		})
+	}
+
+	async function uploadChosen(paths : string[], category : string, intoAttachments : boolean, stepIndex : number, session : number) {
+		if (session != uploadSession.value) {
+			return
+		}
+		uploadingCount.value = uploadingCount.value + paths.length
+		for (let i = 0; i < paths.length; i++) {
+			try {
+				const file = await uploadImage(paths[i], category)
+				if (session == uploadSession.value && conducting.value) {
+					const normalized = keptFile(file)
+					if (normalized != null) {
+						if (intoAttachments) {
+							const list = attachments.value
+							list.push(normalized)
+							attachments.value = list
+						} else if (stepIndex >= 0 && stepIndex < steps.value.length) {
+							const list = steps.value
+							const photos = list[stepIndex].photos
+							photos.push(normalized)
+							list[stepIndex].photos = photos
+							steps.value = list
+						}
+					}
+				}
+			} catch (err) {
+				if (session == uploadSession.value) {
+					formError.value = readError(err)
+				}
+			}
+			if (session == uploadSession.value) {
+				uploadingCount.value = uploadingCount.value - 1
+			}
+		}
+	}
+
+	function readQty(text : string) : number {
+		const num = parseFloat(text)
+		if (isNaN(num)) {
+			return 0
+		}
+		return num
+	}
+
+	function readTemplateItems(row : UTSJSONObject) : UTSJSONObject[] {
+		let src = row.getJSON('quality_characteristics')
+		if (src == null) {
+			src = row.getJSON('other_checks')
+		}
+		if (src == null) {
+			return [] as UTSJSONObject[]
+		}
+		const items = src.getArray('items')
+		if (items == null) {
+			return [] as UTSJSONObject[]
+		}
+		return items as UTSJSONObject[]
+	}
+
+	function buildSteps(row : UTSJSONObject) : StepDraft[] {
+		const items = readTemplateItems(row)
+		const out : StepDraft[] = []
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i]
+			const spec = item.getJSON('value_spec')
+			if (spec != null && spec.getBoolean('derived') == true) {
+				continue
+			}
+			const draft = new StepDraft()
+			draft.index = i
+			const stepKey = item.getString('step_key')
+			draft.key = stepKey != null && stepKey.length > 0 ? stepKey : String(i)
+			const name = item.getString('inspection_item')
+			draft.name = name != null && name.length > 0 ? name : ('检验项 ' + String(i + 1))
+			const valueType = item.getString('value_type')
+			draft.photos = [] as UTSJSONObject[]
+			if (valueType == null || valueType.length == 0) {
+				draft.legacy = true
+				draft.valueType = ''
+				draft.allowNa = false
+				draft.wantsPhoto = false
+			} else {
+				draft.valueType = valueType
+				draft.legacy = false
+				draft.textNeedsJudgment = valueType == 'text'
+				draft.allowNa = spec != null && spec.getBoolean('allow_na') == true
+				draft.wantsPhoto = spec != null && spec.getBoolean('require_photo') == true
+				if (valueType == 'boolean') {
+					draft.value = 'true'
+				}
+			}
+			out.push(draft)
+		}
+		return out
+	}
+
+	function buildStepResults() : UTSJSONObject | null {
+		const obj = new UTSJSONObject()
+		let count = 0
+		const list = steps.value
+		for (let i = 0; i < list.length; i++) {
+			const step = list[i]
+			if (step.legacy) {
+				continue
+			}
+			const entry = new UTSJSONObject()
+			let filled = false
+			if (step.valueType == 'boolean') {
+				entry.set('value', step.value == 'true')
+				filled = true
+			} else if (step.valueType == 'multi_select') {
+				const parts : string[] = []
+				if (step.value.length > 0) {
+					const raw = step.value.split(',')
+					for (let p = 0; p < raw.length; p++) {
+						const piece = raw[p].trim()
+						if (piece.length > 0) {
+							parts.push(piece)
+						}
+					}
+				}
+				entry.set('value', parts)
+				filled = true
+			} else if (step.valueType == 'numeric') {
+				if (step.value.length > 0) {
+					const num = parseFloat(step.value)
+					if (isNaN(num)) {
+						entry.set('value', step.value)
+					} else {
+						entry.set('value', num)
+					}
+					filled = true
+				}
+			} else if (step.value.length > 0) {
+				entry.set('value', step.value)
+				filled = true
+			}
+			if (step.textNeedsJudgment && step.judgment.length > 0) {
+				entry.set('judgment', step.judgment)
+				filled = true
+			}
+			if (step.judgment == 'na') {
+				entry.set('judgment', 'na')
+				filled = true
+			}
+			if (step.wantsPhoto && step.judgment != 'na') {
+				const photos = keptFiles(step.photos)
+				if (photos.length > 0) {
+					entry.set('photos', photos)
+					filled = true
+				}
+			}
+			if (!filled) {
+				continue
+			}
+			obj.set(step.key, entry)
+			count++
+		}
+		if (count == 0) {
+			return null
+		}
+		return obj
+	}
+
+	function buildItemResults() : UTSJSONObject | null {
+		const obj = new UTSJSONObject()
+		let count = 0
+		const list = steps.value
+		for (let i = 0; i < list.length; i++) {
+			const step = list[i]
+			if (!step.legacy) {
+				continue
+			}
+			if (step.judgment != 'pass' && step.judgment != 'fail') {
+				continue
+			}
+			obj.set(step.key, step.judgment)
+			count++
+		}
+		if (count == 0) {
+			return null
+		}
+		return obj
+	}
+
+	function putInspector(body : UTSJSONObject, includeUuid : boolean) {
+		const inspectorId = parseInt(inspectorIdText.value)
+		if (!isNaN(inspectorId) && inspectorId > 0) {
+			body.set('inspector_id', inspectorId)
+		}
+		if (includeUuid) {
+			const uuid = inspectorUuid.value.trim()
+			if (uuid.length > 0) {
+				body.set('inspector_uuid', uuid)
+			}
+		}
+	}
+
+	function putStepExtras(body : UTSJSONObject) {
+		const stepResults = buildStepResults()
+		if (stepResults != null) {
+			body.set('conduct_step_results', stepResults)
+		}
+		const itemResults = buildItemResults()
+		if (itemResults != null) {
+			body.set('item_results', itemResults)
+		}
+	}
+
+	function buildStandardBody() : UTSJSONObject {
+		const body = new UTSJSONObject()
+		body.set('qualified_quantity', readQty(qualifiedText.value))
+		body.set('unqualified_quantity', readQty(unqualifiedText.value))
+		body.set('notes', notes.value)
+		body.set('nonconformance_reason', nonconformanceReason.value)
+		body.set('attachments', keptFiles(attachments.value))
+		putInspector(body, true)
+		putStepExtras(body)
+		return body
+	}
+
+	function buildOqcBody() : UTSJSONObject {
+		const body = new UTSJSONObject()
+		body.set('inspection_result', inspectionResult.value)
+		body.set('quality_status', qualityStatus.value)
+		body.set('qualified_quantity', readQty(qualifiedText.value))
+		body.set('unqualified_quantity', readQty(unqualifiedText.value))
+		body.set('release_decision', releaseDecision.value)
+		body.set('release_note', releaseNote.value)
+		body.set('notes', notes.value)
+		body.set('attachments', keptFiles(attachments.value))
+		putInspector(body, false)
+		putStepExtras(body)
+		return body
+	}
+
+	async function loadCustomFields(recordId : number) {
+		customFields.value = [] as FieldDraft[]
+		const table = props.customTable
+		if (table.length == 0 || recordId <= 0) {
+			return
+		}
+		try {
+			const payload = await request({
+				path: '/api/v1/core/custom-fields/by-table/' + table + '?is_active=true',
+				method: 'GET',
+				data: null
+			})
+			const list = readRows(payload)
+			const out : FieldDraft[] = []
+			for (let i = 0; i < list.length; i++) {
+				const row = list[i]
+				const code = row.getString('code')
+				const uuid = row.getString('uuid')
+				if (code == null || uuid == null || code.length == 0 || uuid.length == 0) {
+					continue
+				}
+				if (row.getBoolean('is_active') == false) {
+					continue
+				}
+				const draft = new FieldDraft()
+				draft.code = code
+				draft.uuid = uuid
+				const name = row.getString('name')
+				draft.name = name != null && name.length > 0 ? name : code
+				const fieldType = row.getString('field_type')
+				draft.fieldType = fieldType == null ? 'text' : fieldType
+				out.push(draft)
+			}
+			customFields.value = out
+		} catch (err) {
+			customFields.value = [] as FieldDraft[]
+		}
+	}
+
+	async function saveCustomFields(recordId : number) : Promise<string> {
+		const table = props.customTable
+		const list = customFields.value
+		if (table.length == 0 || list.length == 0) {
+			return ''
+		}
+		const values : UTSJSONObject[] = []
+		for (let i = 0; i < list.length; i++) {
+			const field = list[i]
+			if (field.value.length == 0) {
+				continue
+			}
+			const one = new UTSJSONObject()
+			one.set('field_uuid', field.uuid)
+			if (field.fieldType == 'number' || field.fieldType == 'formula') {
+				const num = parseFloat(field.value)
+				if (isNaN(num)) {
+					one.set('value', field.value)
+				} else {
+					one.set('value', num)
+				}
+			} else {
+				one.set('value', field.value)
+			}
+			values.push(one)
+		}
+		if (values.length == 0) {
+			return ''
+		}
+		const body = new UTSJSONObject()
+		body.set('record_id', recordId)
+		body.set('record_table', table)
+		body.set('values', values)
+		try {
+			await request({
+				path: '/api/v1/core/custom-fields/values',
+				method: 'POST',
+				data: body
+			})
+			return ''
+		} catch (err) {
+			return '自定义字段保存失败，检验结果已保存'
+		}
+	}
+
+	async function loadList() {
+		if (props.listPath.length == 0) {
+			return
+		}
+		loading.value = true
+		errorText.value = ''
+		try {
+			const payload = await request({
+				path: props.listPath,
+				method: 'GET',
+				data: null
+			})
+			rows.value = readRows(payload)
+		} catch (err) {
+			rows.value = [] as UTSJSONObject[]
+			errorText.value = readError(err)
+		}
+		loading.value = false
+	}
+
+	function openConduct(index : number) {
+		const row = rows.value[index]
+		const id = jsonId(row)
+		if (id <= 0) {
+			formError.value = '检验单缺少 id'
+			return
+		}
+		currentId.value = id
+		currentTitle.value = rowTitle(row)
+		currentQty.value = jsonText(row, 'inspection_quantity')
+		qualifiedText.value = currentQty.value.length > 0 ? currentQty.value : '0'
+		unqualifiedText.value = '0'
+		notes.value = ''
+		nonconformanceReason.value = ''
+		inspectorIdText.value = ''
+		inspectorUuid.value = ''
+		inspectionResult.value = '合格'
+		qualityStatus.value = '合格'
+		releaseDecision.value = 'pending'
+		releaseNote.value = ''
+		formError.value = ''
+		attachments.value = [] as UTSJSONObject[]
+		uploadSession.value = uploadSession.value + 1
+		uploadingCount.value = 0
+		steps.value = buildSteps(row)
+		conducting.value = true
+		loadCustomFields(id)
+	}
+
+	function closeConduct() {
+		conducting.value = false
+		formError.value = ''
+	}
+
+	async function submitConduct() {
+		if (uploadingCount.value > 0) {
+			formError.value = '图片仍在上传'
+			return
+		}
+		if (submitting.value || currentId.value <= 0) {
+			return
+		}
+		if (props.conductKind == 'oqc') {
+			if (inspectionResult.value.length == 0 || qualityStatus.value.length == 0 || releaseDecision.value.length == 0) {
+				formError.value = '请填写检验结果、质量状态和放行结论'
+				return
+			}
+		}
+		submitting.value = true
+		formError.value = ''
+		const path = props.listPath + '/' + String(currentId.value) + '/conduct'
+		const body = props.conductKind == 'oqc' ? buildOqcBody() : buildStandardBody()
+		try {
+			await request({
+				path: path,
+				method: 'POST',
+				data: body
+			})
+		} catch (err) {
+			formError.value = readError(err)
+			submitting.value = false
+			return
+		}
+		const customWarning = await saveCustomFields(currentId.value)
+		submitting.value = false
+		conducting.value = false
+		if (customWarning.length > 0) {
+			uni.showToast({
+				title: customWarning,
+				icon: 'none',
+				duration: 3000
+			})
+		} else {
+			uni.showToast({
+				title: '检验已提交',
+				icon: 'success'
+			})
+		}
+		await loadList()
+	}
+
+	onMounted(() => {
+		loadList()
+	})
+</script>
+
+<style>
+	.page {
+		padding: 12px;
+		background-color: #F1F1F4;
+	}
+
+	.toolbar {
+		margin-bottom: 8px;
+	}
+
+	.card {
+		background-color: #ffffff;
+		border-radius: 16px;
+		padding: 12px;
+		margin-bottom: 10px;
+	}
+
+	.title {
+		font-size: 16px;
+		color: #28113C;
+	}
+
+	.meta {
+		font-size: 13px;
+		color: #888B9D;
+		margin-top: 4px;
+	}
+
+	.action {
+		margin-top: 8px;
+		color: #801ED3;
+		font-size: 14px;
+	}
+
+	.field {
+		margin-top: 10px;
+	}
+
+	.label {
+		font-size: 13px;
+		color: #888B9D;
+		margin-bottom: 4px;
+	}
+
+	.input {
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E7D9FD;
+		border-radius: 6px;
+		padding: 8px;
+		font-size: 14px;
+		background-color: #ffffff;
+	}
+
+	.choices {
+		flex-direction: row;
+		flex-wrap: wrap;
+		margin-top: 6px;
+	}
+
+	.choice {
+		margin-right: 8px;
+		margin-top: 6px;
+		padding: 4px 8px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E7D9FD;
+		border-radius: 4px;
+		font-size: 13px;
+		color: #28113C;
+	}
+
+	.choice-on {
+		border-color: #801ED3;
+		color: #801ED3;
+	}
+
+	.err {
+		color: #FF4942;
+		font-size: 13px;
+		margin-top: 8px;
+	}
+</style>

@@ -1,67 +1,74 @@
 {
-    "name" : "riveredge-app-mobile",
-    "appid" : "",
-    "description" : "",
-    "versionName" : "1.0.0",
-    "versionCode" : "100",
-    "uni-app-x" : {
-        "styleIsolationVersion" : "2",
-        "vapor" : true
-    },
-    /* 快应用特有相关 */
-    "quickapp" : {},
-    /* 小程序特有相关 */
-    "mp-weixin" : {
-        "appid" : "",
-        "setting" : {
-            "urlCheck" : false
-        },
-        "usingComponents" : true
-    },
-    "mp-alipay" : {
-        "usingComponents" : true
-    },
-    "mp-baidu" : {
-        "usingComponents" : true
-    },
-    "mp-toutiao" : {
-        "usingComponents" : true
-    },
-    "uniStatistics" : {
-        "enable" : false
-    },
-    "vueVersion" : "3",
-    "app" : {
-        "distribute" : {
-            "icons" : {
-                "android" : {
-                    "hdpi" : "",
-                    "xhdpi" : "",
-                    "xxhdpi" : "",
-                    "xxxhdpi" : ""
-                }
-            }
-        }
-    },
-    "app-android" : {
-        "distribute" : {
-            "modules" : {},
-            "icons" : {
-                "hdpi" : "",
-                "xhdpi" : "",
-                "xxhdpi" : "",
-                "xxxhdpi" : ""
-            },
-            "splashScreens" : {
-                "default" : {}
-            }
-        }
-    },
-    "app-ios" : {
-        "distribute" : {
-            "modules" : {},
-            "icons" : {},
-            "splashScreens" : {}
-        }
-    }
+	"name": "riveredge-app-mobile",
+	"appid": "",
+	"description": "星制造移动端。Android 蒸汽模式最低 Android 6.0+（HBuilderX 5.21+），iOS 最低 iOS 15+（HBuilderX 5.11+），微信基础库大于 3.7.1。业务页不按这些门槛分叉。",
+	"versionName": "1.0.0",
+	"versionCode": "100",
+	"uni-app-x": {
+		"styleIsolationVersion": "2",
+		"vapor": true,
+		"vapor-render-target": "bytecode"
+	},
+	"web": {
+		"router": {
+			"mode": "history",
+			"base": "/mobile/"
+		}
+	},
+	/* 快应用特有相关 */
+	"quickapp": {},
+	/* 小程序特有相关 */
+	"mp-weixin": {
+		"appid": "",
+		"setting": {
+			"urlCheck": false
+		},
+		"usingComponents": true
+	},
+	"mp-alipay": {
+		"usingComponents": true
+	},
+	"mp-baidu": {
+		"usingComponents": true
+	},
+	"mp-toutiao": {
+		"usingComponents": true
+	},
+	"uniStatistics": {
+		"enable": false
+	},
+	"vueVersion": "3",
+	"app": {
+		"distribute": {
+			"icons": {
+				"android": {
+					"hdpi": "",
+					"xhdpi": "",
+					"xxhdpi": "",
+					"xxxhdpi": ""
+				}
+			}
+		}
+	},
+	"app-android": {
+		"distribute": {
+			"modules": {},
+			"icons": {
+				"hdpi": "",
+				"xhdpi": "",
+				"xxhdpi": "",
+				"xxxhdpi": ""
+			},
+			"splashScreens": {
+				"default": {}
+			}
+		}
+	},
+	"app-ios": {
+		"distribute": {
+			"modules": {},
+			"icons": {},
+			"splashScreens": {}
+		}
+	}
 }

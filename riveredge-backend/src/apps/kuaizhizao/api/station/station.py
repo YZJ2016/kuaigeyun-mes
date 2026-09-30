@@ -268,7 +268,7 @@ async def delete_face_template(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        await FaceTemplateService.delete_template(tenant_id, template_id)
+        await FaceTemplateService.delete_template(tenant_id, template_id, user_id=current_user.id)
         return {"deleted": True}
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

@@ -1,0 +1,292 @@
+import { apiGet } from '../../api/http.uts'
+import { getTenantId, getToken } from '../../api/session.uts'
+
+export type CallResult = {
+	ok : boolean
+	message : string
+}
+
+export type ScanResult = {
+	ok : boolean
+	message : string
+	value : string
+}
+
+export type LoginCodeResult = {
+	connected : boolean
+	code : string
+}
+
+const JSAPI_PROVIDERS : Array<string> = ['wecom', 'dingtalk', 'feishu']
+
+function readString(obj : any | null, key : string) : string {
+	if (obj == null) {
+		return ''
+	}
+	const value = (obj as UTSJSONObject)[key]
+	if (value == null) {
+		return ''
+	}
+	return String(value)
+}
+
+export function readBrowserQuery(name : string) : string {
+	let search = ''
+	// #ifdef WEB || H5
+	search = window.location.search
+	// #endif
+	if (search.indexOf('?') == 0) {
+		search = search.substring(1)
+	}
+	if (search.length == 0) {
+		return ''
+	}
+	const parts = search.split('&')
+	const prefix = name + '='
+	for (let i = 0; i < parts.length; i++) {
+		if (parts[i].indexOf(prefix) == 0) {
+			const decoded = decodeURIComponent(parts[i].substring(prefix.length))
+			if (decoded == null) {
+				return ''
+			}
+			return decoded
+		}
+	}
+	return ''
+}
+
+export function readBrowserPath() : string {
+	let path = ''
+	// #ifdef WEB || H5
+	path = window.location.pathname + window.location.search
+	// #endif
+	return path
+}
+
+export function publishH5Route(route : string) : void {
+	// #ifdef WEB || H5
+	let path = route.trim()
+	if (path.length == 0) {
+		return
+	}
+	if (path.indexOf('/mobile') == 0) {
+		path = path.substring('/mobile'.length)
+	}
+	if (path.length == 0 || path.charAt(0) != '/') {
+		path = '/' + path
+	}
+	const next = '/mobile' + path
+	const apply = () => {
+		window.history.replaceState(window.history.state, '', next)
+	}
+	apply()
+	setTimeout(apply, 0)
+	// #endif
+}
+
+function currentRedirectUri() : string {
+	let origin = ''
+	let pathname = ''
+	let search = ''
+	// #ifdef WEB || H5
+	origin = window.location.origin
+	pathname = window.location.pathname
+	search = window.location.search
+	// #endif
+	if (search.indexOf('?') == 0) {
+		search = search.substring(1)
+	}
+	const parts = search.split('&')
+	const kept : Array<string> = []
+	for (let i = 0; i < parts.length; i++) {
+		const part = parts[i]
+		if (part.length == 0) {
+			continue
+		}
+		if (part.indexOf('code=') == 0 || part.indexOf('state=') == 0) {
+			continue
+		}
+		kept.push(part)
+	}
+	if (kept.length == 0) {
+		return origin + pathname
+	}
+	return origin + pathname + '?' + kept.join('&')
+}
+
+function redirectBrowser(url : string) : void {
+	// #ifdef WEB || H5
+	window.location.assign(url)
+	// #endif
+}
+
+export function acquireLoginCode() : Promise<LoginCodeResult> {
+	return Promise.resolve({
+		connected: true,
+		code: readBrowserQuery('code')
+	} as LoginCodeResult)
+}
+
+export async function loginRedirect() : Promise<CallResult> {
+	const tenant = getTenantId()
+	if (tenant.length == 0) {
+		return { ok: false, message: '请先确定组织' } as CallResult
+	}
+	const redirectUri = currentRedirectUri()
+	if (redirectUri.length == 0) {
+		return { ok: false, message: '没有当前页面地址' } as CallResult
+	}
+	try {
+		const data = await apiGet('/auth/wecom/authorize-url', [
+			{ key: 'redirect_uri', value: redirectUri },
+			{ key: 'tenant_id', value: tenant }
+		])
+		const authorizeUrl = readString(data, 'authorize_url')
+		if (authorizeUrl.length == 0) {
+			return { ok: false, message: '没有获得授权地址' } as CallResult
+		}
+		redirectBrowser(authorizeUrl)
+		return { ok: true, message: '' } as CallResult
+	} catch (err) {
+		const message = err instanceof Error ? err.message : '企业微信登录未能开始'
+		return { ok: false, message: message } as CallResult
+	}
+}
+
+async function requestSignature(provider : string, pageUrl : string) : Promise<any | null> {
+	if (JSAPI_PROVIDERS.indexOf(provider) < 0) {
+		throw new Error('签名提供方未接通')
+	}
+	return await apiGet('/core/mobile-jsapi/signature', [
+		{ key: 'provider', value: provider },
+		{ key: 'url', value: pageUrl }
+	])
+}
+
+function invokeWecomScan(signed : any) : Promise<ScanResult> {
+	return new Promise<ScanResult>((resolve) => {
+		// #ifdef WEB || H5
+		const host = window as any
+		const wx = host['wx']
+		if (wx == null || wx['config'] == null || wx['scanQRCode'] == null) {
+			resolve({
+				ok: false,
+				message: '当前页面没有企业微信扫码',
+				value: ''
+			} as ScanResult)
+			return
+		}
+		const corpId = readString(signed, 'corp_id')
+		const nonceStr = readString(signed, 'nonce_str')
+		const signature = readString(signed, 'signature')
+		const timestamp = (signed as UTSJSONObject)['timestamp']
+		if (corpId.length == 0 || nonceStr.length == 0 || signature.length == 0 || timestamp == null) {
+			resolve({ ok: false, message: '签名不完整', value: '' } as ScanResult)
+			return
+		}
+		wx.config({
+			appId: corpId,
+			timestamp: timestamp,
+			nonceStr: nonceStr,
+			signature: signature,
+			jsApiList: ['scanQRCode']
+		})
+		let settled = false
+		const finish = (result : ScanResult) => {
+			if (settled) {
+				return
+			}
+			settled = true
+			resolve(result)
+		}
+		const startScan = () => {
+			wx.scanQRCode({
+				needResult: 1,
+				scanType: ['qrCode', 'barCode'],
+				success: (res : any) => {
+					const value = res != null && res['resultStr'] != null ? String(res['resultStr']) : ''
+					finish({ ok: value.length > 0, message: '', value: value } as ScanResult)
+				},
+				fail: () => {
+					finish({ ok: false, message: '扫码未完成', value: '' } as ScanResult)
+				}
+			})
+		}
+		const afterConfig = () => {
+			const agentSignature = readString(signed, 'agent_signature')
+			const agentId = (signed as UTSJSONObject)['agent_id']
+			if (agentSignature.length > 0 && agentId != null && wx['agentConfig'] != null) {
+				wx.agentConfig({
+					corpid: corpId,
+					agentid: agentId,
+					timestamp: timestamp,
+					nonceStr: nonceStr,
+					signature: agentSignature,
+					jsApiList: ['scanQRCode'],
+					success: startScan,
+					fail: () => {
+						finish({ ok: false, message: '企业微信扫码未就绪', value: '' } as ScanResult)
+					}
+				})
+				return
+			}
+			startScan()
+		}
+		if (wx['error'] != null) {
+			wx.error(() => {
+				finish({ ok: false, message: '企业微信扫码未就绪', value: '' } as ScanResult)
+			})
+		}
+		if (wx['ready'] != null) {
+			wx.ready(afterConfig)
+		} else {
+			afterConfig()
+		}
+		return
+		// #endif
+		resolve({ ok: false, message: '当前端未接通扫码', value: '' } as ScanResult)
+	})
+}
+
+export async function scan() : Promise<ScanResult> {
+	if (getToken().length == 0) {
+		return { ok: false, message: '未登录', value: '' } as ScanResult
+	}
+	let hasWx = false
+	// #ifdef WEB || H5
+	const host = window as any
+	hasWx = host['wx'] != null
+	// #endif
+	if (!hasWx) {
+		return { ok: false, message: '当前页面没有企业微信扫码', value: '' } as ScanResult
+	}
+	const pageUrl = currentRedirectUri()
+	if (pageUrl.length == 0) {
+		return { ok: false, message: '没有当前页面地址', value: '' } as ScanResult
+	}
+	try {
+		const signed = await requestSignature('wecom', pageUrl)
+		if (signed == null) {
+			return { ok: false, message: '没有获得签名', value: '' } as ScanResult
+		}
+		return await invokeWecomScan(signed)
+	} catch (err) {
+		const message = err instanceof Error ? err.message : '签名请求失败'
+		return { ok: false, message: message, value: '' } as ScanResult
+	}
+}
+
+export function openCamera() : Promise<CallResult> {
+	return new Promise<CallResult>((resolve) => {
+		uni.chooseImage({
+			count: 1,
+			sourceType: ['camera'],
+			success: () => {
+				resolve({ ok: true, message: '' } as CallResult)
+			},
+			fail: () => {
+				resolve({ ok: false, message: '未能打开摄像头' } as CallResult)
+			}
+		})
+	})
+}

@@ -1,0 +1,283 @@
+import { request } from '../../shared/api/index.uts'
+import { asJson, joinParts, jsonBool, jsonInt, jsonNumberOrNull, jsonObjectList, jsonText } from './json-text.uts'
+
+export type SpotLineForm = {
+	rowKey: string
+	title: string
+	detail: string
+	photoHint: string
+	showMeasured: boolean
+	passLabel: string
+	lineNo: number
+	itemId: number | null
+	itemCode: string
+	itemName: string
+	requirement: string
+	method: string
+	judgmentStandard: string
+	valueType: string
+	unit: string
+	numericMin: number | null
+	numericMax: number | null
+	measuredValue: string
+	isPass: boolean
+	isBoolean: boolean
+	photoRequired: boolean
+	remark: string
+	attachments: Array<UTSJSONObject>
+}
+
+export type SpotPreview = {
+	captureMode: string
+	lines: Array<SpotLineForm>
+}
+
+export type SpotCheckDraft = {
+	equipmentId: number
+	schemeId: number | null
+	checkDate: string
+	inspectorId: number | null
+	inspectorName: string
+	remark: string
+	captureMode: string
+	headerAttachments: Array<UTSJSONObject>
+	lines: Array<SpotLineForm>
+}
+
+export type SpotSubmitResult = {
+	errorText: string
+	saved: UTSJSONObject | null
+}
+
+function upperMode(raw: string): string {
+	const text = raw.trim()
+	if (text.length == 0) {
+		return 'A'
+	}
+	return text.toUpperCase()
+}
+
+function isBooleanType(raw: string): boolean {
+	const value = raw.trim().toLowerCase()
+	if (value.length == 0) {
+		return true
+	}
+	return value == 'boolean' || value == 'bool' || value == '是/否'
+}
+
+function passLabel(isPass: boolean): string {
+	if (isPass) {
+		return '合格'
+	}
+	return '不合格'
+}
+
+function booleanMeasured(isPass: boolean, current: string): string {
+	const text = current.trim()
+	if (text.length > 0) {
+		return text
+	}
+	if (isPass) {
+		return '是'
+	}
+	return '否'
+}
+
+function positiveInt(value: number | null): number | null {
+	if (value == null || value <= 0) {
+		return null
+	}
+	return value
+}
+
+function setText(data: UTSJSONObject, key: string, value: string): void {
+	if (value.length > 0) {
+		data.set(key, value)
+	}
+}
+
+function setNumber(data: UTSJSONObject, key: string, value: number | null): void {
+	if (value != null) {
+		data.set(key, value)
+	}
+}
+
+function lineTitle(itemName: string, itemCode: string, lineNo: number): string {
+	if (itemName.length > 0) {
+		return itemName
+	}
+	if (itemCode.length > 0) {
+		return itemCode
+	}
+	return '第 ' + lineNo + ' 行'
+}
+
+function readLine(row: UTSJSONObject, index: number, captureMode: string): SpotLineForm {
+	const lineNoValue = positiveInt(jsonNumberOrNull(row, 'line_no'))
+	const lineNo = lineNoValue == null ? (index + 1) : lineNoValue
+	const itemName = jsonText(row, 'item_name')
+	const itemCode = jsonText(row, 'item_code')
+	const valueType = jsonText(row, 'value_type')
+	const booleanItem = isBooleanType(valueType)
+	const isPass = jsonBool(row, 'is_pass', true)
+	const photoRequired = jsonBool(row, 'photo_required', false)
+	let measured = jsonText(row, 'measured_value')
+	if (booleanItem) {
+		measured = booleanMeasured(isPass, measured)
+	}
+	let hint = ''
+	if (captureMode == 'C' && photoRequired) {
+		hint = '需拍照'
+	}
+	const empty: Array<UTSJSONObject> = []
+	return {
+		rowKey: 'line-' + lineNo + '-' + index,
+		title: lineTitle(itemName, itemCode, lineNo),
+		detail: joinParts([
+			jsonText(row, 'method'),
+			jsonText(row, 'judgment_standard'),
+			jsonText(row, 'requirement'),
+			jsonText(row, 'unit')
+		]),
+		photoHint: hint,
+		showMeasured: !booleanItem,
+		passLabel: passLabel(isPass),
+		lineNo: lineNo,
+		itemId: jsonInt(row, 'item_id'),
+		itemCode: itemCode,
+		itemName: itemName,
+		requirement: jsonText(row, 'requirement'),
+		method: jsonText(row, 'method'),
+		judgmentStandard: jsonText(row, 'judgment_standard'),
+		valueType: valueType,
+		unit: jsonText(row, 'unit'),
+		numericMin: jsonNumberOrNull(row, 'numeric_min'),
+		numericMax: jsonNumberOrNull(row, 'numeric_max'),
+		measuredValue: measured,
+		isPass: isPass,
+		isBoolean: booleanItem,
+		photoRequired: photoRequired,
+		remark: jsonText(row, 'remark'),
+		attachments: empty
+	}
+}
+
+export function toggleSpotPass(line: SpotLineForm): void {
+	const next = !line.isPass
+	line.isPass = next
+	line.passLabel = passLabel(next)
+	if (line.isBoolean) {
+		line.measuredValue = next ? '是' : '否'
+	}
+}
+
+export async function loadSpotCheckPreview(equipmentId: number, schemeId: number): Promise<SpotPreview> {
+	const query = new UTSJSONObject()
+	query.set('equipment_id', '' + equipmentId)
+	query.set('scheme_id', '' + schemeId)
+	const raw = await request({
+		url: '/api/v1/apps/kuaizhizao/equipment-spot-checks/preview-lines',
+		method: 'GET',
+		query: query
+	})
+	const body = asJson(raw)
+	if (body == null) {
+		throw new Error('请求失败')
+	}
+	const captureMode = upperMode(jsonText(body, 'capture_mode'))
+	const source = jsonObjectList(body, 'lines')
+	const lines: Array<SpotLineForm> = []
+	if (captureMode != 'B') {
+		for (let i = 0; i < source.length; i++) {
+			lines.push(readLine(source[i], i, captureMode))
+		}
+	}
+	return {
+		captureMode: captureMode,
+		lines: lines
+	}
+}
+
+function measuredForSubmit(line: SpotLineForm): string {
+	if (line.isBoolean) {
+		return booleanMeasured(line.isPass, line.measuredValue)
+	}
+	return line.measuredValue.trim()
+}
+
+function mapLine(line: SpotLineForm): UTSJSONObject {
+	const row = new UTSJSONObject()
+	row.set('line_no', line.lineNo)
+	setNumber(row, 'item_id', line.itemId)
+	setText(row, 'item_code', line.itemCode)
+	setText(row, 'item_name', line.itemName)
+	setText(row, 'requirement', line.requirement)
+	setText(row, 'method', line.method)
+	setText(row, 'judgment_standard', line.judgmentStandard)
+	setText(row, 'value_type', line.valueType)
+	setText(row, 'unit', line.unit)
+	setNumber(row, 'numeric_min', line.numericMin)
+	setNumber(row, 'numeric_max', line.numericMax)
+	setText(row, 'measured_value', measuredForSubmit(line))
+	row.set('is_pass', line.isPass)
+	row.set('photo_required', line.photoRequired)
+	setText(row, 'remark', line.remark)
+	if (line.attachments.length > 0) {
+		row.set('attachments', line.attachments)
+	}
+	return row
+}
+
+export async function submitSpotCheck(draft: SpotCheckDraft): Promise<SpotSubmitResult> {
+	const mode = upperMode(draft.captureMode)
+	if (mode == 'B') {
+		if (draft.headerAttachments.length == 0) {
+			return {
+				errorText: '请上传整单照片',
+				saved: null
+			}
+		}
+	} else if (draft.lines.length == 0) {
+		return {
+			errorText: '没有预览行',
+			saved: null
+		}
+	} else if (mode == 'C') {
+		for (let i = 0; i < draft.lines.length; i++) {
+			const line = draft.lines[i]
+			if (line.photoRequired && line.attachments.length == 0) {
+				return {
+					errorText: '请上传行照片',
+					saved: null
+				}
+			}
+		}
+	}
+	const data = new UTSJSONObject()
+	data.set('equipment_id', draft.equipmentId)
+	setNumber(data, 'scheme_id', draft.schemeId)
+	setText(data, 'check_date', draft.checkDate)
+	setNumber(data, 'inspector_id', draft.inspectorId)
+	setText(data, 'inspector_name', draft.inspectorName)
+	setText(data, 'remark', draft.remark)
+	if (mode == 'B') {
+		data.set('attachments', draft.headerAttachments)
+		const emptyLines: Array<UTSJSONObject> = []
+		data.set('lines', emptyLines)
+	} else {
+		const mapped: Array<UTSJSONObject> = []
+		for (let i = 0; i < draft.lines.length; i++) {
+			mapped.push(mapLine(draft.lines[i]))
+		}
+		data.set('lines', mapped)
+	}
+	const raw = await request({
+		url: '/api/v1/apps/kuaizhizao/equipment-spot-checks',
+		method: 'POST',
+		data: data
+	})
+	return {
+		errorText: '',
+		saved: asJson(raw)
+	}
+}

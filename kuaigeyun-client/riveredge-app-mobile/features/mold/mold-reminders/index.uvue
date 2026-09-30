@@ -1,0 +1,109 @@
+<template>
+	<view class="page">
+		<button size="mini" @click="loadList">刷新</button>
+		<text v-if="hint != ''" class="error">{{ hint }}</text>
+		<view v-for="(item, index) in rows" :key="index" class="row">
+			<text class="title">{{ item.title }}</text>
+			<text class="meta">{{ item.detail }}</text>
+		</view>
+		<text v-if="rows.length == 0 && hint == ''" class="meta">暂无保养提醒</text>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { DocLine, MOLD_REMINDERS, apiGet, joinParts, readError, readItems, textOf, withQuery } from '../http.uts'
+
+	const rows = ref<DocLine[]>([])
+	const hint = ref('')
+
+	function reminderLabel(value: string): string {
+		if (value == 'due_soon') {
+			return '即将到期'
+		}
+		if (value == 'overdue') {
+			return '已逾期'
+		}
+		return value
+	}
+
+	function triggerLabel(value: string): string {
+		if (value == 'days') {
+			return '按天'
+		}
+		if (value == 'usage_count') {
+			return '按次数'
+		}
+		return value
+	}
+
+	function mapReminder(item: UTSJSONObject): DocLine {
+		const line = new DocLine()
+		line.title = textOf(item, 'mold_code') + ' ' + textOf(item, 'mold_name')
+		const parts: string[] = [
+			reminderLabel(textOf(item, 'reminder_type')),
+			triggerLabel(textOf(item, 'trigger_type'))
+		]
+		const until = item.getNumber('usages_until_due')
+		if (until != null) {
+			parts.push('剩余次数 ' + until)
+		}
+		const days = item.getNumber('days_since_maintenance')
+		if (days != null) {
+			parts.push('距上次保养 ' + days + ' 天')
+		}
+		const last = textOf(item, 'last_maintenance_date')
+		if (last != '') {
+			parts.push('上次保养 ' + last)
+		}
+		line.detail = joinParts(parts)
+		return line
+	}
+
+	async function loadList(): Promise<void> {
+		hint.value = ''
+		try {
+			const items = readItems(await apiGet(withQuery(MOLD_REMINDERS, 'limit=50')))
+			const lines: DocLine[] = []
+			for (let i = 0; i < items.length; i++) {
+				lines.push(mapReminder(items[i]))
+			}
+			rows.value = lines
+		} catch (err) {
+			hint.value = readError(err)
+		}
+	}
+
+	onShow(() => {
+		loadList()
+	})
+</script>
+
+<style>
+	.page {
+		padding: 16px;
+	}
+
+	.row {
+		padding: 12px 0;
+		border-bottom: 1px solid #E7D9FD;
+	}
+
+	.title {
+		font-size: 16px;
+		color: #28113C;
+	}
+
+	.meta {
+		display: block;
+		margin-top: 4px;
+		font-size: 13px;
+		color: #888B9D;
+	}
+
+	.error {
+		display: block;
+		margin-top: 8px;
+		font-size: 13px;
+		color: #FF4942;
+	}
+</style>

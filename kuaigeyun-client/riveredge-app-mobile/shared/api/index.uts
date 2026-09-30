@@ -1,0 +1,162 @@
+import { apiRequest, QueryPair } from './http.uts'
+
+function optionText(options : UTSJSONObject, key : string) : string {
+	const value = options[key]
+	if (value == null) {
+		return ''
+	}
+	return String(value)
+}
+
+function stripApiPrefix(raw : string) : string {
+	let path = raw.trim()
+	const marker = '/api/v1'
+	const at = path.indexOf(marker)
+	if (at >= 0) {
+		path = path.substring(at + marker.length)
+	}
+	const scheme = path.indexOf('://')
+	if (scheme >= 0) {
+		const slash = path.indexOf('/', scheme + 3)
+		path = slash >= 0 ? path.substring(slash) : '/'
+	}
+	if (path.length == 0) {
+		return '/'
+	}
+	if (path.charAt(0) != '/') {
+		return '/' + path
+	}
+	return path
+}
+
+function pushPair(pairs : Array<QueryPair>, key : string, value : string) : void {
+	if (key.length == 0 || value.length == 0 || value == 'null') {
+		return
+	}
+	pairs.push({
+		key: key,
+		value: value
+	} as QueryPair)
+}
+
+/** 把扁平 JSON 对象转成查询参数。业务页传入的是 UTSJSONObject，不是键值数组。 */
+function pairsFromJsonText(text : string) : Array<QueryPair> {
+	const pairs : Array<QueryPair> = []
+	let i = 0
+	while (i < text.length && text.charAt(i) != '{') {
+		i++
+	}
+	i++
+	while (i < text.length) {
+		while (i < text.length) {
+			const ch = text.charAt(i)
+			if (ch != ' ' && ch != ',' && ch != '\n' && ch != '\r' && ch != '\t') {
+				break
+			}
+			i++
+		}
+		if (i >= text.length || text.charAt(i) == '}') {
+			break
+		}
+		if (text.charAt(i) != '"') {
+			break
+		}
+		i++
+		let key = ''
+		while (i < text.length && text.charAt(i) != '"') {
+			key += text.charAt(i)
+			i++
+		}
+		i++
+		while (i < text.length && text.charAt(i) != ':') {
+			i++
+		}
+		i++
+		while (i < text.length && text.charAt(i) == ' ') {
+			i++
+		}
+		if (i >= text.length) {
+			break
+		}
+		let value = ''
+		if (text.charAt(i) == '"') {
+			i++
+			while (i < text.length && text.charAt(i) != '"') {
+				if (text.charAt(i) == '\\' && i + 1 < text.length) {
+					i++
+				}
+				value += text.charAt(i)
+				i++
+			}
+			i++
+		} else {
+			while (i < text.length && text.charAt(i) != ',' && text.charAt(i) != '}') {
+				value += text.charAt(i)
+				i++
+			}
+			value = value.trim()
+		}
+		pushPair(pairs, key, value)
+	}
+	return pairs
+}
+
+function readQuery(query : any | null) : Array<QueryPair> | null {
+	if (query == null) {
+		return null
+	}
+	if (Array.isArray(query)) {
+		const list = query as Array<any>
+		const pairs : Array<QueryPair> = []
+		for (let i = 0; i < list.length; i++) {
+			const item = list[i] as UTSJSONObject
+			if (item == null) {
+				continue
+			}
+			const key = item['key']
+			const value = item['value']
+			if (key == null) {
+				continue
+			}
+			pushPair(pairs, String(key), value == null ? '' : String(value))
+		}
+		return pairs
+	}
+	if (typeof query != 'object') {
+		return null
+	}
+	const text = JSON.stringify(query)
+	if (text == null || text.length < 2 || text == '{}') {
+		return null
+	}
+	return pairsFromJsonText(text)
+}
+
+function readBody(options : UTSJSONObject) : UTSJSONObject | null {
+	let body = options['body']
+	if (body == null) {
+		body = options['data']
+	}
+	if (body == null || typeof body != 'object' || Array.isArray(body)) {
+		return null
+	}
+	return body as UTSJSONObject
+}
+
+/**
+ * 业务页统一入口。path 或 url 可以带 /api/v1 前缀，这里会去掉后再拼基址，避免重复。
+ * query 支持 UTSJSONObject 或 {key,value} 数组。正文读 body，没有则读 data。
+ */
+export function request(options : any) : Promise<any | null> {
+	const record = options as UTSJSONObject
+	let method = optionText(record, 'method')
+	if (method.length == 0) {
+		method = 'GET'
+	}
+	let raw = optionText(record, 'path')
+	if (raw.length == 0) {
+		raw = optionText(record, 'url')
+	}
+	const path = stripApiPrefix(raw)
+	return apiRequest(method, path, readQuery(record['query']), readBody(record))
+}

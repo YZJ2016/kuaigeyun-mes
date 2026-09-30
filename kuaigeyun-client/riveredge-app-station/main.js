@@ -133,12 +133,15 @@ function stationUrl(origin, workstationId) {
 }
 
 function enableLoginItem() {
-  const settings = { openAtLogin: true };
   if (!app.isPackaged) {
-    settings.path = process.execPath;
-    settings.args = [app.getAppPath()];
+    app.setLoginItemSettings({
+      openAtLogin: false,
+      path: process.execPath,
+      args: [app.getAppPath()],
+    });
+    return;
   }
-  app.setLoginItemSettings(settings);
+  app.setLoginItemSettings({ openAtLogin: true });
 }
 
 function createWindow(origin, workstationId) {
@@ -154,6 +157,26 @@ function createWindow(origin, workstationId) {
     },
   });
   win.setMenu(null);
+  const contents = win.webContents;
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  contents.on('will-navigate', (event, url) => {
+    let target = '';
+    try {
+      target = new URL(url).origin;
+    } catch {
+      target = '';
+    }
+    if (target !== origin) event.preventDefault();
+  });
+  let recovering = false;
+  const onLoadFail = (_event, errorCode, _desc, _url, isMainFrame) => {
+    if (!isMainFrame || errorCode === -3 || recovering || win.isDestroyed()) return;
+    recovering = true;
+    openSetupWindow();
+    win.close();
+  };
+  contents.on('did-fail-provisional-load', onLoadFail);
+  contents.on('did-fail-load', onLoadFail);
   win.loadURL(stationUrl(origin, workstationId));
   return win;
 }
@@ -172,6 +195,7 @@ function openSetupWindow() {
     },
   });
   win.setMenu(null);
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.loadFile(path.join(__dirname, 'setup.html'));
   return win;
 }

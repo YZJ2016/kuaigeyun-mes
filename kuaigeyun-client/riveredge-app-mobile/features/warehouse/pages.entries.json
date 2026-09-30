@@ -1,0 +1,74 @@
+[
+	{
+		"path": "features/warehouse/pickings/index",
+		"style": {
+			"navigationBarTitleText": "生产领料"
+		}
+	},
+	{
+		"path": "features/warehouse/returns/index",
+		"style": {
+			"navigationBarTitleText": "生产退料"
+		}
+	},
+	{
+		"path": "features/warehouse/fg-receipts/index",
+		"style": {
+			"navigationBarTitleText": "成品入库"
+		}
+	},
+	{
+		"path": "features/warehouse/purchase-receipts/index",
+		"style": {
+			"navigationBarTitleText": "采购收货"
+		}
+	},
+	{
+		"path": "features/warehouse/sales-deliveries/index",
+		"style": {
+			"navigationBarTitleText": "销售出库"
+		}
+	},
+	{
+		"path": "features/warehouse/delivery-notices/index",
+		"style": {
+			"navigationBarTitleText": "送货单"
+		}
+	},
+	{
+		"path": "features/warehouse/other-inbound/index",
+		"style": {
+			"navigationBarTitleText": "其它入库"
+		}
+	},
+	{
+		"path": "features/warehouse/other-outbound/index",
+		"style": {
+			"navigationBarTitleText": "其它出库"
+		}
+	},
+	{
+		"path": "features/warehouse/stocktaking/index",
+		"style": {
+			"navigationBarTitleText": "移动盘点"
+		}
+	},
+	{
+		"path": "features/warehouse/inventory-query/index",
+		"style": {
+			"navigationBarTitleText": "库存查询"
+		}
+	},
+	{
+		"path": "features/warehouse/inventory-transfer/index",
+		"style": {
+			"navigationBarTitleText": "调拨确认"
+		}
+	},
+	{
+		"path": "features/warehouse/inventory-alerts/index",
+		"style": {
+			"navigationBarTitleText": "库存预警"
+		}
+	}
+]
