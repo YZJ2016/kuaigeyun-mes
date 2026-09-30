@@ -4178,6 +4178,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             - has_shortage: 是否有缺料
             - shortage_items: 缺料明细列表
             - total_shortage_count: 缺料物料总数
+            - bom_missing: 没有 BOM 时为 true；有 BOM 时为 false
         """
         work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
 
@@ -4202,10 +4203,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 for_kitting_analysis=True,
             )
         except NotFoundError:
-            # 如果没有BOM，返回无缺料
             logger.warning(f"工单 {work_order.code} 的产品 {work_order.product_id} 没有BOM，跳过缺料检测")
             return {
                 "has_shortage": False,
+                "bom_missing": True,
                 "shortage_items": [],
                 "total_shortage_count": 0,
                 "work_order_id": work_order_id,
@@ -4249,6 +4250,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         return {
             "has_shortage": len(shortage_items) > 0,
+            "bom_missing": False,
             "shortage_items": shortage_items,
             "total_shortage_count": len(shortage_items),
             "work_order_id": work_order_id,
@@ -4535,7 +4537,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         Raises:
             NotFoundError: 工单不存在
             ValidationError: 不允许下达的工单状态
-            BusinessLogicError: 存在缺料时抛出（如果check_shortage=True）
+            BusinessLogicError: 存在缺料或没有 BOM 时抛出（如果 check_shortage=True 且拦截级别命中下达）
         """
         async with in_transaction():
             work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
@@ -4557,6 +4559,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     tenant_id=tenant_id,
                     work_order_id=work_order_id
                 )
+                if shortage_result.get("bom_missing"):
+                    raise BusinessLogicError("工单没有BOM，无法下达")
                 if shortage_result.get("has_shortage"):
                     shortage_items = shortage_result.get("shortage_items") or []
                     total_shortage_count = int(shortage_result.get("total_shortage_count") or len(shortage_items) or 0)

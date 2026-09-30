@@ -709,14 +709,12 @@ class InventoryService:
 
             from apps.master_data.models.material import Material
             from infra.exceptions.exceptions import BusinessLogicError, ValidationError
-            from tortoise.exceptions import IntegrityError, OperationalError
+            from tortoise.exceptions import IntegrityError
 
-            batch_management_enabled, serial_management_enabled = False, False
             try:
                 batch_management_enabled, serial_management_enabled = await InventoryService._get_warehouse_management_flags(tenant_id)
-            except (BusinessLogicError, ValidationError, OperationalError, OSError, TimeoutError, ConnectionError) as _flag_exc:
-                # 配置读取失败可降级：跳过强制批号/序列号校验，不阻断入库
-                logger.warning(f"获取仓库管理标志失败（跳过批号/序列号强制校验）: {_flag_exc}")
+            except Exception as _flag_exc:
+                raise BusinessLogicError("读取仓库批号或序列号管理开关失败，拒绝本笔入库") from _flag_exc
             material = await Material.get_or_none(tenant_id=tenant_id, id=material_id, deleted_at__isnull=True)
 
             if (
