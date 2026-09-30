@@ -1,8 +1,9 @@
 """
 工单工序转下道数量：按质检模式解析可转入下道的合格数量。
 
-- none / simple：报工累计合格数
-- plan：仅统计已通过的过程检验单合格数
+- none：报工累计合格数
+- simple：过程检验放行合格数（不含让步）
+- plan：有序方案放行合格数（不含让步）
 """
 
 from __future__ import annotations
@@ -105,37 +106,32 @@ async def resolve_operation_transfer_qualified(
         return Decimal(str(woo.qualified_quantity or 0))
 
     cache = policy_cache if policy_cache is not None else {}
-    if master_op_id not in cache:
-        cache[master_op_id] = await resolve_inspection_policy(
-            tenant_id, "ipqc", operation_id=master_op_id, work_order_operation=woo
-        )
-    cfg = await get_quality_effective_config(tenant_id)
-    mode, _, _ = resolve_ipqc_for_work_order_operation(cfg, woo, cache[master_op_id])
+    mode = await resolve_operation_ipqc_mode(tenant_id, woo, policy_cache=cache)
 
     reported_qualified = Decimal(str(woo.qualified_quantity or 0))
-    if mode != "plan":
+    if mode not in ("simple", "plan"):
         return reported_qualified
 
-    if inspections_by_op is None:
-        from apps.kuaizhizao.models.process_inspection import ProcessInspection
+    inspections = await _inspections_for_master_operation(
+        tenant_id,
+        work_order_id,
+        master_op_id,
+        inspections_by_op=inspections_by_op,
+    )
+    if mode == "plan":
+        from apps.kuaizhizao.utils.ipqc_ordered_plans import resolve_ordered_plan_transfer_qualified
+        from apps.kuaizhizao.utils.route_step_ipqc import ipqc_plan_ids_from_wo_operation
 
-        rows = await ProcessInspection.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            operation_id=master_op_id,
-            deleted_at__isnull=True,
-        ).all()
-        inspections = list(rows)
-    else:
-        inspections = inspections_by_op.get(master_op_id, [])
+        return await resolve_ordered_plan_transfer_qualified(
+            tenant_id,
+            inspections,
+            ipqc_plan_ids_from_wo_operation(woo),
+            audit_required=audit_required,
+        )
 
-    from apps.kuaizhizao.utils.ipqc_ordered_plans import resolve_ordered_plan_transfer_qualified
-    from apps.kuaizhizao.utils.route_step_ipqc import ipqc_plan_ids_from_wo_operation
-
-    return await resolve_ordered_plan_transfer_qualified(
+    return await sum_plan_transfer_qualified_from_inspections(
         tenant_id,
         inspections,
-        ipqc_plan_ids_from_wo_operation(woo),
         audit_required=audit_required,
     )
 
@@ -235,6 +231,116 @@ def resolve_ipqc_for_work_order_operation(
     if snap is not None:
         return apply_ipqc_stage_gates(cfg, snap[0], snap[1], snap[2])
     return master_policy
+
+
+_KEY_IPQC_MODES = frozenset({"simple", "plan"})
+
+
+async def resolve_operation_ipqc_mode(
+    tenant_id: int,
+    woo: WorkOrderOperation,
+    *,
+    policy_cache: Optional[Dict[int, Tuple[str, Optional[int], str]]] = None,
+) -> str:
+    """过程检验 eff。simple / plan 为关键工序；none 不是。"""
+    master_op_id = int(woo.operation_id) if woo.operation_id is not None else 0
+    if master_op_id <= 0:
+        return "none"
+    cache = policy_cache if policy_cache is not None else {}
+    if master_op_id not in cache:
+        cache[master_op_id] = await resolve_inspection_policy(
+            tenant_id, "ipqc", operation_id=master_op_id, work_order_operation=woo
+        )
+    cfg = await get_quality_effective_config(tenant_id)
+    mode, _, _ = resolve_ipqc_for_work_order_operation(cfg, woo, cache[master_op_id])
+    return mode
+
+
+async def _inspections_for_master_operation(
+    tenant_id: int,
+    work_order_id: int,
+    master_op_id: int,
+    *,
+    inspections_by_op: Optional[Dict[int, List[Any]]] = None,
+) -> List[Any]:
+    if inspections_by_op is not None:
+        return list(inspections_by_op.get(master_op_id, []))
+    from apps.kuaizhizao.models.process_inspection import ProcessInspection
+
+    rows = await ProcessInspection.filter(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        operation_id=master_op_id,
+        deleted_at__isnull=True,
+    ).all()
+    return list(rows)
+
+
+async def sum_processed_concession_quantity(
+    tenant_id: int,
+    inspections: List[Any],
+) -> Decimal:
+    """已处理让步：过程检验单上 disposition=accept 且 status=processed 的不良数量。"""
+    inspection_ids = []
+    for insp in inspections:
+        raw_id = getattr(insp, "id", None)
+        if raw_id is None:
+            continue
+        inspection_ids.append(int(raw_id))
+    if not inspection_ids:
+        return Decimal("0")
+    from apps.kuaizhizao.models.defect_record import DefectRecord
+
+    rows = await DefectRecord.filter(
+        tenant_id=tenant_id,
+        process_inspection_id__in=inspection_ids,
+        disposition="accept",
+        status="processed",
+        deleted_at__isnull=True,
+    ).all()
+    total = Decimal("0")
+    for row in rows:
+        total += Decimal(str(getattr(row, "defect_quantity", None) or 0))
+    return total
+
+
+async def resolve_key_operation_output_quantity(
+    tenant_id: int,
+    work_order_id: int,
+    woo: WorkOrderOperation,
+    *,
+    policy_cache: Optional[Dict[int, Tuple[str, Optional[int], str]]] = None,
+    inspections_by_op: Optional[Dict[int, List[Any]]] = None,
+    audit_required: Optional[bool] = None,
+) -> Optional[Decimal]:
+    """
+    关键工序报产出：放行合格数 + 已处理让步。
+
+    非关键工序返回 None。放行合格数与可转下道同一口径，让步只加在产出上。
+    """
+    cache = policy_cache if policy_cache is not None else {}
+    mode = await resolve_operation_ipqc_mode(tenant_id, woo, policy_cache=cache)
+    if mode not in _KEY_IPQC_MODES:
+        return None
+    master_op_id = int(woo.operation_id) if woo.operation_id is not None else 0
+    if inspections_by_op is None:
+        inspections_by_op = {
+            master_op_id: await _inspections_for_master_operation(
+                tenant_id, work_order_id, master_op_id
+            )
+        }
+    released = await resolve_operation_transfer_qualified(
+        tenant_id,
+        work_order_id,
+        woo,
+        policy_cache=cache,
+        inspections_by_op=inspections_by_op,
+        audit_required=audit_required,
+    )
+    concession = await sum_processed_concession_quantity(
+        tenant_id, inspections_by_op.get(master_op_id, [])
+    )
+    return released + concession
 
 
 async def resolve_operation_inspection_plan_label(
