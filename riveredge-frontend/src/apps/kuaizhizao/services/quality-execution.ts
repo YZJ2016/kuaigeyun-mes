@@ -199,6 +199,16 @@ export const qualityApi = {
         '/apps/kuaizhizao/incoming-inspections/pull-candidates/purchase-receipts',
         { method: 'GET', params },
       ),
+    listOutsourceReceiptPullCandidates: async (params?: {
+      skip?: number;
+      limit?: number;
+      keyword?: string;
+      receipt_code?: string;
+    }) =>
+      apiRequest<{ data: Array<Record<string, unknown>>; total: number; success: boolean }>(
+        '/apps/kuaizhizao/incoming-inspections/pull-candidates/outsource-material-receipts',
+        { method: 'GET', params },
+      ),
     listCustomerMaterialPullCandidates: async (params?: {
       skip?: number;
       limit?: number;
@@ -281,6 +291,10 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/incoming-inspections/from-customer-material/${registrationId}`, {
         method: 'POST',
         data: selectedItemIds?.length ? { selected_item_ids: selectedItemIds } : undefined,
+      }),
+    createFromOutsourceReceipt: async (receiptId: string) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-outsource-material-receipt/${receiptId}`, {
+        method: 'POST',
       }),
     createDefect: async (inspectionId: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${inspectionId}/create-defect`, { method: 'POST', data }),

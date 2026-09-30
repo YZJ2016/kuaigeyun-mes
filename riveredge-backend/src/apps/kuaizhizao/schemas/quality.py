@@ -22,7 +22,7 @@ class IncomingInspectionBase(BaseSchema):
     source_type: Optional[str] = Field(
         "purchase_receipt",
         max_length=30,
-        description="来源类型（purchase_receipt/customer_material_inbound/purchase_order）",
+        description="来源类型（purchase_receipt/customer_material_inbound/purchase_order/outsource_material_receipt）",
     )
     # 与模型一致：采购入库 / 代工来料 / 采购订单，允许为空
     purchase_receipt_id: Optional[int] = Field(None, description="采购入库单ID")
@@ -32,6 +32,10 @@ class IncomingInspectionBase(BaseSchema):
     customer_material_registration_id: Optional[int] = Field(None, description="代工来料单ID")
     customer_material_registration_code: Optional[str] = Field(
         None, max_length=50, description="代工来料单编码"
+    )
+    outsource_material_receipt_id: Optional[int] = Field(None, description="委外收货单ID")
+    outsource_material_receipt_code: Optional[str] = Field(
+        None, max_length=50, description="委外收货单编码"
     )
     supplier_id: Optional[int] = Field(None, description="供应商ID")
     supplier_name: Optional[str] = Field(None, max_length=200, description="供应商名称")

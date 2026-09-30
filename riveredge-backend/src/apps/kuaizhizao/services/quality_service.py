@@ -1141,6 +1141,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 "purchase_receipt_code",
                 "purchase_order_code",
                 "customer_material_registration_code",
+                "outsource_material_receipt_code",
             ],
         )
 
@@ -3153,6 +3154,113 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             )
         return {"data": rows, "total": total, "success": True}
 
+    async def list_outsource_material_receipt_pull_candidates(
+        self,
+        tenant_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        receipt_code: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """来料检验加载：草稿委外收货候选（含 capabilities）。"""
+        from apps.kuaizhizao.models.outsource_work_order import (
+            OutsourceMaterialReceipt,
+            OutsourceWorkOrder,
+        )
+
+        await _require_iqc_stage_enabled(tenant_id)
+        incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
+        if not incoming_enabled:
+            return {"data": [], "total": 0, "success": True}
+
+        query = OutsourceMaterialReceipt.filter(
+            tenant_id=tenant_id,
+            status="draft",
+            deleted_at__isnull=True,
+        )
+        kw = str(keyword or "").strip()
+        code_kw = str(receipt_code or "").strip()
+        if code_kw:
+            query = query.filter(code__icontains=code_kw)
+        elif kw:
+            query = query.filter(code__icontains=kw)
+        total = await query.count()
+        receipts = await query.offset(skip).limit(limit).order_by("-created_at")
+        if not receipts:
+            return {"data": [], "total": total, "success": True}
+
+        wo_ids = [int(r.outsource_work_order_id) for r in receipts if r.outsource_work_order_id]
+        work_orders = await OutsourceWorkOrder.filter(
+            tenant_id=tenant_id,
+            id__in=wo_ids,
+            deleted_at__isnull=True,
+        ).all()
+        wo_by_id = {int(row.id): row for row in work_orders}
+        existing_rows = await IncomingInspection.filter(
+            tenant_id=tenant_id,
+            outsource_material_receipt_id__in=[int(r.id) for r in receipts],
+            deleted_at__isnull=True,
+        ).all()
+        existing_ids = {
+            int(row.outsource_material_receipt_id)
+            for row in existing_rows
+            if row.outsource_material_receipt_id is not None
+            and int(getattr(row, "tenant_id", 0) or 0) == int(tenant_id)
+        }
+
+        rows: List[Dict[str, Any]] = []
+        for receipt in receipts:
+            rid = int(receipt.id)
+            work_order = wo_by_id.get(int(receipt.outsource_work_order_id or 0))
+            product_id = int(getattr(work_order, "product_id", 0) or 0) if work_order else 0
+            qty = float(receipt.quantity or 0)
+            material_code = str(getattr(work_order, "product_code", "") or "") if work_order else ""
+            material_name = str(getattr(work_order, "product_name", "") or "") if work_order else ""
+            if product_id <= 0 or qty <= 0:
+                preview_items: List[Dict[str, Any]] = []
+            else:
+                preview_items = [
+                    {
+                        "item_id": rid,
+                        "material_id": product_id,
+                        "material_code": material_code,
+                        "material_name": material_name,
+                        "max_push_quantity": 0 if rid in existing_ids else qty,
+                    }
+                ]
+            allowed, reason = self._derive_iqc_pull_capability(
+                source_allowed=True,
+                preview_items=preview_items,
+                not_allowed_reason="incoming_inspection.pull_from_outsource_material_receipt.not_allowed",
+                no_lines_reason="incoming_inspection.pull_from_outsource_material_receipt.no_lines",
+                already_pulled_reason="incoming_inspection.pull_from_outsource_material_receipt.already_pulled",
+            )
+            pull_summary = _summarize_pull_preview_items(preview_items)
+            supplier_name = str(getattr(work_order, "supplier_name", "") or "").strip() if work_order else ""
+            receipt_code_value = str(receipt.code or rid)
+            label = receipt_code_value
+            if supplier_name:
+                label = f"{label} - {supplier_name}"
+            rows.append(
+                {
+                    "id": rid,
+                    "code": label,
+                    "receipt_code": receipt_code_value,
+                    "work_order_code": str(getattr(work_order, "code", "") or "") or None,
+                    "supplier_name": supplier_name or None,
+                    "status": receipt.status,
+                    "updated_at": getattr(receipt, "updated_at", None),
+                    **pull_summary,
+                    "capabilities": {
+                        "pull_incoming_inspection": {
+                            "allowed": allowed,
+                            "reason": reason,
+                        }
+                    },
+                }
+            )
+        return {"data": rows, "total": total, "success": True}
+
     async def list_purchase_order_pull_candidates(
         self,
         tenant_id: int,
@@ -3654,6 +3762,103 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                     "未生成任何来料检验单：各明细可能已有检验单，或物料质检模式为无质检"
                 )
             return inspections
+
+    async def create_inspection_from_outsource_material_receipt(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        created_by: int,
+    ) -> List[IncomingInspectionResponse]:
+        """从草稿委外收货创建来料检验单，单据类型仍是 IncomingInspection。"""
+        await _require_iqc_stage_enabled(tenant_id)
+        incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
+        if not incoming_enabled:
+            raise BusinessLogicError("当前组织未开启来料检验，禁止从委外收货单下推来料检验")
+
+        from apps.kuaizhizao.models.outsource_work_order import (
+            OutsourceMaterialReceipt,
+            OutsourceWorkOrder,
+        )
+        from apps.master_data.models.material import Material
+
+        async with in_transaction():
+            receipt = await OutsourceMaterialReceipt.get_or_none(
+                tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+            )
+            if not receipt or int(receipt.tenant_id) != int(tenant_id):
+                raise NotFoundError(f"委外收货单不存在: {receipt_id}")
+            if str(receipt.status or "").strip() != "draft":
+                raise BusinessLogicError("仅草稿状态的委外收货单可创建来料检验单")
+
+            work_order = await OutsourceWorkOrder.get_or_none(
+                tenant_id=tenant_id,
+                id=receipt.outsource_work_order_id,
+                deleted_at__isnull=True,
+            )
+            if not work_order or int(work_order.tenant_id) != int(tenant_id):
+                raise NotFoundError(f"委外工单不存在: {receipt.outsource_work_order_id}")
+            product_id = int(work_order.product_id or 0)
+            if product_id <= 0:
+                raise BusinessLogicError("委外收货单没有可检验物料")
+
+            existing = await IncomingInspection.filter(
+                tenant_id=tenant_id,
+                outsource_material_receipt_id=receipt_id,
+                deleted_at__isnull=True,
+            ).first()
+            if existing:
+                raise BusinessLogicError("未生成任何来料检验单：该委外收货已有来料检验单")
+
+            qty = receipt.quantity
+            if qty is None or Decimal(str(qty)) <= 0:
+                raise BusinessLogicError("委外收货数量必须大于 0")
+
+            mat = await Material.get_or_none(
+                tenant_id=tenant_id, id=product_id, deleted_at__isnull=True
+            )
+            template = await _resolve_inspection_template_fields(tenant_id, product_id, "iqc")
+            initial_review_fields = await _quality_inspection_initial_review_fields(
+                tenant_id, "incoming_inspection"
+            )
+            unit = str(getattr(receipt, "unit", None) or "").strip()
+            if not unit and mat is not None:
+                unit = str(getattr(mat, "base_unit", None) or "").strip()
+            if not unit:
+                unit = "件"
+            today = today_site_str()
+            code = await self.generate_code(
+                tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}"
+            )
+            create_kwargs: Dict[str, Any] = {
+                "tenant_id": tenant_id,
+                "inspection_code": code,
+                "source_type": "outsource_material_receipt",
+                "outsource_material_receipt_id": int(receipt.id),
+                "outsource_material_receipt_code": receipt.code,
+                "supplier_id": work_order.supplier_id,
+                "supplier_name": work_order.supplier_name,
+                "material_id": product_id,
+                "material_code": work_order.product_code,
+                "material_name": work_order.product_name,
+                "material_spec": getattr(mat, "specification", None) if mat else None,
+                "material_unit": unit,
+                "inspection_quantity": qty,
+                "qualified_quantity": 0,
+                "unqualified_quantity": 0,
+                "inspection_result": "待检验",
+                "quality_status": "待判定",
+                "status": "待检验",
+                "created_by": created_by,
+                **template,
+            }
+            create_kwargs.update(initial_review_fields)
+            if created_by:
+                creator_name = await self.get_user_name(created_by)
+                create_kwargs["created_by_name"] = creator_name
+                create_kwargs["updated_by"] = created_by
+                create_kwargs["updated_by_name"] = creator_name
+            inspection = await IncomingInspection.create(**create_kwargs)
+            return [IncomingInspectionResponse.model_validate(inspection)]
 
     async def import_from_data(
         self,
