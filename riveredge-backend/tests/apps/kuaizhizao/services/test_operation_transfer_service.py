@@ -38,19 +38,36 @@ async def test_sum_plan_transfer_only_counts_passed():
         "apps.kuaizhizao.services.operation_transfer_service.ipqc_inspection_passed_for_transfer",
         new=AsyncMock(side_effect=[True, False, False]),
     ):
-        total = await sum_plan_transfer_qualified_from_inspections(1, inspections)
+        total = await sum_plan_transfer_qualified_from_inspections(
+            1, inspections, audit_required=False
+        )
     assert total == Decimal("50")
 
 
 @pytest.mark.asyncio
 async def test_resolve_transfer_simple_uses_reporting_qualified():
+    """简易模式完成数量改认过程检验放行数，不再返回报工合格数。"""
     woo = _woo(qualified=80)
     with patch(
         "apps.kuaizhizao.services.operation_transfer_service.resolve_inspection_policy",
         new=AsyncMock(return_value=("simple", None, "operation")),
+    ), patch(
+        "apps.kuaizhizao.services.operation_transfer_service.get_quality_effective_config",
+        new=AsyncMock(
+            return_value={
+                "stage_enabled": {"ipqc": True},
+                "module_enabled": {"process": True},
+            }
+        ),
     ):
-        qty = await resolve_operation_transfer_qualified(1, 10, woo)
-    assert qty == Decimal("80")
+        qty = await resolve_operation_transfer_qualified(
+            1,
+            10,
+            woo,
+            inspections_by_op={1: []},
+            audit_required=False,
+        )
+    assert qty == Decimal("0")
 
 
 @pytest.mark.asyncio
@@ -60,8 +77,13 @@ async def test_resolve_transfer_plan_uses_inspection_sum():
     inspections_by_op = {1: inspections}
     policy_cache = {1: ("plan", 5, "operation")}
     with patch(
-        "apps.kuaizhizao.services.operation_transfer_service.sum_plan_transfer_qualified_from_inspections",
-        new=AsyncMock(return_value=Decimal("60")),
+        "apps.kuaizhizao.services.operation_transfer_service.get_quality_effective_config",
+        new=AsyncMock(
+            return_value={
+                "stage_enabled": {"ipqc": True},
+                "module_enabled": {"process": True},
+            }
+        ),
     ):
         qty = await resolve_operation_transfer_qualified(
             1,
@@ -69,6 +91,7 @@ async def test_resolve_transfer_plan_uses_inspection_sum():
             woo,
             policy_cache=policy_cache,
             inspections_by_op=inspections_by_op,
+            audit_required=False,
         )
     assert qty == Decimal("60")
 
@@ -221,7 +244,9 @@ async def test_ipqc_partial_unqualified_still_transfers_qualified_qty():
     assert ok is True
     assert zero is False
     total = await sum_plan_transfer_qualified_from_inspections(
-        1, [_insp(status="已检验", quality_status="不合格", qualified=99)]
+        1,
+        [_insp(status="已检验", quality_status="不合格", qualified=99)],
+        audit_required=False,
     )
     assert total == Decimal("99")
 
@@ -240,6 +265,14 @@ async def test_resolve_display_unqualified_simple_uses_reporting_unqualified():
     with patch(
         "apps.kuaizhizao.services.operation_transfer_service.resolve_inspection_policy",
         new=AsyncMock(return_value=("simple", None, "operation")),
+    ), patch(
+        "apps.kuaizhizao.services.operation_transfer_service.get_quality_effective_config",
+        new=AsyncMock(
+            return_value={
+                "stage_enabled": {"ipqc": True},
+                "module_enabled": {"process": True},
+            }
+        ),
     ):
         qty = await resolve_operation_display_unqualified(1, 10, woo)
     assert qty == Decimal("100")
