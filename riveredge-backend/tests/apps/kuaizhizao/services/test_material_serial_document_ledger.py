@@ -170,6 +170,53 @@ async def test_revoke_appends_reverse_row_and_does_not_change_original(ledger):
 
 
 @pytest.mark.asyncio
+async def test_unmatched_revoke_stays_in_history_but_is_not_current_document(ledger):
+    await record_serial_document_ledger(**_post())
+    await record_serial_document_ledger(
+        **_post(
+            direction="out",
+            movement_type="sales_delivery_withdraw",
+            source_type="sales_delivery_withdraw",
+            source_doc_id=99,
+            source_doc_code="SD-99",
+            idempotency_key="sales_delivery:99:withdraw:1",
+        )
+    )
+    assert len(ledger.rows) == 2
+    reversal = ledger.rows[1]
+    assert reversal.reverses_id is None
+    assert reversal.source_type == "sales_delivery_withdraw"
+    current = current_document_from_rows(ledger.rows)
+    assert current["source_type"] == "purchase_receipt"
+    assert current["source_doc_id"] == 11
+    traced = await ledger_svc.serial_document_trace(1, "SN-1")
+    assert [row["source_type"] for row in traced["serial_document_ledger"]] == [
+        "purchase_receipt",
+        "sales_delivery_withdraw",
+    ]
+    assert traced["current_document"]["source_type"] == "purchase_receipt"
+    assert traced["current_document"]["source_doc_id"] == 11
+
+
+@pytest.mark.asyncio
+async def test_orphan_revoke_is_history_and_not_the_current_document(ledger):
+    await record_serial_document_ledger(
+        **_post(
+            direction="out",
+            movement_type="purchase_receipt_withdraw",
+            source_type="purchase_receipt_revoke",
+            idempotency_key="purchase_receipt:11:revoke:orphan",
+        )
+    )
+    assert len(ledger.rows) == 1
+    assert ledger.rows[0].reverses_id is None
+    assert current_document_from_rows(ledger.rows) is None
+    traced = await ledger_svc.serial_document_trace(1, "SN-1")
+    assert traced["serial_document_ledger"][0]["source_type"] == "purchase_receipt_revoke"
+    assert traced["current_document"] is None
+
+
+@pytest.mark.asyncio
 async def test_outbound_then_withdraw_current_document_is_no_longer_the_reversed_one(ledger):
     await record_serial_document_ledger(**_post())
     await record_serial_document_ledger(
