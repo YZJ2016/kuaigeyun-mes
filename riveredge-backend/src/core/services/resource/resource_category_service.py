@@ -143,7 +143,10 @@ class ResourceCategoryService:
         description: Optional[str] = None,
         sort_order: int = 0,
     ) -> ResourceCategory:
-        """按 code 获取或创建分类（接口库加载等场景）。"""
+        """按 code 获取或创建分类（接口库加载等场景）。
+
+        unique_together 含已软删行：删除分类后再加载同包时须恢复旧行，不能再 INSERT。
+        """
         resource_type = self._assert_resource_type(resource_type)
         normalized_code = str(code or "").strip()
         if not normalized_code:
@@ -157,6 +160,31 @@ class ResourceCategoryService:
         ).first()
         if existing:
             return existing
+
+        trashed = await ResourceCategory.filter(
+            tenant_id=tenant_id,
+            resource_type=resource_type,
+            code=normalized_code,
+            deleted_at__isnull=False,
+        ).order_by("-deleted_at", "-id").first()
+        if trashed:
+            trashed.deleted_at = None
+            trashed.name = name
+            if description is not None:
+                trashed.description = description
+            trashed.sort_order = sort_order
+            trashed.is_active = True
+            await trashed.save(
+                update_fields=[
+                    "deleted_at",
+                    "name",
+                    "description",
+                    "sort_order",
+                    "is_active",
+                    "updated_at",
+                ]
+            )
+            return trashed
 
         return await ResourceCategory.create(
             tenant_id=tenant_id,
@@ -183,6 +211,32 @@ class ResourceCategoryService:
         ).first()
         if existing:
             raise ValidationError(f"分类代码 '{data.code}' 已存在")
+
+        trashed = await ResourceCategory.filter(
+            tenant_id=tenant_id,
+            resource_type=resource_type,
+            code=data.code,
+            deleted_at__isnull=False,
+        ).order_by("-deleted_at", "-id").first()
+        if trashed:
+            # 与 unique_together 对齐：恢复软删行，避免再 INSERT 撞唯一约束
+            payload = data.model_dump()
+            trashed.deleted_at = None
+            trashed.name = payload.get("name") or trashed.name
+            trashed.description = payload.get("description")
+            trashed.sort_order = int(payload.get("sort_order") or 0)
+            trashed.is_active = bool(payload.get("is_active", True))
+            await trashed.save(
+                update_fields=[
+                    "deleted_at",
+                    "name",
+                    "description",
+                    "sort_order",
+                    "is_active",
+                    "updated_at",
+                ]
+            )
+            return trashed
 
         return await ResourceCategory.create(
             tenant_id=tenant_id,
