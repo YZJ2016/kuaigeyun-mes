@@ -175,6 +175,64 @@ export function buildIncomingPurchaseReceiptPullColumns(t: TFunction): TableColu
   ];
 }
 
+export function buildIncomingOutsourceReceiptPullColumns(t: TFunction): TableColumnsType<QualityPullCandidateBase & {
+  receipt_code?: string;
+  work_order_code?: string;
+  supplier_name?: string;
+  capabilities?: { pull_incoming_inspection?: PullCapability };
+}> {
+  return [
+    {
+      title: t('app.kuaizhizao.quality.pullQuery.receiptCode'),
+      dataIndex: 'receipt_code',
+      width: 168,
+      ellipsis: true,
+      render: (v: unknown) => renderDash(v),
+    },
+    {
+      title: t('app.kuaizhizao.quality.pullQuery.workOrderCode'),
+      dataIndex: 'work_order_code',
+      width: 150,
+      ellipsis: true,
+      render: (v: unknown) => renderDash(v),
+    },
+    {
+      title: t('app.kuaizhizao.quality.pullQuery.supplier'),
+      dataIndex: 'supplier_name',
+      ellipsis: true,
+      render: (v: unknown) => renderDash(v),
+    },
+    {
+      title: t('app.kuaizhizao.quality.pullQuery.material'),
+      key: 'material_summary',
+      width: 160,
+      ellipsis: true,
+      render: (_: unknown, r) => renderDash(r.material_summary),
+    },
+    {
+      title: t('app.kuaizhizao.quality.pullQuery.pushableLines'),
+      key: 'pushable_lines',
+      width: 110,
+      align: 'center',
+      render: (_: unknown, r) => renderPushableLines(t, r.pushable_line_count, r.line_count),
+    },
+    {
+      title: t('app.kuaizhizao.quality.pullQuery.docStatus'),
+      dataIndex: 'status',
+      width: 100,
+      align: 'center',
+      render: (v: unknown) => renderDocStatus(t, v),
+    },
+    {
+      title: t('common.updatedAt'),
+      dataIndex: 'updated_at',
+      width: 112,
+      render: (v: unknown) => (v ? formatDateTimeBySiteSetting(String(v)) : '—'),
+    },
+    buildPullStatusColumn(t, 'pull_incoming_inspection', qualityInspectionCapabilityReasonMessage),
+  ];
+}
+
 export function buildIncomingCustomerMaterialPullColumns(t: TFunction): TableColumnsType<QualityPullCandidateBase & {
   registration_code?: string;
   customer_name?: string;
