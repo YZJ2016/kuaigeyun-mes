@@ -5464,17 +5464,26 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 raise BusinessLogicError("已存在装箱绑定记录，请先删除绑定后再删除成品入库单")
 
             from apps.kuaizhizao.models.document_relation import DocumentRelation
+            from apps.kuaizhizao.services.document_relation_new_service import (
+                DocumentRelationNewService,
+            )
 
-            await DocumentRelation.filter(
+            rel_svc = DocumentRelationNewService()
+            target_rows = await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 target_type="finished_goods_receipt",
                 target_id=receipt_id,
-            ).delete()
-            await DocumentRelation.filter(
+            ).all()
+            source_rows = await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 source_type="finished_goods_receipt",
                 source_id=receipt_id,
-            ).delete()
+            ).all()
+            for row in (*target_rows, *source_rows):
+                try:
+                    await rel_svc.delete_relation(tenant_id, relation_id=row.id)
+                except NotFoundError:
+                    continue
 
             await FinishedGoodsReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).delete()
             now = resolve_business_datetime()
@@ -10871,17 +10880,26 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             )
 
             from apps.kuaizhizao.models.document_relation import DocumentRelation
+            from apps.kuaizhizao.services.document_relation_new_service import (
+                DocumentRelationNewService,
+            )
 
-            await DocumentRelation.filter(
+            rel_svc = DocumentRelationNewService()
+            target_rows = await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 target_type="purchase_receipt",
                 target_id=receipt_id,
-            ).delete()
-            await DocumentRelation.filter(
+            ).all()
+            source_rows = await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 source_type="purchase_receipt",
                 source_id=receipt_id,
-            ).delete()
+            ).all()
+            for row in (*target_rows, *source_rows):
+                try:
+                    await rel_svc.delete_relation(tenant_id, relation_id=row.id)
+                except NotFoundError:
+                    continue
 
             await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).delete()
             now = resolve_business_datetime()

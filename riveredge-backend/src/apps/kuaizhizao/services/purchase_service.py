@@ -1701,25 +1701,36 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         po_code = getattr(order, "order_code", str(order_id))
 
-        # 同步回滚采购申请：清除关联申请明细的转单引用，重算申请状态，并记录操作历史
-        await self._sync_requisition_on_po_delete(
-            tenant_id=tenant_id, order_id=order_id, po_code=po_code, operator_id=operator_id
-        )
+        async with in_transaction():
+            # 同步回滚采购申请：清除关联申请明细的转单引用，重算申请状态，并记录操作历史
+            await self._sync_requisition_on_po_delete(
+                tenant_id=tenant_id, order_id=order_id, po_code=po_code, operator_id=operator_id
+            )
 
-        # 删除采购申请→采购订单 的 DocumentRelation（避免操作历史显示已删除的下游）
-        from apps.kuaizhizao.models.document_relation import DocumentRelation
-        await DocumentRelation.filter(
-            tenant_id=tenant_id,
-            source_type="purchase_requisition",
-            target_type="purchase_order",
-            target_id=order_id,
-        ).delete()
+            # 删除采购申请→采购订单 的 DocumentRelation（无 source_id，先查再按主键删）
+            from apps.kuaizhizao.models.document_relation import DocumentRelation
+            from apps.kuaizhizao.services.document_relation_new_service import (
+                DocumentRelationNewService,
+            )
 
-        # 明细硬删；订单头软删（与销售订单一致，兼容 tenant+code 部分唯一索引）
-        await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).delete()
-        await PurchaseOrder.filter(tenant_id=tenant_id, id=order_id).update(
-            deleted_at=resolve_business_datetime()
-        )
+            rel_svc = DocumentRelationNewService()
+            relation_rows = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="purchase_requisition",
+                target_type="purchase_order",
+                target_id=order_id,
+            ).all()
+            for row in relation_rows:
+                try:
+                    await rel_svc.delete_relation(tenant_id, relation_id=row.id)
+                except NotFoundError:
+                    continue
+
+            # 明细硬删；订单头软删（与销售订单一致，兼容 tenant+code 部分唯一索引）
+            await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).delete()
+            await PurchaseOrder.filter(tenant_id=tenant_id, id=order_id).update(
+                deleted_at=resolve_business_datetime()
+            )
 
         return True
 

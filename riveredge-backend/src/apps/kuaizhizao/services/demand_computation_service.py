@@ -1058,8 +1058,11 @@ class DemandComputationService(AppBaseService):
                 items.append(item)
 
             # 3. 更新需求状态并建立关联
-            from apps.kuaizhizao.models.document_relation import DocumentRelation
+            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
             from apps.kuaizhizao.services.demand_service import DemandService
+            from apps.kuaizhizao.services.document_relation_new_service import (
+                DocumentRelationNewService,
+            )
 
             # 3.1 批量更新下推标记 (确保所有参与工作的需求都被标记)
             push_audit: Dict[str, Any] = {
@@ -1072,28 +1075,33 @@ class DemandComputationService(AppBaseService):
             await Demand.filter(tenant_id=tenant_id, id__in=demand_id_list).update(**push_audit)
 
             demand_svc = DemandService()
+            rel_svc = DocumentRelationNewService()
             for d in demands:
                 await demand_svc.sync_upstream_planning_on_push(
                     tenant_id, d, computation.id, computation_code
                 )
 
                 # 建立单据关联记录（需求 -> 需求计算）
-                await DocumentRelation.get_or_create(
-                    tenant_id=tenant_id,
-                    source_type="demand",
-                    source_id=d.id,
-                    target_type="demand_computation",
-                    target_id=computation.id,
-                    defaults={
-                        "relation_type": "source",
-                        "relation_mode": "push",
-                        "relation_desc": f"下推到需求计算 {computation_code}",
-                        "source_code": d.demand_code,
-                        "target_code": computation_code,
-                        "demand_id": d.id,
-                        "created_by": created_by,
-                    },
-                )
+                try:
+                    await rel_svc.create_relation(
+                        tenant_id,
+                        DocumentRelationCreate(
+                            source_type="demand",
+                            source_id=d.id,
+                            source_code=d.demand_code,
+                            target_type="demand_computation",
+                            target_id=computation.id,
+                            target_code=computation_code,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc=f"下推到需求计算 {computation_code}",
+                            demand_id=d.id,
+                        ),
+                        created_by,
+                    )
+                except BusinessLogicError as exc:
+                    if exc.message != "关联关系已存在":
+                        raise
 
             return await self._build_computation_response(computation, items)
     
@@ -3610,6 +3618,9 @@ class DemandComputationService(AppBaseService):
         """
         from apps.kuaizhizao.models.document_relation import DocumentRelation
         from apps.kuaizhizao.services.demand_service import DemandService
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
 
         DOWNSTREAM_TYPES = ("work_order", "purchase_order", "purchase_requisition")
 
@@ -3651,17 +3662,23 @@ class DemandComputationService(AppBaseService):
                 computation_id=computation_id
             ).delete()
 
-            # 删除单据关联（双向）
-            await DocumentRelation.filter(
+            # 删除单据关联（双向）：先查出命中行，再按主键删。0 行幂等成功。
+            rel_svc = DocumentRelationNewService()
+            source_rows = await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 source_type="demand_computation",
                 source_id=computation_id
-            ).delete()
-            await DocumentRelation.filter(
+            ).all()
+            target_rows = await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 target_type="demand_computation",
                 target_id=computation_id
-            ).delete()
+            ).all()
+            for row in (*source_rows, *target_rows):
+                try:
+                    await rel_svc.delete_relation(tenant_id, relation_id=row.id)
+                except NotFoundError:
+                    continue
 
             # 更新关联需求的 pushed_to_computation 状态并同步上游
             for rel_demand_id in demand_ids_in_comp:

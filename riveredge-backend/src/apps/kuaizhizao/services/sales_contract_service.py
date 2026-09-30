@@ -959,16 +959,26 @@ class SalesContractService(AppBaseService[SalesContract]):
                 contract_id=None,
                 contract_code=None,
             )
-            await DocumentRelation.filter(
+            from apps.kuaizhizao.services.document_relation_new_service import (
+                DocumentRelationNewService,
+            )
+
+            rel_svc = DocumentRelationNewService()
+            target_rows = await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 target_type="sales_contract",
                 target_id=contract_id,
-            ).delete()
-            await DocumentRelation.filter(
+            ).all()
+            source_rows = await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 source_type="sales_contract",
                 source_id=contract_id,
-            ).delete()
+            ).all()
+            for row in (*target_rows, *source_rows):
+                try:
+                    await rel_svc.delete_relation(tenant_id, relation_id=row.id)
+                except NotFoundError:
+                    continue
 
     async def submit_contract(
         self,

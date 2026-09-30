@@ -861,6 +861,9 @@ class DemandService(AppBaseService[Demand]):
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder
         from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
 
         rels = await DocumentRelation.filter(
             tenant_id=tenant_id,
@@ -884,13 +887,13 @@ class DemandService(AppBaseService[Demand]):
                 await PurchaseRequisition.filter(tenant_id=tenant_id, id=tid).update(
                     deleted_at=resolve_business_datetime(), updated_at=resolve_business_datetime()
                 )
-            await DocumentRelation.filter(
-                tenant_id=tenant_id,
+            await DocumentRelationNewService().delete_relation(
+                tenant_id,
                 source_type="demand_computation",
                 source_id=computation_id,
                 target_type=tt,
-                target_id=tid
-            ).delete()
+                target_id=tid,
+            )
 
     async def withdraw_from_computation(
         self,
@@ -917,6 +920,9 @@ class DemandService(AppBaseService[Demand]):
         from apps.kuaizhizao.models.demand_computation import DemandComputation
         from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
         from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
 
         DOWNSTREAM_TYPES = ("work_order", "purchase_order", "purchase_requisition")
 
@@ -973,21 +979,22 @@ class DemandService(AppBaseService[Demand]):
                     computation_id=computation.id
                 ).delete()
                 await DemandComputation.filter(tenant_id=tenant_id, id=computation.id).delete()
+                rel_svc = DocumentRelationNewService()
                 for rel_demand_id in demand_ids_in_comp:
-                    await DocumentRelation.filter(
-                        tenant_id=tenant_id,
+                    await rel_svc.delete_relation(
+                        tenant_id,
                         source_type="demand",
                         source_id=rel_demand_id,
                         target_type="demand_computation",
-                        target_id=computation.id
-                    ).delete()
-                    await DocumentRelation.filter(
-                        tenant_id=tenant_id,
+                        target_id=computation.id,
+                    )
+                    await rel_svc.delete_relation(
+                        tenant_id,
                         source_type="demand_computation",
                         source_id=computation.id,
                         target_type="demand",
-                        target_id=rel_demand_id
-                    ).delete()
+                        target_id=rel_demand_id,
+                    )
                     await Demand.filter(tenant_id=tenant_id, id=rel_demand_id).update(
                         pushed_to_computation=False,
                         computation_id=None,
