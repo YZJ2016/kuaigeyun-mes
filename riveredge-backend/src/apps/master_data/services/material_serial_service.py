@@ -411,9 +411,16 @@ class MaterialSerialService:
         if not serial:
             raise NotFoundError("物料序列号", serial_uuid)
 
+        from apps.kuaizhizao.services.material_serial_document_ledger_service import (
+            serial_document_trace,
+        )
+
+        document_trace = await serial_document_trace(tenant_id, serial.serial_no)
         return {
             "serial": MaterialSerialService._to_response(serial).model_dump(by_alias=True),
             "profile": profile.model_dump(by_alias=True),
+            "serial_document_ledger": document_trace["serial_document_ledger"],
+            "current_document": document_trace["current_document"],
             "production_records": [
                 e.model_dump(by_alias=True)
                 for e in profile.events
