@@ -58,13 +58,18 @@ def ledger_row_for_trace(row: Any) -> dict[str, Any]:
 
 
 def current_document_from_rows(rows: list[Any]) -> Optional[dict[str, Any]]:
-    """时间序上，跳过已被反向指针指到的正向行，取最后一笔正向行的来源单据。"""
+    """时间序上，跳过已被反向指针指到的正向行，取最后一笔正向行的来源单据。
+
+    撤回行即使 ``reverses_id`` 为空，也不进入正向集合。历史列表仍返回这些行。
+    """
     ordered = sorted(rows, key=lambda row: (row.occurred_at, int(row.id or 0)))
     pointed = {int(row.reverses_id) for row in ordered if row.reverses_id}
     forward = [
         row
         for row in ordered
-        if not row.reverses_id and int(row.id) not in pointed
+        if not row.reverses_id
+        and int(row.id) not in pointed
+        and not posting_is_reversal(row.source_type)
     ]
     if not forward:
         return None
