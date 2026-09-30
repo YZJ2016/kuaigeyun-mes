@@ -741,6 +741,68 @@ class ReportingService(AppBaseService[ReportingRecord]):
             target_type__in=["finished_goods_receipt", "semi_finished_goods_receipt"],
         ).exists()
 
+    async def _sum_direct_inbound_quantity_for_work_order(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+    ) -> Decimal:
+        """该工单已挂在末道报工上的自动入库数量。口径与报工幂等关联、一键入库单头数量一致。"""
+        reporting_rows = await ReportingRecord.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
+        ).all()
+        reporting_ids = [
+            int(row.id) for row in reporting_rows if getattr(row, "id", None) is not None
+        ]
+        if not reporting_ids:
+            return Decimal("0")
+        relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="reporting_record",
+            source_id__in=reporting_ids,
+            target_type__in=["finished_goods_receipt", "semi_finished_goods_receipt"],
+        ).all()
+        finished_ids: List[int] = []
+        semi_ids: List[int] = []
+        for rel in relations:
+            target_id = getattr(rel, "target_id", None)
+            if target_id is None:
+                continue
+            if rel.target_type == "finished_goods_receipt":
+                finished_ids.append(int(target_id))
+            elif rel.target_type == "semi_finished_goods_receipt":
+                semi_ids.append(int(target_id))
+        occupied_statuses = ("待入库", "草稿", "draft", "DRAFT", "已入库")
+        total = Decimal("0")
+        if finished_ids:
+            from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+
+            rows = await FinishedGoodsReceipt.filter(
+                tenant_id=tenant_id,
+                id__in=finished_ids,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+                status__in=occupied_statuses,
+            ).all()
+            for row in rows:
+                total += Decimal(str(row.total_quantity or 0))
+        if semi_ids:
+            from apps.kuaizhizao.models.semi_finished_goods_receipt import (
+                SemiFinishedGoodsReceipt,
+            )
+
+            rows = await SemiFinishedGoodsReceipt.filter(
+                tenant_id=tenant_id,
+                id__in=semi_ids,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+                status__in=occupied_statuses,
+            ).all()
+            for row in rows:
+                total += Decimal(str(row.total_quantity or 0))
+        return total
+
     async def _cascade_revoke_direct_inbound_for_reporting(
         self,
         tenant_id: int,
@@ -880,8 +942,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
     ) -> Optional[LastOperationInboundResult]:
         """
         业务参数「末道工序自动入库」：
-        - direct_inbound：末道每笔已审核报工按合格数量各建一张入库单并确认入库
+        - direct_inbound：末道每笔已审核报工各建一张入库单并确认入库
         - inbound_notice：同上建待入库单，不自动确认（预留成品检验流程）
+        非关键末道数量为本笔报工合格数。关键末道数量为当前放行合格数加已处理让步，
+        减去该工单已占用的末道自动入库数量；小于等于 0 不建单、不确认。
         在报工事务提交之后调用，避免与报工嵌套事务冲突。
         """
         from infra.exceptions.exceptions import BusinessLogicError
@@ -923,7 +987,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if key_output is not None:
                 if key_output <= 0:
                     return None
-                qualified = float(key_output)
+                occupied = await self._sum_direct_inbound_quantity_for_work_order(
+                    tenant_id, int(record.work_order_id)
+                )
+                inbound_qty = key_output - occupied
+                if inbound_qty <= 0:
+                    return None
+                qualified = float(inbound_qty)
             else:
                 qualified = float(record.qualified_quantity or 0)
                 if qualified <= 0:
