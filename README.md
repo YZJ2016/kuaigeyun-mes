@@ -5,8 +5,8 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)
 ![Ant Design](https://img.shields.io/badge/Ant%20Design-6-0170FE?style=flat-square&logo=antdesign)
-![Expo](https://img.shields.io/badge/Expo-54-000020?style=flat-square&logo=expo)
-![Electron](https://img.shields.io/badge/Electron-33-47848F?style=flat-square&logo=electron)
+![uni-app x](https://img.shields.io/badge/uni--app%20x-%E8%92%B8%E6%B1%BD%E6%A8%A1%E5%BC%8F-2B9939?style=flat-square)
+![Electron](https://img.shields.io/badge/Electron-44-47848F?style=flat-square&logo=electron)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi)
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python)
 ![Pydantic](https://img.shields.io/badge/Pydantic-2-E92063?style=flat-square&logo=pydantic)
@@ -41,7 +41,7 @@
 - **完整文档**：[docs/部署指南.md](docs/部署指南.md)
 
 > [!WARNING]
-> **开源范围**：本仓库公开 **后端 API** 与 **PC Web 前端**（`riveredge-backend` + `riveredge-frontend`）。移动端 App、H5、企微/钉钉/飞书接入、触屏工位终端、TV 看板等源码在私仓维护。
+> **仓库范围**：本仓库包含 **后端 API**、**PC Web**（`riveredge-backend` + `riveredge-frontend`）、**移动端**（`kuaigeyun-client/riveredge-app-mobile`，uni-app x 蒸汽模式，同一工程出 Android、iOS、H5、微信小程序）与 **工位壳**（`kuaigeyun-client/riveredge-app-station`，Electron 44）。TV 看板客户端不在本仓。
 >
 > 星技谷制造仍在**积极开发中**，功能、数据模型与界面可能频繁变更；在线演示与本地部署**仅供预览与评估**，请勿用于正式生产或承载真实业务数据。
 
@@ -98,7 +98,7 @@
 - 审批流、消息模板/提醒规则、编码规则与自定义字段
 - 打印模板/打印设备、数据集与 API/应用连接集成
 - 各业务域内置看板与报表、上线向导/启动检查、操作与登录审计
-- 扫码与二维码（PC/移动 H5/工位终端，终端源码在私仓）
+- 扫码与二维码（PC、移动 H5、微信小程序、工位终端）
 
 **高级版（私仓 kuaigeyun-pro，可选安装）**
 
@@ -144,18 +144,18 @@
 
 | 终端 | 技术栈 | 源码 |
 | --- | --- | --- |
-| **PC Web** | React 18 + TypeScript 5 + Vite 5 + Ant Design 6 / Pro Components | 本仓库 `riveredge-frontend`（**开源**） |
-| **后端 API** | FastAPI 0.115 + Pydantic 2 + Tortoise ORM + PostgreSQL 15 + Taskiq | 本仓库 `riveredge-backend`（**开源**） |
-| **移动端 App** | Expo 54 + React Native 0.81 + Expo Router 6 + Ant Design RN 5；Android APK / iOS | 私仓 `kuaigeyun-client`（`riveredge-app-mobile`） |
-| **H5** | 与 App **同一套** Expo 源码，`expo export -p web` → `/mobile`；Caddy 托管 | 私仓（构建产物可随部署分发） |
-| **企业微信 / 钉钉 / 飞书** | H5 内嵌工作台；企微 OAuth 登录；各平台 JS-SDK 调原生扫码 | 私仓 `mobile` 平台层（`hostScan` / `wecomAuth`） |
-| **微信小程序** | 原生壳 `web-view` 打开 H5；扫码经小程序页桥接回 H5 | 私仓 `mini-program`（可选，业务仍走 H5） |
-| **触屏工位机** | Windows + Electron 44；薄壳只放主进程，窗口加载服务器工位入口 | 本仓 `kuaigeyun-client/riveredge-app-station`（本仓跟踪，仓外打包） |
-| **TV 看板** | Android TV + Expo / React Native WebView；预置分享链接，免登录直达看板 | 私仓 `riveredge-app/tv`（`kuaigeyun-client`） |
+| **PC Web** | React 18 + TypeScript 5 + Vite 5 + Ant Design 6 / Pro Components | 本仓库 `riveredge-frontend` |
+| **后端 API** | FastAPI 0.115 + Pydantic 2 + Tortoise ORM 0.21 + PostgreSQL 15 + Taskiq；运行时 Python 3.11 | 本仓库 `riveredge-backend` |
+| **移动端 App** | uni-app x 蒸汽模式（`.uvue` / UTS）+ uni-ui x 1.0.5；Android / iOS | 本仓库 `kuaigeyun-client/riveredge-app-mobile` |
+| **H5** | 与 App **同一套** uni-app x 工程；HBuilderX 发行 Web 到 `unpackage/dist/build/web`，Caddy 挂 `/mobile` | 同上 |
+| **企业微信 / 钉钉 / 飞书** | H5 内嵌工作台；企业微信 OAuth；JS-SDK 扫码签名只接受 `wecom` / `dingtalk` / `feishu` | 本仓库 `kuaigeyun-client/riveredge-app-mobile/shared/channel/h5` |
+| **微信小程序** | 同一套 uni-app x 编译到 `mp-weixin`；扫码走小程序 `uni.scanCode` | 本仓库 `kuaigeyun-client/riveredge-app-mobile/shared/channel/mp-weixin` |
+| **触屏工位机** | Windows + Electron 44.4.5；薄壳只放主进程，窗口加载服务器工位入口 | 本仓库 `kuaigeyun-client/riveredge-app-station`（本仓跟踪，仓外打包） |
+| **TV 看板** | 本仓没有该客户端 | — |
 
 部署与平台：多租户 SaaS、插件化应用、Caddy 反向代理（Web `/`、H5 `/mobile`、API `/api`）。
 
-- H5 与企微配置：见 [docs/部署指南.md](docs/部署指南.md)（扩展应用 / `install-h5`）；详细 H5 说明在私仓 `mobile/docs/H5.md`
+- 移动端发行与 H5 路径：见 [kuaigeyun-client/riveredge-app-mobile/README.md](kuaigeyun-client/riveredge-app-mobile/README.md)、[RELEASE.md](kuaigeyun-client/riveredge-app-mobile/RELEASE.md)；部署见 [docs/部署指南.md](docs/部署指南.md)（`install-h5` 复制本机已发行的 HBuilderX Web）
 - 第三方资源与许可：见 [NOTICE](NOTICE) 与系统内“关于 → 版权声明”
 
 ---
@@ -167,12 +167,12 @@
 | 终端 | 形态 | 典型场景 | 为何选用 |
 | --- | --- | --- | --- |
 | **PC Web** | 浏览器访问 | 计划排程、主数据维护、销售/采购/财务协同、审批、报表与看板设计 | 大屏 + 键鼠，适合复杂表单、多页签并行与办公室长时间操作 |
-| **移动端 App** | Android APK 独立安装（iOS / 鸿蒙规划中） | 工业 PDA 扫码、车间移动报工、仓管收发货、巡检点检 | **不依赖微信与浏览器**；可绑定专用设备；Android 工业 PDA 生态成熟，适合不便安装微信的现场 |
-| **移动端 小程序** | 微信小程序壳 + H5 | 苹果用户临时访问、轻量查询与报工、外协/访客短时使用 | 免 App Store 安装；**iOS 原生 App 完成前的过渡方案**；微信内分享链接即可进入 |
+| **移动端 App** | Android / iOS 安装包（uni-app x） | 工业 PDA 扫码、车间移动报工、仓管收发货、巡检点检 | **不依赖微信与浏览器**；可绑定专用设备；Android 工业 PDA 生态成熟，适合不便安装微信的现场 |
+| **移动端 小程序** | 微信小程序（同一套 uni-app x 编译到 `mp-weixin`） | 苹果用户临时访问、轻量查询与报工、外协/访客短时使用 | 免应用商店安装；微信内即可进入 |
 | **移动端 办公平台** | 企业微信 / 钉钉 / 飞书 内嵌 H5 | 待办与审批提醒、消息触达、扫码入库/点检、经理移动审单 | 接入组织通讯录与单点登录；**通知推到已在用的办公软件**，降低推广与账号管理成本 |
 | **触屏工位机** | Windows Electron 触屏 | 固定工位过站报工、工序扫码确认、线边仓领退料 | 大按钮触屏交互，戴手套也可操作；可固定产线点位，减少员工掏手机 |
 | **触屏工位机** | 共享人脸报工模式 | 多班次、多工位共用一台终端，刷脸识别操作员 | 免账号密码输入；适合流水线上**多人轮流、快速过站**的共享场景 |
-| **TV 看板** | Android TV APK（WebView） | 车间大屏、产线 KPI、设备状态、工单进度看板 | **开机直达、免输入链接**；分享 token 预置进 APK，适合 7×24 展示与管理巡视 |
+| **TV 看板** | 本仓未包含该客户端 | 车间大屏、产线 KPI、设备状态、工单进度看板 | 状态一眼可见，无需登录操作 |
 
 **选型建议（可组合）**
 
@@ -180,18 +180,18 @@
 | --- | --- | --- |
 | 计划、物控、办公室文员 | PC Web | 主数据与单据录入的主战场 |
 | 仓库 PDA、无微信现场 | 移动端 App（Android） | 独立安装，扫码性能与设备管控更好 |
-| 苹果手机一线员工（App 未上线前） | 小程序 | 先保证可用，后续可切原生 App |
+| 苹果手机一线员工 | 小程序或 iOS 安装包 | 小程序免应用商店；iOS 与 Android 同一套 uni-app x |
 | 已全员使用企微/钉钉/飞书 | 办公平台 H5 + 消息提醒 | 少一个新 App，审批与告警跟现有习惯走 |
 | 产线固定工序 | 触屏工位机 | 屏幕常亮、触屏优先，减少误操作 |
 | 车间入口或班组长区域 | TV 看板 | 状态一眼可见，无需登录操作 |
 
-> **开源说明**：本仓库含 **PC Web + 后端 API** 完整源码；移动端 App、H5、小程序、办公平台接入、触屏工位机、TV 看板等终端在私仓 [`kuaigeyun-client`](https://gitee.com/kuaigeyun/kuaigeyun-client) 维护，经部署向导或构建脚本产出安装包 / 静态资源。
+> **源码说明**：本仓库含 **PC Web、后端 API、移动端**（uni-app x：Android / iOS / H5 / 微信小程序，含企微 / 钉钉 / 飞书的 H5 接入）与 **工位壳**。TV 看板客户端不在本仓。安装包与 H5 静态资源由 HBuilderX 发行或部署脚本复制，不在本仓提交构建产物。
 
 ---
 
 ## 快速开始
 
-环境要求：Node.js 22+、Python 3.12+（运行时由 uv 锁定 3.11）、PostgreSQL 15+、Caddy（生产）；默认无需 Redis。
+环境要求：Node.js 22+、Python 3.11（`uv.lock` 锁定 `==3.11.*`，工程要求 `>=3.11,<3.12`）、PostgreSQL 15+、Caddy（生产）；默认无需 Redis。移动端用 HBuilderX 发行，不经 npm 编译。
 
 ```bash
 # Gitee（国内推荐）

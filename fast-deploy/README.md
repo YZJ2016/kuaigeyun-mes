@@ -33,10 +33,10 @@ cd riveredge
 | 场景 | 命令 |
 |------|------|
 | **统一入口（推荐）** | [`deploy.sh`](deploy.sh) |
-| **本地快速启动**（开发机一键起停） | [`launch.dev.sh`](launch.dev.sh)（加 `with-h5` 同时起手机 Expo Web） |
+| **本地快速启动**（开发机一键起停） | [`launch.dev.sh`](launch.dev.sh)（`with-h5` 不编译 uni-app x，也不启动 Expo；H5 由本机 HBuilderX 发行） |
 | **构建并发布**（tip 一份未压缩 dist；`.gz`/`.br` 在部署机生成） | [`build.web.sh`](build.web.sh)（需 `git-filter-repo`） |
 | **移动端 H5**（复制本机 HBuilderX 已发行的 Web，不在此 npm 编译） | [`build.mobile.web.sh`](build.mobile.web.sh) |
-| **部署机安装 H5**（把私仓里已有的发行产物复制到 Caddy `/mobile`） | `./fast-deploy/deploy.sh install-h5`（向导扩展应用 → `[3] 安装 H5`；**可选**，缺省不阻断主仓 install/update） |
+| **部署机安装 H5**（把本机已有的 HBuilderX Web 发行产物复制到 Caddy `/mobile`） | `./fast-deploy/deploy.sh install-h5`（向导扩展应用 → `[3] 安装 H5`；**可选**，缺省不阻断主仓 install/update） |
 | **专业/定制应用组装** | [`tools/workspace/compose.py`](tools/workspace/compose.py)（说明见 [`tools/workspace/README.md`](tools/workspace/README.md)） |
 | Linux | [`linux/dev.sh`](linux/dev.sh) / [`linux/prod.sh`](linux/prod.sh) |
 | Windows PowerShell | [`windows/dev.ps1`](windows/dev.ps1) / [`windows/prod.ps1`](windows/prod.ps1) |
@@ -44,7 +44,7 @@ cd riveredge
 
 ## 环境要求（摘要）
 
-Node.js 22+ · Python 3.12+（系统）/ 3.11（uv 虚拟环境）· uv · npm · PostgreSQL 15+ · Caddy（生产）。**无需 Redis**（Taskiq + PostgreSQL）。
+Node.js 22+ · Python 3.11（`uv.lock` 锁定 `==3.11.*`）· uv · npm · PostgreSQL 15+ · Caddy（生产）。**无需 Redis**（Taskiq + PostgreSQL）。移动端 H5 由本机 HBuilderX 发行。
 
 ## 默认端口
 
