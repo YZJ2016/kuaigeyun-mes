@@ -338,8 +338,31 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         if payable_payload:
             self._schedule_auto_payable_for_outsource_receipt(**payable_payload)
 
+    @staticmethod
+    def _inspection_counts_for_outsource_release(
+        inspection: Any,
+        *,
+        tenant_id: int,
+        locked_work_order: Optional[OutsourceWorkOrder],
+    ) -> bool:
+        if int(getattr(inspection, "tenant_id", 0) or 0) != int(tenant_id):
+            return False
+        if locked_work_order is None:
+            return True
+        if int(getattr(locked_work_order, "tenant_id", 0) or 0) != int(tenant_id):
+            return False
+        material_id = getattr(inspection, "material_id", None)
+        product_id = getattr(locked_work_order, "product_id", None)
+        if material_id is None or product_id is None:
+            return False
+        return int(material_id) == int(product_id)
+
     async def _assert_outsource_receipt_iqc_released(
-        self, tenant_id: int, receipt: OutsourceMaterialReceipt
+        self,
+        tenant_id: int,
+        receipt: OutsourceMaterialReceipt,
+        *,
+        locked_work_order: Optional[OutsourceWorkOrder] = None,
     ) -> None:
         """确认前：本收货的来料检验已合格，或指向这些检验单的让步已处理且接收。"""
         from apps.kuaizhizao.models.defect_record import DefectRecord
@@ -353,15 +376,22 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
             outsource_material_receipt_id=int(receipt.id),
             deleted_at__isnull=True,
         ).all()
-        for inspection in inspections:
-            if int(getattr(inspection, "tenant_id", 0) or 0) != int(tenant_id):
-                continue
+        releasable = [
+            row
+            for row in inspections
+            if self._inspection_counts_for_outsource_release(
+                row,
+                tenant_id=tenant_id,
+                locked_work_order=locked_work_order,
+            )
+        ]
+        for inspection in releasable:
             if await iqc_inspection_passed_for_inbound(tenant_id, inspection):
                 return
         inspection_ids = [
             int(row.id)
-            for row in inspections
-            if row.id is not None and int(getattr(row, "tenant_id", 0) or 0) == int(tenant_id)
+            for row in releasable
+            if row.id is not None
         ]
         if inspection_ids:
             concession = await DefectRecord.filter(
@@ -915,6 +945,11 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                 locked_work_order = await self._acquire_outsource_work_order_row_lock(
                     tenant_id=tenant_id,
                     outsource_work_order_id=int(current.outsource_work_order_id),
+                )
+                await self._assert_outsource_receipt_iqc_released(
+                    tenant_id,
+                    current,
+                    locked_work_order=locked_work_order,
                 )
                 qualified_qty = current.qualified_quantity or Decimal("0")
                 unqualified_qty = current.unqualified_quantity or Decimal("0")
