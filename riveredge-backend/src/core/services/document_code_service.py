@@ -8,9 +8,9 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from loguru import logger
 from tortoise import Model
+from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.constants import is_draft_status
-from apps.kuaizhizao.models.document_relation import DocumentRelation
 from core.config.code_rule_pages import get_page_config_by_code
 from core.config.document_code_page_registry import (
     DocumentCodePageEntry,
@@ -216,16 +216,18 @@ async def sync_document_code_snapshots(
         return
 
     if doc_type:
-        await DocumentRelation.filter(
-            tenant_id=tenant_id,
-            source_type=doc_type,
-            source_id=document_id,
-        ).update(source_code=new_code, source_name=new_code)
-        await DocumentRelation.filter(
-            tenant_id=tenant_id,
-            target_type=doc_type,
-            target_id=document_id,
-        ).update(target_code=new_code, target_name=new_code)
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
+
+        await DocumentRelationNewService().refresh_document_code_snapshots(
+            tenant_id,
+            document_type=doc_type,
+            document_id=document_id,
+            code=new_code,
+            refresh_source=True,
+            refresh_target=True,
+        )
 
     logger.info(
         "单据 {}#{} 编号已同步为 {}（page_code={}）",
@@ -255,15 +257,16 @@ async def apply_document_code_change(
         return old_code
 
     await assert_document_code_change_allowed(tenant_id, page_code, entity, new_code, entry=entry)
-    setattr(entity, entry.code_field, new_code)
-    await entity.save(update_fields=[entry.code_field])
-    await sync_document_code_snapshots(
-        tenant_id,
-        page_code,
-        int(entity.id),
-        new_code,
-        old_code=old_code or None,
-    )
+    async with in_transaction():
+        setattr(entity, entry.code_field, new_code)
+        await entity.save(update_fields=[entry.code_field])
+        await sync_document_code_snapshots(
+            tenant_id,
+            page_code,
+            int(entity.id),
+            new_code,
+            old_code=old_code or None,
+        )
     return new_code
 
 
