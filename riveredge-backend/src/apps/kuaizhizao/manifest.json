@@ -1866,6 +1866,7 @@
     "kuaizhizao:after-sales-ticket:print",
     "kuaizhizao:after-sales-ticket:close",
     "kuaizhizao:app-management:reset-data",
+    "kuaizhizao:app-management:flow-generate",
     "kuaizhizao:customer-follow-up:read",
     "kuaizhizao:customer-follow-up:create",
     "kuaizhizao:customer-follow-up:delete",

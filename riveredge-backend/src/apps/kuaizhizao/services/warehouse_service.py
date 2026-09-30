@@ -8118,7 +8118,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             raise NotFoundError(f"销售预测不存在: {sales_forecast_id}")
         
         # 检查预测状态（只有已审核的预测才能加载生成出库单）
-        if sales_forecast.status != "已审核":
+        if sales_forecast.status not in (
+            "已审核",
+            "AUDITED",
+            "CONFIRMED",
+            "已确认",
+            "审核通过",
+        ):
             raise BusinessLogicError("只有已审核的销售预测才能加载生成销售出库单")
         
         # 获取预测明细
