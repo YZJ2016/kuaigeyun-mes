@@ -31,6 +31,8 @@ import { MarkerTag } from '../../../constants/statusBadges';
 
 import { formatDateTimeBySiteSetting } from '../../../utils/format';
 
+import { pickListSearchKeyword } from '../../../utils/tableQueryKey';
+
 
 import {
 
@@ -577,7 +579,7 @@ const OfficialApiLibraryPage: React.FC = () => {
 
         params={{ statusFilter, manageTableVisible }}
 
-        request={async () => {
+        request={async (_params, _sort, _filter, searchFormValues) => {
 
           if (!manageTableVisible) {
 
@@ -591,13 +593,45 @@ const OfficialApiLibraryPage: React.FC = () => {
 
           );
 
+          const keyword = (pickListSearchKeyword(searchFormValues) || '').toLowerCase();
+
+          const items = !keyword
+
+            ? result.items
+
+            : result.items.filter((pack) => {
+
+                const haystack = [
+
+                  pack.name,
+
+                  pack.pack_id,
+
+                  pack.description,
+
+                  pack.category_name,
+
+                  pack.category_code,
+
+                  pack.connector_type,
+
+                ]
+
+                  .map((v) => String(v ?? '').toLowerCase())
+
+                  .join(' ');
+
+                return haystack.includes(keyword);
+
+              });
+
           return {
 
-            data: result.items,
+            data: items,
 
             success: true,
 
-            total: result.items.length,
+            total: items.length,
 
           };
 
