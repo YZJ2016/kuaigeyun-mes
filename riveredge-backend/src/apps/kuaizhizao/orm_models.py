@@ -70,6 +70,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.material_return",
     "apps.kuaizhizao.models.material_return_item",
     "apps.kuaizhizao.models.material_shortage_exception",
+    "apps.kuaizhizao.models.material_serial_document_ledger",
     "apps.kuaizhizao.models.material_stock_movement",
     "apps.kuaizhizao.models.mold",
     "apps.kuaizhizao.models.mold_ops",

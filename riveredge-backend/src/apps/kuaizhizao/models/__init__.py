@@ -105,6 +105,7 @@ from .material_return import MaterialReturn
 from .material_return_item import MaterialReturnItem
 from .replenishment_suggestion import ReplenishmentSuggestion
 from .line_side_inventory import LineSideInventory
+from .material_serial_document_ledger import MaterialSerialDocumentLedger
 from .material_stock_movement import MaterialStockMovement
 from .backflush_record import BackflushRecord
 from .material_call_request import MaterialCallRequest
@@ -375,6 +376,7 @@ __all__ = [
     'MaterialReturnItem',
     'ReplenishmentSuggestion',
     'LineSideInventory',
+    'MaterialSerialDocumentLedger',
     'MaterialStockMovement',
     'BackflushRecord',
     'BatchingOrder',

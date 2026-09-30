@@ -34,7 +34,13 @@ async def test_valid_serial_is_marked_out_of_stock(monkeypatch):
     record = SimpleNamespace(material_id=1, status="in_stock", save=AsyncMock())
     query = _locked_query(record)
     monkeypatch.setattr(MaterialSerial, "filter", lambda **kw: query)
+    ledger = AsyncMock()
+    monkeypatch.setattr(
+        "apps.kuaizhizao.services.material_serial_document_ledger_service.record_serial_document_ledger",
+        ledger,
+    )
     await InventoryService._mark_serials_out_stock(1, 1, ["SN-1"])
+    ledger.assert_awaited_once()
     assert record.status == "out_stock"
     record.save.assert_awaited_once()
     query.select_for_update.assert_called_once()
