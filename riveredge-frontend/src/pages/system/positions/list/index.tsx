@@ -21,6 +21,11 @@ import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/eq
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { PositionFormModal } from '../components/PositionFormModal';
 import {
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
+import {
   getPositionList,
   getPositionByUuid,
   deletePosition,
@@ -318,7 +323,7 @@ const PositionListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Position>
-          columnPersistenceId="pages.system.positions.list-v2"
+          columnPersistenceId="pages.system.positions.list-v3"
           viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.positions')}
           actionRef={actionRef}
@@ -328,11 +333,11 @@ const PositionListPage: React.FC = () => {
               getPositionList({
                 page: params.current || 1,
                 page_size: params.pageSize || 20,
-                keyword: searchFormValues?.keyword,
-                name: searchFormValues?.name,
-                code: searchFormValues?.code,
-                department_uuid: searchFormValues?.department_uuid,
-                is_active: searchFormValues?.is_active,
+                keyword: pickListSearchKeyword(searchFormValues),
+                name: pickSearchString(searchFormValues, 'name'),
+                code: pickSearchString(searchFormValues, 'code'),
+                department_uuid: pickSearchString(searchFormValues, 'department_uuid'),
+                is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
               }),
               getDepartmentTree(),
             ]);

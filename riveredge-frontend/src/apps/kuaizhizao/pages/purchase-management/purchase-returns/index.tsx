@@ -123,7 +123,7 @@ import {
   buildPurchaseReturnLifecycleValueEnum,
   getPurchaseReturnLifecycle,
   LIST_LIFECYCLE_STAGE_FIELD,
-  resolvePurchaseReturnListLifecycleParams,
+  resolvePurchaseReturnListApiParams,
 } from '../../../utils/purchaseReturnLifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
@@ -2221,47 +2221,11 @@ const PurchaseReturnsPage: React.FC = () => {
           ]}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
-              const sf = searchFormValues ?? {};
-              const lifecycleParams = resolvePurchaseReturnListLifecycleParams(sf, params);
-              const { sortBy, sortOrder } = extractProTableSort(sort);
-              const orderBy =
-                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-              const fuzzyKeyword = typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-              const apiParams: PurchaseReturnListParams = {
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                ...lifecycleParams,
-                order_by: orderBy,
-                include_items: true,
-              };
-              if (fuzzyKeyword) {
-                apiParams.keyword = fuzzyKeyword;
-              } else if (sf.return_code != null && String(sf.return_code).trim()) {
-                apiParams.return_code = String(sf.return_code).trim();
-              }
-              if (sf.supplier_id != null && sf.supplier_id !== '') {
-                apiParams.supplier_id = Number(sf.supplier_id);
-              }
-              const receiptCode =
-                sf.purchase_receipt_code != null ? String(sf.purchase_receipt_code).trim() : '';
-              if (receiptCode) apiParams.purchase_receipt_code = receiptCode;
-              const orderCode =
-                sf.purchase_order_code != null ? String(sf.purchase_order_code).trim() : '';
-              if (orderCode) apiParams.purchase_order_code = orderCode;
-              const returnRange = sf.return_time_range as [unknown, unknown] | undefined;
-              if (returnRange && Array.isArray(returnRange) && returnRange[0]) {
-                apiParams.return_start_date = formatDateTime(returnRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.return_end_date = returnRange[1]
-                  ? formatDateTime(returnRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.return_start_date;
-              }
-              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
-              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.created_end_date = createdRange[1]
-                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.created_start_date;
-              }
+              const apiParams = resolvePurchaseReturnListApiParams(
+                params,
+                sort,
+                searchFormValues,
+              ) as PurchaseReturnListParams;
               const response = await warehouseApi.purchaseReturn.list(apiParams);
               const list = response?.data ?? [];
               const enriched = meta?.purpose === 'prefetch'

@@ -255,13 +255,13 @@ const PluginManagerPage: React.FC = () => {
         <UniTable<PluginInfo>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.pluginManager')}
-          columnPersistenceId="pages.system.plugin-manager"
+          columnPersistenceId="pages.system.plugin-manager-v2"
+          showFuzzySearch={false}
           headerTitle={t('pages.system.pluginManager.title')}
           actionRef={actionRef}
           rowKey="code"
           request={fetchPlugins}
           columns={columns}
-          search={false}
           pagination={false}
           showAdvancedSearch={false}
           showImportButton={false}

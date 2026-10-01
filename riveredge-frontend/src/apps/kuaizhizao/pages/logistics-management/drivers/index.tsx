@@ -21,6 +21,7 @@ import {
 import { deleteDriver, listDrivers, type Driver } from '../../../services/logistics';
 import { DriverFormModal } from '../shared/DriverFormModal';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
 
 const DriversPage: React.FC = () => {
   const { t } = useTranslation();
@@ -159,13 +160,15 @@ const DriversPage: React.FC = () => {
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.drivers')}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.drivers.v3"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.drivers.v4"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         rowKey="id"
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await listDrivers({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
-            keyword: params.keyword as string | undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
           });
           return { data: res.items, total: res.total, success: true };
         }}

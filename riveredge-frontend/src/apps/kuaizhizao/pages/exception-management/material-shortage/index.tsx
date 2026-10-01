@@ -21,6 +21,7 @@ import { exceptionApi } from '../../../services/production';
 import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { pickSearchString } from '../../../../../utils/tableQueryKey';
 
 interface MaterialShortageException {
   id?: number;
@@ -247,7 +248,7 @@ const MaterialShortageExceptionPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        columnPersistenceId="apps.kuaizhizao.pages.exception-management.material-shortage"
+        columnPersistenceId="apps.kuaizhizao.pages.exception-management.material-shortage-v2"
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.exceptionMaterialShortage)}
         headerTitle="缺料异常管理"
@@ -257,14 +258,19 @@ const MaterialShortageExceptionPage: React.FC = () => {
         showAdvancedSearch={true}
         request={async (params, _sort, _filter, searchFormValues) => {
           try {
+            const workOrderIdRaw = pickSearchString(searchFormValues, 'work_order_id');
             const listParams: Record<string, unknown> = {
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
-              work_order_id: searchFormValues?.work_order_id,
-              alert_level: searchFormValues?.alert_level,
+              work_order_id:
+                workOrderIdRaw != null && Number.isFinite(Number(workOrderIdRaw))
+                  ? Number(workOrderIdRaw)
+                  : undefined,
+              alert_level: pickSearchString(searchFormValues, 'alert_level'),
             };
-            if (searchFormValues?.status) {
-              listParams.status = searchFormValues.status;
+            const status = pickSearchString(searchFormValues, 'status');
+            if (status) {
+              listParams.status = status;
             } else {
               listParams.statuses = ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES;
             }

@@ -515,8 +515,9 @@ const WorkCalendarPage: React.FC = () => {
                   actionRef={actionRef}
                   columns={columns}
                   rowKey="uuid"
-                  search={false}
-                  request={async (params) => {
+                  showFuzzySearch={false}
+                  showAdvancedSearch={false}
+                  request={async (params, _sort, _filter, _searchFormValues) => {
                     try {
                       const pageSize = params.pageSize || 20;
                       const skip = ((params.current || 1) - 1) * pageSize;
@@ -556,9 +557,10 @@ const WorkCalendarPage: React.FC = () => {
                   columnPersistenceId="apps.kuaizhizao.pages.performance.work-calendar.downtime.v1"
                   actionRef={downtimeActionRef}
                   rowKey="uuid"
-                  search={false}
+                  showFuzzySearch={false}
+                  showAdvancedSearch={false}
                   columns={downtimeColumns}
-                  request={async (params) => {
+                  request={async (params, _sort, _filter, _searchFormValues) => {
                     try {
                       const pageSize = params.pageSize || 20;
                       const skip = ((params.current || 1) - 1) * pageSize;

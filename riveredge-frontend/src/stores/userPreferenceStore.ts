@@ -327,22 +327,33 @@ export const useUserPreferenceStore = create<UserPreferenceState>()(
         const { preferences } = get();
         // 支持点号路径访问，如 'ui.default_page_size'
         const keys = key.split('.');
-        let value = preferences;
-        
+        let value: unknown = preferences;
+        let pathExists = true;
+
         for (const k of keys) {
-          if (value === undefined || value === null) break;
-          value = value[k];
-        }
-        
-        // 如果用户偏好未设置，尝试从系统配置获取（如果是 ui.* 配置）
-        if (value === undefined && key.startsWith('ui.')) {
-           const systemConfig = useConfigStore.getState().getConfig(key, undefined);
-           if (systemConfig !== undefined) {
-             return systemConfig as unknown as T;
-           }
+          if (value === undefined || value === null || typeof value !== 'object') {
+            pathExists = false;
+            value = undefined;
+            break;
+          }
+          const record = value as Record<string, unknown>;
+          if (!Object.prototype.hasOwnProperty.call(record, k)) {
+            pathExists = false;
+            value = undefined;
+            break;
+          }
+          value = record[k];
         }
 
-        return (value !== undefined ? value : defaultValue) as T;
+        // 未设置或显式 null：ui.* 跟随站点配置（避免个人偏好表单误写入 20 永久盖掉站点 50）
+        if ((!pathExists || value === undefined || value === null) && key.startsWith('ui.')) {
+          const systemConfig = useConfigStore.getState().getConfig(key, undefined);
+          if (systemConfig !== undefined) {
+            return systemConfig as unknown as T;
+          }
+        }
+
+        return (value !== undefined && value !== null ? value : defaultValue) as T;
       },
       
       syncTablePreference: async (tableId: string, state: Record<string, any>) => {

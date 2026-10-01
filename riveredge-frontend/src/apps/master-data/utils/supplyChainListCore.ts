@@ -1,5 +1,10 @@
 import type { ProColumns } from '@ant-design/pro-components';
-import { extractProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import {
   buildMasterCrudActiveValueEnum,
@@ -61,21 +66,6 @@ const PRICE_BOOK_SORT_MAP: Record<string, string> = {
   materialName: 'updated_at',
 };
 
-function pickString(search: Record<string, unknown>, key: string) {
-  const v = search[key];
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-}
-
-function resolveActiveBoolean(
-  search: Record<string, unknown>,
-  field: string,
-): boolean | undefined {
-  const raw = search[field];
-  if (raw === true || raw === 'true') return true;
-  if (raw === false || raw === 'false') return false;
-  return undefined;
-}
-
 function resolveSupplyChainListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
@@ -83,35 +73,35 @@ function resolveSupplyChainListParams(
     extra?: (search: Record<string, unknown>) => Record<string, string | number | boolean | undefined>;
   },
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const search = searchFormValues ?? {};
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   const sortKey = sortBy ? SUPPLY_CHAIN_SORT_MAP[sortBy] ?? sortBy : undefined;
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
   const params: Record<string, string | number | boolean | undefined> = {
-    isActive: resolveActiveBoolean(s, 'isActive'),
+    isActive: pickSearchTriStateBoolean(searchFormValues, 'isActive'),
     sortBy: sortKey,
     sortOrder,
     created_start_date,
     created_end_date,
     updated_start_date,
     updated_end_date,
-    ...(options?.extra?.(s) ?? {}),
+    ...(options?.extra?.(search) ?? {}),
   };
 
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const code = pickString(s, 'code');
-    const name = pickString(s, 'name');
+    const code = pickSearchString(searchFormValues, 'code');
+    const name = pickSearchString(searchFormValues, 'name');
     if (code) params.code = code;
     if (name) params.name = name;
   }
@@ -128,9 +118,9 @@ export function resolveCustomerListParams(
       const extra: Record<string, string | number | boolean | undefined> = {};
       const category = pickOptionalString(search, 'category');
       if (category) extra.category = category;
-      const salesmanId = search.salesmanId;
-      if (salesmanId != null && salesmanId !== '') {
-        extra.salesmanId = Number(salesmanId);
+      const salesmanIdRaw = pickSearchString(search, 'salesmanId');
+      if (salesmanIdRaw != null && Number.isFinite(Number(salesmanIdRaw))) {
+        extra.salesmanId = Number(salesmanIdRaw);
       }
       return extra;
     },
@@ -146,9 +136,9 @@ export function resolveSupplierListParams(
       const extra: Record<string, string | number | boolean | undefined> = {};
       const category = pickOptionalString(search, 'category');
       if (category) extra.category = category;
-      const buyerId = search.buyerId;
-      if (buyerId != null && buyerId !== '') {
-        extra.buyerId = Number(buyerId);
+      const buyerIdRaw = pickSearchString(search, 'buyerId');
+      if (buyerIdRaw != null && Number.isFinite(Number(buyerIdRaw))) {
+        extra.buyerId = Number(buyerIdRaw);
       }
       return extra;
     },
@@ -159,21 +149,21 @@ export function resolvePartnerPriceBookListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const search = searchFormValues ?? {};
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   const sortKey = sortBy ? PRICE_BOOK_SORT_MAP[sortBy] ?? sortBy : undefined;
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
   const params: Record<string, string | number | boolean | undefined> = {
-    activeOnly: resolveActiveBoolean(s, 'isActive'),
+    activeOnly: pickSearchTriStateBoolean(searchFormValues, 'isActive'),
     sortBy: sortKey,
     sortOrder,
     created_start_date,
@@ -182,20 +172,20 @@ export function resolvePartnerPriceBookListParams(
     updated_end_date,
   };
 
-  const partnerId = s.partnerId;
-  if (partnerId != null && partnerId !== '') {
-    params.partnerId = Number(partnerId);
+  const partnerIdRaw = pickSearchString(searchFormValues, 'partnerId');
+  if (partnerIdRaw != null && Number.isFinite(Number(partnerIdRaw))) {
+    params.partnerId = Number(partnerIdRaw);
   }
-  const materialId = s.materialId;
-  if (materialId != null && materialId !== '') {
-    params.materialId = Number(materialId);
+  const materialIdRaw = pickSearchString(searchFormValues, 'materialId');
+  if (materialIdRaw != null && Number.isFinite(Number(materialIdRaw))) {
+    params.materialId = Number(materialIdRaw);
   }
 
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   }
 
-  const effectiveOn = pickString(s, 'effectiveOn');
+  const effectiveOn = pickSearchString(searchFormValues, 'effectiveOn');
   if (effectiveOn) params.effectiveOn = effectiveOn;
 
   return params;

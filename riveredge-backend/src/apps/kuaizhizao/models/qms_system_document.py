@@ -14,8 +14,7 @@ class QmsSystemDocument(BaseModel):
             ("document_code",),
             ("doc_type",),
             ("status",),
-            ("iso_clause",),
-            ("iso_clause_id",),
+            ("standard_id",),
         ]
         unique_together = [("tenant_id", "document_code")]
 
@@ -25,8 +24,7 @@ class QmsSystemDocument(BaseModel):
     doc_type = fields.CharField(max_length=30, default="procedure", description="文件类型")
     version = fields.CharField(max_length=30, default="A0", description="版本号")
     status = fields.CharField(max_length=20, default="draft", description="状态 draft/effective/obsolete")
-    iso_clause = fields.CharField(max_length=50, null=True, description="ISO条款")
-    iso_clause_id = fields.IntField(null=True, description="ISO条款ID")
+    standard_id = fields.IntField(null=True, description="所属标准ID")
     content = fields.TextField(null=True, description="正文摘要/内容")
     file_url = fields.CharField(max_length=500, null=True, description="附件或外链")
     effective_at = fields.DatetimeField(null=True, description="生效时间")

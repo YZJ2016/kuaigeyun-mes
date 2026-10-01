@@ -32,8 +32,13 @@ from apps.kuaizhizao.schemas.quality_qms import (
     QmsSystemDocumentReviewDueSummary,
     QmsSystemDocumentUpdate,
     QmsSystemDocumentVersionListResponse,
+    QmsStandardCreate,
+    QmsStandardListResponse,
+    QmsStandardResponse,
+    QmsStandardUpdate,
 )
 from apps.kuaizhizao.services.qms_iso_clause_service import iso_clause_service
+from apps.kuaizhizao.services.qms_standard_service import qms_standard_service
 from apps.kuaizhizao.services.quality_qms_service import (
     QmsInternalAuditService,
     QmsManagementReviewService,
@@ -100,6 +105,7 @@ async def list_system_documents(
     keyword: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     doc_type: Optional[str] = Query(None),
+    standard_id: Optional[int] = Query(None),
     zone: Optional[str] = Query(
         "formal",
         description="目录分区：formal 正式目录 / pending 待审区 / all 全部（受权限约束）",
@@ -121,6 +127,7 @@ async def list_system_documents(
         keyword=keyword,
         status=status,
         doc_type=doc_type,
+        standard_id=standard_id,
         zone=zone,
         current_user_id=current_user.id,
         permission_codes=permission_codes,
@@ -301,6 +308,7 @@ async def create_internal_audit(
 async def list_internal_audits(
     keyword: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    standard_id: Optional[int] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     _auth=_AUDIT_READ,
@@ -308,7 +316,12 @@ async def list_internal_audits(
     tenant_id: int = Depends(get_current_tenant),
 ) -> QmsInternalAuditListResponse:
     return await audit_service.list_audits(
-        tenant_id=tenant_id, keyword=keyword, status=status, skip=skip, limit=limit
+        tenant_id=tenant_id,
+        keyword=keyword,
+        status=status,
+        standard_id=standard_id,
+        skip=skip,
+        limit=limit,
     )
 
 
@@ -440,6 +453,56 @@ async def delete_management_review(
     return {"success": True}
 
 
+@router.get("/qms/standards", response_model=QmsStandardListResponse, summary="List QMS standards")
+async def list_qms_standards(
+    is_active: Optional[bool] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    _auth=_CLAUSE_READ,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QmsStandardListResponse:
+    return await qms_standard_service.list_standards(
+        tenant_id=tenant_id, is_active=is_active, skip=skip, limit=limit
+    )
+
+
+@router.post("/qms/standards", response_model=QmsStandardResponse, summary="Create QMS standard")
+async def create_qms_standard(
+    payload: QmsStandardCreate,
+    _auth=_CLAUSE_CREATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QmsStandardResponse:
+    return await qms_standard_service.create_standard(
+        tenant_id=tenant_id, payload=payload, user=current_user
+    )
+
+
+@router.put("/qms/standards/{standard_id}", response_model=QmsStandardResponse, summary="Update QMS standard")
+async def update_qms_standard(
+    standard_id: int,
+    payload: QmsStandardUpdate,
+    _auth=_CLAUSE_UPDATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QmsStandardResponse:
+    return await qms_standard_service.update_standard(
+        tenant_id=tenant_id, standard_id=standard_id, payload=payload, user=current_user
+    )
+
+
+@router.delete("/qms/standards/{standard_id}", summary="Delete QMS standard")
+async def delete_qms_standard(
+    standard_id: int,
+    _auth=_CLAUSE_DELETE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    await qms_standard_service.delete_standard(tenant_id=tenant_id, standard_id=standard_id)
+    return {"success": True}
+
+
 @router.post("/qms/iso-clauses", response_model=QmsIsoClauseResponse, summary="Create ISO clause")
 async def create_iso_clause(
     payload: QmsIsoClauseCreate,
@@ -452,6 +515,7 @@ async def create_iso_clause(
 
 @router.get("/qms/iso-clauses", response_model=QmsIsoClauseListResponse, summary="List ISO clauses")
 async def list_iso_clauses(
+    standard_id: Optional[int] = Query(None),
     standard_code: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
@@ -463,6 +527,7 @@ async def list_iso_clauses(
 ) -> QmsIsoClauseListResponse:
     return await iso_clause_service.list_clauses(
         tenant_id=tenant_id,
+        standard_id=standard_id,
         standard_code=standard_code,
         keyword=keyword,
         is_active=is_active,
@@ -473,12 +538,15 @@ async def list_iso_clauses(
 
 @router.get("/qms/iso-clauses/tree", response_model=list[QmsIsoClauseTreeNode], summary="ISO clause tree")
 async def list_iso_clause_tree(
+    standard_id: Optional[int] = Query(None),
     standard_code: Optional[str] = Query(None),
     _auth=_CLAUSE_READ,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> list[QmsIsoClauseTreeNode]:
-    return await iso_clause_service.list_tree(tenant_id=tenant_id, standard_code=standard_code)
+    return await iso_clause_service.list_tree(
+        tenant_id=tenant_id, standard_id=standard_id, standard_code=standard_code
+    )
 
 
 @router.post(

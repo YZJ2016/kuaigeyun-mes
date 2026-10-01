@@ -49,7 +49,12 @@ import type { User } from '../../../../../services/user';
 import { searchUserDisplay } from '../../../../../services/user';
 import { useGlobalStore, useUserPreferenceStore } from '../../../../../stores';
 import { displayItemsToUsers } from '../../../../../utils/userDisplay';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../../utils/tableQueryKey';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -88,7 +93,7 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
-const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.layout-v7';
+const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.layout-v8';
 const BOM_LIST_VIEW_TYPES = ['productBom', 'semiProductBom', 'allBom'] as const;
 type BomListViewType = (typeof BOM_LIST_VIEW_TYPES)[number];
 
@@ -234,9 +239,7 @@ interface MaterialBOMRow extends BOMGroupRow {
 }
 
 function normalizeBomKeyword(searchFormValues: Record<string, unknown> | undefined): string {
-  const k = searchFormValues?.keyword;
-  if (k != null && String(k).trim()) return String(k).trim();
-  return '';
+  return pickListSearchKeyword(searchFormValues) ?? '';
 }
 
 function materialBomRowMatchesKeyword(row: MaterialBOMRow, kw: string, materials: Material[]): boolean {
@@ -3415,22 +3418,17 @@ const BOMPage: React.FC = () => {
           }
         }}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
-          const includeObsolete = searchFormValues?.includeObsolete === true;
+          const includeObsolete = pickSearchTriStateBoolean(searchFormValues, 'includeObsolete') === true;
           try {
             const pageSize = params.pageSize || 20;
             const current = params.current || 1;
             const skip = (current - 1) * pageSize;
-            const materialIdRaw = searchFormValues?.materialId;
+            const materialIdRaw = pickSearchString(searchFormValues, 'materialId');
             const materialId =
-              materialIdRaw !== undefined && materialIdRaw !== '' && materialIdRaw != null
+              materialIdRaw != null && Number.isFinite(Number(materialIdRaw))
                 ? Number(materialIdRaw)
                 : undefined;
-            const approvalStatus =
-              searchFormValues?.approvalStatus !== undefined &&
-              searchFormValues?.approvalStatus !== '' &&
-              searchFormValues?.approvalStatus != null
-                ? String(searchFormValues.approvalStatus)
-                : undefined;
+            const approvalStatus = pickSearchString(searchFormValues, 'approvalStatus');
             const keyword = normalizeBomKeyword(searchFormValues as Record<string, unknown>);
             lastBomListSearchRef.current = {
               includeObsolete,

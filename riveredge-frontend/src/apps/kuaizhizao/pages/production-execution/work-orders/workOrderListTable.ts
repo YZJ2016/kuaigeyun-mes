@@ -4,8 +4,14 @@
 import type { QueryClient } from '@tanstack/react-query'
 import type { ReactText } from 'react'
 import dayjs from 'dayjs'
-import { formatDateTime } from '../../../../../utils/format'
-import { stableJsonForQueryKey, extractProTableSort } from '../../../../../utils/tableQueryKey'
+import {
+  stableJsonForQueryKey,
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchRaw,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey'
+import { parseSalesReportDateRange } from '../../../services/reports'
 import { swallowRequestCancellation } from '../../../../../utils/requestCancellation'
 import { resolveWorkOrderListStatusFilter } from '../../../utils/workOrderLifecycle'
 import { workOrderApi } from '../../../services/production'
@@ -466,29 +472,35 @@ function buildWorkOrderListApiParams(
     include_operation_steps: options.include_operation_steps,
     include_downstream_push_progress: options.include_downstream_push_progress,
   }
-  const s = searchFormValues || {}
-  if (s.code) apiParams.code = s.code
-  if (s.name) apiParams.name = s.name
-  if (s.product_name) apiParams.product_name = s.product_name
-  if (s.production_mode) apiParams.production_mode = s.production_mode
-  const statusFilter = resolveWorkOrderListStatusFilter(s)
+  const code = pickSearchString(searchFormValues, 'code')
+  const name = pickSearchString(searchFormValues, 'name')
+  const productName = pickSearchString(searchFormValues, 'product_name')
+  const productionMode = pickSearchString(searchFormValues, 'production_mode')
+  const keyword = pickListSearchKeyword(searchFormValues)
+  const salesOrderCode = pickSearchString(searchFormValues, 'sales_order_code')
+  const customerName = pickSearchString(searchFormValues, 'customer_name')
+  if (code) apiParams.code = code
+  if (name) apiParams.name = name
+  if (productName) apiParams.product_name = productName
+  if (productionMode) apiParams.production_mode = productionMode
+  const statusFilter = resolveWorkOrderListStatusFilter(searchFormValues)
   if (statusFilter) apiParams.status = statusFilter
-  if (s.keyword) apiParams.keyword = s.keyword
-  if (s.sales_order_code) apiParams.sales_order_code = s.sales_order_code
-  if (s.customer_name) apiParams.customer_name = s.customer_name
-  if (s.planned_start_date && Array.isArray(s.planned_start_date) && s.planned_start_date.length === 2) {
-    const [start, end] = s.planned_start_date
-    if (start) apiParams.planned_start_from = formatDateTime(start, 'YYYY-MM-DD')
-    if (end) apiParams.planned_start_to = formatDateTime(end, 'YYYY-MM-DD')
+  if (keyword) apiParams.keyword = keyword
+  if (salesOrderCode) apiParams.sales_order_code = salesOrderCode
+  if (customerName) apiParams.customer_name = customerName
+  const plannedStart = parseSalesReportDateRange(searchFormValues ?? {}, ['planned_start_date'])
+  if (plannedStart.date_start) {
+    apiParams.planned_start_from = plannedStart.date_start
+    if (plannedStart.date_end) apiParams.planned_start_to = plannedStart.date_end
   }
-  if (s.planned_end_date && Array.isArray(s.planned_end_date) && s.planned_end_date.length === 2) {
-    const [start, end] = s.planned_end_date
-    if (start) apiParams.planned_end_from = formatDateTime(start, 'YYYY-MM-DD')
-    if (end) apiParams.planned_end_to = formatDateTime(end, 'YYYY-MM-DD')
+  const plannedEnd = parseSalesReportDateRange(searchFormValues ?? {}, ['planned_end_date'])
+  if (plannedEnd.date_start) {
+    apiParams.planned_end_from = plannedEnd.date_start
+    if (plannedEnd.date_end) apiParams.planned_end_to = plannedEnd.date_end
   }
-  // 高级搜索条件组：与销售订单一致，透传 column_filters JSON
-  if (typeof s.column_filters === 'string' && s.column_filters.trim()) {
-    apiParams.column_filters = s.column_filters.trim()
+  const columnFilters = pickSearchRaw(searchFormValues, 'column_filters')
+  if (typeof columnFilters === 'string' && columnFilters.trim()) {
+    apiParams.column_filters = columnFilters.trim()
   }
   if (sort && Object.keys(sort).length > 0) {
     const { sortBy, sortOrder } = extractProTableSort(sort)

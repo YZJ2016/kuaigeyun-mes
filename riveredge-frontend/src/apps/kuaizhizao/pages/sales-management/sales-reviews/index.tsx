@@ -47,7 +47,7 @@ import {
 } from '../../../../../hooks/useDocumentCapabilities';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { formatDateTime, formatBusinessDateOnly, todaySiteDateString, formatAmount, formatPrice, formatQuantity } from '../../../../../utils/format';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { resolveSalesReviewListApiParams } from '../../../utils/salesReviewListCore';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
@@ -110,7 +110,7 @@ function synthesizeSalesReviewBatchCapabilities(row: SalesReviewListItem): Sales
 }
 
 const SALES_REVIEW_RESOURCE = 'kuaizhizao:sales-review';
-const COLUMN_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.sales-reviews-width-v2';
+const COLUMN_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.sales-reviews-width-v3';
 
 type PullQuotationCandidate = {
   id: number;
@@ -1186,22 +1186,12 @@ const SalesReviewsPage: React.FC = () => {
             }
           }}
           request={async (params, sort, _filter, searchFormValues) => {
-            const keyword =
-              typeof searchFormValues?.keyword === 'string'
-                ? searchFormValues.keyword.trim() || undefined
-                : undefined;
-            const { sortBy, sortOrder } = extractProTableSort(sort);
-            const orderBy =
-              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
             try {
-              const res = await salesReviewApi.list({
-                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-                limit: params.pageSize || 20,
-                keyword,
-                status: statusFilter === 'all' ? undefined : statusFilter,
-                order_by: orderBy,
-                include_items: true,
-              });
+              const res = await salesReviewApi.list(
+                resolveSalesReviewListApiParams(params, sort, searchFormValues, {
+                  statusFilter,
+                }),
+              );
               return {
                 data: res.items || [],
                 success: true,

@@ -20,6 +20,7 @@ import {
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import { pickSearchString } from '../../../../../utils/tableQueryKey';
 import {
   exchangeRateService,
   type GlExchangeRate,
@@ -323,7 +324,7 @@ const GlExchangeRatesPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        columnPersistenceId="kuaicaiwu-gl-exchange-rates-v3"
+        columnPersistenceId="kuaicaiwu-gl-exchange-rates-v4"
         showCreateButton
         createButtonText={t(`${NS}.createButton`)}
         onCreate={openCreate}
@@ -376,16 +377,16 @@ const GlExchangeRatesPage: React.FC = () => {
             {t(`${NS}.fetchReference`)}
           </Dropdown.Button>,
         ]}
-        request={async (params, sort) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           const sortField = sort && Object.keys(sort)[0];
           const sortOrder = sortField ? sort[sortField] : undefined;
-          const { current = 1, pageSize = 20, ...rest } = params;
+          const { current = 1, pageSize = 20 } = params;
           const res = await exchangeRateService.list({
             skip: (current - 1) * pageSize,
             limit: pageSize,
             sort_field: sortField,
             sort_order: sortOrder,
-            ...rest,
+            currency_code: pickSearchString(searchFormValues, 'currency_code'),
           });
           return { data: res.items, success: true, total: res.total };
         }}

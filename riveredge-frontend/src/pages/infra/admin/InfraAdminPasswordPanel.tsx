@@ -1,15 +1,20 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, type ProFormInstance } from '@ant-design/pro-components';
-import { App, theme, Typography } from 'antd';
+import { App } from 'antd';
 import { changeInfraSuperAdminPassword } from '../../../services/infraAdmin';
 
-const InfraAdminPasswordPanel: React.FC = () => {
+type InfraAdminPasswordPanelProps = {
+  /** 嵌在个人资料式 Tabs 内时输入框定宽，与个人资料安全设置一致 */
+  embedded?: boolean;
+};
+
+const InfraAdminPasswordPanel: React.FC<InfraAdminPasswordPanelProps> = ({ embedded = false }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const { token } = theme.useToken();
   const formRef = useRef<ProFormInstance>();
   const [loading, setLoading] = useState(false);
+  const fieldWidth = embedded ? 360 : undefined;
 
   const handleFinish = async (values: {
     old_password: string;
@@ -28,7 +33,8 @@ const InfraAdminPasswordPanel: React.FC = () => {
       formRef.current?.resetFields();
       messageApi.success(t('pages.personal.profile.passwordChangeSuccess'));
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : t('pages.personal.profile.passwordChangeFailed');
+      const errMsg =
+        error instanceof Error ? error.message : t('pages.personal.profile.passwordChangeFailed');
       messageApi.error(errMsg);
       throw error;
     } finally {
@@ -37,81 +43,72 @@ const InfraAdminPasswordPanel: React.FC = () => {
   };
 
   return (
-    <div
-      style={{
-        marginTop: 24,
-        padding: 16,
-        border: `1px solid ${token.colorBorderSecondary}`,
-        borderRadius: token.borderRadiusLG,
-        background: token.colorFillAlter,
-        maxWidth: 480,
+    <ProForm
+      formRef={formRef}
+      layout="vertical"
+      onFinish={async (values) => {
+        await handleFinish(
+          values as { old_password: string; new_password: string; confirm_password: string },
+        );
+        return true;
+      }}
+      submitter={{
+        searchConfig: {
+          submitText: t('pages.personal.profile.changePassword'),
+        },
+        resetButtonProps: { style: { display: 'none' } },
+        submitButtonProps: { loading },
       }}
     >
-      <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>
-        {t('pages.infra.admin.changePasswordSectionTitle')}
-      </Typography.Title>
-      <ProForm
-        formRef={formRef}
-        layout="vertical"
-        onFinish={async (values) => {
-          await handleFinish(values as { old_password: string; new_password: string; confirm_password: string });
-          return true;
+      <ProFormText.Password
+        name="old_password"
+        label={t('pages.personal.profile.currentPassword')}
+        fieldProps={{
+          placeholder: t('pages.personal.profile.currentPasswordPlaceholder'),
+          autoComplete: 'current-password',
+          style: fieldWidth ? { width: fieldWidth } : undefined,
         }}
-        submitter={{
-          searchConfig: {
-            submitText: t('pages.personal.profile.changePassword'),
-          },
-          resetButtonProps: { style: { display: 'none' } },
-          submitButtonProps: { loading },
+        rules={[
+          { required: true, message: t('pages.personal.profile.currentPasswordPlaceholder') },
+          { min: 8, message: t('pages.login.passwordLen') },
+          { max: 128, message: t('pages.login.passwordLenMax') },
+        ]}
+      />
+      <ProFormText.Password
+        name="new_password"
+        label={t('pages.personal.profile.newPassword')}
+        fieldProps={{
+          placeholder: t('pages.personal.profile.newPasswordPlaceholder'),
+          autoComplete: 'new-password',
+          style: fieldWidth ? { width: fieldWidth } : undefined,
         }}
-      >
-        <ProFormText.Password
-          name="old_password"
-          label={t('pages.personal.profile.currentPassword')}
-          fieldProps={{
-            placeholder: t('pages.personal.profile.currentPasswordPlaceholder'),
-            autoComplete: 'current-password',
-          }}
-          rules={[
-            { required: true, message: t('pages.personal.profile.currentPasswordPlaceholder') },
-            { min: 8, message: t('pages.login.passwordLen') },
-            { max: 128, message: t('pages.login.passwordLenMax') },
-          ]}
-        />
-        <ProFormText.Password
-          name="new_password"
-          label={t('pages.personal.profile.newPassword')}
-          fieldProps={{
-            placeholder: t('pages.personal.profile.newPasswordPlaceholder'),
-            autoComplete: 'new-password',
-          }}
-          rules={[
-            { required: true, message: t('pages.personal.profile.newPassword') },
-            { min: 8, message: t('pages.login.passwordLen') },
-            { max: 128, message: t('pages.login.passwordLenMax') },
-          ]}
-        />
-        <ProFormText.Password
-          name="confirm_password"
-          label={t('pages.personal.profile.confirmNewPassword')}
-          fieldProps={{
-            placeholder: t('pages.personal.profile.confirmNewPasswordPlaceholder'),
-            autoComplete: 'new-password',
-          }}
-          rules={[
-            { required: true, message: t('pages.personal.profile.confirmNewPasswordPlaceholder') },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                if (!value || getFieldValue('new_password') === value) {
-                  return Promise.resolve();
-                }
-                return Promise.reject(new Error(t('pages.login.confirmPasswordMismatch')));
-              },
-            }),
-          ]}
-        />
-      </ProForm>
-    </div>
+        rules={[
+          { required: true, message: t('pages.personal.profile.newPassword') },
+          { min: 8, message: t('pages.login.passwordLen') },
+          { max: 128, message: t('pages.login.passwordLenMax') },
+        ]}
+      />
+      <ProFormText.Password
+        name="confirm_password"
+        label={t('pages.personal.profile.confirmNewPassword')}
+        fieldProps={{
+          placeholder: t('pages.personal.profile.confirmNewPasswordPlaceholder'),
+          autoComplete: 'new-password',
+          style: fieldWidth ? { width: fieldWidth } : undefined,
+        }}
+        rules={[
+          { required: true, message: t('pages.personal.profile.confirmNewPasswordPlaceholder') },
+          ({ getFieldValue }) => ({
+            validator(_, value) {
+              if (!value || getFieldValue('new_password') === value) {
+                return Promise.resolve();
+              }
+              return Promise.reject(new Error(t('pages.login.confirmPasswordMismatch')));
+            },
+          }),
+        ]}
+      />
+    </ProForm>
   );
 };
 

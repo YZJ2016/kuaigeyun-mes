@@ -3,6 +3,12 @@
  */
 
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../services/reports';
 
 export function getPackingBindingLifecycle(
   record: Record<string, unknown> | null | undefined
@@ -51,9 +57,8 @@ export function buildPackingBindingMethodValueEnum(
 export function resolvePackingBindingListMethodParams(
   searchFormValues?: Record<string, unknown> | null,
 ): { binding_method?: string } {
-  const raw = searchFormValues?.binding_method;
-  if (raw == null || String(raw).trim() === '') return {};
-  const binding_method = String(raw).trim();
+  const binding_method = pickSearchString(searchFormValues, 'binding_method');
+  if (!binding_method) return {};
   if (PACKING_BINDING_METHOD_KEYS.includes(binding_method as (typeof PACKING_BINDING_METHOD_KEYS)[number])) {
     return { binding_method };
   }
@@ -78,11 +83,64 @@ export function buildPackingBindingSourceValueEnum(
 export function resolvePackingBindingListSourceParams(
   searchFormValues?: Record<string, unknown> | null,
 ): { source_type?: string } {
-  const raw = searchFormValues?.source_type;
-  if (raw == null || String(raw).trim() === '') return {};
-  const source_type = String(raw).trim();
+  const source_type = pickSearchString(searchFormValues, 'source_type');
+  if (!source_type) return {};
   if (PACKING_BINDING_SOURCE_KEYS.includes(source_type as (typeof PACKING_BINDING_SOURCE_KEYS)[number])) {
     return { source_type };
   }
   return {};
+}
+
+export function resolvePackingBindingListApiParams(
+  params: { current?: number; pageSize?: number; receipt_id?: unknown; product_id?: unknown; uuid?: unknown },
+  sort?: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const methodParams = resolvePackingBindingListMethodParams(searchFormValues);
+  const sourceParams = resolvePackingBindingListSourceParams(searchFormValues);
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  const orderBy =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+
+  const apiParams: Record<string, unknown> = {
+    skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+    limit: params.pageSize ?? 20,
+    ...methodParams,
+    ...sourceParams,
+    order_by: orderBy,
+    receipt_id: params.receipt_id,
+    product_id: params.product_id,
+    uuid: params.uuid as string | undefined,
+  };
+
+  if (fuzzyKeyword) {
+    apiParams.keyword = fuzzyKeyword;
+  } else {
+    const boxNo = pickSearchString(searchFormValues, 'box_no');
+    const productCode = pickSearchString(searchFormValues, 'product_code');
+    const productName = pickSearchString(searchFormValues, 'product_name');
+    const productSerialNo = pickSearchString(searchFormValues, 'product_serial_no');
+    const packingMaterialName = pickSearchString(searchFormValues, 'packing_material_name');
+    const sealStatus = pickSearchString(searchFormValues, 'seal_status');
+    if (boxNo) apiParams.box_no = boxNo;
+    if (productCode) apiParams.product_code = productCode;
+    if (productName) apiParams.product_name = productName;
+    if (productSerialNo) apiParams.product_serial_no = productSerialNo;
+    if (packingMaterialName) apiParams.packing_material_name = packingMaterialName;
+    if (sealStatus) apiParams.seal_status = sealStatus;
+  }
+
+  const bound = parseSalesReportDateRange(searchFormValues ?? {}, ['bound_at_range']);
+  if (bound.date_start) {
+    apiParams.bound_at_start_date = bound.date_start;
+    apiParams.bound_at_end_date = bound.date_end ?? bound.date_start;
+  }
+  const created = parseSalesReportDateRange(searchFormValues ?? {}, ['created_at_range', 'createdAtRange']);
+  if (created.date_start) {
+    apiParams.created_start_date = created.date_start;
+    apiParams.created_end_date = created.date_end ?? created.date_start;
+  }
+
+  return apiParams;
 }

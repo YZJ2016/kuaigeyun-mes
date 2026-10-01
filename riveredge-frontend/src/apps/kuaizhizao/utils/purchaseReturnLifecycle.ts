@@ -9,6 +9,12 @@ import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
 } from '../../../utils/listLifecycleStage';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../services/reports';
 
 const P = 'app.kuaizhizao.purchaseReturn';
 
@@ -56,6 +62,57 @@ export function resolvePurchaseReturnListLifecycleParams(
   });
   const api = toListLifecycleStageApiParams(stage);
   return api.lifecycle_stage ? { status: api.lifecycle_stage } : {};
+}
+
+export function resolvePurchaseReturnListApiParams(
+  params: { current?: number; pageSize?: number },
+  sort?: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const lifecycleParams = resolvePurchaseReturnListLifecycleParams(searchFormValues, params);
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  const orderBy =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+
+  const apiParams: Record<string, unknown> = {
+    skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+    limit: params.pageSize ?? 20,
+    ...lifecycleParams,
+    order_by: orderBy,
+    include_items: true,
+  };
+
+  if (fuzzyKeyword) {
+    apiParams.keyword = fuzzyKeyword;
+  } else {
+    const returnCode = pickSearchString(searchFormValues, 'return_code');
+    if (returnCode) apiParams.return_code = returnCode;
+  }
+
+  const supplierIdRaw = pickSearchString(searchFormValues, 'supplier_id');
+  if (supplierIdRaw != null && Number.isFinite(Number(supplierIdRaw))) {
+    apiParams.supplier_id = Number(supplierIdRaw);
+  }
+
+  const purchaseReceiptCode = pickSearchString(searchFormValues, 'purchase_receipt_code');
+  if (purchaseReceiptCode) apiParams.purchase_receipt_code = purchaseReceiptCode;
+
+  const purchaseOrderCode = pickSearchString(searchFormValues, 'purchase_order_code');
+  if (purchaseOrderCode) apiParams.purchase_order_code = purchaseOrderCode;
+
+  const returnRange = parseSalesReportDateRange(searchFormValues ?? {}, ['return_time_range']);
+  if (returnRange.date_start) {
+    apiParams.return_start_date = returnRange.date_start;
+    apiParams.return_end_date = returnRange.date_end ?? returnRange.date_start;
+  }
+  const created = parseSalesReportDateRange(searchFormValues ?? {}, ['created_at_range', 'createdAtRange']);
+  if (created.date_start) {
+    apiParams.created_start_date = created.date_start;
+    apiParams.created_end_date = created.date_end ?? created.date_start;
+  }
+
+  return apiParams;
 }
 
 export { LIST_LIFECYCLE_STAGE_FIELD };

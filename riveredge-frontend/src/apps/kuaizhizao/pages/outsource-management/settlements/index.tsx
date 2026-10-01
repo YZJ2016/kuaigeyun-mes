@@ -14,6 +14,7 @@ import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import {
   DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
   renderDocumentLineMaterialsPreview,
@@ -49,6 +50,15 @@ const OutsourceSettlementsPage: React.FC = () => {
   const detailRetryIdRef = useRef<number | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
+
+  const settlementStatusValueEnum = useMemo(
+    () => ({
+      草稿: { text: '草稿' },
+      待审核: { text: '待审核' },
+      已审核: { text: '已审核' },
+    }),
+    [],
+  );
 
   const loadDetail = useCallback(async (id: number) => {
     setDetailLoading(true);
@@ -104,6 +114,12 @@ const OutsourceSettlementsPage: React.FC = () => {
             resizable: false,
             fixed: 'left',
             copyable: true,
+            hideInSearch: true,
+          },
+          {
+            title: t('app.kuaizhizao.outsourceManagement.settlement.field.settlementCode'),
+            dataIndex: 'settlement_code',
+            hideInTable: true,
           },
           {
             title: t('app.kuaizhizao.outsourceManagement.settlement.field.supplierName'),
@@ -113,6 +129,13 @@ const OutsourceSettlementsPage: React.FC = () => {
             uniTableKeepWidth: true,
             resizable: false,
             ellipsis: true,
+          },
+          {
+            title: t('common.status'),
+            dataIndex: 'status',
+            hideInTable: true,
+            valueType: 'select',
+            valueEnum: settlementStatusValueEnum,
           },
           {
             title: t('app.kuaizhizao.outsourceManagement.settlement.field.settlementKind'),
@@ -221,7 +244,7 @@ const OutsourceSettlementsPage: React.FC = () => {
         ],
         GLOBAL_DOC_LIST_FIELD_RANK,
       ),
-    [messageApi, perms, t],
+    [messageApi, perms, settlementStatusValueEnum, t],
   );
 
   return (
@@ -229,15 +252,22 @@ const OutsourceSettlementsPage: React.FC = () => {
       <UniTable<OutsourceSettlement>
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.outsource-management.settlements.v2"
+        columnPersistenceId="apps.kuaizhizao.pages.outsource-management.settlements.v3"
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.outsource-management.settlements')}
-        request={async (params) => {
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField="status"
+        pinnedTabsValueEnum={settlementStatusValueEnum}
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+          const settlementCode = pickSearchString(searchFormValues, 'settlement_code');
+          const supplierName = pickSearchString(searchFormValues, 'supplier_name');
           const res = await outsourceSettlementApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
-            keyword: params.keyword as string | undefined,
-            status: params.status as string | undefined,
+            keyword: fuzzyKeyword ?? settlementCode ?? supplierName,
+            status: pickSearchString(searchFormValues, 'status'),
           });
           return { data: res.items, total: res.total, success: true };
         }}

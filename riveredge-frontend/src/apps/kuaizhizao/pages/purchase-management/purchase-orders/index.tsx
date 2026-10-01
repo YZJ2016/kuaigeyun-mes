@@ -178,7 +178,7 @@ import {
   isDraftStatus,
   isAuditedStatus,
 } from '../../../constants/documentStatus';
-import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, resolvePurchaseOrderListLifecycleParams, isPurchaseOrderDeliveryOverdue } from '../../../utils/purchaseOrderLifecycle';
+import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, resolvePurchaseOrderListApiParams, isPurchaseOrderDeliveryOverdue } from '../../../utils/purchaseOrderLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { PurchaseOrderAiCreateTrigger } from './components/PurchaseOrderAiCreateDrawer';
 import {
@@ -3979,58 +3979,7 @@ const PurchaseOrdersPage: React.FC = () => {
           toolBarActionsEnd={[purchaseOrderHighlightOverdueToolbar]}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
-              const sf = searchFormValues ?? {};
-              const { sortBy, sortOrder } = extractProTableSort(sort);
-              const orderBy =
-                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-              const fuzzyKeyword = typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-              const apiParams: Record<string, unknown> = {
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                order_by: orderBy,
-              };
-              const lifecycleMapped = resolvePurchaseOrderListLifecycleParams(sf, params);
-              if (lifecycleMapped.status) apiParams.status = lifecycleMapped.status;
-              if (lifecycleMapped.review_status) apiParams.review_status = lifecycleMapped.review_status;
-              if (fuzzyKeyword) {
-                apiParams.keyword = fuzzyKeyword;
-              } else if (sf.order_code != null && String(sf.order_code).trim()) {
-                apiParams.order_code = String(sf.order_code).trim();
-              }
-              if (sf.supplier_id != null && sf.supplier_id !== '') {
-                apiParams.supplier_id = Number(sf.supplier_id);
-              }
-              if (sf.buyer_id != null && sf.buyer_id !== '') {
-                const buyerId = Number(sf.buyer_id);
-                if (Number.isFinite(buyerId) && buyerId > 0) {
-                  apiParams.buyer_id = buyerId;
-                }
-              }
-              const orderDateRange = sf.order_date_range as [unknown, unknown] | undefined;
-              if (orderDateRange && Array.isArray(orderDateRange) && orderDateRange[0]) {
-                apiParams.order_date_from = formatDateTime(orderDateRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.order_date_to = orderDateRange[1]
-                  ? formatDateTime(orderDateRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.order_date_from;
-              }
-              const deliveryDateRange = sf.delivery_date_range as [unknown, unknown] | undefined;
-              if (deliveryDateRange && Array.isArray(deliveryDateRange) && deliveryDateRange[0]) {
-                apiParams.delivery_date_from = formatDateTime(deliveryDateRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.delivery_date_to = deliveryDateRange[1]
-                  ? formatDateTime(deliveryDateRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.delivery_date_from;
-              }
-              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
-              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.created_end_date = createdRange[1]
-                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.created_start_date;
-              }
-              apiParams.include_items = true;
-              if (typeof sf.column_filters === 'string' && sf.column_filters.trim()) {
-                apiParams.column_filters = sf.column_filters.trim();
-              }
+              const apiParams = resolvePurchaseOrderListApiParams(params, sort, searchFormValues);
 
               const toFlatRows = (orders: PurchaseOrder[]): PurchaseOrderItemRow[] => {
                 const flatRows: PurchaseOrderItemRow[] = [];

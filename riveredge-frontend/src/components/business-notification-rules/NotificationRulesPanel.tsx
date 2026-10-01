@@ -46,6 +46,7 @@ import {
 import { stripMiddleDotSeparator } from './stripMiddleDotSeparator';
 import { getAntdModal } from '../../utils/antdAppApis';
 import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin';
+import { pickListSearchKeyword } from '../../utils/tableQueryKey';
 
 type NotificationRuleTableRow = {
   id: string;
@@ -70,7 +71,7 @@ async function filterNotificationRuleRows(
   rows: NotificationRuleTableRow[],
   searchFormValues?: Record<string, unknown>,
 ): Promise<NotificationRuleTableRow[]> {
-  const keyword = String(searchFormValues?.keyword ?? '').trim();
+  const keyword = pickListSearchKeyword(searchFormValues);
   if (!keyword) return rows;
 
   const keywordLower = keyword.toLowerCase();
@@ -754,7 +755,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                 tanstackQuery={{ enabled: false }}
                 rowKey="id"
                 pagination={false}
-                search={false}
+                showFuzzySearch={false}
                 showAdvancedSearch={false}
                 fuzzySearchPlaceholder={t('pages.system.configCenter.notification.searchPlaceholder')}
                 options={false}

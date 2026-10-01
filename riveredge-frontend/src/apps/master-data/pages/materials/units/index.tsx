@@ -28,6 +28,11 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import {
+  extractProTableSort,
+  pickListSearchKeywordOrFields,
+  pickSearchTriStateBoolean,
+} from '../../../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues';
 import { materialUnitApi, getMaterialUnitSyncBinding } from '../../../services/material-unit';
@@ -913,7 +918,7 @@ const UnitsPage: React.FC = () => {
               <UniTable<MaterialUnit>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.units')}
-                columnPersistenceId="apps.master-data.pages.materials.units.catalog.list-v2"
+                columnPersistenceId="apps.master-data.pages.materials.units.catalog.list-v3"
                 permissionResource="master-data:material-unit"
                 actionRef={unitActionRef}
                 rowKey="uuid"
@@ -967,25 +972,18 @@ const UnitsPage: React.FC = () => {
                       )
                     : undefined
                 }
-                request={async (params, sort) => {
+                request={async (params, sort, _filter, searchFormValues) => {
                   try {
-                    const sortKey = sort ? Object.keys(sort)[0] : undefined;
+                    const { sortBy, sortOrder } = extractProTableSort(sort);
                     const listParams = {
-                      keyword: params.keyword || params.code || params.name,
-                      is_active:
-                        params.is_active === true || params.is_active === false
-                          ? params.is_active
-                          : params.is_active === 'true'
-                            ? true
-                            : params.is_active === 'false'
-                              ? false
-                              : undefined,
-                      sort_by: sortKey,
-                      sort_order: sortKey
-                        ? sort[sortKey] === 'ascend'
-                          ? 'asc'
-                          : 'desc'
-                        : undefined,
+                      keyword: pickListSearchKeywordOrFields(
+                        searchFormValues,
+                        'code',
+                        'name',
+                      ),
+                      is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
+                      sort_by: sortBy,
+                      sort_order: sortOrder,
                     };
                     lastUnitListParamsRef.current = listParams as Record<
                       string,
@@ -1010,7 +1008,7 @@ const UnitsPage: React.FC = () => {
             label: t('app.master-data.units.tabConversions'),
             children: (
               <UniTable<MaterialUnitConversion>
-                columnPersistenceId="apps.master-data.pages.materials.units.conversions.list-v2"
+                columnPersistenceId="apps.master-data.pages.materials.units.conversions.list-v3"
                 permissionResource="master-data:material-unit"
                 actionRef={convActionRef}
                 rowKey="uuid"
@@ -1038,18 +1036,15 @@ const UnitsPage: React.FC = () => {
                 importTemplateName={t('app.master-data.units.tabConversions')}
                 showExportButton
                 onExport={handleConversionExport}
-                request={async (params) => {
+                request={async (params, _sort, _filter, searchFormValues) => {
                   try {
                     const listParams = {
-                      keyword: params.keyword || params.from_unit_code || params.to_unit_code,
-                      is_active:
-                        params.is_active === true || params.is_active === false
-                          ? params.is_active
-                          : params.is_active === 'true'
-                            ? true
-                            : params.is_active === 'false'
-                              ? false
-                              : undefined,
+                      keyword: pickListSearchKeywordOrFields(
+                        searchFormValues,
+                        'from_unit_code',
+                        'to_unit_code',
+                      ),
+                      is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
                     };
                     lastConvListParamsRef.current = listParams as Record<
                       string,

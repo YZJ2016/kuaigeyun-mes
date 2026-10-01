@@ -1,4 +1,4 @@
-"""质量体系 - ISO 条款目录"""
+"""质量体系 - 条款目录（表名保留 qms_iso_clauses 历史兼容）"""
 
 from tortoise import fields
 
@@ -6,20 +6,24 @@ from core.models.base import BaseModel
 
 
 class QmsIsoClause(BaseModel):
+    """条款行；代码层亦称 QmsClause。"""
+
     class Meta:
         table = "apps_kuaizhizao_qms_iso_clauses"
-        table_description = "快格轻制造 - 质量体系 ISO 条款"
+        table_description = "快格轻制造 - 质量体系条款"
         indexes = [
             ("tenant_id",),
+            ("standard_id",),
             ("standard_code",),
             ("clause_code",),
             ("parent_id",),
             ("is_active",),
         ]
-        unique_together = [("tenant_id", "standard_code", "clause_code")]
+        unique_together = [("tenant_id", "standard_id", "clause_code")]
 
     id = fields.IntField(pk=True, description="主键ID")
-    standard_code = fields.CharField(max_length=30, description="标准编码，如 ISO9001:2015")
+    standard_id = fields.IntField(description="标准ID")
+    standard_code = fields.CharField(max_length=30, description="标准编码冗余快照")
     clause_code = fields.CharField(max_length=30, description="条款号，如 8.5.1")
     title = fields.CharField(max_length=200, description="条款标题")
     description = fields.TextField(null=True, description="说明")

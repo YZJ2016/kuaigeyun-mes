@@ -30,6 +30,11 @@ import {
 } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../../utils/tableQueryKey';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -335,7 +340,9 @@ const ReworkPositionPlanTemplatesPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         permissionResource={RESOURCE}
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.rework-position-plan-templates-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.rework-position-plan-templates-v3"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onSelectedRowKeysChange={setSelectedRowKeys}
@@ -345,18 +352,15 @@ const ReworkPositionPlanTemplatesPage: React.FC = () => {
         showCreateButton
         createButtonText={t('app.kuaizhizao.reworkPositionPlanTemplate.createButton')}
         onCreate={openCreate}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+          const templateName = pickSearchString(searchFormValues, 'template_name');
           const res = await reworkPositionPlanTemplateApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            keyword: params.keyword || params.template_name,
-            product_line_code: params.product_line_code,
-            is_active:
-              params.is_active === true || params.is_active === 'true'
-                ? true
-                : params.is_active === false || params.is_active === 'false'
-                  ? false
-                  : undefined,
+            keyword: fuzzyKeyword ?? templateName,
+            product_line_code: pickSearchString(searchFormValues, 'product_line_code'),
+            is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
           });
           return { data: res.data || [], success: true, total: res.total || 0 };
         }}

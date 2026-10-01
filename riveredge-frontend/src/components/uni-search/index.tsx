@@ -29,6 +29,7 @@ export interface UniAdvancedSearchProps {
    */
   pinnedSearchUiEpoch?: number;
   onSearchParamsApplied?: () => void;
+  pinnedTabsField?: string;
 }
 
 export const UniAdvancedSearch: React.FC<UniAdvancedSearchProps> = ({
@@ -39,6 +40,7 @@ export const UniAdvancedSearch: React.FC<UniAdvancedSearchProps> = ({
   onReset,
   pinnedSearchUiEpoch = 0,
   onSearchParamsApplied,
+  pinnedTabsField,
 }) => {
   const { t } = useTranslation();
 
@@ -60,6 +62,7 @@ export const UniAdvancedSearch: React.FC<UniAdvancedSearchProps> = ({
           onReset={onReset}
           pinnedSearchUiEpoch={pinnedSearchUiEpoch}
           onSearchParamsApplied={onSearchParamsApplied}
+          pinnedTabsField={pinnedTabsField}
         />
       </Suspense>
     </ErrorBoundary>

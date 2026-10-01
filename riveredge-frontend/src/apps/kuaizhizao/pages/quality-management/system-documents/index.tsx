@@ -1,5 +1,14 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormDateTimePicker, ProFormItem, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import {
+  ActionType,
+  ProColumns,
+  ProFormDateTimePicker,
+  ProFormDependency,
+  ProFormItem,
+  ProFormSelect,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
 import { App, Button, Col, Empty, Row, Segmented, Table, Tag, Alert, Modal } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +22,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import {
@@ -21,12 +31,13 @@ import {
   QmsSystemDocumentVersion,
 } from '../../../services/quality-qms';
 import {
+  EVIDENCE_LINKS_PARSE_INVALID_JSON,
   parseEvidenceLinksText,
   stringifyEvidenceLinks,
   QMS_DOC_STATUS_OPTIONS,
   QMS_DOC_TYPE_OPTIONS,
 } from '../qms/qmsMeta';
-import QmsIsoClauseSelect from '../qms/QmsIsoClauseSelect';
+import QmsClauseSelect from '../qms/QmsClauseSelect';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import { hasDocumentGlobalView } from '../../../../../utils/permissionContract';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -77,7 +88,7 @@ const SystemDocumentsPage: React.FC = () => {
         doc_type: 'procedure',
         version: 'A0',
         status: 'draft',
-        evidence_links_text: '[]',
+        evidence_links_text: '',
         training_refs_text: '[]',
         attachments: [],
       });
@@ -91,6 +102,16 @@ const SystemDocumentsPage: React.FC = () => {
     queryKey: ['qms-system-documents-review-due'],
     queryFn: () => qualityQmsApi.systemDocuments.reviewDueSummary(),
   });
+
+  const { data: standardsEnvelope } = useQuery({
+    queryKey: ['qms-standards'],
+    queryFn: () => qualityQmsApi.standards.list({ limit: 200 }),
+  });
+
+  const standardValueEnum = useMemo(() => {
+    const items = standardsEnvelope?.items ?? [];
+    return Object.fromEntries(items.map((s) => [s.id, { text: s.code }]));
+  }, [standardsEnvelope?.items]);
 
   const isReviewDue = useCallback((row: QmsSystemDocument) => {
     if (row.status !== 'effective' || !row.next_review_at) return false;
@@ -165,13 +186,31 @@ const SystemDocumentsPage: React.FC = () => {
             hideInSearch: true,
           },
           {
-            title: t('app.kuaizhizao.quality.qms.isoClause'),
-            dataIndex: 'iso_clause',
-            width: 100,
-            minWidth: 100,
+            title: t('app.kuaizhizao.quality.qms.applicableStandard'),
+            dataIndex: 'standard_id',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            valueEnum: standardValueEnum,
+            render: (_, row) =>
+              (row.standard_id != null && standardValueEnum[row.standard_id]?.text) || '-',
+          },
+          {
+            title: t('app.kuaizhizao.quality.qms.clauseLabel'),
+            dataIndex: 'clause_labels',
+            width: 140,
+            minWidth: 140,
             uniTableKeepWidth: true,
             resizable: false,
             hideInSearch: true,
+            ellipsis: true,
+            render: (_, row) => {
+              const labels = row.clause_labels;
+              if (!labels?.length) return '-';
+              if (labels.length === 1) return labels[0];
+              return `${labels[0]} +${labels.length - 1}`;
+            },
           },
           {
             title: t('app.kuaizhizao.quality.qms.nextReviewAt'),
@@ -314,6 +353,7 @@ const SystemDocumentsPage: React.FC = () => {
       t,
       typeEnum,
       zone,
+      standardValueEnum,
     ],
   );
 
@@ -353,7 +393,8 @@ const SystemDocumentsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.system-documents-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.system-documents-width-v5"
+          skipFuzzyPinyinClientFilter
           toolBarRender={() =>
             canCreate
               ? [
@@ -383,15 +424,20 @@ const SystemDocumentsPage: React.FC = () => {
             messageApi.success(t('common.batchDeleteSuccess', { count: deletable.length }));
             actionRef.current?.reload();
           }}
-          request={async (params) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
+            const standardIdRaw = pickSearchString(searchFormValues, 'standard_id');
             const res = await qualityQmsApi.systemDocuments.list({
               skip,
               limit: pageSize,
-              keyword: params.keyword,
-              status: params.status,
-              doc_type: params.doc_type,
+              keyword: pickListSearchKeyword(searchFormValues),
+              status: pickSearchString(searchFormValues, 'status'),
+              doc_type: pickSearchString(searchFormValues, 'doc_type'),
+              standard_id:
+                standardIdRaw != null && Number.isFinite(Number(standardIdRaw))
+                  ? Number(standardIdRaw)
+                  : undefined,
               zone,
             });
             return { success: true, data: res.items || [], total: res.total || 0 };
@@ -503,7 +549,11 @@ const SystemDocumentsPage: React.FC = () => {
     actionRef.current?.reload();
               return true;
             } catch (e: any) {
-              messageApi.error(e?.message || t('common.saveFailed'));
+              if (e?.message === EVIDENCE_LINKS_PARSE_INVALID_JSON) {
+                messageApi.error(t('app.kuaizhizao.quality.qms.evidenceLinksInvalidJson'));
+              } else {
+                messageApi.error(e?.message || t('common.saveFailed'));
+              }
               return false;
             }
           }}
@@ -532,9 +582,27 @@ const SystemDocumentsPage: React.FC = () => {
               <ProFormText name="version" label={t('app.kuaizhizao.quality.qms.version')} rules={[{ required: true }]} />
             </Col>
             <Col span={8}>
-              <ProFormItem name="iso_clause_id" label={t('app.kuaizhizao.quality.qms.isoClause')}>
-                <QmsIsoClauseSelect />
-              </ProFormItem>
+              <ProFormSelect
+                name="standard_id"
+                label={t('app.kuaizhizao.quality.qms.applicableStandard')}
+                options={(standardsEnvelope?.items ?? []).map((s) => ({
+                  value: s.id,
+                  label: `${s.code} ${s.name}`,
+                }))}
+              />
+            </Col>
+            <Col span={16}>
+              <ProFormDependency name={['standard_id']}>
+                {({ standard_id }) => (
+                  <ProFormItem name="clause_ids" label={t('app.kuaizhizao.quality.qms.clauseLabel')}>
+                    <QmsClauseSelect
+                      standardId={standard_id as number | undefined}
+                      multiple
+                      disabled={!standard_id}
+                    />
+                  </ProFormItem>
+                )}
+              </ProFormDependency>
             </Col>
             <Col span={8}>
               <ProFormText name="owner_name" label={t('app.kuaizhizao.quality.qms.ownerName')} />

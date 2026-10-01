@@ -23,6 +23,7 @@ import { getApiErrorMessage } from '../../../utils/errorHandler';
 import { useListPageStatCardsVisible } from '../../../components/layout-templates/listPageStatCardsContext';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { rowActionKind } from '../../../components/uni-action';
+import { resolveOperationLogListFilter } from '../../../utils/systemUniTableListFilters';
 import {
   getOperationLogs,
   getOperationLogStats,
@@ -389,28 +390,19 @@ const OperationLogsPage: React.FC = () => {
               };
             }
             
-            // 从 params 和 searchFormValues 中获取搜索参数
             const { current, pageSize } = params;
-            const searchParams = searchFormValues || {};
-            
-            // 处理时间范围（从 searchParams 中获取）
-            let start_time: string | undefined;
-            let end_time: string | undefined;
-            if (searchParams.created_at && Array.isArray(searchParams.created_at) && searchParams.created_at.length === 2) {
-              start_time = dayjs(searchParams.created_at[0]).toISOString();
-              end_time = dayjs(searchParams.created_at[1]).toISOString();
-            }
+            const filter = resolveOperationLogListFilter(searchFormValues);
             
             try {
               const response = await getOperationLogs({
                 page: current || 1,
                 page_size: pageSize || 20,
-                operation_type: searchParams.operation_type as string | undefined,
-                operation_module: searchParams.operation_module as string | undefined,
-                operation_object_type: searchParams.operation_object_type as string | undefined,
-                user_id: searchParams.user_id ? Number(searchParams.user_id) : undefined,
-                start_time,
-                end_time,
+                operation_type: filter.operation_type,
+                operation_module: filter.operation_module,
+                operation_object_type: filter.operation_object_type,
+                user_id: filter.user_id,
+                start_time: filter.start_time,
+                end_time: filter.end_time,
               });
               return {
                 data: response.items,

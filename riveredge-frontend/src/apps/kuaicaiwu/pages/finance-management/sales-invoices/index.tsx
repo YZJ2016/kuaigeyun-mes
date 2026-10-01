@@ -943,9 +943,8 @@ const SalesInvoicesPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v3"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v4"
         showAdvancedSearch
-        search={{ labelWidth: 120 }}
         showCreateButton={false}
         createButtonText={t(`${P}.createTitle`)}
         onCreate={() => setCreateModalVisible(true)}

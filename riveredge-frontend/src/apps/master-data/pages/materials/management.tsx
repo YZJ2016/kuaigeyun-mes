@@ -162,7 +162,7 @@ import {
   renderMasterActiveTag,
   renderMasterYesNoTag,
 } from '../../utils/masterListPresentation'
-import { MarkerTag } from '../../../../constants/statusBadges'
+import { renderInlineMarkerTagGroup } from '../../../../components/inline-marker-tag-preview'
 
 const LazyUniImport = lazy(() => import('../../../../components/uni-import'))
 
@@ -246,21 +246,31 @@ function MaterialListStackedCell({
 
   const brand = record.brand?.trim()
   const model = record.model?.trim()
-  const badges =
-    brand || model ? (
-      <Space size={4} wrap style={{ marginTop: 2 }}>
-        {brand ? (
-          <Tooltip title={`${t('app.master-data.materials.brand')}: ${brand}`}>
-            <MarkerTag color="processing">{brand}</MarkerTag>
-          </Tooltip>
-        ) : null}
-        {model ? (
-          <Tooltip title={`${t('app.master-data.materials.model')}: ${model}`}>
-            <MarkerTag color="purple">{model}</MarkerTag>
-          </Tooltip>
-        ) : null}
-      </Space>
-    ) : null
+  const badgeItems = [
+    ...(brand
+      ? [
+          {
+            key: 'brand',
+            label: brand,
+            color: 'processing' as const,
+            title: `${t('app.master-data.materials.brand')}: ${brand}`,
+          },
+        ]
+      : []),
+    ...(model
+      ? [
+          {
+            key: 'model',
+            label: model,
+            color: 'purple' as const,
+            title: `${t('app.master-data.materials.model')}: ${model}`,
+          },
+        ]
+      : []),
+  ]
+  const badges = badgeItems.length
+    ? renderInlineMarkerTagGroup(badgeItems, { empty: null })
+    : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0 }}>
@@ -4517,7 +4527,6 @@ const MaterialsManagementPage: React.FC = () => {
           helpViewConfig={buildListPageHelpViewConfig('masterData.materials')}
                 tanstackQuery={{ queryKeyPrefix: ['apps.master-data.pages.materials.management', String(selectedGroupKeys[0] ?? 'all')] }}
                 size="small"
-                defaultPageSize={20}
                 actionRef={actionRef}
                 columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
                 beforeSearchButtons={

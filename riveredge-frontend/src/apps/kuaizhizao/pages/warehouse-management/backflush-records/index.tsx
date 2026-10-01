@@ -4,7 +4,7 @@
  * 查看报工触发的物料倒冲记录，支持按工单、物料、状态筛选，失败记录可重试。
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Segmented, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -57,7 +57,6 @@ const BackflushRecordsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const actionRef = useRef<any>(null);
-  const viewScopeRef = useRef<BackflushViewScope>('all');
   const [viewScope, setViewScope] = useState<BackflushViewScope>('all');
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -255,10 +254,17 @@ const BackflushRecordsPage: React.FC = () => {
   );
 
   const handleViewScopeChange = useCallback((value: BackflushViewScope) => {
-    viewScopeRef.current = value;
     setViewScope(value);
-    actionRef.current?.reload();
   }, []);
+
+  const viewScopeMountedRef = useRef(false);
+  useEffect(() => {
+    if (!viewScopeMountedRef.current) {
+      viewScopeMountedRef.current = true;
+      return;
+    }
+    actionRef.current?.reload();
+  }, [viewScope]);
 
   const viewScopeSegment = useMemo(
     () => (
@@ -276,14 +282,11 @@ const BackflushRecordsPage: React.FC = () => {
 
   const fetchRecords = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, unknown>) => {
     try {
-      const scopedStatus = viewScopeRef.current === 'failed' ? 'failed' : undefined;
-      const listParams = resolveBackflushRecordListParams(
-        {
-          ...(searchFormValues ?? {}),
-          ...(scopedStatus ? { status: scopedStatus } : {}),
-        },
-        sort,
-      );
+      const viewScopeParam = params.backflushViewScope as BackflushViewScope | undefined;
+      const listParams = resolveBackflushRecordListParams(searchFormValues, sort);
+      if (viewScopeParam === 'failed') {
+        listParams.status = 'failed';
+      }
       const res = await warehouseApi.backflushRecords.list({
         ...listParams,
         skip: ((params?.current || 1) - 1) * (params?.pageSize || 20),
@@ -309,15 +312,14 @@ const BackflushRecordsPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.backflushRecords.headerTitle')}
         actionRef={actionRef}
         columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.backflush-records-width-v4"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.backflush-records-width-v6"
         request={fetchRecords}
+        params={{ backflushViewScope: viewScope }}
         beforeSearchButtons={viewScopeSegment}
         showAdvancedSearch
         pinnedTabsField={WAREHOUSE_DOC_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter
         rowKey="id"
-        search={{ labelWidth: 'auto' }}
-        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
       />
 
       <DetailDrawerTemplate

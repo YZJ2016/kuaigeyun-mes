@@ -106,7 +106,7 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import {
   buildPurchaseRequisitionLifecycleValueEnum,
   getPurchaseRequisitionLifecycle,
-  resolvePurchaseRequisitionListLifecycleParams,
+  resolvePurchaseRequisitionListApiParams,
 } from '../../../utils/purchaseRequisitionLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { formatPurchaseRequisitionSourceType } from '../../../utils/purchaseRequisitionSourceType';
@@ -2219,42 +2219,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
           }}
           detailTableColumns={detailTableColumns}
           request={async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
-            const s = searchFormValues ?? {};
-            const lifecycleParams = resolvePurchaseRequisitionListLifecycleParams(
+            const apiParams = resolvePurchaseRequisitionListApiParams(
+              params,
+              sort,
               searchFormValues,
               params,
-            );
-            const { sortBy, sortOrder } = extractProTableSort(sort);
-            const orderBy =
-              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
-            const apiParams: Parameters<typeof listPurchaseRequisitions>[0] = {
-              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-              limit: params.pageSize || 20,
-              ...lifecycleParams,
-              order_by: orderBy,
-              source_type: s.source_type,
-              required_date_from: s.required_date_from,
-              required_date_to: s.required_date_to,
-              include_items: true,
-            };
-            if (fuzzyKeyword) {
-              apiParams.keyword = fuzzyKeyword;
-            } else {
-              if (s.requisition_code != null && String(s.requisition_code).trim()) {
-                apiParams.requisition_code = String(s.requisition_code).trim();
-              }
-              if (s.requisition_name != null && String(s.requisition_name).trim()) {
-                apiParams.requisition_name = String(s.requisition_name).trim();
-              }
-            }
-            const createdRange = s.created_at_range as [unknown, unknown] | undefined;
-            if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-              apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-              apiParams.created_end_date = createdRange[1]
-                ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                : apiParams.created_start_date;
-            }
+            ) as Parameters<typeof listPurchaseRequisitions>[0];
             const res = await listPurchaseRequisitions(apiParams);
             const requisitions = res.data || [];
             const total = res.total || 0;
@@ -2313,7 +2283,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
           skipFuzzyPinyinClientFilter
           pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
           pinnedTabsValueEnum={lifecycleValueEnum}
-          search={false}
           showCreateButton={false}
           createButtonText={t('app.kuaizhizao.menu.purchase-management.purchase-requisitions.new')}
           onCreate={handleCreate}

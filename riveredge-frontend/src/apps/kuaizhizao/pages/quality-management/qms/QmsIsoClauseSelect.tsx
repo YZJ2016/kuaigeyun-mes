@@ -27,20 +27,24 @@ function mapClauseTree(
 }
 
 export type QmsIsoClauseSelectProps = {
-  value?: number | null;
-  onChange?: (value?: number | null) => void;
+  value?: number | number[] | null;
+  onChange?: (value?: number | number[] | null) => void;
+  standardId?: number;
   standardCode?: string;
   excludeId?: number;
   disabled?: boolean;
+  multiple?: boolean;
   placeholder?: string;
 };
 
 export const QmsIsoClauseSelect: React.FC<QmsIsoClauseSelectProps> = ({
   value,
   onChange,
-  standardCode = 'ISO9001:2015',
+  standardId,
+  standardCode,
   excludeId,
   disabled,
+  multiple = false,
   placeholder,
 }) => {
   const { t } = useTranslation();
@@ -51,7 +55,10 @@ export const QmsIsoClauseSelect: React.FC<QmsIsoClauseSelectProps> = ({
     let cancelled = false;
     setLoading(true);
     qualityQmsApi.isoClauses
-      .tree({ standard_code: standardCode })
+      .tree({
+        ...(standardId != null ? { standard_id: standardId } : {}),
+        ...(standardCode ? { standard_code: standardCode } : {}),
+      })
       .then((res) => {
         if (!cancelled) setTree(res ?? []);
       })
@@ -61,7 +68,7 @@ export const QmsIsoClauseSelect: React.FC<QmsIsoClauseSelectProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [standardCode]);
+  }, [standardId, standardCode]);
 
   const treeData = useMemo(() => mapClauseTree(tree, excludeId), [tree, excludeId]);
 
@@ -73,10 +80,13 @@ export const QmsIsoClauseSelect: React.FC<QmsIsoClauseSelectProps> = ({
       treeNodeFilterProp="title"
       loading={loading}
       disabled={disabled}
+      multiple={multiple}
+      treeCheckable={multiple}
+      showCheckedStrategy={multiple ? TreeSelect.SHOW_PARENT : undefined}
       value={value ?? undefined}
-      placeholder={placeholder ?? t('app.kuaizhizao.quality.qms.selectIsoClause')}
+      placeholder={placeholder ?? t('app.kuaizhizao.quality.qms.selectClause')}
       treeData={treeData}
-      onChange={(next) => onChange?.(next ?? null)}
+      onChange={(next) => onChange?.(next ?? (multiple ? [] : null))}
       style={{ width: '100%' }}
     />
   );

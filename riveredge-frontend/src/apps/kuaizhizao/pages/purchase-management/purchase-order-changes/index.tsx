@@ -60,7 +60,7 @@ import { listPurchaseOrders, type PurchaseOrder } from '../../../services/purcha
 import {
   buildOrderChangeLifecycleValueEnum,
   getOrderChangeLifecycle,
-  resolveOrderChangeListLifecycleParams,
+  resolveOrderChangeListApiParams,
 } from '../../../utils/orderChangeLifecycle';
 import { formatOrderChangeCategory, ORDER_CHANGE_CATEGORY_LABELS } from '../../../utils/orderChangeCategory';
 import { formatAmount, formatDateTime, formatNumber } from '../../../../../utils/format';
@@ -735,42 +735,10 @@ const PurchaseOrderChangesPage: React.FC = () => {
       _filter?: unknown,
       searchFormValues?: Record<string, unknown>,
     ) => {
-      const sf = searchFormValues ?? {};
-      const lifecycleParams = resolveOrderChangeListLifecycleParams(sf, params);
-      const { sortBy, sortOrder } = extractProTableSort(sort);
-      const orderBy =
-        sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-      const fuzzyKeyword = typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-      const changeCode = sf.change_code != null ? String(sf.change_code).trim() : '';
-      const apiParams: import('../../../services/purchase-order-change').PurchaseOrderChangeListParams = {
-        skip: ((Number(params.current) || 1) - 1) * (Number(params.pageSize) || 20),
-        limit: Number(params.pageSize) || 20,
-        ...lifecycleParams,
-        order_by: orderBy,
-        source_order_id: params.source_order_id as number | undefined,
-        include_items: true,
-      };
-      if (fuzzyKeyword) {
-        apiParams.keyword = fuzzyKeyword;
-      } else if (changeCode) {
-        apiParams.change_code = changeCode;
-      }
-      if (sf.supplier_id != null && sf.supplier_id !== '') {
-        apiParams.supplier_id = Number(sf.supplier_id);
-      }
-      if (sf.change_category != null && sf.change_category !== '') {
-        apiParams.change_category = String(sf.change_category);
-      }
-      const sourceOrderCode =
-        sf.source_order_code != null ? String(sf.source_order_code).trim() : '';
-      if (sourceOrderCode) apiParams.source_order_code = sourceOrderCode;
-      const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
-      if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-        apiParams.start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-        apiParams.end_date = createdRange[1]
-          ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-          : apiParams.start_date;
-      }
+      const apiParams = resolveOrderChangeListApiParams(params, sort, searchFormValues, {
+        partyIdField: 'supplier_id',
+        sourceOrderId: params.source_order_id as number | undefined,
+      }) as import('../../../services/purchase-order-change').PurchaseOrderChangeListParams;
       const res = await listPurchaseOrderChanges(apiParams);
       return { data: res.items ?? [], success: true, total: res.total ?? 0 };
     },

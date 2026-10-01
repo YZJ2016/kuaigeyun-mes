@@ -66,7 +66,7 @@ import {
   shipmentNoticeCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
-import { getShipmentNoticeLifecycle, buildShipmentNoticeLifecycleValueEnum, resolveShipmentNoticeListLifecycleParams } from '../../../utils/shipmentNoticeLifecycle';
+import { getShipmentNoticeLifecycle, buildShipmentNoticeLifecycleValueEnum, resolveShipmentNoticeListApiParams } from '../../../utils/shipmentNoticeLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -1862,47 +1862,11 @@ const ShipmentNoticesPage: React.FC = () => {
           }}
           request={async (params, sort, _filter, searchFormValues) => {
             try {
-              const sf = searchFormValues ?? {};
-              const lifecycleParams = resolveShipmentNoticeListLifecycleParams(sf, params);
-              const { sortBy, sortOrder } = extractProTableSort(sort);
-              const orderBy =
-                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-              const fuzzyKeyword =
-                typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-              const noticeCode = sf.notice_code != null ? String(sf.notice_code).trim() : '';
-              const apiParams: ShipmentNoticeListParams = {
-                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-                limit: params.pageSize || 20,
-                ...lifecycleParams,
-                order_by: orderBy,
-                // 订单视图明细预览列 + 明细视图展开行均需 items
-                include_items: true,
-              };
-              if (fuzzyKeyword) {
-                apiParams.keyword = fuzzyKeyword;
-              } else if (noticeCode) {
-                apiParams.notice_code = noticeCode;
-              }
-              if (sf.customer_id != null && sf.customer_id !== '') {
-                apiParams.customer_id = Number(sf.customer_id);
-              }
-              const salesOrderCode =
-                sf.sales_order_code != null ? String(sf.sales_order_code).trim() : '';
-              if (salesOrderCode) apiParams.sales_order_code = salesOrderCode;
-              const plannedRange = sf.planned_ship_date_range as [unknown, unknown] | undefined;
-              if (plannedRange && Array.isArray(plannedRange) && plannedRange[0]) {
-                apiParams.planned_start_date = formatDateTime(plannedRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.planned_end_date = plannedRange[1]
-                  ? formatDateTime(plannedRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.planned_start_date;
-              }
-              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
-              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.created_end_date = createdRange[1]
-                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.created_start_date;
-              }
+              const apiParams = resolveShipmentNoticeListApiParams(
+                params,
+                sort,
+                searchFormValues,
+              ) as ShipmentNoticeListParams;
               const response = await shipmentNoticeApi.list(apiParams);
               const notices = response?.data ?? [];
               const total = response?.total ?? notices.length;

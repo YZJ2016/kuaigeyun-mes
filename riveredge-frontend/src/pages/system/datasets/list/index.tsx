@@ -44,7 +44,11 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../utils/spreadsheetImportTemplate';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
-import { mergeListKeyword } from '../../../../utils/tableQueryKey';
+import {
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 import {
   getDataConnectionsForDataset,
   IntegrationConfig,
@@ -693,7 +697,7 @@ const DatasetListPage: React.FC = () => {
             <UniTable<Dataset>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.datasets')}
-          columnPersistenceId="pages.system.datasets.list-v3"
+          columnPersistenceId="pages.system.datasets.list-v4"
           tanstackQuery={{ queryKeyPrefix: ['pages.system.datasets.list', selectedCategoryKey] }}
           actionRef={actionRef}
           columns={columns}
@@ -706,28 +710,28 @@ const DatasetListPage: React.FC = () => {
               ...categoryFilter,
             };
             
-            const kw = mergeListKeyword(searchFormValues, 'search');
-            if (kw) {
-              apiParams.search = kw;
+            const search = pickListSearchKeywordOrFields(searchFormValues, 'search');
+            if (search) {
+              apiParams.search = search;
             }
-            
-            // 查询类型筛选
-            if (searchFormValues?.query_type) {
-              apiParams.query_type = searchFormValues.query_type;
+
+            const queryType = pickSearchString(searchFormValues, 'query_type');
+            if (queryType) {
+              apiParams.query_type = queryType;
             }
-            // 输出类型筛选
-            if (searchFormValues?.output_type) {
-              apiParams.output_type = searchFormValues.output_type;
+            const outputType = pickSearchString(searchFormValues, 'output_type');
+            if (outputType) {
+              apiParams.output_type = outputType;
             }
-            
-            // 数据源筛选
-            if (searchFormValues?.data_source_uuid) {
-              apiParams.data_source_uuid = searchFormValues.data_source_uuid;
+
+            const dataSourceUuid = pickSearchString(searchFormValues, 'data_source_uuid');
+            if (dataSourceUuid) {
+              apiParams.data_source_uuid = dataSourceUuid;
             }
-            
-            // 启用状态筛选
-            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-              apiParams.is_active = searchFormValues.is_active;
+
+            const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+            if (isActive !== undefined) {
+              apiParams.is_active = isActive;
             }
             
             try {

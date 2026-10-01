@@ -222,7 +222,7 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.moldMaintenanceReminders')}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-reminders-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-reminders-width-v3"
           actionRef={actionRef}
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
@@ -245,7 +245,6 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
             const { data, total } = normalizeEquipmentListResponse(res);
             return { data: data as MoldMaintenanceReminder[], success: true, total };
           }}
-          search={{ labelWidth: 'auto' }}
           pagination={{ defaultPageSize: 20 }}
         />
       </ListPageTemplate>

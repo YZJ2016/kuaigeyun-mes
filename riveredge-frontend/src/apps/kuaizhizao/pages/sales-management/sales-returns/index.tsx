@@ -79,7 +79,7 @@ import {
 } from '../../../utils/documentCurrencyDisplay';
 import dayjs from 'dayjs';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListLifecycleParams } from '../../../utils/salesReturnLifecycle';
+import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListApiParams } from '../../../utils/salesReturnLifecycle';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import {
@@ -1884,50 +1884,11 @@ const SalesReturnsPage: React.FC = () => {
           ]}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
-              const sf = searchFormValues ?? {};
-              const lifecycleParams = resolveSalesReturnListLifecycleParams(sf, params);
-              const { sortBy, sortOrder } = extractProTableSort(sort);
-              const orderBy =
-                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-              const fuzzyKeyword =
-                typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-              const returnCode = sf.return_code != null ? String(sf.return_code).trim() : '';
-              const apiParams: SalesReturnListParams = {
-                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-                limit: params.pageSize || 20,
-                ...lifecycleParams,
-                order_by: orderBy,
-                // 订单视图明细预览列 + 明细视图展开行均需 items
-                include_items: true,
-              };
-              if (fuzzyKeyword) {
-                apiParams.keyword = fuzzyKeyword;
-              } else if (returnCode) {
-                apiParams.return_code = returnCode;
-              }
-              if (sf.customer_id != null && sf.customer_id !== '') {
-                apiParams.customer_id = Number(sf.customer_id);
-              }
-              const deliveryCode =
-                sf.sales_delivery_code != null ? String(sf.sales_delivery_code).trim() : '';
-              if (deliveryCode) apiParams.sales_delivery_code = deliveryCode;
-              const orderCode =
-                sf.sales_order_code != null ? String(sf.sales_order_code).trim() : '';
-              if (orderCode) apiParams.sales_order_code = orderCode;
-              const returnRange = sf.return_time_range as [unknown, unknown] | undefined;
-              if (returnRange && Array.isArray(returnRange) && returnRange[0]) {
-                apiParams.return_start_date = formatDateTime(returnRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.return_end_date = returnRange[1]
-                  ? formatDateTime(returnRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.return_start_date;
-              }
-              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
-              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.created_end_date = createdRange[1]
-                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.created_start_date;
-              }
+              const apiParams = resolveSalesReturnListApiParams(
+                params,
+                sort,
+                searchFormValues,
+              ) as SalesReturnListParams;
               const response = await warehouseApi.salesReturn.list(apiParams);
               const list = response?.data ?? [];
               const enriched = meta?.purpose === 'prefetch'

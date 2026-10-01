@@ -3,6 +3,7 @@
  */
 
 import { createLifecycleResolver } from './createLifecycleResolver';
+import { pickSearchString } from '../../../utils/tableQueryKey';
 
 const P = 'app.kuaizhizao.workReporting';
 
@@ -56,9 +57,8 @@ export function buildReportingStatusValueEnum(
 export function resolveReportingListStatusParams(
   searchFormValues?: Record<string, unknown> | null,
 ): { status?: string } {
-  const raw = searchFormValues?.status;
-  if (raw == null || String(raw).trim() === '') return {};
-  const status = String(raw).trim();
+  const status = pickSearchString(searchFormValues, 'status');
+  if (!status) return {};
   if (REPORTING_STATUS_KEYS.includes(status as (typeof REPORTING_STATUS_KEYS)[number])) {
     return { status };
   }

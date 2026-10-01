@@ -218,6 +218,18 @@ const DrawingLoansPage: React.FC = () => {
       ...buildDocumentAuditColumns<DrawingLoan>(t),
       {
         title: t('common.status'),
+        dataIndex: 'status',
+        hideInTable: true,
+        valueType: 'select',
+        valueEnum: {
+          Draft: { text: t('app.master-data.drawingLoans.status.Draft') },
+          Pending: { text: t('app.master-data.drawingLoans.status.Pending') },
+          Borrowed: { text: t('app.master-data.drawingLoans.status.Borrowed') },
+          Returned: { text: t('app.master-data.drawingLoans.status.Returned') },
+        },
+      },
+      {
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         fixed: 'right',
@@ -383,8 +395,11 @@ const DrawingLoansPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.master-data.pages.process.drawing-loans.v2"
+        columnPersistenceId="apps.master-data.pages.process.drawing-loans.v3"
+        showAdvancedSearch
+        pinnedTabsField="status"
         showCreateButton={perms.canCreate}
+        createButtonText={t('app.master-data.drawingLoans.create')}
         onCreate={openCreate}
         showDeleteButton={perms.canDelete}
         onDelete={async (keys) => {

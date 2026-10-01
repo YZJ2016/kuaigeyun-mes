@@ -1,5 +1,12 @@
 import type { TFunction } from 'i18next';
-import { extractProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchDateTimeRange,
+  pickSearchRaw,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../services/reports';
 import { normalizeQualityInspectionListResponse } from './qualityInspectionListCore';
 import {
@@ -68,23 +75,16 @@ export function buildInspectionPlanActiveValueEnum(t: TFunction): Record<string,
   };
 }
 
-function pickString(searchFormValues: Record<string, unknown> | null | undefined, key: string) {
-  const v = searchFormValues?.[key];
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-}
-
 function resolveOrderBy(sort?: Record<string, unknown>) {
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   return sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
 }
 
-function parseDateTimeRange(range: unknown): { from?: string; to?: string } {
-  if (!range || !Array.isArray(range) || !range[0]) {
-    return {};
-  }
-  const from = formatDateTime(range[0] as string | Date, 'YYYY-MM-DD HH:mm:ss');
-  const to = range[1] ? formatDateTime(range[1] as string | Date, 'YYYY-MM-DD HH:mm:ss') : from;
-  return { from, to };
+function pickUrlId(urlFilters: Record<string, unknown> | undefined, key: string): number | undefined {
+  const raw = urlFilters?.[key];
+  if (raw == null || raw === '') return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 export function formatQualityDateTimeCell(value: unknown): string {
@@ -96,26 +96,21 @@ export function resolveInspectionPlanListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const search = searchFormValues ?? {};
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
   const params: Record<string, string | number | boolean | undefined> = {
     order_by: resolveOrderBy(sort),
-    plan_type: typeof s.plan_type === 'string' && s.plan_type ? s.plan_type : undefined,
-    is_active:
-      s.is_active === true || s.is_active === 'true'
-        ? true
-        : s.is_active === false || s.is_active === 'false'
-          ? false
-          : undefined,
+    plan_type: pickSearchString(searchFormValues, 'plan_type'),
+    is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
     created_start_date,
     created_end_date,
     updated_start_date,
@@ -125,8 +120,8 @@ export function resolveInspectionPlanListParams(
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const planCode = pickString(s, 'plan_code');
-    const planName = pickString(s, 'plan_name');
+    const planCode = pickSearchString(searchFormValues, 'plan_code');
+    const planName = pickSearchString(searchFormValues, 'plan_name');
     if (planCode) params.plan_code = planCode;
     if (planName) params.plan_name = planName;
   }
@@ -138,9 +133,13 @@ export function resolveSpcSampleListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
-  const sampleTimeRange = parseDateTimeRange(s.sample_time_range);
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+  const sampleTimeRange = pickSearchDateTimeRange(
+    searchFormValues,
+    'sample_time_from',
+    'sample_time_to',
+    'sample_time_range',
+  );
 
   const params: Record<string, string | number | undefined> = {
     order_by: resolveOrderBy(sort),
@@ -151,7 +150,7 @@ export function resolveSpcSampleListParams(
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const characteristicName = pickString(s, 'characteristic_name');
+    const characteristicName = pickSearchString(searchFormValues, 'characteristic_name');
     if (characteristicName) params.characteristic_name = characteristicName;
   }
 
@@ -166,33 +165,22 @@ export function resolveNonconformingLedgerListParams(
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   const order_by =
     sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-  const s = searchFormValues ?? {};
-  const pick = (key: string) => {
-    const v = s[key];
-    return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-  };
+  const search = searchFormValues ?? {};
   const { date_start: created_start_date, date_end: created_end_date } =
-    parseSalesReportDateRange(s, ['created_at_range', 'createdAtRange']);
-
-  const pickUrlId = (key: string) => {
-    const v = urlFilters?.[key];
-    if (v == null || v === '') return undefined;
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? n : undefined;
-  };
+    parseSalesReportDateRange(search, ['created_at_range', 'createdAtRange']);
 
   return {
     order_by,
-    keyword: pick('keyword'),
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
-    defect_type: typeof s.defect_type === 'string' && s.defect_type ? s.defect_type : undefined,
-    disposition: typeof s.disposition === 'string' && s.disposition ? s.disposition : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    status: pickSearchString(searchFormValues, 'status'),
+    defect_type: pickSearchString(searchFormValues, 'defect_type'),
+    disposition: pickSearchString(searchFormValues, 'disposition'),
     created_start_date,
     created_end_date,
-    defect_id: pickUrlId('defect_id'),
-    incoming_inspection_id: pickUrlId('incoming_inspection_id'),
-    process_inspection_id: pickUrlId('process_inspection_id'),
-    finished_goods_inspection_id: pickUrlId('finished_goods_inspection_id'),
+    defect_id: pickUrlId(urlFilters, 'defect_id'),
+    incoming_inspection_id: pickUrlId(urlFilters, 'incoming_inspection_id'),
+    process_inspection_id: pickUrlId(urlFilters, 'process_inspection_id'),
+    finished_goods_inspection_id: pickUrlId(urlFilters, 'finished_goods_inspection_id'),
   };
 }
 
@@ -203,18 +191,14 @@ export function resolveEightDReportListParams(
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   const order_by =
     sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-  const s = searchFormValues ?? {};
-  const pick = (key: string) => {
-    const v = s[key];
-    return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-  };
+  const search = searchFormValues ?? {};
   const { date_start: created_start_date, date_end: created_end_date } =
-    parseSalesReportDateRange(s, ['created_at_range', 'createdAtRange']);
-  const { date_start: due_start_date, date_end: due_end_date } = parseSalesReportDateRange(s, [
+    parseSalesReportDateRange(search, ['created_at_range', 'createdAtRange']);
+  const { date_start: due_start_date, date_end: due_end_date } = parseSalesReportDateRange(search, [
     'due_date_range',
     'dueDateRange',
   ]);
-  const overdueRaw = s.overdue_only;
+  const overdueRaw = pickSearchRaw(searchFormValues, 'overdue_only');
   const overdue_only =
     overdueRaw === true ||
     overdueRaw === 'true' ||
@@ -222,9 +206,9 @@ export function resolveEightDReportListParams(
 
   return {
     order_by,
-    keyword: pick('keyword'),
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
-    severity: typeof s.severity === 'string' && s.severity ? s.severity : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    status: pickSearchString(searchFormValues, 'status'),
+    severity: pickSearchString(searchFormValues, 'severity'),
     overdue_only: overdue_only || undefined,
     created_start_date,
     created_end_date,

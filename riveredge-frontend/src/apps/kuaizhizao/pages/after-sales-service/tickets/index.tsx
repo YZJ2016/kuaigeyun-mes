@@ -59,7 +59,12 @@ import { AfterSalesTicketDetailDrawer } from './components/AfterSalesTicketDetai
 import { formatDateTime, formatDateTimeBySiteSetting, formatAmount } from '../../../../../utils/format';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchDateTimeRange,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
 import {
   KUAIZHIZAO_DOC_HOST,
   loadCustomerFormReferenceList,
@@ -1087,7 +1092,10 @@ const AfterSalesTicketsPage: React.FC = () => {
     <>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<AfterSalesTicket>
-          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.tickets.v4"
+          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.tickets.v7"
+          onTableDataChange={(rows) => {
+            setTableTickets(rows);
+          }}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesTicket)}
           selectedRowKeys={selectedRowKeys}
@@ -1156,24 +1164,13 @@ const AfterSalesTicketsPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
           request={async (params, sort, _filter, searchFormValues) => {
-            const keyword =
-              typeof searchFormValues?.keyword === 'string'
-                ? searchFormValues.keyword.trim() || undefined
-                : undefined;
-            const registeredRange = searchFormValues?.registered_at_range as
-              | [unknown, unknown]
-              | undefined;
-            let registeredFrom: string | undefined;
-            let registeredTo: string | undefined;
-            if (registeredRange && Array.isArray(registeredRange) && registeredRange[0]) {
-              registeredFrom = formatDateTime(
-                registeredRange[0] as string | Date,
-                'YYYY-MM-DD HH:mm:ss',
-              );
-              registeredTo = registeredRange[1]
-                ? formatDateTime(registeredRange[1] as string | Date, 'YYYY-MM-DD HH:mm:ss')
-                : registeredFrom;
-            }
+            const { from: registeredFrom, to: registeredTo } = pickSearchDateTimeRange(
+              searchFormValues,
+              'registered_from',
+              'registered_to',
+              'registered_at_range',
+            );
+            const customerIdRaw = pickSearchString(searchFormValues, 'customer_id');
             const { sortBy, sortOrder } = extractProTableSort(sort);
             const orderBy =
               sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
@@ -1181,36 +1178,22 @@ const AfterSalesTicketsPage: React.FC = () => {
               const res = await afterSalesTicketApi.list({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                keyword,
-                customer_id:
-                  searchFormValues?.customer_id != null && searchFormValues.customer_id !== ''
-                    ? Number(searchFormValues.customer_id)
-                    : undefined,
-                request_type:
-                  typeof searchFormValues?.request_type === 'string'
-                    ? searchFormValues.request_type.trim() || undefined
-                    : undefined,
-                status:
-                  typeof searchFormValues?.status === 'string'
-                    ? searchFormValues.status.trim() || undefined
-                    : undefined,
-                sales_order_code:
-                  typeof searchFormValues?.sales_order_code === 'string'
-                    ? searchFormValues.sales_order_code.trim() || undefined
-                    : undefined,
+                keyword: pickListSearchKeyword(searchFormValues),
+                customer_id: customerIdRaw != null ? Number(customerIdRaw) : undefined,
+                request_type: pickSearchString(searchFormValues, 'request_type'),
+                status: pickSearchString(searchFormValues, 'status'),
+                sales_order_code: pickSearchString(searchFormValues, 'sales_order_code'),
                 registered_from: registeredFrom,
                 registered_to: registeredTo,
                 order_by: orderBy,
               });
               const rows = res.items || [];
-              setTableTickets(rows);
               return {
                 data: rows,
                 success: true,
                 total: res.total ?? 0,
               };
             } catch {
-              setTableTickets([]);
               message.error(t('app.kuaizhizao.afterSalesTicket.loadFailed'));
               return { data: [], success: false, total: 0 };
             }

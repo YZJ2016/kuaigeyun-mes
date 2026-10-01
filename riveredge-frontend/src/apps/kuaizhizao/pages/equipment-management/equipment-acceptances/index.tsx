@@ -34,6 +34,7 @@ import { formDateFormItemProps, formDateRangeFormItemProps, toApiDateString, toA
 import { todaySiteDateString } from '../../../../../utils/format';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import { pickSearchString } from '../../../../../utils/tableQueryKey';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import {
@@ -465,7 +466,7 @@ const EquipmentAcceptancesPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<EquipmentAcceptanceRow>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-acceptances-r10-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-acceptances-r10-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -482,8 +483,8 @@ const EquipmentAcceptancesPage: React.FC = () => {
               const res = await equipmentAcceptanceApi.list({
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
-                target_type: searchFormValues?.target_type,
-                category: searchFormValues?.category,
+                target_type: pickSearchString(searchFormValues, 'target_type'),
+                category: pickSearchString(searchFormValues, 'category'),
                 ...listParams,
               });
               const { data, total } = normalizeEquipmentListResponse(res);

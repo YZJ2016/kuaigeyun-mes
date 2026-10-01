@@ -141,7 +141,7 @@ const SystemDocumentsPage = lazy(() => import('./pages/quality-management/system
 const QcSopPage = lazy(() => import('./pages/quality-management/qc-sop'));
 const InternalAuditsPage = lazy(() => import('./pages/quality-management/internal-audits'));
 const ManagementReviewsPage = lazy(() => import('./pages/quality-management/management-reviews'));
-const IsoClausesPage = lazy(() => import('./pages/quality-management/iso-clauses'));
+const ClauseManagementPage = lazy(() => import('./pages/quality-management/clause-management'));
 const FaiOrdersPage = lazy(() => import('./pages/quality-management/fai-orders'));
 const FaiBalloonPage = lazy(() => import('./pages/quality-management/fai-orders/balloon'));
 
@@ -530,7 +530,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/supplier-evaluations" element={withPageSuspense(SupplierEvaluationsPage)} />
       <Route path="quality-management/oqc-inspection" element={withPageSuspense(OQCInspectionPage)} />
       <Route path="quality-management/spc-monitor" element={withPageSuspense(SPCMonitorPage)} />
-      <Route path="quality-management/iso-clauses" element={withPageSuspense(IsoClausesPage)} />
+      <Route path="quality-management/clause-management" element={withPageSuspense(ClauseManagementPage)} />
+      <Route path="quality-management/iso-clauses" element={<Navigate to="/apps/kuaizhizao/quality-management/clause-management" replace />} />
       <Route path="quality-management/system-documents" element={withPageSuspense(SystemDocumentsPage)} />
       <Route path="quality-management/qc-sop" element={withPageSuspense(QcSopPage)} />
       <Route path="quality-management/internal-audits" element={withPageSuspense(InternalAuditsPage)} />

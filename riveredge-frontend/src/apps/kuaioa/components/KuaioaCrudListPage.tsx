@@ -42,6 +42,7 @@ import {
   renderOaYesNoTag,
 } from '../utils/oaListPresentation';
 import { mapOaFormValuesToPayload, mapOaRecordToFormValues } from '../utils/oaFormDateUtils';
+import { pickListSearchKeyword, pickSearchString } from '../../../utils/tableQueryKey';
 import {
   resolveOaLookupKind,
   shouldSkipOaFormField,
@@ -771,23 +772,23 @@ const KuaioaCrudListPage: React.FC<Props> = ({
             />
           ) : undefined
         }
-        request={async (params) => {
+        request={async (_params, _sort, _filter, searchFormValues) => {
           const fetchFn = listScope === 'expiring' && expiringListFn ? expiringListFn : listFn;
           const selectFilters: Record<string, unknown> = {};
           for (const field of fields) {
             if (field.type !== 'select') continue;
-            const raw = params[field.name];
-            if (raw == null || raw === '') continue;
+            const raw = pickSearchString(searchFormValues, field.name);
+            if (raw == null) continue;
             selectFilters[field.name] = raw;
           }
           const res = await fetchFn({
-            keyword: params.keyword as string | undefined,
-            status: params.status as string | undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
+            status: pickSearchString(searchFormValues, 'status'),
             ...selectFilters,
           });
           return { data: res.items, success: true, total: res.total };
         }}
-        search={{ labelWidth: 'auto' }}
+        showAdvancedSearch
         showCreateButton={!!createFn}
         createButtonText={t(createButtonKey)}
         onCreate={openCreate}

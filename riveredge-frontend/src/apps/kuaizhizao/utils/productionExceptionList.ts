@@ -1,3 +1,10 @@
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../services/reports';
+
 const P = 'app.kuaizhizao.productionException';
 
 const ALERT_LEVEL_KEYS = ['low', 'medium', 'high', 'critical'] as const;
@@ -101,13 +108,33 @@ export function resolveQualityExceptionStatusTagColor(status?: string): string {
   return 'default';
 }
 
+export function buildProductionExceptionListOrderBy(
+  sort?: Record<string, unknown>,
+): string | undefined {
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  return sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+}
+
+export function pickProductionExceptionCreatedDateParams(
+  searchFormValues?: Record<string, unknown> | null,
+): { created_start_date?: string; created_end_date?: string } {
+  const { date_start, date_end } = parseSalesReportDateRange(searchFormValues ?? {}, [
+    'created_at_range',
+    'createdAtRange',
+  ]);
+  if (!date_start) return {};
+  return {
+    created_start_date: date_start,
+    created_end_date: date_end ?? date_start,
+  };
+}
+
 export function resolveProductionExceptionListStatusParams(
   searchFormValues?: Record<string, unknown> | null,
   statusField: 'status' | 'process_status' = 'status',
 ): { status?: string; process_status?: string } {
-  const raw = searchFormValues?.[statusField];
-  if (raw == null || String(raw).trim() === '') return {};
-  const value = String(raw).trim();
+  const value = pickSearchString(searchFormValues, statusField);
+  if (!value) return {};
   if (statusField === 'process_status') {
     if (EXCEPTION_PROCESS_STATUS_KEYS.includes(value as (typeof EXCEPTION_PROCESS_STATUS_KEYS)[number])) {
       return { process_status: value };

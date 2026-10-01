@@ -14,7 +14,7 @@ class QmsInternalAudit(BaseModel):
             ("audit_code",),
             ("status",),
             ("planned_date",),
-            ("iso_clause_id",),
+            ("standard_id",),
         ]
         unique_together = [("tenant_id", "audit_code")]
 
@@ -22,8 +22,7 @@ class QmsInternalAudit(BaseModel):
     audit_code = fields.CharField(max_length=50, description="内审编码")
     title = fields.CharField(max_length=200, description="审核主题")
     audit_scope = fields.CharField(max_length=500, null=True, description="审核范围")
-    iso_clause = fields.CharField(max_length=100, null=True, description="涉及条款")
-    iso_clause_id = fields.IntField(null=True, description="ISO条款ID")
+    standard_id = fields.IntField(null=True, description="审核依据标准ID")
     status = fields.CharField(max_length=20, default="planned", description="planned/in_progress/completed/closed")
     planned_date = fields.DatetimeField(null=True, description="计划日期")
     completed_date = fields.DatetimeField(null=True, description="完成日期")

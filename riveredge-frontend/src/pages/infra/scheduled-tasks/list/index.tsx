@@ -33,6 +33,10 @@ import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+import {
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 
 /**
  * 定时任务管理列表页面组件
@@ -479,7 +483,7 @@ const ScheduledTaskListPage: React.FC = () => {
         <UniTable<ScheduledTask>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('infra.scheduledTasks')}
-          columnPersistenceId="pages.infra.scheduled-tasks.list-v3"
+          columnPersistenceId="pages.infra.scheduled-tasks.list-v4"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -489,19 +493,19 @@ const ScheduledTaskListPage: React.FC = () => {
               limit: params.pageSize || 20,
             };
             
-            // 任务类型筛选
-            if (searchFormValues?.type) {
-              apiParams.type = searchFormValues.type;
+            const type = pickSearchString(searchFormValues, 'type');
+            if (type) {
+              apiParams.type = type;
             }
-            
-            // 触发器类型筛选
-            if (searchFormValues?.trigger_type) {
-              apiParams.trigger_type = searchFormValues.trigger_type;
+
+            const triggerType = pickSearchString(searchFormValues, 'trigger_type');
+            if (triggerType) {
+              apiParams.trigger_type = triggerType;
             }
-            
-            // 启用状态筛选
-            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-              apiParams.is_active = searchFormValues.is_active;
+
+            const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+            if (isActive !== undefined) {
+              apiParams.is_active = isActive;
             }
             
             try {

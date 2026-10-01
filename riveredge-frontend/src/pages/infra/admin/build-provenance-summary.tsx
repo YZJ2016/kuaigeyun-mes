@@ -72,7 +72,8 @@ export default function BuildProvenanceSummaryTab() {
             dataSource={data?.non_official_remotes ?? []}
             loading={isLoading}
             pagination={{ pageSize: 20, showSizeChanger: true }}
-            search={false}
+            showFuzzySearch={false}
+            showAdvancedSearch={false}
             options={false}
             toolBarRender={false}
           />

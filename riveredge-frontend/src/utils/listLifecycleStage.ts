@@ -1,4 +1,5 @@
 import type { MutableRefObject } from 'react';
+import { pickSearchString } from './tableQueryKey';
 
 /**
  * 列表页生命周期筛选 — 全局唯一约定
@@ -29,17 +30,13 @@ export const LEGACY_LIST_LIFECYCLE_FIELD = 'lifecycle' as const;
  */
 export function resolveListLifecycleStageFromSearch(
   searchFormValues?: Record<string, unknown> | null,
-  params?: Record<string, unknown> | null,
+  _params?: Record<string, unknown> | null,
   options?: { allowedStages?: readonly string[] },
 ): string | undefined {
-  const s = searchFormValues ?? {};
-  const p = params ?? {};
-  const raw =
-    s[LIST_LIFECYCLE_STAGE_FIELD] ??
-    s[LEGACY_LIST_LIFECYCLE_FIELD] ??
-    p[LIST_LIFECYCLE_STAGE_FIELD] ??
-    p[LEGACY_LIST_LIFECYCLE_FIELD];
-  const stage = raw != null ? String(raw).trim() : '';
+  const stage =
+    pickSearchString(searchFormValues, LIST_LIFECYCLE_STAGE_FIELD) ??
+    pickSearchString(searchFormValues, LEGACY_LIST_LIFECYCLE_FIELD) ??
+    '';
   if (!stage) {
     return undefined;
   }
@@ -164,6 +161,51 @@ export function isRemotePinnedSearchRedundantWithBuiltinLifecycle(
     return false;
   }
   return builtinStageValues.includes(stage);
+}
+
+/** 两路搜索参数在钉住/筛选语义下是否等价（已归一 lifecycle 键）。 */
+export function areListSearchParamsEquivalent(
+  a?: Record<string, unknown> | null,
+  b?: Record<string, unknown> | null,
+): boolean {
+  const normalizedA = normalizeListPageSearchParamsForApply(a);
+  const normalizedB = normalizeListPageSearchParamsForApply(b);
+  if (!normalizedA || !normalizedB) {
+    return false;
+  }
+  return stableSearchParamsKey(normalizedA) === stableSearchParamsKey(normalizedB);
+}
+
+/** 远程已保存钉住是否与任一内置钉住重复（单键等值或 lifecycle 等价）。 */
+export function isRemotePinnedSearchRedundantWithBuiltinPins(
+  remoteSearchParams: Record<string, unknown> | undefined,
+  builtinSearches: readonly { search_params?: Record<string, unknown> }[],
+): boolean {
+  for (const builtin of builtinSearches) {
+    if (areListSearchParamsEquivalent(remoteSearchParams, builtin.search_params)) {
+      return true;
+    }
+  }
+  const builtinStageValues = builtinSearches
+    .map((s) => s.search_params?.[LIST_LIFECYCLE_STAGE_FIELD])
+    .filter((v): v is string => v != null && String(v).trim() !== '');
+  if (
+    builtinStageValues.length > 0 &&
+    isRemotePinnedSearchRedundantWithBuiltinLifecycle(remoteSearchParams, builtinStageValues)
+  ) {
+    return true;
+  }
+  const builtinLedgerSources = builtinSearches
+    .map((s) => s.search_params?.ledger_source)
+    .filter((v): v is string => v != null && String(v).trim() !== '');
+  const remoteSrc =
+    remoteSearchParams?.ledger_source != null
+      ? String(remoteSearchParams.ledger_source).trim()
+      : '';
+  if (remoteSrc && builtinLedgerSources.includes(remoteSrc)) {
+    return true;
+  }
+  return false;
 }
 
 /**

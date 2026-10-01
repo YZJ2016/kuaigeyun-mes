@@ -30,7 +30,10 @@ import { renderSystemStatusTag, renderSystemYesNoTag } from '../utils/systemList
 import { rowActionKind } from '../../../components/uni-action';
 import { apiRequest } from '../../../services/api';
 import { fetchAllListItems } from '../../../utils/fetchAllListPages';
-import { pickListSearchKeyword } from '../../../utils/tableQueryKey';
+import {
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
@@ -345,7 +348,7 @@ const ReportTemplatesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        columnPersistenceId="pages.system.report-templates"
+        columnPersistenceId="pages.system.report-templates-v2"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.reportTemplates')}
         headerTitle={t('pages.system.reportTemplates.headerTitle')}
@@ -359,9 +362,9 @@ const ReportTemplatesPage: React.FC = () => {
               params: {
                 skip: (params.current! - 1) * params.pageSize!,
                 limit: params.pageSize,
-                type: params.type,
-                category: params.category,
-                status: params.status,
+                type: pickSearchString(searchFormValues, 'type'),
+                category: pickSearchString(searchFormValues, 'category'),
+                status: pickSearchString(searchFormValues, 'status'),
                 keyword: pickListSearchKeyword(searchFormValues),
               },
             });

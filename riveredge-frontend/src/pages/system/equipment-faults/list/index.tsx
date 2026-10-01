@@ -30,6 +30,10 @@ import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import {
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../../utils/tableQueryKey';
+import {
   getEquipmentFaultList,
   getEquipmentFaultByUuid,
   createEquipmentFault,
@@ -434,17 +438,17 @@ const EquipmentFaultListPage: React.FC = () => {
         <UniTable<EquipmentFault>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.equipmentFaults')}
-          columnPersistenceId="pages.system.equipment-faults.list"
+          columnPersistenceId="pages.system.equipment-faults.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, filter, searchFormValues) => {
             const response = await getEquipmentFaultList({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              equipment_uuid: searchFormValues?.equipment_uuid,
-              status: searchFormValues?.status,
-              fault_type: searchFormValues?.fault_type,
-              search: searchFormValues?.keyword,
+              equipment_uuid: pickSearchString(searchFormValues, 'equipment_uuid'),
+              status: pickSearchString(searchFormValues, 'status'),
+              fault_type: pickSearchString(searchFormValues, 'fault_type'),
+              search: pickListSearchKeyword(searchFormValues),
             });
             return {
               data: response.items,

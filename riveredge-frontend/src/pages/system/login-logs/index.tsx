@@ -28,6 +28,7 @@ import {
   LoginLogStats,
 } from '../../../services/loginLog';
 import type { LoginLogMapQuery } from '../../../services/loginLog';
+import { resolveLoginLogListFilter } from '../../../utils/systemUniTableListFilters';
 import { LoginLogsWorldMap } from './LoginLogsWorldMap';
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../utils/format';
@@ -338,24 +339,15 @@ const LoginLogsPage: React.FC = () => {
               };
             }
             
-            // 从 params 和 searchFormValues 中获取搜索参数
             const { current, pageSize } = params;
-            const searchParams = searchFormValues || {};
-            
-            // 处理时间范围（从 searchParams 中获取）
-            let start_time: string | undefined;
-            let end_time: string | undefined;
-            if (searchParams.created_at && Array.isArray(searchParams.created_at) && searchParams.created_at.length === 2) {
-              start_time = dayjs(searchParams.created_at[0]).toISOString();
-              end_time = dayjs(searchParams.created_at[1]).toISOString();
-            }
+            const filter = resolveLoginLogListFilter(searchFormValues);
 
             mapQueryRef.current = {
-              login_status: searchParams.login_status as string | undefined,
-              username: searchParams.username as string | undefined,
-              login_ip: searchParams.login_ip as string | undefined,
-              start_time,
-              end_time,
+              login_status: filter.login_status,
+              username: filter.username,
+              login_ip: filter.login_ip,
+              start_time: filter.start_time,
+              end_time: filter.end_time,
             };
             setMapQueryVersion((v) => v + 1);
             
@@ -363,12 +355,12 @@ const LoginLogsPage: React.FC = () => {
               const response = await getLoginLogs({
                 page: current || 1,
                 page_size: pageSize || 20,
-                login_status: searchParams.login_status as string | undefined,
-                username: searchParams.username as string | undefined,
-                user_id: searchParams.user_id ? Number(searchParams.user_id) : undefined,
-                login_ip: searchParams.login_ip as string | undefined,
-                start_time,
-                end_time,
+                login_status: filter.login_status,
+                username: filter.username,
+                user_id: filter.user_id,
+                login_ip: filter.login_ip,
+                start_time: filter.start_time,
+                end_time: filter.end_time,
               });
               return {
                 data: response.items,

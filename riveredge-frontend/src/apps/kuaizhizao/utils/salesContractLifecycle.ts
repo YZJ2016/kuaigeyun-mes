@@ -10,6 +10,12 @@ import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
 } from '../../../utils/listLifecycleStage';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../services/reports';
 
 const P = 'app.kuaizhizao.salesContract';
 
@@ -82,4 +88,36 @@ export function resolveSalesContractListLifecycleParams(
   };
   const api = toListLifecycleStageApiParams(stage ? (stageToStatus[stage] ?? stage) : stage);
   return api.lifecycle_stage ? { status: api.lifecycle_stage } : {};
+}
+
+export function resolveSalesContractListApiParams(
+  params: { current?: number; pageSize?: number },
+  sort?: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const lifecycleParams = resolveSalesContractListLifecycleParams(searchFormValues, params);
+  const { date_start: startDate, date_end: endDate } = parseSalesReportDateRange(
+    searchFormValues ?? {},
+    ['contract_date_range', 'contractDateRange'],
+  );
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  const orderBy =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const customerIdRaw = pickSearchString(searchFormValues, 'customer_id');
+
+  return {
+    skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+    limit: params.pageSize || 20,
+    keyword: pickListSearchKeyword(searchFormValues),
+    contract_code: pickSearchString(searchFormValues, 'contract_code'),
+    status: lifecycleParams.status ?? pickSearchString(searchFormValues, 'status'),
+    customer_id:
+      customerIdRaw != null && Number.isFinite(Number(customerIdRaw))
+        ? Number(customerIdRaw)
+        : undefined,
+    start_date: startDate,
+    end_date: endDate,
+    order_by: orderBy,
+    include_items: true,
+  };
 }

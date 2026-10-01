@@ -26,6 +26,10 @@ import { ClientReleaseDetailDrawer } from './ClientReleaseDetailDrawer';
 import { ClientProductConfigDrawer } from './ClientProductConfigDrawer';
 import { ClientMiniprogramQrModal } from './ClientMiniprogramQrModal';
 import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
+import {
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 
 const ClientReleasesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -311,24 +315,24 @@ const ClientReleasesPage: React.FC = () => {
         <UniTable<ClientRelease>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('infra.clientReleases')}
-          columnPersistenceId="pages.infra.client-releases-v5"
+          columnPersistenceId="pages.infra.client-releases-v7"
+          showAdvancedSearch
           actionRef={actionRef}
           columns={columns}
           rowKey="id"
           request={async (_params, _sort, _filter, searchFormValues) => {
             try {
-              const clientKey = searchFormValues?.client_key as string | undefined;
-              const platform = searchFormValues?.platform as string | undefined;
-              const isActive = searchFormValues?.is_active;
+              const clientKey = pickSearchString(searchFormValues, 'client_key');
+              const platform = pickSearchString(searchFormValues, 'platform');
+              const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
 
               let list = await listClientReleases({
-                client_key: clientKey || undefined,
-                platform: platform || undefined,
+                client_key: clientKey,
+                platform: platform,
               });
 
-              if (isActive !== undefined && isActive !== '' && isActive !== null) {
-                const active = isActive === true || isActive === 'true';
-                list = list.filter((row) => row.is_active === active);
+              if (isActive !== undefined) {
+                list = list.filter((row) => row.is_active === isActive);
               }
 
               return {
@@ -361,7 +365,6 @@ const ClientReleasesPage: React.FC = () => {
               {t('pages.infra.clientReleases.clientConfigButton')}
             </Button>,
           ]}
-          search={{ labelWidth: 'auto' }}
         />
       </ListPageTemplate>
 

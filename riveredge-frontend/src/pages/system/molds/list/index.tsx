@@ -31,6 +31,11 @@ import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/eq
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { renderSystemActiveTag } from '../../utils/systemListPresentation';
 import {
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
+import {
   getMoldList,
   getMoldByUuid,
   createMold,
@@ -396,17 +401,17 @@ const MoldListPage: React.FC = () => {
         <UniTable<Mold>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.molds')}
-          columnPersistenceId="pages.system.molds.list"
+          columnPersistenceId="pages.system.molds.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, filter, searchFormValues) => {
             const response = await getMoldList({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              type: searchFormValues?.type,
-              status: searchFormValues?.status,
-              is_active: searchFormValues?.is_active,
-              search: searchFormValues?.keyword,
+              type: pickSearchString(searchFormValues, 'type'),
+              status: pickSearchString(searchFormValues, 'status'),
+              is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
+              search: pickListSearchKeyword(searchFormValues),
             });
             return {
               data: response.items,

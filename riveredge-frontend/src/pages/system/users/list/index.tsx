@@ -11,7 +11,8 @@ import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag, SystemUserAvatar } from '../../utils/systemListPresentation';
+import { renderSystemActiveTag, renderSystemYesNoTag, SystemUserAvatar } from '../../utils/systemListPresentation';
+import { renderInlineMarkerTagGroup } from '../../../../components/inline-marker-tag-preview';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
@@ -47,6 +48,11 @@ import { getAntdModal } from '../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../utils/format';
 import { importExcelMatrixInChunks } from '../../../../utils/chunkedBulkImport';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+import {
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 /**
  * 账户管理列表页面组件
  */
@@ -530,31 +536,24 @@ const UserListPage: React.FC = () => {
         record.position ? resolvePresetPositionName(record.position, t) : '-',
     },
     {
-      // 角色多枚徽章：唯一 RemainderFlex
+      // 角色多枚徽章：唯一 RemainderFlex；抬高 minWidth 避免余量不足时徽章贴边/被裁
       title: t('field.user.roles'),
       dataIndex: 'roles',
-      minWidth: 140,
+      minWidth: 200,
       uniTableRemainderFlex: true,
       uniTablePrimaryFlex: true,
       resizable: false,
-      ellipsis: true,
+      ellipsis: false,
       hideInSearch: true,
-      render: (_, record) => (
-        <Space size={4} wrap>
-          {record.roles?.map(role => (
-            <span
-              key={role.uuid}
-              style={{ cursor: 'pointer' }}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenRoleEdit(role.uuid);
-              }}
-            >
-              {renderSystemTypeMarker(resolvePresetRoleName(role, t), 'processing')}
-            </span>
-          ))}
-        </Space>
-      ),
+      render: (_, record) =>
+        renderInlineMarkerTagGroup(
+          (record.roles ?? []).map((role) => ({
+            key: role.uuid,
+            label: resolvePresetRoleName(role, t),
+            color: 'processing',
+            onClick: () => handleOpenRoleEdit(role.uuid),
+          })),
+        ),
     },
     {
       title: t('field.user.phone'),
@@ -727,22 +726,22 @@ const UserListPage: React.FC = () => {
         <UniTable<User>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.users')}
-        columnPersistenceId="pages.system.users.list-v3"
+        columnPersistenceId="pages.system.users.list-v5"
         actionRef={actionRef}
         columns={columns}
         request={async (params, _, __, searchFormValues) => {
             const response = await getUserList({
               page: params.current || 1,
               page_size: params.pageSize || 20,
-              keyword: searchFormValues?.keyword,
-              username: searchFormValues?.username,
-              email: searchFormValues?.email,
-              full_name: searchFormValues?.full_name,
-              phone: searchFormValues?.phone,
-              department_uuid: searchFormValues?.department_uuid,
-              position_uuid: searchFormValues?.position_uuid,
-              is_active: searchFormValues?.is_active,
-              is_tenant_admin: searchFormValues?.is_tenant_admin,
+              keyword: pickListSearchKeyword(searchFormValues),
+              username: pickSearchString(searchFormValues, 'username'),
+              email: pickSearchString(searchFormValues, 'email'),
+              full_name: pickSearchString(searchFormValues, 'full_name'),
+              phone: pickSearchString(searchFormValues, 'phone'),
+              department_uuid: pickSearchString(searchFormValues, 'department_uuid'),
+              position_uuid: pickSearchString(searchFormValues, 'position_uuid'),
+              is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
+              is_tenant_admin: pickSearchTriStateBoolean(searchFormValues, 'is_tenant_admin'),
             });
           return {
             data: response.items,

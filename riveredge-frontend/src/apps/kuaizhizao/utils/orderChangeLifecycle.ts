@@ -5,6 +5,12 @@ import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
 } from '../../../utils/listLifecycleStage';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../services/reports';
 
 const P = 'app.kuaizhizao.salesOrder';
 const OC = 'app.kuaizhizao.salesOrderChange';
@@ -134,4 +140,64 @@ export function formatOrderChangeStatusLabel(
   const i18nKey = stageKey ? ORDER_CHANGE_STAGE_I18N_BY_KEY[stageKey] : undefined;
   if (i18nKey) return requireI18nText(t, i18nKey);
   return raw;
+}
+
+export function resolveOrderChangeListApiParams(
+  params: Record<string, unknown>,
+  sort?: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown> | null,
+  options?: {
+    partyIdField?: 'supplier_id' | 'customer_id';
+    sourceOrderId?: number;
+    includeItems?: boolean;
+  },
+): Record<string, unknown> {
+  const lifecycleParams = resolveOrderChangeListLifecycleParams(searchFormValues, params);
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  const orderBy =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+
+  const apiParams: Record<string, unknown> = {
+    skip: ((Number(params.current) || 1) - 1) * (Number(params.pageSize) || 20),
+    limit: Number(params.pageSize) || 20,
+    ...lifecycleParams,
+    order_by: orderBy,
+  };
+
+  if (options?.includeItems !== false) {
+    apiParams.include_items = true;
+  }
+  if (options?.sourceOrderId != null) {
+    apiParams.source_order_id = options.sourceOrderId;
+  }
+
+  if (fuzzyKeyword) {
+    apiParams.keyword = fuzzyKeyword;
+  } else {
+    const changeCode = pickSearchString(searchFormValues, 'change_code');
+    if (changeCode) apiParams.change_code = changeCode;
+  }
+
+  const partyField = options?.partyIdField;
+  if (partyField) {
+    const partyRaw = pickSearchString(searchFormValues, partyField);
+    if (partyRaw != null && Number.isFinite(Number(partyRaw))) {
+      apiParams[partyField] = Number(partyRaw);
+    }
+  }
+
+  const changeCategory = pickSearchString(searchFormValues, 'change_category');
+  if (changeCategory) apiParams.change_category = changeCategory;
+
+  const sourceOrderCode = pickSearchString(searchFormValues, 'source_order_code');
+  if (sourceOrderCode) apiParams.source_order_code = sourceOrderCode;
+
+  const created = parseSalesReportDateRange(searchFormValues ?? {}, ['created_at_range', 'createdAtRange']);
+  if (created.date_start) {
+    apiParams.start_date = created.date_start;
+    apiParams.end_date = created.date_end ?? created.date_start;
+  }
+
+  return apiParams;
 }

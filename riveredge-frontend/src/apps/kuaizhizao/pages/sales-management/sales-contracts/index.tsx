@@ -200,11 +200,10 @@ import {
 import {
   buildSalesContractLifecycleValueEnum,
   getSalesContractLifecycle,
-  resolveSalesContractListLifecycleParams,
+  resolveSalesContractListApiParams,
 } from '../../../utils/salesContractLifecycle';
 
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
@@ -303,7 +302,7 @@ type SalesContractItemRow = SalesContractItem & {
 };
 
 const SALES_CONTRACT_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.sales-management.sales-contracts-width-v2';
+  'apps.kuaizhizao.pages.sales-management.sales-contracts-width-v3';
 
 const SalesContractsPage: React.FC = () => {
 
@@ -2689,52 +2688,9 @@ const SalesContractsPage: React.FC = () => {
 
         request={async (params, sort, _filter, searchFormValues) => {
 
-          const lifecycleParams = resolveSalesContractListLifecycleParams(searchFormValues, params);
-          const dr = searchFormValues?.contract_date_range as [unknown, unknown] | undefined;
-          let startDate: string | undefined;
-          let endDate: string | undefined;
-          if (dr && Array.isArray(dr) && dr[0]) {
-            startDate = formatDateTime(dr[0] as string | Date, 'YYYY-MM-DD');
-            endDate = dr[1] ? formatDateTime(dr[1] as string | Date, 'YYYY-MM-DD') : startDate;
-          }
-          const { sortBy, sortOrder } = extractProTableSort(sort);
-          const orderBy =
-            sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-          const keyword =
-            typeof searchFormValues?.keyword === 'string'
-              ? searchFormValues.keyword.trim() || undefined
-              : undefined;
-
-          const res = await salesContractApi.list({
-
-            skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-
-            limit: params.pageSize || 20,
-
-            keyword,
-
-            contract_code:
-              typeof searchFormValues?.contract_code === 'string'
-                ? searchFormValues.contract_code.trim() || undefined
-                : undefined,
-
-            status: lifecycleParams.status ?? searchFormValues?.status,
-
-            customer_id:
-              searchFormValues?.customer_id != null && searchFormValues.customer_id !== ''
-                ? Number(searchFormValues.customer_id)
-                : undefined,
-
-            start_date: startDate,
-
-            end_date: endDate,
-
-            order_by: orderBy,
-
-            // 订单视图明细预览列 + 明细视图展开行均需 items
-            include_items: true,
-
-          });
+          const res = await salesContractApi.list(
+            resolveSalesContractListApiParams(params, sort, searchFormValues),
+          );
 
           const contracts = res.items || [];
           // 行缓存唯一真源：onTableDataChange（prefetchNextPage 也会走本 request，禁止在此覆盖）

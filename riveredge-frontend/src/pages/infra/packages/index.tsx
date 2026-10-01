@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import PackageForm from './form';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
+import { resolveInfraPackageListFilter } from '../../../utils/systemUniTableListFilters';
 
 /**
  * 套餐管理页面组件
@@ -54,53 +55,18 @@ export default function PackageManagementPage() {
 
   // UniTable的request函数
   const handleRequest = async (
-    params: any,
+    params: { current?: number; pageSize?: number },
     sort: Record<string, 'ascend' | 'descend' | null>,
-    filter: Record<string, React.ReactText[] | null>
+    _filter: Record<string, React.ReactText[] | null>,
+    searchFormValues?: Record<string, unknown>,
   ) => {
     try {
-      // 获取搜索参数（从 searchParamsRef 或 formRef 获取）
-      const searchParams = params.searchFormValues || {};
-      
-      // 处理排序参数
-      let sortField: string | undefined;
-      let sortOrder: string | undefined;
-      if (sort && Object.keys(sort).length > 0) {
-        const sortKey = Object.keys(sort)[0];
-        const sortValue = sort[sortKey];
-        if (sortValue) {
-          sortField = sortKey;
-          sortOrder = sortValue === 'ascend' ? 'asc' : 'desc';
-        }
-      }
-      
-      // 构建请求参数
-      const requestParams: any = {
+      const listFilter = resolveInfraPackageListFilter(searchFormValues ?? null, sort);
+      const requestParams = {
         page: params.current || 1,
         pageSize: params.pageSize || 10,
+        ...listFilter,
       };
-      
-      // 添加搜索参数
-      if (searchParams.name) {
-        requestParams.name = searchParams.name;
-      }
-      if (searchParams.plan) {
-        requestParams.plan = searchParams.plan;
-      }
-      if (searchParams.is_active !== undefined && searchParams.is_active !== null) {
-        requestParams.is_active = searchParams.is_active;
-      }
-      if (searchParams.allow_pro_apps !== undefined && searchParams.allow_pro_apps !== null) {
-        requestParams.allow_pro_apps = searchParams.allow_pro_apps;
-      }
-      
-      // 添加排序参数
-      if (sortField) {
-        requestParams.sort = sortField;
-      }
-      if (sortOrder) {
-        requestParams.order = sortOrder;
-      }
 
       const result = await getPackageList(requestParams);
 

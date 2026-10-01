@@ -17,8 +17,10 @@ export interface QmsSystemDocument {
   doc_type: string;
   version: string;
   status: string;
-  iso_clause?: string;
-  iso_clause_id?: number | null;
+  standard_id?: number | null;
+  clause_ids?: number[];
+  clause_labels?: string[];
+  primary_clause_id?: number | null;
   content?: string;
   file_url?: string;
   effective_at?: string;
@@ -39,8 +41,10 @@ export interface QmsInternalAudit {
   audit_code: string;
   title: string;
   audit_scope?: string;
-  iso_clause?: string;
-  iso_clause_id?: number | null;
+  standard_id?: number | null;
+  clause_ids?: number[];
+  clause_labels?: string[];
+  primary_clause_id?: number | null;
   status: string;
   planned_date?: string;
   completed_date?: string;
@@ -58,11 +62,24 @@ export interface QmsInternalAudit {
   updated_at?: string;
 }
 
+export interface QmsStandard {
+  id: number;
+  uuid?: string;
+  code: string;
+  name: string;
+  family: string;
+  is_preset?: boolean;
+  is_active?: boolean;
+  sort_order?: number;
+}
+
 export interface QmsManagementReview {
   id: number;
   uuid?: string;
   review_code: string;
   title: string;
+  standard_ids?: number[];
+  standard_labels?: string[];
   status: string;
   review_date?: string;
   chairperson?: string;
@@ -81,6 +98,7 @@ export interface QmsManagementReview {
 export interface QmsIsoClause {
   id: number;
   uuid?: string;
+  standard_id?: number;
   standard_code: string;
   clause_code: string;
   title: string;
@@ -230,13 +248,29 @@ export const qualityQmsApi = {
         oqc_pass_rate?: number | null;
       }>('/apps/kuaizhizao/qms/management-reviews/input-summary', { method: 'GET', params }),
   },
+  standards: {
+    list: (params?: Record<string, unknown>) =>
+      apiRequest<ListEnvelope<QmsStandard>>('/apps/kuaizhizao/qms/standards', {
+        method: 'GET',
+        params,
+      }),
+    create: (data: Partial<QmsStandard>) =>
+      apiRequest<QmsStandard>('/apps/kuaizhizao/qms/standards', { method: 'POST', data }),
+    update: (id: number, data: Partial<QmsStandard>) =>
+      apiRequest<QmsStandard>(`/apps/kuaizhizao/qms/standards/${id}`, {
+        method: 'PUT',
+        data,
+      }),
+    delete: (id: number) =>
+      apiRequest(`/apps/kuaizhizao/qms/standards/${id}`, { method: 'DELETE' }),
+  },
   isoClauses: {
     list: (params?: Record<string, unknown>) =>
       apiRequest<ListEnvelope<QmsIsoClause>>('/apps/kuaizhizao/qms/iso-clauses', {
         method: 'GET',
         params,
       }),
-    tree: (params?: { standard_code?: string }) =>
+    tree: (params?: { standard_id?: number; standard_code?: string }) =>
       apiRequest<QmsIsoClauseTreeNode[]>('/apps/kuaizhizao/qms/iso-clauses/tree', {
         method: 'GET',
         params,

@@ -66,6 +66,7 @@ import {
   UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { MarkerTag } from '../../../../../constants/statusBadges'
+import { renderInlineMarkerTagGroup } from '../../../../../components/inline-marker-tag-preview'
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import {
   MultiTabListPageTemplate,
@@ -152,7 +153,12 @@ import {
   renderDocumentLineMaterialsPreview,
 } from '../../sales-management/shared/documentLineMaterialsPreview'
 import {formatDateBySiteSetting, formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format'
-import { extractProTableSort } from '../../../../../utils/tableQueryKey'
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchDateRange,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey'
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate'
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select'
 import {
@@ -2239,16 +2245,30 @@ const DemandComputationPage: React.FC = () => {
               monitorSecondary = <Spin size="small" />
             }
           } else if (summary.has_upstream_change || summary.has_downstream_risk) {
-            monitorSecondary = (
-              <Space size={4} wrap={false}>
-                {summary.has_upstream_change ? (
-                  <MarkerTag color="warning">{t('app.kuaizhizao.demandComputation.monitorBadgeUpstream')}</MarkerTag>
-                ) : null}
-                {summary.has_downstream_risk ? (
-                  <MarkerTag color="error">{t('app.kuaizhizao.demandComputation.monitorBadgeDownstream')}</MarkerTag>
-                ) : null}
-              </Space>
-            )
+            const monitorItems = [
+              ...(summary.has_upstream_change
+                ? [
+                    {
+                      key: 'upstream',
+                      label: t('app.kuaizhizao.demandComputation.monitorBadgeUpstream'),
+                      color: 'warning' as const,
+                    },
+                  ]
+                : []),
+              ...(summary.has_downstream_risk
+                ? [
+                    {
+                      key: 'downstream',
+                      label: t('app.kuaizhizao.demandComputation.monitorBadgeDownstream'),
+                      color: 'error' as const,
+                    },
+                  ]
+                : []),
+            ]
+            monitorSecondary = renderInlineMarkerTagGroup(monitorItems, {
+              wrap: false,
+              empty: null,
+            })
           }
         }
         return (
@@ -2617,7 +2637,7 @@ const DemandComputationPage: React.FC = () => {
   const listTabContent = (
       <>
       <UniTable<DemandComputation>
-        columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-computation-width-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-computation-width-v4"
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.demandComputation)}
         actionRef={actionRef}
@@ -2627,47 +2647,53 @@ const DemandComputationPage: React.FC = () => {
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={demandComputationLifecycleValueEnum}
         request={async (params, sort, _filter, searchFormValues) => {
-          const s = (searchFormValues ?? {}) as Record<string, unknown>
-          const lifecycleParams = resolveDemandComputationListLifecycleParams(s, params as Record<string, unknown>)
+          const lifecycleParams = resolveDemandComputationListLifecycleParams(
+            searchFormValues,
+            params as Record<string, unknown>,
+          )
           const { sortBy, sortOrder } = extractProTableSort(sort)
           const orderBy =
             sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined
-          const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : ''
+          const fuzzyKeyword = pickListSearchKeyword(searchFormValues)
 
           const apiParams: Parameters<typeof listDemandComputations>[0] = {
             skip: (params.current! - 1) * params.pageSize!,
             limit: params.pageSize!,
             ...lifecycleParams,
             order_by: orderBy,
-            business_mode: s.business_mode as DemandComputation['business_mode'],
-            demand_type: s.demand_type as DemandComputation['demand_type'],
+            business_mode: pickSearchString(searchFormValues, 'business_mode') as DemandComputation['business_mode'],
+            demand_type: pickSearchString(searchFormValues, 'demand_type') as DemandComputation['demand_type'],
           }
 
           if (fuzzyKeyword) {
             apiParams.keyword = fuzzyKeyword
           } else {
-            if (s.computation_code != null && String(s.computation_code).trim()) {
-              apiParams.computation_code = String(s.computation_code).trim()
-            }
-            if (s.demand_code != null && String(s.demand_code).trim()) {
-              apiParams.demand_code = String(s.demand_code).trim()
-            }
+            const computationCode = pickSearchString(searchFormValues, 'computation_code')
+            const demandCode = pickSearchString(searchFormValues, 'demand_code')
+            if (computationCode) apiParams.computation_code = computationCode
+            if (demandCode) apiParams.demand_code = demandCode
           }
 
-          const startRange = s.computation_start_time_range as [unknown, unknown] | undefined
-          if (startRange && Array.isArray(startRange) && startRange[0]) {
-            apiParams.start_date = formatDateTime(startRange[0] as string | Date, 'YYYY-MM-DD')
-            apiParams.end_date = startRange[1]
-              ? formatDateTime(startRange[1] as string | Date, 'YYYY-MM-DD')
-              : apiParams.start_date
+          const startRange = pickSearchDateRange(
+            searchFormValues,
+            'start_date',
+            'end_date',
+            'computation_start_time_range',
+          )
+          if (startRange.from) {
+            apiParams.start_date = startRange.from
+            apiParams.end_date = startRange.to ?? startRange.from
           }
 
-          const createdRange = s.created_at_range as [unknown, unknown] | undefined
-          if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-            apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD')
-            apiParams.created_end_date = createdRange[1]
-              ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-              : apiParams.created_start_date
+          const createdRange = pickSearchDateRange(
+            searchFormValues,
+            'created_start_date',
+            'created_end_date',
+            'created_at_range',
+          )
+          if (createdRange.from) {
+            apiParams.created_start_date = createdRange.from
+            apiParams.created_end_date = createdRange.to ?? createdRange.from
           }
 
           const result = await listDemandComputations(apiParams)
@@ -2697,9 +2723,6 @@ const DemandComputationPage: React.FC = () => {
         }}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.demandComputation.batchDeleteConfirm', { count })}
         deleteConfirmDescription={t('app.kuaizhizao.demandComputation.batchDeleteDescription')}
-        search={{
-          labelWidth: 'auto',
-        }}
         showCreateButton={false}
         createButtonText={t('app.kuaizhizao.demandComputation.create')}
         onCreate={handleCreate}

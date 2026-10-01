@@ -25,6 +25,10 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { glService, type GlAccount, type GlCoaSeedTemplate } from '../../../services/gl';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import {
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
 
 const NS = 'app.kuaicaiwu.gl.chartOfAccounts';
 
@@ -471,17 +475,17 @@ const ChartOfAccountsPage: React.FC = () => {
       <UniTable<GlAccountTree>
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.chart-of-accounts.list-v4"
+        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.chart-of-accounts.list-v5"
         viewTypes={['table', 'help']}
         helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.chartOfAccounts')}
         columns={columns}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pagination={false}
-        request={async (params) => {
+        request={async (_params, _sort, _filter, searchFormValues) => {
           try {
             const typeFilter =
-              accountTypeTab || (params.account_type ? String(params.account_type) : undefined);
+              accountTypeTab || pickSearchString(searchFormValues, 'account_type');
             const res = await glService.listAccounts({
               account_type: typeFilter || undefined,
             });
@@ -491,7 +495,9 @@ const ChartOfAccountsPage: React.FC = () => {
               nameMap[row.id] = `${row.account_code} ${row.account_name}`.trim();
             });
             setAccountNameById(nameMap);
-            const codeKw = String(params.account_code || '').trim();
+            const codeKw =
+              pickListSearchKeyword(searchFormValues) ??
+              pickSearchString(searchFormValues, 'account_code');
             if (codeKw) {
               flat = flat.filter(
                 (r) => r.account_code?.includes(codeKw) || r.account_name?.includes(codeKw),

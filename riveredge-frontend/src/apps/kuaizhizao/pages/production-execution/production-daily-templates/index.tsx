@@ -22,6 +22,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -229,7 +230,9 @@ const ProductionDailyTemplatesPage: React.FC = () => {
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.production-execution.production-daily-templates')}
         permissionResource={RESOURCE}
-        columnPersistenceId="apps.kuaizhizao.production-daily-template.list-v1"
+        columnPersistenceId="apps.kuaizhizao.production-daily-template.list-v2"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         columns={columns}
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
@@ -241,9 +244,9 @@ const ProductionDailyTemplatesPage: React.FC = () => {
             </Button>
           ) : null,
         ]}
-        request={async (params) => {
+        request={async (_params, _sort, _filter, searchFormValues) => {
           const res = await productionDailyTemplateApi.list({
-            keyword: params.keyword,
+            keyword: pickListSearchKeyword(searchFormValues),
           });
           return { data: res.items, success: true, total: res.total };
         }}

@@ -34,7 +34,7 @@ import { apiRequest } from '../../../../../services/api';
 import { ExceptionListPage } from '../../../services/production';
 import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
 import { formatDateTime } from '../../../../../utils/format';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -43,6 +43,8 @@ import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../
 import {
   buildProductionExceptionAlertLevelValueEnum,
   buildStandardProductionExceptionStatusValueEnum,
+  buildProductionExceptionListOrderBy,
+  pickProductionExceptionCreatedDateParams,
   resolveProductionExceptionListStatusParams,
   resolveStandardProductionExceptionStatusTagColor,
 } from '../../../utils/productionExceptionList';
@@ -344,19 +346,16 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
         columns={columns}
         request={async (params, sort, _filter, searchFormValues) => {
           try {
-            const s = searchFormValues ?? {};
-            const statusParams = resolveProductionExceptionListStatusParams(s);
-            const { sortBy, sortOrder } = extractProTableSort(sort);
-            const orderBy =
-              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+            const statusParams = resolveProductionExceptionListStatusParams(searchFormValues);
+            const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
 
             const queryParams: Record<string, unknown> = {
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
-              order_by: orderBy,
-              alert_level: s.alert_level,
+              order_by: buildProductionExceptionListOrderBy(sort),
+              alert_level: pickSearchString(searchFormValues, 'alert_level'),
               ...statusParams,
+              ...pickProductionExceptionCreatedDateParams(searchFormValues),
             };
             if (!statusParams.status) {
               queryParams.statuses = ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES;
@@ -364,22 +363,10 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
             if (fuzzyKeyword) {
               queryParams.keyword = fuzzyKeyword;
             } else {
-              if (s.work_order_code != null && String(s.work_order_code).trim()) {
-                queryParams.work_order_code = String(s.work_order_code).trim();
-              }
-              if (s.delay_reason != null && String(s.delay_reason).trim()) {
-                queryParams.delay_reason = String(s.delay_reason).trim();
-              }
-            }
-            const createdRange = s.created_at_range as [unknown, unknown] | undefined;
-            if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-              queryParams.created_start_date = formatDateTime(
-                createdRange[0] as string | Date,
-                'YYYY-MM-DD',
-              );
-              queryParams.created_end_date = createdRange[1]
-                ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                : queryParams.created_start_date;
+              const workOrderCode = pickSearchString(searchFormValues, 'work_order_code');
+              const delayReason = pickSearchString(searchFormValues, 'delay_reason');
+              if (workOrderCode) queryParams.work_order_code = workOrderCode;
+              if (delayReason) queryParams.delay_reason = delayReason;
             }
             const result = await apiRequest<ExceptionListPage<DeliveryDelayException>>(
               '/apps/kuaizhizao/exceptions/delivery-delay',

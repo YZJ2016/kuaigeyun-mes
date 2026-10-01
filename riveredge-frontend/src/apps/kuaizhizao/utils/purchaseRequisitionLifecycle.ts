@@ -49,6 +49,12 @@ import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
 } from '../../../utils/listLifecycleStage';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../services/reports';
 
 /** @deprecated 使用 LIST_LIFECYCLE_STAGE_FIELD */
 export const PURCHASE_REQUISITION_LIST_LIFECYCLE_FIELD = LIST_LIFECYCLE_STAGE_FIELD;
@@ -96,6 +102,47 @@ export function buildPurchaseRequisitionLifecycleValueEnum(
       { text: stage, status: statusByStage[stage] ?? 'Default' },
     ]),
   );
+}
+
+export function resolvePurchaseRequisitionListApiParams(
+  params: { current?: number; pageSize?: number },
+  sort?: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown> | null,
+  listParams?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const lifecycleParams = resolvePurchaseRequisitionListLifecycleParams(searchFormValues, listParams);
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  const orderBy =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+
+  const apiParams: Record<string, unknown> = {
+    skip: ((params.current || 1) - 1) * (params.pageSize || 20),
+    limit: params.pageSize || 20,
+    ...lifecycleParams,
+    order_by: orderBy,
+    source_type: pickSearchString(searchFormValues, 'source_type'),
+    required_date_from: pickSearchString(searchFormValues, 'required_date_from'),
+    required_date_to: pickSearchString(searchFormValues, 'required_date_to'),
+    include_items: true,
+  };
+
+  if (fuzzyKeyword) {
+    apiParams.keyword = fuzzyKeyword;
+  } else {
+    const requisitionCode = pickSearchString(searchFormValues, 'requisition_code');
+    const requisitionName = pickSearchString(searchFormValues, 'requisition_name');
+    if (requisitionCode) apiParams.requisition_code = requisitionCode;
+    if (requisitionName) apiParams.requisition_name = requisitionName;
+  }
+
+  const created = parseSalesReportDateRange(searchFormValues ?? {}, ['created_at_range', 'createdAtRange']);
+  if (created.date_start) {
+    apiParams.created_start_date = created.date_start;
+    apiParams.created_end_date = created.date_end ?? created.date_start;
+  }
+
+  return apiParams;
 }
 
 export function getPurchaseRequisitionLifecycle(

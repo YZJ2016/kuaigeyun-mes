@@ -43,7 +43,11 @@ import {
   TranslationUpdateRequest,
 } from '../../../../services/language';
 import { cacheTenantDefaultLanguage } from '../../../../utils/localeBootstrap';
-import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
+import {
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 import zhCN from '../../../../locales/zh-CN';
 import enUS from '../../../../locales/en-US';
 import zhHant from '../../../../locales/zh-Hant';
@@ -611,7 +615,7 @@ const LanguageListPage: React.FC = () => {
         <UniTable<Language>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.languages')}
-          columnPersistenceId="pages.system.languages.list-v3"
+          columnPersistenceId="pages.system.languages.list-v4"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -621,18 +625,15 @@ const LanguageListPage: React.FC = () => {
               page_size: params.pageSize || 20,
             };
             
-            // 状态筛选
-            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-              apiParams.is_active = searchFormValues.is_active;
+            const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+            if (isActive !== undefined) {
+              apiParams.is_active = isActive;
             }
-            
-            // 搜索条件处理：code 和 name 使用模糊搜索
-            if (searchFormValues?.code) {
-              apiParams.code = searchFormValues.code as string;
-            }
-            if (searchFormValues?.name) {
-              apiParams.name = searchFormValues.name as string;
-            }
+
+            const code = pickSearchString(searchFormValues, 'code');
+            const name = pickSearchString(searchFormValues, 'name');
+            if (code) apiParams.code = code;
+            if (name) apiParams.name = name;
             const keyword = pickListSearchKeyword(searchFormValues);
             if (keyword) {
               apiParams.keyword = keyword;

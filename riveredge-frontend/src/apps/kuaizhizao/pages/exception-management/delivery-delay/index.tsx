@@ -17,6 +17,7 @@ import { exceptionApi } from '../../../services/production';
 import { ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES } from '../../../constants/exceptionStatuses';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { pickSearchString } from '../../../../../utils/tableQueryKey';
 
 interface DeliveryDelayException {
   id?: number;
@@ -223,7 +224,7 @@ const DeliveryDelayExceptionPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        columnPersistenceId="apps.kuaizhizao.pages.exception-management.delivery-delay"
+        columnPersistenceId="apps.kuaizhizao.pages.exception-management.delivery-delay-v2"
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.exceptionDeliveryDelay)}
         headerTitle="交期延期异常管理"
@@ -233,14 +234,19 @@ const DeliveryDelayExceptionPage: React.FC = () => {
         showAdvancedSearch={true}
         request={async (params, _sort, _filter, searchFormValues) => {
           try {
+            const workOrderIdRaw = pickSearchString(searchFormValues, 'work_order_id');
             const listParams: Record<string, unknown> = {
               skip: (params.current! - 1) * params.pageSize!,
               limit: params.pageSize,
-              work_order_id: searchFormValues?.work_order_id,
-              alert_level: searchFormValues?.alert_level,
+              work_order_id:
+                workOrderIdRaw != null && Number.isFinite(Number(workOrderIdRaw))
+                  ? Number(workOrderIdRaw)
+                  : undefined,
+              alert_level: pickSearchString(searchFormValues, 'alert_level'),
             };
-            if (searchFormValues?.status) {
-              listParams.status = searchFormValues.status;
+            const status = pickSearchString(searchFormValues, 'status');
+            if (status) {
+              listParams.status = status;
             } else {
               listParams.statuses = ACTIVE_MATERIAL_DELIVERY_EXCEPTION_STATUSES;
             }

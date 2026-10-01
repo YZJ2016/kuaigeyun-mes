@@ -10,6 +10,7 @@ import { spotChecksApi } from '../../../kuaizhizao/services/equipmentOps';
 import { StatusTag } from '../../../../constants/statusBadges';
 import { indElectronicsEsdApi } from '../../services/esd';
 import { useRequest } from 'ahooks';
+import { pickListSearchKeyword, pickSearchString } from '../../../../utils/tableQueryKey';
 
 const { Text } = Typography;
 
@@ -98,7 +99,9 @@ export default function IndElectronicsEsdInspectionPage() {
       <UniTable<SpotRow>
         actionRef={actionRef}
         headerTitle={t('app.ind-electronics.menu.esdInspection')}
-        columnPersistenceId="ind-electronics-esd-inspection-v2-v2-v1"
+        columnPersistenceId="ind-electronics-esd-inspection-v3"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         rowKey={(r) => String(r.id ?? r.uuid)}
         showCreateButton={spotPerms.canCreate}
         createButtonText={t('app.ind-electronics.esd.createSpotCheck')}
@@ -126,13 +129,13 @@ export default function IndElectronicsEsdInspectionPage() {
           ) : null,
         ]}
         columns={columns}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await spotChecksApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            keyword: params.keyword,
+            keyword: pickListSearchKeyword(searchFormValues),
             scheme_domain: 'esd',
-            status: params.status,
+            status: pickSearchString(searchFormValues, 'status'),
           });
           const payload = res as { items?: SpotRow[]; total?: number };
           return {
