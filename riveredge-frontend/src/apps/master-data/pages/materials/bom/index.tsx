@@ -30,6 +30,12 @@ import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni
 import { StatusTag, MarkerTag, RE_STATUS_BADGE_DRAFT } from '../../../../../constants/statusBadges';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import BomSyncFromSourceModal from '../../../components/BomSyncFromSourceModal';
+import BomDocumentPushPanel from '../../../components/BomDocumentPushPanel';
+import { getEngineeringBomSyncBinding } from '../../../services/material';
 import { openPrintHtmlWindow } from '../../../../../utils/printResponseHelpers';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { formatQuantity, formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
@@ -350,6 +356,7 @@ const BOMPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { token } = theme.useToken();
   const bomPerms = useResourcePermissions(BOM_RESOURCE);
+  const toolbarSyncPush = useToolbarSyncPushFlags(BOM_RESOURCE);
   /** 嵌套在 BOM 表单 Modal 内，须高于父弹窗，避免二次打开被挡住 */
   const nestedBomModalZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const bomIssueMethodOptions = useMemo(
@@ -373,6 +380,12 @@ const BOMPage: React.FC = () => {
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
+  const [bomSyncFreshnessKey, setBomSyncFreshnessKey] = useState(0);
+  const loadBomSyncBinding = React.useCallback(() => getEngineeringBomSyncBinding(), []);
+  const handleBomSyncComplete = React.useCallback(() => {
+    setBomSyncFreshnessKey((k) => k + 1);
+    actionRef.current?.reload();
+  }, []);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
   // Drawer 相关状态（详情查看）
@@ -654,6 +667,7 @@ const BOMPage: React.FC = () => {
 
   /** 当前展示页 groupKey -> uuid。真源：onTableDataChange，禁止在 request 内写入（prefetch 会冲掉当前页） */
   const groupKeyToUuidsRef = useRef<Map<string, string[]>>(new Map());
+  const pageBomRowsRef = useRef<MaterialBOMRow[]>([]);
 
   const collectUuidsFromGroupRow = (row: BOMGroupRow | MaterialBOMRow): string[] => {
     const from = (items?: BOM[]) =>
@@ -685,6 +699,26 @@ const BOMPage: React.FC = () => {
     }
     groupKeyToUuidsRef.current = next;
   };
+
+  const resolveBomIdsFromRowKeys = React.useCallback((keys: React.Key[]): number[] => {
+    const byGroupKey = new Map<string, number>();
+    for (const row of pageBomRowsRef.current) {
+      const selected = row.selectedVersion ?? row;
+      const id = Number(selected.firstItem?.id ?? selected.items?.[0]?.id ?? 0);
+      if (row.groupKey && id > 0) byGroupKey.set(row.groupKey, id);
+      if (selected.groupKey && id > 0) byGroupKey.set(selected.groupKey, id);
+    }
+    const seen = new Set<number>();
+    const ids: number[] = [];
+    for (const key of keys) {
+      const fromGroup = byGroupKey.get(String(key));
+      const numeric = fromGroup ?? Number(key);
+      if (!Number.isFinite(numeric) || numeric <= 0 || seen.has(numeric)) continue;
+      seen.add(numeric);
+      ids.push(numeric);
+    }
+    return ids;
+  }, []);
 
   /** 物料选中的版本 materialId -> groupKey；切换时只本地重建，禁止整表网络 reload */
   const [selectedVersionByMaterial, setSelectedVersionByMaterial] = useState<Record<number, string>>({});
@@ -3622,6 +3656,7 @@ const BOMPage: React.FC = () => {
           record.groupKey ?? record.key ?? record.uuid ?? `row-${record.materialId ?? 'x'}-${record.version ?? 'v'}`
         }
         onTableDataChange={(rows) => {
+          pageBomRowsRef.current = (rows || []) as MaterialBOMRow[];
           syncGroupKeyToUuidsFromTableRows(rows);
         }}
         defaultExpandAllRows={true}
@@ -3666,6 +3701,50 @@ const BOMPage: React.FC = () => {
           ] : []),
         ]}
         showImportButton={true}
+        showSyncButton={toolbarSyncPush.hubVisible}
+        onSync={() => undefined}
+        syncToolbarExtra={
+          toolbarSyncPush.hubVisible
+            ? () => (
+                <SyncPushHubButton
+                  syncEnabled={toolbarSyncPush.syncEnabled}
+                  pushEnabled={toolbarSyncPush.pushEnabled}
+                  size="middle"
+                  wrapButton={(hubButton) => (
+                    <SyncFreshnessBadge
+                      getBinding={loadBomSyncBinding}
+                      refreshKey={bomSyncFreshnessKey}
+                    >
+                      {hubButton}
+                    </SyncFreshnessBadge>
+                  )}
+                  renderSyncPanel={({ active, close }) => (
+                    <BomSyncFromSourceModal
+                      contentOnly
+                      open={active}
+                      onClose={close}
+                      onComplete={() => {
+                        handleBomSyncComplete();
+                        close();
+                      }}
+                    />
+                  )}
+                  renderPushPanel={({ active, close }) => (
+                    <BomDocumentPushPanel
+                      embedded
+                      open={active}
+                      onClose={close}
+                      bomIds={resolveBomIdsFromRowKeys(selectedRowKeys)}
+                      onComplete={() => {
+                        handleBomSyncComplete();
+                        close();
+                      }}
+                    />
+                  )}
+                />
+              )
+            : undefined
+        }
         onImport={handleBatchImportConfirm}
         enableCustomImport={true}
         enableRelationImport={true}

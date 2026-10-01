@@ -165,3 +165,61 @@ class MaterialGroupSyncBinding(BaseModel):
     last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
     last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
     last_error = fields.TextField(null=True, description="最近一次同步错误")
+
+
+class EngineeringBomSyncBinding(BaseModel):
+    """每个租户一条：工程 BOM 同步来源与字段映射。"""
+
+    id = fields.IntField(pk=True, description="主键")
+
+    class Meta:
+        table = "apps_master_data_engineering_bom_sync_binding"
+        table_description = "主数据 - 工程BOM同步绑定"
+        indexes = [("tenant_id",)]
+
+    source_type = fields.CharField(max_length=20, null=True, description="来源类型：api | dataset")
+    api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
+    dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
+    field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
+    match_key_field = fields.CharField(
+        max_length=64,
+        default="line_key",
+        description="匹配键目标字段（默认 parent_code|version|component_code）",
+    )
+    sync_mode = fields.CharField(
+        max_length=32,
+        default="manual_full",
+        description="manual_full | scheduled_full | scheduled_incremental",
+    )
+    schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
+    last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
+    last_error = fields.TextField(null=True, description="最近一次同步错误")
+
+
+class OperationSyncBinding(BaseModel):
+    """每个租户一条：工序同步来源与字段映射。"""
+
+    id = fields.IntField(pk=True, description="主键")
+
+    class Meta:
+        table = "apps_master_data_operation_sync_binding"
+        table_description = "主数据 - 工序同步绑定"
+        indexes = [("tenant_id",)]
+
+    source_type = fields.CharField(max_length=20, null=True, description="来源类型：api | dataset")
+    api_uuid = fields.CharField(max_length=36, null=True, description="数据接口 UUID")
+    dataset_uuid = fields.CharField(max_length=36, null=True, description="数据集 UUID")
+    field_mapping = fields.JSONField(null=True, description="来源列 -> 目标字段")
+    sources = fields.JSONField(null=True, description="多来源：kind + 接口/数据集 + field_mapping")
+    match_key_field = fields.CharField(max_length=64, default="code", description="匹配键目标字段")
+    sync_mode = fields.CharField(
+        max_length=32,
+        default="manual_full",
+        description="manual_full | scheduled_full | scheduled_incremental",
+    )
+    schedule_interval_minutes = fields.IntField(default=15, description="定时同步间隔（分钟）")
+    last_success_at = fields.DatetimeField(null=True, description="最近一次成功同步时间")
+    last_attempt_at = fields.DatetimeField(null=True, description="最近一次尝试同步时间")
+    last_error = fields.TextField(null=True, description="最近一次同步错误")

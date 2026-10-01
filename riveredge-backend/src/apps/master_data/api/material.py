@@ -355,6 +355,62 @@ async def list_bom_groups(
     )
 
 
+engineering_bom_sync_service = None
+
+
+def _engineering_bom_sync_service():
+    global engineering_bom_sync_service
+    if engineering_bom_sync_service is None:
+        from apps.master_data.services.engineering_bom_sync_service import EngineeringBomSyncService
+        engineering_bom_sync_service = EngineeringBomSyncService()
+    return engineering_bom_sync_service
+
+
+@router.get(
+    "/bom/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="工程BOM同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("process:engineering-bom"))],
+)
+async def get_engineering_bom_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _engineering_bom_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/bom/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存工程BOM同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("process:engineering-bom"))],
+)
+async def put_engineering_bom_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _engineering_bom_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/bom/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从数据接口或数据集同步工程BOM",
+    dependencies=[Depends(require_master_data_module_access("process:engineering-bom"))],
+)
+async def sync_engineering_bom_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _engineering_bom_sync_service().sync_from_source(tenant_id, current_user, body)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
 @router.get("/bom/component-ids", summary="List component material IDs")
 async def list_bom_component_ids(
     current_user: Annotated[User, Depends(get_current_user)],

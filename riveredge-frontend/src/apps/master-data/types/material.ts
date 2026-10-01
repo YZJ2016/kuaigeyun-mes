@@ -708,6 +708,7 @@ export interface BOMListParams {
 
 /** BOM 分组摘要（按 material_id + version，用于列表树） */
 export interface BOMGroupSummary {
+  id?: number;
   material_id: number;
   version: string;
   bom_code?: string;

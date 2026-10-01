@@ -171,6 +171,18 @@ STK_MISCELLANEOUS_SAVE_PRESET_CODE_SUFFIX = "save_stk_miscellaneous"
 
 STK_MISCELLANEOUS_PUSH_PRESET_CODE_SUFFIX = "push_stk_miscellaneous"
 
+BD_MATERIAL_FORM_ID = "BD_MATERIAL"
+BD_MATERIAL_SAVE_PRESET_CODE_SUFFIX = "save_bd_material"
+BD_MATERIAL_PUSH_PRESET_CODE_SUFFIX = "push_bd_material"
+
+ENG_BOM_FORM_ID = "ENG_BOM"
+ENG_BOM_SAVE_PRESET_CODE_SUFFIX = "save_eng_bom"
+ENG_BOM_PUSH_PRESET_CODE_SUFFIX = "push_eng_bom"
+
+ENG_PROCESS_FORM_ID = "ENG_Process"
+ENG_PROCESS_SAVE_PRESET_CODE_SUFFIX = "save_eng_process"
+ENG_PROCESS_PUSH_PRESET_CODE_SUFFIX = "push_eng_process"
+
 PRD_MO_FORM_ID = "PRD_MO"
 
 PRD_MO_DEFAULT_BILL_TYPE = "SCDD01_SYS"
@@ -454,6 +466,61 @@ def build_stk_miscellaneous_save_preset_body() -> Dict[str, Any]:
 
 def build_stk_miscellaneous_push_preset_body() -> Dict[str, Any]:
     return build_stk_miscellaneous_save_preset_body()
+
+
+def build_bd_material_save_preset_body() -> Dict[str, Any]:
+    return build_save_body(
+        form_id=BD_MATERIAL_FORM_ID,
+        model={
+            "FMATERIALID": 0,
+            "FNumber": "MAT001",
+            "FName": "示例物料",
+            "FSpecification": "",
+            "FMaterialGroup": {"FNumber": "001"},
+            "FBaseUnitId": {"FNumber": "Pcs"},
+            "FCreateOrgId": {"FNumber": "100"},
+            "FUseOrgId": {"FNumber": "100"},
+        },
+        need_return_fields=["FMATERIALID", "FNumber"],
+    )
+
+
+def build_eng_bom_save_preset_body() -> Dict[str, Any]:
+    return build_save_body(
+        form_id=ENG_BOM_FORM_ID,
+        model={
+            "FID": 0,
+            "FNumber": "BOM001",
+            "FMATERIALID": {"FNumber": "FG001"},
+            "FBomVersion": "1.0",
+            "FCreateOrgId": {"FNumber": "100"},
+            "FUseOrgId": {"FNumber": "100"},
+            "FTreeEntity": [
+                {
+                    "FMATERIALIDCHILD": {"FNumber": "RM001"},
+                    "FNUMERATOR": 1,
+                    "FDENOMINATOR": 1,
+                }
+            ],
+        },
+        need_return_fields=["FID", "FNumber"],
+    )
+
+
+def build_eng_process_save_preset_body() -> Dict[str, Any]:
+    return build_save_body(
+        form_id=ENG_PROCESS_FORM_ID,
+        model={
+            "FID": 0,
+            "FNumber": "OP001",
+            "FName": "示例工序",
+            "FDescription": "快格云工序推送示例",
+            "FCreateOrgId": {"FNumber": "100"},
+            "FUseOrgId": {"FNumber": "100"},
+        },
+        need_return_fields=["FID", "FNumber"],
+    )
+
 
 def build_prd_mo_sample_model() -> Dict[str, Any]:
     """生产订单 Save 示例 Model（占位值，联调前请改成账套真实编码）。"""
@@ -880,6 +947,54 @@ def list_kingdee_galaxy_api_presets() -> List[KingdeeGalaxyApiPreset]:
             "path": SAVE_PATH,
             "method": "POST",
             "request_body": build_stk_miscellaneous_push_preset_body(),
+        },
+        {
+            "code_suffix": BD_MATERIAL_SAVE_PRESET_CODE_SUFFIX,
+            "name": "金蝶保存物料",
+            "description": "Save：物料（BD_MATERIAL）。快格云物料主数据外推用。",
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_bd_material_save_preset_body(),
+        },
+        {
+            "code_suffix": BD_MATERIAL_PUSH_PRESET_CODE_SUFFIX,
+            "name": "金蝶推送物料",
+            "description": "快格云物料 → 金蝶 BD_MATERIAL 推送用 Save 接口。页面推送弹窗优先选用本接口。",
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_bd_material_save_preset_body(),
+        },
+        {
+            "code_suffix": ENG_BOM_SAVE_PRESET_CODE_SUFFIX,
+            "name": "金蝶保存工程BOM",
+            "description": "Save：工程BOM（ENG_BOM）。快格云物料清单外推用。",
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_eng_bom_save_preset_body(),
+        },
+        {
+            "code_suffix": ENG_BOM_PUSH_PRESET_CODE_SUFFIX,
+            "name": "金蝶推送工程BOM",
+            "description": "快格云工程BOM → 金蝶 ENG_BOM 推送用 Save 接口。",
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_eng_bom_save_preset_body(),
+        },
+        {
+            "code_suffix": ENG_PROCESS_SAVE_PRESET_CODE_SUFFIX,
+            "name": "金蝶保存工序",
+            "description": "Save：工序/工艺（ENG_Process，FormId 可按账套调整）。",
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_eng_process_save_preset_body(),
+        },
+        {
+            "code_suffix": ENG_PROCESS_PUSH_PRESET_CODE_SUFFIX,
+            "name": "金蝶推送工序",
+            "description": "快格云工序 → 金蝶 ENG_Process 推送用 Save 接口。",
+            "path": SAVE_PATH,
+            "method": "POST",
+            "request_body": build_eng_process_save_preset_body(),
         },
         {
             "code_suffix": "view_bill",
