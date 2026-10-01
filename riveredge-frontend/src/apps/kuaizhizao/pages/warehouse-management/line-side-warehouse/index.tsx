@@ -303,14 +303,13 @@ const LineSideWarehousePage: React.FC = () => {
         headerTitle={t(`${P}.headerTitle`)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.line-side-warehouse-width-v6"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.line-side-warehouse-width-v7"
         viewTypes={['table', 'help']}
         helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.lineSideWarehouse')}
         request={fetchInventory}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         rowKey="id"
-        search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         params={{ warehouse_id: selectedWarehouseId }}
         toolBarRender={() => [

@@ -377,7 +377,7 @@ const EquipmentRepairsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentRepairs)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-repairs-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-repairs-width-v3"
           actionRef={actionRef}
           rowKey="uuid"
           enableRowSelection={perms.canDelete}
@@ -403,7 +403,6 @@ const EquipmentRepairsPage: React.FC = () => {
             const { data, total } = normalizeEquipmentListResponse(res);
             return { data: data as EquipmentRepair[], success: true, total };
           }}
-          search={{ labelWidth: 'auto' }}
           pagination={{ defaultPageSize: 20 }}
         />
       </ListPageTemplate>

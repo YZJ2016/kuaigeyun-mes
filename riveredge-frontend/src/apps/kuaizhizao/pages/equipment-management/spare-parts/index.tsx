@@ -511,11 +511,12 @@ const SparePartsPage: React.FC = () => {
             label: t(`${P}.tab.inventory`),
             children: (
               <UniTable<SpareInventoryRow>
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.inventory-width-v2"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.inventory-width-v3"
                 actionRef={inventoryActionRef}
                 rowKey={(r) => String(r.id ?? r.part_no)}
                 columns={inventoryColumns}
-                search={false}
+                showFuzzySearch={false}
+                showAdvancedSearch={false}
                 request={async () => {
                   try {
                     const data = await sparePartApi.listInventory();
@@ -534,10 +535,11 @@ const SparePartsPage: React.FC = () => {
             label: t(`${P}.tab.alerts`),
             children: (
               <UniTable<SpareAlertRow>
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.alerts-width-v2"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts.alerts-width-v3"
                 rowKey={(r) => String(r.part_no)}
                 columns={alertColumns}
-                search={false}
+                showFuzzySearch={false}
+                showAdvancedSearch={false}
                 request={async () => {
                   try {
                     const data = await sparePartApi.getAlerts();

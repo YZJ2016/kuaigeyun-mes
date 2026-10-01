@@ -1,21 +1,15 @@
 import type { PaginationProps } from 'antd';
 
-import { useConfigStore } from '../../stores/configStore';
-import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
+import { resolveDefaultTablePageSize as resolveDefaultTablePageSizeShared } from '../../utils/resolveDefaultTablePageSize';
 
 /** 报表「全部」分页：与后端 REPORT_LIST_MAX_LIMIT 一致 */
 export const UNI_REPORT_PAGE_SIZE_ALL = 10_000;
 
 export const UNI_REPORT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100, UNI_REPORT_PAGE_SIZE_ALL] as const;
 
-/** 与 UniTable 一致：用户偏好 > 站点配置 > 20 */
+/** 与 UniTable 一致：显式偏好 > 站点配置 > 20（真源 utils/resolveDefaultTablePageSize） */
 export function resolveDefaultTablePageSize(override?: number): number {
-  if (override != null && override > 0) {
-    return override;
-  }
-  const getPreference = useUserPreferenceStore.getState().getPreference;
-  const getConfig = useConfigStore.getState().getConfig;
-  return getPreference('ui.default_page_size', getConfig('ui.default_page_size', 20));
+  return resolveDefaultTablePageSizeShared(override);
 }
 
 export function buildUniReportTablePagination(

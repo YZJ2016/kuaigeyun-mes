@@ -26,6 +26,7 @@ import {
   renderFreightOrderStatusTag,
 } from '../shared/logisticsListPresentation';
 import { CarrierSelectDropdown } from '../shared/CarrierSelectDropdown';
+import { pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
 import {
   auditFreightBill,
   createFreightBill,
@@ -458,13 +459,15 @@ const FreightBillsPage: React.FC = () => {
               <UniTable<FreightBill>
                 actionRef={billsActionRef}
                 columns={billColumns}
-                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.v4"
+                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.v6"
+                showAdvancedSearch
+                skipFuzzyPinyinClientFilter
                 rowKey="id"
-                request={async (params) => {
+                request={async (params, _sort, _filter, searchFormValues) => {
                   const res = await listFreightBills({
                     skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                     limit: params.pageSize,
-                    keyword: params.keyword as string | undefined,
+                    keyword: pickListSearchKeyword(searchFormValues),
                   });
                   return { data: res.items, total: res.total, success: true };
                 }}
@@ -487,9 +490,10 @@ const FreightBillsPage: React.FC = () => {
             children: (
               <UniTable<FreightOrder>
                 actionRef={pendingActionRef}
-                search={false}
                 columns={pendingColumns}
-                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.pending.v4"
+                columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-bills.pending.v5"
+                showFuzzySearch={false}
+                showAdvancedSearch={false}
                 rowKey="id"
                 request={async () => {
                   const res = await listPendingFreightOrdersForBill({ limit: 100 });

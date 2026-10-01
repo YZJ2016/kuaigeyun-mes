@@ -8,6 +8,7 @@ import KuaizhizaoReport from '../../../../components/KuaizhizaoReport';
 import { deliveryProjectApi, DELIVERY_PROJECT_STATUS, type DeliveryProgressSummaryRow } from '../../../../services/delivery-project';
 import { reportPercent } from '../../../../utils/reportPresentation';
 import { formatBusinessDateOnly } from '../../../../../../utils/format';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../../utils/tableQueryKey';
 
 const ProgressSummaryReportPage: React.FC = () => {
   const { t } = useTranslation();
@@ -119,8 +120,8 @@ const ProgressSummaryReportPage: React.FC = () => {
       const res = await deliveryProjectApi.progressSummary({
         skip,
         limit: pageSize,
-        keyword: (searchFormValues?.keyword ?? params.keyword) as string | undefined,
-        status: (searchFormValues?.status ?? params.status) as string | undefined,
+        keyword: pickListSearchKeyword(searchFormValues),
+        status: pickSearchString(searchFormValues, 'status'),
       });
       return { data: res.items, total: res.total, success: true };
     },
@@ -129,7 +130,7 @@ const ProgressSummaryReportPage: React.FC = () => {
 
   return (
     <KuaizhizaoReport<DeliveryProgressSummaryRow>
-      columnPersistenceId="apps.kuaizhizao.pages.delivery-project.reports.progress-summary.index-v3"
+      columnPersistenceId="apps.kuaizhizao.pages.delivery-project.reports.progress-summary.index-v4"
       title={t('app.kuaizhizao.menu.delivery-project.reports.progress-summary')}
       reportType="delivery-progress-summary"
       domain="delivery"

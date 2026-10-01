@@ -16,6 +16,7 @@ import {
   useEquipmentDetailDrawer,
 } from '../../shared/equipmentMasterDataDetail';
 import { MEASURING_INSTRUMENT_NATURE } from '../measuringInstrumentConstants';
+import { pickSearchString } from '../../../../../../utils/tableQueryKey';
 
 const RESOURCE = 'kuaizhizao:measuring-instrument-calibration-reminder';
 const P = 'app.kuaizhizao.measuringInstrumentCalibrationReminder';
@@ -147,6 +148,14 @@ const MeasuringInstrumentCalibrationRemindersPage: React.FC = () => {
     [handleDetail, t],
   );
 
+  const dueTypeValueEnum = useMemo(
+    () => ({
+      due_soon: { text: t(`${P}.statusDueSoon`) },
+      overdue: { text: t(`${P}.statusOverdue`) },
+    }),
+    [t],
+  );
+
   const settingsToolbar = useMemo(
     () => (
       <Popover
@@ -233,7 +242,11 @@ const MeasuringInstrumentCalibrationRemindersPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<CalibrationReminder>
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.measuring-instruments.calibration-reminders-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.measuring-instruments.calibration-reminders-v4"
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
+          pinnedTabsField="due_type"
+          pinnedTabsValueEnum={dueTypeValueEnum}
           actionRef={actionRef}
           permissionResource={RESOURCE}
           enableRowSelection={perms.canExport}
@@ -299,17 +312,15 @@ const MeasuringInstrumentCalibrationRemindersPage: React.FC = () => {
             onClick: () => handleDetail(record),
             style: { cursor: 'pointer' },
           })}
-          request={async (params) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             const res = await equipmentApi.listCalibrationReminders({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              due_type: params.due_type as string | undefined,
+              due_type: pickSearchString(searchFormValues, 'due_type'),
               equipment_nature: MEASURING_INSTRUMENT_NATURE,
             });
             return { data: res.items || [], success: true, total: res.total || 0 };
           }}
-          search={{ labelWidth: 'auto' }}
-          pagination={{ defaultPageSize: 20 }}
         />
       </ListPageTemplate>
 

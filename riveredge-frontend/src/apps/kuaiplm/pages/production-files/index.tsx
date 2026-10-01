@@ -735,7 +735,8 @@ const ProductionFilesPage: React.FC = () => {
       rowKey="id"
       columns={columns}
       permissionResource={RESOURCE}
-      columnPersistenceId={`apps.kuaiplm.pages.production-files.${pageTab}.width-v5`}
+      columnPersistenceId={`apps.kuaiplm.pages.production-files.${pageTab}.width-v6`}
+      showAdvancedSearch
       enableRowSelection
       selectedRowKeys={selectedRowKeys}
       onSelectedRowKeysChange={setSelectedRowKeys}
@@ -809,7 +810,6 @@ const ProductionFilesPage: React.FC = () => {
         });
         return { data: res.items, success: true, total: res.total };
       }}
-      search={{ labelWidth: 'auto' }}
     />
     </>
   );

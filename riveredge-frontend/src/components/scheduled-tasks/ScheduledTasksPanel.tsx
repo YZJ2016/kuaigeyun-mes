@@ -223,7 +223,8 @@ export const ScheduledTasksPanel: React.FC<ScheduledTasksPanelProps> = ({
         rowKey="uuid"
         columns={columns}
         loading={loading}
-        search={false}
+        showFuzzySearch={false}
+        showAdvancedSearch={false}
         pagination={{ pageSize: 20 }}
         request={async () => {
           const items = await getScheduledTaskList({ limit: 200 });

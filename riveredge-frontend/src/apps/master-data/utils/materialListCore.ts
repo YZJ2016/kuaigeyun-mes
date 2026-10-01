@@ -1,7 +1,12 @@
 import type { TFunction } from 'i18next';
 import type { ProColumns } from '@ant-design/pro-components';
 import React from 'react';
-import { extractProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import { formDateRangeFormItemProps } from '../../../utils/formDate';
 import {
@@ -65,21 +70,6 @@ const BATCH_SERIAL_SORT_MAP: Record<string, string> = {
   createdAt: 'created_at',
 };
 
-function pickString(search: Record<string, unknown>, key: string) {
-  const v = search[key];
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-}
-
-function resolveActiveBoolean(
-  search: Record<string, unknown>,
-  field: string,
-): boolean | undefined {
-  const raw = search[field];
-  if (raw === true || raw === 'true') return true;
-  if (raw === false || raw === 'false') return false;
-  return undefined;
-}
-
 function resolveMaterialOperatorName(record: Record<string, unknown>, key: 'created' | 'updated'): string {
   const candidates =
     key === 'created'
@@ -96,21 +86,21 @@ export function resolveRuleListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const search = searchFormValues ?? {};
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   const sort_by = sortBy ? RULE_LIST_SORT_MAP[sortBy] ?? sortBy : undefined;
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
   const params: Record<string, string | number | boolean | undefined> = {
-    is_active: resolveActiveBoolean(s, 'isActive'),
+    is_active: pickSearchTriStateBoolean(searchFormValues, 'isActive'),
     sort_by,
     sort_order: sortOrder,
     created_start_date,
@@ -122,8 +112,8 @@ export function resolveRuleListParams(
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const code = pickString(s, 'code');
-    const name = pickString(s, 'name');
+    const code = pickSearchString(searchFormValues, 'code');
+    const name = pickSearchString(searchFormValues, 'name');
     if (code) params.code = code;
     if (name) params.name = name;
   }
@@ -160,21 +150,21 @@ export function resolveMaterialListParams(
     noGroup?: boolean;
   },
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const search = searchFormValues ?? {};
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   const sortKey = sortBy ? MATERIAL_LIST_SORT_MAP[sortBy] ?? sortBy : undefined;
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
   const params: Record<string, string | number | boolean | undefined> = {
-    isActive: resolveActiveBoolean(s, 'isActive'),
+    isActive: pickSearchTriStateBoolean(searchFormValues, 'isActive'),
     sortBy: sortKey,
     sortOrder,
     created_start_date,
@@ -189,30 +179,31 @@ export function resolveMaterialListParams(
     params.groupId = options.groupId;
   }
 
-  const searchGroupId = s.groupId;
-  if (searchGroupId != null && searchGroupId !== '') {
-    params.groupId = Number(searchGroupId);
+  const searchGroupIdRaw = pickSearchString(searchFormValues, 'groupId');
+  if (searchGroupIdRaw != null && Number.isFinite(Number(searchGroupIdRaw))) {
+    params.groupId = Number(searchGroupIdRaw);
     delete params.noGroup;
   }
 
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const code = pickString(s, 'code') ?? pickString(s, 'mainCode');
-    const name = pickString(s, 'name');
+    const code =
+      pickSearchString(searchFormValues, 'code') ?? pickSearchString(searchFormValues, 'mainCode');
+    const name = pickSearchString(searchFormValues, 'name');
     if (code) params.code = code;
     if (name) params.name = name;
   }
 
-  const sourceType = pickOptionalString(s, 'sourceType');
+  const sourceType = pickOptionalString(search, 'sourceType');
   if (sourceType) params.sourceType = sourceType;
-  const specification = pickString(s, 'specification');
+  const specification = pickSearchString(searchFormValues, 'specification');
   if (specification) params.specification = specification;
-  const brand = pickString(s, 'brand');
+  const brand = pickSearchString(searchFormValues, 'brand');
   if (brand) params.brand = brand;
-  const model = pickString(s, 'model');
+  const model = pickSearchString(searchFormValues, 'model');
   if (model) params.model = model;
-  const baseUnit = pickOptionalString(s, 'baseUnit');
+  const baseUnit = pickOptionalString(search, 'baseUnit');
   if (baseUnit) params.baseUnit = baseUnit;
 
   return params;
@@ -222,22 +213,22 @@ export function resolveVariantAttributeListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const search = searchFormValues ?? {};
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   const sort_by = sortBy ? VARIANT_ATTR_SORT_MAP[sortBy] ?? sortBy : undefined;
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
   const params: Record<string, string | number | boolean | undefined> = {
-    is_active: resolveActiveBoolean(s, 'is_active'),
-    attribute_type: pickOptionalString(s, 'attribute_type'),
+    is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
+    attribute_type: pickOptionalString(search, 'attribute_type'),
     sort_by,
     sort_order: sortOrder,
     created_start_date,
@@ -249,8 +240,8 @@ export function resolveVariantAttributeListParams(
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const attribute_name = pickString(s, 'attribute_name');
-    const display_name = pickString(s, 'display_name');
+    const attribute_name = pickSearchString(searchFormValues, 'attribute_name');
+    const display_name = pickSearchString(searchFormValues, 'display_name');
     if (attribute_name) params.attribute_name = attribute_name;
     if (display_name) params.display_name = display_name;
   }
@@ -391,19 +382,19 @@ export function resolveBatchSerialLedgerListParams(
   sort?: Record<string, unknown>,
   options?: { batchNoField?: string; serialNoField?: string },
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
+  const search = searchFormValues ?? {};
   const batchNoField = options?.batchNoField ?? 'batchNo';
   const serialNoField = options?.serialNoField ?? 'serialNo';
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   const sort_by = sortBy ? BATCH_SERIAL_SORT_MAP[sortBy] ?? sortBy : undefined;
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
 
   const params: Record<string, string | number | boolean | undefined> = {
-    status: pickOptionalString(s, 'status'),
+    status: pickOptionalString(search, 'status'),
     sort_by,
     sort_order: sortOrder,
     created_start_date,
@@ -413,8 +404,8 @@ export function resolveBatchSerialLedgerListParams(
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const batchNo = pickString(s, batchNoField);
-    const serialNo = pickString(s, serialNoField);
+    const batchNo = pickSearchString(searchFormValues, batchNoField);
+    const serialNo = pickSearchString(searchFormValues, serialNoField);
     if (batchNo) params.batch_no = batchNo;
     if (serialNo) params.serial_no = serialNo;
   }

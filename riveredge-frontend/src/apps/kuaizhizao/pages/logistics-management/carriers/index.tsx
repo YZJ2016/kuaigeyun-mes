@@ -30,6 +30,7 @@ import {
 } from '../../../services/logistics';
 import { CarrierFormModal, LOGISTICS_SETTLEMENT_METHOD_OPTIONS } from '../shared/CarrierFormModal';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
 
 const CarriersPage: React.FC = () => {
   const { t } = useTranslation();
@@ -245,13 +246,15 @@ const CarriersPage: React.FC = () => {
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.carriers')}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.carriers.v4"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.carriers.v5"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         rowKey="id"
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await listCarriers({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
-            keyword: params.keyword as string | undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
           });
           return { data: res.items, total: res.total, success: true };
         }}

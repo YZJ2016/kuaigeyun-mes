@@ -447,10 +447,10 @@ const CostRulePage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-rules.list-v2"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-rules.list-v3"
+        showAdvancedSearch
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.costRules')}
-        showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={COST_CRUD_PINNED_ACTIVE_FIELD}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -506,9 +506,6 @@ const CostRulePage: React.FC = () => {
             ]}
           />,
         ]}
-        search={{
-          labelWidth: 'auto',
-        }}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,

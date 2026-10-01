@@ -29,6 +29,10 @@ import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import {
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../../utils/tableQueryKey';
+import {
   getMaintenancePlanList,
   getMaintenancePlanByUuid,
   createMaintenancePlan,
@@ -474,17 +478,17 @@ const MaintenancePlanListPage: React.FC = () => {
         <UniTable<MaintenancePlan>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.maintenancePlans')}
-          columnPersistenceId="pages.system.maintenance-plans.list"
+          columnPersistenceId="pages.system.maintenance-plans.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, filter, searchFormValues) => {
             const response = await getMaintenancePlanList({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              equipment_uuid: searchFormValues?.equipment_uuid,
-              status: searchFormValues?.status,
-              plan_type: searchFormValues?.plan_type,
-              search: searchFormValues?.keyword,
+              equipment_uuid: pickSearchString(searchFormValues, 'equipment_uuid'),
+              status: pickSearchString(searchFormValues, 'status'),
+              plan_type: pickSearchString(searchFormValues, 'plan_type'),
+              search: pickListSearchKeyword(searchFormValues),
             });
             return {
               data: response.items,

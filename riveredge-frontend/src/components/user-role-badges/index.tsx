@@ -1,5 +1,6 @@
 import React from 'react';
-import { Space, Tag } from 'antd';
+import { Space } from 'antd';
+import { renderInlineMarkerTagGroup } from '../inline-marker-tag-preview';
 
 export type UserRoleBadgeItem = {
   uuid?: string;
@@ -7,23 +8,16 @@ export type UserRoleBadgeItem = {
   code?: string;
 };
 
-const ROLE_TAG_COLORS = ['geekblue', 'cyan', 'purple', 'gold', 'green'] as const;
-
+/** 角色多枚徽章：走 inline-marker-tag-preview，禁止 Space+Tag 分叉 */
 export function UserRoleBadges({ roles }: { roles?: UserRoleBadgeItem[] | null }) {
   if (!roles?.length) return null;
-  return (
-    <Space size={4} wrap>
-      {roles.map((role, index) => (
-        <Tag
-          key={role.uuid || role.code || role.name}
-          bordered
-          color={ROLE_TAG_COLORS[index % ROLE_TAG_COLORS.length]}
-          style={{ marginInlineEnd: 0 }}
-        >
-          {role.name}
-        </Tag>
-      ))}
-    </Space>
+  return renderInlineMarkerTagGroup(
+    roles.map((role, index) => ({
+      key: role.uuid || role.code || `${role.name}-${index}`,
+      label: role.name,
+      color: 'processing',
+    })),
+    { empty: null },
   );
 }
 

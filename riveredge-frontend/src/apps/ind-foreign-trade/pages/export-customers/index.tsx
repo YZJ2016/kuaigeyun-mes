@@ -400,7 +400,7 @@ export default function ExportCustomersPage() {
           const listParams = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            keyword: params.keyword || core.keyword,
+            keyword: core.keyword,
             salesmanId: core.salesmanId,
             followStatus: core.followStatus,
             inactive: core.inactive,

@@ -28,6 +28,10 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../comp
 import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../utils/errorHandler';
 import { UniTable } from '../../../components/uni-table';
+import {
+  pickListSearchKeywordOrFields,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 import MenuIconPicker, { renderMenuIconByKey } from '../../../components/MenuIconPicker';
 import {
   getMenuTree,
@@ -497,11 +501,11 @@ const MenuListPage: React.FC = () => {
 
     try {
       const response = await getMenuTree({
-          is_active: searchFormValues?.is_active === 'true' ? true : (searchFormValues?.is_active === 'false' ? false : undefined),
+        is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
       });
 
       // 客户端过滤 (因为 getMenuTree API 可能不支持 keyword)
-      const keyword = searchFormValues?.keyword || searchFormValues?.name;
+      const keyword = pickListSearchKeywordOrFields(searchFormValues, 'name');
       
       const filterTree = (nodes: MenuTree[]): MenuTree[] => {
         if (!keyword) return nodes;
@@ -965,7 +969,8 @@ const MenuListPage: React.FC = () => {
         <UniTable<Menu>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.menus')}
-            columnPersistenceId="pages.system.menus.list-v2"
+            columnPersistenceId="pages.system.menus.list-v4"
+            showAdvancedSearch
             actionRef={actionRef}
             headerTitle={t('pages.system.menus.listTitle')}
             rowKey="uuid"
@@ -1074,7 +1079,6 @@ const MenuListPage: React.FC = () => {
                 expandedRowKeys,
                 onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as React.Key[]),
             }}
-            search={{ labelWidth: 'auto' }}
             showAdvancedSearch={true}
         />
 

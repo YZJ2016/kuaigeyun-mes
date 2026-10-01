@@ -555,10 +555,11 @@ const PriceSettlementPanel: React.FC<SettlementPanelProps> = ({
           tableRowsRef.current = rows as PriceSettlementRow[];
         }}
         rowKey="source_line_id"
-        columnPersistenceId={`apps.kuaicaiwu.pages.finance-management.price-settlement.${side}.list-v3`}
+        columnPersistenceId={`apps.kuaicaiwu.pages.finance-management.price-settlement.${side}.list-v4`}
         columns={columns}
         loading={loading}
-        search={false}
+        showFuzzySearch={false}
+        showAdvancedSearch={false}
         pagination={false}
         skipFuzzyPinyinClientFilter
         locale={{

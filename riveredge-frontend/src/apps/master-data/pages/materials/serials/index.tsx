@@ -289,7 +289,7 @@ const SerialsPage: React.FC = () => {
       <UniTable<MaterialSerial>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.serials')}
-        columnPersistenceId="apps.master-data.pages.materials.serials.list-v2"
+        columnPersistenceId="apps.master-data.pages.materials.serials.list-v3"
         headerTitle={t('app.master-data.menu.materials.serials')}
         actionRef={actionRef}
         rowKey="uuid"
@@ -316,9 +316,6 @@ const SerialsPage: React.FC = () => {
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={SERIAL_STATUS_PINNED_FIELD}
-        search={{
-          labelWidth: 'auto',
-        }}
         showCreateButton
         createButtonText={t('common.create')}
         onCreate={handleCreate}

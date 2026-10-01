@@ -511,7 +511,7 @@ const BatchInventoryQuery: React.FC = () => {
     const warehouse = warehouseFilterRef.current;
     const apiParams = {
       ...listParams,
-      material_id: listParams.material_id ?? params.material_id,
+      material_id: listParams.material_id,
       include_expired: includeExpiredRef.current,
       include_zero_stock: includeZeroStockRef.current,
       aging_bucket: aging === 'all' ? undefined : aging,
@@ -665,7 +665,7 @@ const BatchInventoryQuery: React.FC = () => {
         headerActions={tableHeaderActions}
         actionRef={actionRef}
         columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.batch-inventory-query-width-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.batch-inventory-query-width-v4"
         request={fetchBatchInventory}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
@@ -673,7 +673,6 @@ const BatchInventoryQuery: React.FC = () => {
         onExport={handleExport}
         enableRowSelection
         rowKey="id"
-        search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         params={{
           material_id: searchParams.get('material_id') || undefined,

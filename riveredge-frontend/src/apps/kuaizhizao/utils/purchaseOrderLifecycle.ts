@@ -11,6 +11,13 @@ import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent'
 import { applyLifecycleI18n, requireI18nText, type LifecycleTranslateFn } from './lifecycleI18n';
 import { LIFECYCLE_DOCUMENT_ACTION_LABEL_KEYS as DA } from '../constants/lifecycleDocumentActionLabelKeys';
 import { resolveListLifecycleStageFromSearch } from '../../../utils/listLifecycleStage';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchRaw,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../services/reports';
 import { mapAuditLifecycleStageToApiParams } from './auditListFilter';
 
 const MAIN_STAGE_KEYS = [
@@ -497,4 +504,66 @@ export function isPurchaseOrderDeliveryOverdue(
     || isInProgress(status)
     || isApproved(reviewStatus)
   );
+}
+
+export function resolvePurchaseOrderListApiParams(
+  params: { current?: number; pageSize?: number },
+  sort?: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  const orderBy =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+
+  const apiParams: Record<string, unknown> = {
+    skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+    limit: params.pageSize ?? 20,
+    order_by: orderBy,
+    include_items: true,
+  };
+
+  const lifecycleMapped = resolvePurchaseOrderListLifecycleParams(searchFormValues, params);
+  if (lifecycleMapped.status) apiParams.status = lifecycleMapped.status;
+  if (lifecycleMapped.review_status) apiParams.review_status = lifecycleMapped.review_status;
+
+  if (fuzzyKeyword) {
+    apiParams.keyword = fuzzyKeyword;
+  } else {
+    const orderCode = pickSearchString(searchFormValues, 'order_code');
+    if (orderCode) apiParams.order_code = orderCode;
+  }
+
+  const supplierIdRaw = pickSearchString(searchFormValues, 'supplier_id');
+  if (supplierIdRaw != null && Number.isFinite(Number(supplierIdRaw))) {
+    apiParams.supplier_id = Number(supplierIdRaw);
+  }
+
+  const buyerIdRaw = pickSearchString(searchFormValues, 'buyer_id');
+  if (buyerIdRaw != null && Number.isFinite(Number(buyerIdRaw)) && Number(buyerIdRaw) > 0) {
+    apiParams.buyer_id = Number(buyerIdRaw);
+  }
+
+  const orderDate = parseSalesReportDateRange(searchFormValues ?? {}, ['order_date_range']);
+  if (orderDate.date_start) {
+    apiParams.order_date_from = orderDate.date_start;
+    apiParams.order_date_to = orderDate.date_end ?? orderDate.date_start;
+  }
+  const deliveryDate = parseSalesReportDateRange(searchFormValues ?? {}, ['delivery_date_range']);
+  if (deliveryDate.date_start) {
+    apiParams.delivery_date_from = deliveryDate.date_start;
+    apiParams.delivery_date_to = deliveryDate.date_end ?? deliveryDate.date_start;
+  }
+  const created = parseSalesReportDateRange(searchFormValues ?? {}, ['created_at_range', 'createdAtRange']);
+  if (created.date_start) {
+    apiParams.created_start_date = created.date_start;
+    apiParams.created_end_date = created.date_end ?? created.date_start;
+  }
+
+  const columnFilters = pickSearchRaw(searchFormValues, 'column_filters');
+  if (typeof columnFilters === 'string' && columnFilters.trim()) {
+    apiParams.column_filters = columnFilters.trim();
+  }
+
+  return apiParams;
 }

@@ -740,6 +740,7 @@ export default {
   'pages.personal.preferences.layoutWide': '宽屏',
   'pages.personal.preferences.sidebarCollapsed': '侧边栏默认收起',
   'pages.personal.preferences.tablePageSize': '表格每页条数',
+  'pages.personal.preferences.followSystemPageSize': '跟随系统设置',
   'pages.personal.preferences.perPage10': '10 条/页',
   'pages.personal.preferences.perPage20': '20 条/页',
   'pages.personal.preferences.perPage50': '50 条/页',
@@ -3278,7 +3279,8 @@ export default {
   'app.kuaizhizao.menu.sales-management.sales-reviews': '订单评审',
   'app.kuaizhizao.menu.quality-management.fai-orders': '首件检验 (FAI)',
   'app.kuaizhizao.menu.quality-management.quality-system': '质量体系',
-  'app.kuaizhizao.menu.quality-management.iso-clauses': 'ISO条款',
+  'app.kuaizhizao.menu.quality-management.iso-clauses': '条款管理',
+  'app.kuaizhizao.menu.quality-management.clause-management': '条款管理',
   'app.kuaizhizao.menu.quality-management.system-documents': '体系文件',
   'app.kuaizhizao.menu.quality-management.qc-sop': 'QC 材料 SOP',
   'app.kuaizhizao.qcSop.createTitle': '新建 QC 材料 SOP',
@@ -29274,6 +29276,186 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.unitable-system-audit-backup-package-list-search-r01.title':
+    '登录操作日志、数据备份与套餐列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-system-audit-backup-package-list-search-r01.description':
+    '登录日志、操作日志、数据备份与平台套餐列表请求统一经 systemUniTableListFilters 与 tableQueryKey pick 读取 searchFormValues；套餐列表 request 恢复标准四参签名。',
+  'pages.dashboard.updateLog.entries.unitable-system-approval-print-list-search-r01.title':
+    '审批流程与打印管理列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-system-approval-print-list-search-r01.description':
+    '审批流程、审批实例、平台定时任务、打印模板与打印设备列表请求统一经 systemUniTableListFilters 与 tableQueryKey pick 读取 searchFormValues，去除整表 spread 传参。',
+  'pages.dashboard.updateLog.entries.unitable-hub-contract-finance-list-search-r01.title':
+    '仓储 Hub、销售合同评审与票据列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-hub-contract-finance-list-search-r01.description':
+    '入出库 Hub 关键词改为 pickListSearchKeywordOrFields；销售合同与销售评审列表参数迁入 lifecycle/listCore；轻财务票据列表排序改经 extractProTableSort。',
+  'pages.dashboard.updateLog.entries.unitable-kz-sales-purchase-doc-list-search-r01.title':
+    '购销通知退货与订单预测列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-kz-sales-purchase-doc-list-search-r01.description':
+    '销售订单、销售预测、发货通知、销售退货、采购订单、收货通知、采购退货列表请求统一经 lifecycle 侧 resolve*ListApiParams 与 tableQueryKey pick 读取 searchFormValues，去除页面 sf 别名。',
+  'pages.dashboard.updateLog.entries.unitable-list-search-lifecycle-r01.title':
+    '列表生命周期与采购质检筛选参数收口',
+  'pages.dashboard.updateLog.entries.unitable-list-search-lifecycle-r01.description':
+    '生命周期阶段解析、自定义字段列表、供应商评价四 Tab、采购询价与购销变更单列表请求统一经 tableQueryKey pick 与 resolve*ListApiParams 读取 searchFormValues。',
+  'pages.dashboard.updateLog.entries.unitable-plm-kz-production-list-search-r01.title':
+    '快研发与生产执行列表筛选参数收口',
+  'pages.dashboard.updateLog.entries.unitable-plm-kz-production-list-search-r01.description':
+    '快研发 plmListCore 与生产异常、工单、委外、返工、装箱绑定、采购申请等列表请求统一经 tableQueryKey pick 与生命周期侧 resolve*ListApiParams 读取 searchFormValues，去除页面内 s 别名与手写 keyword 解析。',
+  'pages.dashboard.updateLog.entries.unitable-master-data-list-core-search-r01.title':
+    '主数据与成本列表参数核心及 UniTable 关键词收口',
+  'pages.dashboard.updateLog.entries.unitable-master-data-list-core-search-r01.description':
+    '主数据 master/material/supplyChain/process 与轻财务 cost 列表参数构建统一经 tableQueryKey pick 读取 searchFormValues；UniTable 预取下一页与拼音客户端过滤的关键词同样走 pickListSearchKeyword。',
+  'pages.dashboard.updateLog.entries.unitable-kz-warehouse-equipment-list-core-r01.title':
+    '仓储、设备与质检列表参数核心收口',
+  'pages.dashboard.updateLog.entries.unitable-kz-warehouse-equipment-list-core-r01.description':
+    '仓储与设备运维列表参数构建、质检检验与改进类列表核心统一经 tableQueryKey pick 工具读取 searchFormValues，去除本地 pickString 与 s 别名。',
+  'pages.dashboard.updateLog.entries.unitable-kz-list-core-search-r01.title':
+    '快制造列表参数与生命周期筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-kz-list-core-search-r01.description':
+    '计划、绩效、客户池、仓储与设备列表核心、报表请求、生命周期解析及销售销售人员筛选统一经 tableQueryKey pick 工具读取 searchFormValues；BOM 含废弃版本开关同步对齐。',
+  'pages.dashboard.updateLog.entries.unitable-system-infra-list-search-r01.title':
+    '应用中心、数据集成与消息配置列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-system-infra-list-search-r01.description':
+    '应用连接、应用中心、数据集、接口、数据源、消息渠道与模板、系统参数、邀请码、定时任务及个人任务列表统一从 searchFormValues 经 pick 工具取参；业务消息提醒规则面板同步对齐。',
+  'pages.dashboard.updateLog.entries.unitable-system-master-list-search-r01.title':
+    '系统管理与主数据列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-system-master-list-search-r01.description':
+    '账户、部门、菜单、职位、字典、语言及平台设备模具维护故障列表，与原料行情、BOM、外贸跟进、组织租户与缺料交期异常等统一从 searchFormValues 经 pick 工具取参。',
+  'pages.dashboard.updateLog.entries.unitable-list-search-tail-r01.title':
+    '报价单、平台与系统列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-list-search-tail-r01.description':
+    '轻财务列表参数核心、报价单、报工与售后工单日期时间区间，以及客户端发布、报表模板、数据连接与权限列表统一从 searchFormValues 经 pick 工具取参。',
+  'pages.dashboard.updateLog.entries.unitable-sales-crm-list-search-r01.title':
+    '订单评审、销售合同与客户跟进列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-sales-crm-list-search-r01.description':
+    '订单评审、销售合同与客户跟进列表 keyword 与高级搜索字段统一从 searchFormValues 读取，合同日期区间与生命周期筛选对齐既有契约。',
+  'pages.dashboard.updateLog.entries.unitable-finance-report-list-search-r01.title':
+    '票据、报表与 ESD 点检筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-finance-report-list-search-r01.description':
+    '应收应付票据到期区间与快制造报表请求参数统一走 pick 工具；固定资产折旧报表与 ESD 点检列表同步收口。',
+  'pages.dashboard.updateLog.entries.unitable-oa-finance-master-list-search-r01.title':
+    '轻办公、轻财务与主数据单位列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-oa-finance-master-list-search-r01.description':
+    '轻办公通用列表壳与科目表、凭证、汇率、进项认证、固定资产及主数据单位/换算列表统一从 searchFormValues 读取筛选参数。',
+  'pages.dashboard.updateLog.entries.unitable-qms-misc-list-search-r01.title':
+    'QMS 与关联列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-qms-misc-list-search-r01.description':
+    '内审、管理评审、体系文件、FAI、ISO 条款及到货预警、报工、返工模板、组装模板等列表统一用 searchFormValues 与 pick 工具读取筛选条件。',
+  'pages.dashboard.updateLog.entries.unitable-plan-management-list-search-r01.title':
+    '计划管理列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-plan-management-list-search-r01.description':
+    '需求计划、需求计算、MRP 异常收件箱与重排任务列表的 keyword 与高级搜索字段统一从 searchFormValues 读取。',
+  'pages.dashboard.updateLog.entries.unitable-delivery-project-list-search-r01.title':
+    '交付项目列表与进度报表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-delivery-project-list-search-r01.description':
+    '交付项目、问题、计划、节点汇报、车间台账及三张进度报表的 keyword 与阶段筛选统一从 searchFormValues 读取；售后工单行缓存改由 onTableDataChange 写入。',
+  'pages.dashboard.updateLog.entries.unitable-aftersales-list-search-r02.title':
+    '售后业务列表筛选统一收口',
+  'pages.dashboard.updateLog.entries.unitable-aftersales-list-search-r02.description':
+    '维修单、回访、服务资产、结算、备件申请、安装执行与工单列表筛选参数统一从 searchFormValues 读取，并启用高级搜索。',
+  'pages.dashboard.updateLog.entries.unitable-logistics-aftersales-list-search-r01.title':
+    '物流与售后派工列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-logistics-aftersales-list-search-r01.description':
+    '承运商、驾驶员、车辆、运单与运费单列表 keyword 统一走 searchFormValues；售后派工单启用高级搜索。',
+  'pages.dashboard.updateLog.entries.unitable-equipment-list-search-r01.title':
+    '量具校准提醒与设备换线列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-equipment-list-search-r01.description':
+    '量具校准提醒页启用高级搜索与到期状态钉住；设备换线绑定列表 keyword/状态只读 searchFormValues。',
+  'pages.dashboard.updateLog.entries.unitable-quality-complaint-iso-clause-search-r01.title':
+    '质量投诉与 ISO 条款列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-quality-complaint-iso-clause-search-r01.description':
+    '质量投诉列表统一 searchFormValues 与高级搜索；ISO 条款标准筛选经 params 传入，关键词与启用状态只读高级搜索表单。',
+  'pages.dashboard.updateLog.entries.unitable-outsource-settlement-list-search-r01.title':
+    '外协结算单列表高级搜索与状态钉住',
+  'pages.dashboard.updateLog.entries.unitable-outsource-settlement-list-search-r01.description':
+    '外协结算列表启用高级搜索与审核状态钉住 Tab；筛选只读 searchFormValues，支持结算单号与供应商条件。',
+  'pages.dashboard.updateLog.entries.unitable-warehouse-toolbar-scope-params-r01.title':
+    '库存与倒冲列表工具栏筛选走 params',
+  'pages.dashboard.updateLog.entries.unitable-warehouse-toolbar-scope-params-r01.description':
+    '实时库存的仓库/零库存开关与倒冲记录的失败视图经 UniTable params 传入 request，高级搜索仍只读 searchFormValues，去掉 ref 双轨取数。',
+  'pages.dashboard.updateLog.entries.unitable-production-daily-list-search-r01.title':
+    '生产日报与返工排位模板列表筛选收口',
+  'pages.dashboard.updateLog.entries.unitable-production-daily-list-search-r01.description':
+    '生产日报模板、生产日报录入、返工排位策划模板显式启用高级搜索；列表 keyword 统一走 pickListSearchKeyword，不再裸读表单字段。',
+  'pages.dashboard.updateLog.entries.unitable-purchase-arrival-warning-search-r01.title':
+    '采购到货预警列表筛选只认高级搜索',
+  'pages.dashboard.updateLog.entries.unitable-purchase-arrival-warning-search-r01.description':
+    '到货预警列表不再把分页 params 合并进筛选；顶栏模糊与高级字段只读 searchFormValues，并支持预警等级钉住 Tab。',
+  'pages.dashboard.updateLog.entries.unitable-drawing-vault-tree-filter-r01.title':
+    '工程图库侧栏筛选与高级搜索分工明确',
+  'pages.dashboard.updateLog.entries.unitable-drawing-vault-tree-filter-r01.description':
+    '工程图库左侧目录/分类筛选经列表 params 传入取数，高级搜索仍只读 searchFormValues；侧栏与弹窗状态可正确叠加。',
+  'pages.dashboard.updateLog.entries.unitable-drawing-doc-list-search-r01.title':
+    '图档发放与图纸借阅列表筛选钉住',
+  'pages.dashboard.updateLog.entries.unitable-drawing-doc-list-search-r01.description':
+    '图档发放、图纸借阅、工程图库列表统一高级搜索与状态钉住 Tab；借阅单新建按钮文案为「新建图纸借阅」。',
+  'pages.dashboard.updateLog.entries.unitable-list-legacy-protable-search-r02.title':
+    '无搜索列表显式关闭 UniSearch',
+  'pages.dashboard.updateLog.entries.unitable-list-legacy-protable-search-r02.description':
+    '图纸反查、运单待开票、备件库存、绩效日历、敏感词、插件管理、协议条款弹窗等页去掉无效的 search 属性，改用 showFuzzySearch 与 showAdvancedSearch 表达是否展示搜索区。',
+  'pages.dashboard.updateLog.entries.unitable-list-legacy-protable-search-r01.title':
+    '列表统一顶栏模糊与高级搜索',
+  'pages.dashboard.updateLog.entries.unitable-list-legacy-protable-search-r01.description':
+    '主数据、快制造、轻财务、快研发、轻办公与平台设置等页移除无效的 ProTable search 行，筛选只走 UniSearch 与 searchFormValues；相关列表已 bump 列持久化 id。',
+  'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r03.title':
+    '生命周期筛选不再读 ProTable params',
+  'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r03.description':
+    '列表阶段钉住与高级搜索只从 searchFormValues 解析 lifecycle_stage；平台许可证、研发项目类型等去掉 params 合并双读。',
+  'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r02.title':
+    '列表筛选漏改页补齐 searchFormValues',
+  'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r02.description':
+    '报表模板、自定义字段、承兑票据、汇率、安装执行、ESD 点检、外贸跟进、行情价、进项认证、批次库存、质量异常等页去掉 params 双读，筛选只走高级搜索表单真源。',
+  'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r01.title':
+    '多模块列表高级搜索与钉住筛选生效',
+  'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r01.description':
+    '物流、售后、交付、质量 QMS、外协、设备提醒、主数据单位、轻办公等列表 request 统一读取 searchFormValues；交付项目进度报表去掉 params 双读。',
+  'pages.dashboard.updateLog.entries.unitable-pinned-search-engine-r01.title':
+    '列表钉住条件去重与单字段内置 Tab',
+  'pages.dashboard.updateLog.entries.unitable-pinned-search-engine-r01.description':
+    '高级搜索钉住条只从得分最高的一列 valueEnum 生成；页面 pinnedTabsField 可指定字段；远程保存的重复钉住自动隐藏。',
+  'pages.dashboard.updateLog.entries.tenant-list-sort-last-login-r01.title':
+    '组织管理支持按最后登录时间排序',
+  'pages.dashboard.updateLog.entries.tenant-list-sort-last-login-r01.description':
+    '组织列表「最后登录时间」列可升序/降序；按成功登录日志聚合排序，从未登录的组织排在末尾。',
+  'pages.dashboard.updateLog.entries.user-list-roles-column-width-r01.title':
+    '账户管理加宽角色列',
+  'pages.dashboard.updateLog.entries.user-list-roles-column-width-r01.description':
+    '角色列最小宽度由 140 提到 200，避免「体验用户」「系统管理员」等徽章贴边或被邻列裁切。',
+  'pages.dashboard.updateLog.entries.department-code-column-width-r01.title':
+    '部门管理加宽部门代码列',
+  'pages.dashboard.updateLog.entries.department-code-column-width-r01.description':
+    '树形缩进与复制图标下部门代码列由 140 加宽到 240，深层编码更易完整显示。',
+  'pages.dashboard.updateLog.entries.infra-admin-info-profile-layout-r01.title':
+    '平台管理管理员信息页排版对齐个人资料',
+  'pages.dashboard.updateLog.entries.infra-admin-info-profile-layout-r01.description':
+    '左侧用户信息摘要、右侧基本信息与安全设置分栏；可编辑邮箱与全名，状态用徽章展示，改密入口与个人资料安全设置一致。',
+  'pages.dashboard.updateLog.entries.unitable-default-page-size-site-setting-r01.title':
+    '修复站点「表格默认每页条数」不生效',
+  'pages.dashboard.updateLog.entries.unitable-default-page-size-site-setting-r01.description':
+    'UniTable 改为受控分页并跟随站点配置；忽略页面写死的 pagination.defaultPageSize:20；个人偏好新增「跟随系统设置」，避免误写入 20 盖掉站点值。',
+  'pages.dashboard.updateLog.entries.unitable-marker-badge-vertical-align-r01.title':
+    '统一列表多枚徽章写法并修复行内垂直不对齐',
+  'pages.dashboard.updateLog.entries.unitable-marker-badge-vertical-align-r01.description':
+    '多枚 MarkerTag 统一走 inline-marker-tag-preview（禁止 Space/span/裸 Tag 分叉）；UniTable 表体 Space 行高压齐；账户角色、协作人、排产诊断、物料品牌型号等已收口。',
+  'pages.dashboard.updateLog.entries.qms-preset-clauses-three-standards-r01.title':
+    '补齐 IATF16949 与环境、职业健康安全标准条款目录',
+  'pages.dashboard.updateLog.entries.qms-preset-clauses-three-standards-r01.description':
+    '打开条款管理时自动导入 IATF 16949:2016、ISO 14001:2015、ISO 45001:2018 条款树；环境与安全标准预置包补充 6.1、7.5、9 等子条款节点。',
+  'pages.dashboard.updateLog.entries.qms-system-document-evidence-attachments-r01.title':
+    '修复体系文件证据说明保存与附件上传预览',
+  'pages.dashboard.updateLog.entries.qms-system-document-evidence-attachments-r01.description':
+    '证据链接支持按行填写说明文字；体系文件、内审与管理评审附件上传纳入业务单据写权限，无需单独文件管理权限即可上传并预览。',
+  'pages.dashboard.updateLog.entries.qms-clause-link-audit-columns-r01.title':
+    '修复条款目录点击后无法加载详情',
+  'pages.dashboard.updateLog.entries.qms-clause-link-audit-columns-r01.description':
+    '补齐体系文件与内审条款关联表的审计姓名字段，避免查询符合性时报 created_by_name 不存在。',
+  'pages.dashboard.updateLog.entries.qms-clause-management-three-column-r01.title':
+    '条款管理改为三栏浏览',
+  'pages.dashboard.updateLog.entries.qms-clause-management-three-column-r01.description':
+    '条款管理页分为条款（标准体系）、条款目录与条款内容三栏，逐级选择后查看符合性与关联文件、内审。',
+  'pages.dashboard.updateLog.entries.qms-multi-standard-clauses-r01.title':
+    '质量体系支持多标准条款管理',
+  'pages.dashboard.updateLog.entries.qms-multi-standard-clauses-r01.description':
+    '条款管理改为两栏布局，预置 ISO9001/14001/45001 与 IATF16949；体系文件与内审支持多条款关联，管理评审可挂体系并点选输入材料。',
   'pages.dashboard.updateLog.entries.equipment-ledger-import-upsert-r01.title':
     '设备台账导入支持按编号更新',
   'pages.dashboard.updateLog.entries.equipment-ledger-import-upsert-r01.description':
@@ -38480,8 +38662,22 @@ export default {
   'app.kuaizhizao.quality.isoClauses.compliance.reviewDue': '待评审',
   'app.kuaizhizao.quality.isoClauses.complianceStatus': '符合性状态',
   'app.kuaizhizao.quality.isoClauses.complianceSummary': '符合性摘要',
-  'app.kuaizhizao.quality.isoClauses.createTitle': '新建 ISO 条款',
-  'app.kuaizhizao.quality.isoClauses.editTitle': '编辑 ISO 条款',
+  'app.kuaizhizao.quality.isoClauses.createTitle': '新建条款',
+  'app.kuaizhizao.quality.isoClauses.editTitle': '编辑条款',
+  'app.kuaizhizao.quality.clauseManagement.tierStandard': '条款',
+  'app.kuaizhizao.quality.clauseManagement.tierCatalog': '条款目录',
+  'app.kuaizhizao.quality.clauseManagement.tierContent': '条款内容',
+  'app.kuaizhizao.quality.clauseManagement.selectStandardHint': '请先在左侧选择标准体系',
+  'app.kuaizhizao.quality.clauseManagement.emptyStandards': '暂无标准体系，可新建自定义体系',
+  'app.kuaizhizao.quality.clauseManagement.selectStandard': '选择体系标准',
+  'app.kuaizhizao.quality.clauseManagement.newClause': '新建条款',
+  'app.kuaizhizao.quality.clauseManagement.newStandard': '新建自定义体系',
+  'app.kuaizhizao.quality.clauseManagement.newStandardShort': '新建体系',
+  'app.kuaizhizao.quality.clauseManagement.emptyTree': '当前体系暂无条款，可导入预设或手工新建',
+  'app.kuaizhizao.quality.clauseManagement.selectClauseHint': '请在条款目录中选择条目查看内容与符合性',
+  'app.kuaizhizao.quality.clauseManagement.createClauseTitle': '新建条款',
+  'app.kuaizhizao.quality.clauseManagement.standardCodeRequired': '请填写体系代号',
+  'app.kuaizhizao.quality.clauseManagement.standardName': '体系名称',
   'app.kuaizhizao.quality.isoClauses.effectiveDocuments': '现行有效文件',
   'app.kuaizhizao.quality.isoClauses.gapFlags': '缺口说明',
   'app.kuaizhizao.quality.isoClauses.gapNoAudit': '缺少内审记录',
@@ -38554,7 +38750,9 @@ export default {
   'app.kuaizhizao.quality.qms.editDocument': '编辑体系文件',
   'app.kuaizhizao.quality.qms.editReview': '编辑管理评审',
   'app.kuaizhizao.quality.qms.evidenceLinks': '证据链接',
-  'app.kuaizhizao.quality.qms.evidenceLinksHint': '请填写 JSON 数组，例如 [{"type":"attachment","id":1}]',
+  'app.kuaizhizao.quality.qms.evidenceLinksHint':
+    '可填写说明文字，每行一条；若需结构化引用可填写 JSON 数组，元素须含 ref_type 字段',
+  'app.kuaizhizao.quality.qms.evidenceLinksInvalidJson': '证据链接 JSON 格式有误，请检查括号与引号，或改为每行一条说明文字',
   'app.kuaizhizao.quality.qms.fileUrl': '文件地址',
   'app.kuaizhizao.quality.qms.findingLinks8d': '关联 8D 报告',
   'app.kuaizhizao.quality.qms.findingLinks8dPlaceholder': '请选择 8D 报告',
@@ -38563,10 +38761,20 @@ export default {
   'app.kuaizhizao.quality.qms.findingLinksNcPlaceholder': '请选择不合格品台账',
   'app.kuaizhizao.quality.qms.findings': '审核发现',
   'app.kuaizhizao.quality.qms.inputLinks': '输入关联',
-  'app.kuaizhizao.quality.qms.inputLinksHint': '请填写 JSON 数组，关联管理评审输入材料',
+  'app.kuaizhizao.quality.qms.inputLinksHint': '可从体系文件、内审、不合格台账与 8D 报告点选挂入评审输入',
+  'app.kuaizhizao.quality.qms.selectClause': '请选择条款',
+  'app.kuaizhizao.quality.qms.clauseLabel': '关联条款',
+  'app.kuaizhizao.quality.qms.applicableStandard': '适用体系',
+  'app.kuaizhizao.quality.qms.auditStandard': '审核依据体系',
+  'app.kuaizhizao.quality.qms.reviewStandards': '评审体系',
+  'app.kuaizhizao.quality.qms.reviewStandardsRequired': '请至少选择一套体系',
+  'app.kuaizhizao.quality.qms.reviewInputDocs': '关联体系文件',
+  'app.kuaizhizao.quality.qms.reviewInputDocsPlaceholder': '搜索并选择体系文件',
+  'app.kuaizhizao.quality.qms.reviewInputAudits': '关联内审记录',
+  'app.kuaizhizao.quality.qms.reviewInputAuditsPlaceholder': '搜索并选择内审',
   'app.kuaizhizao.quality.qms.inputSummaryHint': '可从系统汇总管理评审输入后写入下方字段',
   'app.kuaizhizao.quality.qms.inputsSummary': '评审输入',
-  'app.kuaizhizao.quality.qms.isoClause': 'ISO 条款',
+  'app.kuaizhizao.quality.qms.isoClause': '关联条款',
   'app.kuaizhizao.quality.qms.keyword': '关键词',
   'app.kuaizhizao.quality.qms.leadAuditor': '主审员',
   'app.kuaizhizao.quality.qms.loadInputSummary': '加载输入汇总',
@@ -38894,6 +39102,7 @@ export default {
   'app.master-data.drawingLoans.clearanceSaved': '密级授权已保存',
   'app.master-data.drawingLoans.clearanceUser': '授权用户',
   'app.master-data.drawingLoans.clearanceUserRequired': '请选择授权用户',
+  'app.master-data.drawingLoans.create': '新建图纸借阅',
   'app.master-data.drawingLoans.code': '借阅单号',
   'app.master-data.drawingLoans.complete': '归还',
   'app.master-data.drawingLoans.completeConfirm': '确认归还该借阅单？',

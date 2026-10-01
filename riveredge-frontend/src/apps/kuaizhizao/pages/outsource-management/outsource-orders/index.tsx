@@ -67,7 +67,7 @@ import CodeField from '../../../../../components/code-field';
 import { outsourceOrderApi, workOrderApi } from '../../../services/production';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
-import { getOutsourceOrderLifecycle, buildOutsourceOrderLifecycleValueEnum, resolveOutsourceOrderListLifecycleParams } from '../../../utils/outsourceOrderLifecycle';
+import { getOutsourceOrderLifecycle, buildOutsourceOrderLifecycleValueEnum, resolveOutsourceOrderListApiParams } from '../../../utils/outsourceOrderLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
@@ -1032,54 +1032,9 @@ export const OutsourceOrdersTable: React.FC = () => {
     meta?: UniTableRequestMeta,
   ) => {
     try {
-      const s = searchFormValues ?? {};
-      const lifecycleParams = resolveOutsourceOrderListLifecycleParams(s);
-      const { sortBy, sortOrder } = extractProTableSort(sort);
-      const orderBy =
-        sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-      const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
-
-      const apiParams: Parameters<typeof outsourceOrderApi.list>[0] = {
-        skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
-        limit: params.pageSize ?? 20,
-        ...lifecycleParams,
-        order_by: orderBy,
-      };
-
-      if (fuzzyKeyword) {
-        apiParams.keyword = fuzzyKeyword;
-      } else {
-        if (s.code != null && String(s.code).trim()) {
-          apiParams.code = String(s.code).trim();
-        }
-        if (s.work_order_code != null && String(s.work_order_code).trim()) {
-          apiParams.work_order_code = String(s.work_order_code).trim();
-        }
-        if (s.operation_name != null && String(s.operation_name).trim()) {
-          apiParams.operation_name = String(s.operation_name).trim();
-        }
-        if (s.supplier_id != null && String(s.supplier_id).trim()) {
-          apiParams.supplier_id = Number(s.supplier_id);
-        } else if (s.supplier_name != null && String(s.supplier_name).trim()) {
-          apiParams.supplier_name = String(s.supplier_name).trim();
-        }
-      }
-
-      const plannedRange = s.planned_start_date_range as [unknown, unknown] | undefined;
-      if (plannedRange && Array.isArray(plannedRange) && plannedRange[0]) {
-        apiParams.planned_start_from = formatDateTime(plannedRange[0] as string | Date, 'YYYY-MM-DD');
-        apiParams.planned_start_to = plannedRange[1]
-          ? formatDateTime(plannedRange[1] as string | Date, 'YYYY-MM-DD')
-          : apiParams.planned_start_from;
-      }
-
-      const createdRange = s.created_at_range as [unknown, unknown] | undefined;
-      if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-        apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-        apiParams.created_end_date = createdRange[1]
-          ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-          : apiParams.created_start_date;
-      }
+      const apiParams = resolveOutsourceOrderListApiParams(params, sort, searchFormValues) as Parameters<
+        typeof outsourceOrderApi.list
+      >[0];
 
       const response = await outsourceOrderApi.list(apiParams);
       const list = response.data ?? [];

@@ -207,9 +207,12 @@ class TenantService:
         Returns:
             dict: 包含 items、total、page、page_size 的字典
         """
+        ascending = (order or "").lower() == "asc"
+        sort_by_last_login = sort == "last_login_at"
         order_by = self._tenant_list_order_by(sort=sort, order=order)
         # 显式按父组织 / 是否子组织筛选时保持扁平分页，不改语义
         tree_list_mode = parent_tenant_id is None and is_subtenant is None
+        offset = (page - 1) * page_size
 
         if not tree_list_mode:
             query = Tenant.all()
@@ -222,10 +225,19 @@ class TenantService:
                 name=name,
                 domain=domain,
             )
-            query = query.order_by(order_by)
-            total = await query.count()
-            offset = (page - 1) * page_size
-            items = await query.offset(offset).limit(page_size).all()
+            if sort_by_last_login:
+                matched_ids = list(await query.values_list("id", flat=True))
+                total = len(matched_ids)
+                login_map = await self._get_tenant_last_login_map(matched_ids)
+                ordered_ids = self._sort_tenant_ids_by_last_login(
+                    matched_ids, login_map, ascending=ascending
+                )
+                page_ids = ordered_ids[offset : offset + page_size]
+                items = await self._fetch_tenants_in_id_order(page_ids)
+            else:
+                query = query.order_by(order_by)
+                total = await query.count()
+                items = await query.offset(offset).limit(page_size).all()
             return await self._tenant_list_payload(
                 items=items,
                 total=total,
@@ -247,18 +259,43 @@ class TenantService:
                 "page_size": page_size,
             }
 
-        roots_query = Tenant.filter(id__in=root_ids, is_subtenant=False).order_by(order_by)
-        total = await roots_query.count()
-        offset = (page - 1) * page_size
-        roots = await roots_query.offset(offset).limit(page_size).all()
-        root_page_ids = [t.id for t in roots]
-        children = (
-            await Tenant.filter(parent_tenant_id__in=root_page_ids, is_subtenant=True)
-            .order_by(order_by)
-            .all()
-            if root_page_ids
-            else []
-        )
+        if sort_by_last_login:
+            root_login_map = await self._get_tenant_last_login_map(root_ids)
+            ordered_root_ids = self._sort_tenant_ids_by_last_login(
+                root_ids, root_login_map, ascending=ascending
+            )
+            total = len(ordered_root_ids)
+            page_root_ids = ordered_root_ids[offset : offset + page_size]
+            roots = await self._fetch_tenants_in_id_order(page_root_ids)
+        else:
+            roots_query = Tenant.filter(id__in=root_ids, is_subtenant=False).order_by(order_by)
+            total = await roots_query.count()
+            roots = await roots_query.offset(offset).limit(page_size).all()
+            page_root_ids = [t.id for t in roots]
+
+        if page_root_ids:
+            if sort_by_last_login:
+                children = await Tenant.filter(
+                    parent_tenant_id__in=page_root_ids, is_subtenant=True
+                ).all()
+                if children:
+                    child_login_map = await self._get_tenant_last_login_map(
+                        [c.id for c in children]
+                    )
+                    child_by_id = {c.id: c for c in children}
+                    ordered_child_ids = self._sort_tenant_ids_by_last_login(
+                        list(child_by_id.keys()), child_login_map, ascending=ascending
+                    )
+                    children = [child_by_id[i] for i in ordered_child_ids]
+            else:
+                children = (
+                    await Tenant.filter(parent_tenant_id__in=page_root_ids, is_subtenant=True)
+                    .order_by(order_by)
+                    .all()
+                )
+        else:
+            children = []
+
         children_by_parent: Dict[int, List[Tenant]] = {}
         for child in children:
             children_by_parent.setdefault(int(child.parent_tenant_id), []).append(child)
@@ -290,10 +327,38 @@ class TenantService:
             "created_at",
             "updated_at",
         }
+        # last_login_at 为登录日志聚合字段，不走 ORM order_by，见 list_tenants 分支
         field = sort if sort in allowed_sort_fields else "created_at"
         if order == "asc":
             return field
         return f"-{field}"
+
+    @staticmethod
+    def _sort_tenant_ids_by_last_login(
+        tenant_ids: List[int],
+        last_login_map: Dict[int, datetime],
+        *,
+        ascending: bool,
+    ) -> List[int]:
+        """按最后登录时间排序；无登录记录的组织排在末尾。"""
+        non_null: List[tuple] = []
+        nulls: List[int] = []
+        for tid in tenant_ids:
+            dt = last_login_map.get(tid)
+            if dt is None:
+                nulls.append(tid)
+            else:
+                non_null.append((dt, tid))
+        non_null.sort(key=lambda item: item[0], reverse=not ascending)
+        return [tid for _, tid in non_null] + nulls
+
+    @staticmethod
+    async def _fetch_tenants_in_id_order(ordered_ids: List[int]) -> List[Tenant]:
+        if not ordered_ids:
+            return []
+        tenants = await Tenant.filter(id__in=ordered_ids).all()
+        by_id = {t.id: t for t in tenants}
+        return [by_id[i] for i in ordered_ids if i in by_id]
 
     @staticmethod
     def _apply_tenant_list_filters(

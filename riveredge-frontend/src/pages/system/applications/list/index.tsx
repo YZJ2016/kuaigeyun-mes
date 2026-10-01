@@ -103,7 +103,10 @@ import {
 } from '../../../../utils/menuTranslation';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
-import { mergeListKeyword } from '../../../../utils/tableQueryKey';
+import {
+  pickListSearchKeywordOrFields,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../utils/format';
 /** 应用中心行/卡片操作图标（表格与卡片共用，避免 uni-action 按 manifest action 覆盖） */
@@ -1582,7 +1585,7 @@ const ApplicationListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Application>
-          columnPersistenceId="pages.system.applications.list-v2"
+          columnPersistenceId="pages.system.applications.list-v3"
           tanstackQuery={{ queryKeyPrefix: ['pages.system.applications.list', appCategoryFilter] }}
           key={`application-list-${appCategoryFilter}`}
           headerTitle={t('pages.system.applications.headerTitle')}
@@ -1599,12 +1602,13 @@ const ApplicationListPage: React.FC = () => {
                 limit: APPLICATION_CENTER_LIST_LIMIT,
               };
 
-              // 添加筛选条件
-              if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-                apiParams.is_active = searchFormValues.is_active === 'true' || searchFormValues.is_active === true;
+              const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+              if (isActive !== undefined) {
+                apiParams.is_active = isActive;
               }
-              if (searchFormValues?.is_installed !== undefined && searchFormValues.is_installed !== '' && searchFormValues.is_installed !== null) {
-                apiParams.is_installed = searchFormValues.is_installed === 'true' || searchFormValues.is_installed === true;
+              const isInstalled = pickSearchTriStateBoolean(searchFormValues, 'is_installed');
+              if (isInstalled !== undefined) {
+                apiParams.is_installed = isInstalled;
               }
 
               const allData = await getApplicationList(apiParams);
@@ -1624,13 +1628,12 @@ const ApplicationListPage: React.FC = () => {
                   : app;
               });
 
-              // 前端筛选（因为后端可能不支持某些筛选）
-              if (searchFormValues?.is_system !== undefined && searchFormValues.is_system !== '' && searchFormValues.is_system !== null) {
-                filteredData = filteredData.filter(item => item.is_system === (searchFormValues.is_system === 'true' || searchFormValues.is_system === true));
+              const isSystem = pickSearchTriStateBoolean(searchFormValues, 'is_system');
+              if (isSystem !== undefined) {
+                filteredData = filteredData.filter((item) => item.is_system === isSystem);
               }
 
-              // 搜索关键词筛选（顶栏模糊词或高级搜索 name）
-              const keyword = mergeListKeyword(searchFormValues, 'name').toLowerCase();
+              const keyword = (pickListSearchKeywordOrFields(searchFormValues, 'name') ?? '').toLowerCase();
               if (keyword) {
                 filteredData = filteredData.filter(item =>
                   item.name.toLowerCase().includes(keyword) ||

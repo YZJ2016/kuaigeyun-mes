@@ -108,7 +108,7 @@ import {
   SalesDocumentSalesmanListFilter,
   resolveListSalesmanId,
 } from '../shared/SalesDocumentSalesmanListFilter';
-import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, resolveSalesOrderListLifecycleParams } from '../../../utils/salesOrderLifecycle';
+import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, resolveSalesOrderListApiParams } from '../../../utils/salesOrderLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import {
   isAuditedStatus,
@@ -5620,46 +5620,9 @@ const SalesOrdersPage: React.FC = () => {
           }}
           request={async (params: any, sort: any, _filter: any, searchFormValues: any, meta?: UniTableRequestMeta): Promise<any> => {
             const isPrefetch = meta?.purpose === 'prefetch';
-            const sf = searchFormValues ?? {};
-            const { sortBy, sortOrder } = extractProTableSort(sort);
-            const orderBy =
-              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-            const apiParams: SalesOrderListParams = {
-              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-              limit: params.pageSize || 20,
-              order_by: orderBy,
-            };
-            Object.assign(apiParams, resolveSalesOrderListLifecycleParams(sf, params));
-            const fuzzyKeyword =
-              typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-            const orderCode = sf.order_code != null ? String(sf.order_code).trim() : '';
-            if (fuzzyKeyword) {
-              apiParams.keyword = fuzzyKeyword;
-            } else if (orderCode) {
-              apiParams.order_code = orderCode;
-            }
-            if (sf.customer_id != null && sf.customer_id !== '') {
-              apiParams.customer_id = Number(sf.customer_id);
-            }
-            const salesmanId = resolveListSalesmanId(salesmanFilterIdRef.current, sf);
-            if (salesmanId != null) {
-              apiParams.salesman_id = salesmanId;
-            }
-            const contractCode = sf.contract_code != null ? String(sf.contract_code).trim() : '';
-            if (contractCode) apiParams.contract_code = contractCode;
-            const orderDateRange = sf.order_date_range as [unknown, unknown] | undefined;
-            if (orderDateRange && Array.isArray(orderDateRange) && orderDateRange[0]) {
-              apiParams.start_date = formatDateTime(orderDateRange[0] as string | Date, 'YYYY-MM-DD');
-              apiParams.end_date = orderDateRange[1]
-                ? formatDateTime(orderDateRange[1] as string | Date, 'YYYY-MM-DD')
-                : apiParams.start_date;
-            }
-            // 订单视图明细预览列 + 明细视图展开行均需 items
-            apiParams.include_items = true;
-            if (typeof sf.column_filters === 'string' && sf.column_filters.trim()) {
-              apiParams.column_filters = sf.column_filters.trim();
-            }
-            apiParams.list_scope = params.list_scope;
+            const apiParams = resolveSalesOrderListApiParams(params, sort, searchFormValues, {
+              salesmanId: resolveListSalesmanId(salesmanFilterIdRef.current, searchFormValues),
+            }) as SalesOrderListParams;
 
             const toFlatRows = (orders: SalesOrder[], writeRowKeyMap: boolean): SalesOrderItemRow[] => {
               const map = new Map<string, number>();

@@ -11,7 +11,12 @@ import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTab
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { formatDateTime } from '../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../utils/formDate';
-import { extractProTableSort } from '../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchDateTimeRange,
+  pickSearchString,
+} from '../../../../utils/tableQueryKey';
 import {
   getDictionaryOptions,
   getDictionaryOptionsSync,
@@ -218,7 +223,7 @@ export default function ExportFollowUpsPage() {
         actionRef={actionRef}
         rowKey="id"
         headerTitle={t('app.ind-foreign-trade.menu.followUps')}
-        columnPersistenceId="apps.ind-foreign-trade.pages.follow-ups-v1"
+        columnPersistenceId="apps.ind-foreign-trade.pages.follow-ups-v2"
         permissionResource="ind-foreign-trade:follow-up"
         columns={columns}
         createButtonText={t('app.kuaizhizao.customerFollowUp.new')}
@@ -230,25 +235,26 @@ export default function ExportFollowUpsPage() {
             setDetailOpen(true);
           },
         })}
-        request={async (params, sort, _filter, search) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           const { sortBy, sortOrder } = extractProTableSort(sort);
           const orderBy =
             sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-          const occurredRange = search?.occurred_at_range as [unknown, unknown] | undefined;
-          let occurredFrom: string | undefined;
-          let occurredTo: string | undefined;
-          if (occurredRange?.[0]) {
-            occurredFrom = formatDateTime(occurredRange[0] as string | Date, 'YYYY-MM-DD HH:mm:ss');
-            occurredTo = occurredRange[1]
-              ? formatDateTime(occurredRange[1] as string | Date, 'YYYY-MM-DD HH:mm:ss')
-              : occurredFrom;
-          }
+          const { from: occurredFrom, to: occurredTo } = pickSearchDateTimeRange(
+            searchFormValues,
+            'occurred_from',
+            'occurred_to',
+            'occurred_at_range',
+          );
+          const customerIdRaw = pickSearchString(searchFormValues, 'customer_id');
           const res = await foreignTradeApi.listFollowUps({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            keyword: params.keyword,
-            customerId: search?.customer_id,
-            activityTypeCode: search?.activity_type_code,
+            keyword: pickListSearchKeyword(searchFormValues),
+            customerId:
+              customerIdRaw != null && Number.isFinite(Number(customerIdRaw))
+                ? Number(customerIdRaw)
+                : undefined,
+            activityTypeCode: pickSearchString(searchFormValues, 'activity_type_code'),
             occurredFrom,
             occurredTo,
             orderBy,

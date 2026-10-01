@@ -50,7 +50,11 @@ import {
 } from '../../../../services/messageConfig';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
-import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
+import {
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 import { getAntdModal } from '../../../../utils/antdAppApis';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
@@ -528,7 +532,7 @@ const MessageConfigListPage: React.FC = () => {
         <UniTable<MessageConfig>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.messageConfig')}
-        columnPersistenceId="pages.system.messages.config.list-v2"
+        columnPersistenceId="pages.system.messages.config.list-v3"
         actionRef={actionRef}
         columns={columns}
         request={async (params, _sort, _filter, searchFormValues) => {
@@ -538,14 +542,14 @@ const MessageConfigListPage: React.FC = () => {
             limit: params.pageSize || 20,
           };
           
-          // 消息类型筛选
-          if (searchFormValues?.type) {
-            apiParams.type = searchFormValues.type;
+          const type = pickSearchString(searchFormValues, 'type');
+          if (type) {
+            apiParams.type = type;
           }
-          
-          // 启用状态筛选
-          if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-            apiParams.is_active = searchFormValues.is_active;
+
+          const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+          if (isActive !== undefined) {
+            apiParams.is_active = isActive;
           }
           const keyword = pickListSearchKeyword(searchFormValues);
           if (keyword) {

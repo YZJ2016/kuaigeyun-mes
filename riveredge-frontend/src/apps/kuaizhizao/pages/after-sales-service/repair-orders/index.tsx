@@ -23,6 +23,7 @@ import {
   renderAfterSalesTypeMarker,
 } from '../shared/afterSalesListPresentation';
 import { repairOrderApi, type RepairOrder } from '../../../services/after-sales-service';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import RepairOrderFormModal from './RepairOrderFormModal';
 import { RepairOrderDetailDrawer } from './components/RepairOrderDetailDrawer';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
@@ -358,15 +359,17 @@ const RepairOrdersPage: React.FC = () => {
         helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesRepair)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v8"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.repair-orders.v9"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.repair-orders')}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await repairOrderApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
-            keyword: params.keyword as string | undefined,
-            status: params.status as string | undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
+            status: pickSearchString(searchFormValues, 'status'),
           });
           return { data: res.items, total: res.total, success: true };
         }}

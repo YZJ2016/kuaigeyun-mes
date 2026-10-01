@@ -21,6 +21,10 @@ import {
   WAREHOUSE_DETAIL_TABLE_STYLES,
 } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  pickListSearchKeyword,
+  pickSearchTriStateBoolean,
+} from '../../../../../utils/tableQueryKey';
 import { buildDetailDrawerEditExtra } from '../../equipment-management/shared/equipmentMasterDataDetail';
 import { MasterDataDetailDrawer } from '../../../../master-data/pages/shared/masterDataDetailDrawer';
 import { MarkerTag } from '../../../../../constants/statusBadges';
@@ -539,7 +543,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
     <ListPageTemplate>
       <UniTable<AssemblyTemplate>
         headerTitle={t('app.kuaizhizao.assemblyTemplate.headerTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.assembly-templates-width-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.assembly-templates-width-v4"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -554,13 +558,12 @@ export const AssemblyTemplatesTab: React.FC = () => {
           messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           actionRef.current?.reload();
         }}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const result = await assemblyTemplateApi.list({
             skip: (params.current! - 1) * params.pageSize!,
             limit: params.pageSize,
-            keyword: (params as any).keyword,
-            is_active:
-              params.is_active === 'true' ? true : params.is_active === 'false' ? false : undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
+            is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
           });
           return {
             data: result.items || [],

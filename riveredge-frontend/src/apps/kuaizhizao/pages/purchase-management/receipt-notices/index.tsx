@@ -87,7 +87,7 @@ import {
   buildReceiptNoticeLifecycleValueEnum,
   getReceiptNoticeLifecycle,
   LIST_LIFECYCLE_STAGE_FIELD,
-  resolveReceiptNoticeListLifecycleParams,
+  resolveReceiptNoticeListApiParams,
 } from '../../../utils/receiptNoticeLifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -1748,44 +1748,11 @@ const ReceiptNoticesPage: React.FC = () => {
           }}
           request={async (params, sort, _filter, searchFormValues) => {
             try {
-              const sf = searchFormValues ?? {};
-              const lifecycleParams = resolveReceiptNoticeListLifecycleParams(sf, params);
-              const { sortBy, sortOrder } = extractProTableSort(sort);
-              const orderBy =
-                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-              const fuzzyKeyword = typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-              const apiParams: ReceiptNoticeListParams = {
-                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-                limit: params.pageSize || 20,
-                ...lifecycleParams,
-                order_by: orderBy,
-                include_items: true,
-              };
-              if (fuzzyKeyword) {
-                apiParams.keyword = fuzzyKeyword;
-              } else if (sf.notice_code != null && String(sf.notice_code).trim()) {
-                apiParams.notice_code = String(sf.notice_code).trim();
-              }
-              if (sf.supplier_id != null && sf.supplier_id !== '') {
-                apiParams.supplier_id = Number(sf.supplier_id);
-              }
-              const orderCode =
-                sf.purchase_order_code != null ? String(sf.purchase_order_code).trim() : '';
-              if (orderCode) apiParams.purchase_order_code = orderCode;
-              const plannedRange = sf.planned_receipt_date_range as [unknown, unknown] | undefined;
-              if (plannedRange && Array.isArray(plannedRange) && plannedRange[0]) {
-                apiParams.planned_start_date = formatDateTime(plannedRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.planned_end_date = plannedRange[1]
-                  ? formatDateTime(plannedRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.planned_start_date;
-              }
-              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
-              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.created_end_date = createdRange[1]
-                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.created_start_date;
-              }
+              const apiParams = resolveReceiptNoticeListApiParams(
+                params,
+                sort,
+                searchFormValues,
+              ) as ReceiptNoticeListParams;
               const response = await receiptNoticeApi.list(apiParams);
               const notices = response?.data ?? [];
               const total = response?.total ?? notices.length;

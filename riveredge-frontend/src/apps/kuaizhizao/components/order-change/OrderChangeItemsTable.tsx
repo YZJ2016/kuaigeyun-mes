@@ -8,8 +8,10 @@ import type { Material } from '../../../master-data/types/material';
 import type { OrderChangeItem } from '../../services/sales-order-change';
 import { formatDateTime } from '../../../../utils/format';
 import {
-  renderOrderChangeTypeMarkerTag,
+  getOrderChangeTypeMarkerColor,
+  translateOrderChangeLineType,
 } from '../../utils/orderChangeType';
+import { renderInlineMarkerTagGroup } from '../../../../components/inline-marker-tag-preview';
 
 interface OrderChangeItemsTableProps {
   items: OrderChangeItem[];
@@ -165,12 +167,12 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
         render: (_v: string, row: OrderChangeItem) => {
           const types = inferLineChangeTypes(row);
           if (types.length === 0) return '—';
-          return (
-            <Space size={4} wrap>
-              {types.map((type) => (
-                <span key={type}>{renderOrderChangeTypeMarkerTag(t, type)}</span>
-              ))}
-            </Space>
+          return renderInlineMarkerTagGroup(
+            types.map((type) => ({
+              key: type,
+              label: translateOrderChangeLineType(t, type),
+              color: getOrderChangeTypeMarkerColor(type),
+            })),
           );
         },
       },

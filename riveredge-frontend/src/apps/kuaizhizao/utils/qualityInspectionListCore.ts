@@ -1,4 +1,8 @@
-import { extractProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../services/reports';
 
 export const QUALITY_INSPECTION_PINNED_STATUS_FIELD = 'status';
@@ -34,6 +38,16 @@ export function buildOqcInspectionStatusValueEnum(
   };
 }
 
+function pickOptionalId(
+  searchFormValues: Record<string, unknown> | null | undefined,
+  key: string,
+): number | undefined {
+  const raw = pickSearchString(searchFormValues, key);
+  if (raw == null || !Number.isFinite(Number(raw))) return undefined;
+  const n = Number(raw);
+  return n > 0 ? n : undefined;
+}
+
 export function resolveQualityInspectionListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
@@ -41,32 +55,22 @@ export function resolveQualityInspectionListParams(
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   const order_by =
     sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-  const s = searchFormValues ?? {};
-  const pick = (key: string) => {
-    const v = s[key];
-    return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-  };
+  const search = searchFormValues ?? {};
   const { date_start: inspection_start_date, date_end: inspection_end_date } =
-    parseSalesReportDateRange(s, ['inspection_time_range', 'inspectionTimeRange']);
+    parseSalesReportDateRange(search, ['inspection_time_range', 'inspectionTimeRange']);
   const { date_start: created_start_date, date_end: created_end_date } =
-    parseSalesReportDateRange(s, ['created_at_range', 'createdAtRange']);
+    parseSalesReportDateRange(search, ['created_at_range', 'createdAtRange']);
 
   return {
     order_by,
-    keyword: pick('keyword'),
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
-    quality_status:
-      typeof s.quality_status === 'string' && s.quality_status ? s.quality_status : undefined,
-    supplier_id: s.supplier_id != null && s.supplier_id !== '' ? Number(s.supplier_id) : undefined,
-    material_id: s.material_id != null && s.material_id !== '' ? Number(s.material_id) : undefined,
-    purchase_receipt_id:
-      s.purchase_receipt_id != null && s.purchase_receipt_id !== ''
-        ? Number(s.purchase_receipt_id)
-        : undefined,
-    work_order_id:
-      s.work_order_id != null && s.work_order_id !== '' ? Number(s.work_order_id) : undefined,
-    operation_id:
-      s.operation_id != null && s.operation_id !== '' ? Number(s.operation_id) : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    status: pickSearchString(searchFormValues, 'status'),
+    quality_status: pickSearchString(searchFormValues, 'quality_status'),
+    supplier_id: pickOptionalId(searchFormValues, 'supplier_id'),
+    material_id: pickOptionalId(searchFormValues, 'material_id'),
+    purchase_receipt_id: pickOptionalId(searchFormValues, 'purchase_receipt_id'),
+    work_order_id: pickOptionalId(searchFormValues, 'work_order_id'),
+    operation_id: pickOptionalId(searchFormValues, 'operation_id'),
     inspection_start_date,
     inspection_end_date,
     created_start_date,

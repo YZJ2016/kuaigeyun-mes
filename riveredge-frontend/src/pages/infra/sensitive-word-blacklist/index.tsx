@@ -373,7 +373,6 @@ const SensitiveWordBlacklistPage: React.FC = () => {
               actionRef={banActionRef}
               rowKey="id"
               columns={banColumns}
-              search={false}
               showFuzzySearch={false}
               showAdvancedSearch={false}
               beforeSearchButtons={banTenantFilter}
@@ -393,7 +392,7 @@ const SensitiveWordBlacklistPage: React.FC = () => {
                   {t('pages.infra.sensitiveWordBlacklist.batchUnban')}
                 </UniBatchButton>,
               ]}
-              request={async (params) => {
+              request={async (params, _sort, _filter, _searchFormValues) => {
                 if (!meta?.enabled_tenant_count) {
                   return { data: [], success: true, total: 0 };
                 }
@@ -417,7 +416,6 @@ const SensitiveWordBlacklistPage: React.FC = () => {
               actionRef={allowlistActionRef}
               rowKey="id"
               columns={allowlistColumns}
-              search={false}
               showFuzzySearch={false}
               showAdvancedSearch={false}
               beforeSearchButtons={allowlistSearchButtons}
@@ -428,7 +426,7 @@ const SensitiveWordBlacklistPage: React.FC = () => {
                 t('pages.infra.sensitiveWordBlacklist.batchDeleteAllowlistConfirm', { count })
               }
               onDelete={handleBatchDeleteAllowlist}
-              request={async (params) => {
+              request={async (params, _sort, _filter, _searchFormValues) => {
                   if (!selectedTenantId) {
                     return { data: [], success: true, total: 0 };
                   }

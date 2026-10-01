@@ -19,14 +19,21 @@ class QmsEvidenceLink(BaseSchema):
     note: Optional[str] = None
 
 
+class QmsClauseLinkFields(BaseSchema):
+    standard_id: Optional[int] = Field(None, description="所属标准ID")
+    clause_ids: Optional[List[int]] = Field(None, description="关联条款ID列表")
+    clause_labels: Optional[List[str]] = Field(None, description="关联条款展示（只读）")
+    primary_clause_id: Optional[int] = Field(None, description="主条款ID（只读）")
+
+
 class QmsSystemDocumentBase(BaseSchema):
     document_code: Optional[str] = Field(None, description="文件编码")
     title: str = Field(..., description="标题")
     doc_type: str = Field("procedure", description="文件类型")
     version: str = Field("A0", description="版本")
     status: str = Field("draft", description="状态")
-    iso_clause: Optional[str] = None
-    iso_clause_id: Optional[int] = None
+    standard_id: Optional[int] = None
+    clause_ids: Optional[List[int]] = None
     content: Optional[str] = None
     file_url: Optional[str] = None
     effective_at: Optional[datetime] = None
@@ -48,8 +55,8 @@ class QmsSystemDocumentUpdate(BaseSchema):
     doc_type: Optional[str] = None
     version: Optional[str] = None
     status: Optional[str] = None
-    iso_clause: Optional[str] = None
-    iso_clause_id: Optional[int] = None
+    standard_id: Optional[int] = None
+    clause_ids: Optional[List[int]] = None
     content: Optional[str] = None
     file_url: Optional[str] = None
     effective_at: Optional[datetime] = None
@@ -67,6 +74,8 @@ class QmsSystemDocumentResponse(QmsSystemDocumentBase):
     id: int
     uuid: str
     tenant_id: int
+    clause_labels: Optional[List[str]] = None
+    primary_clause_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -122,8 +131,8 @@ class QmsInternalAuditBase(BaseSchema):
     audit_code: Optional[str] = None
     title: str
     audit_scope: Optional[str] = None
-    iso_clause: Optional[str] = None
-    iso_clause_id: Optional[int] = None
+    standard_id: Optional[int] = None
+    clause_ids: Optional[List[int]] = None
     status: str = Field("planned")
     planned_date: Optional[datetime] = None
     completed_date: Optional[datetime] = None
@@ -146,8 +155,8 @@ class QmsInternalAuditCreate(QmsInternalAuditBase):
 class QmsInternalAuditUpdate(BaseSchema):
     title: Optional[str] = None
     audit_scope: Optional[str] = None
-    iso_clause: Optional[str] = None
-    iso_clause_id: Optional[int] = None
+    standard_id: Optional[int] = None
+    clause_ids: Optional[List[int]] = None
     status: Optional[str] = None
     planned_date: Optional[datetime] = None
     completed_date: Optional[datetime] = None
@@ -168,6 +177,8 @@ class QmsInternalAuditResponse(QmsInternalAuditBase):
     id: int
     uuid: str
     tenant_id: int
+    clause_labels: Optional[List[str]] = None
+    primary_clause_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -183,6 +194,7 @@ class QmsInternalAuditListResponse(BaseSchema):
 class QmsManagementReviewBase(BaseSchema):
     review_code: Optional[str] = None
     title: str
+    standard_ids: Optional[List[int]] = Field(None, description="评审覆盖的标准")
     status: str = Field("draft")
     review_date: Optional[datetime] = None
     chairperson: Optional[str] = None
@@ -202,6 +214,7 @@ class QmsManagementReviewCreate(QmsManagementReviewBase):
 
 class QmsManagementReviewUpdate(BaseSchema):
     title: Optional[str] = None
+    standard_ids: Optional[List[int]] = None
     status: Optional[str] = None
     review_date: Optional[datetime] = None
     chairperson: Optional[str] = None
@@ -220,6 +233,7 @@ class QmsManagementReviewResponse(QmsManagementReviewBase):
     id: int
     uuid: str
     tenant_id: int
+    standard_labels: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -250,8 +264,50 @@ class QmsManagementReviewInputSummary(BaseSchema):
     summary_text: str = ""
 
 
+class QmsStandardBase(BaseSchema):
+    code: str = Field(..., max_length=30, description="标准代号")
+    name: str = Field(..., max_length=200, description="显示名称")
+    family: str = Field("custom", description="标准族")
+    is_preset: bool = False
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class QmsStandardCreate(BaseSchema):
+    code: str = Field(..., max_length=30)
+    name: str = Field(..., max_length=200)
+    family: str = Field("custom")
+    is_active: bool = True
+    sort_order: int = 0
+
+
+class QmsStandardUpdate(BaseSchema):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    family: Optional[str] = None
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class QmsStandardResponse(QmsStandardBase):
+    id: int
+    uuid: str
+    tenant_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class QmsStandardListResponse(BaseSchema):
+    items: List[QmsStandardResponse]
+    total: int
+
+
 class QmsIsoClauseBase(BaseSchema):
-    standard_code: str = Field(..., description="标准编码")
+    standard_id: Optional[int] = Field(None, description="标准ID")
+    standard_code: Optional[str] = Field(None, description="标准编码")
     clause_code: str = Field(..., description="条款号")
     title: str = Field(..., description="条款标题")
     description: Optional[str] = None
@@ -265,6 +321,7 @@ class QmsIsoClauseCreate(QmsIsoClauseBase):
 
 
 class QmsIsoClauseUpdate(BaseSchema):
+    standard_id: Optional[int] = None
     standard_code: Optional[str] = None
     clause_code: Optional[str] = None
     title: Optional[str] = None

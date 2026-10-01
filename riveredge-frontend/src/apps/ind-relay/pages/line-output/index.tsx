@@ -61,9 +61,10 @@ export default function RelayLineOutputPage() {
         actionRef={actionRef}
         rowKey="production_line_id"
         headerTitle={t('app.ind-relay.menu.lineOutput')}
-        columnPersistenceId="apps.ind-relay.pages.line-output-v1"
+        columnPersistenceId="apps.ind-relay.pages.line-output-v2"
         columns={columns}
-        search={false}
+        showFuzzySearch={false}
+        showAdvancedSearch={false}
         toolBarActionsBeforeCreate={[
           <Space key="date-range">
             <span>{t('app.ind-relay.lineOutput.dateRange')}</span>

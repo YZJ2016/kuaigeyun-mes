@@ -251,7 +251,8 @@ const ProductionDailyReportsPage: React.FC = () => {
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.production-execution.production-daily-reports')}
         permissionResource={RESOURCE}
-        columnPersistenceId="apps.kuaizhizao.production-daily-report.list-v1"
+        columnPersistenceId="apps.kuaizhizao.production-daily-report.list-v2"
+        showAdvancedSearch
         columns={columns}
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;

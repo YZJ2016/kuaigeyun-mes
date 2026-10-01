@@ -930,6 +930,87 @@ code {
   }
 }
 
+/* 条款管理 - 条款目录：与物料分组/文件管理侧栏树同一套展开箭头与行布局 */
+.two-column-layout-left-tree .clause-mgmt-catalog-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-indent-unit {
+  width: 10px !important;
+}
+
+.two-column-layout-left-tree .clause-mgmt-catalog-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-treenode {
+  height: auto !important;
+  min-height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 2px 0 !important;
+  margin: 2px 4px !important;
+}
+
+.two-column-layout-left-tree .clause-mgmt-catalog-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-switcher {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-self: center !important;
+  flex-shrink: 0 !important;
+  width: 20px !important;
+  height: 20px !important;
+  margin-inline-end: 4px !important;
+  line-height: 1 !important;
+  background: transparent !important;
+  cursor: pointer;
+
+  &:hover {
+    background-color: transparent !important;
+  }
+
+  &::before {
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    transform: none !important;
+    border-radius: 4px !important;
+  }
+}
+
+.two-column-layout-left-tree .clause-mgmt-catalog-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-switcher .ant-tree-switcher-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
+  font-size: 10px !important;
+}
+
+.two-column-layout-left-tree .clause-mgmt-catalog-tree.ant-tree:not(.ant-tree-show-line) .ant-tree-switcher-noop {
+  display: inline-flex !important;
+  width: 20px !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  margin-inline-end: 4px !important;
+  padding: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.two-column-layout-left-tree .clause-mgmt-catalog-tree.ant-tree .ant-tree-node-content-wrapper {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  align-items: center !important;
+  min-height: 28px !important;
+  line-height: 1.5 !important;
+}
+
+.two-column-layout-left-tree .clause-mgmt-catalog-tree.ant-tree .ant-tree-title {
+  flex: 1 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
 /* 图纸管理导航树：紧凑行高 + 图标与标题同行 */
 .two-column-layout-left-tree .drawing-nav-tree.ant-tree .ant-tree-treenode {
   height: auto !important;

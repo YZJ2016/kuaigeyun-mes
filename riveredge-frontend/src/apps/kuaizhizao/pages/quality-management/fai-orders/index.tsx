@@ -35,6 +35,7 @@ import { inspectionPlanApi } from '../../../services/production';
 import { renderFaiConclusionTag, renderFaiStatusTag } from '../components/qualityMeta';
 import { faiBalloonPath } from './paths';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 
 const RESOURCE = 'kuaizhizao:quality-management-fai-orders';
 
@@ -709,7 +710,8 @@ const FaiOrdersPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.fai-orders-width-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.fai-orders-width-v2"
+          skipFuzzyPinyinClientFilter
           onTableDataChange={(rows) => {
             tableRowsRef.current = rows;
           }}
@@ -759,14 +761,14 @@ const FaiOrdersPage: React.FC = () => {
                 ]
               : []
           }
-          request={async (params) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
             const res = await faiOrderApi.list({
               skip,
               limit: pageSize,
-              keyword: params.keyword,
-              status: params.status,
+              keyword: pickListSearchKeyword(searchFormValues),
+              status: pickSearchString(searchFormValues, 'status'),
             });
             return { success: true, data: res.items || [], total: res.total || 0 };
           }}

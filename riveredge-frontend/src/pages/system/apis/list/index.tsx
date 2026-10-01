@@ -39,7 +39,13 @@ import {
   UpdateAPIData,
 } from '../../../../services/apiManagement'
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts'
-import { extractProTableSort, mergeListKeyword, mapApiListSortField } from '../../../../utils/tableQueryKey'
+import {
+  extractProTableSort,
+  mapApiListSortField,
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey'
 import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action'
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
@@ -622,7 +628,7 @@ const APIListPage: React.FC = () => {
             <UniTable<API>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.apis')}
-          columnPersistenceId="pages.system.apis.list-v6"
+          columnPersistenceId="pages.system.apis.list-v7"
           tanstackQuery={{ queryKeyPrefix: ['pages.system.apis.list', selectedCategoryKey] }}
           actionRef={actionRef}
           columns={columns}
@@ -638,27 +644,24 @@ const APIListPage: React.FC = () => {
               ...categoryFilter,
             }
 
-            const kw = mergeListKeyword(searchFormValues, 'search')
-            if (kw) {
-              apiParams.search = kw
+            const search = pickListSearchKeywordOrFields(searchFormValues, 'search')
+            if (search) {
+              apiParams.search = search
             }
 
-            // 方法筛选
-            if (searchFormValues?.method) {
-              apiParams.method = searchFormValues.method
+            const method = pickSearchString(searchFormValues, 'method')
+            if (method) {
+              apiParams.method = method
             }
 
-            if (searchFormValues?.sync_direction) {
-              apiParams.sync_direction = searchFormValues.sync_direction
+            const syncDirection = pickSearchString(searchFormValues, 'sync_direction')
+            if (syncDirection) {
+              apiParams.sync_direction = syncDirection
             }
 
-            // 启用状态筛选
-            if (
-              searchFormValues?.is_active !== undefined &&
-              searchFormValues.is_active !== '' &&
-              searchFormValues.is_active !== null
-            ) {
-              apiParams.is_active = searchFormValues.is_active
+            const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active')
+            if (isActive !== undefined) {
+              apiParams.is_active = isActive
             }
 
             try {

@@ -27,12 +27,14 @@ import {
   performApprovalAction,
   batchPerformApprovalActions,
   ApprovalInstance,
+  ApprovalInstanceListParams,
   CreateApprovalInstanceData,
   ApprovalInstanceActionData,
 } from '../../../../services/approvalInstance';
 import { getApprovalProcessList } from '../../../../services/approvalProcess';
 import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
+import { resolveApprovalInstanceListFilter } from '../../../../utils/systemUniTableListFilters';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { formatDateBySiteSetting, todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
@@ -497,7 +499,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         }
       >
         <UniTable<ApprovalInstance>
-          columnPersistenceId="pages.system.approval-processes.instances.list-v2"
+          columnPersistenceId="pages.system.approval-processes.instances.list-v3"
           headerTitle={t('pages.system.approvalInstances.headerTitle')}
           actionRef={actionRef}
           columns={columns}
@@ -506,10 +508,11 @@ const ApprovalInstanceListPage: React.FC = () => {
             const skip = (current - 1) * pageSize;
             const limit = pageSize;
             
-            const listParams: any = {
+            const filter = resolveApprovalInstanceListFilter(searchFormValues);
+            const listParams: ApprovalInstanceListParams = {
               skip,
               limit,
-              ...searchFormValues,
+              ...filter,
             };
             
             const countTotal = async (): Promise<number> => {
@@ -520,7 +523,7 @@ const ApprovalInstanceListPage: React.FC = () => {
                 const chunk = await getApprovalInstanceList({
                   skip: offset,
                   limit: chunkSize,
-                  ...searchFormValues,
+                  ...filter,
                 });
                 total += chunk.length;
                 if (chunk.length < chunkSize) break;
@@ -575,9 +578,6 @@ const ApprovalInstanceListPage: React.FC = () => {
                 ]
               : []
           }
-          search={{
-            labelWidth: 'auto',
-          }}
           showCreateButton
           createButtonText={t('pages.system.approvalInstances.createButton')}
           onCreate={handleSubmit}

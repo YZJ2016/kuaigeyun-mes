@@ -1,7 +1,13 @@
 import type { TFunction } from 'i18next';
 import type { ProColumns } from '@ant-design/pro-components';
 import React from 'react';
-import { extractProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import { formatDateTime } from '../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../utils/formDate';
@@ -14,39 +20,12 @@ import {
 export const PLM_PHASE2_PINNED_STATUS_FIELD = 'status';
 export const PLM_CHANGE_PINNED_STATUS_FIELD = 'status';
 
-function pickString(search: Record<string, unknown> | null | undefined, key: string) {
-  const v = search?.[key];
-  if (v == null || v === '') return undefined;
-  if (Array.isArray(v)) {
-    const first = String(v[0] ?? '').trim();
-    return first || undefined;
-  }
-  if (typeof v === 'number' && Number.isFinite(v)) {
-    return String(v);
-  }
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-}
-
-function pickBoolean(search: Record<string, unknown> | null | undefined, key: string) {
-  const v = search?.[key];
-  if (v === true || v === 'true') return true;
-  if (v === false || v === 'false') return false;
-  return undefined;
-}
-
 /** UniTable 顶栏模糊词 + 列内高级搜索（title/code 等）→ API keyword */
 export function resolvePlmListKeyword(
   searchFormValues?: Record<string, unknown> | null,
   fallbackFieldKeys: string[] = ['title'],
 ): string | undefined {
-  const s = searchFormValues ?? {};
-  const kw = pickString(s, 'keyword');
-  if (kw) return kw;
-  for (const key of fallbackFieldKeys) {
-    const v = pickString(s, key);
-    if (v) return v;
-  }
-  return undefined;
+  return pickListSearchKeywordOrFields(searchFormValues, ...fallbackFieldKeys);
 }
 
 /** 快研发单据列表通用：模糊/钉住/高级搜索 → API 查询字段（勿从 params 读 keyword） */
@@ -54,17 +33,16 @@ export function resolvePlmStandardDocListSearch(
   searchFormValues?: Record<string, unknown> | null,
   keywordFallbackKeys: string[] = ['title'],
 ) {
-  const s = searchFormValues ?? {};
   return {
-    keyword: resolvePlmListKeyword(s, keywordFallbackKeys),
-    status: pickString(s, 'status'),
-    business_type: pickString(s, 'business_type'),
-    priority: pickString(s, 'priority'),
-    doc_kind: pickString(s, 'doc_kind'),
-    doc_type: pickString(s, 'doc_type'),
-    request_kind: pickString(s, 'request_kind'),
-    plan_year: pickString(s, 'plan_year'),
-    is_active: pickBoolean(s, 'is_active'),
+    keyword: resolvePlmListKeyword(searchFormValues, keywordFallbackKeys),
+    status: pickSearchString(searchFormValues, 'status'),
+    business_type: pickSearchString(searchFormValues, 'business_type'),
+    priority: pickSearchString(searchFormValues, 'priority'),
+    doc_kind: pickSearchString(searchFormValues, 'doc_kind'),
+    doc_type: pickSearchString(searchFormValues, 'doc_type'),
+    request_kind: pickSearchString(searchFormValues, 'request_kind'),
+    plan_year: pickSearchString(searchFormValues, 'plan_year'),
+    is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
   };
 }
 
@@ -80,12 +58,12 @@ function resolvePlmSort(sort?: Record<string, unknown>) {
 }
 
 function resolvePlmDateParams(searchFormValues?: Record<string, unknown> | null) {
-  const s = searchFormValues ?? {};
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const search = searchFormValues ?? {};
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
@@ -197,16 +175,15 @@ export function resolveRdProjectListParams(
   sort?: Record<string, unknown>,
   params?: Record<string, unknown> | null,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolvePlmSort(sort);
   const lifecycleParams = resolveRdProjectListLifecycleParams(searchFormValues, params);
-  const dates = resolvePlmDateParams(s);
+  const dates = resolvePlmDateParams(searchFormValues);
 
   const listParams: Record<string, string | number | boolean | undefined> = {
     sort_field,
     sort_order,
-    project_type: pickString(s, 'project_type') ?? pickString(params ?? {}, 'project_type'),
+    project_type: pickSearchString(searchFormValues, 'project_type'),
     ...lifecycleParams,
     ...dates,
   };
@@ -214,8 +191,8 @@ export function resolveRdProjectListParams(
   if (fuzzyKeyword) {
     listParams.keyword = fuzzyKeyword;
   } else {
-    const projectCode = pickString(s, 'project_code');
-    const projectName = pickString(s, 'project_name');
+    const projectCode = pickSearchString(searchFormValues, 'project_code');
+    const projectName = pickSearchString(searchFormValues, 'project_name');
     if (projectCode) listParams.project_code = projectCode;
     if (projectName) listParams.project_name = projectName;
   }
@@ -228,24 +205,23 @@ export function resolvePhase2RequirementListParams(
   sort?: Record<string, unknown>,
   options?: { projectId?: number },
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolvePlmSort(sort);
 
   const listParams: Record<string, string | number | boolean | undefined> = {
     sort_field,
     sort_order,
-    status: pickString(s, 'status'),
-    priority: pickString(s, 'priority'),
+    status: pickSearchString(searchFormValues, 'status'),
+    priority: pickSearchString(searchFormValues, 'priority'),
     project_id: options?.projectId,
-    ...resolvePlmDateParams(s),
+    ...resolvePlmDateParams(searchFormValues),
   };
 
   if (fuzzyKeyword) {
     listParams.keyword = fuzzyKeyword;
   } else {
-    const requirementCode = pickString(s, 'requirement_code');
-    const title = pickString(s, 'title');
+    const requirementCode = pickSearchString(searchFormValues, 'requirement_code');
+    const title = pickSearchString(searchFormValues, 'title');
     if (requirementCode) listParams.requirement_code = requirementCode;
     if (title) listParams.title = title;
   }
@@ -258,23 +234,22 @@ export function resolvePhase2DesignReviewListParams(
   sort?: Record<string, unknown>,
   options?: { projectId?: number },
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolvePlmSort(sort);
 
   const listParams: Record<string, string | number | boolean | undefined> = {
     sort_field,
     sort_order,
-    status: pickString(s, 'status'),
+    status: pickSearchString(searchFormValues, 'status'),
     project_id: options?.projectId,
-    ...resolvePlmDateParams(s),
+    ...resolvePlmDateParams(searchFormValues),
   };
 
   if (fuzzyKeyword) {
     listParams.keyword = fuzzyKeyword;
   } else {
-    const reviewCode = pickString(s, 'review_code');
-    const title = pickString(s, 'title');
+    const reviewCode = pickSearchString(searchFormValues, 'review_code');
+    const title = pickSearchString(searchFormValues, 'title');
     if (reviewCode) listParams.review_code = reviewCode;
     if (title) listParams.title = title;
   }
@@ -287,24 +262,23 @@ export function resolvePhase2FmeaListParams(
   sort?: Record<string, unknown>,
   options?: { projectId?: number },
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolvePlmSort(sort);
 
   const listParams: Record<string, string | number | boolean | undefined> = {
     sort_field,
     sort_order,
-    status: pickString(s, 'status'),
-    fmea_type: pickString(s, 'fmea_type'),
+    status: pickSearchString(searchFormValues, 'status'),
+    fmea_type: pickSearchString(searchFormValues, 'fmea_type'),
     project_id: options?.projectId,
-    ...resolvePlmDateParams(s),
+    ...resolvePlmDateParams(searchFormValues),
   };
 
   if (fuzzyKeyword) {
     listParams.keyword = fuzzyKeyword;
   } else {
-    const fmeaCode = pickString(s, 'fmea_code');
-    const title = pickString(s, 'title');
+    const fmeaCode = pickSearchString(searchFormValues, 'fmea_code');
+    const title = pickSearchString(searchFormValues, 'title');
     if (fmeaCode) listParams.fmea_code = fmeaCode;
     if (title) listParams.title = title;
   }
@@ -315,19 +289,18 @@ export function resolvePhase2FmeaListParams(
 export function resolveChangeDeskListParams(
   searchFormValues?: Record<string, unknown> | null,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
 
   const listParams: Record<string, string | number | boolean | undefined> = {
-    status: pickString(s, 'status'),
-    ...resolvePlmDateParams(s),
+    status: pickSearchString(searchFormValues, 'status'),
+    ...resolvePlmDateParams(searchFormValues),
   };
 
   if (fuzzyKeyword) {
     listParams.keyword = fuzzyKeyword;
   } else {
-    const changeCode = pickString(s, 'change_code');
-    const targetName = pickString(s, 'target_name');
+    const changeCode = pickSearchString(searchFormValues, 'change_code');
+    const targetName = pickSearchString(searchFormValues, 'target_name');
     if (changeCode) listParams.change_code = changeCode;
     if (targetName) listParams.target_name = targetName;
   }

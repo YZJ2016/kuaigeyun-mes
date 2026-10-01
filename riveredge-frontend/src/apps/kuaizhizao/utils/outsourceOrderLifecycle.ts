@@ -5,6 +5,12 @@
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../services/reports';
 
 function norm(s: string | undefined): string {
   return (s ?? '').trim();
@@ -94,11 +100,68 @@ export function buildOutsourceOrderLifecycleValueEnum(
 export function resolveOutsourceOrderListLifecycleParams(
   searchFormValues?: Record<string, unknown> | null,
 ): { status?: string } {
-  const raw = searchFormValues?.status ?? searchFormValues?.lifecycle_stage;
-  if (raw == null || String(raw).trim() === '') return {};
-  const status = String(raw).trim();
+  const status =
+    pickSearchString(searchFormValues, 'status') ??
+    pickSearchString(searchFormValues, 'lifecycle_stage');
+  if (!status) return {};
   if (OUTSOURCE_ORDER_LIFECYCLE_KEYS.includes(status as (typeof OUTSOURCE_ORDER_LIFECYCLE_KEYS)[number])) {
     return { status };
   }
   return {};
+}
+
+function appendOutsourceOrderListDateParams(
+  apiParams: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown> | null,
+) {
+  const planned = parseSalesReportDateRange(searchFormValues ?? {}, ['planned_start_date_range']);
+  if (planned.date_start) {
+    apiParams.planned_start_from = planned.date_start;
+    apiParams.planned_start_to = planned.date_end ?? planned.date_start;
+  }
+  const created = parseSalesReportDateRange(searchFormValues ?? {}, ['created_at_range', 'createdAtRange']);
+  if (created.date_start) {
+    apiParams.created_start_date = created.date_start;
+    apiParams.created_end_date = created.date_end ?? created.date_start;
+  }
+}
+
+export function resolveOutsourceOrderListApiParams(
+  params: { current?: number; pageSize?: number },
+  sort?: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const lifecycleParams = resolveOutsourceOrderListLifecycleParams(searchFormValues);
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  const orderBy =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+
+  const apiParams: Record<string, unknown> = {
+    skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+    limit: params.pageSize ?? 20,
+    ...lifecycleParams,
+    order_by: orderBy,
+  };
+
+  if (fuzzyKeyword) {
+    apiParams.keyword = fuzzyKeyword;
+  } else {
+    const code = pickSearchString(searchFormValues, 'code');
+    const workOrderCode = pickSearchString(searchFormValues, 'work_order_code');
+    const operationName = pickSearchString(searchFormValues, 'operation_name');
+    const supplierIdRaw = pickSearchString(searchFormValues, 'supplier_id');
+    const supplierName = pickSearchString(searchFormValues, 'supplier_name');
+    if (code) apiParams.code = code;
+    if (workOrderCode) apiParams.work_order_code = workOrderCode;
+    if (operationName) apiParams.operation_name = operationName;
+    if (supplierIdRaw != null && Number.isFinite(Number(supplierIdRaw))) {
+      apiParams.supplier_id = Number(supplierIdRaw);
+    } else if (supplierName) {
+      apiParams.supplier_name = supplierName;
+    }
+  }
+
+  appendOutsourceOrderListDateParams(apiParams, searchFormValues);
+  return apiParams;
 }

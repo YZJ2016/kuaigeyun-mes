@@ -23,6 +23,7 @@ import {
   renderAfterSalesTypeMarker,
 } from '../shared/afterSalesListPresentation';
 import { AfterSalesSourceDocumentSelect } from '../shared/AfterSalesSourceDocumentSelect';
+import { pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
 import {
   customerReturnVisitApi,
   type CustomerReturnVisit,
@@ -248,14 +249,16 @@ const ReturnVisitsPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesReturnVisit)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.return-visits.v7"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.return-visits.v8"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.return-visits')}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await customerReturnVisitApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
-            keyword: params.keyword as string | undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
           });
           return { data: res.items, total: res.total, success: true };
         }}

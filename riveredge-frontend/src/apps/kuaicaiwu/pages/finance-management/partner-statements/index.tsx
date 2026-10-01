@@ -496,11 +496,10 @@ const PartnerStatementsPage: React.FC = () => {
       selectedRowKeys={customerSelectedRowKeys}
       onRowSelectionChange={setCustomerSelectedRowKeys}
       rowKey="id"
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer.list-v3"
+      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer.list-v4"
+      showAdvancedSearch
       viewTypes={['table', 'help']}
       helpViewConfig={buildReportHelpViewConfig()}
-      showAdvancedSearch
-      search={{ labelWidth: 100 }}
       showCreateButton
       createButtonText={t(`${PS}.createButton`)}
       onCreate={() => {
@@ -544,11 +543,10 @@ const PartnerStatementsPage: React.FC = () => {
       selectedRowKeys={supplierSelectedRowKeys}
       onRowSelectionChange={setSupplierSelectedRowKeys}
       rowKey="id"
-      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier.list-v3"
+      columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier.list-v4"
+      showAdvancedSearch
       viewTypes={['table', 'help']}
       helpViewConfig={buildReportHelpViewConfig()}
-      showAdvancedSearch
-      search={{ labelWidth: 100 }}
       showCreateButton
       createButtonText={t(`${PS}.createButton`)}
       onCreate={() => {

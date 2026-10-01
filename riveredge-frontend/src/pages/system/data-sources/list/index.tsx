@@ -70,7 +70,13 @@ import { getDatasetList } from '../../../../services/dataset';
 import { updateIntegrationConfig } from '../../../../services/integrationConfig';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  mapIntegrationConfigListSortField,
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
@@ -881,7 +887,7 @@ const DataSourceListPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<DataSource>
-          columnPersistenceId="pages.system.data-sources.list-v2"
+          columnPersistenceId="pages.system.data-sources.list-v3"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -893,17 +899,19 @@ const DataSourceListPage: React.FC = () => {
               sort_order: sortOrder,
             };
 
-            const kw = mergeListKeyword(searchFormValues, 'search');
-            if (kw) {
-              apiParams.search = kw;
+            const search = pickListSearchKeywordOrFields(searchFormValues, 'search');
+            if (search) {
+              apiParams.search = search;
             }
 
-            if (searchFormValues?.type) {
-              apiParams.type = searchFormValues.type;
+            const type = pickSearchString(searchFormValues, 'type');
+            if (type) {
+              apiParams.type = type;
             }
 
-            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-              apiParams.is_active = searchFormValues.is_active;
+            const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+            if (isActive !== undefined) {
+              apiParams.is_active = isActive;
             }
 
             try {

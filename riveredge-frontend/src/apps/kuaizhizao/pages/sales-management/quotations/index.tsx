@@ -131,7 +131,12 @@ import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulk
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { coerceFormDate, formDateFormItemProps, formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../../../services/reports';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
@@ -290,7 +295,7 @@ type QuotationItemRow = QuotationItem & {
 };
 
 const QUOTATION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_quotations';
-const QUOTATION_LIST_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.quotations-width-v2';
+const QUOTATION_LIST_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.quotations-width-v3';
 
 function pickQuotationCustomFieldProps(record: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(record).filter(([key]) => key.startsWith('custom_')));
@@ -4144,27 +4149,25 @@ const QuotationsPage: React.FC = () => {
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             const isPrefetch = meta?.purpose === 'prefetch';
             try {
-              const dr = searchFormValues?.date_range as [unknown, unknown] | undefined;
-              let startDate: string | undefined;
-              let endDate: string | undefined;
-              if (dr && Array.isArray(dr) && dr[0]) {
-                startDate = formatDateTime(dr[0] as string | Date, 'YYYY-MM-DD');
-                endDate = dr[1] ? formatDateTime(dr[1] as string | Date, 'YYYY-MM-DD') : startDate;
-              }
+              const { date_start: startDate, date_end: endDate } = parseSalesReportDateRange(
+                searchFormValues ?? {},
+                ['date_range'],
+              );
               const { sortBy, sortOrder } = extractProTableSort(sort);
               const lifecycleParams = resolveQuotationListLifecycleParams(searchFormValues, params);
               const orderBy =
                 sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+              const customerIdRaw = pickSearchString(searchFormValues, 'customer_id');
               const response = await listQuotations({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
                 ...lifecycleParams,
-                keyword: searchFormValues?.keyword,
-                quotation_code: searchFormValues?.quotation_code,
-                quotation_series_code: searchFormValues?.quotation_series_code,
+                keyword: pickListSearchKeyword(searchFormValues),
+                quotation_code: pickSearchString(searchFormValues, 'quotation_code'),
+                quotation_series_code: pickSearchString(searchFormValues, 'quotation_series_code'),
                 customer_id:
-                  searchFormValues?.customer_id != null && searchFormValues.customer_id !== ''
-                    ? Number(searchFormValues.customer_id)
+                  customerIdRaw != null && Number.isFinite(Number(customerIdRaw))
+                    ? Number(customerIdRaw)
                     : undefined,
                 salesman_id: resolveListSalesmanId(salesmanFilterIdRef.current, searchFormValues),
                 start_date: startDate,
@@ -4180,10 +4183,6 @@ const QuotationsPage: React.FC = () => {
               const flat = isPrefetch
                 ? raw
                 : await enrichQuotationRecordsWithCustomFields(raw);
-              if (!isPrefetch) {
-                lastQuotationsFlatCacheRef.current = flat;
-                setTableQuotationsFlat(flat);
-              }
               if (dataViewModeRef.current === 'order') {
                 return {
                   data: buildQuotationSeriesTree(flat),

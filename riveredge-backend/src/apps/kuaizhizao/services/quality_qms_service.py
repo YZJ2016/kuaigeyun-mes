@@ -34,6 +34,13 @@ from apps.kuaizhizao.schemas.quality_qms import (
     QmsSystemDocumentVersionListResponse,
     QmsSystemDocumentVersionResponse,
 )
+from apps.kuaizhizao.models.qms_standard import QmsStandard
+from apps.kuaizhizao.services.qms_clause_link_service import (
+    enrich_clause_fields,
+    replace_audit_clauses,
+    replace_document_clauses,
+    replace_review_standards,
+)
 from apps.kuaizhizao.services.qms_iso_clause_service import iso_clause_service
 from core.services.file.document_version_policy import (
     DOCUMENT_GLOBAL_VIEW_PERMISSION,
@@ -76,6 +83,43 @@ def _normalize_links(value: Any) -> Optional[List[Dict[str, Any]]]:
             }
         )
     return out
+
+
+async def _document_response(tenant_id: int, row: QmsSystemDocument) -> QmsSystemDocumentResponse:
+    clause_ids, clause_labels, primary_clause_id, _ = await enrich_clause_fields(
+        tenant_id, document_id=row.id
+    )
+    payload = QmsSystemDocumentResponse.model_validate(row).model_dump()
+    payload["clause_ids"] = clause_ids
+    payload["clause_labels"] = clause_labels
+    payload["primary_clause_id"] = primary_clause_id
+    return QmsSystemDocumentResponse.model_validate(payload)
+
+
+async def _audit_response(tenant_id: int, row: QmsInternalAudit) -> QmsInternalAuditResponse:
+    clause_ids, clause_labels, primary_clause_id, _ = await enrich_clause_fields(
+        tenant_id, audit_id=row.id
+    )
+    payload = QmsInternalAuditResponse.model_validate(row).model_dump()
+    payload["clause_ids"] = clause_ids
+    payload["clause_labels"] = clause_labels
+    payload["primary_clause_id"] = primary_clause_id
+    return QmsInternalAuditResponse.model_validate(payload)
+
+
+async def _review_response(tenant_id: int, row: QmsManagementReview) -> QmsManagementReviewResponse:
+    _, _, _, standard_ids = await enrich_clause_fields(tenant_id, review_id=row.id)
+    labels: List[str] = []
+    if standard_ids:
+        std_rows = await QmsStandard.filter(
+            tenant_id=tenant_id, id__in=standard_ids, deleted_at__isnull=True
+        ).all()
+        code_map = {s.id: s.code for s in std_rows}
+        labels = [code_map[sid] for sid in standard_ids if sid in code_map]
+    payload = QmsManagementReviewResponse.model_validate(row).model_dump()
+    payload["standard_ids"] = standard_ids
+    payload["standard_labels"] = labels
+    return QmsManagementReviewResponse.model_validate(payload)
 
 
 def _bump_version(current: str) -> str:
@@ -156,7 +200,13 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
         data["document_code"] = await self._ensure_code(tenant_id, data.get("document_code"))
         data["evidence_links"] = _normalize_links(data.get("evidence_links"))
         data["training_refs"] = _normalize_links(data.get("training_refs"))
-        data = await iso_clause_service.resolve_clause_snapshot(tenant_id, data)
+        clause_ids = data.pop("clause_ids", None)
+        standard_id = await iso_clause_service.resolve_standard_id_from_payload(
+            tenant_id, data, clause_ids
+        )
+        if standard_id is not None:
+            data["standard_id"] = standard_id
+        write_data = await iso_clause_service.pop_clause_payload_fields(tenant_id, data)
         exists = await QmsSystemDocument.filter(
             tenant_id=tenant_id, document_code=data["document_code"], deleted_at__isnull=True
         ).exists()
@@ -169,7 +219,10 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
             data["updated_by_name"] = actor_name
         from apps.kuaizhizao.models.qms_system_document_version import QmsSystemDocumentVersion
 
-        row = await QmsSystemDocument.create(tenant_id=tenant_id, **data)
+        row = await QmsSystemDocument.create(tenant_id=tenant_id, **write_data)
+        await replace_document_clauses(
+            tenant_id, row.id, clause_ids, standard_id=row.standard_id
+        )
         await QmsSystemDocumentVersion.create(
             tenant_id=tenant_id,
             document_id=row.id,
@@ -185,7 +238,7 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
             updated_by=getattr(row, "updated_by", None),
             updated_by_name=getattr(row, "updated_by_name", None),
         )
-        return QmsSystemDocumentResponse.model_validate(row)
+        return await _document_response(tenant_id, row)
 
     async def list_documents(
         self,
@@ -194,6 +247,7 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
         keyword: Optional[str] = None,
         status: Optional[str] = None,
         doc_type: Optional[str] = None,
+        standard_id: Optional[int] = None,
         zone: Optional[str] = None,
         current_user_id: Optional[int] = None,
         permission_codes: Optional[List[str]] = None,
@@ -243,16 +297,16 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
             query = query.filter(status=status)
         if doc_type:
             query = query.filter(doc_type=doc_type)
+        if standard_id is not None:
+            query = query.filter(standard_id=standard_id)
         total = await query.count()
         rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
-        return QmsSystemDocumentListResponse(
-            items=[QmsSystemDocumentResponse.model_validate(r) for r in rows],
-            total=total,
-        )
+        items = [await _document_response(tenant_id, r) for r in rows]
+        return QmsSystemDocumentListResponse(items=items, total=total)
 
     async def get_document(self, tenant_id: int, document_id: int) -> QmsSystemDocumentResponse:
         row = await self._get_row(tenant_id, document_id)
-        return QmsSystemDocumentResponse.model_validate(row)
+        return await _document_response(tenant_id, row)
 
     async def list_versions(
         self,
@@ -341,7 +395,7 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
                 row.updated_by = actor_id
                 row.updated_by_name = actor_name
             await row.save()
-        return QmsSystemDocumentResponse.model_validate(row)
+        return await _document_response(tenant_id, row)
 
     async def reject_document(
         self,
@@ -407,7 +461,7 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
                 row.updated_by = actor_id
                 row.updated_by_name = actor_name
             await row.save()
-        return QmsSystemDocumentResponse.model_validate(row)
+        return await _document_response(tenant_id, row)
 
     async def update_document(
         self, tenant_id: int, document_id: int, payload: QmsSystemDocumentUpdate
@@ -419,19 +473,29 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
             data["evidence_links"] = _normalize_links(data.get("evidence_links"))
         if "training_refs" in data:
             data["training_refs"] = _normalize_links(data.get("training_refs"))
-        data = await iso_clause_service.resolve_clause_snapshot(tenant_id, data)
-        if "document_code" in data and data["document_code"]:
+        clause_ids = data.pop("clause_ids", None) if "clause_ids" in data else None
+        standard_id = await iso_clause_service.resolve_standard_id_from_payload(
+            tenant_id, data, clause_ids
+        )
+        if standard_id is not None:
+            data["standard_id"] = standard_id
+        write_data = await iso_clause_service.pop_clause_payload_fields(tenant_id, data)
+        if "document_code" in write_data and write_data["document_code"]:
             clash = await QmsSystemDocument.filter(
                 tenant_id=tenant_id,
-                document_code=data["document_code"],
+                document_code=write_data["document_code"],
                 deleted_at__isnull=True,
             ).exclude(id=document_id).exists()
             if clash:
                 raise BusinessLogicError("体系文件编码已存在")
-        for key, value in data.items():
+        for key, value in write_data.items():
             setattr(row, key, value)
         await row.save()
-        return QmsSystemDocumentResponse.model_validate(row)
+        if clause_ids is not None:
+            await replace_document_clauses(
+                tenant_id, row.id, clause_ids, standard_id=row.standard_id
+            )
+        return await _document_response(tenant_id, row)
 
     async def publish_document(self, tenant_id: int, document_id: int) -> QmsSystemDocumentResponse:
         from apps.kuaizhizao.models.qms_system_document_version import QmsSystemDocumentVersion
@@ -486,7 +550,7 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
             row.effective_at = resolve_business_datetime()
             row.obsolete_at = None
             await row.save()
-        return QmsSystemDocumentResponse.model_validate(row)
+        return await _document_response(tenant_id, row)
 
     async def obsolete_document(self, tenant_id: int, document_id: int) -> QmsSystemDocumentResponse:
         from apps.kuaizhizao.models.qms_system_document_version import QmsSystemDocumentVersion
@@ -507,7 +571,7 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
             status="obsolete",
             obsolete_at=resolve_business_datetime(),
         )
-        return QmsSystemDocumentResponse.model_validate(row)
+        return await _document_response(tenant_id, row)
 
     async def delete_document(self, tenant_id: int, document_id: int) -> None:
         row = await self._get_row(tenant_id, document_id)
@@ -545,14 +609,23 @@ class QmsInternalAuditService(AppBaseService[QmsInternalAudit], _QmsCrudMixin):
         data["finding_links"] = _normalize_links(data.get("finding_links"))
         data["training_refs"] = _normalize_links(data.get("training_refs"))
         data["calibration_refs"] = _normalize_links(data.get("calibration_refs"))
-        data = await iso_clause_service.resolve_clause_snapshot(tenant_id, data)
+        clause_ids = data.pop("clause_ids", None)
+        standard_id = await iso_clause_service.resolve_standard_id_from_payload(
+            tenant_id, data, clause_ids
+        )
+        if standard_id is not None:
+            data["standard_id"] = standard_id
+        write_data = await iso_clause_service.pop_clause_payload_fields(tenant_id, data)
         exists = await QmsInternalAudit.filter(
-            tenant_id=tenant_id, audit_code=data["audit_code"], deleted_at__isnull=True
+            tenant_id=tenant_id, audit_code=write_data["audit_code"], deleted_at__isnull=True
         ).exists()
         if exists:
             raise BusinessLogicError("内审编码已存在")
-        row = await QmsInternalAudit.create(tenant_id=tenant_id, **data)
-        return QmsInternalAuditResponse.model_validate(row)
+        row = await QmsInternalAudit.create(tenant_id=tenant_id, **write_data)
+        await replace_audit_clauses(
+            tenant_id, row.id, clause_ids, standard_id=row.standard_id
+        )
+        return await _audit_response(tenant_id, row)
 
     async def list_audits(
         self,
@@ -560,6 +633,7 @@ class QmsInternalAuditService(AppBaseService[QmsInternalAudit], _QmsCrudMixin):
         *,
         keyword: Optional[str] = None,
         status: Optional[str] = None,
+        standard_id: Optional[int] = None,
         skip: int = 0,
         limit: int = 50,
     ) -> QmsInternalAuditListResponse:
@@ -568,15 +642,15 @@ class QmsInternalAuditService(AppBaseService[QmsInternalAudit], _QmsCrudMixin):
             query = query.filter(title__icontains=keyword)
         if status:
             query = query.filter(status=status)
+        if standard_id is not None:
+            query = query.filter(standard_id=standard_id)
         total = await query.count()
         rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
-        return QmsInternalAuditListResponse(
-            items=[QmsInternalAuditResponse.model_validate(r) for r in rows],
-            total=total,
-        )
+        items = [await _audit_response(tenant_id, r) for r in rows]
+        return QmsInternalAuditListResponse(items=items, total=total)
 
     async def get_audit(self, tenant_id: int, audit_id: int) -> QmsInternalAuditResponse:
-        return QmsInternalAuditResponse.model_validate(await self._get_row(tenant_id, audit_id))
+        return await _audit_response(tenant_id, await self._get_row(tenant_id, audit_id))
 
     async def update_audit(
         self, tenant_id: int, audit_id: int, payload: QmsInternalAuditUpdate
@@ -593,11 +667,21 @@ class QmsInternalAuditService(AppBaseService[QmsInternalAudit], _QmsCrudMixin):
             ).exclude(id=audit_id).exists()
             if clash:
                 raise BusinessLogicError("内审编码已存在")
-        data = await iso_clause_service.resolve_clause_snapshot(tenant_id, data)
-        for key, value in data.items():
+        clause_ids = data.pop("clause_ids", None) if "clause_ids" in data else None
+        standard_id = await iso_clause_service.resolve_standard_id_from_payload(
+            tenant_id, data, clause_ids
+        )
+        if standard_id is not None:
+            data["standard_id"] = standard_id
+        write_data = await iso_clause_service.pop_clause_payload_fields(tenant_id, data)
+        for key, value in write_data.items():
             setattr(row, key, value)
         await row.save()
-        return QmsInternalAuditResponse.model_validate(row)
+        if clause_ids is not None:
+            await replace_audit_clauses(
+                tenant_id, row.id, clause_ids, standard_id=row.standard_id
+            )
+        return await _audit_response(tenant_id, row)
 
     async def delete_audit(self, tenant_id: int, audit_id: int) -> None:
         row = await self._get_row(tenant_id, audit_id)
@@ -629,8 +713,13 @@ class QmsManagementReviewService(AppBaseService[QmsManagementReview], _QmsCrudMi
         ).exists()
         if exists:
             raise BusinessLogicError("管理评审编码已存在")
-        row = await QmsManagementReview.create(tenant_id=tenant_id, **data)
-        return QmsManagementReviewResponse.model_validate(row)
+        standard_ids = data.pop("standard_ids", None)
+        if not standard_ids:
+            raise BusinessLogicError("须选择至少一套管理体系")
+        write_data = await iso_clause_service.pop_clause_payload_fields(tenant_id, data)
+        row = await QmsManagementReview.create(tenant_id=tenant_id, **write_data)
+        await replace_review_standards(tenant_id, row.id, standard_ids)
+        return await _review_response(tenant_id, row)
 
     async def list_reviews(
         self,
@@ -648,13 +737,11 @@ class QmsManagementReviewService(AppBaseService[QmsManagementReview], _QmsCrudMi
             query = query.filter(status=status)
         total = await query.count()
         rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
-        return QmsManagementReviewListResponse(
-            items=[QmsManagementReviewResponse.model_validate(r) for r in rows],
-            total=total,
-        )
+        items = [await _review_response(tenant_id, r) for r in rows]
+        return QmsManagementReviewListResponse(items=items, total=total)
 
     async def get_review(self, tenant_id: int, review_id: int) -> QmsManagementReviewResponse:
-        return QmsManagementReviewResponse.model_validate(await self._get_row(tenant_id, review_id))
+        return await _review_response(tenant_id, await self._get_row(tenant_id, review_id))
 
     async def update_review(
         self, tenant_id: int, review_id: int, payload: QmsManagementReviewUpdate
@@ -671,12 +758,16 @@ class QmsManagementReviewService(AppBaseService[QmsManagementReview], _QmsCrudMi
             ).exclude(id=review_id).exists()
             if clash:
                 raise BusinessLogicError("管理评审编码已存在")
-        for key, value in data.items():
+        standard_ids = data.pop("standard_ids", None) if "standard_ids" in data else None
+        write_data = await iso_clause_service.pop_clause_payload_fields(tenant_id, data)
+        for key, value in write_data.items():
             setattr(row, key, value)
         await row.save()
-        return QmsManagementReviewResponse.model_validate(row)
-
-    async def delete_review(self, tenant_id: int, review_id: int) -> None:
+        if standard_ids is not None:
+            if not standard_ids:
+                raise BusinessLogicError("须选择至少一套管理体系")
+            await replace_review_standards(tenant_id, row.id, standard_ids)
+        return await _review_response(tenant_id, row)
         row = await self._get_row(tenant_id, review_id)
         row.deleted_at = resolve_business_datetime()
         await row.save()

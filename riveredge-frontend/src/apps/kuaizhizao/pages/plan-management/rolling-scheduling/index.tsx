@@ -36,6 +36,7 @@ import { useTranslation } from 'react-i18next';
 import dayjs, { Dayjs } from 'dayjs';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { renderInlineMarkerTagGroup } from '../../../../../components/inline-marker-tag-preview';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { formatDateTime } from '../../../../../utils/format';
@@ -308,16 +309,16 @@ const RollingSchedulingPage: React.FC = () => {
         render: (_: unknown, row: RollingScheduleLine) => {
           const items = row.scheduling_diagnostics ?? [];
           if (!items.length) return '—';
-          return (
-            <Space size={4} wrap>
-              {items.slice(0, 2).map((item) => (
-                <Tag key={item} color="warning">
-                  {item}
-                </Tag>
-              ))}
-              {items.length > 2 ? <Tag>+{items.length - 2}</Tag> : null}
-            </Space>
-          );
+          return renderInlineMarkerTagGroup([
+            ...items.slice(0, 2).map((item) => ({
+              key: item,
+              label: item,
+              color: 'warning' as const,
+            })),
+            ...(items.length > 2
+              ? [{ key: 'more', label: `+${items.length - 2}`, color: 'default' as const }]
+              : []),
+          ]);
         },
       },
       {

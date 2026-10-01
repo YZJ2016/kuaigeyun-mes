@@ -189,6 +189,18 @@ const DrawingDistributionsPage: React.FC = () => {
       ...buildDocumentAuditColumns<DrawingDistribution>(t),
       {
         title: t('common.status'),
+        dataIndex: 'status',
+        hideInTable: true,
+        valueType: 'select',
+        valueEnum: {
+          Draft: { text: t('app.master-data.drawingDistributions.status.Draft') },
+          Pending: { text: t('app.master-data.drawingDistributions.status.Pending') },
+          Issued: { text: t('app.master-data.drawingDistributions.status.Issued') },
+          Recalled: { text: t('app.master-data.drawingDistributions.status.Recalled') },
+        },
+      },
+      {
+        title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
         fixed: 'right',
@@ -356,7 +368,9 @@ const DrawingDistributionsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.master-data.pages.process.drawing-distributions.v3"
+        columnPersistenceId="apps.master-data.pages.process.drawing-distributions.v4"
+        showAdvancedSearch
+        pinnedTabsField="status"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.master-data.drawingDistributions.create')}
         onCreate={openCreate}

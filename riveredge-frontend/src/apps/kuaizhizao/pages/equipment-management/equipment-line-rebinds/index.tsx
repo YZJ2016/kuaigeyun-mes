@@ -33,6 +33,7 @@ import {
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
 import { equipmentLineRebindApi } from '../../../services/equipmentLineRebind';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import { equipmentApi } from '../../../services/equipment';
 import { productionLineApi, factoryListItems } from '../../../../master-data/services/factory';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -400,7 +401,7 @@ const EquipmentLineRebindsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<LineRebindRow>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-line-rebinds-r10-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-line-rebinds-r10-v2"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -411,13 +412,15 @@ const EquipmentLineRebindsPage: React.FC = () => {
             onClick: () => perms.canRead && handleDetail(record),
             style: { cursor: perms.canRead ? 'pointer' : undefined },
           })}
-          request={async (params) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             try {
+              const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+              const documentNo = pickSearchString(searchFormValues, 'document_no');
               const res = await equipmentLineRebindApi.list({
                 skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
                 limit: params.pageSize,
-                status: params.status,
-                keyword: params.document_no,
+                status: pickSearchString(searchFormValues, 'status'),
+                keyword: fuzzyKeyword ?? documentNo,
               });
               const { data, total } = normalizeEquipmentListResponse(res);
               return { data: data as LineRebindRow[], success: true, total };

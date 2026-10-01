@@ -40,9 +40,11 @@ import { apiRequest } from '../../../../../services/api';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { exceptionProcessBatchCancelAllowed } from '../../../../../hooks/useDocumentCapabilities';
 import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import {
   buildExceptionProcessStatusValueEnum,
+  buildProductionExceptionListOrderBy,
+  pickProductionExceptionCreatedDateParams,
   resolveProductionExceptionListStatusParams,
 } from '../../../utils/productionExceptionList';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -585,24 +587,22 @@ const ExceptionProcessPage: React.FC = () => {
           actionRef={actionRef}
           columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
           request={async (params, sort, _filter, searchFormValues) => {
-            const s = searchFormValues ?? {};
-            const statusParams = resolveProductionExceptionListStatusParams(s, 'process_status');
-            const { sortBy, sortOrder } = extractProTableSort(sort);
-            const orderBy =
-              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+            const statusParams = resolveProductionExceptionListStatusParams(searchFormValues, 'process_status');
+            const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
 
             const apiParams: Record<string, unknown> = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              order_by: orderBy,
+              order_by: buildProductionExceptionListOrderBy(sort),
               ...statusParams,
+              ...pickProductionExceptionCreatedDateParams(searchFormValues),
             };
 
-            if (s.exception_type) {
-              apiParams.exception_type = s.exception_type;
+            const exceptionType = pickSearchString(searchFormValues, 'exception_type');
+            if (exceptionType) {
+              apiParams.exception_type = exceptionType;
             }
-            const assigneeUuid = String(s.assigned_to_uuid ?? '').trim();
+            const assigneeUuid = pickSearchString(searchFormValues, 'assigned_to_uuid');
             if (assigneeUuid) {
               const resolved = await resolveUserDisplay({ user_uuids: [assigneeUuid] });
               const assigneeId = resolved[0]?.id;
@@ -612,19 +612,9 @@ const ExceptionProcessPage: React.FC = () => {
             }
             if (fuzzyKeyword) {
               apiParams.keyword = fuzzyKeyword;
-            } else if (s.assigned_to_name != null && String(s.assigned_to_name).trim()) {
-              apiParams.assigned_to_name = String(s.assigned_to_name).trim();
-            }
-
-            const createdRange = s.created_at_range as [unknown, unknown] | undefined;
-            if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-              apiParams.created_start_date = formatDateTime(
-                createdRange[0] as string | Date,
-                'YYYY-MM-DD',
-              );
-              apiParams.created_end_date = createdRange[1]
-                ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                : apiParams.created_start_date;
+            } else {
+              const assignedToName = pickSearchString(searchFormValues, 'assigned_to_name');
+              if (assignedToName) apiParams.assigned_to_name = assignedToName;
             }
 
             try {

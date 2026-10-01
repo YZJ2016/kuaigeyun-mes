@@ -40,6 +40,7 @@ import {
   resolveTenantPlanLabelKey,
 } from '../../../../services/tenant';
 import { getPlatformSettings, updatePlatformSettings } from '../../../../services/platformSettings';
+import { pickSearchString } from '../../../../utils/tableQueryKey';
 // 使用 apiRequest 统一处理 HTTP 请求
 
 // @ts-ignore
@@ -1148,6 +1149,7 @@ const SuperAdminTenantList: React.FC = () => {
       minWidth: 180,
       uniTableKeepWidth: true,
       resizable: false,
+      sorter: true,
       responsive: ['xl'],
     },
     {
@@ -1344,7 +1346,7 @@ const SuperAdminTenantList: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<Tenant>
-      columnPersistenceId="pages.infra.tenants.list-lifecycle-v4"
+      columnPersistenceId="pages.infra.tenants.list-lifecycle-v5"
       actionRef={actionRef}
       columns={columns}
       rowKey="id"
@@ -1401,23 +1403,23 @@ const SuperAdminTenantList: React.FC = () => {
         
         // 状态和套餐筛选
         // ⭐ 修复：确保只有明确选择的状态才会被传递，避免意外过滤
-        if (searchFormValues?.status && searchFormValues.status !== '' && searchFormValues.status !== undefined && searchFormValues.status !== null) {
-          apiParams.status = searchFormValues.status as TenantStatus;
+        const status = pickSearchString(searchFormValues, 'status');
+        if (status) {
+          apiParams.status = status as TenantStatus;
         }
-        if (searchFormValues?.plan && searchFormValues.plan !== '' && searchFormValues.plan !== undefined && searchFormValues.plan !== null) {
-          apiParams.plan = searchFormValues.plan as TenantPlan;
+        const plan = pickSearchString(searchFormValues, 'plan');
+        if (plan) {
+          apiParams.plan = plan as TenantPlan;
         }
-        if (searchFormValues?.parent_tenant_id !== undefined && searchFormValues?.parent_tenant_id !== null && searchFormValues?.parent_tenant_id !== '') {
-          apiParams.parent_tenant_id = Number(searchFormValues.parent_tenant_id);
+        const parentTenantIdRaw = pickSearchString(searchFormValues, 'parent_tenant_id');
+        if (parentTenantIdRaw != null && Number.isFinite(Number(parentTenantIdRaw))) {
+          apiParams.parent_tenant_id = Number(parentTenantIdRaw);
         }
-        
-        // 搜索条件处理：name 和 domain 使用模糊搜索
-        if (searchFormValues?.name) {
-          apiParams.name = searchFormValues.name as string;
-        }
-        if (searchFormValues?.domain) {
-          apiParams.domain = searchFormValues.domain as string;
-        }
+
+        const name = pickSearchString(searchFormValues, 'name');
+        const domain = pickSearchString(searchFormValues, 'domain');
+        if (name) apiParams.name = name;
+        if (domain) apiParams.domain = domain;
 
         try {
           const result = await getTenantList(

@@ -1,7 +1,12 @@
 import type { TFunction } from 'i18next';
 import type { ProColumns } from '@ant-design/pro-components';
 import React from 'react';
-import { extractProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import { formatDateTime } from '../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../utils/formDate';
@@ -52,16 +57,13 @@ function pickBoolean(search: Record<string, unknown>, key: string): boolean | un
   return undefined;
 }
 
-function pickAgingBucket(search: Record<string, unknown>): FinanceAgingBucket | undefined {
-  const v = pickString(search, 'aging_bucket');
+function pickAgingBucket(
+  searchFormValues?: Record<string, unknown> | null,
+): FinanceAgingBucket | undefined {
+  const v = pickSearchString(searchFormValues, 'aging_bucket');
   return v && FINANCE_AGING_BUCKET_VALUES.includes(v as FinanceAgingBucket)
     ? (v as FinanceAgingBucket)
     : undefined;
-}
-
-function pickString(search: Record<string, unknown> | null | undefined, key: string) {
-  const v = search?.[key];
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
 }
 
 function pickOptionalId(search: Record<string, unknown>, key: string): number | undefined {
@@ -244,29 +246,28 @@ function resolveFinanceArApListParams(
     partnerNameField: string;
   },
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveFinanceSort(sort);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'updated_at_range',
     'updatedAtRange',
   ]);
-  const { date_start: business_date_start, date_end: business_date_end } = parseSalesReportDateRange(s, [
+  const { date_start: business_date_start, date_end: business_date_end } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'business_date_range',
     'businessDateRange',
   ]);
-  const { date_start: due_date_start, date_end: due_date_end } = parseSalesReportDateRange(s, [
+  const { date_start: due_date_start, date_end: due_date_end } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'due_date_range',
     'dueDateRange',
   ]);
 
   const params: Record<string, string | number | boolean | undefined> = {
-    status: pickString(s, 'status'),
-    review_status: pickString(s, 'review_status'),
+    status: pickSearchString(searchFormValues, 'status'),
+    review_status: pickSearchString(searchFormValues, 'review_status'),
     sort_field,
     sort_order,
     created_start_date,
@@ -277,20 +278,20 @@ function resolveFinanceArApListParams(
     business_date_end,
     due_date_start,
     due_date_end,
-    aging_bucket: pickAgingBucket(s),
-    overdue_only: pickBoolean(s, 'overdue_only'),
+    aging_bucket: pickAgingBucket(searchFormValues),
+    overdue_only: pickBoolean(searchFormValues ?? {}, 'overdue_only'),
   };
 
   if (options) {
-    const partnerId = pickOptionalId(s, options.partnerIdField);
+    const partnerId = pickOptionalId(searchFormValues ?? {}, options.partnerIdField);
     if (partnerId) params[options.partnerIdField] = partnerId;
   }
 
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else if (options) {
-    const docCode = pickString(s, options.docCodeField);
-    const partnerName = pickString(s, options.partnerNameField);
+    const docCode = pickSearchString(searchFormValues, options.docCodeField);
+    const partnerName = pickSearchString(searchFormValues, options.partnerNameField);
     if (docCode) params[options.docCodeField] = docCode;
     if (partnerName) params[options.partnerNameField] = partnerName;
   }
@@ -346,22 +347,21 @@ function resolveFinanceVoucherListParams(
     docDateRangeKeys: [string, string];
   },
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveFinanceSort(sort);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'updated_at_range',
     'updatedAtRange',
   ]);
-  const { date_start: start_date, date_end: end_date } = parseSalesReportDateRange(s, options.docDateRangeKeys);
+  const { date_start: start_date, date_end: end_date } = parseSalesReportDateRange(searchFormValues ?? {}, options.docDateRangeKeys);
 
   const params: Record<string, string | number | boolean | undefined> = {
-    status: pickString(s, 'status'),
-    settlement_type: pickString(s, 'settlement_type'),
+    status: pickSearchString(searchFormValues, 'status'),
+    settlement_type: pickSearchString(searchFormValues, 'settlement_type'),
     sort_field,
     sort_order,
     created_start_date,
@@ -372,14 +372,14 @@ function resolveFinanceVoucherListParams(
     end_date,
   };
 
-  const partnerId = pickOptionalId(s, options.partnerIdField);
+  const partnerId = pickOptionalId(searchFormValues ?? {}, options.partnerIdField);
   if (partnerId) params[options.partnerIdField] = partnerId;
 
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const docCode = pickString(s, options.docCodeField);
-    const partnerName = pickString(s, options.partnerNameField);
+    const docCode = pickSearchString(searchFormValues, options.docCodeField);
+    const partnerName = pickSearchString(searchFormValues, options.partnerNameField);
     if (docCode) params[options.docCodeField] = docCode;
     if (partnerName) params[options.partnerNameField] = partnerName;
   }
@@ -421,22 +421,21 @@ function resolveFinanceInvoiceListParams(
     docDateRangeKeys: [string, string];
   },
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveFinanceSort(sort);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'updated_at_range',
     'updatedAtRange',
   ]);
-  const { date_start: start_date, date_end: end_date } = parseSalesReportDateRange(s, options.docDateRangeKeys);
+  const { date_start: start_date, date_end: end_date } = parseSalesReportDateRange(searchFormValues ?? {}, options.docDateRangeKeys);
 
   const params: Record<string, string | number | boolean | undefined> = {
-    status: pickString(s, 'status'),
-    review_status: pickString(s, 'review_status'),
+    status: pickSearchString(searchFormValues, 'status'),
+    review_status: pickSearchString(searchFormValues, 'review_status'),
     sort_field,
     sort_order,
     created_start_date,
@@ -447,15 +446,15 @@ function resolveFinanceInvoiceListParams(
     end_date,
   };
 
-  const partnerId = pickOptionalId(s, options.partnerIdField);
+  const partnerId = pickOptionalId(searchFormValues ?? {}, options.partnerIdField);
   if (partnerId) params[options.partnerIdField] = partnerId;
 
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const docCode = pickString(s, options.docCodeField);
-    const partnerName = pickString(s, options.partnerNameField);
-    const invoiceNumber = pickString(s, 'invoice_number');
+    const docCode = pickSearchString(searchFormValues, options.docCodeField);
+    const partnerName = pickSearchString(searchFormValues, options.partnerNameField);
+    const invoiceNumber = pickSearchString(searchFormValues, 'invoice_number');
     if (docCode) params[options.docCodeField] = docCode;
     if (partnerName) params[options.partnerNameField] = partnerName;
     if (invoiceNumber) params.invoice_number = invoiceNumber;
@@ -550,21 +549,20 @@ export function resolvePartnerStatementListParams(
   sort?: Record<string, unknown>,
   partnerType?: 'Customer' | 'Supplier',
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveFinanceSort(sort);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
   const params: Record<string, string | number | boolean | undefined> = {
-    status: pickString(s, 'status'),
-    statement_period: pickString(s, 'statement_period'),
+    status: pickSearchString(searchFormValues, 'status'),
+    statement_period: pickSearchString(searchFormValues, 'statement_period'),
     sort_field,
     sort_order,
     created_start_date,
@@ -577,14 +575,14 @@ export function resolvePartnerStatementListParams(
     params.partner_type = partnerType;
   }
 
-  const partnerId = pickOptionalId(s, 'partner_id');
+  const partnerId = pickOptionalId(searchFormValues ?? {}, 'partner_id');
   if (partnerId) params.partner_id = partnerId;
 
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const statementCode = pickString(s, 'statement_code');
-    const partnerName = pickString(s, 'partner_name');
+    const statementCode = pickSearchString(searchFormValues, 'statement_code');
+    const partnerName = pickSearchString(searchFormValues, 'partner_name');
     if (statementCode) params.statement_code = statementCode;
     if (partnerName) params.partner_name = partnerName;
   }
@@ -608,8 +606,7 @@ export function resolvePrepaymentBalanceListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveFinanceSort(sort);
 
   const params: Record<string, string | number | boolean | undefined> = {
@@ -620,7 +617,7 @@ export function resolvePrepaymentBalanceListParams(
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const name = pickString(s, 'partner_name');
+    const name = pickSearchString(searchFormValues, 'partner_name');
     if (name) params.partner_name = name;
   }
 
@@ -669,25 +666,18 @@ export function resolveBankAccountListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveFinanceSort(sort);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
-  const activeRaw = s[FINANCE_CRUD_PINNED_ACTIVE_FIELD];
-  const is_active =
-    activeRaw === true || activeRaw === 'true'
-      ? true
-      : activeRaw === false || activeRaw === 'false'
-        ? false
-        : undefined;
+  const is_active = pickSearchTriStateBoolean(searchFormValues, FINANCE_CRUD_PINNED_ACTIVE_FIELD);
 
   const params: Record<string, string | number | boolean | undefined> = {
     sort_field,
@@ -702,10 +692,10 @@ export function resolveBankAccountListParams(
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const accountCode = pickString(s, 'account_code');
-    const accountName = pickString(s, 'account_name');
-    const bankName = pickString(s, 'bank_name');
-    const accountNumber = pickString(s, 'account_number');
+    const accountCode = pickSearchString(searchFormValues, 'account_code');
+    const accountName = pickSearchString(searchFormValues, 'account_name');
+    const bankName = pickSearchString(searchFormValues, 'bank_name');
+    const accountNumber = pickSearchString(searchFormValues, 'account_number');
     if (accountCode) params.account_code = accountCode;
     if (accountName) params.account_name = accountName;
     if (bankName) params.bank_name = bankName;
@@ -744,8 +734,7 @@ export function resolveDocumentReconciliationGapListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveFinanceSort(sort);
 
   const params: Record<string, string | number | boolean | undefined> = {
@@ -756,8 +745,8 @@ export function resolveDocumentReconciliationGapListParams(
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const docType = pickString(s, 'doc_type');
-    const docCode = pickString(s, 'doc_code');
+    const docType = pickSearchString(searchFormValues, 'doc_type');
+    const docCode = pickSearchString(searchFormValues, 'doc_code');
     if (docType) params.doc_type = docType;
     if (docCode) params.doc_code = docCode;
   }
@@ -769,17 +758,16 @@ export function resolveSettlementHistoryListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveFinanceSort(sort);
-  const { date_start: settlement_date_start, date_end: settlement_date_end } = parseSalesReportDateRange(s, [
+  const { date_start: settlement_date_start, date_end: settlement_date_end } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'settlement_date_range',
     'settlementDateRange',
   ]);
-  const businessRaw = pickString(s, 'business_type');
+  const businessRaw = pickSearchString(searchFormValues, 'business_type');
   const business_type =
     businessRaw === 'receivable' || businessRaw === 'payable' ? businessRaw : undefined;
-  const partnerId = pickOptionalId(s, 'partner_id');
+  const partnerId = pickOptionalId(searchFormValues ?? {}, 'partner_id');
 
   const params: Record<string, string | number | boolean | undefined> = {
     business_type,
@@ -797,10 +785,9 @@ export function resolveBankTransactionListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveFinanceSort(sort);
-  const { date_start: transaction_date_start, date_end: transaction_date_end } = parseSalesReportDateRange(s, [
+  const { date_start: transaction_date_start, date_end: transaction_date_end } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'transaction_date_range',
     'transactionDateRange',
   ]);
@@ -808,7 +795,7 @@ export function resolveBankTransactionListParams(
   const params: Record<string, string | number | boolean | undefined> = {
     sort_field,
     sort_order,
-    direction: pickString(s, 'direction'),
+    direction: pickSearchString(searchFormValues, 'direction'),
     transaction_date_start,
     transaction_date_end,
   };
@@ -816,7 +803,7 @@ export function resolveBankTransactionListParams(
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const sourceDocCode = pickString(s, 'source_doc_code');
+    const sourceDocCode = pickSearchString(searchFormValues, 'source_doc_code');
     if (sourceDocCode) params.source_doc_code = sourceDocCode;
   }
 

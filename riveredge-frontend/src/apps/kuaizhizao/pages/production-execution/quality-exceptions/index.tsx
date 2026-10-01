@@ -45,7 +45,7 @@ import {
   resolveExceptionNextStepLabel,
 } from '../components/productionExceptionWorkbench';
 import { formatDateTime } from '../../../../../utils/format';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -53,6 +53,8 @@ import { StatusTag } from '../../../../../constants/statusBadges';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   buildQualityExceptionStatusValueEnum,
+  buildProductionExceptionListOrderBy,
+  pickProductionExceptionCreatedDateParams,
   resolveProductionExceptionListStatusParams,
   resolveQualityExceptionStatusTagColor,
 } from '../../../utils/productionExceptionList';
@@ -400,23 +402,20 @@ const QualityExceptionsPage: React.FC = () => {
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.quality-exceptions-width-v3"
         request={async (params, sort, _filter, searchFormValues) => {
           try {
-            const s = searchFormValues ?? {};
-            const statusParams = resolveProductionExceptionListStatusParams(s);
-            const { sortBy, sortOrder } = extractProTableSort(sort);
-            const orderBy =
-              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+            const statusParams = resolveProductionExceptionListStatusParams(searchFormValues);
+            const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
             const pageSize = params.pageSize || 20;
             const skip = (params.current! - 1) * pageSize;
             const queryParams: Record<string, unknown> = {
               skip,
               limit: pageSize,
-              order_by: orderBy,
-              exception_type: s.exception_type ?? params.exception_type,
-              severity: s.severity ?? params.severity,
+              order_by: buildProductionExceptionListOrderBy(sort),
+              exception_type: pickSearchString(searchFormValues, 'exception_type'),
+              severity: pickSearchString(searchFormValues, 'severity'),
               inspection_record_id: initialInspectionRecordId || undefined,
               inspection_source_type: initialInspectionSourceType || undefined,
               ...statusParams,
+              ...pickProductionExceptionCreatedDateParams(searchFormValues),
             };
             if (!statusParams.status) {
               queryParams.statuses = ACTIVE_QUALITY_EXCEPTION_STATUSES;
@@ -424,25 +423,12 @@ const QualityExceptionsPage: React.FC = () => {
             if (fuzzyKeyword) {
               queryParams.keyword = fuzzyKeyword;
             } else {
-              if (s.work_order_code != null && String(s.work_order_code).trim()) {
-                queryParams.work_order_code = String(s.work_order_code).trim();
-              }
-              if (s.material_code != null && String(s.material_code).trim()) {
-                queryParams.material_code = String(s.material_code).trim();
-              }
-              if (s.batch_no != null && String(s.batch_no).trim()) {
-                queryParams.batch_no = String(s.batch_no).trim();
-              }
-            }
-            const createdRange = s.created_at_range as [unknown, unknown] | undefined;
-            if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-              queryParams.created_start_date = formatDateTime(
-                createdRange[0] as string | Date,
-                'YYYY-MM-DD',
-              );
-              queryParams.created_end_date = createdRange[1]
-                ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                : queryParams.created_start_date;
+              const workOrderCode = pickSearchString(searchFormValues, 'work_order_code');
+              const materialCode = pickSearchString(searchFormValues, 'material_code');
+              const batchNo = pickSearchString(searchFormValues, 'batch_no');
+              if (workOrderCode) queryParams.work_order_code = workOrderCode;
+              if (materialCode) queryParams.material_code = materialCode;
+              if (batchNo) queryParams.batch_no = batchNo;
             }
             const result = await apiRequest<ExceptionListPage<QualityException>>(
               '/apps/kuaizhizao/exceptions/quality',

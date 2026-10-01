@@ -42,7 +42,7 @@ import { qualityApi, reworkOrderApi, workOrderApi } from '../../../services/prod
 import { reworkPositionPlanTemplateApi } from '../../../services/rework-position-plan-template';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import type { PushPreviewResponse } from '../../../services/sales-order';
-import { getReworkOrderLifecycle, buildReworkOrderLifecycleValueEnum, resolveReworkOrderListLifecycleParams, reworkCapabilityAllowed } from '../../../utils/reworkOrderLifecycle';
+import { getReworkOrderLifecycle, buildReworkOrderLifecycleValueEnum, resolveReworkOrderListApiParams, reworkCapabilityAllowed } from '../../../utils/reworkOrderLifecycle';
 import { resolveReworkTypeDisplay } from '../../../utils/reworkOrderType';
 import {formatDateTime, formatDateTimeBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -1466,55 +1466,9 @@ const ReworkOrdersPage: React.FC = () => {
     meta?: UniTableRequestMeta,
   ) => {
     try {
-      const s = searchFormValues ?? {};
-      const lifecycleParams = resolveReworkOrderListLifecycleParams(s);
-      const { sortBy, sortOrder } = extractProTableSort(sort);
-      const orderBy =
-        sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-      const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
-
-      const apiParams: Parameters<typeof reworkOrderApi.list>[0] = {
-        skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
-        limit: params.pageSize ?? 20,
-        ...lifecycleParams,
-        order_by: orderBy,
-        rework_type: s.rework_type as string | undefined,
-        business_type: s.business_type as string | undefined,
-        product_line_code:
-          s.product_line_code != null && String(s.product_line_code).trim()
-            ? String(s.product_line_code).trim()
-            : undefined,
-      };
-
-      if (fuzzyKeyword) {
-        apiParams.keyword = fuzzyKeyword;
-      } else {
-        if (s.code != null && String(s.code).trim()) {
-          apiParams.code = String(s.code).trim();
-        }
-        if (s.product_name != null && String(s.product_name).trim()) {
-          apiParams.product_name = String(s.product_name).trim();
-        }
-        if (s.original_work_order_code != null && String(s.original_work_order_code).trim()) {
-          apiParams.original_work_order_code = String(s.original_work_order_code).trim();
-        }
-      }
-
-      const plannedRange = s.planned_start_date_range as [unknown, unknown] | undefined;
-      if (plannedRange && Array.isArray(plannedRange) && plannedRange[0]) {
-        apiParams.planned_start_from = formatDateTime(plannedRange[0] as string | Date, 'YYYY-MM-DD');
-        apiParams.planned_start_to = plannedRange[1]
-          ? formatDateTime(plannedRange[1] as string | Date, 'YYYY-MM-DD')
-          : apiParams.planned_start_from;
-      }
-
-      const createdRange = s.created_at_range as [unknown, unknown] | undefined;
-      if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-        apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-        apiParams.created_end_date = createdRange[1]
-          ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-          : apiParams.created_start_date;
-      }
+      const apiParams = resolveReworkOrderListApiParams(params, sort, searchFormValues) as Parameters<
+        typeof reworkOrderApi.list
+      >[0];
 
       const response = await reworkOrderApi.list(apiParams);
       const list = response.data ?? [];

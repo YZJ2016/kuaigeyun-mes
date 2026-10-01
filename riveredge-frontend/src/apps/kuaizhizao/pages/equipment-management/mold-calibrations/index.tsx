@@ -293,7 +293,7 @@ const MoldCalibrationsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.moldCalibrations)}
         headerTitle={t(`${P}.title`)}
-        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-calibrations-width-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-calibrations-width-v3"
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
@@ -329,7 +329,6 @@ const MoldCalibrationsPage: React.FC = () => {
               ]
             : []
         }
-        search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
       />
     </ListPageTemplate>

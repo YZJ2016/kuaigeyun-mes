@@ -91,7 +91,7 @@ import {
   isInquiryPendingCompare,
   isInquiryQuoting,
   isInquiryAwarded,
-  resolvePurchaseInquiryListLifecycleParams,
+  resolvePurchaseInquiryListApiParams,
 } from '../../../utils/purchaseInquiryLifecycle';
 import {
   listPurchaseRequisitions,
@@ -1019,46 +1019,11 @@ const PurchaseInquiriesPage: React.FC = () => {
       _filter?: Record<string, unknown>,
       searchFormValues?: Record<string, unknown>,
     ) => {
-      const sf = searchFormValues ?? {};
-      const lifecycleParams = resolvePurchaseInquiryListLifecycleParams(sf, params);
-      const { sortBy, sortOrder } = extractProTableSort(sort);
-      const orderBy =
-        sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-      const fuzzyKeyword = typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-      const apiParams: Parameters<typeof listPurchaseInquiries>[0] = {
-        skip: (((params.current as number) || 1) - 1) * ((params.pageSize as number) || 20),
-        limit: (params.pageSize as number) || 20,
-        ...lifecycleParams,
-        order_by: orderBy,
-        include_items: true,
-      };
-      if (fuzzyKeyword) {
-        apiParams.keyword = fuzzyKeyword;
-      } else {
-        if (sf.inquiry_code != null && String(sf.inquiry_code).trim()) {
-          apiParams.inquiry_code = String(sf.inquiry_code).trim();
-        }
-        if (sf.inquiry_name != null && String(sf.inquiry_name).trim()) {
-          apiParams.inquiry_name = String(sf.inquiry_name).trim();
-        }
-        if (sf.source_code != null && String(sf.source_code).trim()) {
-          apiParams.source_code = String(sf.source_code).trim();
-        }
-      }
-      const deadlineRange = sf.quote_deadline_range as [unknown, unknown] | undefined;
-      if (deadlineRange && Array.isArray(deadlineRange) && deadlineRange[0]) {
-        apiParams.quote_deadline_from = formatDateTime(deadlineRange[0] as string | Date, 'YYYY-MM-DD');
-        apiParams.quote_deadline_to = deadlineRange[1]
-          ? formatDateTime(deadlineRange[1] as string | Date, 'YYYY-MM-DD')
-          : apiParams.quote_deadline_from;
-      }
-      const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
-      if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-        apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-        apiParams.created_end_date = createdRange[1]
-          ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-          : apiParams.created_start_date;
-      }
+      const apiParams = resolvePurchaseInquiryListApiParams(
+        params,
+        sort,
+        searchFormValues,
+      ) as Parameters<typeof listPurchaseInquiries>[0];
       const list = await listPurchaseInquiries(apiParams);
       const inquiries = list.data ?? [];
       // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）

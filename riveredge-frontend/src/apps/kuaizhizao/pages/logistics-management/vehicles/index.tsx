@@ -30,6 +30,7 @@ import {
 import { deleteVehicle, listVehicles, type Vehicle } from '../../../services/logistics';
 import { VehicleFormModal } from '../shared/VehicleFormModal';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
 
 const VehiclesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -192,13 +193,15 @@ const VehiclesPage: React.FC = () => {
         helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.vehicles')}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.vehicles.v7"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.vehicles.v8"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         rowKey="id"
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await listVehicles({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
-            keyword: params.keyword as string | undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
           });
           return { data: res.items, total: res.total, success: true };
         }}

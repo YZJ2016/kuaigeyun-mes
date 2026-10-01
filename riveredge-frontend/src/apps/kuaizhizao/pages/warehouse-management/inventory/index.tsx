@@ -173,11 +173,7 @@ const InventoryPage: React.FC = () => {
   const [includeZeroStock, setIncludeZeroStock] = useState(true);
   const [warehouseFilter, setWarehouseFilter] = useState<'all' | number>('all');
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
-  // setState 后立刻 reload 时闭包仍是旧值；用 ref 保证请求参数与开关一致
-  const includeZeroStockRef = useRef(true);
-  const warehouseFilterRef = useRef(warehouseFilter);
-  includeZeroStockRef.current = includeZeroStock;
-  warehouseFilterRef.current = warehouseFilter;
+  const inventoryToolbarFilterMountedRef = useRef(false);
   const [summary, setSummary] = useState<InventorySummary | undefined>({
     total_records: 0,
     total_quantity: 0,
@@ -213,6 +209,14 @@ const InventoryPage: React.FC = () => {
       cancelled = true;
     };
   }, [messageApi, t]);
+
+  useEffect(() => {
+    if (!inventoryToolbarFilterMountedRef.current) {
+      inventoryToolbarFilterMountedRef.current = true;
+      return;
+    }
+    actionRef.current?.reload();
+  }, [includeZeroStock, warehouseFilter]);
 
   const escapeCsv = (v: unknown) => {
     const s = String(v ?? '');
@@ -289,10 +293,7 @@ const InventoryPage: React.FC = () => {
             { label: t('app.kuaizhizao.warehouseCommon.hideZeroStock'), value: 'hide' },
           ]}
           onChange={(v) => {
-            const next = v === 'show';
-            includeZeroStockRef.current = next;
-            setIncludeZeroStock(next);
-    actionRef.current?.reload();
+            setIncludeZeroStock(v === 'show');
           }}
         />
         <Select
@@ -302,10 +303,7 @@ const InventoryPage: React.FC = () => {
           optionFilterProp="label"
           options={warehouseSelectOptions}
           onChange={(v) => {
-            const next: 'all' | number = v === 'all' ? 'all' : Number(v);
-            warehouseFilterRef.current = next;
-            setWarehouseFilter(next);
-    actionRef.current?.reload();
+            setWarehouseFilter(v === 'all' ? 'all' : Number(v));
           }}
         />
       </Space>
@@ -469,12 +467,12 @@ const InventoryPage: React.FC = () => {
 
   const fetchInventory = async (params: any, sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
     const listParams = resolveInventoryMaterialBalanceListParams(searchFormValues, sort);
-    const zeroStock = includeZeroStockRef.current;
-    const warehouse = warehouseFilterRef.current;
+    const warehouseScope = params.inventoryWarehouseScope as 'all' | number | undefined;
     const baseQuery = {
       ...listParams,
-      include_zero_stock: zeroStock,
-      warehouse_id: warehouse === 'all' ? undefined : warehouse,
+      include_zero_stock: params.include_zero_stock !== false,
+      warehouse_id:
+        warehouseScope === 'all' || warehouseScope == null ? undefined : Number(warehouseScope),
     };
     lastQueryRef.current = baseQuery;
     try {
@@ -565,11 +563,14 @@ const InventoryPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.inventory')}
         headerActions={tableHeaderActions}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-width-v5"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-width-v7"
         actionRef={actionRef}
         columns={columns}
         request={fetchInventory}
-        params={{ warehouse_id: warehouseFilter === 'all' ? undefined : warehouseFilter }}
+        params={{
+          inventoryWarehouseScope: warehouseFilter,
+          include_zero_stock: includeZeroStock,
+        }}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         showSyncButton={toolbarSyncPush.hubVisible}
@@ -629,8 +630,6 @@ const InventoryPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        search={{ labelWidth: 'auto' }}
-        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
       />
     </ListPageTemplate>
   );

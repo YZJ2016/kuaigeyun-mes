@@ -27,6 +27,7 @@ import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../utils/errorHandler';
+import { resolveDataBackupListFilter } from '../../../utils/systemUniTableListFilters';
 import {
   getBackups,
   createBackup,
@@ -833,16 +834,16 @@ const DataBackupsPage: React.FC = () => {
               };
             }
             
-            const { current, pageSize, backup_type, backup_scope, status } = params;
+            const { current, pageSize } = params;
+            const filter = resolveDataBackupListFilter(searchFormValues);
             
             try {
               // 获取当前页数据
               const response = await getBackups({
                 page: current || 1,
                 page_size: pageSize || 20,
-                backup_type: backup_type as string | undefined,
-                backup_scope: backup_scope as string | undefined,
-                status: status as string | undefined,
+                backup_type: filter.backup_type,
+                status: filter.status,
               });
               
               const isActiveJob = (item: DataBackup) =>

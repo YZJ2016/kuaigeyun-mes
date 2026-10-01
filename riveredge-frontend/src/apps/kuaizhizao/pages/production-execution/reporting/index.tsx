@@ -116,7 +116,12 @@ import {
   convertBaseQtyToProductionDisplay,
   convertProductionInputToBaseQty,
 } from '../../../../../utils/materialScenarioUnit';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchDateTimeRange,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -1825,7 +1830,7 @@ const ReportingPage: React.FC = () => {
         headerTitle={t('app.kuaizhizao.menu.production-execution.reporting')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.reporting)}
-        columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting-width-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting-width-v4"
         actionRef={actionRef}
         rowKey="id"
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
@@ -1835,39 +1840,39 @@ const ReportingPage: React.FC = () => {
         pinnedTabsValueEnum={reportingStatusValueEnum}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           try {
-            const s = (searchFormValues ?? {}) as Record<string, unknown>;
-            const statusParams = resolveReportingListStatusParams(s);
+            const statusParams = resolveReportingListStatusParams(searchFormValues);
             const { sortBy, sortOrder } = extractProTableSort(sort);
             const orderBy =
               sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+            const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
 
             const apiParams: Parameters<typeof reportingApi.list>[0] = {
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
               limit: params.pageSize ?? 20,
               ...statusParams,
               order_by: orderBy,
-              operation_name: s.operation_name as string | undefined,
-              worker_name: s.worker_name as string | undefined,
+              operation_name: pickSearchString(searchFormValues, 'operation_name'),
+              worker_name: pickSearchString(searchFormValues, 'worker_name'),
             };
 
             if (fuzzyKeyword) {
               apiParams.keyword = fuzzyKeyword;
             } else {
-              if (s.work_order_code != null && String(s.work_order_code).trim()) {
-                apiParams.work_order_code = String(s.work_order_code).trim();
-              }
-              if (s.work_order_name != null && String(s.work_order_name).trim()) {
-                apiParams.work_order_name = String(s.work_order_name).trim();
-              }
+              const workOrderCode = pickSearchString(searchFormValues, 'work_order_code');
+              const workOrderName = pickSearchString(searchFormValues, 'work_order_name');
+              if (workOrderCode) apiParams.work_order_code = workOrderCode;
+              if (workOrderName) apiParams.work_order_name = workOrderName;
             }
 
-            const reportedRange = s.reported_at_range as [unknown, unknown] | undefined;
-            if (reportedRange && Array.isArray(reportedRange) && reportedRange[0]) {
-              apiParams.reported_at_start = formatDateTime(reportedRange[0] as string | Date, 'YYYY-MM-DD HH:mm:ss');
-              apiParams.reported_at_end = reportedRange[1]
-                ? formatDateTime(reportedRange[1] as string | Date, 'YYYY-MM-DD HH:mm:ss')
-                : apiParams.reported_at_start;
+            const { from: reportedAtStart, to: reportedAtEnd } = pickSearchDateTimeRange(
+              searchFormValues,
+              'reported_at_start',
+              'reported_at_end',
+              'reported_at_range',
+            );
+            if (reportedAtStart) {
+              apiParams.reported_at_start = reportedAtStart;
+              apiParams.reported_at_end = reportedAtEnd;
             }
 
             const result = await reportingApi.list(apiParams);

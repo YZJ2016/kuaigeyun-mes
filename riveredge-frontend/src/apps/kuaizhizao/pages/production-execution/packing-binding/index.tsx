@@ -74,7 +74,7 @@ const LazyQRCodeGenerator = lazy(() =>
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
-import { getPackingBindingLifecycle, buildPackingBindingMethodValueEnum, resolvePackingBindingListMethodParams, buildPackingBindingSourceValueEnum, resolvePackingBindingListSourceParams } from '../../../utils/packingBindingLifecycle';
+import { getPackingBindingLifecycle, buildPackingBindingMethodValueEnum, buildPackingBindingSourceValueEnum, resolvePackingBindingListApiParams } from '../../../utils/packingBindingLifecycle';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
@@ -1380,63 +1380,9 @@ const PackingBindingPage: React.FC = () => {
     searchFormValues?: Record<string, unknown>,
   ) => {
     try {
-      const s = searchFormValues ?? {};
-      const methodParams = resolvePackingBindingListMethodParams(s);
-      const sourceParams = resolvePackingBindingListSourceParams(s);
-      const { sortBy, sortOrder } = extractProTableSort(sort);
-      const orderBy =
-        sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-      const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
-
-      const apiParams: Parameters<typeof packingBindingApi.listPage>[0] = {
-        skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
-        limit: params.pageSize ?? 20,
-        ...methodParams,
-        ...sourceParams,
-        order_by: orderBy,
-        receipt_id: params.receipt_id,
-        product_id: params.product_id,
-        uuid: params.uuid as string | undefined,
-      };
-
-      if (fuzzyKeyword) {
-        apiParams.keyword = fuzzyKeyword;
-      } else {
-        if (s.box_no != null && String(s.box_no).trim()) {
-          apiParams.box_no = String(s.box_no).trim();
-        }
-        if (s.product_code != null && String(s.product_code).trim()) {
-          apiParams.product_code = String(s.product_code).trim();
-        }
-        if (s.product_name != null && String(s.product_name).trim()) {
-          apiParams.product_name = String(s.product_name).trim();
-        }
-        if (s.product_serial_no != null && String(s.product_serial_no).trim()) {
-          apiParams.product_serial_no = String(s.product_serial_no).trim();
-        }
-        if (s.packing_material_name != null && String(s.packing_material_name).trim()) {
-          apiParams.packing_material_name = String(s.packing_material_name).trim();
-        }
-        if (s.seal_status != null && String(s.seal_status).trim()) {
-          apiParams.seal_status = String(s.seal_status).trim();
-        }
-      }
-
-      const boundRange = s.bound_at_range as [unknown, unknown] | undefined;
-      if (boundRange && Array.isArray(boundRange) && boundRange[0]) {
-        apiParams.bound_at_start_date = formatDateTime(boundRange[0] as string | Date, 'YYYY-MM-DD');
-        apiParams.bound_at_end_date = boundRange[1]
-          ? formatDateTime(boundRange[1] as string | Date, 'YYYY-MM-DD')
-          : apiParams.bound_at_start_date;
-      }
-
-      const createdRange = s.created_at_range as [unknown, unknown] | undefined;
-      if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-        apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-        apiParams.created_end_date = createdRange[1]
-          ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-          : apiParams.created_start_date;
-      }
+      const apiParams = resolvePackingBindingListApiParams(params, sort, searchFormValues) as Parameters<
+        typeof packingBindingApi.listPage
+      >[0];
 
       const result = (await packingBindingApi.listPage(apiParams)) as PackingBindingPageResult;
       const data = Array.isArray(result?.data) ? result.data : [];
