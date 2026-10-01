@@ -343,14 +343,31 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         ...restValues,
         contacts: normalizeCustomerContactsForSubmit(standardValues.contacts ?? values.contacts),
       };
-      const contactsForCheck = (payload.contacts as Array<{ phone?: string; email?: string }>) || [];
+      const contactsForCheck =
+        (payload.contacts as Array<{
+          contactPerson?: string;
+          contact_person?: string;
+          contactTitle?: string;
+          contact_title?: string;
+          phone?: string;
+          email?: string;
+        }>) || [];
+      const hasContactIdentity =
+        Boolean(String(payload.contactPerson || payload.contact_person || '').trim()) ||
+        Boolean(String(payload.contactTitle || payload.contact_title || '').trim()) ||
+        contactsForCheck.some(
+          (c) =>
+            Boolean(String(c?.contactPerson || c?.contact_person || '').trim()) ||
+            Boolean(String(c?.contactTitle || c?.contact_title || '').trim()),
+        );
       const hasPhoneOrEmail =
         Boolean(String(payload.phone || '').trim()) ||
         Boolean(String(payload.email || '').trim()) ||
         contactsForCheck.some(
           (c) => Boolean(String(c?.phone || '').trim()) || Boolean(String(c?.email || '').trim()),
         );
-      if (!hasPhoneOrEmail) {
+      // 未填联系人时不强制手机/邮箱；填写联系人后须至少一项
+      if (hasContactIdentity && !hasPhoneOrEmail) {
         messageApi.error(t('app.kuaizhizao.customerPool.phoneOrEmailRequired'));
         throw new Error('phone or email required');
       }

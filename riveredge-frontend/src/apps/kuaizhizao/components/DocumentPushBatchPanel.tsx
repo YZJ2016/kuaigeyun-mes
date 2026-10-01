@@ -34,6 +34,9 @@ export const DOCUMENT_PUSH_PROFILE_LABEL_KEYS: Record<string, string> = {
   kingdee_sal_saleorder: 'app.kuaizhizao.documentPush.profile.kingdee_sal_saleorder',
   kingdee_pur_purchaseorder: 'app.kuaizhizao.documentPush.profile.kingdee_pur_purchaseorder',
   kingdee_stk_miscellaneous: 'app.kuaizhizao.documentPush.profile.kingdee_stk_miscellaneous',
+  kingdee_bd_material: 'app.kuaizhizao.documentPush.profile.kingdee_bd_material',
+  kingdee_eng_bom: 'app.kuaizhizao.documentPush.profile.kingdee_eng_bom',
+  kingdee_eng_process: 'app.kuaizhizao.documentPush.profile.kingdee_eng_process',
 };
 
 export interface DocumentPushTargetBinding {
@@ -199,10 +202,12 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   targetProfilesRef.current = targetProfiles;
   profileOptionsRef.current = profileOptions;
 
-  const needsKingdeeConnector = useMemo(
-    () => targetProfiles.some((p) => kingdeeProfiles.includes(p)),
-    [kingdeeProfiles, targetProfiles],
-  );
+  const needsKingdeeConnector = useMemo(() => {
+    const profiles = new Set(targetProfiles);
+    if (settingProfile) profiles.add(settingProfile);
+    if (pendingNewProfile) profiles.add(pendingNewProfile);
+    return [...profiles].some((p) => kingdeeProfiles.includes(p));
+  }, [kingdeeProfiles, pendingNewProfile, settingProfile, targetProfiles]);
 
   const selectedConnector = useMemo(
     () => connectors.find((row) => row.code === connectionCode),

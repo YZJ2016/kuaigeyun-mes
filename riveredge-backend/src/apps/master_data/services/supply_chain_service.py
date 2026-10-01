@@ -67,18 +67,41 @@ def _strip_customer_pool_managed_fields(data: Dict[str, Any]) -> None:
 
 
 def _assert_customer_phone_or_email(data: Dict[str, Any]) -> None:
-    """手机号与邮箱至少填一项（含 contacts 明细首条）。"""
+    """有联系人身份信息时，手机号与邮箱至少填一项；无联系人则不强制（同步可仅编码+名称）。"""
     phone = str(data.get("phone") or "").strip()
     email = str(data.get("email") or "").strip()
     if phone or email:
         return
+
+    contact_rows: List[Dict[str, Any]] = []
     contacts = data.get("contacts")
     if isinstance(contacts, list):
         for row in contacts:
-            if not isinstance(row, dict):
-                continue
-            if str(row.get("phone") or "").strip() or str(row.get("email") or "").strip():
-                return
+            if isinstance(row, dict):
+                contact_rows.append(row)
+
+    def _row_phone_or_email(row: Dict[str, Any]) -> bool:
+        return bool(
+            str(row.get("phone") or "").strip()
+            or str(row.get("email") or "").strip()
+        )
+
+    def _row_has_identity(row: Dict[str, Any]) -> bool:
+        return bool(
+            str(row.get("contact_person") or row.get("contactPerson") or "").strip()
+            or str(row.get("contact_title") or row.get("contactTitle") or "").strip()
+        )
+
+    if any(_row_phone_or_email(row) for row in contact_rows):
+        return
+
+    has_identity = bool(
+        str(data.get("contact_person") or "").strip()
+        or str(data.get("contact_title") or "").strip()
+        or any(_row_has_identity(row) for row in contact_rows)
+    )
+    if not has_identity:
+        return
     raise ValidationError("手机号与邮箱至少填写一项")
 
 
@@ -344,6 +367,8 @@ class SupplyChainService:
         tenant_id: int,
         data: CustomerCreate,
         current_user: User,
+        *,
+        require_contact_channel: bool = True,
     ) -> CustomerResponse:
         """
         创建客户
@@ -393,7 +418,8 @@ class SupplyChainService:
             create_data["market_scope"] = "domestic"
 
         _apply_partner_contacts_payload(create_data)
-        _assert_customer_phone_or_email(create_data)
+        if require_contact_channel:
+            _assert_customer_phone_or_email(create_data)
 
         try:
             apply_create_audit(create_data, current_user)
@@ -549,6 +575,8 @@ class SupplyChainService:
         customer_uuid: str,
         data: CustomerUpdate,
         current_user: User,
+        *,
+        require_contact_channel: bool = True,
     ) -> CustomerResponse:
         """
         更新客户
@@ -602,11 +630,21 @@ class SupplyChainService:
         salesman_changed = salesman_field_present and salesman_change != customer.salesman_id
 
         _apply_partner_contacts_payload(update_data)
-        contact_keys = ("phone", "email", "contacts")
-        if any(k in update_data for k in contact_keys):
+        contact_keys = ("phone", "email", "contacts", "contact_person", "contact_title")
+        if require_contact_channel and any(k in update_data for k in contact_keys):
             merged_contact = {
                 "phone": update_data["phone"] if "phone" in update_data else customer.phone,
                 "email": update_data["email"] if "email" in update_data else customer.email,
+                "contact_person": (
+                    update_data["contact_person"]
+                    if "contact_person" in update_data
+                    else customer.contact_person
+                ),
+                "contact_title": (
+                    update_data["contact_title"]
+                    if "contact_title" in update_data
+                    else customer.contact_title
+                ),
                 "contacts": update_data["contacts"] if "contacts" in update_data else customer.contacts,
             }
             _assert_customer_phone_or_email(merged_contact)

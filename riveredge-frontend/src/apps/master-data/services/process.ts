@@ -605,3 +605,30 @@ export interface LoadOperationPresetResponse {
   message: string;
 }
 
+import type { MasterDataSyncBinding, MasterDataSyncFromSourceResult } from './supply-chain';
+
+export async function getOperationSyncBinding(): Promise<MasterDataSyncBinding> {
+  return api.get('/apps/master-data/process/operations/sync-binding');
+}
+
+export async function syncOperationsFromSource(payload: {
+  source_type?: 'api' | 'dataset';
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+}): Promise<MasterDataSyncFromSourceResult> {
+  return apiRequest<MasterDataSyncFromSourceResult>(
+    '/apps/master-data/process/operations/sync-from-source',
+    {
+      method: 'POST',
+      data: payload,
+      timeoutMs: 600_000,
+    },
+  );
+}
+

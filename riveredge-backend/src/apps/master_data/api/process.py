@@ -268,6 +268,68 @@ async def delete_defect_type(
 
 # ==================== 工序相关接口 ====================
 
+operation_sync_service = None
+
+
+def _operation_sync_service():
+    global operation_sync_service
+    if operation_sync_service is None:
+        from apps.master_data.services.operation_sync_service import OperationSyncService
+        operation_sync_service = OperationSyncService()
+    return operation_sync_service
+
+
+@router.get(
+    "/operations/sync-binding",
+    summary="工序同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("process:operation"))],
+)
+async def get_operation_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    from apps.master_data.schemas.master_data_sync import MasterDataSyncBindingOut
+    return await _operation_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/operations/sync-binding",
+    summary="保存工序同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("process:operation"))],
+)
+async def put_operation_sync_binding(
+    body: dict,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    from apps.master_data.schemas.master_data_sync import MasterDataSyncBindingUpsert
+    try:
+        return await _operation_sync_service().upsert_binding(
+            tenant_id, MasterDataSyncBindingUpsert.model_validate(body)
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/operations/sync-from-source",
+    summary="从数据接口或数据集同步工序",
+    dependencies=[Depends(require_master_data_module_access("process:operation"))],
+)
+async def sync_operations_from_source(
+    body: dict,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    from apps.master_data.schemas.master_data_sync import MasterDataSyncFromSourceRequest
+    try:
+        return await _operation_sync_service().sync_from_source(
+            tenant_id,
+            current_user,
+            MasterDataSyncFromSourceRequest.model_validate(body),
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
 @router.post("/operations", response_model=OperationResponse, summary="Create operation")
 async def create_operation(
     data: OperationCreate,
