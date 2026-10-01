@@ -1218,6 +1218,7 @@ class BOMResponse(BOMBase):
 
 class BOMGroupSummary(BaseModel):
     """BOM 分组摘要（按 material_id + version 一组，用于列表树按需加载）"""
+    id: Optional[int] = Field(None, description="版本组代表行 ID（MIN(id)，外推 source_id）")
     material_id: int = Field(..., description="主物料ID")
     version: str = Field(..., description="版本号")
     bom_code: Optional[str] = Field(None, max_length=100, description="BOM编码")

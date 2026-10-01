@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import SyncFromSourceModal from '../../../components/sync-from-source-modal';
 import type { SyncFromSourceResult } from '../../../components/sync-from-source-modal/types';
-import { createMaterialSyncConfig } from '../materialSyncConfig';
+import { createEngineeringBomSyncConfig } from '../bomSyncConfig';
 
-export interface MaterialSyncFromSourceModalProps {
+export interface BomSyncFromSourceModalProps {
   open: boolean;
   onClose: () => void;
   onComplete?: (result: SyncFromSourceResult) => void;
@@ -11,9 +11,9 @@ export interface MaterialSyncFromSourceModalProps {
   contentOnly?: boolean;
 }
 
-export const MaterialSyncFromSourceModal: React.FC<MaterialSyncFromSourceModalProps> = (props) => {
-  const config = useMemo(() => createMaterialSyncConfig(), []);
+export const BomSyncFromSourceModal: React.FC<BomSyncFromSourceModalProps> = (props) => {
+  const config = useMemo(() => createEngineeringBomSyncConfig(), []);
   return <SyncFromSourceModal {...props} config={config} />;
 };
 
-export default MaterialSyncFromSourceModal;
+export default BomSyncFromSourceModal;
