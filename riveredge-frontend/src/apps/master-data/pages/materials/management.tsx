@@ -121,7 +121,10 @@ import {
 import { MaterialForm } from '../../components/MaterialForm'
 import MaterialSyncFromSourceModal from '../../components/MaterialSyncFromSourceModal'
 import MaterialGroupSyncFromSourceModal from '../../components/MaterialGroupSyncFromSourceModal'
+import MaterialDocumentPushPanel from '../../components/MaterialDocumentPushPanel'
 import { SyncFreshnessBadge } from '../../../../components/sync-from-source-modal/SyncFreshnessBadge'
+import { SyncPushHubButton } from '../../../../components/sync-push-hub'
+import { useToolbarSyncPushFlags } from '../../../../hooks/useToolbarSyncPushFlags'
 import { MaterialGroupFormModal } from '../../components/MaterialGroupFormModal'
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../../constants/materialDefaults'
 import {
@@ -656,6 +659,7 @@ const MaterialsManagementPage: React.FC = () => {
   const [formPageError, setFormPageError] = useState<string | null>(null)
   const pagePermissionResource = usePagePermissionResource(location.pathname)
   const { canImport, canCreate } = useResourcePermissions(pagePermissionResource)
+  const toolbarSyncPush = useToolbarSyncPushFlags('master-data:material')
   const drawingPerms = useResourcePermissions('master-data:process:drawing')
   const processRoutePerms = useResourcePermissions('master-data:process:route')
   const customerPerms = useResourcePermissions('master-data:supply-chain:customer')
@@ -671,15 +675,33 @@ const MaterialsManagementPage: React.FC = () => {
   // 右侧物料列表状态
   const actionRef = useRef<ActionType>(null)
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({})
+  const pageMaterialsRef = useRef<Material[]>([])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [activeImportKind, setActiveImportKind] = useState<MaterialSplitImportKind | null>(null)
   const [importModalVisible, setImportModalVisible] = useState(false)
-  const [syncModalVisible, setSyncModalVisible] = useState(false)
   const [groupSyncModalVisible, setGroupSyncModalVisible] = useState(false)
   const [syncFreshnessKey, setSyncFreshnessKey] = useState(0)
   const [groupSyncFreshnessKey, setGroupSyncFreshnessKey] = useState(0)
   const loadMaterialSyncBinding = useCallback(() => getMaterialSyncBinding(), [])
   const loadMaterialGroupSyncBinding = useCallback(() => getMaterialGroupSyncBinding(), [])
+
+  const resolveMaterialIdsFromRowKeys = useCallback((keys: React.Key[]): number[] => {
+    const byUuid = new Map(
+      pageMaterialsRef.current
+        .filter((row) => row.uuid && Number(row.id) > 0)
+        .map((row) => [row.uuid, Number(row.id)] as const),
+    )
+    const seen = new Set<number>()
+    const ids: number[] = []
+    for (const key of keys) {
+      const fromUuid = byUuid.get(String(key))
+      const numeric = fromUuid ?? Number(key)
+      if (!Number.isFinite(numeric) || numeric <= 0 || seen.has(numeric)) continue
+      seen.add(numeric)
+      ids.push(numeric)
+    }
+    return ids
+  }, [])
 
   const handleSyncComplete = useCallback(() => {
     setSyncFreshnessKey((key) => key + 1)
@@ -4645,6 +4667,9 @@ const MaterialsManagementPage: React.FC = () => {
                 }
                 }}
                 rowKey="uuid"
+                onTableDataChange={(rows) => {
+                  pageMaterialsRef.current = rows || []
+                }}
                 defaultExpandAllRows
                 showAdvancedSearch={true}
                 skipFuzzyPinyinClientFilter
@@ -4655,17 +4680,47 @@ const MaterialsManagementPage: React.FC = () => {
                   onChange: setSelectedRowKeys,
                 }}
                 showImportButton={false}
-                showSyncButton={canCreate}
-                onSync={() => setSyncModalVisible(true)}
+                showSyncButton={toolbarSyncPush.hubVisible}
+                onSync={() => undefined}
                 syncToolbarExtra={
-                  canCreate
-                    ? (syncButton) => (
-                        <SyncFreshnessBadge
-                          getBinding={loadMaterialSyncBinding}
-                          refreshKey={syncFreshnessKey}
-                        >
-                          {syncButton}
-                        </SyncFreshnessBadge>
+                  toolbarSyncPush.hubVisible
+                    ? () => (
+                        <SyncPushHubButton
+                          syncEnabled={toolbarSyncPush.syncEnabled}
+                          pushEnabled={toolbarSyncPush.pushEnabled}
+                          size="middle"
+                          wrapButton={(hubButton) => (
+                            <SyncFreshnessBadge
+                              getBinding={loadMaterialSyncBinding}
+                              refreshKey={syncFreshnessKey}
+                            >
+                              {hubButton}
+                            </SyncFreshnessBadge>
+                          )}
+                          renderSyncPanel={({ active, close }) => (
+                            <MaterialSyncFromSourceModal
+                              contentOnly
+                              open={active}
+                              onClose={close}
+                              onComplete={() => {
+                                handleSyncComplete()
+                                close()
+                              }}
+                            />
+                          )}
+                          renderPushPanel={({ active, close }) => (
+                            <MaterialDocumentPushPanel
+                              embedded
+                              open={active}
+                              onClose={close}
+                              materialIds={resolveMaterialIdsFromRowKeys(selectedRowKeys)}
+                              onComplete={() => {
+                                handleSyncComplete()
+                                close()
+                              }}
+                            />
+                          )}
+                        />
                       )
                     : undefined
                 }
@@ -5741,12 +5796,6 @@ const MaterialsManagementPage: React.FC = () => {
           />
         </Suspense>
       )}
-
-      <MaterialSyncFromSourceModal
-        open={syncModalVisible}
-        onClose={() => setSyncModalVisible(false)}
-        onComplete={handleSyncComplete}
-      />
 
       <MaterialGroupSyncFromSourceModal
         open={groupSyncModalVisible}

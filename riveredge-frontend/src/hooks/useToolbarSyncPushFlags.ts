@@ -26,7 +26,10 @@ export type ToolbarSyncPushResource =
   | 'kuaizhizao:production-execution-reporting'
   | 'kuaizhizao:sales-order'
   | 'kuaizhizao:purchase-order'
-  | 'kuaizhizao:inventory';
+  | 'kuaizhizao:inventory'
+  | 'master-data:material'
+  | 'master-data:process:engineering-bom'
+  | 'master-data:process:operation';
 
 /** @deprecated 旧 category 名 → 资源前缀（兼容未改完的调用） */
 const CATEGORY_TO_RESOURCE: Record<string, ToolbarSyncPushResource> = {

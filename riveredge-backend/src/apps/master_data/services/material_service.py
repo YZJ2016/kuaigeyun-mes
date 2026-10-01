@@ -4554,7 +4554,8 @@ class MaterialService:
             )
         filter_sql = "".join(extra)
         grouped_sql = f'''
-            SELECT b.material_id, b.version,
+            SELECT MIN(b.id) AS id,
+                   b.material_id, b.version,
                    MAX(b.bom_code) AS bom_code,
                    MAX(b.bom_name) AS bom_name,
                    MAX(b.base_quantity) AS base_quantity,

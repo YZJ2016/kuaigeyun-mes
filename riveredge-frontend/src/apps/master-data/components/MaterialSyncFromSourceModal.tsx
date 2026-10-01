@@ -8,6 +8,7 @@ export interface MaterialSyncFromSourceModalProps {
   onClose: () => void;
   onComplete?: (result: SyncFromSourceResult) => void;
   zIndex?: number;
+  contentOnly?: boolean;
 }
 
 export const MaterialSyncFromSourceModal: React.FC<MaterialSyncFromSourceModalProps> = (props) => {
