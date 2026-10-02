@@ -2348,7 +2348,16 @@ collect_caddy_extra_proxies_config() {
         printf '%s\n' "${entries[@]}" | save_caddy_extra_proxy_entries || return 1
     fi
 
-    read -rp "是否立即 reload Caddy 使反代生效？ [Y/n]: " reload_input
+    if [ "${CADDY_CONFIG_SKIP_RELOAD:-0}" = "1" ]; then
+        return 0
+    fi
+    configure_offer_caddy_reload
+}
+
+configure_offer_caddy_reload() {
+    local reload_input
+    [ "$DEPLOY_MODE" = "prod" ] || return 0
+    read -rp "是否立即 reload Caddy 使配置生效？ [Y/n]: " reload_input
     case "${reload_input:-Y}" in
         n|N|no|No|NO)
             log_info "稍后执行 ./fast-deploy/deploy.sh start 时会应用"
@@ -2481,29 +2490,16 @@ configure_prompt_database_edit() {
     fi
 }
 
-cmd_configure() {
-    log_info "配置应用环境..."
-    apply_cn_mirrors
-    if [ ! -f "$ENV_FILE" ]; then
-        cp "$BACKEND_DIR/.env.example" "$ENV_FILE"
-        log_info "已从 .env.example 创建 $ENV_FILE"
+configure_section_database() {
+    local db_user db_host db_port db_name input
+    echo ""
+    log_info "[数据库]"
+    if db_config_complete && [ "${CONFIGURE_FORCE_DB_EDIT:-0}" != "1" ] && [ "${CONFIGURE_ALLOW_DB_EDIT:-0}" != "1" ]; then
+        log_info "数据库已配置，跳过（菜单中选此项或设置 CONFIGURE_ALLOW_DB_EDIT=1 可改）"
+        return 0
     fi
-    load_deploy_env
-
-    local db_user db_host db_port db_name admin_pass admin_user input detected_ip server_ip
-
-    if db_config_complete && [ "${CONFIGURE_ALLOW_DB_EDIT:-0}" = "1" ]; then
+    if db_config_complete; then
         configure_prompt_database_edit
-        db_user="$(read_env_value DB_USER)"
-        db_host="$(read_env_value DB_HOST)"
-        db_port="$(read_env_value DB_PORT)"
-        db_name="$(read_env_value DB_NAME)"
-    elif db_config_complete; then
-        log_info "数据库已在向导/此前步骤配置，跳过数据库问答"
-        db_user="$(read_env_value DB_USER)"
-        db_host="$(read_env_value DB_HOST)"
-        db_port="$(read_env_value DB_PORT)"
-        db_name="$(read_env_value DB_NAME)"
     else
         db_user="$(read_env_value DB_USER || true)"
         [ -z "$db_user" ] && db_user="postgres"
@@ -2531,7 +2527,12 @@ cmd_configure() {
 
         configure_postgres_password
     fi
+}
 
+configure_section_admin() {
+    local admin_user admin_pass input
+    echo ""
+    log_info "[平台超管]"
     admin_user="$(read_env_value PLATFORM_SUPERADMIN_USERNAME || true)"
     [ -z "$admin_user" ] && admin_user="infra_admin"
     if ! admin_config_complete; then
@@ -2539,12 +2540,12 @@ cmd_configure() {
         admin_user="${input:-$admin_user}"
         set_env_value PLATFORM_SUPERADMIN_USERNAME "$admin_user"
         read -rsp "平台超级管理员密码: " admin_pass; echo
-        [ ${#admin_pass} -lt 8 ] && { log_error "超管密码至少 8 位"; exit 1; }
+        [ ${#admin_pass} -lt 8 ] && { log_error "超管密码至少 8 位"; return 1; }
         set_env_value PLATFORM_SUPERADMIN_PASSWORD "$admin_pass"
     else
         read -rsp "平台超管密码 [已配置，回车跳过 / 输入新密码]: " input; echo
         if [ -n "$input" ]; then
-            [ ${#input} -lt 8 ] && { log_error "超管密码至少 8 位"; exit 1; }
+            [ ${#input} -lt 8 ] && { log_error "超管密码至少 8 位"; return 1; }
             set_env_value PLATFORM_SUPERADMIN_PASSWORD "$input"
         fi
         read -rp "平台超管用户名 [${admin_user}，回车跳过]: " input
@@ -2552,7 +2553,12 @@ cmd_configure() {
             set_env_value PLATFORM_SUPERADMIN_USERNAME "$input"
         fi
     fi
+}
 
+configure_section_server_ip() {
+    local detected_ip server_ip input
+    echo ""
+    log_info "[服务器 IP]"
     detected_ip="$(detect_server_ip)"
     server_ip="$(read_deploy_env_value SERVER_IP || true)"
     [ -z "$server_ip" ] && server_ip="$detected_ip"
@@ -2560,12 +2566,114 @@ cmd_configure() {
     read -rp "服务器 IP (浏览器访问地址) [${server_ip}]: " input
     server_ip="${input:-$server_ip}"
     set_deploy_env_value SERVER_IP "$server_ip"
+    load_deploy_env
+}
 
+configure_run_all_sections() {
+    local skip_reload="${1:-0}"
+    CONFIGURE_FORCE_DB_EDIT=1 configure_section_database || return 1
+    configure_section_admin || return 1
+    configure_section_server_ip || return 1
     if [ "$DEPLOY_MODE" = "prod" ]; then
-        collect_caddy_proxy_port_config || exit 1
+        collect_caddy_proxy_port_config || return 1
         echo ""
-        collect_prod_domain_https_config || exit 1
-        collect_caddy_extra_proxies_config || exit 1
+        collect_prod_domain_https_config || return 1
+        if [ "$skip_reload" = "1" ]; then
+            CADDY_CONFIG_SKIP_RELOAD=1 collect_caddy_extra_proxies_config || return 1
+        else
+            collect_caddy_extra_proxies_config || return 1
+        fi
+    fi
+}
+
+configure_menu_loop() {
+    local choice need_caddy_reload=0
+    load_deploy_env
+
+    while true; do
+        echo ""
+        log_info "修改配置 — 选择要调整的分类（可多次挑选）"
+        echo "    1) 数据库"
+        echo "    2) 平台超管账号"
+        echo "    3) 服务器 IP"
+        if [ "$DEPLOY_MODE" = "prod" ]; then
+            echo "    4) Caddy 端口 (PROXY_PORT)"
+            echo "    5) 域名与 HTTPS"
+            echo "    6) 额外反向代理"
+        fi
+        echo "    a) 全部设置（按顺序走完以上各项）"
+        echo "    0) 完成并退出"
+        read -rp "请选择: " choice
+        choice="$(printf '%s' "${choice:-}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        case "$choice" in
+            1)
+                CONFIGURE_FORCE_DB_EDIT=1 configure_section_database || return 1
+                ;;
+            2)
+                configure_section_admin || return 1
+                ;;
+            3)
+                configure_section_server_ip || return 1
+                ;;
+            4)
+                if [ "$DEPLOY_MODE" != "prod" ]; then
+                    log_warn "仅生产模式可配置 Caddy 端口"
+                    continue
+                fi
+                collect_caddy_proxy_port_config || return 1
+                need_caddy_reload=1
+                ;;
+            5)
+                if [ "$DEPLOY_MODE" != "prod" ]; then
+                    log_warn "仅生产模式可配置域名"
+                    continue
+                fi
+                echo ""
+                collect_prod_domain_https_config || return 1
+                need_caddy_reload=1
+                ;;
+            6)
+                if [ "$DEPLOY_MODE" != "prod" ]; then
+                    log_warn "仅生产模式可配置额外反代"
+                    continue
+                fi
+                CADDY_CONFIG_SKIP_RELOAD=1 collect_caddy_extra_proxies_config || return 1
+                need_caddy_reload=1
+                ;;
+            a|A|all)
+                configure_run_all_sections 1 || return 1
+                need_caddy_reload=1
+                ;;
+            0|q|Q|"")
+                break
+                ;;
+            *)
+                log_warn "未知选项: ${choice}"
+                ;;
+        esac
+    done
+
+    if [ "$need_caddy_reload" = "1" ]; then
+        configure_offer_caddy_reload
+    fi
+}
+
+cmd_configure() {
+    log_info "配置应用环境..."
+    apply_cn_mirrors
+    if [ ! -f "$ENV_FILE" ]; then
+        cp "$BACKEND_DIR/.env.example" "$ENV_FILE"
+        log_info "已从 .env.example 创建 $ENV_FILE"
+    fi
+    [ -f "$DEPLOY_ENV_FILE" ] || cp "$DEPLOY_ENV_EXAMPLE" "$DEPLOY_ENV_FILE"
+    load_deploy_env
+
+    # 向导「修改配置」或已具备库/超管时：分类菜单；首次缺配置时仍走全部设置
+    if [ "${CONFIGURE_MENU:-0}" = "1" ] || [ "${CONFIGURE_ALLOW_DB_EDIT:-0}" = "1" ] \
+        || { db_config_complete && admin_config_complete; }; then
+        configure_menu_loop || exit 1
+    else
+        configure_run_all_sections 0 || exit 1
     fi
 
     apply_app_config

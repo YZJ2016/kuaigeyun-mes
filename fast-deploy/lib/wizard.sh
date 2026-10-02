@@ -385,7 +385,7 @@ wizard_show_home_panel() {
     wizard_panel_mid
     wizard_panel_section "DEPLOY 部署"
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
-    wizard_panel_menu_item "2" "修改配置" "修改数据库、超管、Caddy 端口、域名与额外反代"
+    wizard_panel_menu_item "2" "修改配置" "分类挑选或全部设置（库/超管/IP/Caddy/反代）"
     wizard_panel_menu_item "3" "更新系统" "fetch+reset 拉最新 → 迁移重启（低配固定传统部署）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
     wizard_panel_menu_item "5" "选装依赖" "发票 OCR / PDF 打印 / KU-AI / 敏感词 / LibreOffice"
@@ -2178,7 +2178,7 @@ cmd_wizard_configure() {
     ensure_logs_dir
     load_deploy_env
     apply_cn_mirrors
-    CONFIGURE_ALLOW_DB_EDIT=1 cmd_configure
+    CONFIGURE_MENU=1 CONFIGURE_ALLOW_DB_EDIT=1 cmd_configure
 
     wizard_stage 3 "完成"
     wizard_show_summary
