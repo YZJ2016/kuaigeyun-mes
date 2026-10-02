@@ -2266,8 +2266,8 @@ collect_caddy_extra_proxies_config() {
 
     echo ""
     log_info "额外反向代理：把其它域名转到内网服务（与本项目主站并列）"
-    echo "    示例站点: http://xingjie.lzh-tech.com"
-    echo "    示例上游: 192.168.2.103:8888"
+    echo "    示例站点: http://app.example.com"
+    echo "    示例上游: 192.168.1.10:8888"
     echo "    http://域名 = 仅 HTTP；裸域名 = 自动 HTTPS"
 
     while true; do
@@ -2292,10 +2292,10 @@ collect_caddy_extra_proxies_config() {
         choice="${choice:-0}"
         case "$choice" in
             a|A|add)
-                read -rp "站点 (如 http://xingjie.lzh-tech.com): " site
+                read -rp "站点 (如 http://app.example.com): " site
                 site="$(printf '%s' "$site" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's|/*$||')"
                 [ -n "$site" ] || { log_warn "站点不能为空"; continue; }
-                read -rp "上游 host:port (如 192.168.2.103:8888): " upstream
+                read -rp "上游 host:port (如 192.168.1.10:8888): " upstream
                 upstream="$(printf '%s' "$upstream" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's|/*$||')"
                 entry="${site}->${upstream}"
                 site=""

@@ -7,5 +7,5 @@
 # - https://host 或裸域名 = Caddy 自动 HTTPS（需 DNS 指向本机且 80/443 可达）
 #
 # 示例：
-# http://xingjie.lzh-tech.com -> 192.168.2.103:8888
-# app.example.com -> 192.168.1.10:80
+# http://app.example.com -> 192.168.1.10:8888
+# other.example.com -> 192.168.1.20:80
