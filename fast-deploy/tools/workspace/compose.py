@@ -82,14 +82,15 @@ def _remove_target(path: Path) -> None:
     path.unlink()
 
 
-def _link_or_copy(src: Path, dst: Path, mode: str) -> None:
+def _link_or_copy(src: Path, dst: Path, mode: str, *, quiet: bool = False) -> None:
     if not src.is_dir():
         raise SystemExit(f"源目录不存在: {src}")
     dst.parent.mkdir(parents=True, exist_ok=True)
     _remove_target(dst)
     if mode == "copy":
         shutil.copytree(src, dst)
-        print(f"  copy  {src} -> {dst}")
+        if not quiet:
+            print(f"  copy  {src} -> {dst}")
         return
     if os.name == "nt":
         import subprocess
@@ -105,10 +106,12 @@ def _link_or_copy(src: Path, dst: Path, mode: str) -> None:
                 f"{detail.decode('gbk', errors='replace')}\n"
                 "可改用 mode: copy，或以管理员创建 symlink。"
             )
-        print(f"  junction  {src} -> {dst}")
+        if not quiet:
+            print(f"  junction  {src} -> {dst}")
         return
     os.symlink(src, dst, target_is_directory=True)
-    print(f"  symlink  {src} -> {dst}")
+    if not quiet:
+        print(f"  symlink  {src} -> {dst}")
 
 
 def _iter_app_bindings(cfg: dict) -> Iterator[BindingTuple]:
@@ -137,22 +140,23 @@ def _iter_app_bindings(cfg: dict) -> Iterator[BindingTuple]:
 
 
 def compose(cfg: dict) -> None:
-    print(f"组装根目录: {ROOT}")
     for mode, repo, label, be_name, fe_name in _iter_app_bindings(cfg):
-        print(f"\n[{label}] from {repo}")
+        display = (label or be_name).strip()
         be_src = repo / "backend" / "apps" / be_name
         fe_src = repo / "frontend" / "apps" / fe_name
         be_dst = BACKEND_APPS / be_name
         fe_dst = FRONTEND_APPS / fe_name
+        assembled = False
         if be_src.is_dir():
-            _link_or_copy(be_src, be_dst, mode)
-        else:
-            print(f"  skip backend（无 {be_src}）")
+            _link_or_copy(be_src, be_dst, mode, quiet=True)
+            assembled = True
         if fe_src.is_dir():
-            _link_or_copy(fe_src, fe_dst, mode)
+            _link_or_copy(fe_src, fe_dst, mode, quiet=True)
+            assembled = True
+        if assembled:
+            print(f"{display} 应用组装成功")
         else:
-            print(f"  skip frontend（无 {fe_src}）")
-    print("\n完成。重启后端与前端后生效。")
+            print(f"{display} 应用组装失败")
 
 
 def status(cfg: dict) -> None:

@@ -1,0 +1,11 @@
+# RiverEdge 额外 Caddy 反向代理列表
+# 复制为同目录 caddy-extra-proxies.list 后生效（该文件已被 gitignore，不进库）
+# 也可在 deploy.env 写 CADDY_EXTRA_PROXIES=...（逗号分隔）
+#
+# 每行一条：站点 -> 上游 host:port
+# - http://host  = 仅 HTTP（不申请证书）
+# - https://host 或裸域名 = Caddy 自动 HTTPS（需 DNS 指向本机且 80/443 可达）
+#
+# 示例：
+# http://xingjie.lzh-tech.com -> 192.168.2.103:8888
+# app.example.com -> 192.168.1.10:80

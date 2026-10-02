@@ -207,6 +207,8 @@ load_deploy_env() {
     PROXY_PORT="${PROXY_PORT:-8080}"
     CADDY_DOMAIN="${CADDY_DOMAIN:-}"
     CADDY_ENABLE_LETSENCRYPT="${CADDY_ENABLE_LETSENCRYPT:-false}"
+    CADDY_EXTRA_PROXIES="${CADDY_EXTRA_PROXIES:-}"
+    CADDY_EXTRA_PROXIES_FILE="${CADDY_EXTRA_PROXIES_FILE:-$FAST_DEPLOY_DIR/config/caddy-extra-proxies.list}"
     NODE_BUILD_MEM="${NODE_BUILD_MEM:-4096}"
     ALLOW_SERVER_BUILD="${ALLOW_SERVER_BUILD:-0}"
     SERVER_IP="${SERVER_IP:-}"
@@ -2086,6 +2088,38 @@ resolve_prod_web_url() {
     echo "http://${server_ip}:${PROXY_PORT}"
 }
 
+collect_caddy_proxy_port_config() {
+    local current_port input port
+    load_deploy_env
+    [ "$DEPLOY_MODE" = "prod" ] || return 0
+    [ -f "$DEPLOY_ENV_FILE" ] || cp "$DEPLOY_ENV_EXAMPLE" "$DEPLOY_ENV_FILE"
+
+    current_port="$(read_deploy_env_value PROXY_PORT || true)"
+    [ -n "$current_port" ] || current_port="${PROXY_PORT:-8080}"
+
+    echo ""
+    log_info "Caddy 对外监听端口（PROXY_PORT，本项目主站入口）"
+    echo "    默认 8080；启用域名 HTTPS 时主站走 80/443，此端口仍可作为 IP 备用入口"
+    echo "    端口 <1024 时 Linux 可能需: sudo setcap 'cap_net_bind_service=+ep' \$(which caddy)"
+    read -rp "Caddy 端口 (PROXY_PORT) [${current_port}]: " input
+    port="${input:-$current_port}"
+    port="$(printf '%s' "$port" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if ! printf '%s' "$port" | grep -qE '^[1-9][0-9]{0,4}$'; then
+        log_error "端口无效: ${port}（须为 1-65535 的整数）"
+        return 1
+    fi
+    if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        log_error "端口超出范围: ${port}"
+        return 1
+    fi
+    set_deploy_env_value PROXY_PORT "$port"
+    load_deploy_env
+    if [ "$port" -lt 1024 ]; then
+        log_warn "已设置特权端口 ${port}，若绑定失败请为 caddy 授予 cap_net_bind_service"
+    fi
+    log_ok "Caddy 端口: ${port}"
+}
+
 collect_prod_domain_https_config() {
     local current_domain current_le choice domain input enable_input enable_le default_le
     load_deploy_env
@@ -2145,6 +2179,186 @@ collect_prod_domain_https_config() {
             set_deploy_env_value CADDY_ENABLE_LETSENCRYPT "false"
             load_deploy_env
             log_ok "已选择 IP 访问模式"
+            ;;
+    esac
+}
+
+# 收集当前额外反代条目（列表文件 + CADDY_EXTRA_PROXIES），每行一条「站点 -> 上游」
+collect_caddy_extra_proxy_entries() {
+    load_deploy_env
+    local list_file="${CADDY_EXTRA_PROXIES_FILE:-$FAST_DEPLOY_DIR/config/caddy-extra-proxies.list}"
+    local line entry rest site upstream
+
+    if [ -f "$list_file" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%%#*}"
+            line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [ -n "$line" ] || continue
+            site=""
+            upstream=""
+            if parse_caddy_extra_proxy_entry "$line" 2>/dev/null; then
+                printf '%s -> %s\n' "$site" "$upstream"
+            fi
+        done < "$list_file"
+    fi
+
+    if [ -n "${CADDY_EXTRA_PROXIES:-}" ]; then
+        rest="$(printf '%s' "$CADDY_EXTRA_PROXIES" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
+        while [ -n "$rest" ]; do
+            case "$rest" in
+                *,*)
+                    entry="${rest%%,*}"
+                    rest="${rest#*,}"
+                    ;;
+                *)
+                    entry="$rest"
+                    rest=""
+                    ;;
+            esac
+            entry="$(printf '%s' "$entry" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [ -n "$entry" ] || continue
+            site=""
+            upstream=""
+            if parse_caddy_extra_proxy_entry "$entry" 2>/dev/null; then
+                printf '%s -> %s\n' "$site" "$upstream"
+            fi
+        done
+    fi
+}
+
+caddy_extra_proxy_count() {
+    collect_caddy_extra_proxy_entries | grep -c . || true
+}
+
+save_caddy_extra_proxy_entries() {
+    # stdin: 每行「站点 -> 上游」；写入列表文件并清空 CADDY_EXTRA_PROXIES，避免双源重复
+    load_deploy_env
+    local list_file="${CADDY_EXTRA_PROXIES_FILE:-$FAST_DEPLOY_DIR/config/caddy-extra-proxies.list}"
+    local line site upstream count=0
+    mkdir -p "$(dirname "$list_file")"
+    {
+        printf '%s\n' "# 由部署面板「修改配置」写入；格式: 站点 -> host:port"
+        while IFS= read -r line || [ -n "$line" ]; do
+            line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [ -n "$line" ] || continue
+            site=""
+            upstream=""
+            parse_caddy_extra_proxy_entry "$line" || return 1
+            printf '%s -> %s\n' "$site" "$upstream"
+            count=$((count + 1))
+        done
+    } > "$list_file"
+    set_deploy_env_value CADDY_EXTRA_PROXIES ""
+    load_deploy_env
+    log_ok "已保存 ${count} 条额外反向代理 → ${list_file}"
+}
+
+collect_caddy_extra_proxies_config() {
+    local choice site upstream entry idx del_idx reload_input
+    local -a entries=()
+    load_deploy_env
+    [ "$DEPLOY_MODE" = "prod" ] || return 0
+
+    while IFS= read -r entry || [ -n "$entry" ]; do
+        [ -n "$entry" ] || continue
+        entries+=("$entry")
+    done < <(collect_caddy_extra_proxy_entries)
+
+    echo ""
+    log_info "额外反向代理：把其它域名转到内网服务（与本项目主站并列）"
+    echo "    示例站点: http://xingjie.lzh-tech.com"
+    echo "    示例上游: 192.168.2.103:8888"
+    echo "    http://域名 = 仅 HTTP；裸域名 = 自动 HTTPS"
+
+    while true; do
+        echo ""
+        if [ "${#entries[@]}" -eq 0 ]; then
+            echo "    当前: （无）"
+        else
+            echo "    当前:"
+            idx=1
+            for entry in "${entries[@]}"; do
+                echo "      ${idx}) ${entry}"
+                idx=$((idx + 1))
+            done
+        fi
+        echo "    a) 添加一条"
+        if [ "${#entries[@]}" -gt 0 ]; then
+            echo "    d) 删除一条"
+            echo "    c) 清空全部"
+        fi
+        echo "    0) 完成并保存"
+        read -rp "请选择 [a/d/c/0] (默认 0): " choice
+        choice="${choice:-0}"
+        case "$choice" in
+            a|A|add)
+                read -rp "站点 (如 http://xingjie.lzh-tech.com): " site
+                site="$(printf '%s' "$site" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's|/*$||')"
+                [ -n "$site" ] || { log_warn "站点不能为空"; continue; }
+                read -rp "上游 host:port (如 192.168.2.103:8888): " upstream
+                upstream="$(printf '%s' "$upstream" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's|/*$||')"
+                entry="${site}->${upstream}"
+                site=""
+                upstream=""
+                if ! parse_caddy_extra_proxy_entry "$entry"; then
+                    continue
+                fi
+                entries+=("${site} -> ${upstream}")
+                log_ok "已加入: ${site} -> ${upstream}"
+                ;;
+            d|D|del|delete)
+                if [ "${#entries[@]}" -eq 0 ]; then
+                    log_warn "当前没有可删条目"
+                    continue
+                fi
+                read -rp "删除序号 [1-${#entries[@]}]: " del_idx
+                if ! printf '%s' "$del_idx" | grep -qE '^[0-9]+$'; then
+                    log_warn "序号无效"
+                    continue
+                fi
+                if [ "$del_idx" -lt 1 ] || [ "$del_idx" -gt "${#entries[@]}" ]; then
+                    log_warn "序号超出范围"
+                    continue
+                fi
+                log_info "已删除: ${entries[$((del_idx - 1))]}"
+                unset "entries[$((del_idx - 1))]"
+                # 压缩数组下标
+                local -a _compact=()
+                for entry in "${entries[@]}"; do
+                    [ -n "${entry:-}" ] && _compact+=("$entry")
+                done
+                entries=("${_compact[@]}")
+                ;;
+            c|C|clear)
+                entries=()
+                log_ok "已清空（保存后生效）"
+                ;;
+            0|done|q|Q)
+                break
+                ;;
+            *)
+                log_warn "未知选项: ${choice}"
+                ;;
+        esac
+    done
+
+    if [ "${#entries[@]}" -eq 0 ]; then
+        printf '' | save_caddy_extra_proxy_entries || return 1
+    else
+        printf '%s\n' "${entries[@]}" | save_caddy_extra_proxy_entries || return 1
+    fi
+
+    read -rp "是否立即 reload Caddy 使反代生效？ [Y/n]: " reload_input
+    case "${reload_input:-Y}" in
+        n|N|no|No|NO)
+            log_info "稍后执行 ./fast-deploy/deploy.sh start 时会应用"
+            ;;
+        *)
+            if reload_caddy_prod_config; then
+                :
+            else
+                log_warn "Caddy reload 未成功（服务可能未在运行）；请稍后 start"
+            fi
             ;;
     esac
 }
@@ -2211,10 +2425,12 @@ print_configure_summary() {
     echo "  超管账号: ${admin_user}"
     echo "  蓝绿部署: $(blue_green_deploy_status_label)"
     if [ "$DEPLOY_MODE" = "prod" ]; then
+        echo "  Caddy 端口: ${PROXY_PORT}"
         echo "  访问地址: $(resolve_prod_web_url "$server_ip")"
         if [ -n "$CADDY_DOMAIN" ] && [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
             echo "  备用 IP: http://${server_ip}:${PROXY_PORT}"
         fi
+        echo "  额外反代: $(caddy_extra_proxy_count) 条"
     else
         echo "  访问地址: http://${server_ip}:${FRONTEND_PORT} (Web) / http://${server_ip}:${BACKEND_PORT} (API)"
     fi
@@ -2346,8 +2562,10 @@ cmd_configure() {
     set_deploy_env_value SERVER_IP "$server_ip"
 
     if [ "$DEPLOY_MODE" = "prod" ]; then
+        collect_caddy_proxy_port_config || exit 1
         echo ""
         collect_prod_domain_https_config || exit 1
+        collect_caddy_extra_proxies_config || exit 1
     fi
 
     apply_app_config
@@ -3476,6 +3694,97 @@ ensure_mobile_web_dist() {
     return 0
 }
 
+# 解析单条额外反代：site->upstream（允许箭头两侧空格）
+# 成功时把 site / upstream 写入同名变量（调用方需 local site upstream）
+parse_caddy_extra_proxy_entry() {
+    local entry="${1:-}"
+    entry="$(printf '%s' "$entry" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    [ -n "$entry" ] || return 1
+    case "$entry" in
+        *'->'*) ;;
+        *)
+            log_error "额外反代格式错误（缺 ->）: $entry"
+            log_error "期望: http://host->ip:port 或 host->ip:port"
+            return 1
+            ;;
+    esac
+    site="$(printf '%s' "$entry" | sed -e 's/[[:space:]]*->.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    upstream="$(printf '%s' "$entry" | sed -e 's/^.*->[[:space:]]*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's|/*$||')"
+    if [ -z "$site" ] || [ -z "$upstream" ]; then
+        log_error "额外反代格式错误: $entry"
+        return 1
+    fi
+    # host:port（IPv4 / 主机名）；须带端口，禁止路径与空格
+    if ! printf '%s' "$upstream" | grep -qE '^[A-Za-z0-9._-]+:[0-9]+$'; then
+        log_error "额外反代上游无效（需 host:port）: $upstream"
+        return 1
+    fi
+    return 0
+}
+
+# 将 CADDY_EXTRA_PROXIES / caddy-extra-proxies.list 追加为独立站点块（写在主站 :PROXY_PORT 之外）
+append_caddy_extra_proxy_blocks() {
+    local out="${1:-}"
+    [ -n "$out" ] || return 1
+    load_deploy_env
+
+    local list_file="${CADDY_EXTRA_PROXIES_FILE:-$FAST_DEPLOY_DIR/config/caddy-extra-proxies.list}"
+    local -a entries=()
+    local line entry site upstream count=0
+
+    if [ -f "$list_file" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%%#*}"
+            line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [ -n "$line" ] || continue
+            entries+=("$line")
+        done < "$list_file"
+    fi
+
+    if [ -n "${CADDY_EXTRA_PROXIES:-}" ]; then
+        local rest="${CADDY_EXTRA_PROXIES}"
+        rest="$(printf '%s' "$rest" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
+        while [ -n "$rest" ]; do
+            case "$rest" in
+                *,*)
+                    entry="${rest%%,*}"
+                    rest="${rest#*,}"
+                    ;;
+                *)
+                    entry="$rest"
+                    rest=""
+                    ;;
+            esac
+            entry="$(printf '%s' "$entry" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [ -n "$entry" ] || continue
+            entries+=("$entry")
+        done
+    fi
+
+    [ "${#entries[@]}" -gt 0 ] || return 0
+
+    {
+        printf '\n'
+        printf '%s\n' "# ----- 额外反向代理（CADDY_EXTRA_PROXIES / caddy-extra-proxies.list）-----"
+    } >> "$out"
+
+    for entry in "${entries[@]}"; do
+        site=""
+        upstream=""
+        parse_caddy_extra_proxy_entry "$entry" || exit 1
+        cat >> "$out" <<EOF
+
+${site} {
+	encode gzip zstd
+	reverse_proxy ${upstream}
+}
+EOF
+        count=$((count + 1))
+        log_info "额外反代: ${site} -> ${upstream}"
+    done
+    log_ok "已追加 ${count} 条额外反向代理"
+}
+
 gen_caddyfile() {
     load_deploy_env
     sync_prod_app_urls
@@ -3522,6 +3831,8 @@ gen_caddyfile() {
         -e "s|{{CLIENT_RELEASE_ROOT}}|${client_release_root}|g" \
         -e "s|{{FILE_UPLOAD_ROOT}}|${file_upload_root}|g" \
         "$CADDY_TEMPLATE" > "$CADDYFILE.tmp"
+
+    append_caddy_extra_proxy_blocks "$CADDYFILE.tmp"
 
     if ! grep -qE '^[A-Za-z0-9.:_/-][^{]*\{' "$CADDYFILE.tmp"; then
         log_error "生成的 Caddyfile 无效"

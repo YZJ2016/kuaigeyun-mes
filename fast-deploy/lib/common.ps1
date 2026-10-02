@@ -72,6 +72,10 @@ function Load-DeployEnv {
     if (-not $script:PROXY_PORT) { $script:PROXY_PORT = 8080 }
     if (-not $script:CADDY_DOMAIN) { $script:CADDY_DOMAIN = '' }
     if (-not $script:CADDY_ENABLE_LETSENCRYPT) { $script:CADDY_ENABLE_LETSENCRYPT = 'false' }
+    if (-not $script:CADDY_EXTRA_PROXIES) { $script:CADDY_EXTRA_PROXIES = '' }
+    if (-not $script:CADDY_EXTRA_PROXIES_FILE) {
+        $script:CADDY_EXTRA_PROXIES_FILE = Join-Path $script:FastDeployDir 'config\caddy-extra-proxies.list'
+    }
     if (-not $script:NODE_BUILD_MEM) { $script:NODE_BUILD_MEM = 4096 }
     if (-not $script:ALLOW_SERVER_BUILD) { $script:ALLOW_SERVER_BUILD = '0' }
     if (-not $script:SERVER_IP) { $script:SERVER_IP = '' }
@@ -644,6 +648,204 @@ function Resolve-ProdWebUrl([string]$ServerIp) {
     return "http://${ServerIp}:$($script:PROXY_PORT)"
 }
 
+function Get-CaddyExtraProxyEntries {
+    Load-DeployEnv
+    $entries = New-Object System.Collections.Generic.List[string]
+    $listFile = if ($script:CADDY_EXTRA_PROXIES_FILE) {
+        $script:CADDY_EXTRA_PROXIES_FILE
+    } else {
+        Join-Path $script:FastDeployDir 'config\caddy-extra-proxies.list'
+    }
+
+    $rawLines = New-Object System.Collections.Generic.List[string]
+    if (Test-Path -LiteralPath $listFile) {
+        Get-Content -LiteralPath $listFile | ForEach-Object {
+            $line = $_
+            $hash = $line.IndexOf('#')
+            if ($hash -ge 0) { $line = $line.Substring(0, $hash) }
+            $line = $line.Trim()
+            if ($line) { [void]$rawLines.Add($line) }
+        }
+    }
+    $raw = if ($script:CADDY_EXTRA_PROXIES) { "$($script:CADDY_EXTRA_PROXIES)".Trim() } else { '' }
+    if ($raw.Length -ge 2 -and (
+        ($raw.StartsWith('"') -and $raw.EndsWith('"')) -or
+        ($raw.StartsWith("'") -and $raw.EndsWith("'"))
+    )) {
+        $raw = $raw.Substring(1, $raw.Length - 2).Trim()
+    }
+    if ($raw) {
+        foreach ($part in ($raw -split ',')) {
+            $entry = "$part".Trim()
+            if ($entry) { [void]$rawLines.Add($entry) }
+        }
+    }
+
+    foreach ($entry in $rawLines) {
+        if ($entry -notmatch '->') { continue }
+        $parts = $entry -split '->', 2
+        $site = "$($parts[0])".Trim()
+        $upstream = "$($parts[1])".Trim().TrimEnd('/')
+        if (-not $site -or -not $upstream) { continue }
+        if ($upstream -notmatch '^[A-Za-z0-9._-]+:[0-9]+$') { continue }
+        [void]$entries.Add("$site -> $upstream")
+    }
+    return $entries
+}
+
+function Save-CaddyExtraProxyEntries {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Entries)
+    Load-DeployEnv
+    $listFile = if ($script:CADDY_EXTRA_PROXIES_FILE) {
+        $script:CADDY_EXTRA_PROXIES_FILE
+    } else {
+        Join-Path $script:FastDeployDir 'config\caddy-extra-proxies.list'
+    }
+    $dir = Split-Path -Parent $listFile
+    if (-not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    $lines = New-Object System.Collections.Generic.List[string]
+    [void]$lines.Add('# 由部署面板「修改配置」写入；格式: 站点 -> host:port')
+    $count = 0
+    foreach ($entry in $Entries) {
+        if ([string]::IsNullOrWhiteSpace($entry)) { continue }
+        if ($entry -notmatch '->') { throw "额外反代格式错误（缺 ->）: $entry" }
+        $parts = $entry -split '->', 2
+        $site = "$($parts[0])".Trim()
+        $upstream = "$($parts[1])".Trim().TrimEnd('/')
+        if (-not $site -or -not $upstream) { throw "额外反代格式错误: $entry" }
+        if ($upstream -notmatch '^[A-Za-z0-9._-]+:[0-9]+$') {
+            throw "额外反代上游无效（需 host:port）: $upstream"
+        }
+        [void]$lines.Add("$site -> $upstream")
+        $count++
+    }
+    Set-Content -LiteralPath $listFile -Value $lines -Encoding UTF8
+    Set-DeployEnvValue 'CADDY_EXTRA_PROXIES' ''
+    Load-DeployEnv
+    Write-LogOk "已保存 $count 条额外反向代理 → $listFile"
+}
+
+function Collect-CaddyExtraProxiesConfig {
+    Load-DeployEnv
+    if ($script:DeployMode -ne 'prod') { return }
+
+    $entries = New-Object System.Collections.Generic.List[string]
+    foreach ($e in (Get-CaddyExtraProxyEntries)) { [void]$entries.Add($e) }
+
+    Write-Host ''
+    Write-LogInfo '额外反向代理：把其它域名转到内网服务（与本项目主站并列）'
+    Write-Host '    示例站点: http://xingjie.lzh-tech.com'
+    Write-Host '    示例上游: 192.168.2.103:8888'
+    Write-Host '    http://域名 = 仅 HTTP；裸域名 = 自动 HTTPS'
+
+    while ($true) {
+        Write-Host ''
+        if ($entries.Count -eq 0) {
+            Write-Host '    当前: （无）'
+        } else {
+            Write-Host '    当前:'
+            for ($i = 0; $i -lt $entries.Count; $i++) {
+                Write-Host ("      {0}) {1}" -f ($i + 1), $entries[$i])
+            }
+        }
+        Write-Host '    a) 添加一条'
+        if ($entries.Count -gt 0) {
+            Write-Host '    d) 删除一条'
+            Write-Host '    c) 清空全部'
+        }
+        Write-Host '    0) 完成并保存'
+        $choice = Read-Host '请选择 [a/d/c/0] (默认 0)'
+        if ([string]::IsNullOrWhiteSpace($choice)) { $choice = '0' }
+
+        # 不用 switch+break：PowerShell 中 switch 内 break 会跳出 while
+        if ($choice -match '^(a|A|add)$') {
+            $site = Read-Host '站点 (如 http://xingjie.lzh-tech.com)'
+            $site = if ($site) { $site.Trim().TrimEnd('/') } else { '' }
+            if (-not $site) {
+                Write-LogWarn '站点不能为空'
+                continue
+            }
+            $upstream = Read-Host '上游 host:port (如 192.168.2.103:8888)'
+            $upstream = if ($upstream) { $upstream.Trim().TrimEnd('/') } else { '' }
+            if ($upstream -notmatch '^[A-Za-z0-9._-]+:[0-9]+$') {
+                Write-LogWarn "上游无效（需 host:port）: $upstream"
+                continue
+            }
+            [void]$entries.Add("$site -> $upstream")
+            Write-LogOk "已加入: $site -> $upstream"
+            continue
+        }
+        if ($choice -match '^(d|D|del|delete)$') {
+            if ($entries.Count -eq 0) {
+                Write-LogWarn '当前没有可删条目'
+                continue
+            }
+            $delIdx = Read-Host "删除序号 [1-$($entries.Count)]"
+            $n = 0
+            if (-not [int]::TryParse("$delIdx", [ref]$n) -or $n -lt 1 -or $n -gt $entries.Count) {
+                Write-LogWarn '序号无效'
+                continue
+            }
+            Write-LogInfo "已删除: $($entries[$n - 1])"
+            $entries.RemoveAt($n - 1)
+            continue
+        }
+        if ($choice -match '^(c|C|clear)$') {
+            $entries.Clear()
+            Write-LogOk '已清空（保存后生效）'
+            continue
+        }
+        if ($choice -match '^(0|done|q|Q)$') {
+            break
+        }
+        Write-LogWarn "未知选项: $choice"
+    }
+
+    Save-CaddyExtraProxyEntries -Entries @($entries)
+    $reloadInput = Read-Host '是否立即 reload Caddy 使反代生效？ [Y/n]'
+    if ([string]::IsNullOrWhiteSpace($reloadInput)) { $reloadInput = 'Y' }
+    if ($reloadInput -match '^(n|N|no|No|NO)$') {
+        Write-LogInfo '稍后执行 start 时会应用'
+    } else {
+        try {
+            Reload-CaddyProdConfig
+        } catch {
+            Write-LogWarn "Caddy reload 未成功（服务可能未在运行）；请稍后 start"
+        }
+    }
+}
+
+function Collect-CaddyProxyPortConfig {
+    Load-DeployEnv
+    if ($script:DeployMode -ne 'prod') { return }
+    if (-not (Test-Path $script:DeployEnvFile)) {
+        Copy-Item $script:DeployEnvExample $script:DeployEnvFile
+    }
+
+    $currentPort = Read-DeployEnvValue 'PROXY_PORT'
+    if ([string]::IsNullOrWhiteSpace($currentPort)) { $currentPort = "$($script:PROXY_PORT)" }
+    if ([string]::IsNullOrWhiteSpace($currentPort)) { $currentPort = '8080' }
+
+    Write-Host ''
+    Write-LogInfo 'Caddy 对外监听端口（PROXY_PORT，本项目主站入口）'
+    Write-Host '    默认 8080；启用域名 HTTPS 时主站走 80/443，此端口仍可作为 IP 备用入口'
+    Write-Host "    端口 <1024 时 Linux 可能需: sudo setcap 'cap_net_bind_service=+ep' `$(which caddy)"
+    $inputPort = Read-Host "Caddy 端口 (PROXY_PORT) [$currentPort]"
+    $port = if ([string]::IsNullOrWhiteSpace($inputPort)) { $currentPort } else { $inputPort.Trim() }
+    $n = 0
+    if (-not [int]::TryParse("$port", [ref]$n) -or $n -lt 1 -or $n -gt 65535) {
+        throw "端口无效: $port（须为 1-65535 的整数）"
+    }
+    Set-DeployEnvValue 'PROXY_PORT' "$n"
+    Load-DeployEnv
+    if ($n -lt 1024) {
+        Write-LogWarn "已设置特权端口 $n，若绑定失败请为 caddy 授予 cap_net_bind_service"
+    }
+    Write-LogOk "Caddy 端口: $n"
+}
+
 function Collect-ProdDomainHttpsConfig {
     Load-DeployEnv
     if ($script:DeployMode -ne 'prod') { return }
@@ -890,8 +1092,10 @@ function Invoke-Configure {
     Load-DeployEnv
 
     if ($script:DeployMode -eq 'prod') {
+        Collect-CaddyProxyPortConfig
         Write-Host ''
         Collect-ProdDomainHttpsConfig
+        Collect-CaddyExtraProxiesConfig
         Load-DeployEnv
     }
 
@@ -914,10 +1118,12 @@ function Invoke-Configure {
     Write-Host "  蓝绿部署: $(Get-BlueGreenDeployStatusLabel)"
     if ($script:DeployMode -eq 'prod') {
         $webUrl = Resolve-ProdWebUrl $serverIp
+        Write-Host "  Caddy 端口: $($script:PROXY_PORT)"
         Write-Host "  访问地址: $webUrl"
         if ($script:CADDY_DOMAIN -and $script:CADDY_ENABLE_LETSENCRYPT -eq 'true') {
             Write-Host "  备用 IP: http://${serverIp}:$($script:PROXY_PORT)"
         }
+        Write-Host "  额外反代: $((Get-CaddyExtraProxyEntries).Count) 条"
     } else {
         Write-Host "  访问地址: http://${serverIp}:$($script:FRONTEND_PORT) (Web) / http://${serverIp}:$($script:BACKEND_PORT) (API)"
     }
@@ -1489,6 +1695,72 @@ function Ensure-MobileWebDist {
     Write-MobileWebDistPlaceholder
 }
 
+function Add-CaddyExtraProxyBlocks {
+    param([Parameter(Mandatory = $true)][string]$OutFile)
+    Load-DeployEnv
+
+    $entries = New-Object System.Collections.Generic.List[string]
+    $listFile = if ($script:CADDY_EXTRA_PROXIES_FILE) {
+        $script:CADDY_EXTRA_PROXIES_FILE
+    } else {
+        Join-Path $script:FastDeployDir 'config\caddy-extra-proxies.list'
+    }
+
+    if (Test-Path -LiteralPath $listFile) {
+        Get-Content -LiteralPath $listFile | ForEach-Object {
+            $line = $_
+            $hash = $line.IndexOf('#')
+            if ($hash -ge 0) { $line = $line.Substring(0, $hash) }
+            $line = $line.Trim()
+            if ($line) { [void]$entries.Add($line) }
+        }
+    }
+
+    $raw = if ($script:CADDY_EXTRA_PROXIES) { "$($script:CADDY_EXTRA_PROXIES)".Trim() } else { '' }
+    if ($raw.Length -ge 2 -and (
+        ($raw.StartsWith('"') -and $raw.EndsWith('"')) -or
+        ($raw.StartsWith("'") -and $raw.EndsWith("'"))
+    )) {
+        $raw = $raw.Substring(1, $raw.Length - 2).Trim()
+    }
+    if ($raw) {
+        foreach ($part in ($raw -split ',')) {
+            $entry = "$part".Trim()
+            if ($entry) { [void]$entries.Add($entry) }
+        }
+    }
+
+    if ($entries.Count -eq 0) { return }
+
+    $blocks = New-Object System.Text.StringBuilder
+    [void]$blocks.AppendLine('')
+    [void]$blocks.AppendLine('# ----- 额外反向代理（CADDY_EXTRA_PROXIES / caddy-extra-proxies.list）-----')
+    $count = 0
+    foreach ($entry in $entries) {
+        if ($entry -notmatch '->') {
+            throw "额外反代格式错误（缺 ->）: $entry`n期望: http://host->ip:port 或 host->ip:port"
+        }
+        $parts = $entry -split '->', 2
+        $site = "$($parts[0])".Trim()
+        $upstream = "$($parts[1])".Trim().TrimEnd('/')
+        if (-not $site -or -not $upstream) {
+            throw "额外反代格式错误: $entry"
+        }
+        if ($upstream -notmatch '^[A-Za-z0-9._-]+:[0-9]+$') {
+            throw "额外反代上游无效（需 host:port）: $upstream"
+        }
+        [void]$blocks.AppendLine('')
+        [void]$blocks.AppendLine("$site {")
+        [void]$blocks.AppendLine("`tencode gzip zstd")
+        [void]$blocks.AppendLine("`treverse_proxy $upstream")
+        [void]$blocks.AppendLine('}')
+        $count++
+        Write-LogInfo "额外反代: $site -> $upstream"
+    }
+    Add-Content -LiteralPath $OutFile -Value $blocks.ToString() -Encoding UTF8
+    Write-LogOk "已追加 $count 条额外反向代理"
+}
+
 function New-Caddyfile {
     Load-DeployEnv
     Sync-ProdAppUrls
@@ -1534,6 +1806,7 @@ function New-Caddyfile {
         Remove-Item $tmp -Force
         throw '生成的 Caddyfile 无效'
     }
+    Add-CaddyExtraProxyBlocks -OutFile $tmp
     Move-Item $tmp $script:Caddyfile -Force
     Write-LogOk '已生成 Caddyfile'
 }
@@ -1793,6 +2066,34 @@ function Start-CaddyProd {
         throw "Caddy 未监听端口（等待 $($script:CADDY_START_TIMEOUT)s 超时），查看 $logFile"
     }
     Write-LogOk 'Caddy 已启动'
+}
+
+function Reload-CaddyProdConfig {
+    New-Caddyfile
+    Load-DeployEnv
+    Set-CaddyEnv
+    $caddy = Resolve-Caddy
+    if (-not $caddy) { throw '未安装 Caddy' }
+    $config = (Resolve-Path $script:Caddyfile).Path
+    $reloadErr = Join-Path $script:LogsDir 'caddy-reload.err'
+    & $caddy validate --config $config 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Caddyfile 校验失败' }
+    $pidFile = Join-Path $script:LogsDir 'caddy.pid'
+    if (Test-PidFileAlive $pidFile) {
+        Invoke-CaddyReload -CaddyBin $caddy -ConfigPath $config -AdminAddress $script:CaddyProdAdminAddr 2>$reloadErr
+        if ($LASTEXITCODE -eq 0) {
+            Write-LogOk 'Caddy 已 reload'
+            return
+        }
+        if (Test-Path $reloadErr) {
+            $tail = Get-Content $reloadErr -Tail 3 -ErrorAction SilentlyContinue
+            Write-LogWarn "Caddy reload 失败: $($tail -join ' ')"
+        } else {
+            Write-LogWarn 'Caddy reload 失败'
+        }
+    }
+    Write-LogInfo '正在重启 Caddy 以应用配置...'
+    Start-CaddyProd -Force
 }
 
 function Invoke-StartDev {
