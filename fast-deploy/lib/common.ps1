@@ -804,16 +804,22 @@ function Collect-CaddyExtraProxiesConfig {
     }
 
     Save-CaddyExtraProxyEntries -Entries @($entries)
-    $reloadInput = Read-Host '是否立即 reload Caddy 使反代生效？ [Y/n]'
+    if ("$($script:CADDY_CONFIG_SKIP_RELOAD)" -eq '1') { return }
+    Offer-CaddyConfigReload
+}
+
+function Offer-CaddyConfigReload {
+    if ($script:DeployMode -ne 'prod') { return }
+    $reloadInput = Read-Host '是否立即 reload Caddy 使配置生效？ [Y/n]'
     if ([string]::IsNullOrWhiteSpace($reloadInput)) { $reloadInput = 'Y' }
     if ($reloadInput -match '^(n|N|no|No|NO)$') {
         Write-LogInfo '稍后执行 start 时会应用'
-    } else {
-        try {
-            Reload-CaddyProdConfig
-        } catch {
-            Write-LogWarn "Caddy reload 未成功（服务可能未在运行）；请稍后 start"
-        }
+        return
+    }
+    try {
+        Reload-CaddyProdConfig
+    } catch {
+        Write-LogWarn 'Caddy reload 未成功（服务可能未在运行）；请稍后 start'
     }
 }
 
@@ -1028,18 +1034,9 @@ function Invoke-PostgresPasswordSetup {
     }
 }
 
-function Invoke-Configure {
-    Write-LogInfo '配置应用环境...'
-    Apply-CN-Mirrors
-    if (-not (Test-Path $script:EnvFile)) {
-        Copy-Item (Join-Path $script:BackendDir '.env.example') $script:EnvFile
-        Write-LogInfo '已从 .env.example 创建 .env'
-    }
-    if (-not (Test-Path $script:DeployEnvFile)) {
-        Copy-Item $script:DeployEnvExample $script:DeployEnvFile
-    }
-    Load-DeployEnv
-
+function Invoke-ConfigureSectionDatabase {
+    Write-Host ''
+    Write-LogInfo '[数据库]'
     $dbUser = Read-EnvValue 'DB_USER'; if (-not $dbUser) { $dbUser = 'postgres' }
     $inputUser = Read-Host "PostgreSQL 用户名 [$dbUser]"
     if (-not [string]::IsNullOrWhiteSpace($inputUser)) { $dbUser = $inputUser }
@@ -1056,7 +1053,11 @@ function Invoke-Configure {
     Set-EnvValue 'DB_NAME' $dbName
 
     Invoke-PostgresPasswordSetup
+}
 
+function Invoke-ConfigureSectionAdmin {
+    Write-Host ''
+    Write-LogInfo '[平台超管]'
     if ([string]::IsNullOrWhiteSpace((Read-EnvValue 'PLATFORM_SUPERADMIN_PASSWORD'))) {
         $sec = Read-Host '平台超级管理员密码 (登录用户名 infra_admin)' -AsSecureString
         $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
@@ -1072,6 +1073,129 @@ function Invoke-Configure {
             Set-EnvValue 'PLATFORM_SUPERADMIN_PASSWORD' $adminPass
         }
     }
+}
+
+function Invoke-ConfigureSectionServerIp {
+    Write-Host ''
+    Write-LogInfo '[服务器 IP]'
+    $detectedIp = Detect-ServerIp
+    $serverIp = Read-DeployEnvValue 'SERVER_IP'
+    if ([string]::IsNullOrWhiteSpace($serverIp)) { $serverIp = $detectedIp }
+    Write-LogInfo "检测到本机 IP: $detectedIp"
+    $inputIp = Read-Host "服务器 IP (浏览器访问) [$serverIp]"
+    if (-not [string]::IsNullOrWhiteSpace($inputIp)) { $serverIp = $inputIp }
+    Set-DeployEnvValue 'SERVER_IP' $serverIp
+    Load-DeployEnv
+    return $serverIp
+}
+
+function Invoke-ConfigureRunAllSections {
+    param([switch]$SkipReload)
+    Invoke-ConfigureSectionDatabase
+    Invoke-ConfigureSectionAdmin
+    [void](Invoke-ConfigureSectionServerIp)
+    if ($script:DeployMode -eq 'prod') {
+        Collect-CaddyProxyPortConfig
+        Write-Host ''
+        Collect-ProdDomainHttpsConfig
+        $prev = $script:CADDY_CONFIG_SKIP_RELOAD
+        if ($SkipReload) { $script:CADDY_CONFIG_SKIP_RELOAD = '1' }
+        try {
+            Collect-CaddyExtraProxiesConfig
+        } finally {
+            $script:CADDY_CONFIG_SKIP_RELOAD = $prev
+        }
+        Load-DeployEnv
+    }
+}
+
+function Invoke-ConfigureMenuLoop {
+    Load-DeployEnv
+    $needCaddyReload = $false
+    while ($true) {
+        Write-Host ''
+        Write-LogInfo '修改配置 — 选择要调整的分类（可多次挑选）'
+        Write-Host '    1) 数据库'
+        Write-Host '    2) 平台超管账号'
+        Write-Host '    3) 服务器 IP'
+        if ($script:DeployMode -eq 'prod') {
+            Write-Host '    4) Caddy 端口 (PROXY_PORT)'
+            Write-Host '    5) 域名与 HTTPS'
+            Write-Host '    6) 额外反向代理'
+        }
+        Write-Host '    a) 全部设置（按顺序走完以上各项）'
+        Write-Host '    0) 完成并退出'
+        $choice = Read-Host '请选择'
+        if ($null -eq $choice) { $choice = '' }
+        $choice = "$choice".Trim()
+
+        if ($choice -eq '1') {
+            Invoke-ConfigureSectionDatabase
+            continue
+        }
+        if ($choice -eq '2') {
+            Invoke-ConfigureSectionAdmin
+            continue
+        }
+        if ($choice -eq '3') {
+            [void](Invoke-ConfigureSectionServerIp)
+            continue
+        }
+        if ($choice -eq '4') {
+            if ($script:DeployMode -ne 'prod') { Write-LogWarn '仅生产模式可配置 Caddy 端口'; continue }
+            Collect-CaddyProxyPortConfig
+            $needCaddyReload = $true
+            continue
+        }
+        if ($choice -eq '5') {
+            if ($script:DeployMode -ne 'prod') { Write-LogWarn '仅生产模式可配置域名'; continue }
+            Write-Host ''
+            Collect-ProdDomainHttpsConfig
+            $needCaddyReload = $true
+            continue
+        }
+        if ($choice -eq '6') {
+            if ($script:DeployMode -ne 'prod') { Write-LogWarn '仅生产模式可配置额外反代'; continue }
+            $prev = $script:CADDY_CONFIG_SKIP_RELOAD
+            $script:CADDY_CONFIG_SKIP_RELOAD = '1'
+            try { Collect-CaddyExtraProxiesConfig } finally { $script:CADDY_CONFIG_SKIP_RELOAD = $prev }
+            $needCaddyReload = $true
+            continue
+        }
+        if ($choice -match '^(a|A|all)$') {
+            Invoke-ConfigureRunAllSections -SkipReload
+            $needCaddyReload = $true
+            continue
+        }
+        if ($choice -match '^(0|q|Q)?$' -or $choice -eq '') {
+            break
+        }
+        Write-LogWarn "未知选项: $choice"
+    }
+    if ($needCaddyReload) { Offer-CaddyConfigReload }
+}
+
+function Invoke-Configure {
+    Write-LogInfo '配置应用环境...'
+    Apply-CN-Mirrors
+    if (-not (Test-Path $script:EnvFile)) {
+        Copy-Item (Join-Path $script:BackendDir '.env.example') $script:EnvFile
+        Write-LogInfo '已从 .env.example 创建 .env'
+    }
+    if (-not (Test-Path $script:DeployEnvFile)) {
+        Copy-Item $script:DeployEnvExample $script:DeployEnvFile
+    }
+    Load-DeployEnv
+
+    $useMenu = ($env:CONFIGURE_MENU -eq '1') -or ($env:CONFIGURE_ALLOW_DB_EDIT -eq '1') -or (
+        -not [string]::IsNullOrWhiteSpace((Read-EnvValue 'DB_PASSWORD')) -and
+        -not [string]::IsNullOrWhiteSpace((Read-EnvValue 'PLATFORM_SUPERADMIN_PASSWORD'))
+    )
+    if ($useMenu) {
+        Invoke-ConfigureMenuLoop
+    } else {
+        Invoke-ConfigureRunAllSections
+    }
 
     $jwt = Read-EnvValue 'JWT_SECRET_KEY'
     if ([string]::IsNullOrWhiteSpace($jwt) -or $jwt -eq 'your-secret-key-here-change-in-production') {
@@ -1082,22 +1206,12 @@ function Invoke-Configure {
         Write-LogInfo '已自动生成 JWT_SECRET_KEY'
     }
 
-    $detectedIp = Detect-ServerIp
     $serverIp = Read-DeployEnvValue 'SERVER_IP'
-    if ([string]::IsNullOrWhiteSpace($serverIp)) { $serverIp = $detectedIp }
-    Write-LogInfo "检测到本机 IP: $detectedIp"
-    $inputIp = Read-Host "服务器 IP (浏览器访问) [$serverIp]"
-    if (-not [string]::IsNullOrWhiteSpace($inputIp)) { $serverIp = $inputIp }
-    Set-DeployEnvValue 'SERVER_IP' $serverIp
-    Load-DeployEnv
-
-    if ($script:DeployMode -eq 'prod') {
-        Collect-CaddyProxyPortConfig
-        Write-Host ''
-        Collect-ProdDomainHttpsConfig
-        Collect-CaddyExtraProxiesConfig
-        Load-DeployEnv
+    if ([string]::IsNullOrWhiteSpace($serverIp)) {
+        $serverIp = Detect-ServerIp
+        Set-DeployEnvValue 'SERVER_IP' $serverIp
     }
+    Load-DeployEnv
 
     if ($script:DeployMode -eq 'prod') {
         Set-EnvValue 'ENVIRONMENT' 'production'
@@ -1109,6 +1223,10 @@ function Invoke-Configure {
         Set-EnvValue 'HOST' '0.0.0.0'
         Set-EnvValue 'CORS_ORIGINS' "http://${serverIp}:$($script:FRONTEND_PORT),http://127.0.0.1:$($script:FRONTEND_PORT),http://localhost:$($script:FRONTEND_PORT),http://${serverIp}:8098,http://127.0.0.1:8098,http://localhost:8098,http://${serverIp}:8081,http://127.0.0.1:8081,http://localhost:8081,http://${serverIp}:8300,http://127.0.0.1:8300,http://localhost:8300"
     }
+
+    $dbUser = Read-EnvValue 'DB_USER'; if (-not $dbUser) { $dbUser = 'postgres' }
+    $dbHost = Read-EnvValue 'DB_HOST'; if (-not $dbHost) { $dbHost = 'localhost' }
+    $dbName = Read-EnvValue 'DB_NAME'; if (-not $dbName) { $dbName = 'riveredge' }
 
     Write-LogInfo '测试数据库连接...'
     if (-not (Test-DbConnection)) { throw '数据库连接失败，请确认 PostgreSQL 已启动且 DB_* 配置正确' }
