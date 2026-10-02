@@ -385,7 +385,7 @@ wizard_show_home_panel() {
     wizard_panel_mid
     wizard_panel_section "DEPLOY 部署"
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
-    wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
+    wizard_panel_menu_item "2" "修改配置" "修改数据库、超管、Caddy 端口、域名与额外反代"
     wizard_panel_menu_item "3" "更新系统" "fetch+reset 拉最新 → 迁移重启（低配固定传统部署）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
     wizard_panel_menu_item "5" "选装依赖" "发票 OCR / PDF 打印 / KU-AI / 敏感词 / LibreOffice"
@@ -2088,9 +2088,13 @@ wizard_show_summary() {
     wizard_panel_mid
     wizard_panel_kv "Mode" "${mode_label}"
     wizard_panel_kv "Web" "${web_url}"
-    if [ "$DEPLOY_MODE" = "prod" ] && [ -n "$(read_deploy_env_value CADDY_DOMAIN || true)" ]; then
-        wizard_panel_kv "Domain" "$(read_deploy_env_value CADDY_DOMAIN)"
-        wizard_panel_kv "HTTPS" "$(read_deploy_env_value CADDY_ENABLE_LETSENCRYPT || echo false)"
+    if [ "$DEPLOY_MODE" = "prod" ]; then
+        wizard_panel_kv "CaddyPort" "$(read_deploy_env_value PROXY_PORT || echo "${PROXY_PORT:-8080}")"
+        if [ -n "$(read_deploy_env_value CADDY_DOMAIN || true)" ]; then
+            wizard_panel_kv "Domain" "$(read_deploy_env_value CADDY_DOMAIN)"
+            wizard_panel_kv "HTTPS" "$(read_deploy_env_value CADDY_ENABLE_LETSENCRYPT || echo false)"
+        fi
+        wizard_panel_kv "ExtraProxies" "$(caddy_extra_proxy_count) 条"
     fi
     wizard_panel_kv "API" "${api_hint}"
     wizard_panel_kv "Database" "$(read_env_value DB_USER || echo postgres)@${db_host}:${db_port}/${db_name}"
