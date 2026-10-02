@@ -736,8 +736,8 @@ function Collect-CaddyExtraProxiesConfig {
 
     Write-Host ''
     Write-LogInfo '额外反向代理：把其它域名转到内网服务（与本项目主站并列）'
-    Write-Host '    示例站点: http://xingjie.lzh-tech.com'
-    Write-Host '    示例上游: 192.168.2.103:8888'
+    Write-Host '    示例站点: http://app.example.com'
+    Write-Host '    示例上游: 192.168.1.10:8888'
     Write-Host '    http://域名 = 仅 HTTP；裸域名 = 自动 HTTPS'
 
     while ($true) {
@@ -761,13 +761,13 @@ function Collect-CaddyExtraProxiesConfig {
 
         # 不用 switch+break：PowerShell 中 switch 内 break 会跳出 while
         if ($choice -match '^(a|A|add)$') {
-            $site = Read-Host '站点 (如 http://xingjie.lzh-tech.com)'
+            $site = Read-Host '站点 (如 http://app.example.com)'
             $site = if ($site) { $site.Trim().TrimEnd('/') } else { '' }
             if (-not $site) {
                 Write-LogWarn '站点不能为空'
                 continue
             }
-            $upstream = Read-Host '上游 host:port (如 192.168.2.103:8888)'
+            $upstream = Read-Host '上游 host:port (如 192.168.1.10:8888)'
             $upstream = if ($upstream) { $upstream.Trim().TrimEnd('/') } else { '' }
             if ($upstream -notmatch '^[A-Za-z0-9._-]+:[0-9]+$') {
                 Write-LogWarn "上游无效（需 host:port）: $upstream"
