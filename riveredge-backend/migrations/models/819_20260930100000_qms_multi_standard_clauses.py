@@ -46,7 +46,8 @@ SELECT
     NOW(),
     NOW()
 FROM (
-    SELECT DISTINCT "tenant_id" FROM "apps_kuaizhizao_qms_iso_clauses" WHERE "deleted_at" IS NULL
+    -- 含软删条款租户：否则仅软删行会在 SET NOT NULL 时因 standard_id 为空失败
+    SELECT DISTINCT "tenant_id" FROM "apps_kuaizhizao_qms_iso_clauses"
     UNION
     SELECT DISTINCT "tenant_id" FROM "apps_kuaizhizao_qms_system_documents" WHERE "deleted_at" IS NULL
     UNION
@@ -72,8 +73,8 @@ INSERT INTO "apps_kuaizhizao_qms_standards" (
 SELECT DISTINCT
     gen_random_uuid()::text,
     c."tenant_id",
-    c."standard_code",
-    c."standard_code",
+    TRIM(c."standard_code"),
+    TRIM(c."standard_code"),
     'custom',
     FALSE,
     TRUE,
@@ -81,24 +82,63 @@ SELECT DISTINCT
     NOW(),
     NOW()
 FROM "apps_kuaizhizao_qms_iso_clauses" c
-WHERE c."deleted_at" IS NULL
-  AND c."standard_code" NOT IN ('ISO9001:2015', 'ISO14001:2015', 'ISO45001:2018', 'IATF16949:2016')
+WHERE TRIM(c."standard_code") <> ''
+  AND TRIM(c."standard_code") NOT IN ('ISO9001:2015', 'ISO14001:2015', 'ISO45001:2018', 'IATF16949:2016')
   AND NOT EXISTS (
     SELECT 1 FROM "apps_kuaizhizao_qms_standards" s
-    WHERE s."tenant_id" = c."tenant_id" AND s."code" = c."standard_code" AND s."deleted_at" IS NULL
+    WHERE s."tenant_id" = c."tenant_id" AND s."code" = TRIM(c."standard_code") AND s."deleted_at" IS NULL
 );
 
 ALTER TABLE "apps_kuaizhizao_qms_iso_clauses"
     ADD COLUMN IF NOT EXISTS "standard_id" INT;
 
+-- 含软删行：NOT NULL 作用于全表，不能只回填未删除行
 UPDATE "apps_kuaizhizao_qms_iso_clauses" c
 SET "standard_id" = s."id"
 FROM "apps_kuaizhizao_qms_standards" s
-WHERE c."deleted_at" IS NULL
+WHERE s."deleted_at" IS NULL
+  AND c."tenant_id" = s."tenant_id"
+  AND TRIM(c."standard_code") = s."code"
+  AND c."standard_id" IS NULL;
+
+-- 仍未匹配（空白码等）：按租户补一条可引用的标准目录再回填
+INSERT INTO "apps_kuaizhizao_qms_standards" (
+    "uuid", "tenant_id", "code", "name", "family", "is_preset", "is_active", "sort_order", "created_at", "updated_at"
+)
+SELECT DISTINCT
+    gen_random_uuid()::text,
+    c."tenant_id",
+    '_LEGACY_UNMAPPED',
+    '历史未映射标准码',
+    'custom',
+    FALSE,
+    TRUE,
+    990,
+    NOW(),
+    NOW()
+FROM "apps_kuaizhizao_qms_iso_clauses" c
+WHERE c."standard_id" IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM "apps_kuaizhizao_qms_standards" s
+    WHERE s."tenant_id" = c."tenant_id" AND s."code" = '_LEGACY_UNMAPPED' AND s."deleted_at" IS NULL
+);
+
+UPDATE "apps_kuaizhizao_qms_iso_clauses" c
+SET "standard_id" = s."id"
+FROM "apps_kuaizhizao_qms_standards" s
+WHERE c."standard_id" IS NULL
   AND s."deleted_at" IS NULL
   AND c."tenant_id" = s."tenant_id"
-  AND c."standard_code" = s."code"
-  AND c."standard_id" IS NULL;
+  AND s."code" = '_LEGACY_UNMAPPED';
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM "apps_kuaizhizao_qms_iso_clauses" WHERE "standard_id" IS NULL
+    ) THEN
+        RAISE EXCEPTION 'apps_kuaizhizao_qms_iso_clauses.standard_id 回填后仍有 NULL，请检查 standard_code 与标准目录';
+    END IF;
+END $$;
 
 ALTER TABLE "apps_kuaizhizao_qms_iso_clauses"
     ALTER COLUMN "standard_id" SET NOT NULL;
