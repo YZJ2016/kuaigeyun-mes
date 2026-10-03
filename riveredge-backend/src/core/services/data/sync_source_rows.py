@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from core.services.data.sync_nested_expand import expand_nested_detail_rows
+
 
 def _collect_kingdee_error_messages(payload: Any) -> List[str]:
     messages: List[str] = []
@@ -75,6 +77,16 @@ def normalize_api_body_to_rows(
     *,
     column_names: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
+    rows = _normalize_api_body_to_rows_raw(body, column_names=column_names)
+    # 苍穹 BOM 等「表头 + entry[]」在解包外壳后仍须摊成扁平行，供字段映射
+    return expand_nested_detail_rows(rows)
+
+
+def _normalize_api_body_to_rows_raw(
+    body: Any,
+    *,
+    column_names: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
     if body is None:
         return []
     if isinstance(body, str):
@@ -109,6 +121,6 @@ def normalize_api_body_to_rows(
     if isinstance(body, dict):
         nested = _extract_array_from_object(body)
         if nested is not None:
-            return normalize_api_body_to_rows(nested, column_names=column_names)
+            return _normalize_api_body_to_rows_raw(nested, column_names=column_names)
         return [body]
     return [{"value": body}]

@@ -825,7 +825,9 @@ const ScheduledTaskListPage: React.FC = () => {
             render: (_, record) => {
               const value = !!record.is_running;
               return (
-              <Badge status={value ? 'processing' : 'default'} text={value ? t('field.scheduledTask.running') : t('field.scheduledTask.notRunning')} />
+              <MarkerTag color={value ? 'processing' : 'default'}>
+                {value ? t('field.scheduledTask.running') : t('field.scheduledTask.notRunning')}
+              </MarkerTag>
             );
             },
           },

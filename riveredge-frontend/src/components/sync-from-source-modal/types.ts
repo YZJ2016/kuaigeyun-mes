@@ -115,6 +115,8 @@ export interface SyncFromSourceConfig {
   /** 便捷：按表名拉取启用中的自定义字段并转为 custom:{code} 目标 */
   customFieldTableName?: string;
   requiredTargets: string[];
+  /** 匹配键目标字段；BOM 等可为派生键（如 line_key），不必出现在 requiredTargets */
+  matchKeyField?: string;
   validateMapping?: (targetToSource: Record<string, string>, t: TFunction) => string | null;
   getBinding: () => Promise<SyncBinding>;
   syncFromSource: (

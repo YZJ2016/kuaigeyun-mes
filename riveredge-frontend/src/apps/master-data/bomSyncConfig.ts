@@ -18,6 +18,8 @@ export function createEngineeringBomSyncConfig(): SyncFromSourceConfig {
     targetFields: BOM_SYNC_TARGET_FIELDS,
     availableTargetFields: BOM_SYNC_AVAILABLE_TARGET_FIELDS,
     requiredTargets: BOM_SYNC_REQUIRED_TARGETS,
+    // line_key 由 parent|version|component 派生，不必映射源列
+    matchKeyField: 'line_key',
     getBinding: getEngineeringBomSyncBinding,
     syncFromSource: syncEngineeringBomFromSource,
     completeSuccessKey: 'app.master-data.bom.syncComplete',
