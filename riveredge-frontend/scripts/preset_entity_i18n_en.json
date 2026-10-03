@@ -2,10 +2,12 @@
   "department": {
     "EXEC": { "name": "Executive Office" },
     "PROD": { "name": "Production Department" },
+    "EQUIP": { "name": "Equipment Department" },
     "PURCH": { "name": "Procurement Department" },
     "SALES": { "name": "Sales Department" },
     "WH": { "name": "Warehouse Department" },
     "QC": { "name": "Quality Department" },
+    "RD": { "name": "R&D Department" },
     "FIN": { "name": "Finance Department" },
     "HR": { "name": "Administration & HR Department" }
   },
@@ -13,10 +15,14 @@
     "GM": { "name": "General Manager" },
     "PROD_MGR": { "name": "Production Manager" },
     "PROD_OP": { "name": "Production Operator" },
+    "EQUIP_MGR": { "name": "Equipment Supervisor" },
+    "EQUIP_OP": { "name": "Equipment Operator" },
     "PURCH_MGR": { "name": "Procurement Manager" },
     "SALES_MGR": { "name": "Sales Manager" },
     "WH_SUPV": { "name": "Warehouse Supervisor" },
     "QC_INSP": { "name": "Quality Inspector" },
+    "RD_MGR": { "name": "R&D Supervisor" },
+    "RD_STAFF": { "name": "R&D Staff" },
     "ACCT": { "name": "Accountant" },
     "CASHIER": { "name": "Cashier" },
     "ADMIN": { "name": "Administration Specialist" },
@@ -31,10 +37,6 @@
       "name": "Sales Representative",
       "desc": "Standard sales staff responsible for customer relations, quoting, and order follow-up"
     },
-    "SALES_OPERATOR": {
-      "name": "Sales Clerk",
-      "desc": "Clerical support role responsible for order entry, document filing, and workflow follow-up"
-    },
     "PURCHASE_MANAGER": {
       "name": "Procurement Manager",
       "desc": "Procurement department head responsible for sourcing, cost control, and settlement approval"
@@ -43,25 +45,21 @@
       "name": "Procurement Specialist",
       "desc": "Standard procurement staff responsible for vendor comparison, purchase planning, and supplier follow-up"
     },
-    "PURCHASE_OPERATOR": {
-      "name": "Procurement Clerk",
-      "desc": "Clerical support role responsible for purchase order entry, delivery follow-up, and document management"
-    },
     "PRODUCTION_MANAGER": {
-      "name": "Shop Floor Manager",
-      "desc": "Shop floor head responsible for production scheduling, quality coordination, and delivery alignment"
-    },
-    "PRODUCTION_TEAM_LEADER": {
-      "name": "Team Leader",
-      "desc": "Work team lead responsible for task assignment, progress tracking, and exception reporting"
-    },
-    "PRODUCTION_CLERK": {
-      "name": "Production Clerk",
-      "desc": "Production clerk responsible for work order maintenance, data entry, and report consolidation"
+      "name": "Production Supervisor",
+      "desc": "Production department head responsible for production scheduling, quality coordination, and delivery alignment"
     },
     "PRODUCTION_STAFF": {
       "name": "Production Operator",
       "desc": "Frontline production staff responsible for executing operations per routing and process feedback"
+    },
+    "EQUIPMENT_MANAGER": {
+      "name": "Equipment Supervisor",
+      "desc": "Equipment department head responsible for asset ledger, maintenance planning, and fault handling decisions"
+    },
+    "EQUIPMENT_OPERATOR": {
+      "name": "Equipment Operator",
+      "desc": "Equipment execution staff responsible for spot checks, patrols, fault reporting, and maintenance work"
     },
     "WAREHOUSE_MANAGER": {
       "name": "Warehouse Supervisor",
@@ -86,6 +84,14 @@
     "QUALITY_OPERATOR": {
       "name": "Quality Inspector",
       "desc": "Quality execution staff responsible for incoming, in-process, and finished goods inspection"
+    },
+    "RD_MANAGER": {
+      "name": "R&D Supervisor",
+      "desc": "R&D department head responsible for project gates, change decisions, and engineering collaboration"
+    },
+    "RD_STAFF": {
+      "name": "R&D Staff",
+      "desc": "R&D execution staff responsible for requirements, design, lab work, and deliverable maintenance"
     },
     "ADMIN_OFFICE": {
       "name": "Administration",

@@ -836,14 +836,6 @@ class RoleService:
             "kuaizhizao:sales",
             "kuaizhizao:shipment",
         ],
-        "SALES_OPERATOR": [
-            "sales_",
-            "customer",
-            "quotation",
-            "kuaizhizao:pricing",
-            "kuaizhizao:sales",
-            "kuaizhizao:shipment",
-        ],
         "PURCHASE_MANAGER": [
             "purchase_",
             "supplier",
@@ -855,15 +847,6 @@ class RoleService:
             "kuaizhizao:logistics",
         ],
         "PURCHASE_PERSON": [
-            "purchase_",
-            "supplier",
-            "kuaizhizao:pricing",
-            "kuaizhizao:purchase",
-            "kuaizhizao:receipt-notice",
-            "kuaizhizao:purchase-return",
-            "kuaizhizao:logistics",
-        ],
-        "PURCHASE_OPERATOR": [
             "purchase_",
             "supplier",
             "kuaizhizao:pricing",
@@ -886,34 +869,17 @@ class RoleService:
             "kuaizhizao:outsource",
             "kuaizhizao:production-execution",
         ],
-        "PRODUCTION_TEAM_LEADER": [
-            "work_order",
-            "process_inspection",
-            "kuaizhizao:pricing",
-            "kuaizhizao:work-order",
-            "kuaizhizao:reporting",
-            "kuaizhizao:reporting:proxy",
-            "kuaizhizao:rework",
-            "kuaizhizao:outsource",
-            "kuaizhizao:production-execution",
-        ],
-        "PRODUCTION_CLERK": [
-            "work_order",
-            "routing",
-            "process",
-            "kuaizhizao:pricing",
-            "kuaizhizao:work-order",
-            "kuaizhizao:reporting",
-            "kuaizhizao:reporting:proxy",
-            "kuaizhizao:rework",
-            "kuaizhizao:outsource",
-            "kuaizhizao:production-execution",
-        ],
         "PRODUCTION_STAFF": [
             "work_order",
             "process_inspection",
             "kuaizhizao:work-order",
             "kuaizhizao:production-execution",
+        ],
+        "EQUIPMENT_MANAGER": [
+            "kuaizhizao:equipment",
+        ],
+        "EQUIPMENT_OPERATOR": [
+            "kuaizhizao:equipment",
         ],
         "WAREHOUSE_MANAGER": [
             "warehouse",
@@ -983,22 +949,38 @@ class RoleService:
             "kuaizhizao:traceability",
             "kuaizhizao:quality-management-traceability",
         ],
+        "RD_MANAGER": [
+            "kuaiplm:",
+        ],
+        "RD_STAFF": [
+            "kuaiplm:",
+        ],
         "ADMIN_OFFICE": ["system:user:read", "system:role:read", "system:menu:read", "kuaioa:"],
         "EMPLOYEE": [],
     }
     LEGACY_ROLE_CODE_MAPPINGS = {
         # 旧生产角色编码迁移到新编码
         "PRODUCTION_OPERATOR": "PRODUCTION_STAFF",
+        # 文员/班组长并入对应「人员」角色
+        "SALES_OPERATOR": "SALES_PERSON",
+        "PURCHASE_OPERATOR": "PURCHASE_PERSON",
+        "PRODUCTION_CLERK": "PRODUCTION_STAFF",
+        "PRODUCTION_TEAM_LEADER": "PRODUCTION_STAFF",
     }
     LEGACY_ROLE_NAME_MAPPINGS = {
         # 销售
         "销售员": "SALES_PERSON",
-        "销售助理": "SALES_OPERATOR",
+        "销售助理": "SALES_PERSON",
+        "销售文员": "SALES_PERSON",
         # 采购
         "采购员": "PURCHASE_PERSON",
-        "采购助理": "PURCHASE_OPERATOR",
+        "采购助理": "PURCHASE_PERSON",
+        "采购文员": "PURCHASE_PERSON",
         # 生产
         "生产部经理": "PRODUCTION_MANAGER",
+        "车间主任": "PRODUCTION_MANAGER",
+        "班组长": "PRODUCTION_STAFF",
+        "生产文员": "PRODUCTION_STAFF",
         "生产执行员": "PRODUCTION_STAFF",
         # 质量
         "质检员": "QUALITY_OPERATOR",
@@ -1009,35 +991,40 @@ class RoleService:
     }
 
     # 中国中小制造业极简角色预设（不含系统管理员，避免与已有系统角色冲突）
+    # 各部门仅保留「主管 + 人员」两档，不含文员/班组长等中间档
     PRESET_ROLES = [
         # 销售部
         {"name": "销售经理", "code": "SALES_MANAGER", "description": "销售部门负责人，负责订单终审、销售计划与价格策略"},
         {"name": "销售人员", "code": "SALES_PERSON", "description": "标准业务人员，负责客户维护、报价与订单跟进"},
-        {"name": "销售文员", "code": "SALES_OPERATOR", "description": "文员辅助角色，负责订单录入、单据归档与流程跟催"},
-        
+
         # 采购部
         {"name": "采购经理", "code": "PURCHASE_MANAGER", "description": "采购部门负责人，负责采购寻源、成本管控与结算审核"},
         {"name": "采购人员", "code": "PURCHASE_PERSON", "description": "标准采购人员，负责寻比价、下达采购计划与供应商跟进"},
-        {"name": "采购文员", "code": "PURCHASE_OPERATOR", "description": "文员辅助角色，负责采购单录入、到货跟催与资料整理"},
-        
+
         # 生产部
-        {"name": "车间主任", "code": "PRODUCTION_MANAGER", "description": "车间负责人，负责排产组织、质量与交付协同"},
-        {"name": "班组长", "code": "PRODUCTION_TEAM_LEADER", "description": "班组负责人，负责班组任务分配、进度跟踪与异常反馈"},
-        {"name": "生产文员", "code": "PRODUCTION_CLERK", "description": "生产文员，负责工单资料维护、单据录入与报表汇总"},
+        {"name": "生产主管", "code": "PRODUCTION_MANAGER", "description": "生产部门负责人，负责排产组织、质量与交付协同"},
         {"name": "生产人员", "code": "PRODUCTION_STAFF", "description": "一线生产人员，负责按工艺执行生产和过程反馈"},
-        
+
+        # 设备部
+        {"name": "设备主管", "code": "EQUIPMENT_MANAGER", "description": "设备部门负责人，负责设备台账、维保计划与故障处置决策"},
+        {"name": "设备人员", "code": "EQUIPMENT_OPERATOR", "description": "设备执行人员，负责点检巡检、报修与维保作业"},
+
         # 仓库部
         {"name": "仓库主管", "code": "WAREHOUSE_MANAGER", "description": "仓库部门负责人，负责库存策略与实物安全"},
         {"name": "仓库员", "code": "WAREHOUSE_OPERATOR", "description": "仓储执行人员，负责出入库盘点与收发货"},
-        
+
         # 财务部
         {"name": "财务主管", "code": "FINANCE_MANAGER", "description": "财务部门负责人，负责资金统筹与成本核算"},
         {"name": "会计专员", "code": "FINANCE_OPERATOR", "description": "财务执行人员，负责核销、开票及凭证录入"},
-        
+
         # 质量部
         {"name": "质量主管", "code": "QUALITY_MANAGER", "description": "质量部门负责人，负责质量标准与仲裁决策"},
         {"name": "质检员", "code": "QUALITY_OPERATOR", "description": "质检执行人员，负责进料、制程、成品检验"},
-        
+
+        # 研发部
+        {"name": "研发主管", "code": "RD_MANAGER", "description": "研发部门负责人，负责项目门禁、变更决策与研发协同"},
+        {"name": "研发人员", "code": "RD_STAFF", "description": "研发执行人员，负责需求、设计、实验与交付资料维护"},
+
         # 通用
         {"name": "行政办公", "code": "ADMIN_OFFICE", "description": "负责行政文秘及通用办公功能"},
         {"name": "普通员工", "code": "EMPLOYEE", "description": "职能通用权限，仅包含基础查询"},

@@ -325,6 +325,7 @@ class AuditBindingService:
                     "name": entry.name,
                     "app": entry.app,
                     "config_category": entry.config_category,
+                    "config_section": entry.config_section or None,
                     "template": entry.template,
                     "is_enabled": bool(binding and binding.is_enabled),
                     "process_uuid": str(process.uuid) if process else None,

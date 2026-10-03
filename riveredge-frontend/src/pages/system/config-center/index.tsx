@@ -156,6 +156,7 @@ function toBusinessParams(flat: Record<string, any>, bizParamKeys: string[]): Re
 }
 
 type ParamRenderBlock =
+  | { kind: 'section'; sectionKey: string; sectionNameKey: string; sectionDescriptionKey?: string }
   | { kind: 'single'; param: ParamMeta }
   | {
       kind: 'group';
@@ -165,12 +166,30 @@ type ParamRenderBlock =
       params: ParamMeta[];
     };
 
-/** 按 groupKey 聚合同组参数；无组参数保持单卡。同组首次出现位置决定整组插入点。 */
+/**
+ * 按声明顺序构建渲染块：
+ * 1) sectionKey 变化时插入通栏分区标题；
+ * 2) groupKey 聚合同组参数为一张卡；无组参数保持单卡。
+ */
 function groupParamsForRender(params: ParamMeta[]): ParamRenderBlock[] {
   const blocks: ParamRenderBlock[] = [];
   const groupBuckets = new Map<string, ParamMeta[]>();
+  let lastSectionKey = '';
+
+  const emitSectionIfNeeded = (param: ParamMeta) => {
+    const sk = param.sectionKey?.trim();
+    if (!sk || sk === lastSectionKey) return;
+    lastSectionKey = sk;
+    blocks.push({
+      kind: 'section',
+      sectionKey: sk,
+      sectionNameKey: param.sectionNameKey || sk,
+      sectionDescriptionKey: param.sectionDescriptionKey,
+    });
+  };
 
   for (const param of params) {
+    emitSectionIfNeeded(param);
     const gk = param.groupKey?.trim();
     if (!gk) {
       blocks.push({ kind: 'single', param });
@@ -563,6 +582,34 @@ const ConfigCenterPage: React.FC = () => {
                           (param) => param.source === 'quality_stage_toggle' || isImplementedParam(param.sourcePath),
                         ),
                       ).map((block) => {
+                        if (block.kind === 'section') {
+                          const { sectionKey, sectionNameKey, sectionDescriptionKey } = block;
+                          return (
+                            <div
+                              key={`section:${sectionKey}`}
+                              style={{
+                                gridColumn: '1 / -1',
+                                marginTop: 12,
+                                marginBottom: 4,
+                                padding: '12px 14px',
+                                borderRadius: token.borderRadiusLG,
+                              }}
+                            >
+                              <Text strong style={{ fontSize: 14, color: token.colorPrimary }}>
+                                {renderText(sectionNameKey, sectionKey)}
+                              </Text>
+                              {sectionDescriptionKey ? (
+                                <Paragraph
+                                  type="secondary"
+                                  style={{ fontSize: 12, margin: '4px 0 0', color: token.colorTextSecondary }}
+                                >
+                                  {renderText(sectionDescriptionKey, '')}
+                                </Paragraph>
+                              ) : null}
+                            </div>
+                          );
+                        }
+
                         if (block.kind === 'group') {
                           const { groupKey, groupNameKey, groupDescriptionKey, params } = block;
                           // 外层占满一行（不与其他卡并排）；内层同列宽网格，卡片宽度与单卡一致

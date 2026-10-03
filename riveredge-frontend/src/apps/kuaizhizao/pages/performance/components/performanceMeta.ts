@@ -118,6 +118,89 @@ export function renderYesNoTag(t: TFunction, value?: boolean): React.ReactNode {
   return React.createElement(MarkerTag, { color: value ? 'processing' : 'default' }, text);
 }
 
+/** 排班格子班次着色（按启用班次顺序轮换，非状态徽章） */
+export type ShiftSelectTint = {
+  background: string;
+  color: string;
+  borderColor: string;
+};
+
+const SHIFT_SELECT_TINTS: readonly ShiftSelectTint[] = [
+  { background: '#e6f4ff', color: '#0958d9', borderColor: '#91caff' },
+  { background: '#f6ffed', color: '#389e0d', borderColor: '#b7eb8f' },
+  { background: '#fff7e6', color: '#d46b08', borderColor: '#ffd591' },
+  { background: '#f9f0ff', color: '#531dab', borderColor: '#d3adf7' },
+  { background: '#e6fffb', color: '#08979c', borderColor: '#87e8de' },
+  { background: '#fff0f6', color: '#c41d7f', borderColor: '#ffadd2' },
+];
+
+const REST_SELECT_TINT: ShiftSelectTint = {
+  background: '#f5f5f5',
+  color: '#595959',
+  borderColor: '#d9d9d9',
+};
+
+/** 休息 / 各班次稳定配色；未选中返回 undefined */
+export function resolveShiftSelectTint(
+  shiftId: number | null | undefined,
+  restValue: number,
+  activeShiftIds: readonly number[],
+): ShiftSelectTint | undefined {
+  if (shiftId == null) return undefined;
+  if (shiftId === restValue) return REST_SELECT_TINT;
+  const idx = activeShiftIds.indexOf(shiftId);
+  if (idx < 0) return SHIFT_SELECT_TINTS[0];
+  return SHIFT_SELECT_TINTS[idx % SHIFT_SELECT_TINTS.length];
+}
+
+/** 班次开始/结束时间 → HH:mm（兼容 string / dayjs / 异常对象） */
+export function formatShiftClock(value: unknown): string {
+  if (value == null || value === '') return '';
+  if (typeof value === 'string') {
+    const m = value.trim().match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return '';
+    return `${m[1].padStart(2, '0')}:${m[2]}`;
+  }
+  if (typeof value === 'object' && value !== null && typeof (value as { format?: unknown }).format === 'function') {
+    try {
+      return String((value as { format: (p: string) => string }).format('HH:mm'));
+    } catch {
+      return '';
+    }
+  }
+  const raw = String(value);
+  const m = raw.match(/(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+}
+
+/** 列表/详情「时间段」展示：08:00 ~ 17:00 */
+export function formatShiftTimeRange(record: {
+  startTime?: unknown;
+  endTime?: unknown;
+  start_time?: unknown;
+  end_time?: unknown;
+} | null | undefined): string {
+  if (!record) return '-';
+  const start = formatShiftClock(record.startTime ?? record.start_time);
+  const end = formatShiftClock(record.endTime ?? record.end_time);
+  if (!start && !end) return '-';
+  return `${start || '-'} ~ ${end || '-'}`;
+}
+
+/** 列表/详情「班内休息」展示：12:00 ~ 13:00；未配置返回空串 */
+export function formatShiftBreakRange(record: {
+  breakStart?: unknown;
+  breakEnd?: unknown;
+  break_start?: unknown;
+  break_end?: unknown;
+} | null | undefined): string {
+  if (!record) return '';
+  const start = formatShiftClock(record.breakStart ?? record.break_start);
+  const end = formatShiftClock(record.breakEnd ?? record.break_end);
+  if (!start && !end) return '';
+  return `${start || '-'} ~ ${end || '-'}`;
+}
+
 const SUMMARY_STATUS_COLOR: Record<string, string> = {
   draft: 'default',
   pending: 'warning',

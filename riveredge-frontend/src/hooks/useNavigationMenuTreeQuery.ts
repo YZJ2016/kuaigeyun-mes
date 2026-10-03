@@ -7,6 +7,9 @@
  * 查询参数，所有消费方复用，确保 staleTime 内命中同一缓存、只发一次请求。
  *
  * 失效仍可用前缀 [NAVIGATION_MENU_TREE_QUERY_KEY] 匹配（React Query 默认前缀匹配）。
+ *
+ * 注意：navigation-tree 为租户级全量启用菜单，RBAC 在前端 filter；queryKey
+ * 不得含 permission_version，否则 /auth/me 回写版本时会丢缓存并二次拉取，APP 菜单闪空。
  */
 
 import { useMemo } from 'react';
@@ -19,15 +22,11 @@ import { useCurrentUser } from './useCurrentUser';
 /** 与 clearSessionQueries / 各失效点共用，避免侧栏与工作台菜单缓存不一致 */
 export const NAVIGATION_MENU_TREE_QUERY_KEY = 'navigationMenuTree';
 
-/** 规范的导航树 queryKey：随租户与权限版本变化失效 */
+/** 规范的导航树 queryKey：按租户缓存；权限变更只重算前端过滤，不重拉树 */
 export function buildNavigationMenuTreeQueryKey(
-  user?: Pick<CurrentUser, 'tenant_id' | 'permission_version'> | null,
+  user?: Pick<CurrentUser, 'tenant_id'> | null,
 ) {
-  return [
-    NAVIGATION_MENU_TREE_QUERY_KEY,
-    user?.tenant_id ?? null,
-    user?.permission_version ?? 0,
-  ] as const;
+  return [NAVIGATION_MENU_TREE_QUERY_KEY, user?.tenant_id ?? null] as const;
 }
 
 export interface UseNavigationMenuTreeQueryOptions {
@@ -47,7 +46,7 @@ export function useNavigationMenuTreeQuery(
 
   const queryKey = useMemo(
     () => buildNavigationMenuTreeQueryKey(currentUser),
-    [currentUser?.tenant_id, currentUser?.permission_version],
+    [currentUser?.tenant_id],
   );
 
   return useQuery<MenuTree[]>({
@@ -56,5 +55,7 @@ export function useNavigationMenuTreeQuery(
     enabled: !!currentUser && enabled,
     ...layoutShellQueryOptions,
     staleTime: 5 * 60 * 1000,
+    // 失效重拉时保留上一棵树，避免侧栏 APP 菜单空档
+    placeholderData: (previousData) => previousData,
   });
 }

@@ -523,26 +523,6 @@
             "permission": "kuaizhizao:rework-order:read"
           },
           {
-            "title": "app.kuaizhizao.menu.production-execution.rework-position-plan-templates",
-            "path": "/apps/kuaizhizao/production-execution/rework-position-plan-templates",
-            "sort_order": 5.5,
-            "meta": {
-              "module": "production",
-              "node": "rework_position_plan_template"
-            },
-            "permission": "kuaizhizao:rework-position-plan-template:read"
-          },
-          {
-            "title": "app.kuaizhizao.menu.production-execution.label-station",
-            "path": "/apps/kuaizhizao/production-execution/label-station",
-            "sort_order": 6,
-            "meta": {
-              "module": "production",
-              "node": "label_station"
-            },
-            "permission": "kuaizhizao:label-station:read"
-          },
-          {
             "title": "app.kuaizhizao.menu.production-execution.packing-binding",
             "path": "/apps/kuaizhizao/production-execution/packing-binding",
             "sort_order": 6.5,
@@ -551,26 +531,6 @@
               "node": "work_order"
             },
             "permission": "kuaizhizao:production-execution-packing-binding:read"
-          },
-          {
-            "title": "app.kuaizhizao.menu.production-execution.production-daily-templates",
-            "path": "/apps/kuaizhizao/production-execution/production-daily-templates",
-            "sort_order": 7,
-            "meta": {
-              "module": "production",
-              "node": "production_daily_template"
-            },
-            "permission": "kuaizhizao:production-daily-template:read"
-          },
-          {
-            "title": "app.kuaizhizao.menu.production-execution.production-daily-reports",
-            "path": "/apps/kuaizhizao/production-execution/production-daily-reports",
-            "sort_order": 7.5,
-            "meta": {
-              "module": "production",
-              "node": "production_daily"
-            },
-            "permission": "kuaizhizao:production-daily:read"
           },
           {
             "title": "app.kuaizhizao.menu.production-execution.reporting.statistics",
@@ -1125,12 +1085,6 @@
             "path": "/apps/kuaizhizao/performance/shift-rosters",
             "permission": "kuaizhizao:performance-shift-rosters:read",
             "sort_order": 2
-          },
-          {
-            "title": "app.kuaizhizao.menu.performance-management.work-calendar",
-            "path": "/apps/kuaizhizao/performance/work-calendar",
-            "permission": "kuaizhizao:performance-work-calendar:read",
-            "sort_order": 3
           }
         ]
       }
@@ -3028,6 +2982,8 @@
     "kuaizhizao:quality-management-eight-d-reports:delete",
     "kuaizhizao:quality-management-eight-d-reports:update",
     "kuaizhizao:quality-management-eight-d-reports:export",
+    "kuaizhizao:quality-management-eight-d-reports:assign",
+    "kuaizhizao:quality-management-eight-d-reports:submit",
     "kuaizhizao:quality-management-eight-d-reports:approve",
     "kuaizhizao:quality-management-eight-d-reports:print",
     "kuaizhizao:quality-management-eight-d-reports:close",
@@ -3773,7 +3729,8 @@
       "resource": "kuaizhizao:sales-order",
       "name": "销售订单审核",
       "template": "sme",
-      "config_category": "sales"
+      "config_category": "sales",
+      "config_section": "sales_order"
     },
     {
       "node_key": "sales_order_change",
@@ -3781,7 +3738,8 @@
       "resource": "kuaizhizao:sales-order-change",
       "name": "销售订单变更审核",
       "template": "simple",
-      "config_category": "sales"
+      "config_category": "sales",
+      "config_section": "sales_order"
     },
     {
       "node_key": "sales_forecast",
@@ -3789,7 +3747,8 @@
       "resource": "kuaizhizao:sales-forecast",
       "name": "销售预测审核",
       "template": "simple",
-      "config_category": "sales"
+      "config_category": "sales",
+      "config_section": "sales_order"
     },
     {
       "node_key": "sales_contract",
@@ -3797,7 +3756,8 @@
       "resource": "kuaizhizao:sales-contract",
       "name": "框架合同审核",
       "template": "simple",
-      "config_category": "sales"
+      "config_category": "sales",
+      "config_section": "sales_order"
     },
     {
       "node_key": "quotation",
@@ -3805,7 +3765,8 @@
       "resource": "kuaizhizao:quotation",
       "name": "报价单审核",
       "template": "simple",
-      "config_category": "sales"
+      "config_category": "sales",
+      "config_section": "sales_order"
     },
     {
       "node_key": "shipment_notice",
@@ -3813,7 +3774,8 @@
       "resource": "kuaizhizao:shipment-notice",
       "name": "发货通知单审核",
       "template": "simple",
-      "config_category": "sales"
+      "config_category": "sales",
+      "config_section": "sales_fulfillment"
     },
     {
       "node_key": "sales_delivery",
@@ -3821,7 +3783,8 @@
       "resource": "kuaizhizao:outbound",
       "name": "销售出库审核",
       "template": "simple",
-      "config_category": "sales"
+      "config_category": "sales",
+      "config_section": "sales_fulfillment"
     },
     {
       "node_key": "freight_bill",
@@ -3829,7 +3792,8 @@
       "resource": "kuaizhizao:freight-bill",
       "name": "运费单审核",
       "template": "simple",
-      "config_category": "warehouse"
+      "config_category": "warehouse",
+      "config_section": "warehouse_logistics"
     },
     {
       "node_key": "sales_return",
@@ -3837,7 +3801,8 @@
       "resource": "kuaizhizao:sales-return",
       "name": "销售退货单审核",
       "template": "simple",
-      "config_category": "sales"
+      "config_category": "sales",
+      "config_section": "sales_fulfillment"
     },
     {
       "node_key": "sales_contract_change",
@@ -3845,7 +3810,8 @@
       "resource": "kuaizhizao:sales-contract",
       "name": "框架合同变更审核",
       "template": "simple",
-      "config_category": "sales"
+      "config_category": "sales",
+      "config_section": "sales_order"
     },
     {
       "node_key": "demand",
@@ -3861,7 +3827,8 @@
       "resource": "kuaizhizao:purchase-order",
       "name": "采购订单审核",
       "template": "sme",
-      "config_category": "procurement"
+      "config_category": "procurement",
+      "config_section": "procurement_order"
     },
     {
       "node_key": "purchase_order_change",
@@ -3869,7 +3836,8 @@
       "resource": "kuaizhizao:purchase-order-change",
       "name": "采购订单变更审核",
       "template": "simple",
-      "config_category": "procurement"
+      "config_category": "procurement",
+      "config_section": "procurement_order"
     },
     {
       "node_key": "purchase_arrival_delay",
@@ -3877,7 +3845,8 @@
       "resource": "kuaizhizao:purchase-arrival-delay",
       "name": "采购到货延期填报审核",
       "template": "simple",
-      "config_category": "procurement"
+      "config_category": "procurement",
+      "config_section": "procurement_order"
     },
     {
       "node_key": "purchase_request",
@@ -3885,7 +3854,8 @@
       "resource": "kuaizhizao:purchase-request",
       "name": "采购申请审核",
       "template": "simple",
-      "config_category": "procurement"
+      "config_category": "procurement",
+      "config_section": "procurement_request"
     },
     {
       "node_key": "purchase_inquiry",
@@ -3893,7 +3863,8 @@
       "resource": "kuaizhizao:purchase-inquiry",
       "name": "采购询价审核",
       "template": "simple",
-      "config_category": "procurement"
+      "config_category": "procurement",
+      "config_section": "procurement_request"
     },
     {
       "node_key": "purchase_return",
@@ -3901,7 +3872,8 @@
       "resource": "kuaizhizao:purchase-return",
       "name": "采购退货审核",
       "template": "simple",
-      "config_category": "procurement"
+      "config_category": "procurement",
+      "config_section": "procurement_order"
     },
     {
       "node_key": "reporting_record",
@@ -3909,7 +3881,8 @@
       "resource": "kuaizhizao:reporting-record",
       "name": "报工审核",
       "template": "simple",
-      "config_category": "production"
+      "config_category": "production",
+      "config_section": "production_reporting"
     },
     {
       "node_key": "incoming_inspection",
@@ -3917,7 +3890,8 @@
       "resource": "kuaizhizao:incoming-inspection",
       "name": "来料检验审核",
       "template": "simple",
-      "config_category": "quality"
+      "config_category": "quality",
+      "config_section": "quality_inspection"
     },
     {
       "node_key": "process_inspection",
@@ -3925,7 +3899,8 @@
       "resource": "kuaizhizao:process-inspection",
       "name": "工序检验审核",
       "template": "simple",
-      "config_category": "quality"
+      "config_category": "quality",
+      "config_section": "quality_inspection"
     },
     {
       "node_key": "finished_goods_inspection",
@@ -3933,7 +3908,8 @@
       "resource": "kuaizhizao:finished-goods-inspection",
       "name": "成品检验审核",
       "template": "simple",
-      "config_category": "quality"
+      "config_category": "quality",
+      "config_section": "quality_inspection"
     },
     {
       "node_key": "oqc_inspection",
@@ -3941,7 +3917,8 @@
       "resource": "kuaizhizao:oqc-inspection",
       "name": "出货检验审核",
       "template": "simple",
-      "config_category": "quality"
+      "config_category": "quality",
+      "config_section": "quality_inspection"
     },
     {
       "node_key": "rework_order",
@@ -3950,6 +3927,7 @@
       "name": "返工单会签审核",
       "template": "simple",
       "config_category": "production",
+      "config_section": "production_work",
       "business_type": "multi_signoff"
     },
     {
@@ -3958,7 +3936,8 @@
       "resource": "kuaizhizao:work-order",
       "name": "生产工单审核",
       "template": "simple",
-      "config_category": "production"
+      "config_category": "production",
+      "config_section": "production_work"
     },
     {
       "node_key": "production_picking",
@@ -3966,7 +3945,8 @@
       "resource": "kuaizhizao:inbound",
       "name": "生产领料审核",
       "template": "simple",
-      "config_category": "warehouse"
+      "config_category": "warehouse",
+      "config_section": "warehouse_picking"
     },
     {
       "node_key": "supplier_evaluation",
@@ -3974,7 +3954,8 @@
       "resource": "kuaizhizao:supplier-eval",
       "name": "供应商评价审核",
       "template": "simple",
-      "config_category": "quality"
+      "config_category": "quality",
+      "config_section": "quality_inspection"
     },
     {
       "node_key": "quality_complaint_iqc_incoming",
@@ -3983,6 +3964,7 @@
       "name": "质量投诉审核",
       "template": "simple",
       "config_category": "quality",
+      "config_section": "quality_complaint",
       "business_type": "iqc_incoming"
     },
     {
@@ -3992,6 +3974,7 @@
       "name": "质量投诉审核产线来料",
       "template": "simple",
       "config_category": "quality",
+      "config_section": "quality_complaint",
       "business_type": "line_incoming"
     },
     {
@@ -4001,6 +3984,7 @@
       "name": "质量投诉审核PQC",
       "template": "simple",
       "config_category": "quality",
+      "config_section": "quality_complaint",
       "business_type": "pqc"
     },
     {
@@ -4010,6 +3994,7 @@
       "name": "质量投诉审核OQC",
       "template": "simple",
       "config_category": "quality",
+      "config_section": "quality_complaint",
       "business_type": "oqc"
     },
     {
@@ -4019,6 +4004,7 @@
       "name": "质量投诉审核客户",
       "template": "simple",
       "config_category": "quality",
+      "config_section": "quality_complaint",
       "business_type": "customer"
     }
   ],
@@ -5986,6 +5972,44 @@
                 "icon": "bell",
                 "route": "/mold/reminders",
                 "permission": "kuaizhizao:mold-maintenance-reminder:read"
+              }
+            ]
+          }
+        ]
+      },
+      "common": {
+        "sections": [
+          {
+            "key": "other_common",
+            "title": "其他常用",
+            "entries": [
+              {
+                "key": "purchase-requisitions",
+                "label": "采购申请",
+                "icon": "file",
+                "route": "/docs/purchase-requisitions",
+                "permission": "kuaizhizao:purchase-requisition:read"
+              },
+              {
+                "key": "purchase-arrival-delays",
+                "label": "采购到货延误",
+                "icon": "clock-circle",
+                "route": "/docs/purchase-arrival-delays",
+                "permission": "kuaizhizao:purchase-arrival-delay:read"
+              },
+              {
+                "key": "receipt-notices",
+                "label": "收货通知单",
+                "icon": "inbox",
+                "route": "/wms/receipt-notices",
+                "permission": "kuaizhizao:receipt-notice:read"
+              },
+              {
+                "key": "shipment-notices",
+                "label": "发货通知单",
+                "icon": "export",
+                "route": "/wms/shipment-notices",
+                "permission": "kuaizhizao:shipment-notice:read"
               }
             ]
           }

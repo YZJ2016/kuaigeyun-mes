@@ -407,8 +407,8 @@ class UserService:
         old_position_id = user.position_id
         old_is_active = user.is_active
         
-        # 验证部门（如果提供）
-        if data.department_uuid is not None:
+        # 验证部门（显式传入才更新；null/空串清空）
+        if "department_uuid" in data.model_fields_set:
             if data.department_uuid:
                 department = await Department.filter(
                     uuid=data.department_uuid,
@@ -423,8 +423,8 @@ class UserService:
             else:
                 user.department_id = None
         
-        # 验证职位（如果提供）
-        if data.position_uuid is not None:
+        # 验证职位（显式传入才更新；null/空串清空）
+        if "position_uuid" in data.model_fields_set:
             if data.position_uuid:
                 position = await Position.filter(
                     uuid=data.position_uuid,
@@ -669,6 +669,54 @@ class UserService:
                 failure_count += 1
                 errors.append({"uuid": user_uuid, "message": str(e)})
                 logger.exception("batch_delete_users failed for %s", user_uuid)
+        return {
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "errors": errors,
+        }
+
+    @staticmethod
+    async def batch_update_users(
+        tenant_id: int,
+        user_uuids: List[str],
+        data: UserUpdate,
+        current_user_id: int,
+        *,
+        current_user: Optional[User] = None,
+    ) -> Dict[str, Any]:
+        """
+        批量更新用户（部门 / 职位 / 角色 / 启用状态等）。
+
+        逐条调用 update_user，单条失败不影响其余条目。
+        """
+        patch_dump = data.model_dump(exclude_unset=True)
+        if not patch_dump:
+            raise ValidationError("批量更新至少需要提供一个可更新字段")
+
+        success_count = 0
+        failure_count = 0
+        errors: List[Dict[str, str]] = []
+        seen: set[str] = set()
+        for user_uuid in user_uuids:
+            if not user_uuid or user_uuid in seen:
+                continue
+            seen.add(user_uuid)
+            try:
+                await UserService.update_user(
+                    tenant_id=tenant_id,
+                    user_uuid=user_uuid,
+                    data=UserUpdate.model_validate(patch_dump),
+                    current_user_id=current_user_id,
+                    current_user=current_user,
+                )
+                success_count += 1
+            except (NotFoundError, ValidationError) as e:
+                failure_count += 1
+                errors.append({"uuid": user_uuid, "message": str(e)})
+            except Exception as e:
+                failure_count += 1
+                errors.append({"uuid": user_uuid, "message": str(e)})
+                logger.exception("batch_update_users failed for %s", user_uuid)
         return {
             "success_count": success_count,
             "failure_count": failure_count,

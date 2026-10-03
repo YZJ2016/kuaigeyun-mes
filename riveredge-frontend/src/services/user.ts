@@ -102,8 +102,10 @@ export interface UpdateUserData {
   password?: string;
   full_name?: string;
   phone?: string;
-  department_uuid?: string;
-  position_uuid?: string;
+  /** 传 null 清空部门 */
+  department_uuid?: string | null;
+  /** 传 null 清空职位 */
+  position_uuid?: string | null;
   role_uuids?: string[];
   is_active?: boolean;
   is_tenant_admin?: boolean;
@@ -348,16 +350,44 @@ export async function exportUsers(params?: UserListParams): Promise<Blob> {
 export async function batchUpdateUsersStatus(userUuids: string[], isActive: boolean): Promise<{
   success_count: number;
   failure_count: number;
+  errors: Array<{ uuid: string; message: string }>;
 }> {
   return apiRequest<{
     success_count: number;
     failure_count: number;
+    errors: Array<{ uuid: string; message: string }>;
   }>('/core/users/batch/status', {
     method: 'POST',
     data: {
       user_uuids: userUuids,
       is_active: isActive,
     },
+  });
+}
+
+export interface UserBatchUpdatePayload {
+  user_uuids: string[];
+  department_uuid?: string | null;
+  position_uuid?: string | null;
+  role_uuids?: string[];
+  is_active?: boolean;
+}
+
+/**
+ * 批量设置用户部门 / 职位 / 角色 / 启用状态
+ */
+export async function batchUpdateUsers(payload: UserBatchUpdatePayload): Promise<{
+  success_count: number;
+  failure_count: number;
+  errors: Array<{ uuid: string; message: string }>;
+}> {
+  return apiRequest<{
+    success_count: number;
+    failure_count: number;
+    errors: Array<{ uuid: string; message: string }>;
+  }>('/core/users/batch-update', {
+    method: 'POST',
+    data: payload,
   });
 }
 
@@ -442,6 +472,8 @@ export interface UserDisplayItem {
   /** 头像文件 UUID；无则空 */
   avatar?: string | null;
   department_uuid?: string | null;
+  /** 所属部门名称（展示用） */
+  department_name?: string | null;
   roles?: UserDisplayRoleItem[];
 }
 

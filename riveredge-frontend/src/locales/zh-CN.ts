@@ -3038,7 +3038,10 @@ export default {
   'app.kuaizhizao.labelStation.title': '标签工位',
   'app.kuaizhizao.labelStation.stubTitle': '通用标签工位壳',
   'app.kuaizhizao.labelStation.placeholder':
-    '未启用行业包时使用本页通用工位引擎；启用电子制造后由 document 替代加载 OEM 签样页。',
+    '通用标签工位已从快制造菜单下线；作业能力由已启用的定制应用维护。',
+  'app.kuaizhizao.labelStation.offlineTitle': '通用标签工位已下线',
+  'app.kuaizhizao.labelStation.offlineDescription':
+    '标签打印与装箱作业请在已启用的定制应用中使用「标签打印工位」入口。启用「电子制造」行业包时，本地址仍可加载 OEM 标签签样替代页。',
   'app.kuaizhizao.labelStation.industryHint':
     '可在应用中心启用「电子制造」以加载 OEM 标签签样替代页。',
   'app.kuaizhizao.labelStation.tabWork': '作业',
@@ -7834,6 +7837,9 @@ export default {
   'app.kuaizhizao.reworkPositionPlanTemplate.updateSuccess': '排位策划模板已更新',
   'app.kuaizhizao.reworkPositionPlanTemplate.deleteSuccess': '排位策划模板已删除',
   'app.kuaizhizao.reworkPositionPlanTemplate.deleteConfirm': '确定删除该排位策划模板？',
+  'app.kuaizhizao.reworkPositionPlan.offlineTitle': '返工策划已从快制造通用版下线',
+  'app.kuaizhizao.reworkPositionPlan.offlineDescription':
+    '排位策划模板请在已启用的定制应用中维护；本地址不再加载通用列表与编辑页。',
   'app.kuaizhizao.menu.production-execution.outsource-orders': '委外单',
   'app.kuaizhizao.menu.production-execution.exception-management': '异常管理',
   'app.kuaizhizao.menu.production-execution.work-orders.kiosk': '工单看板',
@@ -9358,6 +9364,43 @@ export default {
   'app.kuaizhizao.eightD.status.closed': '已关闭',
   'app.kuaizhizao.eightD.workbench.tabTitleSuffix': '8D 工作台',
   'app.kuaizhizao.eightD.workbench.backToList': '全部 8D 报告',
+  'app.kuaizhizao.eightD.collab.assignSaved': '阶段负责人已保存',
+  'app.kuaizhizao.eightD.collab.assignee': '负责人',
+  'app.kuaizhizao.eightD.collab.selectAssignee': '选择负责人',
+  'app.kuaizhizao.eightD.collab.stageDue': '阶段截止',
+  'app.kuaizhizao.eightD.collab.saveAssignment': '保存指派',
+  'app.kuaizhizao.eightD.collab.submitStage': '提交阶段',
+  'app.kuaizhizao.eightD.collab.approveStage': '确认阶段',
+  'app.kuaizhizao.eightD.collab.rejectStage': '驳回阶段',
+  'app.kuaizhizao.eightD.collab.rejectStageTitle': '驳回阶段提交',
+  'app.kuaizhizao.eightD.collab.rejectReason': '驳回原因',
+  'app.kuaizhizao.eightD.collab.rejectReasonRequired': '请填写驳回原因',
+  'app.kuaizhizao.eightD.collab.submitDone': '阶段已提交，等待牵头人确认',
+  'app.kuaizhizao.eightD.collab.approveDone': '阶段已确认',
+  'app.kuaizhizao.eightD.collab.rejectDone': '已驳回，负责人可继续修改',
+  'app.kuaizhizao.eightD.collab.stageStatus.pending': '待开始',
+  'app.kuaizhizao.eightD.collab.stageStatus.in_progress': '进行中',
+  'app.kuaizhizao.eightD.collab.stageStatus.submitted': '待确认',
+  'app.kuaizhizao.eightD.collab.stageStatus.approved': '已确认',
+  'app.kuaizhizao.eightD.collab.actionSection': '阶段行动项',
+  'app.kuaizhizao.eightD.collab.createActionItem': '新建行动项',
+  'app.kuaizhizao.eightD.collab.editActionItem': '编辑行动项',
+  'app.kuaizhizao.eightD.collab.actionTitle': '行动项',
+  'app.kuaizhizao.eightD.collab.actionAssignee': '责任人',
+  'app.kuaizhizao.eightD.collab.actionStatus': '状态',
+  'app.kuaizhizao.eightD.collab.actionStatus.open': '进行中',
+  'app.kuaizhizao.eightD.collab.actionStatus.done': '待验证',
+  'app.kuaizhizao.eightD.collab.actionStatus.verified': '已验证',
+  'app.kuaizhizao.eightD.collab.actionStatus.cancelled': '已取消',
+  'app.kuaizhizao.eightD.collab.actionComplete': '标记完成',
+  'app.kuaizhizao.eightD.collab.actionVerify': '验证',
+  'app.kuaizhizao.eightD.collab.actionCompleteDone': '行动项已标记完成',
+  'app.kuaizhizao.eightD.collab.actionVerifyDone': '行动项已验证',
+  'app.kuaizhizao.eightD.collab.filterMyStage': '待我负责阶段',
+  'app.kuaizhizao.eightD.collab.filterMyStageOnly': '仅看待我负责阶段',
+  'app.kuaizhizao.eightD.collab.filterMyAction': '待我行动项',
+  'app.kuaizhizao.eightD.collab.filterMyActionOnly': '仅看待我行动项',
+  'app.kuaizhizao.eightD.collab.openActions': '开放行动项',
   'app.kuaizhizao.eightD.workbench.currentStage': '流程阶段',
   'app.kuaizhizao.eightD.workbench.closedReadonly': '报告已关闭，内容只读',
   'app.kuaizhizao.eightD.workbench.stageLocked': '阶段 {{stage}} 尚未开放，请先推进流程',
@@ -9865,6 +9908,12 @@ export default {
   'app.kuaizhizao.productionDaily.plantName': '厂区',
   'app.kuaizhizao.productionDaily.status.draft': '草稿',
   'app.kuaizhizao.productionDaily.status.submitted': '已提交',
+  'app.kuaizhizao.productionDailyTemplate.offlineTitle': '日报模板已从快制造通用版下线',
+  'app.kuaizhizao.productionDailyTemplate.offlineDescription':
+    '日报类型与字段模板请在已启用的定制应用中维护；本地址不再加载通用配置页。',
+  'app.kuaizhizao.productionDailyReport.offlineTitle': '生产日报已从快制造通用版下线',
+  'app.kuaizhizao.productionDailyReport.offlineDescription':
+    '生产日报录入请在已启用的定制应用中维护；本地址不再加载通用录入页。',
   'app.kuaizhizao.menu.reports.work-order-tracking': '工单状态跟踪',
   'app.kuaizhizao.menu.reports.work-order-material-usage': '物料耗用明细',
   'app.kuaizhizao.menu.reports.work-order-labor-detail': '工时报工明细',
@@ -9981,6 +10030,7 @@ export default {
   'app.kuaizhizao.performance.common.rosterStatus.published': '已发布',
   'app.kuaizhizao.performance.common.rosterStatus.draft': '草稿',
   'app.kuaizhizao.performance.common.columns.employee': '员工',
+  'app.kuaizhizao.performance.common.columns.actions': '操作',
   'app.kuaizhizao.performance.common.columns.period': '周期',
   'app.kuaizhizao.performance.common.columns.totalHours': '总工时',
   'app.kuaizhizao.performance.common.columns.totalPieces': '总件数',
@@ -10080,14 +10130,21 @@ export default {
   'app.kuaizhizao.performance.skills.messages.loadListFailed': '获取技能列表失败',
   'app.kuaizhizao.performance.skills.messages.deleteConfirm': '确定要删除这个技能吗？',
   'app.kuaizhizao.performance.workCalendar.pageTitle': '工作日历',
+  'app.kuaizhizao.performance.workCalendar.pageHint':
+    '厂级加班与员工临时加班/休息已迁至「班次排班」页的「加班管理」「临时调整」；本页仅维护工位停机窗。',
+  'app.kuaizhizao.performance.workCalendar.pageMovedHint':
+    '工作日历能力已并入「班次排班」：排班、加班、临时调整、工位停机窗在同一页维护。请从班次排班进入「工位停机窗」。',
+  'app.kuaizhizao.performance.workCalendar.openShiftRostersDowntime': '打开班次排班 工位停机窗',
   'app.kuaizhizao.performance.workCalendar.configTitle': '工作时段配置',
-  'app.kuaizhizao.performance.workCalendar.configHint': '厂级每日可排产时段；APS 自动重排与保存校验均引用此处。节假日见「节假日」菜单；加班见「加班管理」标签。',
+  'app.kuaizhizao.performance.workCalendar.configHint':
+    '每日可排工作时段已改跟班次与已发布排班；请在「班次定义」维护上下班与班内休息。节假日见「节假日」菜单；加班见「加班管理」标签。',
   'app.kuaizhizao.performance.workCalendar.workDayRange': '每日工作时间',
   'app.kuaizhizao.performance.workCalendar.breakRange': '休息时段（可选）',
   'app.kuaizhizao.performance.workCalendar.windowSource': '窗口来源',
   'app.kuaizhizao.performance.workCalendar.windowSourceFixed': '固定时段',
   'app.kuaizhizao.performance.workCalendar.windowSourceShift': '按班次（已发布排班）',
-  'app.kuaizhizao.performance.workCalendar.windowSourceHint': '选择「按班次」时，以已发布排班合成每日可排窗，并与节假日/加班规则合并。',
+  'app.kuaizhizao.performance.workCalendar.windowSourceHint':
+    '可排窗以已发布排班与班次班内休息为准，并与节假日/加班规则合并。',
   'app.kuaizhizao.performance.workCalendar.downtimeTitle': '工位停机窗',
   'app.kuaizhizao.performance.workCalendar.downtimeHint': '停机窗从工位可排时间扣除，并作为 APS 占用。',
   'app.kuaizhizao.performance.workCalendar.downtimeTableTitle': '停机窗列表',
@@ -10099,9 +10156,11 @@ export default {
   'app.kuaizhizao.performance.workCalendar.columns.reason': '原因',
   'app.kuaizhizao.performance.workCalendar.messages.downtimeSaved': '停机窗已保存',
   'app.kuaizhizao.performance.workCalendar.messages.downtimeDeleted': '停机窗已删除',
+  'app.kuaizhizao.performance.workCalendar.messages.downtimeDeleteConfirm': '确定删除该停机窗？',
   'app.kuaizhizao.performance.workCalendar.updatedAt': '最近更新：{{time}}',
   'app.kuaizhizao.performance.workCalendar.overtimeTitle': '加班管理',
-  'app.kuaizhizao.performance.workCalendar.overtimeHint': '工作日加班在基础时段外追加窗口；节假日加班仅开放所配置窗口。',
+  'app.kuaizhizao.performance.workCalendar.overtimeHint':
+    '日常可排窗跟班次与已发布排班；工作日加班在班次窗外追加，节假日加班仅开放所配置窗口。',
   'app.kuaizhizao.performance.workCalendar.overtimeTableTitle': '加班计划',
   'app.kuaizhizao.performance.workCalendar.createOvertime': '新增加班',
   'app.kuaizhizao.performance.workCalendar.editOvertime': '编辑加班',
@@ -10115,29 +10174,82 @@ export default {
   'app.kuaizhizao.performance.shifts.pageTitle': '班次定义',
   'app.kuaizhizao.performance.shifts.createButton': '新建班次',
   'app.kuaizhizao.performance.shifts.detailTitle': '班次详情',
+  'app.kuaizhizao.performance.shifts.modal.createTitle': '新建班次',
+  'app.kuaizhizao.performance.shifts.modal.editTitle': '编辑班次',
+  'app.kuaizhizao.performance.shifts.form.code': '班次编码',
+  'app.kuaizhizao.performance.shifts.form.name': '班次名称',
+  'app.kuaizhizao.performance.shifts.form.startTime': '开始时间',
+  'app.kuaizhizao.performance.shifts.form.endTime': '结束时间',
+  'app.kuaizhizao.performance.shifts.form.breakStart': '班内休息开始',
+  'app.kuaizhizao.performance.shifts.form.breakEnd': '班内休息结束',
+  'app.kuaizhizao.performance.shifts.form.breakHint': '可选；须同时填写开始与结束，并落在班次时段内（白班/晚班均可）。',
+  'app.kuaizhizao.performance.shifts.form.standardHours': '标准工时(小时)',
+  'app.kuaizhizao.performance.shifts.form.crossesMidnight': '跨天',
   'app.kuaizhizao.performance.shifts.columns.shiftCode': '班次编码',
   'app.kuaizhizao.performance.shifts.columns.shiftName': '班次名称',
   'app.kuaizhizao.performance.shifts.columns.timeRange': '时间段',
+  'app.kuaizhizao.performance.shifts.columns.breakRange': '班内休息',
   'app.kuaizhizao.performance.shifts.columns.crossesMidnight': '跨天',
   'app.kuaizhizao.performance.shifts.columns.standardHours': '标准工时',
   'app.kuaizhizao.performance.shifts.messages.selectFirst': '请先选择班次',
+  'app.kuaizhizao.performance.shifts.messages.loadFailed': '加载班次失败',
+  'app.kuaizhizao.performance.shifts.messages.breakPairRequired': '班内休息须同时填写开始与结束时间',
   'app.kuaizhizao.performance.shifts.messages.deleteConfirm': '确定删除该班次？',
   'app.kuaizhizao.performance.shifts.messages.deleteBatchConfirm': '确定要删除选中的 {{count}} 条班次吗？',
   'app.kuaizhizao.performance.rosters.label.workGroup': '工作小组',
-  'app.kuaizhizao.performance.rosters.label.employee': '工人人员',
+  'app.kuaizhizao.performance.rosters.label.employee': '人员',
+  'app.kuaizhizao.performance.rosters.label.departmentFilter': '部门',
   'app.kuaizhizao.performance.rosters.label.rosterWeek': '排班周',
   'app.kuaizhizao.performance.rosters.scope.workGroup': '工作小组',
-  'app.kuaizhizao.performance.rosters.scope.employee': '工人人员',
+  'app.kuaizhizao.performance.rosters.scope.employee': '人员',
   'app.kuaizhizao.performance.rosters.placeholder.workGroup': '选择工作小组',
-  'app.kuaizhizao.performance.rosters.placeholder.employee': '选择工人人员',
+  'app.kuaizhizao.performance.rosters.placeholder.employee': '选择人员',
+  'app.kuaizhizao.performance.rosters.placeholder.allDepartments': '全部部门',
+  'app.kuaizhizao.performance.scope.label': '适用范围',
+  'app.kuaizhizao.performance.scope.plant': '整厂',
+  'app.kuaizhizao.performance.scope.department': '按部门',
+  'app.kuaizhizao.performance.scope.employee': '按人员',
+  'app.kuaizhizao.performance.rosters.overtime.hint':
+    '列表默认筛选当前排班周（{{start}} ~ {{end}}）。可设整厂、按部门或按人员；工作日加班在班次窗外追加，节假日加班仅开放所配置窗口；请填写原因便于追溯。',
+  'app.kuaizhizao.performance.rosters.tempAdjust.tabTitle': '临时调整',
+  'app.kuaizhizao.performance.rosters.tempAdjust.tableTitle': '临时加班与临时休息',
+  'app.kuaizhizao.performance.rosters.tempAdjust.hint':
+    '默认筛选排班周 {{start}} ~ {{end}}；支持整厂、按部门或按人员。临时加班按范围并入 APS 可排窗，临时休息仅作记录不扣全厂窗。',
+  'app.kuaizhizao.performance.rosters.tempAdjust.createButton': '新建临时调整',
+  'app.kuaizhizao.performance.rosters.tempAdjust.createTitle': '新建临时调整',
+  'app.kuaizhizao.performance.rosters.tempAdjust.editTitle': '编辑临时调整',
+  'app.kuaizhizao.performance.rosters.tempAdjust.kindOvertime': '临时加班',
+  'app.kuaizhizao.performance.rosters.tempAdjust.kindRest': '临时休息',
+  'app.kuaizhizao.performance.rosters.tempAdjust.columns.kind': '类型',
+  'app.kuaizhizao.performance.rosters.tempAdjust.messages.saved': '临时调整已保存',
+  'app.kuaizhizao.performance.rosters.tempAdjust.messages.noEmployeeInScope':
+    '当前排班范围内无可用员工，请先在「班次排班」Tab 加载人员后再新建。',
+  'app.kuaizhizao.performance.rosters.hint.allEmployees':
+    '当前展示组织内全部可用人员（共 {{count}} 人），按周维护一张全员排班表。',
+  'app.kuaizhizao.performance.rosters.hint.personnelRoster':
+    '人员视图共 {{total}} 人，当前列表 {{shown}} 人；保存仍作用于全员排班表。',
   'app.kuaizhizao.performance.rosters.hint.period': '周期：{{start}} ~ {{end}}。未排班单元格留空；选择「休息」表示当日不上班。',
+  'app.kuaizhizao.performance.rosters.hint.quickFill':
+    '每行可「一键排班」整周或工作日填入班次；工作日以假期设置中的休息日为准。',
+  'app.kuaizhizao.performance.rosters.quickFill.action': '一键排班',
+  'app.kuaizhizao.performance.rosters.quickFill.groupWeek': '整周',
+  'app.kuaizhizao.performance.rosters.quickFill.groupWorkdays': '工作日（按假期设置）',
+  'app.kuaizhizao.performance.rosters.quickFill.fillWeek': '整周填「{{shift}}」',
+  'app.kuaizhizao.performance.rosters.quickFill.fillWorkdays': '工作日填「{{shift}}」',
+  'app.kuaizhizao.performance.rosters.quickFill.fillWeekRest': '整周休息',
+  'app.kuaizhizao.performance.rosters.quickFill.modeWeek': '整周',
+  'app.kuaizhizao.performance.rosters.quickFill.modeWorkdays': '工作日',
   'app.kuaizhizao.performance.rosters.messages.loadBaseFailed': '加载基础数据失败',
+  'app.kuaizhizao.performance.rosters.messages.loadWeekHolidaysFailed': '加载本周假期设置失败',
+  'app.kuaizhizao.performance.rosters.messages.loadEmployeeDisplayFailed': '加载员工部门角色失败',
   'app.kuaizhizao.performance.rosters.messages.loadRosterFailed': '加载排班表失败',
   'app.kuaizhizao.performance.rosters.messages.selectWorkGroup': '请先选择工作小组',
-  'app.kuaizhizao.performance.rosters.messages.selectEmployee': '请先选择工人人员',
+  'app.kuaizhizao.performance.rosters.messages.selectEmployee': '请先选择人员',
   'app.kuaizhizao.performance.rosters.messages.saveSuccess': '排班已保存',
   'app.kuaizhizao.performance.rosters.messages.publishSuccess': '排班已发布',
   'app.kuaizhizao.performance.rosters.messages.copySuccess': '已复制上周排班',
+  'app.kuaizhizao.performance.rosters.messages.quickFillSuccess':
+    '已为 {{name}} {{mode}}填入「{{shift}}」，请保存草稿',
   'app.kuaizhizao.performance.rosters.employeeFallback': '员工#{{id}}',
   'app.kuaizhizao.performance.employeeConfigs.pageTitle': '员工绩效配置',
   'app.kuaizhizao.performance.employeeConfigs.createButton': '新建员工绩效配置',
@@ -21078,8 +21190,7 @@ export default {
   'app.master-data.productionLines.importSuccess': '成功导入 {{count}} 条产线数据',
   'app.master-data.productionLines.dimensionHint':
     '产线是工厂组织树中间层（车间下的线组），用于工位归属与设备线组；不参与排产、派工或线边仓匹配。产能与派工请维护工作中心。',
-  'app.master-data.factory.collapseDimensionHint': '收起提示',
-  'app.master-data.factory.expandDimensionHint': '展开提示',
+  'app.master-data.factory.dimensionHintButton': '说明',
   'app.master-data.workstations.getListFailed': '获取工位列表失败',
   'app.master-data.workstations.code': '工位编码',
   'app.master-data.workstations.name': '工位名称',
@@ -23568,8 +23679,10 @@ export default {
   'field.role.functionalDomainSales': '销售',
   'field.role.functionalDomainPurchase': '采购',
   'field.role.functionalDomainProduction': '生产',
+  'field.role.functionalDomainEquipment': '设备',
   'field.role.functionalDomainWarehouse': '仓库',
   'field.role.functionalDomainQuality': '质量',
+  'field.role.functionalDomainRd': '研发',
   'field.role.functionalDomainFinance': '财务',
   'field.role.functionalDomainGeneral': '通用',
   'field.role.externalPartnerType': '外部绑定类型',
@@ -23622,7 +23735,6 @@ export default {
   'field.department.descriptionPlaceholder': '请输入备注',
   'field.department.createTitle': '新建部门',
   'field.department.loadPreset': '加载预设',
-  'field.department.linkPresetManagers': '补齐部门负责人',
   'field.approvalProcess.loadPreset': '加载预设',
   'field.messageTemplate.loadPreset': '加载预设',
   'field.department.editTitle': '编辑部门',
@@ -24495,6 +24607,7 @@ export default {
   'pages.system.configCenter.scheduledTasks.title': '定时任务',
   'pages.system.configCenter.scheduledTasks.description':
     '管理系统内置的后台定时任务。Cron 按站点时区墙钟解释；需同时运行 taskiq worker 与 scheduler。可调整执行周期与启用状态，并按组织独立执行。',
+  'pages.system.configCenter.scheduledTasks.searchPlaceholder': '搜索任务名称、编码、模块等',
   'pages.system.configCenter.scheduledTasks.syncPresets': '同步内置任务',
   'pages.system.configCenter.scheduledTasks.syncFailed': '同步内置定时任务失败',
   'pages.system.configCenter.scheduledTasks.editTitle': '编辑定时任务',
@@ -24743,6 +24856,67 @@ export default {
   'pages.system.configCenter.category.productionDesc': '工单、报工、BOM、计划相关参数',
   'pages.system.configCenter.category.common': '通用配置',
   'pages.system.configCenter.category.commonDesc': '跨模块共享的全局配置项',
+  'pages.system.configCenter.category.office': '办公管理',
+  'pages.system.configCenter.category.officeDesc': '请假、用章、固定资产、培训等办公申请审核',
+  'pages.system.configCenter.category.plm': '研发管理',
+  'pages.system.configCenter.category.plmDesc': '工程变更、文控与研发项目相关审核',
+  'pages.system.configCenter.auditSection.office_admin': '日常行政',
+  'pages.system.configCenter.auditSection.office_admin_desc':
+    '自定义申请、固定资产、请假出差与用章。',
+  'pages.system.configCenter.auditSection.office_training': '培训与资质',
+  'pages.system.configCenter.auditSection.office_training_desc':
+    '部门培训、年度培训计划与特殊作业资格。',
+  'pages.system.configCenter.auditSection.plm_change': '工程变更',
+  'pages.system.configCenter.auditSection.plm_change_desc':
+    'BOM、工艺路线、图纸与工程变更单。',
+  'pages.system.configCenter.auditSection.plm_doc': '文控与文件',
+  'pages.system.configCenter.auditSection.plm_doc_desc':
+    '产品固件、生产文件、工程图纸与研发交付物。',
+  'pages.system.configCenter.auditSection.plm_project': '研发项目',
+  'pages.system.configCenter.auditSection.plm_project_desc':
+    '项目建议、物料评审、协同、试流打样与样机制作。',
+  'pages.system.configCenter.auditSection.sales_order': '订单与合同',
+  'pages.system.configCenter.auditSection.sales_order_desc':
+    '销售订单、变更、预测、框架合同与报价。',
+  'pages.system.configCenter.auditSection.sales_fulfillment': '发货与退货',
+  'pages.system.configCenter.auditSection.sales_fulfillment_desc':
+    '发货通知、销售出库与销售退货。',
+  'pages.system.configCenter.auditSection.sales_special': '特价申请',
+  'pages.system.configCenter.auditSection.sales_special_desc':
+    '特价申请审核。',
+  'pages.system.configCenter.auditSection.procurement_request': '请购与询价',
+  'pages.system.configCenter.auditSection.procurement_request_desc':
+    '采购申请与询价。',
+  'pages.system.configCenter.auditSection.procurement_order': '采购订单',
+  'pages.system.configCenter.auditSection.procurement_order_desc':
+    '采购订单、变更、退货与到货延期填报。',
+  'pages.system.configCenter.auditSection.production_work': '工单',
+  'pages.system.configCenter.auditSection.production_work_desc':
+    '生产工单与返工单会签。',
+  'pages.system.configCenter.auditSection.production_reporting': '报工',
+  'pages.system.configCenter.auditSection.production_reporting_desc':
+    '报工记录审核。',
+  'pages.system.configCenter.auditSection.quality_inspection': '检验与评价',
+  'pages.system.configCenter.auditSection.quality_inspection_desc':
+    '来料、过程、成品、出货检验与供应商评价。',
+  'pages.system.configCenter.auditSection.quality_complaint': '质量投诉',
+  'pages.system.configCenter.auditSection.quality_complaint_desc':
+    '各来源质量投诉审核。',
+  'pages.system.configCenter.auditSection.quality_collab': '质量协同申请',
+  'pages.system.configCenter.auditSection.quality_collab_desc':
+    '让步接收与工艺偏离申请。',
+  'pages.system.configCenter.auditSection.warehouse_picking': '生产领料',
+  'pages.system.configCenter.auditSection.warehouse_picking_desc':
+    '生产领料审核。',
+  'pages.system.configCenter.auditSection.warehouse_logistics': '物流运费',
+  'pages.system.configCenter.auditSection.warehouse_logistics_desc':
+    '运费单审核。',
+  'pages.system.configCenter.auditSection.finance_ar_ap': '应收应付',
+  'pages.system.configCenter.auditSection.finance_ar_ap_desc':
+    '应收单与应付单。',
+  'pages.system.configCenter.auditSection.finance_invoice': '进项发票',
+  'pages.system.configCenter.auditSection.finance_invoice_desc':
+    '进项发票审核。',
   'pages.system.configCenter.param.common_trial_run_mode': '试运营模式',
   'pages.system.configCenter.param.common_trial_run_mode_desc':
     '开启后进入试运营阶段，部分业务校验与修改限制将更为宽松；具体规则将随各模块逐步接入。关闭后恢复常规严格校验。',
@@ -24761,6 +24935,42 @@ export default {
   'pages.system.configCenter.paramGroup.common_numeric_precision': '数值精度',
   'pages.system.configCenter.paramGroup.common_numeric_precision_desc':
     '数量、单价、金额分项设定，默认均为 2 位，可配置范围 0–4。',
+  'pages.system.configCenter.paramSection.production_work_order': '工单',
+  'pages.system.configCenter.paramSection.production_work_order_desc':
+    '工单拆分合并、优先级、客户显示与无 BOM 开工等。',
+  'pages.system.configCenter.paramSection.production_reporting': '报工',
+  'pages.system.configCenter.paramSection.production_reporting_desc':
+    '快速报工、默认数量与人员、数据修正与自动审核。',
+  'pages.system.configCenter.paramSection.production_picking': '领料与缺料',
+  'pages.system.configCenter.paramSection.production_picking_desc':
+    '缺料拦截、领料确认权限，以及开工/报工前是否必须确认领料。',
+  'pages.system.configCenter.paramSection.quality_stage': '检验阶段开关',
+  'pages.system.configCenter.paramSection.quality_stage_desc':
+    '控制来料、过程、成品、出货检验阶段是否启用。',
+  'pages.system.configCenter.paramSection.quality_capability': '检验能力',
+  'pages.system.configCenter.paramSection.quality_capability_desc':
+    '各检验业务与不良处理能力开关。',
+  'pages.system.configCenter.paramSection.quality_gate': '入库门禁',
+  'pages.system.configCenter.paramSection.quality_gate_desc':
+    '收货、客供料、成品入库前是否必须完成对应检验。',
+  'pages.system.configCenter.paramSection.warehouse_trace': '标识与追溯',
+  'pages.system.configCenter.paramSection.warehouse_trace_desc':
+    '批次、序列号与库位管理。',
+  'pages.system.configCenter.paramSection.warehouse_issue_strategy': '出库策略',
+  'pages.system.configCenter.paramSection.warehouse_issue_strategy_desc':
+    '先进先出、后进先出及其判定口径。',
+  'pages.system.configCenter.paramSection.warehouse_over_issue': '超量发料',
+  'pages.system.configCenter.paramSection.warehouse_over_issue_desc':
+    '允许超出需求的发料比例。',
+  'pages.system.configCenter.paramSection.procurement_process': '采购流程',
+  'pages.system.configCenter.paramSection.procurement_process_desc':
+    '请购、供应商资质、到货预警与订单变更确认。',
+  'pages.system.configCenter.paramSection.procurement_tolerance': '容差与价格',
+  'pages.system.configCenter.paramSection.procurement_tolerance_desc':
+    '收货数量容差与采购价格波动上限。',
+  'pages.system.configCenter.paramSection.automation_quality_auto_create': '自动创建检验单',
+  'pages.system.configCenter.paramSection.automation_quality_auto_create_desc':
+    '收货、报工、发货等节点自动创建对应检验单。',
   'pages.system.configCenter.param.common_quantity_decimal_places': '数量小数位',
   'pages.system.configCenter.param.common_quantity_decimal_places_desc':
     '数量录入与展示小数位数。默认 2 位，范围 0–4。',
@@ -27417,6 +27627,7 @@ export default {
   'pages.system.onboardingWizard.roleFinance': '财务结算向导',
   'pages.system.onboardingWizard.roleManager': '管理决策向导',
   'pages.system.onboardingWizard.roleImplementer': '系统实施专家向导',
+  'pages.system.onboardingWizard.loadingSiteConfig': '正在同步站点配置…',
   'pages.system.onboardingWizard.loadSystemFailed': '加载系统上线向导失败',
   'pages.system.onboardingWizard.loadRoleFailed': '加载业务角色向导失败',
   'pages.system.onboardingWizard.emptySystem': '暂无系统上线任务数据',
@@ -27473,6 +27684,11 @@ export default {
   'pages.system.onboardingWizard.system.phase.modeling': '第二阶段：核心资源定义 (物料与伙伴)',
   'pages.system.onboardingWizard.system.phase.process': '第三阶段：生产工艺模型 (BOM 与路线)',
   'pages.system.onboardingWizard.system.phase.validation': '第四阶段：全链路闭环验证',
+  'pages.system.onboardingWizard.system.phase.opsCalendar': '可选：运营日历与班次',
+  'pages.system.onboardingWizard.system.phase.outsource': '可选：外协协同',
+  'pages.system.onboardingWizard.system.phase.qmsBootstrap': '可选：质检体系',
+  'pages.system.onboardingWizard.system.phase.emsBootstrap': '可选：设备运维',
+  'pages.system.onboardingWizard.system.phase.financeBootstrap': '可选：轻财务建账',
   'pages.system.onboardingWizard.system.task.factoryData.name': '建立工厂数据',
   'pages.system.onboardingWizard.system.task.factoryData.desc': '在「工厂数据」中定义工作中心、车间与产线建模',
   'pages.system.onboardingWizard.system.task.warehouseData.name': '规划仓库数据',
@@ -27486,7 +27702,7 @@ export default {
   'pages.system.onboardingWizard.system.task.processRouting.name': '配置工艺数据 (路线)',
   'pages.system.onboardingWizard.system.task.processRouting.desc': '在「工艺数据」中规划生产工序、工时标准与工序流转',
   'pages.system.onboardingWizard.system.task.firstOrderRun.name': '完成首笔业务试运行',
-  'pages.system.onboardingWizard.system.task.firstOrderRun.desc': '通过一笔完整的模拟订单（从销售下单开始）验证所有主数据的准确性与连通性',
+  'pages.system.onboardingWizard.system.task.firstOrderRun.desc': '按闭环清单从销售订单跑通至库存核对，验证主数据与跨模块单据连通性',
   'pages.system.onboardingWizard.system.task.initialDataVerified.name': '期初数据核对完成',
   'pages.system.onboardingWizard.system.task.initialDataVerified.desc': '确认期初库存 / 在制 / 应收应付等期初数据已与线下账目核对一致',
   'pages.system.onboardingWizard.system.sub.factoryPlants.name': '厂区管理',
@@ -27529,6 +27745,76 @@ export default {
   'pages.system.onboardingWizard.system.sub.processDefects.desc': '定义生产异常与质量缺陷分类，支撑报工时的质量统计',
   'pages.system.onboardingWizard.system.sub.processSop.name': '标准操作 (SOP)',
   'pages.system.onboardingWizard.system.sub.processSop.desc': '挂载图纸与作业指导书，确保车间操作规范化',
+  'pages.system.onboardingWizard.system.sub.materialUnits.name': '计量单位',
+  'pages.system.onboardingWizard.system.sub.materialUnits.desc': '维护主单位与换算关系，供物料与单据计量引用',
+  'pages.system.onboardingWizard.system.sub.partnerCustomerPriceBooks.name': '客户价目本',
+  'pages.system.onboardingWizard.system.sub.partnerCustomerPriceBooks.desc': '维护客户专属销售价，开单时可自动带出',
+  'pages.system.onboardingWizard.system.sub.partnerSupplierPriceBooks.name': '供应商价目本',
+  'pages.system.onboardingWizard.system.sub.partnerSupplierPriceBooks.desc': '维护采购价与有效区间，支撑采购核价',
+  'pages.system.onboardingWizard.system.sub.processProductProcess.name': '产品工艺',
+  'pages.system.onboardingWizard.system.sub.processProductProcess.desc': '为产品绑定默认工艺与工序，便于工单与报工',
+  'pages.system.onboardingWizard.system.sub.loopSalesOrder.name': '1 销售订单',
+  'pages.system.onboardingWizard.system.sub.loopSalesOrder.desc': '创建并审核一笔试跑销售订单',
+  'pages.system.onboardingWizard.system.sub.loopDemand.name': '2 需求计划',
+  'pages.system.onboardingWizard.system.sub.loopDemand.desc': '由订单生成或维护需求计划，确认可下推生产',
+  'pages.system.onboardingWizard.system.sub.loopWorkOrder.name': '3 生产工单',
+  'pages.system.onboardingWizard.system.sub.loopWorkOrder.desc': '下达工单并释放至车间执行',
+  'pages.system.onboardingWizard.system.sub.loopReporting.name': '4 生产报工',
+  'pages.system.onboardingWizard.system.sub.loopReporting.desc': '完成工序报工，更新在制与产出',
+  'pages.system.onboardingWizard.system.sub.loopProdInbound.name': '5 生产入库',
+  'pages.system.onboardingWizard.system.sub.loopProdInbound.desc': '完工品办理生产入库，增加成品库存',
+  'pages.system.onboardingWizard.system.sub.loopShipment.name': '6 发货通知',
+  'pages.system.onboardingWizard.system.sub.loopShipment.desc': '开具发货通知，衔接销售出库',
+  'pages.system.onboardingWizard.system.sub.loopInventory.name': '7 库存核对',
+  'pages.system.onboardingWizard.system.sub.loopInventory.desc': '在库存台账核对试跑物料数量与结存',
+  'pages.system.onboardingWizard.system.task.opsCalendarSetup.name': '配置运营日历',
+  'pages.system.onboardingWizard.system.task.opsCalendarSetup.desc': '维护节假日、班次与工作日历，支撑排程与绩效',
+  'pages.system.onboardingWizard.system.sub.opsHolidays.name': '节假日',
+  'pages.system.onboardingWizard.system.sub.opsHolidays.desc': '维护法定与公司休假，避免排产撞期',
+  'pages.system.onboardingWizard.system.sub.opsShifts.name': '班次',
+  'pages.system.onboardingWizard.system.sub.opsShifts.desc': '定义上下班时段，供日历与排班引用',
+  'pages.system.onboardingWizard.system.sub.opsWorkCalendar.name': '工作日历',
+  'pages.system.onboardingWizard.system.sub.opsWorkCalendar.desc': '组合班次与例外日，形成工厂可用产能日历',
+  'pages.system.onboardingWizard.system.task.outsourceBootstrap.name': '外协流程试通',
+  'pages.system.onboardingWizard.system.task.outsourceBootstrap.desc': '按需配置外协订单、发料与收回，验证委外链路',
+  'pages.system.onboardingWizard.system.sub.outsourceOrders.name': '外协订单',
+  'pages.system.onboardingWizard.system.sub.outsourceOrders.desc': '创建外协加工订单并跟踪交期',
+  'pages.system.onboardingWizard.system.sub.outsourceIssue.name': '外协发料',
+  'pages.system.onboardingWizard.system.sub.outsourceIssue.desc': '向外协厂发出物料并登记在途',
+  'pages.system.onboardingWizard.system.sub.outsourceReceipt.name': '外协收回',
+  'pages.system.onboardingWizard.system.sub.outsourceReceipt.desc': '登记外协完工收回与检验入库',
+  'pages.system.onboardingWizard.system.task.qmsBootstrap.name': '质检体系就绪',
+  'pages.system.onboardingWizard.system.task.qmsBootstrap.desc': '建立检验方案与来料、过程、成品检验入口',
+  'pages.system.onboardingWizard.system.sub.qmsPlans.name': '检验方案',
+  'pages.system.onboardingWizard.system.sub.qmsPlans.desc': '定义检验项目与抽样规则',
+  'pages.system.onboardingWizard.system.sub.qmsIqc.name': '来料检验',
+  'pages.system.onboardingWizard.system.sub.qmsIqc.desc': '采购/外协到货检验与放行',
+  'pages.system.onboardingWizard.system.sub.qmsIpqc.name': '过程检验',
+  'pages.system.onboardingWizard.system.sub.qmsIpqc.desc': '工序在制检验与异常登记',
+  'pages.system.onboardingWizard.system.sub.qmsFqc.name': '成品检验',
+  'pages.system.onboardingWizard.system.sub.qmsFqc.desc': '完工入库前的成品质量确认',
+  'pages.system.onboardingWizard.system.sub.qmsNcr.name': '不合格台账',
+  'pages.system.onboardingWizard.system.sub.qmsNcr.desc': '集中跟踪不合格品处置与闭环',
+  'pages.system.onboardingWizard.system.task.emsBootstrap.name': '设备运维就绪',
+  'pages.system.onboardingWizard.system.task.emsBootstrap.desc': '建立设备台账与保养、点检日常机制',
+  'pages.system.onboardingWizard.system.sub.emsEquipment.name': '设备台账',
+  'pages.system.onboardingWizard.system.sub.emsEquipment.desc': '登记设备档案与归属工作中心',
+  'pages.system.onboardingWizard.system.sub.emsMaintPlans.name': '保养计划',
+  'pages.system.onboardingWizard.system.sub.emsMaintPlans.desc': '制定预防性保养周期与项目',
+  'pages.system.onboardingWizard.system.sub.emsSpotCheck.name': '设备点检',
+  'pages.system.onboardingWizard.system.sub.emsSpotCheck.desc': '执行日常点检并记录异常',
+  'pages.system.onboardingWizard.system.task.financeBootstrap.name': '财务建账就绪',
+  'pages.system.onboardingWizard.system.task.financeBootstrap.desc': '配置科目、总账参数与应收应付入口',
+  'pages.system.onboardingWizard.system.sub.fiCoa.name': '科目表',
+  'pages.system.onboardingWizard.system.sub.fiCoa.desc': '维护会计科目体系',
+  'pages.system.onboardingWizard.system.sub.fiGlSettings.name': '总账设置',
+  'pages.system.onboardingWizard.system.sub.fiGlSettings.desc': '配置账簿、期间与过账规则',
+  'pages.system.onboardingWizard.system.sub.fiOpening.name': '期初余额',
+  'pages.system.onboardingWizard.system.sub.fiOpening.desc': '录入财务期初余额并与业务对齐',
+  'pages.system.onboardingWizard.system.sub.fiReceivables.name': '应收账款',
+  'pages.system.onboardingWizard.system.sub.fiReceivables.desc': '查看销售形成的应收与核销',
+  'pages.system.onboardingWizard.system.sub.fiPayables.name': '应付账款',
+  'pages.system.onboardingWizard.system.sub.fiPayables.desc': '查看采购形成的应付与付款计划',
   'pages.system.onboardingWizard.guide.warehouse_main.mission': '定义工厂的物理仓储中心，支撑原材料、在制品与成品的数字化入出库流转。',
   'pages.system.onboardingWizard.guide.warehouse_main.standard': '完成核心原材料仓与成品仓的建立，确立基本的出入库策略。',
   'pages.system.onboardingWizard.guide.warehouse_main.tip': '建议将线边仓与原材料仓分开：线边仓按车间或工作中心管理现场备料；工位级在制通过报工/WIP管理，无需为每个工位建仓。',
@@ -27552,10 +27838,10 @@ export default {
   'pages.system.onboardingWizard.guide.process_routes.standard': '完成产品工艺路线配置，且工序间的逻辑关系（串行/并行）与车间实操一致。',
   'pages.system.onboardingWizard.guide.process_routes.tip': '工时数据的精度直接影响排产（APS）的有效性，初期可使用经验值，后期通过报工数据优化。',
   'pages.system.onboardingWizard.guide.process_routes.dependency': '需预先定义【工作中心】与【资源组】。',
-  'pages.system.onboardingWizard.guide.first_order_run.mission': '快格云制造全链路闭环验证：销售下单 -> 计划排产 -> 车间生产/报工 -> 完工入库 -> 销售发货。',
-  'pages.system.onboardingWizard.guide.first_order_run.standard': '完成至少一笔完整的「进-销-存-产」一体化业务循环，且库存台账与生产档案准确。',
-  'pages.system.onboardingWizard.guide.first_order_run.tip': '这是系统正式上线的终极考核，务必邀请各部门业务骨干参与，确认数据流与价值流的连贯性。',
-  'pages.system.onboardingWizard.guide.first_order_run.dependency': '需保证【进销存基础、MES 建模、权限配置】均已就绪。',
+  'pages.system.onboardingWizard.guide.first_order_run.mission': '制造业务全链路闭环验证：销售订单 → 需求计划 → 生产工单 → 报工 → 生产入库 → 发货通知 → 库存核对。',
+  'pages.system.onboardingWizard.guide.first_order_run.standard': '完成至少一笔端到端业务循环，销售、计划、车间、仓储各环节单据与库存台账一致。',
+  'pages.system.onboardingWizard.guide.first_order_run.tip': '建议邀请销售、计划、车间、仓储各岗位骨干联调，逐步勾选闭环子项，确认数据连通无误后再切正式账期。',
+  'pages.system.onboardingWizard.guide.first_order_run.dependency': '需完成主数据建模、工艺路线与期初库存核对等前置项，并已为相关岗位分配权限。',
   'pages.system.onboardingWizard.adminCoreDuties': '管理员核心职责',
   'pages.system.onboardingWizard.adminCoreDutiesValue': '组织架构、账号权限、流程引擎、系统安全',
   'pages.system.onboardingWizard.deliveryAcceptance': '交付验收标准',
@@ -27581,24 +27867,40 @@ export default {
   'pages.system.onboardingWizard.role.sales.task.sales_order.desc': '承接客户需求，生成正式的销售订单，触发生产或发货需求',
   'pages.system.onboardingWizard.role.sales.task.sales_delivery.name': '跟进发货进度',
   'pages.system.onboardingWizard.role.sales.task.sales_delivery.desc': '根据库存和生产情况，开具发货通知单',
+  'pages.system.onboardingWizard.role.sales.task.sales_price_book.name': '维护客户价目本',
+  'pages.system.onboardingWizard.role.sales.task.sales_price_book.desc': '为客户维护标准售价，减少开单差错',
+  'pages.system.onboardingWizard.role.sales.task.sales_return.name': '处理销售退货',
+  'pages.system.onboardingWizard.role.sales.task.sales_return.desc': '按需登记退货并衔接库存回库',
   'pages.system.onboardingWizard.role.purchase.mission': '核心使命：找准供应商，管好采购进度，确保生产不缺料。',
   'pages.system.onboardingWizard.role.purchase.prerequisiteData': '供应商档案、物料采购价目表、采购周期设置',
   'pages.system.onboardingWizard.role.purchase.businessDocs': '采购申请单、采购订单、到货质检单、采购退货单',
   'pages.system.onboardingWizard.role.purchase.empowermentValue': '系统智能计算缺料并推荐采购，避免停工待料或库存积压。',
   'pages.system.onboardingWizard.role.purchase.task.pur_supplier.name': '建立供应商档案',
   'pages.system.onboardingWizard.role.purchase.task.pur_supplier.desc': '录入供应商库，进行资质管理',
-  'pages.system.onboardingWizard.role.purchase.task.pur_price.name': '维护采购价目',
-  'pages.system.onboardingWizard.role.purchase.task.pur_price.desc': '记录物料的采购成本价与历史采购记录',
+  'pages.system.onboardingWizard.role.purchase.task.pur_price_book.name': '维护供应商价目本',
+  'pages.system.onboardingWizard.role.purchase.task.pur_price_book.desc': '记录物料采购价与有效区间',
+  'pages.system.onboardingWizard.role.purchase.task.pur_requisition.name': '发起采购申请',
+  'pages.system.onboardingWizard.role.purchase.task.pur_requisition.desc': '由需求部门提交采购申请并转订单',
   'pages.system.onboardingWizard.role.purchase.task.pur_order.name': '下达采购订单',
   'pages.system.onboardingWizard.role.purchase.task.pur_order.desc': '向供应商正式下达采购任务，明确交期',
   'pages.system.onboardingWizard.role.purchase.task.pur_receipt.name': '跟踪到货入库',
   'pages.system.onboardingWizard.role.purchase.task.pur_receipt.desc': '确认供应商送货情况，协同质检与仓储入库',
+  'pages.system.onboardingWizard.role.purchase.task.pur_inbound.name': '办理采购入库',
+  'pages.system.onboardingWizard.role.purchase.task.pur_inbound.desc': '到货检验合格后完成采购入库过账',
   'pages.system.onboardingWizard.role.warehouse.mission': '核心使命：管好仓库，确保存货账实相符，物料找得到、发得快。',
   'pages.system.onboardingWizard.role.warehouse.prerequisiteData': '仓库/储位划分、期初库存建账、安全库存设置',
   'pages.system.onboardingWizard.role.warehouse.businessDocs': '采购入库单、生产领料单、生产入库单、销售出库单、盘点单',
   'pages.system.onboardingWizard.role.warehouse.empowermentValue': '告别手工做账，实现库存流水扫码即时更新，库存数据 100% 准确。',
   'pages.system.onboardingWizard.role.warehouse.task.wh_setup.name': '规划物理仓库',
   'pages.system.onboardingWizard.role.warehouse.task.wh_setup.desc': '定义原材料仓、半成品仓及成品仓',
+  'pages.system.onboardingWizard.role.warehouse.task.wh_initial.name': '期初数据核对',
+  'pages.system.onboardingWizard.role.warehouse.task.wh_initial.desc': '在期初数据页导入并核对库存与在制',
+  'pages.system.onboardingWizard.role.warehouse.task.wh_inventory.name': '查询库存台账',
+  'pages.system.onboardingWizard.role.warehouse.task.wh_inventory.desc': '日常查询结存、批次与库位分布',
+  'pages.system.onboardingWizard.role.warehouse.task.wh_stocktake.name': '执行盘点',
+  'pages.system.onboardingWizard.role.warehouse.task.wh_stocktake.desc': '按计划盘点并处理盘盈盘亏',
+  'pages.system.onboardingWizard.role.warehouse.task.wh_transfer.name': '库存调拨',
+  'pages.system.onboardingWizard.role.warehouse.task.wh_transfer.desc': '跨仓或跨库位调拨物料',
   'pages.system.onboardingWizard.role.warehouse.task.wh_stock_in.name': '处理采购入库',
   'pages.system.onboardingWizard.role.warehouse.task.wh_stock_in.desc': '核对采购到货单，完成物料实物入库',
   'pages.system.onboardingWizard.role.warehouse.task.wh_picking.name': '处理生产领料',
@@ -27611,18 +27913,28 @@ export default {
   'pages.system.onboardingWizard.role.technician.empowermentValue': '实现研发资料与 BOM 的版本管控，确保车间拿到的永远是最新标准。',
   'pages.system.onboardingWizard.role.technician.task.tech_material.name': '定义物料主数据',
   'pages.system.onboardingWizard.role.technician.task.tech_material.desc': '统一下发全厂的物料编码与属性',
+  'pages.system.onboardingWizard.role.technician.task.tech_units.name': '维护计量单位',
+  'pages.system.onboardingWizard.role.technician.task.tech_units.desc': '统一全厂计量单位与换算',
   'pages.system.onboardingWizard.role.technician.task.tech_bom.name': '搭建产品 BOM',
   'pages.system.onboardingWizard.role.technician.task.tech_bom.desc': '构建产品结构的数字孪生（物料清单）',
+  'pages.system.onboardingWizard.role.technician.task.tech_product_process.name': '维护产品工艺',
+  'pages.system.onboardingWizard.role.technician.task.tech_product_process.desc': '为产品绑定默认工艺路线与工序',
   'pages.system.onboardingWizard.role.technician.task.tech_route.name': '设计工艺路线',
   'pages.system.onboardingWizard.role.technician.task.tech_route.desc': '梳理生产工序先后顺序与标准工时',
+  'pages.system.onboardingWizard.role.technician.task.tech_defects.name': '维护不良类型',
+  'pages.system.onboardingWizard.role.technician.task.tech_defects.desc': '定义报工与质检使用的不良原因字典',
   'pages.system.onboardingWizard.role.planner.mission': '核心使命：排好生产计划，平衡订单与产能，解决车间堵点。',
   'pages.system.onboardingWizard.role.planner.prerequisiteData': '工作中心定义、工作中心产能配置、日历与排班',
   'pages.system.onboardingWizard.role.planner.businessDocs': '生产计划表、生产工单、委外加工单',
   'pages.system.onboardingWizard.role.planner.empowermentValue': '系统智能排程推算交期，平衡产能负荷，最大化车间产出。',
   'pages.system.onboardingWizard.role.planner.task.plan_wc.name': '维护工作中心产能',
   'pages.system.onboardingWizard.role.planner.task.plan_wc.desc': '定义工作中心（机台或产线组）的基础产能信息',
-  'pages.system.onboardingWizard.role.planner.task.plan_mrp.name': '运行物料需求计划',
-  'pages.system.onboardingWizard.role.planner.task.plan_mrp.desc': '一键推算缺料情况，生成采购建议',
+  'pages.system.onboardingWizard.role.planner.task.plan_demand.name': '维护需求计划',
+  'pages.system.onboardingWizard.role.planner.task.plan_demand.desc': '汇总订单需求并确认可释放生产',
+  'pages.system.onboardingWizard.role.planner.task.plan_mrp.name': '运行需求计算',
+  'pages.system.onboardingWizard.role.planner.task.plan_mrp.desc': '推算缺料与建议，支撑采购与工单',
+  'pages.system.onboardingWizard.role.planner.task.plan_schedule.name': '生产排程',
+  'pages.system.onboardingWizard.role.planner.task.plan_schedule.desc': '按产能与交期安排工单开工顺序',
   'pages.system.onboardingWizard.role.planner.task.plan_order.name': '下达生产工单',
   'pages.system.onboardingWizard.role.planner.task.plan_order.desc': '将销售订单转化为车间可执行的生产工单',
   'pages.system.onboardingWizard.role.supervisor.mission': '核心使命：盯着现场进度，及时解决异常，把控生产节奏。',
@@ -27632,7 +27944,11 @@ export default {
   'pages.system.onboardingWizard.role.supervisor.task.sup_team.name': '管理车间班组',
   'pages.system.onboardingWizard.role.supervisor.task.sup_team.desc': '维护排班信息与车间操作人员档案',
   'pages.system.onboardingWizard.role.supervisor.task.sup_dispatch.name': '工序派工下发',
-  'pages.system.onboardingWizard.role.supervisor.task.sup_dispatch.desc': '将工单拆解到具体工位和工人',
+  'pages.system.onboardingWizard.role.supervisor.task.sup_dispatch.desc': '在工单上释放任务并跟进工序进度',
+  'pages.system.onboardingWizard.role.supervisor.task.sup_prod_out.name': '生产领料出库',
+  'pages.system.onboardingWizard.role.supervisor.task.sup_prod_out.desc': '按工单办理领料或产出库出库',
+  'pages.system.onboardingWizard.role.supervisor.task.sup_calendar.name': '工作日历',
+  'pages.system.onboardingWizard.role.supervisor.task.sup_calendar.desc': '查看班次与工厂日历，协调现场排班',
   'pages.system.onboardingWizard.role.supervisor.task.sup_monitor.name': '生产进度看板',
   'pages.system.onboardingWizard.role.supervisor.task.sup_monitor.desc': '实时监控产线运行情况与报工异常',
   'pages.system.onboardingWizard.role.operator.mission': '核心使命：高效执行派工任务，保质保量完成工序作业。',
@@ -27643,6 +27959,8 @@ export default {
   'pages.system.onboardingWizard.role.operator.task.op_receive.desc': '在移动端/平板上查看自己的派工任务',
   'pages.system.onboardingWizard.role.operator.task.op_report.name': '扫码完工报工',
   'pages.system.onboardingWizard.role.operator.task.op_report.desc': '工序做完后，一键报工并自动计算计件工资',
+  'pages.system.onboardingWizard.role.operator.task.op_label.name': '标签工位',
+  'pages.system.onboardingWizard.role.operator.task.op_label.desc': '按需打印或扫描产品标签',
   'pages.system.onboardingWizard.role.quality.mission': '核心使命：严控产品质量，实现全过程追溯，降低废品成本。',
   'pages.system.onboardingWizard.role.quality.prerequisiteData': '检验标准 (AQL)、质检方案、检验项目字典',
   'pages.system.onboardingWizard.role.quality.businessDocs': '来料检验单 (IQC)、过程检验单 (PQC)、出货检验单',
@@ -27653,6 +27971,14 @@ export default {
   'pages.system.onboardingWizard.role.quality.task.qa_iqc.desc': '对委外或采购回来的物料进行质检',
   'pages.system.onboardingWizard.role.quality.task.qa_oqc.name': '出货检验',
   'pages.system.onboardingWizard.role.quality.task.qa_oqc.desc': '对即将发货的成品进行最终出厂前检验',
+  'pages.system.onboardingWizard.role.quality.task.qa_ipqc.name': '过程检验',
+  'pages.system.onboardingWizard.role.quality.task.qa_ipqc.desc': '在制工序检验并登记异常',
+  'pages.system.onboardingWizard.role.quality.task.qa_fqc.name': '成品检验',
+  'pages.system.onboardingWizard.role.quality.task.qa_fqc.desc': '完工入库前的成品质量确认',
+  'pages.system.onboardingWizard.role.quality.task.qa_ncr.name': '不合格台账',
+  'pages.system.onboardingWizard.role.quality.task.qa_ncr.desc': '跟踪不合格品处置与闭环',
+  'pages.system.onboardingWizard.role.quality.task.qa_fai.name': '首件检验',
+  'pages.system.onboardingWizard.role.quality.task.qa_fai.desc': '新工单或换型时的首件确认',
   'pages.system.onboardingWizard.role.equipment.mission': '核心使命：保养好机器设备，减少临时停机，保障生产不停工。',
   'pages.system.onboardingWizard.role.equipment.prerequisiteData': '设备台账、备品备件库、保养计划模板',
   'pages.system.onboardingWizard.role.equipment.businessDocs': '设备点检单、设备维修单、设备保养单',
@@ -27660,17 +27986,31 @@ export default {
   'pages.system.onboardingWizard.role.equipment.task.eq_ledger.name': '建立设备台账',
   'pages.system.onboardingWizard.role.equipment.task.eq_ledger.desc': '对全厂机器设备进行一物一码建档',
   'pages.system.onboardingWizard.role.equipment.task.eq_maintain.name': '设备巡检与保养',
-  'pages.system.onboardingWizard.role.equipment.task.eq_maintain.desc': '执行设备日常点检与预防性保养任务',
+  'pages.system.onboardingWizard.role.equipment.task.eq_maintain.desc': '执行保养任务并登记执行结果',
+  'pages.system.onboardingWizard.role.equipment.task.eq_plan.name': '保养计划',
+  'pages.system.onboardingWizard.role.equipment.task.eq_plan.desc': '制定设备预防性保养计划',
+  'pages.system.onboardingWizard.role.equipment.task.eq_spot.name': '设备点检',
+  'pages.system.onboardingWizard.role.equipment.task.eq_spot.desc': '执行日常点检并记录读数',
+  'pages.system.onboardingWizard.role.equipment.task.eq_fault.name': '设备故障',
+  'pages.system.onboardingWizard.role.equipment.task.eq_fault.desc': '登记故障并跟踪维修闭环',
   'pages.system.onboardingWizard.role.finance.mission': '核心使命：算清每一笔账，实时掌握成本，为老板提供决策参考。',
   'pages.system.onboardingWizard.role.finance.prerequisiteData': '科目余额表、收支类别、成本核算规则',
   'pages.system.onboardingWizard.role.finance.businessDocs': '应收/应付单、收款/付款单、成本核算单据',
   'pages.system.onboardingWizard.role.finance.empowermentValue': '业务单据自动生成财务凭证，订单成本/毛利实时可见。',
+  'pages.system.onboardingWizard.role.finance.task.fi_coa.name': '维护科目表',
+  'pages.system.onboardingWizard.role.finance.task.fi_coa.desc': '建立会计科目体系',
+  'pages.system.onboardingWizard.role.finance.task.fi_open.name': '录入期初余额',
+  'pages.system.onboardingWizard.role.finance.task.fi_open.desc': '在总账录入财务期初并与业务对齐',
   'pages.system.onboardingWizard.role.finance.task.fi_ap.name': '应付账款对账',
   'pages.system.onboardingWizard.role.finance.task.fi_ap.desc': '与供应商核对应付款项，生成付款单',
   'pages.system.onboardingWizard.role.finance.task.fi_ar.name': '应收账款对账',
   'pages.system.onboardingWizard.role.finance.task.fi_ar.desc': '与客户核对销售账单，进行收款核销',
   'pages.system.onboardingWizard.role.finance.task.fi_cost.name': '订单成本核算',
   'pages.system.onboardingWizard.role.finance.task.fi_cost.desc': '自动归集料工费，核算产品真实成本',
+  'pages.system.onboardingWizard.role.finance.task.fi_payment.name': '付款处理',
+  'pages.system.onboardingWizard.role.finance.task.fi_payment.desc': '登记供应商付款并核销应付',
+  'pages.system.onboardingWizard.role.finance.task.fi_receipt.name': '收款处理',
+  'pages.system.onboardingWizard.role.finance.task.fi_receipt.desc': '登记客户收款并核销应收',
   'pages.system.onboardingWizard.role.manager.mission': '核心使命：通过数字化看板，随时随地掌握工厂全局动态。',
   'pages.system.onboardingWizard.role.manager.prerequisiteData': '审批流程设置、数据字典规划、企业目标 (KPI) 设定',
   'pages.system.onboardingWizard.role.manager.businessDocs': '各类核心业务单据的审批、总经理看板',
@@ -27679,6 +28019,12 @@ export default {
   'pages.system.onboardingWizard.role.manager.task.mgr_approve.desc': '集中处理各部门提交的核心业务审批流',
   'pages.system.onboardingWizard.role.manager.task.mgr_dashboard.name': '经营分析看板',
   'pages.system.onboardingWizard.role.manager.task.mgr_dashboard.desc': '查看营收、利润、库存周转等核心指标',
+  'pages.system.onboardingWizard.role.manager.task.mgr_sales_dash.name': '销售模块中心',
+  'pages.system.onboardingWizard.role.manager.task.mgr_sales_dash.desc': '从销售工作台查看订单与交付概况',
+  'pages.system.onboardingWizard.role.manager.task.mgr_prod_dash.name': '制造模块中心',
+  'pages.system.onboardingWizard.role.manager.task.mgr_prod_dash.desc': '从制造工作台查看产能与工单进度',
+  'pages.system.onboardingWizard.role.manager.task.mgr_wh_dash.name': '仓储模块中心',
+  'pages.system.onboardingWizard.role.manager.task.mgr_wh_dash.desc': '从仓储工作台查看库存与作业动态',
   'pages.system.onboardingWizard.role.implementer.mission': '核心使命：负责系统底层架构配置与全局参数设定，确保软件运行环境稳健。',
   'pages.system.onboardingWizard.role.implementer.prerequisiteData': '组织架构、权限模型、审批工作流、单据流水号规则',
   'pages.system.onboardingWizard.role.implementer.businessDocs': '系统参数配置表、审计日志、自定义字段定义',
@@ -27739,6 +28085,10 @@ export default {
   'pages.system.onboardingWizard.implementer.sub.imp_connector.desc': '标准连接器快速打通第三方 SaaS 数据。',
   'pages.system.onboardingWizard.implementer.sub.imp_dataset.name': '数据集管理',
   'pages.system.onboardingWizard.implementer.sub.imp_dataset.desc': '定义 BI 看板与报表底层的数据集逻辑。',
+  'pages.system.onboardingWizard.implementer.sub.imp_initial_data.name': '期初数据',
+  'pages.system.onboardingWizard.implementer.sub.imp_initial_data.desc': '导入并核对库存、在制与期初财务数据',
+  'pages.system.onboardingWizard.implementer.sub.imp_approval_instances.name': '审批实例',
+  'pages.system.onboardingWizard.implementer.sub.imp_approval_instances.desc': '查看在途审批与上线前流程试跑',
   'pages.system.onboardingWizard.implementer.sub.imp_audit.name': '操作日志',
   'pages.system.onboardingWizard.implementer.sub.imp_audit.desc': '查询操作留痕，支撑安全审计（非业务过账前置条件）。',
   'pages.system.onboardingWizard.implementer.sub.imp_login.name': '登录日志',
@@ -29352,6 +29702,354 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.mobile-login-platform-logo-r01.title':
+    '手机登录页跟随平台 Logo',
+  'pages.dashboard.updateLog.entries.mobile-login-platform-logo-r01.description':
+    '移动登录头图与 PC 一致：优先展示平台设置中的 Logo；未配置时使用服务端默认 /img/logo.png；加载失败再回退本地应用图标。',
+  'pages.dashboard.updateLog.entries.mobile-im-chat-wechat-r02.title':
+    '手机聊天页仿微信布局',
+  'pages.dashboard.updateLog.entries.mobile-im-chat-wechat-r02.description':
+    '群聊对话页增加时间条、他人消息左侧头像、本人绿色气泡；系统/审批类通知改为居中灰条，不再用大卡片；底栏输入与绿色发送按钮更接近微信。',
+  'pages.dashboard.updateLog.entries.mobile-message-notify-chips-r01.title':
+    '消息通知分类改为胶囊筛选',
+  'pages.dashboard.updateLog.entries.mobile-message-notify-chips-r01.description':
+    '消息中心仅保留聊天/通知/待办一层顶栏；通知下的全部/审批/流程/系统改为列表顶部横向胶囊，避免双层下划线 Tab 占高。',
+  'pages.dashboard.updateLog.entries.mobile-im-chat-self-align-right-r01.title':
+    '手机 IM 本人消息右对齐',
+  'pages.dashboard.updateLog.entries.mobile-im-chat-self-align-right-r01.description':
+    '会话页本人发送的绿色气泡与头像贴右侧排列，左侧留白，与微信式 IM 一致；对方与 KU-AI 仍在左侧。',
+  'pages.dashboard.updateLog.entries.mobile-im-chat-markdown-table-r01.title':
+    '手机 IM 识别 Markdown 表格',
+  'pages.dashboard.updateLog.entries.mobile-im-chat-markdown-table-r01.description':
+    'KU-AI 气泡内 GFM 表格（项目与内容等两列）按 PC 助手样式渲染为表头加行，不再显示原始竖线文本；同一段落内文字与表格可混排。',
+  'pages.dashboard.updateLog.entries.mobile-im-chat-markdown-avatar-r01.title':
+    '手机 IM 对话排版与头像',
+  'pages.dashboard.updateLog.entries.mobile-im-chat-markdown-avatar-r01.description':
+    'KU-AI 回复按 PC 端渲染 Markdown 列表与引用，不再居中当系统灰条；左右气泡均展示头像，助手为 KU 圆标、自己为姓名首字或头像图。',
+  'pages.dashboard.updateLog.entries.mobile-inbox-loading-perf-r01.title':
+    '手机消息中心加载优化',
+  'pages.dashboard.updateLog.entries.mobile-inbox-loading-perf-r01.description':
+    '聊天列表先展示会话数据，通知与待办并行加载且互不影响；收件箱刷新合并防抖，并避免多路失败弹窗拖住界面。',
+  'pages.dashboard.updateLog.entries.mobile-kuaizhizao-other-common-docs-r01.title':
+    '手机快制造其他常用单据',
+  'pages.dashboard.updateLog.entries.mobile-kuaizhizao-other-common-docs-r01.description':
+    '工作台新增「其他常用」：采购申请、采购到货延误、收货通知单、发货通知单；支持列表与详情、提交撤回或通知撤回，并可深链至采购收货与销售出库；审批详情可查看关联单据。',
+  'pages.dashboard.updateLog.entries.mobile-im-wechat-ui-r01.title':
+    '手机 IM 仿微信界面',
+  'pages.dashboard.updateLog.entries.mobile-im-wechat-ui-r01.description':
+    '消息中心会话列表改为头像、摘要一行与时间规则（今天/昨天/星期）；聊天页浅灰底、左白右绿气泡与底栏输入，更接近微信手机端习惯。',
+  'pages.dashboard.updateLog.entries.mobile-message-chat-tab-first-r01.title':
+    '消息中心聊天置顶',
+  'pages.dashboard.updateLog.entries.mobile-message-chat-tab-first-r01.description':
+    '手机消息中心顶栏分段将「聊天」置于首位，进入消息页默认展示会话列表；通知与待办顺序后移，深链仍可指定 pane 打开对应分段。',
+  'pages.dashboard.updateLog.entries.mobile-perf-root-bootstrap-r01.title':
+    '手机端加载性能根因修复',
+  'pages.dashboard.updateLog.entries.mobile-perf-root-bootstrap-r01.description':
+    '后端提供工作台 home 与收件箱 snapshot 聚合 API；工单统计关闭 7 日趋势、菜单徽章可按分区查询；IM 会话列表消除 N+1 查询。前端改为单次请求，移除预取与内存缓存叠层。',
+  'pages.dashboard.updateLog.entries.mobile-perf-inbox-chat-r01.title':
+    '手机消息中心聊天加载优化',
+  'pages.dashboard.updateLog.entries.mobile-perf-inbox-chat-r01.description':
+    '收件箱内存缓存与登录工作台预取，取消会话列表重复请求；聊天会话接口先返回先展示，回焦刷新不再全屏转圈。',
+  'pages.dashboard.updateLog.entries.mobile-perf-list-load-r01.title':
+    '手机端列表与请求加载优化',
+  'pages.dashboard.updateLog.entries.mobile-perf-list-load-r01.description':
+    'API 请求头并行读取并缓存 Token 与租户，列表从详情返回时保留数据仅后台刷新，设备与模具详情先用路由参数展示壳再补全接口字段。',
+  'pages.dashboard.updateLog.entries.mobile-mold-detail-doc-flow-r01.title':
+    '手机模具详情单据流',
+  'pages.dashboard.updateLog.entries.mobile-mold-detail-doc-flow-r01.description':
+    '模具详情改为表单头与分区字段行，并增加领用归还保养维修列表入口；底栏操作文案缩短为领用、归还、保养、维修以免四键挤字。',
+  'pages.dashboard.updateLog.entries.mobile-equipment-detail-doc-flow-r01.title':
+    '手机设备详情单据流',
+  'pages.dashboard.updateLog.entries.mobile-equipment-detail-doc-flow-r01.description':
+    '设备详情改为表单头与分区字段行，关联记录使用链接行进入过滤列表，底栏保留新建点检、保养与登记故障。',
+  'pages.dashboard.updateLog.entries.mobile-quality-conduct-doc-flow-r01.title':
+    '手机执行检验页单据流',
+  'pages.dashboard.updateLog.entries.mobile-quality-conduct-doc-flow-r01.description':
+    '过程、来料、成品与出库检验执行页改为表单头与分区录入合格不良数量、方案检验项与出库放行结论，底栏仍为提交检验。',
+  'pages.dashboard.updateLog.entries.mobile-exception-detail-doc-flow-r01.title':
+    '手机异常处理详情单据流',
+  'pages.dashboard.updateLog.entries.mobile-exception-detail-doc-flow-r01.description':
+    '异常处理详情改为表单头与分区展示缺料、交期与质量信息，处理动作与备注纳入表单分区，关联工单使用链接行，底栏仍为提交处理。',
+  'pages.dashboard.updateLog.entries.mobile-packing-detail-doc-flow-r01.title':
+    '手机装箱详情单据流分区',
+  'pages.dashboard.updateLog.entries.mobile-packing-detail-doc-flow-r01.description':
+    '装箱绑定详情改为表单头与分区字段行展示，底栏保留封箱与删除装箱，滚动区对齐单据流页边距。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-mold-lists-r01.title':
+    '手机模具作业六入口单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-mold-lists-r01.description':
+    '扫码查模具、领用、归还、保养、维修与保养提醒统一为导航卡与时间线或 KPI 页脚，扫码页对齐表单头与多候选导航卡，并保留去归还、提交审核与去保养行操作。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-equipment-lists-r01.title':
+    '手机设备作业八入口单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-equipment-lists-r01.description':
+    '扫码查设备、点检、换线绑定、路线巡检、报修维修、维修台账、保养执行与维护提醒统一为导航卡与时间线页脚，换线扫码阶段使用表单头，并保留转维修、完修与提醒处理行操作。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-quality-lists-r01.title':
+    '手机质量检验六列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-quality-lists-r01.description':
+    '待检验 Hub、过程/来料/成品/出库检验与不合格品台账统一为导航卡、时间线页脚与执行检验或处置入口。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-alerts-r01.title':
+    '手机库存预警列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-alerts-r01.description':
+    '库存预警列表改为导航卡与 KPI 页脚，展示预警类型、库存与阈值，并保留备注与解决忽略行操作。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-transfers-r01.title':
+    '手机调拨确认列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-transfers-r01.description':
+    '调拨单列表改为导航卡与时间线页脚，展示调出调入仓库与明细行数，并保留去执行调拨与新建底栏。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-inventory-r01.title':
+    '手机库存查询单据流界面',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-inventory-r01.description':
+    '库存与批次查询页采用表单头、白卡片搜索区及结果导航卡 KPI 页脚，展示数量、可用、批次与库位。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-stocktaking-r01.title':
+    '手机移动盘点单据流界面',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-stocktaking-r01.description':
+    '盘点任务列表改为导航卡与时间线页脚；进入任务后使用表单头与白卡片扫码筛选区，保留实盘录入与完成盘点。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-other-outbounds-r01.title':
+    '手机其它出库列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-other-outbounds-r01.description':
+    '其它出库列表改为导航卡与时间线页脚，展示仓库与出库原因，并保留去确认出库与新建底栏。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-other-inbounds-r01.title':
+    '手机其它入库列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-other-inbounds-r01.description':
+    '其它入库列表改为导航卡与时间线页脚，展示仓库与入库原因，并保留去确认入库与新建底栏。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-delivery-notices-r01.title':
+    '手机送货单列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-delivery-notices-r01.description':
+    '送货单列表改为导航卡与时间线页脚，展示客户、仓库与关联出库或销售订单，并保留新建送货单底栏。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-sales-deliveries-r01.title':
+    '手机销售出库列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-sales-deliveries-r01.description':
+    '销售出库列表改为导航卡与时间线页脚，展示客户、仓库与销售订单或发货通知，并保留去确认出库与取单新建。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-purchase-receipts-r01.title':
+    '手机采购收货列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-purchase-receipts-r01.description':
+    '采购收货列表改为导航卡与时间线页脚，展示供应商、仓库与关联工单，并保留去确认收货与取单新建。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-fg-receipts-r01.title':
+    '手机成品入库列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-fg-receipts-r01.description':
+    '成品入库列表改为导航卡与时间线页脚，展示仓库与工单，并保留去确认入库与取单新建。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-returns-r01.title':
+    '手机生产退料列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-returns-r01.description':
+    '生产退料列表改为导航卡与时间线页脚，展示工单与关联领料单，并保留去确认退料与取单新建。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-pickings-r01.title':
+    '手机生产领料列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-pickings-r01.description':
+    '生产领料列表改为导航卡与 KPI 页脚，保留去确认领料行操作与取单新建底栏；确认列表壳支持 flow 变体。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-shipment-notices-r01.title':
+    '手机发货通知单列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-shipment-notices-r01.description':
+    '发货通知单列表改为导航卡与时间线页脚，展示仓库、计划发货与通知数量，并支持进入详情。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-receipt-notices-r01.title':
+    '手机收货通知单列表单据流',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-receipt-notices-r01.description':
+    '收货通知单列表改为导航卡与时间线页脚，展示仓库、计划收货与通知数量，并支持进入详情。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-performance-r01.title':
+    '手机我的绩效页单据流界面',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-performance-r01.description':
+    '我的绩效采用 Hub 抬头与指标带、区间白卡片、工序与计件汇总导航卡，并保留下拉刷新。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-exception-report-r01.title':
+    '手机异常提报页单据流界面',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-exception-report-r01.description':
+    '异常提报采用表单头、白卡片分区与底栏提交，工单与缺料物料用与列表一致的导航卡选择。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-scan-report-r01.title':
+    '手机扫码报工页单据流界面',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-scan-report-r01.description':
+    '扫码报工页采用与列表一致的表单头、白卡片扫码区及多工单导航卡，便于逐页统一车间视觉。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-workshop-lists-r01.title':
+    '手机车间列表单据流推广',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-workshop-lists-r01.description':
+    '我的报工、报工审核、装箱绑定、异常追踪及到货延误列表统一为导航卡、指标页脚与右箭头样式。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-work-order-detail-r01.title':
+    '手机工单详情单据流界面',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-work-order-detail-r01.description':
+    '工单详情改用 Hub 头、白卡片分区与链接行，与列表和工序 Hub 同一套单据流组件，工序开工报工逻辑不变。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-work-order-list-r01.title':
+    '手机主工单列表单据流界面',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-work-order-list-r01.description':
+    '全部/我的工单列表增加计划与完成双格指标、查看详情行动条与工业页脚，与工单指派页视觉一致。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-purchase-requisition-r01.title':
+    '手机采购申请列表单据流试点',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-purchase-requisition-r01.description':
+    '采购申请列表采用与工单指派一致的导航卡、工业页脚与右箭头，需求与申请日期下沉页脚展示。',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-ui-system-r01.title':
+    '手机单据流三层界面体系',
+  'pages.dashboard.updateLog.entries.mobile-doc-flow-ui-system-r01.description':
+    '统一 L1 导航卡、L2 Hub 与 L3 表单头分区组件，工单指派全链路为参考实现，并补充列表与详情 Skill 文档。',
+  'pages.dashboard.updateLog.entries.mobile-doc-card-industrial-pilot-r02.title':
+    '手机工单指派卡片试点可见优化',
+  'pages.dashboard.updateLog.entries.mobile-doc-card-industrial-pilot-r02.description':
+    '工单指派列表增加工序与已指派双格指标、浅蓝行动条与右侧箭头；工序 Hub 页同步展示指派进度与工序列表标题。',
+  'pages.dashboard.updateLog.entries.mobile-doc-card-industrial-pilot-r01.title':
+    '手机工单列表卡片样式试点',
+  'pages.dashboard.updateLog.entries.mobile-doc-card-industrial-pilot-r01.description':
+    '工单指派与工单列表复用统一页脚与工序 Hub 头组件，工序派工卡片与列表卡片视觉一致。',
+  'pages.dashboard.updateLog.entries.mobile-card-radius-r01.title':
+    '手机端卡片圆角统一',
+  'pages.dashboard.updateLog.entries.mobile-card-radius-r01.description':
+    '工作台、个人中心及列表卡片圆角统一为 8 像素，与全站视觉规范一致。',
+  'pages.dashboard.updateLog.entries.mobile-tab-approval-split-r01.title':
+    '手机底栏审批与消息拆分',
+  'pages.dashboard.updateLog.entries.mobile-tab-approval-split-r01.description':
+    '快制造待我审批独立为底栏「审批」Tab；消息中心仅保留通知、待办与聊天，审批类站内信仍可在通知分类中查看。',
+  'pages.dashboard.updateLog.entries.mobile-inbox-bell-r01.title':
+    '手机工作台待我处理并入顶栏铃铛',
+  'pages.dashboard.updateLog.entries.mobile-inbox-bell-r01.description':
+    '未读消息、待办与快制造待审批合并为铃铛角标；点铃铛弹出待我处理清单并可直达待办、消息或审批，不再单独占工作台卡片区域。',
+  'pages.dashboard.updateLog.entries.mobile-inbox-capabilities-r01.title':
+    '手机端收件箱与快制造移动审批',
+  'pages.dashboard.updateLog.entries.mobile-inbox-capabilities-r01.description':
+    'H5/App 消息中心支持通知分类、待办与轻量聊天，站内信可深链至报工审核、异常、检验与设备等已有移动页；工作台聚合未读、待办与快制造待审批；另提供快制造审批列表同意驳回与 Socket 前台刷新。不含 8D 移动专页与轻办公审批。',
+  'pages.dashboard.updateLog.entries.eight-d-collaboration-r01.title':
+    '8D 报告协同指派与行动项',
+  'pages.dashboard.updateLog.entries.eight-d-collaboration-r01.description':
+    '新建 8D 默认协同模式：可按 D0至D8 指派负责人与截止日，D3/D5/D6 可维护多条行动项并完成与验证；阶段提交与牵头人确认后方能推进。列表支持待我负责阶段与待我行动项筛选，指派与逾期走个人任务与站内信。旧报告保持 legacy 单人编制。',
+  'pages.dashboard.updateLog.entries.funide-host-pages-offline-r01.title':
+    '快制造下线返工策划与生产日报菜单',
+  'pages.dashboard.updateLog.entries.funide-host-pages-offline-r01.description':
+    '生产执行侧栏去掉「返工策划」「日报模板」「生产日报」；原 URL 仅提示已迁定制应用，API 与权限保留供定制菜单使用。请同步快制造菜单后生效。',
+  'pages.dashboard.updateLog.entries.label-station-menu-offline-r02.title':
+    '再次下线快制造「标签工位」菜单与通用工位台',
+  'pages.dashboard.updateLog.entries.label-station-menu-offline-r02.description':
+    '生产执行侧栏去掉「标签工位」；原 URL 不再回退通用扫码工位，仅保留行业 document 替代与定制应用入口。请同步快制造菜单或重新登录后生效。',
+  'pages.dashboard.updateLog.entries.work-calendar-menu-remove-r01.title':
+    '排班管理菜单去掉工作日历入口',
+  'pages.dashboard.updateLog.entries.work-calendar-menu-remove-r01.description':
+    '停机窗与排班、加班、临时调整均在「班次排班」维护；侧栏不再显示「工作日历」，旧链接自动打开工位停机窗 Tab。',
+  'pages.dashboard.updateLog.entries.shift-roster-downtime-tab-r01.title':
+    '工位停机窗迁入班次排班',
+  'pages.dashboard.updateLog.entries.shift-roster-downtime-tab-r01.description':
+    '工位停机窗与排班、加班、临时调整集中在班次排班页维护；原工作日历菜单保留为跳转说明。',
+  'pages.dashboard.updateLog.entries.shift-roster-overtime-scope-r01.title':
+    '加班与临时调整支持整厂按部门按人员',
+  'pages.dashboard.updateLog.entries.shift-roster-overtime-scope-r01.description':
+    '班次排班页「加班管理」「临时调整」可指定整厂、按部门或按人员；临时加班按范围并入 APS，临时休息仍为记录不扣全厂窗。',
+  'pages.dashboard.updateLog.entries.shift-roster-all-employees-view-r01.title':
+    '工人人员排班一次展示全员',
+  'pages.dashboard.updateLog.entries.shift-roster-all-employees-view-r01.description':
+    '班次排班切换到「工人人员」时直接列出组织内全部可用人员，无需再逐个下拉选择。',
+  'pages.dashboard.updateLog.entries.shift-roster-overtime-temp-adjust-r01.title':
+    '加班管理迁入班次排班并支持临时调整',
+  'pages.dashboard.updateLog.entries.shift-roster-overtime-temp-adjust-r01.description':
+    '厂级加班与原因维护移至班次排班页；新增员工临时加班与临时休息（原因必填，临时加班并入 APS）。工作日历仅保留工位停机窗。',
+  'pages.dashboard.updateLog.entries.shift-work-window-break-r01.title':
+    '可排工作时间改跟班次并支持班内休息',
+  'pages.dashboard.updateLog.entries.shift-work-window-break-r01.description':
+    'APS 可排窗以已发布排班与班次时段为准；班次可配置班内休息，工作日历页不再单独维护固定工作时段。',
+  'pages.dashboard.updateLog.entries.shift-roster-employee-shift-display-r01.title':
+    '班次排班展示部门角色并区分班次颜色',
+  'pages.dashboard.updateLog.entries.shift-roster-employee-shift-display-r01.description':
+    '班次排班员工列显示部门与角色；班别下拉只显示班次名称，不同班次用不同颜色区分，休息为灰色。',
+  'pages.dashboard.updateLog.entries.shift-roster-quick-fill-rest-mode-r01.title':
+    '一键排班工作日直接按假期设置',
+  'pages.dashboard.updateLog.entries.shift-roster-quick-fill-rest-mode-r01.description':
+    '班次排班「工作日填班」以假期设置中的休息日为准：当日在假期表中则填休息，否则填班次，不再写死按双休算。',
+  'pages.dashboard.updateLog.entries.shift-list-time-range-display-r01.title':
+    '修复班次列表时间段不显示',
+  'pages.dashboard.updateLog.entries.shift-list-time-range-display-r01.description':
+    '班次定义列表「时间段」列正确展示开始结束时间；读写侧规范化时刻格式，避免有数据却空白。',
+  'pages.dashboard.updateLog.entries.shift-roster-row-quick-fill-r01.title':
+    '班次排班支持单行一键排班',
+  'pages.dashboard.updateLog.entries.shift-roster-row-quick-fill-r01.description':
+    '班次排班表每行增加「一键排班」：可整周或工作日填入指定班次，也可整周休息，填完后保存草稿即可。',
+  'pages.dashboard.updateLog.entries.factory-dimension-hint-popover-r01.title':
+    '产线与工作中心说明改为按钮弹出',
+  'pages.dashboard.updateLog.entries.factory-dimension-hint-popover-r01.description':
+    '产线管理、工作中心列表不再用顶部提示条与收起/展开；功能按钮区提供「说明」按钮，点击弹出维度说明。',
+  'pages.dashboard.updateLog.entries.config-center-notification-task-search-r01.title':
+    '配置中心消息提醒与定时任务开启列表搜索',
+  'pages.dashboard.updateLog.entries.config-center-notification-task-search-r01.description':
+    '消息提醒、定时任务列表恢复模糊搜索条，可按场景/模板或任务名称编码等快速筛选。',
+  'pages.dashboard.updateLog.entries.config-center-audit-categories-r01.title':
+    '配置中心审核设置拆分分类并支持二级分区',
+  'pages.dashboard.updateLog.entries.config-center-audit-categories-r01.description':
+    '审核设置新增办公管理、研发管理侧栏；销售/采购/生产/质量/仓储/财务等分类内按单据类型二次分区，标题样式与参数设置一致。',
+  'pages.dashboard.updateLog.entries.config-center-param-sections-r01.title':
+    '配置中心参数设置支持二级分区',
+  'pages.dashboard.updateLog.entries.config-center-param-sections-r01.description':
+    '生产执行、质量、仓储、采购及业务自动化质量等参数较多的分类增加分区标题（如工单/报工/领料），便于快速定位。',
+  'pages.dashboard.updateLog.entries.department-list-manager-before-remark-r01.title':
+    '部门列表将负责人列调至备注前',
+  'pages.dashboard.updateLog.entries.department-list-manager-before-remark-r01.description':
+    '部门管理列表列序调整为部门负责人在备注之前，便于先看负责人再浏览备注。',
+  'pages.dashboard.updateLog.entries.user-clear-position-persist-r01.title':
+    '修复编辑用户清空职位后保存无效',
+  'pages.dashboard.updateLog.entries.user-clear-position-persist-r01.description':
+    '编辑用户清空职位或部门时改为显式提交 null，后端按字段是否传入识别清空，保存后不再残留原职位。',
+  'pages.dashboard.updateLog.entries.sidebar-app-menu-permission-version-refetch-r01.title':
+    '修复侧栏 APP 菜单加载偏慢与闪空',
+  'pages.dashboard.updateLog.entries.sidebar-app-menu-permission-version-refetch-r01.description':
+    '导航树缓存不再绑定权限版本：登录后 /auth/me 回写时不再丢缓存重拉整棵菜单；自组布局未到时也可先显示 APP 菜单。',
+  'pages.dashboard.updateLog.entries.department-manager-show-dept-r01.title':
+    '编辑部门选择负责人时可看到所属部门',
+  'pages.dashboard.updateLog.entries.department-manager-show-dept-r01.description':
+    '部门负责人下拉选项展示为「姓名 (账号) - 所属部门」，便于区分同名或跨部门人员。',
+  'pages.dashboard.updateLog.entries.department-remove-link-preset-managers-r01.title':
+    '移除部门管理「补齐部门负责人」',
+  'pages.dashboard.updateLog.entries.department-remove-link-preset-managers-r01.description':
+    '该入口仅按预设角色猜测填入负责人，易空跑或误指派；负责人请在编辑部门时明确指定。',
+  'pages.dashboard.updateLog.entries.org-preset-rd-equipment-trim-clerk-r01.title':
+    '组织预设增补研发设备并精简为各部门主管加人员',
+  'pages.dashboard.updateLog.entries.org-preset-rd-equipment-trim-clerk-r01.description':
+    '部门/职位/角色预设新增研发部与设备部；角色去掉销售/采购/生产文员及班组长，各部门仅保留主管与人员两档。历史文员角色可通过「清理旧预设」并入对应人员角色。',
+  'pages.dashboard.updateLog.entries.user-batch-menu-keep-selection-r01.title':
+    '修复账户批量操作后按钮变灰仍显示勾选',
+  'pages.dashboard.updateLog.entries.user-batch-menu-keep-selection-r01.description':
+    '批量设置部门/职位/角色或启停后保留勾选，列表选中与工具栏受控同步，「批量操作」可连续使用而无需重新勾选。',
+  'pages.dashboard.updateLog.entries.user-form-quick-create-org-role-r01.title':
+    '新建编辑用户时可快速新建部门职位角色',
+  'pages.dashboard.updateLog.entries.user-form-quick-create-org-role-r01.description':
+    '账户表单中部门、职位、角色下拉底部增加快速新建入口；有对应新建权限时打开完整新建弹窗，保存后自动选中并刷新选项。',
+  'pages.dashboard.updateLog.entries.workplace-tab-always-present-r01.title':
+    '修复工作台标签在其它页打开后丢失',
+  'pages.dashboard.updateLog.entries.workplace-tab-always-present-r01.description':
+    '有效首页为工作台时，标签栏会始终保留工作台：缺失时自动补回，不再因「其它标签已在栏上」或历史关掉记录而省略。',
+  'pages.dashboard.updateLog.entries.user-batch-actions-menu-r01.title':
+    '账户管理批量操作收拢为下拉按钮',
+  'pages.dashboard.updateLog.entries.user-batch-actions-menu-r01.description':
+    '除批量删除外，设置部门/职位/角色、启停与批量二维码并入「批量操作」下拉，排布与物料管理一致。',
+  'pages.dashboard.updateLog.entries.user-batch-set-org-role-status-r01.title':
+    '账户管理支持批量设置部门职位角色与启停',
+  'pages.dashboard.updateLog.entries.user-batch-set-org-role-status-r01.description':
+    '用户列表可对勾选账号批量设置部门、职位、角色，以及批量启用或停用；后端提供统一批量更新接口。',
+  'pages.dashboard.updateLog.entries.workplace-tab-unclosable-r01.title':
+    '有效首页为工作台时标签不可关闭',
+  'pages.dashboard.updateLog.entries.workplace-tab-unclosable-r01.description':
+    '恢复工作台作为有效首页时不可关闭：标签无关闭按钮，右键关闭禁用；关闭其它页时不会误关工作台。',
+  'pages.dashboard.updateLog.entries.unitab-right-click-refresh-r01.title':
+    '修复标签栏右键刷新不生效',
+  'pages.dashboard.updateLog.entries.unitab-right-click-refresh-r01.description':
+    '右键刷新恢复列表路由 remount 兜底，并在切换到其它标签后仍能带 _refresh 完成刷新；避免仅软刷新时无监听或 tabKey 不一致导致看起来没反应。',
+  'pages.dashboard.updateLog.entries.department-manager-quick-create-user-r01.title':
+    '新建部门时可快速新建部门负责人',
+  'pages.dashboard.updateLog.entries.department-manager-quick-create-user-r01.description':
+    '部门负责人下拉底部增加「快速新建用户」；有用户新建权限时打开新建用户弹窗，保存后自动选中。',
+  'pages.dashboard.updateLog.entries.onboarding-detail-check-icon-after-name-r01.title':
+    '上线向导详情清单完成标记改到名称后',
+  'pages.dashboard.updateLog.entries.onboarding-detail-check-icon-after-name-r01.description':
+    '功能详情清单里已完成项的对勾图标移到功能名称后面，不再挡在文字前面。',
+  'pages.dashboard.updateLog.entries.onboarding-process-flow-removed-r01.title':
+    '上线向导移除全流程工厂图',
+  'pages.dashboard.updateLog.entries.onboarding-process-flow-removed-r01.description':
+    '去掉「全流程流程图」菜单、工厂场景图资源及相关代码，向导恢复为系统设定与各角色向导。',
+  'pages.dashboard.updateLog.entries.onboarding-wizard-pane-shell-r01.title':
+    '上线向导左右栏共用同一套壳',
+  'pages.dashboard.updateLog.entries.onboarding-wizard-pane-shell-r01.description':
+    '切换左侧向导菜单时，左栏不再跟着整页滚动条挪动。左右内容放在同一固定高度壳里，只在右栏内部滚动。',
+  'pages.dashboard.updateLog.entries.onboarding-role-guide-api-path-r01.title':
+    '上线向导角色 Tab 不再请求错误地址',
+  'pages.dashboard.updateLog.entries.onboarding-role-guide-api-path-r01.description':
+    '修正 onboarding 接口路径重复 api/v1 导致的 404；各业务角色向导以页面内清单为准展示任务与跳转，不再被旧版后端培训清单覆盖。',
+  'pages.dashboard.updateLog.entries.dev-hmr-appshell-spin-fix-r01.title':
+    '开发热更新后不再整页转圈',
+  'pages.dashboard.updateLog.entries.dev-hmr-appshell-spin-fix-r01.description':
+    '调整向导或 zh-CN 文案触发热更新时，壳层不再反复全屏加载；向导页在站点配置未就绪时会主动拉取配置而非一直等待。',
+  'pages.dashboard.updateLog.entries.onboarding-wizard-completed-open-r01.title':
+    '上线向导已完成任务仍可跳转',
+  'pages.dashboard.updateLog.entries.onboarding-wizard-completed-open-r01.description':
+    '系统设定、系统上线与各角色向导中，进度已达成的任务点击「已完成」仍可打开对应功能页或子项清单，便于复查与补录。',
+  'pages.dashboard.updateLog.entries.onboarding-wizard-go-live-paths-r01.title':
+    '上线向导对齐现行菜单与制造闭环',
+  'pages.dashboard.updateLog.entries.onboarding-wizard-go-live-paths-r01.description':
+    '系统与各角色上线向导跳转路径同步至当前 manifest；试运行拆分为销售至库存核对闭环子项，并增加日历、外协、质检、设备、轻财务等可选阶段；期初核对入口改为系统期初数据页。',
   'pages.dashboard.updateLog.entries.unitable-system-audit-backup-package-list-search-r01.title':
     '登录操作日志、数据备份与套餐列表筛选收口',
   'pages.dashboard.updateLog.entries.unitable-system-audit-backup-package-list-search-r01.description':
@@ -35660,6 +36358,7 @@ export default {
   'field.user.resetPassword': '重置密码',
   'field.user.qrcode': '二维码',
   'field.user.createTitle': '新建用户',
+  'components.uniUserSelect.quickCreate': '快速新建用户',
   'field.user.editTitle': '编辑用户',
   'field.user.detailTitle': '用户详情',
   'field.user.deleteConfirm': '确定要删除这个用户吗？',
@@ -35668,6 +36367,21 @@ export default {
   'field.user.batchDeleteConfirmDescription': '将删除 {{count}} 个用户，删除后无法恢复，请谨慎操作。',
   'field.user.batchDeleteSuccess': '成功删除 {{count}} 条记录',
   'field.user.batchDeletePartial': '删除完成：成功 {{success}} 条，失败 {{fail}} 条',
+  'field.user.batchSetDepartment': '批量设置部门',
+  'field.user.batchSetPosition': '批量设置职位',
+  'field.user.batchSetRoles': '批量设置角色',
+  'field.user.batchEnable': '批量启用',
+  'field.user.batchDisable': '批量停用',
+  'field.user.batchSetDepartmentRequired': '请选择要设置的部门',
+  'field.user.batchSetPositionRequired': '请选择要设置的职位',
+  'field.user.batchSetRolesRequired': '请至少选择一个角色',
+  'field.user.batchSetSelectedHint': '将应用于已选的 {{count}} 个用户',
+  'field.user.batchEnableConfirmTitle': '确定要批量启用选中的用户吗？',
+  'field.user.batchEnableConfirmDescription': '将启用 {{count}} 个用户账号。',
+  'field.user.batchDisableConfirmTitle': '确定要批量停用选中的用户吗？',
+  'field.user.batchDisableConfirmDescription': '将停用 {{count}} 个用户账号，停用后无法登录。',
+  'field.user.batchUpdateSuccess': '成功更新 {{count}} 个用户',
+  'field.user.batchUpdatePartial': '更新完成：成功 {{success}} 条，失败 {{fail}} 条',
   'field.user.resetPasswordTitle': '重置密码',
   'field.user.resetPasswordConfirm': '确定要重置用户 "{{username}}" 的密码吗？',
   'field.user.createButton': '新建用户',
@@ -35735,6 +36449,9 @@ export default {
   'field.user.departmentPlaceholder': '请选择部门',
   'field.user.positionPlaceholder': '请选择职位',
   'field.user.rolesPlaceholder': '请选择角色',
+  'field.user.quickCreateDepartment': '快速新建部门',
+  'field.user.quickCreatePosition': '快速新建职位',
+  'field.user.quickCreateRole': '快速新建角色',
   'field.user.isTenantAdminLabel': '是否组织管理员',
 
   // 平台级 (infra) - 管理员、登录、运营、监控、套餐

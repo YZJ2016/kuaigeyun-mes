@@ -8,7 +8,8 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Alert, App, Button, List, Modal, Popconfirm, Typography } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
+import { App, Button, List, Modal, Popconfirm, Popover, Typography } from 'antd';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -74,9 +75,6 @@ const WorkCentersPage: React.FC = () => {
   const [workCenterDetail, setWorkCenterDetail] = useState<WorkCenter | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [workstationMap, setWorkstationMap] = useState<Record<number, Workstation>>({});
-  /** 顶部维度说明提示；收起入口在 UniTable 功能按钮区末尾 */
-  const [dimensionHintVisible, setDimensionHintVisible] = useState(true);
-
   const {
     customFields,
     customFieldValues,
@@ -575,14 +573,6 @@ const WorkCentersPage: React.FC = () => {
   return (
     <>
       <ListPageTemplate>
-        {dimensionHintVisible ? (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 12 }}
-            title={t('app.master-data.workCenters.dimensionHint')}
-          />
-        ) : null}
         <UniTable<WorkCenter>
           columnPersistenceId="apps.master-data.pages.factory.work-centers.list-v3"
           actionRef={actionRef}
@@ -648,14 +638,20 @@ const WorkCentersPage: React.FC = () => {
             />,
           ]}
           toolBarActionsEnd={[
-            <Button
-              key="dimension-hint-toggle"
-              onClick={() => setDimensionHintVisible((v) => !v)}
+            <Popover
+              key="dimension-hint"
+              trigger="click"
+              placement="bottomRight"
+              content={
+                <div style={{ maxWidth: 360, lineHeight: 1.6 }}>
+                  {t('app.master-data.workCenters.dimensionHint')}
+                </div>
+              }
             >
-              {dimensionHintVisible
-                ? t('app.master-data.factory.collapseDimensionHint')
-                : t('app.master-data.factory.expandDimensionHint')}
-            </Button>,
+              <Button icon={<QuestionCircleOutlined />}>
+                {t('app.master-data.factory.dimensionHintButton')}
+              </Button>
+            </Popover>,
           ]}
           enableRowSelection
           selectedRowKeys={selectedRowKeys}

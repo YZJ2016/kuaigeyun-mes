@@ -27,20 +27,36 @@ export function canPickUsersForDisplay(user: CurrentUser | undefined): boolean {
   return Boolean(user);
 }
 
-export function formatUserDisplayLabel(item: {
-  full_name?: string | null;
-  username?: string | null;
-  label?: string | null;
-  id?: number;
-}): string {
-  if (item.label?.trim()) return item.label.trim();
+export function formatUserDisplayLabel(
+  item: {
+    full_name?: string | null;
+    username?: string | null;
+    label?: string | null;
+    id?: number;
+    department_name?: string | null;
+    department?: { name?: string | null } | null;
+  },
+  options?: { includeDepartment?: boolean },
+): string {
+  const includeDepartment = Boolean(options?.includeDepartment);
   const name = (item.full_name || '').trim();
   const login = (item.username || '').trim();
-  if (name && login) return `${name} (${login})`;
-  if (name) return name;
-  if (login) return login;
-  if (item.id != null) return `用户#${item.id}`;
-  return '';
+  let base = '';
+  if (!includeDepartment && item.label?.trim()) {
+    base = item.label.trim();
+  } else if (name && login) {
+    base = `${name} (${login})`;
+  } else if (name) {
+    base = name;
+  } else if (login) {
+    base = login;
+  } else if (item.id != null) {
+    base = `用户#${item.id}`;
+  }
+  if (!base) return '';
+  if (!includeDepartment) return base;
+  const dept = (item.department_name || item.department?.name || '').trim();
+  return dept ? `${base} - ${dept}` : base;
 }
 
 /** 统一人名展示：去掉尾部括号内账号/ID，如 "张三 (u005)" -> "张三" */

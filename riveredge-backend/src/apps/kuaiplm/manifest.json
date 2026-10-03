@@ -439,7 +439,8 @@
       "resource": "kuaiplm:change",
       "name": "BOM 工程变更审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "plm",
+      "config_section": "plm_change"
     },
     {
       "node_key": "process_route_change",
@@ -447,7 +448,8 @@
       "resource": "kuaiplm:change",
       "name": "工艺路线变更审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "plm",
+      "config_section": "plm_change"
     },
     {
       "node_key": "drawing_change",
@@ -455,7 +457,8 @@
       "resource": "kuaiplm:change",
       "name": "图纸工程变更审核",
       "template": "rd_file_change",
-      "config_category": "common"
+      "config_category": "plm",
+      "config_section": "plm_change"
     },
     {
       "node_key": "product_firmware",
@@ -463,7 +466,8 @@
       "resource": "kuaiplm:product-firmware",
       "name": "产品固件审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "plm",
+      "config_section": "plm_doc"
     },
     {
       "node_key": "production_file",
@@ -471,7 +475,8 @@
       "resource": "kuaiplm:production-file",
       "name": "生产文件审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "plm",
+      "config_section": "plm_doc"
     },
     {
       "node_key": "trial_flow",
@@ -479,8 +484,9 @@
       "resource": "kuaiplm:trial-flow",
       "name": "试流审核",
       "template": "simple",
-      "config_category": "common",
-      "business_type": ""
+      "config_category": "plm",
+      "business_type": "",
+      "config_section": "plm_project"
     },
     {
       "node_key": "engineering_change",
@@ -488,7 +494,8 @@
       "resource": "kuaiplm:ecn",
       "name": "工程变更审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "plm",
+      "config_section": "plm_change"
     },
     {
       "node_key": "sample_process",
@@ -496,8 +503,9 @@
       "resource": "kuaiplm:sample-process",
       "name": "样品加工审核",
       "template": "simple",
-      "config_category": "common",
-      "business_type": ""
+      "config_category": "plm",
+      "business_type": "",
+      "config_section": "plm_project"
     },
     {
       "node_key": "material_review",
@@ -505,7 +513,8 @@
       "resource": "kuaiplm:material-review",
       "name": "物料评审审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "plm",
+      "config_section": "plm_project"
     },
     {
       "node_key": "bom_collaboration",
@@ -513,7 +522,8 @@
       "resource": "kuaiplm:bom-collab",
       "name": "BOM协同审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "plm",
+      "config_section": "plm_project"
     },
     {
       "node_key": "project_proposal",
@@ -521,7 +531,8 @@
       "resource": "kuaiplm:project-proposal",
       "name": "项目建议审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "plm",
+      "config_section": "plm_project"
     },
     {
       "node_key": "mold_sample",
@@ -529,8 +540,9 @@
       "resource": "kuaiplm:mold-sample",
       "name": "开模打样审核",
       "template": "simple",
-      "config_category": "common",
-      "business_type": ""
+      "config_category": "plm",
+      "business_type": "",
+      "config_section": "plm_project"
     },
     {
       "node_key": "rd_deliverable",
@@ -538,8 +550,9 @@
       "resource": "kuaiplm:project",
       "name": "研发交付物审核",
       "template": "rd_file_change",
-      "config_category": "common",
-      "business_type": ""
+      "config_category": "plm",
+      "business_type": "",
+      "config_section": "plm_doc"
     },
     {
       "node_key": "prototype_build_sheet",
@@ -547,8 +560,9 @@
       "resource": "kuaiplm:prototype-build-sheet",
       "name": "样机制作书审核",
       "template": "simple",
-      "config_category": "common",
-      "business_type": ""
+      "config_category": "plm",
+      "business_type": "",
+      "config_section": "plm_project"
     }
   ]
 }

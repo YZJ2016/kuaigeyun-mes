@@ -150,8 +150,10 @@ const ROLE_FUNCTIONAL_DOMAIN_I18N: Record<string, string> = {
   sales: 'field.role.functionalDomainSales',
   purchase: 'field.role.functionalDomainPurchase',
   production: 'field.role.functionalDomainProduction',
+  equipment: 'field.role.functionalDomainEquipment',
   warehouse: 'field.role.functionalDomainWarehouse',
   quality: 'field.role.functionalDomainQuality',
+  rd: 'field.role.functionalDomainRd',
   finance: 'field.role.functionalDomainFinance',
   general: 'field.role.functionalDomainGeneral',
 };
@@ -618,23 +620,22 @@ const RolesPermissionsPage: React.FC = () => {
   const [menuTree, setMenuTree] = useState<MenuTree[]>([]);
   const menuTreeLoadPromiseRef = useRef<Promise<void> | null>(null);
 
-  // 按快制造业务单据流排序：销售 -> 采购 -> 生产 -> 质量 -> 仓储 -> 财务 -> 行政 -> 通用
+  // 按业务单据流排序：销售 -> 采购 -> 生产 -> 设备 -> 质量 -> 仓储 -> 研发 -> 财务 -> 行政 -> 通用
   const ROLE_ORDER_BY_CODE: Record<string, number> = {
     SALES_MANAGER: 100,
-    SALES_OPERATOR: 110,
     SALES_PERSON: 120,
     PURCHASE_MANAGER: 200,
-    PURCHASE_OPERATOR: 210,
     PURCHASE_PERSON: 220,
     PRODUCTION_MANAGER: 300,
-    PRODUCTION_TEAM_LEADER: 310,
-    PRODUCTION_CLERK: 320,
     PRODUCTION_STAFF: 330,
-    PRODUCTION_OPERATOR: 330,
+    EQUIPMENT_MANAGER: 350,
+    EQUIPMENT_OPERATOR: 360,
     QUALITY_MANAGER: 400,
     QUALITY_OPERATOR: 410,
     WAREHOUSE_MANAGER: 500,
     WAREHOUSE_OPERATOR: 510,
+    RD_MANAGER: 550,
+    RD_STAFF: 560,
     FINANCE_MANAGER: 600,
     FINANCE_OPERATOR: 610,
     ADMIN_OFFICE: 700,

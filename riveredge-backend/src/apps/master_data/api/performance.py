@@ -35,7 +35,11 @@ from apps.master_data.schemas.shift_scheduling_schemas import (
     ShiftRosterCreate,
     ShiftRosterResponse,
     ShiftAssignmentsBulkUpdate,
+    RosterTimeAdjustmentCreate,
+    RosterTimeAdjustmentUpdate,
+    RosterTimeAdjustmentResponse,
 )
+from apps.master_data.services.roster_time_adjustment_service import RosterTimeAdjustmentService
 from apps.master_data.services.work_calendar_service import WorkCalendarService
 from apps.master_data.schemas.work_calendar_schemas import (
     WorkCalendarConfigUpdate,
@@ -365,9 +369,14 @@ async def list_employees_for_performance(
         tenant_id=tenant_id,
         is_active=True,
         deleted_at__isnull=True,
-    ).offset(skip).limit(limit).values_list("id", "full_name", "username")
+    ).offset(skip).limit(limit).values_list("id", "full_name", "username", "department_id")
     items = [
-        {"id": u[0], "full_name": (u[1] or u[2]) or str(u[0]), "username": u[2]}
+        {
+            "id": u[0],
+            "full_name": (u[1] or u[2]) or str(u[0]),
+            "username": u[2],
+            "department_id": u[3],
+        }
         for u in users
     ]
     total = await UserModel.filter(
@@ -987,6 +996,7 @@ async def list_shift_rosters(
 )
 async def get_or_create_shift_roster_week(
     period_start: date = Query(..., alias="periodStart"),
+    scope_type: Optional[str] = Query(None, alias="scopeType"),
     work_group_id: Optional[int] = Query(None, alias="workGroupId"),
     employee_id: Optional[int] = Query(None, alias="employeeId"),
     current_user: User = Depends(get_current_user),
@@ -996,6 +1006,7 @@ async def get_or_create_shift_roster_week(
         return await ShiftSchedulingService.get_or_create_roster_for_week(
             tenant_id,
             period_start,
+            scope_type=scope_type,
             work_group_id=work_group_id,
             employee_id=employee_id,
         )
@@ -1205,6 +1216,98 @@ async def delete_overtime(
 ):
     try:
         await WorkCalendarService.delete_overtime(tenant_id, overtime_uuid)
+        return {"success": True}
+    except NotFoundError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/roster-time-adjustments", summary="List roster time adjustments")
+async def list_roster_time_adjustments(
+    date_from: Optional[date] = Query(None, alias="dateFrom"),
+    date_to: Optional[date] = Query(None, alias="dateTo"),
+    employee_id: Optional[int] = Query(None, alias="employeeId"),
+    employee_ids: Optional[List[int]] = Query(None, alias="employeeIds"),
+    kind: Optional[str] = Query(None, description="temp_overtime | temp_rest"),
+    is_active: Optional[bool] = Query(None, alias="isActive"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await RosterTimeAdjustmentService.list_adjustments(
+        tenant_id,
+        date_from=date_from,
+        date_to=date_to,
+        employee_id=employee_id,
+        employee_ids=employee_ids,
+        kind=kind,
+        is_active=is_active,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/roster-time-adjustments",
+    response_model=RosterTimeAdjustmentResponse,
+    summary="Create roster time adjustment",
+)
+async def create_roster_time_adjustment(
+    data: RosterTimeAdjustmentCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await RosterTimeAdjustmentService.create(tenant_id, data, operator=current_user)
+    except (ValidationError, NotFoundError) as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/roster-time-adjustments/{adjustment_uuid}",
+    response_model=RosterTimeAdjustmentResponse,
+    summary="Get roster time adjustment",
+)
+async def get_roster_time_adjustment(
+    adjustment_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await RosterTimeAdjustmentService.get(tenant_id, adjustment_uuid)
+    except NotFoundError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put(
+    "/roster-time-adjustments/{adjustment_uuid}",
+    response_model=RosterTimeAdjustmentResponse,
+    summary="Update roster time adjustment",
+)
+async def update_roster_time_adjustment(
+    adjustment_uuid: str,
+    data: RosterTimeAdjustmentUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await RosterTimeAdjustmentService.update(
+            tenant_id, adjustment_uuid, data, operator=current_user
+        )
+    except NotFoundError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise FastAPIHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/roster-time-adjustments/{adjustment_uuid}", summary="Delete roster time adjustment")
+async def delete_roster_time_adjustment(
+    adjustment_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        await RosterTimeAdjustmentService.delete(tenant_id, adjustment_uuid)
         return {"success": True}
     except NotFoundError as e:
         raise FastAPIHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

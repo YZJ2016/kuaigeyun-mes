@@ -374,6 +374,10 @@ async def create_peer_group_work_orders(
 async def get_work_order_statistics(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    include_trends: bool = Query(
+        True,
+        description="false 时仅返回 KPI 计数（手机工作台）；true 含 PC 看板 7 日趋势",
+    ),
 ) -> Dict[str, Any]:
     """
     返回工单各维度数量，用于列表页指标卡片。
@@ -438,6 +442,15 @@ async def get_work_order_statistics(
         ).count()
         draft_count = await base.filter(status="draft").count()
         completed_count = await base.filter(status="completed").count()
+
+    if not include_trends:
+        return {
+            "in_progress_count": in_progress_count,
+            "completed_today_count": completed_today_count,
+            "overdue_count": overdue_count,
+            "draft_count": draft_count,
+            "completed_count": completed_count,
+        }
 
     # 补充前端指标卡需要的字段（基于现有数据合理计算）
     from apps.kuaizhizao.models.work_order import WorkOrder

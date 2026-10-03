@@ -1367,7 +1367,9 @@ class DocumentPrintService:
                 raise NotFoundError(f"8D 报告不存在: {document_id}")
             assert_eight_d_report_capability(document, "print")
             return self._finalize_print_context(
-                document_type, document, self._format_eight_d_report_data(document, loc)
+                document_type,
+                document,
+                await self._format_eight_d_report_data_async(tenant_id, document, loc),
             )
 
         else:
@@ -2687,6 +2689,19 @@ class DocumentPrintService:
             "items": items,
             "item": items[0] if items else {},
         }
+
+    async def _format_eight_d_report_data_async(
+        self, tenant_id: int, report: Any, i18n: PrintLocalization | None = None
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.services.eight_d_collaboration_service import EightDCollaborationService
+
+        base = self._format_eight_d_report_data(report, i18n)
+        assignments = await EightDCollaborationService.list_assignments(tenant_id, report.id)
+        actions = await EightDCollaborationService.list_action_items(tenant_id, report.id)
+        base["stage_assignments"] = [a.model_dump() for a in assignments]
+        base["action_items"] = [a.model_dump() for a in actions]
+        base["items"] = base["action_items"]
+        return base
 
     def _format_eight_d_report_data(
         self, report: Any, i18n: PrintLocalization | None = None

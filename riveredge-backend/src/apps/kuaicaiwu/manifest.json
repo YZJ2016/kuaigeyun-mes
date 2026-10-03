@@ -627,7 +627,8 @@
       "resource": "kuaicaiwu:receivable",
       "name": "应收单审核",
       "template": "simple",
-      "config_category": "finance"
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
     },
     {
       "node_key": "payable",
@@ -635,7 +636,8 @@
       "resource": "kuaicaiwu:payable",
       "name": "应付单审核",
       "template": "simple",
-      "config_category": "finance"
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
     },
     {
       "node_key": "purchase_invoice",
@@ -643,7 +645,8 @@
       "resource": "kuaicaiwu:purchase-invoice",
       "name": "进项发票审核",
       "template": "simple",
-      "config_category": "finance"
+      "config_category": "finance",
+      "config_section": "finance_invoice"
     }
   ],
   "dependencies": {

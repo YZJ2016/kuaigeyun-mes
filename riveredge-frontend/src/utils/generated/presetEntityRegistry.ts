@@ -11,11 +11,11 @@ export type PresetEntityKind =
   | 'operation'
   | 'operationDefect';
 
-export const PRESET_DEPARTMENT_CODES = new Set<string>(['EXEC', 'FIN', 'HR', 'PROD', 'PURCH', 'QC', 'SALES', 'WH']);
+export const PRESET_DEPARTMENT_CODES = new Set<string>(['EQUIP', 'EXEC', 'FIN', 'HR', 'PROD', 'PURCH', 'QC', 'RD', 'SALES', 'WH']);
 
-export const PRESET_POSITION_CODES = new Set<string>(['ACCT', 'ADMIN', 'CASHIER', 'GM', 'HR_SPEC', 'PROD_MGR', 'PROD_OP', 'PURCH_MGR', 'QC_INSP', 'SALES_MGR', 'WH_SUPV']);
+export const PRESET_POSITION_CODES = new Set<string>(['ACCT', 'ADMIN', 'CASHIER', 'EQUIP_MGR', 'EQUIP_OP', 'GM', 'HR_SPEC', 'PROD_MGR', 'PROD_OP', 'PURCH_MGR', 'QC_INSP', 'RD_MGR', 'RD_STAFF', 'SALES_MGR', 'WH_SUPV']);
 
-export const PRESET_ROLE_CODES = new Set<string>(['ADMIN_OFFICE', 'EMPLOYEE', 'FINANCE_MANAGER', 'FINANCE_OPERATOR', 'PRODUCTION_CLERK', 'PRODUCTION_MANAGER', 'PRODUCTION_STAFF', 'PRODUCTION_TEAM_LEADER', 'PURCHASE_MANAGER', 'PURCHASE_OPERATOR', 'PURCHASE_PERSON', 'QUALITY_MANAGER', 'QUALITY_OPERATOR', 'SALES_MANAGER', 'SALES_OPERATOR', 'SALES_PERSON', 'WAREHOUSE_MANAGER', 'WAREHOUSE_OPERATOR']);
+export const PRESET_ROLE_CODES = new Set<string>(['ADMIN_OFFICE', 'EMPLOYEE', 'EQUIPMENT_MANAGER', 'EQUIPMENT_OPERATOR', 'FINANCE_MANAGER', 'FINANCE_OPERATOR', 'PRODUCTION_MANAGER', 'PRODUCTION_STAFF', 'PURCHASE_MANAGER', 'PURCHASE_PERSON', 'QUALITY_MANAGER', 'QUALITY_OPERATOR', 'RD_MANAGER', 'RD_STAFF', 'SALES_MANAGER', 'SALES_PERSON', 'WAREHOUSE_MANAGER', 'WAREHOUSE_OPERATOR']);
 
 export const PRESET_APPROVAL_PROCESS_CODES = new Set<string>(['demand', 'finished_goods_inspection', 'incoming_inspection', 'oqc_inspection', 'payable', 'process_inspection', 'purchase_inquiry', 'purchase_invoice', 'purchase_order', 'purchase_order_change', 'purchase_request', 'quotation', 'receivable', 'reporting_record', 'sales_contract', 'sales_forecast', 'sales_order', 'sales_order_change']);
 

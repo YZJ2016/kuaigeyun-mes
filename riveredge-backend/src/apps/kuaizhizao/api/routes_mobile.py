@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from apps.kuaizhizao.models.equipment_fault import EquipmentFault
 from apps.kuaizhizao.models.maintenance_reminder import MaintenanceReminder
+from apps.kuaizhizao.services.mobile_home_service import fetch_mobile_home_bootstrap
 from apps.kuaizhizao.services.mobile_workbench import resolve_mobile_workbench
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
@@ -33,6 +34,16 @@ class MobileWorkbenchSectionOut(BaseModel):
     key: str
     title: str
     entries: list[MobileWorkbenchEntryOut]
+
+
+class MobileHomeBootstrapOut(BaseModel):
+    sections: list[MobileWorkbenchSectionOut]
+    work_order_stats: dict[str, int]
+    pending_inspection_count: int
+    unread_message_count: int
+    pending_task_count: int
+    pending_kuaizhizao_approval_count: int
+    notices: list[dict[str, str]]
 
 
 class MobileEquipmentBootstrapOut(BaseModel):
@@ -61,11 +72,23 @@ async def get_mobile_bootstrap(
     )
 
 
+@router.get("/home", response_model=MobileHomeBootstrapOut, summary="手机工作台首屏聚合")
+async def get_mobile_home_bootstrap(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> MobileHomeBootstrapOut:
+    payload = await fetch_mobile_home_bootstrap(tenant_id=tenant_id, user=user)
+    return MobileHomeBootstrapOut.model_validate(payload)
+
+
 @router.get("/workbench", response_model=list[MobileWorkbenchSectionOut], summary="移动端工作台导航")
 async def get_mobile_workbench(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
-    scope: Annotated[str, Query(description="equipment 等 scope 键")] = "equipment",
+    scope: Annotated[
+        str,
+        Query(description="equipment 等 scope 键；home 为工作台首屏全部分区（单次权限解析）"),
+    ] = "equipment",
 ) -> list[MobileWorkbenchSectionOut]:
     sections: list[dict[str, Any]] = await resolve_mobile_workbench(
         tenant_id=tenant_id,

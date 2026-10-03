@@ -744,30 +744,48 @@ async def _section_finance(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
     }
 
 
-async def fetch_menu_badge_counts(tenant_id: int, user: User) -> dict:
+def _register_menu_badge_runners() -> dict[str, Any]:
     from apps.kuaizhizao.services.menu_badge_counts_extended import fetch_extended_menu_badge_counts
 
+    return {
+        "work_orders": lambda ctx, now, now_date: _section_work_orders(ctx, now),
+        "exceptions": lambda ctx, now, now_date: _section_exceptions(ctx),
+        "sales": lambda ctx, now, now_date: _section_sales(ctx, now_date),
+        "purchase": lambda ctx, now, now_date: _section_purchase(ctx, now_date),
+        "quality_inspection": lambda ctx, now, now_date: _section_quality_inspection(ctx),
+        "equipment_assets": lambda ctx, now, now_date: _section_equipment_assets(ctx),
+        "spare_part": lambda ctx, now, now_date: _section_spare_part(ctx),
+        "warehouse_docs": lambda ctx, now, now_date: _section_warehouse_docs(ctx),
+        "warehouse_ops": lambda ctx, now, now_date: _section_warehouse_ops(ctx, now_date),
+        "sales_docs": lambda ctx, now, now_date: _section_sales_docs(ctx, now_date),
+        "misc_ops": lambda ctx, now, now_date: _section_misc_ops(ctx, now, now_date),
+        "finance": lambda ctx, now, now_date: _section_finance(ctx, now_date),
+        "extended": lambda ctx, now, now_date: fetch_extended_menu_badge_counts(ctx, now, now_date),
+    }
+
+
+async def fetch_menu_badge_counts(
+    tenant_id: int,
+    user: User,
+    *,
+    sections: list[str] | None = None,
+) -> dict:
     ctx = BadgeScopeCtx(tenant_id=tenant_id, user=user)
     now = resolve_business_datetime()
     now_date = now.date()
 
-    sections = await asyncio.gather(
-        _safe_section("work_orders", lambda: _section_work_orders(ctx, now)),
-        _safe_section("exceptions", lambda: _section_exceptions(ctx)),
-        _safe_section("sales", lambda: _section_sales(ctx, now_date)),
-        _safe_section("purchase", lambda: _section_purchase(ctx, now_date)),
-        _safe_section("quality_inspection", lambda: _section_quality_inspection(ctx)),
-        _safe_section("equipment_assets", lambda: _section_equipment_assets(ctx)),
-        _safe_section("spare_part", lambda: _section_spare_part(ctx)),
-        _safe_section("warehouse_docs", lambda: _section_warehouse_docs(ctx)),
-        _safe_section("warehouse_ops", lambda: _section_warehouse_ops(ctx, now_date)),
-        _safe_section("sales_docs", lambda: _section_sales_docs(ctx, now_date)),
-        _safe_section("misc_ops", lambda: _section_misc_ops(ctx, now, now_date)),
-        _safe_section("finance", lambda: _section_finance(ctx, now_date)),
-        _safe_section("extended", lambda: fetch_extended_menu_badge_counts(ctx, now, now_date)),
-    )
+    runners = _register_menu_badge_runners()
+    keys = sections if sections else list(runners.keys())
+    tasks = [
+        _safe_section(key, (lambda section_key=key: runners[section_key](ctx, now, now_date)))
+        for key in keys
+        if key in runners
+    ]
+    if not tasks:
+        return {}
+    section_results = await asyncio.gather(*tasks)
 
     counts: dict = {}
-    for fragment in sections:
+    for fragment in section_results:
         counts.update(fragment)
     return counts

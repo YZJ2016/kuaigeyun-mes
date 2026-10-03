@@ -35,14 +35,14 @@ STEP_KEYS = (
 
 # 各步骤默认从这些预设角色码中随机取激活用户（按序尝试）
 STEP_DEFAULT_ROLE_CODES: dict[str, tuple[str, ...]] = {
-    "demand_computation": ("PRODUCTION_MANAGER", "PRODUCTION_CLERK", "SALES_MANAGER"),
-    "purchase": ("PURCHASE_PERSON", "PURCHASE_OPERATOR", "PURCHASE_MANAGER"),
+    "demand_computation": ("PRODUCTION_MANAGER", "SALES_MANAGER"),
+    "purchase": ("PURCHASE_PERSON", "PURCHASE_MANAGER"),
     "inventory_topup": ("WAREHOUSE_OPERATOR",),
     "production_picking": ("WAREHOUSE_OPERATOR",),
-    "reporting": ("PRODUCTION_STAFF", "PRODUCTION_TEAM_LEADER", "PRODUCTION_CLERK"),
+    "reporting": ("PRODUCTION_STAFF", "PRODUCTION_MANAGER"),
     "finished_goods_inspection": ("QUALITY_OPERATOR", "QUALITY_MANAGER"),
     "finished_goods_receipt": ("WAREHOUSE_OPERATOR",),
-    "shipment_delivery": ("WAREHOUSE_OPERATOR", "SALES_OPERATOR", "SALES_PERSON"),
+    "shipment_delivery": ("WAREHOUSE_OPERATOR", "SALES_PERSON"),
 }
 
 DEFAULT_INTERVAL_MIN = 300

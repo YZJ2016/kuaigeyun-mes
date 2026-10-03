@@ -56,6 +56,8 @@ from .delivery_delay_exception import DeliveryDelayException
 from .quality_exception import QualityException
 from .exception_process_record import ExceptionProcessRecord, ExceptionProcessHistory
 from .quality_8d_report import Quality8DReport
+from .quality_8d_stage_assignment import Quality8DStageAssignment
+from .quality_8d_action_item import Quality8DActionItem
 from .quality_8d_stage_revision import Quality8DStageRevision
 from .quality_complaint import QualityComplaint
 from .quality_complaint_batch_month import QualityComplaintBatchMonth
