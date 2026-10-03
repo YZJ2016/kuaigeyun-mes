@@ -1,1 +1,0 @@
-import{d as i,bo as s}from"./clientRelease-DXJtxs-l.js";function n(){return i({queryKey:["businessConfigAuditRequiredMap"],queryFn:s,staleTime:5*60*1e3})}function a(e,u=!1){const{data:t}=n();if(!e)return u;const r=t?.[e];return typeof r=="boolean"?r:u}export{a as u};
