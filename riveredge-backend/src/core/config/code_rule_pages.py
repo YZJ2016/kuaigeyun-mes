@@ -2570,12 +2570,19 @@ def get_seq_sync_entity_for_rule(rule_code: str) -> Optional[Tuple[str, str, str
     return None
 
 
+_CODE_RULE_PAGE_BY_CODE: Optional[Dict[str, Dict[str, Any]]] = None
+
+
 def get_page_config_by_code(page_code: str) -> Optional[CodeRulePageConfig]:
     """按 page_code 查找页面编码规则静态配置。"""
-    for page in CODE_RULE_PAGES:
-        if page.get("page_code") == page_code:
-            return page
-    return None
+    global _CODE_RULE_PAGE_BY_CODE
+    if _CODE_RULE_PAGE_BY_CODE is None:
+        _CODE_RULE_PAGE_BY_CODE = {
+            str(page.get("page_code")): page
+            for page in CODE_RULE_PAGES
+            if page.get("page_code")
+        }
+    return _CODE_RULE_PAGE_BY_CODE.get(page_code)
 
 
 def get_canonical_rule_code(page_code: str) -> Optional[str]:

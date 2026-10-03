@@ -431,6 +431,15 @@ export function buildEquipmentNatureValueEnum(_t: TFunction): Record<string, { t
   };
 }
 
+/** 设备台账排除「测量设备」（该性质走计量器具台账），避免钉住页签筛出空列表 */
+export function buildEquipmentLedgerNatureValueEnum(t: TFunction): Record<string, { text: string }> {
+  return Object.fromEntries(
+    Object.entries(buildEquipmentNatureValueEnum(t)).filter(([k]) => k !== '测量设备'),
+  );
+}
+
+export const DEFAULT_EQUIPMENT_LEDGER_NATURE = '通用设备';
+
 export function resolveMasterDataListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,

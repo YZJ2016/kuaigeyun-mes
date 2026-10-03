@@ -269,6 +269,8 @@ const MeasuringInstrumentsPage: React.FC = () => {
       if (isEdit && current?.uuid) {
         await equipmentApi.update(current.uuid, payload);
         messageApi.success(t(`${P}.updateSuccess`));
+        setModalVisible(false);
+        actionRef.current?.reload();
       } else {
         const created = await equipmentApi.create(payload);
         const calDate = lastCalibrationDate;
@@ -281,9 +283,9 @@ const MeasuringInstrumentsPage: React.FC = () => {
           });
         }
         messageApi.success(t(`${P}.createSuccess`));
+        setModalVisible(false);
+        actionRef.current?.reload();
       }
-      setModalVisible(false);
-      actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || t('common.saveFailed'));
       throw error;

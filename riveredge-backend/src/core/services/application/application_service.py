@@ -820,6 +820,12 @@ class ApplicationService:
         # 更新本地字典
         application['is_installed'] = True
         application['is_active'] = False
+
+        from core.services.system.installed_feature_scope import (
+            invalidate_installed_application_codes_cache,
+        )
+
+        invalidate_installed_application_codes_cache(tenant_id)
         
         # 自动同步应用菜单配置到菜单管理（批量扫描时可关闭，改由「一键同步菜单」或清单同步接口写入）
         app_code = str(application.get("code") or "")
@@ -883,8 +889,12 @@ class ApplicationService:
         application['is_active'] = False
 
         from core.services.application.enabled_apps import clear_enabled_apps_cache
+        from core.services.system.installed_feature_scope import (
+            invalidate_installed_application_codes_cache,
+        )
 
         clear_enabled_apps_cache()
+        invalidate_installed_application_codes_cache(tenant_id)
 
         app_code = str(application.get("code") or "")
         from core.services.system.menu_takeover_service import MenuTakeoverService
@@ -1021,8 +1031,12 @@ class ApplicationService:
         from core.services.authorization.permission_registry_service import (
             PermissionRegistryService,
         )
+        from core.services.system.installed_feature_scope import (
+            invalidate_installed_application_codes_cache,
+        )
 
         clear_enabled_apps_cache()
+        invalidate_installed_application_codes_cache(tenant_id)
         PermissionRegistryService.invalidate_definitions_cache(tenant_id)
         
         if is_industry_module_app_code(app_code):
@@ -1170,8 +1184,12 @@ class ApplicationService:
         from core.services.authorization.permission_registry_service import (
             PermissionRegistryService,
         )
+        from core.services.system.installed_feature_scope import (
+            invalidate_installed_application_codes_cache,
+        )
 
         clear_enabled_apps_cache()
+        invalidate_installed_application_codes_cache(tenant_id)
         PermissionRegistryService.invalidate_definitions_cache(tenant_id)
 
         from core.services.system.menu_service import MenuService

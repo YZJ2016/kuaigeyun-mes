@@ -20,6 +20,7 @@ from core.config.code_rule_pages import (
     CODE_RULE_PAGES,
     PAGE_CODE_TO_FIXED_TEXT_PRESET,
     get_canonical_rule_code,
+    get_page_config_by_code,
 )
 from core.services.business.code_rule_service import CodeRuleService
 from core.services.business.code_generation_service import CodeGenerationService
@@ -149,19 +150,13 @@ async def get_page_config(
     Raises:
         HTTPException: 当页面不存在时抛出
     """
-    # 从完整配置中查找页面
-    page_config = None
-    for page in CODE_RULE_PAGES:
-        if page.get("page_code") == page_code:
-            page_config = page.copy()
-            break
-
-    if not page_config:
+    page = get_page_config_by_code(page_code)
+    if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"页面配置不存在: {page_code}"
         )
-    page_config = apply_manifest_display_overlay(page_config)
+    page_config = apply_manifest_display_overlay(dict(page))
     installed = await get_installed_application_codes(tenant_id)
     if not is_page_path_in_installed_apps(page_config.get("page_path"), installed):
         raise HTTPException(
