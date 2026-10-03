@@ -296,21 +296,6 @@ async def _load_core_user_fk_children_async(conn, *, export_tables: list[str]) -
     return mapping
 
 
-def _build_tenant_user_reference_subqueries(
-    *,
-    tenant_id: int,
-    user_fk_children: dict[str, str],
-) -> list[str]:
-    """收集租户子表引用 core_users 的 user_id，用于导出时一并打包关联用户。"""
-    subqueries: list[str] = []
-    for child_table, child_column in sorted(user_fk_children.items()):
-        subqueries.append(
-            f'SELECT DISTINCT "{child_column}" FROM "{child_table}" '
-            f"WHERE tenant_id = {int(tenant_id)} AND \"{child_column}\" IS NOT NULL"
-        )
-    return subqueries
-
-
 async def _load_tenant_tables_with_user_id_column_async(conn, *, export_tables: list[str]) -> set[str]:
     if not export_tables:
         return set()
@@ -342,7 +327,6 @@ def _resolve_user_ref_column_for_table(
 def _build_tenant_table_copy_sql(
     table: str,
     tenant_id: int,
-    user_ref_subqueries: list[str],
     user_fk_children: Optional[dict[str, str]] = None,
     tables_with_user_id: Optional[set[str]] = None,
 ) -> str:
@@ -350,12 +334,6 @@ def _build_tenant_table_copy_sql(
     user_fk_children = user_fk_children or {}
     tables_with_user_id = tables_with_user_id or set()
     if table == "core_users":
-        if user_ref_subqueries:
-            refs = " UNION ".join(user_ref_subqueries)
-            return (
-                f'SELECT * FROM "core_users" WHERE tenant_id = {tid} '
-                f"OR id IN ({refs})"
-            )
         return f'SELECT * FROM "core_users" WHERE tenant_id = {tid}'
 
     user_col = _resolve_user_ref_column_for_table(table, user_fk_children, tables_with_user_id)
@@ -363,7 +341,7 @@ def _build_tenant_table_copy_sql(
         return (
             f'SELECT t.* FROM "{table}" t '
             f"WHERE t.tenant_id = {tid} "
-            f'AND EXISTS (SELECT 1 FROM "core_users" u WHERE u.id = t."{user_col}")'
+            f'AND EXISTS (SELECT 1 FROM "core_users" u WHERE u.id = t."{user_col}" AND u.tenant_id = {tid})'
         )
     return f'SELECT * FROM "{table}" WHERE tenant_id = {tid}'
 
@@ -373,8 +351,7 @@ def _build_tenant_junction_copy_sql(table: str, tenant_id: int) -> str:
     if table == "core_user_roles":
         return (
             f'SELECT ur.* FROM "core_user_roles" ur '
-            f'WHERE ur.user_id IN (SELECT id FROM "core_users" WHERE tenant_id = {tid}) '
-            f'OR ur.role_id IN (SELECT id FROM "core_roles" WHERE tenant_id = {tid})'
+            f'WHERE ur.user_id IN (SELECT id FROM "core_users" WHERE tenant_id = {tid})'
         )
     if table == "core_role_permissions":
         return (
@@ -384,11 +361,7 @@ def _build_tenant_junction_copy_sql(table: str, tenant_id: int) -> str:
     if table == "core_policy_bindings":
         return (
             f'SELECT pb.* FROM "core_policy_bindings" pb '
-            f'WHERE pb.policy_id IN (SELECT id FROM "core_access_policies" WHERE tenant_id = {tid}) '
-            f"OR (pb.subject_type = 'user' AND pb.subject_id IN "
-            f'(SELECT id FROM "core_users" WHERE tenant_id = {tid})) '
-            f"OR (pb.subject_type = 'role' AND pb.subject_id IN "
-            f'(SELECT id FROM "core_roles" WHERE tenant_id = {tid}))'
+            f'WHERE pb.policy_id IN (SELECT id FROM "core_access_policies" WHERE tenant_id = {tid})'
         )
     raise ValueError(f"未知租户关联表: {table}")
 
@@ -501,12 +474,6 @@ async def _export_tenant_csv_dump(
 
     user_fk_children = await _load_core_user_fk_children_async(conn, export_tables=tables)
     tables_with_user_id = await _load_tenant_tables_with_user_id_column_async(conn, export_tables=tables)
-    user_ref_subqueries = _build_tenant_user_reference_subqueries(
-        tenant_id=int(tenant_id),
-        user_fk_children=user_fk_children,
-    )
-    if user_ref_subqueries:
-        logger.info("core_users 导出将包含 {} 个子表引用的用户 ID", len(user_ref_subqueries))
 
     total_tables = max(len(tables), 1)
     junction_tables = sorted(TENANT_JUNCTION_TABLES)
@@ -526,7 +493,7 @@ async def _export_tenant_csv_dump(
                 pct = 8 + int(index * 80 / total_tables)
                 await on_progress(pct, f"导出表 {index}/{len(tables)}: {table}")
             select_sql = _build_tenant_table_copy_sql(
-                table, int(tenant_id), user_ref_subqueries, user_fk_children, tables_with_user_id
+                table, int(tenant_id), user_fk_children, tables_with_user_id
             )
             section_start = f.tell()
             f.write(f"-- Data for table: {table}\n".encode("utf-8"))
@@ -1002,11 +969,16 @@ def _ensure_csv_field_limit() -> None:
 
 
 def infer_source_tenant_id_from_csv_map(table_csv_map: dict[str, str]) -> Optional[int]:
-    """从备份 CSV 数据推断导出租户 ID（须唯一）。"""
+    """从备份 CSV 数据推断导出租户 ID（须唯一）。
+
+    跳过 core_users：旧备份会打入被本租户引用的其他租户用户，不能参与推断。
+    """
     _ensure_csv_field_limit()
 
     found: set[int] = set()
-    for csv_text in sorted(table_csv_map.values(), key=len):
+    for table, csv_text in sorted(table_csv_map.items(), key=lambda item: len(item[1])):
+        if table == "core_users":
+            continue
         if not _csv_has_data_rows(csv_text):
             continue
         columns = _csv_header_columns(csv_text)
