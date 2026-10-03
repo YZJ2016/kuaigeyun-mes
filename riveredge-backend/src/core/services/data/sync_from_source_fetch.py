@@ -18,6 +18,14 @@ from core.services.integration.kingdee_bill_query_page import (
     resolve_page_size,
     with_bill_query_page,
 )
+from core.services.integration.kingdee_cosmic_since_filter import (
+    apply_cosmic_since_filter,
+    apply_cosmic_since_to_params,
+    filter_rows_by_since,
+    is_cosmic_paged_query,
+    resolve_cosmic_page_size,
+    with_cosmic_page,
+)
 from core.services.integration.kingdee_field_keys import extract_kingdee_field_keys
 from core.services.integration.kingdee_active_scope_filter import apply_kingdee_active_scope_filter
 from core.services.integration.kingdee_since_filter import apply_kingdee_since_filter
@@ -29,6 +37,7 @@ async def _execute_api_once(
     tenant_id: int,
     api_uuid: str,
     request_body: Dict[str, Any],
+    request_params: Optional[Dict[str, Any]] = None,
     timeout: float,
 ) -> List[Dict[str, Any]]:
     from core.schemas.api import APITestRequest
@@ -36,7 +45,7 @@ async def _execute_api_once(
     result = await api_service.test_api(
         tenant_id,
         UUID(api_uuid),
-        APITestRequest(body=request_body),
+        APITestRequest(body=request_body, params=request_params),
         timeout=timeout,
     )
     status_code = int(result.get("status_code") or 0)
@@ -68,46 +77,92 @@ async def fetch_rows_from_api(
     api_service = APIService()
     api = await api_service.get_api_by_uuid(tenant_id, UUID(api_uuid))
     request_body = copy.deepcopy(api.request_body) if isinstance(api.request_body, dict) else {}
+    request_params = (
+        copy.deepcopy(api.request_params) if isinstance(api.request_params, dict) else {}
+    )
     request_body = apply_kingdee_active_scope_filter(request_body, active_only=active_only)
     if since is not None:
         request_body = apply_kingdee_since_filter(request_body, since)
+        request_body = apply_cosmic_since_filter(request_body, since)
+        request_params = apply_cosmic_since_to_params(
+            request_params,
+            since,
+            path=str(getattr(api, "path", None) or ""),
+        )
+        await emit_sync_progress(
+            f"已注入增量水位（自 {since.isoformat(sep=' ', timespec='seconds')}）…"
+        )
     if active_only:
         await emit_sync_progress("已启用有效/未完成过滤（源端 FilterString）…")
     else:
         await emit_sync_progress("已关闭有效/未完成过滤，按接口可拉全量…")
 
-    if not is_kingdee_execute_bill_query(request_body):
+    all_rows: List[Dict[str, Any]]
+    if is_kingdee_execute_bill_query(request_body):
+        _, query = parse_kingdee_query(request_body)
+        page_size = resolve_page_size(query or {})
+        all_rows = []
+        start_row = 0
+        for page_no in range(1, MAX_PAGES + 1):
+            await emit_sync_progress(
+                f"正在从源端拉取第 {page_no} 页（每页最多 {page_size} 条，已累计 {len(all_rows)} 条）…"
+            )
+            page_body = with_bill_query_page(request_body, start_row=start_row, limit=page_size)
+            chunk = await _execute_api_once(
+                api_service=api_service,
+                tenant_id=tenant_id,
+                api_uuid=api_uuid,
+                request_body=page_body,
+                request_params=request_params or None,
+                timeout=timeout,
+            )
+            if not chunk:
+                break
+            all_rows.extend(chunk)
+            if len(chunk) < page_size:
+                break
+            start_row += len(chunk)
+    elif is_cosmic_paged_query(request_body):
+        page_size = resolve_cosmic_page_size(request_body)
+        all_rows = []
+        for page_no in range(1, MAX_PAGES + 1):
+            await emit_sync_progress(
+                f"正在从苍穹拉取第 {page_no} 页（每页最多 {page_size} 条，已累计 {len(all_rows)} 条）…"
+            )
+            page_body = with_cosmic_page(request_body, page_no=page_no, page_size=page_size)
+            chunk = await _execute_api_once(
+                api_service=api_service,
+                tenant_id=tenant_id,
+                api_uuid=api_uuid,
+                request_body=page_body,
+                request_params=request_params or None,
+                timeout=timeout,
+            )
+            if not chunk:
+                break
+            all_rows.extend(chunk)
+            if len(chunk) < page_size:
+                break
+    else:
         await emit_sync_progress("正在从数据接口拉取…")
-        return await _execute_api_once(
+        all_rows = await _execute_api_once(
             api_service=api_service,
             tenant_id=tenant_id,
             api_uuid=api_uuid,
             request_body=request_body,
+            request_params=request_params or None,
             timeout=timeout,
         )
 
-    _, query = parse_kingdee_query(request_body)
-    page_size = resolve_page_size(query or {})
-    all_rows: List[Dict[str, Any]] = []
-    start_row = 0
-    for page_no in range(1, MAX_PAGES + 1):
-        await emit_sync_progress(
-            f"正在从源端拉取第 {page_no} 页（每页最多 {page_size} 条，已累计 {len(all_rows)} 条）…"
-        )
-        page_body = with_bill_query_page(request_body, start_row=start_row, limit=page_size)
-        chunk = await _execute_api_once(
-            api_service=api_service,
-            tenant_id=tenant_id,
-            api_uuid=api_uuid,
-            request_body=page_body,
-            timeout=timeout,
-        )
-        if not chunk:
-            break
-        all_rows.extend(chunk)
-        if len(chunk) < page_size:
-            break
-        start_row += len(chunk)
+    if since is not None:
+        before = len(all_rows)
+        all_rows = filter_rows_by_since(all_rows, since)
+        dropped = before - len(all_rows)
+        if dropped > 0:
+            await emit_sync_progress(
+                f"本地水位过滤：丢弃早于水位 {dropped} 条，保留 {len(all_rows)} 条"
+            )
+
     await emit_sync_progress(f"源端拉取完成，共 {len(all_rows)} 条")
     return all_rows
 
@@ -149,5 +204,7 @@ async def fetch_rows_from_dataset(
         if len(chunk) < page_size:
             break
         offset += len(chunk)
+    if since is not None:
+        all_rows = filter_rows_by_since(all_rows, since)
     await emit_sync_progress(f"数据集拉取完成，共 {len(all_rows)} 条")
     return all_rows

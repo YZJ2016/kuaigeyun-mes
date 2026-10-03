@@ -14,7 +14,15 @@ const KINGDEE_TARGET_ALIASES: Record<string, string[]> = {
   forbid_status: ['FForbidStatus'],
   product_code: ['FMaterialId.FNumber'],
   product_name: ['FMaterialId.FName'],
-  quantity: ['FQty', 'FPlanQty'],
+  quantity: [
+    'FQty',
+    'FPlanQty',
+    'entryqty',
+    'entryQty',
+    'entryentryqty',
+    'entrychildnumerator',
+    'billentryqty',
+  ],
   planned_start_date: ['FPlanStartDate'],
   planned_end_date: ['FPlanFinishDate', 'FPlanEndDate'],
   sales_order_code: ['FSaleOrderNo', 'FSrcBillNo'],
@@ -30,7 +38,23 @@ const KINGDEE_TARGET_ALIASES: Record<string, string[]> = {
   specification: ['FSpecification', 'FMaterialId.FSpecification'],
   group_code: ['FMaterialGroup.FNumber'],
   group_name: ['FMaterialGroup.FName'],
-  parent_code: ['FParentId.FNumber', 'FMaterialGroup.FParentId.FNumber'],
+  parent_code: [
+    'FParentId.FNumber',
+    'FMaterialGroup.FParentId.FNumber',
+    'material_number',
+    'materialnumber',
+    'materialid_number',
+    'number',
+  ],
+  component_code: [
+    'entrymaterial_number',
+    'entrymaterialnumber',
+    'entrymaterialid_number',
+    'entryentrymaterial_number',
+    'entryentrymaterialid_number',
+    'billentrymaterial_number',
+    'FEntityFMaterialId_FNumber',
+  ],
   'item.material_code': ['FMaterialId.FNumber'],
   'item.material_name': ['FMaterialId.FName'],
   'item.material_unit': ['FUnitId.FNumber', 'FBaseUnitId.FNumber'],
@@ -110,6 +134,105 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** 业务明细数组（勿含 data/items/rows 等响应外壳键） */
+const NESTED_DETAIL_KEYS = [
+  'entry',
+  'billentry',
+  'BillEntry',
+  'FEntity',
+  'fentity',
+  'TreeEntity',
+  'treeEntity',
+] as const;
+
+function flattenSyncFields(
+  obj: Record<string, unknown>,
+  prefix = '',
+  glueFirst = true,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [rawKey, value] of Object.entries(obj)) {
+    if (!rawKey) continue;
+    let full: string;
+    if (prefix) {
+      if (glueFirst && rawKey.toLowerCase().startsWith(prefix.toLowerCase())) {
+        full = rawKey;
+      } else if (glueFirst) {
+        full = `${prefix}${rawKey}`;
+      } else {
+        full = `${prefix}_${rawKey}`;
+      }
+    } else {
+      full = rawKey;
+    }
+    if (isPlainObject(value)) {
+      Object.assign(out, flattenSyncFields(value, full, false));
+      continue;
+    }
+    if (Array.isArray(value)) continue;
+    out[full] = value;
+  }
+  return out;
+}
+
+function findDetailKey(row: Record<string, unknown>): string | null {
+  for (const key of NESTED_DETAIL_KEYS) {
+    if (Array.isArray(row[key])) return key;
+  }
+  const lowerMap = new Map(Object.keys(row).map((k) => [k.toLowerCase(), k]));
+  for (const key of NESTED_DETAIL_KEYS) {
+    const found = lowerMap.get(key.toLowerCase());
+    if (found && Array.isArray(row[found])) return found;
+  }
+  return null;
+}
+
+/** 表头 + entry[] / FEntity[] 摊成扁平行（对齐后端 sync_nested_expand） */
+export function expandNestedDetailRows(
+  rows: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const row of rows) {
+    if (!isPlainObject(row)) continue;
+    const detailKey = findDetailKey(row);
+    if (!detailKey) {
+      out.push(flattenSyncFields(row));
+      continue;
+    }
+    const details = row[detailKey];
+    const header: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(row)) {
+      if (k !== detailKey) header[k] = v;
+    }
+    const flatHeader = flattenSyncFields(header);
+    if (!Array.isArray(details) || details.length === 0) {
+      out.push(flatHeader);
+      continue;
+    }
+    let expanded = 0;
+    for (const item of details) {
+      if (!isPlainObject(item)) continue;
+      out.push({ ...flatHeader, ...flattenSyncFields(item, detailKey, true) });
+      expanded += 1;
+    }
+    if (expanded === 0) out.push(flatHeader);
+  }
+  return out;
+}
+
+export function collectRowColumnKeys(rows: Record<string, unknown>[]): string[] {
+  const seen = new Set<string>();
+  const columns: string[] = [];
+  for (const row of rows) {
+    for (const key of Object.keys(row)) {
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      columns.push(key);
+    }
+  }
+  return columns;
+}
+
 /** 与接口测试预览一致：解包 data.rows / items / records 等嵌套数组。 */
 function extractArrayFromObject(body: Record<string, unknown>, depth = 0): unknown[] | null {
   const candidates = ['data', 'items', 'rows', 'records', 'Results', 'result', 'list'];
@@ -149,7 +272,7 @@ function normalizeBodyValue(body: unknown): unknown {
   }
 }
 
-export function normalizeApiBodyToRows(
+function normalizeApiBodyToRowsRaw(
   body: unknown,
   columnNames?: string[],
 ): Record<string, unknown>[] {
@@ -180,11 +303,18 @@ export function normalizeApiBodyToRows(
   if (isPlainObject(normalized)) {
     const nested = extractArrayFromObject(normalized);
     if (nested) {
-      return normalizeApiBodyToRows(nested, columnNames);
+      return normalizeApiBodyToRowsRaw(nested, columnNames);
     }
     return [normalized];
   }
   return [{ value: normalized }];
+}
+
+export function normalizeApiBodyToRows(
+  body: unknown,
+  columnNames?: string[],
+): Record<string, unknown>[] {
+  return expandNestedDetailRows(normalizeApiBodyToRowsRaw(body, columnNames));
 }
 
 const CAMEL_SNAKE_PAIRS: Array<[string, string]> = [

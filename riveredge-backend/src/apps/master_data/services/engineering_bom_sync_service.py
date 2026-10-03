@@ -21,6 +21,7 @@ from apps.master_data.services.master_data_sync_common import (
     mark_external_sync_record,
     normalize_schedule_interval,
     normalize_sync_mode,
+    record_fields_unchanged,
     resolve_incremental_since,
     resolve_sync_sources,
     serialize_binding_row,
@@ -47,6 +48,25 @@ def _to_decimal(value: Any, default: Decimal = Decimal("1")) -> Decimal:
 
 def _build_line_key(parent: str, version: str, component: str) -> str:
     return f"{parent}|{version}|{component}"
+
+
+def _ensure_bom_line_keys(rows: List[Dict[str, Any]], match_key: str) -> List[Dict[str, Any]]:
+    """匹配键 line_key 可由父件+版本+子件派生，写入前补齐。"""
+    if match_key != "line_key":
+        return rows
+    for row in rows:
+        if cell_str(row.get("line_key")):
+            continue
+        parent_code = cell_str(
+            row.get("parent_code") or row.get("material_code") or row.get("parent_main_code")
+        )
+        component_code = cell_str(
+            row.get("component_code") or row.get("child_code") or row.get("component_main_code")
+        )
+        version = cell_str(row.get("version")) or "1.0"
+        if parent_code and component_code:
+            row["line_key"] = _build_line_key(parent_code, version, component_code)
+    return rows
 
 
 class EngineeringBomSyncService:
@@ -131,6 +151,7 @@ class EngineeringBomSyncService:
                 since=since,
                 active_only=req.active_only,
             )
+            rows = _ensure_bom_line_keys(rows, match_key)
             result = await self._upsert_bom_lines(tenant_id, current_user, rows, match_key)
             if source_errors:
                 result.errors = (source_errors + list(result.errors))[:20]
@@ -204,7 +225,12 @@ class EngineeringBomSyncService:
             waste = _to_decimal(row.get("waste_rate"), Decimal("0"))
             bom_code = cell_str(row.get("bom_code")) or None
             bom_name = cell_str(row.get("bom_name")) or None
-            unit = cell_str(row.get("unit")) or None
+            # DB 侧 unit 常为 NOT NULL；未映射时回退子件基础单位 / 个
+            unit = (
+                cell_str(row.get("unit"))
+                or cell_str(getattr(component, "base_unit", None))
+                or "个"
+            )
             is_required_raw = row.get("is_required")
             is_required = True
             if is_required_raw is not None and str(is_required_raw).strip():
@@ -225,12 +251,25 @@ class EngineeringBomSyncService:
                     deleted_at__isnull=True,
                 ).first()
                 if existing:
+                    proposed: Dict[str, Any] = {
+                        "quantity": qty,
+                        "base_quantity": base_qty,
+                        "waste_rate": waste,
+                        "is_required": is_required,
+                        "unit": unit,
+                    }
+                    if bom_code is not None:
+                        proposed["bom_code"] = bom_code
+                    if bom_name is not None:
+                        proposed["bom_name"] = bom_name
+                    if record_fields_unchanged(existing, proposed):
+                        skipped += 1
+                        continue
                     existing.quantity = qty
                     existing.base_quantity = base_qty
                     existing.waste_rate = waste
                     existing.is_required = is_required
-                    if unit is not None:
-                        existing.unit = unit
+                    existing.unit = unit
                     if bom_code is not None:
                         existing.bom_code = bom_code
                     if bom_name is not None:
