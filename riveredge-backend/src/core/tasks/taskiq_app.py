@@ -169,7 +169,7 @@ async def _recover_stale_taskiq_messages() -> None:
         if purged:
             logger.warning("已清理过期 Taskiq tick 积压: {}", purged)
 
-        # 3) 对仍 pending 的业务消息补发 NOTIFY（含备份）
+        # 3) 启动时对仍 pending 的业务消息补发 NOTIFY（含备份与其它 pipeline）
         rows = await conn.fetch(
             f"""
             SELECT id FROM {table}
@@ -189,6 +189,36 @@ async def _recover_stale_taskiq_messages() -> None:
             logger.info("已补发 Taskiq NOTIFY（业务 pending）: {}", len(rows))
     finally:
         await conn.close()
+
+
+async def _notify_pending_backup_messages(conn=None, *, table: str = "riveredge_taskiq_messages", channel: str = "riveredge_taskiq") -> int:
+    """只补发 pending 的备份/恢复消息，不回滚 processing。"""
+    import asyncpg
+
+    own_conn = conn is None
+    if own_conn:
+        conn = await asyncpg.connect(get_taskiq_postgres_dsn())
+    try:
+        rows = await conn.fetch(
+            f"""
+            SELECT id FROM {table}
+            WHERE status = 'pending'
+              AND (
+                message::text LIKE '%backup.requested%'
+                OR message::text LIKE '%restore.requested%'
+              )
+            ORDER BY id
+            LIMIT 500
+            """
+        )
+        for row in rows:
+            await conn.execute(f"NOTIFY {channel}, '{int(row['id'])}'")
+        if rows:
+            logger.info("已补发 Taskiq NOTIFY（备份 pending）: {}", len(rows))
+        return len(rows)
+    finally:
+        if own_conn:
+            await conn.close()
 
 
 async def _on_worker_shutdown(_state: TaskiqState) -> None:
@@ -242,6 +272,19 @@ async def reporting_kingdee_push_retry_tick() -> dict:
     )
 
     return await KingdeeProductionReportPushService().retry_due_pushes()
+
+
+@task(schedule=[{"cron": "*/2 * * * *"}])
+async def data_backup_reclaim_tick() -> dict:
+    """每 2 分钟回收堆积备份，并只补发 pending 备份消息（不回滚 processing）。"""
+    from core.services.system.data_backup_service import DataBackupService
+
+    result = await DataBackupService.reclaim_stalled_backups()
+    try:
+        await _notify_pending_backup_messages()
+    except Exception as e:  # pragma: no cover
+        logger.warning("备份回收时补发 NOTIFY 失败: {}", e)
+    return result
 
 
 @task(schedule=[{"cron": "*/10 * * * *"}])

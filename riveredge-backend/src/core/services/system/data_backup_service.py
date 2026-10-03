@@ -9,7 +9,7 @@ from uuid import uuid4
 import shutil
 import asyncio
 from typing import List, Tuple, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from loguru import logger
 from tortoise.exceptions import DoesNotExist
 
@@ -200,6 +200,97 @@ class DataBackupService:
             await backup.save()
             
         return backup
+
+    @staticmethod
+    async def _queue_has_backup_message(backup_uuid: str) -> bool:
+        """队列里是否已有该备份的 pending/processing 消息（避免重复 kiq）。"""
+        try:
+            import asyncpg
+            from core.tasks.taskiq_app import get_taskiq_postgres_dsn
+
+            conn = await asyncpg.connect(get_taskiq_postgres_dsn())
+            try:
+                n = await conn.fetchval(
+                    """
+                    SELECT COUNT(*) FROM riveredge_taskiq_messages
+                    WHERE status IN ('pending', 'processing')
+                      AND message::text LIKE $1
+                    """,
+                    f"%{backup_uuid}%",
+                )
+                return int(n or 0) > 0
+            finally:
+                await conn.close()
+        except Exception as exc:
+            logger.debug("检查备份队列消息失败 uuid={}: {}", backup_uuid, exc)
+            return True
+
+    @staticmethod
+    async def _dispatch_backup_record(backup: DataBackup) -> bool:
+        task_ids = await dispatch_event(
+            TaskEvent(
+                name="database/backup.requested",
+                data={
+                    "backup_uuid": str(backup.uuid),
+                    "tenant_id": backup.tenant_id,
+                    "backup_type": backup.backup_type,
+                    "backup_scope": backup.backup_scope,
+                    "include_files": backup.include_files,
+                    "backup_tables": backup.backup_tables,
+                },
+                id=str(backup.uuid),
+            )
+        )
+        if not task_ids:
+            return False
+        backup.inngest_run_id = task_ids[0]
+        backup.progress_message = backup.progress_message or "已重新入队"
+        await backup.save()
+        return True
+
+    @staticmethod
+    async def reclaim_stalled_backups(*, tenant_id: Optional[int] = None) -> dict:
+        """
+        回收堆积：无 advisory lock 的 running 标失败；pending 且队列无消息则重新投递。
+        """
+        from core.services.system.data_backup_jobs import is_backup_advisory_lock_held
+
+        now = resolve_business_datetime()
+        pending_stale_before = now - timedelta(minutes=2)
+        running_q = DataBackup.filter(status="running")
+        pending_q = DataBackup.filter(status="pending", updated_at__lt=pending_stale_before)
+        if tenant_id is not None:
+            running_q = running_q.filter(tenant_id=tenant_id)
+            pending_q = pending_q.filter(tenant_id=tenant_id)
+
+        lock_held = await is_backup_advisory_lock_held()
+        failed_running = 0
+        if lock_held is False:
+            for backup in await running_q.all():
+                backup.status = "failed"
+                backup.error_message = "备份进程中断（锁已释放且任务仍为执行中），已自动取消"
+                backup.progress_message = "已取消：执行中断"
+                backup.completed_at = now
+                await backup.save()
+                failed_running += 1
+
+        redispatched = 0
+        skipped_queued = 0
+        for backup in await pending_q.order_by("created_at").limit(20):
+            if await DataBackupService._queue_has_backup_message(str(backup.uuid)):
+                skipped_queued += 1
+                continue
+            try:
+                if await DataBackupService._dispatch_backup_record(backup):
+                    redispatched += 1
+            except Exception as exc:
+                logger.warning("重投备份失败 uuid={}: {}", backup.uuid, exc)
+
+        return {
+            "failed_running": failed_running,
+            "redispatched": redispatched,
+            "already_queued": skipped_queued,
+        }
 
     @staticmethod
     async def upload_backup_file(tenant_id: int, file, backup_name: str, *, allow_global_backup: bool = False) -> DataBackup:

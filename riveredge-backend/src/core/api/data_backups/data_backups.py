@@ -125,6 +125,28 @@ async def get_worker_health(
     )
 
 
+class BackupReclaimResponse(BaseModel):
+    failed_running: int
+    redispatched: int
+    already_queued: int
+
+
+@router.post("/reclaim-stalled", response_model=BackupReclaimResponse)
+async def reclaim_stalled_backups(
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """重投超时 pending、取消无进度的 running。"""
+    _require_backup_administrator(current_user)
+    result = await DataBackupService.reclaim_stalled_backups(tenant_id=current_user.tenant_id)
+    try:
+        from core.tasks.taskiq_app import _notify_pending_backup_messages
+
+        await _notify_pending_backup_messages()
+    except Exception:
+        logger.warning("补发 Taskiq NOTIFY 失败", exc_info=True)
+    return BackupReclaimResponse(**result)
+
+
 @router.get("", response_model=DataBackupListResponse)
 async def get_backups(
     page: int = Query(1, ge=1),
