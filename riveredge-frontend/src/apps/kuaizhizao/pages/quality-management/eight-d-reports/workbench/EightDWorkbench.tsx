@@ -37,6 +37,8 @@ import { EightDHistoryTimeline } from '../components/EightDHistoryTimeline';
 import { EightDStageRevisionTimeline } from '../components/EightDStageRevisionTimeline';
 import { EightDStageEditor } from '../components/EightDStageEditor';
 import { EightDStageStepper } from '../components/EightDStageStepper';
+import { EightDStageAssignmentBar } from '../components/EightDStageAssignmentBar';
+import { EightDActionItemsPanel } from '../components/EightDActionItemsPanel';
 import {
   EIGHT_D_STAGE_FIELDS,
   getEightDNextStatus,
@@ -172,9 +174,30 @@ const EightDWorkbench: React.FC = () => {
 
   useEffect(() => {
     if (!report?.status) return;
+    const params = new URLSearchParams(location.search);
+    const stageFromUrl = params.get('stage');
+    if (stageFromUrl) {
+      setActiveStageKey(stageFromUrl);
+      return;
+    }
     const workflowKey = report.status === 'closed' ? 'd8_team_congratulation' : report.status;
     setActiveStageKey(workflowKey);
-  }, [report?.id]);
+  }, [report?.id, report?.status, location.search]);
+
+  const activeStageAssignment = useMemo(
+    () => report?.stage_assignments?.find((a) => a.stage_key === activeStageKey),
+    [report?.stage_assignments, activeStageKey],
+  );
+
+  const isCollaborative = report?.coordination_mode === 'collaborative';
+  const isChampion =
+    !!report &&
+    ((report.owner_id && currentUser?.id === report.owner_id) ||
+      (!report.owner_id && report.created_by && currentUser?.id === report.created_by));
+  const canEditActiveStageContent =
+    !isCollaborative ||
+    isChampion ||
+    activeStageAssignment?.assignee_user_id === currentUser?.id;
 
   const reportGates = eightDReportRowGates(report, canUpdate, false, canClose, t, undefined, canPrint);
   const nextStatus = useMemo(() => getEightDNextStatus(report?.status), [report?.status]);
@@ -358,6 +381,7 @@ const EightDWorkbench: React.FC = () => {
   const isClosed = report.status === 'closed';
   const canSave =
     canUpdate &&
+    canEditActiveStageContent &&
     activeStageEditable &&
     (isClosed || (reportGates.update.allowed && !reportGates.update.disabled));
 
@@ -465,6 +489,17 @@ const EightDWorkbench: React.FC = () => {
                   activeStageKey={activeStageKey}
                   onChange={(key) => setActiveStageKey(key)}
                 />
+                <EightDStageAssignmentBar
+                  report={report}
+                  activeStageKey={activeStageKey}
+                  assignment={activeStageAssignment}
+                  onReload={loadDetail}
+                />
+                <EightDActionItemsPanel
+                  report={report}
+                  activeStageKey={activeStageKey}
+                  onReload={loadDetail}
+                />
                 <div className="eight-d-workbench-stage-panel">
                   <EightDStageEditor
                     form={form}
@@ -472,7 +507,7 @@ const EightDWorkbench: React.FC = () => {
                     activeStageKey={activeStageKey}
                     saving={saving}
                     unlocking={unlocking}
-                    canUpdate={canUpdate}
+                    canUpdate={canUpdate && canEditActiveStageContent}
                     onSaveClick={submitSave}
                     onRequestUnlock={handleRequestStageUnlock}
                   />

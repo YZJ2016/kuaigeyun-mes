@@ -562,7 +562,8 @@
       "resource": "kuaioa:form-request",
       "name": "轻办公自定义申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_admin"
     },
     {
       "node_key": "kuaioa_asset_purchase",
@@ -570,7 +571,8 @@
       "resource": "kuaioa:asset-purchase",
       "name": "固定资产采买申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_admin"
     },
     {
       "node_key": "kuaioa_leave",
@@ -578,7 +580,8 @@
       "resource": "kuaioa:leave",
       "name": "请假出差申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_admin"
     },
     {
       "node_key": "kuaioa_seal",
@@ -586,7 +589,8 @@
       "resource": "kuaioa:seal",
       "name": "用章申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_admin"
     },
     {
       "node_key": "kuaioa_special_price",
@@ -594,7 +598,8 @@
       "resource": "kuaioa:special-price",
       "name": "特价申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "sales",
+      "config_section": "sales_special"
     },
     {
       "node_key": "kuaioa_concession",
@@ -602,7 +607,8 @@
       "resource": "kuaioa:concession",
       "name": "让步接收申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "quality",
+      "config_section": "quality_collab"
     },
     {
       "node_key": "kuaioa_process_deviation",
@@ -610,7 +616,8 @@
       "resource": "kuaioa:process-deviation",
       "name": "工艺偏离申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "quality",
+      "config_section": "quality_collab"
     },
     {
       "node_key": "kuaioa_dept_training_application",
@@ -618,7 +625,8 @@
       "resource": "kuaioa:dept-training-application",
       "name": "部门培训申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_training"
     },
     {
       "node_key": "kuaioa_training_plan",
@@ -626,7 +634,8 @@
       "resource": "kuaioa:training-plan",
       "name": "年度培训计划审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_training"
     },
     {
       "node_key": "kuaioa_special_work_qualification",
@@ -634,7 +643,8 @@
       "resource": "kuaioa:special-work-qualification",
       "name": "特殊作业资格确认审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_training"
     }
   ]
 }

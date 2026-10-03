@@ -44,7 +44,6 @@ import {
   deleteDepartment,
   importDepartments,
   loadPresetDepartments,
-  linkPresetDepartmentManagers,
   getDepartmentPresetPreview,
   getDepartmentDatasetBinding,
   putDepartmentDatasetBinding,
@@ -671,7 +670,7 @@ const DepartmentListPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<Department>
-        columnPersistenceId="pages.system.departments.list-v5"
+        columnPersistenceId="pages.system.departments.list-v6"
         showAdvancedSearch
         permissionResource="system:department"
         viewTypes={['table', 'help']}
@@ -712,22 +711,6 @@ const DepartmentListPage: React.FC = () => {
             }}
           >
             {t('field.department.loadPreset')}
-          </Button>
-          ),
-          (
-          <Button
-            key="linkPresetManagers"
-            onClick={async () => {
-              try {
-                const res = await linkPresetDepartmentManagers();
-                messageApi.success(res.message);
-    actionRef.current?.reload();
-              } catch (e: any) {
-                messageApi.error(e?.message || t('common.operationFailed'));
-              }
-            }}
-          >
-            {t('field.department.linkPresetManagers')}
           </Button>
           ),
           <Button {...rowActionKind('skip')}

@@ -113,6 +113,8 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.qms_system_document",
     "apps.kuaizhizao.models.qms_system_document_version",
     "apps.kuaizhizao.models.quality_8d_report",
+    "apps.kuaizhizao.models.quality_8d_stage_assignment",
+    "apps.kuaizhizao.models.quality_8d_action_item",
     "apps.kuaizhizao.models.quality_8d_stage_revision",
     "apps.kuaizhizao.models.quality_complaint",
     "apps.kuaizhizao.models.quality_complaint_batch_month",

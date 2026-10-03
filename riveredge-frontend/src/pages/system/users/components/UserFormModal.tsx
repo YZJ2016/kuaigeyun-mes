@@ -2,11 +2,13 @@
  * 用户新建/编辑弹窗
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance, ProFormSelect, ProFormSwitch, ProFormText } from '@ant-design/pro-components';
-import { App, Form } from 'antd';
+import { App, Form, theme } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../components/layout-templates/constants';
 import {
   getUserByUuid,
   getUserDataScopeBindings,
@@ -16,7 +18,11 @@ import {
   checkUserFullNameCollision,
   CreateUserData,
   UpdateUserData,
+  type User,
 } from '../../../../services/user';
+import type { Department, DepartmentTreeItem } from '../../../../services/department';
+import type { Position } from '../../../../services/position';
+import type { Role } from '../../../../services/role';
 import {
   getUserFormCoreReferenceOptions,
   getUserFormPartnerOptions,
@@ -25,16 +31,78 @@ import {
   type UserFormRoleMeta,
 } from '../userFormReferenceOptions';
 import { validateTenantUsernameInput } from '../../../../utils/reservedUsername';
+import { hasPermission } from '../../../../utils/permission';
+import { useCurrentUser } from '../../../../hooks/useCurrentUser';
+import { DepartmentFormModal } from '../../departments/components/DepartmentFormModal';
+import { PositionFormModal } from '../../positions/components/PositionFormModal';
+import { RoleFormModal } from '../../roles/components/RoleFormModal';
 
 /** 账户用户名：2-50 字符，支持中文、字母、数字、下划线、连字符 */
 const USERNAME_PATTERN = /^[\u4e00-\u9fa5a-zA-Z0-9_-]+$/;
+
+const PERM_DEPARTMENT_CREATE = 'system:department:create';
+const PERM_POSITION_CREATE = 'system:position:create';
+const PERM_ROLE_CREATE = 'system:role:create';
+
+function buildQuickCreatePopupRender(
+  label: string,
+  onClick: () => void,
+  token: ReturnType<typeof theme.useToken>['token'],
+) {
+  return (menu: React.ReactElement) => {
+    const footerStyle: React.CSSProperties = {
+      borderTop: `1px solid ${token.colorBorder}`,
+      padding: '4px 0',
+      background: token.colorBgContainer,
+    };
+    const itemStyle: React.CSSProperties = {
+      padding: '6px 12px',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      fontSize: 12,
+      color: token.colorTextSecondary,
+    };
+    return (
+      <>
+        {menu}
+        <div style={footerStyle}>
+          <div
+            role="button"
+            tabIndex={0}
+            style={itemStyle}
+            onClick={onClick}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onClick();
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = token.colorFillTertiary;
+              e.currentTarget.style.color = token.colorText;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = token.colorTextSecondary;
+            }}
+          >
+            <PlusOutlined />
+            {label}
+          </div>
+        </div>
+      </>
+    );
+  };
+}
 
 export interface UserFormModalProps {
   open: boolean;
   onClose: () => void;
   /** 编辑时传入用户 uuid，为 null 时为新建 */
   editUuid: string | null;
-  onSuccess: () => void;
+  /** 保存成功；快速新建场景可据此回填选中 */
+  onSuccess: (user: User) => void;
+  /** 嵌套在外层 Modal 时抬高层级 */
+  zIndex?: number;
 }
 
 function parseErrorMessage(error: any, t: (key: string) => string): string {
@@ -90,9 +158,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
+  const currentUser = useCurrentUser();
   const formRef = useRef<ProFormInstance>();
   const onCloseRef = useRef(onClose);
   const tRef = useRef(t);
@@ -105,13 +176,20 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [positionOptions, setPositionOptions] = useState<UserFormSelectOption[]>([]);
   const [roleOptions, setRoleOptions] = useState<UserFormSelectOption[]>([]);
   const [roleMetaByUuid, setRoleMetaByUuid] = useState<Record<string, UserFormRoleMeta>>({});
+  const [deptTreeItems, setDeptTreeItems] = useState<DepartmentTreeItem[]>([]);
   const [customerOptions, setCustomerOptions] = useState<UserFormSelectOption[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<UserFormSelectOption[]>([]);
   const [manufacturerOptions, setManufacturerOptions] = useState<UserFormSelectOption[]>([]);
+  const [departmentCreateOpen, setDepartmentCreateOpen] = useState(false);
+  const [positionCreateOpen, setPositionCreateOpen] = useState(false);
+  const [roleCreateOpen, setRoleCreateOpen] = useState(false);
 
   const isEdit = Boolean(editUuid);
   const onRoleDraftChange = useMemo(() => (uuids: string[]) => setRoleUuidsDraft(uuids), []);
-
+  const canCreateDepartment = hasPermission(currentUser, PERM_DEPARTMENT_CREATE);
+  const canCreatePosition = hasPermission(currentUser, PERM_POSITION_CREATE);
+  const canCreateRole = hasPermission(currentUser, PERM_ROLE_CREATE);
+  const nestedModalZIndex = (zIndex ?? 1000) + MODAL_NESTED_ABOVE_PARENT_OFFSET;
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -141,7 +219,14 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     setPositionOptions(core.positionOptions);
     setRoleOptions(core.roleOptions);
     setRoleMetaByUuid(core.roleMetaByUuid);
+    setDeptTreeItems(core.deptTreeItems);
   };
+
+  const refreshCoreReferenceOptions = useCallback(async () => {
+    const core = await getUserFormCoreReferenceOptions(tRef.current);
+    applyCoreReferenceOptions(core);
+    return core;
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -151,6 +236,9 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       setCustomerOptions([]);
       setSupplierOptions([]);
       setManufacturerOptions([]);
+      setDepartmentCreateOpen(false);
+      setPositionCreateOpen(false);
+      setRoleCreateOpen(false);
       return;
     }
 
@@ -285,6 +373,69 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     setRoleUuidsDraft([]);
   };
 
+  const handleDepartmentCreated = async (created?: Department) => {
+    setDepartmentCreateOpen(false);
+    await refreshCoreReferenceOptions();
+    if (created?.uuid) {
+      formRef.current?.setFieldsValue({ department_uuid: created.uuid });
+    }
+  };
+
+  const handlePositionCreated = async (created?: Position) => {
+    setPositionCreateOpen(false);
+    await refreshCoreReferenceOptions();
+    if (created?.uuid) {
+      formRef.current?.setFieldsValue({ position_uuid: created.uuid });
+    }
+  };
+
+  const handleRoleCreated = async (created?: Role) => {
+    setRoleCreateOpen(false);
+    await refreshCoreReferenceOptions();
+    if (created?.uuid) {
+      const prev = normalizeRoleUuids(formRef.current?.getFieldValue('role_uuids'));
+      const next = prev.includes(created.uuid) ? prev : [...prev, created.uuid];
+      formRef.current?.setFieldsValue({ role_uuids: next });
+      setRoleUuidsDraft(next);
+    }
+  };
+
+  const departmentPopupRender = useMemo(
+    () =>
+      canCreateDepartment
+        ? buildQuickCreatePopupRender(
+            t('field.user.quickCreateDepartment'),
+            () => setDepartmentCreateOpen(true),
+            token,
+          )
+        : undefined,
+    [canCreateDepartment, t, token],
+  );
+
+  const positionPopupRender = useMemo(
+    () =>
+      canCreatePosition
+        ? buildQuickCreatePopupRender(
+            t('field.user.quickCreatePosition'),
+            () => setPositionCreateOpen(true),
+            token,
+          )
+        : undefined,
+    [canCreatePosition, t, token],
+  );
+
+  const rolePopupRender = useMemo(
+    () =>
+      canCreateRole
+        ? buildQuickCreatePopupRender(
+            t('field.user.quickCreateRole'),
+            () => setRoleCreateOpen(true),
+            token,
+          )
+        : undefined,
+    [canCreateRole, t, token],
+  );
+
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
@@ -309,6 +460,12 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         delete submitData.password;
       }
 
+      // 编辑时显式传 null：Select 清空后表单值为 undefined，JSON 会省略字段导致后端不更新
+      if (isEdit) {
+        submitData.department_uuid = submitData.department_uuid || null;
+        submitData.position_uuid = submitData.position_uuid || null;
+      }
+
       const latestRoleValue = formRef.current?.getFieldValue?.('role_uuids');
       // 优先表单当前值（ProForm 写回），draft 仅作外部角色区联动兜底
       const rawRoleValue =
@@ -321,18 +478,19 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         submitData.role_uuids = normalizedRoleUuids;
       }
 
+      let savedUser: User;
       if (isEdit && editUuid) {
-        const updated = await updateUser(editUuid, submitData as UpdateUserData);
+        savedUser = await updateUser(editUuid, submitData as UpdateUserData);
         await Promise.all([
-          replaceUserDataScopeBindings(updated.uuid, {
+          replaceUserDataScopeBindings(savedUser.uuid, {
             dimension: 'supplier',
             items: supplierCodes.map((code: string) => ({ dimension: 'supplier', scope_code: code })),
           }),
-          replaceUserDataScopeBindings(updated.uuid, {
+          replaceUserDataScopeBindings(savedUser.uuid, {
             dimension: 'customer',
             items: customerCodes.map((code: string) => ({ dimension: 'customer', scope_code: code })),
           }),
-          replaceUserDataScopeBindings(updated.uuid, {
+          replaceUserDataScopeBindings(savedUser.uuid, {
             dimension: 'manufacturer',
             items: manufacturerCodes.map((code: string) => ({ dimension: 'manufacturer', scope_code: code })),
           }),
@@ -343,17 +501,17 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
           messageApi.error(t('field.user.passwordRequired'));
           return;
         }
-        const created = await createUser(submitData as CreateUserData);
+        savedUser = await createUser(submitData as CreateUserData);
         await Promise.all([
-          replaceUserDataScopeBindings(created.uuid, {
+          replaceUserDataScopeBindings(savedUser.uuid, {
             dimension: 'supplier',
             items: supplierCodes.map((code: string) => ({ dimension: 'supplier', scope_code: code })),
           }),
-          replaceUserDataScopeBindings(created.uuid, {
+          replaceUserDataScopeBindings(savedUser.uuid, {
             dimension: 'customer',
             items: customerCodes.map((code: string) => ({ dimension: 'customer', scope_code: code })),
           }),
-          replaceUserDataScopeBindings(created.uuid, {
+          replaceUserDataScopeBindings(savedUser.uuid, {
             dimension: 'manufacturer',
             items: manufacturerCodes.map((code: string) => ({ dimension: 'manufacturer', scope_code: code })),
           }),
@@ -362,7 +520,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       }
 
       handleClose();
-      onSuccess();
+      onSuccess(savedUser);
     } catch (error: any) {
       messageApi.error(parseErrorMessage(error, t));
     } finally {
@@ -371,19 +529,21 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   };
 
   return (
-    <FormModalTemplate
-      title={isEdit ? t('field.user.editTitle') : t('field.user.createTitle')}
-      open={open}
-      onClose={handleClose}
-      onFinish={handleSubmit}
-      isEdit={isEdit}
-      initialValues={formInitialValues}
-      loading={formLoading || detailLoading}
-      formRef={formRef}
-      width={MODAL_CONFIG.STANDARD_WIDTH}
-      grid={true}
-    >
-      <RoleUuidsDraftSync onDraftChange={onRoleDraftChange} />
+    <>
+      <FormModalTemplate
+        title={isEdit ? t('field.user.editTitle') : t('field.user.createTitle')}
+        open={open}
+        onClose={handleClose}
+        onFinish={handleSubmit}
+        isEdit={isEdit}
+        initialValues={formInitialValues}
+        loading={formLoading || detailLoading}
+        formRef={formRef}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        grid={true}
+        zIndex={zIndex}
+      >
+        <RoleUuidsDraftSync onDraftChange={onRoleDraftChange} />
       <ProFormText
         name="username"
         label={t('field.user.username')}
@@ -499,16 +659,21 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         placeholder={t('field.user.departmentPlaceholder')}
         allowClear
         options={departmentOptions}
-        fieldProps={{ showSearch: true }}
+        fieldProps={{
+          showSearch: true,
+          popupRender: departmentPopupRender,
+        }}
         colProps={{ span: 8 }}
       />
       <ProFormSelect
         name="position_uuid"
         label={t('field.user.position')}
         placeholder={t('field.user.positionPlaceholder')}
+        allowClear
         options={positionOptions}
         fieldProps={{
           showSearch: true,
+          popupRender: positionPopupRender,
         }}
         colProps={{ span: 8 }}
       />
@@ -520,6 +685,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         fieldProps={{
           mode: 'multiple',
           showSearch: true,
+          popupRender: rolePopupRender,
           // 勿在 fieldProps 覆盖 onChange，否则 ProForm 不写回 role_uuids，二次保存角色不变
         }}
         colProps={{ span: 8 }}
@@ -579,6 +745,29 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         label={t('field.user.isTenantAdminLabel')}
         colProps={{ span: 12 }}
       />
-    </FormModalTemplate>
+      </FormModalTemplate>
+      <DepartmentFormModal
+        open={departmentCreateOpen}
+        editUuid={null}
+        onClose={() => setDepartmentCreateOpen(false)}
+        onSuccess={handleDepartmentCreated}
+        deptTreeItems={deptTreeItems}
+        zIndex={nestedModalZIndex}
+      />
+      <PositionFormModal
+        open={positionCreateOpen}
+        editUuid={null}
+        onClose={() => setPositionCreateOpen(false)}
+        onSuccess={handlePositionCreated}
+        zIndex={nestedModalZIndex}
+      />
+      <RoleFormModal
+        open={roleCreateOpen}
+        editUuid={null}
+        onClose={() => setRoleCreateOpen(false)}
+        onSuccess={handleRoleCreated}
+        zIndex={nestedModalZIndex}
+      />
+    </>
   );
 };

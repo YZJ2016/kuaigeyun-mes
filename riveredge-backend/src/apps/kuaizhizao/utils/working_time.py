@@ -141,16 +141,18 @@ class WorkHoursConfig:
         *,
         day_windows: Optional[Dict[date, List[Tuple[time, time]]]] = None,
     ) -> "WorkHoursConfig":
-        bs = getattr(row, "break_start", None)
-        be = getattr(row, "break_end", None)
-        source = str(getattr(row, "window_source", None) or "fixed").strip().lower()
+        """厂级可排窗以已发布排班为准；row 上的固定时段仅作缺省占位，不参与排产。"""
+        start = _naive_time(getattr(row, "work_day_start", None) or time(8, 0))
+        end = _naive_time(getattr(row, "work_day_end", None) or time(17, 0))
+        if end <= start:
+            start, end = time(8, 0), time(17, 0)
         cfg = cls(
-            start=_naive_time(row.work_day_start),
-            end=_naive_time(row.work_day_end),
-            break_start=_naive_time(bs) if bs is not None else None,
-            break_end=_naive_time(be) if be is not None else None,
-            day_windows=day_windows if source == "shift" else None,
-            window_source=source if source in {"fixed", "shift"} else "fixed",
+            start=start,
+            end=end,
+            break_start=None,
+            break_end=None,
+            day_windows={} if day_windows is None else day_windows,
+            window_source="shift",
         )
         cfg.validate()
         return cfg
@@ -206,12 +208,61 @@ class WorkHoursConfig:
         return windows
 
 
+def _append_shift_slots(
+    by_day: Dict[date, List[Tuple[time, time]]],
+    work_date: date,
+    shift: Any,
+) -> None:
+    """将单个班次（含可选班内休息）拆成同日可排片段写入 by_day。"""
+    start = _naive_time(shift.start_time)
+    end = _naive_time(shift.end_time)
+    bs = _naive_time(shift.break_start) if getattr(shift, "break_start", None) is not None else None
+    be = _naive_time(shift.break_end) if getattr(shift, "break_end", None) is not None else None
+    crosses = bool(getattr(shift, "crosses_midnight", False))
+    day_end = time.max.replace(microsecond=0)
+    day_start = time.min
+
+    def add(day: date, a: time, b: time) -> None:
+        if b <= a:
+            return
+        by_day.setdefault(day, []).append((a, b))
+
+    def split_linear(day: date, a: time, b: time) -> None:
+        if bs is None or be is None or not (a <= bs < be <= b):
+            add(day, a, b)
+            return
+        add(day, a, bs)
+        add(day, be, b)
+
+    if not crosses:
+        if end <= start:
+            return
+        split_linear(work_date, start, end)
+        return
+
+    next_day = work_date + timedelta(days=1)
+    if bs is not None and be is not None and start <= bs < be:
+        # 班内休息在开始日晚间
+        add(work_date, start, bs)
+        add(work_date, be, day_end)
+        add(next_day, day_start, end)
+        return
+    if bs is not None and be is not None and bs < be <= end:
+        # 班内休息在结束日凌晨
+        add(work_date, start, day_end)
+        add(next_day, day_start, bs)
+        add(next_day, be, end)
+        return
+    add(work_date, start, day_end)
+    add(next_day, day_start, end)
+
+
 async def _load_shift_day_windows(
     tenant_id: int,
     from_date: date,
     to_date: date,
 ) -> Dict[date, List[Tuple[time, time]]]:
-    """已发布排班：按日合并班次时刻为厂级基础窗。"""
+    """已发布排班：按日合并班次时刻（扣除班内休息）为厂级基础窗。"""
     from apps.master_data.models.shift_scheduling import Shift, ShiftAssignment, ShiftRoster
 
     rosters = await ShiftRoster.filter(
@@ -238,18 +289,20 @@ async def _load_shift_day_windows(
     shifts = await Shift.filter(
         tenant_id=tenant_id, id__in=shift_ids, deleted_at__isnull=True, is_active=True
     ).all()
-    shift_times = {
-        int(s.id): (_naive_time(s.start_time), _naive_time(s.end_time)) for s in shifts
-    }
+    shift_by_id = {int(s.id): s for s in shifts}
     by_day: Dict[date, List[Tuple[time, time]]] = {}
     for a in assignments:
-        times = shift_times.get(int(a.shift_id or 0))
-        if not times:
+        shift = shift_by_id.get(int(a.shift_id or 0))
+        if not shift:
             continue
-        by_day.setdefault(a.work_date, []).append(times)
+        _append_shift_slots(by_day, a.work_date, shift)
     merged: Dict[date, List[Tuple[time, time]]] = {}
     for day, slots in by_day.items():
+        if day < from_date or day > to_date:
+            continue
         ordered = sorted(slots, key=lambda x: x[0])
+        if not ordered:
+            continue
         day_merged: List[Tuple[time, time]] = [ordered[0]]
         for start_t, end_t in ordered[1:]:
             last_s, last_e = day_merged[-1]
@@ -276,9 +329,7 @@ async def load_scheduling_work_context(
     cfg_row, holidays, overtime = await WorkCalendarService.get_effective_calendar(
         tenant_id, from_date, to_date
     )
-    day_windows = None
-    if str(getattr(cfg_row, "window_source", "fixed") or "fixed").strip().lower() == "shift":
-        day_windows = await _load_shift_day_windows(tenant_id, from_date, to_date)
+    day_windows = await _load_shift_day_windows(tenant_id, from_date, to_date)
     return holidays, WorkHoursConfig.from_model(cfg_row, day_windows=day_windows), overtime
 
 

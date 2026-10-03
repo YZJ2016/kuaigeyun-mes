@@ -1826,11 +1826,23 @@ async def _cached_menu_badge_counts(*, tenant_id: int, user_id: int, user: User)
 async def get_menu_badge_counts(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    sections: str | None = Query(
+        None,
+        description="仅计算指定分区，逗号分隔（如 quality_inspection）；省略则全量 PC 菜单",
+    ),
 ) -> dict:
     """
     返回各业务单据的「未完成」数量，key 与前端菜单 path 映射一致。
     用于左侧菜单业务类单据显示数量小徽标；COUNT 与列表相同的数据权限（本人/部门/全部）。
     """
+    section_keys = None
+    if sections and sections.strip():
+        section_keys = [s.strip() for s in sections.split(",") if s.strip()]
+        return await fetch_menu_badge_counts(
+            tenant_id,
+            current_user,
+            sections=section_keys,
+        )
     return await _cached_menu_badge_counts(
         tenant_id=tenant_id,
         user_id=current_user.id,

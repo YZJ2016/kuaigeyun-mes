@@ -32,7 +32,6 @@ import {
 } from 'lucide-react';
 import { App } from 'antd';
 import {
-  getRoleOnboardingGuide,
   getSystemGoLiveGuide,
   getOnboardingCounts,
   markInitialDataVerified,
@@ -73,6 +72,7 @@ import { getLoginLogs } from '../../../services/loginLog';
 import { getBackups } from '../../../services/dataBackup';
 import { getInstalledApplicationList } from '../../../services/application';
 import { useRedirectIfLaunchWizardOff } from '../../../hooks/useRedirectIfLaunchWizardOff';
+import { getPersistedConfigs, useConfigStore } from '../../../stores/configStore';
 import {
   buildMissionGuide,
   buildSystemLaunchChecklist,
@@ -84,7 +84,6 @@ import {
   buildRoleDetailsMap,
   buildRoleDefaultChecklists,
   buildImplementerChecklist,
-  localizeRoleChecklistItems,
 } from './roleLaunchData';
 
 const { Title, Paragraph, Text } = Typography;
@@ -166,7 +165,19 @@ const OnboardingWizardPage: React.FC = () => {
   const runGuide = useGuideStore((s) => s.runGuide);
   const { token } = theme.useToken();
   const isDark = useThemeStore((s) => s.resolved.isDark);
-  const { initialized: cfgReady, enabled: launchWizardOn } = useRedirectIfLaunchWizardOff();
+  const configInitialized = useConfigStore((s) => s.initialized);
+  const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
+  const launchWizardFromStore = useConfigStore((s) => s.configs.enable_launch_wizard !== false);
+  useRedirectIfLaunchWizardOff();
+  const launchWizardOn = configInitialized
+    ? launchWizardFromStore
+    : getPersistedConfigs()?.enable_launch_wizard !== false;
+
+  useEffect(() => {
+    if (!configInitialized) {
+      void fetchConfigs();
+    }
+  }, [configInitialized, fetchConfigs]);
 
   // 注入局部样式以强制 Steps 标题撑开并实现右对齐
   const stepStyle = `
@@ -211,6 +222,9 @@ const OnboardingWizardPage: React.FC = () => {
     .onboarding-completed-btn.ant-btn .anticon,
     .onboarding-completed-btn.ant-btn svg {
       color: ${token.colorSuccess} !important;
+    }
+    .onboarding-completed-btn.ant-btn:not(:disabled) {
+      cursor: pointer;
     }
     .onboarding-completed-btn.ant-btn:not(:disabled):hover,
     .onboarding-completed-btn.ant-btn:not(:disabled):focus-visible {
@@ -558,30 +572,17 @@ const OnboardingWizardPage: React.FC = () => {
     }
   };
 
-  /**
-   * 加载角色上线向导数据
-   */
-  const loadRoleGuide = async (roleCode: string) => {
-    try {
-      setLoading(true);
-      const response: any = await getRoleOnboardingGuide(undefined, roleCode);
-      const data = response.guide || response;
-      setGuideData(data);
-
-      const tenantId = getTenantId();
-      const storageKey = tenantId != null ? `onboarding_completed_t${tenantId}_${roleCode}` : `onboarding_completed_${roleCode}`;
-      const savedCompleted = localStorage.getItem(storageKey);
-      if (savedCompleted) {
-        setCompletedItems(new Set(JSON.parse(savedCompleted)));
-      } else {
-        setCompletedItems(new Set());
-      }
-    } catch (error: any) {
-      // 很多角色的 API 可能尚未开发完毕或暂不提供配置清单，为避免频繁弹窗报错，这里改为静默处理并让 UI 自动降级显示 Empty 状态
-      console.warn(`[Onboarding] Role ${roleCode} guide data not found or API failed.`, error?.message);
-      setGuideData(null);
-    } finally {
-      setLoading(false);
+  /** 角色 Tab 清单真源为 roleLaunchData；仅恢复本地勾选进度 */
+  const loadRoleGuide = (roleCode: string) => {
+    setGuideData(null);
+    const tenantId = getTenantId();
+    const storageKey =
+      tenantId != null ? `onboarding_completed_t${tenantId}_${roleCode}` : `onboarding_completed_${roleCode}`;
+    const savedCompleted = localStorage.getItem(storageKey);
+    if (savedCompleted) {
+      setCompletedItems(new Set(JSON.parse(savedCompleted)));
+    } else {
+      setCompletedItems(new Set());
     }
   };
 
@@ -592,7 +593,7 @@ const OnboardingWizardPage: React.FC = () => {
     setActiveTab(key);
     if (key === 'system') {
       loadSystemGuide();
-    } else {
+    } else if (key !== 'implementer') {
       loadRoleGuide(key);
     }
   };
@@ -613,10 +614,29 @@ const OnboardingWizardPage: React.FC = () => {
     localStorage.setItem(storageKey, JSON.stringify(Array.from(newCompleted)));
   };
 
+  /** 打开任务对应页面；有子项时打开详情弹窗（完成态同样可进入） */
+  const openChecklistItem = (item: { jump_path?: string; subItems?: unknown[] }) => {
+    if (item.subItems?.length) {
+      setCurrentDetailItem(item);
+      setDetailModalVisible(true);
+      return;
+    }
+    if (item.jump_path) {
+      navigate(item.jump_path);
+    }
+  };
+
   /**
    * 计算完成进度
    */
   const calculateProgress = () => {
+    const roleItems = roleDefaultChecklists[activeTab];
+    if (roleItems?.length) {
+      const required = roleItems.filter((item) => item.required);
+      const pool = required.length > 0 ? required : roleItems;
+      const done = pool.filter((item) => completedItems.has(item.id)).length;
+      return pool.length > 0 ? Math.round((done / pool.length) * 100) : 0;
+    }
     if (!guideData || !guideData.checklist) return 0;
     let total = 0;
     let completed = 0;
@@ -635,7 +655,7 @@ const OnboardingWizardPage: React.FC = () => {
     if (activeTab === 'system') {
       loadSystemGuide();
     } else if (activeTab === 'implementer') {
-      // Logic handled via renderImplementerTab
+      // implementer：纯前端，无需 API
     } else {
       loadRoleGuide(activeTab);
     }
@@ -975,16 +995,7 @@ const OnboardingWizardPage: React.FC = () => {
                                         ? wizIcon(CheckCircle2, 16, undefined, token.colorSuccess)
                                         : wizIcon(ArrowRight, 16)
                                     }
-                                    onClick={() => {
-                                      if (!isCompleted) {
-                                        if (item.subItems) {
-                                          setCurrentDetailItem(item);
-                                          setDetailModalVisible(true);
-                                        } else {
-                                          navigate(item.jump_path);
-                                        }
-                                      }
-                                    }}
+                                    onClick={() => openChecklistItem(item)}
                                     style={{ 
                                       borderRadius: 25, 
                                       paddingInline: 36,
@@ -1001,7 +1012,7 @@ const OnboardingWizardPage: React.FC = () => {
                                             border: `1px solid ${token.colorSuccessBorder}`,
                                             color: token.colorSuccess,
                                             boxShadow: 'none',
-                                            cursor: 'default',
+                                            cursor: 'pointer',
                                           }
                                         : {
                                             background: `linear-gradient(90deg, #1890ff 0%, #0070f3 100%)`,
@@ -1379,16 +1390,7 @@ const OnboardingWizardPage: React.FC = () => {
                                     size="large"
                                     shape="round"
                                     icon={isCompleted ? wizIcon(CheckCircle2, 16, undefined, token.colorSuccess) : wizIcon(ArrowRight, 16)}
-                                    onClick={() => {
-                                      if (!isCompleted) {
-                                        if (item.subItems) {
-                                          setCurrentDetailItem(item);
-                                          setDetailModalVisible(true);
-                                        } else {
-                                          navigate(item.jump_path);
-                                        }
-                                      }
-                                    }}
+                                    onClick={() => openChecklistItem(item)}
                                     style={{ 
                                       borderRadius: 25, 
                                       paddingInline: 36,
@@ -1405,7 +1407,7 @@ const OnboardingWizardPage: React.FC = () => {
                                             border: `1px solid ${token.colorSuccessBorder}`,
                                             color: token.colorSuccess,
                                             boxShadow: 'none',
-                                            cursor: 'default',
+                                            cursor: 'pointer',
                                           }
                                         : {
                                             background: `linear-gradient(90deg, #1890ff 0%, #0070f3 100%)`,
@@ -1463,12 +1465,7 @@ const OnboardingWizardPage: React.FC = () => {
       return renderImplementerTab();
     }
 
-    if (loading && !guideData) return <Card loading={loading} />;
-    
-    const apiRoleItems = guideData?.checklist?.[0]?.items || [];
-    const roleChecklistItems = apiRoleItems.length > 0
-      ? localizeRoleChecklistItems(apiRoleItems, activeTab, roleDefaultChecklists)
-      : (roleDefaultChecklists[activeTab] || []);
+    const roleChecklistItems = roleDefaultChecklists[activeTab] || [];
     
     const currentRoleName = ROLE_TAB_NAME_KEYS[activeTab] ? t(ROLE_TAB_NAME_KEYS[activeTab]) : t('pages.system.onboardingWizard.roleChecklist');
 
@@ -1612,7 +1609,7 @@ const OnboardingWizardPage: React.FC = () => {
                                   ? wizIcon(CheckCircle2, 16, undefined, token.colorSuccess)
                                   : wizIcon(PlayCircle, 16)
                               }
-                              onClick={() => !isCompleted && navigate(item.jump_path)}
+                              onClick={() => openChecklistItem(item)}
                               className={
                                 isCompleted ? 'onboarding-completed-btn' : 'onboarding-action-btn'
                               }
@@ -1631,7 +1628,7 @@ const OnboardingWizardPage: React.FC = () => {
                                       border: `1px solid ${token.colorSuccessBorder}`,
                                       color: token.colorSuccess,
                                       boxShadow: 'none',
-                                      cursor: 'default',
+                                      cursor: 'pointer',
                                     }
                                   : {
                                       background: `linear-gradient(90deg, ${token.colorPrimary} 0%, ${token.colorPrimaryActive} 100%)`,
@@ -1677,116 +1674,133 @@ const OnboardingWizardPage: React.FC = () => {
     );
   };
 
-  if (!cfgReady) {
-    return (
-      <div style={{ padding: 48, textAlign: 'center' }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
   if (!launchWizardOn) {
     return null;
   }
 
   return (
-    <div style={{ width: '100%', padding: 0, boxSizing: 'border-box' }}>
+    <div
+      style={{
+        width: '100%',
+        height: 'calc(100vh - 96px)',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        minHeight: 0,
+      }}
+    >
       <style>{stepStyle}</style>
-      <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'flex-start', marginBottom: 16 }}>
-        <div style={{ flex: 1 }}>
-          <Title level={2} style={{ marginTop: 0, marginBottom: 8, letterSpacing: '-0.02em', fontSize: '24px' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flex: '0 0 80px',
+          height: 80,
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0, paddingRight: 16 }}>
+          <Title level={2} style={{ marginTop: 0, marginBottom: 4, letterSpacing: '-0.02em', fontSize: '24px' }}>
             {t('pages.system.onboardingWizard.title')}
           </Title>
-          <Paragraph type="secondary" style={{ fontSize: 14, marginBottom: 0 }}>
+          <Paragraph type="secondary" ellipsis style={{ fontSize: 14, marginBottom: 0 }}>
             {t('pages.system.onboardingWizard.subtitle')}
           </Paragraph>
         </div>
         
-        {/* 右侧环形进度组件 */}
         <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 16, 
-          background: token.colorBgContainer, 
-          padding: '8px 8px 8px 24px', 
-          borderRadius: 32,
-          border: `1px solid ${token.colorBorderSecondary}`,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-            <Text strong style={{ fontSize: 14 }}>
-              {activeTab === 'system' ? t('pages.system.onboardingWizard.systemProgress') : (activeTab === 'implementer' ? t('pages.system.onboardingWizard.implementerProgress') : t('pages.system.onboardingWizard.roleProgress'))}
-            </Text>
-            <Space size={4}>
-              <Button 
-                type="text" 
-                size="small" 
-                icon={wizIcon(RefreshCw, 15)} 
-                onClick={() => {
-                  if (activeTab === 'system') {
-                    loadSystemGuide();
-                    setRealCountsRefreshKey((k) => k + 1);
-                  } else if (activeTab === 'implementer') {
-                    setRealCountsRefreshKey((k) => k + 1);
-                  } else {
-                    loadRoleGuide(activeTab);
-                  }
-                }}
-                style={{ fontSize: 12, color: token.colorTextSecondary, padding: 0, height: 'auto', lineHeight: 1 }}
-              >
-                {t('pages.system.onboardingWizard.refresh')}
-              </Button>
-            </Space>
-          </div>
-          <Progress 
-            type="circle" 
-            percent={activeTab === 'system' ? sysProgress : (activeTab === 'implementer' ? impProgress : progress)} 
-            size={48} 
-            strokeColor={token.colorSuccess}
-            format={(percent) => (
-              <span style={{ fontSize: 12, fontWeight: 600, color: token.colorSuccess }}>
-                {percent}%
-              </span>
-            )}
-          />
-        </div>
-      </div>
-
-      <Row gutter={16}>
-        {/* 左侧角色列表 */}
-        <Col xs={24} sm={24} md={6} lg={5} xl={4}>
-          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 16, 
             background: token.colorBgContainer, 
-            borderRadius: token.borderRadiusLG, 
+            padding: '8px 8px 8px 24px', 
+            borderRadius: 32,
             border: `1px solid ${token.colorBorderSecondary}`,
-            overflow: 'hidden',
-            position: 'sticky',
-            top: 24
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
           }}>
-            <Menu
-              mode="vertical"
-              selectedKeys={[activeTab]}
-              onClick={({ key }) => handleTabChange(key)}
-              style={{ border: 'none' }}
-              items={allTabs.map((tab) => ({
-                key: tab.code,
-                label: (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', fontSize: 16 }}>{tab.icon}</span>
-                    <span style={{ fontSize: 14 }}>{tab.name}</span>
-                  </div>
-                ),
-              }))}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <Text strong style={{ fontSize: 14 }}>
+                {activeTab === 'system' ? t('pages.system.onboardingWizard.systemProgress') : (activeTab === 'implementer' ? t('pages.system.onboardingWizard.implementerProgress') : t('pages.system.onboardingWizard.roleProgress'))}
+              </Text>
+              <Space size={4}>
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={wizIcon(RefreshCw, 15)} 
+                  onClick={() => {
+                    if (activeTab === 'system') {
+                      loadSystemGuide();
+                      setRealCountsRefreshKey((k) => k + 1);
+                    } else if (activeTab === 'implementer') {
+                      setRealCountsRefreshKey((k) => k + 1);
+                    } else {
+                      loadRoleGuide(activeTab);
+                    }
+                  }}
+                  style={{ fontSize: 12, color: token.colorTextSecondary, padding: 0, height: 'auto', lineHeight: 1 }}
+                >
+                  {t('pages.system.onboardingWizard.refresh')}
+                </Button>
+              </Space>
+            </div>
+            <Progress 
+              type="circle" 
+              percent={activeTab === 'system' ? sysProgress : (activeTab === 'implementer' ? impProgress : progress)} 
+              size={48} 
+              strokeColor={token.colorSuccess}
+              format={(percent) => (
+                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorSuccess }}>
+                  {percent}%
+                </span>
+              )}
             />
           </div>
-        </Col>
+      </div>
 
-        {/* 右侧引导内容 */}
-        <Col xs={24} sm={24} md={18} lg={19} xl={20}>
-          <div style={{ minHeight: 600 }}>
-            {activeTab === 'system' ? renderSystemTab() : renderRoleTab()}
-          </div>
-        </Col>
-      </Row>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          alignItems: 'stretch',
+          gap: 16,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: 220,
+            flex: '0 0 220px',
+            height: '100%',
+            background: token.colorBgContainer,
+            borderRadius: token.borderRadiusLG,
+            border: `1px solid ${token.colorBorderSecondary}`,
+            overflow: 'auto',
+          }}
+        >
+          <Menu
+            mode="vertical"
+            selectedKeys={[activeTab]}
+            onClick={({ key }) => handleTabChange(key)}
+            style={{ border: 'none', background: 'transparent' }}
+            items={allTabs.map((tab) => ({
+              key: tab.code,
+              label: (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', fontSize: 16 }}>{tab.icon}</span>
+                  <span style={{ fontSize: 14 }}>{tab.name}</span>
+                </div>
+              ),
+            }))}
+          />
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0, height: '100%', overflow: 'auto' }}>
+          {activeTab === 'system' ? renderSystemTab() : renderRoleTab()}
+        </div>
+      </div>
 
       {/* 详细功能指引 Modal */}
       <Modal
@@ -1825,11 +1839,11 @@ const OnboardingWizardPage: React.FC = () => {
                 fixed: 'left',
                 render: (text, record: any) => (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Text strong>{text}</Text>
                     {((record.check_key ? (realCounts[record.check_key] ?? 0) : (record.id ? (realCounts[record.id] ?? 0) : 0)) > 0 ||
                       (!!record.id && completedItems.has(record.id))) && (
                       <CheckCircle2 size={14} color={token.colorSuccess} style={{ flexShrink: 0 }} />
                     )}
-                    <Text strong>{text}</Text>
                   </div>
                 ),
               },

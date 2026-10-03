@@ -1192,7 +1192,8 @@
       "resource": "master-data:process:drawing",
       "name": "工程图纸审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "plm",
+      "config_section": "plm_doc"
     }
   ]
 }

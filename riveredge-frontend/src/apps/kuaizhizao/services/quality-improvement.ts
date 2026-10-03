@@ -37,6 +37,9 @@ export interface Quality8DReport {
   lifecycle_stages?: Array<{ key: string; label: string; status: 'done' | 'active' | 'pending' }>;
   next_status?: string | null;
   next_step_suggestions?: string[];
+  coordination_mode?: 'legacy' | 'collaborative';
+  stage_assignments?: Quality8DStageAssignment[];
+  open_action_items_count?: number;
   created_at?: string;
   updated_at?: string;
   capabilities?: {
@@ -55,6 +58,40 @@ export interface Quality8DHistoryEntry {
   to_status?: string | null;
   remarks?: string | null;
   verification_result?: string | null;
+}
+
+export interface Quality8DStageAssignment {
+  id: number;
+  report_id: number;
+  stage_key: string;
+  assignee_user_id?: number | null;
+  assignee_name?: string | null;
+  due_date?: string | null;
+  status: 'pending' | 'in_progress' | 'submitted' | 'approved' | string;
+  submitted_at?: string | null;
+  approved_at?: string | null;
+  approved_by?: number | null;
+  approved_by_name?: string | null;
+}
+
+export interface Quality8DActionItem {
+  id: number;
+  report_id: number;
+  discipline: 'd3_containment' | 'd5_corrective' | 'd6_verification' | string;
+  title: string;
+  description?: string | null;
+  assignee_user_id?: number | null;
+  assignee_name?: string | null;
+  due_date?: string | null;
+  status: 'open' | 'done' | 'verified' | 'cancelled' | string;
+  sort_order?: number;
+  evidence_attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
+  completed_at?: string | null;
+  verified_by?: number | null;
+  verified_by_name?: string | null;
+  verified_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Quality8DStageRevisionEntry {
@@ -212,6 +249,63 @@ export const qualityImprovementApi = {
         method: 'POST',
         data,
       }),
+    upsertStageAssignments: async (
+      id: number,
+      items: Array<{
+        stage_key: string;
+        assignee_user_id?: number | null;
+        assignee_name?: string | null;
+        due_date?: string | null;
+      }>,
+    ) =>
+      apiRequest<Quality8DStageAssignment[]>(`/apps/kuaizhizao/quality-8d-reports/${id}/stage-assignments`, {
+        method: 'PUT',
+        data: { items },
+      }),
+    submitStage: async (id: number, stageKey: string) =>
+      apiRequest<Quality8DStageAssignment>(
+        `/apps/kuaizhizao/quality-8d-reports/${id}/stage-assignments/${stageKey}/submit`,
+        { method: 'POST' },
+      ),
+    approveStage: async (id: number, stageKey: string) =>
+      apiRequest<Quality8DStageAssignment>(
+        `/apps/kuaizhizao/quality-8d-reports/${id}/stage-assignments/${stageKey}/approve`,
+        { method: 'POST' },
+      ),
+    rejectStage: async (id: number, stageKey: string, reason: string) =>
+      apiRequest<Quality8DStageAssignment>(
+        `/apps/kuaizhizao/quality-8d-reports/${id}/stage-assignments/${stageKey}/reject`,
+        { method: 'POST', data: { reason } },
+      ),
+    listActionItems: async (id: number, discipline?: string) =>
+      apiRequest<Quality8DActionItem[]>(`/apps/kuaizhizao/quality-8d-reports/${id}/action-items`, {
+        method: 'GET',
+        params: discipline ? { discipline } : undefined,
+      }),
+    createActionItem: async (id: number, data: Partial<Quality8DActionItem>) =>
+      apiRequest<Quality8DActionItem>(`/apps/kuaizhizao/quality-8d-reports/${id}/action-items`, {
+        method: 'POST',
+        data,
+      }),
+    updateActionItem: async (id: number, itemId: number, data: Partial<Quality8DActionItem>) =>
+      apiRequest<Quality8DActionItem>(
+        `/apps/kuaizhizao/quality-8d-reports/${id}/action-items/${itemId}`,
+        { method: 'PUT', data },
+      ),
+    deleteActionItem: async (id: number, itemId: number) =>
+      apiRequest(`/apps/kuaizhizao/quality-8d-reports/${id}/action-items/${itemId}`, {
+        method: 'DELETE',
+      }),
+    completeActionItem: async (id: number, itemId: number) =>
+      apiRequest<Quality8DActionItem>(
+        `/apps/kuaizhizao/quality-8d-reports/${id}/action-items/${itemId}/complete`,
+        { method: 'POST' },
+      ),
+    verifyActionItem: async (id: number, itemId: number) =>
+      apiRequest<Quality8DActionItem>(
+        `/apps/kuaizhizao/quality-8d-reports/${id}/action-items/${itemId}/verify`,
+        { method: 'POST' },
+      ),
     history: async (id: number) =>
       apiRequest<Quality8DHistoryEntry[]>(`/apps/kuaizhizao/quality-8d-reports/${id}/history`, {
         method: 'GET',

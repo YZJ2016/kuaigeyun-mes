@@ -203,6 +203,16 @@ export function resolveEightDReportListParams(
     overdueRaw === true ||
     overdueRaw === 'true' ||
     (Array.isArray(overdueRaw) && overdueRaw.includes('true'));
+  const myStageRaw = pickSearchRaw(searchFormValues, 'my_stage_pending');
+  const my_stage_pending =
+    myStageRaw === true ||
+    myStageRaw === 'true' ||
+    (Array.isArray(myStageRaw) && myStageRaw.includes('true'));
+  const myActionRaw = pickSearchRaw(searchFormValues, 'my_action_pending');
+  const my_action_pending =
+    myActionRaw === true ||
+    myActionRaw === 'true' ||
+    (Array.isArray(myActionRaw) && myActionRaw.includes('true'));
 
   return {
     order_by,
@@ -210,6 +220,8 @@ export function resolveEightDReportListParams(
     status: pickSearchString(searchFormValues, 'status'),
     severity: pickSearchString(searchFormValues, 'severity'),
     overdue_only: overdue_only || undefined,
+    my_stage_pending: my_stage_pending || undefined,
+    my_action_pending: my_action_pending || undefined,
     created_start_date,
     created_end_date,
     due_start_date,

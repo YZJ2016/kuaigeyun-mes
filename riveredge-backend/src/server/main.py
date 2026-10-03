@@ -119,6 +119,7 @@ from core.api.im import im_router
 from core.api.user_profile.user_profile import router as user_profile_router
 from core.api.user_preferences.user_preferences import router as user_preferences_router
 from core.api.user_messages.user_messages import router as user_messages_router
+from core.api.personal.mobile_inbox import router as mobile_inbox_router
 from core.api.user_tasks.user_tasks import router as user_tasks_router
 from core.api.data_backups.data_backups import router as data_backups_router
 from core.api.operation_logs.operation_logs import router as operation_logs_router
@@ -969,6 +970,7 @@ app.include_router(user_preferences_router, prefix="/api/v1/personal")
 app.include_router(user_messages_router, prefix="/api/v1/personal")
 app.include_router(im_router, prefix="/api/v1/personal")
 app.include_router(user_tasks_router, prefix="/api/v1/personal")
+app.include_router(mobile_inbox_router, prefix="/api/v1/personal")
 app.include_router(data_backups_router, prefix="/api/v1/core")
 app.include_router(operation_logs_router, prefix="/api/v1/core")
 app.include_router(document_tracking_router, prefix="/api/v1/core")

@@ -43,7 +43,10 @@ export interface PositionFormModalProps {
   open: boolean;
   onClose: () => void;
   editUuid: string | null;
-  onSuccess: () => void;
+  /** 保存成功；新建时回传创建实体便于外层回填选中 */
+  onSuccess: (created?: Position) => void;
+  /** 嵌套在外层 Modal 时抬高层级 */
+  zIndex?: number;
 }
 
 export const PositionFormModal: React.FC<PositionFormModalProps> = ({
@@ -51,6 +54,7 @@ export const PositionFormModal: React.FC<PositionFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -110,13 +114,16 @@ export const PositionFormModal: React.FC<PositionFormModalProps> = ({
       if (isEdit && editUuid) {
         await updatePosition(editUuid, payload as UpdatePositionData);
         messageApi.success(t('common.updateSuccess'));
+        onClose();
+        formRef.current?.resetFields();
+        onSuccess();
       } else {
-        await createPosition(values as CreatePositionData);
+        const created = await createPosition(values as CreatePositionData);
         messageApi.success(t('common.createSuccess'));
+        onClose();
+        formRef.current?.resetFields();
+        onSuccess(created);
       }
-      onClose();
-      formRef.current?.resetFields();
-      onSuccess();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.saveFailed')));
     } finally {
@@ -141,6 +148,7 @@ export const PositionFormModal: React.FC<PositionFormModalProps> = ({
       formRef={formRef as React.RefObject<ProFormInstance>}
       initialValues={{ is_active: true, sort_order: 0 }}
       layout="vertical"
+      zIndex={zIndex}
     >
       <SchemaFormRenderer
         schema={positionFormSchema}

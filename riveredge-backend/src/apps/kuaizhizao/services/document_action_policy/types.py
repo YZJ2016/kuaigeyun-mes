@@ -845,6 +845,8 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "eight_d_report.close.already_closed": "8D 报告已关闭",
     "eight_d_report.close.not_at_final_stage": "仅 D8 总结阶段可关闭报告",
     "eight_d_report.close.stage_incomplete": "关闭前需先完善 D8 总结内容",
+    "eight_d_report.transition.stage_not_approved": "推进前需牵头人确认当前阶段",
+    "eight_d_report.transition.actions_not_verified": "推进前需验证当前阶段全部行动项",
     "nonconforming_ledger.update.closed": "已处理或已取消的台账不可更新处置",
     "nonconforming_ledger.start_8d.closed": "已处理或已取消的台账不可发起 8D",
     "nonconforming_ledger.start_8d.already_linked": "该台账已关联 8D 报告",

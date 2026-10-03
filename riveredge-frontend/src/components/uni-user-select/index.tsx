@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { App, Form, Space, Tag } from 'antd';
+import { App, Form, Space, Tag, theme } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
 import { NamePath } from 'antd/es/form/interface';
+import { useTranslation } from 'react-i18next';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   getUserList,
@@ -17,6 +19,12 @@ import {
   canReadUserDirectory,
   formatUserDisplayLabel,
 } from '../../utils/userDisplay';
+import { hasPermission } from '../../utils/permission';
+import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../layout-templates/constants';
+import type { QuickCreateConfig } from '../uni-dropdown';
+import { UserFormModal } from '../../pages/system/users/components/UserFormModal';
+
+const PERM_USER_CREATE = 'system:user:create';
 
 interface UniUserSelectProps {
   /** 表单字段名称 */
@@ -52,11 +60,23 @@ interface UniUserSelectProps {
   onChange?: (value: any, user: User | User[] | undefined) => void;
   /** 下拉中对这些用户 ID 展示「默认」徽章（如工序档案默认生产人员） */
   defaultBadgeUserIds?: number[];
+  /**
+   * 是否显示快速新建用户入口（需 system:user:create）。
+   * 传入 quickCreate 时优先用自定义配置。
+   */
+  showQuickCreate?: boolean;
+  /** 自定义快速新建（如打开外部弹窗）；传入时优先于 showQuickCreate 内置 UserFormModal */
+  quickCreate?: QuickCreateConfig;
+  /** 选项文案追加所属部门（如「张三 (u001) - 生产部」） */
+  showDepartmentInLabel?: boolean;
+  /** 内置快速新建弹窗 zIndex（嵌套在外层 Modal 时传入外层 zIndex） */
+  modalZIndex?: number;
   /** 透传其他 ProFormSelect 属性 */
   [key: string]: any;
 }
 
 function displayItemToUser(item: UserDisplayItem): User {
+  const departmentName = item.department_name?.trim() || undefined;
   return {
     id: item.id,
     uuid: item.uuid,
@@ -68,6 +88,12 @@ function displayItemToUser(item: UserDisplayItem): User {
     created_at: '',
     updated_at: '',
     department_uuid: item.department_uuid ?? undefined,
+    department: departmentName
+      ? {
+          uuid: item.department_uuid || '',
+          name: departmentName,
+        }
+      : undefined,
   };
 }
 
@@ -145,17 +171,25 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
   width,
   onChange,
   defaultBadgeUserIds,
+  showQuickCreate = false,
+  quickCreate: quickCreateProp,
+  showDepartmentInLabel = false,
+  modalZIndex,
   ...restProps
 }) => {
+  const { t } = useTranslation();
+  const { token } = theme.useToken();
   const { message } = App.useApp();
   const currentUser = useCurrentUser();
   const isReadonlyMode = useProFormReadonlyMode(readonly);
   const canPick = canPickUsersForDisplay(currentUser);
   const canInteract = !isReadonlyMode && !disabled && canPick;
   const useFullList = canReadUserDirectory(currentUser);
+  const canCreateUser = hasPermission(currentUser, PERM_USER_CREATE);
 
   const [data, setData] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [userModalOpen, setUserModalOpen] = useState(false);
   const form = Form.useFormInstance();
   const watchedValue = Form.useWatch(name, form);
   const onChangeRef = useRef(onChange);
@@ -304,58 +338,156 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
 
   const options = useMemo(() => {
     return data.map((item) => ({
-      label: formatUserDisplayLabel(item),
+      label: formatUserDisplayLabel(item, { includeDepartment: showDepartmentInLabel }),
       value: item.uuid,
       key: item.uuid,
     }));
-  }, [data]);
+  }, [data, showDepartmentInLabel]);
 
   const effectiveReadonly = isReadonlyMode || disabled || !canPick;
 
-  return (
-    <ProFormSelect
-      name={name}
-      label={label}
-      placeholder={placeholder}
-      readonly={effectiveReadonly}
-      disabled={disabled}
-      width={width}
-      rules={
-        required
-          ? [
-              {
-                required: true,
-                message: `请选择${typeof label === 'string' && label ? label : '人员'}`,
-              },
-            ]
-          : undefined
+  const openBuiltinCreate = () => {
+    setUserModalOpen(true);
+  };
+
+  const effectiveQuickCreate: QuickCreateConfig | undefined =
+    quickCreateProp ??
+    (showQuickCreate && canCreateUser && canInteract
+      ? {
+          label: t('components.uniUserSelect.quickCreate'),
+          onClick: openBuiltinCreate,
+        }
+      : undefined);
+
+  const useBuiltinUserModal = showQuickCreate && !quickCreateProp && canCreateUser;
+
+  const handleUserCreated = (user: User) => {
+    setData((prev) => mergeUsersByUuid(prev, [user]));
+    if (mode === 'multiple' || mode === 'tags') {
+      const prev = collectSelectedUuids(form.getFieldValue(name), mode);
+      const next = prev.includes(user.uuid) ? prev : [...prev, user.uuid];
+      form.setFieldValue(name, next);
+    } else {
+      form.setFieldValue(name, user.uuid);
+    }
+    setUserModalOpen(false);
+  };
+
+  const {
+    fieldProps: restFieldProps,
+    rules: restRules,
+    ...otherRestProps
+  } = restProps as {
+    fieldProps?: Record<string, unknown>;
+    rules?: unknown[];
+    [key: string]: unknown;
+  };
+
+  const popupRender = effectiveQuickCreate
+    ? (menu: React.ReactElement) => {
+        const footerStyle: React.CSSProperties = {
+          borderTop: `1px solid ${token.colorBorder}`,
+          padding: '4px 0',
+          background: token.colorBgContainer,
+        };
+        const itemStyle: React.CSSProperties = {
+          padding: '6px 12px',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 12,
+          color: token.colorTextSecondary,
+        };
+        return (
+          <>
+            {menu}
+            <div style={footerStyle}>
+              <div
+                role="button"
+                tabIndex={0}
+                style={itemStyle}
+                onClick={() => effectiveQuickCreate.onClick()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') effectiveQuickCreate.onClick();
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = token.colorFillTertiary;
+                  e.currentTarget.style.color = token.colorText;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = token.colorTextSecondary;
+                }}
+              >
+                <PlusOutlined />
+                {effectiveQuickCreate.label ?? t('components.uniUserSelect.quickCreate')}
+              </div>
+            </div>
+          </>
+        );
       }
-      options={options}
-      fieldProps={{
-        mode,
-        showSearch: canInteract,
-        loading,
-        filterOption: false,
-        onSearch: canInteract ? debounceFetch : undefined,
-        // 故意不传 onChange：会覆盖 ProForm createField 写回逻辑
-        optionRender: (ori) => {
-          const u = data.find((item) => item.uuid === ori.value);
-          const text =
-            typeof ori.label === 'string'
-              ? ori.label
-              : u
-                ? formatUserDisplayLabel(u)
-                : '';
-          return (
-            <Space size={6} wrap>
-              <span>{text}</span>
-              {u && defaultIdSet.has(u.id) ? <Tag color="blue">默认</Tag> : null}
-            </Space>
-          );
+    : undefined;
+
+  const requiredRules = required
+    ? [
+        {
+          required: true,
+          message: `请选择${typeof label === 'string' && label ? label : '人员'}`,
         },
-      }}
-      {...restProps}
-    />
+      ]
+    : undefined;
+
+  return (
+    <>
+      <ProFormSelect
+        name={name}
+        label={label}
+        placeholder={placeholder}
+        readonly={effectiveReadonly}
+        disabled={disabled}
+        width={width}
+        rules={(restRules as typeof requiredRules) ?? requiredRules}
+        options={options}
+        fieldProps={{
+          mode,
+          showSearch: canInteract,
+          loading,
+          filterOption: false,
+          onSearch: canInteract ? debounceFetch : undefined,
+          // 故意不传 onChange：会覆盖 ProForm createField 写回逻辑
+          optionRender: (ori: { value?: string | number; label?: React.ReactNode }) => {
+            const u = data.find((item) => item.uuid === ori.value);
+            const text =
+              typeof ori.label === 'string'
+                ? ori.label
+                : u
+                  ? formatUserDisplayLabel(u, { includeDepartment: showDepartmentInLabel })
+                  : '';
+            return (
+              <Space size={6} wrap>
+                <span>{text}</span>
+                {u && defaultIdSet.has(u.id) ? <Tag color="blue">默认</Tag> : null}
+              </Space>
+            );
+          },
+          popupRender,
+          ...restFieldProps,
+        }}
+        {...otherRestProps}
+      />
+      {useBuiltinUserModal ? (
+        <UserFormModal
+          open={userModalOpen}
+          editUuid={null}
+          zIndex={
+            (modalZIndex ?? 1000) + MODAL_NESTED_ABOVE_PARENT_OFFSET
+          }
+          onClose={() => setUserModalOpen(false)}
+          onSuccess={handleUserCreated}
+        />
+      ) : null}
+    </>
   );
 };
 

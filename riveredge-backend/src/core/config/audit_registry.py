@@ -3,7 +3,8 @@
 「单据是否可审核」的唯一声明源是各 app 的 `manifest.json` 顶层 `audit` 数组，
 每条形如：``{ node_key, entity_type, resource, name, template, config_category? }``，
 ``template`` ∈ ``simple`` | ``sme`` | ``rd_file_change``（构图见 ``audit_process_templates``）；
-``config_category`` 用于配置中心侧边栏分组（默认 ``common``）。
+``config_category`` 用于配置中心侧边栏分组（默认 ``common``）；
+可选 ``config_section`` 用于分类内二级分区标题。
 
 本模块在进程内扫描一次（manifest 仅随部署/重启变化），聚合为单一注册表，供下列
 全部从此派生，消除并行硬编码表：
@@ -28,6 +29,8 @@ VALID_TEMPLATES = {"simple", "sme", "rd_file_change"}
 
 VALID_CONFIG_CATEGORIES = frozenset({
     "common",
+    "office",
+    "plm",
     "sales",
     "planning",
     "procurement",
@@ -51,6 +54,8 @@ class AuditEntry:
     template: str
     config_category: str
     business_type: str = ""
+    # 配置中心审核设置二级分区（可选）
+    config_section: str = ""
 
 
 def _apps_dir() -> Path:
@@ -98,6 +103,7 @@ def _load_entries() -> Tuple[AuditEntry, ...]:
             template = str(raw.get("template") or "").strip()
             config_category = str(raw.get("config_category") or "common").strip() or "common"
             business_type = str(raw.get("business_type") or "").strip()
+            config_section = str(raw.get("config_section") or "").strip()
             if not (node_key and entity_type and resource and name and template):
                 raise ValueError(
                     f"manifest[{app_code}].audit 项字段缺失（node_key/entity_type/resource/name/template 均必填）: {raw!r}"
@@ -133,6 +139,7 @@ def _load_entries() -> Tuple[AuditEntry, ...]:
                     template=template,
                     config_category=config_category,
                     business_type=business_type,
+                    config_section=config_section,
                 )
             )
 

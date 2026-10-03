@@ -12,6 +12,7 @@ import { UniTable } from '../uni-table';
 import { FormModalTemplate, MODAL_CONFIG } from '../layout-templates';
 import { StatusTag } from '../../constants/statusBadges';
 import { formatDateTime } from '../../utils/format';
+import { pickListSearchKeyword } from '../../utils/tableQueryKey';
 import {
   getScheduledTaskList,
   syncScheduledTaskPresets,
@@ -223,13 +224,26 @@ export const ScheduledTasksPanel: React.FC<ScheduledTasksPanelProps> = ({
         rowKey="uuid"
         columns={columns}
         loading={loading}
-        showFuzzySearch={false}
+        showFuzzySearch
         showAdvancedSearch={false}
+        fuzzySearchPlaceholder={t('pages.system.configCenter.scheduledTasks.searchPlaceholder')}
         pagination={{ pageSize: 20 }}
-        request={async () => {
+        request={async (_params, _sort, _filter, searchFormValues) => {
           const items = await getScheduledTaskList({ limit: 200 });
           const presetItems = items.filter((row) => row.is_preset);
-          return { data: presetItems, success: true, total: presetItems.length };
+          const keyword = (pickListSearchKeyword(searchFormValues) ?? '').trim().toLowerCase();
+          const filtered = keyword
+            ? presetItems.filter((row) => {
+                const moduleKey = row.preset_module
+                  ? MODULE_LABEL_KEYS[row.preset_module]
+                  : undefined;
+                const moduleLabel = moduleKey ? t(moduleKey) : '';
+                return [row.name, row.description, row.code, row.preset_module, moduleLabel].some(
+                  (v) => String(v ?? '').toLowerCase().includes(keyword),
+                );
+              })
+            : presetItems;
+          return { data: filtered, success: true, total: filtered.length };
         }}
         toolBarRender={() => [
           <Button

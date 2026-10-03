@@ -86,8 +86,14 @@ def derive_eight_d_report_capabilities(report: Any) -> EightDReportCapabilities:
     elif not _stage_content_ready(report, status):
         transition_reason = "eight_d_report.transition.stage_incomplete"
     else:
-        transition_allowed = True
-        transition_reason = None
+        gate = getattr(report, "_eight_d_gate", None)
+        if gate is not None and not gate.current_stage_approved:
+            transition_reason = gate.reason or "eight_d_report.transition.stage_not_approved"
+        elif gate is not None and not gate.action_items_verified:
+            transition_reason = gate.reason or "eight_d_report.transition.actions_not_verified"
+        else:
+            transition_allowed = True
+            transition_reason = None
     transition_cap = _cap(transition_allowed, transition_reason)
 
     close_allowed = False

@@ -45,7 +45,6 @@ import {
 } from './notificationChannelRefs';
 import { stripMiddleDotSeparator } from './stripMiddleDotSeparator';
 import { getAntdModal } from '../../utils/antdAppApis';
-import { isPinyinKeyword, matchPinyinInitialsAsync } from '../../utils/pinyin';
 import { pickListSearchKeyword } from '../../utils/tableQueryKey';
 
 type NotificationRuleTableRow = {
@@ -60,39 +59,6 @@ type NotificationRuleTableRow = {
   raw: Record<string, unknown>;
 };
 
-const NOTIFICATION_RULE_SEARCH_FIELDS: (keyof Pick<
-  NotificationRuleTableRow,
-  'scene' | 'document' | 'action' | 'template' | 'channels' | 'recipients'
->)[] = ['scene', 'document', 'action', 'template', 'channels', 'recipients'];
-
-const compactSearchToken = (value: string) => value.toLowerCase().replace(/[\s\-_]+/g, '');
-
-async function filterNotificationRuleRows(
-  rows: NotificationRuleTableRow[],
-  searchFormValues?: Record<string, unknown>,
-): Promise<NotificationRuleTableRow[]> {
-  const keyword = pickListSearchKeyword(searchFormValues);
-  if (!keyword) return rows;
-
-  const keywordLower = keyword.toLowerCase();
-  const keywordCompact = compactSearchToken(keyword);
-  const usePinyin = isPinyinKeyword(keyword);
-  const keywordUpper = keyword.toUpperCase();
-
-  const matched = await Promise.all(
-    rows.map(async (row) => {
-      for (const field of NOTIFICATION_RULE_SEARCH_FIELDS) {
-        const valueStr = String(row[field] ?? '').trim();
-        if (!valueStr || valueStr === '-') continue;
-        if (valueStr.toLowerCase().includes(keywordLower)) return row;
-        if (keywordCompact && compactSearchToken(valueStr).includes(keywordCompact)) return row;
-        if (usePinyin && (await matchPinyinInitialsAsync(valueStr, keywordUpper))) return row;
-      }
-      return null;
-    }),
-  );
-  return matched.filter((row): row is NotificationRuleTableRow => row !== null);
-}
 function splitRecipientScopes(scopes: unknown): {
   recipient_role_scopes: string[];
   enable_form_user_notify: boolean;
@@ -755,7 +721,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                 tanstackQuery={{ enabled: false }}
                 rowKey="id"
                 pagination={false}
-                showFuzzySearch={false}
+                showFuzzySearch
                 showAdvancedSearch={false}
                 fuzzySearchPlaceholder={t('pages.system.configCenter.notification.searchPlaceholder')}
                 options={false}
@@ -870,10 +836,14 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                   },
                 ]}
                 request={async (_params, _sort, _filter, searchFormValues) => {
-                  const filtered = await filterNotificationRuleRows(
-                    notificationRuleRows as NotificationRuleTableRow[],
-                    searchFormValues,
-                  );
+                  const keyword = (pickListSearchKeyword(searchFormValues) ?? '').trim().toLowerCase();
+                  const rows = notificationRuleRows as NotificationRuleTableRow[];
+                  const filtered = keyword
+                    ? rows.filter((row) =>
+                        [row.scene, row.document, row.action, row.template, row.channels, row.recipients]
+                          .some((v) => String(v ?? '').toLowerCase().includes(keyword)),
+                      )
+                    : rows;
                   return {
                     data: filtered,
                     success: true,
