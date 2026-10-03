@@ -234,12 +234,16 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
     except Exception as e:
         logger.exception(f"备份任务失败: {e}")
         if backup is not None:
-            backup.status = "failed"
-            backup.error_message = str(e)
-            backup.progress_message = "备份失败"
-            backup.completed_at = resolve_business_datetime()
+            err = str(e).strip() or repr(e)
+            name = type(e).__name__
+            error_message = name if err == name else f"{name}: {err}"
             try:
-                await backup.save()
+                await DataBackup.filter(uuid=backup.uuid).update(
+                    status="failed",
+                    error_message=error_message[:4000],
+                    progress_message="备份失败",
+                    completed_at=resolve_business_datetime(),
+                )
             except Exception as save_e:
                 logger.error(f"写入备份失败状态异常: {save_e}")
     finally:
