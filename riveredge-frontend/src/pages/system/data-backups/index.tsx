@@ -394,24 +394,10 @@ const DataBackupsPage: React.FC = () => {
             : Math.min(99, Math.max(0, Number(record.progress) || 0));
     const status =
       record.status === 'success' ? 'success' : record.status === 'failed' ? 'exception' : 'active';
-    const progressHint =
-      (record.status === 'running' || record.status === 'failed') ? record.progress_message : undefined;
     return (
-      <Tooltip title={progressHint || undefined}>
-        <div style={{ minWidth: 120 }}>
-          <Progress
-            percent={percent}
-            size="small"
-            status={status}
-            format={(p) => `${p ?? 0}%`}
-          />
-          {progressHint ? (
-            <Text type="secondary" style={{ fontSize: 11 }} ellipsis>
-              {progressHint}
-            </Text>
-          ) : null}
-        </div>
-      </Tooltip>
+      <div style={{ minWidth: 120 }}>
+        <Progress percent={percent} size="small" status={status} />
+      </div>
     );
   }, []);
 
@@ -871,6 +857,13 @@ const DataBackupsPage: React.FC = () => {
               
               const isActiveJob = (item: DataBackup) =>
                 item.status === 'pending' || item.status === 'running';
+              const markActiveJobs = (items: DataBackup[]) => {
+                const nextActive = items.some(isActiveJob);
+                setHasActiveBackupJobs(nextActive);
+                if (!nextActive) {
+                  void loadWorkerHealth(true);
+                }
+              };
               // 同时获取所有数据用于统计（如果当前页是第一页，获取所有数据）
               if ((current || 1) === 1) {
                 try {
@@ -879,12 +872,12 @@ const DataBackupsPage: React.FC = () => {
                     page_size: 1000,
                   });
                   setAllBackups(allResponse.items);
-                  setHasActiveBackupJobs(allResponse.items.some(isActiveJob));
+                  markActiveJobs(allResponse.items);
                 } catch (e) {
-                  setHasActiveBackupJobs(response.items.some(isActiveJob));
+                  markActiveJobs(response.items);
                 }
               } else {
-                setHasActiveBackupJobs(response.items.some(isActiveJob));
+                markActiveJobs(response.items);
               }
               
               return {

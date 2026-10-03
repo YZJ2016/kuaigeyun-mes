@@ -48,3 +48,12 @@ def test_cross_system_csv_still_maps_tenant_and_file_path():
     assert columns == ["tenant_id", "file_path"]
     assert "1,1/a.pdf" in csv
     assert "2/a.pdf" not in csv
+
+
+def test_tenant_export_sql_only_current_tenant():
+    users = jobs._build_tenant_table_copy_sql("core_users", 24)
+    assert users == 'SELECT * FROM "core_users" WHERE tenant_id = 24'
+    roles = jobs._build_tenant_junction_copy_sql("core_user_roles", 24)
+    assert "OR " not in roles
+    policies = jobs._build_tenant_junction_copy_sql("core_policy_bindings", 24)
+    assert "OR " not in policies
