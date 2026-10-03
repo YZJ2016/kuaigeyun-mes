@@ -183,7 +183,24 @@ def _pg_dsn() -> str:
 
 async def _asyncpg_connect():
     import asyncpg
-    return await asyncpg.connect(_pg_dsn(), command_timeout=600)
+
+    host = infra_settings.DB_HOST
+    if host == "localhost":
+        host = "127.0.0.1"
+    return await asyncpg.connect(
+        host=host,
+        port=int(infra_settings.DB_PORT),
+        user=infra_settings.DB_USER,
+        password=infra_settings.DB_PASSWORD or None,
+        database=infra_settings.DB_NAME,
+        ssl=False,
+        timeout=30,
+        command_timeout=600,
+        server_settings={
+            "application_name": "riveredge_backup",
+            "timezone": getattr(infra_settings, "TIMEZONE", "UTC"),
+        },
+    )
 
 
 async def is_backup_advisory_lock_held() -> Optional[bool]:
@@ -219,13 +236,19 @@ async def _copy_query_to_file(conn, select_sql: str, file_obj) -> int:
     """
     用 asyncpg COPY 流式导出 CSV（含表头）到已打开的二进制文件。
 
-    禁止整表进内存：大表 COPY 进 BytesIO/str 会把 taskiq worker 打到数 GB 触发 OOM。
-    返回本次写入字节数。
+    不要把 file 对象直接交给 copy_from_query：asyncpg 在线程池里 write 之后，
+    本线程对 `wb` 文件 `read()` 会变成 UnsupportedOperation: read（远程库更易踩中）。
+    禁止整表进内存。返回本次写入字节数。
     """
     start = file_obj.tell()
+
+    async def _on_chunk(data: bytes) -> None:
+        if data:
+            file_obj.write(data)
+
     await conn.copy_from_query(
         select_sql,
-        output=file_obj,
+        output=_on_chunk,
         format="csv",
         header=True,
     )
@@ -233,15 +256,8 @@ async def _copy_query_to_file(conn, select_sql: str, file_obj) -> int:
 
 
 def _ensure_binary_file_ends_with_newline(file_obj) -> None:
-    pos = file_obj.tell()
-    if pos <= 0:
-        file_obj.write(b"\n")
-        return
-    file_obj.seek(pos - 1)
-    last = file_obj.read(1)
-    file_obj.seek(0, os.SEEK_END)
-    if last != b"\n":
-        file_obj.write(b"\n")
+    """dump 分段以换行结束。只写不读。"""
+    file_obj.write(b"\n")
 
 
 async def _load_core_user_fk_children_async(conn, *, export_tables: list[str]) -> dict[str, str]:

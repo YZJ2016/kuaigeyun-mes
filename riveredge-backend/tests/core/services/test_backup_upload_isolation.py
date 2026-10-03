@@ -58,3 +58,15 @@ async def test_exclusive_create_never_deletes_an_existing_collision(monkeypatch,
     with pytest.raises(FileExistsError):
         await service.DataBackupService.upload_backup_file(1, upload("new"), "same")
     assert existing.read_bytes() == b"keep"
+
+
+def test_ensure_newline_does_not_raise_on_write_only_file(tmp_path):
+    from core.services.system.data_backup_jobs import _ensure_binary_file_ends_with_newline
+
+    dump = tmp_path / "db_dump.sql"
+    with open(dump, "wb") as f:
+        f.write(b"row1")
+        _ensure_binary_file_ends_with_newline(f)
+        f.write(b"row2")
+        _ensure_binary_file_ends_with_newline(f)
+    assert dump.read_bytes().endswith(b"\n")
