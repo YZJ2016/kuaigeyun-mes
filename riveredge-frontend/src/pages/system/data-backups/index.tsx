@@ -37,6 +37,7 @@ import {
   deleteBackup,
   startBackupDownload,
   getBackupWorkerHealth,
+  reclaimStalledBackups,
   pollRestoreStatus,
   DataBackup,
   BackupWorkerHealth,
@@ -109,6 +110,7 @@ const DataBackupsPage: React.FC = () => {
   const [allBackups, setAllBackups] = useState<DataBackup[]>([]); // 用于统计
   const [workerHealth, setWorkerHealth] = useState<BackupWorkerHealth | null>(null);
   const [workerHealthLoading, setWorkerHealthLoading] = useState(false);
+  const [reclaiming, setReclaiming] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [hasActiveBackupJobs, setHasActiveBackupJobs] = useState(false);
 
@@ -129,6 +131,25 @@ const DataBackupsPage: React.FC = () => {
       }
     }
   }, [messageApi, t]);
+
+  const handleReclaimStalled = async () => {
+    setReclaiming(true);
+    try {
+      const result = await reclaimStalledBackups();
+      messageApi.success(
+        t('pages.system.dataBackups.reclaimSuccess', {
+          redispatched: result.redispatched,
+          failedRunning: result.failed_running,
+        }),
+      );
+      await loadWorkerHealth(true);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.dataBackups.reclaimFailed'));
+    } finally {
+      setReclaiming(false);
+    }
+  };
 
   React.useEffect(() => {
     loadWorkerHealth(true);
@@ -925,6 +946,11 @@ const DataBackupsPage: React.FC = () => {
               >
                 {t('pages.system.dataBackups.workerStatusRefresh')}
               </Button>
+              {workerHealth?.status === 'backlog' ? (
+                <Button type="primary" loading={reclaiming} onClick={() => void handleReclaimStalled()}>
+                  {t('pages.system.dataBackups.reclaimStalled')}
+                </Button>
+              ) : null}
             </Space>,
           ]}
           showImportButton={false}

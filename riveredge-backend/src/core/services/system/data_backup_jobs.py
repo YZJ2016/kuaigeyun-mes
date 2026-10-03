@@ -28,6 +28,9 @@ from core.utils.timezone_utils import resolve_business_datetime
 
 ProgressCallback = Callable[[int, str], Awaitable[None]]
 
+# 与 data_backup_handlers 同一把 session advisory lock（bigint key）
+BACKUP_ADVISORY_LOCK_KEY = 824_601_001
+
 TENANT_BACKUP_EXCLUDED_TABLES = {
     # 超大运行日志表：对业务恢复价值有限，但会显著拖慢租户级备份
     "core_operation_logs",
@@ -181,6 +184,35 @@ def _pg_dsn() -> str:
 async def _asyncpg_connect():
     import asyncpg
     return await asyncpg.connect(_pg_dsn(), command_timeout=600)
+
+
+async def is_backup_advisory_lock_held() -> Optional[bool]:
+    """当前库是否仍有备份 advisory lock。查询失败返回 None（当作仍持锁，避免误杀）。"""
+    key = int(BACKUP_ADVISORY_LOCK_KEY)
+    classid = key >> 32
+    objid = key & 0xFFFFFFFF
+    try:
+        conn = await _asyncpg_connect()
+        try:
+            held = await conn.fetchval(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_locks
+                    WHERE locktype = 'advisory'
+                      AND classid = $1::oid
+                      AND objid = $2::oid
+                      AND granted
+                )
+                """,
+                classid,
+                objid,
+            )
+            return bool(held)
+        finally:
+            await conn.close()
+    except Exception as e:
+        logger.debug("查询备份 advisory lock 失败: {}", e)
+        return None
 
 
 async def _copy_query_to_file(conn, select_sql: str, file_obj) -> int:
