@@ -149,6 +149,43 @@ def test_command_create_validates_params():
         assert command.function_key == "set_speed"
 
 
+def test_command_rejects_unimplemented_dispatch_channel():
+    from infra.exceptions.exceptions import ValidationError
+
+    device = MagicMock()
+    device.id = 1
+    device.product_id = 2
+    device.connection_id = None
+
+    product = MagicMock()
+    product.functions = [
+        {
+            "function_key": "set_speed",
+            "name": "设置转速",
+            "timeout_seconds": 30,
+            "params": [{"key": "value", "name": "转速", "value_type": "number", "required": True}],
+        }
+    ]
+
+    with patch(
+        "apps.kuaiiot.services.command_service.ProductService.get_by_id",
+        new=AsyncMock(return_value=product),
+    ):
+        with pytest.raises(ValidationError, match="暂未实现"):
+            asyncio.run(
+                CommandService.create_command(
+                    1,
+                    device,
+                    DeviceCommandCreate(
+                        function_key="set_speed",
+                        params={"value": 100},
+                        dispatch_channel="http",
+                    ),
+                    requested_by=99,
+                )
+            )
+
+
 def test_ingest_payload_events_optional():
     payload = IngestPayload(tags={}, events=[{"event_key": "fault"}])
     assert payload.events[0]["event_key"] == "fault"
