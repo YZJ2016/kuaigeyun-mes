@@ -3,7 +3,7 @@
 """
 
 from functools import wraps
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from core.tasks.event_compat import Event
 from infra.domain.tenant_context import clear_tenant_context, set_current_tenant_id
@@ -11,13 +11,28 @@ from infra.models.tenant import Tenant
 from loguru import logger
 
 
+def _extract_event(args: tuple, kwargs: dict) -> Optional[Any]:
+    """从 handler 调用约定解析 Event / TaskEvent。
+
+    dispatcher 对单参 handler 直接传 ``event``；对双参形态传 ``(ctx, step)``，
+    event 在 ``ctx.event``。旧实现只认后者，导致 ``scheduled-task/execute`` 等
+    单参工作流一律报「缺少 event」。
+    """
+    first = (args[0] if args else None) or kwargs.get("ctx")
+    if first is None:
+        return kwargs.get("event")
+    nested = getattr(first, "event", None)
+    if nested is not None and hasattr(nested, "data"):
+        return nested
+    if hasattr(first, "data"):
+        return first
+    return kwargs.get("event")
+
+
 def with_tenant_isolation(func: Callable) -> Callable:
     @wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
-        ctx = (args[0] if args else None) or kwargs.get("ctx")
-        event = getattr(ctx, "event", None) if ctx is not None else None
-        if not event:
-            event = kwargs.get("event")
+        event = _extract_event(args, kwargs)
         if not event:
             logger.error(f"工作流函数 {func.__name__} 缺少 event 参数")
             return {"success": False, "error": "缺少必要参数：event"}
@@ -63,10 +78,7 @@ def with_tenant_isolation(func: Callable) -> Callable:
 def with_tenant_isolation_optional(func: Callable) -> Callable:
     @wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
-        ctx = (args[0] if args else None) or kwargs.get("ctx")
-        event = getattr(ctx, "event", None) if ctx is not None else None
-        if not event:
-            event = kwargs.get("event")
+        event = _extract_event(args, kwargs)
         if not event:
             logger.error(f"工作流函数 {func.__name__} 缺少 event 参数")
             return {"success": False, "error": "缺少必要参数：event"}
