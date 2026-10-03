@@ -6,9 +6,10 @@
 
 from __future__ import annotations
 
+import time
 from functools import reduce
 from operator import or_
-from typing import Dict, FrozenSet, List, Optional, Set
+from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 
 from tortoise.expressions import Q
 
@@ -191,9 +192,26 @@ _MESSAGE_TEMPLATE_CODE_PREFIX_TO_APP: Dict[str, str] = {
 }
 
 
+_INSTALLED_APP_CODES_CACHE: Dict[int, Tuple[FrozenSet[str], float]] = {}
+_INSTALLED_APP_CODES_TTL_SECONDS = 30.0
+
+
+def invalidate_installed_application_codes_cache(tenant_id: Optional[int] = None) -> None:
+    if tenant_id is None:
+        _INSTALLED_APP_CODES_CACHE.clear()
+        return
+    _INSTALLED_APP_CODES_CACHE.pop(int(tenant_id), None)
+
+
 async def get_installed_application_codes(tenant_id: int) -> Set[str]:
+    now = time.monotonic()
+    cached = _INSTALLED_APP_CODES_CACHE.get(int(tenant_id))
+    if cached and now - cached[1] < _INSTALLED_APP_CODES_TTL_SECONDS:
+        return set(cached[0])
     apps = await ApplicationService.get_installed_applications(tenant_id)
-    return {str(a["code"]) for a in apps if a.get("code")}
+    codes = frozenset(str(a["code"]) for a in apps if a.get("code"))
+    _INSTALLED_APP_CODES_CACHE[int(tenant_id)] = (codes, now)
+    return set(codes)
 
 
 def app_code_from_page_path(page_path: Optional[str]) -> Optional[str]:

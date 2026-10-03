@@ -18044,6 +18044,8 @@ export default {
   'app.kuaizhizao.equipment.getListFailed': '获取设备列表失败',
   'app.kuaizhizao.equipment.getTraceFailed': '获取设备追溯失败',
   'app.kuaizhizao.equipment.createSuccess': '设备创建成功',
+  'app.kuaizhizao.equipment.measuringNatureUseMeasuringLedger':
+    '「测量设备」请到「计量器具台账」新建；本列表不展示测量设备',
   'app.kuaizhizao.equipment.updateSuccess': '设备更新成功',
   'app.kuaizhizao.equipment.calibrationSaved': '校验记录已保存',
   'app.kuaizhizao.equipment.confirmBatchDeleteTitle': '确认批量删除',

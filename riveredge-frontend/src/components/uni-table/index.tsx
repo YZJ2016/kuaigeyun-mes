@@ -2327,9 +2327,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       ...inner,
       reload: (...args: any[]) => reloadWithTanstackCacheBust(...args),
       reloadAndRest: (...args: any[]) => reloadAndRestWithTanstackCacheBust(...args),
+      resetSearch: () => handleSearchReset(),
       clearSelected: () => clearAllRowSelection(),
-    }
-  }, [outwardActionRef, reloadWithTanstackCacheBust, reloadAndRestWithTanstackCacheBust, clearAllRowSelection])
+    } as ActionType
+  }, [outwardActionRef, reloadWithTanstackCacheBust, reloadAndRestWithTanstackCacheBust, handleSearchReset, clearAllRowSelection])
 
   /**
    * 表格数据请求（核心性能路径）

@@ -263,47 +263,69 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       });
       loadFormOptions();
 
-      let ruleCode: string | undefined;
-      let autoGenerate = false;
       const initValues = {
         isActive: true,
         reportingType: 'quantity',
         overReportMode: 'none',
         overReportValue: 0,
       };
-      (async () => {
-        try {
-          const pageConfig = await getCodeRulePageConfig(PAGE_CODE);
-          ruleCode = pageConfig?.ruleCode;
-          autoGenerate = !!(pageConfig?.autoGenerate && ruleCode);
-        } catch {
-          ruleCode = getPageRuleCode(PAGE_CODE);
-          autoGenerate = isAutoGenerateEnabled(PAGE_CODE);
+      let cancelled = false;
+      const applyPreview = (res: { code?: string } | null | undefined) => {
+        if (cancelled) return;
+        const previewCodeValue = (res?.code ?? '').trim();
+        setPreviewCode(previewCodeValue || null);
+        formRef.current?.setFieldsValue({
+          ...initValues,
+          ...(previewCodeValue ? { code: previewCodeValue } : {}),
+        });
+        if (!previewCodeValue) {
+          messageApi.info(t('app.master-data.codeRulePreviewHint'));
         }
-        if (autoGenerate && ruleCode) {
-          testGenerateCode({ rule_code: ruleCode })
-            .then((res) => {
-              const previewCodeValue = (res?.code ?? '').trim();
-              setPreviewCode(previewCodeValue || null);
-              formRef.current?.setFieldsValue({
-                ...initValues,
-                ...(previewCodeValue ? { code: previewCodeValue } : {}),
-              });
-              if (!previewCodeValue) {
-                messageApi.info(t('app.master-data.codeRulePreviewHint'));
-              }
-            })
-            .catch(() => {
-              setPreviewCode(null);
-              formRef.current?.setFieldsValue(initValues);
-              messageApi.info(t('app.master-data.codeRuleAutoFailed'));
-            });
-        } else {
+      };
+      (async () => {
+        const localRuleCode = getPageRuleCode(PAGE_CODE);
+        const localAutoGenerate = isAutoGenerateEnabled(PAGE_CODE);
+        const previewPromise =
+          localAutoGenerate && localRuleCode
+            ? testGenerateCode({ rule_code: localRuleCode })
+                .then((res) => {
+                  applyPreview(res);
+                  return res;
+                })
+                .catch(() => {
+                  if (cancelled) return null;
+                  setPreviewCode(null);
+                  formRef.current?.setFieldsValue(initValues);
+                  messageApi.info(t('app.master-data.codeRuleAutoFailed'));
+                  return null;
+                })
+            : null;
+        if (!previewPromise) {
           setPreviewCode(null);
           formRef.current?.setFieldsValue(initValues);
         }
+        try {
+          const pageConfig = await getCodeRulePageConfig(PAGE_CODE);
+          if (cancelled) return;
+          const ruleCode = pageConfig?.ruleCode || localRuleCode;
+          const autoGenerate = !!(pageConfig?.autoGenerate && ruleCode);
+          if (!autoGenerate || !ruleCode) {
+            if (previewPromise) {
+              setPreviewCode(null);
+              formRef.current?.setFieldsValue(initValues);
+            }
+            return;
+          }
+          if (ruleCode !== localRuleCode) {
+            applyPreview(await testGenerateCode({ rule_code: ruleCode }));
+          }
+        } catch {
+          /* 租户配置拉取失败时保留本地规则预览 */
+        }
       })();
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     setPreviewCode(null);

@@ -373,8 +373,10 @@ const DataBackupsPage: React.FC = () => {
             : Math.min(99, Math.max(0, Number(record.progress) || 0));
     const status =
       record.status === 'success' ? 'success' : record.status === 'failed' ? 'exception' : 'active';
+    const progressHint =
+      (record.status === 'running' || record.status === 'failed') ? record.progress_message : undefined;
     return (
-      <Tooltip title={record.progress_message || undefined}>
+      <Tooltip title={progressHint || undefined}>
         <div style={{ minWidth: 120 }}>
           <Progress
             percent={percent}
@@ -382,9 +384,9 @@ const DataBackupsPage: React.FC = () => {
             status={status}
             format={(p) => `${p ?? 0}%`}
           />
-          {(isActive || record.status === 'failed') && record.progress_message ? (
+          {progressHint ? (
             <Text type="secondary" style={{ fontSize: 11 }} ellipsis>
-              {record.progress_message}
+              {progressHint}
             </Text>
           ) : null}
         </div>

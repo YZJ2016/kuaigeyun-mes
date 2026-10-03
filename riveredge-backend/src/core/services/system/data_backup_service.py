@@ -145,7 +145,7 @@ class DataBackupService:
             backup_tables=data.backup_tables,
             status="pending",
             progress=0,
-            progress_message="等待执行",
+            progress_message=None,
         )
         
         # 2. 分发后台任务

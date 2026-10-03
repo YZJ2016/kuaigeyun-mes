@@ -96,7 +96,8 @@ import {
 } from '../../../../../utils/formDate';
 import {
   buildActiveStatusValueEnum,
-  buildEquipmentNatureValueEnum,
+  buildEquipmentLedgerNatureValueEnum,
+  DEFAULT_EQUIPMENT_LEDGER_NATURE,
   normalizeEquipmentListResponse,
   resolveLedgerListParams,
   EQUIPMENT_LEDGER_GROUP_PINNED_FIELD,
@@ -404,7 +405,11 @@ const EquipmentPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentEquipment(null);
-    setFormInitialValues(undefined);
+    setFormInitialValues({
+      is_active: true,
+      status: '正常',
+      equipment_nature: DEFAULT_EQUIPMENT_LEDGER_NATURE,
+    });
     resetEquipmentFormFieldValues();
     setCreateCodeSessionKey((key) => key + 1);
     setModalVisible(true);
@@ -583,6 +588,11 @@ const EquipmentPage: React.FC = () => {
             : null,
       };
 
+      if (submitData.equipment_nature === MEASURING_INSTRUMENT_NATURE) {
+        messageApi.warning(t('app.kuaizhizao.equipment.measuringNatureUseMeasuringLedger'));
+        throw new Error(t('app.kuaizhizao.equipment.measuringNatureUseMeasuringLedger'));
+      }
+
       const editedUuid = isEdit ? currentEquipment?.uuid : undefined;
       if (isEdit && editedUuid) {
         await equipmentApi.update(editedUuid, submitData);
@@ -600,12 +610,39 @@ const EquipmentPage: React.FC = () => {
           await saveEquipmentCustomFieldValues(created.id, customData);
         }
         messageApi.success(t('app.kuaizhizao.equipment.createSuccess'));
+        const createdNature = created?.equipment_nature ?? submitData.equipment_nature;
+        const createdWorkshopId = created?.workshop_id ?? submitData.workshop_id;
+        const createdLineId = created?.production_line_id ?? submitData.production_line_id;
+        const createdStatus = created?.status ?? submitData.status;
+        const filters = searchFormRef.current?.getFieldsValue?.() ?? {};
+        const hideByNature =
+          !!filters.equipment_nature && String(filters.equipment_nature) !== String(createdNature ?? '');
+        const hideByWorkshop =
+          filters.workshop_id != null &&
+          filters.workshop_id !== '' &&
+          Number(filters.workshop_id) !== Number(createdWorkshopId);
+        const hideByLine =
+          filters.production_line_id != null &&
+          filters.production_line_id !== '' &&
+          Number(filters.production_line_id) !== Number(createdLineId);
+        const hideByStatus =
+          !!filters.status && String(filters.status) !== String(createdStatus ?? '');
+        if (hideByNature || hideByWorkshop || hideByLine || hideByStatus) {
+          (actionRef.current as ActionType & { resetSearch?: () => void })?.resetSearch?.();
+        } else {
+          actionRef.current?.reloadAndRest?.();
+        }
+        setModalVisible(false);
+        setCurrentEquipment(null);
+        formRef.current?.resetFields();
+        resetEquipmentFormFieldValues();
+        return;
       }
       setModalVisible(false);
       setCurrentEquipment(null);
       formRef.current?.resetFields();
       resetEquipmentFormFieldValues();
-      actionRef.current?.reload();
+      actionRef.current?.reloadAndRest?.();
     } catch (error: any) {
       messageApi.error(error.message || t('common.operationFailed'));
       throw error;
@@ -672,7 +709,7 @@ const EquipmentPage: React.FC = () => {
 
   const activeStatusValueEnum = useMemo(() => buildActiveStatusValueEnum(t), [t]);
 
-  const equipmentNatureValueEnum = useMemo(() => buildEquipmentNatureValueEnum(t), [t]);
+  const equipmentNatureValueEnum = useMemo(() => buildEquipmentLedgerNatureValueEnum(t), [t]);
 
   const equipmentStatusValueEnum = useMemo(
     () => ({
@@ -1401,6 +1438,7 @@ const EquipmentPage: React.FC = () => {
                       placeholder={t('common.selectField', {
                         field: t('app.kuaizhizao.equipment.fieldEquipmentNature'),
                       })}
+                      excludeValues={[MEASURING_INSTRUMENT_NATURE]}
                       formRef={formRef}
                     />
                   </Col>
