@@ -9,24 +9,69 @@ from apps.kuaizhizao.services.menu_badge_counts_service import _section_quality_
 from apps.kuaizhizao.services.menu_badge_scope import BadgeScopeCtx
 from apps.kuaizhizao.services.mobile_workbench import resolve_mobile_workbench_home
 from apps.kuaizhizao.services.work_order_mobile_kpi import fetch_work_order_mobile_kpi
-from core.models.approval_instance import ApprovalInstance
+from core.models.approval_task import ApprovalTask
+from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.authorization.effective_access_service import EffectiveAccessService
+from core.models.im_conversation import ImConversationMember
+from core.services.im.im_service import ImService
 from core.services.user.user_message_service import UserMessageService
 from core.services.user.user_task_service import UserTaskService
 from infra.models.user import User
 
 
-async def _count_pending_kuaizhizao_approvals(tenant_id: int, user_id: int) -> int:
-    """与手机端 kuaizhizaoApprovalFilter 对齐的待审数量（仅 COUNT 行，不拉列表）。"""
-    rows = await ApprovalInstance.filter(
+async def _count_im_unread(tenant_id: int, user_id: int) -> int:
+    member_rows = await ImConversationMember.filter(
         tenant_id=tenant_id,
+        user_id=user_id,
         deleted_at__isnull=True,
-        status="pending",
-        current_approver_id=user_id,
-    ).values("id", "data")
-    from apps.kuaizhizao.services.kuaizhizao_approval_scope import is_kuaizhizao_approval_data
+    ).all()
+    if not member_rows:
+        return 0
+    member_by_conv = {int(m.conversation_id): m for m in member_rows}
+    unread_map = await ImService._batch_unread_counts(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        member_by_conv=member_by_conv,
+    )
+    return sum(int(v or 0) for v in unread_map.values())
 
-    return sum(1 for row in rows if is_kuaizhizao_approval_data(row.get("data") or {}))
+
+async def _count_pending_kuaizhizao_approvals(tenant_id: int, user_id: int) -> int:
+    """与手机审批列表 API 同口径（pending_task_for_user_id + 快制造过滤）。"""
+    from apps.kuaizhizao.services.kuaizhizao_approval_scope import is_kuaizhizao_approval_instance
+
+    instances = await ApprovalInstanceService.list_approval_instances(
+        tenant_id=tenant_id,
+        skip=0,
+        limit=500,
+        status="pending",
+        pending_for_user_id=user_id,
+    )
+    return sum(
+        1
+        for inst in instances
+        if is_kuaizhizao_approval_instance(inst.data or {}, inst.title or "")
+    )
+
+
+async def _count_inbox_pending_tasks(tenant_id: int, user_id: int) -> int:
+    """消息中心「待办」：排除快制造审批类 ApprovalTask。"""
+    from apps.kuaizhizao.services.kuaizhizao_approval_scope import is_kuaizhizao_approval_pending_task
+
+    tasks = await ApprovalTask.filter(
+        tenant_id=tenant_id,
+        approver_id=user_id,
+        status="pending",
+    ).prefetch_related("approval_instance")
+    count = 0
+    for task in tasks:
+        inst = task.approval_instance
+        if not inst or getattr(inst, "deleted_at", None) or inst.status != "pending":
+            continue
+        if is_kuaizhizao_approval_pending_task(inst.data or {}, inst.title or ""):
+            continue
+        count += 1
+    return count
 
 
 async def fetch_mobile_home_bootstrap(*, tenant_id: int, user: User) -> dict[str, Any]:
@@ -81,6 +126,8 @@ async def fetch_mobile_home_bootstrap(*, tenant_id: int, user: User) -> dict[str
         notices,
         t_stats,
         pending_kuaizhizao_approvals,
+        pending_inbox_tasks,
+        im_unread,
     ) = await asyncio.gather(
         workbench_sections(),
         fetch_work_order_mobile_kpi(tenant_id),
@@ -89,6 +136,8 @@ async def fetch_mobile_home_bootstrap(*, tenant_id: int, user: User) -> dict[str
         message_notices(),
         task_stats(),
         _count_pending_kuaizhizao_approvals(tenant_id, user.id),
+        _count_inbox_pending_tasks(tenant_id, user.id),
+        _count_im_unread(tenant_id, user.id),
     )
 
     unread = getattr(msg_stats, "unread", None)
@@ -103,7 +152,9 @@ async def fetch_mobile_home_bootstrap(*, tenant_id: int, user: User) -> dict[str
         "work_order_stats": work_order_stats,
         "pending_inspection_count": pending_inspection_count,
         "unread_message_count": int(unread or 0),
+        "im_unread_count": int(im_unread or 0),
         "pending_task_count": int(pending_tasks or 0),
+        "pending_inbox_task_count": int(pending_inbox_tasks or 0),
         "pending_kuaizhizao_approval_count": pending_kuaizhizao_approvals,
         "notices": notices,
     }

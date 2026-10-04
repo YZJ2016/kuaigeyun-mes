@@ -29821,6 +29821,122 @@ export default {
     '消息中心聊天置顶',
   'pages.dashboard.updateLog.entries.mobile-message-chat-tab-first-r01.description':
     '手机消息中心顶栏分段将「聊天」置于首位，进入消息页默认展示会话列表；通知与待办顺序后移，深链仍可指定 pane 打开对应分段。',
+  'pages.dashboard.updateLog.entries.mobile-approval-pending-for-user-r01.title':
+    '手机待我审批列表恢复',
+  'pages.dashboard.updateLog.entries.mobile-approval-pending-for-user-r01.description':
+    '待我审列表改为「审批任务指派 ∪ 实例当前审批人」联合查询，避免仅查任务表时待审单被漏掉。',
+  'pages.dashboard.updateLog.entries.mobile-approval-badge-count-align-r01.title':
+    '手机待我审批计数与角标',
+  'pages.dashboard.updateLog.entries.mobile-approval-badge-count-align-r01.description':
+    '快制造待审数量与审批列表同 API 口径；底栏审批角标、工作台待我处理与消息待办拆分后数字一致；审批页标题展示条数。',
+  'pages.dashboard.updateLog.entries.mobile-im-peer-avatar-initial-r01.title':
+    '聊天对方头像首字',
+  'pages.dashboard.updateLog.entries.mobile-im-peer-avatar-initial-r01.description':
+    '手机单聊页对方消息气泡头像改为会话标题（对方姓名）首字，不再误显示用户 id 末位数字。',
+  'pages.dashboard.updateLog.entries.mobile-tab-message-badge-split-r01.title':
+    '底栏消息角标与待办分离',
+  'pages.dashboard.updateLog.entries.mobile-tab-message-badge-split-r01.description':
+    '手机底栏「消息」仅统计未读通知与聊天未读，不再叠加待办；待办与快制造审批分别在消息中心待办与底部审批展示。',
+  'pages.dashboard.updateLog.entries.mobile-approval-reject-modal-r01.title':
+    '审批驳回弹窗双层白框',
+  'pages.dashboard.updateLog.entries.mobile-approval-reject-modal-r01.description':
+    '手机审批详情「驳回意见」改用原生 Modal，去掉 Ant Design 额外白底容器，只保留一层圆角对话框。',
+  'pages.dashboard.updateLog.entries.mobile-status-tabs-badge-align-r01.title':
+    '消息 Tab 数字徽章对齐',
+  'pages.dashboard.updateLog.entries.mobile-status-tabs-badge-align-r01.description':
+    '列表顶部分段 Tab 的未读数字徽章与文案统一行高，避免相对标题文字偏下。',
+  'pages.dashboard.updateLog.entries.mobile-message-notify-tab-badge-r01.title':
+    '消息中心通知 Tab 未读角标',
+  'pages.dashboard.updateLog.entries.mobile-message-notify-tab-badge-r01.description':
+    '消息中心「通知」分段在未读时显示数字徽章，与「聊天」「待办」一致；未读数取自消息统计并与列表未读对齐。',
+  'pages.dashboard.updateLog.entries.mobile-approval-inbox-align-r01.title':
+    '审批 Tab 与消息待办对齐',
+  'pages.dashboard.updateLog.entries.mobile-approval-inbox-align-r01.description':
+    '待我审批列表改为按审批任务指派查询（与会签或签一致），修复审批 Tab 空而消息待办有单；快制造审批从消息「待办」移出，改在底部审批处理。',
+  'pages.dashboard.updateLog.entries.mobile-tab-bar-inbox-badges-r01.title':
+    '底栏消息与审批角标',
+  'pages.dashboard.updateLog.entries.mobile-tab-bar-inbox-badges-r01.description':
+    '底部 Tab「消息」显示未读与待办合计、「审批」显示快制造待审数量，红底数字角标；与工作台待我处理及收件箱刷新同步。',
+  'pages.dashboard.updateLog.entries.mobile-list-card-type-scale-r01.title':
+    '手机列表卡片字号三档化',
+  'pages.dashboard.updateLog.entries.mobile-list-card-type-scale-r01.description':
+    'DocCard 与工业页脚（保养提醒等）统一 title/body/caption 三档：次要说明与上次保养时间改用正文档、状态与 Tab 不再缩到过小，便于 PDA 现场阅读。',
+  'pages.dashboard.updateLog.entries.mobile-inbox-task-approval-deeplink-r02.title':
+    '消息中心待办跳转审批修复',
+  'pages.dashboard.updateLog.entries.mobile-inbox-task-approval-deeplink-r02.description':
+    '快制造审批类待办在未带实例 UUID 或 PC 路径时，按标题/单号匹配待审实例进入审批详情；列表待审态与审批 Tab 一致显示「待审」。',
+  'pages.dashboard.updateLog.entries.mobile-inbox-task-approval-deeplink-r01.title':
+    '消息中心待办可手机审批',
+  'pages.dashboard.updateLog.entries.mobile-inbox-task-approval-deeplink-r01.description':
+    '消息中心待办（含销售订单等快制造审批）点进后直达审批详情，可同意或驳回；与底部「审批」Tab 同一套能力。待办 API 返回审批实例 UUID 供跳转。',
+  'pages.dashboard.updateLog.entries.mobile-workbench-grid-row-gap-r01.title':
+    '手机工作台入口行距',
+  'pages.dashboard.updateLog.entries.mobile-workbench-grid-row-gap-r01.description':
+    '首页模块区三列图标网格加大纵向行距，卡片内上下留白对称，行与行之间更易点选。',
+  'pages.dashboard.updateLog.entries.mobile-purchase-requisition-conduct-r02.title':
+    '手机采购申请日期与物料筛选',
+  'pages.dashboard.updateLog.entries.mobile-purchase-requisition-conduct-r02.description':
+    '新建采购申请页申请日期与需求日期改为日期选择器；物料明细支持输入即筛选、结果行点「添加」入明细，默认数量 1，已选物料不再出现在筛选列表。',
+  'pages.dashboard.updateLog.entries.mobile-purchase-requisition-conduct-r01.title':
+    '手机端新建采购申请',
+  'pages.dashboard.updateLog.entries.mobile-purchase-requisition-conduct-r01.description':
+    '采购申请列表增加新建入口，支持填写表头、检索添加物料明细、保存草稿或保存并提交，单号由服务端编码规则生成。',
+  'pages.dashboard.updateLog.entries.mobile-action-button-semantic-r01.title':
+    '手机操作按钮语义色',
+  'pages.dashboard.updateLog.entries.mobile-action-button-semantic-r01.description':
+    'ActionBarButton 与 DocCardAction 支持 success/danger/warning 变体，并按文案自动着色：通过/同意为绿、驳回/删除为红、撤回为橙、取消为浅底主色；报工审核等双按钮列表即时区分。',
+  'pages.dashboard.updateLog.entries.mobile-mold-maint-list-cta-r01.title':
+    '模具保养维修列表去掉重复提交按钮',
+  'pages.dashboard.updateLog.entries.mobile-mold-maint-list-cta-r01.description':
+    '模具保养与模具维修列表仅保留页脚 CTA 与点卡片进详情，提交与审核改在详情底栏操作。',
+  'pages.dashboard.updateLog.entries.mobile-list-local-search-fill-r01.title':
+    '手机列表搜索补齐',
+  'pages.dashboard.updateLog.entries.mobile-list-local-search-fill-r01.description':
+    'ListScreen 新增 localSearch 内置本地搜索；工单指派、报工、设备模具、仓储预警盘点、消息待办审批等原无搜索条的列表页已接入。',
+  'pages.dashboard.updateLog.entries.mobile-status-tabs-badge-r01.title':
+    '手机列表 Tab 支持数字徽章',
+  'pages.dashboard.updateLog.entries.mobile-status-tabs-badge-r01.description':
+    'StatusTabs 可选 badge 与 badgeTone，采购到货延误将未结/逾期/临期/正常计数并入预警等级 Tab，去掉顶部重复汇总行。',
+  'pages.dashboard.updateLog.entries.mobile-doc-card-header-align-r01.title':
+    '手机单据卡片标题与状态垂直对齐',
+  'pages.dashboard.updateLog.entries.mobile-doc-card-header-align-r01.description':
+    'DocCard 标题行改为垂直居中，状态与右箭头同组排列，避免单号与状态字高不一致时上下错位。',
+  'pages.dashboard.updateLog.entries.mobile-list-single-tab-hide-r01.title':
+    '手机列表仅一个 Tab 时隐藏 Tab 行',
+  'pages.dashboard.updateLog.entries.mobile-list-single-tab-hide-r01.description':
+    'ListScreen 在 tabs 只有一项（如仅「全部」）时不渲染 StatusTabs，直接展示搜索与筛选，减少占高。',
+  'pages.dashboard.updateLog.entries.mobile-purchase-arrival-warning-r01.title':
+    '手机采购到货对齐 PC 到货预警',
+  'pages.dashboard.updateLog.entries.mobile-purchase-arrival-warning-r01.description':
+    '采购到货延误列表改读预警接口，支持逾期临期 Tab、处理状态筛选与汇总；未处理行可填报延期并提交，已有延误单跳转详情；工作台入口权限与 PC 预警读权限一致。',
+  'pages.dashboard.updateLog.entries.mobile-list-search-filter-r01.title':
+    '手机列表统一搜索与简易筛选',
+  'pages.dashboard.updateLog.entries.mobile-list-search-filter-r01.description':
+    'ListSearchFilterBar 接入 ListScreen 与 ConfirmDocList/SimpleDocList/检验壳，默认在当前已加载行内搜索；异常追踪合并状态 chips。',
+  'pages.dashboard.updateLog.entries.mobile-list-cta-dedupe-batch-r01.title':
+    '手机列表页脚 CTA 去重',
+  'pages.dashboard.updateLog.entries.mobile-list-cta-dedupe-batch-r01.description':
+    '仓储确认、异常追踪、设备/模具下钻列表等同路由只保留页脚 CTA 与点卡片，去掉重复实心按钮；列表内提交/审核/归还等独立操作仍保留。',
+  'pages.dashboard.updateLog.entries.mobile-quality-inspection-cta-bar-r01.title':
+    '手机检验列表统一 CTA 条下钻',
+  'pages.dashboard.updateLog.entries.mobile-quality-inspection-cta-bar-r01.description':
+    '过程/来料/成品/出库检验与待检验 Hub 与派工等 L1 一致，页脚保留「进入执行检验」CTA 条，去掉重复的实心执行按钮。',
+  'pages.dashboard.updateLog.entries.mobile-qty-format-quantity-r01.title':
+    '手机端数量展示对齐电脑端',
+  'pages.dashboard.updateLog.entries.mobile-qty-format-quantity-r01.description':
+    '数量统一 formatQuantity，跟随站点数量小数位配置，列表报工指标与 meta 不再裸显四位小数。',
+  'pages.dashboard.updateLog.entries.mobile-im-chat-avatar-every-r01.title':
+    '手机聊天每条消息显示头像',
+  'pages.dashboard.updateLog.entries.mobile-im-chat-avatar-every-r01.description':
+    '取消连续同发送者只显示首条头像的折叠，对齐微信每条气泡旁保留头像。',
+  'pages.dashboard.updateLog.entries.mobile-mes-scan-query-row-r01.title':
+    '手机扫码报工查询按钮布局修复',
+  'pages.dashboard.updateLog.entries.mobile-mes-scan-query-row-r01.description':
+    '手动输入行改用定宽查询按钮并约束输入框 flex，避免真机右侧溢出卡片。',
+  'pages.dashboard.updateLog.entries.mobile-im-group-msg-left-r01.title':
+    '手机群聊消息左对齐',
+  'pages.dashboard.updateLog.entries.mobile-im-group-msg-left-r01.description':
+    '群聊系统通知与普通气泡正文改为左对齐，与单聊阅读习惯一致。',
   'pages.dashboard.updateLog.entries.mobile-perf-root-bootstrap-r01.title':
     '手机端加载性能根因修复',
   'pages.dashboard.updateLog.entries.mobile-perf-root-bootstrap-r01.description':

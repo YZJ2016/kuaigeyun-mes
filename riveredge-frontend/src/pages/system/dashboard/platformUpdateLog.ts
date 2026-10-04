@@ -44,6 +44,238 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'mobile-approval-pending-for-user-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-approval-pending-for-user-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-approval-pending-for-user-r01.description',
+  },
+  {
+    id: 'mobile-approval-badge-count-align-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-approval-badge-count-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-approval-badge-count-align-r01.description',
+  },
+  {
+    id: 'mobile-im-peer-avatar-initial-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-im-peer-avatar-initial-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-im-peer-avatar-initial-r01.description',
+  },
+  {
+    id: 'mobile-tab-message-badge-split-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-tab-message-badge-split-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-tab-message-badge-split-r01.description',
+  },
+  {
+    id: 'mobile-approval-reject-modal-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-approval-reject-modal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-approval-reject-modal-r01.description',
+  },
+  {
+    id: 'mobile-status-tabs-badge-align-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-status-tabs-badge-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-status-tabs-badge-align-r01.description',
+  },
+  {
+    id: 'mobile-message-notify-tab-badge-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-message-notify-tab-badge-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-message-notify-tab-badge-r01.description',
+  },
+  {
+    id: 'mobile-approval-inbox-align-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-approval-inbox-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-approval-inbox-align-r01.description',
+  },
+  {
+    id: 'mobile-tab-bar-inbox-badges-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-tab-bar-inbox-badges-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-tab-bar-inbox-badges-r01.description',
+  },
+  {
+    id: 'mobile-list-card-type-scale-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-list-card-type-scale-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-list-card-type-scale-r01.description',
+  },
+  {
+    id: 'mobile-inbox-task-approval-deeplink-r02',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-inbox-task-approval-deeplink-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-inbox-task-approval-deeplink-r02.description',
+  },
+  {
+    id: 'mobile-inbox-task-approval-deeplink-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-inbox-task-approval-deeplink-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-inbox-task-approval-deeplink-r01.description',
+  },
+  {
+    id: 'mobile-workbench-grid-row-gap-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-workbench-grid-row-gap-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-workbench-grid-row-gap-r01.description',
+  },
+  {
+    id: 'mobile-purchase-requisition-conduct-r02',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-purchase-requisition-conduct-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-purchase-requisition-conduct-r02.description',
+  },
+  {
+    id: 'mobile-purchase-requisition-conduct-r01',
+    date: '2026-10-04',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-purchase-requisition-conduct-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-purchase-requisition-conduct-r01.description',
+  },
+  {
+    id: 'mobile-action-button-semantic-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-action-button-semantic-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-action-button-semantic-r01.description',
+  },
+  {
+    id: 'mobile-mold-maint-list-cta-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-mold-maint-list-cta-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-mold-maint-list-cta-r01.description',
+  },
+  {
+    id: 'mobile-list-local-search-fill-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-list-local-search-fill-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-list-local-search-fill-r01.description',
+  },
+  {
+    id: 'mobile-status-tabs-badge-r01',
+    date: '2026-10-04',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-status-tabs-badge-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-status-tabs-badge-r01.description',
+  },
+  {
+    id: 'mobile-doc-card-header-align-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-card-header-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-card-header-align-r01.description',
+  },
+  {
+    id: 'mobile-list-single-tab-hide-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-list-single-tab-hide-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-list-single-tab-hide-r01.description',
+  },
+  {
+    id: 'mobile-purchase-arrival-warning-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-purchase-arrival-warning-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-purchase-arrival-warning-r01.description',
+  },
+  {
+    id: 'mobile-list-search-filter-r01',
+    date: '2026-10-04',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-list-search-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-list-search-filter-r01.description',
+  },
+  {
+    id: 'mobile-list-cta-dedupe-batch-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-list-cta-dedupe-batch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-list-cta-dedupe-batch-r01.description',
+  },
+  {
+    id: 'mobile-quality-inspection-cta-bar-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-quality-inspection-cta-bar-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-quality-inspection-cta-bar-r01.description',
+  },
+  {
+    id: 'mobile-qty-format-quantity-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-qty-format-quantity-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-qty-format-quantity-r01.description',
+  },
+  {
+    id: 'mobile-im-chat-avatar-every-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-im-chat-avatar-every-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-im-chat-avatar-every-r01.description',
+  },
+  {
+    id: 'mobile-mes-scan-query-row-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-mes-scan-query-row-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-mes-scan-query-row-r01.description',
+  },
+  {
+    id: 'mobile-im-group-msg-left-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-im-group-msg-left-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-im-group-msg-left-r01.description',
+  },
+  {
     id: 'mobile-perf-root-bootstrap-r01',
     date: '2026-10-04',
     type: 'major',

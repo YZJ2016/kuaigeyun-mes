@@ -16,6 +16,10 @@ class UserTaskResponse(BaseModel):
     uuid: UUID = Field(..., description="任务UUID")
     tenant_id: int = Field(..., description="组织ID")
     process_uuid: Optional[UUID] = Field(None, description="关联审批流程UUID")
+    approval_instance_uuid: Optional[UUID] = Field(
+        None,
+        description="关联审批实例 UUID（待办列表项 uuid 为审批任务 uuid 时用于跳转详情）",
+    )
     title: str = Field(..., description="任务标题")
     content: Optional[str] = Field(None, description="任务内容")
     data: Optional[Dict[str, Any]] = Field(None, description="审批数据（JSON格式）")

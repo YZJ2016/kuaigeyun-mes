@@ -19,6 +19,7 @@ from loguru import logger
 from core.models.approval_history import ApprovalHistory
 
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 
 from core.models.approval_instance import ApprovalInstance
 from core.utils.search_utils import apply_keyword_icontains
@@ -1242,6 +1243,8 @@ class ApprovalInstanceService:
         status: Optional[str] = None,
         submitter_id: Optional[int] = None,
         current_approver_id: Optional[int] = None,
+        pending_task_for_user_id: Optional[int] = None,
+        pending_for_user_id: Optional[int] = None,
         keyword: Optional[str] = None,
     ) -> List[ApprovalInstance]:
         """
@@ -1271,6 +1274,31 @@ class ApprovalInstanceService:
         
         if current_approver_id:
             query = query.filter(current_approver_id=current_approver_id)
+
+        if pending_for_user_id:
+            task_q = ApprovalTask.filter(
+                tenant_id=tenant_id,
+                approver_id=pending_for_user_id,
+                status="pending",
+            )
+            instance_ids = await task_q.values_list("approval_instance_id", flat=True)
+            uid = int(pending_for_user_id)
+            if instance_ids:
+                query = query.filter(
+                    Q(id__in=list(instance_ids)) | Q(current_approver_id=uid)
+                )
+            else:
+                query = query.filter(current_approver_id=uid)
+        elif pending_task_for_user_id:
+            task_q = ApprovalTask.filter(
+                tenant_id=tenant_id,
+                approver_id=pending_task_for_user_id,
+                status="pending",
+            )
+            instance_ids = await task_q.values_list("approval_instance_id", flat=True)
+            if not instance_ids:
+                return []
+            query = query.filter(id__in=list(instance_ids))
 
         query = apply_keyword_icontains(query, keyword, ["title", "content", "current_node"])
         
