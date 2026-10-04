@@ -107,6 +107,7 @@ class UserTaskService:
                         uuid=inst.uuid,
                         tenant_id=inst.tenant_id,
                         process_uuid=process_uuid,
+                        approval_instance_uuid=inst.uuid,
                         title=inst.title,
                         content=inst.content,
                         data=inst.data,
@@ -142,6 +143,7 @@ class UserTaskService:
                         uuid=task.uuid,
                         tenant_id=task.tenant_id,
                         process_uuid=process_uuid,
+                        approval_instance_uuid=inst.uuid,
                         title=inst.title,
                         content=inst.content,
                         data=inst.data,
@@ -177,6 +179,7 @@ class UserTaskService:
                         uuid=task.uuid, # 注意：待办任务返回的是任务自身的 UUID
                         tenant_id=task.tenant_id,
                         process_uuid=process_uuid,
+                        approval_instance_uuid=inst.uuid,
                         title=inst.title,
                         content=inst.content,
                         data=inst.data,
@@ -252,6 +255,7 @@ class UserTaskService:
             "created_at": task.created_at,
             "updated_at": task.updated_at,
         }
+        task_dict["approval_instance_uuid"] = task.uuid
         response = UserTaskResponse.model_validate(task_dict)
         await _enrich_user_display_names(tenant_id, [response])
         return response
@@ -298,6 +302,7 @@ class UserTaskService:
                 uuid=instance.uuid,
                 tenant_id=instance.tenant_id,
                 process_uuid=instance.process.uuid if instance.process else None,
+                approval_instance_uuid=instance.uuid,
                 title=instance.title,
                 content=instance.content,
                 status=instance.status,

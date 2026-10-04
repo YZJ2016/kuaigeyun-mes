@@ -67,6 +67,14 @@ async def list_approval_instances(
     status: Optional[str] = Query(None, description="审批状态（可选）"),
     submitter_id: Optional[int] = Query(None, description="提交人ID（可选）"),
     current_approver_id: Optional[int] = Query(None, description="当前审批人ID（可选）"),
+    pending_task_for_user_id: Optional[int] = Query(
+        None,
+        description="存在 pending 审批任务且指派给该用户的实例（与会签/或签任务表一致）",
+    ),
+    pending_for_user_id: Optional[int] = Query(
+        None,
+        description="手机待我审：pending 任务指派或实例 current_approver_id 为该用户",
+    ),
     keyword: Optional[str] = Query(None, description="模糊搜索（标题、内容、当前节点）"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -94,6 +102,8 @@ async def list_approval_instances(
         status=status,
         submitter_id=submitter_id,
         current_approver_id=current_approver_id,
+        pending_task_for_user_id=pending_task_for_user_id,
+        pending_for_user_id=pending_for_user_id,
         keyword=keyword,
     )
     return [ApprovalInstanceResponse.model_validate(ai) for ai in approval_instances]

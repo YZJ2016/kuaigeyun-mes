@@ -41,7 +41,12 @@ class MobileHomeBootstrapOut(BaseModel):
     work_order_stats: dict[str, int]
     pending_inspection_count: int
     unread_message_count: int
+    im_unread_count: int = Field(default=0, description="IM 会话未读合计")
     pending_task_count: int
+    pending_inbox_task_count: int = Field(
+        default=0,
+        description="消息中心待办（不含快制造审批）",
+    )
     pending_kuaizhizao_approval_count: int
     notices: list[dict[str, str]]
 

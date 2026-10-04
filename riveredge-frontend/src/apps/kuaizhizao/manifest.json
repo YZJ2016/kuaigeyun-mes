@@ -5908,7 +5908,7 @@
                 "label": "采购到货延误",
                 "icon": "clock-circle",
                 "route": "/docs/purchase-arrival-delays",
-                "permission": "kuaizhizao:purchase-arrival-delay:read"
+                "permission": "kuaizhizao:purchase-arrival-warning:read"
               },
               {
                 "key": "receipt-notices",
