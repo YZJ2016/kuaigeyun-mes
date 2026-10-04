@@ -3,4 +3,4 @@
  * 本机换源只改本文件，且不要把地址提交。
  * 被 gitignore 的 origin.local.uts 不会被导入，改它不会改变请求源。
  */
-export const API_ORIGIN = ''
+export const API_ORIGIN = 'http://127.0.0.1:8200'
