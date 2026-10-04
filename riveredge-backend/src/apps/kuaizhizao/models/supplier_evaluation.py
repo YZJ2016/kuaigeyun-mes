@@ -213,6 +213,7 @@ class SupplierEvalEnvDocument(BaseModel):
         table_description = "快制造 - 供应商环保资料"
         indexes = [
             ("tenant_id", "supplier_id"),
+            ("tenant_id", "material_id"),
             ("tenant_id", "expires_at"),
             ("uuid",),
         ]
@@ -221,6 +222,10 @@ class SupplierEvalEnvDocument(BaseModel):
     supplier_id = fields.IntField(description="主数据供应商 ID")
     supplier_code = fields.CharField(max_length=80, null=True)
     supplier_name = fields.CharField(max_length=200, null=True)
+    material_id = fields.IntField(null=True, description="主数据物料 ID")
+    material_code = fields.CharField(max_length=50, null=True, description="物料编码快照")
+    material_name = fields.CharField(max_length=200, null=True, description="物料名称快照")
+    material_description = fields.TextField(null=True, description="材料说明")
     doc_type = fields.CharField(max_length=40, default="other")
     title = fields.CharField(max_length=200)
     issued_at = fields.DateField(null=True)

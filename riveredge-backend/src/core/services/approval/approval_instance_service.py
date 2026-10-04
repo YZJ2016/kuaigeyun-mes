@@ -162,12 +162,18 @@ class ApprovalInstanceService:
             raise NotFoundError("审批流程不存在或未启用")
 
         try:
+            from core.services.approval.approval_audit_scope import enrich_instance_data_audit_app
+
+            instance_data = enrich_instance_data_audit_app(
+                data.data if isinstance(data.data, dict) else {},
+                process_code=process.code,
+            )
             approval_instance = ApprovalInstance(
                 tenant_id=tenant_id,
                 process=process,
                 title=data.title,
                 content=data.content,
-                data=data.data,
+                data=instance_data,
                 status="pending",
                 submitter_id=user_id,
                 submitted_at=resolve_business_datetime(),
@@ -1025,7 +1031,22 @@ class ApprovalInstanceService:
         closed = 0
         for task in tasks:
             inst = task.approval_instance
-            if not inst or inst.status != "pending":
+            if not inst:
+                continue
+            if inst.status in ("approved", "rejected", "cancelled"):
+                await ApprovalTask.filter(
+                    tenant_id=tenant_id,
+                    approval_instance_id=inst.id,
+                    status="pending",
+                ).update(status=inst.status)
+                closed += 1
+                logger.info(
+                    "已关闭终态实例上的残留待办 instance={} status={}",
+                    inst.id,
+                    inst.status,
+                )
+                continue
+            if inst.status != "pending":
                 continue
             data = inst.data if isinstance(inst.data, dict) else {}
             entity_type = str(data.get("entity_type") or "").strip()
@@ -2246,6 +2267,8 @@ class ApprovalInstanceService:
             "trigger_action": trigger_action,
             "detail_path": ApprovalInstanceService._approval_detail_path(instance),
             "approval_instance_id": str(instance.id),
+            "approval_instance_uuid": str(instance.uuid),
+            "mobile_path": f"/(tabs)/approval/detail?uuid={instance.uuid}",
             "title": instance.title or "",
         }
         if extra_variables:

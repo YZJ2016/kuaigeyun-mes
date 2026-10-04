@@ -127,6 +127,8 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import {
   resolveSupplierEvalEnvListParams,
@@ -1583,6 +1585,36 @@ const SupplierEvaluationsPage: React.FC = () => {
 
           {
 
+            title: t(`${P}.colMaterial`),
+
+            dataIndex: 'material_code',
+
+            key: 'material_code',
+
+            hideInSearch: true,
+
+            render: (_, record) =>
+
+              [record.material_code, record.material_name].filter(Boolean).join(' ') || '-',
+
+          },
+
+          {
+
+            title: t(`${P}.colMaterialDescription`),
+
+            dataIndex: 'material_description',
+
+            key: 'material_description',
+
+            hideInSearch: true,
+
+            ellipsis: true,
+
+          },
+
+          {
+
             title: t(`${P}.colEnvDocType`),
 
             dataIndex: 'doc_type',
@@ -2556,7 +2588,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
               <UniTable<SupplierEvalEnvDocument>
 
-                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-env-v2"
+                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-env-v3"
 
                 headerTitle={t(`${P}.tabEnv`)}
 
@@ -3637,6 +3669,60 @@ const SupplierEvaluationsPage: React.FC = () => {
               options={envDocTypeOptions}
 
               rules={[{ required: true }]}
+
+            />
+
+          </Col>
+
+        </Row>
+
+        <Row gutter={16}>
+
+          <Col span={12}>
+
+            <UniMaterialSelect
+
+              name="material_id"
+
+              label={t(`${P}.colMaterial`)}
+
+              required
+
+              placeholder={t('common.selectMaterial')}
+
+              fallbackOption={
+
+                editingEnv?.material_id
+
+                  ? {
+
+                      value: editingEnv.material_id,
+
+                      label: [editingEnv.material_code, editingEnv.material_name]
+
+                        .filter(Boolean)
+
+                        .join(' '),
+
+                    }
+
+                  : undefined
+
+              }
+
+            />
+
+          </Col>
+
+          <Col span={12}>
+
+            <ProFormText
+
+              name="material_description"
+
+              label={t(`${P}.colMaterialDescription`)}
+
+              rules={[{ required: true, message: t(`${P}.materialDescriptionRequired`) }]}
 
             />
 

@@ -127,6 +127,8 @@ class ReworkOrder(BaseModel):
     pqc_summary_file_uuid = fields.CharField(
         max_length=36, null=True, description="PQC 汇总扫描件"
     )
+    inventory_annual_plan = fields.JSONField(null=True, description="库存验证年度计划附件")
+    inventory_monthly_summary = fields.JSONField(null=True, description="库存验证月汇总附件")
     pqc_checked_at = fields.DatetimeField(null=True, description="PQC 主管核对时刻")
     pqc_checked_by = fields.IntField(null=True)
     pqc_checked_by_name = fields.CharField(max_length=100, null=True)

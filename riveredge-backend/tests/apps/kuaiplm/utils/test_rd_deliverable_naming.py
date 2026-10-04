@@ -6,23 +6,33 @@ from apps.kuaiplm.utils.rd_deliverable_naming import validate_deliverable_catalo
 from infra.exceptions.exceptions import ValidationError
 
 
-def test_test_report_requires_material_code():
+def test_test_report_part_requires_material_code():
     with pytest.raises(ValidationError, match="关联料号"):
         validate_deliverable_catalog(
-            deliverable_type="test_report",
+            deliverable_type="test_report_part",
             material_code=None,
             legacy_material_code=None,
             file_name="report.pdf",
         )
 
 
-def test_test_report_accepts_legacy_material_code():
+def test_test_report_part_accepts_legacy_material_code():
     validate_deliverable_catalog(
-        deliverable_type="test_report",
+        deliverable_type="test_report_part",
         material_code="MAT-001",
         legacy_material_code="MAT-OLD",
         file_name="report.pdf",
     )
+
+
+def test_test_report_complete_requires_machine_code():
+    with pytest.raises(ValidationError, match="整机"):
+        validate_deliverable_catalog(
+            deliverable_type="test_report_complete",
+            material_code=None,
+            legacy_material_code=None,
+            file_name="report.pdf",
+        )
 
 
 def test_part_spec_filename_must_include_material_code():
@@ -103,6 +113,44 @@ def test_layout_accepts_pcb_version_date():
         material_code="PCB001",
         legacy_material_code=None,
         file_name="PCB001_A1_20260926.brd",
+    )
+
+
+def test_drawing_3d_requires_version_suffix():
+    with pytest.raises(ValidationError, match="版本后缀"):
+        validate_deliverable_catalog(
+            deliverable_type="drawing_3d",
+            material_code=None,
+            legacy_material_code=None,
+            file_name="housing.stp",
+        )
+
+
+def test_drawing_cad_accepts_version_suffix():
+    validate_deliverable_catalog(
+        deliverable_type="drawing_cad",
+        material_code=None,
+        legacy_material_code=None,
+        file_name="housing_A1.dwg",
+    )
+
+
+def test_mold_repair_requires_date_suffix():
+    with pytest.raises(ValidationError, match="日期后缀"):
+        validate_deliverable_catalog(
+            deliverable_type="mold_repair",
+            material_code=None,
+            legacy_material_code=None,
+            file_name="repair_A1.pdf",
+        )
+
+
+def test_mold_repair_accepts_date_suffix():
+    validate_deliverable_catalog(
+        deliverable_type="mold_repair",
+        material_code=None,
+        legacy_material_code=None,
+        file_name="repair_20261004.pdf",
     )
 
 

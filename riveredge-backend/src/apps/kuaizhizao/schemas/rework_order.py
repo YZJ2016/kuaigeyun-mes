@@ -39,6 +39,8 @@ class ReworkOrderBase(BaseModel):
     show_to_customer: bool = Field(False, description="是否向客户展示")
     pqc_summary: Optional[str] = Field(None, description="PQC 质量记录汇总")
     pqc_summary_file_uuid: Optional[str] = Field(None, max_length=36)
+    inventory_annual_plan: Optional[List[dict]] = Field(None, description="年度计划附件")
+    inventory_monthly_summary: Optional[List[dict]] = Field(None, description="月汇总附件")
 
     route_id: Optional[int] = Field(None, description="返工工艺路线ID")
     route_name: Optional[str] = Field(None, max_length=200, description="返工工艺路线名称")
@@ -205,6 +207,8 @@ class ReworkOrderUpdate(BaseModel):
     show_to_customer: Optional[bool] = Field(None, description="是否向客户展示")
     pqc_summary: Optional[str] = Field(None, description="PQC 质量记录汇总")
     pqc_summary_file_uuid: Optional[str] = Field(None, max_length=36)
+    inventory_annual_plan: Optional[List[dict]] = Field(None, description="年度计划附件")
+    inventory_monthly_summary: Optional[List[dict]] = Field(None, description="月汇总附件")
     route_id: Optional[int] = Field(None, description="返工工艺路线ID")
     route_name: Optional[str] = Field(None, max_length=200, description="返工工艺路线名称")
     planned_start_date: Optional[datetime] = Field(None, description="计划开始日期")

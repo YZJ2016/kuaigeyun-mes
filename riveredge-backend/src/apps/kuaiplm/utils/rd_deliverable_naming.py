@@ -25,7 +25,21 @@ SCHEMATIC_GERBER_TYPES = frozenset(
 )
 DRAWING_3D_TYPES = frozenset({"drawing_3d", "3d_drawing"})
 DRAWING_2D_TYPES = frozenset({"drawing_2d", "2d_drawing", "drawing_cad", "drawing_pdf"})
-TEST_REPORT_TYPES = frozenset({"test_report", "test"})
+STRUCTURE_DRAWING_TYPES = DRAWING_3D_TYPES | DRAWING_2D_TYPES
+STRUCTURE_DRAWING_BUSINESS_TYPE = "structure_drawing"
+STRUCTURE_CATALOG_TYPES = frozenset(
+    {
+        "mold_dfm",
+        "mold_drawing",
+        "mold_acceptance",
+        "reliability_report",
+        "mold_repair",
+    }
+)
+MOLD_REPAIR_TYPES = frozenset({"mold_repair"})
+TEST_REPORT_PART_TYPES = frozenset({"test_report_part", "test_report", "test"})
+TEST_REPORT_COMPLETE_TYPES = frozenset({"test_report_complete"})
+TEST_REPORT_TYPES = TEST_REPORT_PART_TYPES | TEST_REPORT_COMPLETE_TYPES
 
 _VERSION_SUFFIX_RE = re.compile(
     r"[_\-\s]?[vV]?([A-Z]\d{1,2}|[Rr]\d{1,3}|\d+\.\d+)\s*$"
@@ -63,6 +77,30 @@ def is_software_spec_type(
     return dtype in SOFTWARE_SPEC_TYPES or dtype in (extra or [])
 
 
+def is_test_report_part_type(
+    deliverable_type: Optional[str],
+    naming_rules: Optional[Dict[str, Any]] = None,
+) -> bool:
+    dtype = (deliverable_type or "").strip().lower()
+    if not dtype:
+        return False
+    rules = naming_rules or {}
+    extra = rules.get("test_report_part_types") if isinstance(rules, dict) else None
+    return dtype in TEST_REPORT_PART_TYPES or dtype in (extra or [])
+
+
+def is_test_report_complete_type(
+    deliverable_type: Optional[str],
+    naming_rules: Optional[Dict[str, Any]] = None,
+) -> bool:
+    dtype = (deliverable_type or "").strip().lower()
+    if not dtype:
+        return False
+    rules = naming_rules or {}
+    extra = rules.get("test_report_complete_types") if isinstance(rules, dict) else None
+    return dtype in TEST_REPORT_COMPLETE_TYPES or dtype in (extra or [])
+
+
 def is_schematic_gerber_type(
     deliverable_type: Optional[str],
     naming_rules: Optional[Dict[str, Any]] = None,
@@ -82,6 +120,23 @@ def _require_material_code(material_code: Optional[str], *, label: str) -> str:
     if not _MATERIAL_CODE_RE.match(code):
         raise ValidationError(f"{label}料号格式不合法: {code}")
     return code
+
+
+def is_structure_drawing_type(deliverable_type: Optional[str]) -> bool:
+    dtype = (deliverable_type or "").strip().lower()
+    return bool(dtype) and dtype in STRUCTURE_DRAWING_TYPES
+
+
+def skips_deliverable_signoff(deliverable_type: Optional[str]) -> bool:
+    """模具资料、可靠性报告、修模资料：上传即生效，不走交付物会签。"""
+    dtype = (deliverable_type or "").strip().lower()
+    return bool(dtype) and dtype in STRUCTURE_CATALOG_TYPES
+
+
+def deliverable_approval_business_type(deliverable_type: Optional[str]) -> str:
+    if is_structure_drawing_type(deliverable_type):
+        return STRUCTURE_DRAWING_BUSINESS_TYPE
+    return (deliverable_type or "").strip().lower()
 
 
 def _require_version_suffix(file_name: Optional[str], *, label: str) -> None:
@@ -128,6 +183,17 @@ def _require_prefix_version_date_filename(
     if not _DATE_TOKEN_RE.match(date_token):
         raise ValidationError(
             f"{label}更新日期须为 YYYYMMDD 或 YYYY-MM-DD: {date_token}"
+        )
+
+
+def _require_date_suffix(file_name: Optional[str], *, label: str) -> None:
+    name = (file_name or "").strip()
+    if not name:
+        raise ValidationError(f"{label}须上传文件并填写文件名")
+    base = name.rsplit(".", 1)[0] if "." in name else name
+    if not re.search(r"(?:^|[_-])(\d{4}-\d{2}-\d{2}|\d{8})$", base):
+        raise ValidationError(
+            f"{label}文件名须带日期后缀（如 _20261004 或 _2026-10-04）: {name}"
         )
 
 
@@ -184,12 +250,16 @@ def validate_deliverable_catalog(
                 raise ValidationError(f"部品规格书文件名须以料号 {code} 开头或在路径中包含该料号")
         return
 
-    if dtype in TEST_REPORT_TYPES or dtype in rules.get("test_report_types", []):
-        _require_material_code(material_code, label="测试报告")
+    if is_test_report_part_type(dtype, rules):
+        _require_material_code(material_code, label="部品测试报告")
         if legacy_material_code:
             legacy = legacy_material_code.strip()
             if legacy and not _MATERIAL_CODE_RE.match(legacy):
                 raise ValidationError(f"沿用旧料号格式不合法: {legacy}")
+        return
+
+    if is_test_report_complete_type(dtype, rules):
+        _require_material_code(material_code, label="整机测试报告")
         return
 
     if dtype in SOFTWARE_SPEC_TYPES or dtype in rules.get("software_spec_types", []):
@@ -203,6 +273,10 @@ def validate_deliverable_catalog(
         pcb = _require_material_code(material_code, label="原理图/Layout/Gerber（PCB料号）")
         if file_name:
             _require_schematic_gerber_filename(file_name, pcb_code=pcb)
+        return
+
+    if dtype in MOLD_REPAIR_TYPES:
+        _require_date_suffix(file_name, label="修模资料")
         return
 
     if dtype in DRAWING_3D_TYPES or dtype in DRAWING_2D_TYPES:

@@ -102,6 +102,14 @@ from loguru import logger
 
 
 REWORK_PROFILE_KEY = "kuaizhizao.rework_order"
+REWORK_INVENTORY_AUDIT_NODE = "rework_order_inventory_verify"
+REWORK_SIGNOFF_AUDIT_NODE = "rework_order"
+
+
+def rework_audit_node_key(business_type: str) -> str:
+    if (business_type or "").strip().lower() == REWORK_BUSINESS_INVENTORY_VERIFY:
+        return REWORK_INVENTORY_AUDIT_NODE
+    return REWORK_SIGNOFF_AUDIT_NODE
 
 REWORK_ORDER_SORTABLE_FIELDS = frozenset({
     "code",
@@ -801,6 +809,10 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 pqc_summary_file_uuid=(
                     (getattr(rework_order_data, "pqc_summary_file_uuid", None) or "").strip()
                     or None
+                ),
+                inventory_annual_plan=getattr(rework_order_data, "inventory_annual_plan", None),
+                inventory_monthly_summary=getattr(
+                    rework_order_data, "inventory_monthly_summary", None
                 ),
                 route_id=rework_order_data.route_id,
                 route_name=rework_order_data.route_name,
@@ -1726,11 +1738,12 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         await rework_order.save()
 
         approval_instance = None
-        if await AuditBindingService.is_audit_enabled(tenant_id, "rework_order"):
+        audit_node = rework_audit_node_key(bt)
+        if await AuditBindingService.is_audit_enabled(tenant_id, audit_node):
             approval_instance = await ApprovalInstanceService.start_approval_for_node(
                 tenant_id=tenant_id,
                 user_id=submitted_by,
-                node_key="rework_order",
+                node_key=audit_node,
                 entity_type="rework_order",
                 entity_id=rework_order.id,
                 entity_uuid=str(rework_order.uuid),
@@ -1741,7 +1754,7 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             )
             if approval_instance is None:
                 raise ValidationError(
-                    "审核已开启但未找到可用审批流程，请检查 rework_order 会签/库存验证绑定"
+                    f"审核已开启但未找到可用审批流程，请检查 {audit_node} 绑定"
                 )
         from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
 
@@ -1758,7 +1771,8 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
         if rework_order.status != "pending":
             raise BusinessLogicError("仅待审返工单可通过")
-        if await AuditBindingService.is_audit_enabled(tenant_id, "rework_order"):
+        audit_node = rework_audit_node_key(str(getattr(rework_order, "business_type", None) or ""))
+        if await AuditBindingService.is_audit_enabled(tenant_id, audit_node):
             from core.services.approval.audit_flow_guard import (
                 assert_manual_approval_action_allowed,
                 get_approval_gate_status,
@@ -1793,7 +1807,8 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         rework_order = await self.get_by_id(tenant_id, rework_order_id, raise_if_not_found=True)
         if rework_order.status != "pending":
             raise BusinessLogicError("仅待审返工单可驳回")
-        if await AuditBindingService.is_audit_enabled(tenant_id, "rework_order"):
+        audit_node = rework_audit_node_key(str(getattr(rework_order, "business_type", None) or ""))
+        if await AuditBindingService.is_audit_enabled(tenant_id, audit_node):
             from core.services.approval.audit_flow_guard import (
                 assert_manual_approval_action_allowed,
                 get_approval_gate_status,

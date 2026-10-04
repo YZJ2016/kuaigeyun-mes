@@ -3,6 +3,7 @@
  * 菜单待 DoD 后挂入；路由 /apps/kuaiplm/material-reviews
  */
 
+import { DownloadOutlined } from '@ant-design/icons';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
@@ -13,7 +14,22 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Descriptions, Form as AntForm, Input, Result, Row, Select, Table, Alert, Space, Upload } from 'antd';
+import {
+  Alert,
+  App,
+  Button,
+  Col,
+  Descriptions,
+  Dropdown,
+  Form as AntForm,
+  Input,
+  Result,
+  Row,
+  Select,
+  Space,
+  Table,
+  Upload,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../components/uni-table';
 import { UniTableDetail } from '../../../../components/uni-table-detail';
@@ -50,6 +66,7 @@ import {
   materialReviewApi,
   type MaterialReview,
   type MaterialReviewLine,
+  type MaterialReviewRevision,
   type MaterialReviewStatus,
   type MaterialUsageStatus,
 } from '../../services/material-review';
@@ -58,6 +75,13 @@ import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
 const RESOURCE = 'kuaiplm:material-review';
 const STATUS_KEYS: MaterialReviewStatus[] = ['draft', 'pending', 'approved', 'rejected'];
 const USAGE_KEYS: MaterialUsageStatus[] = ['preferred', 'limited', 'forbidden'];
+
+const LINE_TEMPLATE_COLUMNS: ExportXlsxColumn[] = [
+  { key: 'material_code', title: '物料编码' },
+  { key: 'material_name', title: '物料名称' },
+  { key: 'usage_status', title: '使用状态' },
+  { key: 'remarks', title: '备注' },
+];
 
 const MATERIAL_REVIEW_EXPORT_COLUMNS: ExportXlsxColumn[] = [
   { key: 'review_code', title: '评审单号' },
@@ -95,6 +119,7 @@ const MaterialReviewsPage: React.FC = () => {
   const [materialOptions, setMaterialOptions] = useState<
     { value: number; label: string; code: string; name: string }[]
   >([]);
+  const [revisionHistory, setRevisionHistory] = useState<MaterialReviewRevision[]>([]);
 
   const reload = useCallback(() => actionRef.current?.reload(), []);
   const openCreate = useCallback(() => {
@@ -247,14 +272,41 @@ const MaterialReviewsPage: React.FC = () => {
     });
   }, []);
 
+  const exportReviewLines = useCallback(
+    async (
+      reviewCode: string,
+      revisionLabel: string,
+      lines: MaterialReviewLine[],
+    ) => {
+      const rows = lines.map((line) => ({
+        material_code: line.material_code,
+        material_name: line.material_name,
+        usage_status: usageLabel(String(line.usage_status)),
+        remarks: line.remarks || '',
+      }));
+      await downloadRecordsAsXlsx(
+        rows as Array<Record<string, unknown>>,
+        `material-review-${reviewCode}-${revisionLabel}-${todaySiteDateString()}.xlsx`,
+        { columns: LINE_TEMPLATE_COLUMNS, sheetName: '评审物料' },
+      );
+      messageApi.success(t('common.exportSuccess', { count: rows.length }));
+    },
+    [messageApi, t, usageLabel],
+  );
+
   const openDetail = useCallback(async (row: MaterialReview) => {
     if (!row.id) return;
     setDetailLoading(true);
     setDetailError(null);
     setDetail(row);
+    setRevisionHistory([]);
     try {
-      const full = await materialReviewApi.get(row.id);
+      const [full, revisions] = await Promise.all([
+        materialReviewApi.get(row.id),
+        materialReviewApi.listRevisions(row.id),
+      ]);
       setDetail(full);
+      setRevisionHistory(revisions.items);
     } catch (e) {
       setDetailError(getApiErrorMessage(e));
     } finally {
@@ -506,6 +558,27 @@ const MaterialReviewsPage: React.FC = () => {
                   }
                 }}
               />,
+            );
+          }
+          if (row.status === 'approved' && perms.canUpdate && row.id) {
+            actions.push(
+              <Button
+                key="revise"
+                type="link"
+                size="small"
+                {...rowActionKind('update')}
+                onClick={async () => {
+                  try {
+                    await materialReviewApi.revise(row.id);
+                    messageApi.success(t('app.kuaiplm.materialReview.messages.reviseSuccess'));
+                    reload();
+                  } catch (e) {
+                    messageApi.error(getApiErrorMessage(e));
+                  }
+                }}
+              >
+                {t('app.kuaiplm.materialReview.actions.revise')}
+              </Button>,
             );
           }
           return actions;
@@ -774,6 +847,7 @@ const MaterialReviewsPage: React.FC = () => {
         onClose={() => {
           setDetail(null);
           setDetailError(null);
+          setRevisionHistory([]);
         }}
         title={detail?.review_code || t('app.kuaiplm.materialReview.title')}
         loading={detailLoading}
@@ -843,29 +917,59 @@ const MaterialReviewsPage: React.FC = () => {
         }
         extra={
           detail && !detailError && (detail.lines?.length || 0) > 0 ? (
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={async () => {
-                try {
-                  const lines = (detail.lines || []).map((line) => ({
-                    material_code: line.material_code,
-                    material_name: line.material_name,
-                    usage_status: usageLabel(String(line.usage_status)),
-                    remarks: line.remarks || '',
-                  }));
-                  await downloadRecordsAsXlsx(
-                    lines as Array<Record<string, unknown>>,
-                    `material-review-${detail.review_code || detail.id}-${todaySiteDateString()}.xlsx`,
-                    { columns: LINE_TEMPLATE_COLUMNS, sheetName: '评审物料' },
-                  );
-                  messageApi.success(t('common.exportSuccess', { count: lines.length }));
-                } catch (e) {
-                  messageApi.error(getApiErrorMessage(e, t('common.exportFailed')));
-                }
-              }}
-            >
-              {t('app.kuaiplm.materialReview.actions.downloadSheet')}
-            </Button>
+            <Space wrap>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={async () => {
+                  try {
+                    const rev =
+                      detail.status === 'approved'
+                        ? `V${detail.revision_no ?? 1}`
+                        : t('app.kuaiplm.materialReview.revisionDraft');
+                    await exportReviewLines(
+                      detail.review_code || String(detail.id),
+                      rev,
+                      detail.lines || [],
+                    );
+                  } catch (e) {
+                    messageApi.error(getApiErrorMessage(e, t('common.exportFailed')));
+                  }
+                }}
+              >
+                {t('app.kuaiplm.materialReview.actions.downloadSheet')}
+              </Button>
+              {revisionHistory.length > 0 ? (
+                <Dropdown
+                  menu={{
+                    items: revisionHistory.map((rev) => ({
+                      key: String(rev.revision_no),
+                      label: t('app.kuaiplm.materialReview.actions.downloadRevision', {
+                        version: rev.revision_no,
+                      }),
+                      onClick: async () => {
+                        try {
+                          const snap =
+                            rev.lines?.length > 0
+                              ? rev
+                              : await materialReviewApi.getRevision(detail.id, rev.revision_no);
+                          await exportReviewLines(
+                            detail.review_code || String(detail.id),
+                            `V${rev.revision_no}`,
+                            snap.lines || [],
+                          );
+                        } catch (e) {
+                          messageApi.error(getApiErrorMessage(e, t('common.exportFailed')));
+                        }
+                      },
+                    })),
+                  }}
+                >
+                  <Button icon={<DownloadOutlined />}>
+                    {t('app.kuaiplm.materialReview.actions.downloadHistory')}
+                  </Button>
+                </Dropdown>
+              ) : null}
+            </Space>
           ) : null
         }
       />

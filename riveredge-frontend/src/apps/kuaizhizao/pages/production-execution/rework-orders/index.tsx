@@ -135,6 +135,8 @@ interface ReworkOrder {
   verify_month?: string;
   show_to_customer?: boolean;
   pqc_summary?: string;
+  inventory_annual_plan?: Array<{ uid?: string; name?: string; url?: string }>;
+  inventory_monthly_summary?: Array<{ uid?: string; name?: string; url?: string }>;
   material_reqs?: Array<Record<string, unknown>>;
   scrap_lines?: Array<Record<string, unknown>>;
   position_plans?: Array<Record<string, unknown>>;
@@ -940,6 +942,8 @@ const ReworkOrdersPage: React.FC = () => {
           verify_month: detail.verify_month,
           show_to_customer: detail.show_to_customer,
           pqc_summary: detail.pqc_summary,
+          inventory_annual_plan: mapAttachmentsToUploadList(detail.inventory_annual_plan),
+          inventory_monthly_summary: mapAttachmentsToUploadList(detail.inventory_monthly_summary),
           material_reqs: detail.material_reqs || [],
           scrap_lines: detail.scrap_lines || [],
           position_plans: (detail.position_plans || []).map((row) =>
@@ -1398,6 +1402,16 @@ const ReworkOrdersPage: React.FC = () => {
     try {
       const { customData, standardValues } = extractReworkFormValues(values);
       standardValues.attachments = normalizeDocumentAttachments(standardValues.attachments);
+      if (standardValues.inventory_annual_plan !== undefined) {
+        standardValues.inventory_annual_plan = normalizeDocumentAttachments(
+          standardValues.inventory_annual_plan,
+        );
+      }
+      if (standardValues.inventory_monthly_summary !== undefined) {
+        standardValues.inventory_monthly_summary = normalizeDocumentAttachments(
+          standardValues.inventory_monthly_summary,
+        );
+      }
       if (Array.isArray(standardValues.material_reqs)) {
         standardValues.material_reqs = standardValues.material_reqs.map((row: any, idx: number) => ({
           ...row,
@@ -2166,6 +2180,22 @@ const ReworkOrdersPage: React.FC = () => {
                       <ProFormSwitch
                         name="show_to_customer"
                         label={t('app.kuaizhizao.reworkOrder.fieldShowToCustomer')}
+                      />
+                    </Col>
+                    <Col span={24}>
+                      <DocumentAttachmentsField
+                        name="inventory_annual_plan"
+                        category="rework_order_inventory_plan"
+                        max={1}
+                        label={t('app.kuaizhizao.reworkOrder.fieldInventoryAnnualPlan')}
+                      />
+                    </Col>
+                    <Col span={24}>
+                      <DocumentAttachmentsField
+                        name="inventory_monthly_summary"
+                        category="rework_order_inventory_summary"
+                        max={1}
+                        label={t('app.kuaizhizao.reworkOrder.fieldInventoryMonthlySummary')}
                       />
                     </Col>
                     <Col span={24}>

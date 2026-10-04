@@ -12,6 +12,14 @@ from typing import Any, Dict, List, Sequence, Tuple
 TEMPLATE_SIMPLE = "simple"
 TEMPLATE_SME = "sme"
 TEMPLATE_RD_FILE_CHANGE = "rd_file_change"
+TEMPLATE_SAMPLE_SMT = "sample_smt"
+TEMPLATE_STRUCTURE_DRAWING = "structure_drawing"
+TEMPLATE_COMPLAINT_IQC = "complaint_iqc"
+TEMPLATE_COMPLAINT_LINE = "complaint_line"
+TEMPLATE_COMPLAINT_PQC = "complaint_pqc"
+TEMPLATE_COMPLAINT_OQC = "complaint_oqc"
+TEMPLATE_COMPLAINT_CUSTOMER = "complaint_customer"
+TEMPLATE_INVENTORY_VERIFY = "inventory_verify"
 
 # 研发文件下发变更（#31 / L34）：发起后五级签审
 RD_FILE_CHANGE_APPROVAL_STEPS: Tuple[str, ...] = (
@@ -21,6 +29,30 @@ RD_FILE_CHANGE_APPROVAL_STEPS: Tuple[str, ...] = (
     "生产审核",
     "总监审核",
 )
+
+# 样品阶段钢网/SMT（L36）：经理 → 仓库 → 采购 → COB
+SAMPLE_SMT_APPROVAL_STEPS: Tuple[str, ...] = (
+    "经理审核",
+    "仓库确认",
+    "采购审核",
+    "COB审核",
+)
+
+# 结构 3D / CAD / PDF（L42、L43）：组长审核 → 经理批准，8 小时
+STRUCTURE_DRAWING_APPROVAL_STEPS: Tuple[str, ...] = (
+    "组长审核",
+    "经理批准",
+)
+
+# 质量投诉：按业务类型串行，岗位在审批中心绑定，不写具体人名
+COMPLAINT_IQC_STEPS: Tuple[str, ...] = ("计划会签", "采购会签")
+COMPLAINT_LINE_STEPS: Tuple[str, ...] = ("责任部门确认",)
+COMPLAINT_PQC_STEPS: Tuple[str, ...] = ("生产确认", "责任经理", "PQC主管", "质量经理")
+COMPLAINT_OQC_STEPS: Tuple[str, ...] = ("PQC分发", "责任主管", "PQC主管", "质量负责人")
+COMPLAINT_CUSTOMER_STEPS: Tuple[str, ...] = ("责任人回复", "客服审核", "负责人批准")
+
+# 库存验证返工：质量、制造、负责人、采购、计划
+INVENTORY_VERIFY_STEPS: Tuple[str, ...] = ("质量", "制造", "负责人", "采购", "计划")
 
 
 def build_serial_approval_flow(
@@ -127,9 +159,53 @@ def build_rd_file_change_flow() -> Dict[str, Any]:
     )
 
 
+def build_sample_smt_flow() -> Dict[str, Any]:
+    """样品钢网/SMT 内置链（四级签审，节点待租户绑定角色）。"""
+    return build_serial_approval_flow(
+        step_labels=SAMPLE_SMT_APPROVAL_STEPS,
+        default_approver_type="role",
+        empty_approver_policy="block",
+        timeout_hours=24,
+    )
+
+
+def build_structure_drawing_flow() -> Dict[str, Any]:
+    """结构图纸内置链（组长、经理，8 小时）。"""
+    return build_serial_approval_flow(
+        step_labels=STRUCTURE_DRAWING_APPROVAL_STEPS,
+        default_approver_type="role",
+        empty_approver_policy="block",
+        timeout_hours=8,
+    )
+
+
+def _build_role_serial(steps: Sequence[str]) -> Dict[str, Any]:
+    """岗位串行。超时留给单据自己的期限字段，不在节点上再写小时数。"""
+    return build_serial_approval_flow(
+        step_labels=steps,
+        default_approver_type="role",
+        empty_approver_policy="block",
+        timeout_hours=None,
+    )
+
+
 def build_flow_from_template(template: str, label: str) -> Dict[str, Any]:
     """按 manifest.audit.template 构图。"""
     code = str(template or "").strip().lower()
+    role_chains = {
+        TEMPLATE_COMPLAINT_IQC: COMPLAINT_IQC_STEPS,
+        TEMPLATE_COMPLAINT_LINE: COMPLAINT_LINE_STEPS,
+        TEMPLATE_COMPLAINT_PQC: COMPLAINT_PQC_STEPS,
+        TEMPLATE_COMPLAINT_OQC: COMPLAINT_OQC_STEPS,
+        TEMPLATE_COMPLAINT_CUSTOMER: COMPLAINT_CUSTOMER_STEPS,
+        TEMPLATE_INVENTORY_VERIFY: INVENTORY_VERIFY_STEPS,
+    }
+    if code in role_chains:
+        return _build_role_serial(role_chains[code])
+    if code == TEMPLATE_STRUCTURE_DRAWING:
+        return build_structure_drawing_flow()
+    if code == TEMPLATE_SAMPLE_SMT:
+        return build_sample_smt_flow()
     if code == TEMPLATE_RD_FILE_CHANGE:
         return build_rd_file_change_flow()
     if code in {TEMPLATE_SIMPLE, TEMPLATE_SME}:
