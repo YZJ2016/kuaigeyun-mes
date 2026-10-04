@@ -1,7 +1,7 @@
 /**
  * KU-AI 模型目录区块（spec 138）。
  *
- * - model_name 自由填写（非下拉）；model_type ∈ chat|embed|vision。
+ * - model_name 自由填写（非下拉）；model_type ∈ chat|embed|vision|rerank。
  * - 支持按 provider_id / model_type 过滤（后端 query 参数；经 UniTable `params`
  *   透传，保证请求缓存 key 与过滤条件一致并自动触发重新加载）。
  * - 按钮显隐按 kuaiai:model:{add,edit,remove}。
@@ -27,7 +27,14 @@ import {
 } from '../../services/models';
 import { bareListPageTotal, KUAI_AI_OPTIONS_PREFIX } from '../../constants';
 
-const MODEL_TYPES: LlmModelType[] = ['chat', 'embed', 'vision'];
+const MODEL_TYPES: LlmModelType[] = ['chat', 'embed', 'vision', 'rerank'];
+
+const MODEL_TYPE_LABELS: Record<LlmModelType, string> = {
+  chat: '对话',
+  embed: '嵌入',
+  vision: '视觉',
+  rerank: '重排',
+};
 
 export function ModelsSection() {
   const { t } = useTranslation();
@@ -89,7 +96,16 @@ export function ModelsSection() {
         title: t('app.kuaiai.models.modelType', { defaultValue: '类型' }),
         dataIndex: 'model_type',
         width: 100,
-        render: (_, row) => <Tag>{row.model_type || '—'}</Tag>,
+        render: (_, row) => (
+          <Tag>
+            {row.model_type
+              ? t(`app.kuaiai.models.type.${row.model_type}`, {
+                  defaultValue:
+                    MODEL_TYPE_LABELS[row.model_type as LlmModelType] ?? row.model_type,
+                })
+              : '—'}
+          </Tag>
+        ),
       },
       {
         title: t('common.status', { defaultValue: '状态' }),
@@ -230,7 +246,10 @@ export function ModelsSection() {
             })}
             value={filterModelType}
             onChange={(v) => setFilterModelType(v)}
-            options={MODEL_TYPES.map((mt) => ({ value: mt, label: mt }))}
+            options={MODEL_TYPES.map((mt) => ({
+              value: mt,
+              label: t(`app.kuaiai.models.type.${mt}`, { defaultValue: MODEL_TYPE_LABELS[mt] }),
+            }))}
           />,
           canAdd ? (
             <Button
@@ -340,7 +359,12 @@ export function ModelsSection() {
               },
             ]}
           >
-            <Select options={MODEL_TYPES.map((mt) => ({ value: mt, label: mt }))} />
+            <Select
+              options={MODEL_TYPES.map((mt) => ({
+                value: mt,
+                label: t(`app.kuaiai.models.type.${mt}`, { defaultValue: MODEL_TYPE_LABELS[mt] }),
+              }))}
+            />
           </Form.Item>
           <Form.Item
             name="status"

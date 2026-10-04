@@ -3,10 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 import { Alert, Button, Form, Input, Spin } from 'antd';
 import { apiRequest } from '../../../services/api';
 import { DashboardWidgets, type DashboardWidget } from './dashboards/DashboardWidgets';
+import { DashboardCanvasFrame, isCanvasLayout, isFlowLayout, parseTheme } from './dashboards/dashboardStage';
 
 type SharedDashboard = {
   name?: string;
   widgets_config?: DashboardWidget[];
+  layout_config?: unknown;
+  theme_config?: unknown;
 };
 
 /** detail.reason 后端原因码 → 中文提示 */
@@ -83,10 +86,19 @@ export default function DashboardSharedView() {
   return (
     <div style={{ minHeight: '100vh', padding: 24, background: '#001529' }}>
       {board ? (
-        <>
-          <h1 style={{ color: '#fff' }}>{board.name}</h1>
-          <DashboardWidgets widgets={board.widgets_config || []} shareToken={token} />
-        </>
+        isCanvasLayout(board.layout_config) ? (
+          <DashboardCanvasFrame
+            theme={parseTheme(board.theme_config)}
+            widgets={board.widgets_config || []}
+            shareToken={token}
+            flow={isFlowLayout(board.layout_config)}
+          />
+        ) : (
+          <>
+            <h1 style={{ color: '#fff' }}>{board.name}</h1>
+            <DashboardWidgets widgets={board.widgets_config || []} shareToken={token} />
+          </>
+        )
       ) : needsPassword ? (
         <Form
           layout="vertical"

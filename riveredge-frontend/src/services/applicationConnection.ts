@@ -225,3 +225,23 @@ export async function getConnectorDefinitions(
     params: category && category !== 'all' ? { category } : undefined,
   });
 }
+
+export type LlmRoleSelection = {
+  chat: string;
+  embed: string;
+  vision: string;
+  rerank: string;
+};
+
+export async function getLlmRoleSelection(): Promise<LlmRoleSelection> {
+  return apiRequest<LlmRoleSelection>('/core/application-connections/llm-roles');
+}
+
+export async function selectApplicationConnectionRole(
+  uuid: string,
+): Promise<{ role: string; uuid: string }> {
+  return apiRequest<{ role: string; uuid: string }>(
+    `/core/application-connections/${uuid}/select-role`,
+    { method: 'POST' },
+  );
+}

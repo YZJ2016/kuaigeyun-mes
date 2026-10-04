@@ -74,7 +74,9 @@ async def test_admin_restore_passes_explicit_scope_authorization(monkeypatch, pl
                            is_organization_admin=lambda: not platform_admin)
     restore = AsyncMock(return_value=True)
     monkeypatch.setattr(api.DataBackupService, "restore_backup", restore)
-    result = await api.restore_backup("fixture", api.RestoreRequest(confirm=True), user)
+    result = await api.restore_backup(
+        "fixture", api.RestoreRequest(confirm=True), user, tenant_id=1,
+    )
     assert result.success
     assert restore.call_args.kwargs["allow_global_restore"] is platform_admin
 

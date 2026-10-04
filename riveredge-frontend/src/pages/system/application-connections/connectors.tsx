@@ -96,7 +96,7 @@ export function isKingdeeCosmicOpenApiType(type: string): type is KingdeeCosmicO
   return (KINGDEE_COSMIC_OPENAPI_TYPES as readonly string[]).includes(type);
 }
 
-/** OpenAI 兼容 LLM 应用连接类型（可多条不同 model；选用在 KU-AI → 模型设置） */
+/** OpenAI 兼容 LLM 应用连接类型（可多条不同 model；在应用连接器按角色选用） */
 export const LLM_CONNECTION_TYPES = [
   'deepseek',
   'openai',
@@ -974,7 +974,7 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     icon: <HddOutlined />,
     defaultConfig: { host: '', share: '', username: '', password: '', domain: '', port: 445 },
   },
-  // AI（应用连接列表行；可建多条不同 model；选用在 KU-AI → 模型设置）
+  // AI（应用连接列表行；可建多条不同 model；在应用连接器按角色选用）
   {
     id: 'deepseek',
     name: 'DeepSeek',

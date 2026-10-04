@@ -33,6 +33,7 @@ class KuaiaiChatSession(BaseModel):
     user_id = fields.IntField(description="归属用户 ID")
     title = fields.CharField(max_length=300, default="", description="会话标题")
     agent_id = fields.IntField(null=True, description="Agent 档案 ID（S2 起装配使用）")
+    # 新写入为 #id:<目录行id>；无此前缀的仍是历史模型名。列注释保持原样，避免无字段变更的迁移。
     model = fields.CharField(max_length=100, null=True, description="会话选用模型名（无档案全宽对话）")
     last_message_at = fields.DatetimeField(null=True, description="最后一条消息时间")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")

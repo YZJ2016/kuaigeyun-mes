@@ -11,10 +11,72 @@
   "route_path": "/apps/kuaiiot",
   "sort_order": 320,
   "menu_config": {
-    "title": "星数采",
+    "title": "app.kuaiiot.name",
     "icon": "api",
     "path": "/apps/kuaiiot",
-    "permission": "kuaiiot:registry:display"
+    "permission": "kuaiiot:registry:display",
+    "children": [
+      {
+        "title": "app.kuaiiot.menu.group.monitorOps",
+        "sort_order": 1,
+        "children": [
+          {
+            "title": "app.kuaiiot.menu.dashboard",
+            "path": "/apps/kuaiiot/dashboard",
+            "permission": "kuaiiot:registry:display",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaiiot.menu.pipeline",
+            "path": "/apps/kuaiiot/pipeline",
+            "permission": "kuaiiot:device:display",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaiiot.menu.alerts",
+            "path": "/apps/kuaiiot/alerts",
+            "permission": "kuaiiot:alert:display",
+            "sort_order": 3
+          }
+        ]
+      },
+      {
+        "title": "app.kuaiiot.menu.group.modelAccess",
+        "sort_order": 2,
+        "children": [
+          {
+            "title": "app.kuaiiot.menu.products",
+            "path": "/apps/kuaiiot/products",
+            "permission": "kuaiiot:device:display",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaiiot.menu.devices",
+            "path": "/apps/kuaiiot/devices",
+            "permission": "kuaiiot:device:display",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaiiot.menu.tags",
+            "path": "/apps/kuaiiot/tags",
+            "permission": "kuaiiot:tag:create",
+            "sort_order": 3
+          },
+          {
+            "title": "app.kuaiiot.menu.connections",
+            "path": "/apps/kuaiiot/connections",
+            "permission": "kuaiiot:connection:display",
+            "sort_order": 4
+          },
+          {
+            "title": "app.kuaiiot.menu.edgeConfigs",
+            "path": "/apps/kuaiiot/edge",
+            "permission": "kuaiiot:device:display",
+            "sort_order": 5
+          }
+        ]
+      }
+    ]
   },
   "permissions": [
     "kuaiiot:registry:display",

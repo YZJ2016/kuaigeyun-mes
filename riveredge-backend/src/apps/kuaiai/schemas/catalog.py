@@ -62,7 +62,7 @@ class LlmModelCreate(BaseModel):
 
     provider_id: int = Field(..., ge=1, description="所属厂商目录行 ID")
     model_name: str = Field(..., min_length=1, max_length=200, description="模型名（自由填）")
-    model_type: str = Field(..., max_length=20, description="chat|embed|vision")
+    model_type: str = Field(..., max_length=20, description="chat|embed|vision|rerank")
     status: Optional[str] = Field(default=None, max_length=20, description="启用|停用，缺省启用")
 
 

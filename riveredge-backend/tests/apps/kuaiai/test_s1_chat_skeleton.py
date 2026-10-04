@@ -792,3 +792,69 @@ class TestHistoryWindowOrphans:
         ):
             rows = await cs._history_rows(TENANT, 1)
         assert [r.role for r in rows] == ["user"]
+
+
+class TestCatalogModelRef:
+    """会话 model：#id:<目录行id> 按主键；否则仍按模型名取最小 id。"""
+
+    @pytest.mark.asyncio
+    async def test_hash_id_resolves_enabled_chat_row(self):
+        row = SimpleNamespace(id=12)
+        with (
+            patch.object(
+                cs.KuaiaiLlmModel,
+                "get_or_none",
+                new=AsyncMock(return_value=row),
+            ) as mock_get,
+            patch.object(cs.KuaiaiLlmModel, "filter") as mock_filter,
+        ):
+            got = await cs._match_catalog_model_id(TENANT, "  #id:12 ")
+        assert got == 12
+        mock_filter.assert_not_called()
+        mock_get.assert_awaited_once_with(
+            id=12,
+            tenant_id=TENANT,
+            model_type=cs.MODEL_TYPE_CHAT,
+            status=cs.STATUS_ENABLED,
+            deleted_at__isnull=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_hash_id_miss_or_disabled_is_none(self):
+        with patch.object(
+            cs.KuaiaiLlmModel, "get_or_none", new=AsyncMock(return_value=None)
+        ) as mock_get:
+            assert await cs._match_catalog_model_id(TENANT, "#id:99") is None
+        mock_get.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_bad_hash_id_does_not_query(self):
+        with (
+            patch.object(
+                cs.KuaiaiLlmModel, "get_or_none", new=AsyncMock()
+            ) as mock_get,
+            patch.object(cs.KuaiaiLlmModel, "filter") as mock_filter,
+        ):
+            for raw in ("#id:", "#id:abc", "#id:0", "#id:9999999999", "", "   "):
+                assert await cs._match_catalog_model_id(TENANT, raw) is None
+        mock_get.assert_not_called()
+        mock_filter.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_plain_name_still_matches_lowest_id(self):
+        qs = MagicMock()
+        qs.order_by.return_value = qs
+        qs.first = AsyncMock(return_value=SimpleNamespace(id=3))
+        with patch.object(
+            cs.KuaiaiLlmModel, "filter", return_value=qs
+        ) as mock_filter:
+            got = await cs._match_catalog_model_id(TENANT, " deepseek-chat ")
+        assert got == 3
+        mock_filter.assert_called_once_with(
+            tenant_id=TENANT,
+            model_name="deepseek-chat",
+            model_type=cs.MODEL_TYPE_CHAT,
+            status=cs.STATUS_ENABLED,
+            deleted_at__isnull=True,
+        )
+        qs.order_by.assert_called_once_with("id")

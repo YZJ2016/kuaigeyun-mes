@@ -275,7 +275,7 @@ class TestListAndOptions:
 
 class TestEmbeddingModelBinding:
     @pytest.mark.asyncio
-    async def test_embed_model_ok(self):
+    async def test_embedding_model_id_is_not_written(self):
         created = {}
 
         async def _create(**kw):
@@ -288,83 +288,23 @@ class TestEmbeddingModelBinding:
                 KuaiaiKnowledgeBase, "get_or_none", new=AsyncMock(return_value=None)
             ),
             patch.object(
-                KuaiaiLlmModel,
-                "get_or_none",
-                new=AsyncMock(return_value=_model(mid=3, mtype="embed")),
-            ),
-            patch.object(
                 KuaiaiKnowledgeBase, "create", new=AsyncMock(side_effect=_create)
             ),
         ):
             await kbs.create_base(TENANT, _user(), payload)
-        assert created["embedding_model_id"] == 3
+        assert created["embedding_model_id"] is None
 
     @pytest.mark.asyncio
-    async def test_cross_tenant_model_404(self):
-        payload = KnowledgeBaseCreate(name="k", embedding_model_id=55)
-        with (
-            patch.object(
-                KuaiaiKnowledgeBase, "get_or_none", new=AsyncMock(return_value=None)
-            ),
-            patch.object(
-                KuaiaiLlmModel, "get_or_none", new=AsyncMock(return_value=None)
-            ) as mock_get,
-        ):
-            with pytest.raises(NotFoundError):
-                await kbs.create_base(TENANT, _user(), payload)
-        # 归属查询带本租户过滤，查不到即跨租户/不存在 → 404
-        assert mock_get.await_args.kwargs["tenant_id"] == TENANT
-
-    @pytest.mark.asyncio
-    async def test_non_embed_model_400(self):
-        payload = KnowledgeBaseCreate(name="k", embedding_model_id=2)
-        with (
-            patch.object(
-                KuaiaiKnowledgeBase, "get_or_none", new=AsyncMock(return_value=None)
-            ),
-            patch.object(
-                KuaiaiLlmModel,
-                "get_or_none",
-                new=AsyncMock(return_value=_model(mid=2, mtype="chat")),
-            ),
-        ):
-            with pytest.raises(BusinessLogicError) as exc:
-                await kbs.create_base(TENANT, _user(), payload)
-        assert exc.value.status_code == 400
-
-    @pytest.mark.asyncio
-    async def test_disabled_embed_model_400(self):
-        payload = KnowledgeBaseCreate(name="k", embedding_model_id=2)
-        with (
-            patch.object(
-                KuaiaiKnowledgeBase, "get_or_none", new=AsyncMock(return_value=None)
-            ),
-            patch.object(
-                KuaiaiLlmModel,
-                "get_or_none",
-                new=AsyncMock(return_value=_model(mid=2, status="停用")),
-            ),
-        ):
-            with pytest.raises(BusinessLogicError):
-                await kbs.create_base(TENANT, _user(), payload)
-
-    @pytest.mark.asyncio
-    async def test_update_embed_null_clears_without_check(self):
-        """显式 null = 清空回落默认 embed，不触发归属查询。"""
+    async def test_update_ignores_embedding_model_id(self):
+        """列保留，更新不再改 embedding_model_id。"""
         base = _base(embedding_model_id=3)
-        with (
-            patch.object(
-                KuaiaiKnowledgeBase, "get_or_none", new=AsyncMock(return_value=base)
-            ),
-            patch.object(
-                KuaiaiLlmModel, "get_or_none", new=AsyncMock()
-            ) as mock_model_get,
+        with patch.object(
+            KuaiaiKnowledgeBase, "get_or_none", new=AsyncMock(return_value=base)
         ):
             await kbs.update_base(
                 TENANT, _user(), 1, KnowledgeBaseUpdate(embedding_model_id=None)
             )
-        mock_model_get.assert_not_called()
-        assert base.embedding_model_id is None
+        assert base.embedding_model_id == 3
 
 
 class TestChunkParamValidation:

@@ -20,11 +20,44 @@ const MessagesPage = lazy(() => import('./pages/messages'));
 const KuaiiotApp: React.FC = () => {
   return (
     <Routes>
+      <Route index element={<Navigate to="dashboard" replace />} />
       <Route
-        index
+        path="dashboard"
         element={
           <Suspense fallback={<PageSkeleton variant="content" />}>
-            <RegistryPage />
+            <RegistryPage section="center" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="pipeline"
+        element={
+          <Suspense fallback={<PageSkeleton variant="content" />}>
+            <MessagesPage title="数采链路" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="connections"
+        element={
+          <Suspense fallback={<PageSkeleton variant="content" />}>
+            <RegistryPage section="connection" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="devices"
+        element={
+          <Suspense fallback={<PageSkeleton variant="content" />}>
+            <RegistryPage section="device" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="tags"
+        element={
+          <Suspense fallback={<PageSkeleton variant="content" />}>
+            <RegistryPage section="tag" />
           </Suspense>
         }
       />

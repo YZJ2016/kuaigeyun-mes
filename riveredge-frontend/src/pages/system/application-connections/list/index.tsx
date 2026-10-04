@@ -4,7 +4,7 @@
  * 用于系统管理员查看和管理组织内的应用连接器（飞书、钉钉、ERP、PLM、CRM 等）。
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
 import { rowActionKind, rowActionLabelKeep, rowActionTestConnection } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
@@ -70,6 +70,8 @@ import {
   testApplicationConnectionConfig,
   syncApplicationConnectionContacts,
   loadApplicationConnectionApiPresets,
+  getLlmRoleSelection,
+  selectApplicationConnectionRole,
   ApplicationConnection,
 } from '../../../../services/applicationConnection';
 import {
@@ -232,6 +234,20 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [syncingContactsUuid, setSyncingContactsUuid] = useState<string | null>(null);
   const [loadingApiPresetsUuid, setLoadingApiPresetsUuid] = useState<string | null>(null);
+  const [selectedLlmRoles, setSelectedLlmRoles] = useState<Record<string, string>>({});
+  const [selectingRoleUuid, setSelectingRoleUuid] = useState<string | null>(null);
+
+  const loadLlmRoles = useCallback(async () => {
+    try {
+      setSelectedLlmRoles(await getLlmRoleSelection());
+    } catch {
+      setSelectedLlmRoles({});
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLlmRoles();
+  }, [loadLlmRoles]);
   const [allConnections, setAllConnections] = useState<ApplicationConnection[]>([]);
   const [connectorMarketVisible, setConnectorMarketVisible] = useState(false);
   const [connectorMarketInitialCategory, setConnectorMarketInitialCategory] = useState('all');
@@ -518,6 +534,20 @@ const ApplicationConnectionsListPage: React.FC = () => {
       messageApi.error(error?.message || t('pages.system.applicationConnections.loadApiPresetsFailed'));
     } finally {
       setLoadingApiPresetsUuid(null);
+    }
+  };
+
+  const handleSelectLlmRole = async (record: ApplicationConnection) => {
+    try {
+      setSelectingRoleUuid(record.uuid);
+      await selectApplicationConnectionRole(record.uuid);
+      messageApi.success(t('pages.system.applicationConnections.llmRoleSelected', { defaultValue: '已选用为该角色' }));
+      await loadLlmRoles();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.operationFailed'));
+    } finally {
+      setSelectingRoleUuid(null);
     }
   };
 
@@ -1269,6 +1299,10 @@ const ApplicationConnectionsListPage: React.FC = () => {
               label="API Base URL"
               rules={[{ required: true }]}
               colProps={{ span: 24 }}
+              extra={t('pages.system.applicationConnections.llmBaseUrlExtra', {
+                defaultValue:
+                  '每种角色单独填写，同一厂商也可以不同。对话和嵌入常用 …/compatible-mode/v1；千问重排请填同主机的 …/compatible-api/v1/reranks，不要沿用对话地址。',
+              })}
             />
             <ProFormText
               name="model"
@@ -1276,6 +1310,18 @@ const ApplicationConnectionsListPage: React.FC = () => {
               rules={[{ required: true }]}
               colProps={{ span: 12 }}
               placeholder="deepseek-v4-flash"
+            />
+            <ProFormSelect
+              name="model_role"
+              label={t('pages.system.applicationConnections.columnModelRole', { defaultValue: '模型角色' })}
+              rules={[{ required: true, message: t('pages.system.applicationConnections.modelRoleRequired', { defaultValue: '请选择模型角色' }) }]}
+              colProps={{ span: 12 }}
+              options={[
+                { value: 'chat', label: t('pages.system.applicationConnections.roleChat', { defaultValue: '对话' }) },
+                { value: 'embed', label: t('pages.system.applicationConnections.roleEmbed', { defaultValue: '嵌入' }) },
+                { value: 'vision', label: t('pages.system.applicationConnections.roleVision', { defaultValue: '视觉' }) },
+                { value: 'rerank', label: t('pages.system.applicationConnections.roleRerank', { defaultValue: '重排' }) },
+              ]}
             />
             <ProFormText.Password
               name="api_key"
@@ -1369,6 +1415,29 @@ const ApplicationConnectionsListPage: React.FC = () => {
       },
     },
     {
+      title: t('pages.system.applicationConnections.columnModelRole', { defaultValue: '模型角色' }),
+      dataIndex: ['config', 'model_role'],
+      width: 100,
+      minWidth: 100,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      render: (_, record) => {
+        if (!isLlmConnectionType(record.type)) return t('common.dash');
+        const role = String(record.config?.model_role || '');
+        const labels: Record<string, string> = {
+          chat: t('pages.system.applicationConnections.roleChat', { defaultValue: '对话' }),
+          embed: t('pages.system.applicationConnections.roleEmbed', { defaultValue: '嵌入' }),
+          vision: t('pages.system.applicationConnections.roleVision', { defaultValue: '视觉' }),
+          rerank: t('pages.system.applicationConnections.roleRerank', { defaultValue: '重排' }),
+        };
+        const text = labels[role];
+        if (!text) return t('common.dash');
+        const selected = selectedLlmRoles[role] === record.uuid;
+        return selected ? <MarkerTag color="green">{text}</MarkerTag> : text;
+      },
+    },
+    {
       // 备注长短不一：唯一 RemainderFlex
       title: t('common.remark'),
       dataIndex: 'description',
@@ -1439,6 +1508,18 @@ const ApplicationConnectionsListPage: React.FC = () => {
               key="test"
               onClick={() => handleTestConnection(record)}
             />,
+            isLlmConnectionType(record.type) ? (
+              <Button
+                {...rowActionKind('update')}
+                key="select-role"
+                loading={selectingRoleUuid === record.uuid}
+                onClick={() => void handleSelectLlmRole(record)}
+              >
+                {selectedLlmRoles[String(record.config?.model_role || '')] === record.uuid
+                  ? t('pages.system.applicationConnections.llmRoleSelectedTag', { defaultValue: '已选用' })
+                  : t('pages.system.applicationConnections.selectLlmRole', { defaultValue: '选用' })}
+              </Button>
+            ) : null,
             record.type === 'wecom' && canSyncContacts ? (
               <Popconfirm
                 key="sync-contacts"
@@ -1480,7 +1561,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
             </Popconfirm>,
           ].filter(Boolean),
     },
-  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canSyncContacts, canLoadApiPresets, syncingContactsUuid, loadingApiPresetsUuid, handleView, handleEdit, handleTestConnection, handleSyncContacts, handleLoadApiPresets, handleDelete]);
+  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canSyncContacts, canLoadApiPresets, syncingContactsUuid, loadingApiPresetsUuid, selectingRoleUuid, selectedLlmRoles, handleView, handleEdit, handleTestConnection, handleSelectLlmRole, handleSyncContacts, handleLoadApiPresets, handleDelete]);
 
   const detailColumns = [
     { title: t('pages.system.applicationConnections.columnName'), dataIndex: 'name' },

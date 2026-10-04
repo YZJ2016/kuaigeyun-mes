@@ -49,11 +49,12 @@ def _report_lookup(report_id: str | int) -> dict[str, Any]:
     return {"uuid": ref}
 
 
-def _bound_source_uuid(report_config: dict[str, Any]) -> str:
+def _bound_source_uuid(report_config: dict[str, Any]) -> str | None:
+    """已登记数据源 uuid。自制报表只写 dataset_uuid 时这里返回 None。"""
     extra = report_config.get("extra")
     raw = extra.get(REPORT_DATA_SOURCE_UUID) if isinstance(extra, dict) else None
     if not isinstance(raw, str) or not raw.strip():
-        raise ValidationError("报表未绑定数据源")
+        return None
     return raw.strip()
 
 
@@ -192,25 +193,43 @@ def _project(rows: list[dict[str, Any]], report_config: dict[str, Any]) -> list[
 
 
 def _declared_parameter_keys(report_config: dict[str, Any]) -> set[str]:
-    """report_config.filters 声明的字段收敛出的数据集参数键。
+    """filters 与 parameters 声明的数据集参数键。
 
-    between 写成 ``字段_start`` / ``字段_end``；其余操作符用字段名本身。
+    between / dateRange 写成 ``字段_start`` / ``字段_end``；其余用字段名本身。
+    下钻维度一并放行，查询时按该字段收窄。
     """
     allowed: set[str] = set()
     specs = report_config.get("filters")
-    if not isinstance(specs, list):
-        return allowed
-    for spec in specs:
-        if not isinstance(spec, dict):
-            continue
-        field = spec.get("field")
-        if not isinstance(field, str) or not field:
-            continue
-        if spec.get("operator") == "between":
-            allowed.add(f"{field}_start")
-            allowed.add(f"{field}_end")
-        else:
-            allowed.add(field)
+    if isinstance(specs, list):
+        for spec in specs:
+            if not isinstance(spec, dict):
+                continue
+            field = spec.get("field")
+            if not isinstance(field, str) or not field:
+                continue
+            if spec.get("operator") == "between":
+                allowed.add(f"{field}_start")
+                allowed.add(f"{field}_end")
+            else:
+                allowed.add(field)
+    parameters = report_config.get("parameters")
+    if isinstance(parameters, list):
+        for spec in parameters:
+            if not isinstance(spec, dict):
+                continue
+            key = spec.get("key")
+            if not isinstance(key, str) or not key:
+                continue
+            if spec.get("control") == "dateRange":
+                allowed.add(f"{key}_start")
+                allowed.add(f"{key}_end")
+            else:
+                allowed.add(key)
+    interaction = report_config.get("interaction")
+    drill = interaction.get("drilldown") if isinstance(interaction, dict) else None
+    dimension = drill.get("dimension_field") if isinstance(drill, dict) else None
+    if isinstance(dimension, str) and dimension:
+        allowed.add(dimension)
     return allowed
 
 
@@ -441,6 +460,35 @@ def _reject_address_override(filters: dict[str, Any], registered_url: str) -> No
             raise ValidationError("HTTP 地址未登记")
 
 
+async def _execute_platform_dataset(
+    tenant_id: int,
+    dataset_uuid: str,
+    filters: dict[str, Any],
+    report_config: dict[str, Any],
+) -> tuple[list[dict[str, Any]], Optional[int], bool]:
+    """直接执行平台数据集。自制报表不经过星报表数据源登记。"""
+    dataset = await load_dataset(dataset_uuid)
+    if dataset is None:
+        raise NotFoundError("数据集", dataset_uuid)
+    if getattr(dataset, "tenant_id", tenant_id) != tenant_id:
+        raise NotFoundError("数据集", dataset_uuid)
+    if dataset.query_type not in ("sql", "api"):
+        raise ValidationError("报表只绑定 sql 或 api 数据集")
+    from core.schemas.dataset import ExecuteQueryRequest
+
+    limit, offset = _page(filters, report_config)
+    request = ExecuteQueryRequest(
+        parameters=_parameters(filters, report_config),
+        limit=limit,
+        offset=offset,
+    )
+    result = await run_dataset_query(tenant_id, dataset_uuid, request)
+    if not result.success:
+        raise ValidationError("数据集执行失败")
+    rows = [row for row in (result.data or []) if isinstance(row, dict)]
+    return rows, result.total, True
+
+
 async def _load_rows(
     source: KuaireportDataSource,
     tenant_id: int,
@@ -459,24 +507,9 @@ async def _load_rows(
         dataset_uuid = config.get(DATASET_UUID_KEY)
         if not isinstance(dataset_uuid, str) or not dataset_uuid:
             raise ValidationError("dataset 配置必须包含数据集 uuid")
-        dataset = await load_dataset(dataset_uuid)
-        if dataset is None:
-            raise NotFoundError("数据集", dataset_uuid)
-        if dataset.query_type not in ("sql", "api"):
-            raise ValidationError("报表只绑定 sql 或 api 数据集")
-        from core.schemas.dataset import ExecuteQueryRequest
-
-        limit, offset = _page(filters, report_config)
-        request = ExecuteQueryRequest(
-            parameters=_parameters(filters, report_config),
-            limit=limit,
-            offset=offset,
+        return await _execute_platform_dataset(
+            tenant_id, dataset_uuid, filters, report_config
         )
-        result = await run_dataset_query(tenant_id, dataset_uuid, request)
-        if not result.success:
-            raise ValidationError("数据集执行失败")
-        rows = [row for row in (result.data or []) if isinstance(row, dict)]
-        return rows, result.total, True
     if source.type == "http":
         url = config.get(HTTP_URL_KEY)
         if not isinstance(url, str) or not url:
@@ -504,10 +537,20 @@ async def execute_report(
     report_config = report.report_config if isinstance(report.report_config, dict) else {}
     _reject_sql_keys(report_config)
     source_uuid = _bound_source_uuid(report_config)
-    source = await KuaireportDataSource.get_or_none(uuid=source_uuid, tenant_id=tid)
-    if source is None:
-        raise NotFoundError("数据源", source_uuid)
-    rows, remote_total, paged = await _load_rows(source, tid, incoming, report_config, http_get)
+    platform_uuid = report_config.get(DATASET_UUID_KEY)
+    if source_uuid:
+        source = await KuaireportDataSource.get_or_none(uuid=source_uuid, tenant_id=tid)
+        if source is None:
+            raise NotFoundError("数据源", source_uuid)
+        rows, remote_total, paged = await _load_rows(
+            source, tid, incoming, report_config, http_get
+        )
+    elif isinstance(platform_uuid, str) and platform_uuid.strip():
+        rows, remote_total, paged = await _execute_platform_dataset(
+            tid, platform_uuid.strip(), incoming, report_config
+        )
+    else:
+        raise ValidationError("报表未绑定数据源")
     if paged:
         data_rows = rows
         summary = summarize_rows(data_rows, report_config)

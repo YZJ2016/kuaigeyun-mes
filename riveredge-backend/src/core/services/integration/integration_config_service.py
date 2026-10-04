@@ -177,6 +177,9 @@ class IntegrationConfigService:
             ValidationError: 当集成代码已存在时抛出
         """
         try:
+            from core.utils.integration_settings import require_llm_model_role
+
+            require_llm_model_role(data.type, data.config if isinstance(data.config, dict) else {})
             integration = IntegrationConfig(
                 tenant_id=tenant_id,
                 **data.model_dump()
@@ -350,11 +353,23 @@ class IntegrationConfigService:
                     merged[sk] = old_cfg[sk]
             merged.pop("api_key_configured", None)
             update_data["config"] = merged
+
+        next_type = update_data.get("type", integration.type)
+        next_config = update_data.get("config", integration.config)
+        from core.utils.integration_settings import require_llm_model_role
+
+        require_llm_model_role(
+            next_type, next_config if isinstance(next_config, dict) else {}
+        )
         
         for key, value in update_data.items():
             setattr(integration, key, value)
         
         await integration.save()
+        if next_type in ("deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow"):
+            from core.ai.runtime.model_factory import evict_model_cache
+
+            evict_model_cache(tenant_id)
         return integration
     
     @staticmethod

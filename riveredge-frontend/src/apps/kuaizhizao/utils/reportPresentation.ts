@@ -102,7 +102,6 @@ const DOCUMENT_STATUS_I18N_KEYS: Record<string, string> = {
   已退货: 'app.kuaizhizao.reports.returnStatusDone',
   待交货: 'app.kuaizhizao.reports.itemDeliveryPending',
   部分交货: 'app.kuaizhizao.reports.itemDeliveryPartial',
-  已交货: 'app.kuaizhizao.reports.itemDeliveryDone',
 };
 
 const REVIEW_STATUS_I18N_KEYS: Record<string, string> = {

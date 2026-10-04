@@ -50,7 +50,7 @@ class FileService:
     ALLOWED_EXTENSIONS = {
         "jpg", "jpeg", "png", "gif", "svg", "webp",  # 图片
         "pdf", "dwg", "dxf", "step", "stp", "pcbdoc", "schdoc",  # 物料/SOP附件常用：PDF、2D/3D CAD、Altium PCB/原理图
-        "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "json", # 文档
+        "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "md", "csv", "json", # 文档
         "zip", "rar", "7z", "tar", "gz", # 压缩包
         "mp3", "wav", "mp4", "mov", "avi", # 多媒体
         # 产品固件 / 烧录产测：原始固件与常见烧录镜像（非脚本可执行后缀）
@@ -113,6 +113,7 @@ class FileService:
             "png": "image/png",
             "gif": "image/gif",
             "txt": "text/plain",
+            "md": "text/markdown",
             "doc": "application/msword",
             "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "xls": "application/vnd.ms-excel",

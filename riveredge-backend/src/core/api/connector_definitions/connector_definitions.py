@@ -106,7 +106,7 @@ PRESET_APP_CONNECTORS: List[Dict[str, Any]] = [
     {"id": "qiniu_kodo", "name": "七牛云 Kodo", "type": "qiniu_kodo", "category": "storage", "description": "七牛云对象存储 Kodo", "icon": "CloudServerOutlined", "default_config": {"endpoint": "", "access_key": "", "secret_key": "", "bucket": "", "region": "z0"}},
     {"id": "nas_webdav", "name": "NAS / WebDAV", "type": "nas_webdav", "category": "storage", "description": "群晖 / 威联通等 NAS WebDAV 协议", "icon": "HddOutlined", "default_config": {"base_url": "", "username": "", "password": "", "root_path": "/"}},
     {"id": "nas_smb", "name": "NAS / SMB", "type": "nas_smb", "category": "storage", "description": "NAS SMB/CIFS 共享目录", "icon": "HddOutlined", "default_config": {"host": "", "share": "", "username": "", "password": "", "domain": "", "port": 445}},
-    # AI（应用连接列表行，可多条不同 model；选用在 KU-AI → 模型设置）
+    # AI（应用连接列表行，可多条不同 model；在本页按角色选用）
     {"id": "deepseek", "name": "DeepSeek", "type": "deepseek", "category": "ai", "description": "DeepSeek OpenAI 兼容 API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://api.deepseek.com", "model": "deepseek-v4-flash"}},
     {"id": "openai", "name": "OpenAI", "type": "openai", "category": "ai", "description": "OpenAI Chat Completions API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"}},
     {"id": "qwen", "name": "通义千问", "type": "qwen", "category": "ai", "description": "阿里云百炼兼容模式（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus"}},

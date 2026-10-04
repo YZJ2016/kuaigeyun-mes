@@ -1325,16 +1325,34 @@ class MaterialService:
                 material_data["process_route_id"] = resolved_pr_id
 
         from apps.kuaizhizao.services.inspection_policy_service import (
+            MATERIAL_INSPECTION_STAGE_KEYS,
             assert_master_data_inspection_stages_allowed,
+            normalize_material_inspection_stages,
+            normalize_stage_policy,
             prepare_material_inspection_for_write,
         )
 
-        if material_data.get("inspection_stages") is not None or material_data.get("inspection_mode") is not None:
+        incoming_stages = material_data.get("inspection_stages")
+        if incoming_stages is not None or material_data.get("inspection_mode") is not None:
             prepare_material_inspection_for_write(material_data)
-            await assert_master_data_inspection_stages_allowed(
-                tenant_id,
-                material_stages=material_data.get("inspection_stages"),
+            expanded = material_data.get("inspection_stages")
+            # 创建 schema 默认 inspection_mode=none。导入未带分场景策略时，展开成
+            # 三环节全无会被拒绝。这里保持未配置（stages 空 + legacy none），
+            # 解析走 default_none（必检）。显式传入全无 JSON 仍拒绝。
+            expanded_norm = normalize_material_inspection_stages(expanded)
+            omitted_all_none = incoming_stages is None and all(
+                normalize_stage_policy(expanded_norm.get(key))["mode"] == "none"
+                for key in MATERIAL_INSPECTION_STAGE_KEYS
             )
+            if omitted_all_none:
+                material_data["inspection_stages"] = None
+                material_data["inspection_mode"] = "none"
+                material_data["default_inspection_plan_id"] = None
+            else:
+                await assert_master_data_inspection_stages_allowed(
+                    tenant_id,
+                    material_stages=expanded,
+                )
         
         # 创建物料（属性 SKU 并发导入时 code 可能冲突，自动重试下一序号或返回已存在组合）
         material = None

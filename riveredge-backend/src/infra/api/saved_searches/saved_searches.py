@@ -20,8 +20,8 @@ from infra.schemas.saved_search import (
 from infra.services.saved_search_service import SavedSearchService
 from infra.api.deps.services import get_saved_search_service_with_fallback
 from infra.models.user import User
-from infra.domain.tenant_context import get_current_tenant_id
 from infra.api.deps.deps import get_current_user
+from core.api.deps.deps import get_current_tenant
 from typing import Any
 
 # 创建路由
@@ -33,6 +33,7 @@ async def list_saved_searches(
     page_path: str = Query(..., description="页面路径"),
     include_shared: bool = Query(True, description="是否包含共享的搜索条件"),
     current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
     saved_search_service: Any = Depends(get_saved_search_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
@@ -51,7 +52,6 @@ async def list_saved_searches(
     # ⚠️ 第三阶段改进：使用依赖注入的服务
     if not saved_search_service:
         saved_search_service = SavedSearchService()  # 向后兼容
-    tenant_id = get_current_tenant_id()
     
     result = await saved_search_service.list_saved_searches(
         page_path=page_path,
@@ -76,6 +76,7 @@ async def list_saved_searches(
 async def create_saved_search(
     data: SavedSearchCreate,
     current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
     saved_search_service: Any = Depends(get_saved_search_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
@@ -93,7 +94,6 @@ async def create_saved_search(
     # ⚠️ 第三阶段改进：使用依赖注入的服务
     if not saved_search_service:
         saved_search_service = SavedSearchService()  # 向后兼容
-    tenant_id = get_current_tenant_id()
     
     try:
         saved_search = await saved_search_service.create_saved_search(
@@ -115,6 +115,7 @@ async def create_saved_search(
 async def get_saved_search(
     search_uuid: str,
     current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
     saved_search_service: Any = Depends(get_saved_search_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
@@ -154,6 +155,7 @@ async def update_saved_search(
     search_uuid: str,
     data: SavedSearchUpdate,
     current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
     saved_search_service: Any = Depends(get_saved_search_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """
@@ -195,6 +197,7 @@ async def update_saved_search(
 async def delete_saved_search(
     search_uuid: str,
     current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
     saved_search_service: Any = Depends(get_saved_search_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
 ):
     """

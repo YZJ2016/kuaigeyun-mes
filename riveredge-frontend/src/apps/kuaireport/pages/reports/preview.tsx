@@ -5,11 +5,12 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, App, Button, Space } from 'antd';
+import { Alert, App, Button, Space, Spin } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
 import { UniReport } from '../../../../components/uni-report';
 import { downloadFile } from '../../../../utils/fileDownload';
 import { executeReport } from '../../services/kuaireport';
+import { ChartCanvas, DrillDrawer, QueryPanel } from './ChartPanel';
 import { downloadFullExcel, getReport, type ReportCenterRow } from './api';
 
 export default function ReportPreviewPage() {
@@ -84,6 +85,19 @@ export default function ReportPreviewPage() {
     return null;
   }
 
+  if (report.report_config?.chart_type && report.report_config.dataset_uuid) {
+    return (
+      <DatasetChartView
+        report={report}
+        onExport={onExport}
+        exporting={exporting}
+        onFilters={(next) => {
+          filtersRef.current = next;
+        }}
+      />
+    );
+  }
+
   return (
     <UniReport
       mode="config"
@@ -103,5 +117,108 @@ export default function ReportPreviewPage() {
         </Space>
       }
     />
+  );
+}
+
+function DatasetChartView({
+  report,
+  onExport,
+  exporting,
+  onFilters,
+}: {
+  report: ReportCenterRow;
+  onExport: () => Promise<void>;
+  exporting: boolean;
+  onFilters: (filters: Record<string, unknown>) => void;
+}) {
+  const { message } = App.useApp();
+  const navigate = useNavigate();
+  const config = report.report_config;
+  const fields = config.fields || [];
+  const xField = fields.find((field) => field.x_axis)?.field;
+  const yField = fields.find((field) => field.y_axis)?.field;
+  const drill = config.interaction?.drilldown;
+  const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState<Record<string, unknown>>({});
+  const [drillValue, setDrillValue] = useState<string | null>(null);
+  const [drillRows, setDrillRows] = useState<Record<string, unknown>[]>([]);
+
+  const load = useCallback(
+    async (next: Record<string, unknown>) => {
+      setLoading(true);
+      try {
+        const res = await executeReport(report.id, { ...next, limit: config.page_size || 50, offset: 0 });
+        setRows((res.data || []) as Record<string, unknown>[]);
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : '报表加载失败');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [config.page_size, message, report.id],
+  );
+
+  useEffect(() => {
+    void load({});
+  }, [load]);
+
+  const openDrill = async (value: string) => {
+    const dimension = drill?.dimension_field || xField;
+    if (!dimension) return;
+    setDrillValue(value);
+    try {
+      const res = await executeReport(report.id, {
+        ...filters,
+        [dimension]: value,
+        limit: 500,
+        offset: 0,
+      });
+      const data = ((res.data || []) as Record<string, unknown>[]).filter(
+        (row) => String(row[dimension] ?? '') === value,
+      );
+      setDrillRows(data.length ? data : ((res.data || []) as Record<string, unknown>[]));
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '下钻失败');
+    }
+  };
+
+  return (
+    <div style={{ padding: 16 }}>
+      <Space style={{ marginBottom: 12 }}>
+        <Button onClick={() => navigate('/apps/kuaireport/reports')}>返回</Button>
+        <Button type="primary" loading={exporting} onClick={() => void onExport()}>
+          全量 Excel
+        </Button>
+        <span style={{ fontWeight: 600 }}>{report.name}</span>
+      </Space>
+      <QueryPanel
+        parameters={config.parameters || []}
+        onSubmit={(next) => {
+          setFilters(next);
+          onFilters(next);
+          void load(next);
+        }}
+      />
+      <Spin spinning={loading}>
+        <ChartCanvas
+          chartType={config.chart_type || 'table'}
+          rows={rows}
+          xField={xField}
+          yField={yField}
+          fields={fields}
+          drillEnabled={Boolean(drill?.enabled)}
+          onDrill={(value) => void openDrill(value)}
+        />
+      </Spin>
+      {drill?.enabled ? <div style={{ marginTop: 8, color: '#8c8c8c' }}>点击图表维度可下钻明细</div> : null}
+      <DrillDrawer
+        open={drillValue != null}
+        title={drill?.title || '明细下钻'}
+        rows={drillRows}
+        fields={fields}
+        onClose={() => setDrillValue(null)}
+      />
+    </div>
   );
 }

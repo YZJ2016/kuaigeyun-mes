@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile
 from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
-from core.api.deps import get_current_user
+from core.api.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 from core.models.data_backup import DataBackup
 from core.schemas.data_backup import DataBackupCreate, DataBackupResponse, DataBackupListResponse
@@ -79,7 +79,7 @@ async def _load_worker_health_counts(
 
 @router.get("/worker-health", response_model=BackupWorkerHealthResponse)
 async def get_worker_health(
-    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
 ) -> Any:
     """
     获取备份 Worker 健康状态（用于前端状态指示）。
@@ -93,7 +93,6 @@ async def get_worker_health(
     stale_threshold = now - timedelta(minutes=2)
     recent_window = now - timedelta(minutes=10)
 
-    tenant_id = current_user.tenant_id
     pending_total, pending_stalled, running_count, recent_completed = await _load_worker_health_counts(
         tenant_id=tenant_id,
         stale_threshold=stale_threshold,
@@ -132,7 +131,8 @@ async def get_backups(
     backup_type: Optional[str] = None,
     backup_scope: Optional[str] = None,
     backup_status: Optional[str] = Query(None, alias="status"),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
 ) -> Any:
     """
     获取备份列表
@@ -152,7 +152,7 @@ async def get_backups(
     获取备份列表
     """
     items, total = await DataBackupService.get_backups(
-        current_user.tenant_id,
+        tenant_id,
         page,
         page_size,
         backup_type,
@@ -221,13 +221,13 @@ async def create_backup(
 @router.get("/{uuid}", response_model=DataBackupResponse)
 async def get_backup(
     uuid: str,
-    current_user: User = Depends(get_current_user)
+    tenant_id: int = Depends(get_current_tenant),
 ) -> Any:
     """
     获取备份详情
     """
     try:
-        backup = await DataBackupService.get_backup_by_uuid(current_user.tenant_id, uuid)
+        backup = await DataBackupService.get_backup_by_uuid(tenant_id, uuid)
         return DataBackupService.to_response(backup)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -236,18 +236,18 @@ async def get_backup(
 @router.get("/{uuid}/download-url", response_model=BackupDownloadUrlResponse)
 async def get_backup_download_url(
     uuid: str,
-    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
 ) -> Any:
     """
     获取备份下载链接（短效 download_token，供浏览器原生流式下载）
     """
     try:
-        backup = await DataBackupService.get_backup_by_uuid(current_user.tenant_id, uuid)
+        backup = await DataBackupService.get_backup_by_uuid(tenant_id, uuid)
         if backup.status != "success":
             raise HTTPException(status_code=400, detail="只能下载成功的备份")
-        BackupDownloadService.resolve_backup_file(uuid, current_user.tenant_id, backup.file_path)
+        BackupDownloadService.resolve_backup_file(uuid, tenant_id, backup.file_path)
         return BackupDownloadUrlResponse(
-            download_url=BackupDownloadService.build_download_url(uuid, current_user.tenant_id),
+            download_url=BackupDownloadService.build_download_url(uuid, tenant_id),
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -291,13 +291,13 @@ async def download_backup(
 @router.delete("/{uuid}")
 async def delete_backup(
     uuid: str,
-    current_user: User = Depends(get_current_user)
+    tenant_id: int = Depends(get_current_tenant),
 ) -> Any:
     """
     删除备份
     """
     try:
-        await DataBackupService.delete_backup(current_user.tenant_id, uuid)
+        await DataBackupService.delete_backup(tenant_id, uuid)
         return {"success": True}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -320,7 +320,8 @@ class RestoreBackupResponse(BaseModel):
 async def restore_backup(
     uuid: str,
     data: RestoreRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
 ) -> Any:
     """
     恢复备份
@@ -333,7 +334,7 @@ async def restore_backup(
 
     try:
         success = await DataBackupService.restore_backup(
-            current_user.tenant_id,
+            tenant_id,
             uuid,
             create_pre_restore_backup=data.create_pre_restore_backup,
             source_tenant_id=data.source_tenant_id,
@@ -345,7 +346,7 @@ async def restore_backup(
                 restore_status="running",
                 message="恢复任务已提交，请稍后在列表中查看恢复状态",
             )
-        backup = await DataBackupService.get_backup_by_uuid(current_user.tenant_id, uuid)
+        backup = await DataBackupService.get_backup_by_uuid(tenant_id, uuid)
         return RestoreBackupResponse(
             success=False,
             restore_status=backup.restore_status,

@@ -201,8 +201,6 @@ async def create_profile(
     )
     if dup is not None:
         raise BusinessLogicError(f"档案名称 {name} 已存在")
-    if payload.default_model_id is not None:
-        await _require_chat_model(tenant_id, payload.default_model_id)
     if status == STATUS_ENABLED:
         # 新建档案尚无名单，启用必为空名单 → 400（先停用建档，再配名单，再启用）
         raise BusinessLogicError("启用档案的授权名单不得为空，请先停用建档再配置名单")
@@ -211,7 +209,7 @@ async def create_profile(
         name=name,
         description=payload.description,
         system_prompt=payload.system_prompt,
-        default_model_id=payload.default_model_id,
+        default_model_id=None,
         knowledge_ids=knowledge_ids,
         enabled_tools=enabled_tools,
         mcp_server_ids=mcp_server_ids,
@@ -252,8 +250,7 @@ async def update_profile(
         data["mcp_server_ids"] = _normalize_id_list(
             data["mcp_server_ids"], "mcp_server_ids"
         )
-    if "default_model_id" in data and data["default_model_id"] is not None:
-        await _require_chat_model(tenant_id, data["default_model_id"])
+    data.pop("default_model_id", None)
 
     new_status = data.get("status", profile.status)
     new_mode = data.get("grant_mode", profile.grant_mode)

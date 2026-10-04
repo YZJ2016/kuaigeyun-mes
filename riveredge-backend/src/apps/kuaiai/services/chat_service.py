@@ -5,7 +5,8 @@
 
 路径 A 纯对话（无档案）：``model_factory.build_chat_model`` 目录行优先
 （无目录行才 IntegrationConfig 兜底）；请求级模型仅接受 ``context.model_id``
-（int 目录行）或请求 ``model`` 名匹配本租户启用 chat 行，不直通任意模型名。
+（int 目录行）、``#id:<目录行id>``，或请求 ``model`` / 会话 ``model`` 名匹配
+本租户启用 chat 行，不直通任意模型名。
 
 路径 B 带工具（显式 ``context.agent_id`` 或 agent 路径默认档案）：
 ``agent_assembler.assemble`` 授权+装配（无授权 403，不静默降级）→
@@ -276,13 +277,38 @@ async def _knowledge_context_summary(
     return "以下是与问题相关的知识库内容（仅供参考）：\n" + "\n\n".join(parts)
 
 
+# 会话 model 列复用：新数据写目录行主键；无此前缀的仍是历史模型名。
+_CATALOG_MODEL_ID_PREFIX = "#id:"
+# Tortoise IntField / PostgreSQL integer
+_CATALOG_MODEL_ID_MAX = 2_147_483_647
+
+
 async def _match_catalog_model_id(
     tenant_id: int, model_name: str
 ) -> Optional[int]:
-    """请求级模型名 → 本租户启用 chat 目录行 id；未命中 None（回默认解析）。"""
+    """会话/请求模型引用 → 本租户未删除且启用的 chat 目录行 id。
+
+    ``#id:<id>`` 按主键解析；否则按 model_name 取 id 最小的一行。
+    未命中 None（回默认解析）。
+    """
     name = (model_name or "").strip()
     if not name:
         return None
+    if name.startswith(_CATALOG_MODEL_ID_PREFIX):
+        raw = name[len(_CATALOG_MODEL_ID_PREFIX) :]
+        if not raw.isdigit():
+            return None
+        row_id = int(raw)
+        if row_id <= 0 or row_id > _CATALOG_MODEL_ID_MAX:
+            return None
+        row = await KuaiaiLlmModel.get_or_none(
+            id=row_id,
+            tenant_id=tenant_id,
+            model_type=MODEL_TYPE_CHAT,
+            status=STATUS_ENABLED,
+            deleted_at__isnull=True,
+        )
+        return row.id if row is not None else None
     row = await (
         KuaiaiLlmModel.filter(
             tenant_id=tenant_id,
@@ -799,15 +825,8 @@ async def create_chat_completion(
         # 同一解析判定走哪个来源（目录行查询是只读的，无副作用）
         model_row_id = getattr(assembled.profile, "default_model_id", None)
     else:
-        # 路径 A 请求级模型：context.model_id（目录行 id）优先，其次
-        # 请求 model / 会话 model 名匹配本租户启用 chat 行；皆无 → 目录默认
-        model_row_id = _context_int(context, "model_id")
-        if model_row_id is None:
-            model_row_id = await _match_catalog_model_id(tenant_id, model or "")
-        if model_row_id is None and session is not None:
-            model_row_id = await _match_catalog_model_id(
-                tenant_id, session.model or ""
-            )
+        # 路径 A 使用应用连接器的对话选用连接，不读请求级模型。
+        model_row_id = None
     catalog_hit = (
         await _resolve_catalog_source(tenant_id, model_row_id, "chat")
         is not None
@@ -827,7 +846,7 @@ async def create_chat_completion(
         # KR-F3：选中档案忽略请求级模型覆盖，只用档案 default_model_id
         model_name = (assembled.model_name or "").strip()
         if not model_name:
-            raise ValidationError("未解析到可用对话模型，请检查模型目录配置")
+            raise ValidationError("未解析到可用对话模型，请在应用连接器中选用一条对话连接")
     else:
         chat = await build_chat_model(tenant_id, model_row_id)
         model_name = str(getattr(chat, "model_name", None) or "").strip()

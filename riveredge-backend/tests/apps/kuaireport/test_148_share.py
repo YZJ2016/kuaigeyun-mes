@@ -170,7 +170,12 @@ async def test_save_dashboard_widgets_and_logged_in_preview_skips_share_path():
     assert preview.status_code == 200
     body = preview.json()
     assert "shared" not in preview.request.url.path
-    assert set(seen) == {(TENANT, index) for index in range(1, 4)}
+    data_ids = {
+        index
+        for index, widget_type in enumerate(share.WIDGET_TYPES, start=1)
+        if widget_type in share.DATA_WIDGET_TYPES
+    }
+    assert set(seen) == {(TENANT, source_id) for source_id in data_ids}
     metric = next(item for item in body["widgets_config"] if item["type"] == "metric")
     assert metric["result"]["data"] == [{"v": 1}]
     assert metric["result"]["total"] == 1
@@ -727,6 +732,34 @@ async def test_dashboard_list_endpoint_returns_tenant_summary():
 
 
 @pytest.mark.asyncio
+async def test_delete_dashboard_removes_only_the_current_tenant_row(monkeypatch):
+    async def _no_menu(*_args, **_kwargs):
+        return {"mounted": False, "menu_uuid": None, "menu_name": None, "parent_uuid": None}
+
+    monkeypatch.setattr(share, "clear_dashboard_mount", _no_menu)
+    store = share.MemoryShareStore()
+    service = _service(store)
+    saved = await _save_dashboard(service, store)
+    other = share.DashboardRecord(
+        id=999, uuid="d-999", tenant_id=TENANT + 1, code="other", name="别租户"
+    )
+    store.dashboards[other.id] = other
+    client = _client(service)
+
+    missing = client.delete("/api/v1/apps/kuaireport/dashboards/404")
+    assert missing.status_code == 404
+
+    removed = client.delete(f"/api/v1/apps/kuaireport/dashboards/{saved['id']}")
+    assert removed.status_code == 200
+    assert removed.json() == {"deleted": True}
+    assert saved["id"] not in store.dashboards
+    assert store.dashboards[other.id].name == "别租户"
+
+    listed = client.get("/api/v1/apps/kuaireport/dashboards")
+    assert listed.json() == []
+
+
+@pytest.mark.asyncio
 async def test_decorative_widgets_source_optional_but_must_be_registered():
     store = share.MemoryShareStore()
     store.data_source_ids = {1, 2, 3}
@@ -783,6 +816,40 @@ async def test_decorative_widgets_source_optional_but_must_be_registered():
             ],
             **base,
         )
+
+
+@pytest.mark.asyncio
+async def test_manual_data_widget_preview_skips_source():
+    store = share.MemoryShareStore()
+    seen = []
+
+    async def source(tenant_id, data_source_id):
+        seen.append(data_source_id)
+        return {"data": [], "total": 0, "summary": {}}
+
+    service = _service(store, execute_source=source)
+    saved = await service.save_dashboard(
+        tenant_id=TENANT,
+        dashboard_id=None,
+        code="board-manual",
+        name="手动看板",
+        layout_config={"mode": "canvas", "compose": "flow"},
+        widgets_config=[
+            {
+                "type": "metric",
+                "refresh_seconds": 30,
+                "title": "当日产量",
+                "options": {"valueSource": "manual", "value": "1,280"},
+            }
+        ],
+        theme_config={},
+        tv_config={},
+    )
+    assert "data_source_id" not in saved["widgets_config"][0]
+    preview = await service.preview_dashboard(tenant_id=TENANT, dashboard_id=saved["id"])
+    assert preview["widgets_config"][0]["options"]["value"] == "1,280"
+    assert "result" not in preview["widgets_config"][0]
+    assert seen == []
 
 
 def test_create_dashboard_code_conflict_returns_4xx():
@@ -842,3 +909,31 @@ def test_forwarded_headers_only_trusted_with_configured_proxies(monkeypatch):
     assert client_ip_mod.request_is_https(https_via_proxy) is False
     direct_https = _fake_request({}, client_host="9.9.9.9", scheme="https")
     assert client_ip_mod.request_is_https(direct_https) is True
+
+
+def test_public_link_opens_without_password_and_missing_hash_stays_denied():
+    ok, reason = share.evaluate_share(
+        is_shared=True,
+        share_expires_at=LATER,
+        share_password_hash=share.PUBLIC_LINK_MARKER,
+        share_allow_ip_cidrs=[],
+        password=None,
+        client_ip="10.1.2.3",
+        now=NOW,
+        unlock_ok=False,
+    )
+    assert ok is True
+    assert reason == share.DETAIL_OK
+
+    denied, denied_reason = share.evaluate_share(
+        is_shared=True,
+        share_expires_at=LATER,
+        share_password_hash=None,
+        share_allow_ip_cidrs=[],
+        password=None,
+        client_ip="10.1.2.3",
+        now=NOW,
+        unlock_ok=False,
+    )
+    assert denied is False
+    assert denied_reason == share.DETAIL_MISSING_HASH

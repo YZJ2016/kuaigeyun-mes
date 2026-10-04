@@ -2,8 +2,9 @@
  * KU-AI 全宽对话页消息列表。
  *
  * 渲染 user / assistant / tool 三角色：
- * - assistant 行带 tool_calls 时渲染工具调用块（工具名 + 参数摘要），
- *   并按 tool_call_id 匹配对应 role=tool 行展示工具名 + 结果文本（可折叠）；
+ * - 同一条用户消息后的多轮工具调用收进正式回答下面的「推理过程」；
+ * - 带 tool_calls 的 assistant 行只展示工具卡，不展示其 content（调用前的中间说明）；
+ * - 推理过程里的工具结果仍可展开；
  * - 已被 assistant.tool_calls 认领的 tool 行不再单独渲染；
  * - 纯文本 assistant 走 Markdown（复用 AiAssistantMarkdown，只读引用）。
  */
@@ -14,12 +15,15 @@ import { RobotOutlined, ToolOutlined, UserOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import AiAssistantMarkdown from '../../../../components/ai-assistant/AiAssistantMarkdown';
 import { stripAssistantThinkContent } from '../../../../services/deepseekChat';
-import type { ChatMessageOut, ChatToolCall } from '../../services/chatApi';
+import type { ChatMessageOut, ChatToolCall, LiveReasoningStep } from '../../services/chatApi';
 
 /** 本地发送中的一轮对话（流式累积态，流结束重拉服务端消息后移除） */
 export interface PendingExchange {
   user: string;
+  /** 正式回答。有工具时不含工具调用前的中间说明。 */
   assistant: string;
+  /** 正式回答下面的工具调用。中间说明不放这里。 */
+  reasoning?: LiveReasoningStep[];
   error?: string;
   /** 归属会话；仅当与当前选中会话一致时才渲染（发送中切换会话不串场） */
   sessionId?: number | null;
@@ -74,13 +78,16 @@ function normalizeToolCall(call: ChatToolCall): NormalizedToolCall {
 interface ToolCallCardProps {
   call: NormalizedToolCall;
   result?: ChatMessageOut;
+  /** 流式阶段还没有落库结果时，用工具帧里的短摘要 */
+  resultText?: string;
 }
 
-const ToolCallCard: React.FC<ToolCallCardProps> = ({ call, result }) => {
+const ToolCallCard: React.FC<ToolCallCardProps> = ({ call, result, resultText }) => {
   const { t } = useTranslation();
   const label = t(`app.kuaiai.chat.tools.${call.name}`, {
     defaultValue: TOOL_NAME_LABELS[call.name] || call.name || '工具调用',
   });
+  const body = result?.content || resultText || '';
   return (
     <div className="kuaiai-tool-call">
       <div className="kuaiai-tool-call-head">
@@ -92,7 +99,7 @@ const ToolCallCard: React.FC<ToolCallCardProps> = ({ call, result }) => {
           </Typography.Text>
         ) : null}
       </div>
-      {result ? (
+      {body ? (
         <Collapse
           ghost
           size="small"
@@ -102,11 +109,9 @@ const ToolCallCard: React.FC<ToolCallCardProps> = ({ call, result }) => {
               key: 'result',
               label: t('app.kuaiai.chat.toolResult', {
                 defaultValue: '工具结果：{{name}}',
-                name: result.tool_name || call.name || '',
+                name: result?.tool_name || call.name || '',
               }),
-              children: (
-                <pre className="kuaiai-tool-result-body">{result.content || ''}</pre>
-              ),
+              children: <pre className="kuaiai-tool-result-body">{body}</pre>,
             },
           ]}
         />
@@ -114,6 +119,71 @@ const ToolCallCard: React.FC<ToolCallCardProps> = ({ call, result }) => {
     </div>
   );
 };
+
+function hasToolCalls(message: ChatMessageOut): boolean {
+  return message.role === 'assistant' && Array.isArray(message.tool_calls) && message.tool_calls.length > 0;
+}
+
+interface AssistantTurn {
+  key: string;
+  answer: ChatMessageOut | null;
+  /** 正式回答以外的 assistant 行（带工具调用的中间轮次），按发生序 */
+  steps: ChatMessageOut[];
+}
+
+/**
+ * 同一条用户消息之后、下一条用户消息之前：
+ * 最后一条不带工具调用的 assistant 是正式回答，其余 assistant 归入推理过程。
+ */
+function buildAssistantTurns(messages: ChatMessageOut[]): Array<
+  | { kind: 'user'; message: ChatMessageOut }
+  | { kind: 'turn'; turn: AssistantTurn }
+  | { kind: 'tool'; message: ChatMessageOut }
+> {
+  const blocks: Array<
+    | { kind: 'user'; message: ChatMessageOut }
+    | { kind: 'turn'; turn: AssistantTurn }
+    | { kind: 'tool'; message: ChatMessageOut }
+  > = [];
+  let index = 0;
+  while (index < messages.length) {
+    const current = messages[index];
+    if (current.role === 'user') {
+      blocks.push({ kind: 'user', message: current });
+      index += 1;
+      continue;
+    }
+    const start = index;
+    while (index < messages.length && messages[index].role !== 'user') index += 1;
+    const run = messages.slice(start, index);
+    const assistants = run.filter((row) => row.role === 'assistant');
+    let answer: ChatMessageOut | null = null;
+    for (let cursor = assistants.length - 1; cursor >= 0; cursor -= 1) {
+      if (!hasToolCalls(assistants[cursor])) {
+        answer = assistants[cursor];
+        break;
+      }
+    }
+    const steps = assistants.filter((row) => row !== answer);
+    if (answer || steps.length > 0) {
+      const head = answer ?? steps[0];
+      blocks.push({ kind: 'turn', turn: { key: `turn-${head.id}`, answer, steps } });
+    }
+    const claimed = new Set<string>();
+    assistants.forEach((row) => {
+      if (!Array.isArray(row.tool_calls)) return;
+      row.tool_calls.forEach((call) => {
+        if (call?.id) claimed.add(String(call.id));
+      });
+    });
+    run.forEach((row) => {
+      if (row.role !== 'tool') return;
+      if (row.tool_call_id && claimed.has(String(row.tool_call_id))) return;
+      blocks.push({ kind: 'tool', message: row });
+    });
+  }
+  return blocks;
+}
 
 interface ChatMessageListProps {
   messages: ChatMessageOut[];
@@ -135,50 +205,58 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, pending, lo
     return map;
   }, [messages]);
 
-  /** 被 assistant.tool_calls 认领的 tool_call_id 集合（其 tool 行不单独渲染） */
-  const claimedToolCallIds = useMemo(() => {
-    const set = new Set<string>();
-    messages.forEach((m) => {
-      if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
-        m.tool_calls.forEach((call) => {
-          const id = call?.id ? String(call.id) : '';
-          if (id) set.add(id);
-        });
-      }
-    });
-    return set;
-  }, [messages]);
+  const blocks = useMemo(() => buildAssistantTurns(messages), [messages]);
 
-  const renderAssistant = (m: ChatMessageOut) => {
-    const calls = Array.isArray(m.tool_calls) ? m.tool_calls.map(normalizeToolCall) : [];
-    const text = stripAssistantThinkContent(m.content || '');
+  const renderStep = (step: ChatMessageOut) => {
+    const calls = Array.isArray(step.tool_calls) ? step.tool_calls.map(normalizeToolCall) : [];
+    // 带工具调用的行：content 是调用前的中间说明，不当回答展示。工具卡保留。
+    const prose = hasToolCalls(step) ? '' : stripAssistantThinkContent(step.content || '');
     return (
-      <div key={m.id} className="kuaiai-msg kuaiai-msg--assistant">
-        <div className="kuaiai-msg-avatar">
-          <RobotOutlined />
-        </div>
-        <div className="kuaiai-msg-body">
-          {calls.map((call, idx) => (
-            <ToolCallCard
-              key={call.id || idx}
-              call={call}
-              result={call.id ? toolResultMap.get(call.id) : undefined}
-            />
-          ))}
-          {text ? (
-            <div className="kuaiai-msg-bubble kuaiai-msg-bubble--assistant">
-              <AiAssistantMarkdown content={text} />
-            </div>
-          ) : null}
-          {!text && calls.length === 0 ? (
-            <div className="kuaiai-msg-bubble kuaiai-msg-bubble--assistant kuaiai-msg-bubble--empty">
-              <Typography.Text type="secondary">…</Typography.Text>
-            </div>
-          ) : null}
-        </div>
+      <div key={step.id} className="kuaiai-reasoning-step">
+        {calls.map((call, idx) => (
+          <ToolCallCard
+            key={call.id || idx}
+            call={call}
+            result={call.id ? toolResultMap.get(call.id) : undefined}
+          />
+        ))}
+        {prose ? <div className="kuaiai-reasoning-text">{prose}</div> : null}
       </div>
     );
   };
+
+  const renderLiveReasoning = (steps: LiveReasoningStep[]) => (
+    <div className="kuaiai-reasoning-steps">
+      {steps.map((step, idx) => (
+        <div key={idx} className="kuaiai-reasoning-step">
+          <ToolCallCard
+            call={{
+              id: '',
+              name: step.tool.name,
+              argsSummary: step.tool.argsSummary || '',
+            }}
+            resultText={step.tool.resultSummary}
+          />
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderReasoning = (steps: ChatMessageOut[]) => (
+    <Collapse
+      ghost
+      size="small"
+      className="kuaiai-reasoning"
+      defaultActiveKey={['reasoning']}
+      items={[
+        {
+          key: 'reasoning',
+          label: t('app.kuaiai.chat.reasoning', { defaultValue: '推理过程' }),
+          children: <div className="kuaiai-reasoning-steps">{steps.map(renderStep)}</div>,
+        },
+      ]}
+    />
+  );
 
   const renderTool = (m: ChatMessageOut) => (
     // 未被认领的孤儿 tool 行（窗口截断/脏数据）也兜底展示
@@ -206,10 +284,35 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, pending, lo
     </div>
   );
 
+  const renderTurn = (turn: AssistantTurn) => {
+    const answerText = stripAssistantThinkContent(turn.answer?.content || '');
+    return (
+      <div key={turn.key} className="kuaiai-msg kuaiai-msg--assistant">
+        <div className="kuaiai-msg-avatar">
+          <RobotOutlined />
+        </div>
+        <div className="kuaiai-msg-body">
+          {answerText ? (
+            <div className="kuaiai-msg-bubble kuaiai-msg-bubble--assistant">
+              <AiAssistantMarkdown content={answerText} />
+            </div>
+          ) : null}
+          {turn.steps.length > 0 ? renderReasoning(turn.steps) : null}
+          {!answerText && turn.steps.length === 0 ? (
+            <div className="kuaiai-msg-bubble kuaiai-msg-bubble--assistant kuaiai-msg-bubble--empty">
+              <Typography.Text type="secondary">…</Typography.Text>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="kuaiai-chat-messages">
-      {messages.map((m) => {
-        if (m.role === 'user') {
+      {blocks.map((block) => {
+        if (block.kind === 'user') {
+          const m = block.message;
           return (
             <div key={m.id} className="kuaiai-msg kuaiai-msg--user">
               <div className="kuaiai-msg-body">
@@ -221,13 +324,8 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, pending, lo
             </div>
           );
         }
-        if (m.role === 'tool') {
-          if (m.tool_call_id && claimedToolCallIds.has(String(m.tool_call_id))) {
-            return null;
-          }
-          return renderTool(m);
-        }
-        return renderAssistant(m);
+        if (block.kind === 'tool') return renderTool(block.message);
+        return renderTurn(block.turn);
       })}
 
       {pending ? (
@@ -258,6 +356,21 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, pending, lo
                   </span>
                 )}
               </div>
+              {pending.reasoning && pending.reasoning.length > 0 ? (
+                <Collapse
+                  ghost
+                  size="small"
+                  className="kuaiai-reasoning"
+                  defaultActiveKey={['reasoning']}
+                  items={[
+                    {
+                      key: 'reasoning',
+                      label: t('app.kuaiai.chat.reasoning', { defaultValue: '推理过程' }),
+                      children: renderLiveReasoning(pending.reasoning),
+                    },
+                  ]}
+                />
+              ) : null}
             </div>
           </div>
         </>

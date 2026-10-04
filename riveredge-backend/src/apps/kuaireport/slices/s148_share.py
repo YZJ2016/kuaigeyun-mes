@@ -38,8 +38,14 @@ WIDGET_TYPES = (
     "image",
     "video",
     "web",
+    "columns",
+    "text",
+    "fullscreen",
+    "marquee",
+    "card_list",
+    "resource_list",
 )
-DATA_WIDGET_TYPES = frozenset({"metric", "table", "chart"})
+DATA_WIDGET_TYPES = frozenset({"metric", "table", "chart", "card_list", "resource_list"})
 SYSTEM_REPORT_CODES = frozenset(
     {
         "inv_ledger",
@@ -69,6 +75,9 @@ MAX_SHARE_CIDR_ENTRIES = 50
 SHARED_REPORT_MAX_LIMIT = 500
 
 DETAIL_OK = "ok"
+# 报表中心「分享」生成的免登录链接。不是口令哈希；空哈希仍拒绝。
+PUBLIC_LINK_MARKER = "public-link"
+PUBLIC_LINK_DAYS = 30
 DETAIL_NOT_SHARED = "not_shared"
 DETAIL_MISSING_HASH = "missing_password_hash"
 DETAIL_MISSING_EXPIRY = "missing_expiry"
@@ -173,21 +182,23 @@ def evaluate_share(
     """顺序：已分享、哈希已存在、未过期、口令匹配、白名单（非空才查）。"""
     if not is_shared:
         return False, DETAIL_NOT_SHARED
-    if not (share_password_hash or "").strip():
+    public_link = share_password_hash == PUBLIC_LINK_MARKER
+    if not public_link and not (share_password_hash or "").strip():
         return False, DETAIL_MISSING_HASH
     if share_expires_at is None:
         return False, DETAIL_MISSING_EXPIRY
     if as_utc(now) >= as_utc(share_expires_at):
         return False, DETAIL_EXPIRED
-    if password:
-        try:
-            matched = verify_password(password, share_password_hash or "")
-        except Exception:
-            matched = False
-        if not matched:
-            return False, DETAIL_PASSWORD
-    elif not unlock_ok:
-        return False, DETAIL_PASSWORD_REQUIRED
+    if not public_link:
+        if password:
+            try:
+                matched = verify_password(password, share_password_hash or "")
+            except Exception:
+                matched = False
+            if not matched:
+                return False, DETAIL_PASSWORD
+        elif not unlock_ok:
+            return False, DETAIL_PASSWORD_REQUIRED
     if not ip_allowed(client_ip, share_allow_ip_cidrs):
         return False, DETAIL_IP
     return True, DETAIL_OK
@@ -202,7 +213,7 @@ def _as_object(value: Any, name: str) -> Optional[dict]:
 
 
 def validate_widgets(widgets: Any) -> list[dict]:
-    """数据组件必绑一个 data_source_id；装饰组件可省。每组件至多一个数据源。"""
+    """数据集组件必绑一个 data_source_id。取值来源为手动时可省。装饰组件可省。每组件至多一个数据源。"""
     if widgets is None:
         return []
     if not isinstance(widgets, list):
@@ -222,7 +233,9 @@ def validate_widgets(widgets: Any) -> list[dict]:
         if widget_type not in WIDGET_TYPES:
             raise ValueError("unknown widget type")
         source_id = widget.get("data_source_id")
-        if widget_type in DATA_WIDGET_TYPES and source_id is None:
+        options = widget.get("options")
+        manual = isinstance(options, dict) and options.get("valueSource") == "manual"
+        if widget_type in DATA_WIDGET_TYPES and source_id is None and not manual:
             raise ValueError("widget requires one data source")
         if source_id is not None and (
             isinstance(source_id, bool) or not isinstance(source_id, int)
@@ -543,6 +556,13 @@ class MemoryShareStore:
         self.dashboards[row.id] = row
         return row
 
+    async def delete_dashboard(self, *, tenant_id: int, dashboard_id: int) -> bool:
+        row = self.dashboards.get(dashboard_id)
+        if row is None or row.tenant_id != tenant_id:
+            return False
+        del self.dashboards[dashboard_id]
+        return True
+
     async def list_dashboards(self, tenant_id: int) -> list[dict]:
         rows = [row for row in self.dashboards.values() if row.tenant_id == tenant_id]
         rows.sort(
@@ -833,6 +853,34 @@ class SqlShareStore:
             }
             for row in rows
         ]
+
+    async def delete_dashboard(self, *, tenant_id: int, dashboard_id: int) -> bool:
+        conn = await self._connection()
+        await conn.execute_query_dict(
+            """
+            DELETE FROM apps_kuaireport_dashboard_versions
+            WHERE tenant_id = $1 AND dashboard_id = $2
+            RETURNING id
+            """,
+            [tenant_id, dashboard_id],
+        )
+        await conn.execute_query_dict(
+            """
+            DELETE FROM apps_kuaireport_share_grants
+            WHERE tenant_id = $1 AND resource_type = $2 AND resource_id = $3
+            RETURNING id
+            """,
+            [tenant_id, "dashboard", dashboard_id],
+        )
+        rows = await conn.execute_query_dict(
+            """
+            DELETE FROM apps_kuaireport_dashboards
+            WHERE id = $1 AND tenant_id = $2
+            RETURNING id
+            """,
+            [dashboard_id, tenant_id],
+        )
+        return bool(rows)
 
     async def update_dashboard(
         self,
@@ -1241,6 +1289,13 @@ class ShareService:
             row = await _persist(None)
         return self._dashboard_public(row)
 
+    async def delete_dashboard(self, *, tenant_id: int, dashboard_id: int) -> None:
+        deleted = await self.store.delete_dashboard(
+            tenant_id=tenant_id, dashboard_id=dashboard_id
+        )
+        if not deleted:
+            raise LookupError("dashboard not found")
+
     async def preview_dashboard(
         self,
         *,
@@ -1310,6 +1365,26 @@ class ShareService:
             share_expires_at=expires,
             share_password_hash=hashed,
             share_allow_ip_cidrs=allow,
+        )
+        if row is None:
+            raise LookupError("report not found")
+        return {
+            "is_shared": True,
+            "share_path": f"/apps/kuaireport/reports/shared?token={token}",
+            "expires_at": expires.isoformat(),
+        }
+
+    async def enable_report_public_link(self, *, tenant_id: int, report_id: int) -> dict:
+        """报表中心「分享」：免登录链接，不设口令。30 天后过期。"""
+        expires = self.now() + timedelta(days=PUBLIC_LINK_DAYS)
+        token = self._new_token()
+        row = await self.store.set_report_share(
+            tenant_id=tenant_id,
+            report_id=report_id,
+            share_token=token,
+            share_expires_at=expires,
+            share_password_hash=PUBLIC_LINK_MARKER,
+            share_allow_ip_cidrs=[],
         )
         if row is None:
             raise LookupError("report not found")
@@ -1567,8 +1642,9 @@ class ShareService:
         rendered = []
         for widget in row.widgets_config or []:
             item = dict(widget)
-            if widget.get("type") in DATA_WIDGET_TYPES:
-                raw = await execute_source(row.tenant_id, int(widget["data_source_id"]))
+            source_id = widget.get("data_source_id")
+            if widget.get("type") in DATA_WIDGET_TYPES and isinstance(source_id, int):
+                raw = await execute_source(row.tenant_id, source_id)
                 item["result"] = project_widget_field(widget, _shape_result(raw))
             rendered.append(item)
         return {
@@ -1688,6 +1764,112 @@ DASHBOARD_DISPLAY_DEP = require_permission_codes(PERM_DASHBOARD_DISPLAY)
 SHARE_MANAGE_DEP = require_permission_codes(PERM_SHARE_MANAGE)
 
 
+def dashboard_menu_path(dashboard_id: int) -> str:
+    return f"/apps/kuaireport/dashboards/{int(dashboard_id)}/preview"
+
+
+async def _menu_by_path(tenant_id: int, path: str):
+    from core.models.menu import Menu
+
+    return await Menu.filter(
+        tenant_id=tenant_id,
+        path=path,
+        deleted_at__isnull=True,
+    ).first()
+
+
+async def _parent_uuid_of(menu) -> str | None:
+    from core.models.menu import Menu
+
+    if menu is None or not menu.parent_id:
+        return None
+    parent = await Menu.get_or_none(id=menu.parent_id, deleted_at__isnull=True)
+    if parent is None:
+        return None
+    return str(parent.uuid)
+
+
+def _mount_payload(menu, parent_uuid: str | None) -> dict[str, Any]:
+    if menu is None:
+        return {"mounted": False, "menu_uuid": None, "menu_name": None, "parent_uuid": None}
+    return {
+        "mounted": True,
+        "menu_uuid": str(menu.uuid),
+        "menu_name": menu.name,
+        "parent_uuid": parent_uuid,
+    }
+
+
+async def get_dashboard_mount(
+    service: ShareService, tenant_id: int, dashboard_id: int
+) -> dict[str, Any]:
+    row = await service.store.get_dashboard(tenant_id, dashboard_id)
+    if row is None:
+        raise LookupError("dashboard not found")
+    menu = await _menu_by_path(tenant_id, dashboard_menu_path(dashboard_id))
+    return _mount_payload(menu, await _parent_uuid_of(menu))
+
+
+async def mount_dashboard(
+    service: ShareService,
+    tenant_id: int,
+    dashboard_id: int,
+    parent_uuid: str,
+    menu_name: str,
+) -> dict[str, Any]:
+    """把大屏挂到应用菜单下。系统菜单（没有 application_uuid）不可作为父级。"""
+    from core.models.menu import Menu
+    from core.schemas.menu import MenuCreate, MenuUpdate
+    from core.services.system.menu_service import MenuService
+
+    row = await service.store.get_dashboard(tenant_id, dashboard_id)
+    if row is None:
+        raise LookupError("dashboard not found")
+    parent = await Menu.filter(
+        uuid=parent_uuid,
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    ).first()
+    if parent is None:
+        raise ValueError("父菜单不存在或不属于当前组织")
+    if not (parent.application_uuid or "").strip():
+        raise ValueError("系统菜单不可选")
+    name = menu_name.strip()
+    if not name:
+        raise ValueError("请填写菜单名称")
+    path = dashboard_menu_path(dashboard_id)
+    existing = await _menu_by_path(tenant_id, path)
+    if existing is None:
+        await MenuService.create_menu(
+            tenant_id,
+            MenuCreate(
+                name=name,
+                path=path,
+                icon="barChart",
+                parent_uuid=str(parent.uuid),
+                permission_code=PERM_DASHBOARD_DISPLAY,
+                sort_order=100,
+            ),
+        )
+    else:
+        await MenuService.update_menu(
+            tenant_id,
+            str(existing.uuid),
+            MenuUpdate(name=name, parent_uuid=str(parent.uuid)),
+        )
+    menu = await _menu_by_path(tenant_id, path)
+    return _mount_payload(menu, await _parent_uuid_of(menu))
+
+
+async def clear_dashboard_mount(tenant_id: int, dashboard_id: int) -> dict[str, Any]:
+    from core.services.system.menu_service import MenuService
+
+    menu = await _menu_by_path(tenant_id, dashboard_menu_path(dashboard_id))
+    if menu is not None:
+        await MenuService.delete_menu(tenant_id, str(menu.uuid))
+    return {"mounted": False, "menu_uuid": None, "menu_name": None, "parent_uuid": None}
+
+
 def create_router(service: ShareService) -> APIRouter:
     router = APIRouter(tags=["kuaireport-148"])
 
@@ -1742,6 +1924,74 @@ def create_router(service: ShareService) -> APIRouter:
             raise HTTPException(status_code=404, detail="dashboard not found") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.delete(
+        "/dashboards/{dashboard_id}",
+        dependencies=[Depends(DASHBOARD_DESIGN_DEP)],
+    )
+    async def delete_dashboard(
+        dashboard_id: int,
+        user: Any = Depends(get_current_user),
+    ):
+        try:
+            await service.delete_dashboard(
+                tenant_id=_tenant_of(user), dashboard_id=dashboard_id
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="dashboard not found") from exc
+        await clear_dashboard_mount(_tenant_of(user), dashboard_id)
+        return {"deleted": True}
+
+    @router.get(
+        "/dashboards/{dashboard_id}/mount",
+        dependencies=[Depends(DASHBOARD_DISPLAY_DEP)],
+    )
+    async def get_dashboard_mount_endpoint(
+        dashboard_id: int,
+        user: Any = Depends(get_current_user),
+    ):
+        try:
+            return await get_dashboard_mount(service, _tenant_of(user), dashboard_id)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="dashboard not found") from exc
+
+    @router.post(
+        "/dashboards/{dashboard_id}/mount",
+        dependencies=[Depends(DASHBOARD_DISPLAY_DEP)],
+    )
+    async def mount_dashboard_endpoint(
+        dashboard_id: int,
+        request: Request,
+        user: Any = Depends(get_current_user),
+    ):
+        body = await _read_json(request)
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=400, detail="invalid body")
+        try:
+            return await mount_dashboard(
+                service,
+                _tenant_of(user),
+                dashboard_id,
+                str(body.get("parent_uuid") or ""),
+                str(body.get("menu_name") or ""),
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="dashboard not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.delete(
+        "/dashboards/{dashboard_id}/mount",
+        dependencies=[Depends(DASHBOARD_DISPLAY_DEP)],
+    )
+    async def clear_dashboard_mount_endpoint(
+        dashboard_id: int,
+        user: Any = Depends(get_current_user),
+    ):
+        row = await service.store.get_dashboard(_tenant_of(user), dashboard_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="dashboard not found")
+        return await clear_dashboard_mount(_tenant_of(user), dashboard_id)
 
     @router.get("/dashboards", dependencies=[Depends(DASHBOARD_DISPLAY_DEP)])
     async def list_dashboards_endpoint(user: Any = Depends(get_current_user)):
@@ -1817,6 +2067,22 @@ def create_router(service: ShareService) -> APIRouter:
             raise HTTPException(status_code=404, detail="report not found") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post(
+        "/reports/{report_id}/public-link",
+        dependencies=[Depends(require_permission_codes("kuaireport:report:display"))],
+    )
+    async def share_report_public_link(
+        report_id: int,
+        user: Any = Depends(get_current_user),
+    ):
+        try:
+            return await service.enable_report_public_link(
+                tenant_id=_tenant_of(user),
+                report_id=report_id,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="report not found") from exc
 
     @router.delete(
         "/dashboards/{dashboard_id}/share",

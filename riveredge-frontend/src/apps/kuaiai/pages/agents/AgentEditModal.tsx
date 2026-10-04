@@ -16,7 +16,6 @@ import {
   updateAgent,
   type AgentProfileOut,
 } from '../../services/agents';
-import { listModelOptions } from '../../services/models';
 import { listKnowledgeBaseOptions } from '../../services/knowledge';
 import { listMcpServerOptions } from '../../services/mcp';
 import {
@@ -57,13 +56,6 @@ export function AgentEditModal({ open, agent, onCancel, onSaved }: AgentEditModa
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
 
-  // 各 options 端点分别要求 model/knowledge/mcp:query；无权限不打 403，对应下拉留空
-  const { data: chatModelOptions } = useQuery({
-    queryKey: KUAI_AI_OPTION_KEYS.chatModels,
-    queryFn: () => listModelOptions('chat'),
-    enabled: open && hasPermission(currentUser, 'kuaiai:model:read'),
-    staleTime: 60_000,
-  });
   const { data: knowledgeOptions } = useQuery({
     queryKey: KUAI_AI_OPTION_KEYS.knowledgeBases,
     queryFn: listKnowledgeBaseOptions,
@@ -84,7 +76,6 @@ export function AgentEditModal({ open, agent, onCancel, onSaved }: AgentEditModa
         name: agent.name,
         description: agent.description ?? undefined,
         system_prompt: agent.system_prompt ?? undefined,
-        default_model_id: agent.default_model_id ?? undefined,
         knowledge_ids: agent.knowledge_ids ?? [],
         enabled_tools: agent.enabled_tools ?? [],
         mcp_server_ids: agent.mcp_server_ids ?? [],
@@ -111,19 +102,10 @@ export function AgentEditModal({ open, agent, onCancel, onSaved }: AgentEditModa
         grant_mode: values.grant_mode,
       };
       if (agent) {
-        // 编辑：清空默认模型须显式传 null（省略表示不动）
-        await updateAgent(agent.id, {
-          ...base,
-          default_model_id: values.default_model_id ?? null,
-        });
+        await updateAgent(agent.id, base);
         message.success(t('app.kuaiai.agents.editSuccess', { defaultValue: '档案已更新' }));
       } else {
-        await createAgent({
-          ...base,
-          ...(values.default_model_id != null
-            ? { default_model_id: values.default_model_id }
-            : {}),
-        });
+        await createAgent(base);
         message.success(
           t('app.kuaiai.agents.createSuccess', { defaultValue: '档案已创建' }),
         );
@@ -189,23 +171,6 @@ export function AgentEditModal({ open, agent, onCancel, onSaved }: AgentEditModa
           label={t('app.kuaiai.agents.fieldSystemPrompt', { defaultValue: '系统提示词' })}
         >
           <Input.TextArea rows={4} />
-        </Form.Item>
-        <Form.Item
-          name="default_model_id"
-          label={t('app.kuaiai.agents.fieldDefaultModel', { defaultValue: '默认模型' })}
-        >
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder={t('app.kuaiai.agents.defaultModelPlaceholder', {
-              defaultValue: '选择 chat 类型启用模型',
-            })}
-            options={(chatModelOptions ?? []).map((o) => ({
-              value: o.id,
-              label: o.provider_name ? `${o.provider_name} / ${o.model_name}` : o.model_name,
-            }))}
-          />
         </Form.Item>
         <Form.Item
           name="knowledge_ids"

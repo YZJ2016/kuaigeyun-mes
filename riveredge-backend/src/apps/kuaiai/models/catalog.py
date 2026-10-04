@@ -3,7 +3,7 @@
 - KuaiaiLlmProvider：厂商目录（base_url + api_key；provider_type 仅作模板标签，
   非闭集枚举、不得挡自定义保存；api_key 只写、出参打码，不回明文）
 - KuaiaiLlmModel：模型目录（挂 provider_id；model_name 自由填；
-  model_type 闭集 chat|embed|vision）
+  model_type 闭集 chat|embed|vision|rerank）
 
 消费方一律经 core/ai/runtime/model_factory 解析（目录行优先，IntegrationConfig
 单活连接兜底）；运行时只用 base_url + api_key + model_name，无厂商分支。
@@ -70,7 +70,7 @@ class KuaiaiLlmModel(BaseModel):
     tenant_id = fields.IntField(description="组织 ID")
     provider_id = fields.IntField(description="所属厂商目录行 ID（apps_kuaiai_llm_providers.id）")
     model_name = fields.CharField(max_length=200, description="模型名（自由填，上游 model 参数）")
-    model_type = fields.CharField(max_length=20, description="chat|embed|vision")
+    model_type = fields.CharField(max_length=20, description="chat|embed|vision|rerank")
     status = fields.CharField(max_length=20, default="启用", description="启用|停用")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

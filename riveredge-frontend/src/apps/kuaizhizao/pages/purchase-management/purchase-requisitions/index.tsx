@@ -2340,7 +2340,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
               disabledReason={toolbarPushDisabledReason}
             />,
           ]}
-          enableRowSelection={true}
           showDeleteButton={true}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.purchaseRequisition.confirmBatchDelete', { count })}

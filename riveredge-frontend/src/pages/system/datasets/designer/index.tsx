@@ -102,20 +102,30 @@ const DatasetDesignerPage: React.FC = () => {
     return { sql: sqlText, parameters: params };
   };
 
+  const currentQueryConfig = () =>
+    editorTab === 'visual' ? { ...queryConfigForVisual } : buildQueryConfigFromForm();
+
+  const currentQueryType = () =>
+    dataset?.query_type === 'api' ? 'api' : statementKind === 'write' ? 'sql_write' : 'sql';
+
+  const persistQuery = async () => {
+    if (!uuid) return null;
+    const queryConfig = currentQueryConfig();
+    const saveQueryType = currentQueryType();
+    await updateDataset(uuid, {
+      query_type: saveQueryType,
+      query_config: queryConfig,
+    });
+    setDataset((prev) => (prev ? { ...prev, query_type: saveQueryType, query_config: queryConfig } : null));
+    return queryConfig;
+  };
+
   const handleSave = async () => {
     if (!uuid) return;
-    const queryConfig = editorTab === 'visual'
-      ? queryConfigForVisual
-      : buildQueryConfigFromForm();
-    const saveQueryType = dataset?.query_type === 'api' ? 'api' : statementKind === 'write' ? 'sql_write' : 'sql';
     try {
       setSaving(true);
-      await updateDataset(uuid, {
-        query_type: saveQueryType,
-        query_config: queryConfig,
-      });
+      await persistQuery();
       messageApi.success(t('common.saveSuccess'));
-      setDataset((prev) => (prev ? { ...prev, query_type: saveQueryType, query_config: queryConfig } : null));
     } catch (error: any) {
       messageApi.error(error?.message || t('common.saveFailed'));
     } finally {
@@ -125,15 +135,19 @@ const DatasetDesignerPage: React.FC = () => {
 
   const handleExecute = async () => {
     if (!uuid) return;
-    const draftQueryConfig =
-      editorTab === 'visual' ? { ...queryConfigForVisual } : buildQueryConfigFromForm();
+    const draftQueryConfig = currentQueryConfig();
+    if (currentQueryType() !== 'api' && !String(draftQueryConfig.sql || '').trim()) {
+      messageApi.error(t('pages.system.datasets.sqlRequired'));
+      return;
+    }
     try {
       setExecuting(true);
       setExecuteResult(null);
+      // 执行接口只认已保存的 SQL，不接受请求里替换语句。先把编辑器内容写入再执行。
+      await persistQuery();
       const result = await executeDatasetQuery(uuid, {
         limit: 100,
         offset: 0,
-        query_config: draftQueryConfig,
       });
       setExecuteResult(result);
       if (result.success) {

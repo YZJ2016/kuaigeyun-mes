@@ -3,14 +3,13 @@
  *
  * - 左侧会话列表：新建（POST 后选中）/ 行内重命名（PATCH title）/ 删除（DELETE 确认后）；
  *   选中会话加载 listChatMessages 渲染历史（含 tool 轨迹）。
- * - 右上：档案下拉（agents/options，allowClear）；无档案时显示 chat 模型下拉
- *   （llm-models/options?model_type=chat）；选中档案后隐藏模型下拉（不发模型覆盖）。
- * - 发送：无会话且有 session:create 时先 createChatSession（带当前 agent_id/模型名）→
+ * - 右上：档案下拉（agents/options，allowClear）。对话模型用应用连接器的对话选用连接。
+ * - 发送：无会话且有 session:create 时先 createChatSession（带当前档案）→
  *   再走 POST /core/ai/chat/completions（SSE）；无 session:create 不自动建会话。
  *   流式累积渲染，流结束重拉 messages 拿服务端落库的 tool/assistant 行。
  *   发送权限码 kuaiai:act:execute。
- * - 会话恢复（KR-F5）：历史会话 agent_id 不在当前 options → 清空选择且发送
- *   不带 agent_id；切会话先清 modelId，仅无档案时按 session.model 回显；不删消息。
+ * - 会话恢复：地址 `?session=` 选中会话。有 agent_id 且仍在 options 内则恢复档案。
+ *   失效档案只清本地选择，不删消息。
  * - 全宽页不传页上下文（screen/resource_key 等），不注册 useRegisterAiContext。
  */
 
@@ -37,22 +36,25 @@ import { Sender } from '@ant-design/x';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import { useSearchParams } from 'react-router-dom';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 import { hasPermission } from '../../../../utils/permission';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import {
   createChatSession,
   deleteChatSession,
+  getChatSession,
   listChatMessages,
   listChatSessions,
   sendChatMessage,
   updateChatSession,
   type ChatSessionOut,
+  type ChatSessionUpdatePayload,
 } from '../../services/chatApi';
 import { listAgentOptions } from '../../services/agents';
-import { listModelOptions } from '../../services/models';
 import { KUAI_AI_OPTION_KEYS } from '../../constants';
 import ChatMessageList, { type PendingExchange } from './MessageList';
+import { parseSessionQueryId, sessionSelectionPayload } from './sessionSelection';
 import './index.less';
 
 /** 每页条数（与后端 page_size 上限一致；首屏仍只拉第 1 页，更多靠「加载更多」） */
@@ -78,6 +80,7 @@ const KuaiaiChatPage: React.FC = () => {
   const { message: messageApi, modal } = App.useApp();
   const currentUser = useCurrentUser();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const canListSessions = hasPermission(currentUser, 'kuaiai:session:display');
   const canQuerySession = hasPermission(currentUser, 'kuaiai:session:read');
@@ -86,14 +89,17 @@ const KuaiaiChatPage: React.FC = () => {
   const canRemoveSession = hasPermission(currentUser, 'kuaiai:session:delete');
   const canSend = hasPermission(currentUser, 'kuaiai:act:execute');
 
-  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(() =>
+    parseSessionQueryId(searchParams.get('session')),
+  );
   const [agentId, setAgentId] = useState<number | undefined>(undefined);
-  const [modelId, setModelId] = useState<number | undefined>(undefined);
   const [senderValue, setSenderValue] = useState('');
   const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<PendingExchange | null>(null);
   const [renaming, setRenaming] = useState<{ id: number; title: string } | null>(null);
   const [sessions, setSessions] = useState<ChatSessionOut[]>([]);
+  // 不在已加载列表里、但 ?session= 指向的会话（例如不在第 1 页）
+  const [extraSession, setExtraSession] = useState<ChatSessionOut | null>(null);
   const [sessionsPage, setSessionsPage] = useState(1);
   const [sessionsTotal, setSessionsTotal] = useState<number | undefined>(undefined);
   const [sessionsHasMore, setSessionsHasMore] = useState(false);
@@ -104,6 +110,9 @@ const KuaiaiChatPage: React.FC = () => {
   const sendingRef = useRef(false);
   // 首屏 invalidate 时递增，丢弃进行中的「加载更多」结果，避免追加到已重置列表
   const sessionsListGenRef = useRef(0);
+  // 同一会话连续切换时只采纳最后一次 PATCH，避免慢响应把下拉写回去
+  const selectionWriteGenRef = useRef<Record<number, number>>({});
+  const sessionProbeRef = useRef<number | null>(null);
 
   // ---------------- 数据 ----------------
 
@@ -133,19 +142,20 @@ const KuaiaiChatPage: React.FC = () => {
   });
   const agentOptions = useMemo(() => agentOptionsQuery.data ?? [], [agentOptionsQuery.data]);
 
-  const modelOptionsQuery = useQuery({
-    queryKey: KUAI_AI_OPTION_KEYS.chatModels,
-    queryFn: () => listModelOptions('chat'),
-    // /llm-models/options 需 kuaiai:model:read
-    enabled: hasPermission(currentUser, 'kuaiai:model:read'),
-    retry: 1,
-  });
-  const modelOptions = useMemo(() => modelOptionsQuery.data ?? [], [modelOptionsQuery.data]);
+  const displaySessions = useMemo(() => {
+    if (extraSession && !sessions.some((s) => s.id === extraSession.id)) {
+      return [extraSession, ...sessions];
+    }
+    return sessions;
+  }, [extraSession, sessions]);
 
   const selectedSession = useMemo(
-    () => sessions.find((s) => s.id === selectedSessionId),
-    [sessions, selectedSessionId],
+    () => displaySessions.find((s) => s.id === selectedSessionId),
+    [displaySessions, selectedSessionId],
   );
+
+  const selectedInLoadedSessions =
+    selectedSessionId != null && sessions.some((s) => s.id === selectedSessionId);
 
   const messagesQuery = useQuery({
     queryKey: ['kuaiai', 'chat-messages', selectedSessionId],
@@ -154,35 +164,82 @@ const KuaiaiChatPage: React.FC = () => {
   });
   const messages = useMemo(() => messagesQuery.data ?? [], [messagesQuery.data]);
 
-  const selectedModelName = useMemo(
-    () => modelOptions.find((o) => o.id === modelId)?.model_name,
-    [modelOptions, modelId],
-  );
-
-  // ---------------- KR-F5 会话恢复 ----------------
-  // 选中会话的 agent_id 须在 options 内（有使用权且启用），否则清空且不带入 send；
-  // 不删消息、不改服务端会话。无档案会话尝试按 session.model 名回显模型下拉。
+  // ---------------- 会话与右上角恢复 ----------------
+  // 档案优先：agent_id 仍在 options 内则只恢复档案。否则按 #id: 或唯一模型名回显。
+  // 失效档案只清本地选择，不改服务端、不删消息。
 
   useEffect(() => {
     if (!selectedSession) return;
-    // 切会话 / 失效档案路径：先清 modelId，避免上一会话残留成为无档案时的非预期 model 覆盖
-    setModelId(undefined);
     const sessionAgentId = selectedSession.agent_id;
     const agentValid =
       sessionAgentId != null && agentOptions.some((o) => o.id === sessionAgentId);
-    if (agentValid) {
-      setAgentId(sessionAgentId);
-      // 有档案：不回显/不发送 model_id（send 侧 agentId 存在则 omit）
+    setAgentId(agentValid ? sessionAgentId : undefined);
+  }, [selectedSession, selectedSessionId, agentOptions]);
+
+  // 选中 / 新建 / 删除后把 ?session= 写回路由；无效 query 去掉。replace 避免整页跳转。
+  useEffect(() => {
+    const raw = searchParams.get('session');
+    const rawInvalid = raw != null && raw !== '' && parseSessionQueryId(raw) == null;
+    const desired = selectedSessionId == null ? null : String(selectedSessionId);
+    if (!rawInvalid && raw === desired) return;
+    const next = new URLSearchParams(searchParams);
+    if (desired == null) next.delete('session');
+    else next.set('session', desired);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, selectedSessionId, setSearchParams]);
+
+  // 列表里没有该 id 时再查一次；404/403 视为无效并清掉 query，其它错误不抛到渲染。
+  useEffect(() => {
+    if (selectedSessionId == null) {
+      sessionProbeRef.current = null;
       return;
     }
-    setAgentId(undefined);
-    // 无档案（含失效 agent 已清空）：仅从 session.model 回显
-    if (selectedSession.model) {
-      const hit = modelOptions.find((o) => o.model_name === selectedSession.model);
-      if (hit) setModelId(hit.id);
+    if (canListSessions && !sessionsQuery.isSuccess) return;
+    if (selectedInLoadedSessions) {
+      sessionProbeRef.current = null;
+      setExtraSession((prev) => (prev ? null : prev));
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSessionId, selectedSession?.agent_id, selectedSession?.model, agentOptions, modelOptions]);
+    if (extraSession?.id === selectedSessionId) return;
+    if (!canQuerySession) {
+      if (canListSessions && sessionsQuery.isSuccess) {
+        setSelectedSessionId((cur) => (cur === selectedSessionId ? null : cur));
+      }
+      return;
+    }
+    if (sessionProbeRef.current === selectedSessionId) return;
+    sessionProbeRef.current = selectedSessionId;
+    const id = selectedSessionId;
+    let cancelled = false;
+    getChatSession(id)
+      .then((session) => {
+        if (!cancelled) setExtraSession(session);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const status =
+          error && typeof error === 'object' && 'response' in error
+            ? (error as { response?: { status?: number } }).response?.status
+            : undefined;
+        if (status === 404 || status === 403) {
+          setExtraSession((prev) => (prev?.id === id ? null : prev));
+          setSelectedSessionId((cur) => (cur === id ? null : cur));
+        } else {
+          sessionProbeRef.current = null;
+        }
+      });
+    return () => {
+      cancelled = true;
+      if (sessionProbeRef.current === id) sessionProbeRef.current = null;
+    };
+  }, [
+    canListSessions,
+    canQuerySession,
+    extraSession?.id,
+    selectedInLoadedSessions,
+    selectedSessionId,
+    sessionsQuery.isSuccess,
+  ]);
 
   // 滚动到底部（新消息 / 流式增量）
   useEffect(() => {
@@ -193,6 +250,57 @@ const KuaiaiChatPage: React.FC = () => {
   useEffect(() => () => abortRef.current?.abort(), []);
 
   // ---------------- 会话操作 ----------------
+
+  const applySessionUpdate = useCallback((session: ChatSessionOut) => {
+    setSessions((prev) => {
+      const index = prev.findIndex((s) => s.id === session.id);
+      if (index === -1) return prev;
+      const next = prev.slice();
+      next[index] = session;
+      return next;
+    });
+    setExtraSession((prev) => (prev && prev.id === session.id ? session : prev));
+  }, []);
+
+  const prependCreatedSession = useCallback((session: ChatSessionOut) => {
+    setSessions((prev) => [session, ...prev.filter((s) => s.id !== session.id)]);
+  }, []);
+
+  const writeSessionSelection = useCallback(
+    async (sessionId: number, payload: ChatSessionUpdatePayload) => {
+      const gen = (selectionWriteGenRef.current[sessionId] ?? 0) + 1;
+      selectionWriteGenRef.current[sessionId] = gen;
+      try {
+        const updated = await updateChatSession(sessionId, payload);
+        if (selectionWriteGenRef.current[sessionId] !== gen) return;
+        applySessionUpdate(updated);
+      } catch (error) {
+        if (selectionWriteGenRef.current[sessionId] !== gen) return;
+        messageApi.error(
+          getApiErrorMessage(
+            error,
+            t('app.kuaiai.chat.saveSelectionFailed', {
+              defaultValue: '保存模型或档案选择失败',
+            }),
+          ),
+        );
+      }
+    },
+    [messageApi, applySessionUpdate, t],
+  );
+
+  const handleAgentChange = useCallback(
+    (value: number | null | undefined) => {
+      const next = value ?? undefined;
+      setAgentId(next);
+      if (selectedSessionId == null) return;
+      void writeSessionSelection(
+        selectedSessionId,
+        next != null ? { agent_id: next, model: null } : { agent_id: null },
+      );
+    },
+    [selectedSessionId, writeSessionSelection],
+  );
 
   const invalidateSessions = useCallback(
     () => queryClient.invalidateQueries({ queryKey: ['kuaiai', 'chat-sessions'] }),
@@ -243,11 +351,10 @@ const KuaiaiChatPage: React.FC = () => {
 
   const handleNewSession = useCallback(async () => {
     try {
-      // 带上当前档案/模型选择，避免选中后 KR-F5 恢复逻辑清空用户已选项
-      const created = await createChatSession({
-        ...(agentId ? { agent_id: agentId } : {}),
-        ...(!agentId && selectedModelName ? { model: selectedModelName } : {}),
-      });
+      const created = await createChatSession(
+        sessionSelectionPayload(agentId, undefined),
+      );
+      prependCreatedSession(created);
       setSelectedSessionId(created.id);
       await invalidateSessions();
     } catch (error) {
@@ -258,7 +365,7 @@ const KuaiaiChatPage: React.FC = () => {
         ),
       );
     }
-  }, [agentId, invalidateSessions, messageApi, selectedModelName, t]);
+  }, [agentId, invalidateSessions, messageApi, prependCreatedSession, t]);
 
   const handleRename = useCallback(async () => {
     if (!renaming) return;
@@ -290,6 +397,7 @@ const KuaiaiChatPage: React.FC = () => {
         onOk: async () => {
           try {
             await deleteChatSession(session.id);
+            setExtraSession((prev) => (prev?.id === session.id ? null : prev));
             if (selectedSessionId === session.id) {
               setSelectedSessionId(null);
             }
@@ -331,11 +439,11 @@ const KuaiaiChatPage: React.FC = () => {
       let failed = false;
       try {
         if (sessionId == null) {
-          const created = await createChatSession({
-            ...(agentId ? { agent_id: agentId } : {}),
-            ...(!agentId && selectedModelName ? { model: selectedModelName } : {}),
-          });
+          const created = await createChatSession(
+            sessionSelectionPayload(agentId, undefined),
+          );
           sessionId = created.id;
+          prependCreatedSession(created);
           setSelectedSessionId(created.id);
           setPending((p) => (p ? { ...p, sessionId } : p));
         }
@@ -344,10 +452,11 @@ const KuaiaiChatPage: React.FC = () => {
           sessionId,
           content,
           agentId,
-          modelId: agentId ? undefined : modelId,
           signal: abortRef.current.signal,
-          onDelta: (full) =>
-            setPending((p) => (p ? { ...p, assistant: full } : p)),
+          onDelta: (view) =>
+            setPending((p) =>
+              p ? { ...p, assistant: view.answer, reasoning: view.reasoning } : p,
+            ),
         });
       } catch (error) {
         if (!isAbortError(error)) {
@@ -365,18 +474,23 @@ const KuaiaiChatPage: React.FC = () => {
         sendingRef.current = false;
         setSending(false);
         abortRef.current = null;
+        let reloaded = false;
         if (sessionId != null) {
-          // 流结束重拉：拿服务端落库的 user/tool/assistant 行（工具轨迹唯一来源）
-          await queryClient
-            .fetchQuery({
+          // 刚落库，忽略全局 staleTime，必须向服务器重拉 user/tool/assistant
+          try {
+            await queryClient.fetchQuery({
               queryKey: ['kuaiai', 'chat-messages', sessionId],
               queryFn: () => listChatMessages(sessionId as number),
-            })
-            .catch(() => undefined);
+              staleTime: 0,
+            });
+            reloaded = true;
+          } catch {
+            // 重拉失败则保留 pending，避免对话框先空掉
+          }
           await invalidateSessions();
         }
-        // 失败时保留 pending（error 气泡 + 原始用户消息），下一次发送/取消时覆盖
-        if (!failed) setPending(null);
+        // 流失败或重拉失败都保留 pending（error 气泡 + 原始用户消息）
+        if (!failed && reloaded) setPending(null);
       }
     },
     [
@@ -385,9 +499,8 @@ const KuaiaiChatPage: React.FC = () => {
       canSend,
       invalidateSessions,
       messageApi,
-      modelId,
       queryClient,
-      selectedModelName,
+      prependCreatedSession,
       selectedSessionId,
       t,
     ],
@@ -395,7 +508,7 @@ const KuaiaiChatPage: React.FC = () => {
 
   const handleCancelSend = useCallback(() => {
     abortRef.current?.abort();
-    // 取消时清掉 pending（abort 路径 failed=false，finally 也会清）
+    // 取消时立刻清掉 pending；finally 只在重拉成功后清
     setPending(null);
   }, []);
 
@@ -454,14 +567,14 @@ const KuaiaiChatPage: React.FC = () => {
             <div className="kuaiai-chat-list-loading">
               <Spin />
             </div>
-          ) : sessions.length === 0 ? (
+          ) : displaySessions.length === 0 ? (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={t('app.kuaiai.chat.noSessions', { defaultValue: '暂无会话' })}
             />
           ) : (
             <>
-              {sessions.map((s) => {
+              {displaySessions.map((s) => {
                 const menuItems = sessionMenuItems(s);
                 return (
                   <div
@@ -550,7 +663,7 @@ const KuaiaiChatPage: React.FC = () => {
                 defaultValue: '选择档案（可选）',
               })}
               value={agentId}
-              onChange={(v) => setAgentId(v ?? undefined)}
+              onChange={handleAgentChange}
               options={agentOptions.map((o) => ({
                 value: o.id,
                 label: o.name,
@@ -558,24 +671,6 @@ const KuaiaiChatPage: React.FC = () => {
               }))}
               loading={agentOptionsQuery.isLoading}
             />
-            {!agentId ? (
-              <Select
-                className="kuaiai-chat-select"
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t('app.kuaiai.chat.modelPlaceholder', {
-                  defaultValue: '选择模型（可选）',
-                })}
-                value={modelId}
-                onChange={(v) => setModelId(v ?? undefined)}
-                options={modelOptions.map((o) => ({
-                  value: o.id,
-                  label: o.provider_name ? `${o.provider_name}/${o.model_name}` : o.model_name,
-                }))}
-                loading={modelOptionsQuery.isLoading}
-              />
-            ) : null}
           </div>
         </header>
 
@@ -605,7 +700,8 @@ const KuaiaiChatPage: React.FC = () => {
           )}
         </div>
 
-        <footer className="kuaiai-chat-composer">
+        {/* 布局样式 `.ant-pro-layout-container footer { display: none }` 会藏掉 footer，输入区不能用 footer */}
+        <div className="kuaiai-chat-composer">
           {!canSend ? (
             <Typography.Text type="secondary" className="kuaiai-chat-no-permission">
               {t('app.kuaiai.chat.noSendPermission', {
@@ -628,7 +724,7 @@ const KuaiaiChatPage: React.FC = () => {
             })}
             autoSize={{ minRows: 2, maxRows: 6 }}
           />
-        </footer>
+        </div>
       </section>
 
       {/* 重命名弹窗 */}

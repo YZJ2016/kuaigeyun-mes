@@ -100,6 +100,38 @@ async def list_application_connections(
         )
 
 
+@router.get("/llm-roles")
+async def list_llm_roles(
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """当前租户四种模型角色各自选用的连接 UUID。"""
+    from core.utils.integration_settings import list_selected_llm_role_uuids
+
+    return await list_selected_llm_role_uuids(tenant_id)
+
+
+@router.post("/{uuid}/select-role")
+async def select_llm_role(
+    uuid: UUID,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """把该 AI 连接选用为它 config.model_role 对应的角色。"""
+    from core.utils.integration_settings import select_llm_connection_role
+
+    try:
+        ic = await IntegrationConfigService.get_integration_by_uuid(
+            tenant_id=tenant_id, uuid=str(uuid)
+        )
+        role = await select_llm_connection_role(tenant_id, ic)
+        return {"role": role, "uuid": str(ic.uuid)}
+    except NotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="应用连接不存在")
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
 @router.get("/{uuid}", response_model=IntegrationConfigResponse)
 async def get_application_connection(
     uuid: UUID,

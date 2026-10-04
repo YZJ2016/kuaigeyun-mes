@@ -6,6 +6,7 @@
 import { DeepSeekChatProvider } from '@ant-design/x-sdk';
 import { apiRequest, API_BASE_URL } from './api';
 import { getToken } from '../utils/auth';
+import { webClientChannelHeaders } from '../utils/clientChannel';
 import i18n from '../config/i18n';
 
 const DEEPSEEK_STATUS_URL = '/core/site-settings/integrations/deepseek/status';
@@ -138,7 +139,9 @@ export class KuaiDeepSeekChatProvider<
 }
 
 export function buildKuaiChatAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    ...webClientChannelHeaders(),
+  };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   const tenantId = localStorage.getItem('tenant_id');
@@ -160,6 +163,8 @@ export async function parseKuaiChatErrorResponse(response: Response): Promise<st
       detail = data.detail;
     } else if (data?.detail?.message) {
       detail = String(data.detail.message);
+    } else if (data?.error?.message) {
+      detail = String(data.error.message);
     } else if (data?.message) {
       detail = String(data.message);
     }

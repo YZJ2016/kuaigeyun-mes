@@ -95,127 +95,102 @@ def registered_tool():
 # ---------------------------------------------------------------- model_factory
 
 
-@pytest.mark.asyncio
-async def test_resolve_model_source_fallback_when_catalog_missing():
-    with (
-        patch.object(model_factory, "_catalog_models", return_value=None),
-        patch(
-            "core.ai.runtime_config.AiRuntimeConfig.load",
-            AsyncMock(return_value=_fake_config()),
-        ),
-    ):
-        source = await model_factory.resolve_model_source(TENANT)
-    assert source.base_url == "https://fb.example/v1"
-    assert source.api_key == "k-fb"
-    assert source.model_name == "fb-chat"
-    assert source.model_type == "chat"
-
-
-@pytest.mark.asyncio
-async def test_resolve_model_source_catalog_row_wins_over_fallback():
-    model_row = SimpleNamespace(
-        id=3,
-        tenant_id=TENANT,
-        status="0",
-        is_default=True,
+def _role_source(**over) -> model_factory.ModelSource:
+    data = dict(
+        base_url="https://fb.example/v1",
+        api_key="k-fb",
+        model_name="fb-chat",
         model_type="chat",
-        model_name="cat-chat",
-        provider_id=9,
     )
-    provider_row = SimpleNamespace(
-        id=9,
-        tenant_id=TENANT,
-        status="0",
-        base_url="https://cat.example/v1",
-        api_key="k-cat",
-    )
-    KuaiaiLlmModel = MagicMock()
-    KuaiaiLlmModel.filter = MagicMock(return_value=_Query([model_row]))
-    KuaiaiLlmProvider = MagicMock()
-    KuaiaiLlmProvider.filter = MagicMock(return_value=_Query([provider_row]))
-
-    with (
-        patch.object(
-            model_factory,
-            "_catalog_models",
-            return_value=(KuaiaiLlmModel, KuaiaiLlmProvider),
-        ),
-        patch(
-            "core.ai.runtime_config.AiRuntimeConfig.load",
-            AsyncMock(return_value=_fake_config()),
-        ) as load,
-    ):
-        source = await model_factory.resolve_model_source(TENANT)
-    assert source.base_url == "https://cat.example/v1"
-    assert source.api_key == "k-cat"
-    assert source.model_name == "cat-chat"
-    load.assert_not_called()
+    data.update(over)
+    return model_factory.ModelSource(**data)
 
 
 @pytest.mark.asyncio
-async def test_resolve_model_source_explicit_id_missing_fails_closed():
-    KuaiaiLlmModel = MagicMock()
-    KuaiaiLlmModel.filter = MagicMock(return_value=_Query([]))
-    KuaiaiLlmProvider = MagicMock()
+async def test_resolve_model_source_uses_selected_role_connection():
+    load = AsyncMock(return_value=_role_source())
+    with patch.object(model_factory, "_load_role_source", load):
+        source = await model_factory.resolve_model_source(TENANT, model_id=9)
+    assert source.model_name == "fb-chat"
+    load.assert_awaited_once_with(TENANT, "chat")
 
+
+@pytest.mark.asyncio
+async def test_resolve_model_source_missing_connection_fails_closed():
     with patch.object(
         model_factory,
-        "_catalog_models",
-        return_value=(KuaiaiLlmModel, KuaiaiLlmProvider),
+        "_load_role_source",
+        AsyncMock(side_effect=ValidationError("未配置对话模型")),
     ):
         with pytest.raises(ValidationError):
             await model_factory.resolve_model_source(TENANT, model_id=404)
 
 
 @pytest.mark.asyncio
-async def test_build_chat_model_caches_and_evicts():
-    with (
-        patch.object(model_factory, "_catalog_models", return_value=None),
-        patch(
-            "core.ai.runtime_config.AiRuntimeConfig.load",
-            AsyncMock(return_value=_fake_config()),
-        ) as load,
+async def test_build_embeddings_sends_text_batches_at_768():
+    """兼容端点不接受 token id，且 text-embedding-v4 单批最多 10、默认 1024 维。"""
+    with patch.object(
+        model_factory,
+        "_load_role_source",
+        AsyncMock(
+            return_value=_role_source(
+                base_url="https://embed.example/v1",
+                api_key="k-embed",
+                model_name="text-embedding-v4",
+                model_type="embed",
+            )
+        ),
     ):
+        embeddings = await model_factory.build_embeddings(TENANT, model_id=2)
+
+    assert embeddings.check_embedding_ctx_length is False
+    assert embeddings.dimensions == 768
+    assert embeddings.chunk_size == 10
+    assert embeddings.model == "text-embedding-v4"
+
+
+@pytest.mark.asyncio
+async def test_build_chat_model_caches_and_evicts():
+    load = AsyncMock(return_value=_role_source())
+    with patch.object(model_factory, "_load_role_source", load):
         first = await model_factory.build_chat_model(TENANT)
-        second = await model_factory.build_chat_model(TENANT)
+        second = await model_factory.build_chat_model(TENANT, model_id=3)
         assert first is second
-        assert load.call_count == 1
+        assert load.await_count == 1
 
         model_factory.evict_model_cache(TENANT)
         third = await model_factory.build_chat_model(TENANT)
         assert third is not first
-        assert load.call_count == 2
+        assert load.await_count == 2
 
 
 @pytest.mark.asyncio
-async def test_build_vision_model_uses_ocr_fallback():
-    cfg = _fake_config(
-        ocr_base_url="https://ocr.example/v1",
-        ocr_model="ocr-model",
-        ocr_api_key="k-ocr",
+async def test_build_vision_model_uses_selected_vision_connection():
+    load = AsyncMock(
+        return_value=_role_source(
+            base_url="https://ocr.example/v1",
+            api_key="k-ocr",
+            model_name="ocr-model",
+            model_type="vision",
+        )
     )
-    with (
-        patch.object(model_factory, "_catalog_models", return_value=None),
-        patch(
-            "core.ai.runtime_config.AiRuntimeConfig.load",
-            AsyncMock(return_value=cfg),
-        ),
-    ):
-        source = await model_factory.resolve_model_source(TENANT, model_type="vision")
+    with patch.object(model_factory, "_load_role_source", load):
+        source = await model_factory.resolve_model_source(
+            TENANT, model_id=3, model_type="vision"
+        )
         chat = await model_factory.build_vision_model(TENANT)
     assert source.model_type == "vision"
     assert source.model_name == "ocr-model"
     assert chat.model_name == "ocr-model"
+    load.assert_awaited_with(TENANT, "vision")
 
 
 @pytest.mark.asyncio
 async def test_build_vision_model_unconfigured_fails_closed():
-    with (
-        patch.object(model_factory, "_catalog_models", return_value=None),
-        patch(
-            "core.ai.runtime_config.AiRuntimeConfig.load",
-            AsyncMock(return_value=_fake_config()),
-        ),
+    with patch.object(
+        model_factory,
+        "_load_role_source",
+        AsyncMock(side_effect=ValidationError("未配置视觉模型")),
     ):
         with pytest.raises(ValidationError):
             await model_factory.build_vision_model(TENANT)
@@ -332,6 +307,71 @@ async def test_agent_to_openai_sse_chunk_wire_format():
     second = json.loads(frames[1][len("data: ") :])
     assert "role" not in second["choices"][0]["delta"]
     assert second["choices"][0]["delta"]["content"] == "世界"
+
+
+def _sse_payloads(body: str):
+    frames = [line for line in body.split("\n") if line.startswith("data: ")]
+    assert frames[-1] == "data: [DONE]"
+    return [json.loads(line[len("data: ") :]) for line in frames[:-1]]
+
+
+@pytest.mark.asyncio
+async def test_agent_sse_omits_prose_before_tool_call():
+    """工具调用前的模型正文不进 delta.content；其后没有工具的那轮才是回答。"""
+
+    class _ToolRoundAgent:
+        async def astream_events(self, payload, config=None, version=None):
+            yield {
+                "event": "on_chat_model_stream",
+                "data": {"chunk": SimpleNamespace(content="我先检索知识库。")},
+            }
+            yield {
+                "event": "on_tool_start",
+                "name": "search_knowledge",
+                "data": {"name": "search_knowledge", "input": {"q": "工艺"}},
+            }
+            yield {
+                "event": "on_tool_end",
+                "name": "search_knowledge",
+                "data": {"name": "search_knowledge", "output": "命中"},
+            }
+            yield {
+                "event": "on_chat_model_stream",
+                "data": {"chunk": SimpleNamespace(content="再核对一次。")},
+            }
+            yield {
+                "event": "on_tool_start",
+                "name": "search_knowledge",
+                "data": {"name": "search_knowledge", "input": {"q": "核对"}},
+            }
+            yield {
+                "event": "on_tool_end",
+                "name": "search_knowledge",
+                "data": {"output": "ok"},
+            }
+            yield {
+                "event": "on_chat_model_stream",
+                "data": {"chunk": SimpleNamespace(content="结论：")},
+            }
+            yield {
+                "event": "on_chat_model_stream",
+                "data": {"chunk": SimpleNamespace(content="已找到。")},
+            }
+
+    body = await _collect(_ToolRoundAgent())
+    assert "我先检索知识库。" not in body
+    assert "再核对一次。" not in body
+    payloads = _sse_payloads(body)
+    contents = [
+        p["choices"][0]["delta"].get("content")
+        for p in payloads
+        if p["choices"][0]["delta"].get("content")
+    ]
+    assert contents == ["结论：", "已找到。"]
+    assert payloads[0]["kuaiai_tool"]["phase"] == "start"
+    assert payloads[0]["choices"][0]["delta"] == {}
+    answer = next(p for p in payloads if p["choices"][0]["delta"].get("content"))
+    assert answer["choices"][0]["delta"]["role"] == "assistant"
 
 
 @pytest.mark.asyncio
@@ -598,32 +638,9 @@ async def test_tool_guard_audit_exception_is_500(registered_tool):
 
 
 @pytest.mark.asyncio
-async def test_explicit_model_id_type_mismatch_fails_closed():
-    """显式 model_id 指向 chat 行、按 vision 解析 → ValidationError（m4）。"""
-    model_row = SimpleNamespace(
-        id=3,
-        tenant_id=TENANT,
-        status="0",
-        is_default=True,
-        model_type="chat",
-        model_name="cat-chat",
-        provider_id=9,
-    )
-    KuaiaiLlmModel = MagicMock()
-    KuaiaiLlmModel.filter = MagicMock(return_value=_Query([model_row]))
-    KuaiaiLlmProvider = MagicMock()
-
-    with patch.object(
-        model_factory,
-        "_catalog_models",
-        return_value=(KuaiaiLlmModel, KuaiaiLlmProvider),
-    ):
-        with pytest.raises(ValidationError):
-            await model_factory.resolve_model_source(
-                TENANT, model_id=3, model_type="vision"
-            )
-        with pytest.raises(ValidationError):
-            await model_factory.build_vision_model(TENANT, model_id=3)
+async def test_rerank_role_is_not_constructed():
+    with pytest.raises(ValidationError):
+        await model_factory.resolve_model_source(TENANT, model_type="rerank")
 
 
 def test_ensure_defaults_skips_items_without_permission():
