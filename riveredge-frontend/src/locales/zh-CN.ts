@@ -29821,6 +29821,10 @@ export default {
     '消息中心聊天置顶',
   'pages.dashboard.updateLog.entries.mobile-message-chat-tab-first-r01.description':
     '手机消息中心顶栏分段将「聊天」置于首位，进入消息页默认展示会话列表；通知与待办顺序后移，深链仍可指定 pane 打开对应分段。',
+  'pages.dashboard.updateLog.entries.mobile-pending-approvals-api-r01.title':
+    '手机待我审批专用接口',
+  'pages.dashboard.updateLog.entries.mobile-pending-approvals-api-r01.description':
+    '手机审批 Tab 改走 kuaizhizao/mobile/pending-approvals，与角标共用服务端查询，避免 core 列表参数未生效导致待审为空。',
   'pages.dashboard.updateLog.entries.mobile-approval-pending-for-user-r01.title':
     '手机待我审批列表恢复',
   'pages.dashboard.updateLog.entries.mobile-approval-pending-for-user-r01.description':

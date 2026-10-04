@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'mobile-pending-approvals-api-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-pending-approvals-api-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-pending-approvals-api-r01.description',
+  },
+  {
     id: 'mobile-approval-pending-for-user-r01',
     date: '2026-10-04',
     type: 'fix',
