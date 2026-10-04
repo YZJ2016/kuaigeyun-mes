@@ -319,6 +319,7 @@ class InfraSettings(BaseSettings):
                 8081,  # Expo Web 旧默认
                 8101,  # 前端备用端口
                 8300,  # riveredge-app/station Vite
+                5173,  # HBuilderX uni-app x Web（riveredge-app-mobile）
             }
         )
         hosts: List[str] = ["127.0.0.1", "localhost"]
