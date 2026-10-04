@@ -65,6 +65,8 @@ export interface CreateDataBackupData {
   backup_scope: 'all' | 'tenant' | 'table';
   include_files?: boolean;
   backup_tables?: string[];
+  /** 平台管理员为指定组织创建租户级备份时必填（或当前已绑定该组织） */
+  target_tenant_id?: number;
 }
 
 export interface RestoreBackupRequest {
@@ -206,9 +208,26 @@ export async function deleteBackup(uuid: string): Promise<void> {
 /**
  * 获取短效下载链接（Authorization 头鉴权，仅返回 URL，不缓冲文件）
  */
+function toSameOriginBackupDownloadUrl(url: string): string {
+  const trimmed = (url || '').trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith('/api/v1/core/data-backups/')) {
+    return trimmed;
+  }
+  try {
+    const parsed = new URL(trimmed, window.location.origin);
+    if (parsed.pathname.startsWith('/api/v1/core/data-backups/')) {
+      return parsed.pathname + parsed.search;
+    }
+  } catch {
+    // keep as-is
+  }
+  return trimmed;
+}
+
 export async function getBackupDownloadUrl(uuid: string): Promise<string> {
   const res = await apiRequest<{ download_url: string }>(`/core/data-backups/${uuid}/download-url`);
-  return res.download_url;
+  return toSameOriginBackupDownloadUrl(res.download_url);
 }
 
 /**

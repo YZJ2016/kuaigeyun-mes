@@ -12,6 +12,7 @@ from typing import List, Tuple, Optional
 from datetime import datetime, timedelta
 from loguru import logger
 from tortoise.exceptions import DoesNotExist
+from tortoise.expressions import Q
 
 from core.models.data_backup import DataBackup
 from core.services.system.backup_storage import (
@@ -58,30 +59,39 @@ class DataBackupService:
         return " | ".join(parts) if parts else exc.__class__.__name__
 
     @staticmethod
+    def backup_visible_to_user(
+        backup: DataBackup,
+        tenant_id: Optional[int],
+        *,
+        is_infra_admin: bool,
+    ) -> bool:
+        # 全平台包仅平台管理员；指定组织包 = 归属组织 + 平台管理员
+        if is_infra_admin:
+            return True
+        if backup.backup_scope == "all" or backup.tenant_id is None:
+            return False
+        return tenant_id is not None and backup.tenant_id == tenant_id
+
+    @staticmethod
     async def get_backups(
-        tenant_id: int,
+        tenant_id: Optional[int],
         page: int = 1,
         page_size: int = 20,
         backup_type: Optional[str] = None,
         backup_scope: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        *,
+        is_infra_admin: bool = False,
     ) -> Tuple[List[DataBackup], int]:
         """
         获取备份列表
-        
-        Args:
-            tenant_id: 组织ID
-            page: 页码
-            page_size: 每页数量
-            backup_type: 备份类型可选过滤
-            backup_scope: 备份范围可选过滤
-            status: 状态可选过滤
-            
-        Returns:
-            Tuple[List[DataBackup], int]: (备份列表, 总数)
         """
-        query = DataBackup.filter(tenant_id=tenant_id)
-        
+        if is_infra_admin:
+            query = DataBackup.all()
+        else:
+            # 组织侧：仅本组织非全平台包；全平台包不对组织用户暴露
+            query = DataBackup.filter(tenant_id=tenant_id).exclude(backup_scope="all")
+
         if backup_type:
             query = query.filter(backup_type=backup_type)
         if backup_scope:
@@ -97,48 +107,59 @@ class DataBackupService:
         return await DataBackupService._query_in_tenant(tenant_id, _materialize)
 
     @staticmethod
-    def resolve_source_tenant_id(backup: DataBackup) -> Optional[int]:
-        """从 zip 元数据或 CSV 推断导出租户 ID；缺失时回退到备份记录 tenant_id。"""
-        from core.services.system.data_backup_jobs import (
-            read_backup_metadata,
-            infer_source_tenant_id_from_zip,
-        )
+    def resolve_source_tenant_id(backup: DataBackup, *, read_zip_meta: bool = False) -> Optional[int]:
+        """
+        解析导出租户 ID，供列表/详情展示。
 
-        if backup.file_path:
+        禁止在列表路径解压 database.dump：全平台包可达数百 MB，
+        infer_source_tenant_id_from_zip 会拖死 API 与页面轮询。
+        恢复时再走 dump 推断（restore_backup 内已单独调用）。
+        """
+        if backup.backup_scope == "all":
+            return None
+        if read_zip_meta and backup.file_path:
+            from core.services.system.data_backup_jobs import read_backup_metadata
+
             resolved = resolve_backup_file_path(backup.file_path)
             if resolved:
-                inferred = infer_source_tenant_id_from_zip(resolved)
-                if inferred is not None:
-                    return int(inferred)
                 meta_src = read_backup_metadata(resolved).get("source_tenant_id")
                 if meta_src is not None:
                     return int(meta_src)
         return backup.tenant_id
 
     @staticmethod
-    def to_response(backup: DataBackup) -> "DataBackupResponse":
+    def to_response(backup: DataBackup, *, enrich: bool = False) -> "DataBackupResponse":
         from core.schemas.data_backup import DataBackupResponse
 
         return DataBackupResponse.model_validate(backup).model_copy(
             update={
-                "source_tenant_id": DataBackupService.resolve_source_tenant_id(backup),
+                "source_tenant_id": DataBackupService.resolve_source_tenant_id(
+                    backup, read_zip_meta=enrich
+                ),
                 "file_available": resolve_backup_file_path(backup.file_path) is not None,
             }
         )
 
     @staticmethod
-    async def get_backup_by_uuid(tenant_id: int, uuid: str) -> DataBackup:
+    async def get_backup_by_uuid(
+        tenant_id: Optional[int],
+        uuid: str,
+        *,
+        is_infra_admin: bool = False,
+    ) -> DataBackup:
         """
         通过 UUID 获取备份详情
         """
-        async def _load():
-            try:
-                return await DataBackup.get(tenant_id=tenant_id, uuid=uuid)
-            except DoesNotExist:
-                logger.error(f"备份不存在: {uuid}")
-                raise ValueError("备份不存在")
-
-        return await DataBackupService._query_in_tenant(tenant_id, _load)
+        try:
+            backup = await DataBackup.get(uuid=uuid)
+        except DoesNotExist:
+            logger.error(f"备份不存在: {uuid}")
+            raise ValueError("备份不存在")
+        if not DataBackupService.backup_visible_to_user(
+            backup, tenant_id, is_infra_admin=is_infra_admin
+        ):
+            raise ValueError("备份不存在")
+        return backup
 
     @staticmethod
     async def create_backup_task(tenant_id: Optional[int], data: DataBackupCreate) -> DataBackup:
@@ -150,9 +171,11 @@ class DataBackupService:
                 "租户级备份缺少 tenant_id：请在租户上下文中创建，或改用 backup_scope=all"
             )
 
-        # 1. 创建备份记录
+        record_tenant_id = None if data.backup_scope == "all" else tenant_id
+
+        # 全平台备份 tenant_id 为空，避免组织管理员下载到全租户数据包
         backup = await DataBackup.create(
-            tenant_id=tenant_id,
+            tenant_id=record_tenant_id,
             name=data.name,
             backup_type=data.backup_type,
             backup_scope=data.backup_scope,
@@ -176,7 +199,7 @@ class DataBackupService:
                             name="database/backup.requested",
                             data={
                                 "backup_uuid": str(backup.uuid),
-                                "tenant_id": tenant_id,
+                                "tenant_id": record_tenant_id,
                                 "backup_type": data.backup_type,
                                 "backup_scope": data.backup_scope,
                                 "include_files": data.include_files,
@@ -336,7 +359,7 @@ class DataBackupService:
             if include_files is None:
                 include_files = zip_has_upload_entries(file_path)
             backup = await DataBackup.create(
-                tenant_id=tenant_id,
+                tenant_id=None if backup_scope == "all" else tenant_id,
                 name=backup_name,
                 backup_type="full",
                 backup_scope=backup_scope,
@@ -360,11 +383,18 @@ class DataBackupService:
             raise
 
     @staticmethod
-    async def delete_backup(tenant_id: int, uuid: str) -> None:
+    async def delete_backup(
+        tenant_id: Optional[int],
+        uuid: str,
+        *,
+        is_infra_admin: bool = False,
+    ) -> None:
         """
         删除备份记录（同时应处理物理文件，通常由 Taskiq 任务或服务层手动处理）
         """
-        backup = await DataBackupService.get_backup_by_uuid(tenant_id, uuid)
+        backup = await DataBackupService.get_backup_by_uuid(
+            tenant_id, uuid, is_infra_admin=is_infra_admin
+        )
         
         # 如果有物理文件，发送删除事件或直接在此删除
         # 这里选择发送事件让后台清理，或者简单起见如果本地可访问则直接删除
@@ -381,7 +411,7 @@ class DataBackupService:
 
     @staticmethod
     async def restore_backup(
-        tenant_id: int,
+        tenant_id: Optional[int],
         uuid: str,
         create_pre_restore_backup: bool = True,
         source_tenant_id: Optional[int] = None,
@@ -394,8 +424,9 @@ class DataBackupService:
         若 create_pre_restore_backup=True，恢复前会自动创建当前状态的备份。
         source_tenant_id: 备份中的租户ID，用于恢复时替换；不填则从备份记录推断；若与目标租户不同则自动替换。
         """
-        backup = await DataBackupService.get_backup_by_uuid(tenant_id, uuid)
-
+        backup = await DataBackupService.get_backup_by_uuid(
+            tenant_id, uuid, is_infra_admin=allow_global_restore
+        )
         if backup.status != "success":
             raise ValueError("只能恢复成功的备份")
 
