@@ -79,6 +79,12 @@ async def append_mounted_form_template_menus(
         )
         return
 
+    from apps.ind_electronics.services.signoff_template_seed_service import (
+        ensure_project_signoff_templates,
+    )
+
+    await ensure_project_signoff_templates(tenant_id)
+
     rows = (
         await KuaioaFormTemplate.filter(
             tenant_id=tenant_id,

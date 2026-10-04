@@ -919,6 +919,28 @@ class SupplierEvalEnvDocumentService:
             raise NotFoundError("供应商不存在（请从主数据选择）")
         return row.id, row.code, row.name
 
+    async def _resolve_material(
+        self, tenant_id: int, material_id: int
+    ) -> tuple[int, str, str]:
+        from apps.master_data.models.material import Material
+
+        row = await Material.filter(
+            tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
+        ).first()
+        if not row:
+            raise NotFoundError("物料不存在（请从主数据选择）")
+        code = (getattr(row, "main_code", None) or getattr(row, "code", None) or "").strip()
+        name = (getattr(row, "name", None) or "").strip()
+        if not code or not name:
+            raise ValidationError("所选物料缺少编码或名称")
+        return row.id, code, name
+
+    def _require_material_description(self, text: Optional[str]) -> str:
+        desc = (text or "").strip()
+        if not desc:
+            raise ValidationError("材料说明不能为空")
+        return desc
+
     def _validate_doc_type(self, doc_type: str) -> str:
         dt = (doc_type or ENV_DOC_TYPE_DEFAULT).strip().lower()
         if dt not in ENV_DOC_TYPES:
@@ -940,6 +962,7 @@ class SupplierEvalEnvDocumentService:
         self, tenant_id: int, data: SupplierEvalEnvDocumentCreate, user: User
     ) -> SupplierEvalEnvDocumentResponse:
         sid, scode, sname = await self._resolve_supplier(tenant_id, data.supplier_id)
+        mid, mcode, mname = await self._resolve_material(tenant_id, data.material_id)
         title = (data.title or "").strip()
         if not title:
             raise ValidationError("资料标题不能为空")
@@ -948,6 +971,10 @@ class SupplierEvalEnvDocumentService:
             supplier_id=sid,
             supplier_code=scode,
             supplier_name=sname,
+            material_id=mid,
+            material_code=mcode,
+            material_name=mname,
+            material_description=self._require_material_description(data.material_description),
             doc_type=self._validate_doc_type(data.doc_type),
             title=title,
             issued_at=data.issued_at,
@@ -980,6 +1007,19 @@ class SupplierEvalEnvDocumentService:
             if not title:
                 raise ValidationError("资料标题不能为空")
             payload["title"] = title
+        if "material_id" in payload and payload["material_id"] is not None:
+            mid, mcode, mname = await self._resolve_material(tenant_id, int(payload["material_id"]))
+            payload["material_id"] = mid
+            payload["material_code"] = mcode
+            payload["material_name"] = mname
+        elif row.material_id is None:
+            raise ValidationError("请选择物料")
+        if "material_description" in payload:
+            payload["material_description"] = self._require_material_description(
+                None if payload["material_description"] is None else str(payload["material_description"])
+            )
+        elif not (row.material_description or "").strip():
+            raise ValidationError("材料说明不能为空")
         for key, value in payload.items():
             setattr(row, key, value)
         apply_update_audit(row, user)

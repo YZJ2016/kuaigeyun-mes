@@ -250,6 +250,8 @@ class SupplierEvaluationListResponse(BaseModel):
 
 class SupplierEvalEnvDocumentCreate(BaseModel):
     supplier_id: int
+    material_id: int
+    material_description: str
     doc_type: str = "other"
     title: str
     issued_at: Optional[date] = None
@@ -259,6 +261,8 @@ class SupplierEvalEnvDocumentCreate(BaseModel):
 
 
 class SupplierEvalEnvDocumentUpdate(BaseModel):
+    material_id: Optional[int] = None
+    material_description: Optional[str] = None
     doc_type: Optional[str] = None
     title: Optional[str] = None
     issued_at: Optional[date] = None
@@ -275,6 +279,10 @@ class SupplierEvalEnvDocumentResponse(BaseModel):
     supplier_id: int
     supplier_code: Optional[str] = None
     supplier_name: Optional[str] = None
+    material_id: Optional[int] = None
+    material_code: Optional[str] = None
+    material_name: Optional[str] = None
+    material_description: Optional[str] = None
     doc_type: str
     title: str
     issued_at: Optional[date] = None

@@ -24,7 +24,19 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-VALID_TEMPLATES = {"simple", "sme", "rd_file_change"}
+VALID_TEMPLATES = {
+    "simple",
+    "sme",
+    "rd_file_change",
+    "sample_smt",
+    "structure_drawing",
+    "complaint_iqc",
+    "complaint_line",
+    "complaint_pqc",
+    "complaint_oqc",
+    "complaint_customer",
+    "inventory_verify",
+}
 
 
 VALID_CONFIG_CATEGORIES = frozenset({

@@ -10,6 +10,7 @@ from apps.kuaiplm.models.material_review import (
     USAGE_STATUSES,
     MaterialReview,
     MaterialReviewLine,
+    MaterialReviewRevision,
 )
 from apps.kuaiplm.models.rd_project import RdProject
 from apps.kuaiplm.schemas.material_review import (
@@ -19,6 +20,9 @@ from apps.kuaiplm.schemas.material_review import (
     MaterialReviewListItem,
     MaterialReviewListResponse,
     MaterialReviewResponse,
+    MaterialReviewRevisionLineOut,
+    MaterialReviewRevisionListResponse,
+    MaterialReviewRevisionOut,
     MaterialReviewUpdate,
 )
 from core.services.approval.approval_instance_service import ApprovalInstanceService
@@ -76,6 +80,60 @@ class MaterialReviewService(AppBaseService[MaterialReview]):
         data = MaterialReviewResponse.model_validate(row)
         data.lines = [MaterialReviewLineOut.model_validate(line) for line in lines]
         return data
+
+    @staticmethod
+    def _lines_snapshot(lines: List[MaterialReviewLine]) -> list[dict]:
+        return [
+            {
+                "material_code": line.material_code,
+                "material_name": line.material_name,
+                "usage_status": line.usage_status,
+                "remarks": line.remarks,
+            }
+            for line in lines
+        ]
+
+    async def _persist_revision_snapshot(
+        self,
+        tenant_id: int,
+        row: MaterialReview,
+        lines: List[MaterialReviewLine],
+        user: User,
+    ) -> None:
+        rev_no = int(row.revision_no or 1)
+        exists = await MaterialReviewRevision.filter(
+            tenant_id=tenant_id,
+            review_id=row.id,
+            revision_no=rev_no,
+            deleted_at__isnull=True,
+        ).exists()
+        if exists:
+            return
+        snap = MaterialReviewRevision(
+            tenant_id=tenant_id,
+            review_id=row.id,
+            revision_no=rev_no,
+            title=row.title,
+            remarks=row.remarks,
+            lines_snapshot=self._lines_snapshot(lines),
+            approved_at=row.approved_at or resolve_business_datetime(),
+            approved_by=user.id,
+            approved_by_name=getattr(user, "display_name", None)
+            or getattr(user, "username", None),
+        )
+        apply_create_audit(snap, user)
+        await snap.save()
+
+    def _revision_to_out(self, row: MaterialReviewRevision) -> MaterialReviewRevisionOut:
+        raw_lines = row.lines_snapshot if isinstance(row.lines_snapshot, list) else []
+        lines = [
+            MaterialReviewRevisionLineOut.model_validate(item)
+            for item in raw_lines
+            if isinstance(item, dict)
+        ]
+        out = MaterialReviewRevisionOut.model_validate(row)
+        out.lines = lines
+        return out
 
     def _validate_line(self, line: MaterialReviewLineIn) -> None:
         status = (line.usage_status or "").strip()
@@ -257,7 +315,49 @@ class MaterialReviewService(AppBaseService[MaterialReview]):
         apply_update_audit(row, user)
         await row.save()
         lines = await self._load_lines(tenant_id, review_id)
+        await self._persist_revision_snapshot(tenant_id, row, lines, user)
         return self._to_response(row, lines)
+
+    async def revise(
+        self, tenant_id: int, review_id: int, user: User
+    ) -> MaterialReviewResponse:
+        row = await self._get_row(tenant_id, review_id)
+        if row.status != "approved":
+            raise BusinessLogicError("仅已审核通过的评审单可升版")
+        row.status = "draft"
+        row.submitted_at = None
+        row.approved_at = None
+        row.revision_no = int(row.revision_no or 1) + 1
+        apply_update_audit(row, user)
+        await row.save()
+        lines = await self._load_lines(tenant_id, review_id)
+        return self._to_response(row, lines)
+
+    async def list_revisions(
+        self, tenant_id: int, review_id: int
+    ) -> MaterialReviewRevisionListResponse:
+        await self._get_row(tenant_id, review_id)
+        rows = await MaterialReviewRevision.filter(
+            tenant_id=tenant_id,
+            review_id=review_id,
+            deleted_at__isnull=True,
+        ).order_by("-revision_no")
+        items = [self._revision_to_out(r) for r in rows]
+        return MaterialReviewRevisionListResponse(items=items, total=len(items))
+
+    async def get_revision(
+        self, tenant_id: int, review_id: int, revision_no: int
+    ) -> MaterialReviewRevisionOut:
+        await self._get_row(tenant_id, review_id)
+        row = await MaterialReviewRevision.filter(
+            tenant_id=tenant_id,
+            review_id=review_id,
+            revision_no=revision_no,
+            deleted_at__isnull=True,
+        ).first()
+        if not row:
+            raise NotFoundError(f"评审单版次不存在: V{revision_no}")
+        return self._revision_to_out(row)
 
     async def reject(
         self, tenant_id: int, review_id: int, user: User

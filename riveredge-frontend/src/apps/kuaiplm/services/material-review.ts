@@ -34,10 +34,23 @@ export interface MaterialReview {
   lines?: MaterialReviewLine[];
   submitted_at?: string | null;
   approved_at?: string | null;
+  revision_no?: number;
   created_at?: string;
   updated_at?: string;
   created_by_name?: string | null;
   updated_by_name?: string | null;
+}
+
+export interface MaterialReviewRevision {
+  id: number;
+  uuid: string;
+  review_id: number;
+  revision_no: number;
+  title: string;
+  remarks?: string | null;
+  approved_at: string;
+  approved_by_name?: string | null;
+  lines: MaterialReviewLine[];
 }
 
 export interface MaterialReviewPayload {
@@ -91,5 +104,19 @@ export const materialReviewApi = {
   },
   remove: async (id: number) => {
     await api.delete(`${BASE}/${id}`);
+  },
+  revise: async (id: number) => {
+    const res = await api.post(`${BASE}/${id}/revise`);
+    return res as MaterialReview;
+  },
+  listRevisions: async (id: number) => {
+    const res = await api.get(`${BASE}/${id}/revisions`);
+    const r = (res || {}) as Record<string, unknown>;
+    const items = (r.items ?? []) as MaterialReviewRevision[];
+    return { items: Array.isArray(items) ? items : [], total: Number(r.total ?? items.length) };
+  },
+  getRevision: async (id: number, revisionNo: number) => {
+    const res = await api.get(`${BASE}/${id}/revisions/${revisionNo}`);
+    return res as MaterialReviewRevision;
   },
 };

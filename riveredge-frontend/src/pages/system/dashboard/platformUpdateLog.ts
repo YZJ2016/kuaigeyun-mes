@@ -44,6 +44,61 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaizhizao-quality-l68-l77-r01',
+    date: '2026-10-04',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaizhizao-quality-l68-l77-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaizhizao-quality-l68-l77-r01.description',
+  },
+  {
+    id: 'kuaiplm-rd-project-l53-l57-r01',
+    date: '2026-10-04',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-rd-project-l53-l57-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-project-l53-l57-r01.description',
+  },
+  {
+    id: 'kuaiplm-rd-structure-deliverable-l42-l46-r01',
+    date: '2026-10-04',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-rd-structure-deliverable-l42-l46-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-structure-deliverable-l42-l46-r01.description',
+  },
+  {
+    id: 'kuaiplm-rd-electronics-l35-l41-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-rd-electronics-l35-l41-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-electronics-l35-l41-r01.description',
+  },
+  {
+    id: 'approval-task-terminal-instance-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-task-terminal-instance-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-task-terminal-instance-r01.description',
+  },
+  {
+    id: 'mobile-pending-approval-task-first-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-pending-approval-task-first-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-pending-approval-task-first-r01.description',
+  },
+  {
+    id: 'mobile-message-approval-audit-scope-r01',
+    date: '2026-10-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-message-approval-audit-scope-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-message-approval-audit-scope-r01.description',
+  },
+  {
     id: 'mobile-pending-approvals-api-r01',
     date: '2026-10-04',
     type: 'fix',

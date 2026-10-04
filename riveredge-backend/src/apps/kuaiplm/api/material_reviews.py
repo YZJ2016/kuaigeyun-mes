@@ -10,6 +10,8 @@ from apps.kuaiplm.schemas.material_review import (
     MaterialReviewCreate,
     MaterialReviewListResponse,
     MaterialReviewResponse,
+    MaterialReviewRevisionListResponse,
+    MaterialReviewRevisionOut,
     MaterialReviewUpdate,
 )
 from apps.kuaiplm.services.material_review_service import MaterialReviewService
@@ -120,6 +122,52 @@ async def approve_material_review(
 ):
     try:
         return await service.approve(tenant_id, review_id, current_user)
+    except Exception as e:
+        raise _http(e)
+
+
+@router.get(
+    "/{review_id}/revisions",
+    response_model=MaterialReviewRevisionListResponse,
+    summary="List approved revisions",
+)
+async def list_material_review_revisions(
+    review_id: int,
+    _auth=Depends(require_permission_codes("kuaiplm:material-review:read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.list_revisions(tenant_id, review_id)
+    except Exception as e:
+        raise _http(e)
+
+
+@router.get(
+    "/{review_id}/revisions/{revision_no}",
+    response_model=MaterialReviewRevisionOut,
+    summary="Get revision snapshot",
+)
+async def get_material_review_revision(
+    review_id: int,
+    revision_no: int,
+    _auth=Depends(require_permission_codes("kuaiplm:material-review:read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.get_revision(tenant_id, review_id, revision_no)
+    except Exception as e:
+        raise _http(e)
+
+
+@router.post("/{review_id}/revise", response_model=MaterialReviewResponse, summary="Revise")
+async def revise_material_review(
+    review_id: int,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaiplm:material-review:update")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.revise(tenant_id, review_id, current_user)
     except Exception as e:
         raise _http(e)
 

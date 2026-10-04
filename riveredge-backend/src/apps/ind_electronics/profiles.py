@@ -158,7 +158,8 @@ ELECTRONICS_TRIAL_FLOW_SEED: Dict[str, Any] = {
         "component": [
             {"step_key": "rd_manager", "step_name": "经理审核", "dept_code": "rd", "sort": 10},
             {"step_key": "purchasing", "step_name": "采购审核", "dept_code": "purchasing", "sort": 20},
-            {"step_key": "production", "step_name": "生产试流结果", "dept_code": "prod", "sort": 30},
+            {"step_key": "production_trial", "step_name": "生产试流", "dept_code": "prod", "sort": 30},
+            {"step_key": "production_feedback", "step_name": "生产反馈结果", "dept_code": "prod", "sort": 40},
         ],
         "structure": [
             {"step_key": "plan", "step_name": "生产计划排产", "dept_code": "plan", "sort": 10},
@@ -213,7 +214,8 @@ ELECTRONICS_TRIAL_FLOW_SEED: Dict[str, Any] = {
 ELECTRONICS_RD_DELIVERABLE_SEED: Dict[str, Any] = {
     "naming_rules": {
         "part_spec_types": ["part_spec", "component_spec"],
-        "test_report_types": ["test_report", "test"],
+        "test_report_part_types": ["test_report_part", "test_report", "test"],
+        "test_report_complete_types": ["test_report_complete"],
         "software_spec_types": ["software_spec", "sw_spec"],
         "schematic_gerber_types": [
             "schematic",
@@ -428,14 +430,14 @@ ELECTRONICS_LAB_REQUEST_SEED: Dict[str, Any] = {
 
 ELECTRONICS_RD_DELIVERABLE_SEED: Dict[str, Any] = {
     "drawing_types": [
-        {"code": "silkscreen", "label": "丝印图纸", "sort": 10, "active": True},
-        {"code": "assembly", "label": "总装图纸", "sort": 20, "active": True},
-        {"code": "packaging", "label": "包装图纸", "sort": 30, "active": True},
-        {"code": "pcb_assembly", "label": "线路板组件图纸", "sort": 40, "active": True},
+        {"code": "drawing_silkscreen", "label": "丝印图纸", "sort": 10, "active": True},
+        {"code": "drawing_assembly", "label": "总装图纸", "sort": 20, "active": True},
+        {"code": "drawing_packaging", "label": "包装图纸", "sort": 30, "active": True},
+        {"code": "drawing_pcb_assembly", "label": "线路板组件图纸", "sort": 40, "active": True},
     ],
     "customer_doc_types": [
-        {"code": "spec_sheet", "label": "规格书", "sort": 10, "active": True},
-        {"code": "approval_sheet", "label": "承认书", "sort": 20, "active": True},
+        {"code": "customer_spec", "label": "规格书", "sort": 10, "active": True},
+        {"code": "customer_approval", "label": "承认书", "sort": 20, "active": True},
     ],
 }
 

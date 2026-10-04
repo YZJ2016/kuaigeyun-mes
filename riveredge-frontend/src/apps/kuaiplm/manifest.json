@@ -503,7 +503,7 @@
       "entity_type": "sample_process",
       "resource": "kuaiplm:sample-process",
       "name": "样品加工审核",
-      "template": "simple",
+      "template": "sample_smt",
       "config_category": "plm",
       "business_type": "",
       "config_section": "plm_project"
@@ -544,6 +544,16 @@
       "config_category": "plm",
       "business_type": "",
       "config_section": "plm_project"
+    },
+    {
+      "node_key": "rd_structure_drawing",
+      "entity_type": "rd_deliverable",
+      "resource": "kuaiplm:project",
+      "name": "结构图纸审核",
+      "template": "structure_drawing",
+      "config_category": "plm",
+      "business_type": "structure_drawing",
+      "config_section": "plm_doc"
     },
     {
       "node_key": "rd_deliverable",

@@ -38,12 +38,11 @@ async def fetch_mobile_inbox_snapshot(*, tenant_id: int, user: User) -> dict[str
         )
 
     async def tasks():
-        return await UserTaskService.get_user_tasks(
+        return await UserTaskService.get_mobile_inbox_pending_tasks(
             tenant_id=tenant_id,
             user_id=user_id,
             page=1,
             page_size=50,
-            task_type="pending",
         )
 
     async def task_stats():

@@ -42,6 +42,16 @@ def _parse_status_filter(status: Optional[str]) -> Optional[List[str]]:
     return values or None
 
 
+def _task_response_data_from_instance(inst: ApprovalInstance) -> Optional[Dict[str, Any]]:
+    from core.services.approval.approval_audit_scope import enrich_instance_data_audit_app
+
+    process_code = inst.process.code if getattr(inst, "process", None) else None
+    return enrich_instance_data_audit_app(
+        inst.data if isinstance(inst.data, dict) else {},
+        process_code=process_code,
+    )
+
+
 async def _enrich_user_display_names(
     tenant_id: int, items: List[UserTaskResponse]
 ) -> List[UserTaskResponse]:
@@ -110,7 +120,7 @@ class UserTaskService:
                         approval_instance_uuid=inst.uuid,
                         title=inst.title,
                         content=inst.content,
-                        data=inst.data,
+                        data=_task_response_data_from_instance(inst),
                         submitter_id=inst.submitter_id,
                         current_approver_id=inst.current_approver_id,
                         status=inst.status,
@@ -146,7 +156,7 @@ class UserTaskService:
                         approval_instance_uuid=inst.uuid,
                         title=inst.title,
                         content=inst.content,
-                        data=inst.data,
+                        data=_task_response_data_from_instance(inst),
                         submitter_id=inst.submitter_id,
                         current_approver_id=user_id,
                         status=task.status,
@@ -162,7 +172,13 @@ class UserTaskService:
                 await ApprovalInstanceService.reconcile_orphaned_outbound_approval_tasks(
                     tenant_id, user_id
                 )
-                query = Q(tenant_id=tenant_id, approver_id=user_id, status="pending")
+                query = Q(
+                    tenant_id=tenant_id,
+                    approver_id=user_id,
+                    status="pending",
+                    approval_instance__status="pending",
+                    approval_instance__deleted_at__isnull=True,
+                )
                 total = await ApprovalTask.filter(query).count()
                 tasks = await ApprovalTask.filter(query).prefetch_related("approval_instance__process").order_by("-created_at").offset(offset).limit(page_size)
                 for task in tasks:
@@ -182,7 +198,7 @@ class UserTaskService:
                         approval_instance_uuid=inst.uuid,
                         title=inst.title,
                         content=inst.content,
-                        data=inst.data,
+                        data=_task_response_data_from_instance(inst),
                         submitter_id=inst.submitter_id,
                         current_approver_id=user_id,
                         status=task.status,
@@ -204,6 +220,66 @@ class UserTaskService:
         except Exception as e:
             logger.exception(f"获取用户任务列表失败: {e}")
             raise e
+
+    @staticmethod
+    async def get_mobile_inbox_pending_tasks(
+        tenant_id: int,
+        user_id: int,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> UserTaskListResponse:
+        """消息中心「待办」：不含 audit app=kuaizhizao 的审批任务。"""
+        from core.services.approval.approval_audit_scope import is_mobile_inbox_approval_task
+
+        offset = (page - 1) * page_size
+        await ApprovalInstanceService.reconcile_orphaned_outbound_approval_tasks(
+            tenant_id, user_id
+        )
+        query = Q(tenant_id=tenant_id, approver_id=user_id, status="pending")
+        tasks = await ApprovalTask.filter(query).prefetch_related("approval_instance__process").order_by("-created_at").all()
+        inbox_tasks: List[ApprovalTask] = []
+        for task in tasks:
+            inst = task.approval_instance
+            if not inst:
+                continue
+            if not is_mobile_inbox_approval_task(inst):
+                continue
+            inbox_tasks.append(task)
+        items: List[UserTaskResponse] = []
+        for task in inbox_tasks[offset : offset + page_size]:
+            inst = task.approval_instance
+            if not inst:
+                continue
+            process_uuid = None
+            if inst.process:
+                process_uuid = getattr(inst.process, "uuid", None)
+            items.append(
+                UserTaskResponse(
+                    uuid=task.uuid,
+                    tenant_id=task.tenant_id,
+                    process_uuid=process_uuid,
+                    approval_instance_uuid=inst.uuid,
+                    title=inst.title,
+                    content=inst.content,
+                    data=_task_response_data_from_instance(inst),
+                    submitter_id=inst.submitter_id,
+                    current_approver_id=user_id,
+                    status=task.status,
+                    current_node=task.node_id,
+                    remind_at=inst.remind_at,
+                    submitted_at=inst.submitted_at,
+                    completed_at=inst.completed_at,
+                    created_at=task.created_at,
+                    updated_at=task.updated_at,
+                )
+            )
+        await _enrich_user_display_names(tenant_id, items)
+        return UserTaskListResponse(
+            items=items,
+            total=len(inbox_tasks),
+            page=page,
+            page_size=page_size,
+        )
     
     @staticmethod
     async def get_user_task(
@@ -338,7 +414,9 @@ class UserTaskService:
             pending_tasks = await ApprovalTask.filter(
                 tenant_id=tenant_id,
                 approver_id=user_id,
-                status="pending"
+                status="pending",
+                approval_instance__status="pending",
+                approval_instance__deleted_at__isnull=True,
             ).prefetch_related("approval_instance")
             
             pending = len(pending_tasks)

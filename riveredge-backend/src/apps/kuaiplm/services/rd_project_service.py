@@ -92,7 +92,9 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, Valid
 from infra.models.user import User
 
 RD_DELIVERABLE_AUDIT_NODE = "rd_deliverable"
+RD_STRUCTURE_DRAWING_AUDIT_NODE = "rd_structure_drawing"
 RD_DELIVERABLE_ENTITY_TYPE = "rd_deliverable"
+STRUCTURE_DRAWING_REMINDER_HOURS = 8
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date, today_site_str
 
 
@@ -1412,23 +1414,43 @@ class RdProjectService(AppBaseService[RdProject]):
         await row.save()
         await self._ensure_deliverable_version_row(row, actor_name=user_info["name"])
 
+        from apps.kuaiplm.utils.rd_deliverable_naming import (
+            deliverable_approval_business_type,
+            is_structure_drawing_type,
+            skips_deliverable_signoff,
+        )
+
+        if skips_deliverable_signoff(row.deliverable_type):
+            approved = await self._apply_deliverable_approved(
+                tenant_id,
+                row,
+                actor_id=user.id,
+                actor_name=user_info["name"],
+            )
+            return RdProjectDeliverableResponse.model_validate(approved)
+
+        audit_node = (
+            RD_STRUCTURE_DRAWING_AUDIT_NODE
+            if is_structure_drawing_type(row.deliverable_type)
+            else RD_DELIVERABLE_AUDIT_NODE
+        )
         approval_instance = None
-        if await AuditBindingService.is_audit_enabled(tenant_id, RD_DELIVERABLE_AUDIT_NODE):
+        if await AuditBindingService.is_audit_enabled(tenant_id, audit_node):
             approval_instance = await ApprovalInstanceService.start_approval_for_node(
                 tenant_id=tenant_id,
                 user_id=user.id,
-                node_key=RD_DELIVERABLE_AUDIT_NODE,
+                node_key=audit_node,
                 entity_type=RD_DELIVERABLE_ENTITY_TYPE,
                 entity_id=row.id,
                 entity_uuid=str(row.uuid),
                 title=f"研发交付物审核 {row.name} {row.version}",
                 content=row.description or row.name,
-                business_type=(row.deliverable_type or ""),
+                business_type=deliverable_approval_business_type(row.deliverable_type),
                 send_notification=True,
             )
             if approval_instance is None:
                 raise ValidationError(
-                    f"审核已开启但未找到可用审批流程，请检查 {RD_DELIVERABLE_AUDIT_NODE} 绑定"
+                    f"审核已开启但未找到可用审批流程，请检查 {audit_node} 绑定"
                 )
 
         await PlmPendingApprovalReminderService.sync_after_submit(
@@ -1441,6 +1463,11 @@ class RdProjectService(AppBaseService[RdProject]):
             title=row.name,
             project_code=project.project_code,
             doc_label="研发交付物 ",
+            delay_hours=(
+                STRUCTURE_DRAWING_REMINDER_HOURS
+                if is_structure_drawing_type(row.deliverable_type)
+                else None
+            ),
         )
 
         if submit_instance_auto_passed(approval_instance):
@@ -1466,9 +1493,16 @@ class RdProjectService(AppBaseService[RdProject]):
         row = await self._get_deliverable_or_404(tenant_id, project_id, deliverable_id)
         if row.status != RdDeliverableStatus.SUBMITTED.value:
             raise BusinessLogicError("仅待审交付物可通过")
+        from apps.kuaiplm.utils.rd_deliverable_naming import is_structure_drawing_type
+
+        audit_node = (
+            RD_STRUCTURE_DRAWING_AUDIT_NODE
+            if is_structure_drawing_type(row.deliverable_type)
+            else RD_DELIVERABLE_AUDIT_NODE
+        )
         await assert_plm_manual_approval_action(
             tenant_id,
-            audit_node=RD_DELIVERABLE_AUDIT_NODE,
+            audit_node=audit_node,
             entity_type=RD_DELIVERABLE_ENTITY_TYPE,
             entity_id=deliverable_id,
             doc_label="研发交付物",
@@ -1654,9 +1688,16 @@ class RdProjectService(AppBaseService[RdProject]):
         if row.status == RdDeliverableStatus.SUBMITTED.value:
             from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
 
+            from apps.kuaiplm.utils.rd_deliverable_naming import is_structure_drawing_type
+
+            audit_node = (
+                RD_STRUCTURE_DRAWING_AUDIT_NODE
+                if is_structure_drawing_type(row.deliverable_type)
+                else RD_DELIVERABLE_AUDIT_NODE
+            )
             await assert_plm_manual_approval_action(
                 tenant_id,
-                audit_node=RD_DELIVERABLE_AUDIT_NODE,
+                audit_node=audit_node,
                 entity_type=RD_DELIVERABLE_ENTITY_TYPE,
                 entity_id=deliverable_id,
                 doc_label="研发交付物",

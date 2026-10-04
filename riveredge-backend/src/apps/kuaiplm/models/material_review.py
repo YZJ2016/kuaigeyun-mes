@@ -40,6 +40,7 @@ class MaterialReview(BaseModel):
     remarks = fields.TextField(null=True, description="备注")
     submitted_at = fields.DatetimeField(null=True)
     approved_at = fields.DatetimeField(null=True)
+    revision_no = fields.IntField(default=1, description="当前版次（升版后递增）")
     deleted_at = fields.DatetimeField(null=True)
 
 
@@ -62,4 +63,25 @@ class MaterialReviewLine(BaseModel):
         description="preferred/limited/forbidden",
     )
     remarks = fields.CharField(max_length=500, null=True)
+    deleted_at = fields.DatetimeField(null=True)
+
+
+class MaterialReviewRevision(BaseModel):
+    """物料评审已审核版次快照（同评审单号升版后可下载历史版）。"""
+
+    class Meta:
+        table = "apps_kuaiplm_material_review_revisions"
+        table_description = "快研发 - 物料评审版次"
+        unique_together = [("tenant_id", "review_id", "revision_no")]
+        indexes = [("tenant_id", "review_id"), ("uuid",)]
+
+    id = fields.IntField(pk=True)
+    review_id = fields.IntField(description="评审单ID")
+    revision_no = fields.IntField(description="版次号")
+    title = fields.CharField(max_length=200, description="标题快照")
+    remarks = fields.TextField(null=True, description="备注快照")
+    lines_snapshot = fields.JSONField(description="明细行快照")
+    approved_at = fields.DatetimeField(description="该版审核通过时间")
+    approved_by = fields.IntField(null=True)
+    approved_by_name = fields.CharField(max_length=100, null=True)
     deleted_at = fields.DatetimeField(null=True)

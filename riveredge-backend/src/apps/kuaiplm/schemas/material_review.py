@@ -53,6 +53,7 @@ class MaterialReviewResponse(BaseModel):
     remarks: Optional[str] = None
     submitted_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None
+    revision_no: int = 1
     created_at: datetime
     updated_at: datetime
     created_by: Optional[int] = None
@@ -82,4 +83,30 @@ class MaterialReviewListItem(BaseModel):
 
 class MaterialReviewListResponse(BaseModel):
     items: List[MaterialReviewListItem]
+    total: int
+
+
+class MaterialReviewRevisionLineOut(BaseModel):
+    material_code: str
+    material_name: str
+    usage_status: str
+    remarks: Optional[str] = None
+
+
+class MaterialReviewRevisionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    uuid: UUID
+    review_id: int
+    revision_no: int
+    title: str
+    remarks: Optional[str] = None
+    approved_at: datetime
+    approved_by_name: Optional[str] = None
+    lines: List[MaterialReviewRevisionLineOut] = Field(default_factory=list)
+
+
+class MaterialReviewRevisionListResponse(BaseModel):
+    items: List[MaterialReviewRevisionOut]
     total: int

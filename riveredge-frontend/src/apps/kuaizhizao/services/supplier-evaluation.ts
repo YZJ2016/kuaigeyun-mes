@@ -177,6 +177,10 @@ export interface SupplierEvalEnvDocument {
   supplier_id?: number;
   supplier_code?: string | null;
   supplier_name?: string | null;
+  material_id?: number | null;
+  material_code?: string | null;
+  material_name?: string | null;
+  material_description?: string | null;
   doc_type?: SupplierEnvDocType | string;
   title?: string;
   issued_at?: string | null;

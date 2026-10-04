@@ -9,6 +9,7 @@ from apps.kuaizhizao.services.menu_badge_counts_service import _section_quality_
 from apps.kuaizhizao.services.menu_badge_scope import BadgeScopeCtx
 from apps.kuaizhizao.services.mobile_workbench import resolve_mobile_workbench_home
 from apps.kuaizhizao.services.work_order_mobile_kpi import fetch_work_order_mobile_kpi
+from core.models.approval_instance import ApprovalInstance
 from core.models.approval_task import ApprovalTask
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.authorization.effective_access_service import EffectiveAccessService
@@ -36,6 +37,17 @@ async def _count_im_unread(tenant_id: int, user_id: int) -> int:
     return sum(int(v or 0) for v in unread_map.values())
 
 
+async def _persist_instance_audit_snapshot(inst: ApprovalInstance) -> None:
+    from core.services.approval.approval_audit_scope import enrich_instance_data_audit_app
+
+    process_code = inst.process.code if getattr(inst, "process", None) else None
+    before = inst.data if isinstance(inst.data, dict) else {}
+    enriched = enrich_instance_data_audit_app(before, process_code=process_code)
+    inst.data = enriched
+    if enriched != before:
+        await inst.save(update_fields=["data", "updated_at"])
+
+
 async def list_mobile_pending_kuaizhizao_approvals(
     *,
     tenant_id: int,
@@ -43,21 +55,55 @@ async def list_mobile_pending_kuaizhizao_approvals(
     skip: int = 0,
     limit: int = 100,
 ) -> list:
-    """手机「待我审批」列表与角标唯一真源。"""
+    """手机「待我审批」列表与角标唯一真源（ApprovalTask 指派 ∪ current_approver_id）。"""
     from apps.kuaizhizao.services.kuaizhizao_approval_scope import is_kuaizhizao_approval_instance
 
-    instances = await ApprovalInstanceService.list_approval_instances(
-        tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        status="pending",
-        pending_for_user_id=user_id,
+    uid = int(user_id)
+    seen: set[int] = set()
+    ordered: list[ApprovalInstance] = []
+
+    pending_tasks = (
+        await ApprovalTask.filter(
+            tenant_id=tenant_id,
+            approver_id=uid,
+            status="pending",
+        )
+        .prefetch_related("approval_instance__process")
+        .order_by("-created_at")
     )
-    return [
-        inst
-        for inst in instances
-        if is_kuaizhizao_approval_instance(inst.data or {}, inst.title or "")
-    ]
+    for task in pending_tasks:
+        inst = task.approval_instance
+        if not inst or inst.deleted_at or inst.status != "pending":
+            continue
+        if inst.id in seen:
+            continue
+        if not is_kuaizhizao_approval_instance(inst):
+            continue
+        seen.add(inst.id)
+        ordered.append(inst)
+
+    approver_instances = (
+        await ApprovalInstance.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status="pending",
+            current_approver_id=uid,
+        )
+        .prefetch_related("process")
+        .order_by("-created_at")
+    )
+    for inst in approver_instances:
+        if inst.id in seen:
+            continue
+        if not is_kuaizhizao_approval_instance(inst):
+            continue
+        seen.add(inst.id)
+        ordered.append(inst)
+
+    page = ordered[skip : skip + limit]
+    for inst in page:
+        await _persist_instance_audit_snapshot(inst)
+    return page
 
 
 async def _count_pending_kuaizhizao_approvals(tenant_id: int, user_id: int) -> int:
@@ -72,21 +118,20 @@ async def _count_pending_kuaizhizao_approvals(tenant_id: int, user_id: int) -> i
 
 async def _count_inbox_pending_tasks(tenant_id: int, user_id: int) -> int:
     """消息中心「待办」：排除快制造审批类 ApprovalTask。"""
-    from apps.kuaizhizao.services.kuaizhizao_approval_scope import is_kuaizhizao_approval_pending_task
+    from core.services.approval.approval_audit_scope import is_mobile_inbox_approval_task
 
     tasks = await ApprovalTask.filter(
         tenant_id=tenant_id,
         approver_id=user_id,
         status="pending",
-    ).prefetch_related("approval_instance")
+    ).prefetch_related("approval_instance__process")
     count = 0
     for task in tasks:
         inst = task.approval_instance
         if not inst or getattr(inst, "deleted_at", None) or inst.status != "pending":
             continue
-        if is_kuaizhizao_approval_pending_task(inst.data or {}, inst.title or ""):
-            continue
-        count += 1
+        if is_mobile_inbox_approval_task(inst):
+            count += 1
     return count
 
 

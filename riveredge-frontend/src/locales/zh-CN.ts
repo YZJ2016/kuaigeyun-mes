@@ -4916,6 +4916,11 @@ export default {
   'app.kuaiplm.materialReview.actions.downloadTemplate': '下载填写模板',
   'app.kuaiplm.materialReview.actions.importTemplate': '导入模板',
   'app.kuaiplm.materialReview.actions.downloadSheet': '下载评审单',
+  'app.kuaiplm.materialReview.actions.downloadHistory': '下载历史版',
+  'app.kuaiplm.materialReview.actions.downloadRevision': '下载第 {{version}} 版',
+  'app.kuaiplm.materialReview.actions.revise': '升版',
+  'app.kuaiplm.materialReview.revisionDraft': '草稿',
+  'app.kuaiplm.materialReview.messages.reviseSuccess': '已升版，可编辑后再次提交审核',
   'app.kuaiplm.materialReview.template.sampleName': '示例物料（请改为真实物料）',
   'app.kuaiplm.materialReview.template.sampleRemark': '示例行可删；使用状态填：优先使用 / 限用 / 禁止使用',
   'app.kuaiplm.materialReview.status.draft': '草稿',
@@ -5351,6 +5356,42 @@ export default {
   'app.kuaiplm.rdProjects.detail.deliverable.type.panelization': '拼版资料',
   'app.kuaiplm.rdProjects.detail.deliverable.type.schematicGerber': '原理图/Layout/Gerber',
   'app.kuaiplm.rdProjects.detail.deliverable.type.testReport': '测试报告',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.testReportPart': '测试报告（部品）',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.testReportComplete': '测试报告（整机）',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.drawing3d': '3D',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.drawingCad': '2D CAD',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.drawingPdf': '2D PDF',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.moldDfm': '模具DFM',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.moldDrawing': '模具图',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.moldAcceptance': '模具验收报告',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.reliabilityReport': '可靠性试验报告',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.moldRepair': '修模资料',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.drawingSilkscreen': '丝印图纸',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.drawingAssembly': '总装图纸',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.drawingPackaging': '包装图纸',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.drawingPcbAssembly': '线路板组件图纸',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.customerSpec': '规格书',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.customerApproval': '承认书',
+  'app.kuaiplm.rdProjects.detail.deliverable.projectDrawingHint':
+    '项目侧生产图纸，与电子图纸、结构 3D 和 2D 分开归档。上传后可下发，历史版本仍可查看。',
+  'app.kuaiplm.rdProjects.detail.deliverable.customerDocHint':
+    '发给客户的规格书或承认书。不并进部品规格书或软件规格书。',
+  'app.kuaiplm.rdProjects.detail.deliverable.structureDrawingHint':
+    '文件名后缀须带版本号（如 _A1、_R02）。提交后由组长审核、经理批准；超过 8 小时未处理会再提醒。',
+  'app.kuaiplm.rdProjects.detail.deliverable.moldRepairHint':
+    '修模资料单独归档。文件名须带日期（如 _20261004），不做封面。提交后即为当前版，不另走会签。',
+  'app.kuaiplm.rdProjects.detail.deliverable.structureCatalogHint':
+    '上传最新版即可。提交后即为当前版，不另走会签。',
+  'app.kuaiplm.rdProjects.detail.deliverable.testReportPartHint':
+    '部品测试报告按部品料号归档；旧料号仍可用时填写沿用旧料号。',
+  'app.kuaiplm.rdProjects.detail.deliverable.testReportCompleteHint':
+    '整机测试报告按整机型号或整机料号归档，与部品目录分开管理。',
+  'app.kuaiplm.rdProjects.detail.deliverable.legacyMaterialCode': '沿用旧料号',
+  'app.kuaiplm.rdProjects.detail.deliverable.legacyMaterialCodePlaceholder':
+    '旧料号仍可用时填写，须与物料编码格式一致',
+  'app.kuaiplm.rdProjects.detail.deliverable.completeMachineCode': '整机型号/料号',
+  'app.kuaiplm.rdProjects.detail.deliverable.completeMachineCodeRequired': '请填写整机型号或整机料号',
+  'app.kuaiplm.rdProjects.detail.deliverable.completeMachineCodePlaceholder': '整机目录下的归档料号',
   'app.kuaiplm.rdProjects.detail.deliverable.type.document': '其它文档',
   'app.kuaiplm.rdProjects.detail.deliverable.materialCode': '材料料号',
   'app.kuaiplm.rdProjects.detail.deliverable.catalogCode': '料号',
@@ -7642,6 +7683,9 @@ export default {
   'app.kuaizhizao.supplierEval.colEnvTitle': '资料标题',
   'app.kuaizhizao.supplierEval.colIssuedAt': '签发日期',
   'app.kuaizhizao.supplierEval.colExpiresAt': '有效期至',
+  'app.kuaizhizao.supplierEval.colMaterial': '物料',
+  'app.kuaizhizao.supplierEval.colMaterialDescription': '材料说明',
+  'app.kuaizhizao.supplierEval.materialDescriptionRequired': '请填写材料说明',
   'app.kuaizhizao.supplierEval.supplierRequired': '请选择供应商',
   'app.kuaizhizao.supplierEval.quarterRequired': '季评须选择季度',
   'app.kuaizhizao.supplierEval.quarterOption': '第{{quarter}}季度',
@@ -7812,6 +7856,8 @@ export default {
   'app.kuaizhizao.reworkOrder.fieldVerifyMonth': '验证月份',
   'app.kuaizhizao.reworkOrder.fieldShowToCustomer': '向客户展示',
   'app.kuaizhizao.reworkOrder.fieldPqcSummary': 'PQC 质量记录汇总',
+  'app.kuaizhizao.reworkOrder.fieldInventoryAnnualPlan': '年度计划',
+  'app.kuaizhizao.reworkOrder.fieldInventoryMonthlySummary': '月汇总',
   'app.kuaizhizao.reworkOrder.fieldNoScrapConfirmed': '无报废确认',
   'app.kuaizhizao.reworkOrder.fieldNeedWarehouseIn': '是否入库',
   'app.kuaizhizao.reworkOrder.signoffChildrenHint': '会签型可维护物料到位、报废明细与排位策划（与制造执行工序分开）。',
@@ -29794,6 +29840,22 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.kuaizhizao-quality-l68-l77-r01.title':
+    '质量：投诉按岗位签字，环保资料记物料，库存验证可挂计划与月汇总',
+  'pages.dashboard.updateLog.entries.kuaizhizao-quality-l68-l77-r01.description':
+    '来料、产线、制程、出货和客诉各自按岗位串行签字，审批人在审批中心绑定。环保资料须选择物料并填写材料说明，到期仍按有效期提醒。库存验证返工可上传年度计划和月汇总，审核顺序为质量、制造、负责人、采购、计划。已改过的签字图不会被覆盖。',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-project-l53-l57-r01.title':
+    '快研发：项目图纸、确认书、评审单和发客户资料',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-project-l53-l57-r01.description':
+    '项目交付物增加丝印、总装、包装、线路板组件图纸，以及发给客户的规格书和承认书。确认书分为整机确认和材料确认。评审单类型固定为设计开发、色彩合并、样机。',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-structure-deliverable-l42-l46-r01.title':
+    '快研发：结构图纸与模具资料可在项目交付物中归档',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-structure-deliverable-l42-l46-r01.description':
+    '项目交付物增加 3D、2D CAD、2D PDF、模具 DFM、模具图、验收报告、可靠性试验报告和修模资料。3D 与 2D 由组长审核、经理批准，超过 8 小时再提醒，文件名须带版本号。模具、可靠性与修模提交后即为当前版。修模文件名须带日期。',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-electronics-l35-l41-r01.title':
+    '快研发：电子行业试流、样品 SMT、评审升版与测试报告目录',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-electronics-l35-l41-r01.description':
+    '元件试流拆为经理、采购、生产试流与生产反馈四步；样品钢网/SMT 审核为经理、仓库、采购、COB 四级；物料评审同号升版后可下载各历史版；测试报告分为部品与整机两类目录并支持沿用旧料号。',
   'pages.dashboard.updateLog.entries.mobile-login-platform-logo-r01.title':
     '手机登录页跟随平台 Logo',
   'pages.dashboard.updateLog.entries.mobile-login-platform-logo-r01.description':
@@ -29834,6 +29896,18 @@ export default {
     '消息中心聊天置顶',
   'pages.dashboard.updateLog.entries.mobile-message-chat-tab-first-r01.description':
     '手机消息中心顶栏分段将「聊天」置于首位，进入消息页默认展示会话列表；通知与待办顺序后移，深链仍可指定 pane 打开对应分段。',
+  'pages.dashboard.updateLog.entries.approval-task-terminal-instance-r01.title':
+    '已结束审批不再显示待处理',
+  'pages.dashboard.updateLog.entries.approval-task-terminal-instance-r01.description':
+    '审批实例已通过、驳回或取消后，残留的 pending 任务会同步为终态；我的任务待处理与手机待我审批只统计实例仍为待审的任务。',
+  'pages.dashboard.updateLog.entries.mobile-pending-approval-task-first-r01.title':
+    '手机待我审批列表取数',
+  'pages.dashboard.updateLog.entries.mobile-pending-approval-task-first-r01.description':
+    '待我审批改为按 pending 审批任务并集当前审批人实例，打开列表时按 audit 注册表回填实例 app；审批通知携带实例 UUID 可直达详情。',
+  'pages.dashboard.updateLog.entries.mobile-message-approval-audit-scope-r01.title':
+    '手机消息与审批边界',
+  'pages.dashboard.updateLog.entries.mobile-message-approval-audit-scope-r01.description':
+    '消息中心仅承载聊天、系统通知与非快制造待办；快制造审核待办统一由 manifest audit 注册表判定并写入审批实例 app，待我审批列表与角标同口径，移除标题与路径猜测过滤。',
   'pages.dashboard.updateLog.entries.mobile-pending-approvals-api-r01.title':
     '手机待我审批专用接口',
   'pages.dashboard.updateLog.entries.mobile-pending-approvals-api-r01.description':
