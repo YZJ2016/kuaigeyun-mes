@@ -5,10 +5,9 @@
 再由浏览器 / 下载管理器直接流式拉取 zip，避免 JWT 出现在 URL 或 JS blob 缓冲。
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 import os
-from typing import Any, Dict
-from urllib.parse import urlparse
+from typing import Any, Dict, Optional
 
 from jose import JWTError, jwt
 from loguru import logger
@@ -27,24 +26,17 @@ class BackupDownloadService:
     TOKEN_EXPIRES_IN = 3600
 
     @staticmethod
-    def _browser_safe_public_base_url() -> str:
-        raw = (settings.BASE_URL or "").strip().rstrip("/")
-        if not raw:
-            return ""
-        try:
-            host = (urlparse(raw).hostname or "").lower()
-            if host in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
-                return ""
-        except Exception:
-            return ""
-        return raw
-
-    @staticmethod
-    def generate_download_token(backup_uuid: str, tenant_id: int) -> str:
+    def generate_download_token(
+        backup_uuid: str,
+        tenant_id: Optional[int],
+        *,
+        is_infra_admin: bool = False,
+    ) -> str:
         now = now_utc()
         payload = {
             "backup_uuid": backup_uuid,
             "tenant_id": tenant_id,
+            "is_infra_admin": bool(is_infra_admin),
             "exp": now + timedelta(seconds=BackupDownloadService.TOKEN_EXPIRES_IN),
             "iat": now,
         }
@@ -66,14 +58,24 @@ class BackupDownloadService:
             raise ValueError("下载链接无效") from exc
 
     @staticmethod
-    def build_download_url(backup_uuid: str, tenant_id: int) -> str:
-        download_token = BackupDownloadService.generate_download_token(backup_uuid, tenant_id)
-        base_url = BackupDownloadService._browser_safe_public_base_url()
-        path = f"/api/v1/core/data-backups/{backup_uuid}/download?download_token={download_token}"
-        return f"{base_url}{path}" if base_url else path
+    def build_download_url(
+        backup_uuid: str,
+        tenant_id: Optional[int],
+        *,
+        is_infra_admin: bool = False,
+    ) -> str:
+        download_token = BackupDownloadService.generate_download_token(
+            backup_uuid, tenant_id, is_infra_admin=is_infra_admin
+        )
+        # 相对路径走当前页面 origin（与文件预览一致）。拼 BASE_URL 会在局域网 IP /
+        # Vite 开发端口与 .env 不一致时变成 ERR_CONNECTION_REFUSED。
+        return (
+            f"/api/v1/core/data-backups/{backup_uuid}/download"
+            f"?download_token={download_token}"
+        )
 
     @staticmethod
-    def resolve_backup_file(backup_uuid: str, tenant_id: int, file_path: str | None) -> tuple[str, str]:
+    def resolve_backup_file(backup_uuid: str, tenant_id: Optional[int], file_path: str | None) -> tuple[str, str]:
         if not file_path:
             raise ValueError("备份文件不存在")
 

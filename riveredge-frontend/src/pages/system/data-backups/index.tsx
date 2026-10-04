@@ -14,11 +14,13 @@ import {
   ActionType,
   ProColumns,
   ProForm,
+  ProFormDependency,
   ProFormText,
   type ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, Tag, Space, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip, theme, Upload, InputNumber, Form } from 'antd';
+import { getTenantList, TenantStatus } from '../../../services/tenant';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemStatusTag, renderSystemTypeMarker } from '../utils/systemListPresentation';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
@@ -66,6 +68,7 @@ const DataBackupsPage: React.FC = () => {
   const { token } = theme.useToken();
   const { Text } = Typography;
   const currentUser = useCurrentUser();
+  const isInfraAdmin = Boolean(currentUser?.is_infra_admin);
   const actionRef = React.useRef<ActionType>(null);
 
   const getStatusInfo = (status: string): { status: 'success' | 'error' | 'processing' | 'default'; text: string } => {
@@ -88,6 +91,12 @@ const DataBackupsPage: React.FC = () => {
     return badge;
   };
 
+  const getBackupTenantScopeText = (scope?: string | null): string => {
+    if (scope === 'all') {
+      return t('pages.system.dataBackups.backupScopeAllLabel');
+    }
+    return t('pages.system.dataBackups.backupScopeTenantLabel');
+  };
   const getBackupContentScopeText = (includeFiles?: boolean | null): string => {
     if (includeFiles === false) {
       return t('pages.system.dataBackups.contentDataOnly');
@@ -216,21 +225,44 @@ const DataBackupsPage: React.FC = () => {
   /**
    * 创建备份
    */
-  const handleCreate = async (values: Pick<CreateDataBackupData, 'name' | 'include_files'>) => {
+  const handleCreate = async (
+    values: Pick<CreateDataBackupData, 'name' | 'include_files' | 'backup_scope' | 'target_tenant_id'>,
+  ) => {
     setSubmitting(true);
     try {
-      const tenantId = currentUser?.tenant_id ?? getTenantId();
-      const isInfraAdmin = Boolean(currentUser?.is_infra_admin);
-      // 无租户上下文时：平台管理员走全量备份，普通用户直接提示
-      if (tenantId == null && !isInfraAdmin) {
+      const boundTenantId = currentUser?.tenant_id ?? getTenantId();
+      const formValues = {
+        ...values,
+        ...(typeof form.getFieldsValue === 'function' ? form.getFieldsValue(true) : {}),
+      } as typeof values;
+      let backupScope: CreateDataBackupData['backup_scope'] = 'tenant';
+      if (isInfraAdmin) {
+        backupScope = formValues.backup_scope === 'all' ? 'all' : 'tenant';
+      } else if (boundTenantId == null) {
         messageApi.error(t('pages.system.dataBackups.createNeedTenant'));
         return;
       }
+
+      let targetTenantId: number | undefined;
+      if (backupScope === 'tenant' && isInfraAdmin) {
+        const raw = formValues.target_tenant_id ?? form.getFieldValue?.('target_tenant_id');
+        const selected = raw != null ? Number(raw) : NaN;
+        if (Number.isFinite(selected) && selected > 0) {
+          targetTenantId = selected;
+        } else if (boundTenantId != null) {
+          targetTenantId = Number(boundTenantId);
+        } else {
+          messageApi.error(t('pages.system.dataBackups.targetTenantRequired'));
+          return;
+        }
+      }
+
       await createBackup({
-        name: values.name,
+        name: formValues.name,
         backup_type: 'full',
-        backup_scope: tenantId != null ? 'tenant' : 'all',
-        include_files: values.include_files ?? true,
+        backup_scope: backupScope,
+        include_files: formValues.include_files ?? true,
+        ...(targetTenantId != null ? { target_tenant_id: targetTenantId } : {}),
       });
       messageApi.success(t('pages.system.dataBackups.createSuccess'));
       setCreateModalVisible(false);
@@ -535,6 +567,10 @@ const DataBackupsPage: React.FC = () => {
             </div>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelTenantScope')}</Text>
+              <Text style={{ fontSize: 12 }}>{getBackupTenantScopeText(backup.backup_scope)}</Text>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelScope')}</Text>
               <Text style={{ fontSize: 12 }}>{getBackupContentScopeText(backup.include_files)}</Text>
             </div>
@@ -638,6 +674,20 @@ const DataBackupsPage: React.FC = () => {
       minWidth: 110,
       uniTableKeepWidth: true,
       resizable: false,
+    },
+    {
+      title: t('pages.system.dataBackups.columnTenantScope'),
+      dataIndex: 'backup_scope',
+      key: 'backup_scope',
+      width: 140,
+      minWidth: 140,
+      uniTableKeepWidth: true,
+      resizable: false,
+      valueEnum: {
+        tenant: { text: t('pages.system.dataBackups.backupScopeTenantLabel') },
+        all: { text: t('pages.system.dataBackups.backupScopeAllLabel') },
+      },
+      render: (_: unknown, record: DataBackup) => getBackupTenantScopeText(record.backup_scope),
     },
     {
       title: t('pages.system.dataBackups.columnScope'),
@@ -779,6 +829,7 @@ const DataBackupsPage: React.FC = () => {
     { title: t('pages.system.dataBackups.columnName'), dataIndex: 'name' },
     { title: t('pages.system.dataBackups.columnSource'), dataIndex: 'source_type', render: (_, r) => getSourceTypeTag(r.source_type) },
     { title: t('pages.system.dataBackups.columnType'), dataIndex: 'backup_type', render: (_, r) => getBackupTypeTag(r.backup_type) },
+    { title: t('pages.system.dataBackups.columnTenantScope'), dataIndex: 'backup_scope', render: (_, r) => getBackupTenantScopeText(r.backup_scope) },
     { title: t('pages.system.dataBackups.columnScope'), dataIndex: 'include_files', render: (_, r) => getBackupContentScopeText(r.include_files) },
     {
       title: t('pages.system.dataBackups.restoreSourceTenantLabel'),
@@ -864,8 +915,8 @@ const DataBackupsPage: React.FC = () => {
                   void loadWorkerHealth(true);
                 }
               };
-              // 同时获取所有数据用于统计（如果当前页是第一页，获取所有数据）
-              if ((current || 1) === 1) {
+              // 进度轮询时只合并当前页，禁止每 2.5s 再拉 1000 条（全平台包曾拖死页面）
+              if ((current || 1) === 1 && !hasActiveBackupJobs) {
                 try {
                   const allResponse = await getBackups({
                     page: 1,
@@ -874,10 +925,22 @@ const DataBackupsPage: React.FC = () => {
                   setAllBackups(allResponse.items);
                   markActiveJobs(allResponse.items);
                 } catch (e) {
+                  setAllBackups(response.items);
                   markActiveJobs(response.items);
                 }
               } else {
                 markActiveJobs(response.items);
+                setAllBackups((prev) => {
+                  if (!prev.length) return response.items;
+                  const byUuid = new Map(response.items.map((item) => [item.uuid, item]));
+                  const merged = prev.map((item) => byUuid.get(item.uuid) ?? item);
+                  for (const item of response.items) {
+                    if (!prev.some((p) => p.uuid === item.uuid)) {
+                      merged.unshift(item);
+                    }
+                  }
+                  return merged;
+                });
               }
               
               return {
@@ -1012,6 +1075,53 @@ const DataBackupsPage: React.FC = () => {
           rules={[{ required: true, message: t('pages.system.dataBackups.nameRequired') }]}
           placeholder={t('pages.system.dataBackups.namePlaceholder')}
         />
+        {isInfraAdmin ? (
+          <>
+            <SafeProFormSelect
+              name="backup_scope"
+              label={t('pages.system.dataBackups.labelTenantScope')}
+              rules={[{ required: true, message: t('pages.system.dataBackups.tenantScopeRequired') }]}
+              initialValue="tenant"
+              options={[
+                { label: t('pages.system.dataBackups.backupScopeTenantLabel'), value: 'tenant' },
+                { label: t('pages.system.dataBackups.backupScopeAllLabel'), value: 'all' },
+              ]}
+              placeholder={t('pages.system.dataBackups.tenantScopePlaceholder')}
+              extra={t('pages.system.dataBackups.backupScopeAllHint')}
+            />
+            <ProFormDependency name={['backup_scope']}>
+              {({ backup_scope }) =>
+                backup_scope === 'tenant' ? (
+                  <SafeProFormSelect
+                    name="target_tenant_id"
+                    label={t('pages.system.dataBackups.labelTargetTenant')}
+                    rules={[{ required: true, message: t('pages.system.dataBackups.targetTenantRequired') }]}
+                    initialValue={currentUser?.tenant_id ?? getTenantId() ?? undefined}
+                    showSearch
+                    placeholder={t('pages.system.dataBackups.targetTenantPlaceholder')}
+                    request={async ({ keyWords }) => {
+                      const resp = await getTenantList(
+                        {
+                          page: 1,
+                          page_size: 100,
+                          status: TenantStatus.ACTIVE,
+                          keyword: keyWords || undefined,
+                          sort: 'id',
+                          order: 'asc',
+                        },
+                        true,
+                      );
+                      return (resp.items ?? []).map((tenant) => ({
+                        value: Number(tenant.id),
+                        label: `${tenant.name} (#${tenant.id})`,
+                      }));
+                    }}
+                  />
+                ) : null
+              }
+            </ProFormDependency>
+          </>
+        ) : null}
         <SafeProFormSelect
           name="include_files"
           label={t('pages.system.dataBackups.labelContentScope')}
@@ -1070,6 +1180,15 @@ const DataBackupsPage: React.FC = () => {
             {t('pages.system.dataBackups.preRestoreBackupHint')}
           </p>
         </div>
+
+        {restoreBackupRecord?.backup_scope === 'all' && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={t('pages.system.dataBackups.restoreAllScopeHint')}
+          />
+        )}
 
         {restoreBackupRecord?.include_files === false && (
           <Alert
