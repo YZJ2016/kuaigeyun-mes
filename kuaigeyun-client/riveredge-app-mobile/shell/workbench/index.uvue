@@ -1,5 +1,5 @@
 <template>
-	<view class="page">
+	<scroll-view class="page" direction="vertical">
 		<text v-if="loading" class="loading">正在加载</text>
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		<text v-if="empty" class="empty">没有可显示的入口</text>
@@ -27,7 +27,7 @@
 				</view>
 			</view>
 		</view>
-	</view>
+	</scroll-view>
 </template>
 
 <script setup lang="uts">
