@@ -9,7 +9,11 @@ from pydantic import BaseModel, Field
 
 from apps.kuaizhizao.models.equipment_fault import EquipmentFault
 from apps.kuaizhizao.models.maintenance_reminder import MaintenanceReminder
-from apps.kuaizhizao.services.mobile_home_service import fetch_mobile_home_bootstrap
+from apps.kuaizhizao.services.mobile_home_service import (
+    fetch_mobile_home_bootstrap,
+    list_mobile_pending_kuaizhizao_approvals,
+)
+from core.schemas.approval_instance import ApprovalInstanceResponse
 from apps.kuaizhizao.services.mobile_workbench import resolve_mobile_workbench
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
@@ -75,6 +79,26 @@ async def get_mobile_bootstrap(
         pending_fault_count=pending_fault_count,
         overdue_maintenance_reminder_count=overdue_maintenance_reminder_count,
     )
+
+
+@router.get(
+    "/pending-approvals",
+    response_model=list[ApprovalInstanceResponse],
+    summary="手机待我审批（快制造）",
+)
+async def get_mobile_pending_approvals(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[ApprovalInstanceResponse]:
+    rows = await list_mobile_pending_kuaizhizao_approvals(
+        tenant_id=tenant_id,
+        user_id=user.id,
+        skip=skip,
+        limit=limit,
+    )
+    return [ApprovalInstanceResponse.model_validate(row) for row in rows]
 
 
 @router.get("/home", response_model=MobileHomeBootstrapOut, summary="手机工作台首屏聚合")

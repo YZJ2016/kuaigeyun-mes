@@ -36,22 +36,38 @@ async def _count_im_unread(tenant_id: int, user_id: int) -> int:
     return sum(int(v or 0) for v in unread_map.values())
 
 
-async def _count_pending_kuaizhizao_approvals(tenant_id: int, user_id: int) -> int:
-    """与手机审批列表 API 同口径（pending_task_for_user_id + 快制造过滤）。"""
+async def list_mobile_pending_kuaizhizao_approvals(
+    *,
+    tenant_id: int,
+    user_id: int,
+    skip: int = 0,
+    limit: int = 100,
+) -> list:
+    """手机「待我审批」列表与角标唯一真源。"""
     from apps.kuaizhizao.services.kuaizhizao_approval_scope import is_kuaizhizao_approval_instance
 
     instances = await ApprovalInstanceService.list_approval_instances(
         tenant_id=tenant_id,
-        skip=0,
-        limit=500,
+        skip=skip,
+        limit=limit,
         status="pending",
         pending_for_user_id=user_id,
     )
-    return sum(
-        1
+    return [
+        inst
         for inst in instances
         if is_kuaizhizao_approval_instance(inst.data or {}, inst.title or "")
+    ]
+
+
+async def _count_pending_kuaizhizao_approvals(tenant_id: int, user_id: int) -> int:
+    rows = await list_mobile_pending_kuaizhizao_approvals(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        skip=0,
+        limit=500,
     )
+    return len(rows)
 
 
 async def _count_inbox_pending_tasks(tenant_id: int, user_id: int) -> int:
