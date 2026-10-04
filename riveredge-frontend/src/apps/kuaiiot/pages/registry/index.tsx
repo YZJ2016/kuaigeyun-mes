@@ -31,27 +31,40 @@ const MAP_TARGETS = [
   { value: 'other_parameters', label: 'other_parameters' },
 ];
 
-export default function RegistryPage() {
+const SECTION_TITLE = {
+  center: '数采中心',
+  connection: '接入配置',
+  device: '设备连接',
+  tag: '点位映射',
+} as const;
+
+export type RegistrySection = keyof typeof SECTION_TITLE;
+
+export default function RegistryPage({ section = 'center' }: { section?: RegistrySection }) {
   const [connectionId, setConnectionId] = useState<number | null>(null);
   const [deviceId, setDeviceId] = useState<number | null>(null);
   const [snapshots, setSnapshots] = useState<SnapshotOut[]>([]);
   const [loadingSnapshots, setLoadingSnapshots] = useState(false);
+  const showConnection = section === 'center' || section === 'connection';
+  const showDevice = section === 'center' || section === 'device';
+  const showTag = section === 'center' || section === 'tag';
+  const showSnapshot = section === 'center';
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%', padding: 16 }}>
-      <Title level={4}>星数采</Title>
+      <Title level={4}>{SECTION_TITLE[section]}</Title>
       <Space>
-        <Link to="alerts">告警</Link>
-        <Link to="templates">点位模板</Link>
-        <Link to="products">产品</Link>
-        <Link to="trend">趋势</Link>
-        <Link to="groups">分组</Link>
-        <Link to="commands">指令</Link>
-        <Link to="messages">消息</Link>
+        <Link to="/apps/kuaiiot/alerts">告警</Link>
+        <Link to="/apps/kuaiiot/templates">点位模板</Link>
+        <Link to="/apps/kuaiiot/products">产品</Link>
+        <Link to="/apps/kuaiiot/trend">趋势</Link>
+        <Link to="/apps/kuaiiot/groups">分组</Link>
+        <Link to="/apps/kuaiiot/commands">指令</Link>
+        <Link to="/apps/kuaiiot/messages">消息</Link>
       </Space>
       <Text type="secondary">登记连接、IoT 设备与点位后，可查看该设备的最新快照。</Text>
 
-      <Card title="连接">
+      {showConnection ? <Card title="连接">
         <Form
           layout="inline"
           onFinish={async (values: { code: string; name: string; connection_type: string }) => {
@@ -77,9 +90,9 @@ export default function RegistryPage() {
             登记连接
           </Button>
         </Form>
-      </Card>
+      </Card> : null}
 
-      <Card title="IoT 设备">
+      {showDevice ? <Card title="IoT 设备">
         <Form
           layout="inline"
           onFinish={async (values: {
@@ -120,9 +133,9 @@ export default function RegistryPage() {
             登记设备
           </Button>
         </Form>
-      </Card>
+      </Card> : null}
 
-      <Card title="点位">
+      {showTag ? <Card title="点位">
         <Form
           layout="inline"
           onFinish={async (values: { tag_key: string; name: string; value_type: string; map_target: string }) => {
@@ -161,9 +174,9 @@ export default function RegistryPage() {
             登记点位
           </Button>
         </Form>
-      </Card>
+      </Card> : null}
 
-      <Card title="最新快照">
+      {showSnapshot ? <Card title="最新快照">
         <Space style={{ marginBottom: 12 }}>
           <Button
             loading={loadingSnapshots}
@@ -199,7 +212,7 @@ export default function RegistryPage() {
             { title: '采样时间', dataIndex: 'sampled_at' },
           ]}
         />
-      </Card>
+      </Card> : null}
     </Space>
   );
 }

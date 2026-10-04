@@ -811,13 +811,206 @@ class DatasetService:
         return name
 
     @staticmethod
+    def _sql_word_at(sql: str, index: int, word: str) -> bool:
+        end = index + len(word)
+        if sql[index:end].lower() != word.lower():
+            return False
+        before = sql[index - 1] if index else " "
+        after = sql[end] if end < len(sql) else " "
+        ident = lambda char: char.isalnum() or char == "_"
+        return not ident(before) and not ident(after)
+
+    @staticmethod
+    def _project_tenant_id_for_filter(sql: str) -> tuple[str, bool]:
+        """外层 SELECT 没带 tenant_id 时补上一列，外包条件才能引用它。
+
+        SELECT * 视为已包含。UNION / 找不到外层 FROM 时不改写。
+        返回 (语句, 是否补过列)。补过的列在结果里去掉，不改变用户选择的字段。
+        """
+        select_at, list_start, from_at = DatasetService._outer_select_span(sql)
+        if select_at is None or list_start is None or from_at is None:
+            return sql, False
+        if DatasetService._has_top_level_word(sql, ("UNION", "EXCEPT", "INTERSECT")):
+            return sql, False
+        items = DatasetService._split_sql_list(sql[list_start:from_at])
+        if any(DatasetService._select_item_has_tenant_id(item) for item in items):
+            return sql, False
+        head = sql[:from_at].rstrip()
+        return f"{head}, tenant_id {sql[from_at:]}", True
+
+    @staticmethod
+    def _outer_select_span(sql: str) -> tuple[int | None, int | None, int | None]:
+        """顶层 SELECT [DISTINCT] 与 FROM 的位置。字符串和注释里的词不算。"""
+        length = len(sql)
+        index = 0
+        depth = 0
+        quote: str | None = None
+        list_start: int | None = None
+        select_at: int | None = None
+        while index < length:
+            if quote == "'":
+                if sql.startswith("''", index):
+                    index += 2
+                    continue
+                if sql[index] == "'":
+                    quote = None
+                index += 1
+                continue
+            if quote == '"':
+                if sql[index] == '"':
+                    quote = None
+                index += 1
+                continue
+            if sql.startswith("--", index):
+                newline = sql.find("\n", index)
+                index = length if newline < 0 else newline + 1
+                continue
+            if sql.startswith("/*", index):
+                end = sql.find("*/", index + 2)
+                index = length if end < 0 else end + 2
+                continue
+            char = sql[index]
+            if char == "'":
+                quote = "'"
+                index += 1
+                continue
+            if char == '"':
+                quote = '"'
+                index += 1
+                continue
+            if char == "(":
+                depth += 1
+                index += 1
+                continue
+            if char == ")":
+                depth = max(0, depth - 1)
+                index += 1
+                continue
+            if depth == 0 and list_start is None and DatasetService._sql_word_at(sql, index, "SELECT"):
+                select_at = index
+                cursor = index + len("SELECT")
+                while cursor < length and sql[cursor].isspace():
+                    cursor += 1
+                if DatasetService._sql_word_at(sql, cursor, "DISTINCT"):
+                    cursor += len("DISTINCT")
+                list_start = cursor
+                index = cursor
+                continue
+            if depth == 0 and list_start is not None and DatasetService._sql_word_at(sql, index, "FROM"):
+                return select_at, list_start, index
+            index += 1
+        return select_at, list_start, None
+
+    @staticmethod
+    def _has_top_level_word(sql: str, words: tuple[str, ...]) -> bool:
+        length = len(sql)
+        index = 0
+        depth = 0
+        quote: str | None = None
+        while index < length:
+            if quote == "'":
+                if sql.startswith("''", index):
+                    index += 2
+                    continue
+                if sql[index] == "'":
+                    quote = None
+                index += 1
+                continue
+            if quote == '"':
+                if sql[index] == '"':
+                    quote = None
+                index += 1
+                continue
+            if sql.startswith("--", index):
+                newline = sql.find("\n", index)
+                index = length if newline < 0 else newline + 1
+                continue
+            if sql.startswith("/*", index):
+                end = sql.find("*/", index + 2)
+                index = length if end < 0 else end + 2
+                continue
+            char = sql[index]
+            if char in ("'", '"'):
+                quote = char
+                index += 1
+                continue
+            if char == "(":
+                depth += 1
+                index += 1
+                continue
+            if char == ")":
+                depth = max(0, depth - 1)
+                index += 1
+                continue
+            if depth == 0 and any(DatasetService._sql_word_at(sql, index, word) for word in words):
+                return True
+            index += 1
+        return False
+
+    @staticmethod
+    def _split_sql_list(text: str) -> list[str]:
+        items: list[str] = []
+        start = 0
+        depth = 0
+        quote: str | None = None
+        index = 0
+        while index < len(text):
+            if quote == "'":
+                if text.startswith("''", index):
+                    index += 2
+                    continue
+                if text[index] == "'":
+                    quote = None
+                index += 1
+                continue
+            if quote == '"':
+                if text[index] == '"':
+                    quote = None
+                index += 1
+                continue
+            char = text[index]
+            if char in ("'", '"'):
+                quote = char
+                index += 1
+                continue
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth = max(0, depth - 1)
+            elif char == "," and depth == 0:
+                items.append(text[start:index])
+                start = index + 1
+            index += 1
+        items.append(text[start:])
+        return [item.strip() for item in items if item.strip()]
+
+    @staticmethod
+    def _select_item_has_tenant_id(item: str) -> bool:
+        compact = " ".join(item.split())
+        if re.fullmatch(r"(?i)(?:\w+\s*\.\s*)?\*", compact):
+            return True
+        return re.search(r"(?i)(?:\.|\bas\s+)?\"?tenant_id\"?\s*$", compact) is not None
+
+    @staticmethod
+    def _drop_injected_tenant_column(result: Dict[str, Any]) -> Dict[str, Any]:
+        if not result.get("success"):
+            return result
+        for row in result.get("data") or []:
+            if isinstance(row, dict):
+                row.pop("tenant_id", None)
+        columns = result.get("columns")
+        if isinstance(columns, list):
+            result["columns"] = [name for name in columns if name != "tenant_id"]
+        return result
+
+    @staticmethod
     def _inject_tenant_filter_sql(sql: str, *, param_name: str = "tenant_id") -> str:
         """
         把用户 SQL 包进子查询，外层再用当前组织限制。
 
         用户 SQL 里的 OR / ORDER BY / LIMIT 留在子查询内，不能绕过外层 tenant_id。
-        去掉末尾分号后再包裹。结果集没有 tenant_id 列时，数据库执行会报错（失败关闭），
-        不退回无条件执行。
+        去掉末尾分号后再包裹。调用前会把 tenant_id 补进外层 SELECT；
+        补不进去时仍外包，结果集没有该列就由数据库报错（失败关闭）。
         """
         text = sql.strip()
         while text.endswith(";"):
@@ -1092,8 +1285,10 @@ class DatasetService:
                 integration_config, query_config
             )
             tenant_param_name = "tenant_id"
+            injected_tenant_column = False
             if apply_tenant_isolation:
                 tenant_param_name = self._tenant_filter_param_name(sql)
+                sql, injected_tenant_column = self._project_tenant_id_for_filter(sql)
                 sql = self._inject_tenant_filter_sql(sql, param_name=tenant_param_name)
 
             query_params = self._build_sql_query_parameters(
@@ -1147,12 +1342,15 @@ class DatasetService:
                 finally:
                     await conn.close()
 
-                return {
+                result = {
                     "success": True,
                     "data": data,
                     "total": total if total is not None else len(data),
                     "columns": columns,
                 }
+                if injected_tenant_column:
+                    result = self._drop_injected_tenant_column(result)
+                return result
 
             # sqlserver：pymssql 在线程中执行；分页用 TOP / ROW_NUMBER（不使用 LIMIT）
             sql_upper2 = sql.upper()
@@ -1194,6 +1392,8 @@ class DatasetService:
             )
             if result.get("success") and count_total is not None:
                 result["total"] = count_total
+            if injected_tenant_column:
+                result = self._drop_injected_tenant_column(result)
             return result
         except Exception as e:
             return {

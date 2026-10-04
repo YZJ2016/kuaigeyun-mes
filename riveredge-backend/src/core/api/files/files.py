@@ -566,55 +566,58 @@ async def download_file(
             )
 
         logger.debug(f"🎯 最终 tenant_id: {tenant_id}, 将查询文件 uuid: {uuid}")
-        
-        # 获取文件
-        file = await FileService.get_file_by_uuid(tenant_id, uuid)
-        if not await FileService.file_content_available(tenant_id, file):
-            raise NotFoundError("文件内容不存在，请重新上传")
 
-        # 图片档位与原文件同一存储后端（本地或 COS），禁止本机 sidecar 旁路 COS。
-        if size and ImageTierService.is_tier_eligible_image(file.file_type, file.file_extension):
-            tier_response = await ImageTierService.streaming_response_for_tier(
-                tenant_id, file, size,
+        # 本接口用 query/Bearer 令牌鉴权，不走 get_current_tenant，须显式进入该组织再查 File。
+        from infra.domain.tenant_context import with_tenant
+
+        tenant_id = int(tenant_id)
+        async with with_tenant(tenant_id, reason="已鉴权下载按令牌组织读取文件"):
+            file = await FileService.get_file_by_uuid(tenant_id, uuid)
+            if not await FileService.file_content_available(tenant_id, file):
+                raise NotFoundError("文件内容不存在，请重新上传")
+
+            # 图片档位与原文件同一存储后端（本地或 COS），禁止本机 sidecar 旁路 COS。
+            if size and ImageTierService.is_tier_eligible_image(file.file_type, file.file_extension):
+                tier_response = await ImageTierService.streaming_response_for_tier(
+                    tenant_id, file, size,
+                )
+                if tier_response is not None:
+                    return tier_response
+
+            file_content = await FileService.get_file_content(tenant_id, uuid)
+            file_type = FileService.resolve_download_media_type(file, file_content)
+
+            # 处理文件名编码（支持中文文件名）
+            # 使用 RFC 5987 格式编码文件名，避免 latin-1 编码错误
+            from urllib.parse import quote
+
+            # 浏览器可预览的类型用 inline（PDF/文本/音视频/CAD/图片）；其余才 attachment。
+            # 同一条 download 也被预览 iframe/fetch 使用，一律 attachment 会导致 PDF/视频无法内嵌。
+            previewable = FilePreviewService._is_simple_preview_supported(
+                file.file_type, file.file_extension
             )
-            if tier_response is not None:
-                return tier_response
+            disposition_type = "inline" if previewable or file_type.startswith("image/") else "attachment"
 
-        file_content = await FileService.get_file_content(tenant_id, uuid)
-        file_type = FileService.resolve_download_media_type(file, file_content)
+            # 检查文件名是否包含非 ASCII 字符
+            try:
+                # 尝试将文件名编码为 latin-1，如果失败说明包含非 ASCII 字符
+                file.original_name.encode('latin-1')
+                # 如果成功，文件名只包含 ASCII 字符，可以直接使用
+                content_disposition = f'{disposition_type}; filename="{file.original_name}"'
+            except UnicodeEncodeError:
+                # 如果包含非 ASCII 字符，使用 RFC 5987 格式
+                encoded_filename = quote(file.original_name, safe='')
+                # 对于非 ASCII 文件名，只使用 filename*=UTF-8''... 格式，避免 latin-1 编码错误
+                content_disposition = f'{disposition_type}; filename*=UTF-8\'\'{encoded_filename}'
 
-        # 处理文件名编码（支持中文文件名）
-        # 使用 RFC 5987 格式编码文件名，避免 latin-1 编码错误
-        from urllib.parse import quote
-        
-        # 浏览器可预览的类型用 inline（PDF/文本/音视频/CAD/图片）；其余才 attachment。
-        # 同一条 download 也被预览 iframe/fetch 使用，一律 attachment 会导致 PDF/视频无法内嵌。
-        previewable = FilePreviewService._is_simple_preview_supported(
-            file.file_type, file.file_extension
-        )
-        disposition_type = "inline" if previewable or file_type.startswith("image/") else "attachment"
-        
-        # 检查文件名是否包含非 ASCII 字符
-        try:
-            # 尝试将文件名编码为 latin-1，如果失败说明包含非 ASCII 字符
-            file.original_name.encode('latin-1')
-            # 如果成功，文件名只包含 ASCII 字符，可以直接使用
-            content_disposition = f'{disposition_type}; filename="{file.original_name}"'
-        except UnicodeEncodeError:
-            # 如果包含非 ASCII 字符，使用 RFC 5987 格式
-            encoded_filename = quote(file.original_name, safe='')
-            # 对于非 ASCII 文件名，只使用 filename*=UTF-8''... 格式，避免 latin-1 编码错误
-            content_disposition = f'{disposition_type}; filename*=UTF-8\'\'{encoded_filename}'
-        
-        # 返回文件流
-        return StreamingResponse(
-            iter([file_content]),
-            media_type=file_type,
-            headers={
-                "Content-Disposition": content_disposition,
-                "Content-Length": str(len(file_content)),
-            }
-        )
+            return StreamingResponse(
+                iter([file_content]),
+                media_type=file_type,
+                headers={
+                    "Content-Disposition": content_disposition,
+                    "Content-Length": str(len(file_content)),
+                }
+            )
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

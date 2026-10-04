@@ -140,7 +140,8 @@ import {
 import { variantAttributeApi } from '../../services/variant-attribute'
 import type { VariantAttributeDefinition } from '../../types/variant-attribute'
 import FabricationRawMaterialWizard from '../../components/FabricationRawMaterialWizard'
-import { MaterialHealthAssistantTrigger } from '../../../kuaiai/components/material-health/MaterialHealthAssistant'
+// 物料健康助手在专业应用拆仓后不在主仓，静态 import 会让 Vite 无法解析。暂时注释，入口不展示。
+// import { MaterialHealthAssistantTrigger } from '../../../kuaiai/components/material-health/MaterialHealthAssistant'
 import { MaterialDedupConfigTrigger } from '../../components/MaterialDedupAssistant'
 import {
   fabricationMaterialNeedsRawMaterialSetup,
@@ -4557,10 +4558,12 @@ const MaterialsManagementPage: React.FC = () => {
                       ]}
                     />
                     <MaterialDedupConfigTrigger customFields={customFields} />
+                    {/*
                     <MaterialHealthAssistantTrigger
                       groupId={healthCheckGroupId}
                       onOpenMaterial={handleOpenMaterialForEdit}
                     />
+                    */}
                   </Space>
                 }
                 request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {

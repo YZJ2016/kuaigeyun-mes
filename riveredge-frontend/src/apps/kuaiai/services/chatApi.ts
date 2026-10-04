@@ -34,14 +34,18 @@ export interface ChatSessionOut {
 
 export interface ChatSessionCreatePayload {
   title?: string;
-  agent_id?: number;
-  model?: string;
+  /** 显式 null 清空档案（与 model 互斥） */
+  agent_id?: number | null;
+  /** `#id:<目录行id>`，或显式 null 清空；旧会话也可能是模型名 */
+  model?: string | null;
 }
 
 export interface ChatSessionUpdatePayload {
   title?: string;
-  agent_id?: number;
-  model?: string;
+  /** 显式 null 清空档案（PATCH exclude_unset，省略则不动） */
+  agent_id?: number | null;
+  /** `#id:<目录行id>`，或显式 null 清空 */
+  model?: string | null;
 }
 
 /** 消息表 tool_calls 列存 OpenAI 线格式 {id,type,function:{name,arguments}}；
@@ -141,6 +145,29 @@ export function listChatMessages(sessionId: number): Promise<ChatMessageOut[]> {
 
 // ============================================================ SSE 发送
 
+/** 流式过程中的一轮工具调用（参数/结果摘要；完整结果以落库后的 tool 行为准） */
+export interface LiveToolStep {
+  name: string;
+  argsSummary?: string;
+  resultSummary?: string;
+}
+
+/** 正式回答之前的一次工具调用。工具调用前的中间说明不展示。 */
+export interface LiveReasoningStep {
+  tool: LiveToolStep;
+}
+
+/**
+ * 最后一次工具之后的正文才是正式回答。
+ * 工具帧之前的正文是中间说明，不进入回答，也不作为可见文案。
+ * 档案对话在出现工具之前、且流尚未结束时不展示正文（气泡保持「思考中」）；
+ * 流结束仍无工具，则整段正文是正式回答。无档案的普通对话不走这条拆分。
+ */
+export interface LiveAssistantView {
+  answer: string;
+  reasoning: LiveReasoningStep[];
+}
+
 export interface SendChatMessageOptions {
   sessionId: number;
   content: string;
@@ -149,8 +176,8 @@ export interface SendChatMessageOptions {
   /** chat 模型目录行 ID；仅在无档案时生效 */
   modelId?: number | null;
   signal?: AbortSignal;
-  /** 流式累积回调：每次增量到达时回传「当前完整正文」（已去 think 标记） */
-  onDelta?: (fullText: string) => void;
+  /** 流式累积回调：正式回答，以及其下的工具调用（已去 think 标记） */
+  onDelta?: (view: LiveAssistantView) => void;
 }
 
 type OpenAiChunk = {
@@ -159,10 +186,20 @@ type OpenAiChunk = {
     message?: { content?: string };
   }>;
   error?: { message?: string };
+  kuaiai_tool?: {
+    phase?: string;
+    name?: string;
+    args_summary?: string;
+    result_summary?: string;
+  };
 };
 
-function accumulateChunk(chunk: OpenAiChunk, accumulated: string): string {
-  let text = accumulated;
+type StreamSegment =
+  | { kind: 'text'; text: string }
+  | { kind: 'tool'; name: string; argsSummary?: string; resultSummary?: string };
+
+function chunkText(chunk: OpenAiChunk): string {
+  let text = '';
   chunk?.choices?.forEach((choice) => {
     const piece = choice?.delta?.content ?? choice?.message?.content ?? '';
     if (piece) text += piece;
@@ -170,13 +207,71 @@ function accumulateChunk(chunk: OpenAiChunk, accumulated: string): string {
   return text;
 }
 
+function applyToolSegment(segments: StreamSegment[], raw: OpenAiChunk['kuaiai_tool']): void {
+  if (!raw || (raw.phase !== 'start' && raw.phase !== 'end')) return;
+  const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+  if (!name) return;
+  if (raw.phase === 'end') {
+    for (let i = segments.length - 1; i >= 0; i -= 1) {
+      const seg = segments[i];
+      if (seg.kind === 'tool' && seg.name === name && !seg.resultSummary) {
+        if (raw.result_summary) seg.resultSummary = raw.result_summary;
+        return;
+      }
+    }
+  }
+  segments.push({
+    kind: 'tool',
+    name,
+    ...(raw.args_summary ? { argsSummary: raw.args_summary } : {}),
+  });
+}
+
+/** 把已累积的正文/工具帧拆成正式回答和其下的工具调用。 */
+export function buildLiveAssistantView(
+  segments: StreamSegment[],
+  options?: { agent?: boolean; done?: boolean },
+): LiveAssistantView {
+  let lastTool = -1;
+  segments.forEach((seg, index) => {
+    if (seg.kind === 'tool') lastTool = index;
+  });
+  // 档案对话在第一次工具调用之前先不展示正文：这段可能是随后会被工具调用作废的中间说明。
+  // 整段都没有工具时，流结束后再把正文作为正式回答。
+  if (options?.agent && lastTool < 0 && !options.done) {
+    return { answer: '', reasoning: [] };
+  }
+  const answerFrom = lastTool < 0 ? 0 : lastTool + 1;
+  const answer = stripAssistantThinkContent(
+    segments
+      .slice(answerFrom)
+      .filter((seg): seg is Extract<StreamSegment, { kind: 'text' }> => seg.kind === 'text')
+      .map((seg) => seg.text)
+      .join(''),
+  );
+  if (lastTool < 0) return { answer, reasoning: [] };
+  const reasoning: LiveReasoningStep[] = [];
+  segments.slice(0, lastTool + 1).forEach((seg) => {
+    if (seg.kind !== 'tool') return;
+    reasoning.push({
+      tool: {
+        name: seg.name,
+        ...(seg.argsSummary ? { argsSummary: seg.argsSummary } : {}),
+        ...(seg.resultSummary ? { resultSummary: seg.resultSummary } : {}),
+      },
+    });
+  });
+  return { answer, reasoning };
+}
+
 /**
  * 发送一条用户消息并消费 SSE 流（手写 fetch + ReadableStream，按行解析 data: 帧）。
- * 返回 assistant 最终正文（已剥离 think 标记）；工具轨迹不落线格式，由调用方
- * 在流结束后重新拉 listChatMessages 展示。
+ * 返回正式回答（已剥离 think 标记）。有档案时，工具帧之前的正文不并进正式回答；
+ * 落库后的工具轨迹仍由调用方重拉消息展示。
  */
 export async function sendChatMessage(options: SendChatMessageOptions): Promise<string> {
   const { sessionId, content, agentId, modelId, signal, onDelta } = options;
+  const splitTools = agentId != null;
 
   const context: Record<string, unknown> = {
     ...(agentId ? { agent_id: String(agentId) } : {}),
@@ -214,8 +309,8 @@ export async function sendChatMessage(options: SendChatMessageOptions): Promise<
     if (data?.error?.message) {
       throw new Error(String(data.error.message));
     }
-    const text = stripAssistantThinkContent(String(accumulateChunk(data ?? {}, '')));
-    if (text) onDelta?.(text);
+    const text = stripAssistantThinkContent(chunkText(data ?? {}));
+    if (text) onDelta?.({ answer: text, reasoning: [] });
     return text;
   }
 
@@ -224,7 +319,16 @@ export async function sendChatMessage(options: SendChatMessageOptions): Promise<
 
   const decoder = new TextDecoder();
   let buffer = '';
-  let accumulated = '';
+  const segments: StreamSegment[] = [];
+
+  const publish = (done = false) => {
+    onDelta?.(
+      buildLiveAssistantView(splitTools ? segments : textOnly(segments), {
+        agent: splitTools,
+        done,
+      }),
+    );
+  };
 
   const handleLine = (line: string) => {
     if (!line.startsWith('data:')) return;
@@ -239,11 +343,19 @@ export async function sendChatMessage(options: SendChatMessageOptions): Promise<
     if (parsed?.error?.message) {
       throw new Error(String(parsed.error.message));
     }
-    const next = accumulateChunk(parsed, accumulated);
-    if (next !== accumulated) {
-      accumulated = next;
-      onDelta?.(stripAssistantThinkContent(accumulated));
+    let changed = false;
+    if (splitTools && parsed.kuaiai_tool) {
+      applyToolSegment(segments, parsed.kuaiai_tool);
+      changed = true;
     }
+    const piece = chunkText(parsed);
+    if (piece) {
+      const last = segments[segments.length - 1];
+      if (last?.kind === 'text') last.text += piece;
+      else segments.push({ kind: 'text', text: piece });
+      changed = true;
+    }
+    if (changed) publish();
   };
 
   try {
@@ -262,10 +374,19 @@ export async function sendChatMessage(options: SendChatMessageOptions): Promise<
     // 收尾：flush 解码器并处理残余缓冲（无尾换行的最后一行）
     buffer += decoder.decode();
     if (buffer.trim()) handleLine(buffer.trim());
+    publish(true);
   } finally {
     void reader.cancel().catch(() => {});
     reader.releaseLock();
   }
 
-  return stripAssistantThinkContent(accumulated);
+  return buildLiveAssistantView(splitTools ? segments : textOnly(segments), {
+    agent: splitTools,
+    done: true,
+  }).answer;
+}
+
+/** 无档案时忽略工具帧，全部正文都是正式回答。 */
+function textOnly(segments: StreamSegment[]): StreamSegment[] {
+  return segments.filter((seg) => seg.kind === 'text');
 }

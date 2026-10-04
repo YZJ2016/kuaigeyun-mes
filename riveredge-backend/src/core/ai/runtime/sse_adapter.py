@@ -1,9 +1,11 @@
 """LangChain 流 → OpenAI chunk SSE 线格式（KR-D14，逐字节兼容 deepseekChat.ts）。
 
 主路径：``astream_events(version="v2")`` 取 ``on_chat_model_stream`` →
-``choices[].delta.content`` chunk → ``[DONE]``。``on_tool_start/end`` 另发
-顶层 ``kuaiai_tool`` 扩展帧（不写入 ``delta.content``）；旧客户端只读
-正文时忽略该帧。工具轨迹仍以落库历史为准，扩展帧只供抽屉实时反馈。
+``choices[].delta.content`` chunk → ``[DONE]``。同一轮在工具调用之前写下的
+正文不进入 ``delta.content``（中间说明仍落库）；后面没有工具调用的那轮才作为
+回答发出。``on_tool_start/end`` 另发顶层 ``kuaiai_tool`` 扩展帧（不写入
+``delta.content``）；旧客户端只读正文时忽略该帧。工具轨迹仍以落库历史为准，
+扩展帧只供抽屉实时反馈。
 
 兼容分支（KR-D14，**不是**假流式兜底）：流式在产出任何内容且**未发生
 任何工具执行**前失败（典型如端点不支持 tool_calls 流式）→ 该轮回退
@@ -141,19 +143,37 @@ async def agent_to_openai_sse(
     emitted = False
     first = True
     tool_events: List[str] = []
+    # 工具调用前的模型正文先攒着。出现工具事件就丢掉，不写入 delta.content。
+    # 结束时还留着的，是没有被工具调用跟上的那轮，按原 chunk 顺序作为回答发出。
+    pending: List[str] = []
+
+    def drain_pending() -> List[bytes]:
+        nonlocal emitted, first
+        frames: List[bytes] = []
+        texts = list(pending)
+        pending.clear()
+        for text in texts:
+            if not text:
+                continue
+            emitted = True
+            delta: Dict[str, Any] = {"content": text}
+            if first:
+                delta["role"] = "assistant"
+                first = False
+            frames.append(_chunk_payload(model_name, delta))
+        return frames
+
     try:
         async for kind, payload in _iter_agent_texts(
             agent, messages, config, tool_events
         ):
             if kind == "tool":
+                pending.clear()
                 yield _tool_payload(model_name, payload)
                 continue
-            emitted = True
-            delta: Dict[str, Any] = {"content": payload}
-            if first:
-                delta["role"] = "assistant"
-                first = False
-            yield _chunk_payload(model_name, delta)
+            pending.append(payload)
+        for frame in drain_pending():
+            yield frame
     except Exception as exc:
         # KR-I5：仅记录异常类型，不落 base_url/key/参数
         logger.error(
@@ -161,6 +181,9 @@ async def agent_to_openai_sse(
             model_name,
             type(exc).__name__,
         )
+        # 失败前缓冲、且尚未被工具调用作废的正文按已产出发出，避免整图重跑。
+        for frame in drain_pending():
+            yield frame
         # 已产出文本或已发生任何工具执行时，禁止 ainvoke 整图重跑
         # （副作用工具如报工/改状态会重复执行），直接错误帧收尾。
         if emitted or tool_events:

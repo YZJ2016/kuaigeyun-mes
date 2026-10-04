@@ -44,8 +44,7 @@ import {
   type DocumentListOut,
   type KnowledgeBaseOut,
 } from '../../services/knowledge';
-import { listModelOptions } from '../../services/models';
-import { KUAI_AI_OPTION_KEYS, KUAI_AI_OPTIONS_PREFIX } from '../../constants';
+import { KUAI_AI_OPTIONS_PREFIX } from '../../constants';
 
 const K = 'app.kuaiai.knowledge';
 
@@ -103,30 +102,6 @@ export default function KuaiaiKnowledgePage() {
   const [chunkPage, setChunkPage] = useState(1);
   const [chunkPageSize, setChunkPageSize] = useState(20);
 
-  const { data: embedOptions } = useQuery({
-    queryKey: KUAI_AI_OPTION_KEYS.embedModels,
-    queryFn: () => listModelOptions('embed'),
-    // /llm-models/options 需 kuaiai:model:read；无权限不打 403，下拉恒空
-    enabled: hasPermission(currentUser, 'kuaiai:model:read'),
-    staleTime: 60_000,
-  });
-
-  const embedLabel = (id?: number | null) => {
-    if (id === null || id === undefined) return '—';
-    const m = (embedOptions || []).find((o) => o.id === id);
-    if (!m) return `#${id}`;
-    return m.provider_name ? `${m.provider_name} / ${m.model_name}` : m.model_name;
-  };
-
-  const embedSelectOptions = useMemo(
-    () =>
-      (embedOptions || []).map((o) => ({
-        value: o.id,
-        label: o.provider_name ? `${o.provider_name} / ${o.model_name}` : o.model_name,
-      })),
-    [embedOptions],
-  );
-
   const docsQuery = useQuery({
     queryKey: ['kuaiai', 'documents', docKb?.id, docPage, docPageSize],
     queryFn: () => listDocuments(docKb!.id, { page: docPage, page_size: docPageSize }),
@@ -157,7 +132,6 @@ export default function KuaiaiKnowledgePage() {
     kbForm.setFieldsValue({
       name: kb.name,
       description: kb.description ?? undefined,
-      embedding_model_id: kb.embedding_model_id ?? undefined,
       chunk_size: kb.chunk_size ?? undefined,
       chunk_overlap: kb.chunk_overlap ?? undefined,
       expand_enabled: kb.expand_enabled ?? undefined,
@@ -172,7 +146,6 @@ export default function KuaiaiKnowledgePage() {
       const payload = {
         name: values.name,
         description: values.description || null,
-        embedding_model_id: values.embedding_model_id ?? null,
         chunk_size: values.chunk_size ?? null,
         chunk_overlap: values.chunk_overlap ?? null,
         expand_enabled: values.expand_enabled ?? null,
@@ -277,14 +250,6 @@ export default function KuaiaiKnowledgePage() {
         render: (_, r) => r.description || '—',
       },
       {
-        title: t(`${K}.embeddingModel`, { defaultValue: 'Embedding 模型' }),
-        dataIndex: 'embedding_model_id',
-        width: 180,
-        ellipsis: true,
-        hideInSearch: true,
-        render: (_, r) => embedLabel(r.embedding_model_id),
-      },
-      {
         title: t(`${K}.chunkSize`, { defaultValue: '切块大小' }),
         dataIndex: 'chunk_size',
         width: 100,
@@ -366,7 +331,7 @@ export default function KuaiaiKnowledgePage() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canEdit, canRemove, embedOptions, t, message],
+    [canEdit, canRemove, t, message],
   );
 
   const docColumns: ColumnsType<DocumentListOut> = useMemo(
@@ -554,13 +519,6 @@ export default function KuaiaiKnowledgePage() {
           </Form.Item>
           <Form.Item name="description" label={t(`${K}.description`, { defaultValue: '描述' })}>
             <Input.TextArea rows={2} maxLength={500} />
-          </Form.Item>
-          <Form.Item
-            name="embedding_model_id"
-            label={t(`${K}.embeddingModel`, { defaultValue: 'Embedding 模型' })}
-            tooltip={t(`${K}.embeddingTip`, { defaultValue: '留空则回落租户默认配置' })}
-          >
-            <Select allowClear options={embedSelectOptions} showSearch optionFilterProp="label" />
           </Form.Item>
           <Form.Item
             name="chunk_size"

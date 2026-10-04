@@ -1,222 +1,426 @@
 /**
- * 报表中心列表。按 status / category / classify 筛选，并按 classify 分组。
- * 不提供设计器，不在此创建 category=custom 的报表。
- * 分享与关闭分享是显式动作：10 张系统报表默认 is_shared=false，须人开启。
+ * 报表中心。两个页签：我的报表、系统报表。
+ * 列表用 UniTable。管理数据源跳到系统设置的数据源管理。
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Button, Input, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd';
-import { useNavigate } from 'react-router-dom';
-import { ListPageTemplate } from '../../../../components/layout-templates';
-import { ShareModal } from '../dashboards/ShareModal';
+import React, { useCallback, useRef, useState } from 'react';
+import { App, Button, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import {
-  closeReportShare,
+  AppstoreOutlined,
+  DatabaseOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
+import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { MultiTabListPageTemplate } from '../../../../components/layout-templates';
+import { renderUniTableOperationCell, rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
+import { UniTable } from '../../../../components/uni-table';
+import { parseColumnFiltersParam } from '../../../../components/uni-query/columnFilterContract';
+import { MountReportModal } from './MountReportModal';
+import {
+  createPublicLink,
+  deleteReport,
   listReports,
-  publishReport,
-  shareReport,
+  withdrawReport,
   type ReportCenterRow,
 } from './api';
 
-const { Title, Text } = Typography;
+const CLASSIFY_ENUM = {
+  销售: '销售',
+  采购: '采购',
+  生产: '生产',
+  质量: '质量',
+  仓库: '仓库',
+  设备: '设备',
+  财务: '财务',
+  综合: '综合',
+  库存: '库存',
+  物料: '物料',
+  未分类: '未分类',
+};
 
-const STATUS_OPTIONS = [
-  { value: 'DRAFT', label: '草稿' },
-  { value: 'PUBLISHED', label: '已发布' },
-];
+const STATUS_ENUM = {
+  DRAFT: '草稿',
+  PUBLISHED: '已发布',
+};
 
-export default function ReportCenterPage() {
+function statusLabel(status: string): string {
+  if (status === 'PUBLISHED') return '已发布';
+  if (status === 'DRAFT') return '草稿';
+  return status;
+}
+
+function rawField(row: ReportCenterRow, field: string): string {
+  const value = (row as unknown as Record<string, unknown>)[field];
+  return value == null ? '' : String(value);
+}
+
+function fieldText(row: ReportCenterRow, field: string): string {
+  const value = rawField(row, field);
+  if (field === 'status') return statusLabel(value);
+  return value;
+}
+
+function sameText(actual: string, expected: string): boolean {
+  return actual === expected || actual === statusLabel(expected).toLowerCase();
+}
+
+function matchFilter(raw: string, shown: string, op: string, value: unknown): boolean {
+  const text = shown.toLowerCase();
+  const rawText = raw.toLowerCase();
+  const expected = value == null ? '' : String(value).toLowerCase();
+  if (op === 'eq') return sameText(text, expected) || sameText(rawText, expected);
+  if (op === 'ne') return !sameText(text, expected) && !sameText(rawText, expected);
+  if (op === 'startswith') return text.startsWith(expected) || rawText.startsWith(expected);
+  if (op === 'endswith') return text.endsWith(expected) || rawText.endsWith(expected);
+  if (op === 'isnull') return expected === 'true' || expected === '1' ? raw === '' : raw !== '';
+  if (!expected) return true;
+  return text.includes(expected) || rawText.includes(expected);
+}
+
+function applySearch(rows: ReportCenterRow[], search: Record<string, unknown> | undefined): ReportCenterRow[] {
+  if (!search) return rows;
+  let next = rows;
+  const keyword = typeof search.keyword === 'string' ? search.keyword.trim().toLowerCase() : '';
+  if (keyword) {
+    next = next.filter((row) =>
+      [row.code, row.name, row.description, row.classify, statusLabel(row.status)]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(keyword)),
+    );
+  }
+  for (const [key, value] of Object.entries(search)) {
+    if (key === 'keyword' || key === 'column_filters' || value == null || value === '') continue;
+    if (typeof value === 'object') continue;
+    const expected = String(value).toLowerCase();
+    next = next.filter((row) => {
+      const shown = fieldText(row, key).toLowerCase();
+      const raw = rawField(row, key).toLowerCase();
+      return shown.includes(expected) || raw.includes(expected);
+    });
+  }
+  const filters = parseColumnFiltersParam(search.column_filters);
+  for (const filter of filters) {
+    next = next.filter((row) =>
+      matchFilter(rawField(row, filter.field), fieldText(row, filter.field), filter.op, filter.value),
+    );
+  }
+  return next;
+}
+
+function ReportTable({
+  category,
+  mine,
+}: {
+  category: 'system' | 'custom';
+  mine: boolean;
+}) {
   const { message } = App.useApp();
   const navigate = useNavigate();
-  const [rows, setRows] = useState<ReportCenterRow[]>([]);
-  const [status, setStatus] = useState<string | undefined>();
-  const [category, setCategory] = useState<string | undefined>();
-  const [classify, setClassify] = useState<string | undefined>();
-  const [classifyInput, setClassifyInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [shareTarget, setShareTarget] = useState<ReportCenterRow | null>(null);
-  const classifyTimer = useRef<number | undefined>(undefined);
+  const actionRef = useRef<ActionType>();
+  const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
+  const [sharePath, setSharePath] = useState<string | null>(null);
+  const [mountTarget, setMountTarget] = useState<ReportCenterRow | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const reload = useCallback(() => {
+    actionRef.current?.reload?.();
+  }, []);
+
+  const goSources = () => navigate('/system/data-sources');
+
+  const onShare = async (row: ReportCenterRow) => {
     try {
-      const data = await listReports({
-        status: status || undefined,
-        category: category || undefined,
-        classify: classify || undefined,
-      });
-      setRows(Array.isArray(data) ? data : []);
+      const result = await createPublicLink(row.id);
+      const path = result.share_path || '';
+      setSharePath(path.startsWith('http') ? path : `${window.location.origin}${path}`);
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '报表列表加载失败');
-    } finally {
-      setLoading(false);
-    }
-  }, [category, classify, status, message]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  // 分类输入防抖，避免每击键请求
-  useEffect(() => {
-    window.clearTimeout(classifyTimer.current);
-    classifyTimer.current = window.setTimeout(() => {
-      setClassify(classifyInput.trim() || undefined);
-    }, 400);
-    return () => window.clearTimeout(classifyTimer.current);
-  }, [classifyInput]);
-
-  const groups = useMemo(() => {
-    const map = new Map<string, ReportCenterRow[]>();
-    for (const row of rows) {
-      const key = row.classify || '未分类';
-      const bucket = map.get(key);
-      if (bucket) bucket.push(row);
-      else map.set(key, [row]);
-    }
-    return [...map.entries()];
-  }, [rows]);
-
-  const onPublish = async (row: ReportCenterRow) => {
-    try {
-      await publishReport(row.id);
-      message.success(`「${row.name}」已发布`);
-      void load();
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : '发布失败');
+      message.error(err instanceof Error ? err.message : '生成分享链接失败');
     }
   };
 
-  const onCloseShare = async (row: ReportCenterRow) => {
+  const onWithdraw = async (row: ReportCenterRow) => {
     try {
-      await closeReportShare(row.id);
-      message.success(`「${row.name}」已关闭分享`);
-      void load();
+      await withdrawReport(row.id);
+      message.success(`「${row.name}」已撤回为草稿`);
+      reload();
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '关闭分享失败');
+      message.error(err instanceof Error ? err.message : '撤回失败');
     }
   };
+
+  const onDelete = async (row: ReportCenterRow) => {
+    try {
+      await deleteReport(row.id);
+      message.success(`「${row.name}」已删除`);
+      reload();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '删除失败');
+    }
+  };
+
+  const onBatchDelete = async (keys: React.Key[]) => {
+    const ids = keys.map((key) => Number(key)).filter((id) => Number.isFinite(id));
+    if (!ids.length) return;
+    try {
+      await Promise.all(ids.map((id) => deleteReport(id)));
+      message.success('已删除');
+      setSelectedKeys([]);
+      reload();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '批量删除失败');
+      reload();
+    }
+  };
+
+  const columns: ProColumns<ReportCenterRow>[] = [
+      {
+        title: '编号',
+        dataIndex: 'code',
+        copyable: true,
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+      },
+      {
+        title: '名称',
+        dataIndex: 'name',
+        width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+      },
+      {
+        title: '描述',
+        dataIndex: 'description',
+        key: 'description',
+        width: 220,
+        minWidth: 220,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        render: (_, row) => row.description || '-',
+      },
+      {
+        title: '分类',
+        dataIndex: 'classify',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        valueEnum: CLASSIFY_ENUM,
+        render: (_, row) => (row.classify ? <Tag color="blue">{row.classify}</Tag> : '-'),
+      },
+      {
+        title: '更新时间',
+        dataIndex: 'updated_at',
+        key: 'updated_at',
+        width: 168,
+        minWidth: 168,
+        uniTableKeepWidth: true,
+        uniTableAuditStackedColumn: false,
+        resizable: false,
+        ellipsis: true,
+      },
+      {
+        title: '状态',
+        dataIndex: 'status',
+        width: 100,
+        minWidth: 100,
+        uniTableKeepWidth: true,
+        resizable: false,
+        valueEnum: STATUS_ENUM,
+        render: (_, row) =>
+          row.status === 'PUBLISHED' ? <Tag color="success">已发布</Tag> : <Tag>草稿</Tag>,
+      },
+      {
+        title: '操作',
+        dataIndex: 'actions',
+        key: 'actions',
+        width: 288,
+        minWidth: 288,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, row) =>
+          renderUniTableOperationCell(
+            [
+              <Button
+                key="detail"
+                {...rowActionKind('read')}
+                onClick={() => navigate(`/apps/kuaireport/reports/view/${row.id}`)}
+              />,
+              <Button
+                key="edit"
+                {...rowActionKind('update')}
+                onClick={() =>
+                  navigate(
+                    mine
+                      ? `/apps/kuaireport/reports/${row.id}/edit`
+                      : `/apps/kuaireport/designer?reportId=${row.id}`,
+                  )
+                }
+              />,
+              <Popconfirm key="delete" title="确定删除该报表？" onConfirm={() => void onDelete(row)}>
+                <Button {...rowActionKind('delete')} />
+              </Popconfirm>,
+              <Button
+                key="share"
+                {...rowActionKind('skip')}
+                {...rowActionLabelKeep()}
+                onClick={() => void onShare(row)}
+              >
+                分享
+              </Button>,
+              <Button key="pro" {...rowActionKind('skip')} {...rowActionLabelKeep()}>
+                专业
+              </Button>,
+              <Button
+                key="mount"
+                {...rowActionKind('skip')}
+                {...rowActionLabelKeep()}
+                onClick={() => setMountTarget(row)}
+              >
+                挂载
+              </Button>,
+              <Popconfirm
+                key="withdraw"
+                title={`确认将「${row.name}」撤回为草稿？撤回后已有分享链接将立即失效。`}
+                onConfirm={() => void onWithdraw(row)}
+              >
+                <Button {...rowActionKind('skip')} {...rowActionLabelKeep()}>
+                  撤回
+                </Button>
+              </Popconfirm>,
+            ],
+            `report-op-${row.id}`,
+          ),
+      },
+    ];
 
   return (
-    <ListPageTemplate>
-      <Title level={4}>报表中心</Title>
-      <Space wrap style={{ marginBottom: 16 }}>
-        <Select
-          allowClear
-          placeholder="状态"
-          style={{ width: 140 }}
-          value={status}
-          onChange={(value) => setStatus(value)}
-          options={STATUS_OPTIONS}
-        />
-        <Select
-          allowClear
-          placeholder="系统 / 自定义"
-          style={{ width: 160 }}
-          value={category}
-          onChange={(value) => setCategory(value)}
-          options={[
-            { value: 'system', label: '系统报表' },
-            { value: 'custom', label: '自定义报表' },
-          ]}
-        />
-        <Input
-          allowClear
-          placeholder="业务分类"
-          style={{ width: 160 }}
-          value={classifyInput}
-          onChange={(event) => setClassifyInput(event.target.value)}
-        />
-        <Button onClick={() => setStatus('DRAFT')}>只看草稿</Button>
-      </Space>
-      {groups.map(([group, items]) => (
-        <section key={group} style={{ marginBottom: 24 }}>
-          <Title level={5}>{group}</Title>
-          <Table<ReportCenterRow>
-            rowKey="id"
-            loading={loading}
-            pagination={false}
-            dataSource={items}
-            columns={[
-              { title: '名称', dataIndex: 'name' },
-              { title: '编码', dataIndex: 'code' },
-              {
-                title: '类别',
-                dataIndex: 'category',
-                render: (value: string) => (value === 'system' ? '系统报表' : '自定义报表'),
-              },
-              {
-                title: '状态',
-                dataIndex: 'status',
-                render: (value: string) =>
-                  value === 'PUBLISHED' ? (
-                    <Tag color="blue">已发布</Tag>
-                  ) : value === 'DRAFT' ? (
-                    <Tag>草稿</Tag>
-                  ) : (
-                    <Tag color="blue">{value}</Tag>
-                  ),
-              },
-              {
-                title: '分享',
-                dataIndex: 'is_shared',
-                render: (value: boolean) =>
-                  value ? <Tag color="green">已开启</Tag> : <Tag>未开启</Tag>,
-              },
-              {
-                title: '操作',
-                render: (_, row) => (
-                  <Space size={0} wrap>
-                    <Button
-                      type="link"
-                      onClick={() => navigate(`/apps/kuaireport/reports/view/${row.id}`)}
-                    >
-                      打开
-                    </Button>
-                    {row.category === 'custom' ? (
-                      <Button
-                        type="link"
-                        onClick={() =>
-                          navigate(`/apps/kuaireport/designer?reportId=${row.id}`)
-                        }
-                      >
-                        编辑
-                      </Button>
-                    ) : null}
-                    {row.status === 'PUBLISHED' ? null : (
-                      <Button type="link" onClick={() => void onPublish(row)}>
-                        发布
-                      </Button>
-                    )}
-                    <Button type="link" onClick={() => setShareTarget(row)}>
-                      分享
-                    </Button>
-                    {row.is_shared ? (
-                      <Popconfirm
-                        title="关闭后分享链接立即失效"
-                        onConfirm={() => void onCloseShare(row)}
-                      >
-                        <Button type="link" danger>
-                          关闭分享
-                        </Button>
-                      </Popconfirm>
-                    ) : null}
-                  </Space>
-                ),
-              },
-            ]}
-          />
-        </section>
-      ))}
-      {!loading && rows.length === 0 ? <Text type="secondary">没有报表</Text> : null}
-      <ShareModal
-        open={shareTarget != null}
-        resourceName={shareTarget?.name}
-        onSubmit={(body) => shareReport(shareTarget!.id, body)}
-        onClose={(changed) => {
-          setShareTarget(null);
-          if (changed) void load();
+    <>
+      <UniTable<ReportCenterRow>
+        actionRef={actionRef}
+        rowKey="id"
+        columns={columns}
+        columnPersistenceId={mine ? 'kuaireport-reports-mine-v4' : 'kuaireport-reports-system-v4'}
+        viewTypes={['card', 'table', 'help']}
+        showImportButton={false}
+        showExportButton={false}
+        enableRowSelection={mine}
+        selectedRowKeys={mine ? selectedKeys : undefined}
+        onRowSelectionChange={mine ? setSelectedKeys : undefined}
+        headerActions={
+          <Space>
+            {mine ? (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => navigate('/apps/kuaireport/reports/new')}
+              >
+                新建自制报表 (Alt+N)
+              </Button>
+            ) : null}
+            {mine ? (
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                disabled={selectedKeys.length === 0}
+                onClick={() => {
+                  Modal.confirm({
+                    title: `确定删除选中的 ${selectedKeys.length} 张报表？`,
+                    okText: '删除',
+                    okButtonProps: { danger: true },
+                    onOk: () => onBatchDelete(selectedKeys),
+                  });
+                }}
+              >
+                批量删除
+              </Button>
+            ) : null}
+            <Button icon={<DatabaseOutlined />} onClick={goSources}>
+              管理数据源
+            </Button>
+          </Space>
+        }
+        cardViewConfig={{
+          renderCard: (row) => (
+            <div style={{ padding: 16, border: '1px solid var(--river-border-color, #f0f0f0)', borderRadius: 8 }}>
+              <Typography.Text strong>{row.name}</Typography.Text>
+              <div style={{ marginTop: 8 }}>
+                <Tag>{row.code}</Tag>
+                {row.classify ? <Tag color="blue">{row.classify}</Tag> : null}
+                {row.status === 'PUBLISHED' ? <Tag color="success">已发布</Tag> : <Tag>草稿</Tag>}
+              </div>
+            </div>
+          ),
+        }}
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const data = await listReports({ category });
+          let rows = Array.isArray(data) ? data : [];
+          rows = applySearch(rows, searchFormValues as Record<string, unknown> | undefined);
+          const current = Number(params?.current || 1);
+          const pageSize = Number(params?.pageSize || 20);
+          const start = (current - 1) * pageSize;
+          return {
+            data: rows.slice(start, start + pageSize),
+            success: true,
+            total: rows.length,
+          };
         }}
       />
-    </ListPageTemplate>
+      <Modal
+        title="分享报表"
+        open={sharePath != null}
+        onCancel={() => setSharePath(null)}
+        footer={null}
+        destroyOnHidden
+      >
+        <p style={{ marginBottom: 8 }}>分享链接（复制后发送给他人，无需登录即可查看）：</p>
+        <Typography.Paragraph copyable style={{ marginBottom: 0 }}>
+          {sharePath}
+        </Typography.Paragraph>
+      </Modal>
+      <MountReportModal report={mountTarget} onClose={() => setMountTarget(null)} />
+    </>
+  );
+}
+
+export default function ReportCenterPage() {
+  const [params] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(params.get('tab') === 'system' ? 'system' : 'mine');
+
+  return (
+    <MultiTabListPageTemplate
+      activeTabKey={activeTab}
+      onTabChange={setActiveTab}
+      preserveMounted
+      tabs={[
+        {
+          key: 'mine',
+          label: (
+            <Space>
+              <UserOutlined />
+              我的报表
+            </Space>
+          ),
+          children: <ReportTable category="custom" mine />,
+        },
+        {
+          key: 'system',
+          label: (
+            <Space>
+              <AppstoreOutlined />
+              系统报表
+            </Space>
+          ),
+          children: <ReportTable category="system" mine={false} />,
+        },
+      ]}
+    />
   );
 }

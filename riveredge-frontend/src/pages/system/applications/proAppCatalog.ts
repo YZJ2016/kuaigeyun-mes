@@ -35,14 +35,14 @@ export const PRO_PLACEHOLDER_META: Record<ProAppCode, ProPlaceholderMeta> = {
   kuaireport: {
     nameKey: 'sys.app.kuaireport.name',
     descKey: 'sys.app.kuaireport.desc',
-    nameDefault: '快报表',
+    nameDefault: '星报表',
     descDefault: '多源数据聚合与经营分析决策中心',
     version: 'PRO',
   },
   kuaiiot: {
     nameKey: 'sys.app.kuaiiot.name',
     descKey: 'sys.app.kuaiiot.desc',
-    nameDefault: '快数采',
+    nameDefault: '星数采',
     descDefault: '工业物联网设备数采集成平台，敬请期待',
     version: 'PRO',
   },

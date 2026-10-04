@@ -22,6 +22,7 @@ from core.services.system.backup_storage import (
 from core.schemas.data_backup import DataBackupCreate
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.utils.timezone_utils import resolve_business_datetime
+from infra.domain.tenant_context import get_current_tenant_id, with_tenant
 
 
 class DataBackupService:
@@ -30,7 +31,16 @@ class DataBackupService:
     
     管理数据备份记录，并触发后台备份/恢复任务。
     """
-    
+
+    @staticmethod
+    async def _query_in_tenant(tenant_id: Optional[int], action):
+        # 显式 tenant_id 不会打开隔离上下文。环境上下文缺失或指向其他组织时，
+        # 只在本次查询进入该组织，退出后还原调用方上下文。
+        if tenant_id is not None and get_current_tenant_id() != tenant_id:
+            async with with_tenant(int(tenant_id), reason="数据备份按指定组织查询"):
+                return await action()
+        return await action()
+
     @staticmethod
     def _flatten_exception_message(exc: Exception) -> str:
         """
@@ -78,11 +88,13 @@ class DataBackupService:
             query = query.filter(backup_scope=backup_scope)
         if status:
             query = query.filter(status=status)
-            
-        total = await query.count()
-        items = await query.order_by("-created_at").offset((page - 1) * page_size).limit(page_size).all()
-        
-        return items, total
+
+        async def _materialize():
+            total = await query.count()
+            items = await query.order_by("-created_at").offset((page - 1) * page_size).limit(page_size).all()
+            return items, total
+
+        return await DataBackupService._query_in_tenant(tenant_id, _materialize)
 
     @staticmethod
     def resolve_source_tenant_id(backup: DataBackup) -> Optional[int]:
@@ -119,11 +131,14 @@ class DataBackupService:
         """
         通过 UUID 获取备份详情
         """
-        try:
-            return await DataBackup.get(tenant_id=tenant_id, uuid=uuid)
-        except DoesNotExist:
-            logger.error(f"备份不存在: {uuid}")
-            raise ValueError("备份不存在")
+        async def _load():
+            try:
+                return await DataBackup.get(tenant_id=tenant_id, uuid=uuid)
+            except DoesNotExist:
+                logger.error(f"备份不存在: {uuid}")
+                raise ValueError("备份不存在")
+
+        return await DataBackupService._query_in_tenant(tenant_id, _load)
 
     @staticmethod
     async def create_backup_task(tenant_id: Optional[int], data: DataBackupCreate) -> DataBackup:

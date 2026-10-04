@@ -2,7 +2,7 @@
  * KU-AI 模型目录 API（spec 138，契约 C 逐字一致）。
  *
  * - 厂商（llm-providers）：OpenAI 兼容端点目录，非闭集；内置项仅是可选模板。
- * - 模型（llm-models）：model_name 自由填写；model_type ∈ chat|embed|vision。
+ * - 模型（llm-models）：model_name 自由填写；model_type ∈ chat|embed|vision|rerank。
  * - api_key 只写不回明文：详情/列表回打码占位（LlmProviderOut.api_key），
  *   前端原样展示掩码即可；更新时传空/省略视为保留原值。
  * - 请求体禁止携带 tenantId。
@@ -13,7 +13,7 @@ import { apiRequest } from '../../../services/api';
 const PROVIDERS_BASE = '/apps/kuaiai/llm-providers';
 const MODELS_BASE = '/apps/kuaiai/llm-models';
 
-export type LlmModelType = 'chat' | 'embed' | 'vision';
+export type LlmModelType = 'chat' | 'embed' | 'vision' | 'rerank';
 
 // ============================================================ 厂商
 

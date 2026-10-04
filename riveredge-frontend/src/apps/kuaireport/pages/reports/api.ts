@@ -15,12 +15,21 @@ export interface ReportCenterRow {
   uuid: string;
   code: string;
   name: string;
+  description?: string | null;
   category: 'system' | 'custom' | string;
   classify: string;
   is_system: boolean;
   status: string;
   is_shared: boolean;
+  updated_at?: string | null;
   report_config: ReportConfigSchema;
+}
+
+export interface ReportMountState {
+  mounted: boolean;
+  menu_uuid?: string | null;
+  menu_name?: string | null;
+  parent_uuid?: string | null;
 }
 
 export function listReports(params: {
@@ -33,6 +42,40 @@ export function listReports(params: {
 
 export function getReport(reportId: number): Promise<ReportCenterRow> {
   return apiRequest<ReportCenterRow>(`${REPORTS_BASE}/${reportId}`);
+}
+
+export interface WizardSaveBody {
+  code: string;
+  name: string;
+  description?: string | null;
+  category: 'custom' | 'system';
+  classify?: string;
+  report_config: ReportCenterRow['report_config'];
+  status: 'DRAFT' | 'PUBLISHED';
+}
+
+export function createWizardReport(body: WizardSaveBody): Promise<ReportCenterRow> {
+  return apiRequest<ReportCenterRow>(REPORTS_BASE, { method: 'POST', data: body });
+}
+
+export function updateWizardReport(reportId: number, body: WizardSaveBody): Promise<ReportCenterRow> {
+  return apiRequest<ReportCenterRow>(`${REPORTS_BASE}/${reportId}`, { method: 'PUT', data: body });
+}
+
+export function detectDatasetFields(datasetUuid: string): Promise<{
+  fields: Array<{ field: string; label: string; visible?: boolean }>;
+  success: boolean;
+}> {
+  return apiRequest(`${REPORTS_BASE}/datasets/fields`, { params: { dataset_uuid: datasetUuid } });
+}
+
+export function previewDataset(body: {
+  dataset_uuid: string;
+  dataset_code?: string;
+  chart_type: string;
+  page_size?: number;
+}): Promise<{ data: Record<string, unknown>[]; total?: number; success: boolean }> {
+  return apiRequest(`${REPORTS_BASE}/preview`, { method: 'POST', data: body });
 }
 
 export function publishReport(reportId: number): Promise<ReportCenterRow> {
@@ -60,6 +103,37 @@ export function shareReport(
 
 export function closeReportShare(reportId: number): Promise<unknown> {
   return apiRequest(`${REPORTS_BASE}/${reportId}/share`, { method: 'DELETE' });
+}
+
+/** 报表中心「分享」：免登录链接，不传口令。 */
+export function createPublicLink(reportId: number): Promise<ShareResult> {
+  return apiRequest<ShareResult>(`${REPORTS_BASE}/${reportId}/public-link`, { method: 'POST' });
+}
+
+export function withdrawReport(reportId: number): Promise<ReportCenterRow> {
+  return apiRequest<ReportCenterRow>(`${REPORTS_BASE}/${reportId}/withdraw`, { method: 'POST' });
+}
+
+export function deleteReport(reportId: number): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>(`${REPORTS_BASE}/${reportId}`, { method: 'DELETE' });
+}
+
+export function getReportMount(reportId: number): Promise<ReportMountState> {
+  return apiRequest<ReportMountState>(`${REPORTS_BASE}/${reportId}/mount`);
+}
+
+export function mountReport(
+  reportId: number,
+  body: { parent_uuid: string; menu_name: string },
+): Promise<ReportMountState> {
+  return apiRequest<ReportMountState>(`${REPORTS_BASE}/${reportId}/mount`, {
+    method: 'POST',
+    data: body,
+  });
+}
+
+export function clearReportMount(reportId: number): Promise<ReportMountState> {
+  return apiRequest<ReportMountState>(`${REPORTS_BASE}/${reportId}/mount`, { method: 'DELETE' });
 }
 
 export async function downloadFullExcel(

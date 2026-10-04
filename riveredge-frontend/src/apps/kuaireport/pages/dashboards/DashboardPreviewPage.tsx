@@ -3,8 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { Alert, Spin } from 'antd';
 import { apiRequest } from '../../../../services/api';
 import { DashboardWidgets, type DashboardWidget } from './DashboardWidgets';
-
-const DATA_WIDGET_TYPES = new Set(['metric', 'table', 'chart']);
+import { DATA_WIDGET_TYPES, DashboardCanvasFrame, isCanvasLayout, isFlowLayout, parseTheme } from './dashboardStage';
 
 /**
  * 已登录预览。只请求 `/dashboards/{id}/preview`，不请求分享路径。
@@ -17,6 +16,8 @@ export default function DashboardPreviewPage() {
   const dashboardId = params.id || search.get('id') || '';
   const [widgets, setWidgets] = useState<DashboardWidget[]>([]);
   const [name, setName] = useState('');
+  const [canvasTheme, setCanvasTheme] = useState<ReturnType<typeof parseTheme> | null>(null);
+  const [flowCanvas, setFlowCanvas] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const mountedRef = useRef(true);
@@ -34,13 +35,17 @@ export default function DashboardPreviewPage() {
       if (!dashboardId) return;
       if (showSpinner) setLoading(true);
       try {
-        const body = await apiRequest<{ name?: string; widgets_config?: DashboardWidget[] }>(
-          `/apps/kuaireport/dashboards/${dashboardId}/preview`,
-          { method: 'GET' },
-        );
+        const body = await apiRequest<{
+          name?: string;
+          widgets_config?: DashboardWidget[];
+          layout_config?: unknown;
+          theme_config?: unknown;
+        }>(`/apps/kuaireport/dashboards/${dashboardId}/preview`, { method: 'GET' });
         if (!mountedRef.current) return;
         setName(body.name || '');
         setWidgets(body.widgets_config || []);
+        setCanvasTheme(isCanvasLayout(body.layout_config) ? parseTheme(body.theme_config) : null);
+        setFlowCanvas(isFlowLayout(body.layout_config));
         setError('');
       } catch (err) {
         if (mountedRef.current && showSpinner) {
@@ -72,6 +77,7 @@ export default function DashboardPreviewPage() {
   if (!dashboardId) return <Alert type="info" message="缺少大屏 id" />;
   if (loading) return <Spin />;
   if (error) return <Alert type="error" message={error} />;
+  if (canvasTheme) return <DashboardCanvasFrame theme={canvasTheme} widgets={widgets} flow={flowCanvas} />;
   return (
     <div style={{ padding: 16 }}>
       <h1>{name}</h1>

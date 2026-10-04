@@ -24,7 +24,7 @@ from apps.kuaiai.models.knowledge import (
     KuaiaiKnowledgeChunk,
     KuaiaiKnowledgeDocument,
 )
-from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 
 TENANT = 7
 USER_ID = 5
@@ -447,19 +447,24 @@ class TestIndexDocument:
         assert doc.status == "ready"
 
     @pytest.mark.asyncio
-    async def test_no_embed_row_fails_not_ready(self):
-        """无可用 embed 行 → status=failed，不得标成功。"""
+    async def test_no_embed_connection_fails_not_ready(self):
+        """没有嵌入选用连接 → status=failed，不得标成功。"""
         doc = _doc()
         lock_qs, lock_patch = _patch_doc_lock(doc)
         tx, tx_patch = _patch_tx()
-        emb, emb_patch = _patch_embeddings()
         with (
             _patch_get_or_none(KuaiaiKnowledgeDocument, doc),
             lock_patch,
             _patch_get_or_none(KuaiaiKnowledgeBase, _kb()),
-            _patch_embed_row(None),
             _patch_params(),
-            emb_patch,
+            patch(
+                "core.ai.runtime.model_factory.build_embeddings",
+                new=AsyncMock(
+                    side_effect=ValidationError(
+                        "未配置 embedding 模型，请在系统设置 → 应用连接器中选用一条嵌入连接"
+                    )
+                ),
+            ),
             tx_patch,
             _patch_filter(KuaiaiKnowledgeChunk, _FakeQS()),
         ):
@@ -467,7 +472,6 @@ class TestIndexDocument:
         assert doc.status == "failed"
         assert "embed" in (doc.error_message or "")
         assert not any("INSERT INTO" in c[0] for c in tx.calls)
-        emb.aembed_documents.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_dim_mismatch_fails_closed(self):

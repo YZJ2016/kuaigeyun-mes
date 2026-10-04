@@ -31,7 +31,6 @@ from apps.kuaiai.models.knowledge import (
     KuaiaiKnowledgeDocument,
 )
 from apps.kuaiai.services.document_parsers import extract_text
-from apps.kuaiai.services.retrieval import resolve_embed_model_id
 from core.utils.timezone_utils import make_aware, now_utc
 from infra.exceptions.exceptions import (
     BusinessLogicError,
@@ -405,16 +404,9 @@ class KnowledgeService:
                     raise BusinessLogicError("文档切块结果为空")
 
                 stage = "embed"
-                model_id = await resolve_embed_model_id(
-                    tenant_id, kb.embedding_model_id
-                )
-                if model_id is None:
-                    raise BusinessLogicError(
-                        "未配置 embedding 模型，请先在模型目录中添加 embed 模型"
-                    )
                 from core.ai.runtime.model_factory import build_embeddings
 
-                embeddings = await build_embeddings(tenant_id, model_id)
+                embeddings = await build_embeddings(tenant_id)
                 vectors = await embeddings.aembed_documents(chunks)
                 if len(vectors) != len(chunks) or any(
                     len(v) != _EMBED_DIM for v in vectors

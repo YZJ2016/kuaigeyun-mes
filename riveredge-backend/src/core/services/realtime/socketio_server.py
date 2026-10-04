@@ -56,7 +56,12 @@ def _register_handlers(sio: socketio.AsyncServer) -> None:
             "room": personal_room,
             "andon_room": andon_room,
         }
-        logger.debug("Socket.IO 已连接 sid={} room={}", sid, room)
+        logger.debug(
+            "Socket.IO 已连接 sid={} room={} andon_room={}",
+            sid,
+            personal_room,
+            andon_room,
+        )
         return True
 
     @sio.event

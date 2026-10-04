@@ -93,3 +93,34 @@ export function shareDashboard(
 export function closeDashboardShare(dashboardId: number): Promise<unknown> {
   return apiRequest(`${DASHBOARDS_BASE}/${dashboardId}/share`, { method: 'DELETE' });
 }
+
+export function deleteDashboard(dashboardId: number): Promise<unknown> {
+  return apiRequest(`${DASHBOARDS_BASE}/${dashboardId}`, { method: 'DELETE' });
+}
+
+export interface DashboardMountState {
+  mounted: boolean;
+  menu_uuid?: string | null;
+  menu_name?: string | null;
+  parent_uuid?: string | null;
+}
+
+export function getDashboardMount(dashboardId: number): Promise<DashboardMountState> {
+  return apiRequest<DashboardMountState>(`${DASHBOARDS_BASE}/${dashboardId}/mount`);
+}
+
+export function mountDashboard(
+  dashboardId: number,
+  body: { parent_uuid: string; menu_name: string },
+): Promise<DashboardMountState> {
+  return apiRequest<DashboardMountState>(`${DASHBOARDS_BASE}/${dashboardId}/mount`, {
+    method: 'POST',
+    data: body,
+  });
+}
+
+export function clearDashboardMount(dashboardId: number): Promise<DashboardMountState> {
+  return apiRequest<DashboardMountState>(`${DASHBOARDS_BASE}/${dashboardId}/mount`, {
+    method: 'DELETE',
+  });
+}

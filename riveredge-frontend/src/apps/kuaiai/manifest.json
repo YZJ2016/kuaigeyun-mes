@@ -38,13 +38,6 @@
         "sort_order": 3
       },
       {
-        "title": "app.kuaiai.menu.models",
-        "path": "/apps/kuaiai/models",
-        "icon": "deploymentUnit",
-        "permission": "kuaiai:model:display",
-        "sort_order": 4
-      },
-      {
         "title": "app.kuaiai.menu.mcp",
         "path": "/apps/kuaiai/mcp",
         "icon": "api",

@@ -218,29 +218,16 @@ async def _expand_queries(
 async def _resolve_kb_embeddings(
     tenant_id: int, kbs: List[KuaiaiKnowledgeBase]
 ) -> Dict[int, Any]:
-    """每库解析 embedding 实例；无 embed 行/构建失败 → None（该库跳过）。
-
-    本租户没有可用 embed 行时检索返回空集而非炸——索引期本来就要求 embed
-    行才能产出向量，缺行语义上即「不可检索」，不是调用方错误。
-    """
-    out: Dict[int, Any] = {}
-    for kb in kbs:
-        model_id = await resolve_embed_model_id(
-            tenant_id, kb.embedding_model_id
+    """本租户嵌入选用连接；没有或构建失败则各库为 None（检索跳过，不炸）。"""
+    embeddings = None
+    try:
+        embeddings = await build_embeddings(tenant_id)
+    except Exception as exc:
+        logger.warning(
+            "KU-AI 检索 embed 构建失败 error_type={}",
+            type(exc).__name__,
         )
-        if model_id is None:
-            out[kb.id] = None
-            continue
-        try:
-            out[kb.id] = await build_embeddings(tenant_id, model_id)
-        except Exception as exc:
-            logger.warning(
-                "KU-AI 检索 embed 构建失败 knowledge_id={} error_type={}",
-                kb.id,
-                type(exc).__name__,
-            )
-            out[kb.id] = None
-    return out
+    return {kb.id: embeddings for kb in kbs}
 
 
 async def _search_kb(

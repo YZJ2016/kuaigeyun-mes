@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import apps.kuaiai.services.retrieval as rt
+from infra.exceptions.exceptions import ValidationError
 from apps.kuaiai.models.catalog import KuaiaiLlmModel
 from apps.kuaiai.models.knowledge import (
     KuaiaiKnowledgeBase,
@@ -289,13 +290,16 @@ class TestPerKbSearch:
         assert params[2].startswith("[") and params[2].endswith("]")
 
     @pytest.mark.asyncio
-    async def test_no_embed_row_returns_empty_not_crash(self):
-        """本租户无 embed 行（库未绑且回落无果）→ 检索 [] 而非炸。"""
+    async def test_no_embed_connection_returns_empty_not_crash(self):
+        """没有嵌入选用连接 → 检索 [] 而非炸。"""
         conn = _conn([])
-        with _patch_common(
-            [_kb(embedding_model_id=None)], conn, embed_row=None
-        ):
-            result = await rt.retrieve(TENANT, "问题", [9])
+        with _patch_common([_kb(embedding_model_id=None)], conn, embed_row=None):
+            with patch.object(
+                rt,
+                "build_embeddings",
+                AsyncMock(side_effect=ValidationError("未配置 embedding 模型")),
+            ):
+                result = await rt.retrieve(TENANT, "问题", [9])
         assert result == []
         conn.execute_query_dict.assert_not_awaited()
 

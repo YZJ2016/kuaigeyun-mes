@@ -347,16 +347,6 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
               {contextBadge}
             </Tag>
           ) : null}
-          <span
-            className="ai-qa-panel-header-beta"
-            style={{
-              background: token.colorPrimaryBg,
-              color: token.colorPrimary,
-              borderColor: token.colorPrimaryBorder,
-            }}
-          >
-            {t('ui.aiAssistant.beta')}
-          </span>
           <Button
             type="text"
             icon={<PlusOutlined />}

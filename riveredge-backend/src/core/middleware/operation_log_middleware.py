@@ -16,6 +16,7 @@ from starlette.responses import Response
 
 from core.services.logging.online_user_service import OnlineUserService
 from core.services.logging.operation_log_service import OperationLogService
+from infra.domain.tenant_context import with_tenant
 
 _UUID_PATTERN = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
@@ -156,11 +157,14 @@ class OperationLogMiddleware(BaseHTTPMiddleware):
         if not OperationLogMiddleware._should_update_activity(tenant_id, user_id, force=force):
             return
         try:
-            await OnlineUserService.update_user_activity(
-                tenant_id=tenant_id,
-                user_id=user_id,
-                login_ip=ip_address,
-            )
+            # call_next 在独立 task 中执行，请求里 set_current_tenant_id 不会回到本中间件。
+            # tenant_id 已从 request.state / JWT 解析（超管哨兵仍是 0），这里只补该执行域。
+            async with with_tenant(int(tenant_id), reason="请求结束后按已解析组织更新在线活动"):
+                await OnlineUserService.update_user_activity(
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    login_ip=ip_address,
+                )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "在线用户活动更新失败 user_id={user_id} error={error}",

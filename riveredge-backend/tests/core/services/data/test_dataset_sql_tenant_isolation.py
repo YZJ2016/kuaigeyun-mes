@@ -32,6 +32,29 @@ def test_third_party_without_tenant_column_stays_uninjected():
     ) is True
 
 
+def test_selected_columns_gain_tenant_id_before_outer_filter():
+    sql = "SELECT code, name, type, supplier, brand FROM public.apps_kuaizhizao_equipment LIMIT 100"
+    projected, injected = DatasetService._project_tenant_id_for_filter(sql)
+    assert injected is True
+    assert "brand, tenant_id FROM" in projected
+    wrapped = DatasetService._inject_tenant_filter_sql(projected)
+    inner, outer = wrapped.split(") AS dataset_q", 1)
+    assert "tenant_id" in inner
+    assert "LIMIT 100" in inner
+    assert "WHERE dataset_q.tenant_id = :tenant_id" in outer
+
+
+def test_star_and_existing_tenant_column_are_not_duplicated():
+    star, injected_star = DatasetService._project_tenant_id_for_filter("SELECT * FROM equipment")
+    assert injected_star is False
+    assert star == "SELECT * FROM equipment"
+    named, injected_named = DatasetService._project_tenant_id_for_filter(
+        "SELECT code, tenant_id FROM equipment"
+    )
+    assert injected_named is False
+    assert "tenant_id, tenant_id" not in named
+
+
 def test_or_predicate_stays_inside_outer_tenant_filter():
     sql = "SELECT id, tenant_id FROM materials WHERE 1=1 OR tenant_id = 9 ORDER BY id LIMIT 5;"
     wrapped = DatasetService._inject_tenant_filter_sql(sql)

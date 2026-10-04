@@ -22,9 +22,8 @@ from core.utils.integration_settings import (
 from infra.exceptions.exceptions import ValidationError
 
 OCR_NOT_CONFIGURED_MSG = (
-    "DeepSeek 对话 API 不支持图片输入。"
-    "请在系统配置 → 应用连接器中配置 OCR 视觉端点（OCR Base URL 与 OCR 模型），"
-    "例如硅基流动 https://api.siliconflow.cn/v1 + deepseek-ai/DeepSeek-OCR。"
+    "未配置视觉模型。"
+    "请在系统设置 → 应用连接器中新增一条角色为视觉的连接并选用。"
 )
 
 DEFAULT_IMAGE_TEXT_EXTRACT_PROMPT = (
@@ -97,7 +96,7 @@ def is_deepseek_ocr_model(model: Optional[str]) -> bool:
 async def get_deepseek_runtime_config(tenant_id: int) -> Dict[str, Any]:
     active = await resolve_active_llm_integration(tenant_id)
     if not active.get("enabled"):
-        raise ValidationError("AI 连接器未启用，请在应用连接器中启用并填写 API Key，并在 KU-AI → 模型设置中选用")
+        raise ValidationError("AI 连接器未启用，请在系统设置 → 应用连接器中启用对话连接并填写 API Key")
     api_key = active.get("api_key")
     if not isinstance(api_key, str) or not api_key.strip():
         raise ValidationError("未配置 AI API Key，无法使用对话或 OCR")

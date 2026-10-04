@@ -9,14 +9,14 @@ import { listMessageLogs, type MessageLog } from '../../services/kuaiiot';
 
 const { Title } = Typography;
 
-export default function MessagesPage() {
+export default function MessagesPage({ title = '消息追踪' }: { title?: string }) {
   const [rows, setRows] = useState<MessageLog[]>([]);
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%', padding: 16 }}>
       <Space>
         <Title level={4} style={{ margin: 0 }}>
-          消息追踪
+          {title}
         </Title>
         <Link to="/apps/kuaiiot">返回登记</Link>
       </Space>

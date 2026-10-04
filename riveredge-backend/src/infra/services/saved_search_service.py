@@ -10,7 +10,7 @@ from tortoise.exceptions import DoesNotExist
 
 from infra.models.saved_search import SavedSearch
 from infra.schemas.saved_search import SavedSearchCreate, SavedSearchUpdate
-from infra.domain.tenant_context import get_current_tenant_id
+from infra.domain.tenant_context import get_current_tenant_id, with_tenant
 
 
 class SavedSearchService:
@@ -134,12 +134,21 @@ class SavedSearchService:
         # 应用组织过滤（如果 tenant_id 不为空）
         if tenant_id is not None:
             query = query.filter(tenant_id=tenant_id)
-        
-        # 获取总数
-        total = await query.count()
-        
-        # 获取列表（按置顶和时间排序）
-        items = await query.order_by('-is_pinned', '-created_at').all()
+
+        async def _materialize():
+            # 获取总数
+            total = await query.count()
+            # 获取列表（按置顶和时间排序）
+            items = await query.order_by('-is_pinned', '-created_at').all()
+            return total, items
+
+        # 显式 tenant_id 不会打开隔离上下文。环境上下文缺失或指向其他组织时，
+        # 只在本次查询进入该组织，退出后还原调用方上下文。
+        if tenant_id is not None and get_current_tenant_id() != tenant_id:
+            async with with_tenant(int(tenant_id), reason="保存搜索按指定组织查询"):
+                total, items = await _materialize()
+        else:
+            total, items = await _materialize()
         
         return {
             'items': items,

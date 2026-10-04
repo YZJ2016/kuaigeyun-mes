@@ -469,54 +469,26 @@ class TestCrossTenant:
                 await catalog_service.create_model(TENANT, _user(), payload)
 
     @pytest.mark.asyncio
-    async def test_default_model_cross_tenant_404(self):
+    async def test_default_model_id_is_not_written(self):
         payload = AgentProfileCreate(
             name="a1", grant_mode="USER", default_model_id=55
         )
-        with (
-            patch.object(
-                KuaiaiAgentProfile, "get_or_none", new=AsyncMock(return_value=None)
-            ),
-            patch.object(
-                KuaiaiLlmModel, "get_or_none", new=AsyncMock(return_value=None)
-            ),
-        ):
-            with pytest.raises(NotFoundError):
-                await agent_service.create_profile(TENANT, _user(), payload)
+        created = {}
 
-    @pytest.mark.asyncio
-    async def test_default_model_must_be_enabled_chat(self):
-        embed_model = _model(mtype="embed")
-        payload = AgentProfileCreate(
-            name="a1", grant_mode="USER", default_model_id=2
-        )
-        with (
-            patch.object(
-                KuaiaiAgentProfile, "get_or_none", new=AsyncMock(return_value=None)
-            ),
-            patch.object(
-                KuaiaiLlmModel,
-                "get_or_none",
-                new=AsyncMock(return_value=embed_model),
-            ),
-        ):
-            with pytest.raises(BusinessLogicError) as exc:
-                await agent_service.create_profile(TENANT, _user(), payload)
-        assert exc.value.status_code == 400
+        async def _create(**kw):
+            created.update(kw)
+            return SimpleNamespace(id=1, **kw)
 
-        disabled_chat = _model(mtype="chat", status="停用")
         with (
             patch.object(
                 KuaiaiAgentProfile, "get_or_none", new=AsyncMock(return_value=None)
             ),
             patch.object(
-                KuaiaiLlmModel,
-                "get_or_none",
-                new=AsyncMock(return_value=disabled_chat),
+                KuaiaiAgentProfile, "create", new=AsyncMock(side_effect=_create)
             ),
         ):
-            with pytest.raises(BusinessLogicError):
-                await agent_service.create_profile(TENANT, _user(), payload)
+            await agent_service.create_profile(TENANT, _user(), payload)
+        assert created["default_model_id"] is None
 
 
 class TestApiKeyMasking:
@@ -638,6 +610,30 @@ class TestModelTypeValidation:
             )
         mock_filter.assert_not_called()
         model.update_from_dict.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_rerank_model_type_accepted(self):
+        created = {}
+
+        async def _create(**kw):
+            created.update(kw)
+            return _model(mtype=kw["model_type"])
+
+        payload = LlmModelCreate(
+            provider_id=1, model_name="bge-reranker", model_type="rerank"
+        )
+        with (
+            patch.object(
+                KuaiaiLlmProvider,
+                "get_or_none",
+                new=AsyncMock(return_value=_provider()),
+            ),
+            patch.object(
+                KuaiaiLlmModel, "create", new=AsyncMock(side_effect=_create)
+            ),
+        ):
+            await catalog_service.create_model(TENANT, _user(), payload)
+        assert created["model_type"] == "rerank"
 
     @pytest.mark.asyncio
     async def test_bad_model_type_400(self):

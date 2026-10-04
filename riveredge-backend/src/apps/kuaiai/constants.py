@@ -9,8 +9,8 @@ STATUS_ENABLED = "启用"
 STATUS_DISABLED = "停用"
 CATALOG_STATUSES = frozenset({STATUS_ENABLED, STATUS_DISABLED})
 
-# llm_models.model_type 闭集（KR-D5：至少 chat|embed|vision）
-MODEL_TYPES = frozenset({"chat", "embed", "vision"})
+# llm_models.model_type 闭集（KR-D5：chat|embed|vision|rerank）
+MODEL_TYPES = frozenset({"chat", "embed", "vision", "rerank"})
 MODEL_TYPE_CHAT = "chat"
 MODEL_TYPE_EMBED = "embed"
 

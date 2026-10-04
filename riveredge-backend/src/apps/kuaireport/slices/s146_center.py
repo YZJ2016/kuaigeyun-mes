@@ -10,6 +10,7 @@ import json
 import re
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 from io import BytesIO
 from typing import Any, AsyncIterator
 
@@ -119,6 +120,23 @@ def resolve_execute_report():
     )
 
 
+_REPORT_LIST_COLUMNS = (
+    "id, uuid, code, name, description, category, classify, is_system, status, "
+    "is_shared, report_config, updated_at"
+)
+
+
+def _format_updated(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    text = str(value).replace("T", " ")
+    if "." in text:
+        text = text.split(".", 1)[0]
+    return text[:19]
+
+
 def _public_row(row: dict[str, Any]) -> dict[str, Any]:
     config = row.get("report_config")
     if isinstance(config, str):
@@ -128,11 +146,13 @@ def _public_row(row: dict[str, Any]) -> dict[str, Any]:
         "uuid": row.get("uuid"),
         "code": row.get("code"),
         "name": row.get("name"),
+        "description": row.get("description"),
         "category": row.get("category"),
         "classify": row.get("classify"),
         "is_system": bool(row.get("is_system")),
         "status": row.get("status"),
         "is_shared": bool(row.get("is_shared")),
+        "updated_at": _format_updated(row.get("updated_at")),
         "report_config": config if isinstance(config, dict) else {},
     }
 
@@ -157,8 +177,7 @@ class TortoiseReportCenterStore:
         classify: str | None,
     ) -> list[dict[str, Any]]:
         sql = (
-            "SELECT id, uuid, code, name, category, classify, is_system, status, "
-            "is_shared, report_config "
+            f"SELECT {_REPORT_LIST_COLUMNS} "
             "FROM apps_kuaireport_reports WHERE tenant_id = $1"
         )
         params: list[Any] = [tenant_id]
@@ -176,8 +195,7 @@ class TortoiseReportCenterStore:
 
     async def get_row(self, tenant_id: int, report_id: int) -> dict[str, Any] | None:
         rows = await self._dicts(
-            "SELECT id, uuid, code, name, category, classify, is_system, status, "
-            "is_shared, report_config "
+            f"SELECT {_REPORT_LIST_COLUMNS} "
             "FROM apps_kuaireport_reports WHERE tenant_id = $1 AND id = $2",
             [tenant_id, report_id],
         )
@@ -202,6 +220,30 @@ class TortoiseReportCenterStore:
             "WHERE tenant_id = $1 AND id = $2",
             [tenant_id, report_id, status],
         )
+
+    async def withdraw(self, tenant_id: int, report_id: int) -> dict[str, Any] | None:
+        """回到草稿，并清掉分享令牌，已发出的链接立即失效。"""
+        row = await self.get_row(tenant_id, report_id)
+        if row is None:
+            return None
+        await self.conn.execute_query(
+            "UPDATE apps_kuaireport_reports SET status = $3, is_shared = FALSE, "
+            "share_token = NULL, share_expires_at = NULL, share_password_hash = NULL, "
+            "share_allow_ip_cidrs = NULL, updated_at = CURRENT_TIMESTAMP "
+            "WHERE tenant_id = $1 AND id = $2",
+            [tenant_id, report_id, STATUS_DRAFT],
+        )
+        return await self.get_row(tenant_id, report_id)
+
+    async def delete_row(self, tenant_id: int, report_id: int) -> bool:
+        row = await self.get_row(tenant_id, report_id)
+        if row is None:
+            return False
+        await self.conn.execute_query(
+            "DELETE FROM apps_kuaireport_reports WHERE tenant_id = $1 AND id = $2",
+            [tenant_id, report_id],
+        )
+        return True
 
     async def registered_dataset_uuid(self, tenant_id: int) -> str | None:
         """本租户第一条可用 dataset 数据源；种入报表只绑数据集，不绑 static/http。"""
@@ -437,6 +479,133 @@ async def publish_report(report_id: int) -> dict[str, Any]:
     return saved
 
 
+def report_menu_path(report_id: int) -> str:
+    return f"/apps/kuaireport/reports/view/{report_id}"
+
+
+async def withdraw_report(report_id: int) -> dict[str, Any]:
+    """撤回为草稿，并让已有分享链接失效。"""
+    tenant_id = require_tenant_id()
+    async with report_center_transaction() as store:
+        saved = await store.withdraw(tenant_id, report_id)
+    if saved is None:
+        raise NotFoundError("报表", str(report_id))
+    return saved
+
+
+async def delete_report(report_id: int) -> None:
+    tenant_id = require_tenant_id()
+    async with report_center_transaction() as store:
+        deleted = await store.delete_row(tenant_id, report_id)
+    if not deleted:
+        raise NotFoundError("报表", str(report_id))
+    await clear_report_mount(report_id)
+
+
+class MountReportBody(BaseModel):
+    parent_uuid: str = Field(..., min_length=1)
+    menu_name: str = Field(..., min_length=1, max_length=100)
+
+
+async def _report_menu(tenant_id: int, report_id: int):
+    from core.models.menu import Menu
+
+    return await Menu.filter(
+        tenant_id=tenant_id,
+        path=report_menu_path(report_id),
+        deleted_at__isnull=True,
+    ).first()
+
+
+async def _parent_uuid_of(menu) -> str | None:
+    from core.models.menu import Menu
+
+    if menu is None or not menu.parent_id:
+        return None
+    parent = await Menu.get_or_none(id=menu.parent_id, deleted_at__isnull=True)
+    if parent is None:
+        return None
+    return str(parent.uuid)
+
+
+def _mount_payload(menu, parent_uuid: str | None) -> dict[str, Any]:
+    if menu is None:
+        return {"mounted": False, "menu_uuid": None, "menu_name": None, "parent_uuid": None}
+    return {
+        "mounted": True,
+        "menu_uuid": str(menu.uuid),
+        "menu_name": menu.name,
+        "parent_uuid": parent_uuid,
+    }
+
+
+async def get_report_mount(report_id: int) -> dict[str, Any]:
+    tenant_id = require_tenant_id()
+    async with report_center_transaction() as store:
+        row = await store.get_row(tenant_id, report_id)
+    if row is None:
+        raise NotFoundError("报表", str(report_id))
+    menu = await _report_menu(tenant_id, report_id)
+    return _mount_payload(menu, await _parent_uuid_of(menu))
+
+
+async def mount_report(report_id: int, parent_uuid: str, menu_name: str) -> dict[str, Any]:
+    """把报表挂到应用菜单下。系统菜单（没有 application_uuid）不可作为父级。"""
+    from core.models.menu import Menu
+    from core.schemas.menu import MenuCreate, MenuUpdate
+    from core.services.system.menu_service import MenuService
+
+    tenant_id = require_tenant_id()
+    async with report_center_transaction() as store:
+        row = await store.get_row(tenant_id, report_id)
+    if row is None:
+        raise NotFoundError("报表", str(report_id))
+    parent = await Menu.filter(
+        uuid=parent_uuid,
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    ).first()
+    if parent is None:
+        raise ValidationError("父菜单不存在或不属于当前组织")
+    if not (parent.application_uuid or "").strip():
+        raise ValidationError("系统菜单不可选")
+    name = menu_name.strip()
+    if not name:
+        raise ValidationError("请填写菜单名称")
+    path = report_menu_path(report_id)
+    existing = await _report_menu(tenant_id, report_id)
+    if existing is None:
+        await MenuService.create_menu(
+            tenant_id,
+            MenuCreate(
+                name=name,
+                path=path,
+                icon="barChart",
+                parent_uuid=str(parent.uuid),
+                permission_code="kuaireport:report:display",
+                sort_order=100,
+            ),
+        )
+    else:
+        await MenuService.update_menu(
+            tenant_id,
+            str(existing.uuid),
+            MenuUpdate(name=name, parent_uuid=str(parent.uuid)),
+        )
+    menu = await _report_menu(tenant_id, report_id)
+    return _mount_payload(menu, await _parent_uuid_of(menu))
+
+
+async def clear_report_mount(report_id: int) -> dict[str, Any]:
+    from core.services.system.menu_service import MenuService
+
+    tenant_id = require_tenant_id()
+    menu = await _report_menu(tenant_id, report_id)
+    if menu is not None:
+        await MenuService.delete_menu(tenant_id, str(menu.uuid))
+    return {"mounted": False, "menu_uuid": None, "menu_name": None, "parent_uuid": None}
+
+
 def _is_secret_key(key: str) -> bool:
     return _SECRET_KEY.search(key) is not None
 
@@ -586,6 +755,63 @@ async def publish_report_api(
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict[str, Any]:
     return await publish_report(report_id)
+
+
+@router.post(
+    "/{report_id:int}/withdraw",
+    dependencies=[Depends(require_permission_codes("kuaireport:report:display"))],
+)
+async def withdraw_report_api(
+    report_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict[str, Any]:
+    return await withdraw_report(report_id)
+
+
+@router.delete(
+    "/{report_id:int}",
+    dependencies=[Depends(require_permission_codes("kuaireport:report:display"))],
+)
+async def delete_report_api(
+    report_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict[str, bool]:
+    await delete_report(report_id)
+    return {"success": True}
+
+
+@router.get(
+    "/{report_id:int}/mount",
+    dependencies=[Depends(require_permission_codes("kuaireport:report:display"))],
+)
+async def get_report_mount_api(
+    report_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict[str, Any]:
+    return await get_report_mount(report_id)
+
+
+@router.post(
+    "/{report_id:int}/mount",
+    dependencies=[Depends(require_permission_codes("kuaireport:report:display"))],
+)
+async def mount_report_api(
+    report_id: int,
+    body: MountReportBody,
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict[str, Any]:
+    return await mount_report(report_id, body.parent_uuid, body.menu_name)
+
+
+@router.delete(
+    "/{report_id:int}/mount",
+    dependencies=[Depends(require_permission_codes("kuaireport:report:display"))],
+)
+async def clear_report_mount_api(
+    report_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict[str, Any]:
+    return await clear_report_mount(report_id)
 
 
 @router.post(

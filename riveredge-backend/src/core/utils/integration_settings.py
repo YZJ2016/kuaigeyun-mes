@@ -54,9 +54,35 @@ LLM_PROVIDER_SPECS: Dict[str, Dict[str, str]] = {
 LLM_PROVIDER_IDS: List[str] = list(LLM_PROVIDER_SPECS.keys())
 
 # 仅存在于 integrations.kuaiai 的能力/OCR/选用字段
+AI_MODEL_ROLES = ("chat", "embed", "vision", "rerank")
+
+# 阿里云 MaaS：对话/嵌入走 compatible-mode/v1，qwen3-rerank 走同主机的另一条路径。
+_MAAS_CHAT_SUFFIX = "/compatible-mode/v1"
+_MAAS_RERANK_SUFFIX = "/compatible-api/v1/reranks"
+
+
+def endpoint_for_role(role: str, base_url: str) -> str:
+    """同一厂商的不同角色可以有不同调用地址。
+
+    对话、嵌入、视觉原样使用填写的地址。阿里云 MaaS 主机上，若重排仍指向
+    对话用的 ``compatible-mode/v1``，改为同主机的 ``compatible-api/v1/reranks``。
+    已经是其它地址（含用户手填的完整重排地址）则不改。
+    """
+    url = str(base_url or "").strip().rstrip("/")
+    if role != "rerank" or not url.endswith(_MAAS_CHAT_SUFFIX):
+        return url
+    origin = url[: -len(_MAAS_CHAT_SUFFIX)]
+    if ".maas.aliyuncs.com" not in origin:
+        return url
+    return origin + _MAAS_RERANK_SUFFIX
+
 KUAIAI_SETTING_KEYS = (
     "active_provider",
     "active_connection_uuid",
+    "active_chat_connection_uuid",
+    "active_embed_connection_uuid",
+    "active_vision_connection_uuid",
+    "active_rerank_connection_uuid",
     "tools_enabled",
     "rag_enabled",
     "rag_use_embedding",
@@ -320,7 +346,273 @@ async def migrate_llm_providers_to_connections(tenant_id: int, settings: Dict[st
                 break
         changed = True
 
+    if await migrate_catalog_models_to_role_connections(tenant_id, settings):
+        changed = True
+
     return changed
+
+
+def role_connection_setting_key(role: str) -> str:
+    return f"active_{role}_connection_uuid"
+
+
+def require_llm_model_role(integration_type: str, config: Optional[Dict[str, Any]]) -> None:
+    """AI 连接必须带角色。非 AI 类型不校验。"""
+    from infra.exceptions.exceptions import ValidationError
+
+    if integration_type not in LLM_PROVIDER_SPECS:
+        return
+    role = str((config or {}).get("model_role") or "").strip()
+    if role not in AI_MODEL_ROLES:
+        raise ValidationError("AI 连接的 model_role 须为 chat、embed、vision、rerank 之一")
+
+
+def _connection_config(connection: Any) -> Dict[str, Any]:
+    getter = getattr(connection, "get_config", None)
+    if callable(getter):
+        cfg = getter()
+        if isinstance(cfg, dict):
+            return cfg
+    cfg = getattr(connection, "config", None)
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def _role_missing_message(role: str) -> str:
+    if role == "embed":
+        return "未配置 embedding 模型，请在系统设置 → 应用连接器中选用一条嵌入连接"
+    if role == "vision":
+        return (
+            "未配置视觉模型，请在系统设置 → 应用连接器中选用一条角色为视觉的连接"
+        )
+    if role == "rerank":
+        return "未配置重排连接，请在系统设置 → 应用连接器中选用一条重排连接"
+    return "未配置对话模型，请在系统设置 → 应用连接器中选用一条对话连接"
+
+
+async def _load_llm_connection(tenant_id: int, conn_uuid: str):
+    from core.models.integration_config import IntegrationConfig
+
+    if not conn_uuid:
+        return None
+    connection = await IntegrationConfig.filter(
+        tenant_id=tenant_id,
+        uuid=conn_uuid,
+        deleted_at__isnull=True,
+    ).first()
+    if connection is None or connection.type not in LLM_PROVIDER_SPECS:
+        return None
+    if connection.is_active is not True:
+        return None
+    return connection
+
+
+async def migrate_catalog_models_to_role_connections(
+    tenant_id: int, settings: Dict[str, Any]
+) -> bool:
+    """把目录行与旧 OCR 槽补进按角色选用的连接。已有选用 UUID 的角色不动。"""
+    from core.models.integration_config import IntegrationConfig
+
+    if not isinstance(settings, dict):
+        return False
+    integrations = settings.get("integrations")
+    if not isinstance(integrations, dict):
+        return False
+    kuaiai = integrations.get("kuaiai")
+    if not isinstance(kuaiai, dict):
+        kuaiai = {}
+        integrations["kuaiai"] = kuaiai
+
+    changed = False
+    chat_key = role_connection_setting_key("chat")
+    legacy_uuid = str(kuaiai.get("active_connection_uuid") or "").strip()
+    if not str(kuaiai.get(chat_key) or "").strip() and legacy_uuid:
+        kuaiai[chat_key] = legacy_uuid
+        changed = True
+        legacy = await _load_llm_connection(tenant_id, legacy_uuid)
+        if legacy is not None:
+            cfg = dict(_connection_config(legacy))
+            if not str(cfg.get("model_role") or "").strip():
+                cfg["model_role"] = "chat"
+                legacy.config = cfg
+                await legacy.save()
+
+    try:
+        from apps.kuaiai.models.catalog import KuaiaiLlmModel, KuaiaiLlmProvider
+    except ImportError:
+        KuaiaiLlmModel = None
+        KuaiaiLlmProvider = None
+
+    for role in ("chat", "embed", "rerank"):
+        key = role_connection_setting_key(role)
+        if str(kuaiai.get(key) or "").strip() or KuaiaiLlmModel is None:
+            continue
+        model = await KuaiaiLlmModel.filter(
+            tenant_id=tenant_id,
+            model_type=role,
+            status="启用",
+            deleted_at__isnull=True,
+        ).order_by("id").first()
+        if model is None or KuaiaiLlmProvider is None:
+            continue
+        provider = await KuaiaiLlmProvider.filter(
+            tenant_id=tenant_id,
+            id=model.provider_id,
+            deleted_at__isnull=True,
+        ).first()
+        if provider is None or str(provider.status or "") == "停用":
+            continue
+        api_key = provider.decrypt_api_key()
+        base_url = str(provider.base_url or "").strip()
+        model_name = str(model.model_name or "").strip()
+        if not api_key or not base_url or not model_name:
+            continue
+        provider_type = str(provider.provider_type or "").strip()
+        if provider_type not in LLM_PROVIDER_SPECS:
+            provider_type = "qwen"
+        code = f"kuaiai_{role}_{model.id}"
+        existing = await IntegrationConfig.filter(tenant_id=tenant_id, code=code).first()
+        cfg = {
+            "base_url": endpoint_for_role(role, base_url),
+            "model": model_name,
+            "api_key": api_key,
+            "model_role": role,
+        }
+        if existing is None:
+            existing = await IntegrationConfig.create(
+                tenant_id=tenant_id,
+                name=f"{provider.name} {model_name}"[:100],
+                code=code,
+                type=provider_type,
+                description="由星AI模型目录迁入",
+                config=cfg,
+                is_active=True,
+            )
+        else:
+            existing.type = provider_type
+            existing.config = {**_connection_config(existing), **cfg}
+            existing.is_active = True
+            existing.deleted_at = None
+            await existing.save()
+        kuaiai[key] = str(existing.uuid)
+        changed = True
+
+    rerank_uuid = str(kuaiai.get(role_connection_setting_key("rerank")) or "").strip()
+    rerank_conn = await _load_llm_connection(tenant_id, rerank_uuid)
+    if rerank_conn is not None:
+        rerank_cfg = dict(_connection_config(rerank_conn))
+        corrected = endpoint_for_role("rerank", str(rerank_cfg.get("base_url") or ""))
+        if corrected and corrected != str(rerank_cfg.get("base_url") or "").strip().rstrip("/"):
+            rerank_cfg["base_url"] = corrected
+            rerank_conn.config = rerank_cfg
+            await rerank_conn.save()
+            changed = True
+
+    vision_key = role_connection_setting_key("vision")
+    if not str(kuaiai.get(vision_key) or "").strip() and is_ocr_endpoint_configured(kuaiai):
+        ocr_key = str(kuaiai.get("ocr_api_key") or "").strip()
+        if not ocr_key or _is_masked_api_key(ocr_key):
+            chat = await _load_llm_connection(
+                tenant_id, str(kuaiai.get(chat_key) or "").strip()
+            )
+            if chat is not None:
+                ocr_key = str(_connection_config(chat).get("api_key") or "").strip()
+        if ocr_key and not _is_masked_api_key(ocr_key):
+            code = "kuaiai_vision_ocr"
+            cfg = {
+                "base_url": str(kuaiai.get("ocr_base_url") or "").strip(),
+                "model": str(kuaiai.get("ocr_model") or "").strip(),
+                "api_key": ocr_key,
+                "model_role": "vision",
+            }
+            existing = await IntegrationConfig.filter(tenant_id=tenant_id, code=code).first()
+            if existing is None:
+                existing = await IntegrationConfig.create(
+                    tenant_id=tenant_id,
+                    name="视觉",
+                    code=code,
+                    type="openai",
+                    description="由站点 OCR 配置迁入",
+                    config=cfg,
+                    is_active=True,
+                )
+            else:
+                existing.config = {**_connection_config(existing), **cfg}
+                existing.is_active = True
+                existing.deleted_at = None
+                await existing.save()
+            kuaiai[vision_key] = str(existing.uuid)
+            changed = True
+
+    return changed
+
+
+async def resolve_selected_llm_connection(tenant_id: int, role: str) -> Dict[str, Any]:
+    """返回该角色选用连接的 base_url / api_key / model。缺则失败关闭。"""
+    from core.services.system.site_setting_service import SiteSettingService
+    from infra.exceptions.exceptions import ValidationError
+
+    if role not in AI_MODEL_ROLES:
+        raise ValidationError("未知的模型角色")
+    site_settings = await SiteSettingService.get_settings(tenant_id)
+    kuaiai = get_kuaiai_integration(site_settings.settings or {})
+    conn_uuid = str(kuaiai.get(role_connection_setting_key(role)) or "").strip()
+    connection = await _load_llm_connection(tenant_id, conn_uuid)
+    if connection is None:
+        raise ValidationError(_role_missing_message(role))
+    cfg = _connection_config(connection)
+    stored_role = str(cfg.get("model_role") or "").strip()
+    if stored_role and stored_role != role:
+        raise ValidationError("选用连接的角色与调用场景不匹配")
+    base_url = str(cfg.get("base_url") or "").strip()
+    model = str(cfg.get("model") or "").strip()
+    api_key = str(cfg.get("api_key") or "").strip()
+    if not base_url or not model or not api_key or _is_masked_api_key(api_key):
+        raise ValidationError(_role_missing_message(role))
+    return {"base_url": base_url, "api_key": api_key, "model": model, "role": role}
+
+
+async def list_selected_llm_role_uuids(tenant_id: int) -> Dict[str, str]:
+    from core.services.system.site_setting_service import SiteSettingService
+
+    site_settings = await SiteSettingService.get_settings(tenant_id)
+    kuaiai = get_kuaiai_integration(site_settings.settings or {})
+    return {
+        role: str(kuaiai.get(role_connection_setting_key(role)) or "").strip()
+        for role in AI_MODEL_ROLES
+    }
+
+
+async def select_llm_connection_role(tenant_id: int, connection: Any) -> str:
+    from core.services.system.site_setting_service import SiteSettingService
+    from infra.exceptions.exceptions import ValidationError
+
+    if getattr(connection, "type", None) not in LLM_PROVIDER_SPECS:
+        raise ValidationError("仅 AI 连接可选用为模型角色")
+    if getattr(connection, "is_active", None) is not True:
+        raise ValidationError("请先启用该连接再选用")
+    cfg = _connection_config(connection)
+    role = str(cfg.get("model_role") or "").strip()
+    if role not in AI_MODEL_ROLES:
+        raise ValidationError("请先为该连接选择模型角色")
+    if not str(cfg.get("base_url") or "").strip() or not str(cfg.get("model") or "").strip():
+        raise ValidationError("连接缺少 Base URL 或模型名")
+    api_key = str(cfg.get("api_key") or "").strip()
+    if not api_key or _is_masked_api_key(api_key):
+        raise ValidationError("连接缺少 API Key")
+
+    site = await SiteSettingService.get_settings(tenant_id)
+    settings = dict(site.settings or {})
+    integrations = dict(settings.get("integrations") or {})
+    kuaiai = dict(integrations.get("kuaiai") or {})
+    kuaiai[role_connection_setting_key(role)] = str(connection.uuid)
+    integrations["kuaiai"] = kuaiai
+    settings["integrations"] = integrations
+    site.settings = settings
+    await site.save(update_fields=["settings", "updated_at"])
+    from core.ai.runtime.model_factory import evict_model_cache
+
+    evict_model_cache(tenant_id)
+    return role
 
 
 def get_kuaiai_integration(settings: Dict[str, Any]) -> Dict[str, Any]:
@@ -399,7 +691,11 @@ async def resolve_active_llm_integration(tenant_id: int) -> Dict[str, Any]:
     site_settings = await SiteSettingService.get_settings(tenant_id)
     settings = site_settings.settings or {}
     kuaiai = get_kuaiai_integration(settings)
-    conn_uuid = str(kuaiai.get("active_connection_uuid") or "").strip()
+    conn_uuid = str(
+        kuaiai.get(role_connection_setting_key("chat"))
+        or kuaiai.get("active_connection_uuid")
+        or ""
+    ).strip()
 
     connection = None
     if conn_uuid:
@@ -420,13 +716,23 @@ async def resolve_active_llm_integration(tenant_id: int) -> Dict[str, Any]:
         )
 
     provider_id = connection.type if connection.type in LLM_PROVIDER_SPECS else "deepseek"
-    return merge_llm_connection_with_kuaiai(
+    merged = merge_llm_connection_with_kuaiai(
         kuaiai,
         provider_id=provider_id,
         connection_uuid=str(connection.uuid),
         is_active=bool(connection.is_active),
         config=connection.get_config(),
     )
+    vision = await _load_llm_connection(
+        tenant_id, str(kuaiai.get(role_connection_setting_key("vision")) or "").strip()
+    )
+    if vision is not None:
+        vcfg = _connection_config(vision)
+        merged["ocr_base_url"] = str(vcfg.get("base_url") or "").strip() or None
+        merged["ocr_model"] = str(vcfg.get("model") or "").strip() or None
+        merged["ocr_api_key"] = str(vcfg.get("api_key") or "").strip() or None
+        merged["ocr_configured"] = bool(merged["ocr_base_url"] and merged["ocr_model"])
+    return merged
 
 
 def get_deepseek_integration(settings: Dict[str, Any]) -> Dict[str, Any]:

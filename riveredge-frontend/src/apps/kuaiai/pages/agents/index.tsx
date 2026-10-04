@@ -5,15 +5,16 @@
  * 操作：授权（名单）、编辑、删除、启用开关——按 kuaiai:agent:{add,edit,remove} 显隐。
  */
 
-import React, { useMemo, useRef, useState } from 'react';
-import { App, Button, Popconfirm, Switch, Tag } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { App, Button, Card, Popconfirm, Space, Switch, Tag, Tooltip, Typography, theme } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
 import { hasPermission } from '../../../../utils/permission';
+import { formatDateTime } from '../../../../utils/format';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 import {
   deleteAgent,
@@ -39,6 +40,47 @@ export default function KuaiaiAgentsPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AgentProfileOut | null>(null);
   const [grantsTarget, setGrantsTarget] = useState<AgentProfileOut | null>(null);
+  const { token } = theme.useToken();
+  const { Text, Paragraph } = Typography;
+
+  const reload = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: KUAI_AI_OPTIONS_PREFIX });
+    actionRef.current?.reload();
+  }, [queryClient]);
+
+  const handleStatusChange = useCallback(
+    async (row: AgentProfileOut, checked: boolean) => {
+      try {
+        await updateAgent(row.id, { status: checked ? '启用' : '停用' });
+        message.success(t('app.kuaiai.agents.statusUpdated', { defaultValue: '状态已更新' }));
+        reload();
+      } catch (e: any) {
+        message.error(
+          e?.message ||
+            t('app.kuaiai.agents.statusUpdateFailed', { defaultValue: '状态更新失败' }),
+        );
+      }
+    },
+    [message, reload, t],
+  );
+
+  const handleDelete = useCallback(
+    async (row: AgentProfileOut) => {
+      try {
+        await deleteAgent(row.id);
+        message.success(t('common.deleteSuccess', { defaultValue: '删除成功' }));
+        reload();
+      } catch (e: any) {
+        message.error(e?.message || t('common.deleteFailed', { defaultValue: '删除失败' }));
+      }
+    },
+    [message, reload, t],
+  );
+
+  const openEdit = useCallback((row: AgentProfileOut | null) => {
+    setEditTarget(row);
+    setEditOpen(true);
+  }, []);
 
   const columns: ProColumns<AgentProfileOut>[] = useMemo(
     () => [
@@ -75,22 +117,8 @@ export default function KuaiaiAgentsPage() {
               checked={enabled}
               checkedChildren={t('common.enabled', { defaultValue: '启用' })}
               unCheckedChildren={t('common.disabled', { defaultValue: '停用' })}
-              onChange={async (checked) => {
-                try {
-                  await updateAgent(row.id, { status: checked ? '启用' : '停用' });
-                  message.success(
-                    t('app.kuaiai.agents.statusUpdated', { defaultValue: '状态已更新' }),
-                  );
-                  void queryClient.invalidateQueries({ queryKey: KUAI_AI_OPTIONS_PREFIX });
-                  actionRef.current?.reload();
-                } catch (e: any) {
-                  message.error(
-                    e?.message ||
-                      t('app.kuaiai.agents.statusUpdateFailed', {
-                        defaultValue: '状态更新失败',
-                      }),
-                  );
-                }
+              onChange={(checked) => {
+                void handleStatusChange(row, checked);
               }}
             />
           );
@@ -113,24 +141,31 @@ export default function KuaiaiAgentsPage() {
       },
       {
         title: t('app.kuaiai.agents.colTools', { defaultValue: '工具数' }),
+        dataIndex: 'enabled_tools',
         key: 'tools_count',
         width: 80,
         align: 'right',
-        render: (_, row) => row.enabled_tools?.length ?? 0,
+        // 必须带 dataIndex：无 dataIndex 的 render 列会被当成操作列，数字被滤成空白
+        render: (_, row) =>
+          Array.isArray(row.enabled_tools) ? row.enabled_tools.length : 0,
       },
       {
         title: t('app.kuaiai.agents.colKnowledge', { defaultValue: '知识库数' }),
+        dataIndex: 'knowledge_ids',
         key: 'knowledge_count',
         width: 90,
         align: 'right',
-        render: (_, row) => row.knowledge_ids?.length ?? 0,
+        render: (_, row) =>
+          Array.isArray(row.knowledge_ids) ? row.knowledge_ids.length : 0,
       },
       {
         title: t('app.kuaiai.agents.colMcp', { defaultValue: 'MCP 数' }),
+        dataIndex: 'mcp_server_ids',
         key: 'mcp_count',
         width: 80,
         align: 'right',
-        render: (_, row) => row.mcp_server_ids?.length ?? 0,
+        render: (_, row) =>
+          Array.isArray(row.mcp_server_ids) ? row.mcp_server_ids.length : 0,
       },
       {
         title: t('common.updatedAt', { defaultValue: '更新时间' }),
@@ -158,10 +193,7 @@ export default function KuaiaiAgentsPage() {
               key="edit"
               type="link"
               size="small"
-              onClick={() => {
-                setEditTarget(row);
-                setEditOpen(true);
-              }}
+              onClick={() => openEdit(row)}
             >
               {t('common.edit', { defaultValue: '编辑' })}
             </Button>
@@ -172,21 +204,7 @@ export default function KuaiaiAgentsPage() {
               title={t('app.kuaiai.agents.confirmDelete', {
                 defaultValue: '确定删除该档案吗？',
               })}
-              onConfirm={async () => {
-                try {
-                  await deleteAgent(row.id);
-                  message.success(
-                    t('common.deleteSuccess', { defaultValue: '删除成功' }),
-                  );
-                  void queryClient.invalidateQueries({ queryKey: KUAI_AI_OPTIONS_PREFIX });
-                  actionRef.current?.reload();
-                } catch (e: any) {
-                  message.error(
-                    e?.message ||
-                      t('common.deleteFailed', { defaultValue: '删除失败' }),
-                  );
-                }
-              }}
+              onConfirm={() => handleDelete(row)}
             >
               <Button type="link" size="small" danger>
                 {t('common.delete', { defaultValue: '删除' })}
@@ -196,7 +214,148 @@ export default function KuaiaiAgentsPage() {
         ],
       },
     ],
-    [canEdit, canRemove, message, queryClient, t],
+    [canEdit, canRemove, handleDelete, handleStatusChange, openEdit, t],
+  );
+
+  const renderCard = useCallback(
+    (row: AgentProfileOut) => {
+      const enabled = row.status === '启用';
+      const actions: React.ReactNode[] = [];
+      if (canEdit) {
+        actions.push(
+          <Tooltip
+            key="grants"
+            title={t('app.kuaiai.agents.actionGrants', { defaultValue: '授权' })}
+          >
+            <SafetyCertificateOutlined
+              onClick={() => setGrantsTarget(row)}
+              style={{ fontSize: 16 }}
+            />
+          </Tooltip>,
+          <Tooltip key="edit" title={t('common.edit', { defaultValue: '编辑' })}>
+            <EditOutlined onClick={() => openEdit(row)} style={{ fontSize: 16 }} />
+          </Tooltip>,
+        );
+      }
+      if (canRemove) {
+        actions.push(
+          <Popconfirm
+            key="delete"
+            title={t('app.kuaiai.agents.confirmDelete', { defaultValue: '确定删除该档案吗？' })}
+            onConfirm={() => handleDelete(row)}
+          >
+            <Tooltip title={t('common.delete', { defaultValue: '删除' })}>
+              <DeleteOutlined style={{ fontSize: 16, color: token.colorError }} />
+            </Tooltip>
+          </Popconfirm>,
+        );
+      }
+
+      const meta = (label: string, value: React.ReactNode) => (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {label}
+          </Text>
+          {typeof value === 'string' || typeof value === 'number' ? (
+            <Text style={{ fontSize: 12 }}>{value}</Text>
+          ) : (
+            value
+          )}
+        </div>
+      );
+
+      return (
+        <Card
+          hoverable
+          style={{ height: '100%' }}
+          actions={actions.length > 0 ? actions : undefined}
+        >
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <Text strong ellipsis style={{ fontSize: 16, flex: 1, minWidth: 0 }}>
+                {row.name}
+              </Text>
+              {row.grant_mode === 'USER' ? (
+                <Tag color="purple">
+                  {t('app.kuaiai.agents.grantModeUser', { defaultValue: '按人员' })}
+                </Tag>
+              ) : (
+                <Tag color="blue">
+                  {t('app.kuaiai.agents.grantModeRole', { defaultValue: '按角色' })}
+                </Tag>
+              )}
+            </div>
+            <Paragraph
+              ellipsis={{ rows: 2, expandable: false }}
+              style={{ marginBottom: 0, minHeight: 40, fontSize: 12 }}
+            >
+              {row.description || '—'}
+            </Paragraph>
+          </Space>
+          <div
+            style={{
+              marginTop: 12,
+              paddingTop: 12,
+              borderTop: `1px solid ${token.colorBorderSecondary}`,
+            }}
+          >
+            <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+              {meta(
+                t('common.status', { defaultValue: '状态' }),
+                canEdit ? (
+                  <Switch
+                    size="small"
+                    checked={enabled}
+                    checkedChildren={t('common.enabled', { defaultValue: '启用' })}
+                    unCheckedChildren={t('common.disabled', { defaultValue: '停用' })}
+                    onChange={(checked) => {
+                      void handleStatusChange(row, checked);
+                    }}
+                  />
+                ) : (
+                  <Tag color={enabled ? 'green' : 'default'}>
+                    {enabled
+                      ? t('common.enabled', { defaultValue: '启用' })
+                      : t('common.disabled', { defaultValue: '停用' })}
+                  </Tag>
+                ),
+              )}
+              {meta(
+                t('app.kuaiai.agents.colTools', { defaultValue: '工具数' }),
+                Array.isArray(row.enabled_tools) ? row.enabled_tools.length : 0,
+              )}
+              {meta(
+                t('app.kuaiai.agents.colKnowledge', { defaultValue: '知识库数' }),
+                Array.isArray(row.knowledge_ids) ? row.knowledge_ids.length : 0,
+              )}
+              {meta(
+                t('app.kuaiai.agents.colMcp', { defaultValue: 'MCP 数' }),
+                Array.isArray(row.mcp_server_ids) ? row.mcp_server_ids.length : 0,
+              )}
+              {meta(
+                t('common.updatedAt', { defaultValue: '更新时间' }),
+                formatDateTime(row.updated_at),
+              )}
+            </Space>
+          </div>
+        </Card>
+      );
+    },
+    [canEdit, canRemove, handleDelete, handleStatusChange, openEdit, t, token],
   );
 
   return (
@@ -209,16 +368,16 @@ export default function KuaiaiAgentsPage() {
         showFuzzySearch={false}
         showAdvancedSearch={false}
         columns={columns}
+        viewTypes={['card', 'table', 'help']}
+        defaultViewType="table"
+        cardViewConfig={{ renderCard }}
         toolBarRender={() => [
           canAdd ? (
             <Button
               key="create"
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => {
-                setEditTarget(null);
-                setEditOpen(true);
-              }}
+              onClick={() => openEdit(null)}
             >
               {t('app.kuaiai.agents.createButton', { defaultValue: '新建档案' })}
             </Button>
@@ -250,9 +409,7 @@ export default function KuaiaiAgentsPage() {
         onCancel={() => setEditOpen(false)}
         onSaved={() => {
           setEditOpen(false);
-          // 档案变化影响 chat 页档案下拉缓存
-          void queryClient.invalidateQueries({ queryKey: KUAI_AI_OPTIONS_PREFIX });
-          actionRef.current?.reload();
+          reload();
         }}
       />
       <AgentGrantsModal

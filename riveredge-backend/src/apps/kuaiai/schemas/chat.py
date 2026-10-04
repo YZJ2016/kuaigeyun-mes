@@ -15,7 +15,11 @@ class ChatSessionCreate(BaseModel):
     title: Optional[str] = Field(default=None, max_length=300, description="会话标题，留空由首条消息生成")
     # 归属校验在服务层：S2 起挂接前复核本租户档案（跨租户 404）
     agent_id: Optional[int] = Field(default=None, description="Agent 档案 ID（S2 起装配使用）")
-    model: Optional[str] = Field(default=None, max_length=100, description="会话选用模型名")
+    model: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description="会话选用模型：#id:<目录行id>，或历史模型名",
+    )
 
 
 class ChatSessionUpdate(BaseModel):
@@ -23,7 +27,11 @@ class ChatSessionUpdate(BaseModel):
 
     title: Optional[str] = Field(default=None, max_length=300)
     agent_id: Optional[int] = None  # 同上：服务层复核本租户档案归属
-    model: Optional[str] = Field(default=None, max_length=100)
+    model: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description="会话选用模型：#id:<目录行id>，或历史模型名；显式 null 清空",
+    )
 
 
 class ChatSessionOut(BaseModel):

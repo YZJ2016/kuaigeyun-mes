@@ -14,7 +14,7 @@ export const KUAI_AI_TOOL_NAMES = [
 export type KuaiAiToolName = (typeof KUAI_AI_TOOL_NAMES)[number];
 
 /** 模型目录 model_type 闭集（KR-D5） */
-export const KUAI_AI_MODEL_TYPES = ['chat', 'embed', 'vision'] as const;
+export const KUAI_AI_MODEL_TYPES = ['chat', 'embed', 'vision', 'rerank'] as const;
 
 export type KuaiAiModelType = (typeof KUAI_AI_MODEL_TYPES)[number];
 

@@ -137,13 +137,11 @@ async def create_base(
     )
     if dup is not None:
         raise BusinessLogicError(f"知识库名称 {name} 已存在")
-    if payload.embedding_model_id is not None:
-        await _require_embed_model(tenant_id, payload.embedding_model_id)
     return await KuaiaiKnowledgeBase.create(
         tenant_id=tenant_id,
         name=name,
         description=payload.description,
-        embedding_model_id=payload.embedding_model_id,
+        embedding_model_id=None,
         chunk_size=payload.chunk_size,
         chunk_overlap=payload.chunk_overlap,
         expand_enabled=payload.expand_enabled,
@@ -177,8 +175,7 @@ async def update_base(
             data.get("chunk_size", base.chunk_size),
             data.get("chunk_overlap", base.chunk_overlap),
         )
-    if "embedding_model_id" in data and data["embedding_model_id"] is not None:
-        await _require_embed_model(tenant_id, data["embedding_model_id"])
+    data.pop("embedding_model_id", None)
 
     data.update(_audit_update(user))
     await base.update_from_dict(data).save()

@@ -108,7 +108,7 @@ def _require_status(value: Optional[str]) -> str:
 def _require_model_type(value: Optional[str]) -> str:
     stripped = (value or "").strip()
     if stripped not in MODEL_TYPES:
-        raise BusinessLogicError("model_type 仅允许 chat|embed|vision")
+        raise BusinessLogicError("model_type 仅允许 chat|embed|vision|rerank")
     return stripped
 
 

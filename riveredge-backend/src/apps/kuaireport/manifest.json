@@ -14,7 +14,33 @@
     "title": "app.kuaireport.name",
     "icon": "barChart",
     "path": "/apps/kuaireport",
-    "permission": "kuaireport:report:display"
+    "permission": "kuaireport:report:display",
+    "children": [
+      {
+        "title": "app.kuaireport.menu.selfMadeReports",
+        "sort_order": 1,
+        "children": [
+          {
+            "title": "app.kuaireport.menu.reports",
+            "path": "/apps/kuaireport/reports",
+            "permission": "kuaireport:report:display",
+            "sort_order": 1
+          }
+        ]
+      },
+      {
+        "title": "app.kuaireport.menu.board-design",
+        "sort_order": 2,
+        "children": [
+          {
+            "title": "app.kuaireport.menu.dashboards",
+            "path": "/apps/kuaireport/dashboards",
+            "permission": "kuaireport:dashboard:display",
+            "sort_order": 1
+          }
+        ]
+      }
+    ]
   },
   "permissions": [
     "kuaireport:data-source:display",
