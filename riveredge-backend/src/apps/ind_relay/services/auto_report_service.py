@@ -1,0 +1,787 @@
+"""继电器自动报工：读 zscl 快照 → 匹配工序 → 正式报工。"""
+
+from __future__ import annotations
+
+from datetime import timedelta
+from decimal import Decimal, InvalidOperation
+from typing import Any, Optional
+
+from loguru import logger
+
+from apps.ind_relay.models.auto_report import (
+    MODE_PLAN_OFFLINE,
+    MODE_REALTIME,
+    ZSCL_TAG_KEY,
+    RelayAutoReportBinding,
+    RelayAutoReportConfig,
+    RelayAutoReportLog,
+)
+from apps.ind_relay.services.auto_report_math import allocate_increment, compute_zscl_increment
+from apps.kuaizhizao.models.equipment import Equipment
+from apps.kuaizhizao.models.work_order import WorkOrder
+from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+from apps.kuaizhizao.schemas.reporting_record import ReportingRecordCreate
+from apps.kuaizhizao.services.reporting_service import ReportingService
+from apps.kuaizhizao.services.work_order_service import WORK_ORDER_IN_PROGRESS_STATUS
+from apps.kuaiiot.models.iot import IotDevice, IotTagSnapshot
+from core.utils.timezone_utils import resolve_business_datetime
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
+from infra.models.user import User
+
+ZERO = Decimal("0")
+
+
+class AutoReportService:
+    @staticmethod
+    async def get_or_create_config(tenant_id: int) -> RelayAutoReportConfig:
+        from tortoise.exceptions import OperationalError
+
+        try:
+            row = await RelayAutoReportConfig.get_or_none(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if row:
+                return row
+            return await RelayAutoReportConfig.create(
+                tenant_id=tenant_id,
+                is_enabled=False,
+                match_by_device=False,
+                interval_minutes=5,
+                report_mode=MODE_REALTIME,
+                offline_threshold_seconds=180,
+            )
+        except OperationalError as exc:
+            raise ValidationError(
+                "自动报工数据表尚未就绪，请在 riveredge-backend 执行 aerich upgrade（迁移 828）后重启服务"
+            ) from exc
+
+    @staticmethod
+    async def update_config(
+        tenant_id: int,
+        *,
+        user_id: Optional[int],
+        data: dict[str, Any],
+    ) -> RelayAutoReportConfig:
+        row = await AutoReportService.get_or_create_config(tenant_id)
+        if "is_enabled" in data and data["is_enabled"] is not None:
+            row.is_enabled = bool(data["is_enabled"])
+        if "match_by_device" in data and data["match_by_device"] is not None:
+            row.match_by_device = bool(data["match_by_device"])
+        if "interval_minutes" in data and data["interval_minutes"] is not None:
+            minutes = int(data["interval_minutes"])
+            if minutes < 1:
+                raise ValidationError("自动报工间隔至少 1 分钟")
+            row.interval_minutes = minutes
+        if "report_mode" in data and data["report_mode"] is not None:
+            mode = str(data["report_mode"]).strip()
+            if mode not in {MODE_REALTIME, MODE_PLAN_OFFLINE}:
+                raise ValidationError("无效的自动报工模式")
+            row.report_mode = mode
+        if "offline_threshold_seconds" in data and data["offline_threshold_seconds"] is not None:
+            seconds = int(data["offline_threshold_seconds"])
+            if seconds < 30:
+                raise ValidationError("离线兜底阈值至少 30 秒")
+            row.offline_threshold_seconds = seconds
+        if "reporter_user_id" in data:
+            reporter_id = data["reporter_user_id"]
+            if reporter_id is None:
+                row.reporter_user_id = None
+                row.reporter_user_name = None
+            else:
+                user = await User.get_or_none(id=int(reporter_id), tenant_id=tenant_id)
+                if not user or not user.is_active:
+                    raise ValidationError("报工创建人不存在或已停用")
+                row.reporter_user_id = int(user.id)
+                row.reporter_user_name = (
+                    (user.full_name or user.username or "").strip() or str(user.id)
+                )
+        if "remarks" in data:
+            row.remarks = data["remarks"]
+        if not row.match_by_device:
+            enabled_count = await RelayAutoReportBinding.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True, is_enabled=True
+            ).count()
+            if enabled_count > 1:
+                raise ValidationError(
+                    "关闭「按设备匹配工序」时，只能启用一台快数采设备做末道报工"
+                )
+        if user_id is not None:
+            row.updated_by = int(user_id)
+        await row.save()
+        return row
+
+    @staticmethod
+    async def list_bindings(tenant_id: int) -> list[RelayAutoReportBinding]:
+        return (
+            await RelayAutoReportBinding.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+            .order_by("-id")
+            .all()
+        )
+
+    @staticmethod
+    async def upsert_binding(
+        tenant_id: int,
+        *,
+        user_id: Optional[int],
+        iot_device_id: int,
+        is_enabled: bool = True,
+        remarks: Optional[str] = None,
+    ) -> RelayAutoReportBinding:
+        device = await IotDevice.get_or_none(
+            tenant_id=tenant_id, id=int(iot_device_id), deleted_at__isnull=True
+        )
+        if not device:
+            raise NotFoundError("快数采设备不存在")
+        if not device.equipment_uuid:
+            raise ValidationError("请先在「设备连接」绑定 MES 设备")
+        equipment = await Equipment.get_or_none(
+            tenant_id=tenant_id,
+            uuid=device.equipment_uuid,
+            deleted_at__isnull=True,
+        )
+        if not equipment:
+            raise ValidationError("绑定的 MES 设备不存在，请重新在设备连接中选择")
+
+        config = await AutoReportService.get_or_create_config(tenant_id)
+        existing = await RelayAutoReportBinding.get_or_none(
+            tenant_id=tenant_id,
+            iot_device_id=int(device.id),
+            deleted_at__isnull=True,
+        )
+        if is_enabled and not config.match_by_device:
+            others = await RelayAutoReportBinding.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                is_enabled=True,
+            ).exclude(id=existing.id if existing else 0)
+            if await others.exists():
+                raise ValidationError(
+                    "关闭「按设备匹配工序」时，只能启用一台快数采设备做末道报工"
+                )
+
+        if existing:
+            row = existing
+        else:
+            row = RelayAutoReportBinding(
+                tenant_id=tenant_id,
+                iot_device_id=int(device.id),
+                baseline_aligned=False,
+                pending_quantity=ZERO,
+            )
+        row.iot_device_uuid = device.uuid
+        row.iot_device_code = device.code
+        row.iot_device_name = device.name
+        row.external_device_id = device.external_device_id
+        row.equipment_uuid = equipment.uuid
+        row.equipment_id = int(equipment.id)
+        row.equipment_code = equipment.code
+        row.equipment_name = equipment.name
+        row.is_enabled = bool(is_enabled)
+        if remarks is not None:
+            row.remarks = remarks
+        if user_id is not None:
+            row.updated_by = int(user_id)
+            if not existing:
+                row.created_by = int(user_id)
+        await row.save()
+        return row
+
+    @staticmethod
+    async def set_binding_enabled(
+        tenant_id: int,
+        binding_id: int,
+        *,
+        is_enabled: bool,
+        user_id: Optional[int] = None,
+    ) -> RelayAutoReportBinding:
+        row = await RelayAutoReportBinding.get_or_none(
+            tenant_id=tenant_id, id=binding_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("绑定不存在")
+        if is_enabled:
+            config = await AutoReportService.get_or_create_config(tenant_id)
+            if not config.match_by_device:
+                others = await RelayAutoReportBinding.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    is_enabled=True,
+                ).exclude(id=row.id)
+                if await others.exists():
+                    raise ValidationError(
+                        "关闭「按设备匹配工序」时，只能启用一台快数采设备做末道报工"
+                    )
+        row.is_enabled = bool(is_enabled)
+        if user_id is not None:
+            row.updated_by = int(user_id)
+        await row.save()
+        return row
+
+    @staticmethod
+    async def delete_binding(
+        tenant_id: int,
+        binding_id: int,
+        *,
+        user_id: Optional[int] = None,
+    ) -> None:
+        row = await RelayAutoReportBinding.get_or_none(
+            tenant_id=tenant_id, id=binding_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("绑定不存在")
+        row.deleted_at = resolve_business_datetime()
+        if user_id is not None:
+            row.updated_by = int(user_id)
+        await row.save(update_fields=["deleted_at", "updated_by", "updated_at"])
+
+    @staticmethod
+    async def list_logs(
+        tenant_id: int,
+        *,
+        binding_id: Optional[int] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[RelayAutoReportLog], int]:
+        q = RelayAutoReportLog.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if binding_id is not None:
+            q = q.filter(binding_id=binding_id)
+        total = await q.count()
+        rows = await q.order_by("-id").offset(skip).limit(limit)
+        return rows, total
+
+    @staticmethod
+    async def list_bound_iot_device_options(tenant_id: int) -> list[dict[str, Any]]:
+        devices = await IotDevice.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            equipment_uuid__isnull=False,
+        ).exclude(equipment_uuid="").order_by("name").limit(500)
+        uuids = [d.equipment_uuid for d in devices if d.equipment_uuid]
+        eq_map: dict[str, Equipment] = {}
+        if uuids:
+            for eq in await Equipment.filter(
+                tenant_id=tenant_id, uuid__in=uuids, deleted_at__isnull=True
+            ):
+                eq_map[eq.uuid] = eq
+        result = []
+        for d in devices:
+            eq = eq_map.get(d.equipment_uuid or "")
+            if not eq:
+                continue
+            result.append(
+                {
+                    "iot_device_id": int(d.id),
+                    "iot_device_uuid": d.uuid,
+                    "iot_device_code": d.code,
+                    "iot_device_name": d.name,
+                    "external_device_id": d.external_device_id,
+                    "equipment_uuid": eq.uuid,
+                    "equipment_id": int(eq.id),
+                    "equipment_code": eq.code,
+                    "equipment_name": eq.name,
+                    "is_online": bool(d.is_online),
+                    "last_seen_at": d.last_seen_at,
+                    "label": f"{d.name} → {eq.name}/{eq.code}",
+                }
+            )
+        return result
+
+    @staticmethod
+    async def _append_log(
+        tenant_id: int,
+        *,
+        binding: Optional[RelayAutoReportBinding],
+        level: str,
+        event: str,
+        message: str,
+        zscl: Optional[Decimal] = None,
+        increment_qty: Optional[Decimal] = None,
+        work_order_id: Optional[int] = None,
+        work_order_code: Optional[str] = None,
+        operation_id: Optional[int] = None,
+        reporting_record_id: Optional[int] = None,
+        extra: Optional[dict] = None,
+    ) -> None:
+        await RelayAutoReportLog.create(
+            tenant_id=tenant_id,
+            binding_id=int(binding.id) if binding else None,
+            iot_device_id=int(binding.iot_device_id) if binding else None,
+            level=level,
+            event=event,
+            message=message[:2000] if message else None,
+            zscl=zscl,
+            increment_qty=increment_qty,
+            work_order_id=work_order_id,
+            work_order_code=work_order_code,
+            operation_id=operation_id,
+            reporting_record_id=reporting_record_id,
+            extra=extra,
+        )
+
+    @staticmethod
+    async def _read_zscl(tenant_id: int, iot_device_id: int) -> tuple[Optional[Decimal], Optional[Any]]:
+        snap = await IotTagSnapshot.get_or_none(
+            tenant_id=tenant_id,
+            device_id=iot_device_id,
+            tag_key=ZSCL_TAG_KEY,
+            deleted_at__isnull=True,
+        )
+        if not snap:
+            return None, None
+        if snap.value_number is not None:
+            return Decimal(str(snap.value_number)), snap.sampled_at
+        if snap.value_text:
+            try:
+                return Decimal(str(snap.value_text).strip()), snap.sampled_at
+            except (InvalidOperation, ValueError):
+                return None, snap.sampled_at
+        return None, snap.sampled_at
+
+    @staticmethod
+    def _op_has_equipment(op: WorkOrderOperation, equipment_id: int) -> bool:
+        if op.assigned_equipment_id and int(op.assigned_equipment_id) == equipment_id:
+            return True
+        ids = op.assigned_equipment_ids or []
+        if isinstance(ids, list):
+            for raw in ids:
+                try:
+                    if int(raw) == equipment_id:
+                        return True
+                except (TypeError, ValueError):
+                    continue
+        return False
+
+    @staticmethod
+    async def _find_candidate_ops(
+        tenant_id: int,
+        *,
+        equipment_id: int,
+        match_by_device: bool,
+    ) -> list[tuple[WorkOrder, WorkOrderOperation]]:
+        work_orders = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status__in=list(WORK_ORDER_IN_PROGRESS_STATUS),
+            is_frozen=False,
+        ).exclude(status="split").all()
+        if not work_orders:
+            return []
+        wo_map = {int(w.id): w for w in work_orders}
+        ops = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            work_order_id__in=list(wo_map.keys()),
+            deleted_at__isnull=True,
+        ).all()
+        ops_by_wo: dict[int, list[WorkOrderOperation]] = {}
+        for op in ops:
+            if (op.status or "") in {"completed", "cancelled", "paused"}:
+                continue
+            ops_by_wo.setdefault(int(op.work_order_id), []).append(op)
+
+        candidates: list[tuple[WorkOrder, WorkOrderOperation, int]] = []
+        for wo_id, wo_ops in ops_by_wo.items():
+            wo = wo_map.get(wo_id)
+            if not wo:
+                continue
+            all_ops = [op for op in ops if int(op.work_order_id) == wo_id]
+            if match_by_device:
+                matched = [op for op in wo_ops if AutoReportService._op_has_equipment(op, equipment_id)]
+            else:
+                # 末道：该工单末道工序派了此 MES 设备时才报
+                if not all_ops:
+                    continue
+                last_op = max(all_ops, key=lambda o: (int(o.sequence or 0), int(o.id or 0)))
+                if not AutoReportService._op_has_equipment(last_op, equipment_id):
+                    continue
+                if (last_op.status or "") in {"completed", "cancelled", "paused"}:
+                    continue
+                matched = [last_op]
+            for op in matched:
+                if not op.assigned_worker_id and not getattr(op, "assigned_team_id", None):
+                    continue
+                status_rank = 0 if (wo.status or "") in {"in_progress", "生产中", "进行中", "执行中", "IN_PROGRESS"} else 1
+                candidates.append((wo, op, status_rank))
+
+        candidates.sort(
+            key=lambda item: (
+                item[2],
+                item[1].planned_start_date
+                or item[0].planned_start_date
+                or resolve_business_datetime(),
+                int(item[0].id or 0),
+                int(item[1].sequence or 0),
+            )
+        )
+        return [(wo, op) for wo, op, _ in candidates]
+
+    @staticmethod
+    async def _remaining_for_op(tenant_id: int, wo: WorkOrder, op: WorkOrderOperation) -> Decimal:
+        from apps.kuaizhizao.services.reporting_service import _compute_operation_reportable_remaining
+
+        try:
+            rem = await _compute_operation_reportable_remaining(tenant_id, wo, op)
+            return rem if rem > ZERO else ZERO
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("auto_report remaining failed wo={} op={}: {}", wo.id, op.id, exc)
+            plan = Decimal(str(wo.quantity or 0))
+            done = Decimal(str(op.completed_quantity or 0))
+            rem = plan - done
+            return rem if rem > ZERO else ZERO
+
+    @staticmethod
+    async def _create_reporting(
+        tenant_id: int,
+        *,
+        config: RelayAutoReportConfig,
+        wo: WorkOrder,
+        op: WorkOrderOperation,
+        qty: Decimal,
+        binding: RelayAutoReportBinding,
+    ) -> Optional[int]:
+        if qty <= ZERO:
+            return None
+        reporter_id = config.reporter_user_id
+        if not reporter_id:
+            raise ValidationError("请先配置报工创建人")
+        worker_id = op.assigned_worker_id
+        if not worker_id:
+            raw_ids = getattr(op, "assigned_worker_ids", None) or []
+            if isinstance(raw_ids, list) and raw_ids:
+                try:
+                    worker_id = int(raw_ids[0])
+                except (TypeError, ValueError):
+                    worker_id = None
+        team_id = getattr(op, "assigned_team_id", None)
+        worker_name = (op.assigned_worker_name or "").strip() or None
+        team_name = (getattr(op, "assigned_team_name", None) or "").strip() or None
+        payload: dict[str, Any] = {
+            "work_order_id": int(wo.id),
+            "work_order_code": wo.code or str(wo.id),
+            "work_order_name": wo.name or wo.code or str(wo.id),
+            "operation_id": int(op.operation_id),
+            "operation_code": op.operation_code or "",
+            "operation_name": op.operation_name or "",
+            "reported_quantity": qty,
+            "qualified_quantity": qty,
+            "unqualified_quantity": ZERO,
+            "work_hours": ZERO,
+            "status": "pending",
+            "reported_at": resolve_business_datetime(),
+            "remarks": f"继电器自动报工 iot={binding.iot_device_code or binding.iot_device_id}",
+            "device_info": {
+                "source": "ind_relay_auto_report",
+                "iot_device_id": binding.iot_device_id,
+                "equipment_uuid": binding.equipment_uuid,
+                "equipment_code": binding.equipment_code,
+            },
+            "idempotency_key": (
+                f"ind-relay-ar-{binding.id}-{wo.id}-{op.operation_id}-"
+                f"{qty}-{int(resolve_business_datetime().timestamp())}"
+            ),
+        }
+        if team_id:
+            payload["team_id"] = int(team_id)
+            payload["team_name"] = team_name or f"team-{team_id}"
+            payload["worker_name"] = team_name or payload["team_name"]
+        elif worker_id:
+            payload["worker_id"] = int(worker_id)
+            payload["worker_name"] = worker_name or f"user-{worker_id}"
+        else:
+            raise ValidationError("工序未派工，无法自动报工")
+
+        create_data = ReportingRecordCreate.model_validate(payload)
+        record = await ReportingService().create_reporting_record(
+            tenant_id=tenant_id,
+            reporting_data=create_data,
+            reported_by=int(reporter_id),
+            entry_mode="manual",
+            client_channel="integration",
+        )
+        return int(record.id)
+
+    @staticmethod
+    async def settle_binding(
+        tenant_id: int,
+        binding: RelayAutoReportBinding,
+        config: RelayAutoReportConfig,
+        *,
+        force_flush: bool = False,
+        reason: str = "tick",
+    ) -> dict[str, Any]:
+        if not binding.is_enabled:
+            return {"skipped": True, "reason": "binding_disabled"}
+        if not binding.equipment_id:
+            await AutoReportService._append_log(
+                tenant_id,
+                binding=binding,
+                level="warning",
+                event="skip",
+                message="绑定缺少 MES 设备 ID",
+            )
+            return {"skipped": True, "reason": "no_equipment"}
+
+        current, sampled_at = await AutoReportService._read_zscl(tenant_id, int(binding.iot_device_id))
+        if sampled_at:
+            binding.last_seen_at = sampled_at
+            if binding.offline_flushed:
+                binding.offline_flushed = False
+
+        kind, increment = compute_zscl_increment(current, binding.last_zscl)
+        if kind == "missing":
+            await AutoReportService._append_log(
+                tenant_id,
+                binding=binding,
+                level="info",
+                event="skip",
+                message="无 zscl 点位快照",
+                extra={"reason": reason},
+            )
+            await binding.save()
+            return {"skipped": True, "reason": "no_zscl"}
+
+        if kind == "baseline" or not binding.baseline_aligned:
+            binding.last_zscl = current
+            binding.baseline_aligned = True
+            binding.last_settle_at = resolve_business_datetime()
+            await binding.save()
+            await AutoReportService._append_log(
+                tenant_id,
+                binding=binding,
+                level="info",
+                event="baseline",
+                message="首次对齐 zscl 基线，不报工",
+                zscl=current,
+                extra={"reason": reason},
+            )
+            return {"baseline": True, "zscl": str(current)}
+
+        if kind == "zero" and not force_flush:
+            binding.last_settle_at = resolve_business_datetime()
+            await binding.save()
+            return {"skipped": True, "reason": "zero_increment"}
+
+        pending = Decimal(str(binding.pending_quantity or 0))
+        if increment > ZERO:
+            pending += increment
+            binding.last_zscl = current
+
+        candidates = await AutoReportService._find_candidate_ops(
+            tenant_id,
+            equipment_id=int(binding.equipment_id),
+            match_by_device=bool(config.match_by_device),
+        )
+        if not candidates:
+            binding.pending_quantity = pending
+            binding.last_settle_at = resolve_business_datetime()
+            await binding.save()
+            await AutoReportService._append_log(
+                tenant_id,
+                binding=binding,
+                level="info",
+                event="skip",
+                message="未匹配到可报工工序任务",
+                zscl=current,
+                increment_qty=increment if increment > ZERO else None,
+                extra={"pending": str(pending), "reason": reason},
+            )
+            return {"skipped": True, "reason": "no_task", "pending": str(pending)}
+
+        first_wo, first_op = candidates[0]
+        binding.bound_work_order_id = int(first_wo.id)
+        binding.bound_work_order_code = first_wo.code
+        binding.bound_operation_id = int(first_op.operation_id) if first_op.operation_id else None
+        binding.bound_operation_name = first_op.operation_name
+
+        should_report = force_flush or config.report_mode == MODE_REALTIME
+        if not should_report and config.report_mode == MODE_PLAN_OFFLINE:
+            # 达计划：若待报量已覆盖第一张任务剩余则可落单
+            rem = await AutoReportService._remaining_for_op(tenant_id, first_wo, first_op)
+            if pending >= rem > ZERO:
+                should_report = True
+
+        if not should_report:
+            binding.pending_quantity = pending
+            binding.last_settle_at = resolve_business_datetime()
+            await binding.save()
+            await AutoReportService._append_log(
+                tenant_id,
+                binding=binding,
+                level="info",
+                event="accumulate",
+                message="计划量/断链模式：仅累计待报数量",
+                zscl=current,
+                increment_qty=increment if increment > ZERO else None,
+                work_order_id=int(first_wo.id),
+                work_order_code=first_wo.code,
+                operation_id=int(first_op.operation_id) if first_op.operation_id else None,
+                extra={"pending": str(pending), "reason": reason},
+            )
+            return {"accumulated": True, "pending": str(pending)}
+
+        if pending <= ZERO:
+            binding.last_settle_at = resolve_business_datetime()
+            await binding.save()
+            return {"skipped": True, "reason": "no_pending"}
+
+        remainings: list[Decimal] = []
+        for wo, op in candidates:
+            rem = await AutoReportService._remaining_for_op(tenant_id, wo, op)
+            remainings.append(rem)
+        allocs = allocate_increment(pending, remainings, last_takes_overflow=True)
+
+        reported_ids: list[int] = []
+        reported_qty = ZERO
+        for (wo, op), qty in zip(candidates, allocs):
+            if qty <= ZERO:
+                continue
+            try:
+                rid = await AutoReportService._create_reporting(
+                    tenant_id,
+                    config=config,
+                    wo=wo,
+                    op=op,
+                    qty=qty,
+                    binding=binding,
+                )
+            except (ValidationError, BusinessLogicError, NotFoundError) as exc:
+                await AutoReportService._append_log(
+                    tenant_id,
+                    binding=binding,
+                    level="error",
+                    event="error",
+                    message=str(exc),
+                    zscl=current,
+                    increment_qty=qty,
+                    work_order_id=int(wo.id),
+                    work_order_code=wo.code,
+                    operation_id=int(op.operation_id) if op.operation_id else None,
+                    extra={"reason": reason},
+                )
+                break
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("ind_relay auto report failed: {}", exc)
+                await AutoReportService._append_log(
+                    tenant_id,
+                    binding=binding,
+                    level="error",
+                    event="error",
+                    message=f"报工异常: {exc}",
+                    zscl=current,
+                    increment_qty=qty,
+                    work_order_id=int(wo.id),
+                    work_order_code=wo.code,
+                    extra={"reason": reason},
+                )
+                break
+            if rid:
+                reported_ids.append(rid)
+                reported_qty += qty
+                await AutoReportService._append_log(
+                    tenant_id,
+                    binding=binding,
+                    level="info",
+                    event="report",
+                    message="自动报工成功",
+                    zscl=current,
+                    increment_qty=qty,
+                    work_order_id=int(wo.id),
+                    work_order_code=wo.code,
+                    operation_id=int(op.operation_id) if op.operation_id else None,
+                    reporting_record_id=rid,
+                    extra={"reason": reason},
+                )
+
+        leftover = pending - reported_qty
+        binding.pending_quantity = leftover if leftover > ZERO else ZERO
+        binding.last_settle_at = resolve_business_datetime()
+        if force_flush and reason.startswith("offline"):
+            binding.offline_flushed = True
+        await binding.save()
+        return {
+            "reported": len(reported_ids),
+            "qty": str(reported_qty),
+            "pending": str(binding.pending_quantity),
+            "record_ids": reported_ids,
+        }
+
+    @staticmethod
+    async def settle_tenant(tenant_id: int, *, force: bool = False) -> dict[str, Any]:
+        config = await AutoReportService.get_or_create_config(tenant_id)
+        if not config.is_enabled and not force:
+            return {"tenant_id": tenant_id, "skipped": True, "reason": "disabled"}
+        if not config.reporter_user_id:
+            return {"tenant_id": tenant_id, "skipped": True, "reason": "no_reporter"}
+
+        bindings = await RelayAutoReportBinding.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, is_enabled=True
+        ).all()
+        if not bindings:
+            return {"tenant_id": tenant_id, "skipped": True, "reason": "no_bindings"}
+
+        now = resolve_business_datetime()
+        interval = max(1, int(config.interval_minutes or 5))
+        iot_map = {
+            int(d.id): d
+            for d in await IotDevice.filter(
+                tenant_id=tenant_id,
+                id__in=[int(b.iot_device_id) for b in bindings],
+                deleted_at__isnull=True,
+            )
+        }
+        results = []
+        for binding in bindings:
+            due = True
+            if binding.last_settle_at and not force:
+                due = binding.last_settle_at <= now - timedelta(minutes=interval)
+            offline_force = False
+            if config.report_mode == MODE_PLAN_OFFLINE:
+                iot = iot_map.get(int(binding.iot_device_id))
+                last_seen = (iot.last_seen_at if iot else None) or binding.last_seen_at
+                threshold = max(30, int(config.offline_threshold_seconds or 180))
+                stale = bool(last_seen and last_seen <= now - timedelta(seconds=threshold))
+                device_offline = bool(iot and not iot.is_online and last_seen)
+                if (
+                    (stale or device_offline)
+                    and not binding.offline_flushed
+                    and Decimal(str(binding.pending_quantity or 0)) > ZERO
+                ):
+                    offline_force = True
+                    due = True
+            if not due:
+                continue
+            try:
+                outcome = await AutoReportService.settle_binding(
+                    tenant_id,
+                    binding,
+                    config,
+                    force_flush=offline_force or force,
+                    reason="offline" if offline_force else ("force" if force else "tick"),
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("ind_relay settle binding {} failed: {}", binding.id, exc)
+                outcome = {"error": str(exc)}
+            results.append({"binding_id": binding.id, **outcome})
+        return {"tenant_id": tenant_id, "bindings": len(bindings), "results": results}
+
+    @staticmethod
+    async def settle_all_tenants() -> dict[str, Any]:
+        from core.models.application import Application
+
+        tenant_ids = (
+            await Application.filter(
+                code="ind-relay",
+                is_installed=True,
+                is_active=True,
+                deleted_at__isnull=True,
+            )
+            .distinct()
+            .values_list("tenant_id", flat=True)
+        )
+        summaries = []
+        for tid in tenant_ids:
+            try:
+                summaries.append(await AutoReportService.settle_tenant(int(tid)))
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("ind_relay auto report tenant {} failed: {}", tid, exc)
+                summaries.append({"tenant_id": int(tid), "error": str(exc)})
+        return {"tenants": len(tenant_ids), "items": summaries}

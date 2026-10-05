@@ -556,3 +556,319 @@ async def line_output_dashboard(
             )
         )
     return result
+
+
+# —— 自动报工 ——
+
+class AutoReportConfigUpdate(BaseModel):
+    is_enabled: Optional[bool] = None
+    match_by_device: Optional[bool] = None
+    interval_minutes: Optional[int] = None
+    report_mode: Optional[str] = None
+    offline_threshold_seconds: Optional[int] = None
+    reporter_user_id: Optional[int] = None
+    remarks: Optional[str] = None
+
+
+class AutoReportConfigResponse(BaseModel):
+    id: int
+    is_enabled: bool
+    match_by_device: bool
+    interval_minutes: int
+    report_mode: str
+    offline_threshold_seconds: int
+    reporter_user_id: Optional[int] = None
+    reporter_user_name: Optional[str] = None
+    remarks: Optional[str] = None
+
+
+class AutoReportBindingCreate(BaseModel):
+    iot_device_id: int
+    is_enabled: bool = True
+    remarks: Optional[str] = None
+
+
+class AutoReportBindingUpdate(BaseModel):
+    is_enabled: Optional[bool] = None
+    remarks: Optional[str] = None
+
+
+class AutoReportBindingResponse(BaseModel):
+    id: int
+    iot_device_id: int
+    iot_device_uuid: Optional[str] = None
+    iot_device_code: Optional[str] = None
+    iot_device_name: Optional[str] = None
+    external_device_id: Optional[str] = None
+    equipment_uuid: str
+    equipment_id: Optional[int] = None
+    equipment_code: Optional[str] = None
+    equipment_name: Optional[str] = None
+    is_enabled: bool
+    last_zscl: Optional[float] = None
+    pending_quantity: float = 0
+    baseline_aligned: bool
+    bound_work_order_id: Optional[int] = None
+    bound_work_order_code: Optional[str] = None
+    bound_operation_id: Optional[int] = None
+    bound_operation_name: Optional[str] = None
+    last_settle_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
+    offline_flushed: bool = False
+    remarks: Optional[str] = None
+
+
+class AutoReportLogResponse(BaseModel):
+    id: int
+    binding_id: Optional[int] = None
+    iot_device_id: Optional[int] = None
+    level: str
+    event: str
+    message: Optional[str] = None
+    zscl: Optional[float] = None
+    increment_qty: Optional[float] = None
+    work_order_id: Optional[int] = None
+    work_order_code: Optional[str] = None
+    operation_id: Optional[int] = None
+    reporting_record_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+
+def _config_response(row) -> AutoReportConfigResponse:
+    return AutoReportConfigResponse(
+        id=int(row.id),
+        is_enabled=bool(row.is_enabled),
+        match_by_device=bool(row.match_by_device),
+        interval_minutes=int(row.interval_minutes or 5),
+        report_mode=str(row.report_mode or "REALTIME_INCREMENT"),
+        offline_threshold_seconds=int(row.offline_threshold_seconds or 180),
+        reporter_user_id=row.reporter_user_id,
+        reporter_user_name=row.reporter_user_name,
+        remarks=row.remarks,
+    )
+
+
+def _binding_response(row) -> AutoReportBindingResponse:
+    return AutoReportBindingResponse(
+        id=int(row.id),
+        iot_device_id=int(row.iot_device_id),
+        iot_device_uuid=row.iot_device_uuid,
+        iot_device_code=row.iot_device_code,
+        iot_device_name=row.iot_device_name,
+        external_device_id=row.external_device_id,
+        equipment_uuid=row.equipment_uuid,
+        equipment_id=row.equipment_id,
+        equipment_code=row.equipment_code,
+        equipment_name=row.equipment_name,
+        is_enabled=bool(row.is_enabled),
+        last_zscl=float(row.last_zscl) if row.last_zscl is not None else None,
+        pending_quantity=float(row.pending_quantity or 0),
+        baseline_aligned=bool(row.baseline_aligned),
+        bound_work_order_id=row.bound_work_order_id,
+        bound_work_order_code=row.bound_work_order_code,
+        bound_operation_id=row.bound_operation_id,
+        bound_operation_name=row.bound_operation_name,
+        last_settle_at=row.last_settle_at,
+        last_seen_at=row.last_seen_at,
+        offline_flushed=bool(row.offline_flushed),
+        remarks=row.remarks,
+    )
+
+
+@router.get(
+    "/auto-report/config",
+    response_model=AutoReportConfigResponse,
+    dependencies=[Depends(require_permission_codes("ind-relay:auto-report:read"))],
+)
+async def get_auto_report_config(tenant_id: int = Depends(get_current_tenant)):
+    from apps.ind_relay.services.auto_report_service import AutoReportService
+    from infra.exceptions.exceptions import ValidationError
+
+    try:
+        row = await AutoReportService.get_or_create_config(tenant_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return _config_response(row)
+
+
+@router.put(
+    "/auto-report/config",
+    response_model=AutoReportConfigResponse,
+    dependencies=[Depends(require_permission_codes("ind-relay:auto-report:update"))],
+)
+async def update_auto_report_config(
+    body: AutoReportConfigUpdate,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    from apps.ind_relay.services.auto_report_service import AutoReportService
+    from infra.exceptions.exceptions import ValidationError
+
+    try:
+        row = await AutoReportService.update_config(
+            tenant_id,
+            user_id=current_user.id,
+            data=body.model_dump(exclude_unset=True),
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return _config_response(row)
+
+
+@router.get(
+    "/auto-report/device-options",
+    dependencies=[Depends(require_permission_codes("ind-relay:auto-report:read"))],
+)
+async def list_auto_report_device_options(tenant_id: int = Depends(get_current_tenant)):
+    from apps.ind_relay.services.auto_report_service import AutoReportService
+
+    return {"items": await AutoReportService.list_bound_iot_device_options(tenant_id)}
+
+
+@router.get(
+    "/auto-report/bindings",
+    response_model=List[AutoReportBindingResponse],
+    dependencies=[Depends(require_permission_codes("ind-relay:auto-report:read"))],
+)
+async def list_auto_report_bindings(tenant_id: int = Depends(get_current_tenant)):
+    from apps.ind_relay.services.auto_report_service import AutoReportService
+
+    rows = await AutoReportService.list_bindings(tenant_id)
+    return [_binding_response(r) for r in rows]
+
+
+@router.post(
+    "/auto-report/bindings",
+    response_model=AutoReportBindingResponse,
+    dependencies=[Depends(require_permission_codes("ind-relay:auto-report:update"))],
+)
+async def create_auto_report_binding(
+    body: AutoReportBindingCreate,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    from apps.ind_relay.services.auto_report_service import AutoReportService
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    try:
+        row = await AutoReportService.upsert_binding(
+            tenant_id,
+            user_id=current_user.id,
+            iot_device_id=body.iot_device_id,
+            is_enabled=body.is_enabled,
+            remarks=body.remarks,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return _binding_response(row)
+
+
+@router.patch(
+    "/auto-report/bindings/{binding_id}",
+    response_model=AutoReportBindingResponse,
+    dependencies=[Depends(require_permission_codes("ind-relay:auto-report:update"))],
+)
+async def update_auto_report_binding(
+    binding_id: int,
+    body: AutoReportBindingUpdate,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    from apps.ind_relay.services.auto_report_service import AutoReportService
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    data = body.model_dump(exclude_unset=True)
+    try:
+        if "is_enabled" in data and data["is_enabled"] is not None:
+            row = await AutoReportService.set_binding_enabled(
+                tenant_id,
+                binding_id,
+                is_enabled=bool(data["is_enabled"]),
+                user_id=current_user.id,
+            )
+        else:
+            rows = await AutoReportService.list_bindings(tenant_id)
+            row = next((r for r in rows if int(r.id) == binding_id), None)
+            if not row:
+                raise NotFoundError("绑定不存在")
+        if "remarks" in data:
+            row.remarks = data["remarks"]
+            row.updated_by = current_user.id
+            await row.save()
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return _binding_response(row)
+
+
+@router.delete(
+    "/auto-report/bindings/{binding_id}",
+    dependencies=[Depends(require_permission_codes("ind-relay:auto-report:update"))],
+)
+async def delete_auto_report_binding(
+    binding_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    from apps.ind_relay.services.auto_report_service import AutoReportService
+    from infra.exceptions.exceptions import NotFoundError
+
+    try:
+        await AutoReportService.delete_binding(
+            tenant_id, binding_id, user_id=current_user.id
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@router.get(
+    "/auto-report/logs",
+    dependencies=[Depends(require_permission_codes("ind-relay:auto-report:read"))],
+)
+async def list_auto_report_logs(
+    tenant_id: int = Depends(get_current_tenant),
+    binding_id: Optional[int] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    from apps.ind_relay.services.auto_report_service import AutoReportService
+
+    rows, total = await AutoReportService.list_logs(
+        tenant_id, binding_id=binding_id, skip=skip, limit=limit
+    )
+    return {
+        "total": total,
+        "items": [
+            AutoReportLogResponse(
+                id=int(r.id),
+                binding_id=r.binding_id,
+                iot_device_id=r.iot_device_id,
+                level=r.level,
+                event=r.event,
+                message=r.message,
+                zscl=float(r.zscl) if r.zscl is not None else None,
+                increment_qty=float(r.increment_qty) if r.increment_qty is not None else None,
+                work_order_id=r.work_order_id,
+                work_order_code=r.work_order_code,
+                operation_id=r.operation_id,
+                reporting_record_id=r.reporting_record_id,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ],
+    }
+
+
+@router.post(
+    "/auto-report/settle-now",
+    dependencies=[Depends(require_permission_codes("ind-relay:auto-report:update"))],
+)
+async def settle_auto_report_now(tenant_id: int = Depends(get_current_tenant)):
+    """手动触发一次本租户结算（调试/运维）。"""
+    from apps.ind_relay.services.auto_report_service import AutoReportService
+
+    return await AutoReportService.settle_tenant(tenant_id, force=True)
