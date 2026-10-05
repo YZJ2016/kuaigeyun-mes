@@ -29863,6 +29863,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.mobile-workbench-my-work-order-badge-r01.title':
+    '手机工作台「我的工单」角标按本人派工计数',
+  'pages.dashboard.updateLog.entries.mobile-workbench-my-work-order-badge-r01.description':
+    '「我的工单」原先和工作台「全部工单」共用同一套待办数。现已按工序派工给当前用户的工单计数，与列表「我的工单」筛选一致。',
   'pages.dashboard.updateLog.entries.mobile-approval-node-label-zh-r01.title':
     '手机审批详情当前节点显示中文名称',
   'pages.dashboard.updateLog.entries.mobile-approval-node-label-zh-r01.description':

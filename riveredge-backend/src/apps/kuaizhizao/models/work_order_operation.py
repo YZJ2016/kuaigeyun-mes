@@ -207,3 +207,18 @@ class WorkOrderOperation(BaseModel):
         """字符串表示"""
         return f"{self.work_order_code}-OP{self.sequence:02d} - {self.operation_name}"
 
+
+async def work_order_ids_assigned_to_worker(*, tenant_id: int, worker_id: int) -> set[int]:
+    """工单列表「分配员工」与「我的工单」共用：主责或多人派工含该员工的工单 ID。"""
+    if not worker_id:
+        return set()
+    from tortoise.expressions import Q
+
+    rows = await WorkOrderOperation.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    ).filter(
+        Q(assigned_worker_id=worker_id) | Q(assigned_worker_ids__contains=worker_id)
+    ).values_list("work_order_id", flat=True)
+    return {int(wid) for wid in rows if wid is not None}
+

@@ -137,6 +137,7 @@ async def _section_work_orders(ctx: BadgeScopeCtx, now: datetime) -> BadgeFragme
     from tortoise.expressions import Q
 
     from apps.kuaizhizao.models.work_order import WorkOrder
+    from apps.kuaizhizao.models.work_order_operation import work_order_ids_assigned_to_worker
     from apps.kuaizhizao.models.rework_order import ReworkOrder
 
     tid = ctx.tenant_id
@@ -148,34 +149,55 @@ async def _section_work_orders(ctx: BadgeScopeCtx, now: datetime) -> BadgeFragme
     ).filter(
         Q(group_role__isnull=True) | Q(group_role__in=_WORK_ORDER_LIST_GROUP_ROLES)
     )
-    wo_overdue, wo_in_progress, ro_overdue, ro_in_progress = await _gather_counts(
-        badge_count(
-            wo_base.filter(planned_end_date__lt=now).exclude(status__in=_WORK_ORDER_OVERDUE_EXCLUDED),
-            ctx,
-            RES_WORK_ORDER,
-        ),
-        badge_count(
-            wo_base.filter(status__in=_WORK_ORDER_IN_PROGRESS).exclude(planned_end_date__lt=now),
-            ctx,
-            RES_WORK_ORDER,
-        ),
-        badge_count(
-            ReworkOrder.filter(tenant_id=tid, deleted_at__isnull=True, planned_end_date__lt=now).exclude(
-                status__in=_REWORK_TERMINAL
-            ),
-            ctx,
-            RES_REWORK_ORDER,
-        ),
-        badge_count(
-            ReworkOrder.filter(tenant_id=tid, deleted_at__isnull=True, status__in=_REWORK_IN_PROGRESS).exclude(
-                planned_end_date__lt=now
-            ),
-            ctx,
-            RES_REWORK_ORDER,
-        ),
+    worker_id = int(getattr(ctx.user, "id", 0) or 0)
+    mine_ids = await work_order_ids_assigned_to_worker(
+        tenant_id=tid,
+        worker_id=worker_id,
     )
+    wo_overdue_q = wo_base.filter(planned_end_date__lt=now).exclude(status__in=_WORK_ORDER_OVERDUE_EXCLUDED)
+    wo_progress_q = wo_base.filter(status__in=_WORK_ORDER_IN_PROGRESS).exclude(planned_end_date__lt=now)
+    ro_overdue_q = ReworkOrder.filter(
+        tenant_id=tid, deleted_at__isnull=True, planned_end_date__lt=now
+    ).exclude(status__in=_REWORK_TERMINAL)
+    ro_progress_q = ReworkOrder.filter(
+        tenant_id=tid, deleted_at__isnull=True, status__in=_REWORK_IN_PROGRESS
+    ).exclude(planned_end_date__lt=now)
+    if mine_ids:
+        wo_mine = wo_base.filter(id__in=mine_ids)
+        (
+            wo_overdue,
+            wo_in_progress,
+            my_overdue,
+            my_in_progress,
+            ro_overdue,
+            ro_in_progress,
+        ) = await _gather_counts(
+            badge_count(wo_overdue_q, ctx, RES_WORK_ORDER),
+            badge_count(wo_progress_q, ctx, RES_WORK_ORDER),
+            badge_count(
+                wo_mine.filter(planned_end_date__lt=now).exclude(status__in=_WORK_ORDER_OVERDUE_EXCLUDED),
+                ctx,
+                RES_WORK_ORDER,
+            ),
+            badge_count(
+                wo_mine.filter(status__in=_WORK_ORDER_IN_PROGRESS).exclude(planned_end_date__lt=now),
+                ctx,
+                RES_WORK_ORDER,
+            ),
+            badge_count(ro_overdue_q, ctx, RES_REWORK_ORDER),
+            badge_count(ro_progress_q, ctx, RES_REWORK_ORDER),
+        )
+    else:
+        my_overdue, my_in_progress = 0, 0
+        wo_overdue, wo_in_progress, ro_overdue, ro_in_progress = await _gather_counts(
+            badge_count(wo_overdue_q, ctx, RES_WORK_ORDER),
+            badge_count(wo_progress_q, ctx, RES_WORK_ORDER),
+            badge_count(ro_overdue_q, ctx, RES_REWORK_ORDER),
+            badge_count(ro_progress_q, ctx, RES_REWORK_ORDER),
+        )
     return {
         "work_order": {"overdue": wo_overdue, "pending": 0, "in_progress": wo_in_progress},
+        "my_work_order": {"overdue": my_overdue, "pending": 0, "in_progress": my_in_progress},
         "rework_order": {"overdue": ro_overdue, "pending": 0, "in_progress": ro_in_progress},
     }
 

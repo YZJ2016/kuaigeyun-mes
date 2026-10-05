@@ -5654,7 +5654,7 @@
                 "icon": "file",
                 "route": "/mes?my=1",
                 "permission": "kuaizhizao:work-order:read",
-                "badge_key": "work_order"
+                "badge_key": "my_work_order"
               },
               {
                 "key": "work-orders",

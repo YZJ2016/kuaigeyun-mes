@@ -31,7 +31,10 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.work_order import WorkOrder
-from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+from apps.kuaizhizao.models.work_order_operation import (
+    WorkOrderOperation,
+    work_order_ids_assigned_to_worker,
+)
 from apps.kuaizhizao.models.delivery_delay_exception import DeliveryDelayException
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.services.document_action_policy.work_order import (
@@ -2812,18 +2815,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         if work_center_id:
             query = query.filter(work_center_id=work_center_id)
         if assigned_worker_id:
-            # 筛选有工序分配给该员工的工单（含多人派工 assigned_worker_ids）
-            wo_ids_primary = await WorkOrderOperation.filter(
+            wo_id_set = await work_order_ids_assigned_to_worker(
                 tenant_id=tenant_id,
-                assigned_worker_id=assigned_worker_id,
-                deleted_at__isnull=True,
-            ).values_list("work_order_id", flat=True)
-            wo_ids_multi = await WorkOrderOperation.filter(
-                tenant_id=tenant_id,
-                assigned_worker_ids__contains=assigned_worker_id,
-                deleted_at__isnull=True,
-            ).values_list("work_order_id", flat=True)
-            wo_id_set = set(wo_ids_primary) | set(wo_ids_multi)
+                worker_id=assigned_worker_id,
+            )
             if wo_id_set:
                 query = query.filter(id__in=wo_id_set)
             else:
@@ -3233,18 +3228,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         if work_center_id:
             query = query.filter(work_center_id=work_center_id)
         if assigned_worker_id:
-            from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
-            wo_ids_primary = await WorkOrderOperation.filter(
+            wo_id_set = await work_order_ids_assigned_to_worker(
                 tenant_id=tenant_id,
-                assigned_worker_id=assigned_worker_id,
-                deleted_at__isnull=True,
-            ).values_list("work_order_id", flat=True)
-            wo_ids_multi = await WorkOrderOperation.filter(
-                tenant_id=tenant_id,
-                assigned_worker_ids__contains=assigned_worker_id,
-                deleted_at__isnull=True,
-            ).values_list("work_order_id", flat=True)
-            wo_id_set = set(wo_ids_primary) | set(wo_ids_multi)
+                worker_id=assigned_worker_id,
+            )
             if wo_id_set:
                 query = query.filter(id__in=wo_id_set)
             else:
