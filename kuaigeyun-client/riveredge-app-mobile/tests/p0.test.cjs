@@ -25,7 +25,7 @@ function page(file, extra = {}) {
   return expression => vm.runInContext(expression, context);
 }
 function block(errorText = '', badgeNote = '', showBadge = true) {
-  return { scope: 'equipment', errorText, badgeNote, showBadge, pendingCount: 0, overdueCount: 0,
+  return { scope: 'equipment', errorText, badgeNote, showBadge, pendingCount: 0, overdueCount: 0, pendingText: '', overdueText: '',
     sections: [{ cells: [{ key: 'faults', route: '/equipment/faults', uid: 'faults' }] }] };
 }
 test('home distinguishes failed, zero and unavailable counts while retaining entries', () => {

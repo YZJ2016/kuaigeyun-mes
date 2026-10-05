@@ -1,6 +1,7 @@
 /**
- * 工作台色块里的单字标记。
- * 后端用语义名描述 icon。未命中返回 ''，页面改用功能名称的首字。
+ * 工作台色块图标。
+ * 后端用语义名描述 icon。命中原型描边的名字走 static/workbench-icons 里的 SVG；
+ * 未命中时 iconMark 仍退回单字，页面用功能名称的首字。
  */
 
 const SCOPES = ['workshop', 'warehouse', 'quality', 'equipment', 'mold']
@@ -123,11 +124,55 @@ export function iconMark(icon : string, iconGroup : string, label : string) : st
 	return text.charAt(0)
 }
 
+const DRAWN = [
+	'audit', 'bell', 'chart', 'check', 'check-circle', 'close-circle', 'export', 'file',
+	'history', 'import', 'inbox', 'link', 'list', 'maintain', 'minus-square', 'plus-square',
+	'rollback', 'scan', 'search', 'shield', 'shopping', 'swap', 'tool', 'truck', 'user', 'warning'
+]
+
 function knownScope(scope : string) : string {
 	if (SCOPES.indexOf(scope) >= 0) {
 		return scope
 	}
 	return 'workshop'
+}
+
+function drawnName(name : string) : string {
+	const key = name.trim()
+	if (DRAWN.indexOf(key) >= 0) {
+		return key
+	}
+	return ''
+}
+
+export function iconAsset(icon : string, iconGroup : string, scope : string) : string {
+	let name = drawnName(icon)
+	if (name.length == 0) {
+		name = drawnName(iconGroup)
+	}
+	if (name.length == 0) {
+		return ''
+	}
+	return '/static/workbench-icons/' + knownScope(scope) + '/' + name + '.svg'
+}
+
+export function scopeIcon(scope : string) : string {
+	if (scope == 'workshop') {
+		return 'scan'
+	}
+	if (scope == 'warehouse') {
+		return 'inbox'
+	}
+	if (scope == 'quality') {
+		return 'shield'
+	}
+	if (scope == 'equipment') {
+		return 'tool'
+	}
+	if (scope == 'mold') {
+		return 'maintain'
+	}
+	return ''
 }
 
 export function tileClass(scope : string) : string {

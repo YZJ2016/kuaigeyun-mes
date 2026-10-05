@@ -10,9 +10,13 @@
 			<button v-if="kind == 'scheme' && Number(equipmentId) > 0" class="btn-secondary" :disabled="disabled || loading" @click="bound">查看设备绑定方案</button>
 			<text v-if="note.length > 0" class="hint">{{ note }}</text>
 			<text v-if="error.length > 0" class="error">{{ error }}</text>
-			<text v-if="loading" class="loading">加载中</text>
 			<button v-for="(row, index) in rows" :key="index" class="btn-secondary" :disabled="disabled || loading" @click="choose(index)">{{ label(row) }}</button>
 			<button v-if="rows.length < total" class="btn-secondary" :disabled="disabled || loading" @click="more">加载更多</button>
+		</view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
 		</view>
 	</view>
 </template>
@@ -35,7 +39,7 @@
 	const total = ref(0)
 	const note = ref('')
 	const error = ref('')
-	let selectionSession = 0
+	let ticket = 0
 	function label(row : any) : string { return fieldText(row, 'code') + ' ' + fieldText(row, 'name') }
 	function choose(index : number) {
 		if (props.disabled || loading.value || index < 0 || index >= rows.value.length) { return }
@@ -53,50 +57,79 @@
 		}
 	}
 	async function load(append : boolean) {
-		if (props.disabled || loading.value) { return }
-		const session = selectionSession
+		if (props.disabled) { return }
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		error.value = ''
 		note.value = ''
-		if (!append) { rows.value = []; total.value = 0; activeKeyword.value = keyword.value.trim() }
+		if (!append) { activeKeyword.value = keyword.value.trim() }
+		const skip = append ? rows.value.length : 0
 		try {
-			const raw = await searchChoices(props.kind, activeKeyword.value, append ? rows.value.length : 0)
-			if (session != selectionSession || props.disabled) { return }
+			const raw = await searchChoices(props.kind, activeKeyword.value, skip)
+			if (ticket != mine || props.disabled) { return }
 			rows.value = append ? rows.value.concat(readRows(raw)) : readRows(raw)
 			total.value = fieldNumber(raw, 'total')
 			if (rows.value.length == 0) { note.value = '未找到匹配记录' }
-		} catch (_err) { error.value = '查询未完成，请重试' } finally { loading.value = false }
+		} catch (_err) {
+			if (ticket != mine) { return }
+			error.value = '查询未完成，请重试'
+		}
+		if (ticket != mine) { return }
+		loading.value = false
 	}
 	async function search() { await load(false) }
 	async function more() { await load(true) }
 	async function bound() {
-		if (props.disabled || loading.value || Number(props.equipmentId) <= 0) { return }
-		const session = selectionSession
+		if (props.disabled || Number(props.equipmentId) <= 0) { return }
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
-		rows.value = []; total.value = 0; error.value = ''; note.value = ''
+		error.value = ''; note.value = ''
 		try {
 			const result = await loadBoundSchemes(Number(props.equipmentId))
-			if (session != selectionSession || props.disabled) { return }
+			if (ticket != mine || props.disabled) { return }
 			rows.value = result
 			total.value = rows.value.length
 			note.value = rows.value.length > 0 ? '设备绑定方案' : '设备未绑定方案，可按编码或名称查询'
-		} catch (_err) { error.value = '绑定方案未能加载，请重试或查询方案' } finally { loading.value = false }
+		} catch (_err) {
+			if (ticket != mine) { return }
+			error.value = '绑定方案未能加载，请重试或查询方案'
+		}
+		if (ticket != mine) { return }
+		loading.value = false
 	}
 	async function scanDevice() {
-		if (props.disabled || loading.value) { return }
+		if (props.disabled) { return }
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true; error.value = ''
 		try {
 			const code = await scan()
-			if (code == null || String(code).trim().length == 0) { return }
+			if (ticket != mine) { return }
+			if (code == null || String(code).trim().length == 0) {
+				loading.value = false
+				return
+			}
 			const row = await request({ path: '/api/v1/apps/kuaizhizao/equipment/resolve-scan', method: 'GET', query: { q: String(code).trim() } as UTSJSONObject, body: null })
-			if (fieldNumber(row, 'id') <= 0 || fieldText(row, 'uuid').length == 0) { error.value = '未解析到设备'; return }
-			if (props.disabled) { return }
+			if (ticket != mine || props.disabled) { return }
+			if (fieldNumber(row, 'id') <= 0 || fieldText(row, 'uuid').length == 0) {
+				error.value = '未解析到设备'
+				loading.value = false
+				return
+			}
 			selectedLabel.value = label(row); emit('choose', row); expanded.value = false
-		} catch (_err) { error.value = '扫码未完成，可输入编码或名称查询' } finally { loading.value = false }
+		} catch (_err) {
+			if (ticket != mine) { return }
+			error.value = '扫码未完成，可输入编码或名称查询'
+		}
+		if (ticket != mine) { return }
+		loading.value = false
 	}
 	watch(() : string => props.equipmentId, () => {
 		if (props.kind != 'scheme') { return }
-		selectionSession += 1
+		ticket = ticket + 1
+		loading.value = false
 		selectedLabel.value = ''; rows.value = []; total.value = 0; note.value = ''; error.value = ''; expanded.value = false
 	})
 </script>

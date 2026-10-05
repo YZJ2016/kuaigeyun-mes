@@ -1,8 +1,8 @@
 <template>
-	<scroll-view class="page" direction="vertical" :scroll-top="scrollTop" @scroll="onScroll">
+	<view class="page-shell">
 		<home-link />
+	<scroll-view class="page" direction="vertical" :scroll-top="scrollTop" @scroll="onScroll">
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="loading" class="loading">加载中</text>
 		<view v-if="selectedIndex < 0">
 			<text class="label">工单编码、名称或产品</text>
 			<input v-model="keyword" class="field" :disabled="loading" placeholder="输入关键词" @confirm="search" />
@@ -29,6 +29,12 @@
 			<button class="btn-primary" @click="goReport">去报工</button>
 		</view>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -48,6 +54,7 @@
 	const listScrollTop = ref(0)
 	let activeKeyword = ''
 	let activeStatus = ''
+	let ticket = 0
 	const statuses = [
 		{ value: '', label: '全部' }, { value: 'draft', label: '草稿' },
 		{ value: 'released', label: '已下达' }, { value: 'in_progress', label: '执行中' },
@@ -96,22 +103,18 @@
 	}
 
 	async function load(append : boolean = false) {
-		if (loading.value) { return }
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
+		const skip = append ? rows.value.length : 0
 		const query = new UTSJSONObject()
-		query.set('skip', append ? rows.value.length : 0)
+		query.set('skip', skip)
 		query.set('limit', 20)
 		query.set('order_by', '-created_at')
 		query.set('include_downstream_push_progress', false)
 		if (activeKeyword.length > 0) { query.set('keyword', activeKeyword) }
 		if (activeStatus.length > 0) { query.set('status', activeStatus) }
-		if (!append) {
-			rows.value = []
-			total.value = 0
-			scrollTop.value = 0
-			listScrollTop.value = 0
-		}
 		try {
 			const payload = await request({
 				method: 'GET',
@@ -119,10 +122,24 @@
 				query: query,
 				body: null,
 			})
-			rows.value = append ? rows.value.concat(readRows(payload)) : readRows(payload)
+			if (ticket != mine) {
+				return
+			}
+			const incoming = readRows(payload)
+			if (append) {
+				rows.value = rows.value.concat(incoming)
+			} else {
+				rows.value = incoming
+			}
 			total.value = fieldNumber(payload, 'total')
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}

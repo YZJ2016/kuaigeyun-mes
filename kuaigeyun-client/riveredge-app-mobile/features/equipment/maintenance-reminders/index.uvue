@@ -1,10 +1,11 @@
 <template>
-	<scroll-view class="page" direction="vertical">
+	<view class="page-shell">
 		<home-link />
+	<scroll-view class="page" direction="vertical">
 		<view class="card">
 			<text class="title">维护提醒</text>
 			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
-			<text v-if="rows.length == 0" class="empty">暂无记录</text>
+			<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="empty">暂无记录</text>
 			<view class="item" hover-class="pressed" v-for="(item, index) in rows" :key="item.rowKey" @click="selectRow(index)">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
@@ -19,6 +20,12 @@
 		<text v-if="messageText.length > 0" class="hint page-hint">{{ messageText }}</text>
 		<text v-if="errorText.length > 0" class="error page-hint">{{ errorText }}</text>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -36,6 +43,8 @@
 	}
 
 	const busy = ref(false)
+	const loading = ref(false)
+	let ticket = 0
 	const rows = ref<Array<ListRow>>([])
 	const reminderUuid = ref('')
 	const remarkText = ref('')
@@ -55,6 +64,10 @@
 	}
 
 	async function loadList(): Promise<void> {
+		const mine = ticket + 1
+		ticket = mine
+		loading.value = true
+		errorText.value = ''
 		try {
 			const raw = await request({
 				url: '/api/v1/apps/kuaizhizao/maintenance-reminders',
@@ -83,10 +96,20 @@
 				}
 				next.push(view)
 			}
+			if (ticket != mine) {
+				return
+			}
 			rows.value = next
 		} catch (e) {
+			if (ticket != mine) {
+				return
+			}
 			errorText.value = readError(e)
 		}
+		if (ticket != mine) {
+			return
+		}
+		loading.value = false
 	}
 
 	async function submitHandled(): Promise<void> {

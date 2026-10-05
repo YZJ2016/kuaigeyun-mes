@@ -1,6 +1,7 @@
 <template>
-	<view class="page">
+	<view class="page-shell">
 		<home-link />
+	<view class="page">
 		<text class="section">模具</text>
 		<input class="field" v-model="moldKeyword" placeholder="编码或名称" />
 		<button class="btn-secondary" @click="searchMolds">查找模具</button>
@@ -22,7 +23,7 @@
 			<text class="title">{{ item.label }}</text>
 			<text class="meta">{{ item.executed ? '已执行' : '未执行' }}</text>
 		</view>
-		<text v-if="previewLines.length == 0" class="empty">无明细</text>
+		<text v-if="!loading && previewLines.length == 0" class="empty">无明细</text>
 		<button :class="submitting ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="submitting" @click="createRepair">创建维修</button>
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
 		<text class="section">维修记录</text>
@@ -32,7 +33,13 @@
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
-		<text v-if="rows.length == 0" class="empty">暂无维修</text>
+		<text v-if="!loading && rows.length == 0 && hint == ''" class="empty">暂无维修</text>
+	</view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
 	</view>
 </template>
 
@@ -75,6 +82,19 @@
 	const rows = ref<DocLine[]>([])
 	const hint = ref('')
 	const submitting = ref(false)
+	const loading = ref(false)
+	let ticket = 0
+	let moldTicket = 0
+	let schemeTicket = 0
+	let previewTicket = 0
+	let listOpen = false
+	let moldOpen = false
+	let schemeOpen = false
+	let previewOpen = false
+
+	function syncLoading(): void {
+		loading.value = listOpen || moldOpen || schemeOpen || previewOpen
+	}
 
 	function chooseMold(index: number): void {
 		const options = moldOptions.value
@@ -97,24 +117,56 @@
 	}
 
 	async function searchMolds(): Promise<void> {
+		const mine = moldTicket + 1
+		moldTicket = mine
+		moldOpen = true
+		syncLoading()
 		try {
 			let query = 'limit=50'
 			const keyword = moldKeyword.value.trim()
 			if (keyword != '') {
 				query = 'keyword=' + encodeURIComponent(keyword) + '&limit=50'
 			}
-			moldOptions.value = mapNamedOptions(await apiGetRows(withQuery(MOLD_ARCHIVE, query)))
+			const options = mapNamedOptions(await apiGetRows(withQuery(MOLD_ARCHIVE, query)))
+			if (moldTicket != mine) {
+				return
+			}
+			moldOptions.value = options
 		} catch (err) {
+			if (moldTicket != mine) {
+				return
+			}
 			hint.value = errorText(err)
 		}
+		if (moldTicket != mine) {
+			return
+		}
+		moldOpen = false
+		syncLoading()
 	}
 
 	async function loadSchemes(): Promise<void> {
+		const mine = schemeTicket + 1
+		schemeTicket = mine
+		schemeOpen = true
+		syncLoading()
 		try {
-			schemeOptions.value = mapNamedOptions(await apiGetRows(withQuery(MOLD_REPAIR_SCHEMES, 'limit=50&is_active=true')))
+			const options = mapNamedOptions(await apiGetRows(withQuery(MOLD_REPAIR_SCHEMES, 'limit=50&is_active=true')))
+			if (schemeTicket != mine) {
+				return
+			}
+			schemeOptions.value = options
 		} catch (err) {
+			if (schemeTicket != mine) {
+				return
+			}
 			schemeOptions.value = []
 		}
+		if (schemeTicket != mine) {
+			return
+		}
+		schemeOpen = false
+		syncLoading()
 	}
 
 	function mapDoc(item: UTSJSONObject): DocLine {
@@ -131,6 +183,10 @@
 	}
 
 	async function loadList(): Promise<void> {
+		const mine = ticket + 1
+		ticket = mine
+		listOpen = true
+		syncLoading()
 		try {
 			let query = 'limit=50'
 			const keyword = listKeyword.value.trim()
@@ -138,14 +194,25 @@
 				query = 'keyword=' + encodeURIComponent(keyword) + '&limit=50'
 			}
 			const items = await apiGetRows(withQuery(MOLD_REPAIRS, query))
+			if (ticket != mine) {
+				return
+			}
 			const lines: DocLine[] = []
 			for (let i = 0; i < items.length; i++) {
 				lines.push(mapDoc(items[i]))
 			}
 			rows.value = lines
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			hint.value = errorText(err)
 		}
+		if (ticket != mine) {
+			return
+		}
+		listOpen = false
+		syncLoading()
 	}
 
 	async function loadPreview(): Promise<void> {
@@ -153,16 +220,32 @@
 			previewLines.value = []
 			return
 		}
+		const mine = previewTicket + 1
+		previewTicket = mine
+		previewOpen = true
+		syncLoading()
 		let query = 'mold_id=' + moldId.value
 		if (schemeId.value > 0) {
 			query = query + '&scheme_id=' + schemeId.value
 		}
 		try {
-			previewLines.value = readPreviewLines(await apiGet(withQuery(MOLD_REPAIRS + '/preview-lines', query)))
+			const lines = readPreviewLines(await apiGet(withQuery(MOLD_REPAIRS + '/preview-lines', query)))
+			if (previewTicket != mine) {
+				return
+			}
+			previewLines.value = lines
 		} catch (err) {
+			if (previewTicket != mine) {
+				return
+			}
 			previewLines.value = []
 			hint.value = errorText(err)
 		}
+		if (previewTicket != mine) {
+			return
+		}
+		previewOpen = false
+		syncLoading()
 	}
 
 	function toggleExecuted(index: number): void {

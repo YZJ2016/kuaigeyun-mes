@@ -1,10 +1,10 @@
 <template>
-	<scroll-view class="page" scroll-y="true">
+	<view class="page-shell">
 		<home-link />
+	<scroll-view class="page" scroll-y="true">
 		<view class="toolbar">
 			<button class="btn-secondary" @click="loadSummary">刷新</button>
 		</view>
-		<text v-if="loading" class="loading">加载中</text>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text v-if="!loading && pendingRows.length == 0 && errorTextValue.length == 0" class="empty">汇总里没有待检项</text>
 		<view v-for="(row, index) in pendingRows" :key="index" class="card" hover-class="pressed" @click="openRow(index)">
@@ -12,6 +12,12 @@
 			<text class="meta">待检 {{ row.countText }}</text>
 		</view>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -33,6 +39,7 @@
 	const loading = ref(false)
 	const errorTextValue = ref('')
 	const pendingRows = ref<PendingRow[]>([])
+	let ticket = 0
 
 	function readPending(summary : UTSJSONObject) : PendingRow[] {
 		const out : PendingRow[] = []
@@ -63,6 +70,8 @@
 	}
 
 	async function loadSummary() {
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
 		try {
@@ -71,6 +80,9 @@
 				method: 'GET',
 				data: null
 			})
+			if (ticket != mine) {
+				return
+			}
 			if (payload == null || Array.isArray(payload)) {
 				pendingRows.value = [] as PendingRow[]
 				errorTextValue.value = '汇总响应不是对象'
@@ -78,8 +90,14 @@
 				pendingRows.value = readPending(payload as UTSJSONObject)
 			}
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			pendingRows.value = [] as PendingRow[]
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}

@@ -1,11 +1,12 @@
 <template>
-	<scroll-view class="page" direction="vertical">
+	<view class="page-shell">
 		<home-link />
+	<scroll-view class="page" direction="vertical">
 		<view class="card">
 			<text class="title">报修维修</text>
 			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="reload">刷新</button>
 			<text v-if="queryUuid.length > 0" class="hint">以下为该设备的故障</text>
-			<text v-if="rows.length == 0" class="empty">暂无记录</text>
+			<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="empty">暂无记录</text>
 			<view class="item" hover-class="pressed" v-for="item in rows" :key="item.rowKey" @click="openFault(item.faultUuid)">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
@@ -52,6 +53,12 @@
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -73,6 +80,8 @@
 	const repairResults: string[] = ['成功', '失败', '部分成功']
 
 	const busy = ref(false)
+	const loading = ref(false)
+	let ticket = 0
 	const queryUuid = ref('')
 	const openedText = ref('')
 	const openedPending = ref(false)
@@ -123,6 +132,10 @@
 	}
 
 	async function loadList(): Promise<void> {
+		const mine = ticket + 1
+		ticket = mine
+		loading.value = true
+		errorText.value = ''
 		let url = '/api/v1/apps/kuaizhizao/equipment-faults'
 		const equipmentUuid = queryUuid.value
 		if (equipmentUuid.length > 0) {
@@ -154,10 +167,20 @@
 				}
 				next.push(view)
 			}
+			if (ticket != mine) {
+				return
+			}
 			rows.value = next
 		} catch (e) {
+			if (ticket != mine) {
+				return
+			}
 			errorText.value = readError(e)
 		}
+		if (ticket != mine) {
+			return
+		}
+		loading.value = false
 	}
 
 	async function openFault(faultUuid: string): Promise<void> {

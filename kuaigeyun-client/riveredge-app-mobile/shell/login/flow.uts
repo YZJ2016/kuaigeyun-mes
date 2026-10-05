@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from '../../shared/api/http.uts'
-import { clearToken, getTenantId, getToken, setPendingEntry, setSessionUser, setTenantId, setTenantName, setToken } from '../../shared/api/session.uts'
+import { clearToken, getTenantId, getTenantName, getToken, setPendingEntry, setSessionUser, setTenantId, setTenantName, setToken } from '../../shared/api/session.uts'
 import { acquireLoginCode, loginRedirect, readBrowserPath, readBrowserQuery } from '../../shared/channel/index.uts'
 import { loginConnected } from '../../shared/channel/headers.uts'
 import { findEntryByRoute } from '../registry/index.uts'
@@ -22,6 +22,7 @@ export type LoginState = {
 	message : string
 	tenantId : string
 	tenantLocked : boolean
+	hideOrg : boolean
 	tenants : Array<TenantChoice>
 	needsAddress : boolean
 }
@@ -32,6 +33,7 @@ type EntryResolve = {
 }
 
 let tenantEntryLocked = false
+let hideOrgSection = false
 
 function stateOf(connected : boolean, enterWorkbench : boolean, message : string, tenants : Array<TenantChoice>) : LoginState {
 	return {
@@ -40,6 +42,7 @@ function stateOf(connected : boolean, enterWorkbench : boolean, message : string
 		message: message,
 		tenantId: getTenantId(),
 		tenantLocked: tenantEntryLocked,
+		hideOrg: hideOrgSection,
 		tenants: tenants,
 		needsAddress: false
 	} as LoginState
@@ -52,6 +55,7 @@ function addressNeededState() : LoginState {
 		message: '',
 		tenantId: '',
 		tenantLocked: false,
+		hideOrg: false,
 		tenants: [] as Array<TenantChoice>,
 		needsAddress: true
 	} as LoginState
@@ -153,7 +157,11 @@ async function resolveTenant(options : any | null) : Promise<EntryResolve> {
 	}
 	const fromUrl = queryTenant(options)
 	if (fromUrl.length > 0) {
+		if (getTenantId() != fromUrl) {
+			setTenantName('')
+		}
 		setTenantId(fromUrl)
+		hideOrgSection = getTenantName().length == 0
 		return entryOf('', false)
 	}
 	try {
@@ -259,6 +267,7 @@ export async function loginWithPassword(username : string, password : string) : 
 export async function bootLogin(options : any | null) : Promise<LoginState> {
 	rememberDeepLink()
 	tenantEntryLocked = false
+	hideOrgSection = false
 	if (!loginConnected()) {
 		// #ifdef APP
 		const saved = readSavedAppEntry()

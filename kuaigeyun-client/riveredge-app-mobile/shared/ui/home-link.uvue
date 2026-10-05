@@ -1,30 +1,141 @@
 <template>
-	<view class="home-link" hover-class="pressed" @click="goWorkbench">
-		<text class="home-link-text">首页</text>
+	<view class="page-nav">
+		<view v-if="showActions" class="nav-back" hover-class="pressed" @click="onBack">
+			<view class="nav-chevron"></view>
+			<text class="nav-action">返回</text>
+		</view>
+		<text class="page-nav-title">{{ barTitle }}</text>
+		<view v-if="showActions" class="nav-home" hover-class="pressed" @click="onHome">
+			<text class="nav-action">首页</text>
+		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
-	function goWorkbench() {
+	const props = defineProps({
+		title: {
+			type: String,
+			default: ''
+		},
+		holdHome: {
+			type: Boolean,
+			default: false
+		}
+	})
+
+	const emit = defineEmits(['home'])
+	const barTitle = ref('')
+	const showActions = ref(false)
+
+	function syncBar() {
+		const pages = getCurrentPages()
+		if (pages.length == 0) {
+			barTitle.value = props.title
+			showActions.value = false
+			return
+		}
+		const page = pages[pages.length - 1]
+		const route = page.route
+		showActions.value = route != 'shell/login/index' && route != 'shell/workbench/index'
+		if (props.title.length > 0) {
+			barTitle.value = props.title
+			return
+		}
+		const style = page.getPageStyle()
+		const title = style.getString('navigationBarTitleText')
+		barTitle.value = title != null ? title : ''
+	}
+
+	watch((): string => props.title, () => {
+		syncBar()
+	})
+
+	function onBack() {
+		uni.navigateBack({
+			success: () => {}
+		})
+	}
+
+	function onHome() {
+		if (props.holdHome) {
+			emit('home')
+			return
+		}
 		uni.reLaunch({ url: '/shell/workbench/index' })
 	}
+
+	syncBar()
+	onMounted(() => {
+		syncBar()
+	})
 </script>
 
 <style>
-	.home-link {
-		min-width: 44px;
-		min-height: 44px;
-		padding-left: 12px;
-		padding-right: 12px;
+	.page-nav {
+		height: 48px;
+		background-color: #F8FAFC;
+		border-bottom-width: 1px;
+		border-bottom-style: solid;
+		border-bottom-color: #CBD5E1;
 		flex-direction: row;
 		align-items: center;
-		justify-content: flex-end;
-		align-self: flex-end;
+		justify-content: center;
+		position: relative;
+		flex-shrink: 0;
 	}
 
-	.home-link-text {
-		color: #9730E3;
+	.page-nav-title {
+		max-width: 190px;
+		font-size: 17px;
+		font-weight: 700;
+		color: #28113C;
+		text-align: center;
+		lines: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.nav-back {
+		position: absolute;
+		left: 4px;
+		top: 0px;
+		height: 48px;
+		padding-left: 8px;
+		padding-right: 8px;
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.nav-chevron {
+		width: 10px;
+		height: 10px;
+		margin-right: 2px;
+		border-left-width: 2px;
+		border-bottom-width: 2px;
+		border-left-style: solid;
+		border-bottom-style: solid;
+		border-left-color: #28113C;
+		border-bottom-color: #28113C;
+		transform: rotate(45deg);
+	}
+
+	.nav-home {
+		position: absolute;
+		right: 4px;
+		top: 0px;
+		height: 48px;
+		min-width: 44px;
+		padding-left: 8px;
+		padding-right: 8px;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.nav-action {
 		font-size: 16px;
+		font-weight: 600;
+		color: #28113C;
 	}
 
 	.pressed {

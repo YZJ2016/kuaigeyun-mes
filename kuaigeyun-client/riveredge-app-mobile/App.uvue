@@ -55,6 +55,12 @@
 		flex-direction: column;
 	}
 
+	.page-shell {
+		flex: 1;
+		flex-direction: column;
+		background-color: #F8FAFC;
+	}
+
 	.page {
 		flex: 1;
 		flex-direction: column;
@@ -124,6 +130,34 @@
 		color: #475569;
 		padding-top: 20px;
 		padding-bottom: 20px;
+	}
+
+	.loading-mask {
+		position: fixed;
+		left: 0;
+		top: 48px;
+		right: 0;
+		bottom: 0;
+		z-index: 20;
+		background-color: rgba(15, 23, 42, 0.56);
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.loading-card {
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E2E8F0;
+		padding-top: 16px;
+		padding-right: 24px;
+		padding-bottom: 16px;
+		padding-left: 24px;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.loading {
@@ -348,6 +382,11 @@
 	.tile-mark {
 		font-size: 16px;
 		font-weight: 700;
+	}
+
+	.tile-icon {
+		width: 22px;
+		height: 22px;
 	}
 
 	.mark-workshop {

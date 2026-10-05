@@ -1,11 +1,12 @@
 <template>
-	<view class="page">
+	<view class="page-shell">
 		<home-link />
+	<view class="page">
 		<text class="section">未归还领用</text>
 		<view v-for="(item, index) in borrowOptions" :key="index" class="list-row" hover-class="pressed" @click="chooseBorrow(index)">
 			<text class="title">{{ item.label }}</text>
 		</view>
-		<text v-if="borrowOptions.length == 0" class="empty">没有未归还的领用</text>
+		<text v-if="!loading && borrowOptions.length == 0 && hint == ''" class="empty">没有未归还的领用</text>
 		<text v-if="chosenBorrow != ''" class="meta">已选 {{ chosenBorrow }}</text>
 		<input class="field" v-model="returnDate" placeholder="归还日期 YYYY-MM-DD" />
 		<input class="field" v-model="usageCount" placeholder="使用次数" />
@@ -19,7 +20,13 @@
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
-		<text v-if="rows.length == 0" class="empty">暂无归还</text>
+		<text v-if="!loading && rows.length == 0 && hint == ''" class="empty">暂无归还</text>
+	</view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
 	</view>
 </template>
 
@@ -58,6 +65,15 @@
 	const rows = ref<DocLine[]>([])
 	const hint = ref('')
 	const submitting = ref(false)
+	const loading = ref(false)
+	let ticket = 0
+	let borrowTicket = 0
+	let listOpen = false
+	let borrowOpen = false
+
+	function syncLoading(): void {
+		loading.value = listOpen || borrowOpen
+	}
 
 	function parseCount(raw: string): number {
 		const text = raw.trim()
@@ -106,8 +122,15 @@
 	}
 
 	async function loadOutstanding(): Promise<void> {
+		const mine = borrowTicket + 1
+		borrowTicket = mine
+		borrowOpen = true
+		syncLoading()
 		try {
 			const items = await apiGetRows(withQuery(MOLD_BORROWS_OUTSTANDING, 'limit=50'))
+			if (borrowTicket != mine) {
+				return
+			}
 			const options: BorrowPick[] = []
 			for (let i = 0; i < items.length; i++) {
 				const item = items[i]
@@ -121,8 +144,16 @@
 			}
 			borrowOptions.value = options
 		} catch (err) {
+			if (borrowTicket != mine) {
+				return
+			}
 			hint.value = errorText(err)
 		}
+		if (borrowTicket != mine) {
+			return
+		}
+		borrowOpen = false
+		syncLoading()
 	}
 
 	function mapReturn(item: UTSJSONObject): DocLine {
@@ -139,6 +170,10 @@
 	}
 
 	async function loadList(): Promise<void> {
+		const mine = ticket + 1
+		ticket = mine
+		listOpen = true
+		syncLoading()
 		try {
 			let query = 'limit=50'
 			const keyword = listKeyword.value.trim()
@@ -146,14 +181,25 @@
 				query = 'keyword=' + encodeURIComponent(keyword) + '&limit=50'
 			}
 			const items = await apiGetRows(withQuery(MOLD_RETURNS, query))
+			if (ticket != mine) {
+				return
+			}
 			const lines: DocLine[] = []
 			for (let i = 0; i < items.length; i++) {
 				lines.push(mapReturn(items[i]))
 			}
 			rows.value = lines
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			hint.value = errorText(err)
 		}
+		if (ticket != mine) {
+			return
+		}
+		listOpen = false
+		syncLoading()
 	}
 
 	async function createReturn(): Promise<void> {

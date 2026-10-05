@@ -1,17 +1,23 @@
 <template>
-	<view class="page">
+	<view class="page-shell">
 		<home-link />
+	<view class="page">
 		<view class="modes">
 			<button class="btn-chip" @click="switchKind('material-shortage')">缺料</button>
 			<button class="btn-chip" @click="switchKind('delivery-delay')">交期</button>
 			<button class="btn-chip" @click="switchKind('quality')">质量</button>
 		</view>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="loading" class="loading">加载中</text>
 		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无异常</text>
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ lineTitle(row) }}</text>
 			<text class="sub">{{ lineSub(row) }}</text>
+		</view>
+	</view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
 		</view>
 	</view>
 </template>
@@ -25,6 +31,7 @@
 	const rows = ref<any[]>([])
 	const loading = ref(false)
 	const errorTextValue = ref('')
+	let ticket = 0
 
 	function lineTitle(row : any) : string {
 		if (kind.value == 'quality') {
@@ -47,6 +54,8 @@
 	}
 
 	async function load() {
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
 		try {
@@ -56,16 +65,24 @@
 				query: null,
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
 			rows.value = readRows(payload)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}
 
 	function switchKind(next : string) {
 		kind.value = next
-		rows.value = []
 		load()
 	}
 

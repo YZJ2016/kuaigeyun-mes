@@ -1,10 +1,10 @@
 <template>
-	<scroll-view class="page" scroll-y="true">
+	<view class="page-shell">
 		<home-link />
+	<scroll-view class="page" scroll-y="true">
 		<view class="toolbar">
 			<button class="btn-secondary" @click="loadLedger">刷新</button>
 		</view>
-		<text v-if="loading" class="loading">加载中</text>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<view v-if="selectedIndex < 0">
 			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无不合格品</text>
@@ -35,6 +35,12 @@
 			</view>
 		</view>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -48,6 +54,7 @@
 	const loading = ref(false)
 	const errorTextValue = ref('')
 	const rows = ref<UTSJSONObject[]>([])
+	let ticket = 0
 	const selectedIndex = ref(-1)
 	const disposeIndex = ref(-1)
 	const disposeNote = ref('')
@@ -222,6 +229,8 @@
 	})
 
 	async function loadLedger() {
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
 		try {
@@ -230,10 +239,19 @@
 				method: 'GET',
 				data: null
 			})
+			if (ticket != mine) {
+				return
+			}
 			rows.value = readRows(payload)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			rows.value = [] as UTSJSONObject[]
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}

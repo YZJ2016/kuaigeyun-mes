@@ -1,6 +1,7 @@
 <template>
-	<view class="page">
+	<view class="page-shell">
 		<home-link />
+	<view class="page">
 		<button :class="loading ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="loading" @click="onScan">扫码</button>
 		<text v-if="scanned != ''" class="meta">扫到 {{ scanned }}</text>
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
@@ -17,6 +18,12 @@
 		</view>
 		<text v-if="!loading && scanned != '' && !hasOpened && choices.length == 0 && hint == ''" class="empty">未找到模具</text>
 	</view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -26,6 +33,7 @@
 	import { errorText, fieldNumber, fieldText } from '../../../shared/api/fields.uts'
 
 	const loading = ref(false)
+	let ticket = 0
 	const scanned = ref('')
 	const hint = ref('')
 	const hasOpened = ref(false)
@@ -114,24 +122,32 @@
 	}
 
 	async function onScan(): Promise<void> {
+		const mine = ticket + 1
+		ticket = mine
 		hint.value = ''
 		hasOpened.value = false
-		choices.value = []
-		choiceItems.value = []
 		loading.value = true
 		try {
 			const code = readScanCode(await scan())
+			if (ticket != mine) {
+				return
+			}
 			scanned.value = code
 			if (code == '') {
 				hint.value = '没有扫到内容'
+				loading.value = false
 				return
 			}
 			const items = await apiGetRows(withQuery(MOLD_ARCHIVE, 'keyword=' + encodeURIComponent(code) + '&limit=50'))
+			if (ticket != mine) {
+				return
+			}
 			const exact = exactMatches(items, code)
 			if (exact.length == 1) {
 				const hit = exact[0]
 				if (hit != null) {
 					showMold(hit)
+					loading.value = false
 					return
 				}
 			}
@@ -139,6 +155,7 @@
 				const hit = items[0]
 				if (hit != null) {
 					showMold(hit)
+					loading.value = false
 					return
 				}
 			}
@@ -159,10 +176,15 @@
 			choiceItems.value = kept
 			choices.value = lines
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			hint.value = errorText(err)
-		} finally {
-			loading.value = false
 		}
+		if (ticket != mine) {
+			return
+		}
+		loading.value = false
 	}
 </script>
 

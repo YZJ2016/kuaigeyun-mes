@@ -1,4 +1,6 @@
 <template>
+	<view class="page-shell">
+		<home-link />
 	<view class="login-page">
 		<view class="login-hero">
 			<view class="login-mark">
@@ -7,40 +9,46 @@
 			<text class="brand-name">星制造</text>
 			<text class="brand-desc">用账号进入生产现场</text>
 		</view>
-		<view v-if="!ready" class="card login-card">
-			<text class="loading">正在加载</text>
-		</view>
-		<view v-else>
+		<view v-if="ready">
 			<view class="card login-card">
-				<text class="login-label login-label-first">组织</text>
-				<text v-if="tenantName.length > 0" class="org-current">{{ tenantName }}</text>
-				<text v-else-if="tenantId.length > 0 && !tenantLocked" class="org-current">已选择组织</text>
-				<view v-if="showAppAddressSettings()" class="btn-secondary" hover-class="pressed" @click="openAddressSettings">
-					<text class="btn-label-secondary">设置</text>
-				</view>
-				<view v-if="!tenantLocked">
-					<input class="field login-field" v-model="keyword" placeholder="组织名称或域名" placeholder-class="login-ph" />
-					<button :class="searching || wecomBusy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="searching || wecomBusy" @click="onSearch">{{ searching ? '搜索中' : '搜索组织' }}</button>
-					<view v-for="(item, index) in tenants" :key="item.tenantId" class="list-row" hover-class="pressed" @click="onChoose(index)">
-						<text class="title">{{ item.tenantName }}</text>
-						<text class="muted">{{ item.tenantDomain }}</text>
-					</view>
-				</view>
-				<text v-if="isOrgMessage()" class="error login-error">{{ message }}</text>
-				<text class="login-label">用户名</text>
+				<text class="login-label login-label-first">用户名</text>
 				<input class="field login-field" v-model="username" placeholder="请输入用户名" placeholder-class="login-ph" />
 				<text class="login-label">密码</text>
 				<input class="field login-field" :password="true" v-model="passwordText" placeholder="请输入密码" placeholder-class="login-ph" />
 				<text v-for="(line, index) in fieldErrors" :key="index" class="error login-error">{{ line }}</text>
+				<view v-if="!hideOrg">
+					<text class="login-label">组织</text>
+					<text v-if="tenantName.length > 0" class="org-current">{{ tenantName }}</text>
+					<text v-else-if="tenantId.length > 0 && !tenantLocked" class="org-current">已选择组织</text>
+					<view v-if="showAppAddressSettings()" class="btn-secondary" hover-class="pressed" @click="openAddressSettings">
+						<text class="btn-label-secondary">设置</text>
+					</view>
+					<view v-if="!tenantLocked">
+						<input class="field login-field" v-model="keyword" placeholder="组织名称或域名" placeholder-class="login-ph" />
+						<button :class="searching || wecomBusy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="searching || wecomBusy" @click="onSearch">{{ searching ? '搜索中' : '搜索组织' }}</button>
+						<view v-for="(item, index) in tenants" :key="item.tenantId" class="list-row" hover-class="pressed" @click="onChoose(index)">
+							<text class="title">{{ item.tenantName }}</text>
+							<text class="muted">{{ item.tenantDomain }}</text>
+						</view>
+					</view>
+					<text v-if="isOrgMessage()" class="error login-error">{{ message }}</text>
+				</view>
 				<text v-if="message.length > 0 && !isOrgMessage()" class="error login-error">{{ message }}</text>
 				<button :class="loggingIn || wecomBusy ? 'btn-primary login-submit is-disabled' : 'btn-primary login-submit'" :disabled="loggingIn || wecomBusy" @click="onPasswordLogin">{{ loggingIn ? '登录中' : '登录' }}</button>
 			</view>
 			<button :class="wecomBusy || searching || loggingIn ? 'btn-secondary login-wecom is-disabled' : 'btn-secondary login-wecom'" :disabled="wecomBusy || searching || loggingIn" @click="onWecom">企业微信登录</button>
 		</view>
 	</view>
+		<view v-if="!ready" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">正在加载</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../shared/ui/home-link.uvue'
 	import { getTenantName, setTenantName } from '../../shared/api/session.uts'
 	import { bootLogin, chooseTenant, loginWithPassword, searchTenants, startWecomLogin } from './flow.uts'
 	import type { TenantChoice } from './flow.uts'
@@ -51,6 +59,7 @@
 	const tenantId = ref('')
 	const tenantName = ref('')
 	const tenantLocked = ref(false)
+	const hideOrg = ref(false)
 	const keyword = ref('')
 	const username = ref('')
 	const passwordText = ref('')
@@ -98,6 +107,7 @@
 		tenantId.value = state.tenantId
 		tenantName.value = getTenantName()
 		tenantLocked.value = state.tenantLocked
+		hideOrg.value = state.hideOrg
 		ready.value = true
 		if (state.enterWorkbench) {
 			uni.reLaunch({ url: '/shell/workbench/index' })

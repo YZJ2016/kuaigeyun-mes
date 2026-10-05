@@ -1,8 +1,8 @@
 <template>
-	<view class="page">
+	<view class="page-shell">
 		<home-link />
+	<view class="page">
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="loading" class="loading">加载中</text>
 		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无报工</text>
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ lineTitle(row) }}</text>
@@ -11,6 +11,12 @@
 			<text class="sub">工时 {{ reviewValue(row, 'work_hours') }} 小时</text>
 			<text class="sub">报工时间 {{ reviewValue(row, 'reported_at') }}</text>
 			<button class="btn-primary" :disabled="loading || approving" @click="approve(index)">{{ approving ? '审核处理中' : '审核' }}</button>
+		</view>
+	</view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
 		</view>
 	</view>
 </template>
@@ -25,6 +31,7 @@
 	const loading = ref(false)
 	const errorTextValue = ref('')
 	const approving = ref(false)
+	let ticket = 0
 
 	function reviewValue(row : any, key : string) : string {
 		const value = fieldText(row, key)
@@ -44,6 +51,8 @@
 	}
 
 	async function load() {
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
 		const query = new UTSJSONObject()
@@ -55,9 +64,18 @@
 				query: query,
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
 			rows.value = readRows(payload)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}
