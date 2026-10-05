@@ -13,6 +13,7 @@
 # 环境变量：
 #   BUILD_WEB_SKIP_HISTORY_REWRITE=1  跳过历史剥离与普通 push（调试/应急）
 #   BUILD_WEB_SKIP_PULL=1             跳过「落后则自动 merge 拉取」（仅调试）
+#   BUILD_WEB_GC=1                    剥离后 git gc（默认关）
 
 set -euo pipefail
 export NODE_OPTIONS="--max-old-space-size=16384"
@@ -25,6 +26,12 @@ source "$SCRIPT_DIR/lib/build_web_git.sh"
 cd "$PROJECT_ROOT" || exit 1
 
 git rev-parse --is-inside-work-tree >/dev/null
+
+if [ -f "$PROJECT_ROOT/.git/MERGE_HEAD" ]; then
+  echo "错误: 当前处于 merge 中，请先完成或 abort merge 后再构建。"
+  exit 1
+fi
+build_web_assert_no_rebase
 
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 git rev-parse @{u} >/dev/null 2>&1 || {
@@ -72,8 +79,12 @@ build_web_strip_dist_from_history
 
 cd "$PROJECT_ROOT/riveredge-frontend"
 # P5-3：构建前显式同步 CAD wasm/workers（postinstall 已有，部署机无 node_modules 变更时仍需）
+SYNC_START=$SECONDS
 npm run sync:libredwg
+echo "sync:libredwg 耗时 $((SECONDS - SYNC_START))s"
+BUILD_START=$SECONDS
 npm run build:16g
+echo "vite build:16g 耗时 $((SECONDS - BUILD_START))s"
 
 WEB_DIST="$PROJECT_ROOT/riveredge-frontend/dist"
 test -f "$WEB_DIST/index.html"
