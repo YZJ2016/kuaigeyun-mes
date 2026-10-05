@@ -11,10 +11,12 @@ import DeliveryNodeDocumentSelect from '../shared/DeliveryNodeDocumentSelect';
 import {
   buildDeliveryNodeDocumentCreatePath,
   DELIVERY_NODE_DOCUMENT_AUTO_LINK_TYPES,
+  DELIVERY_NODE_DOCUMENT_TASK_BOUND_TYPES,
 } from '../shared/deliveryNodeDocumentLink';
 import {
   DELIVERY_NODE_DOCUMENT_TYPES,
   type DeliveryNodeDocumentKind,
+  type DeliveryProjectNodeTask,
 } from '../../../services/delivery-project';
 
 type LinkMode = 'existing' | 'create';
@@ -26,10 +28,12 @@ interface DeliveryNodeDocumentLinkModalProps {
   returnPath: string;
   customerId?: number | null;
   salesOrderId?: number | null;
+  tasks: DeliveryProjectNodeTask[];
   onClose: () => void;
   onLinked: () => void | Promise<void>;
   onLinkExisting: (payload: {
     node_id: number;
+    task_id?: number;
     doc_type: string;
     doc_id: number;
     doc_code: string;
@@ -44,6 +48,7 @@ const DeliveryNodeDocumentLinkModal: React.FC<DeliveryNodeDocumentLinkModalProps
   returnPath,
   customerId,
   salesOrderId,
+  tasks,
   onClose,
   onLinked,
   onLinkExisting,
@@ -52,7 +57,13 @@ const DeliveryNodeDocumentLinkModal: React.FC<DeliveryNodeDocumentLinkModalProps
   const navigate = useNavigate();
   const [mode, setMode] = useState<LinkMode>('existing');
   const [createDocType, setCreateDocType] = useState<DeliveryNodeDocumentKind | undefined>();
+  const [createTaskId, setCreateTaskId] = useState<number | undefined>();
   const [form] = Form.useForm();
+  const concreteTasks = useMemo(
+    () => tasks.filter((task) => task.task_layer !== 'substage'),
+    [tasks],
+  );
+  const taskOptions = concreteTasks.map((task) => ({ value: task.id, label: task.task_name }));
 
   const typeOptions = useMemo(
     () =>
@@ -66,6 +77,7 @@ const DeliveryNodeDocumentLinkModal: React.FC<DeliveryNodeDocumentLinkModalProps
   const reset = () => {
     setMode('existing');
     setCreateDocType(undefined);
+    setCreateTaskId(undefined);
     form.resetFields();
   };
 
@@ -76,9 +88,15 @@ const DeliveryNodeDocumentLinkModal: React.FC<DeliveryNodeDocumentLinkModalProps
 
   const handleSaveExisting = async () => {
     const values = await form.validateFields();
+    const docType = values.doc_type as DeliveryNodeDocumentKind;
+    const taskId = values.task_id as number | undefined;
+    if (DELIVERY_NODE_DOCUMENT_TASK_BOUND_TYPES.has(docType) && !taskId) {
+      return;
+    }
     await onLinkExisting({
       node_id: values.node_id as number,
-      doc_type: values.doc_type as string,
+      task_id: taskId,
+      doc_type: docType,
       doc_id: values.doc_id as number,
       doc_code: values.doc_code as string,
       title: values.title as string | undefined,
@@ -89,9 +107,11 @@ const DeliveryNodeDocumentLinkModal: React.FC<DeliveryNodeDocumentLinkModalProps
 
   const handleGoCreate = () => {
     if (!createDocType) return;
+    if (DELIVERY_NODE_DOCUMENT_TASK_BOUND_TYPES.has(createDocType) && !createTaskId) return;
     const path = buildDeliveryNodeDocumentCreatePath(createDocType, {
       projectId,
       nodeId,
+      taskId: createTaskId,
       returnPath,
       salesOrderId,
     });
@@ -122,7 +142,15 @@ const DeliveryNodeDocumentLinkModal: React.FC<DeliveryNodeDocumentLinkModalProps
         ) : (
           <Space>
             <Button onClick={handleClose}>{t('common.cancel')}</Button>
-            <Button type="primary" icon={<PlusOutlined />} disabled={!createDocType} onClick={handleGoCreate}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              disabled={
+                !createDocType
+                || (DELIVERY_NODE_DOCUMENT_TASK_BOUND_TYPES.has(createDocType) && !createTaskId)
+              }
+              onClick={handleGoCreate}
+            >
               {t('app.kuaizhizao.deliveryProject.nodeDocumentGoCreate')}
             </Button>
           </Space>
@@ -142,6 +170,24 @@ const DeliveryNodeDocumentLinkModal: React.FC<DeliveryNodeDocumentLinkModalProps
       {mode === 'existing' ? (
         <Form form={form} layout="vertical">
           <DeliveryNodeDocumentSelect customerId={customerId} salesOrderId={salesOrderId} />
+          <Form.Item noStyle shouldUpdate={(prev, next) => prev.doc_type !== next.doc_type}>
+            {() => {
+              const docType = form.getFieldValue('doc_type') as DeliveryNodeDocumentKind | undefined;
+              if (!docType || !DELIVERY_NODE_DOCUMENT_TASK_BOUND_TYPES.has(docType)) return null;
+              return (
+                <Form.Item
+                  name="task_id"
+                  label={t('app.kuaizhizao.deliveryProject.fields.concreteTask')}
+                  rules={[{ required: true, message: t('app.kuaizhizao.deliveryProject.selectConcreteTask') }]}
+                >
+                  <Select
+                    options={taskOptions}
+                    placeholder={t('app.kuaizhizao.deliveryProject.selectConcreteTask')}
+                  />
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
           <Form.Item name="node_id" hidden initialValue={nodeId}>
             <Select />
           </Form.Item>
@@ -153,9 +199,26 @@ const DeliveryNodeDocumentLinkModal: React.FC<DeliveryNodeDocumentLinkModalProps
               placeholder={t('app.kuaizhizao.deliveryProject.selectDocTypeFirst')}
               options={typeOptions}
               value={createDocType}
-              onChange={setCreateDocType}
+              onChange={(value) => {
+                setCreateDocType(value);
+                setCreateTaskId(undefined);
+              }}
             />
           </Form.Item>
+          {createDocType && DELIVERY_NODE_DOCUMENT_TASK_BOUND_TYPES.has(createDocType) ? (
+            <Form.Item
+              label={t('app.kuaizhizao.deliveryProject.fields.concreteTask')}
+              required
+              style={{ marginBottom: 0 }}
+            >
+              <Select
+                options={taskOptions}
+                value={createTaskId}
+                placeholder={t('app.kuaizhizao.deliveryProject.selectConcreteTask')}
+                onChange={setCreateTaskId}
+              />
+            </Form.Item>
+          ) : null}
           <Alert
             type="info"
             showIcon

@@ -10372,6 +10372,24 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         receipt_for_payable = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
         _sup_id = getattr(receipt_for_payable, "supplier_id", None)
         receipt_po_id = int(getattr(receipt_for_payable, "purchase_order_id", 0) or 0)
+        try:
+            from apps.kuaizhizao.services.delivery_project_service import DeliveryProjectService
+            from infra.models.user import User
+
+            actor = await User.get_or_none(id=confirmed_by, tenant_id=tenant_id)
+            await DeliveryProjectService().apply_purchase_receipt_confirmed(
+                tenant_id,
+                receipt_id,
+                receipt_po_id or None,
+                actor_user=actor,
+            )
+        except Exception as exc:
+            logger.warning(
+                "采购入库回写交付任务进度失败 tenant={} receipt={}: {}",
+                tenant_id,
+                receipt_id,
+                exc,
+            )
         if await self.business_config_service.should_auto_generate_payable_on_purchase_receipt(
             tenant_id, int(_sup_id) if _sup_id is not None else None
         ):

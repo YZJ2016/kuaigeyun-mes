@@ -44,6 +44,10 @@ class CustomerFollowUpCreate(BaseSchema):
     opportunity_id: Optional[int] = Field(None, description="关联销售商机ID")
     stage_code_after: Optional[str] = Field(None, max_length=50, description="跟进后目标阶段（变更时提交）")
     attachment_uuids: Optional[List[str]] = Field(None, description="跟进附件 UUID 列表")
+    country_code: Optional[str] = Field(None, max_length=50, description="外贸客户国家")
+    region_text: Optional[str] = Field(None, max_length=100, description="内贸客户地区")
+    project_description: Optional[str] = Field(None, description="项目说明")
+    intent_material_name: Optional[str] = Field(None, max_length=200, description="包装材料名称")
 
 
 class CustomerFollowUpUpdate(BaseSchema):
@@ -59,6 +63,10 @@ class CustomerFollowUpUpdate(BaseSchema):
     opportunity_id: Optional[int] = Field(None, description="关联销售商机ID")
     stage_code_after: Optional[str] = Field(None, max_length=50, description="跟进后目标阶段（变更时提交）")
     attachment_uuids: Optional[List[str]] = Field(None, description="跟进附件 UUID 列表")
+    country_code: Optional[str] = Field(None, max_length=50, description="外贸客户国家")
+    region_text: Optional[str] = Field(None, max_length=100, description="内贸客户地区")
+    project_description: Optional[str] = Field(None, description="项目说明")
+    intent_material_name: Optional[str] = Field(None, max_length=200, description="包装材料名称")
 
 
 class CustomerFollowUpResponse(CustomerFollowUpBase):
@@ -106,3 +114,22 @@ class CustomerFollowUpDashboardSnapshot(BaseSchema):
         default_factory=dict,
         description="客户定级分布（字典码→数量；空码为 _unset）",
     )
+
+
+class SalesTeamMemberStat(BaseSchema):
+    """一名业务员名下的外贸客户与跟进汇总。"""
+
+    salesman_id: int = Field(..., description="业务员用户 ID")
+    salesman_name: str = Field(..., description="业务员显示名")
+    customer_count: int = Field(0, description="名下客户数")
+    follow_up_count: int = Field(0, description="跟进记录条数")
+    pending_count: int = Field(0, description="未跟进客户数")
+    inactive_count: int = Field(0, description="达到未联系提醒天数的客户数")
+    level_counts: Dict[str, int] = Field(default_factory=dict, description="定级分布")
+
+
+class SalesTeamSnapshot(BaseSchema):
+    """按业务员查看外贸客户与跟进。"""
+
+    inactive_alert_days: int = Field(7, description="未联系提醒天数")
+    members: List[SalesTeamMemberStat] = Field(default_factory=list)

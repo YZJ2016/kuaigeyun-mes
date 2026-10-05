@@ -401,6 +401,7 @@ const OperationLogsPage: React.FC = () => {
                 operation_module: filter.operation_module,
                 operation_object_type: filter.operation_object_type,
                 user_id: filter.user_id,
+                keyword: filter.keyword,
                 start_time: filter.start_time,
                 end_time: filter.end_time,
               });

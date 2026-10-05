@@ -22,12 +22,17 @@ from apps.kuaizhizao.schemas.customer_follow_up import (
     CustomerFollowUpListResponse,
     CustomerFollowUpListEnvelope,
     CustomerFollowUpDashboardSnapshot,
+    SalesTeamMemberStat,
+    SalesTeamSnapshot,
 )
+from apps.kuaizhizao.services.customer_pool_list_core import customer_pool_mine_scope_q
+from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
 from apps.kuaizhizao.schemas.sales_opportunity import SalesOpportunityEnsure
 from apps.kuaizhizao.services.sales_opportunity_service import SalesOpportunityService
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.master_data.models.customer import Customer
 from core.services.authorization.data_scope_service import DataScopeService
+from core.services.user.user_display_service import UserDisplayService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 from apps.kuaizhizao.utils.customer_follow_up_plan import follow_up_plan_flags
@@ -47,6 +52,17 @@ CUSTOMER_FOLLOW_UP_SORTABLE_FIELDS = frozenset({
 
 RESOURCE_CUSTOMER_FOLLOW_UP = "kuaizhizao:customer-follow-up"
 RESOURCE_CUSTOMER_FOLLOW_UP_CUSTOMER = "kuaizhizao:customer-follow-up-customer"
+CUSTOMER_PROFILE_FIELDS = (
+    "country_code",
+    "region_text",
+    "project_description",
+    "intent_material_name",
+)
+_CUSTOMER_PROFILE_LIMITS = {
+    "country_code": (50, "国家"),
+    "region_text": (100, "地区"),
+    "intent_material_name": (200, "包装材料名称"),
+}
 
 
 class CustomerFollowUpService:
@@ -186,7 +202,12 @@ class CustomerFollowUpService:
         return so.id, so.order_code
 
     @staticmethod
-    async def _touch_customer_follow_up_time(tenant_id: int, customer: Customer, occurred_at: datetime) -> None:
+    async def _touch_customer_follow_up_time(
+        tenant_id: int,
+        customer: Customer,
+        occurred_at: datetime,
+        extra_fields: Optional[List[str]] = None,
+    ) -> None:
         customer.last_follow_up_at = occurred_at
         if getattr(customer, "follow_status", None) != "followed":
             customer.follow_status = "followed"
@@ -197,9 +218,47 @@ class CustomerFollowUpService:
         ).first()
         if rule and customer.pool_status == "owned":
             customer.recycle_at = occurred_at + timedelta(days=rule.recycle_after_days)
-        await customer.save(
-            update_fields=["last_follow_up_at", "recycle_at", "follow_status", "updated_at"]
+        update_fields = ["last_follow_up_at", "recycle_at", "follow_status", "updated_at"]
+        for name in extra_fields or []:
+            if name not in update_fields:
+                update_fields.append(name)
+        await customer.save(update_fields=update_fields)
+
+    @staticmethod
+    def _apply_customer_profile(customer: Customer, data: CustomerFollowUpCreate | CustomerFollowUpUpdate) -> List[str]:
+        """跟进提交里带上的国家、地区、项目说明、包装材料写回客户。未提交的字段不动。"""
+        sent = data.model_dump(exclude_unset=True)
+        changed: List[str] = []
+        for name in CUSTOMER_PROFILE_FIELDS:
+            if name not in sent:
+                continue
+            raw = sent[name]
+            text = str(raw).strip() if raw is not None else ""
+            limit = _CUSTOMER_PROFILE_LIMITS.get(name)
+            if limit is not None and len(text) > limit[0]:
+                raise ValidationError(f"{limit[1]}不能超过 {limit[0]} 个字")
+            setattr(customer, name, text or None)
+            changed.append(name)
+        return changed
+
+    @staticmethod
+    async def _owner_customer_ids(
+        tenant_id: int,
+        user_id: int,
+        market_scope: Optional[str] = None,
+    ) -> List[int]:
+        collab_ids = await list_collaborator_customer_ids(tenant_id, user_id)
+        query = Customer.filter(tenant_id=tenant_id, deleted_at__isnull=True).filter(
+            customer_pool_mine_scope_q(
+                current_user_id=user_id,
+                collaborator_customer_ids=collab_ids,
+            )
         )
+        scope = str(market_scope or "").strip().lower()
+        if scope:
+            query = query.filter(market_scope=scope)
+        ids = await query.values_list("id", flat=True)
+        return [int(cid) for cid in ids]
 
     @staticmethod
     def _normalize_attachment_uuids(raw: Optional[list]) -> list:
@@ -263,7 +322,13 @@ class CustomerFollowUpService:
             }
             apply_create_audit(row_data, current_user)
             row = await CustomerFollowUp.create(**row_data)
-            await cls._touch_customer_follow_up_time(tenant_id, customer, data.occurred_at)
+            profile_fields = cls._apply_customer_profile(customer, data)
+            await cls._touch_customer_follow_up_time(
+                tenant_id,
+                customer,
+                data.occurred_at,
+                extra_fields=profile_fields,
+            )
 
         count_map = await cls._customer_follow_up_counts(tenant_id, [customer.id])
         return await cls._to_list_item(
@@ -290,6 +355,9 @@ class CustomerFollowUpService:
         customer = await cls._load_customer(tenant_id, row.customer_id, current_user)
 
         dump = data.model_dump(exclude_unset=True)
+        profile_fields = cls._apply_customer_profile(customer, data)
+        for name in CUSTOMER_PROFILE_FIELDS:
+            dump.pop(name, None)
         stage_code_after = dump.pop("stage_code_after", None)
         opportunity_id_in = dump.pop("opportunity_id", None)
         if "attachment_uuids" in dump:
@@ -363,7 +431,12 @@ class CustomerFollowUpService:
                     dump["stage_code_after"] = stage_after
 
             await CustomerFollowUp.filter(id=follow_id, tenant_id=tenant_id).update(**dump)
-            await cls._touch_customer_follow_up_time(tenant_id, customer, occurred_at)
+            await cls._touch_customer_follow_up_time(
+                tenant_id,
+                customer,
+                occurred_at,
+                extra_fields=profile_fields,
+            )
 
         row = await CustomerFollowUp.get(id=follow_id, tenant_id=tenant_id)
         count_map = await cls._customer_follow_up_counts(tenant_id, [row.customer_id])
@@ -476,6 +549,109 @@ class CustomerFollowUpService:
         return query.filter(customer_id__in=id_list)
 
     @classmethod
+    async def _restrict_customer_ids(
+        cls,
+        query,
+        tenant_id: int,
+        *,
+        market_scope: Optional[str] = None,
+        salesman_id: Optional[int] = None,
+        owned_by_user_id: Optional[int] = None,
+    ):
+        """按业务员或「仅本人名下」收窄跟进。无匹配客户时返回 None。"""
+        if salesman_id is None and owned_by_user_id is None:
+            return query
+        allowed: Optional[set[int]] = None
+        if owned_by_user_id is not None:
+            allowed = set(await cls._owner_customer_ids(tenant_id, owned_by_user_id, market_scope))
+        if salesman_id is not None:
+            sales_query = Customer.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                salesman_id=salesman_id,
+            )
+            scope = str(market_scope or "").strip().lower()
+            if scope:
+                sales_query = sales_query.filter(market_scope=scope)
+            sales_ids = {int(cid) for cid in await sales_query.values_list("id", flat=True)}
+            allowed = sales_ids if allowed is None else allowed & sales_ids
+        if not allowed:
+            return None
+        return query.filter(customer_id__in=list(allowed))
+
+    @classmethod
+    async def sales_team_snapshot(
+        cls,
+        tenant_id: int,
+        current_user: User,
+        *,
+        market_scope: str = "export",
+    ) -> SalesTeamSnapshot:
+        """按归属业务员汇总客户数、跟进条数、未跟进和未联系。"""
+        scope = str(market_scope or "").strip().lower()
+        customer_query = Customer.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            market_scope=scope,
+            salesman_id__isnull=False,
+        )
+        customer_query = await DataScopeService.apply(
+            customer_query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource="kuaizhizao:customer-pool",
+        )
+        customers = await customer_query.all()
+        rule = await CustomerPoolRule.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        inactive_alert_days = 7 if rule is None else max(1, min(int(rule.inactive_alert_days), 365))
+        now_date = to_site_date(resolve_business_datetime())
+        count_map = await cls._customer_follow_up_counts(tenant_id, [int(row.id) for row in customers])
+        labels = await UserDisplayService.build_label_map(
+            tenant_id=tenant_id,
+            user_ids={int(row.salesman_id) for row in customers if row.salesman_id},
+        )
+        grouped: Dict[int, List[Customer]] = {}
+        for row in customers:
+            sid = int(row.salesman_id)
+            grouped.setdefault(sid, []).append(row)
+        members: List[SalesTeamMemberStat] = []
+        for sid, rows in grouped.items():
+            level_counter: Counter = Counter()
+            pending = 0
+            inactive = 0
+            follow_total = 0
+            for cust in rows:
+                follow_total += int(count_map.get(int(cust.id), 0))
+                status = str(getattr(cust, "follow_status", None) or "pending").strip().lower()
+                if status != "followed":
+                    pending += 1
+                last_fu = getattr(cust, "last_follow_up_at", None)
+                last_day = to_site_date(last_fu) if last_fu is not None else None
+                if last_day is None or (
+                    now_date is not None and (now_date - last_day).days >= inactive_alert_days
+                ):
+                    inactive += 1
+                level = str(getattr(cust, "customer_level_code", None) or "").strip() or "_unset"
+                level_counter[level] += 1
+            name = labels.get(sid) or str(sid)
+            members.append(
+                SalesTeamMemberStat(
+                    salesman_id=sid,
+                    salesman_name=name,
+                    customer_count=len(rows),
+                    follow_up_count=follow_total,
+                    pending_count=pending,
+                    inactive_count=inactive,
+                    level_counts=dict(level_counter),
+                )
+            )
+        members.sort(key=lambda item: (-item.follow_up_count, item.salesman_name, item.salesman_id))
+        return SalesTeamSnapshot(inactive_alert_days=inactive_alert_days, members=members)
+
+    @classmethod
     def _resolve_list_order_by(
         cls,
         order_by: Optional[str],
@@ -536,6 +712,8 @@ class CustomerFollowUpService:
         order_by: Optional[str] = None,
         current_user: Optional[User] = None,
         market_scope: Optional[str] = None,
+        salesman_id: Optional[int] = None,
+        owned_by_user_id: Optional[int] = None,
     ) -> CustomerFollowUpListEnvelope:
         query = cls._filter_query(
             tenant_id,
@@ -549,6 +727,15 @@ class CustomerFollowUpService:
             pending_only,
         )
         query = await cls._restrict_market_scope(query, tenant_id, market_scope)
+        if query is None:
+            return CustomerFollowUpListEnvelope(items=[], total=0)
+        query = await cls._restrict_customer_ids(
+            query,
+            tenant_id,
+            market_scope=market_scope,
+            salesman_id=salesman_id,
+            owned_by_user_id=owned_by_user_id,
+        )
         if query is None:
             return CustomerFollowUpListEnvelope(items=[], total=0)
         query = await cls._apply_list_scope(query, tenant_id, current_user)
@@ -576,6 +763,7 @@ class CustomerFollowUpService:
         *,
         limit: int = 5,
         market_scope: Optional[str] = None,
+        owned_by_user_id: Optional[int] = None,
     ) -> CustomerFollowUpDashboardSnapshot:
         """
         销售中心待跟进 KPI：按客户「最新一条跟进」的计划下次跟进时间统计。
@@ -588,6 +776,14 @@ class CustomerFollowUpService:
 
         query = CustomerFollowUp.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         query = await cls._restrict_market_scope(query, tenant_id, market_scope)
+        if query is None:
+            return CustomerFollowUpDashboardSnapshot()
+        query = await cls._restrict_customer_ids(
+            query,
+            tenant_id,
+            market_scope=market_scope,
+            owned_by_user_id=owned_by_user_id,
+        )
         if query is None:
             return CustomerFollowUpDashboardSnapshot()
         query = await cls._apply_list_scope(query, tenant_id, current_user)
@@ -638,14 +834,29 @@ class CustomerFollowUpService:
         customer_query = Customer.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if market_scope and str(market_scope).strip():
             customer_query = customer_query.filter(market_scope=str(market_scope).strip().lower())
-        if current_user:
-            customer_query = await DataScopeService.apply(
-                customer_query,
-                tenant_id=tenant_id,
-                user=current_user,
-                resource="kuaizhizao:customer-pool",
-            )
-        customers = await customer_query.all()
+        if owned_by_user_id is not None:
+            owner_ids = await cls._owner_customer_ids(tenant_id, owned_by_user_id, market_scope)
+            if not owner_ids:
+                customers = []
+            else:
+                customer_query = customer_query.filter(id__in=owner_ids)
+                if current_user:
+                    customer_query = await DataScopeService.apply(
+                        customer_query,
+                        tenant_id=tenant_id,
+                        user=current_user,
+                        resource="kuaizhizao:customer-pool",
+                    )
+                customers = await customer_query.all()
+        else:
+            if current_user:
+                customer_query = await DataScopeService.apply(
+                    customer_query,
+                    tenant_id=tenant_id,
+                    user=current_user,
+                    resource="kuaizhizao:customer-pool",
+                )
+            customers = await customer_query.all()
         rule = await CustomerPoolRule.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,

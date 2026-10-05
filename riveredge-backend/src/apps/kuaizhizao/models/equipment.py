@@ -71,7 +71,7 @@ class Equipment(BaseModel):
             ("status",),
             ("qr_bind_code",),
         ]
-        unique_together = [("tenant_id", "code")]
+        # 未删除行唯一：(tenant_id, code) 部分索引 uid_kuaizhizao_equipment_code_active
     
     # 主键（BaseModel 不包含 id 字段，需要自己定义）
     id = fields.IntField(pk=True, description="主键ID")

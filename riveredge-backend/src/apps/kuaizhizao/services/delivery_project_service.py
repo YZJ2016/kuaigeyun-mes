@@ -20,6 +20,7 @@ from apps.kuaizhizao.constants.delivery_project import (
     DeliveryNodeTaskStatus,
     DeliveryProjectStatus,
     DeliveryTaskKitStatus,
+    DeliveryTaskLayer,
     DeliveryTaskParticipantActionStatus,
     DeliveryTaskParticipantMode,
     DeliveryTaskTrackMode,
@@ -157,6 +158,7 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             project_id=project_id,
             node_id=node.id,
             deleted_at__isnull=True,
+            task_layer=DeliveryTaskLayer.TASK.value,
         )
         open_tasks = [
             t
@@ -549,11 +551,37 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         resolved = await self._resolve_members(tenant_id, members, owner_id=owner_id)
         return [{"user_id": uid, "user_name": name} for uid, name in resolved]
 
+    def _schedule_marks(
+        self,
+        *,
+        done: bool,
+        planned_end: Optional[date],
+        actual_end: Optional[date],
+    ) -> Tuple[Optional[int], Optional[int]]:
+        today = to_site_date(resolve_business_datetime())
+        if done and actual_end and planned_end and actual_end < planned_end:
+            return (planned_end - actual_end).days, None
+        if (not done) and planned_end and planned_end < today:
+            return None, (today - planned_end).days
+        return None, None
+
     def _to_node_task_response(self, task: DeliveryProjectNodeTask) -> DeliveryProjectNodeTaskResponse:
+        cancelled = task.status == DeliveryNodeTaskStatus.CANCELLED.value
+        ahead_days, overdue_days = (None, None)
+        if not cancelled:
+            ahead_days, overdue_days = self._schedule_marks(
+                done=task.status == DeliveryNodeTaskStatus.DONE.value,
+                planned_end=task.planned_end_date,
+                actual_end=task.actual_end_date,
+            )
         return DeliveryProjectNodeTaskResponse(
             id=task.id,
             project_id=task.project_id,
             node_id=task.node_id,
+            parent_task_id=task.parent_task_id,
+            task_layer=task.task_layer,
+            ahead_days=ahead_days,
+            overdue_days=overdue_days,
             template_task_id=task.template_task_id,
             task_key=task.task_key,
             task_name=task.task_name,
@@ -602,6 +630,7 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         tpl_tasks = await DeliveryProcessTemplateNodeTask.filter(
             tenant_id=tenant_id, template_node_id=template_node_id
         ).order_by("sort_order", "id")
+        created_task_ids: List[int] = []
         for tpl_task in tpl_tasks:
             tpl_owner_id = getattr(tpl_task, "owner_id", None)
             tpl_owner_name = getattr(tpl_task, "owner_name", None)
@@ -640,10 +669,11 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
                 participant_mode=participant_mode,
                 track_mode=track_mode,
             )
-            await DeliveryProjectNodeTask.create(
+            created = await DeliveryProjectNodeTask.create(
                 tenant_id=tenant_id,
                 project_id=project.id,
                 node_id=node.id,
+                task_layer=DeliveryTaskLayer.TASK.value,
                 template_task_id=tpl_task.id,
                 task_key=tpl_task.task_key,
                 task_name=tpl_task.task_name,
@@ -661,6 +691,29 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
                 participant_mode=participant_mode,
                 participant_actions_json=participant_actions_json or None,
             )
+            created_task_ids.append(created.id)
+        if not created_task_ids:
+            return
+        substage = await DeliveryProjectNodeTask.create(
+            tenant_id=tenant_id,
+            project_id=project.id,
+            node_id=node.id,
+            task_layer=DeliveryTaskLayer.SUBSTAGE.value,
+            task_key=f"substage-{node.id}",
+            task_name=node.node_name,
+            sort_order=0,
+            status=DeliveryNodeTaskStatus.TODO.value,
+            planned_start_date=node.planned_start_date,
+            planned_end_date=node.planned_end_date,
+            progress_percent=Decimal("0"),
+            track_mode=DeliveryTaskTrackMode.PROGRESS.value,
+            kit_status=DeliveryTaskKitStatus.NONE.value,
+            participant_mode=DeliveryTaskParticipantMode.SOLO.value,
+        )
+        await DeliveryProjectNodeTask.filter(
+            tenant_id=tenant_id, id__in=created_task_ids
+        ).update(parent_task_id=substage.id)
+        await self._rollup_substage(tenant_id, project.id, substage.id)
 
     async def _to_detail(self, row: DeliveryProject, nodes: Optional[List[DeliveryProjectNode]] = None) -> DeliveryProjectResponse:
         if nodes is None:
@@ -669,6 +722,11 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         members = await self._load_members(row.tenant_id, row.id)
         node_payloads = []
         for n in nodes:
+            ahead_days, overdue_days = self._schedule_marks(
+                done=n.status == DeliveryNodeStatus.COMPLETED.value,
+                planned_end=n.planned_end_date,
+                actual_end=n.actual_end_date,
+            )
             node_payloads.append(
                 DeliveryProjectNodeResponse(
                     id=n.id,
@@ -686,6 +744,8 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
                     actual_end_date=n.actual_end_date,
                     is_critical=n.is_critical,
                     is_milestone=n.is_milestone,
+                    ahead_days=ahead_days,
+                    overdue_days=overdue_days,
                     tasks=[self._to_node_task_response(t) for t in tasks_by_node.get(n.id, [])],
                 )
             )
@@ -1458,6 +1518,7 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
                         project_id=project.id,
                         node_id=node.id,
                         deleted_at__isnull=True,
+                        task_layer=DeliveryTaskLayer.TASK.value,
                     )
                     open_tasks = [
                         t
@@ -1480,6 +1541,135 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             nodes = await self._load_nodes(tenant_id, project.id)
             await self._sync_project_progress(project, nodes)
             updated += 1
+        return updated
+
+    async def _raise_linked_task_progress(
+        self,
+        tenant_id: int,
+        task_id: int,
+        percent: Decimal,
+        *,
+        actor_user: Optional[User] = None,
+    ) -> int:
+        task = await DeliveryProjectNodeTask.get_or_none(
+            tenant_id=tenant_id, id=task_id, deleted_at__isnull=True
+        )
+        if not task or task.task_layer != DeliveryTaskLayer.TASK.value:
+            return 0
+        if task.status == DeliveryNodeTaskStatus.CANCELLED.value:
+            return 0
+        target = percent if percent <= Decimal("100") else Decimal("100")
+        if target < 0:
+            return 0
+        current = Decimal(str(task.progress_percent or 0))
+        if target <= current and not (target >= Decimal("100") and task.status != DeliveryNodeTaskStatus.DONE.value):
+            return 0
+        today = to_site_date(resolve_business_datetime())
+        if target > current:
+            task.progress_percent = target
+        if task.status == DeliveryNodeTaskStatus.TODO.value:
+            task.status = DeliveryNodeTaskStatus.IN_PROGRESS.value
+            if not task.actual_start_date:
+                task.actual_start_date = today
+        if target >= Decimal("100"):
+            task.progress_percent = Decimal("100")
+            task.status = DeliveryNodeTaskStatus.DONE.value
+            if not task.actual_end_date:
+                task.actual_end_date = today
+        if actor_user:
+            apply_update_audit(task, actor_user)
+        await task.save()
+        if task.parent_task_id:
+            await self._rollup_substage(tenant_id, task.project_id, task.parent_task_id)
+        await self._maybe_sync_node_progress_from_tasks(tenant_id, task.project_id, task.node_id)
+        return 1
+
+    async def apply_purchase_order_receipt_progress(
+        self,
+        tenant_id: int,
+        purchase_order_id: int,
+        *,
+        actor_user: Optional[User] = None,
+    ) -> int:
+        """采购到货后，把到货比例写到已挂该采购单的具体任务。进度只升不降。"""
+        from apps.kuaizhizao.services.purchase_service import PurchaseService
+
+        links = await DeliveryProjectNodeDocument.filter(
+            tenant_id=tenant_id,
+            doc_type="purchase_order",
+            doc_id=purchase_order_id,
+            deleted_at__isnull=True,
+            task_id__isnull=False,
+        )
+        if not links:
+            return 0
+        totals = await PurchaseService()._batch_order_receipt_totals(tenant_id, [purchase_order_id])
+        bucket = totals.get(purchase_order_id, {})
+        ordered_total = Decimal(str(bucket.get("ordered_total") or 0))
+        received_total = Decimal(str(bucket.get("received_total") or 0))
+        if ordered_total <= 0:
+            return 0
+        percent = (received_total / ordered_total) * Decimal("100")
+        percent = percent.quantize(Decimal("0.01"))
+        updated = 0
+        for link in links:
+            if link.task_id is None:
+                continue
+            updated += await self._raise_linked_task_progress(
+                tenant_id, int(link.task_id), percent, actor_user=actor_user
+            )
+        return updated
+
+    async def apply_quality_inspection_completed(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        *,
+        actor_user: Optional[User] = None,
+    ) -> int:
+        """质检执行完成后，把已挂该质检单的具体任务记为完成。"""
+        links = await DeliveryProjectNodeDocument.filter(
+            tenant_id=tenant_id,
+            doc_type="quality_inspection",
+            doc_id=inspection_id,
+            deleted_at__isnull=True,
+            task_id__isnull=False,
+        )
+        updated = 0
+        for link in links:
+            if link.task_id is None:
+                continue
+            updated += await self._raise_linked_task_progress(
+                tenant_id, int(link.task_id), Decimal("100"), actor_user=actor_user
+            )
+        return updated
+
+    async def apply_purchase_receipt_confirmed(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        purchase_order_id: Optional[int],
+        *,
+        actor_user: Optional[User] = None,
+    ) -> int:
+        updated = 0
+        if purchase_order_id:
+            updated += await self.apply_purchase_order_receipt_progress(
+                tenant_id, purchase_order_id, actor_user=actor_user
+            )
+        links = await DeliveryProjectNodeDocument.filter(
+            tenant_id=tenant_id,
+            doc_type="purchase_receipt",
+            doc_id=receipt_id,
+            deleted_at__isnull=True,
+            task_id__isnull=False,
+        )
+        for link in links:
+            if link.task_id is None:
+                continue
+            updated += await self._raise_linked_task_progress(
+                tenant_id, int(link.task_id), Decimal("100"), actor_user=actor_user
+            )
         return updated
 
     async def change_template(
@@ -1819,6 +2009,7 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
                     project_id=project_id,
                     node_id=node.id,
                     deleted_at__isnull=True,
+                    task_layer=DeliveryTaskLayer.TASK.value,
                 )
                 open_tasks = [
                     t
@@ -1875,10 +2066,33 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         )
         if not node:
             raise NotFoundError(f"节点不存在: {body.node_id}")
+        layer = (body.task_layer or "").strip()
+        if layer not in (DeliveryTaskLayer.SUBSTAGE.value, DeliveryTaskLayer.TASK.value):
+            raise ValidationError("任务层级无效")
+        parent_task_id = None
+        if layer == DeliveryTaskLayer.TASK.value:
+            if not body.parent_task_id:
+                raise ValidationError("具体任务必须挂在子阶段下")
+            parent = await DeliveryProjectNodeTask.get_or_none(
+                tenant_id=tenant_id,
+                id=body.parent_task_id,
+                project_id=project_id,
+                node_id=node.id,
+                deleted_at__isnull=True,
+            )
+            if not parent or parent.task_layer != DeliveryTaskLayer.SUBSTAGE.value:
+                raise ValidationError("子阶段不存在")
+            parent_task_id = parent.id
+        elif body.parent_task_id:
+            raise ValidationError("子阶段不能再挂到别的任务下")
         owner_id, owner_name = await self._resolve_owner(tenant_id, body.owner_id)
-        planned_start = body.planned_start_date or node.planned_start_date
-        planned_end = body.planned_end_date or node.planned_end_date
-        self._validate_task_planned_dates_against_node(node, planned_start, planned_end)
+        if layer == DeliveryTaskLayer.SUBSTAGE.value:
+            planned_start = None
+            planned_end = None
+        else:
+            planned_start = body.planned_start_date or node.planned_start_date
+            planned_end = body.planned_end_date or node.planned_end_date
+            self._validate_task_planned_dates_against_node(node, planned_start, planned_end)
         members_json = await self._serialize_task_members(
             tenant_id, body.members or [], owner_id=owner_id
         )
@@ -1895,6 +2109,8 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             tenant_id=tenant_id,
             project_id=project_id,
             node_id=node.id,
+            parent_task_id=parent_task_id,
+            task_layer=layer,
             task_name=body.task_name.strip(),
             core_task=(body.core_task or "").strip() or None,
             sort_order=body.sort_order,
@@ -1913,6 +2129,9 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         )
         apply_create_audit(task, current_user)
         await task.save()
+        if parent_task_id:
+            await self._rollup_substage(tenant_id, project_id, parent_task_id)
+        await self._maybe_sync_node_progress_from_tasks(tenant_id, project_id, node.id)
         return self._to_node_task_response(task)
 
     async def update_node_task(
@@ -1934,6 +2153,33 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         )
         if not node:
             raise NotFoundError(f"节点不存在: {task.node_id}")
+        if task.task_layer == DeliveryTaskLayer.SUBSTAGE.value:
+            if any(
+                value is not None
+                for value in (
+                    body.status,
+                    body.owner_id,
+                    body.members,
+                    body.planned_start_date,
+                    body.planned_end_date,
+                    body.actual_start_date,
+                    body.actual_end_date,
+                    body.progress_percent,
+                    body.track_mode,
+                    body.kit_status,
+                    body.participant_mode,
+                    body.attachments,
+                    body.core_task,
+                )
+            ):
+                raise ValidationError("子阶段的计划和进度由具体任务汇总，不能直接修改")
+            if body.task_name is not None:
+                task.task_name = body.task_name.strip()
+            if body.sort_order is not None:
+                task.sort_order = body.sort_order
+            apply_update_audit(task, current_user)
+            await task.save()
+            return self._to_node_task_response(task)
         participant_mode = self._normalize_participant_mode(
             body.participant_mode
             if body.participant_mode is not None
@@ -2024,6 +2270,8 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             task.attachments = body.attachments
         apply_update_audit(task, current_user)
         await task.save()
+        if task.parent_task_id:
+            await self._rollup_substage(tenant_id, project_id, task.parent_task_id)
         await self._maybe_sync_node_progress_from_tasks(tenant_id, project_id, task.node_id)
         return self._to_node_task_response(task)
 
@@ -2083,6 +2331,8 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         self._apply_participant_completion(task)
         apply_update_audit(task, current_user)
         await task.save()
+        if task.parent_task_id:
+            await self._rollup_substage(tenant_id, project_id, task.parent_task_id)
         await self._maybe_sync_node_progress_from_tasks(tenant_id, project_id, task.node_id)
         return self._to_node_task_response(task)
 
@@ -2100,9 +2350,21 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         if not task:
             raise NotFoundError(f"节点任务不存在: {task_id}")
         node_id = task.node_id
+        parent_task_id = task.parent_task_id
+        if task.task_layer == DeliveryTaskLayer.SUBSTAGE.value:
+            child_exists = await DeliveryProjectNodeTask.filter(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                parent_task_id=task.id,
+                deleted_at__isnull=True,
+            ).exists()
+            if child_exists:
+                raise ValidationError("子阶段下还有具体任务，请先删除具体任务")
         task.deleted_at = resolve_business_datetime()
         apply_update_audit(task, current_user)
         await task.save()
+        if parent_task_id:
+            await self._rollup_substage(tenant_id, project_id, parent_task_id)
         await self._maybe_sync_node_progress_from_tasks(tenant_id, project_id, node_id)
 
     @staticmethod
@@ -2406,6 +2668,7 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             project_id=row.project_id,
             node_id=row.node_id,
             node_name=node_name,
+            task_id=row.task_id,
             doc_type=row.doc_type,
             doc_id=row.doc_id,
             doc_code=row.doc_code,
@@ -2467,6 +2730,31 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         doc_code = body.doc_code.strip()
         if not doc_code:
             raise ValidationError("单据编码不能为空")
+        task_id = None
+        if doc_type in {"purchase_order", "purchase_receipt", "quality_inspection"}:
+            if not body.task_id:
+                raise ValidationError("采购单、采购入库和质检单必须关联到具体任务")
+            bound_task = await DeliveryProjectNodeTask.get_or_none(
+                tenant_id=tenant_id,
+                id=body.task_id,
+                project_id=project_id,
+                node_id=node.id,
+                deleted_at__isnull=True,
+            )
+            if not bound_task or bound_task.task_layer != DeliveryTaskLayer.TASK.value:
+                raise ValidationError("关联的具体任务不存在")
+            task_id = bound_task.id
+        elif body.task_id:
+            bound_task = await DeliveryProjectNodeTask.get_or_none(
+                tenant_id=tenant_id,
+                id=body.task_id,
+                project_id=project_id,
+                node_id=node.id,
+                deleted_at__isnull=True,
+            )
+            if not bound_task or bound_task.task_layer != DeliveryTaskLayer.TASK.value:
+                raise ValidationError("关联的具体任务不存在")
+            task_id = bound_task.id
         existing = await DeliveryProjectNodeDocument.filter(
             tenant_id=tenant_id,
             project_id=project_id,
@@ -2482,6 +2770,7 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             tenant_id=tenant_id,
             project_id=project_id,
             node_id=node.id,
+            task_id=task_id,
             doc_type=doc_type,
             doc_id=body.doc_id,
             doc_code=doc_code,
@@ -2521,6 +2810,61 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
         apply_update_audit(row, current_user)
         await row.save()
 
+    async def _rollup_substage(self, tenant_id: int, project_id: int, substage_id: int) -> None:
+        substage = await DeliveryProjectNodeTask.get_or_none(
+            tenant_id=tenant_id,
+            id=substage_id,
+            project_id=project_id,
+            deleted_at__isnull=True,
+        )
+        if not substage or substage.task_layer != DeliveryTaskLayer.SUBSTAGE.value:
+            return
+        children = await DeliveryProjectNodeTask.filter(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            parent_task_id=substage_id,
+            deleted_at__isnull=True,
+            task_layer=DeliveryTaskLayer.TASK.value,
+        )
+        active = [c for c in children if c.status != DeliveryNodeTaskStatus.CANCELLED.value]
+        if not active:
+            substage.progress_percent = Decimal("0")
+            substage.status = DeliveryNodeTaskStatus.TODO.value
+            substage.planned_start_date = None
+            substage.planned_end_date = None
+            substage.actual_start_date = None
+            substage.actual_end_date = None
+            await substage.save()
+            return
+        progresses = [Decimal(str(c.progress_percent or 0)) for c in active]
+        substage.progress_percent = (sum(progresses, Decimal("0")) / Decimal(len(progresses))).quantize(
+            Decimal("0.01")
+        )
+        starts = [c.planned_start_date for c in active if c.planned_start_date]
+        ends = [c.planned_end_date for c in active if c.planned_end_date]
+        substage.planned_start_date = min(starts) if starts else None
+        substage.planned_end_date = max(ends) if ends else None
+        actual_starts = [c.actual_start_date for c in active if c.actual_start_date]
+        substage.actual_start_date = min(actual_starts) if actual_starts else None
+        all_done = all(c.status == DeliveryNodeTaskStatus.DONE.value for c in active)
+        if all_done:
+            actual_ends = [c.actual_end_date for c in active if c.actual_end_date]
+            substage.actual_end_date = (
+                max(actual_ends) if actual_ends else to_site_date(resolve_business_datetime())
+            )
+            substage.status = DeliveryNodeTaskStatus.DONE.value
+            substage.progress_percent = Decimal("100")
+        elif any(
+            c.status != DeliveryNodeTaskStatus.TODO.value or Decimal(str(c.progress_percent or 0)) > 0
+            for c in active
+        ):
+            substage.actual_end_date = None
+            substage.status = DeliveryNodeTaskStatus.IN_PROGRESS.value
+        else:
+            substage.actual_end_date = None
+            substage.status = DeliveryNodeTaskStatus.TODO.value
+        await substage.save()
+
     async def _maybe_sync_node_progress_from_tasks(
         self, tenant_id: int, project_id: int, node_id: int
     ) -> None:
@@ -2539,11 +2883,13 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             project_id=project_id,
             node_id=node_id,
             deleted_at__isnull=True,
+            task_layer=DeliveryTaskLayer.TASK.value,
         )
-        if not tasks:
+        active = [t for t in tasks if t.status != DeliveryNodeTaskStatus.CANCELLED.value]
+        if not active:
             return
-        done = sum(1 for t in tasks if t.status == DeliveryNodeTaskStatus.DONE.value)
-        percent = Decimal(str(round(100 * done / len(tasks), 2)))
+        percent = sum((Decimal(str(t.progress_percent or 0)) for t in active), Decimal("0"))
+        percent = (percent / Decimal(len(active))).quantize(Decimal("0.01"))
         node = await DeliveryProjectNode.get_or_none(
             tenant_id=tenant_id, id=node_id, project_id=project_id
         )
@@ -2554,7 +2900,7 @@ class DeliveryProjectService(AppBaseService[DeliveryProject]):
             node.status = DeliveryNodeStatus.COMPLETED.value
             if not node.actual_end_date:
                 node.actual_end_date = to_site_date(resolve_business_datetime())
-        elif done > 0 and node.status == DeliveryNodeStatus.NOT_STARTED.value:
+        elif percent > 0 and node.status == DeliveryNodeStatus.NOT_STARTED.value:
             node.status = DeliveryNodeStatus.IN_PROGRESS.value
             if not node.actual_start_date:
                 node.actual_start_date = to_site_date(resolve_business_datetime())

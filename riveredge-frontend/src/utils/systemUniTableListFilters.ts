@@ -5,6 +5,7 @@ import type { PrintDeviceListParams } from '../services/printDevice';
 import type { PrintTemplateListParams } from '../services/printTemplate';
 import type { ScriptListParams } from '../services/script';
 import {
+  pickListSearchKeyword,
   pickListSearchKeywordOrFields,
   pickSearchDateTimeRange,
   pickSearchString,
@@ -34,6 +35,7 @@ function pickIsoTimeRangeFromCreatedAtColumn(
 export function resolveLoginLogListFilter(searchFormValues?: Record<string, unknown> | null) {
   const { start_time, end_time } = pickIsoTimeRangeFromCreatedAtColumn(searchFormValues);
   return {
+    keyword: pickListSearchKeyword(searchFormValues),
     login_status: pickSearchString(searchFormValues, 'login_status'),
     username: pickSearchString(searchFormValues, 'username'),
     user_id: pickSearchOptionalUserId(searchFormValues, 'user_id'),
@@ -46,6 +48,7 @@ export function resolveLoginLogListFilter(searchFormValues?: Record<string, unkn
 export function resolveOperationLogListFilter(searchFormValues?: Record<string, unknown> | null) {
   const { start_time, end_time } = pickIsoTimeRangeFromCreatedAtColumn(searchFormValues);
   return {
+    keyword: pickListSearchKeyword(searchFormValues),
     operation_type: pickSearchString(searchFormValues, 'operation_type'),
     operation_module: pickSearchString(searchFormValues, 'operation_module'),
     operation_object_type: pickSearchString(searchFormValues, 'operation_object_type'),
@@ -57,6 +60,7 @@ export function resolveOperationLogListFilter(searchFormValues?: Record<string, 
 
 export function resolveDataBackupListFilter(searchFormValues?: Record<string, unknown> | null) {
   return {
+    keyword: pickListSearchKeywordOrFields(searchFormValues, 'name'),
     backup_type: pickSearchString(searchFormValues, 'backup_type'),
     status: pickSearchString(searchFormValues, 'status'),
   };
@@ -81,7 +85,7 @@ export function resolveInfraPackageListFilter(
   const sortField = entries.length > 0 ? entries[0][0] : undefined;
   const sortOrder = entries.length > 0 ? (entries[0][1] === 'ascend' ? 'asc' : 'desc') : undefined;
   return {
-    name: pickSearchString(searchFormValues, 'name'),
+    name: pickListSearchKeywordOrFields(searchFormValues, 'name'),
     plan: pickSearchString(searchFormValues, 'plan'),
     is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
     allow_pro_apps: pickSearchTriStateBoolean(searchFormValues, 'allow_pro_apps'),

@@ -1452,6 +1452,22 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 except Exception as e:
                     logger.warning(f"来料检验合格 -> 关联入库单处理失败: {e}")
 
+        try:
+            from apps.kuaizhizao.services.delivery_project_service import DeliveryProjectService
+            from infra.models.user import User
+
+            actor = await User.get_or_none(id=inspected_by, tenant_id=tenant_id)
+            await DeliveryProjectService().apply_quality_inspection_completed(
+                tenant_id, inspection_id, actor_user=actor
+            )
+        except Exception as exc:
+            logger.warning(
+                "来料检验回写交付任务进度失败 tenant={} inspection={}: {}",
+                tenant_id,
+                inspection_id,
+                exc,
+            )
+
         # 空审批人 auto_pass：流程已通过，须在事务外同步落业务审核，避免嵌套事务挂起
         from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
 

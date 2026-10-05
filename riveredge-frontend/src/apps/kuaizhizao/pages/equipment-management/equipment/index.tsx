@@ -1215,7 +1215,8 @@ const EquipmentPage: React.FC = () => {
                 installation_date: parseDate(cellAt(row, 'installation_date')),
                 warranty_period: Number.isFinite(warrantyParsed) ? warrantyParsed : undefined,
                 equipment_nature:
-                  parseEquipmentDict('EQUIPMENT_NATURE', cellAt(row, 'equipment_nature')) || undefined,
+                  parseEquipmentDict('EQUIPMENT_NATURE', cellAt(row, 'equipment_nature'))
+                  || DEFAULT_EQUIPMENT_LEDGER_NATURE,
                 workshop_id: workshop?.id,
                 workshop_name: workshop?.name ?? (workshopRef || undefined),
                 production_line_id: line?.id,
@@ -1248,10 +1249,7 @@ const EquipmentPage: React.FC = () => {
               messageApi.warning(t('app.kuaizhizao.equipment.importNoRows'));
               return;
             }
-            const codeToUuid = await buildLedgerCodeUuidMap(
-              (p) => equipmentApi.list(p),
-              { exclude_equipment_nature: MEASURING_INSTRUMENT_NATURE },
-            );
+            const codeToUuid = await buildLedgerCodeUuidMap((p) => equipmentApi.list(p));
             const result = await importInChunksViaPerItemCreate({
               items,
               createOne: async (item, _index) =>

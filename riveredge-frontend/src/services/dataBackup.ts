@@ -149,6 +149,7 @@ export async function getBackups(params?: {
   backup_type?: string;
   backup_scope?: string;
   status?: string;
+  keyword?: string;
 }): Promise<DataBackupListResponse> {
   return apiRequest<DataBackupListResponse>('/core/data-backups', {
     params,

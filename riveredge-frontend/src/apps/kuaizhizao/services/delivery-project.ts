@@ -14,6 +14,7 @@ export interface DeliveryProjectNodeDocument {
   project_id: number;
   node_id: number;
   node_name?: string | null;
+  task_id?: number | null;
   doc_type: string;
   doc_id: number;
   doc_code: string;
@@ -58,6 +59,10 @@ export interface DeliveryProjectNodeTask {
   id: number;
   project_id: number;
   node_id: number;
+  parent_task_id?: number | null;
+  task_layer?: string;
+  ahead_days?: number | null;
+  overdue_days?: number | null;
   template_task_id?: number | null;
   task_key?: string | null;
   task_name: string;
@@ -95,6 +100,8 @@ export interface DeliveryProjectNode {
   actual_end_date?: string | null;
   is_critical: boolean;
   is_milestone: boolean;
+  ahead_days?: number | null;
+  overdue_days?: number | null;
   tasks?: DeliveryProjectNodeTask[];
 }
 

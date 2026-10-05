@@ -33,6 +33,21 @@ export interface InquiryImportResponse {
   items: InquiryImportResultItem[];
 }
 
+export interface SalesTeamMemberStat {
+  salesman_id: number;
+  salesman_name: string;
+  customer_count: number;
+  follow_up_count: number;
+  pending_count: number;
+  inactive_count: number;
+  level_counts?: Record<string, number>;
+}
+
+export interface SalesTeamSnapshot {
+  inactive_alert_days?: number;
+  members: SalesTeamMemberStat[];
+}
+
 export interface ForeignTradeCrmStats {
   pending_customers?: number;
   overdue_customers?: number;
@@ -88,6 +103,11 @@ export const foreignTradeApi = {
     apiRequest<ForeignTradeCrmStats>('/apps/ind-foreign-trade/stats', {
       method: 'GET',
       params: { limit },
+    }),
+
+  getSalesTeam: () =>
+    apiRequest<SalesTeamSnapshot>('/apps/ind-foreign-trade/sales-team', {
+      method: 'GET',
     }),
 
   listFollowUps: (params?: Record<string, unknown>) =>

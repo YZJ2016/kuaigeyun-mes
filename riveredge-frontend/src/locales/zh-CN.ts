@@ -3213,6 +3213,8 @@ export default {
   'app.ind-foreign-trade.menu.followUps': '客户跟进',
   'app.ind-foreign-trade.field.country': '国家',
   'app.ind-foreign-trade.field.countryPlaceholder': '按国家筛选，如 Vietnam',
+  'app.ind-foreign-trade.field.campaign': '广告系列',
+  'app.ind-foreign-trade.field.capacity': '所需生产能力',
   'app.ind-foreign-trade.createExportCustomer': '新建外贸客户',
   'app.ind-foreign-trade.dashboard.loadFailed': '外贸工作台加载失败',
   'app.ind-foreign-trade.dashboard.inactiveHint': '连续7天未新增跟进',
@@ -3221,10 +3223,16 @@ export default {
   'app.ind-foreign-trade.import.button': '导入询盘',
   'app.ind-foreign-trade.import.title': '导入外贸询盘',
   'app.ind-foreign-trade.import.hint':
-    '按固定 9 列粘贴（制表符或逗号分隔），首行可为英文列名。导入成功默认未跟进，归属当前用户。',
+    '上传询盘模板，或按模板表头粘贴（制表符或逗号分隔）。创建时间可以是日期，也可以是表格里的数字序列。导入成功默认未跟进，归属当前用户。',
   'app.ind-foreign-trade.import.empty': '请粘贴至少一行询盘数据',
+  'app.ind-foreign-trade.import.headerMismatch': '表头与询盘模板不一致，请使用模板第一行',
+  'app.ind-foreign-trade.import.notSpreadsheet': '请上传询盘模板文件',
   'app.ind-foreign-trade.import.done': '导入完成：成功 {{success}}，失败 {{failed}}',
   'app.ind-foreign-trade.import.failed': '询盘导入失败',
+  'app.ind-foreign-trade.dashboard.teamTitle': '业务员跟进',
+  'app.ind-foreign-trade.dashboard.teamEmpty': '还没有归属业务员的外贸客户',
+  'app.ind-foreign-trade.dashboard.teamMemberHint':
+    '客户 {{customers}}，跟进 {{follows}}，未跟进 {{pending}}，未联系 {{inactive}}',
   'app.ind-mold.name': '模具机加',
   'app.ind-mold.menu.programSheets': '程序单',
   'app.ind-mold.menu.materialArrivals': '到料单',
@@ -7069,7 +7077,22 @@ export default {
   'app.kuaizhizao.deliveryProject.nodeList': '节点明细',
   'app.kuaizhizao.deliveryProject.nodeTasks': '节点子任务',
   'app.kuaizhizao.deliveryProject.noNodeTasks': '暂无子任务',
-  'app.kuaizhizao.deliveryProject.addNodeTask': '添加子任务',
+  'app.kuaizhizao.deliveryProject.addNodeTask': '添加具体任务',
+  'app.kuaizhizao.deliveryProject.addSubstage': '添加子阶段',
+  'app.kuaizhizao.deliveryProject.editSubstage': '编辑子阶段',
+  'app.kuaizhizao.deliveryProject.substageRequired': '请先添加子阶段',
+  'app.kuaizhizao.deliveryProject.noSubstages': '暂无子阶段',
+  'app.kuaizhizao.deliveryProject.selectSubstage': '请选择子阶段',
+  'app.kuaizhizao.deliveryProject.selectConcreteTask': '请选择具体任务',
+  'app.kuaizhizao.deliveryProject.fields.substageName': '子阶段',
+  'app.kuaizhizao.deliveryProject.fields.concreteTask': '具体任务',
+  'app.kuaizhizao.deliveryProject.nodeOnTrack': '{{name}}推进正常',
+  'app.kuaizhizao.deliveryProject.nodeOverdue': '{{name}}逾期{{days}}天',
+  'app.kuaizhizao.deliveryProject.nodeAhead': '{{name}}提前{{days}}天完成',
+  'app.kuaizhizao.deliveryProject.taskDurationDays': '{{days}}天',
+  'app.kuaizhizao.deliveryProject.taskOverdueDays': '逾期{{days}}天',
+  'app.kuaizhizao.deliveryProject.taskAheadDays': '提前{{days}}天完成',
+  'app.kuaizhizao.deliveryProject.taskGanttEmpty': '具体任务还没有计划开始和计划结束',
   'app.kuaizhizao.deliveryProject.editNodeTask': '编辑子任务',
   'app.kuaizhizao.deliveryProject.deleteNodeTaskConfirm': '确定删除该子任务？',
   'app.kuaizhizao.deliveryProject.templateNodeTasks': '预置子任务',
@@ -29840,6 +29863,50 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.mobile-status-tabs-label-clip-r01.title':
+    '移动端列表状态 Tab 文案不再缺最后一个字',
+  'pages.dashboard.updateLog.entries.mobile-status-tabs-label-clip-r01.description':
+    '横向 Tab 与 flex 分宽叠加时，安卓会把「全部」「待审核」等量成少一个字。Tab 只按文字宽度排，放不下可横滑，选中只改颜色不再加粗。',
+  'pages.dashboard.updateLog.entries.mobile-header-title-center-r01.title':
+    '移动端顶栏标题恢复居中',
+  'pages.dashboard.updateLog.entries.mobile-header-title-center-r01.description':
+    '顶栏左右按钮区被改成不伸展后，标题贴在左侧。已交回系统顶栏：左右等宽伸展，消息中心、待我审批等标题居中。',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r05.title':
+    '移动端文字不再关掉系统字盒导致末字时有时无',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r05.description':
+    '关掉 Android 字体内边距后，字盒比字形窄，同一列表里「未读」会有的完整有的缺字。已恢复系统字盒，标题只占剩余宽度，状态按自身文字排开。',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r04.title':
+    '移动端同一列表里状态字不再有的全有的缺',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r04.description':
+    '安卓按行量宽不稳定，同页「未读」会有的完整有的只剩一个字。短标签按字数锁定最小宽度，列表每一行同样完整。',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r03.title':
+    '移动端中文末字从根上不再被裁掉',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r03.description':
+    '安卓假粗体和 Text 参与 flex 分宽会裁掉最后一个字。全站文字走同一入口取消假粗体并把弹性布局放到容器上，窄槽缩放不再裁字，顶栏字重同一套规则。',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r02.title':
+    '移动端列表卡片右侧状态不再只显示一个字',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r02.description':
+    '安卓上标题若用 Text 参与 flex 分宽，同行「未读」会被量成一个字。标题改由外层 View 吃剩余宽度，状态按完整文案占宽；全站 Text 同步把 flex/minWidth 从文字挪到容器。',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r01.title':
+    '移动端加粗中文不再裁掉最后一个字',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r01.description':
+    '安卓选中态假粗体会让内容宽按钮按 Regular 宽度裁字，检验「合格」只剩「合」、消息筛选「全部」只剩「全」。全站 Text 取消假粗体，用系统中等字重，末字完整显示。',
+  'pages.dashboard.updateLog.entries.delivery-project-substage-gantt-r01.title':
+    '交付项目可按子阶段拆任务，并在工作台看甘特',
+  'pages.dashboard.updateLog.entries.delivery-project-substage-gantt-r01.description':
+    '交付节点下先建子阶段，再挂具体任务，计划和进度向上汇总。工作台任务旁显示甘特，提前完成和逾期写在表头。质检单新建后挂回任务，采购到货和质检完成会回写任务进度。销售订单审核通过后提醒业务员拆分交付计划。',
+  'pages.dashboard.updateLog.entries.system-log-fuzzy-keyword-r02.title':
+    '登录日志等系统列表顶栏搜索生效',
+  'pages.dashboard.updateLog.entries.system-log-fuzzy-keyword-r02.description':
+    '登录日志、操作日志、数据备份与套餐列表把模糊搜索框的 keyword 传到接口；登录日志按用户名/IP/地点/设备检索，操作日志按用户名/模块/内容/路径/IP 检索。',
+  'pages.dashboard.updateLog.entries.equipment-ledger-import-code-unique-r02.title':
+    '设备台账导入不再因已删或未分组编码报已存在',
+  'pages.dashboard.updateLog.entries.equipment-ledger-import-code-unique-r02.description':
+    '设备编码仅在未删除记录中唯一；导入同一编码会更新已有台账（含计量器具或已删除记录恢复），未填设备性质按通用设备入账，避免列表空白却提示编码已存在。',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-inquiry-team-r01.title':
+    '外贸询盘按模板导入，销售只看自己的客户',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-inquiry-team-r01.description':
+    '询盘导入可直接读取模板文件，识别表头，并把表格里的日期序列写成创建时间。广告系列和所需生产能力显示在外贸客户上。没有查看团队跟进权限时，只能看到自己名下的客户和跟进；有该权限可按业务员查看客户数、跟进次数和未跟进。跟进时可以填写国家或地区、项目说明和包装材料。内贸客户池不再批量导入，查看全部客户需要分配权限。',
   'pages.dashboard.updateLog.entries.kuaizhizao-quality-l68-l77-r01.title':
     '质量：投诉按岗位签字，环保资料记物料，库存验证可挂计划与月汇总',
   'pages.dashboard.updateLog.entries.kuaizhizao-quality-l68-l77-r01.description':

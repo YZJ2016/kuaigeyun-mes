@@ -13,18 +13,23 @@ from apps.kuaizhizao.constants.delivery_project import (
     DELIVERY_ALERT_KIND_OVERDUE,
     DELIVERY_NODE_DUE_SOON_DAYS,
     DeliveryNodeStatus,
+    DeliveryNodeTaskStatus,
     DeliveryProjectStatus,
+    DeliveryTaskLayer,
 )
 from apps.kuaizhizao.models.delivery_project import (
     DeliveryProject,
     DeliveryProjectNode,
     DeliveryProjectNodeAlertSent,
+    DeliveryProjectNodeTask,
 )
 from apps.kuaizhizao.schemas.delivery_project import DeliveryAlertRow
 from apps.kuaizhizao.services.kuaizhizao_business_notification import (
     notify_delivery_node_due_soon,
     notify_delivery_node_milestone_overdue,
     notify_delivery_node_overdue,
+    notify_delivery_task_due_soon,
+    notify_delivery_task_overdue,
 )
 from core.services.business.business_notification_service import register_notification_scope_resolver
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
@@ -145,6 +150,58 @@ class DeliveryProjectAlertService:
                         project_owner_name=project.owner_name,
                     )
                 )
+        node_name_by_id = {node.id: node.node_name for node in nodes}
+        tasks = await DeliveryProjectNodeTask.filter(
+            tenant_id=tenant_id,
+            project_id__in=project_ids,
+            deleted_at__isnull=True,
+            task_layer=DeliveryTaskLayer.TASK.value,
+        ).order_by("planned_end_date", "id")
+        for task in tasks:
+            if task.status in (
+                DeliveryNodeTaskStatus.DONE.value,
+                DeliveryNodeTaskStatus.CANCELLED.value,
+            ):
+                continue
+            project = project_map.get(task.project_id)
+            node_name = node_name_by_id.get(task.node_id)
+            if not project or not node_name or not task.planned_end_date:
+                continue
+            planned_end = task.planned_end_date
+            if planned_end < today:
+                rows.append(
+                    DeliveryAlertRow(
+                        alert_kind=DELIVERY_ALERT_KIND_OVERDUE,
+                        project_id=project.id,
+                        project_code=project.project_code,
+                        project_name=project.project_name,
+                        node_id=task.node_id,
+                        node_name=node_name,
+                        task_id=task.id,
+                        task_name=task.task_name,
+                        planned_end_date=planned_end,
+                        days_overdue=(today - planned_end).days,
+                        owner_name=task.owner_name,
+                        project_owner_name=project.owner_name,
+                    )
+                )
+            elif today <= planned_end <= due_soon_until:
+                rows.append(
+                    DeliveryAlertRow(
+                        alert_kind=DELIVERY_ALERT_KIND_DUE_SOON,
+                        project_id=project.id,
+                        project_code=project.project_code,
+                        project_name=project.project_name,
+                        node_id=task.node_id,
+                        node_name=node_name,
+                        task_id=task.id,
+                        task_name=task.task_name,
+                        planned_end_date=planned_end,
+                        days_remaining=(planned_end - today).days,
+                        owner_name=task.owner_name,
+                        project_owner_name=project.owner_name,
+                    )
+                )
         rows.sort(
             key=lambda r: (
                 0 if r.alert_kind == DELIVERY_ALERT_KIND_MILESTONE_OVERDUE else 1,
@@ -167,6 +224,52 @@ class DeliveryProjectAlertService:
         now = resolve_business_datetime()
         for alert in alerts:
             if not alert.planned_end_date:
+                continue
+            if alert.task_id and alert.task_name:
+                bucket = (
+                    self._bucket_for_due_soon(alert.planned_end_date)
+                    if alert.alert_kind == DELIVERY_ALERT_KIND_DUE_SOON
+                    else self._bucket_for_overdue(alert.planned_end_date)
+                )
+                dedup = f"task:{alert.alert_kind}:{alert.task_id}:{bucket}"
+                if dedup in existing_keys:
+                    continue
+                task_owner_id = await self._resolve_task_owner_id(tenant_id, alert.task_id)
+                project_owner_id = await self._resolve_project_owner_id(tenant_id, alert.project_id)
+                if alert.alert_kind == DELIVERY_ALERT_KIND_DUE_SOON:
+                    count = await notify_delivery_task_due_soon(
+                        tenant_id,
+                        project_id=alert.project_id,
+                        project_code=alert.project_code,
+                        project_name=alert.project_name,
+                        task_name=alert.task_name,
+                        planned_end_date=str(alert.planned_end_date),
+                        days_remaining=alert.days_remaining or 0,
+                        task_owner_user_id=task_owner_id,
+                        project_owner_user_id=project_owner_id,
+                    )
+                elif alert.alert_kind == DELIVERY_ALERT_KIND_OVERDUE:
+                    count = await notify_delivery_task_overdue(
+                        tenant_id,
+                        project_id=alert.project_id,
+                        project_code=alert.project_code,
+                        project_name=alert.project_name,
+                        task_name=alert.task_name,
+                        planned_end_date=str(alert.planned_end_date),
+                        days_overdue=alert.days_overdue or 0,
+                        task_owner_user_id=task_owner_id,
+                        project_owner_user_id=project_owner_id,
+                    )
+                else:
+                    continue
+                if count > 0:
+                    await DeliveryProjectNodeAlertSent.create(
+                        tenant_id=tenant_id,
+                        dedup_key=dedup,
+                        sent_at=now,
+                    )
+                    existing_keys.add(dedup)
+                    sent_count += count
                 continue
             if alert.alert_kind == DELIVERY_ALERT_KIND_DUE_SOON:
                 bucket = self._bucket_for_due_soon(alert.planned_end_date)
@@ -242,6 +345,13 @@ class DeliveryProjectAlertService:
                     existing_keys.add(dedup)
                     sent_count += count
         return sent_count
+
+    @staticmethod
+    async def _resolve_task_owner_id(tenant_id: int, task_id: int) -> Optional[int]:
+        task = await DeliveryProjectNodeTask.get_or_none(
+            tenant_id=tenant_id, id=task_id, deleted_at__isnull=True
+        )
+        return task.owner_id if task and task.owner_id else None
 
     @staticmethod
     async def _resolve_node_owner_id(tenant_id: int, node_id: int) -> Optional[int]:

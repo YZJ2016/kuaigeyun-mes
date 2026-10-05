@@ -106,11 +106,49 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
   const [targetStageCode, setTargetStageCode] = useState<string | null>(null);
   const [resolvingOpportunity, setResolvingOpportunity] = useState(false);
   const [attachmentUuids, setAttachmentUuids] = useState<string[]>([]);
+  const profileCustomerIdRef = useRef<number | null>(null);
 
   const selectedOpportunity = useMemo(
     () => opportunities[0] ?? null,
     [opportunities],
   );
+
+  const selectedCustomer = useMemo(
+    () => customers.find((c) => getCustomerId(c) === Number(modalCustomerId)) ?? null,
+    [customers, modalCustomerId],
+  );
+  const selectedMarket = String(
+    (selectedCustomer as { marketScope?: string; market_scope?: string } | null)?.marketScope
+      ?? (selectedCustomer as { market_scope?: string } | null)?.market_scope
+      ?? 'domestic',
+  ).toLowerCase();
+  const showCountryOnFollowUp = selectedMarket === 'export';
+
+  useEffect(() => {
+    if (!open) {
+      profileCustomerIdRef.current = null;
+      return;
+    }
+    const id = getCustomerId(selectedCustomer);
+    if (id == null || profileCustomerIdRef.current === id) return;
+    profileCustomerIdRef.current = id;
+    const row = selectedCustomer as {
+      countryCode?: string;
+      country_code?: string;
+      regionText?: string;
+      region_text?: string;
+      projectDescription?: string;
+      project_description?: string;
+      intentMaterialName?: string;
+      intent_material_name?: string;
+    };
+    form.setFieldsValue({
+      country_code: row.countryCode ?? row.country_code ?? '',
+      region_text: row.regionText ?? row.region_text ?? '',
+      project_description: row.projectDescription ?? row.project_description ?? '',
+      intent_material_name: row.intentMaterialName ?? row.intent_material_name ?? '',
+    });
+  }, [form, open, selectedCustomer]);
 
   const currentStageCode = selectedOpportunity?.stage_code ?? 'INITIAL';
   const effectiveTargetStage = targetStageCode ?? currentStageCode;
@@ -411,6 +449,16 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           : undefined;
       const opportunityId =
         hasQuotation && v.opportunity_id != null ? Number(v.opportunity_id) : undefined;
+      const profile =
+        profileCustomerIdRef.current != null
+          ? {
+              ...(showCountryOnFollowUp
+                ? { country_code: String(v.country_code ?? '').trim() }
+                : { region_text: String(v.region_text ?? '').trim() }),
+              project_description: String(v.project_description ?? '').trim(),
+              intent_material_name: String(v.intent_material_name ?? '').trim(),
+            }
+          : {};
       if (editing) {
         await followUpApi.update(editing.id, {
           customer_name: (customer as any).name ?? (customer as any).customer_name ?? '',
@@ -423,6 +471,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           opportunity_id: opportunityId ?? null,
           stage_code_after: stageAfter,
           attachment_uuids: attachmentUuids,
+          ...profile,
         });
         message.success(t('common.saveSuccess'));
       } else {
@@ -435,6 +484,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           quotation_id: v.quotation_id ?? null,
           sales_order_id: v.sales_order_id ?? null,
           attachment_uuids: attachmentUuids,
+          ...profile,
           ...(hasQuotation
             ? { opportunity_id: opportunityId, stage_code_after: stageAfter }
             : {}),
@@ -584,6 +634,27 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                 </Form.Item>
               </Col>
             </Row>
+            {showCountryOnFollowUp ? (
+              <Form.Item name="country_code" label={t('app.ind-foreign-trade.field.country')}>
+                <Input maxLength={50} allowClear />
+              </Form.Item>
+            ) : (
+              <Form.Item name="region_text" label={t('app.kuaizhizao.customerPool.region')}>
+                <Input maxLength={100} allowClear />
+              </Form.Item>
+            )}
+            <Form.Item
+              name="intent_material_name"
+              label={t('app.kuaizhizao.customerPool.intentMaterial')}
+            >
+              <Input maxLength={200} allowClear />
+            </Form.Item>
+            <Form.Item
+              name="project_description"
+              label={t('app.kuaizhizao.customerPool.projectDescription')}
+            >
+              <Input.TextArea rows={3} allowClear />
+            </Form.Item>
             <Form.Item
               name="content"
               label={t('app.kuaizhizao.customerFollowUp.fieldContent')}

@@ -38,6 +38,8 @@ class CustomerPoolItem(BaseModel):
     region_text: Optional[str] = None
     market_scope: Optional[str] = "domestic"
     country_code: Optional[str] = None
+    campaign_name: Optional[str] = None
+    required_capacity_text: Optional[str] = None
     customer_level_code: Optional[str] = None
     follow_up_count: int = 0
     inactive: bool = False

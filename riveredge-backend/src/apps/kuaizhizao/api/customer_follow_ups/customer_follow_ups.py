@@ -19,7 +19,9 @@ from apps.kuaizhizao.services.customer_follow_up_service import (
     CustomerFollowUpService,
     CUSTOMER_FOLLOW_UP_SORTABLE_FIELDS,
 )
+from apps.kuaizhizao.services.customer_pool_service import PERM_CUSTOMER_POOL_ASSIGN
 from core.api.deps import get_current_user, get_current_tenant
+from core.services.authorization.user_permission_service import UserPermissionService
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -93,6 +95,11 @@ async def list_follow_ups(
         if field in CUSTOMER_FOLLOW_UP_SORTABLE_FIELDS:
             safe_order_by = order_by
 
+    can_assign = await UserPermissionService.has_any_permission(
+        current_user.id,
+        tenant_id,
+        [PERM_CUSTOMER_POOL_ASSIGN],
+    )
     return await _service.list_follow_ups(
         tenant_id=tenant_id,
         skip=skip,
@@ -107,6 +114,7 @@ async def list_follow_ups(
         pending_only=pending_only,
         order_by=safe_order_by,
         current_user=current_user,
+        owned_by_user_id=None if can_assign else current_user.id,
     )
 
 

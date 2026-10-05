@@ -62,6 +62,7 @@ export type LoginLogMapQuery = {
   login_status?: string;
   username?: string;
   login_ip?: string;
+  keyword?: string;
   start_time?: string;
   end_time?: string;
 };
@@ -76,6 +77,7 @@ export async function getLoginLogs(params?: {
   username?: string;
   login_status?: string;
   login_ip?: string;
+  keyword?: string;
   start_time?: string;
   end_time?: string;
 }): Promise<LoginLogListResponse> {

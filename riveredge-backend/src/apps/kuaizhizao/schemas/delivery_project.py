@@ -143,6 +143,10 @@ class DeliveryProjectNodeTaskResponse(BaseModel):
     id: int
     project_id: int
     node_id: int
+    parent_task_id: Optional[int] = None
+    task_layer: str
+    ahead_days: Optional[int] = None
+    overdue_days: Optional[int] = None
     template_task_id: Optional[int] = None
     task_key: Optional[str] = None
     task_name: str
@@ -169,6 +173,8 @@ class DeliveryProjectNodeTaskResponse(BaseModel):
 
 class DeliveryProjectNodeTaskCreate(BaseModel):
     node_id: int
+    task_layer: str
+    parent_task_id: Optional[int] = None
     task_name: str
     core_task: Optional[str] = None
     sort_order: int = 0
@@ -218,6 +224,8 @@ class DeliveryProjectNodeResponse(BaseModel):
     actual_end_date: Optional[date] = None
     is_critical: bool
     is_milestone: bool
+    ahead_days: Optional[int] = None
+    overdue_days: Optional[int] = None
     tasks: List[DeliveryProjectNodeTaskResponse] = Field(default_factory=list)
 
     class Config:
@@ -315,6 +323,7 @@ class DeliveryProjectNodeScheduleRevisionResponse(BaseModel):
 
 class DeliveryProjectNodeDocumentCreate(BaseModel):
     node_id: int
+    task_id: Optional[int] = None
     doc_type: str
     doc_id: int
     doc_code: str
@@ -326,6 +335,7 @@ class DeliveryProjectNodeDocumentResponse(BaseModel):
     project_id: int
     node_id: int
     node_name: Optional[str] = None
+    task_id: Optional[int] = None
     doc_type: str
     doc_id: int
     doc_code: str
@@ -351,6 +361,8 @@ class DeliveryAlertRow(BaseModel):
     project_name: str
     node_id: int
     node_name: str
+    task_id: Optional[int] = None
+    task_name: Optional[str] = None
     is_milestone: bool = False
     planned_end_date: Optional[date] = None
     days_remaining: Optional[int] = None

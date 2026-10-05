@@ -22,7 +22,11 @@ from apps.kuaizhizao.schemas.customer_pool import (
     CustomerPoolRuleUpdateBody,
 )
 from apps.kuaizhizao.services.customer_pool_list_core import CUSTOMER_POOL_SORTABLE_FIELDS
-from apps.kuaizhizao.services.customer_pool_service import CustomerPoolService
+from apps.kuaizhizao.services.customer_pool_service import (
+    PERM_CUSTOMER_POOL_ASSIGN,
+    CustomerPoolService,
+)
+from core.services.authorization.user_permission_service import UserPermissionService
 from core.api.deps import get_current_tenant, get_current_user
 from core.api.deps.access import require_permission_codes
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -74,10 +78,20 @@ async def list_customer_pool(
         if field in CUSTOMER_POOL_SORTABLE_FIELDS:
             safe_order_by = order_by
 
+    effective_scope = scope
+    if (scope or "").strip().lower() == "all":
+        can_assign = await UserPermissionService.has_any_permission(
+            current_user.id,
+            tenant_id,
+            [PERM_CUSTOMER_POOL_ASSIGN],
+        )
+        if not can_assign:
+            effective_scope = "mine"
+
     return await CustomerPoolService.list_customers(
         tenant_id=tenant_id,
         current_user=current_user,
-        scope=scope,
+        scope=effective_scope,
         skip=skip,
         limit=limit,
         keyword=keyword,

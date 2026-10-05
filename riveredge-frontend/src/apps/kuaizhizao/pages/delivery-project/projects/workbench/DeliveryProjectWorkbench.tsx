@@ -34,6 +34,7 @@ import type { ProFormInstance } from '@ant-design/pro-components';
 import {
   ProForm,
   ProFormDatePicker,
+  ProFormDependency,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
@@ -90,6 +91,7 @@ import {
 import { UniUserSelect } from '../../../../../../components/uni-user-select';
 import DeliveryProjectNodeStepper from '../../components/DeliveryProjectNodeStepper';
 import DeliveryNodeTaskOperateModal from '../../components/DeliveryNodeTaskOperateModal';
+import DeliveryTaskScheduleBars from '../../components/DeliveryTaskScheduleBars';
 import DeliveryNodeDocumentLinkModal from '../../components/DeliveryNodeDocumentLinkModal';
 import DeliveryNodeReportDetailDrawer from '../../node-reports/components/DeliveryNodeReportDetailDrawer';
 import DeliveryIssueDetailDrawer from '../../issues/components/DeliveryIssueDetailDrawer';
@@ -202,6 +204,7 @@ export const DeliveryProjectWorkbench: React.FC = () => {
   const [templateOptions, setTemplateOptions] = useState<DeliveryProcessTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number>();
   const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskModalLayer, setTaskModalLayer] = useState<'substage' | 'task'>('task');
   const [taskOperateOpen, setTaskOperateOpen] = useState(false);
   const [taskOperating, setTaskOperating] = useState<DeliveryProjectNodeTask | null>(null);
   const [taskEditingNode, setTaskEditingNode] = useState<DeliveryProjectNode | null>(null);
@@ -615,6 +618,7 @@ export const DeliveryProjectWorkbench: React.FC = () => {
 
   const saveDocLink = async (payload: {
     node_id: number;
+    task_id?: number;
     doc_type: string;
     doc_id: number;
     doc_code: string;
@@ -647,7 +651,11 @@ export const DeliveryProjectWorkbench: React.FC = () => {
     linkedDetail?.openLinkedDocumentDetail(link.doc_type, link.doc_id);
   };
 
-  const openTaskModal = async (node: DeliveryProjectNode, task?: DeliveryProjectNodeTask) => {
+  const openTaskModal = async (
+    node: DeliveryProjectNode,
+    task?: DeliveryProjectNodeTask,
+    layer: 'substage' | 'task' = 'task',
+  ) => {
     setTaskEditingNode(node);
     setEditingTask(task ?? null);
     taskOwnerRef.current = task?.owner_id ?? undefined;
@@ -674,7 +682,11 @@ export const DeliveryProjectWorkbench: React.FC = () => {
         /* ignore */
       }
     }
+    const formLayer = task?.task_layer === 'substage' ? 'substage' : task ? 'task' : layer;
+    setTaskModalLayer(formLayer);
     taskForm.setFieldsValue({
+      task_layer: formLayer,
+      parent_task_id: task?.parent_task_id ?? undefined,
       task_name: task?.task_name,
       core_task: task?.core_task ?? undefined,
       participant_mode: task?.participant_mode ?? 'solo',
@@ -698,8 +710,30 @@ export const DeliveryProjectWorkbench: React.FC = () => {
       const values = await taskForm.validateFields();
       const fmt = (v: dayjs.Dayjs | undefined) => v?.format('YYYY-MM-DD');
       const participantMode = (values.participant_mode as string) || 'solo';
+      const taskLayer = (values.task_layer as string) || 'task';
+      if (taskLayer === 'substage') {
+        if (editingTask?.id) {
+          await deliveryProjectApi.updateNodeTask(projectId, editingTask.id, {
+            task_name: values.task_name as string,
+          });
+        } else {
+          await deliveryProjectApi.createNodeTask(projectId, {
+            node_id: taskEditingNode.id,
+            task_layer: 'substage',
+            task_name: values.task_name as string,
+          });
+        }
+        message.success(t('common.updated'));
+        setTaskModalOpen(false);
+        setEditingTask(null);
+        setTaskEditingNode(null);
+        await load();
+        return;
+      }
       const payload = {
         node_id: taskEditingNode.id,
+        task_layer: taskLayer,
+        parent_task_id: taskLayer === 'task' ? (values.parent_task_id as number) : undefined,
         task_name: values.task_name as string,
         core_task: (values.core_task as string | undefined)?.trim() || null,
         participant_mode: participantMode,
@@ -1058,6 +1092,8 @@ export const DeliveryProjectWorkbench: React.FC = () => {
 
   const renderNodePanel = (node: DeliveryProjectNode) => {
     const nodeTasks = node.tasks ?? [];
+    const substages = nodeTasks.filter((task) => task.task_layer === 'substage');
+    const concreteTasks = nodeTasks.filter((task) => task.task_layer !== 'substage');
     const nodeDocs = nodeDocuments.filter((d) => d.node_id === node.id);
     const canNodeAction = (canUpdate || canExecute) && !['completed', 'cancelled'].includes(effective.status);
     const showActualDates = node.status !== 'not_started';
@@ -1145,31 +1181,85 @@ export const DeliveryProjectWorkbench: React.FC = () => {
         <Card
           size="small"
           className="delivery-project-node-section-card"
-          title={`${t('app.kuaizhizao.deliveryProject.nodeTasks')} (${nodeTasks.length})`}
+          title={`${t('app.kuaizhizao.deliveryProject.nodeTasks')} (${concreteTasks.length})`}
           extra={
             canUpdate ? (
-              <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => void openTaskModal(node)}>
-                {t('app.kuaizhizao.deliveryProject.addNodeTask')}
-              </Button>
+              <Space>
+                <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => void openTaskModal(node, undefined, 'substage')}>
+                  {t('app.kuaizhizao.deliveryProject.addSubstage')}
+                </Button>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    if (!substages.length) {
+                      message.warning(t('app.kuaizhizao.deliveryProject.substageRequired'));
+                      return;
+                    }
+                    void openTaskModal(node, undefined, 'task');
+                  }}
+                >
+                  {t('app.kuaizhizao.deliveryProject.addNodeTask')}
+                </Button>
+              </Space>
             ) : null
           }
         >
-          <DeliveryWorkbenchTable
-            rowKey="id"
-            size="small"
-            className="delivery-project-workbench-node-table"
-            pagination={false}
-            locale={{ emptyText: t('app.kuaizhizao.deliveryProject.noNodeTasks') }}
-            dataSource={nodeTasks}
-            columns={buildWorkbenchNodeTaskColumns({
-              t,
-              canUpdate,
-              canParticipantAct,
-              onEdit: (task) => void openTaskModal(node, task),
-              onOperate: openTaskOperateModal,
-              onDelete: (task) => void confirmDeleteNodeTask(task),
-            })}
-          />
+          <Typography.Text style={{ display: 'block', marginBottom: 8 }}>
+            {node.ahead_days
+              ? t('app.kuaizhizao.deliveryProject.nodeAhead', { name: node.node_name, days: node.ahead_days })
+              : node.overdue_days
+                ? t('app.kuaizhizao.deliveryProject.nodeOverdue', { name: node.node_name, days: node.overdue_days })
+                : t('app.kuaizhizao.deliveryProject.nodeOnTrack', { name: node.node_name })}
+          </Typography.Text>
+          {substages.length === 0 ? (
+            <Empty description={t('app.kuaizhizao.deliveryProject.noSubstages')} />
+          ) : (
+            <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
+              {substages.map((substage) => {
+                const children = concreteTasks.filter((task) => task.parent_task_id === substage.id);
+                return (
+                  <div key={substage.id}>
+                    <Space style={{ marginBottom: 8 }}>
+                      <Typography.Text strong>{substage.task_name}</Typography.Text>
+                      <Typography.Text type="secondary">
+                        {substage.progress_percent ?? 0}%
+                      </Typography.Text>
+                      {canUpdate ? (
+                        <Button type="link" size="small" onClick={() => void openTaskModal(node, substage)}>
+                          {t('common.edit')}
+                        </Button>
+                      ) : null}
+                    </Space>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <DeliveryWorkbenchTable
+                          rowKey="id"
+                          size="small"
+                          className="delivery-project-workbench-node-table"
+                          pagination={false}
+                          locale={{ emptyText: t('app.kuaizhizao.deliveryProject.noNodeTasks') }}
+                          dataSource={children}
+                          columns={buildWorkbenchNodeTaskColumns({
+                            t,
+                            canUpdate,
+                            canParticipantAct,
+                            onEdit: (task) => void openTaskModal(node, task),
+                            onOperate: openTaskOperateModal,
+                            onDelete: (task) => void confirmDeleteNodeTask(task),
+                          })}
+                        />
+                      </div>
+                      <div style={{ width: 280, flex: '0 0 280px' }}>
+                        <DeliveryTaskScheduleBars tasks={children} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </Space>
+          )}
         </Card>
 
         <Card
@@ -1623,6 +1713,7 @@ export const DeliveryProjectWorkbench: React.FC = () => {
         returnPath={location.pathname}
         customerId={project?.customer_id}
         salesOrderId={project?.sales_order_id}
+        tasks={nodes.find((node) => node.id === docLinkNodeId)?.tasks ?? []}
         onClose={() => {
           setDocLinkModalOpen(false);
           setDocLinkNodeId(null);
@@ -1651,9 +1742,13 @@ export const DeliveryProjectWorkbench: React.FC = () => {
     </Modal>
     <Modal
       title={
-        editingTask
-          ? t('app.kuaizhizao.deliveryProject.editNodeTask')
-          : t('app.kuaizhizao.deliveryProject.addNodeTask')
+        taskModalLayer === 'substage'
+          ? editingTask
+            ? t('app.kuaizhizao.deliveryProject.editSubstage')
+            : t('app.kuaizhizao.deliveryProject.addSubstage')
+          : editingTask
+            ? t('app.kuaizhizao.deliveryProject.editNodeTask')
+            : t('app.kuaizhizao.deliveryProject.addNodeTask')
       }
       open={taskModalOpen}
       width={MODAL_CONFIG.LARGE_WIDTH}
@@ -1666,11 +1761,29 @@ export const DeliveryProjectWorkbench: React.FC = () => {
       destroyOnHidden
     >
       <ProForm form={taskForm} layout="vertical" submitter={false} grid>
+        <ProFormText name="task_layer" hidden />
         <ProFormText
           name="task_name"
-          label={t('app.kuaizhizao.deliveryProject.fields.taskName')}
+          label={
+            taskModalLayer === 'substage'
+              ? t('app.kuaizhizao.deliveryProject.fields.substageName')
+              : t('app.kuaizhizao.deliveryProject.fields.taskName')
+          }
           colProps={{ span: 12 }}
           rules={[{ required: true }]}
+        />
+        <ProFormDependency name={['task_layer']}>
+          {({ task_layer }) =>
+            task_layer === 'substage' ? null : (
+              <>
+        <ProFormSelect
+          name="parent_task_id"
+          label={t('app.kuaizhizao.deliveryProject.fields.substageName')}
+          colProps={{ span: 12 }}
+          rules={[{ required: true, message: t('app.kuaizhizao.deliveryProject.selectSubstage') }]}
+          options={(taskEditingNode?.tasks ?? [])
+            .filter((task) => task.task_layer === 'substage')
+            .map((task) => ({ value: task.id, label: task.task_name }))}
         />
         <ProFormSelect
           name="participant_mode"
@@ -1731,6 +1844,10 @@ export const DeliveryProjectWorkbench: React.FC = () => {
           fieldProps={{ style: { width: '100%' } }}
         />
         <DocumentAttachmentsField category="delivery_node_task_attachments" label={false} />
+              </>
+            )
+          }
+        </ProFormDependency>
       </ProForm>
     </Modal>
     <UniDetail

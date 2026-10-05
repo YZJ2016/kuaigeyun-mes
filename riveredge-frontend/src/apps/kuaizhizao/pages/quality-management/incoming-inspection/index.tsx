@@ -10,7 +10,8 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { completeDeliveryNodeDocumentLinksIfPending } from '../../delivery-project/shared/deliveryNodeDocumentLink';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   ActionType,
@@ -216,6 +217,7 @@ interface IncomingInspection {
 
 const IncomingInspectionPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { t, i18n } = useTranslation();
   const pushToPurchaseReturnAction = resolveKuaizhizaoDocumentAction(t, 'purchase_return.pull_from_incoming_inspection');
@@ -819,6 +821,34 @@ const IncomingInspectionPage: React.FC = () => {
     [t],
   );
 
+  const linkCreatedInspections = useCallback(
+    async (createdRows: unknown[]) => {
+      const docs = createdRows.flatMap((row) => {
+        const list = Array.isArray(row) ? row : [];
+        return list
+          .map((item) => {
+            const record = item as { id?: number; inspection_code?: string };
+            if (!record.id || !record.inspection_code) return null;
+            return {
+              docId: record.id,
+              docCode: record.inspection_code,
+              title: record.inspection_code,
+            };
+          })
+          .filter((item): item is { docId: number; docCode: string; title: string } => item != null);
+      });
+      if (!docs.length) return false;
+      return completeDeliveryNodeDocumentLinksIfPending({
+        docType: 'quality_inspection',
+        docs,
+        navigate,
+        message: messageApi,
+        t,
+      });
+    },
+    [messageApi, navigate, t],
+  );
+
   const pullFromPurchaseOrderQuery = useUniPullQuery<PullSourceCandidate>({
     rowKey: 'id',
     selectionType: 'checkbox',
@@ -853,15 +883,19 @@ const IncomingInspectionPage: React.FC = () => {
         return;
       }
       try {
+        const createdRows: unknown[] = [];
         let count = 0;
         for (const orderId of selectedIds) {
           const created = await qualityApi.incomingInspection.createFromPurchaseOrder(orderId);
+          createdRows.push(created);
           count += Array.isArray(created) ? created.length : 0;
         }
         if (!count) {
           messageApi.warning(t('app.kuaizhizao.quality.incoming.messages.createFailed'));
           return;
         }
+        const linked = await linkCreatedInspections(createdRows);
+        if (linked) return;
         messageApi.success(
           t('app.kuaizhizao.quality.incoming.messages.createFromPurchaseOrderSuccess', {
             count,
@@ -875,6 +909,15 @@ const IncomingInspectionPage: React.FC = () => {
       }
     },
   });
+
+  useEffect(() => {
+    if (searchParams.get('delivery_create') !== '1') return;
+    pullFromPurchaseOrderQuery.openModal();
+    const next = new URLSearchParams(searchParams);
+    next.delete('delivery_create');
+    const query = next.toString();
+    navigate({ pathname: location.pathname, search: query ? `?${query}` : '' }, { replace: true });
+  }, [location.pathname, navigate, pullFromPurchaseOrderQuery, searchParams]);
 
   const pullFromPurchaseReceiptQuery = useUniPullQuery<PullSourceCandidate>({
     rowKey: 'id',
@@ -910,15 +953,19 @@ const IncomingInspectionPage: React.FC = () => {
         return;
       }
       try {
+        const createdRows: unknown[] = [];
         let count = 0;
         for (const receiptId of selectedIds) {
           const created = await qualityApi.incomingInspection.createFromPurchaseReceipt(String(receiptId));
+          createdRows.push(created);
           count += Array.isArray(created) ? created.length : 0;
         }
         if (!count) {
           messageApi.warning(t('app.kuaizhizao.quality.incoming.messages.createFailed'));
           return;
         }
+        const linked = await linkCreatedInspections(createdRows);
+        if (linked) return;
         messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createSuccess'));
         pullFromPurchaseReceiptQuery.closeModal();
         invalidateStats();
