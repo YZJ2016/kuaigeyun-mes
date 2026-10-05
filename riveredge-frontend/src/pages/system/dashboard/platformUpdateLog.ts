@@ -44,6 +44,36 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'im-module-notify-dedupe-r01',
+    date: '2026-10-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.im-module-notify-dedupe-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.im-module-notify-dedupe-r01.description',
+  },
+  {
+    id: 'message-subject-pipe-format-r01',
+    date: '2026-10-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.message-subject-pipe-format-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.message-subject-pipe-format-r01.description',
+  },
+  {
+    id: 'uni-im-dark-list-pane-bg-r01',
+    date: '2026-10-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-im-dark-list-pane-bg-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.uni-im-dark-list-pane-bg-r01.description',
+  },
+  {
+    id: 'mobile-local-system-notification-r01',
+    date: '2026-10-05',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-local-system-notification-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-local-system-notification-r01.description',
+  },
+  {
     id: 'tech-stack-copyright-align-r01',
     date: '2026-10-05',
     type: 'improvement',
