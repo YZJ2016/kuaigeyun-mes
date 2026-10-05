@@ -1,3 +1,4 @@
-"""计量器具：与系统字典 EQUIPMENT_NATURE「测量设备」对齐。"""
+"""设备性质：与系统字典 EQUIPMENT_NATURE 对齐。"""
 
+GENERAL_EQUIPMENT_NATURE = "通用设备"
 MEASURING_INSTRUMENT_NATURE = "测量设备"

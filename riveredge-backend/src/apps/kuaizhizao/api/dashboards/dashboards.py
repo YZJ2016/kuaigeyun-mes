@@ -2066,11 +2066,19 @@ async def get_sales_follow_up_stats(
 ):
     """销售中心「待跟进客户 / 已逾期」统计（按客户最新跟进计划，含数据范围）。"""
     from apps.kuaizhizao.services.customer_follow_up_service import CustomerFollowUpService
+    from apps.kuaizhizao.services.customer_pool_service import PERM_CUSTOMER_POOL_ASSIGN
+    from core.services.authorization.user_permission_service import UserPermissionService
 
+    can_assign = await UserPermissionService.has_any_permission(
+        current_user.id,
+        tenant_id,
+        [PERM_CUSTOMER_POOL_ASSIGN],
+    )
     return await CustomerFollowUpService.dashboard_follow_up_snapshot(
         tenant_id,
         current_user,
         limit=limit,
+        owned_by_user_id=None if can_assign else current_user.id,
     )
 
 

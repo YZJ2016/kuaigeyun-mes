@@ -178,6 +178,22 @@ const customerBusinessFields: FieldConfig[] = [
     allowClear: true,
   },
   {
+    name: 'campaignName',
+    type: 'text',
+    labelKey: 'app.ind-foreign-trade.field.campaign',
+    colSpan: 12,
+    maxLength: 200,
+    allowClear: true,
+  },
+  {
+    name: 'requiredCapacityText',
+    type: 'text',
+    labelKey: 'app.ind-foreign-trade.field.capacity',
+    colSpan: 12,
+    maxLength: 200,
+    allowClear: true,
+  },
+  {
     name: 'projectDescription',
     type: 'textarea',
     labelKey: 'app.kuaizhizao.customerPool.projectDescription',

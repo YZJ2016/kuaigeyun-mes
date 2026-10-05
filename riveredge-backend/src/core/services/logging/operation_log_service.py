@@ -87,6 +87,7 @@ class OperationLogService:
         operation_type: Optional[str] = None,
         operation_module: Optional[str] = None,
         operation_object_type: Optional[str] = None,
+        keyword: Optional[str] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
     ) -> OperationLogListResponse:
@@ -125,6 +126,23 @@ class OperationLogService:
         # 操作对象类型过滤
         if operation_object_type:
             query &= Q(operation_object_type=operation_object_type)
+
+        kw = (keyword or "").strip()
+        if kw:
+            from infra.models.user import User
+
+            matching_user_ids = await User.filter(
+                tenant_id=tenant_id,
+                username__icontains=kw,
+            ).values_list("id", flat=True)
+            query &= (
+                Q(operation_content__icontains=kw)
+                | Q(request_path__icontains=kw)
+                | Q(ip_address__icontains=kw)
+                | Q(operation_module__icontains=kw)
+                | Q(operation_object_type__icontains=kw)
+                | Q(user_id__in=list(matching_user_ids))
+            )
         
         # 时间范围过滤
         if start_time:

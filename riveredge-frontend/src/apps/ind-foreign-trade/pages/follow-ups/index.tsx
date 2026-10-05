@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { App, Button, Space, Typography } from 'antd';
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { ListPageTemplate, DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
 import { ActionConfirmPopconfirm } from '../../../../components/action-confirm';
@@ -20,6 +21,7 @@ import {
 import {
   getDictionaryOptions,
   getDictionaryOptionsSync,
+  getUserOptions,
 } from '../../../master-data/services/supply-chain';
 import {
   CustomerFollowUpFormModal,
@@ -40,11 +42,16 @@ export default function ExportFollowUpsPage() {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const formRef = useRef<ProFormInstance>(undefined);
+  const [searchParams] = useSearchParams();
+  const urlKeyRef = useRef('');
   const perms = useResourcePermissions('ind-foreign-trade:follow-up');
+  const teamPerms = useResourcePermissions('ind-foreign-trade:sales-team');
   const [activityOptions, setActivityOptions] = useState<{ label: string; value: string }[]>(
     () => getDictionaryOptionsSync(DICT_CODE) ?? [],
   );
   const [customers, setCustomers] = useState<CustomerPoolItem[]>([]);
+  const [salesmanOptions, setSalesmanOptions] = useState<{ label: string; value: number }[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerFollowUp | null>(null);
   const [preset, setPreset] = useState<CustomerFollowUpPreset | null>(null);
@@ -59,7 +66,12 @@ export default function ExportFollowUpsPage() {
       .listExportCustomers({ skip: 0, limit: 200 })
       .then((res) => setCustomers(res.items || []))
       .catch(() => setCustomers([]));
-  }, []);
+    if (teamPerms.canRead) {
+      getUserOptions('ind-foreign-trade:export-customer')
+        .then((opts) => setSalesmanOptions(opts.map((o) => ({ label: o.label, value: Number(o.value) }))))
+        .catch(() => setSalesmanOptions([]));
+    }
+  }, [teamPerms.canRead]);
 
   const activityLabel = useCallback(
     (code?: string) => activityOptions.find((o) => o.value === code)?.label || code || '—',
@@ -85,6 +97,11 @@ export default function ExportFollowUpsPage() {
       isActive: true,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      countryCode: row.country_code ?? undefined,
+      regionText: row.region_text ?? undefined,
+      projectDescription: row.project_description ?? undefined,
+      intentMaterialName: row.intent_material_name ?? undefined,
+      marketScope: row.market_scope ?? 'export',
     }));
   }, []);
 
@@ -103,6 +120,19 @@ export default function ExportFollowUpsPage() {
 
   const columns: ProColumns<CustomerFollowUp>[] = useMemo(
     () => [
+      {
+        title: t('field.customer.salesman'),
+        dataIndex: 'salesmanId',
+        hideInTable: true,
+        hideInSearch: !teamPerms.canRead,
+        valueType: 'select',
+        fieldProps: {
+          showSearch: true,
+          optionFilterProp: 'label',
+          allowClear: true,
+          options: salesmanOptions,
+        },
+      },
       {
         title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
         dataIndex: 'customer_id',
@@ -207,7 +237,7 @@ export default function ExportFollowUpsPage() {
         },
       },
     ],
-    [activityLabel, activityOptions, customerSearchOptions, handleDelete, perms.canDelete, perms.canUpdate, t],
+    [activityLabel, activityOptions, customerSearchOptions, handleDelete, perms.canDelete, perms.canUpdate, salesmanOptions, t, teamPerms.canRead],
   );
 
   const openCreate = useCallback(() => {
@@ -222,7 +252,8 @@ export default function ExportFollowUpsPage() {
         actionRef={actionRef}
         rowKey="id"
         headerTitle={t('app.ind-foreign-trade.menu.followUps')}
-        columnPersistenceId="apps.ind-foreign-trade.pages.follow-ups-v2"
+        columnPersistenceId="apps.ind-foreign-trade.pages.follow-ups-v3"
+        formRef={formRef}
         permissionResource="ind-foreign-trade:follow-up"
         columns={columns}
         createButtonText={t('app.kuaizhizao.customerFollowUp.new')}
@@ -245,10 +276,21 @@ export default function ExportFollowUpsPage() {
             'occurred_at_range',
           );
           const customerIdRaw = pickSearchString(searchFormValues, 'customer_id');
+          let salesmanId = Number(pickSearchString(searchFormValues, 'salesmanId'));
+          const urlKey = searchParams.get('salesmanId') || '';
+          if (urlKeyRef.current !== urlKey) {
+            urlKeyRef.current = urlKey;
+            const urlSalesman = Number(urlKey);
+            if (teamPerms.canRead && Number.isFinite(urlSalesman) && urlSalesman > 0) {
+              salesmanId = urlSalesman;
+              formRef.current?.setFieldsValue?.({ salesmanId: urlSalesman });
+            }
+          }
           const res = await foreignTradeApi.listFollowUps({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             keyword: pickListSearchKeyword(searchFormValues),
+            salesmanId: Number.isFinite(salesmanId) && salesmanId > 0 ? salesmanId : undefined,
             customerId:
               customerIdRaw != null && Number.isFinite(Number(customerIdRaw))
                 ? Number(customerIdRaw)

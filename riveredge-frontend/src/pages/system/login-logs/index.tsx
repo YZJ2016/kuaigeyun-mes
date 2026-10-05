@@ -346,6 +346,7 @@ const LoginLogsPage: React.FC = () => {
               login_status: filter.login_status,
               username: filter.username,
               login_ip: filter.login_ip,
+              keyword: filter.keyword,
               start_time: filter.start_time,
               end_time: filter.end_time,
             };
@@ -359,6 +360,7 @@ const LoginLogsPage: React.FC = () => {
                 username: filter.username,
                 user_id: filter.user_id,
                 login_ip: filter.login_ip,
+                keyword: filter.keyword,
                 start_time: filter.start_time,
                 end_time: filter.end_time,
               });

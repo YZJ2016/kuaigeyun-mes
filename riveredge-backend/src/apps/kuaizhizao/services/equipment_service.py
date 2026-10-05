@@ -12,6 +12,7 @@ from datetime import datetime, date
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
+from apps.kuaizhizao.constants.measuring_instrument import GENERAL_EQUIPMENT_NATURE
 from apps.kuaizhizao.models.equipment import Equipment, EquipmentCalibration
 from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusHistory, EquipmentStatusMonitor
 from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
@@ -123,13 +124,10 @@ class EquipmentService:
         """创建设备"""
         try:
             code = (data.code or "").strip() or None
+            existing = None
             if code:
-                exists = await Equipment.filter(
-                    tenant_id=tenant_id,
-                    code=code,
-                    deleted_at__isnull=True,
-                ).exists()
-                if exists:
+                existing = await Equipment.filter(tenant_id=tenant_id, code=code).first()
+                if existing and existing.deleted_at is None:
                     raise ValidationError(
                         f"设备编码 {code} 已存在，请关闭弹窗后重新新建以获取最新编号"
                     )
@@ -143,7 +141,11 @@ class EquipmentService:
 
             bind = (data.qr_bind_code or "").strip() or None
             if bind:
-                await EquipmentService._assert_qr_bind_unique(tenant_id, bind)
+                await EquipmentService._assert_qr_bind_unique(
+                    tenant_id,
+                    bind,
+                    exclude_uuid=str(existing.uuid) if existing else None,
+                )
             dump = data.model_dump(exclude_none=True)
             dump.pop("capable_operations", None)
             if "capable_operation_ids" in data.model_fields_set:
@@ -154,13 +156,20 @@ class EquipmentService:
                 dump["capable_operations"] = capable_snap
             else:
                 dump.pop("capable_operation_ids", None)
-            equipment = Equipment(
-                tenant_id=tenant_id,
-                **{**dump, "qr_bind_code": bind},
-            )
+            if not str(dump.get("equipment_nature") or "").strip():
+                dump["equipment_nature"] = GENERAL_EQUIPMENT_NATURE
+            dump["qr_bind_code"] = bind
             actor = None
             if created_by is not None:
                 actor = await User.filter(id=created_by, tenant_id=tenant_id).first()
+            if existing is not None:
+                for key, value in dump.items():
+                    setattr(existing, key, value)
+                existing.deleted_at = None
+                apply_update_audit(existing, actor)
+                await existing.save()
+                return existing
+            equipment = Equipment(tenant_id=tenant_id, **dump)
             apply_create_audit(equipment, actor)
             await equipment.save()
             return equipment

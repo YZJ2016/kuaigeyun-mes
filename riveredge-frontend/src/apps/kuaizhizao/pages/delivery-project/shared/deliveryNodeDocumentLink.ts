@@ -16,6 +16,7 @@ export const DELIVERY_NODE_DOCUMENT_LINK_INTENT_KEY = 'delivery_node_document_li
 export interface DeliveryNodeDocumentLinkIntent {
   projectId: number;
   nodeId: number;
+  taskId?: number | null;
   docType: DeliveryNodeDocumentKind;
   returnPath: string;
 }
@@ -57,6 +58,7 @@ export function stripDeliveryCreateQuery(search: string): string {
 type CreateNavContext = {
   projectId: number;
   nodeId: number;
+  taskId?: number | null;
   returnPath: string;
   salesOrderId?: number | null;
 };
@@ -68,6 +70,7 @@ export function buildDeliveryNodeDocumentCreatePath(
   saveDeliveryNodeDocumentLinkIntent({
     projectId: ctx.projectId,
     nodeId: ctx.nodeId,
+    taskId: ctx.taskId,
     docType,
     returnPath: ctx.returnPath,
   });
@@ -99,6 +102,13 @@ export const DELIVERY_NODE_DOCUMENT_AUTO_LINK_TYPES = new Set<DeliveryNodeDocume
   'work_order',
   'purchase_order',
   'rd_project',
+  'quality_inspection',
+]);
+
+export const DELIVERY_NODE_DOCUMENT_TASK_BOUND_TYPES = new Set<DeliveryNodeDocumentKind>([
+  'purchase_order',
+  'purchase_receipt',
+  'quality_inspection',
 ]);
 
 export async function completeDeliveryNodeDocumentLinkIfPending(params: {
@@ -121,6 +131,7 @@ export async function completeDeliveryNodeDocumentLinkIfPending(params: {
   try {
     await deliveryProjectApi.linkNodeDocument(intent.projectId, {
       node_id: intent.nodeId,
+      task_id: intent.taskId ?? undefined,
       doc_type: params.docType,
       doc_id: params.docId,
       doc_code: params.docCode,
@@ -131,6 +142,48 @@ export async function completeDeliveryNodeDocumentLinkIfPending(params: {
       params.t('app.kuaizhizao.deliveryProject.nodeDocumentCreateLinked', {
         docType: DELIVERY_NODE_DOCUMENT_TYPES[params.docType] ?? params.docType,
         docCode: params.docCode,
+      }),
+    );
+    params.navigate(intent.returnPath);
+    return true;
+  } catch (error: unknown) {
+    params.message.error((error as Error)?.message ?? params.t('common.operationFailed'));
+    return false;
+  }
+}
+
+export async function completeDeliveryNodeDocumentLinksIfPending(params: {
+  docType: DeliveryNodeDocumentKind;
+  docs: Array<{ docId: number; docCode: string; title?: string | null }>;
+  navigate: NavigateFunction;
+  message: MessageInstance;
+  t: TFunction;
+}): Promise<boolean> {
+  const intent = peekDeliveryNodeDocumentLinkIntent();
+  if (!intent || intent.docType !== params.docType || params.docs.length === 0) {
+    return false;
+  }
+  if (!DELIVERY_NODE_DOCUMENT_AUTO_LINK_TYPES.has(params.docType)) {
+    clearDeliveryNodeDocumentLinkIntent();
+    return false;
+  }
+  try {
+    for (const doc of params.docs) {
+      await deliveryProjectApi.linkNodeDocument(intent.projectId, {
+        node_id: intent.nodeId,
+        task_id: intent.taskId ?? undefined,
+        doc_type: params.docType,
+        doc_id: doc.docId,
+        doc_code: doc.docCode,
+        title: doc.title ?? doc.docCode,
+      });
+    }
+    clearDeliveryNodeDocumentLinkIntent();
+    const first = params.docs[0];
+    params.message.success(
+      params.t('app.kuaizhizao.deliveryProject.nodeDocumentCreateLinked', {
+        docType: DELIVERY_NODE_DOCUMENT_TYPES[params.docType] ?? params.docType,
+        docCode: first.docCode,
       }),
     );
     params.navigate(intent.returnPath);

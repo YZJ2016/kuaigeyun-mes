@@ -45,6 +45,7 @@ class LoginLogService:
         username: Optional[str] = None,
         login_status: Optional[str] = None,
         login_ip: Optional[str] = None,
+        keyword: Optional[str] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
     ) -> Q:
@@ -59,6 +60,15 @@ class LoginLogService:
             query &= Q(login_status=login_status)
         if login_ip:
             query &= Q(login_ip__icontains=login_ip)
+        kw = (keyword or "").strip()
+        if kw:
+            query &= (
+                Q(username__icontains=kw)
+                | Q(login_ip__icontains=kw)
+                | Q(login_location__icontains=kw)
+                | Q(login_device__icontains=kw)
+                | Q(login_browser__icontains=kw)
+            )
         if start_time:
             query &= Q(created_at__gte=start_time)
         if end_time:
@@ -88,6 +98,7 @@ class LoginLogService:
         username: Optional[str] = None,
         login_status: Optional[str] = None,
         login_ip: Optional[str] = None,
+        keyword: Optional[str] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
     ) -> LoginLogListResponse:
@@ -114,11 +125,19 @@ class LoginLogService:
             username=username,
             login_status=login_status,
             login_ip=login_ip,
+            keyword=keyword,
             start_time=start_time,
             end_time=end_time,
         )
 
-        logger.debug(f"get_login_logs: tenant_id={tenant_id}, page={page}, filters: user_id={user_id}, username={username}")
+        logger.debug(
+            "get_login_logs: tenant_id=%s, page=%s, filters: user_id=%s, username=%s, keyword=%s",
+            tenant_id,
+            page,
+            user_id,
+            username,
+            keyword,
+        )
         
         total = await LoginLog.filter(query).count()
         if total == 0 and tenant_id is not None and logger.isEnabledFor(logging.DEBUG):
@@ -315,6 +334,7 @@ class LoginLogService:
         username: Optional[str] = None,
         login_status: Optional[str] = None,
         login_ip: Optional[str] = None,
+        keyword: Optional[str] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
     ) -> LoginLogMapPointsResponse:
@@ -325,6 +345,7 @@ class LoginLogService:
             username=username,
             login_status=login_status,
             login_ip=login_ip,
+            keyword=keyword,
             start_time=start_time,
             end_time=end_time,
         )

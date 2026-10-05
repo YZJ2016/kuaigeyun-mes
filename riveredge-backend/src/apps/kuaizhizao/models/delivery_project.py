@@ -231,6 +231,11 @@ class DeliveryProjectNodeTask(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     project_id = fields.IntField(description="项目ID")
     node_id = fields.IntField(description="节点ID")
+    parent_task_id = fields.IntField(null=True, description="所属子阶段ID，具体任务必填")
+    task_layer = fields.CharField(
+        max_length=20,
+        description="substage 子阶段 / task 具体任务",
+    )
     template_task_id = fields.IntField(null=True, description="模板任务ID")
     task_key = fields.CharField(max_length=50, null=True, description="任务标识")
     task_name = fields.CharField(max_length=200, description="任务名称")
@@ -277,6 +282,7 @@ class DeliveryProjectNodeTask(BaseModel):
         indexes = [
             ("tenant_id", "project_id"),
             ("tenant_id", "node_id"),
+            ("tenant_id", "parent_task_id"),
             ("tenant_id", "status"),
         ]
 
@@ -381,6 +387,7 @@ class DeliveryProjectNodeDocument(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     project_id = fields.IntField(description="项目ID")
     node_id = fields.IntField(description="节点ID")
+    task_id = fields.IntField(null=True, description="具体任务ID")
     doc_type = fields.CharField(max_length=50, description="单据类型")
     doc_id = fields.IntField(description="单据ID")
     doc_code = fields.CharField(max_length=100, description="单据编码")

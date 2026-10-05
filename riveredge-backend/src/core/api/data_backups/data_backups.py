@@ -178,6 +178,7 @@ async def get_backups(
     backup_type: Optional[str] = None,
     backup_scope: Optional[str] = None,
     backup_status: Optional[str] = Query(None, alias="status"),
+    keyword: Optional[str] = Query(None, description="模糊搜索备份名称"),
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
@@ -195,6 +196,7 @@ async def get_backups(
         backup_type,
         backup_scope,
         backup_status,
+        keyword=keyword,
         is_infra_admin=_is_platform_backup_admin(current_user),
     )
     return {

@@ -904,6 +904,7 @@ const DataBackupsPage: React.FC = () => {
                 page_size: pageSize || 20,
                 backup_type: filter.backup_type,
                 status: filter.status,
+                keyword: filter.keyword,
               });
               
               const isActiveJob = (item: DataBackup) =>

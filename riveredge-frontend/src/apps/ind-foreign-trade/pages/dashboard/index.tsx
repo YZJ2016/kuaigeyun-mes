@@ -19,8 +19,10 @@ import {
   masonryWeightFromRows,
 } from '../../../kuaizhizao/components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../kuaizhizao/components/module-center';
-import { foreignTradeApi, type CustomerFollowUp, type ForeignTradeCrmStats } from '../../services/foreignTradeApi';
+import { foreignTradeApi, type CustomerFollowUp, type ForeignTradeCrmStats, type SalesTeamMemberStat } from '../../services/foreignTradeApi';
 import { formatDateTime } from '../../../../utils/format';
+import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
+import { getDictionaryOptions } from '../../../master-data/services/supply-chain';
 
 const { Text } = Typography;
 
@@ -30,18 +32,39 @@ export default function ForeignTradeDashboardPage() {
   const { message } = App.useApp();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<ForeignTradeCrmStats | null>(null);
+  const [teamMembers, setTeamMembers] = useState<SalesTeamMemberStat[]>([]);
+  const [levelLabels, setLevelLabels] = useState<Record<string, string>>({});
+  const teamPerms = useResourcePermissions('ind-foreign-trade:sales-team');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await foreignTradeApi.getStats(8);
       setStats(res);
+      if (teamPerms.canRead) {
+        const team = await foreignTradeApi.getSalesTeam();
+        setTeamMembers(team.members || []);
+      } else {
+        setTeamMembers([]);
+      }
     } catch (e: any) {
       message.error(e?.message || t('app.ind-foreign-trade.dashboard.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [message, t]);
+  }, [message, t, teamPerms.canRead]);
+
+  useEffect(() => {
+    getDictionaryOptions('CUSTOMER_LEVEL')
+      .then((opts) => {
+        const map: Record<string, string> = {};
+        (opts || []).forEach((opt) => {
+          map[String(opt.value)] = String(opt.label);
+        });
+        setLevelLabels(map);
+      })
+      .catch(() => setLevelLabels({}));
+  }, []);
 
   useEffect(() => {
     void load();
@@ -78,7 +101,7 @@ export default function ForeignTradeDashboardPage() {
         icon: <WarningOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
         boxShadow: '0 4px 12px rgba(255, 77, 79, 0.15)',
-        onClick: () => navigate('/apps/ind-foreign-trade/export-customers'),
+        onClick: () => navigate('/apps/ind-foreign-trade/export-customers?inactive=true'),
         sideMetrics: [
           { label: t('app.kuaizhizao.customerPool.followStatusPending'), value: unfollowed },
         ],
@@ -155,10 +178,27 @@ export default function ForeignTradeDashboardPage() {
         .sort((a, b) => b[1] - a[1])
         .map(([code, count]) => ({
           id: code,
-          title: code === '_unset' ? t('app.kuaizhizao.salesDashboard.crm.levelUnset') : code,
+          title: code === '_unset' ? t('app.kuaizhizao.salesDashboard.crm.levelUnset') : (levelLabels[code] || code),
           meta: <Text style={{ fontWeight: 600 }}>{count}</Text>,
         })),
-    [levelCounts, t],
+    [levelCounts, levelLabels, t],
+  );
+
+  const teamFeed = useMemo(
+    () =>
+      teamMembers.map((member) => ({
+        id: member.salesman_id,
+        title: member.salesman_name,
+        subtitle: t('app.ind-foreign-trade.dashboard.teamMemberHint', {
+          customers: member.customer_count,
+          follows: member.follow_up_count,
+          pending: member.pending_count,
+          inactive: member.inactive_count,
+        }),
+        onClick: () =>
+          navigate(`/apps/ind-foreign-trade/export-customers?salesmanId=${member.salesman_id}`),
+      })),
+    [navigate, t, teamMembers],
   );
 
   return (
@@ -188,6 +228,19 @@ export default function ForeignTradeDashboardPage() {
               emptyText={t('app.kuaizhizao.salesDashboard.crm.levelEmpty')}
             />
           </ModuleActionPanel>
+          {teamPerms.canRead ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.ind-foreign-trade.dashboard.teamTitle')}
+              loading={loading}
+              masonryWeight={masonryWeightFromRows(Math.max(teamFeed.length, 3))}
+            >
+              <ModuleFeedList
+                items={teamFeed}
+                emptyText={t('app.ind-foreign-trade.dashboard.teamEmpty')}
+              />
+            </ModuleActionPanel>
+          ) : null}
         </ModuleActionMasonry>
       }
     />

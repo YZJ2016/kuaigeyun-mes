@@ -53,6 +53,7 @@ export async function getOperationLogs(params?: {
   operation_object_type?: string;
   operation_object_uuid?: string;
   operation_object_id?: number;
+  keyword?: string;
   start_time?: string;
   end_time?: string;
 }): Promise<OperationLogListResponse> {

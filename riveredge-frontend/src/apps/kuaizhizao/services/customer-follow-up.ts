@@ -69,6 +69,10 @@ export const customerFollowUpApi = {
     opportunity_id?: number | null;
     stage_code_after?: string | null;
     attachment_uuids?: string[] | null;
+    country_code?: string | null;
+    region_text?: string | null;
+    project_description?: string | null;
+    intent_material_name?: string | null;
   }): Promise<CustomerFollowUp> =>
     apiRequest('/apps/kuaizhizao/customer-follow-ups', { method: 'POST', data }),
 
@@ -85,6 +89,10 @@ export const customerFollowUpApi = {
       sales_order_id: number | null;
       opportunity_id?: number | null;
       stage_code_after?: string | null;
+      country_code?: string | null;
+      region_text?: string | null;
+      project_description?: string | null;
+      intent_material_name?: string | null;
     }>
   ): Promise<CustomerFollowUp> =>
     apiRequest(`/apps/kuaizhizao/customer-follow-ups/${id}`, { method: 'PUT', data }),

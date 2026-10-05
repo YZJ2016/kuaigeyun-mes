@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { App, Button } from 'antd';
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { useNavigate } from 'react-router-dom';
+import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
@@ -32,6 +32,9 @@ export default function ExportCustomersPage() {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
+  const formRef = useRef<ProFormInstance>(undefined);
+  const [searchParams] = useSearchParams();
+  const urlKeyRef = useRef('');
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -41,6 +44,7 @@ export default function ExportCustomersPage() {
   const [salesmanOptions, setSalesmanOptions] = useState<{ label: string; value: number }[]>([]);
   const perms = useResourcePermissions('ind-foreign-trade:export-customer');
   const followPerms = useResourcePermissions('ind-foreign-trade:follow-up');
+  const teamPerms = useResourcePermissions('ind-foreign-trade:sales-team');
   const poolDictOptions = useImportDictionaryOptions(['CUSTOMER_LEVEL']);
   const [inactiveAlertDays, setInactiveAlertDays] = useState(7);
 
@@ -69,6 +73,13 @@ export default function ExportCustomersPage() {
       isActive: true,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      countryCode: row.country_code ?? undefined,
+      regionText: row.region_text ?? undefined,
+      projectDescription: row.project_description ?? undefined,
+      intentMaterialName: row.intent_material_name ?? undefined,
+      marketScope: row.market_scope ?? undefined,
+      campaignName: row.campaign_name ?? undefined,
+      requiredCapacityText: row.required_capacity_text ?? undefined,
     }));
   }, []);
 
@@ -95,6 +106,7 @@ export default function ExportCustomersPage() {
         title: t('field.customer.salesman'),
         dataIndex: 'salesmanId',
         hideInTable: true,
+        hideInSearch: !teamPerms.canRead,
         valueType: 'select',
         fieldProps: {
           options: salesmanOptions,
@@ -156,6 +168,22 @@ export default function ExportCustomersPage() {
         ellipsis: true,
         hideInSearch: true,
         render: (_, row) => row.intent_material_name || '—',
+      },
+      {
+        title: t('app.ind-foreign-trade.field.campaign'),
+        dataIndex: 'campaign_name',
+        width: 160,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, row) => row.campaign_name || '—',
+      },
+      {
+        title: t('app.ind-foreign-trade.field.capacity'),
+        dataIndex: 'required_capacity_text',
+        width: 160,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, row) => row.required_capacity_text || '—',
       },
       {
         title: t('app.kuaizhizao.customerPool.intentMaterial'),
@@ -282,6 +310,7 @@ export default function ExportCustomersPage() {
       poolDictOptions.CUSTOMER_LEVEL,
       salesmanOptions,
       t,
+      teamPerms.canRead,
     ],
   );
 
@@ -332,6 +361,8 @@ export default function ExportCustomersPage() {
         t('field.customer.email'),
         t('field.customer.level'),
         t('app.kuaizhizao.customerPool.intentMaterial'),
+        t('app.ind-foreign-trade.field.campaign'),
+        t('app.ind-foreign-trade.field.capacity'),
         t('app.kuaizhizao.customerPool.followStatus'),
         t('app.kuaizhizao.customerPool.followUpCount'),
         t('field.customer.salesman'),
@@ -352,6 +383,8 @@ export default function ExportCustomersPage() {
           row.email ?? '',
           row.customer_level_code ?? '',
           row.intent_material_name ?? '',
+          row.campaign_name ?? '',
+          row.required_capacity_text ?? '',
           followStatus,
           String(row.follow_up_count ?? 0),
           row.salesman_name ?? '',
@@ -375,7 +408,8 @@ export default function ExportCustomersPage() {
         actionRef={actionRef}
         rowKey="id"
         headerTitle={t('app.ind-foreign-trade.menu.exportCustomers')}
-        columnPersistenceId="apps.ind-foreign-trade.pages.export-customers-v3"
+        columnPersistenceId="apps.ind-foreign-trade.pages.export-customers-v4"
+        formRef={formRef}
         permissionResource="ind-foreign-trade:export-customer"
         columns={columns}
         enableRowSelection
@@ -397,13 +431,28 @@ export default function ExportCustomersPage() {
         }
         request={async (params, sort, _filter, search) => {
           const core = resolveCustomerPoolListParams(search, sort);
+          let salesmanId = core.salesmanId as number | undefined;
+          let inactive = core.inactive as boolean | undefined;
+          const urlKey = `${searchParams.get('salesmanId') || ''}|${searchParams.get('inactive') || ''}`;
+          if (urlKeyRef.current !== urlKey) {
+            urlKeyRef.current = urlKey;
+            const urlSalesman = Number(searchParams.get('salesmanId'));
+            if (teamPerms.canRead && Number.isFinite(urlSalesman) && urlSalesman > 0) {
+              salesmanId = urlSalesman;
+              formRef.current?.setFieldsValue?.({ salesmanId: urlSalesman });
+            }
+            if (searchParams.get('inactive') === 'true') {
+              inactive = true;
+              formRef.current?.setFieldsValue?.({ inactive: 'true' });
+            }
+          }
           const listParams = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
             keyword: core.keyword,
-            salesmanId: core.salesmanId,
+            salesmanId,
             followStatus: core.followStatus,
-            inactive: core.inactive,
+            inactive,
             customerLevelCode: core.customerLevelCode,
             intentMaterialName: core.intentMaterialName,
             countryCode: typeof search?.countryCode === 'string' ? search.countryCode.trim() : undefined,

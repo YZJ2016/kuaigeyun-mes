@@ -31,6 +31,7 @@ async def get_login_logs(
     username: Optional[str] = Query(None, description="用户名过滤"),
     login_status: Optional[str] = Query(None, description="登录状态过滤（success、failed）"),
     login_ip: Optional[str] = Query(None, description="登录IP过滤"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（用户名/IP/地点/设备/浏览器）"),
     start_time: Optional[datetime] = Query(None, description="开始时间过滤"),
     end_time: Optional[datetime] = Query(None, description="结束时间过滤"),
     current_user: User = Depends(get_current_user),
@@ -62,6 +63,7 @@ async def get_login_logs(
         username=username,
         login_status=login_status,
         login_ip=login_ip,
+        keyword=keyword,
         start_time=start_time,
         end_time=end_time,
     )
@@ -73,6 +75,7 @@ async def get_login_log_map_points(
     username: Optional[str] = Query(None, description="用户名过滤"),
     login_status: Optional[str] = Query(None, description="登录状态过滤（success、failed）"),
     login_ip: Optional[str] = Query(None, description="登录IP过滤"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（用户名/IP/地点/设备/浏览器）"),
     start_time: Optional[datetime] = Query(None, description="开始时间过滤"),
     end_time: Optional[datetime] = Query(None, description="结束时间过滤"),
     current_user: User = Depends(get_current_user),
@@ -85,6 +88,7 @@ async def get_login_log_map_points(
         username=username,
         login_status=login_status,
         login_ip=login_ip,
+        keyword=keyword,
         start_time=start_time,
         end_time=end_time,
     )

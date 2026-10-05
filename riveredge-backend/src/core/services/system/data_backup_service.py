@@ -80,6 +80,7 @@ class DataBackupService:
         backup_type: Optional[str] = None,
         backup_scope: Optional[str] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
         *,
         is_infra_admin: bool = False,
     ) -> Tuple[List[DataBackup], int]:
@@ -98,6 +99,9 @@ class DataBackupService:
             query = query.filter(backup_scope=backup_scope)
         if status:
             query = query.filter(status=status)
+        kw = (keyword or "").strip()
+        if kw:
+            query = query.filter(name__icontains=kw)
 
         async def _materialize():
             total = await query.count()

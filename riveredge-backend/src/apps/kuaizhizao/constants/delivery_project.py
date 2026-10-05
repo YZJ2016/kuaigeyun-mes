@@ -54,6 +54,13 @@ class DeliveryNodeTaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class DeliveryTaskLayer(str, Enum):
+    """节点下的子阶段，以及子阶段下的具体任务。"""
+
+    SUBSTAGE = "substage"
+    TASK = "task"
+
+
 class DeliveryTaskTrackMode(str, Enum):
     """节点任务跟踪方式：进度百分比 / 齐套有无"""
 

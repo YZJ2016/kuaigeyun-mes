@@ -117,6 +117,7 @@ PERMISSION_CODE_DISPLAY_LABELS: dict[str, str] = {
     "system:document-time-rewrite:execute": "执行单据时间修正",
     "system:document-global-view:read": "全局档案总查看",
     "system:document-senior-author:read": "资深制定方历史版本",
+    "ind-foreign-trade:sales-team:read": "查看团队跟进",
 }
 
 

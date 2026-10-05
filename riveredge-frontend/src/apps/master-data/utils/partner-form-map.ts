@@ -108,6 +108,8 @@ export function customerDetailToFormValues(d: Customer): Record<string, unknown>
     marketScope: d.marketScope,
     intentMaterialName: d.intentMaterialName,
     projectDescription: d.projectDescription,
+    campaignName: d.campaignName,
+    requiredCapacityText: d.requiredCapacityText,
     isPublic: d.poolStatus === 'pool' || !d.salesmanId,
     isActive: d.isActive ?? true,
     ...partnerFormSliceWithoutFinance(d),

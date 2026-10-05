@@ -52,6 +52,7 @@
     "ind-foreign-trade:export-customer:update",
     "ind-foreign-trade:export-customer:import",
     "ind-foreign-trade:export-customer:export",
+    "ind-foreign-trade:sales-team:read",
     "ind-foreign-trade:follow-up:read",
     "ind-foreign-trade:follow-up:create",
     "ind-foreign-trade:follow-up:update",

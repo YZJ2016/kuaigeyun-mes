@@ -15,6 +15,7 @@ import {
   type DeliveryProjectNode,
   type DeliveryProjectNodeTask,
 } from '../../../services/delivery-project';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { renderDeliveryIssuePriorityTag, renderDeliveryStatusTag } from './deliveryListPresentation';
 import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { workbenchKeepWidth, workbenchRemainderFlex } from './deliveryWorkbenchTableLayout';
@@ -93,17 +94,30 @@ export function buildWorkbenchNodeTaskColumns({
       dataIndex: 'status',
       key: 'lifecycle',
       fixed: 'right',
-      render: (v, task) =>
-        task.participant_mode && task.participant_mode !== 'solo' ? (
-          <Typography.Text style={{ fontSize: 12 }}>
-            {t('app.kuaizhizao.deliveryProject.participantProgressShort', {
-              done: (task.participant_actions ?? []).filter((a) => a.status === 'done').length,
-              total: (task.participant_actions ?? []).length,
-            })}
-          </Typography.Text>
-        ) : (
-          renderDeliveryStatusTag(String(v), DELIVERY_NODE_TASK_STATUS)
-        ),
+      render: (v, task) => (
+        <Space size={4} wrap>
+          {task.participant_mode && task.participant_mode !== 'solo' ? (
+            <Typography.Text style={{ fontSize: 12 }}>
+              {t('app.kuaizhizao.deliveryProject.participantProgressShort', {
+                done: (task.participant_actions ?? []).filter((a) => a.status === 'done').length,
+                total: (task.participant_actions ?? []).length,
+              })}
+            </Typography.Text>
+          ) : (
+            renderDeliveryStatusTag(String(v), DELIVERY_NODE_TASK_STATUS)
+          )}
+          {task.ahead_days ? (
+            <MarkerTag variant="filled" color="green">
+              {t('app.kuaizhizao.deliveryProject.taskAheadDays', { days: task.ahead_days })}
+            </MarkerTag>
+          ) : null}
+          {task.overdue_days ? (
+            <MarkerTag variant="filled" color="red">
+              {t('app.kuaizhizao.deliveryProject.taskOverdueDays', { days: task.overdue_days })}
+            </MarkerTag>
+          ) : null}
+        </Space>
+      ),
     },
     {
       title: t('app.kuaizhizao.deliveryProject.fields.taskAttachments'),

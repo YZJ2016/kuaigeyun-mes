@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
@@ -14,6 +15,7 @@ from apps.kuaizhizao.schemas.customer_follow_up import (
     CustomerFollowUpListEnvelope as FollowUpListEnvelope,
     CustomerFollowUpResponse,
     CustomerFollowUpUpdate,
+    SalesTeamSnapshot,
 )
 from apps.kuaizhizao.schemas.customer_pool import CustomerPoolListEnvelope
 from apps.kuaizhizao.services.customer_follow_up_service import (
@@ -29,6 +31,7 @@ from apps.master_data.schemas.supply_chain_schemas import (
 )
 from apps.master_data.services.supply_chain_service import SupplyChainService
 from core.api.deps.access import require_permission_codes
+from core.services.authorization.user_permission_service import UserPermissionService
 from core.api.deps.deps import get_current_tenant
 from core.config.code_rule_pages import get_canonical_rule_code
 from core.services.business.code_generation_service import CodeGenerationService
@@ -55,6 +58,22 @@ INQUIRY_COLUMNS = (
     "company_name",
     "job_title",
 )
+
+# 询盘模板第一行的真实表头（SpreadsheetML），与 API 字段一一对应。
+INQUIRY_FILE_HEADERS = (
+    "created_time",
+    "campaign_name",
+    "your_packaging_materials?example:_salt__25kg/bag",
+    "what_is_your_required_production_capacity?example:_600_bags/hour",
+    "phone_number",
+    "email",
+    "full_name",
+    "company_name",
+    "job_title",
+)
+
+TEAM_READ_PERMISSION = "ind-foreign-trade:sales-team:read"
+_EXCEL_SERIAL = re.compile(r"^\d+(\.\d+)?$")
 
 
 class InquiryImportRow(BaseModel):
@@ -92,6 +111,17 @@ def _parse_created_time(raw: Optional[str]) -> Optional[datetime]:
     text = str(raw or "").strip()
     if not text:
         return None
+    if _EXCEL_SERIAL.fullmatch(text):
+        serial = float(text)
+        if serial < 1 or serial > 2958465:
+            raise ValidationError(f"创建时间无法解析: {text}")
+        days = int(serial)
+        seconds = int(round((serial - days) * 86400))
+        if seconds >= 86400:
+            days += 1
+            seconds -= 86400
+        wall = datetime(1899, 12, 30) + timedelta(days=days, seconds=seconds)
+        return coerce_business_datetime_to_utc(wall)
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d"):
         try:
             return coerce_business_datetime_to_utc(datetime.strptime(text, fmt))
@@ -111,6 +141,14 @@ async def _next_export_customer_code(tenant_id: int, index: int) -> str:
         if rule:
             return await CodeGenerationService.generate_code(tenant_id, rule_code)
     return f"FT{today_site_str()}{index:04d}"
+
+
+async def _sees_export_team(current_user: User, tenant_id: int) -> bool:
+    return await UserPermissionService.has_any_permission(
+        current_user.id,
+        tenant_id,
+        [TEAM_READ_PERMISSION],
+    )
 
 
 @router.get(
@@ -137,14 +175,15 @@ async def list_export_customers(
     tenant_id: int = Depends(get_current_tenant),
     _auth: object = Depends(require_permission_codes("ind-foreign-trade:export-customer:read")),
 ):
+    sees_team = await _sees_export_team(current_user, tenant_id)
     return await CustomerPoolService.list_customers(
         tenant_id=tenant_id,
         current_user=current_user,
-        scope="all",
+        scope="all" if sees_team else "mine",
+        salesman_id=salesman_id if sees_team else None,
         skip=skip,
         limit=limit,
         keyword=keyword,
-        salesman_id=salesman_id,
         follow_status=follow_status,
         market_scope="export",
         country_code=country_code,
@@ -159,7 +198,15 @@ async def list_export_customers(
     )
 
 
-async def _require_export_customer(tenant_id: int, customer_uuid: str) -> Customer:
+async def _assert_export_customer_visible(tenant_id: int, row: Customer, current_user: User) -> None:
+    if await _sees_export_team(current_user, tenant_id):
+        return
+    owner_ids = await CustomerFollowUpService._owner_customer_ids(tenant_id, current_user.id, "export")
+    if int(row.id) not in owner_ids:
+        raise NotFoundError("外贸客户不存在")
+
+
+async def _require_export_customer(tenant_id: int, customer_uuid: str, current_user: User) -> Customer:
     row = await Customer.filter(
         tenant_id=tenant_id,
         uuid=customer_uuid,
@@ -169,10 +216,11 @@ async def _require_export_customer(tenant_id: int, customer_uuid: str) -> Custom
         raise NotFoundError("外贸客户不存在")
     if str(getattr(row, "market_scope", None) or "").strip().lower() != "export":
         raise ValidationError("该客户不是外贸客户")
+    await _assert_export_customer_visible(tenant_id, row, current_user)
     return row
 
 
-async def _require_export_customer_id(tenant_id: int, customer_id: int) -> Customer:
+async def _require_export_customer_id(tenant_id: int, customer_id: int, current_user: User) -> Customer:
     row = await Customer.filter(
         id=customer_id,
         tenant_id=tenant_id,
@@ -182,6 +230,7 @@ async def _require_export_customer_id(tenant_id: int, customer_id: int) -> Custo
         raise NotFoundError("外贸客户不存在")
     if str(getattr(row, "market_scope", None) or "").strip().lower() != "export":
         raise ValidationError("该客户不是外贸客户")
+    await _assert_export_customer_visible(tenant_id, row, current_user)
     return row
 
 
@@ -196,10 +245,29 @@ async def export_crm_stats(
     limit: int = Query(8, ge=1, le=20),
     _auth: object = Depends(require_permission_codes("ind-foreign-trade:entry:read")),
 ):
+    sees_team = await _sees_export_team(current_user, tenant_id)
     return await CustomerFollowUpService.dashboard_follow_up_snapshot(
         tenant_id,
         current_user,
         limit=limit,
+        market_scope="export",
+        owned_by_user_id=None if sees_team else current_user.id,
+    )
+
+
+@router.get(
+    "/sales-team",
+    response_model=SalesTeamSnapshot,
+    summary="Export customers grouped by salesman",
+)
+async def export_sales_team(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes(TEAM_READ_PERMISSION)),
+):
+    return await CustomerFollowUpService.sales_team_snapshot(
+        tenant_id,
+        current_user,
         market_scope="export",
     )
 
@@ -218,6 +286,7 @@ async def list_export_follow_ups(
     occurred_from: Optional[datetime] = Query(None, alias="occurredFrom"),
     occurred_to: Optional[datetime] = Query(None, alias="occurredTo"),
     pending_only: bool = Query(False, alias="pendingOnly"),
+    salesman_id: Optional[int] = Query(None, alias="salesmanId", ge=1),
     order_by: Optional[str] = Query(None, alias="orderBy"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -228,6 +297,7 @@ async def list_export_follow_ups(
         field = order_by.lstrip("-")
         if field in CUSTOMER_FOLLOW_UP_SORTABLE_FIELDS:
             safe_order_by = order_by
+    sees_team = await _sees_export_team(current_user, tenant_id)
     return await CustomerFollowUpService.list_follow_ups(
         tenant_id=tenant_id,
         skip=skip,
@@ -241,6 +311,8 @@ async def list_export_follow_ups(
         order_by=safe_order_by,
         current_user=current_user,
         market_scope="export",
+        salesman_id=salesman_id if sees_team else None,
+        owned_by_user_id=None if sees_team else current_user.id,
     )
 
 
@@ -257,7 +329,7 @@ async def get_export_follow_up(
 ):
     try:
         item = await CustomerFollowUpService.get(tenant_id, follow_id, current_user)
-        await _require_export_customer_id(tenant_id, item.customer_id)
+        await _require_export_customer_id(tenant_id, item.customer_id, current_user)
         return item
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -277,7 +349,7 @@ async def create_export_follow_up(
     _auth: object = Depends(require_permission_codes("ind-foreign-trade:follow-up:create")),
 ):
     try:
-        await _require_export_customer_id(tenant_id, body.customer_id)
+        await _require_export_customer_id(tenant_id, body.customer_id, current_user)
         return await CustomerFollowUpService.create(tenant_id, body, current_user)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -299,7 +371,7 @@ async def update_export_follow_up(
 ):
     try:
         existing = await CustomerFollowUpService.get(tenant_id, follow_id, current_user)
-        await _require_export_customer_id(tenant_id, existing.customer_id)
+        await _require_export_customer_id(tenant_id, existing.customer_id, current_user)
         return await CustomerFollowUpService.update(tenant_id, follow_id, body, current_user)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -319,7 +391,7 @@ async def delete_export_follow_up(
 ):
     try:
         existing = await CustomerFollowUpService.get(tenant_id, follow_id, current_user)
-        await _require_export_customer_id(tenant_id, existing.customer_id)
+        await _require_export_customer_id(tenant_id, existing.customer_id, current_user)
         await CustomerFollowUpService.delete(tenant_id, follow_id, current_user)
         return {"ok": True}
     except NotFoundError as exc:
@@ -335,10 +407,11 @@ async def delete_export_follow_up(
 )
 async def get_export_customer(
     customer_uuid: str,
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     _auth: object = Depends(require_permission_codes("ind-foreign-trade:export-customer:read")),
 ):
-    await _require_export_customer(tenant_id, customer_uuid)
+    await _require_export_customer(tenant_id, customer_uuid, current_user)
     return await SupplyChainService.get_customer_by_uuid(tenant_id, customer_uuid)
 
 
@@ -371,7 +444,7 @@ async def update_export_customer(
     tenant_id: int = Depends(get_current_tenant),
     _auth: object = Depends(require_permission_codes("ind-foreign-trade:export-customer:update")),
 ):
-    await _require_export_customer(tenant_id, customer_uuid)
+    await _require_export_customer(tenant_id, customer_uuid, current_user)
     payload = body.model_copy(update={"market_scope": "export"})
     return await SupplyChainService.update_customer(tenant_id, customer_uuid, payload, current_user)
 
@@ -382,6 +455,7 @@ async def inquiry_import_columns(
 ):
     return {
         "columns": list(INQUIRY_COLUMNS),
+        "file_headers": list(INQUIRY_FILE_HEADERS),
         "labels_zh": {
             "created_time": "创建时间",
             "campaign_name": "广告系列名称",

@@ -29,6 +29,7 @@ async def get_operation_logs(
     operation_type: Optional[str] = Query(None, description="操作类型过滤"),
     operation_module: Optional[str] = Query(None, description="操作模块过滤"),
     operation_object_type: Optional[str] = Query(None, description="操作对象类型过滤"),
+    keyword: Optional[str] = Query(None, description="模糊搜索（用户名/模块/内容/路径/IP）"),
     start_time: Optional[datetime] = Query(None, description="开始时间过滤"),
     end_time: Optional[datetime] = Query(None, description="结束时间过滤"),
     tenant_id: int = Depends(get_current_tenant),
@@ -57,6 +58,7 @@ async def get_operation_logs(
         operation_type=operation_type,
         operation_module=operation_module,
         operation_object_type=operation_object_type,
+        keyword=keyword,
         start_time=start_time,
         end_time=end_time,
     )

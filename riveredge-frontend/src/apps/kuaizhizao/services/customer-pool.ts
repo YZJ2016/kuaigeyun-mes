@@ -26,6 +26,8 @@ export interface CustomerPoolItem {
   region_text?: string | null;
   market_scope?: 'domestic' | 'export' | string | null;
   country_code?: string | null;
+  campaign_name?: string | null;
+  required_capacity_text?: string | null;
   customer_level_code?: string | null;
   follow_up_count?: number;
   inactive?: boolean;

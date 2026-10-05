@@ -122,6 +122,8 @@ def _to_customer_pool_item(
         region_text=getattr(row, "region_text", None),
         market_scope=getattr(row, "market_scope", None) or "domestic",
         country_code=getattr(row, "country_code", None),
+        campaign_name=getattr(row, "campaign_name", None),
+        required_capacity_text=getattr(row, "required_capacity_text", None),
         customer_level_code=getattr(row, "customer_level_code", None),
         follow_up_count=int(follow_up_count or 0),
         inactive=_is_inactive(last_fu, days=inactive_alert_days, now=now),

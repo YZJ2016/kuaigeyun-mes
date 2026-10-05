@@ -419,6 +419,83 @@ async def notify_delivery_node_milestone_overdue(
     )
 
 
+async def notify_delivery_task_due_soon(
+    tenant_id: int,
+    *,
+    project_id: int,
+    project_code: str,
+    project_name: str,
+    task_name: str,
+    planned_end_date: str,
+    days_remaining: int,
+    task_owner_user_id: Optional[int],
+    project_owner_user_id: Optional[int],
+) -> int:
+    recipients = [uid for uid in (task_owner_user_id, project_owner_user_id) if uid]
+    subject = f"交付任务临期提醒 {project_code} {task_name}"
+    content = (
+        f"项目 {project_code} {project_name} 的任务「{task_name}」"
+        f"计划 {planned_end_date} 完成，剩余 {days_remaining} 天，请及时跟进。"
+    )
+    return await _send_delivery_project_internal(
+        tenant_id,
+        recipient_user_ids=recipients,
+        subject=subject,
+        content=content,
+        detail_path=_delivery_workbench_path(project_id),
+    )
+
+
+async def notify_delivery_task_overdue(
+    tenant_id: int,
+    *,
+    project_id: int,
+    project_code: str,
+    project_name: str,
+    task_name: str,
+    planned_end_date: str,
+    days_overdue: int,
+    task_owner_user_id: Optional[int],
+    project_owner_user_id: Optional[int],
+) -> int:
+    recipients = [uid for uid in (task_owner_user_id, project_owner_user_id) if uid]
+    subject = f"交付任务逾期 {project_code} {task_name}"
+    content = (
+        f"项目 {project_code} {project_name} 的任务「{task_name}」"
+        f"计划 {planned_end_date} 完成，已逾期 {days_overdue} 天，请负责人与项目负责人尽快处理。"
+    )
+    return await _send_delivery_project_internal(
+        tenant_id,
+        recipient_user_ids=recipients,
+        subject=subject,
+        content=content,
+        detail_path=_delivery_workbench_path(project_id),
+    )
+
+
+async def notify_salesman_split_delivery_plan(
+    tenant_id: int,
+    *,
+    order_code: str,
+    sales_order_id: int,
+    salesman_user_id: Optional[int],
+) -> int:
+    if not salesman_user_id:
+        return 0
+    subject = f"请拆分交付计划 {order_code}"
+    content = f"销售订单 {order_code} 已审核，请拆分交付计划。"
+    return await _send_delivery_project_internal(
+        tenant_id,
+        recipient_user_ids=[salesman_user_id],
+        subject=subject,
+        content=content,
+        detail_path=(
+            f"/apps/kuaizhizao/sales-management/sales-orders"
+            f"?highlight={sales_order_id}&split_delivery=1"
+        ),
+    )
+
+
 FQC_EXECUTE_PERMISSION = "kuaizhizao:quality-management-finished-goods-inspection:execute"
 
 
