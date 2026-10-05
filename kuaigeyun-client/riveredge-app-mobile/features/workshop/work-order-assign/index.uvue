@@ -1,8 +1,8 @@
 <template>
-	<view class="page">
+	<view class="page-shell">
 		<home-link />
+	<view class="page">
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="loading" class="loading">加载中</text>
 		<view v-if="selectedOrder == null">
 			<text class="section">选择工单</text>
 			<view v-for="(row, index) in orders" :key="index" class="card" hover-class="pressed" @click="pickOrder(index)">
@@ -39,6 +39,12 @@
 			<button class="btn-primary" @click="submitDispatch">指派</button>
 		</view>
 	</view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -59,6 +65,7 @@
 	const remarks = ref('')
 	const loading = ref(false)
 	const errorTextValue = ref('')
+	let ticket = 0
 
 	function orderTitle(row : any) : string {
 		return fieldText(row, 'code') + ' ' + fieldText(row, 'name')
@@ -93,6 +100,8 @@
 	}
 
 	async function loadOrders() {
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
 		try {
@@ -102,9 +111,18 @@
 				query: null,
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
 			orders.value = readRows(payload)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}
@@ -118,6 +136,8 @@
 		}
 		selectedOrder.value = row
 		selectedOperation.value = null
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
 		try {
@@ -127,9 +147,18 @@
 				query: null,
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
 			operations.value = readRows(payload)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}
@@ -156,6 +185,8 @@
 	}
 
 	async function loadAssignees() {
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
 		try {
@@ -171,16 +202,28 @@
 				query: userQuery,
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
 			const teamPayload = await request({
 				method: 'GET',
 				path: '/api/v1/apps/master-data/factory/work-groups',
 				query: teamQuery,
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
 			workers.value = readRows(userPayload)
 			teams.value = readRows(teamPayload)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}

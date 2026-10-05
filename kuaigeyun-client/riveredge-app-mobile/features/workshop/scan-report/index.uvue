@@ -1,6 +1,7 @@
 <template>
-	<scroll-view class="page" direction="vertical">
+	<view class="page-shell">
 		<home-link />
+	<scroll-view class="page" direction="vertical">
 		<text class="hint">报工人员 {{ workerName }}</text>
 		<button class="btn-primary" :disabled="loading || submitting" @click="onScan">扫码工单</button>
 		<text class="hint">扫码不可用时，可输入或粘贴工单编码。</text>
@@ -13,7 +14,6 @@
 		</view>
 		<text v-if="codeText.length > 0" class="hint">扫码内容 {{ codeText }}</text>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="loading" class="loading">加载中</text>
 		<view v-for="(row, index) in orders" :key="index" class="card" hover-class="pressed" @click="pickOrder(index)">
 			<text class="title">{{ orderTitle(row) }}</text>
 			<text class="sub">{{ orderSub(row) }}</text>
@@ -31,6 +31,12 @@
 			<button class="btn-primary" :disabled="loading || submitting" @click="submitReport">提交报工</button>
 		</view>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -58,6 +64,7 @@
 	const reportedError = ref('')
 	const unqualifiedError = ref('')
 	const hoursError = ref('')
+	let ticket = 0
 
 	function clearQuantities() {
 		reportedQuantity.value = ''
@@ -92,25 +99,37 @@
 	}
 
 	async function onScan() {
-		if (loading.value || submitting.value) return
+		if (submitting.value) return
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		try {
 			const raw = scanRaw(await scan())
-			loading.value = false
+			if (ticket != mine) {
+				return
+			}
 			await resolveCode(raw)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = '扫码未完成，请重试或输入工单编码'
-		} finally {
 			loading.value = false
 		}
 	}
 	async function resolveCode(raw : string) {
-		if (loading.value || submitting.value) return
+		if (submitting.value) return
+		const mine = ticket + 1
+		ticket = mine
+		loading.value = true
 		if (raw.trim().length == 0) {
 			errorTextValue.value = '请输入工单编码或扫码内容'
+			if (ticket != mine) {
+				return
+			}
+			loading.value = false
 			return
 		}
-		loading.value = true
 		errorTextValue.value = ''
 		successText.value = ''
 		selectedOrder.value = null
@@ -122,18 +141,26 @@
 			const body = new UTSJSONObject()
 			body.set('raw', raw.trim())
 			const payload = await request({ method: 'POST', path: '/api/v1/apps/kuaizhizao/work-orders/resolve-by-scan', query: null, body: body })
+			if (ticket != mine) {
+				return
+			}
 			codeText.value = raw.trim()
 			orders.value = readWorkOrderRows(payload)
 			if (orders.value.length == 0) errorTextValue.value = '没有找到可报工的工单，请核对编码'
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
-		} finally {
-			loading.value = false
 		}
+		if (ticket != mine) {
+			return
+		}
+		loading.value = false
 	}
 
 	async function pickOrder(index : number) {
-		if (loading.value || submitting.value || index < 0 || index >= orders.value.length) return
+		if (submitting.value || index < 0 || index >= orders.value.length) return
 		const row = orders.value[index]
 		clearQuantities()
 		selectedOrder.value = row
@@ -145,6 +172,8 @@
 			toast('工单无效')
 			return
 		}
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		try {
 			const payload = await request({
@@ -153,9 +182,18 @@
 				query: null,
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
 			operations.value = readRows(payload)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}
@@ -260,6 +298,8 @@
 	}
 
 	async function openById(workOrderId : number) {
+		const mine = ticket + 1
+		ticket = mine
 		errorTextValue.value = ''
 		loading.value = true
 		try {
@@ -269,9 +309,12 @@
 				query: null,
 				body: null,
 			})
-			loading.value = false
+			if (ticket != mine) {
+				return
+			}
 			if (fieldNumber(payload, 'id') <= 0) {
 				errorTextValue.value = '没有这张工单'
+				loading.value = false
 				return
 			}
 			const list : any[] = []
@@ -279,6 +322,9 @@
 			orders.value = list
 			await pickOrder(0)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			loading.value = false
 			errorTextValue.value = errorText(err)
 		}

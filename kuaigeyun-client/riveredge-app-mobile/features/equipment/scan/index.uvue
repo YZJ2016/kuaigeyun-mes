@@ -1,13 +1,20 @@
 <template>
-	<scroll-view class="page" direction="vertical">
+	<view class="page-shell">
 		<home-link />
+	<scroll-view class="page" direction="vertical">
 		<view class="card">
 			<text class="title">扫码查设备</text>
-			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="onScan">扫码</button>
+			<button :class="loading ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="loading" @click="onScan">扫码</button>
 			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -18,23 +25,26 @@
 	import { openRegisteredRoute } from '../../../shell/registry/index.uts'
 	import { readError } from '../json-text.uts'
 
-	const busy = ref(false)
+	const loading = ref(false)
+	let ticket = 0
 	const messageText = ref('')
 	const errorText = ref('')
 
 	async function onScan(): Promise<void> {
-		if (busy.value) {
-			return
-		}
-		busy.value = true
+		const mine = ticket + 1
+		ticket = mine
+		loading.value = true
 		errorText.value = ''
 		messageText.value = ''
 		try {
 			const code = await scan()
+			if (ticket != mine) {
+				return
+			}
 			const text = code == null ? '' : ('' + code).trim()
 			if (text.length == 0) {
 				errorText.value = '未得到扫码内容'
-				busy.value = false
+				loading.value = false
 				return
 			}
 			const raw = await request({
@@ -42,10 +52,13 @@
 				method: 'GET',
 				data: null
 			})
+			if (ticket != mine) {
+				return
+			}
 			const uuid = fieldText(asJsonObject(raw), 'uuid')
 			if (uuid.length == 0) {
 				errorText.value = '未解析到设备'
-				busy.value = false
+				loading.value = false
 				return
 			}
 			const opened = openRegisteredRoute('/equipment/detail?uuid=' + encodeURIComponent(uuid))
@@ -53,9 +66,15 @@
 				errorText.value = '无法打开设备'
 			}
 		} catch (e) {
+			if (ticket != mine) {
+				return
+			}
 			errorText.value = readError(e)
 		}
-		busy.value = false
+		if (ticket != mine) {
+			return
+		}
+		loading.value = false
 	}
 </script>
 

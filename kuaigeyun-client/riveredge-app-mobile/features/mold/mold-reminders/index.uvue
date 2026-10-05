@@ -1,13 +1,20 @@
 <template>
-	<view class="page">
+	<view class="page-shell">
 		<home-link />
+	<view class="page">
 		<button class="btn-secondary" @click="loadList">刷新</button>
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
 		<view v-for="(item, index) in rows" :key="index" class="list-row">
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
-		<text v-if="rows.length == 0 && hint == ''" class="empty">暂无保养提醒</text>
+		<text v-if="!loading && rows.length == 0 && hint == ''" class="empty">暂无保养提醒</text>
+	</view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
 	</view>
 </template>
 
@@ -18,6 +25,8 @@
 
 	const rows = ref<DocLine[]>([])
 	const hint = ref('')
+	const loading = ref(false)
+	let ticket = 0
 
 	function reminderLabel(value: string): string {
 		if (value == 'due_soon') {
@@ -63,17 +72,30 @@
 	}
 
 	async function loadList(): Promise<void> {
+		const mine = ticket + 1
+		ticket = mine
+		loading.value = true
 		hint.value = ''
 		try {
 			const items = await apiGetRows(withQuery(MOLD_REMINDERS, 'limit=50'))
+			if (ticket != mine) {
+				return
+			}
 			const lines: DocLine[] = []
 			for (let i = 0; i < items.length; i++) {
 				lines.push(mapReminder(items[i]))
 			}
 			rows.value = lines
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			hint.value = errorText(err)
 		}
+		if (ticket != mine) {
+			return
+		}
+		loading.value = false
 	}
 
 	onShow(() => {

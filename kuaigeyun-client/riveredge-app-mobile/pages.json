@@ -312,6 +312,7 @@
 		}
 	],
 	"globalStyle": {
+		"navigationStyle": "custom",
 		"navigationBarTextStyle": "black",
 		"navigationBarTitleText": "星制造",
 		"navigationBarBackgroundColor": "#F8FAFC",

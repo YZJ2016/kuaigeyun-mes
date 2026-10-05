@@ -1,6 +1,7 @@
 <template>
-	<view class="page">
+	<view class="page-shell">
 		<home-link />
+	<view class="page">
 		<view class="modes">
 			<button class="btn-chip" @click="switchKind('material-shortage')">缺料</button>
 			<button class="btn-chip" @click="switchKind('delivery-delay')">交期</button>
@@ -31,6 +32,12 @@
 		<input class="field" v-model="remarks" placeholder="备注（可空）" />
 		<button class="btn-primary" @click="submitReport">提交</button>
 	</view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -51,6 +58,15 @@
 	const problemDescription = ref('')
 	const remarks = ref('')
 	const errorTextValue = ref('')
+	const loading = ref(false)
+	let ticket = 0
+	let materialTicket = 0
+	let ordersOpen = false
+	let materialsOpen = false
+
+	function syncLoading(): void {
+		loading.value = ordersOpen || materialsOpen
+	}
 
 	function orderTitle(row : any) : string {
 		return fieldText(row, 'code') + ' ' + fieldText(row, 'name')
@@ -65,6 +81,10 @@
 	}
 
 	async function loadOrders() {
+		const mine = ticket + 1
+		ticket = mine
+		ordersOpen = true
+		syncLoading()
 		errorTextValue.value = ''
 		try {
 			const query = new UTSJSONObject()
@@ -75,14 +95,29 @@
 				query: query,
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
 			orders.value = readRows(payload)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
 		}
+		if (ticket != mine) {
+			return
+		}
+		ordersOpen = false
+		syncLoading()
 	}
 
 	async function searchMaterials() {
 		selectedMaterialIndex.value = -1
+		const mine = materialTicket + 1
+		materialTicket = mine
+		materialsOpen = true
+		syncLoading()
 		const query = new UTSJSONObject()
 		query.set('limit', 30)
 		const keyword = materialKeyword.value.trim()
@@ -96,10 +131,21 @@
 				query: query,
 				body: null,
 			})
+			if (materialTicket != mine) {
+				return
+			}
 			materials.value = readRows(payload)
 		} catch (err) {
+			if (materialTicket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
 		}
+		if (materialTicket != mine) {
+			return
+		}
+		materialsOpen = false
+		syncLoading()
 	}
 
 	function pickOrder(index : number) {

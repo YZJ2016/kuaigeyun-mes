@@ -1,8 +1,8 @@
 <template>
-	<scroll-view class="page" direction="vertical">
+	<view class="page-shell">
 		<home-link />
+	<scroll-view class="page" direction="vertical">
 		<text class="hint lead">这里修改的是姓名、用户名、手机和邮箱</text>
-		<text v-if="loading" class="loading">正在加载</text>
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		<text class="label">头像</text>
 		<view class="avatar-edit">
@@ -31,6 +31,12 @@
 			<text class="btn-label">保存</text>
 		</view>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">正在加载</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">

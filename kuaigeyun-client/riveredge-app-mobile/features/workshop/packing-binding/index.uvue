@@ -1,8 +1,8 @@
 <template>
-	<view class="page">
+	<view class="page-shell">
 		<home-link />
+	<view class="page">
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="loading" class="loading">加载中</text>
 		<view v-if="detail == null && !packOpen">
 			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无绑定</text>
 			<view v-for="(row, index) in rows" :key="index" class="card" hover-class="pressed" @click="openBinding(index)">
@@ -49,6 +49,12 @@
 			<text class="sub">备注 {{ detailLine('remarks') }}</text>
 		</view>
 	</view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -84,6 +90,7 @@
 	const productIndex = ref(-1)
 	const packQty = ref('')
 	const boxNo = ref('')
+	let ticket = 0
 
 	function lineTitle(row : any) : string {
 		return fieldText(row, 'product_code') + ' ' + fieldText(row, 'product_name')
@@ -98,6 +105,8 @@
 	}
 
 	async function load() {
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
 		try {
@@ -107,9 +116,18 @@
 				query: null,
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
 			rows.value = readRows(payload)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}
@@ -120,17 +138,29 @@
 			toast('绑定无效')
 			return
 		}
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
 		try {
-			detail.value = await request({
+			const payload = await request({
 				method: 'GET',
 				path: '/api/v1/apps/kuaizhizao/packing-bindings/' + bindingId,
 				query: null,
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
+			detail.value = payload
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}
@@ -175,9 +205,10 @@
 
 	async function chooseKind(index : number) {
 		sourceKind.value = index == 0 ? 'fg' : 'sales'
-		sources.value = []
 		resetProducts()
 		errorTextValue.value = ''
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		try {
 			const payload = await request({
@@ -186,6 +217,9 @@
 				query: listQuery(),
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
 			const list = readRows(payload)
 			const next : Array<SourceDoc> = []
 			for (let i = 0; i < list.length; i++) {
@@ -203,17 +237,24 @@
 			}
 			sources.value = next
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}
 
 	async function pickSource(index : number) {
 		sourceIndex.value = index
-		products.value = []
 		productIndex.value = -1
 		errorTextValue.value = ''
 		const doc = sources.value[index]
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		try {
 			const payload = await request({
@@ -245,9 +286,18 @@
 					label: label.length > 0 ? label : '产品'
 				} as SourceProduct)
 			}
+			if (ticket != mine) {
+				return
+			}
 			products.value = next
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}
@@ -303,6 +353,8 @@
 		if (box.length > 0) {
 			body.set('box_no', box)
 		}
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
 		try {
@@ -312,11 +364,21 @@
 				query: null,
 				body: body,
 			})
+			if (ticket != mine) {
+				return
+			}
 			toast('已绑定')
 			closePack()
 			await load()
+			return
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}

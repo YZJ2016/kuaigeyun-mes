@@ -1,13 +1,19 @@
 <template>
-	<view class="page">
+	<view class="page-shell">
 		<home-link />
+	<view class="page">
 		<text class="hint">周期 {{ period }}</text>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="loading" class="loading">加载中</text>
 		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无绩效</text>
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ lineTitle(row) }}</text>
 			<text class="sub">{{ lineSub(row) }}</text>
+		</view>
+	</view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
 		</view>
 	</view>
 </template>
@@ -23,6 +29,7 @@
 	const rows = ref<any[]>([])
 	const loading = ref(false)
 	const errorTextValue = ref('')
+	let ticket = 0
 
 	function lineTitle(row : any) : string {
 		return fieldText(row, 'employee_name') + ' ' + fieldText(row, 'period')
@@ -33,14 +40,15 @@
 	}
 
 	async function load() {
-		loading.value = true
-		errorTextValue.value = ''
 		const user = readCurrentUser()
 		if (user == null || user.id <= 0) {
 			errorTextValue.value = '未获取到当前用户'
-			loading.value = false
 			return
 		}
+		const mine = ticket + 1
+		ticket = mine
+		loading.value = true
+		errorTextValue.value = ''
 		const query = new UTSJSONObject()
 		query.set('period', period.value)
 		query.set('employee_id', user.id)
@@ -53,9 +61,18 @@
 				query: query,
 				body: null,
 			})
+			if (ticket != mine) {
+				return
+			}
 			rows.value = readRows(payload)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}

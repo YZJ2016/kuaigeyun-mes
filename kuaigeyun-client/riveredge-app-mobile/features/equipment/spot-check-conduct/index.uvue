@@ -1,6 +1,7 @@
 <template>
-	<scroll-view class="page" direction="vertical">
+	<view class="page-shell">
 		<home-link />
+	<scroll-view class="page" direction="vertical">
 		<view class="card">
 			<text class="title">点检</text>
 			<text v-if="equipmentText.length > 0" class="hint">{{ equipmentText }}</text>
@@ -32,6 +33,12 @@
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -44,6 +51,8 @@
 	import { loadSpotCheckPreview, SpotLineForm, submitSpotCheck, toggleSpotPass } from '../spot-check-create.uts'
 
 	const busy = ref(false)
+	const loading = ref(false)
+	let ticket = 0
 	const queryUuid = ref('')
 	const equipmentId = ref(0)
 	const equipmentText = ref('')
@@ -98,25 +107,43 @@
 		if (loadedEquipmentUuid.value == uuid && equipmentId.value > 0) {
 			return
 		}
-		const raw = await request({
-			url: '/api/v1/apps/kuaizhizao/equipment/' + encodeURIComponent(uuid),
-			method: 'GET',
-			data: null
-		})
-		const body = asJsonObject(raw)
-		const id = fieldIntOrNull(body, 'id')
-		equipmentId.value = id == null ? 0 : id
-		equipmentText.value = joinParts([
-			fieldText(body, 'code'),
-			fieldText(body, 'name'),
-			fieldText(body, 'status')
-		])
-		if (equipmentId.value <= 0) {
-			errorText.value = '未打开设备'
-			loadedEquipmentUuid.value = ''
+		const mine = ticket + 1
+		ticket = mine
+		loading.value = true
+		errorText.value = ''
+		try {
+			const raw = await request({
+				url: '/api/v1/apps/kuaizhizao/equipment/' + encodeURIComponent(uuid),
+				method: 'GET',
+				data: null
+			})
+			if (ticket != mine) {
+				return
+			}
+			const body = asJsonObject(raw)
+			const id = fieldIntOrNull(body, 'id')
+			equipmentId.value = id == null ? 0 : id
+			equipmentText.value = joinParts([
+				fieldText(body, 'code'),
+				fieldText(body, 'name'),
+				fieldText(body, 'status')
+			])
+			if (equipmentId.value <= 0) {
+				errorText.value = '未打开设备'
+				loadedEquipmentUuid.value = ''
+			} else {
+				loadedEquipmentUuid.value = uuid
+			}
+		} catch (e) {
+			if (ticket != mine) {
+				return
+			}
+			errorText.value = readError(e)
+		}
+		if (ticket != mine) {
 			return
 		}
-		loadedEquipmentUuid.value = uuid
+		loading.value = false
 	}
 
 	function clearPreview(): void {

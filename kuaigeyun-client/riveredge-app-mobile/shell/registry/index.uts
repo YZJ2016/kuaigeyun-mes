@@ -165,7 +165,7 @@ function splitRoute(value : string) : string[] {
 /** 畸形编码（如裸 %）时解码失败，回退原串，不让 URIError 炸掉路由匹配。 */
 function decodeSafe(value : string) : string {
 	try {
-		return decodeURIComponent(value)
+		return decodeURIComponent(value) ?? value
 	} catch (_err) {
 		return value
 	}

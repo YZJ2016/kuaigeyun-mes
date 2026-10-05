@@ -1,5 +1,7 @@
 <template>
-	<scroll-view v-if="allowed" class="page" direction="vertical">
+	<view v-if="allowed" class="page-shell">
+		<home-link />
+	<scroll-view class="page" direction="vertical">
 		<view v-if="settingsMode && currentUrl.length > 0" class="card">
 			<text class="label">当前组织</text>
 			<text v-if="currentName.length > 0" class="title">{{ currentName }}</text>
@@ -22,9 +24,11 @@
 			</view>
 		</view>
 	</scroll-view>
+	</view>
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../shared/ui/home-link.uvue'
 	import { clearToken, getTenantId, getToken } from '../../shared/api/session.uts'
 	import { readSavedAppEntry, saveAppEntry } from '../../shared/api/app-entry.uts'
 	import type { SavedAppEntry } from '../../shared/api/app-entry.uts'

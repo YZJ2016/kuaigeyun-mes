@@ -1,13 +1,14 @@
 <template>
-	<scroll-view class="page" direction="vertical">
+	<view class="page-shell">
 		<home-link />
-		<text v-if="loading" class="loading">正在加载</text>
+	<scroll-view class="page" direction="vertical">
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
-		<text v-if="empty && openedScope.length == 0" class="empty">没有可显示的入口</text>
+		<text v-if="!loading && empty && openedScope.length == 0" class="empty">没有可显示的入口</text>
 		<view v-if="openedScope.length == 0">
 			<view v-for="(block, index) in scopes" :key="block.scope" class="scope-card" hover-class="pressed" @click="openScope(index)">
 				<view :class="tileClass(block.scope)">
-					<text :class="markClass(block.scope)">{{ scopeMark(block.scope) }}</text>
+					<image v-if="iconAsset(scopeIcon(block.scope), '', block.scope).length > 0" class="tile-icon" :src="iconAsset(scopeIcon(block.scope), '', block.scope)" mode="aspectFit"></image>
+					<text v-else :class="markClass(block.scope)">{{ scopeMark(block.scope) }}</text>
 				</view>
 				<view class="scope-copy">
 					<text class="title">{{ scopeTitle(block.scope) }}</text>
@@ -31,7 +32,8 @@
 					<view class="grid">
 						<view v-for="cell in section.cells" :key="cell.uid" :class="cell.solo ? 'cell solo' : 'cell'" hover-class="pressed" @click="onCell(cell)">
 							<view :class="tileClass(block.scope)">
-								<text :class="markClass(block.scope)">{{ iconMark(cell.icon, cell.iconGroup, cell.label) }}</text>
+								<image v-if="iconAsset(cell.icon, cell.iconGroup, block.scope).length > 0" class="tile-icon" :src="iconAsset(cell.icon, cell.iconGroup, block.scope)" mode="aspectFit"></image>
+								<text v-else :class="markClass(block.scope)">{{ iconMark(cell.icon, cell.iconGroup, cell.label) }}</text>
 							</view>
 							<text class="title">{{ cell.label }}</text>
 							<text v-if="cell.missing" class="hint">功能尚未安装</text>
@@ -41,13 +43,19 @@
 			</view>
 		</view>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">正在加载</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
 	import HomeLink from '../../shared/ui/home-link.uvue'
 	import { getToken } from '../../shared/api/session.uts'
 	import { openRegisteredRoute } from '../registry/index.uts'
-	import { iconMark, markClass, scopeTitle, tileClass } from '../workbench/icons.uts'
+	import { iconAsset, iconMark, markClass, scopeIcon, scopeTitle, tileClass } from '../workbench/icons.uts'
 	import { loadWorkbench } from '../workbench/load.uts'
 	import type { WorkCell, WorkScope } from '../workbench/load.uts'
 
@@ -56,22 +64,35 @@
 	const empty = ref(false)
 	const errorText = ref('')
 	const openedScope = ref('')
+	let ticket = 0
 
 	async function refresh() {
 		if (getToken().length == 0) {
 			uni.reLaunch({ url: '/shell/login/index' })
 			return
 		}
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		empty.value = false
 		errorText.value = ''
 		try {
-			scopes.value = await loadWorkbench()
+			const next = await loadWorkbench()
+			if (ticket != mine) {
+				return
+			}
+			scopes.value = next
 			empty.value = scopes.value.length == 0
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			scopes.value = []
 			empty.value = false
 			errorText.value = err instanceof Error ? err.message : '工作台未能加载'
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}

@@ -1,12 +1,11 @@
 <template>
+	<view class="page-shell">
+		<home-link :hold-home="conducting" @home="leaveHome" />
 	<scroll-view class="page" scroll-y="true" :scroll-into-view="scrollTarget">
-		<home-link v-if="!conducting" />
-		<button v-else class="btn-secondary" :disabled="submitting || uploadingCount > 0" @click="leaveHome">返回首页</button>
 		<view v-if="!conducting">
 		<view class="toolbar">
 			<button class="btn-secondary" @click="loadList">刷新</button>
 		</view>
-		<text v-if="loading" class="loading">加载中</text>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无检验单</text>
 		<view v-for="(row, index) in rows" :key="index" class="card">
@@ -138,6 +137,12 @@
 			</view>
 		</view>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -239,6 +244,7 @@
 		})
 	}
 	const loading = ref(false)
+	let ticket = 0
 	const submitting = ref(false)
 	const conducting = ref(false)
 	const errorTextValue = ref('')
@@ -951,6 +957,8 @@
 		if (props.listPath.length == 0) {
 			return
 		}
+		const mine = ticket + 1
+		ticket = mine
 		loading.value = true
 		errorTextValue.value = ''
 		try {
@@ -959,10 +967,19 @@
 				method: 'GET',
 				data: null
 			})
+			if (ticket != mine) {
+				return
+			}
 			rows.value = readRows(payload)
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			rows.value = [] as UTSJSONObject[]
 			errorTextValue.value = errorText(err)
+		}
+		if (ticket != mine) {
+			return
 		}
 		loading.value = false
 	}

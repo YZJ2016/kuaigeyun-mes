@@ -1,13 +1,13 @@
 <template>
-	<scroll-view class="page" scroll-y="true" :scroll-into-view="scrollTarget">
+	<view class="page-shell">
 		<home-link />
+	<scroll-view class="page" scroll-y="true" :scroll-into-view="scrollTarget">
 		<view v-if="isQuery" class="row">
 			<input class="field grow" v-model="keyword" placeholder="物料编码、名称或仓库" />
 			<button class="btn-chip" @click="reload">查询</button>
 		</view>
 		<button v-if="selectedId == 0" class="btn-secondary" @click="reload">刷新</button>
 		<text v-if="hint.length > 0" class="error">{{ hint }}</text>
-		<text v-if="loading" class="loading">加载中</text>
 
 		<view v-if="selectedId == 0">
 			<text v-if="!loading && cards.length == 0" class="empty">没有数据</text>
@@ -113,6 +113,12 @@
 			</view>
 		</view>
 	</scroll-view>
+		<view v-if="loading" class="loading-mask">
+			<view class="loading-card">
+				<text class="loading">加载中</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
@@ -161,6 +167,7 @@
 	const editingLineIndex = ref(-1)
 	const serialInput = ref('')
 	const scrollTarget = ref('')
+	let ticket = 0
 	function editLine(index : number) {
 		if (busy.value) { return }
 		editingLineIndex.value = editingLineIndex.value == index ? -1 : index
@@ -279,7 +286,6 @@
 	function reload(): void {
 		skip.value = 0
 		page.value = 1
-		cards.value = []
 		void loadList(true)
 	}
 
@@ -298,10 +304,18 @@
 			hint.value = '未知页面'
 			return
 		}
+		const mine = ticket + 1
+		ticket = mine
+		const querySkip = skip.value
+		const queryPage = page.value
+		const queryKeyword = keyword.value
 		loading.value = true
 		hint.value = ''
 		try {
-			const raw = await apiGet(path, listQuery(currentKind(), skip.value, page.value, keyword.value))
+			const raw = await apiGet(path, listQuery(currentKind(), querySkip, queryPage, queryKeyword))
+			if (ticket != mine) {
+				return
+			}
 			const batch = readCards(raw)
 			total.value = readTotal(raw)
 			if (reset) {
@@ -318,10 +332,15 @@
 				cards.value = next
 			}
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			hint.value = errorText(err)
-		} finally {
-			loading.value = false
 		}
+		if (ticket != mine) {
+			return
+		}
+		loading.value = false
 	}
 
 	function openCard(index: number): void {
@@ -388,10 +407,16 @@
 	}
 
 	async function loadDetail(): Promise<void> {
+		const mine = ticket + 1
+		ticket = mine
+		const detailId = selectedId.value
 		loading.value = true
 		hint.value = ''
 		try {
-			const raw = await apiGet(detailPath(currentKind(), selectedId.value), null)
+			const raw = await apiGet(detailPath(currentKind(), detailId), null)
+			if (ticket != mine) {
+				return
+			}
 			const form = readDetail(currentKind(), raw)
 			warehouseIdText.value = form.warehouseIdText
 			warehouseName.value = form.warehouseName
@@ -403,11 +428,16 @@
 			clearLocate()
 			beginWizard()
 		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
 			hint.value = errorText(err)
 			beginWizard()
-		} finally {
-			loading.value = false
 		}
+		if (ticket != mine) {
+			return
+		}
+		loading.value = false
 	}
 
 	function onWarehouseName(e: UniInputEvent): void {
