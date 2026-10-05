@@ -32,6 +32,7 @@ class MobileWorkbenchEntryOut(BaseModel):
     icon: str
     icon_group: str | None = None
     solo_row: bool = False
+    badge_count: int = 0
 
 
 class MobileWorkbenchSectionOut(BaseModel):

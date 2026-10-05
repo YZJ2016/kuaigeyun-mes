@@ -373,6 +373,7 @@ async def _section_purchase(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
     )
     return {
         "purchase_order": {"overdue": po_od, "pending": po_pending, "in_progress": po_prog},
+        "purchase_arrival_warning": {"overdue": po_od, "pending": 0, "in_progress": 0},
         "purchase_requisition": {"overdue": 0, "pending": prq_pending, "in_progress": prq_prog},
         "inbound": {"overdue": 0, "pending": pr_pending, "in_progress": pr_exec},
     }
@@ -454,6 +455,8 @@ async def _section_warehouse_docs(ctx: BadgeScopeCtx) -> BadgeFragment:
     from apps.kuaizhizao.models.other_outbound import OtherOutbound
     from apps.kuaizhizao.models.material_borrow import MaterialBorrow
     from apps.kuaizhizao.models.production_picking import ProductionPicking
+    from apps.kuaizhizao.models.production_return import ProductionReturn
+    from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
 
     tid = ctx.tenant_id
     oi = OtherInbound.filter(tenant_id=tid, deleted_at__isnull=True)
@@ -462,10 +465,15 @@ async def _section_warehouse_docs(ctx: BadgeScopeCtx) -> BadgeFragment:
     oo = OtherOutbound.filter(tenant_id=tid, deleted_at__isnull=True)
     mb = MaterialBorrow.filter(tenant_id=tid, deleted_at__isnull=True)
     pp = ProductionPicking.filter(tenant_id=tid, deleted_at__isnull=True)
+    prn = ProductionReturn.filter(tenant_id=tid, deleted_at__isnull=True)
+    fg = FinishedGoodsReceipt.filter(tenant_id=tid, deleted_at__isnull=True)
 
-    wh_term = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "已出库", "已领料", "已入库", "已归还"]))
+    wh_term = list(dict.fromkeys([*_DOC_TERMINAL_STATUSES, "已出库", "已领料", "已入库", "已归还", "已退料"]))
 
-    oi_p, oi_x, mr_p, mr_x, sd_p, sd_x, oo_p, oo_x, mb_p, mb_x, pp_p, pp_x = await _gather_counts(
+    (
+        oi_p, oi_x, mr_p, mr_x, sd_p, sd_x, oo_p, oo_x, mb_p, mb_x, pp_p, pp_x,
+        prn_p, prn_x, fg_p, fg_x,
+    ) = await _gather_counts(
         badge_count(oi.filter(review_status__in=_RV_PENDING).exclude(status__in=wh_term), ctx, RES_OTHER_INBOUND),
         badge_count(oi.filter(status="待入库").exclude(review_status__in=_RV_PENDING), ctx, RES_OTHER_INBOUND),
         badge_count(mr.filter(review_status__in=_RV_PENDING).exclude(status__in=wh_term), ctx, RES_MATERIAL_RETURN),
@@ -478,6 +486,10 @@ async def _section_warehouse_docs(ctx: BadgeScopeCtx) -> BadgeFragment:
         badge_count(mb.filter(status="待借出").exclude(review_status__in=_RV_PENDING), ctx, RES_MATERIAL_BORROW),
         badge_count(pp.filter(review_status__in=_RV_PENDING).exclude(status__in=wh_term), ctx, RES_OUTBOUND),
         badge_count(pp.filter(status="待领料").exclude(review_status__in=_RV_PENDING), ctx, RES_OUTBOUND),
+        badge_count(prn.filter(review_status__in=_RV_PENDING).exclude(status__in=wh_term), ctx, RES_INBOUND),
+        badge_count(prn.filter(status="待退料").exclude(review_status__in=_RV_PENDING), ctx, RES_INBOUND),
+        badge_count(fg.filter(review_status__in=_RV_PENDING).exclude(status__in=wh_term), ctx, RES_INBOUND),
+        badge_count(fg.filter(status="待入库").exclude(review_status__in=_RV_PENDING), ctx, RES_INBOUND),
     )
     return {
         "other_inbound": {"overdue": 0, "pending": oi_p, "in_progress": oi_x},
@@ -487,6 +499,10 @@ async def _section_warehouse_docs(ctx: BadgeScopeCtx) -> BadgeFragment:
             "pending": sd_p + pp_p,
             "in_progress": sd_x + pp_x,
         },
+        "sales_delivery": {"overdue": 0, "pending": sd_p, "in_progress": sd_x},
+        "production_picking": {"overdue": 0, "pending": pp_p, "in_progress": pp_x},
+        "production_return": {"overdue": 0, "pending": prn_p, "in_progress": prn_x},
+        "finished_goods_receipt": {"overdue": 0, "pending": fg_p, "in_progress": fg_x},
         "other_outbound": {"overdue": 0, "pending": oo_p, "in_progress": oo_x},
         "material_borrow": {"overdue": 0, "pending": mb_p, "in_progress": mb_x},
     }

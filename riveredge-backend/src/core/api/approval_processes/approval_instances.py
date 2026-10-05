@@ -173,11 +173,15 @@ async def get_approval_instance(
         HTTPException: 当审批实例不存在时抛出
     """
     try:
+        from core.services.approval.approval_document_view import (
+            attach_document_to_instance_response,
+        )
+
         approval_instance = await ApprovalInstanceService.get_approval_instance_by_uuid(
             tenant_id=tenant_id,
             uuid=uuid
         )
-        return ApprovalInstanceResponse.model_validate(approval_instance)
+        return await attach_document_to_instance_response(tenant_id, approval_instance)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

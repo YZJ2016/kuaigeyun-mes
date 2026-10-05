@@ -44,6 +44,55 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'mobile-approval-node-label-zh-r01',
+    date: '2026-10-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-approval-node-label-zh-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-approval-node-label-zh-r01.description',
+  },
+  {
+    id: 'mobile-approval-document-detail-r01',
+    date: '2026-10-05',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-approval-document-detail-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-approval-document-detail-r01.description',
+  },
+  {
+    id: 'mobile-im-list-all-users-r01',
+    date: '2026-10-05',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-im-list-all-users-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-im-list-all-users-r01.description',
+  },
+  {
+    id: 'mobile-workbench-entry-badges-r01',
+    date: '2026-10-05',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-workbench-entry-badges-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-workbench-entry-badges-r01.description',
+  },
+  {
+    id: 'mobile-count-badge-center-r01',
+    date: '2026-10-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-count-badge-center-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-count-badge-center-r01.description',
+  },
+  {
+    id: 'mobile-quality-meta-inline-r01',
+    date: '2026-10-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-quality-meta-inline-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-quality-meta-inline-r01.description',
+  },
+  {
+    id: 'mobile-android-cjk-last-char-clip-r06',
+    date: '2026-10-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r06.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r06.description',
+  },
+  {
     id: 'mobile-status-tabs-label-clip-r01',
     date: '2026-10-05',
     type: 'fix',

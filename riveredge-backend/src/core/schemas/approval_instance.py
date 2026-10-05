@@ -82,6 +82,31 @@ class ApprovalInstanceAction(BaseModel):
         return v
 
 
+class ApprovalDocumentField(BaseModel):
+    """审批详情抬头字段（已标注中文名）。"""
+    key: str = Field(..., description="字段名")
+    label: str = Field(..., description="展示名")
+    value: str = Field(..., description="展示值")
+
+
+class ApprovalDocumentLine(BaseModel):
+    """审批详情明细行。"""
+    id: str = Field(..., description="行标识")
+    title: str = Field(..., description="物料/行标题")
+    meta: Optional[str] = Field(None, description="行补充说明")
+    qty_text: Optional[str] = Field(None, description="数量与金额")
+
+
+class ApprovalDocumentView(BaseModel):
+    """审批关联单据的只读详情（活单据，非提交时一行摘要）。"""
+    entity_type: str = Field(..., description="单据 entity_type")
+    entity_name: str = Field(..., description="单据名称")
+    code: str = Field(..., description="单据编号")
+    status: Optional[str] = Field(None, description="单据业务状态")
+    header: List[ApprovalDocumentField] = Field(default_factory=list, description="抬头字段")
+    lines: List[ApprovalDocumentLine] = Field(default_factory=list, description="明细行")
+
+
 class ApprovalInstanceResponse(ApprovalInstanceBase):
     """审批实例响应 Schema"""
     uuid: UUID = Field(..., description="审批实例UUID")
@@ -89,13 +114,21 @@ class ApprovalInstanceResponse(ApprovalInstanceBase):
     process_uuid: UUID = Field(..., description="关联流程UUID")
     status: str = Field(..., description="审批状态")
     current_node: Optional[str] = Field(None, description="当前节点")
+    current_node_label: Optional[str] = Field(None, description="当前节点展示名")
     current_approver_id: Optional[int] = Field(None, description="当前审批人ID")
     inngest_run_id: Optional[str] = Field(None, description="Inngest 运行ID")
     submitter_id: int = Field(..., description="提交人ID")
+    submitter_name: Optional[str] = Field(None, description="提交人姓名")
     submitted_at: datetime = Field(..., description="提交时间")
     completed_at: Optional[datetime] = Field(None, description="完成时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
-    
+    document: Optional[ApprovalDocumentView] = Field(
+        None, description="关联业务单据详情（仅 GET 单条时填充）"
+    )
+    document_error: Optional[str] = Field(
+        None, description="关联单据无法加载时的错误说明"
+    )
+
     model_config = ConfigDict(from_attributes=True)
 

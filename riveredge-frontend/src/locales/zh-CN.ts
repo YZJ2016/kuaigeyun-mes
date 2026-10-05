@@ -29863,6 +29863,34 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.mobile-approval-node-label-zh-r01.title':
+    '手机审批详情当前节点显示中文名称',
+  'pages.dashboard.updateLog.entries.mobile-approval-node-label-zh-r01.description':
+    '待我审批详情里当前节点原先露出流程图编码 approval_1。现已读取审批设计器里的节点名称，例如「审批」「经理审核」。',
+  'pages.dashboard.updateLog.entries.mobile-approval-document-detail-r01.title':
+    '手机审批详情展示关联单据抬头和明细',
+  'pages.dashboard.updateLog.entries.mobile-approval-document-detail-r01.description':
+    '待我审批打开后直接显示合同、订单等活单据的客户、金额、物料行，以及流程节点名称，不再只看一行标题就做同意或驳回。',
+  'pages.dashboard.updateLog.entries.mobile-im-list-all-users-r01.title':
+    '手机聊天列出组织内全部同事',
+  'pages.dashboard.updateLog.entries.mobile-im-list-all-users-r01.description':
+    '消息中心「聊天」原先只显示已有会话，公共群聊以外看不到人。现已与电脑端通讯录同一套人员展示，群聊在上、同事在下列出，点同事即可进入私聊。',
+  'pages.dashboard.updateLog.entries.mobile-workbench-entry-badges-r01.title':
+    '手机工作台有待办单据的入口会显示数量角标',
+  'pages.dashboard.updateLog.entries.mobile-workbench-entry-badges-r01.description':
+    '工单、检验、出入库等入口的数字与左侧菜单待办计数同一套 COUNT，有未完单据才显示，扫码查询类入口不加。',
+  'pages.dashboard.updateLog.entries.mobile-count-badge-center-r01.title':
+    '手机数字角标数字垂直居中',
+  'pages.dashboard.updateLog.entries.mobile-count-badge-center-r01.description':
+    '工作台铃铛、底栏、会话未读、列表 Tab 的数字角标共用同一盒高与字号，数字不再偏下。',
+  'pages.dashboard.updateLog.entries.mobile-quality-meta-inline-r01.title':
+    '移动端合格不良数量不再中间一段掉到下一行',
+  'pages.dashboard.updateLog.entries.mobile-quality-meta-inline-r01.description':
+    '工单详情把合格、不合格、报工拆成多个文字块后，数量一长中间一段会单独换行。现已连成一句内部分色，整句不够宽才换行。',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r06.title':
+    '移动端每一处中文都走同一条排字规则，末字不再被切',
+  'pages.dashboard.updateLog.entries.mobile-android-cjk-last-char-clip-r06.description':
+    '此前公共文字入口只在带弹性布局时才改排字，筛选「全部」、检验「合格」仍会缺最后一个字。字重真源在 typography：Android 写 400；筛选与检验选中只用颜色，不再加粗。',
   'pages.dashboard.updateLog.entries.mobile-status-tabs-label-clip-r01.title':
     '移动端列表状态 Tab 文案不再缺最后一个字',
   'pages.dashboard.updateLog.entries.mobile-status-tabs-label-clip-r01.description':
