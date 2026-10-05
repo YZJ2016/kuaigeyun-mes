@@ -90,7 +90,12 @@ build_web_range_has_merge_since() {
 
 # 快速路径：git rebase --onto dist^ dist HEAD，只重写 dist 之后的线性历史。
 build_web_drop_pure_dist_commits() {
-  local sha dropped=0 tip
+  local sha dropped=0 tip branch
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+  if [ "$branch" = "HEAD" ]; then
+    echo "错误: 当前处于 detached HEAD，请先 git checkout develop 再构建。" >&2
+    return 1
+  fi
   tip="$(git rev-parse HEAD)"
   build_web_assert_no_rebase
   while true; do
@@ -104,12 +109,13 @@ build_web_drop_pure_dist_commits() {
       return 1
     fi
     echo "快速剥离: 移除纯 dist 提交 ${sha:0:7}（rebase --onto ${sha:0:7}^）..."
-    if ! git rebase --onto "${sha}^" "$sha" "$tip"; then
+    if ! git rebase --onto "${sha}^" "$sha" "$branch"; then
       git rebase --abort 2>/dev/null || true
       return 1
     fi
     dropped=$((dropped + 1))
     tip="$(git rev-parse HEAD)"
+    branch="$(git rev-parse --abbrev-ref HEAD)"
   done
   if [ "$dropped" -gt 0 ]; then
     echo "快速剥离完成: 共移除 ${dropped} 个纯 dist 提交"
