@@ -484,6 +484,28 @@ class ApprovalInstanceService:
         return {"nodes": [], "edges": []}
 
     @staticmethod
+    def node_display_label(instance: Optional[ApprovalInstance]) -> Optional[str]:
+        """当前节点展示名：流程图 data.label（与 nodes_overview 同一读法）。"""
+        if instance is None:
+            return None
+        node_id = str(instance.current_node or "").strip()
+        if not node_id:
+            return None
+        process = getattr(instance, "process", None)
+        graph = ApprovalInstanceService._normalize_process_graph(
+            getattr(process, "nodes", None) if process is not None else None
+        )
+        for node in graph.get("nodes") or []:
+            if not isinstance(node, dict):
+                continue
+            if str(node.get("id") or "") != node_id:
+                continue
+            data = node.get("data") if isinstance(node.get("data"), dict) else {}
+            label = str(data.get("label") or "").strip()
+            return label or None
+        return None
+
+    @staticmethod
     async def _resolve_process_for_entity_display(
         tenant_id: int,
         entity_type: str,

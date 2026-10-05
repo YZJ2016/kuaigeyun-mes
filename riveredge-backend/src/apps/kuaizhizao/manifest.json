@@ -5653,14 +5653,16 @@
                 "label": "我的工单",
                 "icon": "file",
                 "route": "/mes?my=1",
-                "permission": "kuaizhizao:work-order:read"
+                "permission": "kuaizhizao:work-order:read",
+                "badge_key": "work_order"
               },
               {
                 "key": "work-orders",
                 "label": "全部工单",
                 "icon": "list",
                 "route": "/mes",
-                "permission": "kuaizhizao:work-order:read"
+                "permission": "kuaizhizao:work-order:read",
+                "badge_key": "work_order"
               },
               {
                 "key": "reporting-history",
@@ -5674,14 +5676,16 @@
                 "label": "报工审核",
                 "icon": "check",
                 "route": "/mes/reporting-approve",
-                "permission": "kuaizhizao:production-execution-reporting:approve"
+                "permission": "kuaizhizao:production-execution-reporting:approve",
+                "badge_key": "reporting_record"
               },
               {
                 "key": "packing-binding",
                 "label": "装箱绑定",
                 "icon": "inbox",
                 "route": "/mes/packing",
-                "permission": "kuaizhizao:production-execution-packing-binding:read"
+                "permission": "kuaizhizao:production-execution-packing-binding:read",
+                "badge_key": "packing_binding"
               },
               {
                 "key": "exception-report",
@@ -5703,6 +5707,11 @@
                   "kuaizhizao:production-execution-material-shortage-exceptions:read",
                   "kuaizhizao:production-execution-delivery-delay-exceptions:read",
                   "kuaizhizao:production-execution-quality-exceptions:read"
+                ],
+                "badge_key": [
+                  "material_shortage_exception",
+                  "delivery_delay_exception",
+                  "quality_exception"
                 ]
               },
               {
@@ -5731,63 +5740,72 @@
                 "label": "生产领料",
                 "icon": "export",
                 "route": "/wms/pickings",
-                "permission": "kuaizhizao:inbound:read"
+                "permission": "kuaizhizao:inbound:read",
+                "badge_key": "production_picking"
               },
               {
                 "key": "returns",
                 "label": "生产退料",
                 "icon": "rollback",
                 "route": "/wms/returns",
-                "permission": "kuaizhizao:inbound:read"
+                "permission": "kuaizhizao:inbound:read",
+                "badge_key": "production_return"
               },
               {
                 "key": "fg-receipts",
                 "label": "成品入库",
                 "icon": "inbox",
                 "route": "/wms/receipts",
-                "permission": "kuaizhizao:inbound:read"
+                "permission": "kuaizhizao:inbound:read",
+                "badge_key": "finished_goods_receipt"
               },
               {
                 "key": "purchase-receipts",
                 "label": "采购收货",
                 "icon": "shopping",
                 "route": "/wms/purchase-receipts",
-                "permission": "kuaizhizao:inbound:read"
+                "permission": "kuaizhizao:inbound:read",
+                "badge_key": "inbound"
               },
               {
                 "key": "sales-deliveries",
                 "label": "销售出库",
                 "icon": "truck",
                 "route": "/wms/sales-deliveries",
-                "permission": "kuaizhizao:outbound:read"
+                "permission": "kuaizhizao:outbound:read",
+                "badge_key": "sales_delivery"
               },
               {
                 "key": "delivery-notices",
                 "label": "送货单",
                 "icon": "file",
                 "route": "/wms/delivery-notices",
-                "permission": "kuaizhizao:delivery-notice:read"
+                "permission": "kuaizhizao:delivery-notice:read",
+                "badge_key": "delivery_notice"
               },
               {
                 "key": "other-inbound",
                 "label": "其它入库",
                 "icon": "plus-square",
                 "route": "/wms/other-inbounds",
-                "permission": "kuaizhizao:other-inbound:read"
+                "permission": "kuaizhizao:other-inbound:read",
+                "badge_key": "other_inbound"
               },
               {
                 "key": "other-outbound",
                 "label": "其它出库",
                 "icon": "minus-square",
                 "route": "/wms/other-outbounds",
-                "permission": "kuaizhizao:other-outbound:read"
+                "permission": "kuaizhizao:other-outbound:read",
+                "badge_key": "other_outbound"
               },
               {
                 "key": "stocktaking",
                 "label": "移动盘点",
                 "icon": "audit",
                 "route": "/wms/stocktaking",
-                "permission": "kuaizhizao:warehouse-management-stocktaking:read"
+                "permission": "kuaizhizao:warehouse-management-stocktaking:read",
+                "badge_key": "stocktaking"
               },
               {
                 "key": "inventory-query",
@@ -5801,14 +5819,16 @@
                 "label": "调拨确认",
                 "icon": "swap",
                 "route": "/wms/transfers",
-                "permission": "kuaizhizao:warehouse-management-inventory-transfer:read"
+                "permission": "kuaizhizao:warehouse-management-inventory-transfer:read",
+                "badge_key": "inventory_transfer"
               },
               {
                 "key": "inventory-alerts",
                 "label": "库存预警",
                 "icon": "bell",
                 "route": "/wms/alerts",
-                "permission": "kuaizhizao:warehouse-management-inventory-alert:read"
+                "permission": "kuaizhizao:warehouse-management-inventory-alert:read",
+                "badge_key": "inventory_alert"
               }
             ]
           }
@@ -5829,35 +5849,40 @@
                   "kuaizhizao:quality-management-process-inspection:read",
                   "kuaizhizao:quality-management-incoming-inspection:read",
                   "kuaizhizao:quality-management-finished-goods-inspection:read"
-                ]
+                ],
+                "badge_key": "quality_inspection"
               },
               {
                 "key": "process-scan",
                 "label": "过程检验",
                 "icon": "scan",
                 "route": "/quality/process",
-                "permission": "kuaizhizao:quality-management-process-inspection:read"
+                "permission": "kuaizhizao:quality-management-process-inspection:read",
+                "badge_key": "process_inspection"
               },
               {
                 "key": "incoming",
                 "label": "来料检验",
                 "icon": "shopping",
                 "route": "/quality/incoming",
-                "permission": "kuaizhizao:quality-management-incoming-inspection:read"
+                "permission": "kuaizhizao:quality-management-incoming-inspection:read",
+                "badge_key": "incoming_inspection"
               },
               {
                 "key": "finished",
                 "label": "成品检验",
                 "icon": "inbox",
                 "route": "/quality/finished",
-                "permission": "kuaizhizao:quality-management-finished-goods-inspection:read"
+                "permission": "kuaizhizao:quality-management-finished-goods-inspection:read",
+                "badge_key": "finished_goods_inspection"
               },
               {
                 "key": "oqc",
                 "label": "出库检验",
                 "icon": "check-circle",
                 "route": "/quality/oqc",
-                "permission": "kuaizhizao:quality-management-oqc-inspection:read"
+                "permission": "kuaizhizao:quality-management-oqc-inspection:read",
+                "badge_key": "oqc_inspection"
               },
               {
                 "key": "nonconforming",
@@ -5888,7 +5913,8 @@
                 "label": "设备点检",
                 "icon": "check",
                 "route": "/equipment/spot-checks",
-                "permission": "kuaizhizao:equipment-spot-check:read"
+                "permission": "kuaizhizao:equipment-spot-check:read",
+                "badge_key": "equipment_inspection"
               },
               {
                 "key": "line-rebinds",
@@ -5909,28 +5935,32 @@
                 "label": "报修维修",
                 "icon": "warning",
                 "route": "/equipment/faults",
-                "permission": "kuaizhizao:equipment-fault:read"
+                "permission": "kuaizhizao:equipment-fault:read",
+                "badge_key": "equipment_fault"
               },
               {
                 "key": "repairs",
                 "label": "维修台账",
                 "icon": "tool",
                 "route": "/equipment/repairs",
-                "permission": "kuaizhizao:equipment-fault:read"
+                "permission": "kuaizhizao:equipment-fault:read",
+                "badge_key": "equipment_repair"
               },
               {
                 "key": "maintenance-executions",
                 "label": "保养执行记录",
                 "icon": "maintain",
                 "route": "/equipment/maintenance-executions",
-                "permission": "kuaizhizao:maintenance-plan:read"
+                "permission": "kuaizhizao:maintenance-plan:read",
+                "badge_key": "maintenance_execution"
               },
               {
                 "key": "maintenance-reminders",
                 "label": "维护提醒",
                 "icon": "bell",
                 "route": "/equipment/maintenance-reminders",
-                "permission": "kuaizhizao:maintenance-reminder:read"
+                "permission": "kuaizhizao:maintenance-reminder:read",
+                "badge_key": "maintenance_reminder"
               }
             ]
           }
@@ -5954,7 +5984,8 @@
                 "label": "模具领用",
                 "icon": "export",
                 "route": "/mold/borrows",
-                "permission": "kuaizhizao:mold-borrow:read"
+                "permission": "kuaizhizao:mold-borrow:read",
+                "badge_key": "mold_borrow"
               },
               {
                 "key": "mold-returns",
@@ -5968,14 +5999,16 @@
                 "label": "模具保养",
                 "icon": "maintain",
                 "route": "/mold/maintenances",
-                "permission": "kuaizhizao:mold-maintenance:read"
+                "permission": "kuaizhizao:mold-maintenance:read",
+                "badge_key": "mold_maintenance"
               },
               {
                 "key": "mold-repairs",
                 "label": "模具维修",
                 "icon": "tool",
                 "route": "/mold/repairs",
-                "permission": "kuaizhizao:mold-repair:read"
+                "permission": "kuaizhizao:mold-repair:read",
+                "badge_key": "mold_repair"
               },
               {
                 "key": "mold-reminders",
@@ -5999,28 +6032,32 @@
                 "label": "采购申请",
                 "icon": "file",
                 "route": "/docs/purchase-requisitions",
-                "permission": "kuaizhizao:purchase-requisition:read"
+                "permission": "kuaizhizao:purchase-requisition:read",
+                "badge_key": "purchase_requisition"
               },
               {
                 "key": "purchase-arrival-delays",
                 "label": "采购到货延误",
                 "icon": "clock-circle",
                 "route": "/docs/purchase-arrival-delays",
-                "permission": "kuaizhizao:purchase-arrival-warning:read"
+                "permission": "kuaizhizao:purchase-arrival-warning:read",
+                "badge_key": "purchase_arrival_warning"
               },
               {
                 "key": "receipt-notices",
                 "label": "收货通知单",
                 "icon": "inbox",
                 "route": "/wms/receipt-notices",
-                "permission": "kuaizhizao:receipt-notice:read"
+                "permission": "kuaizhizao:receipt-notice:read",
+                "badge_key": "receipt_notice"
               },
               {
                 "key": "shipment-notices",
                 "label": "发货通知单",
                 "icon": "export",
                 "route": "/wms/shipment-notices",
-                "permission": "kuaizhizao:shipment-notice:read"
+                "permission": "kuaizhizao:shipment-notice:read",
+                "badge_key": "shipment_notice"
               }
             ]
           }

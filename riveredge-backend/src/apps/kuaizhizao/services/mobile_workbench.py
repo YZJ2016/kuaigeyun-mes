@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from apps.kuaizhizao.services.menu_badge_counts_service import fetch_menu_badge_counts
 from core.services.application.application_service import ApplicationService
 from core.services.authorization.data_scope_service import DataScopeService
 from core.services.authorization.effective_access_service import EffectiveUserAccess
@@ -125,6 +126,9 @@ def _filter_scope_sections(
                 item["icon_group"] = icon_group
             if entry.get("solo_row"):
                 item["solo_row"] = True
+            badge_keys = _entry_badge_keys(entry)
+            if badge_keys:
+                item["_badge_keys"] = badge_keys
             entries_out.append(item)
         if not entries_out:
             continue
@@ -137,6 +141,64 @@ def _filter_scope_sections(
             }
         )
     return sections_out
+
+
+def _entry_badge_keys(entry: dict[str, Any]) -> list[str]:
+    raw = entry.get("badge_key")
+    if isinstance(raw, str) and raw.strip():
+        return [raw.strip()]
+    if isinstance(raw, list):
+        return [str(item).strip() for item in raw if str(item).strip()]
+    return []
+
+
+def _open_badge_count(triple: Any) -> int:
+    if isinstance(triple, (int, float)):
+        n = int(triple)
+        return n if n > 0 else 0
+    if not isinstance(triple, dict):
+        return 0
+    overdue = int(triple.get("overdue") or 0)
+    pending = int(triple.get("pending") or 0)
+    in_progress = int(triple.get("in_progress") or 0)
+    n = overdue + pending + in_progress
+    return n if n > 0 else 0
+
+
+def apply_workbench_badge_counts(
+    sections: list[dict[str, Any]],
+    counts: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """把 menu-badge-counts 的待办数挂到入口上。无 badge_key 的入口为 0。"""
+    for section in sections:
+        for entry in section.get("entries") or []:
+            keys = entry.pop("_badge_keys", None) or []
+            total = 0
+            for key in keys:
+                total += _open_badge_count(counts.get(key))
+            entry["badge_count"] = total
+    return sections
+
+
+async def attach_workbench_badge_counts(
+    sections: list[dict[str, Any]],
+    *,
+    tenant_id: int,
+    user: User,
+) -> list[dict[str, Any]]:
+    needed: set[str] = set()
+    for section in sections:
+        for entry in section.get("entries") or []:
+            for key in entry.get("_badge_keys") or []:
+                needed.add(str(key))
+    if not needed:
+        for section in sections:
+            for entry in section.get("entries") or []:
+                entry.pop("_badge_keys", None)
+                entry["badge_count"] = 0
+        return sections
+    counts = await fetch_menu_badge_counts(tenant_id, user)
+    return apply_workbench_badge_counts(sections, counts)
 
 
 async def resolve_mobile_workbench_home(
@@ -175,7 +237,9 @@ async def resolve_mobile_workbench_home(
                 continue
             seen.add(dedupe_key)
             merged.append(section)
-    return merged
+    return await attach_workbench_badge_counts(
+        merged, tenant_id=tenant_id, user=user
+    )
 
 
 async def resolve_mobile_workbench(
@@ -200,9 +264,13 @@ async def resolve_mobile_workbench(
     user_perms = await UserPermissionService.get_user_permissions(user.id, tenant_id)
     is_external = await _user_is_external_partner(tenant_id, user)
     bypass = await UserPermissionService.is_admin_bypass(user, tenant_id)
-    return _filter_scope_sections(
-        scope_cfg,
-        user_perms=user_perms,
-        is_external_partner=is_external,
-        admin_bypass=bypass,
+    return await attach_workbench_badge_counts(
+        _filter_scope_sections(
+            scope_cfg,
+            user_perms=user_perms,
+            is_external_partner=is_external,
+            admin_bypass=bypass,
+        ),
+        tenant_id=tenant_id,
+        user=user,
     )
