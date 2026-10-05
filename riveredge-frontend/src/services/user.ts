@@ -42,6 +42,7 @@ export interface User {
     uuid: string;
     name: string;
     code: string;
+    role_type?: string;
   }>;
   last_login?: string;
   created_at: string;

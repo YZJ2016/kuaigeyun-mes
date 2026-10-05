@@ -65,12 +65,10 @@ class DefectType(BaseModel):
 
 class SOPExecution(BaseModel):
     """
-    SOP 执行实例模型
-    
-    用于定义和管理组织内的 SOP 执行实例，每个实例对应一个 SOP 的执行。
-    支持多组织隔离，每个组织的执行实例相互独立。
-    
-    注意：继承自 BaseModel，自动包含 uuid、tenant_id、created_at、updated_at 字段。
+    SOP 逐步演练实例（PC 设计器配套）。
+
+    不绑定工单，不是现场开工路径。现场真源是工位确认
+    StationSopAcknowledgment + 报工 sop_parameters。
     """
     
     class Meta:
@@ -512,11 +510,14 @@ class SOP(BaseModel):
     # 标准操作SOP 阶段一：绑定与融合（工艺路线+BOM 融合，不改造工艺路线表）
     material_group_uuids = fields.JSONField(null=True, description="绑定的物料组 UUID 列表（JSON 数组）")
     material_uuids = fields.JSONField(null=True, description="绑定的具体物料 UUID 列表（JSON 数组），匹配时优先于物料组")
-    route_uuids = fields.JSONField(null=True, description="载入的工艺路线 UUID 列表（JSON 数组），作为融合输入")
+    route_uuids = fields.JSONField(
+        null=True,
+        description="编辑器从工艺路线批量生成时写入，不参与工位/报工匹配",
+    )
     bom_load_mode = fields.CharField(
         max_length=32,
         default="by_material",
-        description="BOM 载入方式：by_material=按关联物料, by_material_group=按关联物料组, specific_bom=指定BOM"
+        description="编辑器 BOM 载入方式，不参与现场匹配",
     )
     specific_bom_uuid = fields.CharField(max_length=36, null=True, description="指定 BOM 的 UUID（当 bom_load_mode 为 specific_bom 时使用）")
     

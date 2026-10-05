@@ -1485,13 +1485,15 @@ async def get_sop_for_material(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     material_uuid: str = Query(..., description="物料UUID"),
     operation_uuid: Optional[str] = Query(None, description="工序UUID（可选，进一步限定）"),
+    sop_domain: Optional[str] = Query(
+        None, alias="sopDomain", description="业务域 pe=PE制造（默认）qc=QC材料"
+    ),
 ):
     """
-    按物料匹配 SOP，供开工单时「以 SOP 为依据产生流程单据」使用。
-    匹配规则：具体物料优先于物料组；无匹配时 fallback 仅按工序。
+    按物料匹配 SOP。匹配规则与工单相关列表相同；择一失败时同档多份会报错。
     """
     return await ProcessService.get_sop_for_material(
-        tenant_id, material_uuid, operation_uuid=operation_uuid
+        tenant_id, material_uuid, operation_uuid=operation_uuid, sop_domain=sop_domain
     )
 
 
@@ -1505,13 +1507,13 @@ async def get_sop_for_reporting(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     work_order_id: int = Query(..., description="工单ID"),
     operation_id: int = Query(..., description="工序ID"),
+    sop_domain: Optional[str] = Query(
+        None, alias="sopDomain", description="业务域 pe=PE制造（默认）qc=QC材料"
+    ),
 ):
-    """
-    按工单+工序匹配 SOP，供报工使用。
-    匹配规则：物料+工序 > 物料组+工序 > 仅工序。
-    """
+    """按工单+工序匹配 SOP，供报工/工位使用。"""
     return await ProcessService.get_sop_for_reporting(
-        tenant_id, work_order_id, operation_id
+        tenant_id, work_order_id, operation_id, sop_domain=sop_domain
     )
 
 

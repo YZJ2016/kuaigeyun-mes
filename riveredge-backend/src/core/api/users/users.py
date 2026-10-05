@@ -94,7 +94,12 @@ async def _user_to_response(user) -> UserResponse:
         position_uuid = user.position.uuid
     roles_list = await user.roles.all()
     roles_data = [
-        {"uuid": r.uuid, "name": r.name, "code": r.code}
+        {
+            "uuid": r.uuid,
+            "name": r.name,
+            "code": r.code,
+            "role_type": (getattr(r, "role_type", None) or "").strip().lower() or None,
+        }
         for r in roles_list
     ]
     return model_to_response(

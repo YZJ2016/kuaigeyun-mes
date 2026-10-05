@@ -44,6 +44,10 @@ _FORM_FIELD_ALIASES: Dict[str, Dict[str, str]] = {
         "operationId": "operation_id",
         "isActive": "is_active",
     },
+    "apps_master_data_sop": {
+        "operationId": "operation_id",
+        "isActive": "is_active",
+    },
     "master_data_factory_plants": {
         "isActive": "is_active",
     },

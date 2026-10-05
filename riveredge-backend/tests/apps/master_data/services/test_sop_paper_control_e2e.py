@@ -40,6 +40,7 @@ def _make_paper_sop(**overrides: Any) -> SimpleNamespace:
         tenant_id=1,
         code="SOP-PAPER-001",
         name="装配纸质作业指导",
+        sop_domain="pe",
         version="1.0",
         current_revision="1.0",
         carrier="paper",
@@ -47,7 +48,6 @@ def _make_paper_sop(**overrides: Any) -> SimpleNamespace:
         content=None,
         flow_config=None,
         form_config=None,
-        sop_domain="pe",
         attachments=[{"uuid": "scan-file-001", "name": "SOP扫描件.pdf"}],
         storage_location="3号线边柜 A-2",
         keeper_name="张保管",
@@ -341,6 +341,11 @@ async def _get_sop_for_material_only_effective() -> None:
         q.order_by.return_value = q
         q.prefetch_related.return_value = q
         q.first = AsyncMock(return_value=effective if kwargs.get("control_status") == "effective" else None)
+        hit = (
+            kwargs.get("control_status") == "effective"
+            and kwargs.get("material_uuids__contains") == ["mat-001"]
+        )
+        q.all = AsyncMock(return_value=[effective] if hit else [])
         return q
 
     material_q = MagicMock()
@@ -368,6 +373,7 @@ async def _get_sop_for_material_only_effective() -> None:
         q.order_by.return_value = q
         q.prefetch_related.return_value = q
         q.first = AsyncMock(return_value=None)
+        q.all = AsyncMock(return_value=[])
         return q
 
     with patch(
@@ -510,3 +516,20 @@ def test_station_sop_ack_binds_revision():
 def test_next_revision_increments_minor():
     assert _next_revision("1.0") == "1.1"
     assert _next_revision("A1") == "A2"
+
+
+def test_pick_unique_shopfloor_sop_tie_raises():
+    from apps.master_data.services.process_service import pick_unique_shopfloor_sop
+
+    a = SimpleNamespace(code="SOP-A")
+    b = SimpleNamespace(code="SOP-B")
+    with pytest.raises(ValidationError, match="同一匹配优先级"):
+        pick_unique_shopfloor_sop([(1, a), (1, b)])
+
+
+def test_sop_has_material_scope():
+    from apps.master_data.services.process_service import _sop_has_material_scope
+
+    assert _sop_has_material_scope(SimpleNamespace(material_uuids=["x"], material_group_uuids=None))
+    assert not _sop_has_material_scope(SimpleNamespace(material_uuids=[], material_group_uuids=None))
+    assert not _sop_has_material_scope(SimpleNamespace(material_uuids=None, material_group_uuids=None))

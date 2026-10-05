@@ -124,15 +124,17 @@ async def _batch_sop_for_master_operations(
     批量解析工单工序卡所需 SOP（与 ProcessService.get_sop_for_reporting 规则一致），
     避免按工序循环重复加载工单产品/物料。
     """
-    from apps.master_data.models.process import SOP
     from apps.master_data.schemas.process_schemas import SOPResponse
+    from apps.master_data.services.process_service import (
+        collect_shopfloor_sops,
+        pick_unique_shopfloor_sop,
+    )
 
     unique_ids = sorted({int(i) for i in master_operation_ids if i is not None})
     if not unique_ids:
         return {}
 
     material_uuid: Optional[str] = None
-    group_uuid: Optional[str] = None
     if product_id:
         material = await Material.filter(
             id=int(product_id),
@@ -141,63 +143,15 @@ async def _batch_sop_for_master_operations(
         ).first()
         if material:
             material_uuid = str(material.uuid)
-            group_id = getattr(material, "group_id", None)
-            if group_id:
-                group = await MaterialGroup.filter(
-                    id=int(group_id),
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True,
-                ).first()
-                if group:
-                    group_uuid = str(group.uuid)
-
-    material_sops: List[Any] = []
-    group_sops: List[Any] = []
-    if material_uuid:
-        material_sops = await SOP.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            is_active=True,
-            material_uuids__contains=[material_uuid],
-        ).prefetch_related("operation").all()
-    if group_uuid:
-        group_sops = await SOP.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            is_active=True,
-            material_group_uuids__contains=[group_uuid],
-        ).prefetch_related("operation").all()
-    op_sops = await SOP.filter(
-        tenant_id=tenant_id,
-        deleted_at__isnull=True,
-        is_active=True,
-        operation_id__in=unique_ids,
-    ).prefetch_related("operation").all()
-
-    def _pick(sops: List[Any], op_id: int) -> Any:
-        exact = sorted(
-            (s for s in sops if getattr(s, "operation_id", None) == op_id),
-            key=lambda s: str(getattr(s, "code", "") or ""),
-        )
-        if exact:
-            return exact[0]
-        unbound = sorted(
-            (s for s in sops if getattr(s, "operation_id", None) is None),
-            key=lambda s: str(getattr(s, "code", "") or ""),
-        )
-        return unbound[0] if unbound else None
 
     result: Dict[int, Any] = {}
     for op_id in unique_ids:
-        sop = _pick(material_sops, op_id) if material_sops else None
-        if sop is None and group_sops:
-            sop = _pick(group_sops, op_id)
-        if sop is None:
-            op_only = sorted(
-                (s for s in op_sops if getattr(s, "operation_id", None) == op_id),
-                key=lambda s: str(getattr(s, "code", "") or ""),
-            )
-            sop = op_only[0] if op_only else None
+        ranked_rows = await collect_shopfloor_sops(
+            tenant_id,
+            material_uuid=material_uuid,
+            operation_id=op_id,
+        )
+        sop = pick_unique_shopfloor_sop(ranked_rows)
         if sop is not None:
             result[op_id] = SOPResponse.model_validate(sop)
     return result
@@ -282,6 +236,35 @@ def _parse_assigned_worker_ids(
         if uid > 0:
             out.append(uid)
     return out
+
+
+async def _work_order_ids_assigned_to_worker(tenant_id: int, worker_id: int) -> Set[int]:
+    """本人派工 + 所在班组被指派的工序对应工单。"""
+    wo_ids_primary = await WorkOrderOperation.filter(
+        tenant_id=tenant_id,
+        assigned_worker_id=worker_id,
+        deleted_at__isnull=True,
+    ).values_list("work_order_id", flat=True)
+    wo_ids_multi = await WorkOrderOperation.filter(
+        tenant_id=tenant_id,
+        assigned_worker_ids__contains=[worker_id],
+        deleted_at__isnull=True,
+    ).values_list("work_order_id", flat=True)
+    from apps.master_data.models.factory import WorkGroupMember
+
+    team_ids = await WorkGroupMember.filter(
+        tenant_id=tenant_id,
+        employee_id=worker_id,
+        deleted_at__isnull=True,
+    ).values_list("work_group_id", flat=True)
+    wo_ids_team: List[int] = []
+    if team_ids:
+        wo_ids_team = await WorkOrderOperation.filter(
+            tenant_id=tenant_id,
+            assigned_team_id__in=list(team_ids),
+            deleted_at__isnull=True,
+        ).values_list("work_order_id", flat=True)
+    return set(wo_ids_primary) | set(wo_ids_multi) | set(wo_ids_team)
 
 
 def _parse_assigned_equipment_ids(
@@ -2435,11 +2418,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             parsed = None
 
         async def by_worker(user_id: int, matched: Dict[str, Any]) -> Dict[str, Any]:
-            wo_ids = await WorkOrderOperation.filter(
-                tenant_id=tenant_id,
-                assigned_worker_id=user_id,
-                deleted_at__isnull=True,
-            ).values_list("work_order_id", flat=True)
+            wo_ids = await _work_order_ids_assigned_to_worker(tenant_id, user_id)
             orders = await self._work_order_summaries_for_scan(tenant_id, wo_ids, limit=limit)
             return {
                 "match_type": "employee",

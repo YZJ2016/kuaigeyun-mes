@@ -326,14 +326,140 @@ def _normalize_uuid_list(values: Optional[List[str]]) -> List[str]:
     return seen
 
 
+def _normalize_sop_domain(raw: Optional[str]) -> str:
+    from apps.master_data.constants.sop_domain import SOP_DOMAINS, SOP_DOMAIN_PE
+
+    domain = (raw or SOP_DOMAIN_PE).strip().lower()
+    if domain not in SOP_DOMAINS:
+        raise ValidationError(f"非法 SOP 业务域: {raw}")
+    return domain
+
+
+def _sop_has_material_scope(sop: SOP) -> bool:
+    mats = _normalize_uuid_list(sop.material_uuids if isinstance(sop.material_uuids, list) else None)
+    grps = _normalize_uuid_list(
+        sop.material_group_uuids if isinstance(sop.material_group_uuids, list) else None
+    )
+    return bool(mats) or bool(grps)
+
+
+SOP_SHOPFLOOR_RANK_MATERIAL_OP = 1
+SOP_SHOPFLOOR_RANK_MATERIAL_ANY_OP = 2
+SOP_SHOPFLOOR_RANK_GROUP_OP = 3
+SOP_SHOPFLOOR_RANK_GROUP_ANY_OP = 4
+SOP_SHOPFLOOR_RANK_UNBOUND_OP = 5
+
+
+async def collect_shopfloor_sops(
+    tenant_id: int,
+    *,
+    material_uuid: Optional[str],
+    operation_id: Optional[int],
+    sop_domain: Optional[str] = None,
+) -> List[Tuple[int, SOP]]:
+    """
+    工位/报工/工单相关 SOP 共用排序。
+
+    1 绑该物料且工序精确 → 2 绑该物料且未绑工序 → 3 绑物料组且工序精确 →
+    4 绑物料组且未绑工序 → 5 未绑任何物料/组且工序精确。
+    已绑其他物料的 SOP 不得因同工序进入第 5 档。route_uuids / BOM 只用于编辑器融合，不参与匹配。
+    """
+    domain = _normalize_sop_domain(sop_domain)
+    group_uuid: Optional[str] = None
+    if material_uuid:
+        material = await Material.filter(
+            tenant_id=tenant_id, uuid=material_uuid, deleted_at__isnull=True
+        ).first()
+        if material and getattr(material, "group_id", None):
+            group = await MaterialGroup.filter(
+                id=material.group_id, tenant_id=tenant_id, deleted_at__isnull=True
+            ).first()
+            if group:
+                group_uuid = str(group.uuid)
+
+    ranked: List[Tuple[int, SOP]] = []
+    seen: set[int] = set()
+
+    async def _add(rank: int, query) -> None:
+        rows = await query.order_by("code").prefetch_related("operation").all()
+        for row in rows:
+            rid = int(row.id)
+            if rid in seen:
+                continue
+            seen.add(rid)
+            ranked.append((rank, row))
+
+    base = dict(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        is_active=True,
+        control_status="effective",
+        sop_domain=domain,
+    )
+    if material_uuid and operation_id is not None:
+        await _add(
+            SOP_SHOPFLOOR_RANK_MATERIAL_OP,
+            SOP.filter(**base, material_uuids__contains=[material_uuid], operation_id=operation_id),
+        )
+    if material_uuid:
+        await _add(
+            SOP_SHOPFLOOR_RANK_MATERIAL_ANY_OP,
+            SOP.filter(
+                **base, material_uuids__contains=[material_uuid], operation_id__isnull=True
+            ),
+        )
+    if group_uuid and operation_id is not None:
+        await _add(
+            SOP_SHOPFLOOR_RANK_GROUP_OP,
+            SOP.filter(
+                **base, material_group_uuids__contains=[group_uuid], operation_id=operation_id
+            ),
+        )
+    if group_uuid:
+        await _add(
+            SOP_SHOPFLOOR_RANK_GROUP_ANY_OP,
+            SOP.filter(
+                **base, material_group_uuids__contains=[group_uuid], operation_id__isnull=True
+            ),
+        )
+    if operation_id is not None:
+        op_rows = (
+            await SOP.filter(**base, operation_id=operation_id)
+            .order_by("code")
+            .prefetch_related("operation")
+            .all()
+        )
+        for row in op_rows:
+            rid = int(row.id)
+            if rid in seen or _sop_has_material_scope(row):
+                continue
+            seen.add(rid)
+            ranked.append((SOP_SHOPFLOOR_RANK_UNBOUND_OP, row))
+    return ranked
+
+
+def pick_unique_shopfloor_sop(ranked: List[Tuple[int, SOP]]) -> Optional[SOP]:
+    if not ranked:
+        return None
+    top = ranked[0][0]
+    same = [sop for rank, sop in ranked if rank == top]
+    if len(same) > 1:
+        codes = "、".join(str(s.code) for s in same)
+        raise ValidationError(
+            f"同一匹配优先级存在多份生效 SOP（{codes}），请收窄物料/工序绑定或作废多余份"
+        )
+    return same[0]
+
+
 async def _collect_sop_binding_conflicts(
     tenant_id: int,
     operation_id: Optional[int],
     material_uuids: Optional[List[str]],
     material_group_uuids: Optional[List[str]],
     exclude_sop_uuid: Optional[str] = None,
+    sop_domain: Optional[str] = None,
 ) -> List[str]:
-    """检查物料/物料组 + 工序是否与现有 SOP 重复绑定。"""
+    """检查物料/物料组 + 工序是否与现有 SOP 重复绑定（同业务域）。"""
     if not operation_id:
         return []
 
@@ -346,6 +472,7 @@ async def _collect_sop_binding_conflicts(
         tenant_id=tenant_id,
         deleted_at__isnull=True,
         operation_id=operation_id,
+        sop_domain=_normalize_sop_domain(sop_domain),
     )
     if exclude_sop_uuid:
         query = query.exclude(uuid=exclude_sop_uuid)
@@ -1768,10 +1895,13 @@ class ProcessService:
             if not operation:
                 raise ValidationError(f"工序 {data.operation_id} 不存在")
         
-        # 检查编码是否已存在
+        sop_domain = _normalize_sop_domain(getattr(data, "sop_domain", None))
+
+        # 检查编码是否已存在（同业务域）
         existing = await SOP.filter(
             tenant_id=tenant_id,
             code=data.code,
+            sop_domain=sop_domain,
             deleted_at__isnull=True
         ).first()
         
@@ -1783,6 +1913,7 @@ class ProcessService:
             operation_id=data.operation_id,
             material_uuids=data.material_uuids,
             material_group_uuids=data.material_group_uuids,
+            sop_domain=sop_domain,
         )
         if binding_conflicts:
             raise ValidationError("；".join(binding_conflicts))
@@ -1976,12 +2107,15 @@ class ProcessService:
                     bom_mode = "by_material_group"
                     title_extra = f"（{getattr(entity, 'name', '') or gc}｜{gc}）"
 
+                from apps.master_data.constants.sop_domain import SOP_DOMAIN_PE
+
                 if mat_uuids_arg or grp_uuids_arg:
                     binding_conflicts = await _collect_sop_binding_conflicts(
                         tenant_id=tenant_id,
                         operation_id=op_id,
                         material_uuids=mat_uuids_arg,
                         material_group_uuids=grp_uuids_arg,
+                        sop_domain=SOP_DOMAIN_PE,
                     )
                     if binding_conflicts:
                         continue
@@ -1992,7 +2126,10 @@ class ProcessService:
                 code = base_code
                 suffix = 0
                 while code in used_codes or await SOP.filter(
-                    tenant_id=tenant_id, code=code, deleted_at__isnull=True
+                    tenant_id=tenant_id,
+                    code=code,
+                    sop_domain=SOP_DOMAIN_PE,
+                    deleted_at__isnull=True,
                 ).exists():
                     suffix += 1
                     suf = f"-{suffix}"
@@ -2193,11 +2330,12 @@ class ProcessService:
                 if not operation:
                     raise ValidationError(f"工序 {data.operation_id} 不存在")
         
-        # 如果更新编码，检查是否已存在
+        # 如果更新编码，检查是否已存在（同业务域）
         if data.code and data.code != sop.code:
             existing = await SOP.filter(
                 tenant_id=tenant_id,
                 code=data.code,
+                sop_domain=_normalize_sop_domain(sop.sop_domain),
                 deleted_at__isnull=True
             ).first()
             
@@ -2226,12 +2364,16 @@ class ProcessService:
                 next_material_group_uuids if isinstance(next_material_group_uuids, list) else None
             ),
             exclude_sop_uuid=sop_uuid,
+            sop_domain=sop.sop_domain,
         )
         if binding_conflicts:
             raise ValidationError("；".join(binding_conflicts))
 
         for key, value in update_data.items():
             setattr(sop, key, value)
+        if "version" in update_data and update_data["version"]:
+            sop.current_revision = str(update_data["version"]).strip() or sop.current_revision
+            sop.version = sop.current_revision
         
         apply_update_audit(sop, current_user)
         try:
@@ -2278,14 +2420,11 @@ class ProcessService:
         tenant_id: int,
         material_uuid: str,
         operation_uuid: Optional[str] = None,
+        sop_domain: Optional[str] = None,
     ) -> Optional[SOPResponse]:
         """
-        按物料匹配 SOP，供工单/报工「以 SOP 为依据生成流程单据」使用。
-
-        匹配规则（高 → 低）：
-        1. 绑定该具体物料：同物料下「关联当前工序」优先于「未关联工序」（适用全部工序）
-        2. 绑定该物料所属物料组：同上工序优先规则
-        3. 仅按工序匹配（兼容未绑物料、只关联工序的 SOP）
+        按物料匹配 SOP（工位/报工择一）。与 list_sops_for_material_operation 同一排序。
+        同优先级多份生效 SOP 时拒绝静默取第一条。
         """
         op_id: Optional[int] = None
         if operation_uuid:
@@ -2294,91 +2433,24 @@ class ProcessService:
             ).first()
             if op:
                 op_id = int(op.id)
-
-        async def _pick_for_scope(base_q) -> Optional[SOP]:
-            """有工序上下文时：精确工序 > 未绑工序；无工序上下文时取任意启用 SOP。"""
-            if op_id is not None:
-                sop = (
-                    await base_q.filter(operation_id=op_id)
-                    .order_by("code")
-                    .prefetch_related("operation")
-                    .first()
-                )
-                if sop:
-                    return sop
-                return (
-                    await base_q.filter(operation_id__isnull=True)
-                    .order_by("code")
-                    .prefetch_related("operation")
-                    .first()
-                )
-            return await base_q.order_by("code").prefetch_related("operation").first()
-
-        from apps.master_data.constants.sop_domain import SOP_DOMAIN_PE
-
-        # 1) 优先：绑定该具体物料的 SOP
-        q_material = SOP.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            is_active=True,
-            control_status="effective",
-            sop_domain=SOP_DOMAIN_PE,
-            material_uuids__contains=[material_uuid],
+        ranked = await collect_shopfloor_sops(
+            tenant_id,
+            material_uuid=material_uuid,
+            operation_id=op_id,
+            sop_domain=sop_domain,
         )
-        sop = await _pick_for_scope(q_material)
-        if sop:
-            return SOPResponse.model_validate(sop)
-
-        # 2) 其次：绑定该物料所属物料组的 SOP
-        from apps.master_data.models.material import Material, MaterialGroup
-
-        material = await Material.filter(
-            tenant_id=tenant_id, uuid=material_uuid, deleted_at__isnull=True
-        ).first()
-        if material and getattr(material, "group_id", None):
-            group = await MaterialGroup.filter(
-                id=material.group_id, tenant_id=tenant_id, deleted_at__isnull=True
-            ).first()
-            if group:
-                group_uuid = str(group.uuid)
-                q_group = SOP.filter(
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True,
-                    is_active=True,
-                    control_status="effective",
-                    sop_domain=SOP_DOMAIN_PE,
-                    material_group_uuids__contains=[group_uuid],
-                )
-                sop2 = await _pick_for_scope(q_group)
-                if sop2:
-                    return SOPResponse.model_validate(sop2)
-
-        # 3) fallback：仅按工序匹配（兼容仅关联工序的 SOP）
-        if op_id is not None:
-            q3 = SOP.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-                is_active=True,
-                control_status="effective",
-                sop_domain=SOP_DOMAIN_PE,
-                operation_id=op_id,
-            )
-            sop3 = await q3.order_by("code").prefetch_related("operation").first()
-            return SOPResponse.model_validate(sop3) if sop3 else None
-        return None
+        sop = pick_unique_shopfloor_sop(ranked)
+        return SOPResponse.model_validate(sop) if sop else None
 
     @staticmethod
     async def get_sop_for_reporting(
         tenant_id: int,
         work_order_id: int,
         operation_id: int,
+        sop_domain: Optional[str] = None,
     ) -> Optional[SOPResponse]:
-        """
-        按工单+工序匹配 SOP，供报工使用。
-        逻辑：取工单产品 -> 物料 UUID -> get_sop_for_material（含 fallback 仅工序）。
-        """
+        """按工单+工序匹配 SOP，供报工/工位使用。"""
         from apps.kuaizhizao.models.work_order import WorkOrder
-        from apps.master_data.models.material import Material
 
         work_order = await WorkOrder.filter(
             id=work_order_id,
@@ -2388,106 +2460,40 @@ class ProcessService:
         if not work_order:
             return None
 
-        product_id = work_order.product_id
-        material = await Material.filter(
-            id=product_id,
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).first()
-        if not material:
-            # 工单产品无对应物料，fallback 仅按工序
-            from apps.master_data.constants.sop_domain import SOP_DOMAIN_PE
-
-            op = await Operation.filter(
-                tenant_id=tenant_id, id=operation_id, deleted_at__isnull=True
-            ).first()
-            if not op:
-                return None
-            q = SOP.filter(
+        material_uuid: Optional[str] = None
+        if work_order.product_id:
+            material = await Material.filter(
+                id=work_order.product_id,
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
-                is_active=True,
-                control_status="effective",
-                sop_domain=SOP_DOMAIN_PE,
-                operation_id=op.id,
-            )
-            sop = await q.order_by("code").prefetch_related("operation").first()
-            return SOPResponse.model_validate(sop) if sop else None
+            ).first()
+            if material:
+                material_uuid = str(material.uuid)
 
-        material_uuid = str(material.uuid)
-        op = await Operation.filter(
-            tenant_id=tenant_id, id=operation_id, deleted_at__isnull=True
-        ).first()
-        operation_uuid = str(op.uuid) if op else None
-
-        return await ProcessService.get_sop_for_material(
-            tenant_id, material_uuid, operation_uuid=operation_uuid
+        ranked = await collect_shopfloor_sops(
+            tenant_id,
+            material_uuid=material_uuid,
+            operation_id=operation_id,
+            sop_domain=sop_domain,
         )
+        sop = pick_unique_shopfloor_sop(ranked)
+        return SOPResponse.model_validate(sop) if sop else None
 
     @staticmethod
     async def list_sops_for_material_operation(
         tenant_id: int,
         material_uuid: Optional[str],
         operation_id: Optional[int],
+        sop_domain: Optional[str] = None,
     ) -> List[SOP]:
-        """
-        工单详情「相关 SOP」：列出该物料+工序全部适用且已生效的 SOP，不去重成一条。
-
-        顺序（同 uuid 只保留一次）：
-        1. 绑该物料且工序精确匹配
-        2. 绑该物料且未绑工序（适用全部工序）
-        3. 绑物料组且工序精确匹配
-        4. 绑物料组且未绑工序
-        5. 仅绑该工序
-        """
-        seen: set[int] = set()
-        ordered: List[SOP] = []
-
-        async def _add(query) -> None:
-            rows = await query.order_by("code").prefetch_related("operation").all()
-            for row in rows:
-                rid = int(row.id)
-                if rid in seen:
-                    continue
-                seen.add(rid)
-                ordered.append(row)
-
-        from apps.master_data.constants.sop_domain import SOP_DOMAIN_PE
-
-        base = dict(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            is_active=True,
-            control_status="effective",
-            sop_domain=SOP_DOMAIN_PE,
+        """工单详情「相关 SOP」：同一套排序，列出全部档位（不去重成一条）。"""
+        ranked = await collect_shopfloor_sops(
+            tenant_id,
+            material_uuid=material_uuid,
+            operation_id=operation_id,
+            sop_domain=sop_domain,
         )
-        group_uuid: Optional[str] = None
-        if material_uuid:
-            material = await Material.filter(
-                tenant_id=tenant_id, uuid=material_uuid, deleted_at__isnull=True
-            ).first()
-            if material and getattr(material, "group_id", None):
-                group = await MaterialGroup.filter(
-                    id=material.group_id, tenant_id=tenant_id, deleted_at__isnull=True
-                ).first()
-                if group:
-                    group_uuid = str(group.uuid)
-
-        if material_uuid and operation_id is not None:
-            await _add(SOP.filter(**base, material_uuids__contains=[material_uuid], operation_id=operation_id))
-        if material_uuid:
-            await _add(
-                SOP.filter(**base, material_uuids__contains=[material_uuid], operation_id__isnull=True)
-            )
-        if group_uuid and operation_id is not None:
-            await _add(SOP.filter(**base, material_group_uuids__contains=[group_uuid], operation_id=operation_id))
-        if group_uuid:
-            await _add(
-                SOP.filter(**base, material_group_uuids__contains=[group_uuid], operation_id__isnull=True)
-            )
-        if operation_id is not None:
-            await _add(SOP.filter(**base, operation_id=operation_id))
-        return ordered
+        return [sop for _rank, sop in ranked]
 
     # ==================== 工艺路线版本管理相关方法 ====================
     

@@ -34,6 +34,7 @@ def _get_model(table_name: str) -> Optional[Type[Model]]:
         "master_data_operations": "apps.master_data.models.process.Operation",
         "master_data_process_routes": "apps.master_data.models.process.ProcessRoute",
         "master_data_sops": "apps.master_data.models.process.SOP",
+        "apps_master_data_sop": "apps.master_data.models.process.SOP",
         "apps_master_data_engineering_drawings": "apps.master_data.models.drawing.EngineeringDrawing",
         # 主数据 - 供应链
         "master_data_customers": "apps.master_data.models.customer.Customer",
@@ -124,6 +125,7 @@ TABLE_REFERENCE_RESOURCE: Dict[str, str] = {
     "master_data_operations": "master-data:process:operation",
     "master_data_process_routes": "master-data:process:route",
     "master_data_sops": "master-data:process:sop",
+    "apps_master_data_sop": "master-data:process:sop",
     "apps_master_data_engineering_drawings": "master-data:process:drawing",
     "master_data_customers": "master-data:supply-chain:customer",
     "master_data_suppliers": "master-data:supply-chain:supplier",

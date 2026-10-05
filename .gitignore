@@ -64,7 +64,11 @@ riveredge-backend/backups/
 .agent-teams/
 .agent-audit/
 .argo/
+<<<<<<< HEAD
 .codegraph/
+=======
+.aoci/
+>>>>>>> 7e06af67f (feat: SOP 按业务域唯一，工位准入与人脸模板加固)
 .cursor/
 .trae/
 .vscode/

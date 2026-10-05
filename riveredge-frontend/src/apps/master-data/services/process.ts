@@ -418,10 +418,15 @@ export const sopApi = {
    */
   getForMaterial: async (
     materialUuid: string,
-    operationUuid?: string
+    operationUuid?: string,
+    sopDomain?: string
   ): Promise<SOP | null> => {
     return api.get('/apps/master-data/process/sop/for-material', {
-      params: { material_uuid: materialUuid, operation_uuid: operationUuid },
+      params: {
+        material_uuid: materialUuid,
+        operation_uuid: operationUuid,
+        sopDomain,
+      },
     });
   },
 
