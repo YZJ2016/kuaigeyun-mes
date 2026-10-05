@@ -8,7 +8,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
-import { App, Card, Steps, Button, Space, message, Spin, Typography, Tag, Divider, InputNumber } from 'antd';
+import { App, Alert, Card, Steps, Button, Space, message, Spin, Typography, Tag, Divider, InputNumber } from 'antd';
 import { CheckOutlined, PlayCircleOutlined, PauseOutlined, CloseOutlined } from '@ant-design/icons';
 import { createForm } from '@formily/core';
 import { FormProvider, createSchemaField } from '@formily/react';
@@ -247,6 +247,14 @@ const SOPExecutionPage: React.FC = () => {
   
   return (
     <div style={{ padding: 24 }}>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message={t('app.master-data.sop.executionNotShopfloor', {
+          defaultValue: '本页是设计演练，不绑定工单。现场以工位确认与报工采集为准。',
+        })}
+      />
       {/* 标题栏 */}
       <Card
         size="small"

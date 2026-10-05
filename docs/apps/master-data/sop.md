@@ -33,11 +33,34 @@
 - 升版发布时，原 `issued` 份自动变为 `pending_retrieve`，须回收或标记丢失。
 - 权限：`dispatch` 发放、`recall` 回收、`print` 打印（受控/非受控水印）。
 
+## 现场匹配
+
+工位/报工/工单相关 SOP **同一套排序**（`collect_shopfloor_sops`）：
+
+1. 绑该物料且工序精确
+2. 绑该物料且未绑工序（适用全部工序）
+3. 绑物料组且工序精确
+4. 绑物料组且未绑工序
+5. **未绑任何物料/组**且工序精确（已绑其他物料的 SOP 不得因同工序进入本档）
+
+报工/工位择一：同档多份生效 SOP 视为配置错误，拒绝按编码静默取第一条。工单详情列表展示全部档位（不去重成一条）。
+
+`route_uuids` / `bom_load_mode` 只用于从工艺路线批量生成，**不参与现场匹配**。
+
+QC 材料 SOP（`sop_domain=qc`）与 PE 共用文控；工位默认 `pe`。检验/材料场景调用 `for-material?sopDomain=qc`。编码与绑定冲突按 **组织+业务域** 隔离。QC 菜单权限仍是 `master-data:process:sop:*`（同一模块，不另开权限码）。
+
+`version` 与 `current_revision` 在创建/升版/发布时同步；现场确认绑修订号，展示读现行主行。
+
+PC `SOPExecution` 是设计演练，不绑工单。现场真源：工位确认 + 报工 `sop_parameters`。
+
+发布生效时强制 `is_active=true`。自定义字段逻辑表名 `master_data_sops`，物理表 `apps_master_data_sop`（注册表已互指）。
+
 ## 工位与确认
 
 - 工位文档 API 返回 `carrier`、现行修订、存放位置、本工位份号（若已发放到该工位）。
 - 纸质/混合优先展示受控扫描件；电子/混合仍展示 ProFlow 工步。
 - 开工确认记录绑定 **SOP UUID + 修订号**；换版后须重新确认。
+- PC 路径 `/process/sop/execution` 仅设计演练，不进入工位闭环。
 
 ## 与体系文件边界
 

@@ -644,7 +644,7 @@ async def list_work_orders(
     status: Optional[str] = Query(None, description="工单状态"),
     workshop_id: Optional[int] = Query(None, description="车间ID"),
     work_center_id: Optional[int] = Query(None, description="工作中心ID"),
-    assigned_worker_id: Optional[int] = Query(None, description="分配员工ID（只看当前用户时传入）"),
+    assigned_worker_id: Optional[int] = Query(None, description="分配员工ID（本人派工 + 所在班组被指派）"),
     keyword: Optional[str] = Query(
         None,
         description="关键词搜索（工单编码、名称、产品、来源订单号等）",

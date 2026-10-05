@@ -107,6 +107,22 @@ class FaceTemplateResponse(BaseModel):
     created_at: datetime
 
 
+class FaceTemplateSampleResponse(BaseModel):
+    id: int
+    quality: Optional[float] = None
+    device_info: Optional[str] = None
+    created_at: datetime
+
+
+class FaceEnrolledAccountResponse(BaseModel):
+    user_id: int
+    username: str
+    full_name: str
+    sample_count: int
+    latest_at: Optional[datetime] = None
+    templates: List[FaceTemplateSampleResponse] = Field(default_factory=list)
+
+
 class SkillCheckRequest(BaseModel):
     user_id: int
     operation_id: int = Field(..., description="主数据工序ID或工单工序行ID（服务端兼容）")

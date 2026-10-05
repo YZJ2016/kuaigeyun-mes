@@ -369,6 +369,7 @@ class SopControlService:
         ).update(status="pending_retrieve")
 
         sop.control_status = "effective"
+        sop.is_active = True
         sop.current_revision = revision
         sop.version = revision
         sop.effective_at = now

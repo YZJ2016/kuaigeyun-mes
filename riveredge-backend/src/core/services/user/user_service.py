@@ -301,7 +301,12 @@ class UserService:
                 # 角色信息（已通过 prefetch_related 加载，直接迭代可避免 N+1 查询）
                 roles_data = []
                 for r in user.roles:
-                    roles_data.append({"uuid": str(r.uuid), "name": r.name, "code": r.code})
+                    roles_data.append({
+                        "uuid": str(r.uuid),
+                        "name": r.name,
+                        "code": r.code,
+                        "role_type": (getattr(r, "role_type", None) or "").strip().lower() or None,
+                    })
                 user_dict["roles"] = roles_data
 
                 items.append(user_dict)

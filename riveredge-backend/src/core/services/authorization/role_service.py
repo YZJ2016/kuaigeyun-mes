@@ -152,7 +152,7 @@ class RoleService:
         )
         home_path = RoleService._normalize_home_path(getattr(data, "home_path", None))
         create_position = bool(getattr(data, "create_position", False))
-
+        # 与职位预设一致：同代码已存在则复用，不阻断角色创建（删角色不会级联删职位）
         if create_position:
             existing_position = await Position.filter(
                 tenant_id=tenant_id,
@@ -160,7 +160,7 @@ class RoleService:
                 deleted_at__isnull=True,
             ).first()
             if existing_position:
-                raise ValidationError(f"职位代码 {data.code} 已存在，无法同步创建职位")
+                create_position = False
 
         async with in_transaction():
             role = await Role.create(

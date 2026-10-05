@@ -83,6 +83,58 @@ class FaceTemplateService:
         ).order_by("-created_at").all()
 
     @staticmethod
+    async def list_accounts(tenant_id: int) -> List[dict]:
+        templates = await UserFaceTemplate.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).order_by("-created_at").all()
+        by_user: dict[int, List[UserFaceTemplate]] = {}
+        for tpl in templates:
+            by_user.setdefault(tpl.user_id, []).append(tpl)
+        users = await User.filter(id__in=list(by_user.keys())).all() if by_user else []
+        umap = {u.id: u for u in users}
+        accounts: List[dict] = []
+        for user_id, tpls in by_user.items():
+            user = umap.get(user_id)
+            name = (user.full_name or user.username) if user else str(user_id)
+            username = user.username if user else str(user_id)
+            accounts.append(
+                {
+                    "user_id": user_id,
+                    "username": username,
+                    "full_name": name,
+                    "sample_count": len(tpls),
+                    "latest_at": tpls[0].created_at if tpls else None,
+                    "templates": [
+                        {
+                            "id": t.id,
+                            "quality": t.quality,
+                            "device_info": t.device_info,
+                            "created_at": t.created_at,
+                        }
+                        for t in tpls
+                    ],
+                }
+            )
+        accounts.sort(key=lambda row: str(row["full_name"]))
+        return accounts
+
+    @staticmethod
+    async def delete_for_user(tenant_id: int, user_id: int) -> int:
+        rows = await UserFaceTemplate.filter(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            deleted_at__isnull=True,
+        ).all()
+        if not rows:
+            raise NotFoundError("该账号没有人脸采样")
+        now = resolve_business_datetime()
+        for tpl in rows:
+            tpl.deleted_at = now
+            await tpl.save()
+        return len(rows)
+
+    @staticmethod
     async def delete_template(tenant_id: int, template_id: int, user_id: Optional[int] = None) -> None:
         from datetime import datetime
 
